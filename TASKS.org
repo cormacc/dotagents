@@ -248,3 +248,53 @@ Investigate -- reproduce manually, then follow up as appropriate.
 :STARTED: [2026-04-29 Wed 08:00]
 :END:
 #+IMPORT: [[file:design/log/2026-04-28-create-self-improvement-skill.org]]
+
+* Agent feedback
+
+** TODO [#C] pi skill scanner treats `.gitignore` as a skill filter — un-edited installed skills disappear at startup :ext_pi:
+:PROPERTIES:
+:ID: 5b2333e7-848e-45a8-8e52-ec3ba8630ef0
+:CREATED: [2026-05-08 Fri 00:15]
+:END:
+:LOGBOOK:
+- Created [2026-05-08 Fri 00:15]
+:END:
+Pi's startup skill scanner appears to honour `.gitignore` files when
+discovering skills under `~/.agents/skills`. `agents-src/.gitignore`
+intentionally excludes `find-skills/` and `skill-creator/` from the
+dotagents submodule (they were installed via `npx skills` rather than
+authored / owned by us, so we don't want them committed upstream), but
+the side effect is that pi silently filters them out of the
+available_skills list at session startup.
+
+Repro: with both directories present and listed in
+`~/.agents/skills/.gitignore`, neither appears in the skills section
+of the system prompt; removing them from `.gitignore` makes them
+appear. SKILL.md frontmatter is well-formed in both cases.
+
+Design options to weigh during planning:
+- Upstream fix in pi: don't apply `.gitignore` filtering to skill
+  discovery (or only honour a dedicated `.skillignore`).
+- Workaround in dotagents: stop using `.gitignore` for local-only
+  exclusion of `npx skills`-installed skills. Move them to a separate
+  path (e.g. `~/.agents/installed-skills/`) wired up via `agents.nix`,
+  and keep the submodule's `.gitignore` empty.
+- Workaround in dotagents: keep them under `agents-src/` but mark them
+  untracked via `.git/info/exclude` (per-clone) instead of
+  `.gitignore` (in-tree).
+
+Origin:
+- session: agents-src (current)
+- cwd: /Users/cormacc/dotfiles/agents-src
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-05-08 Fri 00:13]
+- sender: human
+
+Update [2026-05-08 Fri]: scope narrowed. `find-skills/` and
+`skill-creator/` were de-gitignored and committed into the dotagents
+submodule (skill-creator was rewritten to be agent-agnostic, so we
+now effectively own it; find-skills is still the verbatim `npx skills`
+install but committed as-is). The remaining concern only applies to
+*future* installed skills we don't want to vendor — for those, either
+use `.git/info/exclude` (per-clone) instead of `.gitignore`, or pursue
+the upstream pi fix. Lower priority than originally filed.
