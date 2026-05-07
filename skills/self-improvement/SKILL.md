@@ -18,6 +18,18 @@ directly — every change goes through a normal TODO entry, optionally
 promoted into a change-record via the [`org-plan`](../org-plan/SKILL.md)
 flow, so the team and the project history stay in the loop.
 
+> **Routing under review.** As of 2026-05-07 the agent skills, pi
+> extensions, and prompts shipped from `~/dotfiles` were extracted into
+> a sibling repo (`cormacc/dotagents`, mounted under `~/dotfiles/agents-src`).
+> "Global" feedback now splits across two repos: dotagents (skills /
+> extensions / prompts / agent behaviour) and dotfiles (Home Manager
+> wiring, Nix configuration, dotfiles `AGENTS.md`). The routing rules
+> below still describe the single-tier dotfiles flow; a follow-up task
+> in dotagents `TASKS.org` (`7e21788d-…`) tracks rewriting them for
+> the two-tier model. Until that lands, treat skill/extension/prompt
+> feedback as a dotagents concern, even where the rules below mention
+> dotfiles.
+
 The skill is repo-agnostic. It is invoked from whichever session
 notices the friction, and routes the resulting TODO to the tier that
 owns the affected artefact.

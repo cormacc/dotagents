@@ -160,6 +160,30 @@ should be installed via the pi-package or submodule routes above.
 - **Tests.** Co-located `*.test.ts` and `test.sh` files exist in the
   source tree but are excluded from the package output.
 
+## Releasing
+
+This repo is consumed both by `pi install` and by Nix flakes / git
+submodules. The release surfaces are tied to a single git tag:
+
+```bash
+# From a clean working tree on `main`
+git tag -a v0.2.0 -m "agent-org-memory + foo extension"
+git push origin v0.2.0
+```
+
+- **Pi consumers** pinned to `git:github.com/cormacc/dotagents` follow
+  `main` automatically; tags only matter when a consumer pins a
+  specific ref via `pi install git:github.com/cormacc/dotagents#v0.2.0`.
+- **Flake input consumers** that pin `inputs.dotagents.url =
+  "github:cormacc/dotagents/v0.2.0"` get a stable revision.
+- **Submodule consumers** (e.g. the upstream `cormacc/dotfiles` repo)
+  bump their submodule pointer with `git submodule update --remote`
+  and commit the new SHA. Tags help them choose a target commit but
+  aren't strictly required.
+
+If you bump the manifest version (`package.json` `version`), keep the
+git tag and the manifest version aligned.
+
 ## Runtime requirements
 
 - **pi-coding-agent** for the pi extensions. Declared as a peer
