@@ -1,0 +1,43 @@
+{
+  "name": "@cormacc/agent-org-memory",
+  "version": "0.1.0",
+  "description": "Org-memory task protocol skills (org-tasks, org-plan, org-jira) plus the pi extensions that implement them (tasks, jira, emacsclient).",
+  "keywords": ["pi-package", "org-mode", "task-management", "agent-skills"],
+  "license": "MIT",
+  "author": "Cormac Cannon",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cormacc/dotagents.git"
+  },
+  "homepage": "https://github.com/cormacc/dotagents",
+  "bugs": {
+    "url": "https://github.com/cormacc/dotagents/issues"
+  },
+  "pi": {
+    "extensions": [
+      "./pi/extensions/tasks",
+      "./pi/extensions/jira",
+      "./pi/extensions/emacsclient"
+    ],
+    "skills": [
+      "./skills/org-tasks",
+      "./skills/org-plan",
+      "./skills/org-jira"
+    ]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@sinclair/typebox": "*"
+  },
+  "files": [
+    "pi/extensions/tasks",
+    "pi/extensions/jira",
+    "pi/extensions/emacsclient",
+    "pi/extensions/lib",
+    "skills/org-tasks",
+    "skills/org-plan",
+    "skills/org-jira",
+    "README.md"
+  ]
+}

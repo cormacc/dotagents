@@ -1,0 +1,25 @@
+# Node / pi
+node_modules/
+*.log
+npm-debug.log*
+
+# Build outputs
+dist/
+build/
+result
+result-*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+.#*
+\#*\#
+.idea/
+.vscode/
+
+# Local agent state
+.agents/tmp/
