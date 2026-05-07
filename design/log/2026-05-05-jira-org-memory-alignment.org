@@ -1,0 +1,124 @@
+#+TITLE: Review Jira integration against org-memory protocol
+#+DATE: 2026-05-05 Tue
+#+PARENT_ID: 2b4d4ca7-6648-4e58-b4cf-b970565e79c7
+#+STATUS: Draft
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Context
+
+This draft plan extracts the Jira-specific follow-up work that was
+originally mixed into the broader org-memory review change-record
+(=design/log/2026-05-01-org-memory-agent-memory-review.org=,
+parent task =724c0332=). The generic org-memory task should focus on
+shared task/plan protocol mechanics; Jira-specific integration checks
+can be considered separately.
+
+The prior org-memory implementation pass already landed some Jira
+alignment work:
+
+- =agents/skills/org-jira/SKILL.md= no longer describes Jira-derived
+  plan tasks as UUID mirrors; Jira keys remain external references in
+  =:LINKED_ISSUES:=.
+- =org-jira= and the Jira README document Jira project/base-url
+  configuration as project-local trusted configuration.
+- =org-tasks=' agent-memory guidance cross-links Jira planning/resume
+  context so agents know to re-fetch upstream Jira state when resuming
+  a linked task.
+- =jira_clone_apply= delegates insertion to =tasks_insert_task=,
+  which now applies the project-root sandbox at the primitive layer.
+
+Remaining Jira work is mostly validation and policy detail: reopen /
+multi-transition semantics for auto-transition, clone-specific
+sandbox tests, and a Jira-linked resume scenario test. This record is
+Draft until that scope is accepted.
+
+** Design decisions
+
+- Keep Jira-specific checks out of the generic org-memory review ::
+  The selected org-memory task still tracks shared protocol work
+  (LOGBOOK, import sandboxing, agent-memory tests). Jira integration
+  has extra external-state and MCP semantics, so it deserves its own
+  review plan.
+- Treat prior shipped Jira docs/code as context, not active work ::
+  This plan does not rewrite the earlier commits. It records what
+  already landed and focuses the executable tasks on remaining gaps.
+- Prefer offline regression coverage :: Later implementation should
+  stub parsed Jira fields and status events; it should not depend on a
+  live Atlassian MCP except for explicit smoke tests.
+
+* Plan
+
+** TODO [#B] Define and verify Jira autoTransition reopen semantics :jira:timestamps:
+:PROPERTIES:
+:ID: 00de800a-1f29-48ac-b3fc-a812a1bbe82d
+:CREATED: [2026-05-05 Tue 21:51]
+:END:
+Acceptance criteria:
+- Jira auto-transition handling is reviewed against the LOGBOOK / reopen
+  semantics from the org-memory protocol.
+- A status-event matrix is documented for first-start
+  (=TODO/WAITING -> STARTED=), close (=* -> DONE=), and reopen
+  (=DONE/CANCELLED -> STARTED=), including whether reopen attempts a
+  Jira "Reopen" transition, falls back to "In Progress", or asks the
+  user.
+- Each live =tasks:status-changed= event maps to at most one Jira
+  transition prompt; historical =:LOGBOOK:= entries are not replayed.
+- Tests cover =STARTED -> DONE -> STARTED= and =WAITING -> DONE=
+  event sequences and assert prompts are based on the current
+  =prevStatus -> status= pair.
+- =org-jira= documentation explains the relationship between durable
+  LOGBOOK audit history and live status-change events.
+** TODO [#B] Complete clone/apply sandbox regression coverage :jira:security:
+:PROPERTIES:
+:ID: 4c561d22-c1c4-4a38-8c47-95211316d46f
+:CREATED: [2026-05-05 Tue 21:51]
+:END:
+Acceptance criteria:
+- =jira_clone_apply= has clone-specific tests proving structured
+  =tasks_insert_task= sandbox errors surface unchanged.
+- Tests cover in-tree relative path, in-tree absolute path,
+  out-of-tree absolute path, parent-traversal escape, and symlink
+  escape cases for the clone/apply entry point.
+- The tests also cover =alsoScan= duplicate-scan sandboxing where Jira
+  clone uses the sibling =TASKS.local.org= / =TASKS.org= path.
+- Jira README and tasks README agree on the project-root sandbox rule.
+** TODO [#C] Add Jira-linked agent-memory scenario coverage :jira:memory:tests:
+:PROPERTIES:
+:ID: 673d58f4-7afc-4ab1-a88c-95573d3f6330
+:CREATED: [2026-05-05 Tue 21:51]
+:END:
+Acceptance criteria:
+- The agent-memory scenario suite includes a Jira-linked task variant
+  exercising =jira_clone_apply= insert, status lifecycle history,
+  re-clone idempotency refusal, and resume-time reconstruction.
+- The scenario verifies that selected task, =:LINKED_ISSUES:=,
+  lifecycle history, and Jira re-fetch guidance surface in the
+  reconstructed context.
+- The scenario uses stubbed Jira fields / tool responses and does not
+  require a live Atlassian MCP.
+** TODO [#C] Review already-landed Jira org-memory documentation :jira:docs:
+:PROPERTIES:
+:ID: 349d800a-a060-4ebc-b1a6-673538e134bc
+:CREATED: [2026-05-05 Tue 21:51]
+:END:
+Acceptance criteria:
+- Re-read =org-jira=, Jira README, and the org-memory sections that
+  mention Jira and confirm they still match the final generic protocol
+  after the remaining org-memory tasks land.
+- Any stale references to the old broader review are either removed or
+  replaced with links to this Jira-specific task.
+- If no docs changes are needed, record that conclusion in
+  =* Implementation= before closing this task.
+* Implementation
+
+Draft extracted on [2026-05-05 Tue 21:51] from
+=design/log/2026-05-01-org-memory-agent-memory-review.org=. No new
+code changes were made as part of the extraction.
+
+* Open questions
+
+** OPEN Should Jira autoTransition attempt a dedicated reopen transition?
+The extracted plan deliberately leaves policy open: reopening a local task
+from =DONE/CANCELLED -> STARTED= might map to a Jira "Reopen" transition,
+fall back to "In Progress", or ask the user. Decide before implementing
+prompt/test behaviour.

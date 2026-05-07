@@ -1,0 +1,427 @@
+#+TITLE: Refine org-memory protocol
+#+DATE: 2026-04-28 Tue
+#+PARENT_ID: 80ea589b-501c-42d9-86e7-4d414c0c314e
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Context
+
+A review of the four artefacts that implement the project's org-memory
+protocol revealed consistency gaps, redundant prose across two skill
+files plus the tasks-extension README, and a few correctness/parity
+issues in the Emacs minor mode.
+
+Artefacts in scope:
+
+- =agents/skills/org-tasks/SKILL.md= — file-format / persistence skill.
+- =agents/skills/org-plan/SKILL.md= — planning methodology skill.
+- =agents/pi/extensions/tasks/= — pi tasks extension (TUI, parser,
+  serializer, agent prompts, change-record scaffolder).
+- =editors/emacs/spacemacs/layers/org-user/local/tasks-org/tasks-org.el= —
+  Emacs minor mode for working with =TASKS.org= and linked plan files.
+
+The change-record =2026-04-25-refine-org-memory-plan-protocol.org= is
+the previous round of this work and shaped most of the current
+structure; this task refines it further now that the implementation has
+settled.
+
+** Design decisions
+
+- =CLOSED:= placement :: Standard org-mode places =CLOSED: [timestamp]=
+  on its own line *between the heading and the =:PROPERTIES:= drawer*
+  (and =org-todo= writes it there). The =org-tasks= skill currently
+  mandates the opposite ("immediately after the =:END:= of the
+  properties drawer"), which neither stock org nor the tasks extension's
+  serializer follows. We align the skill (and any code that depends on
+  the wrong wording) with org's native convention. The extension's
+  existing serializer behaviour is correct and stays as-is.
+- Creation timestamp :: New tasks record their creation time as a
+  =:CREATED: [YYYY-MM-DD Day HH:MM]= property in the properties
+  drawer rather than as inline prose at the top of the description.
+  This keeps the heading's body free for human/agent notes and makes
+  the timestamp machine-readable for filtering and sorting. The
+  format matches =:STARTED:= and =CLOSED:= for consistency.
+- Single source of truth for file format :: =org-tasks= SKILL is
+  authoritative for file shape, properties, keywords, and the
+  =#+SELECTED:= protocol. The tasks-extension README and =org-plan=
+  SKILL link to =org-tasks= rather than restating the format.
+- Single source of truth for the change-record skeleton :: One
+  canonical skeleton (matching =org-plan='s "Minimal skeleton") is
+  asserted by snapshot tests in both the TS scaffolder and the elisp
+  scaffolder, so future drift becomes a CI failure rather than a docs
+  inconsistency.
+- Emacs and the extension stay independent at runtime :: No live IPC,
+  no shared template files; both implementations read =TASKS.org=
+  directly. Parity is enforced by tests against documented invariants,
+  not by a runtime dependency.
+- Terminology :: Skill and user-facing prose use *change-record*
+  exclusively. Internal symbol names in code (=plan=,
+  =tasks-org-plans-directory=, =scaffoldPlan=) are stable API and stay
+  as-is to avoid a churny rename.
+
+* Plan
+
+** DONE [#A] Align =CLOSED:= placement with the standard org convention :skills:pi:
+CLOSED: [2026-04-28 Tue 10:59]
+:PROPERTIES:
+:ID: 1f236e9d-c0b2-452b-aedb-2ee7a2aa9a96
+:STARTED: [2026-04-28 Tue 10:57]
+:END:
+Skill text updated; example in "Task notes" rewritten with =CLOSED:=
+above the drawer. Extension serializer was already correct (no code
+change needed). Added =parser.test.ts= covering both read positions
+and the above-drawer write invariant; 8/8 tests pass.
+Update the =org-tasks= skill so that =CLOSED:= is documented as
+appearing *immediately after the heading line and before the
+=:PROPERTIES:= drawer*, matching =org-todo='s built-in behaviour and
+the extension's serializer.
+
+Acceptance criteria:
+
+- =org-tasks/SKILL.md= "Status discipline" describes the new placement.
+- The example in "Task notes" is updated so =CLOSED:= sits above
+  =:PROPERTIES:=.
+- Tasks-extension README does not contradict the convention (currently
+  it doesn't describe placement; verify it stays silent or links to
+  the skill).
+- Add a parser test asserting that =CLOSED:= read from above the
+  drawer and from below the drawer both round-trip to *above* the
+  drawer on serialize.
+- A manual cycle =TODO -> DONE= on a task with a properties drawer in
+  Emacs and via the extension produces byte-identical output.
+** DONE [#A] Slim =org-tasks= SKILL.md :skills:
+CLOSED: [2026-04-28 Tue 11:02]
+:PROPERTIES:
+:ID: 9c8b7a64-5d3e-4f12-8a71-1e2d3c4b5a60
+:STARTED: [2026-04-28 Tue 11:01]
+:END:
+Rewrote the skill: 295 → 202 lines despite *adding* normative
+material for =:CREATED:= / =:STARTED:= / parent-propagation. Removed
+the housekeeping section, duplicated change-record prose, redundant
+"Task notes" example, separate "Blocking and WAITING" section, and
+the verbose Selection-state bullet list. Properties are now
+documented once, as protocol invariants in the heading-rules section.
+Reduce the skill to its data-model responsibilities and remove material
+that duplicates the extension README or =org-plan= SKILL.
+
+Concrete edits:
+
+- Remove the "Housekeeping automated by the pi tasks extension"
+  section. The behaviours it lists (ID discipline, change-record
+  creation, =:STARTED:=, parent-status propagation, archiving) are
+  documented in the extension README and Emacs mode; the skill should
+  state them as protocol invariants, not as fallbacks for "manual
+  editing".
+- Compress "Selection state" from seven bullets to four.
+- Compress "Bootstrap protocol" to one paragraph.
+- Drop the "Change-records" prose duplicating =org-plan= /
+  retrospective flow; replace with a one-paragraph link.
+- Pick one canonical =TASKS.org= layout (semantic sections with
+  =** TODO=) and remove the conflicting flat example.
+
+Target: from ~240 lines to ~120 lines without losing normative content.
+The "Interop" pointer to =org-plan= remains.
+** DONE [#B] Slim =org-plan= SKILL.md :skills:
+CLOSED: [2026-04-28 Tue 11:03]
+:PROPERTIES:
+:ID: 7a3f5e91-2d4b-4c68-9e35-8b1c0d2f7e44
+:STARTED: [2026-04-28 Tue 11:02]
+:END:
+Rewrote: 130 → 120 lines. Replaced steps 1-5 of "Executing from a
+change-record" with a one-liner that defers to =org-tasks=. Removed
+the duplicate retrospective-flow narrative. Added =:CREATED:= to the
+minimal skeleton example.
+Reduce overlap with =org-tasks= and tighten the executing workflow.
+
+Concrete edits:
+
+- Replace steps 1-5 of "Executing from a change-record" with a single
+  sentence that defers to =org-tasks= "Starting or resuming work";
+  keep only the planning-specific steps (implement smallest change,
+  verify, mark DONE, capture discoveries, handle questions).
+- Remove the duplicate retrospective-flow narrative; keep only the
+  section-shape requirements that =org-tasks= retrospective flow
+  produces.
+** DONE [#B] Trim tasks-extension README :pi:
+CLOSED: [2026-04-28 Tue 11:04]
+:PROPERTIES:
+:ID: c2e8d3b7-6f49-4a51-8d72-3a4b5c6d7e80
+:STARTED: [2026-04-28 Tue 11:03]
+:END:
+Replaced "TASKS.org Format" + "Heading syntax" + "Linked
+change-records" + "Round-trip preservation" + "Org-link syntax"
+with one slim section that links to =org-tasks= SKILL and lists the
+extension-specific notes (round-trip behaviour, permissive parsing,
+link-form preservation, subtask absorption). Replaced the verbose
+=:STARTED:= section with a Timestamps subsection covering all three
+(=:CREATED:=, =:STARTED:=, =CLOSED:=). Result: 257 → 200 lines,
+15.4 KB → 11.3 KB.
+Remove file-format material from the README and link to =org-tasks=
+SKILL instead.
+
+Concrete edits:
+
+- Replace "TASKS.org Format" + "Heading syntax" with one paragraph
+  pointing at =agents/skills/org-tasks/SKILL.md=.
+- Collapse "Linked change-records" + "Org-link syntax" to the
+  extension-specific lines (new plans are written in =[[file:...]]=
+  form; round-trip preserves whichever form is on disk).
+- Replace ":STARTED: first-transition timestamp" body with one line +
+  skill link.
+- Keep: keybindings, status colors, expanded UI controls, local-tasks
+  publish/unpublish, default collapse behaviour, archive UX, settings.
+
+Target: ~15 KB → ~8 KB.
+** DONE [#A] Close Emacs minor-mode parity gaps :emacs:
+CLOSED: [2026-04-28 Tue 11:06]
+:PROPERTIES:
+:ID: e6f1d2a3-4b58-4e79-9c30-7a8b9c0d1e23
+:STARTED: [2026-04-28 Tue 11:04]
+:END:
+All four sub-tasks complete. Byte-compile clean (one pre-existing
+=org-show-entry= obsolescence warning, not introduced here). Added
+=tasks-org-tests.el= with 6 ert tests covering scaffold parity (with
+and without parent ID), timestamp format, plan-dir fallback, and
+plan-dir keyword resolution from both link and bare-path forms;
+6/6 pass.
+Bring =tasks-org.el= into agreement with the documented protocol.
+*** DONE [#A] Fix change-record scaffold to match the canonical skeleton :emacs:
+CLOSED: [2026-04-28 Tue 11:06]
+:PROPERTIES:
+:ID: 4d5e6f70-8192-4a3b-8c4d-5e6f70819abc
+:STARTED: [2026-04-28 Tue 11:04]
+:END:
+=tasks-org--scaffold-plan= now takes an optional PARENT-ID and emits
+=#+PARENT_ID:= when supplied, plus a =* Implementation= section.
+=tasks-org--create-plan-for-current-task= reads the parent task's
+=:ID:= (after ensuring one exists) and threads it through.
+*** DONE [#A] Honour =#+DEFAULT_PLAN_DIR:= from =TASKS.org= :emacs:
+CLOSED: [2026-04-28 Tue 11:06]
+:PROPERTIES:
+:ID: 5e6f7081-92a3-4b4c-8d5e-6f70819abcde
+:STARTED: [2026-04-28 Tue 11:04]
+:END:
+Added =tasks-org--read-default-plan-dir= and
+=tasks-org--effective-plans-directory= helpers that parse the keyword
+(both =[[file:...]]= and bare-path forms) from =TASKS.org=. Plan
+creation and the auto-enable predicate both use the resolved
+directory; =tasks-org-plans-directory= remains the fallback.
+*** DONE [#A] Write =:STARTED:= on first =TODO -> STARTED= :emacs:
+CLOSED: [2026-04-28 Tue 11:06]
+:PROPERTIES:
+:ID: 6f708192-a3b4-4c5d-8e6f-70819abcdef0
+:STARTED: [2026-04-28 Tue 11:04]
+:END:
+Added =tasks-org--maybe-record-started=, attached to
+=org-after-todo-state-change-hook= as a buffer-local hook by the
+minor mode. Writes only when =:STARTED:= is absent, so re-opens
+preserve the original value. =defvar org-state= silences the free-
+variable warning that the dynamic hook variable would otherwise
+produce.
+*** DONE [#C] Fix stale =tasks-org-toggle-selected= docstring :emacs:
+CLOSED: [2026-04-28 Tue 11:06]
+:PROPERTIES:
+:ID: 70819abc-def0-4123-8456-789abcdef012
+:STARTED: [2026-04-28 Tue 11:04]
+:END:
+Docstring now matches the actual no-delete behaviour and notes that
+=TASKS.local.org= may carry local drafts and =#+IMPORT:= keywords
+alongside the selection keyword.
+** DONE [#A] Adopt =:CREATED:= property for new tasks :skills:pi:
+CLOSED: [2026-04-28 Tue 11:01]
+:PROPERTIES:
+:ID: a1b2c3d4-e5f6-4708-8192-a3b4c5d6e7f8
+:CREATED: [2026-04-28 Tue 10:49]
+:STARTED: [2026-04-28 Tue 10:59]
+:END:
+Skill examples updated; the canonical heading example, =TASKS.org=
+example, and "Task notes" example all show =:CREATED:= in the
+drawer. Tasks-extension =createTask= now writes both =:ID:= and
+=:CREATED:= on creation. Proactive-flow agent prompt instructs the
+agent to include =:CREATED:= on any =** TODO= plan tasks it writes.
+Parser test added (=:CREATED:= round-trip, 8/8 pass).
+
+README example update is deferred to the README-trim task; only the
+create-path code and the skill examples were changed here so the
+final trim doesn't fight a half-rewrite.
+Replace the inline =[YYYY-MM-DD Day]= note prefix convention with a
+=:CREATED: [YYYY-MM-DD Day HH:MM]= property in the properties drawer.
+
+Concrete edits:
+
+- =org-tasks= SKILL: replace the "Task notes" example's inline
+  timestamp with a =:CREATED:= drawer entry, and document =:CREATED:=
+  alongside =:STARTED:= / =CLOSED:= as a first-class timestamp
+  property. Keep the "add a short paragraph note" guidance for
+  follow-up notes; only the *creation* stamp moves to the drawer.
+- Tasks extension =createTask= (=index.ts:1257=): include
+  =:CREATED: [${formatOrgTimestamp()}]= in =propertyLines= for
+  newly-created tasks (both top-level and child).
+- Tasks extension parser/serializer: =:CREATED:= rides through as an
+  ordinary property line; no parser changes required, but add a unit
+  test asserting it round-trips.
+- Tasks extension README: update example task headings to show
+  =:CREATED:= in the drawer, no inline timestamp.
+- Extension change-record scaffolder: when scaffolding a new
+  change-record on the proactive flow, add =:CREATED:= to any
+  =** TODO= plan tasks the agent inserts via examples; document the
+  expectation in the agent prompt body so generated plans follow the
+  convention.
+- Emacs minor mode: no creation entrypoint exists today, but if one
+  is added later (e.g. =tasks-org-new-task=) it must write
+  =:CREATED:= the same way. Note this in =tasks-org.el='s commentary.
+
+Acceptance criteria:
+
+- Creating a new task via =/tasks new= or =n=/=N= writes a
+  =:CREATED:= property and no inline date prefix.
+- Existing tasks without =:CREATED:= are left alone (no backfill).
+- Round-trip parser test passes with =:CREATED:= present.
+** DONE [#B] Add change-record-skeleton snapshot tests :pi:emacs:
+CLOSED: [2026-04-28 Tue 11:11]
+:PROPERTIES:
+:ID: 819abcde-f012-4345-8678-9abcdef01234
+:STARTED: [2026-04-28 Tue 11:06]
+:END:
+Lifted =scaffoldPlan= and =insertTasksIntoPlanSection= out of
+=index.ts= into a new =scaffold.ts= module so the test runner can
+import them without pulling in the pi-tui runtime. Added literal
+snapshot tests on both sides:
+
+- =parser.test.ts= — freezes =Date= to 2026-04-28 and asserts
+  =scaffoldPlan(fixture)= against the canonical expected string.
+- =tasks-org-tests.el= — mocks =format-time-string= and asserts
+  =tasks-org--scaffold-plan= produces an identical string.
+
+Found and fixed two divergences while wiring this up:
+
+1. TS scaffold used =formatOrgTimestamp()= for =#+DATE:= (with
+   =HH:MM=) but elisp used a date-only =format-time-string=. Added
+   =formatOrgDate()= alongside =formatOrgTimestamp()= and switched
+   =scaffoldPlan= to the date-only form, matching elisp and existing
+   change-record files in =design/log/=.
+2. Elisp scaffold ended =* Implementation\n=; TS ended =\n\n=.
+   Aligned elisp to add the trailing blank line.
+
+Result: 9/9 TS, 7/7 elisp.
+Add a snapshot/regression test in each scaffolder asserting the
+literal expected output for a fixed input task. The two outputs should
+be byte-identical (modulo trailing newline). This makes future drift a
+test failure rather than an undetected docs inconsistency.
+
+- TS side: a vitest/jest snapshot of =scaffoldPlan(fixtureTask)=.
+- Elisp side: an =ert-deftest= comparing
+  =(tasks-org--scaffold-plan "Title")= against a fixture string,
+  injecting a fixed parent =:ID:= and =format-time-string= via
+  =cl-letf=.
+** DONE [#C] Verify and document =CLOSED:= round-trip behaviour :pi:
+CLOSED: [2026-04-28 Tue 11:11]
+:PROPERTIES:
+:ID: 9abcdef0-1234-4567-889a-bcdef0123456
+:STARTED: [2026-04-28 Tue 11:11]
+:END:
+Subsumed by Plan task 1 (parser test covering both positions and
+the above-drawer write invariant) and Plan task 4 (README's
+Timestamps section now reads: "The parser accepts =CLOSED:= in
+either position and serializes back above the drawer.").
+* Implementation
+
+Work landed across four artefacts in two passes:
+
+1. **Protocol amendments** (skill text + extension code, kept in sync)
+   - =org-tasks= SKILL: =CLOSED:= placement now matches =org-todo='s
+     native convention (above =:PROPERTIES:= drawer); =:CREATED:=
+     adopted as a first-class drawer property; =:STARTED:= and
+     =:CREATED:= documented alongside =CLOSED:= as the three timestamp
+     properties.
+   - Extension =createTask= writes =:ID:= + =:CREATED:= on creation.
+   - Proactive-flow agent prompt instructs the agent to include
+     =:CREATED:= on any plan tasks it writes.
+
+2. **Documentation slim-down**
+   - =org-tasks= SKILL: 295 → 202 lines (housekeeping section,
+     duplicated change-record prose, and verbose Selection-state
+     bullets removed).
+   - =org-plan= SKILL: 130 → 120 lines (executing-from-a-change-record
+     defers to =org-tasks= for the resume prefix).
+   - Tasks-extension README: 257 → 200 lines, 15.4 → 11.3 KB
+     (file-format material now lives only in the skill).
+
+3. **Emacs minor-mode parity**
+   - Scaffold matches the canonical skeleton (=#+PARENT_ID:=,
+     =* Implementation=).
+   - =#+DEFAULT_PLAN_DIR:= resolved from =TASKS.org= and used as both
+     the new-plan default directory and an auto-enable matcher.
+   - =:STARTED:= written via =org-after-todo-state-change-hook= on
+     first transition; preserved on re-opens.
+   - =tasks-org-toggle-selected= docstring corrected.
+   - Commentary clarifies the =:CREATED:= expectation for any future
+     creation entrypoint added in elisp.
+
+4. **Anti-drift tests**
+   - =parser.test.ts= (9/9): =CLOSED:= in both positions → always
+     above-drawer on write, =:CREATED:= round-trip, and a literal
+     snapshot of =scaffoldPlan()= output.
+   - =tasks-org-tests.el= (7/7): structural assertions on the
+     scaffolder, =:STARTED:= timestamp format, plan-dir resolution
+     (fallback, link form, bare path), and the literal snapshot
+     matching the TS one.
+
+** Refactor: =scaffold.ts= module split out of =index.ts=
+
+=scaffoldPlan= and =insertTasksIntoPlanSection= moved to a new
+=scaffold.ts= file so the snapshot test could import them via =tsx=
+without pulling in =@mariozechner/pi-tui=. Net change to =index.ts=
+is a 50-line reduction; behaviour unchanged.
+
+** Two divergences caught by the snapshot tests
+
+1. TS used =formatOrgTimestamp()= for =#+DATE:= (=YYYY-MM-DD Day HH:MM=)
+   while elisp used =format-time-string "%Y-%m-%d %a"= (date only).
+   Added =formatOrgDate()= and switched =scaffoldPlan= to it. The
+   date-only form matches existing change-record files in
+   =design/log/=.
+2. Elisp scaffold ended =* Implementation\n=; TS ended =\n\n=. Aligned
+   elisp to the trailing-blank-line form. Both are now byte-identical
+   for the same input.
+
+** Files touched
+
+- =agents/skills/org-tasks/SKILL.md=
+- =agents/skills/org-plan/SKILL.md=
+- =agents/pi/extensions/tasks/index.ts=
+- =agents/pi/extensions/tasks/parser.ts=
+- =agents/pi/extensions/tasks/scaffold.ts= (new)
+- =agents/pi/extensions/tasks/parser.test.ts= (new)
+- =agents/pi/extensions/tasks/README.md=
+- =editors/emacs/spacemacs/layers/org-user/local/tasks-org/tasks-org.el=
+- =editors/emacs/spacemacs/layers/org-user/local/tasks-org/tasks-org-tests.el= (new)
+- =TASKS.org= (new top-level task; the task itself is the audit trail)
+
+** Follow-ups landed in this commit
+
+- Added =agents/pi/extensions/tasks/test.sh= so the parser/scaffold
+  unit suite can be run with a single command (modelled on
+  =emacsclient/test.sh=). Extension README documents it under a new
+  =## Tests= section.
+- Removed the elisp scaffolder entirely. =tasks-org-open-plan= now
+  opens an existing =#+IMPORT:='d change-record or signals a
+  =user-error= directing the user to the pi tasks extension's =p=
+  keybinding. Removed: =tasks-org--scaffold-plan=,
+  =tasks-org--create-plan-for-current-task=, =tasks-org--slugify=,
+  =tasks-org--plan-link=, and the scaffold ert tests. Kept:
+  =tasks-org--effective-plans-directory= (still used by the
+  auto-enable predicate). Mode commentary, layer README, and the TS
+  scaffold snapshot test (which no longer needs a cross-elisp
+  pairing) are unchanged on the TS side; the elisp half of the
+  cross-implementation snapshot is gone with the scaffolder.
+
+* Open questions
+
+- The cross-implementation snapshot pairing is no longer relevant
+  now that elisp doesn't scaffold. The TS-side snapshot remains as
+  a regression guard against unintentional changes to the canonical
+  skeleton.
+- =:STARTED:= is written by the Emacs hook only when =tasks-org-mode=
+  is active. Power users editing =TASKS.org= without the mode (e.g.
+  via plain =org-mode= or another editor) won't get the property.
+  Accepted as out-of-scope per the user's review.

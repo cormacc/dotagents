@@ -1,0 +1,785 @@
+* DONE [#A] Implement an org-based memory system for pi-agent :org-memory:
+CLOSED: [2026-04-24 Fri 23:53]
+:PROPERTIES:
+:ID: 9ae2bf39-c61c-4a2d-8fa5-882a5ce3eca7
+:ARCHIVED: [2026-04-24 Fri 23:53]
+:END:
+#+IMPORT: [[file:design/log/2026-04-24-org-agent-memory.org]]
+
+* DONE [#B] Refine org-memory/plan protocol :org-memory:
+CLOSED: [2026-04-25 Sat 13:03]
+:PROPERTIES:
+:ID: 7a48756f-95b2-440c-9810-09a9ae60e452
+:ARCHIVED: [2026-04-25 Sat 13:03]
+:END:
+#+IMPORT: [[file:design/log/2026-04-25-refine-org-memory-plan-protocol.org]]
+[2026-04-25 Sat] Implemented skill protocol refinements, task extension round-trip preservation, and ID backfill.
+
+* DONE [#A] Refine tasks extension :org-memory:org-tasks:
+CLOSED: [2026-04-25 Sat 18:03]
+:PROPERTIES:
+:ID: f92b7b2f-c7fc-4933-9e27-20c0e411cbe4
+:ARCHIVED: [2026-04-25 Sat 16:57]
+:END:
+#+IMPORT: [[file:design/log/2026-04-25-refine-tasks-extension.org]]
+UX and persistence refinements for the pi tasks extension. See linked plan
+for the full breakdown. Scope:
+- Auto-insert missing org IDs on load.
+- Merge the modal selection/edit overlay with the persistent selected-task
+  status display into a single expand/collapse UI owner.
+- Fix creation, archiving, and plan prompts that are currently masked by
+  the overlay.
+- Collapse subtrees by default on overlay open.
+- Surface linked-plan metadata in the details pane.
+- Place the compact selected-task UI so it doesn't mask conversation
+  scrollback.
+
+Implemented the first pass in the linked plan: ID backfill,
+compact above-editor widget, expanded UI prompt handoff, default collapse,
+plan metadata display, README updates, and generated keybindings map. Final
+interactive `/reload` and UI smoke tests remain to close validation.
+
+* DONE [#D] TASKS skill - fix completion timestamp insertion :org-memory:org-tasks:
+CLOSED: [2026-04-27 Mon 15:13]
+:PROPERTIES:
+:ID: ba720ca7-077b-455d-9a64-40b41662ec97
+:ARCHIVED: [2026-04-27 Mon 15:13]
+:END:
+When completing a task, a completion timestamp is inserted below the properties drawer without  "CLOSED: " prefix. Also the timestamp format is incorrect. For a task completed today I expected [2026-04-27 Mon 15:07] but got [2026-04-27 Sun].
+Do the following:
+- Ensure the timestamp is in the expected format AND correct.
+- Ensure the timestamp is prefixed with "CLOSED: " and placed immediately below the task heading.
+- Ensure remaining content continues on the next line, rather than on the same line as the timestamp.
+
+* DONE [#D] Tasks overlay bugfixes :org-memory:org-tasks:tasks-extension:
+CLOSED: [2026-04-27 Mon 17:39]
+:PROPERTIES:
+:ID: d36fe453-b8f8-4dfb-8ea6-5ed9d9eeee90
+:ARCHIVED: [2026-04-27 Mon 17:39]
+:END:
+- Toggling selection updates status overlay BUT not editor overlay
+- Editor overlay should open with insertion point at selected subtask, not top level task
+
+* DONE [#A] Move task selection state to .gitignored TASKS.local.org :org-memory:org-tasks:
+CLOSED: [2026-04-27 Mon 18:52]
+:PROPERTIES:
+:ID: a8f3c2e1-7b4d-4f9c-8a52-3e6c1d8b9f47
+:ARCHIVED: [2026-04-27 Mon 18:52]
+:END:
+#+IMPORT: [[file:design/log/2026-04-26-tasks-local-selection.org]]
+Selection state (which task the contributor is actively working on) is currently
+expressed via the reserved =:selected:= tag embedded in =TASKS.org= and plan
+files. That puts per-contributor, per-machine working state into shared,
+version-controlled content. On multi-contributor repos this produces guaranteed
+merge conflicts whenever two people set selection simultaneously, and the tag
+is semantically incoherent across the team (only one person can be "selected").
+Move selection to a gitignored =TASKS.local.org= using top-level
+=#+SELECTED: <UUID>= metadata; update the org-memory skill, the pi tasks
+extension, and the tasks-org Emacs package to read/write the new location.
+
+* DONE [#C] Replace :INCLUDE: drawer property with #+IMPORT: keyword  :org-memory:org-tasks:
+CLOSED: [2026-04-27 Mon 21:53]
+:PROPERTIES:
+:ID: 9adb8c66-8aba-4e11-9922-70d6225f5a0e
+:ARCHIVED: [2026-04-27 Mon 21:53]
+:END:
+** DONE [#B] Update parser
+CLOSED: [2026-04-27 Mon 21:53]
+:PROPERTIES:
+:ID: a1b2c3d4-0001-4000-8000-000000000001
+:END:
+- Remove =INCLUDE_PROPERTY_RE=; add =IMPORT_KEYWORD_RE= matching =#+IMPORT:= anywhere.
+- Recognise =#+IMPORT:= in the main parse loop: attach to =currentTask= when
+  inside a heading body; collect in =fileImports[]= when =currentTask= is null.
+- Simplify properties drawer handling — all lines pass through verbatim.
+- Rename Task fields: =planPath→importPath=, =planRaw→importRaw=,
+  =planChildren→importChildren=, =planError→importError=.
+- Add =ParseResult= type ={tasks, fileImports}=; change =parseTasks= return type.
+- =serializeTasks=: write =#+IMPORT:= in task body (after =:END:=, before
+  description) instead of inside the properties drawer.
+** DONE [#B] Update extension (index.ts, overlay.ts)
+CLOSED: [2026-04-27 Mon 21:53]
+:PROPERTIES:
+:ID: a1b2c3d4-0002-4000-8000-000000000002
+:END:
+- =loadTasks=: destructure =ParseResult=; load root-level =fileImports= and
+  inject their tasks at the top level.
+- =loadLinkedPlans=: field renames throughout; also resolve =fileImports= inside
+  included files (one level deep).
+- =overlay.ts=: update all four =importChildren/importPath/importRaw/importError=
+  reference sites.
+- Fix two type errors introduced by the return-type change (=findSelectedTask=
+  null guard; archive =parseTasks= destructure).
+** DONE [#B] Update tasks-org.el
+CLOSED: [2026-04-27 Mon 21:53]
+:PROPERTIES:
+:ID: a1b2c3d4-0003-4000-8000-000000000003
+:END:
+- Replace =org-entry-get/put= for =:INCLUDE:= with new helpers:
+  - =tasks-org--get-import-raw=: regex search over the heading body.
+  - =tasks-org--set-import=: insert/replace =#+IMPORT:= line at the correct
+    position (after =:END:= or =CLOSED:= line, or directly after heading).
+- Rename =tasks-org--extract-plan-path= → =tasks-org--extract-import-path=.
+- Update =tasks-org-open-plan=, =tasks-org--create-plan-for-current-task=, and
+  =tasks-org-jump-to-parent-task=.
+** DONE [#C] Migrate TASKS.org and update docs
+CLOSED: [2026-04-27 Mon 21:53]
+:PROPERTIES:
+:ID: a1b2c3d4-0004-4000-8000-000000000004
+:END:
+- Migrate 2 existing =:INCLUDE:= drawer entries in =TASKS.org= to =#+IMPORT:=.
+- Update =agents/skills/org-memory/SKILL.md=.
+- Update =agents/pi/extensions/tasks/README.md= (also fix stale =:selected:=
+  tag references left over from the =TASKS.local.org= selection migration).
+- Update =editors/emacs/spacemacs/layers/org-user/README.org=.
+
+* DONE [#C] Add emacs-side tooling for tasks extension :org-memory:org-tasks:tasks-extension:emacs
+:PROPERTIES:
+:ID: 2b87d48c-d158-44ff-8fea-87c99b570144
+:ARCHIVED: [2026-04-27 Mon 22:14]
+:END:
+A couple of ideas for minor QOL improvements on the editor side...
+- Auto-populate expected properties fields when creating tasks in emacs
+- Add keybindings to toggle selection of a given issue
+- Bi-directional sync/refresh on edit
+** DONE [#B] Update tasks extension to include local tasks
+CLOSED: [2026-04-27 Mon 22:32]
+:PROPERTIES:
+:ID: 6bee9f80-d1b5-4121-ab9c-f795e4884d3e
+:ARCHIVED: [2026-04-27 Mon 22:32]
+:END:
+#+IMPORT: [[file:design/log/2026-04-27-local-tasks.org]]
+If TASKS.local.org includes tasks, consider these local/draft/gitignored tasks.
+Not checked in, but surfaced in the extension UI.
+Update task extension and emacs plugins to include publish/unpublish bindings -- promoting
+a local task from TASKS.local.org and vice versa.
+** DONE [#B] Update org-memory skill to prompt to generate an implementation report for tasks without a plan
+CLOSED: [2026-04-28 Tue 00:46]
+:PROPERTIES:
+:ID: 9f233338-833b-43c1-81d2-e413a536d586
+:ARCHIVED: [2026-04-28 Tue 00:46]
+:END:
+#+IMPORT: [[file:design/log/2026-04-28-implementation-reports.org]]
+I.e. if we just implement a simple task that didn't need formal planning, useful to log an implementation report anyway...
+** DONE [#C] Consider whether to rename the 'org-memory' skill to just 'tasks'
+CLOSED: [2026-04-28 Tue 01:03]
+:PROPERTIES:
+:ID: ce69ef5e-5967-4623-a2e3-f22e0bd1a745
+:ARCHIVED: [2026-04-28 Tue 01:03]
+:END:
+#+IMPORT: [[file:design/log/2026-04-28-skill-rename-org-tasks-org-plan.org]]
+Currently we've got 'org-memory' and 'plan' -- maybe more useful to refer to 'tasks' and 'plan', and refer to the combination as org-memory? Or 'org-tasks' and 'org-plan' skills, with the combination of the two making up 'org-memory'?
+Consider, rename as appropriate and update docs accordingly.
+** DONE [#B] Refine org-memory protocol :emacs:pi:skills:
+CLOSED: [2026-04-28 Tue 11:12]
+:PROPERTIES:
+:ID: 80ea589b-501c-42d9-86e7-4d414c0c314e
+:CREATED: [2026-04-28 Tue 10:49]
+:STARTED: [2026-04-28 Tue 10:57]
+:ARCHIVED: [2026-04-28 Tue 11:12]
+:END:
+#+IMPORT: [[file:design/log/2026-04-28-org-memory-refinement.org]]
+Review of skills + tasks extension + tasks-org Emacs minor mode
+identified consistency gaps, repetition, and verbosity. This task tracks
+refining the org-memory protocol into a single source of truth, closing
+Emacs-side parity gaps, and aligning =CLOSED:= placement with the standard
+org convention (before the properties drawer).
+** DONE [#D] Fix compact widget not updating after selection toggle :extension:
+:PROPERTIES:
+:ID: 8e1f3c72-4a9d-4b15-a6c0-2d7e9f1b3c48
+:END:
+When the user toggles =:selected:= inside the =/tasks= overlay, the
+compact widget above the editor (the "editor overlay") should reflect
+the new selection immediately after the overlay closes. Two related
+issues prevented this:
+
+1. The file watcher fires ~150ms after =save()= and calls =refreshTaskUi=,
+   which tried to *create* the compact widget while the expanded overlay
+   was still visible — producing visual artifacts or a stale-state race.
+2. After the overlay closed, =refreshTaskUi= read from disk, racing with
+   the async fire-and-forget =save()= call from inside the overlay.
+
+Fix (=index.ts=):
+- Added =isOverlayActive= module-level flag, set =true= at the top of each
+  =/tasks= overlay loop iteration and =false= after the loop exits.
+- =refreshTaskUi= (called from the file-watcher path) skips
+  =syncCompactWidget= when =isOverlayActive= is set.
+- After the loop exits, call =syncCompactWidget(ctx, tasks)= immediately
+  using the in-memory task state before calling =refreshTaskUi=.
+** DONE [#D] Fix overlay cursor starting at top-level task :extension:
+:PROPERTIES:
+:ID: 3b7d5e91-6f2a-4c08-8e4b-1a9c0d7f2e35
+:END:
+When the =/tasks= overlay opens, the cursor should land on the selected
+task (the one carrying =:selected:=). =focusSelectedTask()= is called in
+the constructor and searches =this.rows= for the =isSelectedTask= row —
+but the row was absent when the selected task was a =planChild= of a
+DONE/CANCELLED parent.
+
+Root cause: =applyDefaultCollapseView()= contained a third condition that
+collapsed tasks in =keepVisible= (ancestors of the selected task) if they
+were DONE/CANCELLED and not the selected task itself. This contradicted
+the purpose of =keepVisible=: tasks on the path to the selected task must
+remain expanded. With the parent collapsed, the planChild was not walked
+in =rebuildRows()=, =focusSelectedTask()= returned =-1=, and =cursor=
+stayed at 0 (the first top-level task).
+
+Fix (=overlay.ts=): removed the erroneous third condition. The two
+remaining conditions correctly express the intended rules:
+- No selection → collapse everything with children.
+- With selection → collapse only tasks not in =keepVisible=, covering
+  completed non-ancestor tasks automatically.
+** DONE [#D] Live-update editor overlay on external file changes :extension:
+:PROPERTIES:
+:ID: 1c4f8a2e-7d3b-4e19-9f5c-6a0b2d8e1f47
+:END:
+The original fix suppressed =refreshTaskUi='s =syncCompactWidget= call
+while the overlay was active but did nothing with the freshly-loaded
+task data. External changes (Emacs selection toggle, status edits) were
+silently discarded — the overlay stayed frozen on its original snapshot.
+
+Fix (=index.ts= + =overlay.ts=):
+- Added =activeOverlayInstance= module-level ref; set in the
+  =ctx.ui.custom= factory callback, cleared after =await=.
+- =refreshTaskUi= now calls =activeOverlayInstance?.refreshTasks(tasks)=
+  instead of skipping entirely when =isOverlayActive=.
+- =TasksOverlay= gains a =TUI= constructor parameter and a public
+  =refreshTasks(newTasks)= method that replaces =this.tasks=, rebuilds
+  collapse state and rows, preserves cursor by task ID (falling back to
+  the selected task), calls =invalidate()= + =tui.requestRender()=.
+** DONE [#A] Add local `tasks-org` package skeleton to the `org-user` layer :emacs:spacemacs:
+:PROPERTIES:
+:ID: 07689ad9-982f-48da-816d-1ac37c8829c7
+:END:
+Create a local package under the existing Spacemacs layer and wire it into layer
+loading without changing normal org-mode behavior.
+
+Acceptance criteria:
+- Add `editors/emacs/spacemacs/layers/org-user/local/tasks-org/tasks-org.el`.
+- Add `(tasks-org :location local)` to `org-user-packages`.
+- Add `org-user/init-tasks-org` in `packages.el` using `use-package`.
+- Auto-enable `tasks-org-mode` on buffers visiting `TASKS.org` or any `*.org`
+  under a `design/log/` directory (filename-based detection). Manual
+  `M-x tasks-org-mode` remains available for other buffers.
+- Package loads cleanly in Emacs/Spacemacs without requiring pi.
+*** DONE [#B] Define package namespace and customization variables :emacs:
+:PROPERTIES:
+:ID: 9c49ed92-b353-4f4e-b10d-dfe71e3efc1b
+:END:
+Use a self-contained namespace such as `tasks-org-` and define customization
+variables for the TASKS file name, default plans directory, and whether save-time
+ID backfill is enabled.
+*** DONE [#B] Add minor mode and keymap :emacs:ui:
+:PROPERTIES:
+:ID: 73d6082a-c0c1-4331-984b-19797e9b7276
+:END:
+Provide `tasks-org-mode` with a small keymap under an org-friendly prefix.
+Candidate bindings: select current task, ensure ID, open/create plan, jump to
+TASKS root, and refresh/reparse helpers.
+** DONE [#A] Implement org task identity helpers :org:ids:
+:PROPERTIES:
+:ID: e437db55-7933-4ef5-911c-89dc81dd3ae3
+:END:
+Add functions that operate on the current org heading and preserve standard org
+semantics.
+
+Acceptance criteria:
+- Detect whether point is on or inside an actionable task heading using org APIs.
+- Ensure the current task has a UUID v4 `:ID:` property compatible with
+  org-id.el.
+- Backfill missing IDs in the current buffer or narrowed subtree via explicit
+  commands.
+- Optional save-time ID backfill is disabled by default or clearly documented as
+  conservative.
+- Existing IDs and unrelated properties are preserved.
+*** DONE [#B] Implement UUID/property primitives :org:ids:
+:PROPERTIES:
+:ID: bd0a484b-9e37-40a5-a295-e0d62e40edef
+:END:
+Wrap `org-entry-get`, `org-entry-put`, and org-id facilities where appropriate.
+Avoid custom parsing when org APIs can safely handle the operation.
+*** DONE [#B] Validate ID helpers on TASKS.org and linked plans :testing:
+:PROPERTIES:
+:ID: c98342fd-9292-47de-9d16-e0c3b2fdb3e0
+:END:
+Test current heading, subtree, whole buffer, existing ID preservation, and files
+with unrelated properties such as `:PLAN:` and `:BLOCKED-BY:`.
+** DONE [#A] Implement explicit task selection helpers :selection:org:
+:PROPERTIES:
+:ID: 2e6b4633-f11b-4e64-814c-ff9714308492
+:END:
+Provide Emacs commands for the reserved `:selected:` tag while keeping selection
+semantics consistent with the pi tasks extension.
+
+Acceptance criteria:
+- Command toggles `:selected:` on the current task.
+- Existing `:selected:` tags are cleared across the project task graph before a
+  new selection is written.
+- Toggling the currently selected task clears selection.
+- Command refuses or explains when point is not on an actionable task heading.
+- Saving the buffer is enough for pi's file watcher to refresh the compact
+  widget/overlay.
+*** DONE [#B] Locate task graph files for selection clearing :selection:
+:PROPERTIES:
+:ID: e896d385-2e31-4fa4-a8c9-b5e5fa0e332d
+:END:
+Use `projectile-project-root` to locate the project root and resolve `TASKS.org`
+plus any plan files referenced by `:PLAN:` properties. Fall back to the buffer's
+own directory if projectile cannot resolve a root. Prefer safe, explicit file
+updates over scanning arbitrary org files.
+*** DONE [#B] Preserve normal org tag editing :selection:ux:
+:PROPERTIES:
+:ID: f3594aeb-1eea-4e07-a02c-f4732f978f86
+:END:
+Ensure the helper coexists with `org-set-tags-command` and does not rewrite
+semantic tags unexpectedly.
+** DONE [#A] Implement plan open/create helpers :plans:org:
+:PROPERTIES:
+:ID: 594900c9-5760-4ae1-ae03-a265aed20a41
+:END:
+Mirror the tasks extension's plan-link conventions from Emacs: prefer clickable
+`[[file:...]]` values, respect top-level `#+PLANS`, and keep plan files in the
+standard structure.
+
+Acceptance criteria:
+- Command opens an existing `:PLAN:` link with normal org link behavior.
+- Command creates a missing `:PLAN:` using `#+PLANS: [[file:...]]`, defaulting to
+  `./design/log` when absent.
+- New plan files include `#+TITLE`, `#+DATE`, `#+TODO`, `* Context`, and
+  `* Plan`.
+- Existing bare path or labelled link forms are preserved unless the command is
+  explicitly creating/replacing the plan link.
+- v1 scaffolds an empty plan file only; moving local subtasks into the new plan
+  is deferred to a separate workstream (see Design decisions).
+*** DONE [#B] Reuse org link APIs for clickable PLAN values :plans:emacs:
+:PROPERTIES:
+:ID: a5b33e4f-a544-4fa4-8a2b-8c64c47d77f1
+:END:
+Use org link parsing/opening primitives where possible rather than maintaining a
+separate Emacs Lisp parser for org links.
+*** DONE [#B] Implement plan file scaffold :plans:org:
+:PROPERTIES:
+:ID: 78c69fdf-c448-4df6-b960-60b2e1be271b
+:END:
+Create the new plan file with `#+TITLE`, `#+DATE`, `#+TODO`, `* Context`, and
+`* Plan` sections. Update or set the parent task's `:PLAN:` property to the
+clickable `[[file:...]]` form. Subtask absorption is explicitly out of scope
+for v1 — see Design decisions.
+** DONE [#B] Document usage in the `org-user` layer README :docs:
+:PROPERTIES:
+:ID: 22f593f9-8229-4ffa-ade5-3aa47410a8ed
+:END:
+Update `editors/emacs/spacemacs/layers/org-user/README.org` with purpose,
+activation, commands, keybindings, and the relationship to pi's tasks extension.
+
+Acceptance criteria:
+- README explains that files remain plain org and pi is optional.
+- README lists commands and keybindings.
+- README documents `:ID:`, `:selected:`, `:PLAN:`, and `#+PLANS` conventions.
+- README notes that sync is currently save/file-watcher based.
+** DONE [#B] Validate transparent Emacs/pi workflow :verification:
+:PROPERTIES:
+:ID: 437d6716-1135-4459-ad0f-ee9f88eff294
+:END:
+Run an end-to-end smoke test using normal org editing plus the new helpers.
+
+[2026-04-27 Sun] All acceptance criteria passed via manual validation.
+
+Acceptance criteria:
+- Open `TASKS.org` in Emacs, enable/use `tasks-org-mode`, and ensure an ID on a
+  task.
+- Toggle selection in Emacs, save, and confirm pi's compact widget/overlay
+  refreshes from disk.
+- Create/open a plan from Emacs and confirm pi loads injected plan tasks.
+- Edit a linked plan task in Emacs, save, and confirm pi refreshes status/title
+  changes.
+- Verify ordinary org editing commands still behave normally.
+- Record any follow-up work as new tasks rather than expanding this initial
+  implementation beyond the transparent-helper scope.
+** DONE [#C] Rework tasks-org Spacemacs keybinding strategy :emacs:ui:
+:PROPERTIES:
+:ID: b1c8e7a3-9f4d-4c2e-a7d3-8b2f1c0e9d4a
+:END:
+Deferred follow-up. The current bindings (=, K {s,i,I,p,t}=) work but the
+implementation is ugly:
+- Capital =K= is not mnemonic for "tasks".
+- =, p= (the original choice) was already bound by Spacemacs's org layer to
+  =org-priority=; capital =, K= turned out to be bound to
+  =org-kill-note-or-show-branches=.
+- We unbind =, K= and then re-declare it as our prefix, deferring the whole
+  sequence via =with-eval-after-load 'org= to win the timing race against
+  =+lang/org='s late binding.
+
+Acceptance criteria:
+- A keybinding scheme that does not require unbinding existing Spacemacs
+  org-layer bindings, OR
+- A clearly justified scheme under a stable prefix that is unlikely to be
+  reclaimed by upstream Spacemacs.
+- README and plan design-decisions updated to match the new scheme.
+
+Candidate approaches to evaluate:
+- Move to a global leader (e.g. =SPC a t= for "applications > tasks") so
+  bindings don't compete with org-mode prefixes at all.
+- Use a special-character prefix (e.g. =, != or =, ;=) that Spacemacs does
+  not bind in any layer.
+- Nest under a sub-prefix already declared by Spacemacs (requires surveying
+  which prefixes are designated for layer extension).
+- Accept the current scheme as intentional and document the trade-off.
+
+[2026-04-27 Sun] Adopted =, ;= as the prefix. =;= is free in the Spacemacs
+org layer, reachable without Shift, and requires no unbinding of existing
+bindings. The =with-eval-after-load 'org= timing workaround was removed
+entirely. Candidate approaches evaluated and rejected: =SPC a t= (global
+leader, too many keystrokes for frequent use), single free capital letters
+(non-mnemonic). =;= is non-mnemonic too but is the most ergonomic free key.
+
+Not blocking v1. Revisit when the package is stable enough that a breaking
+key change is acceptable, or before sharing the package beyond personal use.
+** DONE [#D] Add convenience keybinding
+:PROPERTIES:
+:ID: ddb2529d-6588-40ed-b4ac-81bcb6c31765
+:END:
+[2026-04-27 Sun] Implemented.
+
+- =, ; P= (=tasks-org-open-plan-other-window=) :: Threads `find-fn` through
+  =tasks-org--open-plan-link= and =tasks-org--create-plan-for-current-task=
+  as an optional parameter (defaulting to =#'find-file=).
+  =tasks-org-open-plan= accepts the same optional arg; the new command
+  passes =#'find-file-other-window=.
+- =, ; u= (=tasks-org-jump-to-parent-task=) :: Searches TASKS.org for a
+  =:PLAN:= property whose resolved absolute path matches the current
+  buffer's file; jumps to that heading via =find-file-noselect= +
+  =org-back-to-heading= + =org-show-entry=. Only searches TASKS.org
+  (not nested plan files); sufficient for the common case where plan
+  files are linked directly from the task root.
+** DONE [#B] Tasks extension - archive function mistakenly won't archive some issues
+CLOSED: [2026-04-28 Tue 11:38]
+:PROPERTIES:
+:ID: 84085b11-837b-449a-8cf8-190c607f480c
+:STARTED: [2026-04-28 Tue 11:00]
+:ARCHIVED: [2026-04-28 Tue 11:38]
+:END:
+#+IMPORT: [[file:design/log/2026-04-28-tasks-archive-fix.org]]
+** DONE [#D] tasks-org: subtask absorption on plan create :emacs:pi:
+CLOSED: [2026-04-28 Tue 11:52]
+:PROPERTIES:
+:ID: f4a2c819-3e7d-4b08-a901-6d7c0e5b2f38
+:STARTED: [2026-04-28 Tue 11:45]
+:ARCHIVED: [2026-04-28 Tue 11:52]
+:END:
+#+IMPORT: [[file:design/log/2026-04-28-tasks-org-subtask-absorption.org]]
+When creating a new =#+IMPORT:= for a task that already has local subtasks,
+offer to move those subtasks into the new plan file (preserving =:ID:=
+properties and leaving a summary under the parent). Coordinate behaviour
+with the pi tasks extension's parser so results are consistent across
+editor and CLI.
+** DONE [#C] Add some sort of Jira integration for the tasks extension
+CLOSED: [2026-04-28 Tue 14:00]
+:PROPERTIES:
+:ID: 0276a6c7-0ca8-4c39-a90a-05587ad64698
+:STARTED: [2026-04-28 Tue 13:27]
+:ARCHIVED: [2026-04-28 Tue 14:00]
+:END:
+#+IMPORT: [[file:design/log/2026-04-28-jira-integration.org]]
+** CANCELLED [#B] Update keybindings extension to handle capital letter properly
+CLOSED: [2026-04-28 Tue 22:57]
+:PROPERTIES:
+:ID: d9789ed7-ff34-490a-a818-bf7a79fa1180
+:ARCHIVED: [2026-04-28 Tue 22:57]
+:END:
+#+IMPORT: [[file:design/log/2026-04-27-keybindings-capital-letters.org]]
+Currently a key sequence SPACE t A isn't activated as expected. The keybindings extension toggles on the sequence SPACE t SHIFT a.
+
+Cancelled 2026-04-28: misdiagnosis. The real bug was in =tasks/overlay.ts=,
+which called =matchesKey(data, "A")= directly rather than
+=matchesKey(data, "shift+a")=. The leader/keybindings extension itself was
+not at fault. Fix landed via a one-line change in =overlay.ts=. See change
+record for the four failed attempts down the wrong path.
+
+* DONE [#C] Token-efficient Jira clone workflow
+CLOSED: [2026-04-28 Tue 16:54]
+:PROPERTIES:
+:ID: 4ad4bb1b-9e74-48a0-9ce4-2d69639a8bc8
+:CREATED: [2026-04-28 Tue 15:16]
+:STARTED: [2026-04-28 Tue 16:34]
+:ARCHIVED: [2026-04-28 Tue 16:54]
+:END:
+#+IMPORT: [[file:design/log/2026-04-28-jira-clone-token-efficiency.org]]
+Follow-up to the read-only Jira integration. Today's `/jira clone` round-trips the
+entire `atlassian_getJiraIssue` JSON and the rendered org body through the model,
+which is wasteful (~17KB ingested for ~6 fields used). Step 1 (field-list filter
+in the prompt) shipped on 2026-04-28. The remaining wins below are tracked here.
+
+* DONE Review 0.71.0 changes re. editor
+CLOSED: [2026-05-01 Fri 18:17]
+:PROPERTIES:
+:ID: c94bab43-aedf-4ccf-984c-a2e1167e880a
+:STARTED: [2026-05-01 Fri 17:43]
+:ARCHIVED: [2026-05-01 Fri 18:17]
+:END:
+:LOGBOOK:
+- State "STARTED"    from "TODO"       [2026-05-01 Fri 17:43]
+- State "DONE"       from "STARTED"    [2026-05-01 Fri 18:17]
+:END:
+#+IMPORT: [[file:design/log/2026-05-01-keybindings-editor-composition.org]]
+Changelog for latest pi release includes the following:
+- Added `ctx.ui.getEditorComponent()` so extensions can wrap the currently configured custom editor factory ([#3935](https://github.com/badlogic/pi-mono/issues/3935)).
+
+This new section in the docs includes some relevant examples:
+https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/extensions.md#widgets-status-and-footer
+
+And the commit including the change...
+
+* DONE [#C] Review prior art w.r.t. org-memory protocol
+CLOSED: [2026-05-02 Sat 13:58]
+:PROPERTIES:
+:ID: 5aed17ed-cfc4-4ae3-bb24-57c7d974a142
+:CREATED: [2026-04-29 Wed 09:51]
+:STARTED: [2026-05-01 Fri 19:28]
+:ARCHIVED: [2026-05-02 Sat 13:58]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-02 Sat 13:58]
+- Created [2026-04-29 Wed 09:51]
+- State "STARTED" from "TODO" [2026-05-01 Fri 19:28]
+:END:
+#+IMPORT: [[file:design/log/2026-05-01-dev-agent-backlog-prior-art-review.org]]
+Just saw this while looking for something else:
+https://github.com/farra/dev-agent-backlog
+(Reddit source link: https://www.reddit.com/r/emacs/comments/1q415fx/my_orgmode_based_designtask_tracking_system_for/)
+Looks like a slightly different spin, but interesting to take a look at to see if there are
+some ideas that would benefit my system.
+
+* DONE [#C] Refactor keybindings extension
+CLOSED: [2026-05-02 Sat 17:15]
+:PROPERTIES:
+:ID: 00e1772c-92eb-4a5b-afc5-bf1bbbb51e5b
+:STARTED: [2026-05-02 Sat 14:55]
+:ARCHIVED: [2026-05-02 Sat 17:15]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-02 Sat 17:15]
+- State "STARTED" from "TODO" [2026-05-02 Sat 14:55]
+:END:
+#+IMPORT: [[file:design/log/2026-05-02-refactor-keybindings-extension.org]]
+- Separate the keybindings extension into a 'which-key' extension (for the leader key / sequence stuff) and a modal editor extension
+- Consider whether to eliminate our own modal extension entirely and use this package: https://github.com/kepatrick/vim-motions-pi
+
+* DONE [#D] Make leader keys configurable via leader-menu.json :leader-menu:refactor:
+CLOSED: [2026-05-02 Sat 17:30]
+:PROPERTIES:
+:ID: 2703c1ed-457e-4160-9c3f-eea7b06b0e7b
+:CREATED: [2026-05-02 Sat 17:26]
+:STARTED: [2026-05-02 Sat 17:26]
+:ARCHIVED: [2026-05-02 Sat 17:30]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-02 Sat 17:30]
+- State "STARTED" from "TODO" [2026-05-02 Sat 17:26]
+- Created [2026-05-02 Sat 17:26]
+:END:
+Done. Follow-up to the keybindings refactor (00e1772c). The leader-menu extension now exposes two abstract slots — globalMenu (default Space) and localMenu (default ,) — with trigger keys resolvable from ~/.pi/agent/leader-menu.json. Extensions contribute via globalMenu / localMenu fields rather than naming trigger keys directly. vim-mode receives the resolved keys via a new leader-menu:keys-resolved event and updates its Normal-mode dispatcher accordingly.
+
+Migration: the legacy `menus: { foo: { key: " ", items: {...} } }` registration shape is no longer accepted; consumers (tasks, term, git-diff) updated to globalMenu. term moved from `'` to `Space '`.
+
+Closing this task and committing in the same commit as the implementation.
+
+* DONE [#D] Drop redundant vim-mode toggle (single-responsibility cleanup) :vim-mode:refactor:
+CLOSED: [2026-05-02 Sat 17:50]
+:PROPERTIES:
+:ID: bfbc6354-5441-4a8f-8616-a952d75135fa
+:CREATED: [2026-05-02 Sat 17:38]
+:ARCHIVED: [2026-05-02 Sat 17:50]
+:END:
+:LOGBOOK:
+- Created [2026-05-02 Sat 17:38]
+:END:
+Done. Follow-up to the keybindings refactor (00e1772c). vim-mode is a single-responsibility extension; the runtime enable/disable plumbing was redundant — the natural off-state is "extension not loaded".
+
+Removed:
+- vim-mode.json settings file (entirely)
+- /vim-mode on|off|toggle slash command
+- vim-mode:enable / vim-mode:disable events
+- Space t E v / Space t E e leader chords (from defaults.json)
+- installModalEditor / uninstallModalEditor / setMode plumbing
+- previousEditorFactory save/restore
+- modalEnabled field + setModalEnabled / isModalEnabled methods + every guard against it
+- vim-mode's settings migrator
+
+Moved:
+- debug flag (per-keypress logger) → ~/.pi/agent/leader-menu.json
+- Migrator extended in leader-menu to copy debug from vim-mode.json or keybindings-ext.json on first run
+- tasks/overlay.ts retargeted to read debug from leader-menu.json
+
+Net diff: vim-mode/index.ts shrank ~150 lines; defaults.json's globalMenu has no items left (all chords now contributed by other extensions).
+
+To disable vim-mode now, remove the extension directory or comment out its inclusion in agents.nix (TODO: add a clean Nix-level enable flag for this — captured below as a separate follow-up).
+
+* DONE [#D] Resolve default local leader conflict with vim-mode comma repeat :leader-menu:vim-mode:ux:
+CLOSED: [2026-05-03 Sun 13:05]
+:PROPERTIES:
+:ID: 32e3b4a9-c608-4984-b001-89b3ac70e89f
+:CREATED: [2026-05-02 Sat 17:49]
+:STARTED: [2026-05-03 Sun 13:01]
+:ARCHIVED: [2026-05-03 Sun 13:05]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-03 Sun 13:05]
+- State "STARTED" from "TODO" [2026-05-03 Sun 13:01]
+- Created [2026-05-02 Sat 17:49]
+:END:
+Resolved as option 2 — keep =,= as default localLeader, document the
+trade-off, and silence the spurious clash warning when the user is on
+the shipped default config. =alt+,= remains the always-works escape
+hatch in any mode.
+
+Implementation:
+- =leader-menu/index.ts=: =warnClashingLeaderKeys()= now takes the raw
+  =UserSettings= and only warns for slots the user has explicitly
+  configured. =resolveLeaders()= takes an optional =UserSettings= so
+  the call site can read once and pass both downstream. Warning
+  rephrased to point at =alt+<leader>= as the escape hatch.
+- =leader-menu/README.md=: explicit "Default local leader: , and the
+  vim repeat-find trade-off" subsection covering the behaviour,
+  =alt+,= escape hatch, and how to override.
+- Verified via node script that on a fresh checkout with no
+  =leader-menu.json= the new logic does not warn (old logic did).
+Final-review finding from the keybindings refactor (parent 00e1772c). Current defaults keep `localLeader` as comma, while vim-mode also adopted Vim repeat-find-backward on `,`.
+
+Observed final state:
+- `alt+,` opens the local menu globally.
+- In vim-mode Normal mode, bare `,` is handled by the Vim grammar before leader delegation, so the local leader overlay does not open.
+- `leader-menu` also warns about `localLeader ","` clashing with the Vim grammar, which means the default config can produce its own warning.
+
+Decide and implement one of:
+1. Change the default local leader to a non-conflicting key (candidate `;`, but note Vim `;` is repeat-find-forward).
+2. Keep comma as default and document that bare Normal-mode local leader is unavailable; use `alt+,` or configure `leader-menu.json`.
+3. Add a priority/escape mechanism so users can choose whether leader or Vim grammar wins for conflicting keys.
+
+Do not resolve accidentally by dropping repeat-find-backward; that was intentionally imported from the upstream evaluation.
+
+* DONE leader-menu: fix slash command dispatch :leader-menu:
+CLOSED: [2026-05-05 Tue 21:29]
+:PROPERTIES:
+:ID: c22975ff-5ea8-47d4-807e-6499f2ea6970
+:CREATED: [2026-05-05 Tue 20:46]
+:STARTED: [2026-05-05 Tue 20:47]
+:ARCHIVED: [2026-05-05 Tue 21:29]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-05 Tue 21:29] \\
+  Smoke test verified in kitty on macOS; macOS =⌃Space= gotcha
+  documented in =leader-menu/README.md=. Follow-up to re-enable
+  vim-mode tracked separately (=:ID: fe6b1c6d-edcf-4441-9820-c70aa33add23=).
+- Created [2026-05-05 Tue 20:46]
+- State "STARTED" from "TODO" [2026-05-05 Tue 20:47]
+:END:
+#+IMPORT: [[file:design/log/2026-05-05-leader-menu-slash-submission.org]]
+
+* DONE [#B] Review org-memory protocol as agent memory
+CLOSED: [2026-05-05 Tue 22:05]
+:PROPERTIES:
+:ID: 724c0332-e491-4b66-900f-e11478057eb1
+:STARTED: [2026-05-01 Fri 08:51]
+:ARCHIVED: [2026-05-05 Tue 22:05]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-05 Tue 22:05] \\
+  Generic org-memory protocol review complete. Jira-specific validation
+  extracted to task 2b4d4ca7; legacy metadata compatibility extracted
+  to task 972d5cec.
+- State "WAITING" from "STARTED" [2026-05-02 Sat 14:22]
+- State "DONE" from "WAITING" [2026-05-02 Sat 14:22]
+- State "WAITING" from "DONE" [2026-05-02 Sat 14:22]
+- State "STARTED" from "WAITING" [2026-05-02 Sat 14:22]
+:END:
+#+IMPORT: [[file:design/log/2026-05-01-org-memory-agent-memory-review.org]]
+The org-memory protocol (the combination of org-tasks and org-plan skills) is intended to provide a cross-session memory mechanism for agents to learn and rebuild context as well as a task management and planning tool for humans.
+Review in this context and identify gaps / suggest improvements
+
+* DONE Activating tasks overlay clobbers text in input area
+CLOSED: [2026-05-05 Tue 22:21]
+:PROPERTIES:
+:ID: 1f8a039b-ef3d-4461-952e-1dc2b2b9a780
+:STARTED: [2026-05-05 Tue 22:18]
+:ARCHIVED: [2026-05-05 Tue 22:21]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-05 Tue 22:21]
+- State "STARTED" from "TODO" [2026-05-05 Tue 22:18]
+:END:
+#+IMPORT: [[file:design/log/2026-05-05-event-dispatch-extension-bindings.org]]
+This is irritating -- address.
+
+* CANCELLED [#D] Add Nix-level enable flag for individual pi extensions :dotfiles:nix:feature:
+CLOSED: [2026-05-05 Tue 22:57]
+:PROPERTIES:
+:ID: dabf963a-e0e0-4fac-b7f8-ab5c5740a17e
+:CREATED: [2026-05-02 Sat 17:39]
+:ARCHIVED: [2026-05-05 Tue 22:57]
+:END:
+:LOGBOOK:
+- State "CANCELLED" from "TODO" [2026-05-05 Tue 22:57]
+- Created [2026-05-02 Sat 17:39]
+:END:
+Captured during the vim-mode toggle simplification (bfbc6354). Currently agents.nix symlinks the entire `agents/pi/extensions/` directory into `~/.pi/agent/extensions/`, so per-extension disablement requires either:
+
+- Removing the source directory (lossy)
+- Manually unlinking the target after `home-manager switch` (fragile)
+
+Better: option-based Nix configuration that materialises only the requested subset of extensions.
+
+Sketch:
+
+```nix
+{ piExtensions = {
+    enable = [ "tasks" "term" "git-diff" "leader-menu" "vim-mode" ];
+    # or: disable = [ "vim-mode" ];
+  };
+}
+```
+
+agents.nix iterates the list and creates per-extension symlinks under `~/.pi/agent/extensions/<name>` rather than one bulk symlink. Probably 30-50 lines of Nix.
+
+Useful for:
+- Trying out / disabling vim-mode without removing the source
+- Per-host extension subsets (e.g. fewer extensions on the minimal home-manager profile)
+- Testing builds with one extension excluded
+
+Cancelled eventually -- implementation worked, but was big and ugly -- not worth the maintenance overhead.
+
+* CANCELLED [#D] Add org-mode writing skill?
+CLOSED: [2026-05-05 Tue 23:13]
+:PROPERTIES:
+:ID: f3fd95aa-34ce-4c47-b8d5-569531ca8192
+:STARTED: [2026-05-05 Tue 23:13]
+:ARCHIVED: [2026-05-05 Tue 23:13]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-05 Tue 23:13]
+- State "WAITING" from "STARTED" [2026-05-05 Tue 23:13]
+- State "DONE" from "WAITING" [2026-05-05 Tue 23:13]
+- State "WAITING" from "DONE" [2026-05-05 Tue 23:13]
+- State "STARTED" from "WAITING" [2026-05-05 Tue 23:13]
+- State "TODO" from "STARTED" [2026-05-05 Tue 23:13]
+- State "CANCELLED" from "TODO" [2026-05-05 Tue 23:13]
+:END:
+Automatic writes by skill/tooling clobber whitespace. This may be resolvable via one-line addition to the org-tasks skill? Though maybe worth adding a general-purpose org-mode skill...
+DECISION Updated the org-tasks skill - no need for a dedicated writing skill for now
+* DONE [#D] Package org-memory protocol / extensions
+CLOSED: [2026-05-06 Wed 22:50]
+:PROPERTIES:
+:ID: 79d6f4f5-70f9-404d-9b4c-0cf0ef0e7adb
+:STARTED: [2026-05-06 Wed 21:56]
+:ARCHIVED: [2026-05-06 Wed 22:50]
+:END:
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2026-05-06 Wed 22:50]
+- State "STARTED"    from "TODO"       [2026-05-06 Wed 21:56]
+:END:
+#+IMPORT: [[file:design/log/2026-05-06-package-org-memory-protocol-extensions.org]]
+Currently the skills and extensions are embedded in this repo.
+Good to either extract them, or come up with a packaging/deployment strategy to facilitate sharing them with the team / other
+interested parties.
+Ideally the approach would allow me to continue editing skills/extensions live and reloading without having to go through a
+rebuild install step.

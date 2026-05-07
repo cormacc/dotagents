@@ -1,0 +1,356 @@
+#+TITLE: Create self-improvement skill
+#+DATE: 2026-04-29 Wed
+#+PARENT_ID: 2262ed25-f0fc-40fd-9d21-41a0b16fb3a1
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Context
+
+Agent / pi configuration is layered: a *global* tier lives in this
+dotfiles repo (=AGENTS.md=, =agents/skills/=, =agents/pi/=) and is
+symlinked into =~/.agents= and =~/.pi/agent= via [[file:agents.nix]];
+a *project-local* tier may live in any repo (a project-level
+=AGENTS.md=, project-scoped skills, project-specific pi extensions or
+conventions). Friction with either tier is most visible while
+working *in some project*, but the durable fix has to land at the
+right tier — global friction is fixed in dotfiles, project-local
+friction is fixed in that project.
+
+We want a single skill that captures the feedback at the moment it
+arises and routes it to the right tier as actionable TODO work,
+without forcing a context-switch out of whatever the contributor is
+currently doing.
+
+** Design decisions
+
+- Single skill, repo-agnostic :: One =self-improvement= skill that
+  is available in every session (lives under =agents/skills/= so it
+  symlinks into =~/.agents/skills/=). It does not key its behaviour
+  off "am I inside dotfiles?" — instead it keys off *what the
+  feedback is about*.
+- Routing by target tier :: When the skill is invoked it
+  classifies the affected artefact and routes accordingly:
+  - *Project-local target* (project =AGENTS.md=, project-scoped
+    skill / extension / convention, project tooling) → file the TODO
+    in the *current project's* =TASKS.org= under =* Agent feedback=.
+  - *Global target* (dotfiles-managed =AGENTS.md=, =~/.agents/skills=,
+    =~/.pi/agent= contents) → file the TODO in
+    =~/dotfiles/TASKS.org= under =* Agent feedback=.
+  - *Ambiguous* → ask the user to disambiguate before routing; if
+    they decline, default to the current project (least disruptive)
+    and tag with =:tier-unknown:= so it can be re-routed later.
+- Submit + triage as one flow :: There is no separate "client" and
+  "server". Whichever session the skill is invoked in *also* runs
+  the triage logic for entries it routes locally. For entries
+  routed to dotfiles, the originating session hands off via
+  pi-intercom and the receiving dotfiles session does the triage
+  there.
+- Local-tier flow (no intercom) :: For project-local entries the
+  skill writes directly to the current project's =TASKS.org= via
+  =tasks_insert_task=. No transport needed; the originating session
+  is already in the right place to act on it.
+- Cross-tier flow via pi-intercom :: For dotfiles-tier entries the
+  skill discovers a live dotfiles session via =intercom action:list=,
+  spawns one if none is alive (e.g. =pi= in a tmux session named
+  =dotfiles-feedback= with cwd =$HOME/dotfiles=), and sends a
+  =intercom action:send= envelope (fire-and-forget). The dotfiles
+  session triages the inbound message, inserts the TODO, and replies
+  asynchronously with the new task UUID and a "plan now or
+  backlog?" prompt that lands in the originating session's inbox.
+- Persistence in =TASKS.org= under =* Agent feedback= :: At both
+  tiers, feedback becomes durable as TODO entries under a dedicated
+  =* Agent feedback= section. Inserted via =tasks_insert_task= so
+  =:ID:=, =:CREATED:=, and tags follow protocol. From there the entry
+  can grow a change-record like any other task. Avoids inventing a
+  parallel inbox; existing tooling (selection, archiving,
+  =org-plan=) applies unchanged.
+- Free-form payload + auto-detected metadata :: Sender supplies a
+  free-form description; the skill auto-attaches origin session
+  name, =cwd=, git remote, current branch, timestamp, sender type
+  (=human= vs =agent=), and an optional transcript snippet. The
+  affected-target classification is derived during triage rather
+  than required at submission, keeping the submit UX one-shot.
+- Confirmation policy by sender type :: When the sender is the
+  *agent itself* (proposed in response to recurring missteps or
+  user corrections) triage auto-inserts the drafted task without
+  further prompting. When the sender is a *human* triage surfaces
+  its drafted summary/body for confirmation before inserting,
+  because the human's intent is being reformulated and they
+  should sign off on the wording.
+- Triage classifies + dedupes :: Before inserting, triage tags the
+  entry with the affected target (e.g. =:skill_org-tasks:=,
+  =:ext_jira:=, =:agents-md:=, =:project-convention:=) and searches
+  existing open entries in =* Agent feedback= for near-duplicates,
+  merging evidence into the existing entry rather than creating a
+  parallel TODO.
+
+** Out of scope
+
+- A general "lessons learned" inbox separate from =TASKS.org=.
+- Auto-editing =AGENTS.md= / skill files without going through a
+  =TASKS.org= entry + change-record + the usual review flow.
+- Cross-machine delivery (pi-intercom is local-only). Multi-host
+  feedback can be addressed later if the need arises.
+- Auto-rerouting an entry that was filed at the wrong tier — the
+  skill flags ambiguous cases at submission time but does not move
+  entries between repos after the fact.
+
+* Plan
+
+** DONE [#A] Scaffold skill directory and SKILL.md frontmatter
+CLOSED: [2026-04-29 Wed 08:03]
+:PROPERTIES:
+:ID: 02e28381-5734-498d-944d-c3d468aa0e63
+:CREATED: [2026-04-29 Wed 01:09]
+:STARTED: [2026-04-29 Wed 08:00]
+:END:
+Create =agents/skills/self-improvement/= with a =SKILL.md= that
+declares =name: self-improvement= and a description matching the
+task description. Document the routing rule (project-local vs
+dotfiles-global), the dual flow (direct insert vs intercom
+hand-off), and the high-level control flow. Acceptance: skill
+appears under =~/.agents/skills/= after the symlink resolves;
+=pi= lists it in =available_skills= from any repo.
+** DONE [#A] Specify the routing classifier
+CLOSED: [2026-04-29 Wed 08:03]
+:PROPERTIES:
+:ID: ee93a205-4626-4677-a85d-5a25dd70878f
+:CREATED: [2026-04-29 Wed 01:09]
+:STARTED: [2026-04-29 Wed 08:03]
+:END:
+Define (in SKILL.md) how the agent decides whether feedback is
+project-local or dotfiles-global. Rules of thumb to capture:
+- Path-based signals (the affected file resolves under
+  =$HOME/dotfiles= or under =~/.agents= / =~/.pi/agent= via the
+  symlinks → global; otherwise project-local).
+- Artefact-based signals (skill / extension / =AGENTS.md= shipped
+  by dotfiles → global; project-only =AGENTS.md=, scripts under
+  the project, project conventions → project-local).
+- Ambiguity handling: surface the choice to the user; default to
+  current project + =:tier-unknown:= tag if declined.
+Acceptance: SKILL.md contains a decision table or short
+flowchart the agent can follow without further input.
+** DONE [#A] Implement local-tier submit+insert flow
+CLOSED: [2026-04-29 Wed 08:03]
+:PROPERTIES:
+:ID: 4f3c3b24-d739-4d35-9e00-6336331a3e65
+:CREATED: [2026-04-29 Wed 01:09]
+:STARTED: [2026-04-29 Wed 08:03]
+:END:
+Specify the behaviour for project-local entries (no transport):
+- Collect free-form description (or self-propose).
+- Auto-detect metadata (origin session, cwd, git remote/branch,
+  timestamp, sender type).
+- Classify affected target → org tag.
+- Dedupe against open entries in the current project's
+  =* Agent feedback= section.
+- If sender is human, confirm wording; if agent, skip.
+- Insert via =tasks_insert_task= with =allowCreateSection: true=
+  into the current project's =TASKS.org=.
+- Prompt the user about whether to start =org-plan= now or leave
+  on the backlog.
+Acceptance: invoking the skill in a project with a fake
+observation produces a TODO under =* Agent feedback= in that
+project's =TASKS.org= and offers planning.
+** DONE [#A] Implement cross-tier submit flow (intercom send)
+CLOSED: [2026-04-29 Wed 08:03]
+:PROPERTIES:
+:ID: d0730273-d501-4aa7-bb8e-50e74e19fab2
+:CREATED: [2026-04-29 Wed 01:09]
+:STARTED: [2026-04-29 Wed 08:03]
+:END:
+Specify the sender behaviour when the routing classifier
+identifies a dotfiles-global target:
+- Collect free-form description + auto metadata as above.
+- Discover live dotfiles sessions via =intercom action:list=
+  (filter by cwd under =$HOME/dotfiles=); spawn one if none
+  exists (see next task).
+- Send via =intercom action:send= with a structured envelope
+  (free-form body + metadata block + sender-type marker).
+- Return immediately; do not block on triage.
+Acceptance: a dry-run from another project successfully posts a
+test message that the dotfiles session sees in its inbox.
+** DONE [#B] Auto-spawn dotfiles session when none alive
+CLOSED: [2026-04-29 Wed 08:03]
+:PROPERTIES:
+:ID: 92ada34d-da91-4bf8-8fdf-4178d799ee05
+:CREATED: [2026-04-29 Wed 01:09]
+:STARTED: [2026-04-29 Wed 08:03]
+:END:
+Define the spawn recipe (e.g. tmux session named
+=dotfiles-feedback= running =pi= with cwd =$HOME/dotfiles=). Wait
+for it to register with intercom, retry sending a small number
+of times, then surface a clear error if it never appears.
+Acceptance: with no dotfiles session running, the cross-tier
+submit flow boots one and the message lands.
+** DONE [#A] Implement triage-mode flow (dotfiles inbound + local self-triage)
+CLOSED: [2026-04-29 Wed 08:03]
+:PROPERTIES:
+:ID: e71730f4-9453-4483-b8aa-95bdd50f779f
+:CREATED: [2026-04-29 Wed 01:09]
+:STARTED: [2026-04-29 Wed 08:03]
+:END:
+Specify the triage behaviour. The same routine runs both for
+inbound intercom messages received in a dotfiles session and for
+local-tier self-triage in any session:
+1. Parse envelope (or local-call args) → body + metadata.
+2. Classify affected target → org tag.
+3. Dedupe against open entries in the *target repo's*
+   =* Agent feedback= section using keywords + tag; merge evidence
+   into the existing entry if a near-match exists.
+4. Draft summary + body. If sender is human, confirm wording;
+   if agent, skip.
+5. Insert via =tasks_insert_task= with section =Agent feedback=
+   and =allowCreateSection: true=.
+6. Reply to the sender (intercom for cross-tier, in-session for
+   local) with the new task UUID and the "plan now or backlog?"
+   prompt.
+Acceptance: a synthetic inbound dotfiles message and a synthetic
+local invocation both produce well-formed TODOs under
+=* Agent feedback= with correct tags and an ack/prompt to the
+sender.
+** DONE [#B] Document =* Agent feedback= entry conventions
+CLOSED: [2026-04-29 Wed 08:03]
+:PROPERTIES:
+:ID: 9546e794-142d-469b-a6f9-ca9bf6faf2f6
+:CREATED: [2026-04-29 Wed 01:09]
+:STARTED: [2026-04-29 Wed 08:03]
+:END:
+Document (in the skill's SKILL.md, not in =TASKS.org=) the
+conventions for entries under =* Agent feedback=:
+- Heading shape: =** TODO [summary]= with affected-target tag.
+- Body: free-form description from sender, followed by a small
+  =Origin= block with session name, cwd, git remote+branch,
+  timestamp, sender type. Optional transcript snippet quoted
+  verbatim.
+- Promotion: when triaged into a planned change, the entry
+  follows the standard =org-plan= flow (=#+IMPORT:= a
+  change-record under =design/log/= or the project's
+  =#+DEFAULT_PLAN_DIR=).
+Acceptance: SKILL.md contains a worked example heading + body
+the agent can copy.
+** DONE [#C] Define agent self-proposal trigger heuristics
+CLOSED: [2026-04-29 Wed 08:03]
+:PROPERTIES:
+:ID: bd819ce8-10a0-453a-8309-4eed4bcddaee
+:CREATED: [2026-04-29 Wed 01:09]
+:STARTED: [2026-04-29 Wed 08:03]
+:END:
+Specify (in SKILL.md) the conditions under which the *agent*
+should proactively invoke the skill: user correction of an agent
+action that traces back to an explicit =AGENTS.md= or skill
+guideline, repeated tool misuse rooted in unclear documentation,
+discovered protocol gaps. Keep heuristics narrow enough to avoid
+noise. Acceptance: the trigger list is specific enough that an
+agent can decide yes/no without further user input.
+** TODO [#C] End-to-end smoke test across two pi sessions
+:PROPERTIES:
+:ID: 4a8e0d6b-1c2d-4e3f-9a0b-1c2d3e4f5a6b
+:CREATED: [2026-04-29 Wed 01:09]
+:END:
+Deferred to the user since this requires a second live pi
+session in another project plus interactive observation of the
+dotfiles-side ack. Static checks were performed during
+implementation (see =* Implementation= → "Static verification").
+Run both flows manually when convenient:
+- *Local tier*: in some project, invoke the skill with a fake
+  project-local observation; verify the entry lands in that
+  project's =TASKS.org= with the right tag and the dedupe
+  collapses a second near-duplicate submission.
+- *Cross tier*: in the same project, invoke the skill with a
+  fake dotfiles-global observation; verify the dotfiles session
+  is discovered or spawned, the entry lands in
+  =~/dotfiles/TASKS.org=, and the async ack reaches the sender.
+Capture findings under =* Implementation= when run.
+** DONE [#C] Document the skill in agents/skills/README.org
+CLOSED: [2026-04-29 Wed 08:03]
+:PROPERTIES:
+:ID: 6f7a8b9c-0d1e-4f23-8a0b-1c2d3e4f5a6c
+:CREATED: [2026-04-29 Wed 01:09]
+:STARTED: [2026-04-29 Wed 08:03]
+:END:
+Add a short entry summarising purpose, routing model, and where
+feedback lands so contributors stumbling on the skill directory
+can grok it without reading SKILL.md cover-to-cover. Acceptance:
+README.org has a one-paragraph entry for =self-improvement= and
+links to its =SKILL.md=.
+* Implementation
+
+** Skill artefact
+
+Written as a single coherent SKILL.md at
+[[file:../../agents/skills/self-improvement/SKILL.md]]. The skill is
+spec-only — no scripts or executables — so plan tasks 1, 2, 3, 4, 5,
+6, 7, 8 collapsed naturally into one document with sections per
+responsibility:
+
+- /When to use/ → user-invoked + agent-invoked (self-proposal
+  heuristics, plan task 8).
+- /Routing/ → decision table for project-local vs
+  dotfiles-global, ambiguity handling, =:tier-unknown:= fallback
+  (plan task 2).
+- /Two flows/ → Flow A (local-tier insert, plan task 3) and
+  Flow B (cross-tier intercom send, plan task 4) with shared
+  metadata-collection step.
+- /Spawn recipe/ → cmux-preferred / tmux-fallback recipe for
+  the dotfiles session boot, polling for intercom registration
+  with a retry budget (plan task 5).
+- /Triage routine/ → unified routine for project-local
+  self-triage and dotfiles inbound triage, including the
+  classify-tag-dedupe-confirm-insert-ack pipeline (plan task
+  6).
+- /Agent feedback entry conventions/ → heading shape, body
+  template, dedupe-by-append rule, change-record promotion
+  pointer (plan task 7).
+- /Worked example/ → end-to-end illustrative scenario (Flow B
+  + agent self-propose path).
+
+** README
+
+=agents/skills/README.org= was empty; populated with a top-level
+intro plus one-line entries for every existing skill so the new
+=self-improvement= entry has natural context. Listing all skills
+was modest scope creep but kept the file useful instead of a
+stub.
+
+** Static verification
+
+Performed in lieu of the deferred two-session smoke test:
+
+- Skill is visible at =~/.agents/skills/self-improvement/SKILL.md=
+  (existing =mkOutOfStoreSymlink= for =agents/skills= picks up
+  new directories automatically — no =hms= run needed).
+- YAML frontmatter parses (=name= + =description= present).
+- Sibling skill references (=../org-tasks/SKILL.md=,
+  =../org-plan/SKILL.md=) resolve.
+- =pi-intercom= SKILL.md path referenced for transport
+  semantics resolves at
+  =~/.cache/npm/lib/node_modules/pi-intercom/skills/pi-intercom/SKILL.md=.
+- Tools the skill invokes (=tasks_insert_task=, =intercom=,
+  =date=, =git remote=, =cmux=/=tmux=) are all already part of
+  the standard pi tool surface or ubiquitous CLI.
+
+** Notes / decisions taken during implementation
+
+- /Free-form text envelope, not JSON/. The cross-tier message
+  is a plain string with a =[self-improvement]= prefix tag and
+  a structured =Origin:= block. Rationale: pi-intercom messages
+  are agent-to-agent prose; using the prefix avoids inventing a
+  schema while still letting the dotfiles agent recognise the
+  message.
+- /Acknowledgement uses =send=, not =reply=/. The originating
+  session's submit call was =send= (fire-and-forget), so there
+  is no in-flight =ask= for the dotfiles side to =reply= to.
+  Triage emits a fresh =send= with the =[self-improvement]=
+  prefix; the originating-session agent treats inbound messages
+  with that prefix as the planning prompt.
+- /Confirmation policy/. Inverted from the usual "trust
+  humans more" default: human-sender → confirm wording (because
+  the dotfiles-side agent has reformulated their words);
+  agent-sender → auto-insert (because there's no human at the
+  sender end to confirm anything).
+- /No archiving of feedback entries here/. Once an entry is
+  filed under =* Agent feedback=, it follows the standard
+  =org-tasks= status discipline; archiving on DONE/CANCELLED is
+  the existing protocol's job, not this skill's.
+
+* Open questions

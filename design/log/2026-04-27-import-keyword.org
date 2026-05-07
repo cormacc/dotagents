@@ -1,0 +1,114 @@
+#+TITLE: Replace :INCLUDE: drawer property with #+IMPORT: keyword
+#+DATE: 2026-04-27 Mon
+#+PARENT_ID: 9adb8c66-8aba-4e11-9922-70d6225f5a0e
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Context
+
+The original `:INCLUDE:` mechanism stored the link to an imported task file
+inside a task's =:PROPERTIES:= drawer.  This meant it could only ever be
+attached to a task heading that had a TODO state — it was impossible to use on
+non-task (category) headings like =* Improvements= or at the file root level
+(before any heading), which blocked the goal of splitting =TASKS.org= across
+multiple files via a lightweight index.
+
+The trigger for this work was the task "Update tasks skill to allow INCLUDE at
+top level -- not just for plans", added when the property was still called
+=:PLAN:=.  The rename to =:INCLUDE:= (commit =c9ddda9=) addressed the "not just
+for plans" semantic aspect but left the "top level" capability unimplemented.
+
+* Design
+
+Replaced =:INCLUDE:= with a =#+IMPORT:= keyword that can appear anywhere in an
+org file:
+
+- *In a task body* (after the =:END:= of the properties drawer, before any
+  description text) — same behaviour as the old =:INCLUDE:= property but without
+  requiring the drawer.
+- *At file root level* (before any heading) — tasks from the imported file are
+  injected at the root of the task tree.
+- *After a category/non-task heading* — =currentTask= is null at that point, so
+  the import is also treated as root-level.
+
+The keyword uses org-link syntax for clickability in Emacs (=C-c C-o=):
+
+#+begin_example
+#+IMPORT: [[file:design/log/2026-04-25-feature.org]]
+#+end_example
+
+Plain-path values are also accepted and round-trip cleanly.
+
+** Trade-offs accepted
+
+- =#+IMPORT:= in a heading body is not a standard org affiliated keyword; Emacs
+  displays it as plain text rather than as a drawer property.  Clickability via
+  =C-c C-o= on the link value still works.
+- =org-entry-get/put= can no longer be used from Emacs Lisp to read/write the
+  link; =tasks-org.el= was updated to use regex-based helpers instead.
+
+* Plan
+
+** DONE [#B] Update parser
+:PROPERTIES:
+:ID: a1b2c3d4-0001-4000-8000-000000000001
+:END:
+CLOSED: [2026-04-27 Mon 21:53]
+- Remove =INCLUDE_PROPERTY_RE=; add =IMPORT_KEYWORD_RE= matching =#+IMPORT:= anywhere.
+- Recognise =#+IMPORT:= in the main parse loop: attach to =currentTask= when
+  inside a heading body; collect in =fileImports[]= when =currentTask= is null.
+- Simplify properties drawer handling — all lines pass through verbatim.
+- Rename Task fields: =planPath→importPath=, =planRaw→importRaw=,
+  =planChildren→importChildren=, =planError→importError=.
+- Add =ParseResult= type ={tasks, fileImports}=; change =parseTasks= return type.
+- =serializeTasks=: write =#+IMPORT:= in task body (after =:END:=, before
+  description) instead of inside the properties drawer.
+
+** DONE [#B] Update extension (index.ts, overlay.ts)
+:PROPERTIES:
+:ID: a1b2c3d4-0002-4000-8000-000000000002
+:END:
+CLOSED: [2026-04-27 Mon 21:53]
+- =loadTasks=: destructure =ParseResult=; load root-level =fileImports= and
+  inject their tasks at the top level.
+- =loadLinkedPlans=: field renames throughout; also resolve =fileImports= inside
+  included files (one level deep).
+- =overlay.ts=: update all four =importChildren/importPath/importRaw/importError=
+  reference sites.
+- Fix two type errors introduced by the return-type change (=findSelectedTask=
+  null guard; archive =parseTasks= destructure).
+
+** DONE [#B] Update tasks-org.el
+:PROPERTIES:
+:ID: a1b2c3d4-0003-4000-8000-000000000003
+:END:
+CLOSED: [2026-04-27 Mon 21:53]
+- Replace =org-entry-get/put= for =:INCLUDE:= with new helpers:
+  - =tasks-org--get-import-raw=: regex search over the heading body.
+  - =tasks-org--set-import=: insert/replace =#+IMPORT:= line at the correct
+    position (after =:END:= or =CLOSED:= line, or directly after heading).
+- Rename =tasks-org--extract-plan-path= → =tasks-org--extract-import-path=.
+- Update =tasks-org-open-plan=, =tasks-org--create-plan-for-current-task=, and
+  =tasks-org-jump-to-parent-task=.
+
+** DONE [#C] Migrate TASKS.org and update docs
+:PROPERTIES:
+:ID: a1b2c3d4-0004-4000-8000-000000000004
+:END:
+CLOSED: [2026-04-27 Mon 21:53]
+- Migrate 2 existing =:INCLUDE:= drawer entries in =TASKS.org= to =#+IMPORT:=.
+- Update =agents/skills/org-memory/SKILL.md=.
+- Update =agents/pi/extensions/tasks/README.md= (also fix stale =:selected:=
+  tag references left over from the =TASKS.local.org= selection migration).
+- Update =editors/emacs/spacemacs/layers/org-user/README.org=.
+
+* Implementation notes
+
+The =fileImports= returned by =parseTasks= for a plan file are resolved one
+level deep inside =loadLinkedPlans= (nested =fileImports= within those imported
+files are not recursively chased in this iteration).  Cyclic imports are not
+detected; avoid them.
+
+The =tasks-org--set-import= elisp helper searches for an existing =#+IMPORT:=
+line first (replace-in-place), then falls back to inserting after the last
+structural line (=:END:=, =CLOSED:=, or the heading itself).  It does not
+remove a =#+IMPORT:= line; use =M-x tasks-org-open-plan= to manage links.

@@ -1,0 +1,97 @@
+#+TITLE: Fix tasks-extension archive: stale refs + filename casing
+#+DATE: 2026-04-28 Tue
+#+PARENT_ID: 84085b11-837b-449a-8cf8-190c607f480c
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Context
+
+Two related defects in the tasks extension's archive flow surfaced while
+archiving completed work.
+
+1. /Spurious "Task is not a top-level entry; cannot archive."/ on the
+   first archive attempt for some tasks. Retrying immediately succeeded.
+   Triggered by archiving the just-completed task with id
+   =80ea589b-501c-42d9-86e7-4d414c0c314e=.
+2. /Wrong archive file/. Archives were being written to a newly-created
+   =TASKS.ARCHIVE.org= instead of the existing canonical
+   =TASKS.archive.org= already present in the project root, splitting the
+   archive across two files.
+
+** Design decisions
+
+- /Resolve task references by =:ID:= before each mutating workflow./
+  The overlay's internal task tree can be replaced from disk while the
+  overlay is open (the file watcher fires after writes to
+  =TASKS.local.org= or external Emacs saves and calls
+  =activeOverlayInstance.refreshTasks(...)=). After that point any
+  =request.task= the overlay sends back via callbacks belongs to the
+  fresh tree, while the outer command handler in =index.ts= still
+  holds the original =tasks= array. Object identity therefore can't be
+  relied on across the overlay/handler boundary; identity by =:ID:= is
+  the only stable key. Reload + resolve before the helper runs ensures
+  the helper always operates on the on-disk truth.
+
+- /Lowercase canonical archive filename./ The user already had a
+  =TASKS.archive.org= predating the extension's archive feature. The
+  uppercase constant was wrong; the canonical filename is the one that
+  actually exists on disk. Reconciled by lowercasing the constant and
+  merging the two stray entries from =TASKS.ARCHIVE.org= into
+  =TASKS.archive.org= (re-sorted by =CLOSED:= / =:ARCHIVED:= per the
+  existing rule).
+
+- /Soft-fail on stale parent for create./ A missing parent =:ID:= when
+  creating a child task degrades to a top-level append with a warning
+  rather than refusing the create — the user's title input has already
+  been collected and discarding it would be more annoying than the
+  fallback.
+
+* Plan
+
+The fix was small enough to land in one step; the plan was developed
+inline rather than written out separately.
+
+* Implementation
+
+- =index.ts=
+  - =TASKS_ARCHIVE_FILE= constant changed from ="TASKS.ARCHIVE.org"= to
+    ="TASKS.archive.org"=. Updated the doc-comment on
+    =archiveTopLevel= to match.
+  - Added two helpers in the =/tasks= command's workflow-dispatch
+    block:
+    - =resolveStale(stale)= — looks up a fresh task by =:ID:= against
+      the current outer =tasks= array.
+    - =reloadAndResolve(stale, verb)= — reloads =tasks= from disk
+      first, then resolves; emits a clear notification when the task
+      no longer exists on disk.
+  - Every mutating workflow (=archive=, =publish=, =unpublish=,
+    =changeRecord=, =create=) now reloads + resolves before invoking
+    the helper. Read-only workflows (=edit=, =plan=) untouched.
+- =README.md=
+  - Two =TASKS.ARCHIVE.org= references → =TASKS.archive.org= to match
+    the constant.
+- =TASKS.archive.org=
+  - Merged the two stray entries from the wrongly-named
+    =TASKS.ARCHIVE.org= back in (=6bee9f80…= local-tasks feature,
+    =80ea589b…= org-memory protocol refinement). One-shot script under
+    =.agents/tmp/merge-archives.mjs= split entries on top-of-record
+    headings, sorted by =CLOSED:= then =:ARCHIVED:=, and rewrote the
+    file. Pre/post sanity check: 33 → 35 entries, both new entries
+    correctly interleaved by timestamp.
+  - =TASKS.ARCHIVE.org= deleted (was never tracked in git).
+
+** Verification
+
+- =./test.sh= passes (9/9 parser/scaffold unit tests; the regression is
+  in the workflow-dispatch glue which has no direct unit-test coverage).
+- =esbuild= parse of =index.ts= clean.
+- Manual: archived this task using the patched extension; landed in
+  =TASKS.archive.org= on the first attempt.
+
+Also aligned =agents/skills/org-tasks/SKILL.md= to the lowercase
+filename so the skill doc and the extension agree.
+
+** Follow-ups
+
+- The workflow-dispatch glue is currently untested. A small unit test
+  exercising stale-reference resolution would catch regressions of
+  this class without requiring the live overlay.

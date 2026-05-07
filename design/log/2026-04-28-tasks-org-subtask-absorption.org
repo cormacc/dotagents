@@ -1,0 +1,81 @@
+#+TITLE: tasks-org: subtask absorption on plan create
+#+DATE: 2026-04-28 Tue
+#+PARENT_ID: f4a2c819-3e7d-4b08-a901-6d7c0e5b2f38
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Context
+
+Filed on 2026-04-27 as a follow-up requesting that Emacs and the pi
+extension behave consistently when a `#+IMPORT:` is created on a task
+that already has local subtasks: the subtasks should move into the new
+change-record (preserving =:ID:= properties) and the parent should
+retain a plain-text summary.
+
+Closing this retrospectively: the pi extension already implemented the
+feature two days /before/ the task was filed (commit
+[[file:../../][f833776]] /Refine tasks extension planning workflow/, 2026-04-25).
+The Emacs side has since been intentionally scoped out: =tasks-org.el='s
+commentary states that "plan creation and task creation are the remit
+of the agent harness; this mode intentionally does not scaffold new
+change-records or new tasks". With that architectural decision the
+pi-extension implementation is the single source of truth and the task
+is functionally complete.
+
+** Design decisions
+
+- /Single point of plan creation./ Plan and task scaffolding live in
+  one place (the pi extension). Emacs-side parity is deferred
+  indefinitely. =tasks-org-open-plan= already nudges the user toward
+  the pi extension when they hit a task without an =#+IMPORT:=.
+
+- /Subtasks preserve =:ID:=./ =cloneTaskForPlan= copies =propertyLines=
+  by reference-then-spread, which keeps the =:ID:= line intact on the
+  cloned plan task. This was important for stable cross-file
+  references and was the most fragile part of the requirement.
+
+* Plan
+
+Empty by design — the work was already shipped before the task was
+filed.
+
+* Implementation
+
+The implementation lives in =agents/pi/extensions/tasks/=:
+
+- =index.ts:cloneTaskForPlan= / =cloneSubtasksForPlan= — clone the
+  parent's children at level 2, recursively, preserving =propertyLines=
+  (including =:ID:= and =:CREATED:=). Source-graph metadata
+  (=sourceRoot=, =sourcePath=, =lineNumber=, =endLine=, =importChildren=)
+  is reset on clones since they are about to live in a new file.
+- =scaffold.ts:insertTasksIntoPlanSection= — inserts the cloned plan
+  tasks under =* Plan= in the scaffolded change-record (or the existing
+  one if the user pointed =p= at an existing file).
+- =index.ts:appendExtractedSubtaskList= / =formatExtractedSubtaskList=
+  — appends a bullet summary to the parent's description on TASKS.org
+  ("Extracted subtasks moved to linked plan:") so the parent stays
+  meaningful at a glance without holding the now-moved subtree.
+- =index.ts:handlePlanEdit= — orchestrates the above, then writes the
+  TASKS.org parent (=task.children = []=, new =importPath=/=importRaw=)
+  via =writeTaskFilePreserving= so non-task content elsewhere in the
+  file isn't disturbed.
+- =README.md= — documents the behaviour under "Subtask absorption".
+
+** Verification
+
+- README documentation matches code behaviour.
+- =scaffoldPlan()= canonical-skeleton snapshot in =parser.test.ts=
+  exercises the no-subtasks path. The /with-subtasks/ path is not
+  covered by an automated test (see Follow-ups).
+- =tasks-org.el= behaviour confirmed: opening =p='s analogue in Emacs
+  (=tasks-org-open-plan=) signals a =user-error= when no =#+IMPORT:=
+  exists, with a message redirecting to the pi extension's =p=
+  keybinding. No silent divergence between the tools.
+
+** Follow-ups
+
+- The subtask-absorption code path has no direct unit test. A snapshot
+  test feeding =scaffoldPlan(task, planTasks)= a parent with two
+  children (one with grandchildren) and asserting the rendered
+  =* Plan= block + the parent's bullet summary would close that gap
+  cheaply. Worth filing as a separate low-priority test-debt task if
+  this region churns again.

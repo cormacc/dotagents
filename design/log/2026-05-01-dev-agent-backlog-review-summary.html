@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dev-agent-backlog Review Summary</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.55; max-width: 920px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1, h2 { line-height: 1.2; }
+    h1 { border-bottom: 2px solid #ddd; padding-bottom: .4rem; }
+    code { background: #f5f5f5; padding: .1rem .3rem; border-radius: 4px; }
+    pre { background: #f6f8fa; padding: 1rem; overflow-x: auto; border-radius: 6px; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #ddd; padding: .45rem .6rem; vertical-align: top; }
+    th { background: #f5f5f5; }
+    .meta { color: #666; }
+    .callout { border-left: 4px solid #2f81f7; background: #f6f8ff; padding: .75rem 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Review Summary: <code>farra/dev-agent-backlog</code></h1>
+  <p class="meta">Captured 2026-05-01. Source: <a href="https://github.com/farra/dev-agent-backlog">https://github.com/farra/dev-agent-backlog</a></p>
+
+  <div class="callout">
+    <p><strong>Executive take:</strong> <code>dev-agent-backlog</code> is close in spirit to the local org-memory system: plain-text org, agent-readable, design-first, and commit-friendly. The main philosophical difference is that their design docs are canonical while <code>backlog.org</code> is a transient working surface. Our system keeps <code>TASKS.org</code> as the canonical task graph and links durable change-records via <code>#+IMPORT:</code>.</p>
+  </div>
+
+  <h2>Core comparison</h2>
+  <table>
+    <thead><tr><th>Area</th><th>dev-agent-backlog</th><th>Local org-memory system</th></tr></thead>
+    <tbody>
+      <tr><td>Canonical record</td><td>Design docs; backlog is working surface</td><td><code>TASKS.org</code> task graph plus imported change-records</td></tr>
+      <tr><td>Active work</td><td>Tasks checked out to <code>backlog.org</code>, then reconciled</td><td>Selected task stored in gitignored <code>TASKS.local.org</code></td></tr>
+      <tr><td>Planning</td><td>RFC/RFD-style design docs with lifecycle</td><td>Change-records with <code>* Context</code>, <code>* Plan</code>, <code>* Implementation</code></td></tr>
+      <tr><td>Drift risk</td><td>Higher: source task and backlog copy can diverge</td><td>Lower: imported plan tasks remain canonical nodes</td></tr>
+      <tr><td>External links</td><td>Typed properties such as <code>:GITHUB:</code>, <code>:CLAUDE_TASK:</code>, <code>:BEAD:</code></td><td>Generic <code>:LINKED_ISSUES:</code> plus tracker-specific skills/extensions</td></tr>
+    </tbody>
+  </table>
+
+  <h2>What they do well</h2>
+  <ol>
+    <li><strong>Explicit design-doc lifecycle:</strong> <code>#+STATUS: Draft | Review | Accepted | Active | Complete | Archived</code>, with review commands to resolve questions and finalize tasks.</li>
+    <li><strong>OPEN / DECIDED questions:</strong> questions are parseable task-like headings rather than loose prose.</li>
+    <li><strong>Handoff notes:</strong> <code>:HANDOFF:</code> gives the next session a concise “start here” note.</li>
+    <li><strong>Completion summaries:</strong> distinguishes mid-work progress from final shipped summary.</li>
+    <li><strong>Reconciliation / doctor commands:</strong> checks stale links, stale entries, broken source links, and status inconsistencies.</li>
+    <li><strong>Ready/dependency model:</strong> draft multi-agent protocol includes <code>:CLAIMED_BY:</code>, <code>:BLOCKED_BY:</code>, and <code>:WAITS_FOR:</code>.</li>
+    <li><strong>Progress isolation:</strong> per-task progress files reduce merge conflicts in multi-agent workflows.</li>
+    <li><strong>Attribution:</strong> optional <code>:WORKED_BY:</code> and <code>:COMPLETED_BY:</code> metadata.</li>
+  </ol>
+
+  <h2>Where the local system is stronger</h2>
+  <ul>
+    <li><strong>No duplicated canonical task state:</strong> <code>#+IMPORT:</code> avoids the checkout/reconcile drift inherent in their model.</li>
+    <li><strong>Better lifecycle/audit mechanics:</strong> UUID <code>:ID:</code>, <code>:CREATED:</code>, <code>:STARTED:</code>, <code>CLOSED:</code>, append-only <code>:LOGBOOK:</code>, parent propagation, and archiving.</li>
+    <li><strong>Better local/private state:</strong> <code>TASKS.local.org</code> handles selection and local drafts cleanly.</li>
+    <li><strong>Better tracker integration shape:</strong> generic linked issues plus companion tracker skills is less coupled than one property per tracker.</li>
+  </ul>
+
+  <h2>Ideas worth incorporating</h2>
+  <ol>
+    <li><strong>Add <code>:HANDOFF:</code> support</strong> and surface it in resume / selected-task UI.</li>
+    <li><strong>Structure <code>* Open questions</code></strong> with <code>OPEN</code> / <code>DECIDED</code> states.</li>
+    <li><strong>Add optional <code>#+STATUS:</code> to change-records</strong>: Draft, Review, Accepted, Active, Complete.</li>
+    <li><strong>Add a <code>/tasks doctor</code> health-check command</strong> for broken imports, duplicate UUIDs, stale status, invalid blockers, and missing timestamps.</li>
+    <li><strong>Add ready-task query support</strong> using <code>WAITING</code>, <code>:BLOCKED-BY: task:&lt;UUID&gt;</code>, and possibly <code>:WAITS_FOR:</code>.</li>
+    <li><strong>Prompt for completion summary</strong> when closing top-level tasks.</li>
+    <li><strong>Add optional acceptance criteria / Definition of Done conventions</strong> for non-trivial tasks.</li>
+    <li><strong>Consider solution/lesson capture</strong> as separate knowledge-base material, not mixed into task lifecycle.</li>
+  </ol>
+
+  <h2>Ideas to avoid</h2>
+  <ul>
+    <li>Replacing <code>TASKS.org</code> + <code>#+IMPORT:</code> with a transient checkout/reconcile <code>backlog.org</code>.</li>
+    <li>Replacing UUIDs with human-readable IDs, though aliases could be useful later.</li>
+    <li>Claude-specific task semantics in the core protocol.</li>
+    <li>Transcript links by default.</li>
+    <li>Bidirectional sync with external systems; link and re-fetch when needed is healthier.</li>
+  </ul>
+
+  <h2>Bottom line</h2>
+  <p>The third-party system validates the direction of the local org-memory protocol, but our core model is more robust. The best borrowings are around review lifecycle, handoff, question resolution, readiness/dependency queries, and health-check tooling—not the central backlog checkout model.</p>
+</body>
+</html>

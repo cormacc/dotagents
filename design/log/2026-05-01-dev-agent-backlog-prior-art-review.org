@@ -1,0 +1,414 @@
+#+TITLE: Review dev-agent-backlog prior art
+#+DATE: 2026-05-01 Fri
+#+PARENT_ID: 5aed17ed-cfc4-4ae3-bb24-57c7d974a142
+#+STATUS: Complete
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Context
+The selected task is to review the third-party org-based memory system at
+https://github.com/farra/dev-agent-backlog and identify ideas worth adapting for
+the local org-memory system (`org-tasks`, `org-plan`, `org-jira`, and the
+associated pi extensions).
+
+A first-pass review was completed on 2026-05-01. The durable HTML summary is
+saved at [[file:2026-05-01-dev-agent-backlog-review-summary.html][dev-agent-backlog review summary]].
+
+** First-pass conclusion
+`dev-agent-backlog` is closely aligned with this system's goals: org-mode,
+plain-text, agent-readable, design-first task memory. Its central model differs:
+design docs are canonical and `backlog.org` is a transient checkout/reconcile
+working surface. Our current model keeps `TASKS.org` as the canonical task graph
+and links durable change-records via `#+IMPORT:`.
+
+The recommendation from the first-pass review is to keep our core model and
+adapt selected ideas around handoff, question state, review lifecycle,
+ready/dependency queries, completion summaries, and health-check tooling.
+
+Deliverable for this change-record: the agreed *decisions* plus the
+implementation work that flows from them. The change-record was originally
+scoped review-only and was recast on 2026-05-02 to absorb the three
+implementation follow-ups (SKILL updates, multi-valued `:BLOCKED-BY:` parser
+work, `/tasks doctor`) so the spec and the work that delivers it stay in
+one place. Independent reviews spawned by this work — e.g. the
+self-improvement skill review — remain as their own top-level tasks in
+`TASKS.org`.
+
+** Design decisions to revisit
+- Keep canonical imported task graph :: Do not replace `TASKS.org` and
+  `#+IMPORT:` with a copied checkout/reconcile `backlog.org` model.
+- Prefer generic extension points :: Continue using tracker-agnostic
+  `:LINKED_ISSUES:` and companion tracker skills rather than typed core
+  properties for every external system.
+- Add structured review affordances incrementally :: Handoff notes,
+  `OPEN`/`DECIDED` questions, change-record status, and doctor/readiness
+  commands can be adopted without destabilizing the existing protocol.
+- Retain `:BLOCKED-BY:` for dependency/blocker metadata :: Do not add a
+  separate `:WAITS_FOR:` fan-in property. Instead, allow `:BLOCKED-BY:` to
+  carry one or more blocker references so the same field covers both simple
+  blockers and multi-prerequisite readiness gates.
+
+* Plan
+** DONE [#B] Decide which dev-agent-backlog concepts to adopt :protocol:
+CLOSED: [2026-05-02 Sat 12:18]
+:PROPERTIES:
+:ID: a9f11962-5c55-4e8c-bee6-a3095b434dc0
+:CREATED: [2026-05-01 Fri 19:28]
+:STARTED: [2026-05-02 Sat 12:18]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-02 Sat 12:18]
+- State "STARTED" from "TODO" [2026-05-02 Sat 12:18]
+- Created [2026-05-01 Fri 19:28]
+:END:
+Decisions [2026-05-02 Sat]:
+| Candidate                           | Status              | Shape                                                              |
+|-------------------------------------+---------------------+--------------------------------------------------------------------|
+| `:HANDOFF:` support                 | Adopt               | Optional drawer property; allowed on tasks *and* plan subtasks.    |
+| `OPEN` / `DECIDED` questions        | Adopt               | Question headings with state OPEN/DECIDED; optional `:DECIDED:`.   |
+| Change-record `#+STATUS:`           | Adopt (advisory)    | Draft\|Review\|Accepted\|Active\|Complete\|Archived. No enforcement. |
+| `/tasks doctor`                     | Adopt (design now)  | Spec via task `9021e0c3`; implementation spawned to TASKS.org.     |
+| Ready/dependency queries            | Adopt               | Multi-valued `:BLOCKED-BY:` via `:BLOCKED-BY+:`. Already DECIDED.   |
+| Completion summaries                | Adopt (convention)  | Brief body section in `* Implementation` on top-level task close.  |
+| Acceptance criteria / DoD           | Adopt (convention)  | Bullet list in plan-task body. No drawer.                          |
+| Solution / lesson capture           | Defer               | Out of scope; revisit via self-improvement skill review (spawned). |
+| Attribution (`:WORKED_BY:` etc.)    | Reject (for now)    | Git log suffices for solo workflow. Captured as non-goal.          |
+** DONE [#B] Specify handoff, question, and change-record status conventions :skills:
+CLOSED: [2026-05-02 Sat 12:25]
+:PROPERTIES:
+:ID: 60e4cb26-583b-4d07-b04c-6e2efdbec410
+:CREATED: [2026-05-01 Fri 19:28]
+:STARTED: [2026-05-02 Sat 12:25]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-02 Sat 12:25]
+- State "STARTED" from "TODO" [2026-05-02 Sat 12:25]
+- Created [2026-05-01 Fri 19:28]
+:END:
+Spec captured in this task body. Implementation handled by the recast
+plan tasks below.
+Concrete protocol changes for `org-tasks` and `org-plan` (all adopted
+in task `a9f11962-5c55-4e8c-bee6-a3095b434dc0`):
+- `:HANDOFF:` property: optional, free-form short text. Allowed on both
+  top-level task headings and plan-subtask headings. Surfaced by resume
+  and selected-task tooling.
+- `* Open questions` headings use `OPEN` / `DECIDED` states drawn from
+  the shared TODO cycle's local extension. Optional
+  `:DECIDED: [timestamp]` property when transitioning. Question headings
+  do not need `:ID:` (lighter than full tasks).
+- `#+STATUS:` keyword on change-records: advisory only. Allowed values
+  `Draft | Review | Accepted | Active | Complete | Archived`. No tooling
+  enforcement; used as an index/filter signal.
+- Resume/start behaviour: when a selected task's change-record has a
+  `:HANDOFF:` note or any `OPEN` questions, surface them to the agent
+  during resume.
+- `:BLOCKED-BY:` cardinality: ratify the org-native `:BLOCKED-BY+:`
+  continuation-line convention for multiple blockers. Preserve backward
+  compatibility with the existing single-value form. Specify required
+  parser updates for the `tasks` pi extension and the `tasks-org` Emacs
+  minor mode, plus the SKILL.md changes (example block, blocker rule,
+  ready-task semantics).
+** DONE [#C] Design health-check and readiness tooling :extensions:
+CLOSED: [2026-05-02 Sat 12:25]
+:PROPERTIES:
+:ID: 9021e0c3-55f4-45a3-8611-ec5c1ebd6818
+:CREATED: [2026-05-01 Fri 19:28]
+:STARTED: [2026-05-02 Sat 12:25]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-02 Sat 12:25]
+- State "STARTED" from "TODO" [2026-05-02 Sat 12:25]
+- Created [2026-05-01 Fri 19:28]
+:END:
+Doctor checks and ready-task semantics specified in this task body.
+Implementation handled by the recast plan tasks below.
+Doctor command should report:
+- duplicate UUIDs
+- broken `#+IMPORT:` links
+- selected UUID not found
+- `WAITING` tasks without blockers
+- `DONE` / `CANCELLED` tasks missing `CLOSED:`
+- stale parent status relative to child plan tasks
+- invalid task references in any `:BLOCKED-BY:` / `:BLOCKED-BY+:` entry
+
+Also define a ready-task query using `WAITING` / `:BLOCKED-BY:` support with
+one or more blocker references. A task is *ready* when every entry across
+`:BLOCKED-BY:` and any `:BLOCKED-BY+:` continuation lines resolves to a
+closed dependency: `task:<UUID>` references must point to `DONE` /
+`CANCELLED` tasks; non-task forms (`url:`, `human:`, `jira:` etc.) are
+treated as opaque blockers that gate readiness until removed by hand. A
+separate fan-in property such as `:WAITS_FOR:` is not warranted.
+** DONE [#C] Decide completion-summary and acceptance-criteria shape :workflow:
+CLOSED: [2026-05-02 Sat 12:25]
+:PROPERTIES:
+:ID: 49b27ed0-0006-4cb7-b1de-91e71d3b2d90
+:CREATED: [2026-05-01 Fri 19:28]
+:STARTED: [2026-05-02 Sat 12:25]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-02 Sat 12:25]
+- State "STARTED" from "TODO" [2026-05-02 Sat 12:25]
+- Created [2026-05-01 Fri 19:28]
+:END:
+Decided in `a9f11962`: both completion summaries and acceptance criteria are
+task-body conventions, not properties. SKILL.md updates rolled into the
+implementation phase below. Specifics:
+- `org-plan`: when a plan task is non-trivial, the task body should include a
+  short "Acceptance criteria" bullet list before any other body prose.
+- `org-plan`: when a top-level task closes, its change-record's
+  `* Implementation` section should end with a brief "Outcome" / "Shipped"
+  paragraph (1–3 lines) summarising what landed.
+No new properties or drawers.
+** DONE [#D] Capture explicit non-goals for the local protocol :documentation:
+CLOSED: [2026-05-02 Sat 12:25]
+:PROPERTIES:
+:ID: 817f4fa9-dc65-4191-b3cd-153bf2bd3209
+:CREATED: [2026-05-01 Fri 19:28]
+:STARTED: [2026-05-02 Sat 12:25]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-02 Sat 12:25]
+- State "STARTED" from "TODO" [2026-05-02 Sat 12:25]
+- Created [2026-05-01 Fri 19:28]
+:END:
+Non-goals enumerated in this task body. The actual SKILL.md addition is
+rolled into the SKILL-update plan task below.
+Rejected/deferred ideas, so future reviews do not re-open them
+accidentally:
+- no transient checkout/reconcile backlog as the core model
+- no Claude-specific core metadata
+- no transcript links by default
+- no bidirectional external-tracker sync by default
+- no replacement of UUIDs with human-readable IDs
+- no per-task attribution fields (`:WORKED_BY:`, `:COMPLETED_BY:`) while the
+  workflow remains solo + git-log-attributed; revisit only if multi-agent
+  coordination becomes a real need
+- solution/lesson capture is *deferred*, not rejected; tracked via the
+  spawned self-improvement skill review task in `TASKS.org`
+
+# --- Implementation phase (added 2026-05-02 after recast) ---
+# The five tasks above closed the decision phase. The three tasks below
+# carry the implementation. SKILL updates land first; parser work depends
+# on the spec; the doctor command depends on the parser. Dependency
+# relationships are dogfooded via `:BLOCKED-BY:` / `:BLOCKED-BY+:` to
+# exercise the very convention this change-record introduces.
+** DONE [#C] Apply org-memory SKILL updates from prior-art review :skills:
+CLOSED: [2026-05-02 Sat 12:36]
+:PROPERTIES:
+:ID: d49dad0e-40bd-4b17-8b69-f3bd90440ece
+:CREATED: [2026-05-02 Sat 12:24]
+:STARTED: [2026-05-02 Sat 12:33]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-02 Sat 12:36]
+- State "STARTED" from "TODO" [2026-05-02 Sat 12:33]
+- Migrated from TASKS.org top-level into change-record [2026-05-02 Sat 12:35]
+- Created [2026-05-02 Sat 12:24]
+:END:
+Apply the protocol updates decided in plan tasks `a9f11962`, `60e4cb26`,
+`49b27ed0`, and `817f4fa9`. All edits land in `agents/skills/`; no extension
+code changes here.
+
+Acceptance criteria:
+- `org-tasks` SKILL describes multi-valued `:BLOCKED-BY:` via `:BLOCKED-BY+:`
+  with backward compatibility and at least one multi-blocker example.
+- `org-tasks` SKILL documents optional `:HANDOFF:` property and an explicit
+  non-goals section.
+- `org-plan` SKILL documents `#+STATUS:`, `* Open questions` with
+  `OPEN`/`DECIDED` states (and optional `:DECIDED:`), the acceptance-criteria
+  body convention, and the closing `** Outcome` paragraph convention.
+- `org-plan` SKILL describes resume-time surfacing of `:HANDOFF:` and any
+  `OPEN` questions on the selected task's change-record.
+
+org-tasks SKILL.md:
+- Document `:BLOCKED-BY:` cardinality: first blocker on `:BLOCKED-BY:`,
+  additional blockers on `:BLOCKED-BY+:` continuation lines within the same
+  `:PROPERTIES:` drawer. Preserve backward compat with single-value usage.
+  Update the existing `:BLOCKED-BY:` example to show a multi-blocker case.
+- Document optional `:HANDOFF:` property: short free-form text, allowed on
+  top-level tasks and plan subtasks, surfaced by resume/select tooling.
+- Add an explicit non-goals section listing: no transient checkout/reconcile
+  backlog as the core model; no Claude-specific core metadata; no transcript
+  links by default; no bidirectional external-tracker sync by default; no
+  human-readable IDs replacing UUIDs; no per-task attribution fields
+  (`:WORKED_BY:`, `:COMPLETED_BY:`) under the current solo workflow.
+
+org-plan SKILL.md:
+- Document optional `#+STATUS:` change-record keyword: advisory only,
+  values Draft|Review|Accepted|Active|Complete|Archived.
+- Document `* Open questions` convention: question headings with
+  `OPEN`/`DECIDED` states and optional `:DECIDED: [timestamp]`. Question
+  headings do not require `:ID:`.
+- Recommend acceptance-criteria bullet list at the top of plan-task bodies
+  for non-trivial tasks.
+- Recommend a brief `** Outcome` paragraph at the end of `* Implementation`
+  when a top-level task closes.
+- Note resume-time behaviour: surface `:HANDOFF:` and any `OPEN` questions
+  on the selected task's change-record.
+** DONE [#C] Multi-valued :BLOCKED-BY: + ready-task query in tasks extension :extensions:
+CLOSED: [2026-05-02 Sat 12:46]
+:PROPERTIES:
+:ID: 3b5918d5-8edb-4a35-b2d6-e36ae58c24fe
+:CREATED: [2026-05-02 Sat 12:24]
+:STARTED: [2026-05-02 Sat 12:38]
+:BLOCKED-BY: task:d49dad0e-40bd-4b17-8b69-f3bd90440ece
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-02 Sat 12:46]
+- State "STARTED" from "TODO" [2026-05-02 Sat 12:38]
+- Migrated from TASKS.org top-level into change-record [2026-05-02 Sat 12:35]
+- Created [2026-05-02 Sat 12:24]
+:END:
+Unblocked: `d49dad0e-…` is DONE.
+
+Acceptance criteria:
+- Existing single-value `:BLOCKED-BY:` rows still parse and round-trip
+  byte-identically.
+- Multi-value `:BLOCKED-BY+:` rows render and edit cleanly through the
+  overlay; round-trip is byte-identical for unchanged rows.
+- Ready-task query is exposed in the extension API used by the doctor
+  command (next plan task).
+- `:HANDOFF:`, where present on the selected task, is surfaced in the
+  overlay and resume flow.
+
+Parser/code changes:
+- Teach the `tasks` pi extension parser/serializer to recognise
+  `:BLOCKED-BY+:` continuation lines and accumulate values into a list.
+- Apply the same treatment in the `tasks-org` Emacs minor mode if it
+  parses property drawers itself.
+- Add a ready-task query: a task is ready when every `:BLOCKED-BY:` /
+  `:BLOCKED-BY+:` entry resolves; `task:<UUID>` blockers must point to
+  DONE/CANCELLED tasks; non-task forms (`url:`, `human:`, `jira:` etc.)
+  gate readiness until removed by hand.
+- Surface optional `:HANDOFF:` on selected/active task in resume + overlay.
+** DONE [#D] Implement /tasks doctor health-check command :extensions:
+CLOSED: [2026-05-02 Sat 12:52]
+:PROPERTIES:
+:ID: 77a0ce57-b39a-47d3-beb8-1aaa9884e0f8
+:CREATED: [2026-05-02 Sat 12:24]
+:STARTED: [2026-05-02 Sat 12:46]
+:BLOCKED-BY: task:d49dad0e-40bd-4b17-8b69-f3bd90440ece
+:BLOCKED-BY+: task:3b5918d5-8edb-4a35-b2d6-e36ae58c24fe
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-02 Sat 12:52]
+- State "STARTED" from "TODO" [2026-05-02 Sat 12:46]
+- Migrated from TASKS.org top-level into change-record [2026-05-02 Sat 12:35]
+- Created [2026-05-02 Sat 12:24]
+:END:
+Unblocked: both `d49dad0e-…` and `3b5918d5-…` are DONE.
+
+Acceptance criteria:
+- `/tasks doctor` (or equivalent) is invocable from the tasks pi extension.
+- Each finding is reported with severity (warn/error) and a jumpable
+  location (file + heading + line).
+- All check categories listed below are implemented.
+
+Checks to implement:
+- duplicate `:ID:` UUIDs across the loaded task graph
+- broken `#+IMPORT:` links (file does not exist or resolves outside the
+  project root after symlink resolution)
+- `#+SELECTED:` UUID not found in the task graph
+- `WAITING` tasks without any `:BLOCKED-BY:` / `:BLOCKED-BY+:` entries
+- `DONE` / `CANCELLED` tasks missing a `CLOSED:` cache line
+- parents whose status is stale relative to their child plan tasks
+- invalid task references in any `:BLOCKED-BY:` / `:BLOCKED-BY+:` entry
+  (`task:<UUID>` value not present in the task graph)
+* Implementation
+- 2026-05-01: Reviewed `farra/dev-agent-backlog`, including README, templates,
+  skills, commands, and design docs covering backlog workflow, agent integration,
+  Claude Tasks integration, Backlog.md comparison, and multi-agent coordination.
+- 2026-05-01: Saved first-pass review summary as
+  [[file:2026-05-01-dev-agent-backlog-review-summary.html][HTML for later review]].
+- 2026-05-02: Decided to retain local `:BLOCKED-BY:` rather than adopting
+  upstream `:WAITS_FOR:`; readiness tooling should parse multiple blockers from
+  `:BLOCKED-BY:`.
+- 2026-05-02: Chose org-native `:BLOCKED-BY+:` continuation lines as the
+  multi-value convention. Folded protocol/parser work into plan task
+  `60e4cb26-583b-4d07-b04c-6e2efdbec410` and ready-task semantics into
+  `9021e0c3-55f4-45a3-8611-ec5c1ebd6818`.
+- 2026-05-02: Closed plan task `a9f11962-…` with adopt/defer/reject decisions
+  for all nine candidate ideas. Resolved the `:HANDOFF:` placement and
+  `#+STATUS:` enforcement open questions. Spawned a follow-up TASKS.org task
+  to review the self-improvement skill against the org-memory protocol
+  (covers solution/lesson capture deferral).
+- 2026-05-02: Closed plan tasks `60e4cb26-…` (handoff/question/#+STATUS
+  spec), `9021e0c3-…` (doctor + ready-task spec), `49b27ed0-…`
+  (completion-summary + acceptance-criteria conventions) and `817f4fa9-…`
+  (non-goals). All five decision tasks are now DONE.
+- 2026-05-02: Recast the change-record from review-only to review +
+  implementation. Migrated three previously top-level TASKS.org tasks
+  (`d49dad0e-…` SKILL updates, `3b5918d5-…` parser + ready-query,
+  `77a0ce57-…` `/tasks doctor`) into `* Plan` under a new implementation
+  phase, preserving their UUIDs, `:CREATED:` stamps, LOGBOOK history, and
+  body content. Self-improvement skill review (`64a816ea-…`) stays a
+  top-level TASKS.org task because it is a sibling review, not part of
+  this protocol delivery. Advanced `#+STATUS:` from Draft to Active.
+- 2026-05-02: Closed plan task `d49dad0e-…`. Updated
+  `agents/skills/org-tasks/SKILL.md` and `agents/skills/org-plan/SKILL.md`
+  with multi-blocker, `:HANDOFF:`, `#+STATUS:`, question, acceptance-
+  criteria, outcome, resume, and non-goal conventions. Deployed copies
+  under `~/.agents/skills/` refresh on next `home-manager switch`.
+- 2026-05-02: Closed plan task `3b5918d5-…`. Added parser helpers for
+  multi-valued drawer properties, blocker parsing/readiness, `:HANDOFF:`
+  accessors, overlay surfacing, and parser tests. Dogfooded against this
+  change-record; Emacs `tasks-org.el` needed no code change.
+- 2026-05-02: Closed plan task `77a0ce57-…`. Added `/tasks doctor` via
+  new `doctor.ts`, tests, subcommand registration, and keybinding. The
+  command reports seven health-check categories with severity + location.
+  Dogfood run against live dotfiles graph: no issues found.
+- 2026-05-02: All eight plan tasks under * Plan are DONE (5 decisions + 3
+  implementations); change-record advanced to `#+STATUS: Complete`.
+- 2026-05-02: Final-review clarity pass: compressed duplicated
+  implementation detail in this change-record and shortened the updated
+  skills (quick reference table, concise blocker section, non-goals table,
+  less duplicated resume guidance, clarified `#+STATUS: Complete`).
+
+** Outcome
+Review-and-implement change-record covering both the dev-agent-backlog
+prior-art review and the protocol/code work that flows from it. Decided
+adopt/defer/reject for nine candidate ideas, ratified the org-native
+`:BLOCKED-BY+:` continuation-line convention for multi-valued blockers,
+and shipped:
+- SKILL updates to `org-tasks` (multi-blocker, `:HANDOFF:`, non-goals,
+  extended resume checklist) and `org-plan` (`#+STATUS:` lifecycle,
+  `OPEN`/`DECIDED` questions, acceptance-criteria + `** Outcome` body
+  conventions, resume-time surfacing notes).
+- New parser API in the `tasks` pi extension: multi-valued drawer
+  property accessors, blocker classification + `isTaskReady` predicate,
+  and `:HANDOFF:` accessors. Single-value `:BLOCKED-BY:` round-trips
+  byte-identically; the new convention is dogfooded on the change-record
+  itself.
+- Overlay surfacing of `Handoff` and `Blocked by` blocks (with task-ref
+  resolution + readiness colour) on the cursor task's right pane.
+- New `/tasks doctor` subcommand with seven health checks and
+  jumpable-location findings; runs clean against the live dotfiles
+  graph.
+- 174 passing extension tests (93 parser + 56 insert + 25 doctor).
+Deploy SKILL copies under `~/.agents/skills/` via `hms` when ready.
+One sibling review task (`64a816ea-…`, self-improvement skill vs
+org-memory) remains in `TASKS.org` as an independent follow-up.
+
+* Open questions
+** DECIDED Should `:HANDOFF:` be task-level only, plan-subtask-level, or both?
+Decision [2026-05-02 Sat 12:18]: both. Optional drawer property allowed on
+top-level tasks and plan subtasks; surfaced by resume tooling.
+** DECIDED Should change-record `#+STATUS:` be advisory only or enforced by tooling?
+Decision [2026-05-02 Sat 12:18]: advisory only. Keyword-only signal; no
+state-machine enforcement at this stage.
+** DECIDED Should ready/dependency support extend the existing `:BLOCKED-BY:` field or add a new `:WAITS_FOR:` field?
+Decision [2026-05-02 Sat 11:51]: retain `:BLOCKED-BY:` and allow it to specify
+multiple blockers; do not add `:WAITS_FOR:`.
+
+** DECIDED What delimiter convention should multi-valued `:BLOCKED-BY:` use?
+Decision [2026-05-02 Sat 11:51]: use org's native `:NAME+:` continuation-line
+syntax. The first blocker stays on `:BLOCKED-BY:`; additional blockers each
+appear on their own `:BLOCKED-BY+:` line within the same `:PROPERTIES:`
+drawer. Rationale:
+- Backward-compatible with all existing single-value usage.
+- Avoids comma-vs-free-text ambiguity in `human:` blocker references and
+  in URLs that may contain commas.
+- Each blocker is independently editable, addable, and removable without
+  string surgery on a delimited list.
+- Native org syntax → round-trips cleanly through generic org parsers.
+Protocol/parser implications are tracked under task
+`60e4cb26-583b-4d07-b04c-6e2efdbec410`.

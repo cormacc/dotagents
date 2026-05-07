@@ -1,0 +1,118 @@
+#+TITLE: Task Overlay Bug Fixes
+#+DATE: 2026-04-27 Mon
+#+PARENT_ID: d36fe453-b8f8-4dfb-8ea6-5ed9d9eeee90
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Context
+
+Two minor behavioural bugs in the pi tasks extension, both involving
+the interaction between the expanded =/tasks= overlay modal and the
+compact task widget (the selection banner displayed above the editor
+input area).
+
+The bugs were discovered during normal use after the emacs-integration
+workstream (=2026-04-25-tasks-emacs-integration.org=) was completed.
+
+** Design decisions
+
+- No new state: both fixes use existing data structures. =isOverlayActive=
+  is a module-level boolean (same pattern as =compactWidgetComponent=,
+  =activeCtx=, etc.) rather than passing context through callbacks or
+  adding overlay lifecycle hooks to the extension API.
+- In-memory-first widget sync: after the overlay closes, the compact
+  widget is updated immediately from the in-memory (already mutated) task
+  state rather than waiting for the disk round-trip. The subsequent
+  =refreshTaskUi= call still reads from disk to re-attach file watchers
+  and converge with any external edits; it is not redundant.
+- Collapse-logic simplification: removing the erroneous third condition
+  from =applyDefaultCollapseView= made the logic match its own doc comment
+  without replacing it with a more complex alternative. The two remaining
+  conditions (no-selection collapse-all and keepVisible gate) cover all
+  cases correctly.
+
+* Plan
+
+** DONE [#D] Fix compact widget not updating after selection toggle :extension:
+:PROPERTIES:
+:ID: 8e1f3c72-4a9d-4b15-a6c0-2d7e9f1b3c48
+:END:
+When the user toggles =:selected:= inside the =/tasks= overlay, the
+compact widget above the editor (the "editor overlay") should reflect
+the new selection immediately after the overlay closes. Two related
+issues prevented this:
+
+1. The file watcher fires ~150ms after =save()= and calls =refreshTaskUi=,
+   which tried to *create* the compact widget while the expanded overlay
+   was still visible — producing visual artifacts or a stale-state race.
+2. After the overlay closed, =refreshTaskUi= read from disk, racing with
+   the async fire-and-forget =save()= call from inside the overlay.
+
+Fix (=index.ts=):
+- Added =isOverlayActive= module-level flag, set =true= at the top of each
+  =/tasks= overlay loop iteration and =false= after the loop exits.
+- =refreshTaskUi= (called from the file-watcher path) skips
+  =syncCompactWidget= when =isOverlayActive= is set.
+- After the loop exits, call =syncCompactWidget(ctx, tasks)= immediately
+  using the in-memory task state before calling =refreshTaskUi=.
+** DONE [#D] Fix overlay cursor starting at top-level task :extension:
+:PROPERTIES:
+:ID: 3b7d5e91-6f2a-4c08-8e4b-1a9c0d7f2e35
+:END:
+When the =/tasks= overlay opens, the cursor should land on the selected
+task (the one carrying =:selected:=). =focusSelectedTask()= is called in
+the constructor and searches =this.rows= for the =isSelectedTask= row —
+but the row was absent when the selected task was a =planChild= of a
+DONE/CANCELLED parent.
+
+Root cause: =applyDefaultCollapseView()= contained a third condition that
+collapsed tasks in =keepVisible= (ancestors of the selected task) if they
+were DONE/CANCELLED and not the selected task itself. This contradicted
+the purpose of =keepVisible=: tasks on the path to the selected task must
+remain expanded. With the parent collapsed, the planChild was not walked
+in =rebuildRows()=, =focusSelectedTask()= returned =-1=, and =cursor=
+stayed at 0 (the first top-level task).
+
+Fix (=overlay.ts=): removed the erroneous third condition. The two
+remaining conditions correctly express the intended rules:
+- No selection → collapse everything with children.
+- With selection → collapse only tasks not in =keepVisible=, covering
+  completed non-ancestor tasks automatically.
+** DONE [#D] Live-update editor overlay on external file changes :extension:
+:PROPERTIES:
+:ID: 1c4f8a2e-7d3b-4e19-9f5c-6a0b2d8e1f47
+:END:
+The original fix suppressed =refreshTaskUi='s =syncCompactWidget= call
+while the overlay was active but did nothing with the freshly-loaded
+task data. External changes (Emacs selection toggle, status edits) were
+silently discarded — the overlay stayed frozen on its original snapshot.
+
+Fix (=index.ts= + =overlay.ts=):
+- Added =activeOverlayInstance= module-level ref; set in the
+  =ctx.ui.custom= factory callback, cleared after =await=.
+- =refreshTaskUi= now calls =activeOverlayInstance?.refreshTasks(tasks)=
+  instead of skipping entirely when =isOverlayActive=.
+- =TasksOverlay= gains a =TUI= constructor parameter and a public
+  =refreshTasks(newTasks)= method that replaces =this.tasks=, rebuilds
+  collapse state and rows, preserves cursor by task ID (falling back to
+  the selected task), calls =invalidate()= + =tui.requestRender()=.
+* Implementation
+
+Original two fixes: commit =4b04886= (2026-04-27).
+Follow-up live-update fix: commit =2b7cffc= (2026-04-27).
+
+Files changed:
+- =agents/pi/extensions/tasks/index.ts= — =isOverlayActive= flag,
+  =activeOverlayInstance= ref, =refreshTaskUi= branching, immediate
+  in-memory widget sync after overlay loop.
+- =agents/pi/extensions/tasks/overlay.ts= — removed erroneous third
+  condition from =applyDefaultCollapseView=; added =TUI= parameter and
+  =refreshTasks()= method.
+
+The =isOverlayActive= guard correctly suppresses =syncCompactWidget= in
+the archive/create reopen flows (=archiveTopLevel= calls =refreshTaskUi=
+internally while the loop iterates with =isOverlayActive= still true).
+The widget is re-created once, after the loop fully exits.
+
+=activeOverlayInstance= is null during the archive/create gap between
+overlay sessions so stray =refreshTasks= calls from the file watcher in
+that window are no-ops.

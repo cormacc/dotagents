@@ -1,0 +1,232 @@
+#+TITLE: Surface TASKS.local.org tasks in the extension UI
+#+DATE: 2026-04-27 Mon
+#+PARENT_ID: 6bee9f80-d1b5-4121-ab9c-f795e4884d3e
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Context
+
+=TASKS.local.org= is a gitignored per-contributor file.  It currently holds
+two pieces of state:
+
+1. =#+SELECTED: <UUID>= — the active task pointer (already implemented).
+2. Any number of org task headings — private draft tasks that have not yet
+   been promoted to the shared =TASKS.org=.
+
+The extension currently ignores the task headings entirely; =writeSelectedId=
+also *overwrites the whole file* on every selection toggle, which would
+silently destroy any local tasks the user has written.
+
+This plan covers the full feature:
+
+- Surface local tasks in the extension UI with a clear visual distinction.
+- Fix =writeSelectedId= to be non-destructive.
+- Publish: promote a local task to =TASKS.org= (makes it shared/tracked).
+- Unpublish: demote a shared task to =TASKS.local.org= (removes it from git).
+- Emacs-side bindings for publish/unpublish.
+
+** Design decisions
+
+- =isLocal= flag on Task :: A boolean field on the =Task= interface marks
+  tasks whose =sourcePath= is =TASKS.local.org=.  This is set by the loader,
+  not stored in the org file itself (no tag pollution).
+
+- Visual presentation :: Local tasks render with a =⊠= tree marker instead
+  of =•=/=▶=/=▼= and receive a magenta tint (distinct from the accent used for
+  selected tasks).  A thin separator line labelled =⊠  Local drafts= is
+  injected between the shared task list and the local group.  No separate
+  panel; the two groups share the same scrollable left pane.
+
+- Load order :: Local tasks are appended after all shared tasks so the shared
+  workstream always appears first.
+
+- =writeSelectedId= non-destructive fix :: Read the existing file, replace or
+  insert the =#+SELECTED:= line in-place (regex replace on the content string),
+  then write atomically.  Tasks in the file are untouched.
+
+- Save path for local tasks :: =task.sourcePath= is already set to the file
+  the task came from.  The existing =writeTaskFilePreserving= flow writes to
+  =sourcePath=, so status edits to local tasks automatically go to
+  =TASKS.local.org= without any extra routing logic.  The =#+SELECTED:= line
+  is non-task content and is preserved verbatim by the preserving serializer.
+
+- Publish (local → shared) :: The task subtree is removed from
+  =TASKS.local.org= and appended to =TASKS.org= as a new top-level entry.
+  =task.lineNumber= is set to 0 so =serializeTasksPreservingFile= treats it
+  as a new root.  =sourcePath= and =sourceRoot= are updated to point at
+  =TASKS.org=.  Keybinding: =P= (shift-p) in the overlay.
+
+- Unpublish (shared → local) :: The task is removed from =TASKS.org= and
+  appended to =TASKS.local.org=.  Symmetric to publish.  Only allowed for
+  top-level tasks (same constraint as archiving).  Keybinding: =U= (shift-u)
+  in the overlay.
+
+- Archive guard :: Archiving a local task is refused with a notification
+  ("Local tasks cannot be archived — publish first or delete manually").
+
+- New local task :: =n= / =N= keybindings when the cursor is on a local task
+  create the new task in =TASKS.local.org= rather than =TASKS.org=.  When
+  the cursor is on a shared task, behaviour is unchanged.
+
+- Emacs side :: =tasks-org-publish-task= and =tasks-org-unpublish-task=
+  commands in =tasks-org.el=, bound under =, ; L= (local) sub-map.  Both
+  operate on the heading at point and perform an atomic move between the two
+  files.
+
+* Plan
+
+** DONE [#A] Fix writeSelectedId to be non-destructive
+CLOSED: [2026-04-27 Mon 22:32]
+:PROPERTIES:
+:ID: b1e2c3d4-0001-4000-8000-100000000001
+:END:
+=writeSelectedId= currently overwrites the entire =TASKS.local.org=.  This
+must be fixed before any tasks can safely be stored there.
+
+Replace the full-overwrite with a read-modify-write:
+- Read existing content (or empty string if file absent).
+- If =#+SELECTED:= line exists, replace it in-place with a regex.
+- If absent, prepend it.
+- Write atomically via tmp-rename.
+
+Acceptance: toggling selection in the extension when =TASKS.local.org=
+contains task headings leaves those headings intact.
+** DONE [#A] Add isLocal flag to Task interface and loader
+CLOSED: [2026-04-27 Mon 22:32]
+:PROPERTIES:
+:ID: b1e2c3d4-0002-4000-8000-100000000002
+:END:
+- Add =isLocal?: boolean= to the =Task= interface in =parser.ts=.
+- In =loadTasks= (=index.ts=), after loading shared tasks, parse
+  =TASKS.local.org= with =parseTasks=.  Mark each returned task (and all
+  descendants) =isLocal = true= via a recursive walk.
+- Append local tasks to the root task array.
+- Ensure =backfillMissingIds= also writes IDs back to =TASKS.local.org= for
+  any local tasks that lack one.
+
+Acceptance: =/tasks= overlay shows the "Take over the world" task from the
+demo =TASKS.local.org=.
+** DONE [#B] Render local tasks with visual distinction
+CLOSED: [2026-04-27 Mon 22:32]
+:PROPERTIES:
+:ID: b1e2c3d4-0003-4000-8000-100000000003
+:END:
+In =overlay.ts=:
+- Replace =•= / =▶= / =▼= with =⊠= for local task rows.
+- Apply a magenta tint to local task summaries (not accent/dim — a distinct
+  third colour).
+- Inject a separator row between the last shared task and the first local
+  task: a full-width line =⊠  Local drafts= styled as a section divider.
+  This row is display-only and not navigable (cursor skips it).
+
+In =status-colors.ts=:
+- Add =colorLocal(text)= helper using the magenta ANSI code.
+
+Acceptance: local tasks are visually distinct; separator line appears only
+when at least one local task exists; shared tasks are unaffected.
+** DONE [#B] Publish action (local → shared)
+CLOSED: [2026-04-27 Mon 22:32]
+:PROPERTIES:
+:ID: b1e2c3d4-0004-4000-8000-100000000004
+:END:
+Keybinding: =P= in the overlay (guard: cursor must be on a local task).
+
+Flow:
+1. Guard: task must be local (=isLocal=).
+2. Confirm: "Publish '<summary>' to TASKS.org?"
+3. Remove task from =TASKS.local.org= (update sourceRoot list, save).
+4. Reset =task.lineNumber = 0=, =task.sourcePath = TASKS.org path=,
+   =task.sourceRoot = shared tasks array=, =task.isLocal = false=.
+5. Append to the shared root task array.
+6. Save =TASKS.org= via =writeTaskFilePreserving=.
+7. Reload and re-open overlay.
+
+Acceptance: published task disappears from the local section, appears as a
+new top-level entry in =TASKS.org=, and the file on disk reflects both changes.
+** DONE [#B] Unpublish action (shared → local)
+CLOSED: [2026-04-27 Mon 22:32]
+:PROPERTIES:
+:ID: b1e2c3d4-0005-4000-8000-100000000005
+:END:
+Keybinding: =U= in the overlay (guard: cursor must be on a top-level shared
+task).
+
+Flow:
+1. Guard: task must be shared, top-level.
+2. Confirm: "Move '<summary>' to TASKS.local.org (removes from git)?"
+3. Remove from shared root array, save =TASKS.org=.
+4. Reset =task.lineNumber = 0=, =task.sourcePath = TASKS.local.org path=,
+   =task.isLocal = true=.
+5. Append to local task list in =TASKS.local.org=.
+6. Save =TASKS.local.org= via =writeTaskFilePreserving=.
+7. Reload and re-open overlay.
+
+Acceptance: task disappears from shared list, reappears in local section,
+=TASKS.org= no longer contains it.
+** DONE [#C] Archive guard for local tasks
+CLOSED: [2026-04-27 Mon 22:32]
+:PROPERTIES:
+:ID: b1e2c3d4-0006-4000-8000-100000000006
+:END:
+In =archiveTopLevel= (=index.ts=): if =topLevel.isLocal=, notify "Local tasks
+cannot be archived — publish first" and return false.
+
+Acceptance: pressing =A= on a local task shows the notification; no file
+changes occur.
+** DONE [#C] New-task routing for local tasks
+CLOSED: [2026-04-27 Mon 22:32]
+:PROPERTIES:
+:ID: b1e2c3d4-0007-4000-8000-100000000007
+:END:
+In =createTask=: when =parentTask?.isLocal= or (for top-level new tasks) the
+cursor row is local, write to =TASKS.local.org= instead of =TASKS.org=.
+
+In =createNewTask= (overlay): pass a flag or derive from the cursor context
+whether the new task should be local.
+
+Acceptance: pressing =n= while on a local task creates a new local task in
+=TASKS.local.org=; pressing =n= on a shared task still writes to =TASKS.org=.
+** DONE [#C] Emacs-side publish/unpublish commands
+CLOSED: [2026-04-27 Mon 22:35]
+:PROPERTIES:
+:ID: b1e2c3d4-0008-4000-8000-100000000008
+:END:
+Add to =tasks-org.el=:
+
+- =tasks-org-publish-task= :: Move the task at point from the current file
+  to =TASKS.org=.  Read the task subtree, delete it from the current buffer,
+  append to =TASKS.org=.  Save both buffers.
+- =tasks-org-unpublish-task= :: Move the task at point from =TASKS.org= to
+  =TASKS.local.org=.
+
+Bind under a new =, ; L= local-task sub-map in the Spacemacs layer:
+| =, ; L p= | =tasks-org-publish-task=   |
+| =, ; L u= | =tasks-org-unpublish-task= |
+
+Update =README.org= for the layer.
+
+Acceptance: both commands work on tasks in Emacs; file contents on disk match
+the extension's view after a reload.
+** DONE [#C] Update docs and help text
+CLOSED: [2026-04-27 Mon 22:32]
+:PROPERTIES:
+:ID: b1e2c3d4-0009-4000-8000-100000000009
+:END:
+- Add =P= / =U= to the overlay help bar and README.md keybinding table.
+- Document the =TASKS.local.org= task format in README.md (tasks + =#+SELECTED:=
+  coexist; tasks follow the same heading syntax as =TASKS.org=).
+- Update =org-memory= SKILL.md to document local tasks and
+  publish/unpublish semantics.
+* Open questions
+
+1. *Separator row navigability* → render-time injection only.  The row array
+   stays clean; the render method detects the shared/local boundary by index
+   and injects the divider line without adding a navigable row.
+
+2. *Unpublish scope* → top-level shared tasks only, symmetric with archive.
+   Extracting a subtask to local requires a deliberate two-step (unpublish
+   the whole parent, rework locally, re-publish what you want).
+
+3. *Local task =#+IMPORT:=* → supported without special-casing.  The parser
+   and loader already handle it; publish just moves the task and the link
+   travels with it.  Plan files remain git-tracked; the local task is the
+   only private part.

@@ -1,0 +1,106 @@
+#+TITLE: Define legacy org-task metadata tolerance and normalization
+#+DATE: 2026-05-05 Tue
+#+PARENT_ID: 972d5cec-0606-44e3-8276-4c7d12349cde
+#+STATUS: Draft
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Context
+
+This draft plan was extracted from the org-memory agent-memory review
+(=design/log/2026-05-01-org-memory-agent-memory-review.org=, parent task
+=724c0332=). The generic protocol now has clear identity, LOGBOOK,
+sandboxing, and resume semantics, plus regression coverage. One remaining
+compatibility question is how strictly tooling should treat historical
+org-task data that predates the current metadata rules.
+
+The current protocol says new tasks require:
+
+- =:ID:= UUID property.
+- bracketed =:CREATED: [YYYY-MM-DD Day HH:MM]= property.
+- tool-driven lifecycle history in =:LOGBOOK:= where possible.
+
+Existing data may be older and incomplete. The tasks extension also has a
+historical =backfillMissingIds()= path, which silently repairs missing IDs on
+load. That may conflict with the newer “tolerate legacy reads, avoid silent
+rewrites” posture and should be reviewed deliberately rather than folded into
+the completed org-memory review.
+
+** Design decisions to consider
+
+- Separate read tolerance from write requirements :: New writes should stay
+  strict and deterministic. Existing files should remain loadable even when
+  metadata is incomplete.
+- Avoid surprise file churn :: Any normalization that rewrites historical data
+  should be explicit and user-initiated unless there is a strong compatibility
+  reason to keep automatic ID backfill.
+- Prefer diagnostics first :: =/tasks doctor= is the natural warning surface
+  for malformed legacy metadata; users can decide whether to normalize.
+
+* Plan
+
+** TODO [#B] Specify legacy read tolerance vs new-write requirements :docs:protocol:
+:PROPERTIES:
+:ID: 6fa1a8d7-9049-449b-a2a5-8dcbe3ab1c00
+:CREATED: [2026-05-05 Tue 22:05]
+:END:
+Acceptance criteria:
+- =org-tasks/SKILL.md= distinguishes metadata required on new writes from
+  legacy shapes tolerated on read.
+- Missing or malformed =:CREATED:= is explicitly tolerated on read but not
+  produced by tooling.
+- Missing =:ID:= policy is explicit, including whether automatic backfill
+  remains supported or becomes opt-in.
+- The no-silent-backfill rule is reconciled with any retained automatic ID
+  repair behaviour.
+** TODO [#B] Add doctor diagnostics for legacy metadata :tasks:doctor:
+:PROPERTIES:
+:ID: 21260c85-5513-4680-95fa-088b6770c5fd
+:CREATED: [2026-05-05 Tue 22:05]
+:END:
+Acceptance criteria:
+- =/tasks doctor= reports missing =:CREATED:= and malformed =:CREATED:= with
+  warning severity.
+- If missing =:ID:= is no longer silently backfilled, doctor reports it with
+  error severity; if automatic backfill remains, doctor/docs explain why the
+  warning is normally not observable after load.
+- Tests cover missing =:CREATED:=, malformed =:CREATED:=, and whichever
+  missing-ID behaviour is chosen.
+** TODO [#C] Decide and document a one-time normalization flow :tasks:compatibility:
+:PROPERTIES:
+:ID: 138e019c-5233-451b-b33d-e7df1406ed24
+:CREATED: [2026-05-05 Tue 22:05]
+:END:
+Acceptance criteria:
+- A normalization flow is specified as either a =/tasks normalize= command, a
+  doctor-assisted action, or a documented manual procedure.
+- The flow states exactly what it may add/change: IDs, =:CREATED:= values,
+  LOGBOOK =Created= entries, or provenance comments.
+- Any backfilled timestamp has a documented provenance rule (for example,
+  current time with a note, git history lower bound, or “unknown” marker if a
+  marker is chosen).
+- README explains that normalization is opt-in and may cause file churn.
+** TODO [#C] Implement normalization only if the policy calls for it :tasks:tooling:
+:PROPERTIES:
+:ID: 7dd51187-45a5-4924-b2af-ff0cec903913
+:CREATED: [2026-05-05 Tue 22:05]
+:END:
+Acceptance criteria:
+- If a command/action is chosen, implementation is covered by tests and refuses
+  to run without explicit user confirmation.
+- If manual normalization is chosen instead, no command is added; the plan is
+  closed with docs/tests only.
+* Implementation
+
+Draft extracted on [2026-05-05 Tue 22:05]. No implementation has been done in
+this change-record yet.
+
+* Open questions
+
+** OPEN Should automatic missing-ID backfill remain enabled?
+The extension currently has =backfillMissingIds()=. Decide whether this remains
+a compatibility repair, moves behind an opt-in normalization command, or is
+removed in favour of doctor diagnostics.
+
+** OPEN What provenance should normalized =:CREATED:= timestamps carry?
+Options include current time with a note, a git-history-derived lower bound, or
+no automatic timestamp backfill at all.

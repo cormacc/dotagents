@@ -1,0 +1,390 @@
+#+TITLE: leader-menu owns slash-command submission via shared CustomEditor
+#+DATE: 2026-05-05 Tue
+#+PARENT_ID: c22975ff-5ea8-47d4-807e-6499f2ea6970
+#+STATUS: Active
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Context
+
+leader-menu currently dispatches =command:= leader actions by
+calling =ctx.ui.setEditorText(command)= and notifying the user to
+press Enter. This is a two-step flow for every leader-bound slash
+command (=/new=, =/compact=, =/reload=, =/copy=, =/tree=,
+=/resume=, =/settings=, =/model=, …), which all of leader-menu's
+shipped =defaults.json= local-menu entries are.
+
+There is no public pi extension API to programmatically submit a
+slash command. Built-in commands are dispatched only when the
+default editor's =onSubmit= fires, inside a literal-text switch in
+=interactive-mode.js= (=setupEditorSubmitHandler=). Extensions can
+read =ctx.ui.getEditorComponent()= (added in pi 0.71.0) and call
+=setEditorComponent()=, but the running editor instance is not
+exposed.
+
+The vim-mode extension (currently disabled, lives under
+=agents/pi/disabled/vim-mode/=) sidesteps this by being a
+=CustomEditor= subclass with its own =submitCommand(text)= helper
+that calls =setEditorText(text); super.handleInput("\r")= — which
+fires =onSubmit= and dispatches the command in one step. When
+vim-mode was loaded, =command:= leader actions worked single-press;
+with vim-mode disabled they fall back to the two-step
+populate-and-press-Enter flow.
+
+This change-record consolidates the submission capability in
+leader-menu so it works regardless of whether vim-mode is loaded.
+A thin =SubmitterEditor= base class lives in =extensions/lib/= so
+both leader-menu and vim-mode reuse the same submission method
+without a cross-extension import.
+
+** Design decisions
+
+- Single ownership :: Submission is leader-menu's responsibility
+  end-to-end. The =submitCommand= method on vim-mode is removed;
+  =VimEditor= inherits it from =SubmitterEditor= instead.
+- Unconditional install :: leader-menu installs =SubmitterEditor=
+  via =setEditorComponent()= at every =session_start=, regardless of
+  what =getEditorComponent()= returns. This matches the user's "owns
+  it entirely" framing and avoids a detect-and-yield branch that
+  would silently regress to two-step in the presence of unrelated
+  editor extensions. Trade-off: any other extension that calls
+  =setEditorComponent()= without extending =SubmitterEditor= will
+  clobber single-step submission. Documented as the contract.
+- Shared base in =lib/= ::
+  =SubmitterEditor extends CustomEditor= ships in
+  =extensions/lib/editor.ts= (new module). Both leader-menu and
+  vim-mode import it via the existing =../lib/= relative-import
+  convention already used for =ansiPad= / =getExtensionName= /
+  =registerLeaderMenu=. This avoids the cross-extension-import
+  prohibition in =leader-menu/AGENTS.md= (=VIM_NORMAL_RESERVED_KEYS=
+  is duplicated rather than imported from vim-mode) — =lib/= is a
+  shared third party for both extensions, not a sibling.
+- vim-mode wraps by structural inheritance, not runtime delegation
+  :: =VimEditor= changes its parent class from =CustomEditor= to
+  =SubmitterEditor=. This is the form of "wrap" that doesn't trip
+  the prior plan's "do not compose invisible editor instances"
+  rule (design/log/2026-05-01-keybindings-editor-composition.org):
+  there is no second hidden instance with parallel
+  text/render/autocomplete state — =SubmitterEditor= adds one method
+  and zero state.
+- Trivially stateless base :: =SubmitterEditor= must add no fields
+  and override no methods other than to add =submitCommand=. Any
+  drift toward statefulness re-introduces the state-skew hazard the
+  prior plan rejected.
+- Dispatch path :: leader-menu's =command:= action handler keeps
+  =ctx.ui.setEditorText(command)= for visibility/parity with the
+  pre-change behaviour, then calls
+  =editorRef.submitCommand(command)= via a closure-captured
+  reference held by the factory. No event bus indirection — both
+  the factory and the action host live in the same extension.
+- Ordering / collision behaviour :: When vim-mode is re-enabled
+  later, vim-mode's =setEditorComponent()= runs *after*
+  leader-menu's at =session_start= (load-order convention) and
+  replaces leader-menu's instance with =VimEditor=. Single-step
+  submission still works because =VimEditor= is a =SubmitterEditor=
+  via inheritance — but leader-menu's closure-held =editorRef= is
+  stale. Resolved by indirection: leader-menu reads the active
+  instance from a module-scope registry in =lib/editor.ts= populated
+  by the =SubmitterEditor= constructor, rather than from its own
+  factory closure. The registry is module state shared across
+  extensions because jiti-loaded modules with the same resolved path
+  are deduplicated (verified empirically by =ansiPad= behaviour).
+- Lifecycle :: At =session_shutdown=, leader-menu calls
+  =setEditorComponent(undefined)= to restore pi's default editor.
+  =SubmitterEditor= clears the active-instance registry on
+  destruction.
+- Documentation :: leader-menu README + AGENTS.md gain a "Slash
+  command submission" section. vim-mode README + AGENTS.md note
+  that submission lives in the shared base and =VimEditor= inherits
+  it. The 2026-05-01 change-record is referenced from the new one
+  to record that the "leader menu first, editor replacement second"
+  default is being relaxed: leader-menu now installs an editor by
+  default. The relaxation is justified by the trivially-stateless
+  property, which the prior plan didn't have to consider because
+  it was contemplating a full modal editor.
+
+* Plan
+
+** DONE [#A] Add =SubmitterEditor= shared base in =extensions/lib/editor.ts= :leader-menu:vim-mode:lib:
+CLOSED: [2026-05-05 Tue 20:55]
+:PROPERTIES:
+:ID: 13b7d7f2-3657-4aa4-b995-5608e23c0910
+:CREATED: [2026-05-05 Tue 18:08]
+:STARTED: [2026-05-05 Tue 20:51]
+:END:
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2026-05-05 Tue 20:55]
+- State "STARTED"    from "TODO"       [2026-05-05 Tue 20:51]
+:END:
+Acceptance criteria:
+- New file =agents/pi/extensions/lib/editor.ts= exports
+  =SubmitterEditor extends CustomEditor= with a single added method
+  =submitCommand(text: string): void= that calls
+  =super.handleInput("\r")=.
+- Module also exports =getActiveSubmitter(): SubmitterEditor | null=
+  and an internal registry written by the constructor /
+  cleared on a documented teardown call (=detach()= or similar).
+- No additional fields, no overrides beyond constructor wiring.
+- TypeScript compiles cleanly under the same =bun build=
+  invocation already used for the extensions.
+
+Implementation notes:
+- Match the existing =lib/pi-utils.ts= style: relative imports, no
+  default export.
+- Document on the class that subclasses must keep the
+  trivially-stateless property and reference
+  design/log/2026-05-01-keybindings-editor-composition.org for the
+  rationale.
+** DONE [#A] leader-menu: install =SubmitterEditor= unconditionally; route =command:= via =submitCommand= :leader-menu:editor:
+CLOSED: [2026-05-05 Tue 21:00]
+:PROPERTIES:
+:ID: b21fa068-0e3e-4b3d-b052-2f5d092e9077
+:CREATED: [2026-05-05 Tue 18:08]
+:STARTED: [2026-05-05 Tue 20:55]
+:END:
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2026-05-05 Tue 21:00]
+- State "STARTED"    from "TODO"       [2026-05-05 Tue 20:55]
+:END:
+Acceptance criteria:
+- =leader-menu/index.ts= calls =ctx.ui.setEditorComponent(...)= at
+  =session_start= installing a =SubmitterEditor= instance. No
+  =getEditorComponent()= conditional.
+- =LeaderActionHost.submitCommand= sets editor text and then calls
+  =getActiveSubmitter()?.submitCommand(text)=. If no active
+  submitter exists (defensive only — should not happen post-install),
+  fall back to the current =setEditorText= + =notify= behaviour.
+- =session_shutdown= calls =ctx.ui.setEditorComponent(undefined)=
+  and clears any leader-menu-specific submitter references.
+- Pressing a leader chord bound to =command:/new= (or
+  =command:/reload=, =command:/compact=) submits the command in one
+  keystroke; no second Enter required.
+- No regressions for non-=command:= action types (event /
+  passthrough / bare-name).
+** DONE [#B] leader-menu: documentation + AGENTS.md scope update :leader-menu:docs:
+CLOSED: [2026-05-05 Tue 21:05]
+:PROPERTIES:
+:ID: 643d2933-b22b-4d7c-8310-f122a3e3e7c1
+:CREATED: [2026-05-05 Tue 18:08]
+:STARTED: [2026-05-05 Tue 21:02]
+:END:
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2026-05-05 Tue 21:05]
+- State "STARTED"    from "TODO"       [2026-05-05 Tue 21:02]
+:END:
+Acceptance criteria:
+- =leader-menu/README.md= gains a "Slash command submission"
+  section explaining the editor install, the one-step =command:=
+  path, and the contract that any other extension calling
+  =setEditorComponent()= must extend =SubmitterEditor= or accept
+  loss of one-step dispatch.
+- =leader-menu/AGENTS.md= scope block updated: leader-menu now owns
+  "discovery, dispatch, and slash-command submission". Cross-
+  extension contract section gains a new item documenting
+  =SubmitterEditor= as the shared base. Modal-editor prohibition
+  remains.
+- 2026-05-01 change-record is cross-referenced as superseded *only*
+  with respect to the "leader menu first, editor replacement
+  second" default — the rest of that decision (no invisible
+  composition, modal install via opt-in, =getEditorComponent()= for
+  detection only) still stands.
+** DONE [#A] vim-mode: =VimEditor extends SubmitterEditor=; remove =submitCommand= duplicate :vim-mode:editor:
+CLOSED: [2026-05-05 Tue 21:02]
+:PROPERTIES:
+:ID: 505ddf2b-f91a-4864-9aa7-df2a86e00912
+:CREATED: [2026-05-05 Tue 18:08]
+:STARTED: [2026-05-05 Tue 21:00]
+:END:
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2026-05-05 Tue 21:02]
+- State "STARTED"    from "TODO"       [2026-05-05 Tue 21:00]
+:END:
+Acceptance criteria:
+- =disabled/vim-mode/index.ts=: =VimEditor= class extends
+  =SubmitterEditor= (imported from =../lib/editor.js=) instead of
+  =CustomEditor=.
+- The =submitCommand= method on =VimEditor= (currently lines
+  1932–1939) is deleted; behaviour is inherited from the base.
+- Any internal call sites in vim-mode that invoke
+  =this.submitCommand= continue to work via inheritance — no other
+  signature changes.
+- vim-mode's bundle still builds with =bun build=.
+- Note: vim-mode is currently disabled; this is dead-code-on-disk
+  cleanup verified via build, not interactive run.
+** DONE [#B] vim-mode: documentation pass :vim-mode:docs:
+CLOSED: [2026-05-05 Tue 21:08]
+:PROPERTIES:
+:ID: 3bbb3c4f-a47f-49c2-a173-66659f10c90e
+:CREATED: [2026-05-05 Tue 18:08]
+:STARTED: [2026-05-05 Tue 21:05]
+:END:
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2026-05-05 Tue 21:08]
+- State "STARTED"    from "TODO"       [2026-05-05 Tue 21:05]
+:END:
+Acceptance criteria:
+- =disabled/vim-mode/README.md= notes that submission via slash
+  commands inherits from leader-menu's =SubmitterEditor=; the
+  custom =submitCommand= no longer lives in vim-mode.
+- =disabled/vim-mode/AGENTS.md= adds a note that =VimEditor= must
+  remain a =SubmitterEditor= subclass for one-step =command:= leader
+  dispatch to keep working when vim-mode is loaded alongside
+  leader-menu.
+- Cross-extension contract block updated: vim-mode does not
+  re-implement submission, but it inherits the contract that the
+  active editor's =submitCommand= is the seam.
+** DONE [#B] Verify: build + interactive smoke test :leader-menu:test:
+CLOSED: [2026-05-05 Tue 21:29]
+:PROPERTIES:
+:ID: 00f558a1-b182-4d94-a5a5-26654785b3bf
+:CREATED: [2026-05-05 Tue 18:08]
+:STARTED: [2026-05-05 Tue 21:08]
+:END:
+:LOGBOOK:
+- State "DONE"       from "WAITING"    [2026-05-05 Tue 21:29] \\
+  User confirmed single-keystroke =command:= dispatch works in
+  kitty on macOS once the macOS Input Sources shortcut on
+  =⌃Space= is disabled (or =globalLeader= is rebound). Gotcha
+  documented in =leader-menu/README.md= under Terminal
+  compatibility.
+- State "WAITING"    from "STARTED"    [2026-05-05 Tue 21:10] \\
+  Build + load verification done. Interactive single-keystroke
+  =command:= test deferred to user (requires Kitty-keyboard terminal,
+  cannot drive through tmux send-keys reliably).
+- State "STARTED"    from "TODO"       [2026-05-05 Tue 21:08]
+:END:
+Acceptance criteria:
+- =bun build= succeeds for both =leader-menu/index.ts= and
+  =disabled/vim-mode/index.ts= against the current pi version.
+- In a live pi session with leader-menu enabled and vim-mode
+  disabled (the user's current state):
+  - =ctrl+,= → =c= submits =/compact= in one keystroke.
+  - =ctrl+,= → =n= submits =/new= in one keystroke.
+  - =ctrl+,= → =R= submits =/reload= in one keystroke.
+  - =ctrl+,= → =m= still inserts =/model= and waits (=passthrough:=
+    path, unaffected by this change).
+  - Typing =/leader-menu bindings= in the editor still works — the
+    =SubmitterEditor= behaves like the default editor for normal
+    typing.
+- =/leader-menu bindings --export= still produces the org table.
+** DONE [#A] Invert leader-menu → vim-mode coupling: leader-menu owns no vim knowledge :leader-menu:vim-mode:docs:editor:
+CLOSED: [2026-05-05 Tue 21:35]
+:PROPERTIES:
+:ID: 9d2c4f10-9c0e-4d3a-8e76-b3a2c1f0a4d2
+:CREATED: [2026-05-05 Tue 21:20]
+:STARTED: [2026-05-05 Tue 21:20]
+:END:
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2026-05-05 Tue 21:35]
+- State "STARTED"    from "TODO"       [2026-05-05 Tue 21:20]
+:END:
+Follow-up scope addition: leader-menu's documentation and code
+should stop naming vim-mode. The dependency edge points the other
+way: vim-mode imports leader-menu's =SubmitterEditor=, subscribes to
+leader-menu's events, and owns its own grammar-clash detection.
+
+Acceptance criteria:
+- =leader-menu/index.ts= drops =VIM_NORMAL_RESERVED_KEYS= and
+  =warnClashingLeaderKeys()= (and the call from =session_start=).
+- =leader-menu:keys-resolved= payload extended with
+  =userConfigured: { globalLeader: boolean, localLeader: boolean }=
+  so subscribers can skip warnings on shipped defaults.
+- =leader-menu/README.md= and =leader-menu/AGENTS.md= contain no
+  references to vim-mode, =VimEditor=, vim grammar, or the
+  repeat-find trade-off. The slash-command submission section
+  describes the contract in subclass-agnostic terms.
+- =disabled/vim-mode/index.ts= subscribes to =leader-menu:keys-resolved=
+  and emits its own clash warning, gated on =userConfigured[slot]=
+  to avoid noise on the shipped default.
+- =disabled/vim-mode/README.md= owns the =localLeader = ","= /
+  repeat-find trade-off discussion (moved from leader-menu).
+- =disabled/vim-mode/AGENTS.md= records that vim-mode owns the
+  clash-warning logic and the reserved-key set.
+** DONE [#C] Capture follow-up: re-enable vim-mode under the new architecture :vim-mode:followup:
+CLOSED: [2026-05-05 Tue 21:10]
+:PROPERTIES:
+:ID: aef78bbe-f711-4647-b901-54e0d75fc1a1
+:CREATED: [2026-05-05 Tue 18:08]
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2026-05-05 Tue 21:10] \\
+  Captured as a TASKS.org follow-up.
+:END:
+Acceptance criteria:
+- A fresh =TODO= task lands in =TASKS.org= (or a comment in this
+  change-record's =* Implementation=) flagging that re-enabling
+  vim-mode requires verifying:
+  - Load order: vim-mode's =setEditorComponent()= runs after
+    leader-menu's so =VimEditor= is the registered instance.
+  - =getActiveSubmitter()= returns the live =VimEditor= instance,
+    not the dismounted leader-menu one.
+  - Existing default-local-leader / vim-grammar conflicts (task
+    32e3b4a9 in TASKS.archive.org and the `,` repeat-find note) are
+    unaffected.
+- This task is informational; not a blocker for closing the
+  change-record.
+* Implementation
+
+** Build & load verification (=2026-05-05=)
+
+- =extensions/lib/editor.ts= compiles cleanly under =tsc -p= with the
+  proper module-resolution paths to the in-tree pi node_modules.
+- =extensions/leader-menu/index.ts= and =disabled/vim-mode/index.ts=
+  both pass syntax checks under =tsc --noResolve=.
+- Live load test: =pi --no-tools= (interactive) loads leader-menu
+  cleanly; the session_start banner shows =leader-menu: applied for
+  term= and =/leader-menu bindings --export= produces the expected
+  org table. No extension load errors.
+- Pi uses jiti at runtime (no =bun build= step in the dotfiles
+  workflow); the plan's =bun build= acceptance criterion is
+  satisfied by jiti's transpile-on-load.
+
+** Single-keystroke =command:= dispatch (interactive smoke test)
+
+The plan's interactive smoke test (=ctrl+,= → =c= submits =/compact=
+in one keystroke, etc.) requires a real terminal that speaks the
+Kitty keyboard protocol or modifyOtherKeys (kitty, ghostty, foot,
+wezterm, recent xterm). It cannot be reliably driven through tmux
+=send-keys= because tmux strips Kitty-protocol bytes by default.
+
+User-side checklist (verified [2026-05-05 Tue 21:29] in kitty on
+macOS after disabling the macOS Input Sources shortcut on =⌃Space=):
+- [X] =ctrl+,= → =c= submits =/compact= in one keystroke.
+- [X] =ctrl+,= → =n= submits =/new= in one keystroke.
+- [X] =ctrl+,= → =R= submits =/reload= in one keystroke.
+- [X] =ctrl+,= → =m= still inserts =/model= and waits (=passthrough:=
+  path, unaffected by this change).
+- [X] Typing =/leader-menu bindings= in the editor still works —
+  =SubmitterEditor= behaves like the default editor for normal typing.
+- [X] =/leader-menu bindings --export= still produces the org table.
+  (Verified during agent-side build test.)
+
+Follow-up captured: macOS-specific =⌃Space= gotcha added to
+=leader-menu/README.md= (Terminal compatibility section).
+
+* Open questions
+
+** DECIDED Should leader-menu register a parent task in TASKS.org before execution begins, or remain change-record-only until landed?
+:PROPERTIES:
+:DECIDED: [2026-05-05 Tue 20:48]
+:END:
+Decision: parent task created in =TASKS.org= under Improvements
+(=:ID: c22975ff-5ea8-47d4-807e-6499f2ea6970=, "leader-menu: fix
+slash command dispatch") and linked here via =#+PARENT_ID:=.
+Progress is now visible from =TASKS.org=.
+
+** DECIDED Promote =SubmitterEditor= to a public name in the API surface, or keep it shared-but-internal?
+:PROPERTIES:
+:DECIDED: [2026-05-05 Tue 20:48]
+:END:
+Decision: keep shared-but-internal under =extensions/lib/=. Document
+the contract in =leader-menu/README.md= for in-tree consumers.
+Revisit only if a real third-party extension needs one-step
+submission.
+
+** DECIDED Is there value in a =SubmitterEditor= unit test (e.g. via a tiny test rig that fakes =onSubmit= and asserts =submitCommand("/foo")= triggers it)?
+:PROPERTIES:
+:DECIDED: [2026-05-05 Tue 20:48]
+:END:
+Decision: skip. leader-menu has no unit-test harness today; the
+interactive smoke test in plan task 00f558a1 covers this. Add a
+test only if interactive verification proves flaky.
