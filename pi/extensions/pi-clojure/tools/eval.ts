@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: EPL-2.0
+// Copyright © 2026-present Marko Kocic <marko@euptera.com>
+
+import { Type } from "@sinclair/typebox";
+import { defineTool } from "@mariozechner/pi-coding-agent";
+import { evalExpr } from "../nrepl-client";
+
+export const evalTool = defineTool({
+  name: "clojure_eval",
+  label: "Clojure Eval",
+  description: "Evaluate Clojure code via nREPL. Requires an existing nREPL connection (see clojure_find_nrepl_port to find one).",
+  promptSnippet: "Evaluate Clojure code",
+  parameters: Type.Object({
+    code: Type.String({ description: "Clojure code to evaluate" }),
+    port: Type.Number({ description: "nREPL port" }),
+    host: Type.Optional(
+      Type.String({ description: "nREPL host", default: "localhost" })
+    ),
+    ns: Type.Optional(Type.String({ description: "Target namespace" })),
+    timeout: Type.Optional(
+      Type.Number({ description: "Timeout in milliseconds (default: 30000)" })
+    ),
+  }),
+
+  async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+    try {
+      const result = await evalExpr({
+        host: String(params.host ?? "localhost"),
+        port: Number(params.port),
+        code: String(params.code),
+        ns: params.ns != null ? String(params.ns) : undefined,
+        timeout: params.timeout != null ? Number(params.timeout) : undefined,
+      });
+
+      const lines: string[] = [];
+
+      if (result.vals.length > 0) {
+        lines.push(`=> ${result.vals.join("\n=> ")}`);
+      }
+
+      if (result.out) {
+        lines.push(`stdout: ${result.out}`);
+      }
+
+      if (result.err) {
+        lines.push(`stderr: ${result.err}`);
+      }
+
+      const text = lines.length > 0 ? lines.join("\n") : "No output (nil or empty)";
+
+      return {
+        content: [{ type: "text", text }],
+        details: { vals: result.vals, out: result.out, err: result.err },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        content: [{ type: "text", text: `Error: ${message}` }],
+        details: { error: message },
+        isError: true,
+      };
+    }
+  },
+});
+
+

@@ -1,0 +1,36 @@
+#+TITLE: General-purpose agent skills
+
+These skills are symlinked into =~/.agents/skills/= by the consuming
+project's Home Manager module (or the Vercel Labs ~skills~ installer,
+or any Agent Skills compatible loader). They are available to every
+coding agent that honours that location (=pi=, =claude-code=, =codex=).
+For pi-only skills that depend on specific extensions, see
+[[file:../pi/skills/][../pi/skills/]].
+
+The =org-tasks=, =org-plan=, and =org-jira= skills below are also
+shipped as part of the =agent-org-memory= pi package alongside the
+=tasks=, =jira=, and =emacsclient= extensions. See
+[[file:../README.md][../README.md]] for the package boundary, install routes (npm/git/Nix),
+and the editable-vs-packaged Home Manager modes.
+
+* Skills
+
+- [[file:clj-nrepl/SKILL.md][clj-nrepl]] :: REPL-driven Clojure development for writing,
+  editing, and debugging code. Triggers on =.clj=, =.cljs=, =.cljc=,
+  =.edn=, namespaces, and Clojure tooling.
+- [[file:org-jira/SKILL.md][org-jira]] :: Jira-specific authoring conventions on top of
+  =org-tasks= — =:LINKED_ISSUES:= drawer key, =#+JIRA_*= keywords,
+  agent prompts that drive the atlassian MCP.
+- [[file:org-plan/SKILL.md][org-plan]] :: Drafting, reviewing, and executing implementation
+  plans as change-record files linked from =TASKS.org=.
+- [[file:org-tasks/SKILL.md][org-tasks]] :: The =TASKS.org= task-memory protocol — TODO
+  states, IDs, =#+IMPORT:= links, change-records, status
+  discipline, archiving, and the resume workflow.
+- [[file:review/SKILL.md][review]] :: Run a code-review sub-agent via a harness-agnostic
+  wrapper script.
+- [[file:self-improvement/SKILL.md][self-improvement]] :: Capture friction with agent / pi
+  configuration (AGENTS.md, skills, prompts, extensions, project
+  conventions) at the moment it arises and route it as actionable
+  TODO work. Project-local fixes land in the current project's
+  =TASKS.org=; global fixes are handed off to a session in this
+  dotfiles repo via pi-intercom (auto-spawned if none is alive).

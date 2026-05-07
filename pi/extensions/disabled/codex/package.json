@@ -1,0 +1,12 @@
+{
+  "name": "pi-extension-codex",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "OpenAI Codex (ChatGPT Plus/Pro OAuth) provider for pi",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

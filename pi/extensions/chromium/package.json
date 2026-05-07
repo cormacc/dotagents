@@ -1,0 +1,7 @@
+{
+  "name": "pi-chromium",
+  "private": true,
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}

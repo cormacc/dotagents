@@ -1,14 +1,18 @@
-# Pi-side agent instructions
+# General
+- CRITICAL: Always verify symbols, function names, config options, module
+  paths, variable names, CLI flags, and API fields against actual source code or
+  documentation before use.
+- When asked a question, just answer the question -- don't start coding.
+  Use tools and write scripts only to obtain additional required information.
 
-This file lands at `~/.pi/agent/AGENTS.md` (via the consuming project's
-Home Manager module or equivalent install path) and is the in-pi agent
-context for any session running against this repo's extensions and
-skills.
+# File operations
+- When searching file content, ALWAYS use `rg` rather than `find`
+- When you want to write a new file, ALWAYS use the write tool. Never use cat << 'EOF' or something strange.
+- When moving files controlled by git, ALWAYS use `git mv` rather than `mv` -- this preserves history.
+- When reverting file changes you made, use git operations instead of editing the file again.
+- Always prompt before committing changes, unless explicitly instructed not to. Show the proposed git commit entry.
+- Always use Conventional Commits style when drafting commits: `type(scope): subject`.
 
-> **Status:** placeholder. The full pi-side agent instructions move
-> into this file from the upstream `cormacc/dotfiles` checkout in the
-> "Move source assets and fix repository-relative references" plan
-> task. Until that lands, treat this file as a stub.
-
-For the durable task-memory protocol, see `skills/org-tasks/SKILL.md`.
-For the change-record / plan workflow, see `skills/org-plan/SKILL.md`.
+# Temporary files
+Use `$PROJECT_ROOT/.agents/tmp/` for scripts, data or temporary files for experiments,
+exploration, testing, answering questions, or other ad-hoc tasks.
