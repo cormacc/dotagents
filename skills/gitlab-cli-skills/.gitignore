@@ -1,0 +1,11 @@
+# dependencies
+/node_modules
+
+# claude
+.claude
+
+# misc
+.DS_Store
+
+# build artifacts
+claude-skill.zip
