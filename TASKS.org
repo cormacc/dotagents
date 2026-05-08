@@ -1,11 +1,11 @@
-#+TITLE: dotagents tasks
-#+AUTHOR: Cormac Cannon
-#+LANGUAGE: en
-#+DATE: 2026-05-07
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
-#+DEFAULT_PLAN_DIR: [[file:./design/log]]
+# #+TITLE: dotagents tasks
+# #+AUTHOR: Cormac Cannon
+# #+LANGUAGE: en
+# #+DATE: 2026-05-07
+# #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+# #+DEFAULT_PLAN_DIR: [[file:./design/log]]
 
-# Tracker linkage (consumed by the `tasks` extension for badge rendering
+# # Tracker linkage (consumed by the `tasks` extension for badge rendering
 # and `J` browser-open of bare keys in `:LINKED_ISSUES:`).
 #+ISSUE_URL_BASE: https://your-org.atlassian.net/browse/{ID}
 
@@ -19,6 +19,7 @@
 - [[#improvements][Improvements]]
 - [[#fixes][Fixes]]
 - [[#housekeeping][Housekeeping]]
+- [[#agent-feedback][Agent feedback]]
 
 * Improvements
 
@@ -38,7 +39,6 @@ the shape of ~agent-org-memory.nix~. Decide between sibling
 ~package.json~ files vs a workspaces layout when the second slice
 actually has more than one entry to bind together. Captured as a
 follow-up to the 2026-05-07 dotfiles → dotagents extraction.
-
 ** TODO [#B] Re-tier self-improvement skill routing for the dotfiles/dotagents split :self-improvement:routing:
 :PROPERTIES:
 :ID: 7e21788d-b4e6-439b-b300-ca84ab4a2fcc
@@ -62,7 +62,6 @@ Update the skill's routing rules accordingly: classify by affected
 artefact, hand off to the right repo via ~pi-intercom~, and document
 the two-tier model. Carried forward from the extraction
 change-record.
-
 ** TODO [#C] Improve terminal extension
 :PROPERTIES:
 :ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af
@@ -72,19 +71,6 @@ We refactored a while ago to use tmux across all backends for pane management an
 This was a good choice, but the key bindings / workflows should be reviewed and updated - they hark back to an earlier design (or lack thereof).
 - Evaluate whether we should use zellij rather than tmux as the terminal multiplexer.
 - Redesign the slash commands and keybindings around the multiplexer workflow / semantics.
-
-** TODO Implement emacs-based ui for org-memory extension
-:PROPERTIES:
-:ID: 9b5067ca-fec2-4e23-b647-981c31ee9a87
-:CREATED: [2026-05-06 Wed 21:56]
-:END:
-:LOGBOOK:
-- Created [2026-05-06 Wed 21:56]
-:END:
-#+IMPORT: [[file:design/log/2026-05-06-emacs-org-memory-ui.org]]
-- Consider replicating functionality of existing pi extension in =pi/extensions/tasks=.
-- Evaluate this emacs library for the UI implementation: https://github.com/d12frosted/vui.el
-
 ** TODO [#D] Investigate Allium
 :PROPERTIES:
 :ID: a46d6a4d-e72f-4923-8472-2daf28cb29d0
@@ -92,28 +78,28 @@ This was a good choice, but the key bindings / workflows should be reviewed and 
 May be a useful complement to tasks / memory system?
 - https://juxt.github.io/allium/
 - https://plugins.eca.dev/plugins/allium/
-
 ** TODO [#D] Check out rpiv-todo overlay for ideas
 :PROPERTIES:
 :ID: 60e8eff5-26a9-4d4b-8c1a-3c70321beccd
 :END:
+:LOGBOOK:
+- State "CANCELLED"      from "TODO"      [2026-05-08 Fri 07:41]
+- State "TODO"      from "CANCELLED"      [2026-05-08 Fri 07:41]
+:END:
 https://pi.dev/packages/@juicesharp/rpiv-todo
 Haven't checked it out yet, but might be a nicer overlay, with a different underlying task store.
-
 ** TODO [#D] Check out rpiv-btw
 :PROPERTIES:
 :ID: ec8e6eb3-dcfc-4124-ad1c-17e88d8562b6
 :END:
 https://pi.dev/packages/@juicesharp/rpiv-btw
 Ask a one-off question without polluting context... sounds useful
-
 ** TODO [#C] Evaluate context-mode plugin
 :PROPERTIES:
 :ID: dea3b890-b265-4372-a663-c584d04b4a68
 :END:
 https://pi.dev/packages/context-mode
 Also sounds useful...
-
 ** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol
 :PROPERTIES:
 :ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
@@ -137,7 +123,6 @@ Re-examine the self-improvement skill against the org-memory protocol
 - whether anything in the dev-agent-backlog HTML summary
   (design/log/2026-05-01-dev-agent-backlog-review-summary.html) should be
   borrowed for the self-improvement skill specifically
-
 ** TODO [#D] Decompose vim-mode/index.ts into index + buffer + core :vim-mode:refactor:
 :PROPERTIES:
 :ID: 6b087caf-4b69-4266-bd90-c6447ef361d7
@@ -155,7 +140,6 @@ vim-mode/index.ts is a ~2200-line monolith carrying the VimEditor class, all mot
 - index.ts — entry point + VimEditor class. Keep vim-mode's single-responsibility shape: no slash command, settings file, or settings migrator.
 
 Pure refactor — behaviour must not change. Captured during the keybindings split when the KEEP_OWN evaluation noted upstream's cleaner factoring.
-
 ** TODO [#D] Add clipboard sync to vim-mode (off / yank / all) :vim-mode:feature:
 :PROPERTIES:
 :ID: 08678bfb-f6df-4007-adf4-cf392d0c3313
@@ -175,7 +159,6 @@ Port the `VIM_MOTION_PI_CLIPBOARD` feature from `kepatrick/vim-motions-pi`:
 - One-shot startup notification showing the current mode (matches upstream UX).
 
 Captured in the change-record's `* Implementation` → "Evaluation" section as one of the upstream features worth stealing.
-
 ** TODO vim-mode: re-enable under leader-menu SubmitterEditor architecture :vim-mode:followup:
 :PROPERTIES:
 :ID: fe6b1c6d-edcf-4441-9820-c70aa33add23
@@ -202,7 +185,6 @@ leader-menu owning the editor install:
   do not regress to extending CustomEditor directly.
 
 Not a blocker for closing the slash-submission change-record.
-
 ** TODO [#D] Review Jira integration against org-memory protocol :jira:org-memory:followup:
 :PROPERTIES:
 :ID: 2b4d4ca7-6648-4e58-b4cf-b970565e79c7
@@ -213,7 +195,6 @@ Not a blocker for closing the slash-submission change-record.
 :END:
 #+IMPORT: [[file:design/log/2026-05-05-jira-org-memory-alignment.org]]
 Extracted from the org-memory agent-memory review (parent task 724c0332). Jira-specific protocol and regression-test work is separated here for later consideration so the selected org-memory review can focus on generic task/plan protocol work.
-
 ** TODO [#D] Define legacy org-task metadata tolerance and normalization :org-memory:compatibility:followup:
 :PROPERTIES:
 :ID: 972d5cec-0606-44e3-8276-4c7d12349cde
@@ -224,7 +205,6 @@ Extracted from the org-memory agent-memory review (parent task 724c0332). Jira-s
 :END:
 #+IMPORT: [[file:design/log/2026-05-05-legacy-org-task-metadata.org]]
 Extracted from the org-memory agent-memory review (parent task 724c0332). Compatibility policy for legacy task data is useful but not a blocker for closing the generic org-memory review.
-
 * Fixes
 
 ** TODO Local tasks duplicated in overlay when selected?
@@ -238,7 +218,6 @@ When I do the following....
 The new task is initially duplicated to TASKS.org, then deleted from TASKS.local.org
 It's possible that I accidentally hit promote, but don't believe so.
 Investigate -- reproduce manually, then follow up as appropriate.
-
 * Housekeeping
 
 ** STARTED Create self-improvement skill
@@ -248,8 +227,12 @@ Investigate -- reproduce manually, then follow up as appropriate.
 :STARTED: [2026-04-29 Wed 08:00]
 :END:
 #+IMPORT: [[file:design/log/2026-04-28-create-self-improvement-skill.org]]
-
 * Agent feedback
+** TODO [#D] Evaluate pi-lsp over home-rolled lsp
+:PROPERTIES:
+:ID: 0ed56048-9f53-44b4-8a5a-2dbc858e6f04
+:END:
+https://pi.dev/packages/@dreki-gg/pi-lsp
 
 ** TODO [#C] pi skill scanner treats `.gitignore` as a skill filter — un-edited installed skills disappear at startup :ext_pi:
 :PROPERTIES:

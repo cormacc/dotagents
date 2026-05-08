@@ -17,6 +17,17 @@ section structure (`* Context`, `* Plan`, `* Implementation`, optional
 `* Open questions`) is owned by the `org-plan` skill
 (`../org-plan/SKILL.md`).
 
+## Locating `TASKS.org`
+
+`TASKS.org` is anchored at the **project root** resolved from CWD
+(`git rev-parse --show-toplevel`, `projectile-project-root`, or an
+explicit project marker). Do **not** walk up parent directories — a
+parent project's index is not this project's. If absent at the
+resolved root, treat the project as having no task memory and offer
+to bootstrap (see *Bootstrap*), never fall back to an ancestor file.
+Same rule for `TASKS.local.org`, `TASKS.archive.org`, and `#+IMPORT:`
+resolution.
+
 ## File protocol
 
 `TASKS.org` and included task files declare the shared TODO cycle:
