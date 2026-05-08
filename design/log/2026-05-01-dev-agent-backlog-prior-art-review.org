@@ -1,6 +1,6 @@
 #+TITLE: Review dev-agent-backlog prior art
 #+DATE: 2026-05-01 Fri
-#+PARENT_ID: 5aed17ed-cfc4-4ae3-bb24-57c7d974a142
+#+PARENT: [[file:../../TASKS.archive.org::#5aed17ed-cfc4-4ae3-bb24-57c7d974a142][Review prior art w.r.t. org-memory protocol]]
 #+STATUS: Complete
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
@@ -51,7 +51,7 @@ self-improvement skill review — remain as their own top-level tasks in
 ** DONE [#B] Decide which dev-agent-backlog concepts to adopt :protocol:
 CLOSED: [2026-05-02 Sat 12:18]
 :PROPERTIES:
-:ID: a9f11962-5c55-4e8c-bee6-a3095b434dc0
+:CUSTOM_ID: a9f11962-5c55-4e8c-bee6-a3095b434dc0
 :CREATED: [2026-05-01 Fri 19:28]
 :STARTED: [2026-05-02 Sat 12:18]
 :END:
@@ -75,7 +75,7 @@ Decisions [2026-05-02 Sat]:
 ** DONE [#B] Specify handoff, question, and change-record status conventions :skills:
 CLOSED: [2026-05-02 Sat 12:25]
 :PROPERTIES:
-:ID: 60e4cb26-583b-4d07-b04c-6e2efdbec410
+:CUSTOM_ID: 60e4cb26-583b-4d07-b04c-6e2efdbec410
 :CREATED: [2026-05-01 Fri 19:28]
 :STARTED: [2026-05-02 Sat 12:25]
 :END:
@@ -110,7 +110,7 @@ in task `a9f11962-5c55-4e8c-bee6-a3095b434dc0`):
 ** DONE [#C] Design health-check and readiness tooling :extensions:
 CLOSED: [2026-05-02 Sat 12:25]
 :PROPERTIES:
-:ID: 9021e0c3-55f4-45a3-8611-ec5c1ebd6818
+:CUSTOM_ID: 9021e0c3-55f4-45a3-8611-ec5c1ebd6818
 :CREATED: [2026-05-01 Fri 19:28]
 :STARTED: [2026-05-02 Sat 12:25]
 :END:
@@ -140,7 +140,7 @@ separate fan-in property such as `:WAITS_FOR:` is not warranted.
 ** DONE [#C] Decide completion-summary and acceptance-criteria shape :workflow:
 CLOSED: [2026-05-02 Sat 12:25]
 :PROPERTIES:
-:ID: 49b27ed0-0006-4cb7-b1de-91e71d3b2d90
+:CUSTOM_ID: 49b27ed0-0006-4cb7-b1de-91e71d3b2d90
 :CREATED: [2026-05-01 Fri 19:28]
 :STARTED: [2026-05-02 Sat 12:25]
 :END:
@@ -161,7 +161,7 @@ No new properties or drawers.
 ** DONE [#D] Capture explicit non-goals for the local protocol :documentation:
 CLOSED: [2026-05-02 Sat 12:25]
 :PROPERTIES:
-:ID: 817f4fa9-dc65-4191-b3cd-153bf2bd3209
+:CUSTOM_ID: 817f4fa9-dc65-4191-b3cd-153bf2bd3209
 :CREATED: [2026-05-01 Fri 19:28]
 :STARTED: [2026-05-02 Sat 12:25]
 :END:
@@ -194,7 +194,7 @@ accidentally:
 ** DONE [#C] Apply org-memory SKILL updates from prior-art review :skills:
 CLOSED: [2026-05-02 Sat 12:36]
 :PROPERTIES:
-:ID: d49dad0e-40bd-4b17-8b69-f3bd90440ece
+:CUSTOM_ID: d49dad0e-40bd-4b17-8b69-f3bd90440ece
 :CREATED: [2026-05-02 Sat 12:24]
 :STARTED: [2026-05-02 Sat 12:33]
 :END:
@@ -247,7 +247,7 @@ org-plan SKILL.md:
 ** DONE [#C] Multi-valued :BLOCKED-BY: + ready-task query in tasks extension :extensions:
 CLOSED: [2026-05-02 Sat 12:46]
 :PROPERTIES:
-:ID: 3b5918d5-8edb-4a35-b2d6-e36ae58c24fe
+:CUSTOM_ID: 3b5918d5-8edb-4a35-b2d6-e36ae58c24fe
 :CREATED: [2026-05-02 Sat 12:24]
 :STARTED: [2026-05-02 Sat 12:38]
 :BLOCKED-BY: task:d49dad0e-40bd-4b17-8b69-f3bd90440ece
@@ -283,7 +283,7 @@ Parser/code changes:
 ** DONE [#D] Implement /tasks doctor health-check command :extensions:
 CLOSED: [2026-05-02 Sat 12:52]
 :PROPERTIES:
-:ID: 77a0ce57-b39a-47d3-beb8-1aaa9884e0f8
+:CUSTOM_ID: 77a0ce57-b39a-47d3-beb8-1aaa9884e0f8
 :CREATED: [2026-05-02 Sat 12:24]
 :STARTED: [2026-05-02 Sat 12:46]
 :BLOCKED-BY: task:d49dad0e-40bd-4b17-8b69-f3bd90440ece

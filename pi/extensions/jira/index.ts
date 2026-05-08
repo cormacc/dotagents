@@ -268,7 +268,7 @@ function registerCloneApplyTool(pi: ExtensionAPI): void {
             content: [{
               type: "text" as const,
               text:
-                `${params.key} is already linked from existing task ${result.existingId ?? "(no :ID:)"} in ${result.existingFile}. Refusing to clone again.`,
+                `${params.key} is already linked from existing task ${result.existingId ?? "(no :CUSTOM_ID:)"} in ${result.existingFile}. Refusing to clone again.`,
             }],
             details: { ...result, key: params.key },
             isError: true,

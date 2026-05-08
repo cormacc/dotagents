@@ -1,6 +1,6 @@
 #+TITLE: Fix keybindings extension capital-letter matching
 #+DATE: 2026-04-27 Mon
-#+PARENT_ID: d9789ed7-ff34-490a-a818-bf7a79fa1180
+#+PARENT: [[file:../../TASKS.archive.org::#d9789ed7-ff34-490a-a818-bf7a79fa1180][Update keybindings extension to handle capital letter properly]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -64,7 +64,7 @@ warning.
 ** CANCELLED [#A] Fix handleLeader to use matchesKey
 CLOSED: [2026-04-28 Tue 22:57]
 :PROPERTIES:
-:ID: e1f2a3b4-0001-4000-8000-200000000001
+:CUSTOM_ID: e1f2a3b4-0001-4000-8000-200000000001
 :END:
 In =handleLeader=, replace:
 #+begin_example
@@ -81,7 +81,7 @@ entry.
 ** CANCELLED [#A] Fix mergeChildren to use matchesKey for clash detection
 CLOSED: [2026-04-28 Tue 22:57]
 :PROPERTIES:
-:ID: e1f2a3b4-0002-4000-8000-200000000002
+:CUSTOM_ID: e1f2a3b4-0002-4000-8000-200000000002
 :END:
 In =mergeChildren=, replace:
 #+begin_example
@@ -98,7 +98,7 @@ warning is emitted rather than silently adding a duplicate.
 ** CANCELLED [#B] Fix warnClashingLeaderKeys to use matchesKey
 CLOSED: [2026-04-28 Tue 22:57]
 :PROPERTIES:
-:ID: e1f2a3b4-0003-4000-8000-200000000003
+:CUSTOM_ID: e1f2a3b4-0003-4000-8000-200000000003
 :END:
 =warnClashingLeaderKeys= currently checks:
 #+begin_example
@@ -120,7 +120,7 @@ produces a "clashes with normal-mode vim binding" warning.
 ** CANCELLED [#C] Add #+A / #+P / #+U to tasks leader menu and update docs
 CLOSED: [2026-04-28 Tue 22:57]
 :PROPERTIES:
-:ID: e1f2a3b4-0004-4000-8000-200000000004
+:CUSTOM_ID: e1f2a3b4-0004-4000-8000-200000000004
 :END:
 Once the matching fix lands, extend the tasks extension's
 =suggestKeybindings= call to expose the overlay's capital-letter actions

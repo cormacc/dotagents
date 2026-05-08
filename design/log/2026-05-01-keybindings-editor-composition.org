@@ -1,6 +1,6 @@
 #+TITLE: Keybindings extension: compose with prior editor (pi 0.71.0)
 #+DATE: 2026-05-01 Fri
-#+PARENT_ID: c94bab43-aedf-4ccf-984c-a2e1167e880a
+#+PARENT: [[file:../../TASKS.archive.org::#c94bab43-aedf-4ccf-984c-a2e1167e880a][Review 0.71.0 changes re. editor]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -99,7 +99,7 @@ do not have the API, so the call must be guarded.
 ** DONE [#B] Extract leader menu/action dispatch from =VimEditor= :keybindings:
 CLOSED: [2026-05-01 Fri 18:04]
 :PROPERTIES:
-:ID: 0c28c168-21fd-40c4-8b6e-b7eeb23c1e10
+:CUSTOM_ID: 0c28c168-21fd-40c4-8b6e-b7eeb23c1e10
 :CREATED: [2026-05-01 Fri 17:51]
 :END:
 :LOGBOOK:
@@ -117,7 +117,7 @@ Acceptance:
 ** DONE [#B] Add insert-only leader overlay via =registerShortcut= + =ctx.ui.custom= :keybindings:ui:
 CLOSED: [2026-05-01 Fri 18:04]
 :PROPERTIES:
-:ID: 5d53e75a-00bf-4063-91b8-506a3c238c78
+:CUSTOM_ID: 5d53e75a-00bf-4063-91b8-506a3c238c78
 :CREATED: [2026-05-01 Fri 17:51]
 :END:
 :LOGBOOK:
@@ -137,7 +137,7 @@ Acceptance:
 ** DONE [#B] Install =VimEditor= only for modal mode and restore previous editor on emacs mode :keybindings:editor:
 CLOSED: [2026-05-01 Fri 18:04]
 :PROPERTIES:
-:ID: dc73210c-ff30-4882-b218-bb764d223a18
+:CUSTOM_ID: dc73210c-ff30-4882-b218-bb764d223a18
 :CREATED: [2026-05-01 Fri 17:51]
 :END:
 :LOGBOOK:
@@ -160,7 +160,7 @@ Acceptance:
 ** DONE [#C] Move mode feedback to documented status/footer API :keybindings:ui:
 CLOSED: [2026-05-01 Fri 18:04]
 :PROPERTIES:
-:ID: 8e47bccc-fca1-4437-8c68-f045a329a27e
+:CUSTOM_ID: 8e47bccc-fca1-4437-8c68-f045a329a27e
 :CREATED: [2026-05-01 Fri 17:51]
 :END:
 :LOGBOOK:
@@ -177,7 +177,7 @@ Acceptance:
 ** DONE [#C] Replace or retire raw =passthrough:= leader actions :keybindings:
 CLOSED: [2026-05-01 Fri 18:04]
 :PROPERTIES:
-:ID: bc28a95f-87d1-4115-abbe-ef0a51c1d50a
+:CUSTOM_ID: bc28a95f-87d1-4115-abbe-ef0a51c1d50a
 :CREATED: [2026-05-01 Fri 17:51]
 :END:
 :LOGBOOK:
@@ -199,7 +199,7 @@ Acceptance:
 ** DONE [#C] Update README and generated keybindings map :keybindings:docs:
 CLOSED: [2026-05-01 Fri 18:04]
 :PROPERTIES:
-:ID: 502102b9-61ef-4dc9-be7f-f9d56c3574ef
+:CUSTOM_ID: 502102b9-61ef-4dc9-be7f-f9d56c3574ef
 :CREATED: [2026-05-01 Fri 17:51]
 :END:
 :LOGBOOK:
@@ -218,7 +218,7 @@ changes per the extension-development guidelines.
 ** DONE [#C] Manual interactive reload verification :keybindings:test:
 CLOSED: [2026-05-01 Fri 18:17]
 :PROPERTIES:
-:ID: c0bab814-4122-4daa-94ce-effdf6d45d44
+:CUSTOM_ID: c0bab814-4122-4daa-94ce-effdf6d45d44
 :CREATED: [2026-05-01 Fri 18:04]
 :END:
 :LOGBOOK:

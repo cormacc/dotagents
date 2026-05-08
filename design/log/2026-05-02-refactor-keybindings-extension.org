@@ -1,6 +1,6 @@
 #+TITLE: Refactor keybindings extension
 #+DATE: 2026-05-02 Sat
-#+PARENT_ID: 00e1772c-92eb-4a5b-afc5-bf1bbbb51e5b
+#+PARENT: [[file:../../TASKS.archive.org::#00e1772c-92eb-4a5b-afc5-bf1bbbb51e5b][Refactor keybindings extension]]
 #+STATUS: Complete
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
@@ -85,7 +85,7 @@ are updated atomically with the split.
 ** DONE [#A] Evaluate =kepatrick/vim-motions-pi= against current modal feature set
 CLOSED: [2026-05-02 Sat 15:05]
 :PROPERTIES:
-:ID: 16c3fbee-6fe8-4de1-9d43-02dc51cdda7e
+:CUSTOM_ID: 16c3fbee-6fe8-4de1-9d43-02dc51cdda7e
 :CREATED: [2026-05-02 Sat 14:38]
 :STARTED: [2026-05-02 Sat 14:55]
 :END:
@@ -118,7 +118,7 @@ Steps:
 ** DONE [#A] Specify the split — contracts for =leader-menu= and =vim-mode=
 CLOSED: [2026-05-02 Sat 15:18]
 :PROPERTIES:
-:ID: 5e5260d0-912c-495d-9c17-f9fbb7314c5d
+:CUSTOM_ID: 5e5260d0-912c-495d-9c17-f9fbb7314c5d
 :CREATED: [2026-05-02 Sat 14:38]
 :STARTED: [2026-05-02 Sat 15:08]
 :END:
@@ -142,7 +142,7 @@ Acceptance criteria:
 ** DONE [#B] Extract =leader-menu= extension
 CLOSED: [2026-05-02 Sat 17:15]
 :PROPERTIES:
-:ID: 0634cd5f-e932-44be-8d78-839d3e08c387
+:CUSTOM_ID: 0634cd5f-e932-44be-8d78-839d3e08c387
 :CREATED: [2026-05-02 Sat 14:38]
 :STARTED: [2026-05-02 Sat 15:25]
 :END:
@@ -179,7 +179,7 @@ Later enhancements absorbed in this work:
 ** DONE [#B] Extract =vim-mode= extension
 CLOSED: [2026-05-02 Sat 16:55]
 :PROPERTIES:
-:ID: 7c85f7fd-64e4-441f-9b70-5846b69f48c6
+:CUSTOM_ID: 7c85f7fd-64e4-441f-9b70-5846b69f48c6
 :CREATED: [2026-05-02 Sat 14:38]
 :STARTED: [2026-05-02 Sat 15:45]
 :END:
@@ -217,7 +217,7 @@ Acceptance criteria:
 ** DONE [#C] Update in-tree extension consumers
 CLOSED: [2026-05-02 Sat 17:08]
 :PROPERTIES:
-:ID: 1960dfb5-4e26-4ad3-a145-c4aa5239d151
+:CUSTOM_ID: 1960dfb5-4e26-4ad3-a145-c4aa5239d151
 :CREATED: [2026-05-02 Sat 14:38]
 :STARTED: [2026-05-02 Sat 17:00]
 :END:
@@ -257,7 +257,7 @@ Acceptance criteria:
 ** DONE [#C] Migration + docs pass
 CLOSED: [2026-05-02 Sat 17:12]
 :PROPERTIES:
-:ID: aaf83d7f-4e01-434c-93d9-76d095b3dd4e
+:CUSTOM_ID: aaf83d7f-4e01-434c-93d9-76d095b3dd4e
 :CREATED: [2026-05-02 Sat 14:38]
 :STARTED: [2026-05-02 Sat 17:08]
 :END:
@@ -295,7 +295,7 @@ Acceptance criteria:
 ** DONE [#C] Remove the original =keybindings= extension
 CLOSED: [2026-05-02 Sat 17:14]
 :PROPERTIES:
-:ID: bd679630-17f6-4481-a8f9-31033326ee03
+:CUSTOM_ID: bd679630-17f6-4481-a8f9-31033326ee03
 :CREATED: [2026-05-02 Sat 14:38]
 :STARTED: [2026-05-02 Sat 17:12]
 :END:

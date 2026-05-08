@@ -16,13 +16,37 @@ import {
   serializeTasks,
 } from "./parser.ts";
 
+export interface ScaffoldPlanOptions {
+  /** Path from the plan file's directory to the task file containing the parent. */
+  tasksFileRelPath?: string;
+}
+
+function safeOrgLinkDescription(summary: string): string | null {
+  const trimmed = summary.trim();
+  if (!trimmed || /[\[\]\r\n]/.test(trimmed)) return null;
+  return trimmed;
+}
+
+function parentLink(tasksFileRelPath: string, parentId: string, summary: string): string {
+  const target = `file:${tasksFileRelPath}::#${parentId}`;
+  const description = safeOrgLinkDescription(summary);
+  return description ? `[[${target}][${description}]]` : `[[${target}]]`;
+}
+
 /** Scaffold a minimal change-record body consistent with the `org-plan` skill. */
-export function scaffoldPlan(task: Task, planTasks: Task[] = []): string {
+export function scaffoldPlan(
+  task: Task,
+  optionsOrPlanTasks: ScaffoldPlanOptions | Task[] = {},
+  maybePlanTasks: Task[] = [],
+): string {
   const parentId = getTaskId(task);
+  const options = Array.isArray(optionsOrPlanTasks) ? {} : optionsOrPlanTasks;
+  const planTasks = Array.isArray(optionsOrPlanTasks) ? optionsOrPlanTasks : maybePlanTasks;
+  const tasksFileRelPath = options.tasksFileRelPath ?? "../../TASKS.org";
   const content = [
     `#+TITLE: ${task.summary}`,
     `#+DATE: ${formatOrgDate()}`,
-    parentId ? `#+PARENT_ID: ${parentId}` : null,
+    parentId ? `#+PARENT: ${parentLink(tasksFileRelPath, parentId, task.summary)}` : null,
     "#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)",
     "",
     "* Context",

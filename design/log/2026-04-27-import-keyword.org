@@ -1,6 +1,6 @@
 #+TITLE: Replace :INCLUDE: drawer property with #+IMPORT: keyword
 #+DATE: 2026-04-27 Mon
-#+PARENT_ID: 9adb8c66-8aba-4e11-9922-70d6225f5a0e
+#+PARENT: [[file:../../TASKS.archive.org::#9adb8c66-8aba-4e11-9922-70d6225f5a0e][Replace :INCLUDE: drawer property with #+IMPORT: keyword  :org-memory:org-tasks:]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -50,7 +50,7 @@ Plain-path values are also accepted and round-trip cleanly.
 
 ** DONE [#B] Update parser
 :PROPERTIES:
-:ID: a1b2c3d4-0001-4000-8000-000000000001
+:CUSTOM_ID: a1b2c3d4-0001-4000-8000-000000000001
 :END:
 CLOSED: [2026-04-27 Mon 21:53]
 - Remove =INCLUDE_PROPERTY_RE=; add =IMPORT_KEYWORD_RE= matching =#+IMPORT:= anywhere.
@@ -65,7 +65,7 @@ CLOSED: [2026-04-27 Mon 21:53]
 
 ** DONE [#B] Update extension (index.ts, overlay.ts)
 :PROPERTIES:
-:ID: a1b2c3d4-0002-4000-8000-000000000002
+:CUSTOM_ID: a1b2c3d4-0002-4000-8000-000000000002
 :END:
 CLOSED: [2026-04-27 Mon 21:53]
 - =loadTasks=: destructure =ParseResult=; load root-level =fileImports= and
@@ -79,7 +79,7 @@ CLOSED: [2026-04-27 Mon 21:53]
 
 ** DONE [#B] Update tasks-org.el
 :PROPERTIES:
-:ID: a1b2c3d4-0003-4000-8000-000000000003
+:CUSTOM_ID: a1b2c3d4-0003-4000-8000-000000000003
 :END:
 CLOSED: [2026-04-27 Mon 21:53]
 - Replace =org-entry-get/put= for =:INCLUDE:= with new helpers:
@@ -92,7 +92,7 @@ CLOSED: [2026-04-27 Mon 21:53]
 
 ** DONE [#C] Migrate TASKS.org and update docs
 :PROPERTIES:
-:ID: a1b2c3d4-0004-4000-8000-000000000004
+:CUSTOM_ID: a1b2c3d4-0004-4000-8000-000000000004
 :END:
 CLOSED: [2026-04-27 Mon 21:53]
 - Migrate 2 existing =:INCLUDE:= drawer entries in =TASKS.org= to =#+IMPORT:=.

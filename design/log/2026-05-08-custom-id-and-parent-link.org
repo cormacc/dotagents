@@ -1,6 +1,6 @@
 #+TITLE: Migrate :ID: → :CUSTOM_ID: and #+PARENT_ID: → #+PARENT: link
 #+DATE: 2026-05-08 Fri
-#+PARENT_ID: 69e24b8a-d86a-4c1e-b4bf-d19f8d2b56b7
+#+PARENT: [[file:../../TASKS.org::#69e24b8a-d86a-4c1e-b4bf-d19f8d2b56b7][org-memory -- make PARENT_ID property navigable]]
 #+STATUS: Accepted
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
@@ -35,7 +35,9 @@ a one-shot rewrite across three repos checked out on this machine:
 - =#+PARENT:= carries an org-link :: Form
   =#+PARENT: [[file:<rel>/TASKS.org::#<uuid>][<parent summary>]]=. The
   relative prefix is computed from =#+DEFAULT_PLAN_DIR= at scaffold
-  time. Default =design/log/= → =../../TASKS.org=.
+  time. Default =design/log/= → =../../TASKS.org=. Link descriptions
+  are escaped/sanitised, or omitted when unsafe, so heading text cannot
+  break org link syntax.
 - No legacy tolerance window :: Three projects, one machine, one
   sweep; tooling and content migrate atomically. (Tolerant reader
   stays cheap to add later if a fourth project surfaces with stale
@@ -57,7 +59,7 @@ a one-shot rewrite across three repos checked out on this machine:
 
 ** TODO [#A] Phase 1.1 — Update parser to read :CUSTOM_ID: :tooling:parser:
 :PROPERTIES:
-:ID: 9f066674-057f-4c85-8481-02686f2e8610
+:CUSTOM_ID: 9f066674-057f-4c85-8481-02686f2e8610
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria:
@@ -74,10 +76,9 @@ Acceptance criteria:
   =../../=).
 
 Touches =pi/extensions/tasks/parser.ts= and =parser.test.ts=.
-
 ** TODO [#A] Phase 1.2 — Update writers to emit :CUSTOM_ID: :tooling:writer:
 :PROPERTIES:
-:ID: 684890b9-5674-4c05-9a64-31b7067dd7bd
+:CUSTOM_ID: 684890b9-5674-4c05-9a64-31b7067dd7bd
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria:
@@ -91,10 +92,9 @@ Acceptance criteria:
 - The "develop the plan interactively" agent prompt
   (=index.ts= line ~1355) mentions =:CUSTOM_ID:=.
 - =insert.test.ts= snapshots regenerate with =:CUSTOM_ID:=.
-
 ** TODO [#A] Phase 1.3 — Scaffolder emits #+PARENT: link :tooling:scaffold:
 :PROPERTIES:
-:ID: c8f6b290-ed80-4d49-bfe0-34227327ddd5
+:CUSTOM_ID: c8f6b290-ed80-4d49-bfe0-34227327ddd5
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria:
@@ -110,10 +110,9 @@ Acceptance criteria:
   link form.
 - New test covers a non-default plan dir (e.g. =notes/=) producing
   =../TASKS.org=.
-
 ** TODO [#A] Phase 1.4 — Doctor + overlay string updates :tooling:doctor:
 :PROPERTIES:
-:ID: 50602828-1801-4db1-9402-810daec768a5
+:CUSTOM_ID: 50602828-1801-4db1-9402-810daec768a5
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria:
@@ -126,10 +125,23 @@ Acceptance criteria:
   =:ID: <uuid>= → =:CUSTOM_ID: <uuid>=; =#+PARENT_ID: <uuid>= →
   =#+PARENT: [[file:…/TASKS.org::#<uuid>][<summary>]]=.
 - =pi/extensions/tasks/test.sh= exits clean.
-
-** TODO [#B] Phase 1.5 — Jira extension user-facing strings :tooling:jira:
+** TODO [#A] Phase 1.5 — Rewrite plan parent links when archiving :tooling:archive:
 :PROPERTIES:
-:ID: 8d712d48-7c93-4478-8c2d-1c31e94a68c0
+:CUSTOM_ID: 8d712d48-7c93-4478-8c2d-1c31e94a68c0
+:CREATED: [2026-05-08 Fri 12:02]
+:END:
+Acceptance criteria:
+- When =archiveTopLevel= moves a task from =TASKS.org= to
+  =TASKS.archive.org=, it also rewrites that task's imported plan file
+  from =[[file:../../TASKS.org::#<uuid>][...]]= to
+  =[[file:../../TASKS.archive.org::#<uuid>][...]]=.
+- The rewrite is scoped to the plan's =#+PARENT:= line for the archived
+  task UUID; unrelated links in the plan are untouched.
+- Archiving without an imported plan remains unchanged.
+- Archive tests cover parent-link rewriting and no-plan behaviour.
+** TODO [#B] Phase 1.6 — Jira extension user-facing strings :tooling:jira:
+:PROPERTIES:
+:CUSTOM_ID: 7c70a2a1-8c5e-41bb-9ff4-470af80d93d9
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria:
@@ -138,10 +150,9 @@ Acceptance criteria:
   references with =:CUSTOM_ID:= in user-facing messages.
 - No behavioural change — these messages just cite the property name.
 - Jira test suite passes unchanged.
-
 ** TODO [#A] Phase 2.1 — Update org-tasks SKILL.md :docs:skill:
 :PROPERTIES:
-:ID: 958ed98e-e64d-4421-8cb1-3b8e572af953
+:CUSTOM_ID: 958ed98e-e64d-4421-8cb1-3b8e572af953
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria:
@@ -154,10 +165,9 @@ Acceptance criteria:
   =:CUSTOM_ID:= properties…".
 - Subtask-migration section (line ~158) preserves =:CUSTOM_ID:=
   values.
-
 ** TODO [#A] Phase 2.2 — Update org-plan SKILL.md :docs:skill:
 :PROPERTIES:
-:ID: 47ae8d05-ba22-4c03-bcae-de3dc7981708
+:CUSTOM_ID: 47ae8d05-ba22-4c03-bcae-de3dc7981708
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria:
@@ -168,10 +178,9 @@ Acceptance criteria:
   =:CUSTOM_ID:=.
 - New paragraph documenting =#+PARENT:= link semantics and the
   =<rel>/TASKS.org::#<uuid>= shape.
-
 ** TODO [#B] Phase 2.3 — Update org-jira SKILL.md and prompts :docs:skill:
 :PROPERTIES:
-:ID: 169c0823-94c6-4557-b2a7-8ea434b40086
+:CUSTOM_ID: 169c0823-94c6-4557-b2a7-8ea434b40086
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria:
@@ -179,10 +188,9 @@ Acceptance criteria:
   =:CUSTOM_ID:=.
 - =rg ':ID:' prompts/= returns no hits afterwards (verify zero
   references; update any that exist).
-
 ** TODO [#A] Phase 3 — Author migration script :migration:tooling:
 :PROPERTIES:
-:ID: 2345ad43-e545-4eb2-a1de-d250eb62cedd
+:CUSTOM_ID: 2345ad43-e545-4eb2-a1de-d250eb62cedd
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria:
@@ -198,6 +206,9 @@ Acceptance criteria:
   the heading summary, compute the relative path from the plan file's
   directory to the resolved tasks file, replace with
   =#+PARENT: [[file:<rel>::#<uuid>][<summary>]]=.
+- The script uses its own old-format scanner, or explicitly supports
+  both =:ID:= and =:CUSTOM_ID:= while migrating; it must not depend on
+  runtime parser code that only understands the new schema.
 - Refuses (without writing) when any =#+PARENT_ID:= UUID can't be
   resolved; surfaces the unresolved set for manual fixup.
 - Idempotent: skips files with zero matches.
@@ -205,41 +216,37 @@ Acceptance criteria:
 - Dry-run on =agents-src= shows zero unresolved parents; live run
   produces a clean =git diff= with no semantic changes other than the
   rename + link emission.
-
 ** TODO [#A] Phase 4.1 — Sweep agents-src :migration:sweep:
 :PROPERTIES:
-:ID: 1db5d853-aaec-4de8-ac8b-26efc05f6738
+:CUSTOM_ID: 1db5d853-aaec-4de8-ac8b-26efc05f6738
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria:
 - Migration script applied to =~/dotfiles/agents-src=.
 - =git diff --stat= reviewed.
-- =rg ':ID:|PARENT_ID' TASKS*.org design/log/= returns nothing.
+- =rg '^\s*:ID:|^\s*#\+PARENT_ID:' TASKS*.org design/log/= returns nothing.
 - =tasks_doctor= reports clean.
 - One plan file opened in Emacs: =#+PARENT:= link jumps to the correct
   heading in =TASKS.org=.
 - One task with =#+IMPORT:= opened: forward link still resolves.
-
 ** TODO [#A] Phase 4.2 — Sweep dotfiles :migration:sweep:
 :PROPERTIES:
-:ID: 6340e47c-804f-4806-8374-5d1f128fafdc
+:CUSTOM_ID: 6340e47c-804f-4806-8374-5d1f128fafdc
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria: same as Phase 4.1 against =~/dotfiles=. Touches
 =2026-05-07-extract-agent-skills.org= and 2 archived tasks.
-
 ** TODO [#A] Phase 4.3 — Sweep nmd/products/connect/portal :migration:sweep:
 :PROPERTIES:
-:ID: a9830b00-b2f0-404d-b754-a6050f573637
+:CUSTOM_ID: a9830b00-b2f0-404d-b754-a6050f573637
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria: same as Phase 4.1 against
 =~/nmd/products/connect/portal=. Touches ~12 plan files and ~25 tasks
 across =TASKS.org= + archive.
-
 ** TODO [#B] Phase 4.4 — Per-project commits :migration:commit:
 :PROPERTIES:
-:ID: 95fd3f2d-bdfa-4647-a296-34c8de31c0e2
+:CUSTOM_ID: 95fd3f2d-bdfa-4647-a296-34c8de31c0e2
 :CREATED: [2026-05-08 Fri 12:02]
 :END:
 Acceptance criteria:
@@ -247,7 +254,8 @@ Acceptance criteria:
   =feat(org-memory): migrate :ID: → :CUSTOM_ID: and #+PARENT_ID: → #+PARENT: link=.
 - Tooling commit in =agents-src= lands first (Phases 1+2+3); content
   sweep commits land afterwards in each project (Phases 4.1-4.3).
-
+- The =~/dotfiles= commit also records the updated =agents-src=
+  submodule pointer after the dotagents implementation commit.
 * Implementation
 
 * Open questions

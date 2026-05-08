@@ -43,7 +43,7 @@ function task(status = "TODO"): Task {
     description: "",
     children: [],
     propertyLines: [
-      ":ID: 11111111-2222-4333-8444-555555555555",
+      ":CUSTOM_ID: 11111111-2222-4333-8444-555555555555",
       ":CREATED: [2026-05-01 Fri 08:00]",
     ],
     logbookLines: ["- Created [2026-05-01 Fri 08:00]"],
@@ -105,7 +105,7 @@ function task(status = "TODO"): Task {
   const { tasks } = parseTasks([
     "** STARTED Parsed task",
     ":PROPERTIES:",
-    ":ID: 22222222-3333-4444-8555-666666666666",
+    ":CUSTOM_ID: 22222222-3333-4444-8555-666666666666",
     ":STARTED: [2026-05-01 Fri 08:30]",
     ":END:",
     ":LOGBOOK:",

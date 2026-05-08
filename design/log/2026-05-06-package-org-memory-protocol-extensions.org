@@ -1,6 +1,6 @@
 #+TITLE: Package org-memory protocol / extensions
 #+DATE: 2026-05-06 Wed
-#+PARENT_ID: 79d6f4f5-70f9-404d-9b4c-0cf0ef0e7adb
+#+PARENT: [[file:../../TASKS.archive.org::#79d6f4f5-70f9-404d-9b4c-0cf0ef0e7adb][Package org-memory protocol / extensions]]
 #+STATUS: Review
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
@@ -24,7 +24,7 @@ Initial package scope is deliberately narrow: generic skills `org-tasks`, `org-p
 ** DONE [#B] Spike: pi package manifest format :agents:pi:
 CLOSED: [2026-05-06 Wed 21:59]
 :PROPERTIES:
-:ID: 5f45b851-73e0-4894-b62b-89a86cf6bcec
+:CUSTOM_ID: 5f45b851-73e0-4894-b62b-89a86cf6bcec
 :CREATED: [2026-05-06 Wed 21:05]
 :STARTED: [2026-05-06 Wed 21:56]
 :END:
@@ -40,7 +40,7 @@ This must complete before the boundary task below, so the manifest design is gro
 ** DONE [#B] Define the package boundary and pi manifest :agents:pi:
 CLOSED: [2026-05-06 Wed 22:05]
 :PROPERTIES:
-:ID: 9d0c8e3e-1f1e-4a92-9b5d-5e2c1b7c3a01
+:CUSTOM_ID: 9d0c8e3e-1f1e-4a92-9b5d-5e2c1b7c3a01
 :CREATED: [2026-05-06 Wed 21:05]
 :STARTED: [2026-05-06 Wed 22:01]
 :END:
@@ -58,7 +58,7 @@ Import audit (already done) confirms the helper set: `tasks` → `lib/pi-utils.t
 ** DONE [#B] Add a Nix package for the agent memory bundle :nix:agents:
 CLOSED: [2026-05-06 Wed 22:30]
 :PROPERTIES:
-:ID: fc6286ab-1eac-4c92-9131-31add4e8babb
+:CUSTOM_ID: fc6286ab-1eac-4c92-9131-31add4e8babb
 :CREATED: [2026-05-06 Wed 21:05]
 :STARTED: [2026-05-06 Wed 22:29]
 :END:
@@ -81,7 +81,7 @@ Prefer a simple copy/filter package initially. Avoid introducing unnecessary bui
 ** DONE [#B] Refactor Home Manager wiring into editable and packaged modes :home-manager:nix:
 CLOSED: [2026-05-06 Wed 22:37]
 :PROPERTIES:
-:ID: 9f01b1b5-4312-493d-bc38-ae4f031ff19c
+:CUSTOM_ID: 9f01b1b5-4312-493d-bc38-ae4f031ff19c
 :CREATED: [2026-05-06 Wed 21:05]
 :STARTED: [2026-05-06 Wed 22:34]
 :END:
@@ -99,7 +99,7 @@ This likely means introducing a small local module option set or let-bound sourc
 ** DONE [#C] Verify pi discovery, hot reload, and package installation paths :pi:validation:
 CLOSED: [2026-05-06 Wed 22:43]
 :PROPERTIES:
-:ID: 707ba7c0-a6f7-4125-b6cb-1d4814883c17
+:CUSTOM_ID: 707ba7c0-a6f7-4125-b6cb-1d4814883c17
 :CREATED: [2026-05-06 Wed 21:05]
 :STARTED: [2026-05-06 Wed 22:39]
 :END:
@@ -118,7 +118,7 @@ Validation also runs `nix flake check --impure` and a targeted build of the new 
 ** DONE [#C] Document usage and future extraction path :docs:
 CLOSED: [2026-05-06 Wed 22:49]
 :PROPERTIES:
-:ID: 0109a0c0-5acc-4318-8cdf-b12d09fbbb34
+:CUSTOM_ID: 0109a0c0-5acc-4318-8cdf-b12d09fbbb34
 :CREATED: [2026-05-06 Wed 21:05]
 :STARTED: [2026-05-06 Wed 22:47]
 :END:

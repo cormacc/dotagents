@@ -1,6 +1,6 @@
 #+TITLE: Review Jira integration against org-memory protocol
 #+DATE: 2026-05-05 Tue
-#+PARENT_ID: 2b4d4ca7-6648-4e58-b4cf-b970565e79c7
+#+PARENT: [[file:../../TASKS.org::#2b4d4ca7-6648-4e58-b4cf-b970565e79c7][Review Jira integration against org-memory protocol :jira:org-memory:followup:]]
 #+STATUS: Draft
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
@@ -50,7 +50,7 @@ Draft until that scope is accepted.
 
 ** TODO [#B] Define and verify Jira autoTransition reopen semantics :jira:timestamps:
 :PROPERTIES:
-:ID: 00de800a-1f29-48ac-b3fc-a812a1bbe82d
+:CUSTOM_ID: 00de800a-1f29-48ac-b3fc-a812a1bbe82d
 :CREATED: [2026-05-05 Tue 21:51]
 :END:
 Acceptance criteria:
@@ -70,7 +70,7 @@ Acceptance criteria:
   LOGBOOK audit history and live status-change events.
 ** TODO [#B] Complete clone/apply sandbox regression coverage :jira:security:
 :PROPERTIES:
-:ID: 4c561d22-c1c4-4a38-8c47-95211316d46f
+:CUSTOM_ID: 4c561d22-c1c4-4a38-8c47-95211316d46f
 :CREATED: [2026-05-05 Tue 21:51]
 :END:
 Acceptance criteria:
@@ -84,7 +84,7 @@ Acceptance criteria:
 - Jira README and tasks README agree on the project-root sandbox rule.
 ** TODO [#C] Add Jira-linked agent-memory scenario coverage :jira:memory:tests:
 :PROPERTIES:
-:ID: 673d58f4-7afc-4ab1-a88c-95573d3f6330
+:CUSTOM_ID: 673d58f4-7afc-4ab1-a88c-95573d3f6330
 :CREATED: [2026-05-05 Tue 21:51]
 :END:
 Acceptance criteria:
@@ -98,7 +98,7 @@ Acceptance criteria:
   require a live Atlassian MCP.
 ** TODO [#C] Review already-landed Jira org-memory documentation :jira:docs:
 :PROPERTIES:
-:ID: 349d800a-a060-4ebc-b1a6-673538e134bc
+:CUSTOM_ID: 349d800a-a060-4ebc-b1a6-673538e134bc
 :CREATED: [2026-05-05 Tue 21:51]
 :END:
 Acceptance criteria:

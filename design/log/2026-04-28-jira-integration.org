@@ -1,6 +1,6 @@
 #+TITLE: Jira integration via a new jira extension
 #+DATE: 2026-04-28 Tue
-#+PARENT_ID: 0276a6c7-0ca8-4c39-a90a-05587ad64698
+#+PARENT: [[file:../../TASKS.archive.org::#0276a6c7-0ca8-4c39-a90a-05587ad64698][Add some sort of Jira integration for the tasks extension]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -69,7 +69,7 @@ under =* Plan= so they can be picked up incrementally.
   The two forms can mix freely on the same line:
   #+begin_example
   :PROPERTIES:
-  :ID: 01234567-89ab-…
+  :CUSTOM_ID: 01234567-89ab-…
   :LINKED_ISSUES: MBFW-123 MBE-45 [[https://github.com/foo/bar/issues/42][gh#42]]
   :END:
   #+end_example
@@ -174,7 +174,7 @@ under =* Plan= so they can be picked up incrementally.
 ** DONE [#A] Foundations: extension points + generic linked-issues + scaffolding :tasks-ext:jira:
 CLOSED: [2026-04-28 Tue 13:47]
 :PROPERTIES:
-:ID: d618bcc1-9481-4431-a572-8a1f17612e4f
+:CUSTOM_ID: d618bcc1-9481-4431-a572-8a1f17612e4f
 :CREATED: [2026-04-25 Sat 09:00]
 :STARTED: [2026-04-28 Tue 13:27]
 :END:
@@ -189,7 +189,7 @@ or =org-tasks=.
 *** DONE [#A] Document extension-point conventions in =org-tasks/SKILL.md=
 CLOSED: [2026-04-28 Tue 13:29]
 :PROPERTIES:
-:ID: 734e2717-c8ab-479a-8571-30dd7b1ad53a
+:CUSTOM_ID: 734e2717-c8ab-479a-8571-30dd7b1ad53a
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:27]
 :END:
@@ -212,7 +212,7 @@ CLOSED: [2026-04-28 Tue 13:29]
 *** DONE [#A] Lock in generic round-trip in =tasks=' parser
 CLOSED: [2026-04-28 Tue 13:36]
 :PROPERTIES:
-:ID: ea886cdd-e52b-4194-833f-75d9cecb39dc
+:CUSTOM_ID: ea886cdd-e52b-4194-833f-75d9cecb39dc
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:29]
 :END:
@@ -230,7 +230,7 @@ Lock it in before anything else depends on it.
 *** DONE [#A] First-class =:LINKED_ISSUES:= + =#+ISSUE_URL_BASE= in =tasks=
 CLOSED: [2026-04-28 Tue 13:39]
 :PROPERTIES:
-:ID: 91ed0b79-5b83-4cef-ad4a-51367aa78577
+:CUSTOM_ID: 91ed0b79-5b83-4cef-ad4a-51367aa78577
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:36]
 :END:
@@ -279,7 +279,7 @@ and key handler.
 *** DONE [#A] Update the =tasks= README for =:LINKED_ISSUES:= + =J=
 CLOSED: [2026-04-28 Tue 13:40]
 :PROPERTIES:
-:ID: b294a427-31ad-42ad-8e18-cc440913c2e9
+:CUSTOM_ID: b294a427-31ad-42ad-8e18-cc440913c2e9
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:39]
 :END:
@@ -296,7 +296,7 @@ CLOSED: [2026-04-28 Tue 13:40]
 *** DONE [#A] Scaffold the =jira= pi extension
 CLOSED: [2026-04-28 Tue 13:44]
 :PROPERTIES:
-:ID: d837f4ba-c217-42c4-8c2f-8afaeb6f845c
+:CUSTOM_ID: d837f4ba-c217-42c4-8c2f-8afaeb6f845c
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:40]
 :END:
@@ -317,7 +317,7 @@ status check. Connection visible at
 *** DONE [#A] Scaffold =agents/skills/org-jira/SKILL.md=
 CLOSED: [2026-04-28 Tue 13:46]
 :PROPERTIES:
-:ID: fffb7c63-1508-45f3-934e-96d16f376def
+:CUSTOM_ID: fffb7c63-1508-45f3-934e-96d16f376def
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:44]
 :END:
@@ -346,7 +346,7 @@ Documents:
 *** DONE [#A] Add file-level keywords to =TASKS.org=
 CLOSED: [2026-04-28 Tue 13:47]
 :PROPERTIES:
-:ID: 0bdc5ce4-62d8-481f-bda3-3d609519e85c
+:CUSTOM_ID: 0bdc5ce4-62d8-481f-bda3-3d609519e85c
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:46]
 :END:
@@ -366,7 +366,7 @@ Added a regression test.
 ** DONE [#A] Read-only Jira integration :jira:
 CLOSED: [2026-04-28 Tue 13:52]
 :PROPERTIES:
-:ID: 0d3431c4-d997-41ef-8e6d-0925a386ea6b
+:CUSTOM_ID: 0d3431c4-d997-41ef-8e6d-0925a386ea6b
 :CREATED: [2026-04-25 Sat 09:00]
 :STARTED: [2026-04-28 Tue 13:48]
 :END:
@@ -379,7 +379,7 @@ and codifying the Jira-shape conventions in =org-jira=.
 *** DONE [#A] Document Jira reference conventions in =org-jira=
 CLOSED: [2026-04-28 Tue 13:48]
 :PROPERTIES:
-:ID: 097a6e4f-6752-4f97-8b41-f416f8b47384
+:CUSTOM_ID: 097a6e4f-6752-4f97-8b41-f416f8b47384
 :CREATED: [2026-04-25 Sat 09:00]
 :STARTED: [2026-04-28 Tue 13:48]
 :END:
@@ -399,7 +399,7 @@ Skill-level documentation (no code).
 *** DONE [#B] Clone Jira issues into tasks
 CLOSED: [2026-04-28 Tue 13:52]
 :PROPERTIES:
-:ID: edbea049-3a56-40ad-9aa5-660843364524
+:CUSTOM_ID: edbea049-3a56-40ad-9aa5-660843364524
 :CREATED: [2026-04-25 Sat 09:00]
 :STARTED: [2026-04-28 Tue 13:48]
 :END:
@@ -410,7 +410,7 @@ new-task rule (cursor context); the Jira flow itself does not care.
 **** DONE [#B] =/jira clone= slash command (agent-driven)
 CLOSED: [2026-04-28 Tue 13:52]
 :PROPERTIES:
-:ID: 93502d76-a566-449c-a0c3-49dc28938338
+:CUSTOM_ID: 93502d76-a566-449c-a0c3-49dc28938338
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:48]
 :END:
@@ -439,7 +439,7 @@ slash-command handler in =index.ts= drives them and uses
 ** DONE [#B] Write/edit Jira integration :jira:
 CLOSED: [2026-04-28 Tue 13:59]
 :PROPERTIES:
-:ID: e7b91f96-ec83-4052-ab58-249e876bd946
+:CUSTOM_ID: e7b91f96-ec83-4052-ab58-249e876bd946
 :CREATED: [2026-04-25 Sat 09:00]
 :STARTED: [2026-04-28 Tue 13:53]
 :END:
@@ -448,7 +448,7 @@ the read-only stage being stable.
 *** DONE [#B] Update Jira issues from task transitions
 CLOSED: [2026-04-28 Tue 13:59]
 :PROPERTIES:
-:ID: 6a808310-54c6-4ab6-ae47-8c8ef0bd6e55
+:CUSTOM_ID: 6a808310-54c6-4ab6-ae47-8c8ef0bd6e55
 :CREATED: [2026-04-25 Sat 09:00]
 :STARTED: [2026-04-28 Tue 13:53]
 :END:
@@ -465,7 +465,7 @@ without confusing the Jira workflow.
 **** DONE [#B] =/jira claim= command — set assignee to current user
 CLOSED: [2026-04-28 Tue 13:56]
 :PROPERTIES:
-:ID: 28f047ba-061c-4325-950b-6d9262762e47
+:CUSTOM_ID: 28f047ba-061c-4325-950b-6d9262762e47
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:53]
 :END:
@@ -476,7 +476,7 @@ CLOSED: [2026-04-28 Tue 13:56]
 **** DONE [#B] =/jira comment= — add a comment to issue(s)
 CLOSED: [2026-04-28 Tue 13:56]
 :PROPERTIES:
-:ID: a99074ae-4e91-4be8-9a2e-deca3f2c0478
+:CUSTOM_ID: a99074ae-4e91-4be8-9a2e-deca3f2c0478
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:53]
 :END:
@@ -486,7 +486,7 @@ CLOSED: [2026-04-28 Tue 13:56]
 **** DONE [#C] Optional auto-transition on task =STARTED= / =DONE=
 CLOSED: [2026-04-28 Tue 13:59]
 :PROPERTIES:
-:ID: c8243c28-0030-4a50-b33f-86a5f4adc9eb
+:CUSTOM_ID: c8243c28-0030-4a50-b33f-86a5f4adc9eb
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:59]
 :END:
@@ -510,7 +510,7 @@ Implementation:
 *** DONE [#C] Create Jira issues from tasks
 CLOSED: [2026-04-28 Tue 13:56]
 :PROPERTIES:
-:ID: cfc094b3-870c-4c93-833b-f5a05d478d4a
+:CUSTOM_ID: cfc094b3-870c-4c93-833b-f5a05d478d4a
 :CREATED: [2026-04-25 Sat 09:00]
 :STARTED: [2026-04-28 Tue 13:53]
 :END:
@@ -520,7 +520,7 @@ User-visible behaviour: a task with no Jira-shaped tokens in
 **** DONE [#C] =/jira create [project]= command
 CLOSED: [2026-04-28 Tue 13:56]
 :PROPERTIES:
-:ID: 5c127e9f-7824-49c8-b78a-747e5d1889d4
+:CUSTOM_ID: 5c127e9f-7824-49c8-b78a-747e5d1889d4
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:53]
 :END:

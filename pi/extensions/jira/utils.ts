@@ -115,7 +115,7 @@ export function buildClonePrompt(
     "   - `section` — omit to use `Improvements`; pass an explicit section if the user has been working in a different one.",
     "5. Surface the tool's structured return verbatim:",
     "   - `status: \"inserted\"` — confirm with the new heading and Jira URL.",
-    "   - `status: \"duplicate\"` — tell the user the issue is already cloned (cite the existing task's `:ID:` from `details.existingId`).",
+    "   - `status: \"duplicate\"` — tell the user the issue is already cloned (cite the existing task's `:CUSTOM_ID:` from `details.existingId`).",
     "   - `status: \"section_not_found\"` — ask whether to retry with `allowCreateSection: true` or correct the section name.",
     "   - `status: \"error\"` — surface the message.",
     "",
@@ -203,7 +203,7 @@ export function buildClaimPrompt(
   selectedId: string | null,
 ): string {
   const selectedLine = selectedId
-    ? `The selected task's :ID: is \`${selectedId}\` (from #+SELECTED: in ${tasksLocalFile}).`
+    ? `The selected task's :CUSTOM_ID: is \`${selectedId}\` (from #+SELECTED: in ${tasksLocalFile}).`
     : `Identify the selected task from #+SELECTED: in ${tasksLocalFile}; refuse with a notification if none is set.`;
   return [
     "Claim every Jira-shaped issue linked from the **selected task** by setting its assignee to the current Atlassian user.",
@@ -241,7 +241,7 @@ export function buildCommentPrompt(
   selectedId: string | null,
 ): string {
   const selectedLine = selectedId
-    ? `The selected task's :ID: is \`${selectedId}\` (from #+SELECTED: in ${tasksLocalFile}).`
+    ? `The selected task's :CUSTOM_ID: is \`${selectedId}\` (from #+SELECTED: in ${tasksLocalFile}).`
     : `Identify the selected task from #+SELECTED: in ${tasksLocalFile}; refuse with a notification if none is set.`;
   return [
     "Add a comment to every Jira-shaped issue linked from the **selected task**.",
@@ -294,7 +294,7 @@ export function buildCreatePrompt(
     ].join("\n");
   }
   const selectedLine = selectedId
-    ? `The selected task's :ID: is \`${selectedId}\` (from #+SELECTED: in ${tasksLocalFile}).`
+    ? `The selected task's :CUSTOM_ID: is \`${selectedId}\` (from #+SELECTED: in ${tasksLocalFile}).`
     : `Identify the selected task from #+SELECTED: in ${tasksLocalFile}; refuse with a notification if none is set.`;
   return [
     `Promote the **selected task** to a new Jira issue in project \`${project}\` (issue type \`${opts.type}\`).`,
@@ -342,7 +342,7 @@ export function buildTransitionPrompt(
       ? ["Start Progress", "In Progress"]
       : ["Done", "Closed", "Resolved"];
   return [
-    `Auto-transition: the local task \`${taskSummary}\` (:ID: \`${taskId}\`) just moved to \`${newStatus}\`. Mirror this on every Jira-shaped issue linked from the task's \`:LINKED_ISSUES:\`.`,
+    `Auto-transition: the local task \`${taskSummary}\` (:CUSTOM_ID: \`${taskId}\`) just moved to \`${newStatus}\`. Mirror this on every Jira-shaped issue linked from the task's \`:LINKED_ISSUES:\`.`,
     "",
     "Use the **org-jira** skill for the full transition protocol; the steps below are a concise reminder.",
     "",

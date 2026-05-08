@@ -66,7 +66,7 @@ export interface BuildTaskArgs {
    */
   parentId?: string | null;
   /**
-   * Override the generated `:ID:` UUID. Used by the file-side helper
+   * Override the generated `:CUSTOM_ID:` UUID. Used by the file-side helper
    * to surface the new task's ID back to its caller, and by tests to
    * keep snapshots deterministic. Defaults to a fresh UUID v4.
    */
@@ -85,7 +85,7 @@ export interface BuiltTaskBlock {
   heading: string;
   /**
    * Properties drawer block, including the `:PROPERTIES:` / `:END:`
-   * fences. Always emitted (the `:ID:` line guarantees non-empty
+   * fences. Always emitted (the `:CUSTOM_ID:` line guarantees non-empty
    * content). Multi-line string, no trailing newline.
    */
   drawer: string;
@@ -102,7 +102,7 @@ export interface BuiltTaskBlock {
    * ```
    * ** TODO [#A] Summary :foo:bar:
    * :PROPERTIES:
-   * :ID: <uuid>
+   * :CUSTOM_ID: <uuid>
    * :CREATED: [<timestamp>]
    * :LINKED_ISSUES: KEY1 KEY2
    * :END:
@@ -112,7 +112,7 @@ export interface BuiltTaskBlock {
    * Body is omitted when empty; the trailing newline still applies.
    */
   block: string;
-  /** The `:ID:` UUID written into the drawer. */
+  /** The `:CUSTOM_ID:` UUID written into the drawer. */
   id: string;
 }
 
@@ -175,7 +175,7 @@ export function buildTaskBlock(args: BuildTaskArgs): BuiltTaskBlock {
 
   const drawerLines = [
     ":PROPERTIES:",
-    `:ID: ${id}`,
+    `:CUSTOM_ID: ${id}`,
     `:CREATED: [${createdAt}]`,
   ];
   const linkedIssues = (args.linkedIssues ?? []).filter((t) => t && t.length > 0);
@@ -252,7 +252,7 @@ export interface InsertTaskArgs extends BuildTaskArgs {
 /** Successful insertion result. */
 export interface InsertSuccess {
   status: "inserted";
-  /** UUID written into the new task's `:ID:` drawer line. */
+  /** UUID written into the new task's `:CUSTOM_ID:` drawer line. */
   id: string;
   /** Absolute path of the file mutated. */
   file: string;
@@ -263,7 +263,7 @@ export interface InsertSuccess {
 /** Refusal — duplicate :LINKED_ISSUES: token already present. */
 export interface InsertDuplicate {
   status: "duplicate";
-  /** `:ID:` of the pre-existing task that owns the conflicting token. */
+  /** `:CUSTOM_ID:` of the pre-existing task that owns the conflicting token. */
   existingId: string | null;
   /** Absolute path of the file containing the pre-existing task. */
   existingFile: string;

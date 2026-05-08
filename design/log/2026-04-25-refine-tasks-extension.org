@@ -1,6 +1,6 @@
 #+TITLE: Refine Tasks Extension Implementation Plan
 #+DATE: 2026-04-25 Sat
-#+PARENT_ID: f92b7b2f-c7fc-4933-9e27-20c0e411cbe4
+#+PARENT: [[file:../../TASKS.archive.org::#f92b7b2f-c7fc-4933-9e27-20c0e411cbe4][Refine tasks extension :org-memory:org-tasks:]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -22,7 +22,7 @@ Current implementation snapshot:
 * Plan
 ** DONE [#B] Auto-insert missing org IDs on load :org:parser:
 :PROPERTIES:
-:ID: f674dcf8-b875-4519-9ed2-99cfa01a2345
+:CUSTOM_ID: f674dcf8-b875-4519-9ed2-99cfa01a2345
 :END:
 Ensure tasks created outside the overlay gain stable UUID `:ID:` properties automatically when the extension loads them. Independent of the overlay refactor; do first as an easy win.
 
@@ -34,17 +34,17 @@ Acceptance criteria:
 - LSP diagnostics clean on changed files; `/reload` succeeds.
 *** DONE [#B] Add parser/property helpers for org IDs :org:parser:
 :PROPERTIES:
-:ID: 919daa8a-8f22-4a22-bc8d-a8cac0a0bd22
+:CUSTOM_ID: 919daa8a-8f22-4a22-bc8d-a8cac0a0bd22
 :END:
 Introduce helpers to detect, insert, and preserve `:ID:` property lines without special-casing unrelated properties.
 *** DONE [#B] Backfill IDs across the loaded task graph :org:
 :PROPERTIES:
-:ID: bfaa8ade-525d-433e-87b5-1dc6af2a9dd5
+:CUSTOM_ID: bfaa8ade-525d-433e-87b5-1dc6af2a9dd5
 :END:
 Integrate ID insertion into task loading for `TASKS.org` and linked plans, using existing preservation serializers for writes.
 *** DONE [#B] Validate idempotence and external-edit behaviour :org:testing:
 :PROPERTIES:
-:ID: 337c5a96-6fc2-4afe-934c-d276a72e2537
+:CUSTOM_ID: 337c5a96-6fc2-4afe-934c-d276a72e2537
 :END:
 Run cases:
 - Reload twice with no source change — second run writes no files.
@@ -53,7 +53,7 @@ Run cases:
 - Reload with malformed properties drawer — extension does not corrupt the file.
 ** DONE [#A] Merge task selection/edit and selected-status overlays :ui:architecture:
 :PROPERTIES:
-:ID: 9df4e94e-3a72-4df6-8fd4-6a3b264ba4e5
+:CUSTOM_ID: 9df4e94e-3a72-4df6-8fd4-6a3b264ba4e5
 :END:
 Replace the separate persistent status display plus modal `/tasks` overlay with a single task UI model that can expand from compact status into the task browser. Architectural foundation for the remaining UI workstreams; do before collapse defaults, plan-link display, and compact-UI placement.
 
@@ -65,22 +65,22 @@ Acceptance criteria:
 - LSP diagnostics clean on changed files; `/reload` succeeds.
 *** DONE [#B] Extract shared task UI state/controller :architecture:ui:
 :PROPERTIES:
-:ID: ac816fdc-c93a-4344-b07b-4ea07321df54
+:CUSTOM_ID: ac816fdc-c93a-4344-b07b-4ea07321df54
 :END:
 Factor loading, refresh, compact rendering, expanded rendering, and overlay/widget handles into a single controller with explicit lifecycle cleanup.
 *** DONE [#B] Rework `/tasks` to expand the shared UI :ui:
 :PROPERTIES:
-:ID: ecc6cae2-e5b7-4699-85cb-afe0478ea422
+:CUSTOM_ID: ecc6cae2-e5b7-4699-85cb-afe0478ea422
 :END:
 Route `/tasks`, keybinding suggestions, and any future events through the same expand/collapse action rather than creating unrelated overlays.
 *** DONE [#B] Preserve modal interactions and close semantics :ui:testing:
 :PROPERTIES:
-:ID: 618c593e-f8a6-468f-98a2-d4273bf5e68b
+:CUSTOM_ID: 618c593e-f8a6-468f-98a2-d4273bf5e68b
 :END:
 Verify Escape/q closes the expanded view (returning to compact state), selection toggling persists, status cycling persists, and external file edits update the visible state without requiring reopen.
 ** DONE [#A] Fix task creation, archiving, and prompt-driven flows :workflow:ui:
 :PROPERTIES:
-:ID: 70c9d046-f17c-4bc2-be9c-56687fe06880
+:CUSTOM_ID: 70c9d046-f17c-4bc2-be9c-56687fe06880
 :END:
 Repair workflows that currently spawn `ctx.ui.input` or `ctx.ui.confirm` while the tasks overlay masks the prompt. Sequenced after the overlay merge above; do not start until the merged controller exists.
 
@@ -92,17 +92,17 @@ Acceptance criteria:
 - LSP diagnostics clean on changed files; `/reload` succeeds.
 *** DONE [#A] Decide prompt strategy after overlay merge :workflow:ui:
 :PROPERTIES:
-:ID: 11a58aed-9ee2-4672-85b8-f28a0c3c234e
+:CUSTOM_ID: 11a58aed-9ee2-4672-85b8-f28a0c3c234e
 :END:
 Choose between inline task-UI dialogs, temporarily collapsed task UI, or closing/reopening around `ctx.ui` prompts. Record the decision in this plan's Implementation section.
 *** DONE [#A] Implement visible create/plan/archive flows :workflow:
 :PROPERTIES:
-:ID: ea8aa913-c01d-43d7-afd2-7975c0a596c1
+:CUSTOM_ID: ea8aa913-c01d-43d7-afd2-7975c0a596c1
 :END:
 Apply the chosen prompt strategy to create, plan, and archive paths, keeping persistence and rollback behaviour intact.
 *** DONE [#B] Exercise failure and cancellation cases :workflow:testing:
 :PROPERTIES:
-:ID: e75df6a9-62c7-4350-a5dd-bc4e33af9ee6
+:CUSTOM_ID: e75df6a9-62c7-4350-a5dd-bc4e33af9ee6
 :END:
 Run cases:
 - Cancel from the title prompt for `/tasks new`, sibling create, and child create.
@@ -113,7 +113,7 @@ Run cases:
 - Simulated save failure (e.g. revoke write permissions) — error surfaced and in-memory state rolled back.
 ** DONE [#B] Collapse task selection/edit overlay subtrees by default on load :ui:
 :PROPERTIES:
-:ID: 58120505-f162-44cc-9037-52dbd44d89e4
+:CUSTOM_ID: 58120505-f162-44cc-9037-52dbd44d89e4
 :END:
 Make the expanded task UI easier to scan by defaulting large task trees to a collapsed view while preserving focus on selected work.
 
@@ -125,17 +125,17 @@ Acceptance criteria:
 - LSP diagnostics clean on changed files; `/reload` succeeds.
 *** DONE [#B] Specify initial collapse rules :ui:
 :PROPERTIES:
-:ID: 2003536d-8621-4889-b70a-d21f5f7b3edf
+:CUSTOM_ID: 2003536d-8621-4889-b70a-d21f5f7b3edf
 :END:
 Pin down rules for top-level tasks, selected-tree expansion, completed subtrees, and linked-plan children. Resolve the open question about completed-subtree handling here and record the chosen rule in Implementation.
 *** DONE [#B] Implement initial collapse state in the shared UI :ui:
 :PROPERTIES:
-:ID: 6fb632a7-5a96-4541-a566-3a71405c5218
+:CUSTOM_ID: 6fb632a7-5a96-4541-a566-3a71405c5218
 :END:
 Update the shared task UI controller so default collapse is deterministic and user toggles persist for the lifetime of the expanded view.
 *** DONE [#B] Verify navigation and detail-pane consistency :ui:testing:
 :PROPERTIES:
-:ID: 48f7ee61-e584-4acf-b6a7-6433174139a1
+:CUSTOM_ID: 48f7ee61-e584-4acf-b6a7-6433174139a1
 :END:
 Run cases:
 - Cursor lands on the selected task on first open.
@@ -147,7 +147,7 @@ Run cases:
 - Empty `TASKS.org` shows the placeholder text.
 ** DONE [#B] Refine plan links in the tasks overlay :plans:ui:
 :PROPERTIES:
-:ID: 37d7744d-804b-462c-80f0-da4b047b9317
+:CUSTOM_ID: 37d7744d-804b-462c-80f0-da4b047b9317
 :END:
 Surface linked-plan information in the right-hand details pane so users can see whether the selected task has a plan and where it lives.
 
@@ -159,17 +159,17 @@ Acceptance criteria:
 - LSP diagnostics clean on changed files; `/reload` succeeds.
 *** DONE [#B] Design plan metadata block for the details pane :plans:ui:
 :PROPERTIES:
-:ID: 0f279470-d97a-44a0-878b-16890dc14ab8
+:CUSTOM_ID: 0f279470-d97a-44a0-878b-16890dc14ab8
 :END:
 Decide where plan path, loaded child count, and missing-file warnings appear relative to the task description.
 *** DONE [#B] Render plan metadata in the shared UI :plans:ui:
 :PROPERTIES:
-:ID: 3d9917fb-0ca0-4c83-aa6b-8719c8097270
+:CUSTOM_ID: 3d9917fb-0ca0-4c83-aa6b-8719c8097270
 :END:
 Add compact rendering for plan metadata, including truncation/wrapping that respects terminal width.
 ** DONE [#B] Place compact selected-task UI without masking scrollback :ui:
 :PROPERTIES:
-:ID: 16ab42f6-3bfc-48f5-ab0a-63adb09a0963
+:CUSTOM_ID: 16ab42f6-3bfc-48f5-ab0a-63adb09a0963
 :END:
 Choose a placement for the compact selected-task surface that keeps it visible without covering scrollback. Residual after the overlay merge: the compact surface needs a non-masking home.
 
@@ -181,17 +181,17 @@ Acceptance criteria:
 - LSP diagnostics clean on changed files; `/reload` succeeds.
 *** DONE [#B] Evaluate widget vs bottom overlay options :ui:
 :PROPERTIES:
-:ID: 5d2ae654-b31e-44b5-82b7-ab81d9e89354
+:CUSTOM_ID: 5d2ae654-b31e-44b5-82b7-ab81d9e89354
 :END:
 Compare `ctx.ui.setWidget(..., { placement: "belowEditor" })`, above-editor widgets, footer/status entries, and bottom-anchored non-capturing overlays. Record the choice and rationale in Implementation.
 *** DONE [#B] Implement the compact display in the chosen surface :ui:
 :PROPERTIES:
-:ID: 2f52628c-17e7-49a2-9361-47fbddcd3edb
+:CUSTOM_ID: 2f52628c-17e7-49a2-9361-47fbddcd3edb
 :END:
 Move the compact rendering out of the top pinned overlay into the chosen surface, preserving refresh and hide/show behaviour.
 *** DONE [#B] Verify scrollback, resize, and no-selection behaviour :ui:testing:
 :PROPERTIES:
-:ID: cda4a86a-7638-4163-89a9-94f45b48084c
+:CUSTOM_ID: cda4a86a-7638-4163-89a9-94f45b48084c
 :END:
 Run cases:
 - Narrow terminal (60 columns) — compact display truncates cleanly.
@@ -203,7 +203,7 @@ Run cases:
 - Trigger expand/collapse via `/tasks` — compact and expanded forms transition cleanly.
 ** DONE [#B] Update extension documentation and generated keybinding map :docs:
 :PROPERTIES:
-:ID: e09f7af2-0269-4b67-a585-ae85969134dc
+:CUSTOM_ID: e09f7af2-0269-4b67-a585-ae85969134dc
 :END:
 Single docs pass at the end so all behaviour changes land together.
 
@@ -213,7 +213,7 @@ Acceptance criteria:
 - Any related references in `agents/skills/org-memory/SKILL.md` or `agents/skills/plan/SKILL.md` stay accurate.
 ** DONE [#B] Final validation and cleanup :verification:
 :PROPERTIES:
-:ID: 6aac45cd-5960-4d47-b0b8-ae3e2fef7523
+:CUSTOM_ID: 6aac45cd-5960-4d47-b0b8-ae3e2fef7523
 :END:
 Canonical exit checklist for the workstream.
 

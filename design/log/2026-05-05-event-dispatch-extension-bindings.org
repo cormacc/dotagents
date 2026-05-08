@@ -1,6 +1,6 @@
 #+TITLE: Preserve editor input when leader bindings open extension UIs
 #+DATE: 2026-05-05 Tue
-#+PARENT_ID: 1f8a039b-ef3d-4461-952e-1dc2b2b9a780
+#+PARENT: [[file:../../TASKS.archive.org::#1f8a039b-ef3d-4461-952e-1dc2b2b9a780][Activating tasks overlay clobbers text in input area]]
 #+STATUS: Complete
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
@@ -35,7 +35,7 @@ Affected in-repo extensions for this bug: =tasks= and =git-diff=.
 ** DONE [#A] Refactor tasks bindings and command handler to event dispatch :tasks:leader-menu:
 CLOSED: [2026-05-05 Tue 22:21]
 :PROPERTIES:
-:ID: 052576cc-bc78-4a74-ac33-77c0b941eba0
+:CUSTOM_ID: 052576cc-bc78-4a74-ac33-77c0b941eba0
 :CREATED: [2026-05-05 Tue 22:18]
 :STARTED: [2026-05-05 Tue 22:18]
 :END:
@@ -54,7 +54,7 @@ Acceptance criteria:
 ** DONE [#A] Refactor git-diff bindings and command handler to event dispatch :git-diff:leader-menu:
 CLOSED: [2026-05-05 Tue 22:21]
 :PROPERTIES:
-:ID: 306cdd87-e663-4034-9a53-2c27d604c045
+:CUSTOM_ID: 306cdd87-e663-4034-9a53-2c27d604c045
 :CREATED: [2026-05-05 Tue 22:18]
 :END:
 :LOGBOOK:
@@ -70,7 +70,7 @@ Acceptance criteria:
 ** DONE [#B] Document and verify event-binding convention :docs:test:
 CLOSED: [2026-05-05 Tue 22:21]
 :PROPERTIES:
-:ID: e748c0f1-6d07-43a3-a5b9-02a9e5408e8f
+:CUSTOM_ID: e748c0f1-6d07-43a3-a5b9-02a9e5408e8f
 :CREATED: [2026-05-05 Tue 22:18]
 :END:
 :LOGBOOK:

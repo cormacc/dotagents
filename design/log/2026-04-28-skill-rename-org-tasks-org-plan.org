@@ -1,6 +1,6 @@
 #+TITLE: Rename skills: org-memory \u2192 org-tasks, plan \u2192 org-plan
 #+DATE: 2026-04-28 Tue
-#+PARENT_ID: ce69ef5e-5967-4623-a2e3-f22e0bd1a745
+#+PARENT: [[file:../../TASKS.archive.org::#ce69ef5e-5967-4623-a2e3-f22e0bd1a745][Consider whether to rename the 'org-memory' skill to just 'tasks']]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -55,7 +55,7 @@ for symmetry and namespace clarity in the agent's skill registry.
 ** DONE [#A] Rename skill directories and update frontmatter
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
-:ID: d2e3f4a5-0001-4000-8000-400000000001
+:CUSTOM_ID: d2e3f4a5-0001-4000-8000-400000000001
 :END:
 - =git mv agents/skills/org-memory agents/skills/org-tasks=
 - =git mv agents/skills/plan agents/skills/org-plan=
@@ -72,7 +72,7 @@ name.
 ** DONE [#A] Update cross-references between the two skill bodies
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
-:ID: d2e3f4a5-0002-4000-8000-400000000002
+:CUSTOM_ID: d2e3f4a5-0002-4000-8000-400000000002
 :END:
 Each skill references the other via path and by name:
 
@@ -93,7 +93,7 @@ locations.
 ** DONE [#A] Update body prose in both skill files
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
-:ID: d2e3f4a5-0003-4000-8000-400000000003
+:CUSTOM_ID: d2e3f4a5-0003-4000-8000-400000000003
 :END:
 Both =SKILL.md= bodies contain phrases like:
 
@@ -112,7 +112,7 @@ returns no results.
 ** DONE [#A] Update tasks extension code and docs
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
-:ID: d2e3f4a5-0004-4000-8000-400000000004
+:CUSTOM_ID: d2e3f4a5-0004-4000-8000-400000000004
 :END:
 =agents/pi/extensions/tasks/= contains skill-name references in:
 
@@ -130,7 +130,7 @@ reference the new skill names.
 ** DONE [#B] Update existing change-records and TASKS.org body text
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
-:ID: d2e3f4a5-0005-4000-8000-400000000005
+:CUSTOM_ID: d2e3f4a5-0005-4000-8000-400000000005
 :END:
 Change-records under =design/log/*.org= and task-body prose in
 =TASKS.org= / =TASKS.archive.org= mention the old skill names in
@@ -151,7 +151,7 @@ narrative reads sensibly.
 ** DONE [#C] Update AGENTS.md files
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
-:ID: d2e3f4a5-0006-4000-8000-400000000006
+:CUSTOM_ID: d2e3f4a5-0006-4000-8000-400000000006
 :END:
 The repo root and =agents/= subdirectories may have =AGENTS.md= files
 mentioning the old skill names in guidance text for downstream agents.
@@ -162,7 +162,7 @@ returns only umbrella-concept uses, no stale skill identifiers.
 ** DONE [#C] Final sweep
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
-:ID: d2e3f4a5-0007-4000-8000-400000000007
+:CUSTOM_ID: d2e3f4a5-0007-4000-8000-400000000007
 :END:
 Run a final =rg= across the whole repo for any stale references that
 slipped through earlier subtasks:

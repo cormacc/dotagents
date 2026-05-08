@@ -171,7 +171,7 @@ assertEqual(
   // approach.
   const looksHandRolled =
     prompt.includes(":LINKED_ISSUES: <KEY>") ||
-    /:ID:\s*<new uuid>/.test(prompt) ||
+    /:CUSTOM_ID:\s*<new uuid>/.test(prompt) ||
     /properties drawer:/i.test(prompt);
   if (!looksHandRolled) {
     passed++;

@@ -1,6 +1,6 @@
 #+TITLE: Retrospective change-records for tasks without prior planning
 #+DATE: 2026-04-28 Tue
-#+PARENT_ID: 9f233338-833b-43c1-81d2-e413a536d586
+#+PARENT: [[file:../../TASKS.archive.org::#9f233338-833b-43c1-81d2-e413a536d586][Update org-memory skill to prompt to generate an implementation report for tasks without a plan]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -90,7 +90,7 @@ updated to offer the retrospective scaffolding.
 ** DONE [#A] Document the change-record protocol in org-memory SKILL.md
 CLOSED: [2026-04-28 Tue 00:46]
 :PROPERTIES:
-:ID: c1d2e3f4-0001-4000-8000-300000000001
+:CUSTOM_ID: c1d2e3f4-0001-4000-8000-300000000001
 :END:
 Replace any wording that distinguishes "plan files" from "task files"
 with a single concept: *change-records* linked from a task via
@@ -116,7 +116,7 @@ the existing structure either way.
 ** DONE [#A] Update plan SKILL.md to use "change-record" naming
 CLOSED: [2026-04-28 Tue 00:46]
 :PROPERTIES:
-:ID: c1d2e3f4-0002-4000-8000-300000000002
+:CUSTOM_ID: c1d2e3f4-0002-4000-8000-300000000002
 :END:
 The plan skill owns the section conventions (=* Context=, =* Plan=,
 =* Implementation=).  Rename phrases like "plan file" to
@@ -133,7 +133,7 @@ non-circular.
 ** DONE [#A] Tasks extension: scaffold change-record on DONE transition
 CLOSED: [2026-04-28 Tue 00:46]
 :PROPERTIES:
-:ID: c1d2e3f4-0003-4000-8000-300000000003
+:CUSTOM_ID: c1d2e3f4-0003-4000-8000-300000000003
 :END:
 In =overlay.ts='s =cycleStatus()=, when the new status is =DONE= and
 =task.importPath= is null, emit a new workflow request via a new
@@ -171,7 +171,7 @@ Acceptance:
 ** DONE [#B] Tasks extension: record first STARTED transition as :STARTED: property
 CLOSED: [2026-04-28 Tue 00:46]
 :PROPERTIES:
-:ID: c1d2e3f4-0004-4000-8000-300000000004
+:CUSTOM_ID: c1d2e3f4-0004-4000-8000-300000000004
 :END:
 In =overlay.ts='s =cycleStatus()=, when the new status is =STARTED= and
 the task does not yet have a =:STARTED:= property, write
@@ -196,7 +196,7 @@ Acceptance:
 ** DONE [#C] Retrospective agent-prompt template
 CLOSED: [2026-04-28 Tue 00:46]
 :PROPERTIES:
-:ID: c1d2e3f4-0007-4000-8000-300000000007
+:CUSTOM_ID: c1d2e3f4-0007-4000-8000-300000000007
 :END:
 The agent prompt sent on retrospective scaffolding should:
 
@@ -221,7 +221,7 @@ agent reliably produces a usable retrospective draft for simple cases.
 ** DONE [#C] Documentation
 CLOSED: [2026-04-28 Tue 00:46]
 :PROPERTIES:
-:ID: c1d2e3f4-0008-4000-8000-300000000008
+:CUSTOM_ID: c1d2e3f4-0008-4000-8000-300000000008
 :END:
 - Tasks extension README: document the retrospective flow, the
   =tasks.changeRecordOnDone= setting, and the unified "change-record"

@@ -1,6 +1,6 @@
 #+TITLE: Tasks Emacs Integration
 #+DATE: 2026-04-25 Sat
-#+PARENT_ID: 2b87d48c-d158-44ff-8fea-87c99b570144
+#+PARENT: [[file:../../TASKS.archive.org::#2b87d48c-d158-44ff-8fea-87c99b570144][Add emacs-side tooling for tasks extension :org-memory:org-tasks:tasks-extension:emacs]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -69,7 +69,7 @@ existing file watchers rather than requiring a new live protocol initially.
 
 ** DONE [#A] Add local `tasks-org` package skeleton to the `org-user` layer :emacs:spacemacs:
 :PROPERTIES:
-:ID: 07689ad9-982f-48da-816d-1ac37c8829c7
+:CUSTOM_ID: 07689ad9-982f-48da-816d-1ac37c8829c7
 :END:
 Create a local package under the existing Spacemacs layer and wire it into layer
 loading without changing normal org-mode behavior.
@@ -84,21 +84,21 @@ Acceptance criteria:
 - Package loads cleanly in Emacs/Spacemacs without requiring pi.
 *** DONE [#B] Define package namespace and customization variables :emacs:
 :PROPERTIES:
-:ID: 9c49ed92-b353-4f4e-b10d-dfe71e3efc1b
+:CUSTOM_ID: 9c49ed92-b353-4f4e-b10d-dfe71e3efc1b
 :END:
 Use a self-contained namespace such as `tasks-org-` and define customization
 variables for the TASKS file name, default plans directory, and whether save-time
 ID backfill is enabled.
 *** DONE [#B] Add minor mode and keymap :emacs:ui:
 :PROPERTIES:
-:ID: 73d6082a-c0c1-4331-984b-19797e9b7276
+:CUSTOM_ID: 73d6082a-c0c1-4331-984b-19797e9b7276
 :END:
 Provide `tasks-org-mode` with a small keymap under an org-friendly prefix.
 Candidate bindings: select current task, ensure ID, open/create plan, jump to
 TASKS root, and refresh/reparse helpers.
 ** DONE [#A] Implement org task identity helpers :org:ids:
 :PROPERTIES:
-:ID: e437db55-7933-4ef5-911c-89dc81dd3ae3
+:CUSTOM_ID: e437db55-7933-4ef5-911c-89dc81dd3ae3
 :END:
 Add functions that operate on the current org heading and preserve standard org
 semantics.
@@ -114,19 +114,19 @@ Acceptance criteria:
 - Existing IDs and unrelated properties are preserved.
 *** DONE [#B] Implement UUID/property primitives :org:ids:
 :PROPERTIES:
-:ID: bd0a484b-9e37-40a5-a295-e0d62e40edef
+:CUSTOM_ID: bd0a484b-9e37-40a5-a295-e0d62e40edef
 :END:
 Wrap `org-entry-get`, `org-entry-put`, and org-id facilities where appropriate.
 Avoid custom parsing when org APIs can safely handle the operation.
 *** DONE [#B] Validate ID helpers on TASKS.org and linked plans :testing:
 :PROPERTIES:
-:ID: c98342fd-9292-47de-9d16-e0c3b2fdb3e0
+:CUSTOM_ID: c98342fd-9292-47de-9d16-e0c3b2fdb3e0
 :END:
 Test current heading, subtree, whole buffer, existing ID preservation, and files
 with unrelated properties such as `:PLAN:` and `:BLOCKED-BY:`.
 ** DONE [#A] Implement explicit task selection helpers :selection:org:
 :PROPERTIES:
-:ID: 2e6b4633-f11b-4e64-814c-ff9714308492
+:CUSTOM_ID: 2e6b4633-f11b-4e64-814c-ff9714308492
 :END:
 Provide Emacs commands for the reserved `:selected:` tag while keeping selection
 semantics consistent with the pi tasks extension.
@@ -141,7 +141,7 @@ Acceptance criteria:
   widget/overlay.
 *** DONE [#B] Locate task graph files for selection clearing :selection:
 :PROPERTIES:
-:ID: e896d385-2e31-4fa4-a8c9-b5e5fa0e332d
+:CUSTOM_ID: e896d385-2e31-4fa4-a8c9-b5e5fa0e332d
 :END:
 Use `projectile-project-root` to locate the project root and resolve `TASKS.org`
 plus any plan files referenced by `:PLAN:` properties. Fall back to the buffer's
@@ -149,13 +149,13 @@ own directory if projectile cannot resolve a root. Prefer safe, explicit file
 updates over scanning arbitrary org files.
 *** DONE [#B] Preserve normal org tag editing :selection:ux:
 :PROPERTIES:
-:ID: f3594aeb-1eea-4e07-a02c-f4732f978f86
+:CUSTOM_ID: f3594aeb-1eea-4e07-a02c-f4732f978f86
 :END:
 Ensure the helper coexists with `org-set-tags-command` and does not rewrite
 semantic tags unexpectedly.
 ** DONE [#A] Implement plan open/create helpers :plans:org:
 :PROPERTIES:
-:ID: 594900c9-5760-4ae1-ae03-a265aed20a41
+:CUSTOM_ID: 594900c9-5760-4ae1-ae03-a265aed20a41
 :END:
 Mirror the tasks extension's plan-link conventions from Emacs: prefer clickable
 `[[file:...]]` values, respect top-level `#+PLANS`, and keep plan files in the
@@ -173,13 +173,13 @@ Acceptance criteria:
   is deferred to a separate workstream (see Design decisions).
 *** DONE [#B] Reuse org link APIs for clickable PLAN values :plans:emacs:
 :PROPERTIES:
-:ID: a5b33e4f-a544-4fa4-8a2b-8c64c47d77f1
+:CUSTOM_ID: a5b33e4f-a544-4fa4-8a2b-8c64c47d77f1
 :END:
 Use org link parsing/opening primitives where possible rather than maintaining a
 separate Emacs Lisp parser for org links.
 *** DONE [#B] Implement plan file scaffold :plans:org:
 :PROPERTIES:
-:ID: 78c69fdf-c448-4df6-b960-60b2e1be271b
+:CUSTOM_ID: 78c69fdf-c448-4df6-b960-60b2e1be271b
 :END:
 Create the new plan file with `#+TITLE`, `#+DATE`, `#+TODO`, `* Context`, and
 `* Plan` sections. Update or set the parent task's `:PLAN:` property to the
@@ -187,7 +187,7 @@ clickable `[[file:...]]` form. Subtask absorption is explicitly out of scope
 for v1 — see Design decisions.
 ** DONE [#B] Document usage in the `org-user` layer README :docs:
 :PROPERTIES:
-:ID: 22f593f9-8229-4ffa-ade5-3aa47410a8ed
+:CUSTOM_ID: 22f593f9-8229-4ffa-ade5-3aa47410a8ed
 :END:
 Update `editors/emacs/spacemacs/layers/org-user/README.org` with purpose,
 activation, commands, keybindings, and the relationship to pi's tasks extension.
@@ -199,7 +199,7 @@ Acceptance criteria:
 - README notes that sync is currently save/file-watcher based.
 ** DONE [#B] Validate transparent Emacs/pi workflow :verification:
 :PROPERTIES:
-:ID: 437d6716-1135-4459-ad0f-ee9f88eff294
+:CUSTOM_ID: 437d6716-1135-4459-ad0f-ee9f88eff294
 :END:
 Run an end-to-end smoke test using normal org editing plus the new helpers.
 
@@ -218,7 +218,7 @@ Acceptance criteria:
   implementation beyond the transparent-helper scope.
 ** DONE [#C] Rework tasks-org Spacemacs keybinding strategy :emacs:ui:
 :PROPERTIES:
-:ID: b1c8e7a3-9f4d-4c2e-a7d3-8b2f1c0e9d4a
+:CUSTOM_ID: b1c8e7a3-9f4d-4c2e-a7d3-8b2f1c0e9d4a
 :END:
 Deferred follow-up. The current bindings (=, K {s,i,I,p,t}=) work but the
 implementation is ugly:
@@ -257,7 +257,7 @@ Not blocking v1. Revisit when the package is stable enough that a breaking
 key change is acceptable, or before sharing the package beyond personal use.
 ** DONE [#D] Add convenience keybinding
 :PROPERTIES:
-:ID: ddb2529d-6588-40ed-b4ac-81bcb6c31765
+:CUSTOM_ID: ddb2529d-6588-40ed-b4ac-81bcb6c31765
 :END:
 [2026-04-27 Sun] Implemented.
 

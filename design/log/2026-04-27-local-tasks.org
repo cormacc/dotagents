@@ -1,6 +1,6 @@
 #+TITLE: Surface TASKS.local.org tasks in the extension UI
 #+DATE: 2026-04-27 Mon
-#+PARENT_ID: 6bee9f80-d1b5-4121-ab9c-f795e4884d3e
+#+PARENT: [[file:../../TASKS.archive.org::#6bee9f80-d1b5-4121-ab9c-f795e4884d3e][Update tasks extension to include local tasks]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -77,7 +77,7 @@ This plan covers the full feature:
 ** DONE [#A] Fix writeSelectedId to be non-destructive
 CLOSED: [2026-04-27 Mon 22:32]
 :PROPERTIES:
-:ID: b1e2c3d4-0001-4000-8000-100000000001
+:CUSTOM_ID: b1e2c3d4-0001-4000-8000-100000000001
 :END:
 =writeSelectedId= currently overwrites the entire =TASKS.local.org=.  This
 must be fixed before any tasks can safely be stored there.
@@ -93,7 +93,7 @@ contains task headings leaves those headings intact.
 ** DONE [#A] Add isLocal flag to Task interface and loader
 CLOSED: [2026-04-27 Mon 22:32]
 :PROPERTIES:
-:ID: b1e2c3d4-0002-4000-8000-100000000002
+:CUSTOM_ID: b1e2c3d4-0002-4000-8000-100000000002
 :END:
 - Add =isLocal?: boolean= to the =Task= interface in =parser.ts=.
 - In =loadTasks= (=index.ts=), after loading shared tasks, parse
@@ -108,7 +108,7 @@ demo =TASKS.local.org=.
 ** DONE [#B] Render local tasks with visual distinction
 CLOSED: [2026-04-27 Mon 22:32]
 :PROPERTIES:
-:ID: b1e2c3d4-0003-4000-8000-100000000003
+:CUSTOM_ID: b1e2c3d4-0003-4000-8000-100000000003
 :END:
 In =overlay.ts=:
 - Replace =•= / =▶= / =▼= with =⊠= for local task rows.
@@ -126,7 +126,7 @@ when at least one local task exists; shared tasks are unaffected.
 ** DONE [#B] Publish action (local → shared)
 CLOSED: [2026-04-27 Mon 22:32]
 :PROPERTIES:
-:ID: b1e2c3d4-0004-4000-8000-100000000004
+:CUSTOM_ID: b1e2c3d4-0004-4000-8000-100000000004
 :END:
 Keybinding: =P= in the overlay (guard: cursor must be on a local task).
 
@@ -145,7 +145,7 @@ new top-level entry in =TASKS.org=, and the file on disk reflects both changes.
 ** DONE [#B] Unpublish action (shared → local)
 CLOSED: [2026-04-27 Mon 22:32]
 :PROPERTIES:
-:ID: b1e2c3d4-0005-4000-8000-100000000005
+:CUSTOM_ID: b1e2c3d4-0005-4000-8000-100000000005
 :END:
 Keybinding: =U= in the overlay (guard: cursor must be on a top-level shared
 task).
@@ -165,7 +165,7 @@ Acceptance: task disappears from shared list, reappears in local section,
 ** DONE [#C] Archive guard for local tasks
 CLOSED: [2026-04-27 Mon 22:32]
 :PROPERTIES:
-:ID: b1e2c3d4-0006-4000-8000-100000000006
+:CUSTOM_ID: b1e2c3d4-0006-4000-8000-100000000006
 :END:
 In =archiveTopLevel= (=index.ts=): if =topLevel.isLocal=, notify "Local tasks
 cannot be archived — publish first" and return false.
@@ -175,7 +175,7 @@ changes occur.
 ** DONE [#C] New-task routing for local tasks
 CLOSED: [2026-04-27 Mon 22:32]
 :PROPERTIES:
-:ID: b1e2c3d4-0007-4000-8000-100000000007
+:CUSTOM_ID: b1e2c3d4-0007-4000-8000-100000000007
 :END:
 In =createTask=: when =parentTask?.isLocal= or (for top-level new tasks) the
 cursor row is local, write to =TASKS.local.org= instead of =TASKS.org=.
@@ -188,7 +188,7 @@ Acceptance: pressing =n= while on a local task creates a new local task in
 ** DONE [#C] Emacs-side publish/unpublish commands
 CLOSED: [2026-04-27 Mon 22:35]
 :PROPERTIES:
-:ID: b1e2c3d4-0008-4000-8000-100000000008
+:CUSTOM_ID: b1e2c3d4-0008-4000-8000-100000000008
 :END:
 Add to =tasks-org.el=:
 
@@ -209,7 +209,7 @@ the extension's view after a reload.
 ** DONE [#C] Update docs and help text
 CLOSED: [2026-04-27 Mon 22:32]
 :PROPERTIES:
-:ID: b1e2c3d4-0009-4000-8000-100000000009
+:CUSTOM_ID: b1e2c3d4-0009-4000-8000-100000000009
 :END:
 - Add =P= / =U= to the overlay help bar and README.md keybinding table.
 - Document the =TASKS.local.org= task format in README.md (tasks + =#+SELECTED:=

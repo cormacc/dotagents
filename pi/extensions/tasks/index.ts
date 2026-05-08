@@ -50,6 +50,7 @@ import {
   getTaskStarted,
   parseTasks,
   parseSelectedKeyword,
+  rewriteParentLinkTaskFile,
   serializeTasks,
   serializeTasksPreservingFile,
   taskHasId,
@@ -184,7 +185,7 @@ export async function writeSelectedId(
 }
 
 /**
- * Find a task by its org :ID: property across the full task graph.
+ * Find a task by its org :CUSTOM_ID: property across the full task graph.
  */
 export function findTaskById(tasks: Task[], id: string): Task | null {
   for (const t of tasks) {
@@ -346,7 +347,7 @@ async function backfillMissingIds(cwd: string, tasks: Task[]): Promise<void> {
   const visit = (taskList: Task[]) => {
     for (const task of taskList) {
       if (!taskHasId(task)) {
-        task.propertyLines.unshift(`:ID: ${randomUUID()}`);
+        task.propertyLines.unshift(`:CUSTOM_ID: ${randomUUID()}`);
         const sourcePath = task.sourcePath ?? join(cwd, TASKS_FILE);
         changedRoots.set(sourcePath, task.sourceRoot ?? tasks);
       }
@@ -666,7 +667,7 @@ function insertResultToToolReturn(result: InsertResult) {
         details: result,
       };
     case "duplicate": {
-      const existing = result.existingId ?? "(no :ID:)";
+      const existing = result.existingId ?? "(no :CUSTOM_ID:)";
       return {
         content: [{
           type: "text" as const,
@@ -708,7 +709,7 @@ function registerInsertTaskTool(pi: ExtensionAPI): void {
       "structured 'duplicate' error when any supplied :LINKED_ISSUES: token " +
       "already appears in TASKS.org / TASKS.local.org / their imports.",
     promptSnippet:
-      "Insert a new TASKS.org task with auto-generated :ID:, :CREATED:, drawer + tags",
+      "Insert a new TASKS.org task with auto-generated :CUSTOM_ID:, :CREATED:, drawer + tags",
     promptGuidelines: [
       "Use tasks_insert_task whenever you would otherwise hand-assemble an org task heading + drawer; prefer it over `edit` for inserts so duplicate :LINKED_ISSUES: tokens are caught and priority/UUID/timestamp formatting stays consistent.",
     ],
@@ -1004,7 +1005,7 @@ export default function (pi: ExtensionAPI) {
         // was open (e.g. via the file watcher after a selection write or an
         // Emacs save), so `request.task` can be a reference into a different
         // tree than the outer `tasks` variable. Resolve every stale
-        // reference back to the freshly loaded tree by `:ID:` before any
+        // reference back to the freshly loaded tree by `:CUSTOM_ID:` before any
         // mutating workflow runs.
         const resolveStale = (stale: Task | null): Task | null => {
           if (!stale) return null;
@@ -1352,7 +1353,7 @@ function buildProactiveChangeRecordPrompt(
       ? "Existing TASKS.org subtasks were moved into the linked change-record under * Plan, and the parent task now retains a plain-text summary of the extracted subtasks."
       : "The parent task had no local subtasks to absorb.",
     "",
-    "Use the `org-plan` and `org-tasks` skills. Start by asking me any scoping questions needed to develop the plan. Once the plan is agreed, write the final org content to the change-record file above. New `** TODO` plan tasks must include `:ID:` and `:CREATED: [YYYY-MM-DD Day HH:MM]` properties (use `date +'%Y-%m-%d %a %H:%M'` to obtain the timestamp). Prefer tool-driven status changes so `:LOGBOOK:` lifecycle history stays synchronized. After writing it, offer to open the file in Emacs.",
+    "Use the `org-plan` and `org-tasks` skills. Start by asking me any scoping questions needed to develop the plan. Once the plan is agreed, write the final org content to the change-record file above. New `** TODO` plan tasks must include `:CUSTOM_ID:` and `:CREATED: [YYYY-MM-DD Day HH:MM]` properties (use `date +'%Y-%m-%d %a %H:%M'` to obtain the timestamp). Prefer tool-driven status changes so `:LOGBOOK:` lifecycle history stays synchronized. After writing it, offer to open the file in Emacs.",
   ].join("\n");
 }
 
@@ -1469,7 +1470,12 @@ async function handlePlanEdit(
         );
       }
     } else {
-      await writeFile(absPlan, scaffoldPlan(task, extractedPlanTasks), "utf-8");
+      const tasksFileRelPath = relative(dirname(absPlan), sourcePath).replace(/\\/g, "/");
+      await writeFile(
+        absPlan,
+        scaffoldPlan(task, { tasksFileRelPath }, extractedPlanTasks),
+        "utf-8",
+      );
     }
 
     // Attach #+IMPORT: to the in-memory task body and save its source file.
@@ -1558,7 +1564,7 @@ async function createTask(
     description: "",
     children: [],
     propertyLines: [
-      `:ID: ${randomUUID()}`,
+      `:CUSTOM_ID: ${randomUUID()}`,
       `:CREATED: [${createdAt}]`,
     ],
     importPath: null,
@@ -1652,6 +1658,24 @@ function sortArchivedTasks(tasks: Task[]): Task[] {
     .map(({ task }) => task);
 }
 
+async function prepareArchivedPlanParentLink(
+  ctx: ExtensionContext,
+  task: Task,
+  archivePath: string,
+): Promise<{ absPlan: string; content: string } | null> {
+  const parentId = getTaskId(task);
+  if (!parentId || !task.importPath) return null;
+  const sourcePath = task.sourcePath ?? join(ctx.cwd, TASKS_FILE);
+  const absPlan = await resolveProjectPath(ctx.cwd, dirname(sourcePath), task.importPath);
+  if (!absPlan) {
+    throw new Error("Plan path resolves outside project root");
+  }
+  const current = await readFile(absPlan, "utf-8");
+  const tasksFileRelPath = relative(dirname(absPlan), archivePath).replace(/\\/g, "/");
+  const next = rewriteParentLinkTaskFile(current, parentId, tasksFileRelPath);
+  return next === current ? null : { absPlan, content: next };
+}
+
 /**
  * Archive a top-level TASKS.org task to TASKS.archive.org.
  *
@@ -1705,11 +1729,19 @@ async function archiveTopLevel(
   const stamp = topLevel.closed ?? formatOrgTimestamp();
   archiveCopy.propertyLines.push(`:ARCHIVED: [${stamp}]`);
 
+  const archivePath = join(ctx.cwd, TASKS_ARCHIVE_FILE);
+  const tasksPath = join(ctx.cwd, TASKS_FILE);
+  let planRewrite: { absPlan: string; content: string } | null = null;
+  try {
+    planRewrite = await prepareArchivedPlanParentLink(ctx, topLevel, archivePath);
+  } catch (err) {
+    ctx.ui.notify(`Archive failed: ${(err as Error).message}`, "error");
+    return false;
+  }
+
   // Mutate the live task tree: remove from top-level.
   tasks.splice(idx, 1);
 
-  const archivePath = join(ctx.cwd, TASKS_ARCHIVE_FILE);
-  const tasksPath = join(ctx.cwd, TASKS_FILE);
   try {
     const existing = (await pathExists(archivePath))
       ? await readFile(archivePath, "utf-8")
@@ -1721,6 +1753,9 @@ async function archiveTopLevel(
     const sortedArchive = sortArchivedTasks(archivedTasks);
     await writeFile(archivePath, serializeTasks(sortedArchive), "utf-8");
     await writeTaskFilePreserving(tasksPath, tasks);
+    if (planRewrite) {
+      await writeFile(planRewrite.absPlan, planRewrite.content, "utf-8");
+    }
   } catch (err) {
     // Roll back in-memory change so the overlay stays consistent with disk.
     tasks.splice(idx, 0, topLevel);

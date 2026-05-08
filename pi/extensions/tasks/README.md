@@ -207,7 +207,7 @@ The two forms can mix freely on a single line:
 
 ```org
 :PROPERTIES:
-:ID: 01234567-…
+:CUSTOM_ID: 01234567-…
 :LINKED_ISSUES: MBFW-123 MBE-45 [[https://github.com/foo/bar/issues/42][gh#42]]
 :END:
 ```

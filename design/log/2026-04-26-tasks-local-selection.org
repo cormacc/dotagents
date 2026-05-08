@@ -1,6 +1,6 @@
 #+TITLE: Move Task Selection to TASKS.local.org
 #+DATE: 2026-04-26 Sun
-#+PARENT_ID: a8f3c2e1-7b4d-4f9c-8a52-3e6c1d8b9f47
+#+PARENT: [[file:../../TASKS.archive.org::#a8f3c2e1-7b4d-4f9c-8a52-3e6c1d8b9f47][Move task selection state to .gitignored TASKS.local.org :org-memory:org-tasks:]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -62,7 +62,7 @@ missing keyword means "no selection."
 ** DONE [#A] Update org-memory skill to document TASKS.local.org :docs:protocol:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
-:ID: d4e7f218-3a5b-49c2-b08d-e1f6a4c9d2b3
+:CUSTOM_ID: d4e7f218-3a5b-49c2-b08d-e1f6a4c9d2b3
 :END:
 Replace the =:selected:= tag convention in
 =agents/skills/org-memory/SKILL.md= with the =TASKS.local.org= +
@@ -81,7 +81,7 @@ Acceptance criteria:
 ** DONE [#A] pi tasks extension: read selection from TASKS.local.org :extension:read:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
-:ID: f1c8e2a5-9d4b-4e36-8f72-1a3c5e7d9b04
+:CUSTOM_ID: f1c8e2a5-9d4b-4e36-8f72-1a3c5e7d9b04
 :END:
 Update =agents/pi/extensions/tasks/parser.ts= and
 =agents/pi/extensions/tasks/index.ts= to source the selected task ID from the
@@ -102,7 +102,7 @@ Acceptance criteria:
 *** DONE [#B] Watch TASKS.local.org for changes :extension:watch:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
-:ID: 0c5a3d9e-8f1b-4c27-a653-2e8f9d1b4a76
+:CUSTOM_ID: 0c5a3d9e-8f1b-4c27-a653-2e8f9d1b4a76
 :END:
 Extend the existing file watcher to refresh the compact widget / overlay when
 =TASKS.local.org= changes, so toggling selection in Emacs immediately reflects
@@ -115,7 +115,7 @@ Acceptance criteria:
 ** DONE [#A] pi tasks extension: write selection to TASKS.local.org :extension:write:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
-:ID: 7b2c4d8e-9f0a-4e15-83cd-6f2a8b1e4c9d
+:CUSTOM_ID: 7b2c4d8e-9f0a-4e15-83cd-6f2a8b1e4c9d
 :END:
 Update =agents/pi/extensions/tasks/overlay.ts= so the selection toggle writes
 the local file instead of mutating the =:selected:= tag in the shared graph.
@@ -131,7 +131,7 @@ Acceptance criteria:
 ** DONE [#A] tasks-org Emacs package: read/write TASKS.local.org :emacs:selection:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
-:ID: 4e9f1c5b-8a7d-4632-9e0c-3d8a1f6b7c25
+:CUSTOM_ID: 4e9f1c5b-8a7d-4632-9e0c-3d8a1f6b7c25
 :END:
 Refactor the selection helpers in
 =editors/emacs/spacemacs/layers/org-user/local/tasks-org/tasks-org.el= to use
@@ -152,7 +152,7 @@ Acceptance criteria:
 *** CANCELLED [#C] Optional: visual indicator for selected heading :emacs:ui:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
-:ID: 2a6c8e1f-3b9d-4527-a8f4-5e7c0d2b6a98
+:CUSTOM_ID: 2a6c8e1f-3b9d-4527-a8f4-5e7c0d2b6a98
 :END:
 Without the =:selected:= tag, the active task is no longer visually marked in
 the buffer. Decide whether to add a lightweight overlay/face for the heading
@@ -168,7 +168,7 @@ Acceptance criteria:
 ** DONE [#B] Add TASKS.local.org to .gitignore :infra:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
-:ID: 6d3e8a1c-5f7b-4914-9c8a-2e5d8f0a3b67
+:CUSTOM_ID: 6d3e8a1c-5f7b-4914-9c8a-2e5d8f0a3b67
 :END:
 Acceptance criteria:
 - Project root =.gitignore= includes =TASKS.local.org=.
@@ -178,7 +178,7 @@ Acceptance criteria:
 ** DONE [#B] Migrate existing :selected: tags :migration:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
-:ID: 1f8b4d2e-9c5a-4863-b07f-a1c4d8e3f9b2
+:CUSTOM_ID: 1f8b4d2e-9c5a-4863-b07f-a1c4d8e3f9b2
 :END:
 A small one-shot migration: read any existing =:selected:= tag from
 =TASKS.org= and =:PLAN:= -linked files, write the corresponding ID to
@@ -195,7 +195,7 @@ Acceptance criteria:
 ** DONE [#B] End-to-end validation :verification:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
-:ID: 9c0a3d6e-1b4f-4257-8c9d-5f7e2a0b8c14
+:CUSTOM_ID: 9c0a3d6e-1b4f-4257-8c9d-5f7e2a0b8c14
 :END:
 Smoke-test the round trip across Emacs, the file system, and the pi widget.
 

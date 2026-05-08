@@ -1,6 +1,6 @@
 #+TITLE: Refine org-memory protocol
 #+DATE: 2026-04-28 Tue
-#+PARENT_ID: 80ea589b-501c-42d9-86e7-4d414c0c314e
+#+PARENT: [[file:../../TASKS.archive.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Refine org-memory protocol]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -63,7 +63,7 @@ settled.
 ** DONE [#A] Align =CLOSED:= placement with the standard org convention :skills:pi:
 CLOSED: [2026-04-28 Tue 10:59]
 :PROPERTIES:
-:ID: 1f236e9d-c0b2-452b-aedb-2ee7a2aa9a96
+:CUSTOM_ID: 1f236e9d-c0b2-452b-aedb-2ee7a2aa9a96
 :STARTED: [2026-04-28 Tue 10:57]
 :END:
 Skill text updated; example in "Task notes" rewritten with =CLOSED:=
@@ -91,7 +91,7 @@ Acceptance criteria:
 ** DONE [#A] Slim =org-tasks= SKILL.md :skills:
 CLOSED: [2026-04-28 Tue 11:02]
 :PROPERTIES:
-:ID: 9c8b7a64-5d3e-4f12-8a71-1e2d3c4b5a60
+:CUSTOM_ID: 9c8b7a64-5d3e-4f12-8a71-1e2d3c4b5a60
 :STARTED: [2026-04-28 Tue 11:01]
 :END:
 Rewrote the skill: 295 → 202 lines despite *adding* normative
@@ -123,7 +123,7 @@ The "Interop" pointer to =org-plan= remains.
 ** DONE [#B] Slim =org-plan= SKILL.md :skills:
 CLOSED: [2026-04-28 Tue 11:03]
 :PROPERTIES:
-:ID: 7a3f5e91-2d4b-4c68-9e35-8b1c0d2f7e44
+:CUSTOM_ID: 7a3f5e91-2d4b-4c68-9e35-8b1c0d2f7e44
 :STARTED: [2026-04-28 Tue 11:02]
 :END:
 Rewrote: 130 → 120 lines. Replaced steps 1-5 of "Executing from a
@@ -144,7 +144,7 @@ Concrete edits:
 ** DONE [#B] Trim tasks-extension README :pi:
 CLOSED: [2026-04-28 Tue 11:04]
 :PROPERTIES:
-:ID: c2e8d3b7-6f49-4a51-8d72-3a4b5c6d7e80
+:CUSTOM_ID: c2e8d3b7-6f49-4a51-8d72-3a4b5c6d7e80
 :STARTED: [2026-04-28 Tue 11:03]
 :END:
 Replaced "TASKS.org Format" + "Heading syntax" + "Linked
@@ -174,7 +174,7 @@ Target: ~15 KB → ~8 KB.
 ** DONE [#A] Close Emacs minor-mode parity gaps :emacs:
 CLOSED: [2026-04-28 Tue 11:06]
 :PROPERTIES:
-:ID: e6f1d2a3-4b58-4e79-9c30-7a8b9c0d1e23
+:CUSTOM_ID: e6f1d2a3-4b58-4e79-9c30-7a8b9c0d1e23
 :STARTED: [2026-04-28 Tue 11:04]
 :END:
 All four sub-tasks complete. Byte-compile clean (one pre-existing
@@ -187,7 +187,7 @@ Bring =tasks-org.el= into agreement with the documented protocol.
 *** DONE [#A] Fix change-record scaffold to match the canonical skeleton :emacs:
 CLOSED: [2026-04-28 Tue 11:06]
 :PROPERTIES:
-:ID: 4d5e6f70-8192-4a3b-8c4d-5e6f70819abc
+:CUSTOM_ID: 4d5e6f70-8192-4a3b-8c4d-5e6f70819abc
 :STARTED: [2026-04-28 Tue 11:04]
 :END:
 =tasks-org--scaffold-plan= now takes an optional PARENT-ID and emits
@@ -197,7 +197,7 @@ CLOSED: [2026-04-28 Tue 11:06]
 *** DONE [#A] Honour =#+DEFAULT_PLAN_DIR:= from =TASKS.org= :emacs:
 CLOSED: [2026-04-28 Tue 11:06]
 :PROPERTIES:
-:ID: 5e6f7081-92a3-4b4c-8d5e-6f70819abcde
+:CUSTOM_ID: 5e6f7081-92a3-4b4c-8d5e-6f70819abcde
 :STARTED: [2026-04-28 Tue 11:04]
 :END:
 Added =tasks-org--read-default-plan-dir= and
@@ -208,7 +208,7 @@ directory; =tasks-org-plans-directory= remains the fallback.
 *** DONE [#A] Write =:STARTED:= on first =TODO -> STARTED= :emacs:
 CLOSED: [2026-04-28 Tue 11:06]
 :PROPERTIES:
-:ID: 6f708192-a3b4-4c5d-8e6f-70819abcdef0
+:CUSTOM_ID: 6f708192-a3b4-4c5d-8e6f-70819abcdef0
 :STARTED: [2026-04-28 Tue 11:04]
 :END:
 Added =tasks-org--maybe-record-started=, attached to
@@ -220,7 +220,7 @@ produce.
 *** DONE [#C] Fix stale =tasks-org-toggle-selected= docstring :emacs:
 CLOSED: [2026-04-28 Tue 11:06]
 :PROPERTIES:
-:ID: 70819abc-def0-4123-8456-789abcdef012
+:CUSTOM_ID: 70819abc-def0-4123-8456-789abcdef012
 :STARTED: [2026-04-28 Tue 11:04]
 :END:
 Docstring now matches the actual no-delete behaviour and notes that
@@ -229,7 +229,7 @@ alongside the selection keyword.
 ** DONE [#A] Adopt =:CREATED:= property for new tasks :skills:pi:
 CLOSED: [2026-04-28 Tue 11:01]
 :PROPERTIES:
-:ID: a1b2c3d4-e5f6-4708-8192-a3b4c5d6e7f8
+:CUSTOM_ID: a1b2c3d4-e5f6-4708-8192-a3b4c5d6e7f8
 :CREATED: [2026-04-28 Tue 10:49]
 :STARTED: [2026-04-28 Tue 10:59]
 :END:
@@ -279,7 +279,7 @@ Acceptance criteria:
 ** DONE [#B] Add change-record-skeleton snapshot tests :pi:emacs:
 CLOSED: [2026-04-28 Tue 11:11]
 :PROPERTIES:
-:ID: 819abcde-f012-4345-8678-9abcdef01234
+:CUSTOM_ID: 819abcde-f012-4345-8678-9abcdef01234
 :STARTED: [2026-04-28 Tue 11:06]
 :END:
 Lifted =scaffoldPlan= and =insertTasksIntoPlanSection= out of
@@ -316,7 +316,7 @@ test failure rather than an undetected docs inconsistency.
 ** DONE [#C] Verify and document =CLOSED:= round-trip behaviour :pi:
 CLOSED: [2026-04-28 Tue 11:11]
 :PROPERTIES:
-:ID: 9abcdef0-1234-4567-889a-bcdef0123456
+:CUSTOM_ID: 9abcdef0-1234-4567-889a-bcdef0123456
 :STARTED: [2026-04-28 Tue 11:11]
 :END:
 Subsumed by Plan task 1 (parser test covering both positions and

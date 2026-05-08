@@ -1,6 +1,6 @@
 #+TITLE: Create self-improvement skill
 #+DATE: 2026-04-29 Wed
-#+PARENT_ID: 2262ed25-f0fc-40fd-9d21-41a0b16fb3a1
+#+PARENT: [[file:../../TASKS.org::#2262ed25-f0fc-40fd-9d21-41a0b16fb3a1][Create self-improvement skill]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -99,7 +99,7 @@ currently doing.
 ** DONE [#A] Scaffold skill directory and SKILL.md frontmatter
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
-:ID: 02e28381-5734-498d-944d-c3d468aa0e63
+:CUSTOM_ID: 02e28381-5734-498d-944d-c3d468aa0e63
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:00]
 :END:
@@ -113,7 +113,7 @@ appears under =~/.agents/skills/= after the symlink resolves;
 ** DONE [#A] Specify the routing classifier
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
-:ID: ee93a205-4626-4677-a85d-5a25dd70878f
+:CUSTOM_ID: ee93a205-4626-4677-a85d-5a25dd70878f
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
@@ -132,7 +132,7 @@ flowchart the agent can follow without further input.
 ** DONE [#A] Implement local-tier submit+insert flow
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
-:ID: 4f3c3b24-d739-4d35-9e00-6336331a3e65
+:CUSTOM_ID: 4f3c3b24-d739-4d35-9e00-6336331a3e65
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
@@ -154,7 +154,7 @@ project's =TASKS.org= and offers planning.
 ** DONE [#A] Implement cross-tier submit flow (intercom send)
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
-:ID: d0730273-d501-4aa7-bb8e-50e74e19fab2
+:CUSTOM_ID: d0730273-d501-4aa7-bb8e-50e74e19fab2
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
@@ -172,7 +172,7 @@ test message that the dotfiles session sees in its inbox.
 ** DONE [#B] Auto-spawn dotfiles session when none alive
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
-:ID: 92ada34d-da91-4bf8-8fdf-4178d799ee05
+:CUSTOM_ID: 92ada34d-da91-4bf8-8fdf-4178d799ee05
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
@@ -185,7 +185,7 @@ submit flow boots one and the message lands.
 ** DONE [#A] Implement triage-mode flow (dotfiles inbound + local self-triage)
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
-:ID: e71730f4-9453-4483-b8aa-95bdd50f779f
+:CUSTOM_ID: e71730f4-9453-4483-b8aa-95bdd50f779f
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
@@ -211,7 +211,7 @@ sender.
 ** DONE [#B] Document =* Agent feedback= entry conventions
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
-:ID: 9546e794-142d-469b-a6f9-ca9bf6faf2f6
+:CUSTOM_ID: 9546e794-142d-469b-a6f9-ca9bf6faf2f6
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
@@ -231,7 +231,7 @@ the agent can copy.
 ** DONE [#C] Define agent self-proposal trigger heuristics
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
-:ID: bd819ce8-10a0-453a-8309-4eed4bcddaee
+:CUSTOM_ID: bd819ce8-10a0-453a-8309-4eed4bcddaee
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
@@ -244,7 +244,7 @@ noise. Acceptance: the trigger list is specific enough that an
 agent can decide yes/no without further user input.
 ** TODO [#C] End-to-end smoke test across two pi sessions
 :PROPERTIES:
-:ID: 4a8e0d6b-1c2d-4e3f-9a0b-1c2d3e4f5a6b
+:CUSTOM_ID: 4a8e0d6b-1c2d-4e3f-9a0b-1c2d3e4f5a6b
 :CREATED: [2026-04-29 Wed 01:09]
 :END:
 Deferred to the user since this requires a second live pi
@@ -264,7 +264,7 @@ Capture findings under =* Implementation= when run.
 ** DONE [#C] Document the skill in agents/skills/README.org
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
-:ID: 6f7a8b9c-0d1e-4f23-8a0b-1c2d3e4f5a6c
+:CUSTOM_ID: 6f7a8b9c-0d1e-4f23-8a0b-1c2d3e4f5a6c
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:

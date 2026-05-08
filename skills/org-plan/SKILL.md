@@ -55,7 +55,7 @@ Optional:
   ```
 
   `OPEN` / `DECIDED` are heading-text markers, not task nodes and not
-  `#+TODO:` states. They need no `:ID:` or lifecycle metadata; a
+  `#+TODO:` states. They need no `:CUSTOM_ID:` or lifecycle metadata; a
   `DECIDED` heading may optionally record `:DECIDED: [timestamp]`.
   Resume tooling should surface remaining `OPEN` items.
 
@@ -64,7 +64,7 @@ Optional:
 ```org
 #+TITLE: Descriptive change-record title
 #+DATE: 2026-04-25 Sat
-#+PARENT_ID: 01234567-89ab-4def-8123-456789abcdef
+#+PARENT: [[file:../../TASKS.org::#01234567-89ab-4def-8123-456789abcdef][Descriptive parent task]]
 #+STATUS: Draft
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
@@ -77,7 +77,7 @@ Brief self-contained summary.
 * Plan
 ** TODO [#A] First executable step :area:
 :PROPERTIES:
-:ID: 89abcdef-0123-4567-89ab-cdef01234567
+:CUSTOM_ID: 89abcdef-0123-4567-89ab-cdef01234567
 :CREATED: [2026-04-25 Sat 09:10]
 :END:
 :LOGBOOK:
@@ -146,13 +146,13 @@ parent propagation, and lifecycle log remain synchronized.
 
 When a task in `TASKS.org` already has subtasks and a proactive
 change-record is created, those subtask trees are **moved** into the
-change-record under `* Plan` with their existing `:ID:` values intact.
+change-record under `* Plan` with their existing `:CUSTOM_ID:` values intact.
 They are removed from the parent `TASKS.org` subtree so the loaded task
 graph contains one canonical node per UUID.
 
 The parent task may retain a plain-text bullet summary of migrated
 subtasks for readability, but those bullets are not tasks and contain
-no `:ID:` drawers. The canonical writable task nodes live in the
+no `:CUSTOM_ID:` drawers. The canonical writable task nodes live in the
 change-record after migration.
 
 Example before planning:
@@ -160,11 +160,11 @@ Example before planning:
 ```org
 ** TODO [#A] Implement authentication
 :PROPERTIES:
-:ID: parent-id
+:CUSTOM_ID: parent-id
 :END:
 *** TODO Add login endpoint
 :PROPERTIES:
-:ID: child-id
+:CUSTOM_ID: child-id
 :END:
 ```
 
@@ -173,7 +173,7 @@ Example after planning:
 ```org
 ** TODO [#A] Implement authentication
 :PROPERTIES:
-:ID: parent-id
+:CUSTOM_ID: parent-id
 :END:
 #+IMPORT: [[file:design/log/authentication.org]]
 Migrated subtasks:
@@ -184,7 +184,7 @@ Migrated subtasks:
 * Plan
 ** TODO Add login endpoint
 :PROPERTIES:
-:ID: child-id
+:CUSTOM_ID: child-id
 :END:
 ```
 

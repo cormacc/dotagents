@@ -19,12 +19,14 @@ import {
   getDrawerPropertyValues,
   getFileKeyword,
   getLinkedIssues,
+  getPlanParentId,
   getTaskBlockers,
   getTaskHandoff,
   isTaskReady,
   parseBlocker,
   parseTasks,
   resolveIssueUrl,
+  rewriteParentLinkTaskFile,
   serializeTasks,
   serializeTasksPreservingFile,
   setDrawerProperty,
@@ -72,7 +74,7 @@ function assertContains(haystack: string, needle: string, message: string): void
     "* DONE [#B] Task one",
     "CLOSED: [2026-04-25 Sat 12:00]",
     ":PROPERTIES:",
-    ":ID: 11111111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 11111111-2222-4333-8444-555555555555",
     ":CREATED: [2026-04-24 Fri 09:15]",
     ":END:",
     "Some description.",
@@ -86,10 +88,10 @@ function assertContains(haystack: string, needle: string, message: string): void
   assertEqual(
     tasks[0]!.propertyLines,
     [
-      ":ID: 11111111-2222-4333-8444-555555555555",
+      ":CUSTOM_ID: 11111111-2222-4333-8444-555555555555",
       ":CREATED: [2026-04-24 Fri 09:15]",
     ],
-    "preserves :ID: and :CREATED: property lines",
+    "preserves :CUSTOM_ID: and :CREATED: property lines",
   );
 }
 
@@ -99,7 +101,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* DONE [#B] Task two",
     ":PROPERTIES:",
-    ":ID: 22222222-3333-4444-8555-666666666666",
+    ":CUSTOM_ID: 22222222-3333-4444-8555-666666666666",
     ":END:",
     "CLOSED: [2026-04-25 Sat 12:00]",
     "Some description.",
@@ -118,7 +120,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const inputBelow = [
     "* DONE [#B] Round-trip",
     ":PROPERTIES:",
-    ":ID: 33333333-4444-4555-8666-777777777777",
+    ":CUSTOM_ID: 33333333-4444-4555-8666-777777777777",
     ":END:",
     "CLOSED: [2026-04-25 Sat 12:00]",
     "",
@@ -140,7 +142,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO New task",
     ":PROPERTIES:",
-    ":ID: 44444444-5555-4666-8777-888888888888",
+    ":CUSTOM_ID: 44444444-5555-4666-8777-888888888888",
     ":CREATED: [2026-04-28 Tue 10:49]",
     ":END:",
     "",
@@ -158,12 +160,12 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "** DONE First archived task",
     ":PROPERTIES:",
-    ":ID: 55555555-6666-4777-8888-999999999991",
+    ":CUSTOM_ID: 55555555-6666-4777-8888-999999999991",
     ":END:",
     "Body.",
     "** DONE Second archived task",
     ":PROPERTIES:",
-    ":ID: 55555555-6666-4777-8888-999999999992",
+    ":CUSTOM_ID: 55555555-6666-4777-8888-999999999992",
     ":END:",
     "",
   ].join("\n");
@@ -180,7 +182,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* STARTED Task with history",
     ":PROPERTIES:",
-    ":ID: 55555555-6666-4777-8888-999999999999",
+    ":CUSTOM_ID: 55555555-6666-4777-8888-999999999999",
     ":END:",
     ":LOGBOOK:",
     "- Created [2026-04-28 Tue 10:49]",
@@ -227,7 +229,7 @@ function assertContains(haystack: string, needle: string, message: string): void
       tags: [],
       description: "",
       children: [],
-      propertyLines: [":ID: 80ea589b-501c-42d9-86e7-4d414c0c314e"],
+      propertyLines: [":CUSTOM_ID: 80ea589b-501c-42d9-86e7-4d414c0c314e"],
       logbookLines: [],
       importPath: null,
       importRaw: null,
@@ -239,7 +241,7 @@ function assertContains(haystack: string, needle: string, message: string): void
     const expected = [
       "#+TITLE: Refine org-memory protocol",
       "#+DATE: 2026-04-28 Tue",
-      "#+PARENT_ID: 80ea589b-501c-42d9-86e7-4d414c0c314e",
+      "#+PARENT: [[file:../../TASKS.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Refine org-memory protocol]]",
       "#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)",
       "",
       "* Context",
@@ -258,6 +260,44 @@ function assertContains(haystack: string, needle: string, message: string): void
   }
 }
 
+{
+  const fixture: Task = {
+    level: 2,
+    status: "TODO",
+    priority: null,
+    summary: "Unsafe ] summary",
+    tags: [],
+    description: "",
+    children: [],
+    propertyLines: [":CUSTOM_ID: 80ea589b-501c-42d9-86e7-4d414c0c314e"],
+    logbookLines: [],
+    importPath: null,
+    importRaw: null,
+    isLocal: false,
+    closed: null,
+    lineNumber: 0,
+    endLine: 0,
+  };
+  const actual = scaffoldPlan(fixture, { tasksFileRelPath: "../TASKS.org" });
+  assertContains(actual, "#+PARENT: [[file:../TASKS.org::#80ea589b-501c-42d9-86e7-4d414c0c314e]]",
+    "scaffoldPlan omits unsafe parent-link descriptions and honours custom task-file path");
+}
+
+{
+  const content = "#+PARENT: [[file:../../TASKS.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]\n";
+  assertEqual(getPlanParentId(content), "80ea589b-501c-42d9-86e7-4d414c0c314e",
+    "getPlanParentId extracts a parent UUID from a navigable parent link");
+  assertEqual(
+    rewriteParentLinkTaskFile(
+      `${content}[[file:../../TASKS.org::#other][Other]]\n`,
+      "80ea589b-501c-42d9-86e7-4d414c0c314e",
+      "../../TASKS.archive.org",
+    ),
+    "#+PARENT: [[file:../../TASKS.archive.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]\n[[file:../../TASKS.org::#other][Other]]\n",
+    "rewriteParentLinkTaskFile rewrites only the matching #+PARENT link target",
+  );
+}
+
 // ── Generic round-trip: unknown #+ keywords + drawer properties ──────
 //
 // Third-party extensions (e.g. `jira`) build on the contract that the
@@ -273,7 +313,7 @@ function assertContains(haystack: string, needle: string, message: string): void
     "",
     "* TODO Top-level",
     ":PROPERTIES:",
-    ":ID: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    ":CUSTOM_ID: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
     ":FOO_BAZ: alpha beta",
     ":NS_ZIM: gamma",
     ":END:",
@@ -332,7 +372,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO Generic-helper subject",
     ":PROPERTIES:",
-    ":ID: cccccccc-dddd-4eee-8fff-000011112222",
+    ":CUSTOM_ID: cccccccc-dddd-4eee-8fff-000011112222",
     ":FOO_BAZ: original value",
     ":END:",
     "",
@@ -450,7 +490,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO Mixed bare-key and org-link tokens",
     ":PROPERTIES:",
-    ":ID: dddddddd-eeee-4fff-8000-111122223333",
+    ":CUSTOM_ID: dddddddd-eeee-4fff-8000-111122223333",
     ":LINKED_ISSUES: MBFW-123 MBE-45 [[https://github.com/foo/bar/issues/42][gh#42]]",
     ":END:",
     "",
@@ -496,7 +536,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO Bare keys without template",
     ":PROPERTIES:",
-    ":ID: eeeeeeee-ffff-4000-8111-222233334444",
+    ":CUSTOM_ID: eeeeeeee-ffff-4000-8111-222233334444",
     ":LINKED_ISSUES: MBFW-123",
     ":END:",
     "",
@@ -516,7 +556,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO No linked issues",
     ":PROPERTIES:",
-    ":ID: ffffffff-0000-4111-8222-333344445555",
+    ":CUSTOM_ID: ffffffff-0000-4111-8222-333344445555",
     ":END:",
     "",
   ].join("\n");
@@ -530,7 +570,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO Set property",
     ":PROPERTIES:",
-    ":ID: 00112233-4455-4666-8777-8899aabbccdd",
+    ":CUSTOM_ID: 00112233-4455-4666-8777-8899aabbccdd",
     ":END:",
     "",
   ].join("\n");
@@ -558,7 +598,7 @@ function assertContains(haystack: string, needle: string, message: string): void
     "",
     "* TODO Round-trip",
     ":PROPERTIES:",
-    ":ID: 11223344-5566-4777-8888-99aabbccddee",
+    ":CUSTOM_ID: 11223344-5566-4777-8888-99aabbccddee",
     ":LINKED_ISSUES: MBFW-123 [[https://x/y][y]]",
     ":END:",
     "Body.",
@@ -585,7 +625,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* WAITING [#C] Single blocker :nix:",
     ":PROPERTIES:",
-    ":ID: aaaa1111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: aaaa1111-2222-4333-8444-555555555555",
     ":BLOCKED-BY: url:https://example.com/pr/1",
     ":END:",
     "",
@@ -614,7 +654,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO [#C] Multi blocker",
     ":PROPERTIES:",
-    ":ID: bbbb1111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: bbbb1111-2222-4333-8444-555555555555",
     ":BLOCKED-BY: task:cccc1111-2222-4333-8444-555555555555",
     ":BLOCKED-BY+: url:https://example.com/pr/2",
     ":BLOCKED-BY+: human: waiting on Alice",
@@ -638,7 +678,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO Replace blockers",
     ":PROPERTIES:",
-    ":ID: dddd1111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: dddd1111-2222-4333-8444-555555555555",
     ":BLOCKED-BY: task:old-1",
     ":BLOCKED-BY+: task:old-2",
     ":END:",
@@ -694,7 +734,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO With blockers",
     ":PROPERTIES:",
-    ":ID: eeee1111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: eeee1111-2222-4333-8444-555555555555",
     ":BLOCKED-BY: task:dep-1",
     ":BLOCKED-BY+: human: review pending",
     ":END:",
@@ -711,7 +751,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO Setter",
     ":PROPERTIES:",
-    ":ID: ffff1111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: ffff1111-2222-4333-8444-555555555555",
     ":END:",
     "",
   ].join("\n");
@@ -734,7 +774,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO Solo",
     ":PROPERTIES:",
-    ":ID: 1111aaaa-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 1111aaaa-2222-4333-8444-555555555555",
     ":END:",
     "",
   ].join("\n");
@@ -748,19 +788,19 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* DONE Done dep",
     ":PROPERTIES:",
-    ":ID: 2222aaaa-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 2222aaaa-2222-4333-8444-555555555555",
     ":END:",
     "",
     "* TODO Gated",
     ":PROPERTIES:",
-    ":ID: 3333aaaa-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 3333aaaa-2222-4333-8444-555555555555",
     ":BLOCKED-BY: task:2222aaaa-2222-4333-8444-555555555555",
     ":END:",
     "",
   ].join("\n");
   const { tasks } = parseTasks(input);
   const byId = new Map<string | null, Task>(
-    tasks.map((t) => [getDrawerProperty(t, "ID"), t]));
+    tasks.map((t) => [getDrawerProperty(t, "CUSTOM_ID"), t]));
   const report = isTaskReady(tasks[1]!, (id) => byId.get(id) ?? null);
   assertEqual(report.ready, true,
     "isTaskReady: task: blocker resolving to DONE → ready");
@@ -770,19 +810,19 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO Open dep",
     ":PROPERTIES:",
-    ":ID: 4444aaaa-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 4444aaaa-2222-4333-8444-555555555555",
     ":END:",
     "",
     "* TODO Gated",
     ":PROPERTIES:",
-    ":ID: 5555aaaa-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 5555aaaa-2222-4333-8444-555555555555",
     ":BLOCKED-BY: task:4444aaaa-2222-4333-8444-555555555555",
     ":END:",
     "",
   ].join("\n");
   const { tasks } = parseTasks(input);
   const byId = new Map<string | null, Task>(
-    tasks.map((t) => [getDrawerProperty(t, "ID"), t]));
+    tasks.map((t) => [getDrawerProperty(t, "CUSTOM_ID"), t]));
   const report = isTaskReady(tasks[1]!, (id) => byId.get(id) ?? null);
   assertEqual(report.ready, false,
     "isTaskReady: open task: blocker → not ready");
@@ -795,7 +835,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO Gated",
     ":PROPERTIES:",
-    ":ID: 6666aaaa-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 6666aaaa-2222-4333-8444-555555555555",
     ":BLOCKED-BY: task:does-not-exist",
     ":END:",
     "",
@@ -811,7 +851,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* TODO Opaque",
     ":PROPERTIES:",
-    ":ID: 7777aaaa-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 7777aaaa-2222-4333-8444-555555555555",
     ":BLOCKED-BY: url:https://example.com/pr/1",
     ":BLOCKED-BY+: human: review pending",
     ":END:",
@@ -833,12 +873,12 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* DONE Closed dep",
     ":PROPERTIES:",
-    ":ID: 8888aaaa-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 8888aaaa-2222-4333-8444-555555555555",
     ":END:",
     "",
     "* TODO Mixed",
     ":PROPERTIES:",
-    ":ID: 9999aaaa-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 9999aaaa-2222-4333-8444-555555555555",
     ":BLOCKED-BY: task:8888aaaa-2222-4333-8444-555555555555",
     ":BLOCKED-BY+: url:https://example.com",
     ":END:",
@@ -846,7 +886,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   ].join("\n");
   const { tasks } = parseTasks(input);
   const byId = new Map<string | null, Task>(
-    tasks.map((t) => [getDrawerProperty(t, "ID"), t]));
+    tasks.map((t) => [getDrawerProperty(t, "CUSTOM_ID"), t]));
   const report = isTaskReady(tasks[1]!, (id) => byId.get(id) ?? null);
   assertEqual(report.ready, false,
     "isTaskReady: opaque blocker still gates even when task: dep is closed");
@@ -861,7 +901,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   const input = [
     "* STARTED Active",
     ":PROPERTIES:",
-    ":ID: hand1111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: hand1111-2222-4333-8444-555555555555",
     ":HANDOFF: Pick up at the parser delimiter test.",
     ":END:",
     "",

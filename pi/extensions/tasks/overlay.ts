@@ -69,7 +69,7 @@ interface FlatRow {
   depth: number;
   collapsed: boolean;
   hasChildren: boolean;
-  /** True when this task's :ID: matches the UUID in TASKS.local.org. */
+  /** True when this task's :CUSTOM_ID: matches the UUID in TASKS.local.org. */
   isSelectedTask: boolean;
   /** True when this task is inside the selected top-level task tree. */
   inSelection: boolean;
@@ -561,7 +561,7 @@ export class TasksOverlay {
     return this.findTaskById(this.tasks, this.selectedId);
   }
 
-  /** Find a task anywhere in the graph by its :ID: property value. */
+  /** Find a task anywhere in the graph by its :CUSTOM_ID: property value. */
   private findTaskById(tasks: Task[], id: string | null): Task | null {
     if (!id) return null;
     for (const t of tasks) {
@@ -618,7 +618,7 @@ export class TasksOverlay {
     if (!row) return;
     const target = row.task;
     const id = getTaskId(target);
-    if (!id) return; // Can't select a task with no :ID:
+    if (!id) return; // Can't select a task with no :CUSTOM_ID:
     const wasSelected = this.selectedId === id;
 
     // Update in-memory selection state.

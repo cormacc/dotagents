@@ -1,6 +1,6 @@
 #+TITLE: tasks-org: subtask absorption on plan create
 #+DATE: 2026-04-28 Tue
-#+PARENT_ID: f4a2c819-3e7d-4b08-a901-6d7c0e5b2f38
+#+PARENT: [[file:../../TASKS.archive.org::#f4a2c819-3e7d-4b08-a901-6d7c0e5b2f38][tasks-org: subtask absorption on plan create]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context

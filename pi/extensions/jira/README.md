@@ -80,7 +80,7 @@ keys are stored as **bare `PROJ-NNN` tokens**, not full org links — the
 ```org
 * TODO Refactor stim driver
 :PROPERTIES:
-:ID: 01234567-…
+:CUSTOM_ID: 01234567-…
 :LINKED_ISSUES: MBFW-123 MBE-45
 :END:
 ```

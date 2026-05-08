@@ -8,7 +8,7 @@
  * - Each priority bucket maps correctly (Highest/High/Medium/Low/Lowest).
  * - Missing/unknown priority yields no cookie.
  * - Labels render as `:foo:bar:` after the summary.
- * - Drawer ordering is :ID: → :CREATED: → :LINKED_ISSUES:.
+ * - Drawer ordering is :CUSTOM_ID: → :CREATED: → :LINKED_ISSUES:.
  * - Trailing newline hygiene: the assembled block ends in exactly one `\n`.
  *
  * Run: `tsx insert.test.ts` (or via `./test.sh`).
@@ -88,7 +88,7 @@ assertEqual(mapPriorityName("Critical"), null, "mapPriorityName: unknown → nul
   const expected = [
     "** TODO [#B] Add login flow :backend:auth:",
     ":PROPERTIES:",
-    `:ID: ${FIXED_ID}`,
+    `:CUSTOM_ID: ${FIXED_ID}`,
     `:CREATED: [${FIXED_TS}]`,
     ":LINKED_ISSUES: SAND-42 SAND-43",
     ":END:",
@@ -191,7 +191,7 @@ for (const [name, char] of priorityCases) {
   });
   assertEqual(out.drawer, [
     ":PROPERTIES:",
-    `:ID: ${FIXED_ID}`,
+    `:CUSTOM_ID: ${FIXED_ID}`,
     `:CREATED: [${FIXED_TS}]`,
     ":END:",
   ].join("\n"), "buildTaskBlock: drawer omits :LINKED_ISSUES: when empty");
@@ -223,15 +223,15 @@ for (const [name, char] of priorityCases) {
     id: FIXED_ID,
     createdAt: FIXED_TS,
   });
-  const idIdx = out.drawer.indexOf(":ID:");
+  const idIdx = out.drawer.indexOf(":CUSTOM_ID:");
   const createdIdx = out.drawer.indexOf(":CREATED:");
   const linkedIdx = out.drawer.indexOf(":LINKED_ISSUES:");
   if (idIdx < createdIdx && createdIdx < linkedIdx) {
     passed++;
-    console.log("ok - drawer ordering is :ID: → :CREATED: → :LINKED_ISSUES:");
+    console.log("ok - drawer ordering is :CUSTOM_ID: → :CREATED: → :LINKED_ISSUES:");
   } else {
     failed++;
-    console.log("not ok - drawer ordering should be :ID: → :CREATED: → :LINKED_ISSUES:");
+    console.log("not ok - drawer ordering should be :CUSTOM_ID: → :CREATED: → :LINKED_ISSUES:");
     console.log(`  drawer: ${out.drawer}`);
   }
 }
@@ -307,10 +307,10 @@ for (const [name, char] of priorityCases) {
   const out = buildTaskBlock({ summary: "S" });
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(out.id)) {
     passed++;
-    console.log("ok - default :ID: is a UUID v4");
+    console.log("ok - default :CUSTOM_ID: is a UUID v4");
   } else {
     failed++;
-    console.log(`not ok - default :ID: should be UUID v4, got ${out.id}`);
+    console.log(`not ok - default :CUSTOM_ID: should be UUID v4, got ${out.id}`);
   }
   if (/:CREATED: \[\d{4}-\d{2}-\d{2} \w{3} \d{2}:\d{2}\]/.test(out.drawer)) {
     passed++;
@@ -352,7 +352,7 @@ await withTempDir(async (dir) => {
       "* Improvements",
       "** TODO Pre-existing task",
       ":PROPERTIES:",
-      ":ID: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      ":CUSTOM_ID: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
       ":END:",
       "",
       "* Fixes",
@@ -387,12 +387,12 @@ await withTempDir(async (dir) => {
     "* Improvements",
     "** TODO Pre-existing task",
     ":PROPERTIES:",
-    ":ID: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    ":CUSTOM_ID: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
     ":END:",
     "",
     "** TODO [#B] Cloned from SAND-42 :backend:",
     ":PROPERTIES:",
-    `:ID: ${FIXED_ID}`,
+    `:CUSTOM_ID: ${FIXED_ID}`,
     `:CREATED: [${FIXED_TS}]`,
     ":LINKED_ISSUES: SAND-42",
     ":END:",
@@ -422,7 +422,7 @@ await withTempDir(async (dir) => {
       "* Improvements",
       "** TODO Already cloned",
       ":PROPERTIES:",
-      ":ID: 11111111-2222-4333-8444-555555555555",
+      ":CUSTOM_ID: 11111111-2222-4333-8444-555555555555",
       ":LINKED_ISSUES: SAND-42 SAND-43",
       ":END:",
       "",
@@ -444,7 +444,7 @@ await withTempDir(async (dir) => {
     "insertTaskIntoFile: refuses with status=duplicate when token already linked");
   if (result.status === "duplicate") {
     assertEqual(result.existingId, "11111111-2222-4333-8444-555555555555",
-      "insertTaskIntoFile: surfaces the existing task's :ID:");
+      "insertTaskIntoFile: surfaces the existing task's :CUSTOM_ID:");
     assertEqual(result.conflictingToken, "SAND-42",
       "insertTaskIntoFile: identifies the conflicting token");
   }
@@ -474,7 +474,7 @@ await withTempDir(async (dir) => {
       "* Drafts",
       "** TODO Local draft cloned from SAND-99",
       ":PROPERTIES:",
-      ":ID: 22222222-3333-4444-8555-666666666666",
+      ":CUSTOM_ID: 22222222-3333-4444-8555-666666666666",
       ":LINKED_ISSUES: SAND-99",
       ":END:",
       "",

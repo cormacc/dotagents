@@ -55,13 +55,13 @@ function count(findings: Finding[], code: FindingCode): number {
   const input = [
     "* TODO Healthy",
     ":PROPERTIES:",
-    ":ID: 11111111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 11111111-2222-4333-8444-555555555555",
     ":END:",
     "",
     "* DONE Closed",
     "CLOSED: [2026-04-25 Sat 12:00]",
     ":PROPERTIES:",
-    ":ID: 22222222-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: 22222222-2222-4333-8444-555555555555",
     ":END:",
     "",
   ].join("\n");
@@ -78,12 +78,12 @@ function count(findings: Finding[], code: FindingCode): number {
   const input = [
     "* TODO First",
     ":PROPERTIES:",
-    ":ID: dupe-aaaa-bbbb-cccc-dddddddddddd",
+    ":CUSTOM_ID: dupe-aaaa-bbbb-cccc-dddddddddddd",
     ":END:",
     "",
     "* TODO Second",
     ":PROPERTIES:",
-    ":ID: dupe-aaaa-bbbb-cccc-dddddddddddd",
+    ":CUSTOM_ID: dupe-aaaa-bbbb-cccc-dddddddddddd",
     ":END:",
     "",
   ].join("\n");
@@ -107,7 +107,7 @@ function count(findings: Finding[], code: FindingCode): number {
     tags: [],
     description: "",
     children: [],
-    propertyLines: [":ID: import-aaaa-bbbb-cccc-dddddddddddd"],
+    propertyLines: [":CUSTOM_ID: import-aaaa-bbbb-cccc-dddddddddddd"],
     logbookLines: [],
     importPath: "design/log/missing.org",
     importRaw: "[[file:design/log/missing.org]]",
@@ -133,7 +133,7 @@ function count(findings: Finding[], code: FindingCode): number {
   const input = [
     "* TODO Solo",
     ":PROPERTIES:",
-    ":ID: aaaa1111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: aaaa1111-2222-4333-8444-555555555555",
     ":END:",
     "",
   ].join("\n");
@@ -155,7 +155,7 @@ function count(findings: Finding[], code: FindingCode): number {
   const input = [
     "* TODO Solo",
     ":PROPERTIES:",
-    ":ID: bbbb1111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: bbbb1111-2222-4333-8444-555555555555",
     ":END:",
     "",
   ].join("\n");
@@ -174,12 +174,12 @@ function count(findings: Finding[], code: FindingCode): number {
   const input = [
     "* WAITING Bare wait",
     ":PROPERTIES:",
-    ":ID: cccc1111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: cccc1111-2222-4333-8444-555555555555",
     ":END:",
     "",
     "* WAITING With blocker",
     ":PROPERTIES:",
-    ":ID: dddd1111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: dddd1111-2222-4333-8444-555555555555",
     ":BLOCKED-BY: url:https://example.com",
     ":END:",
     "",
@@ -207,7 +207,7 @@ function count(findings: Finding[], code: FindingCode): number {
     tags: [],
     description: "",
     children: [],
-    propertyLines: [":ID: closed-aaaa-bbbb-cccc-dddddddddddd"],
+    propertyLines: [":CUSTOM_ID: closed-aaaa-bbbb-cccc-dddddddddddd"],
     logbookLines: [],
     importPath: null,
     importRaw: null,
@@ -228,7 +228,7 @@ function count(findings: Finding[], code: FindingCode): number {
     "* CANCELLED Done",
     "CLOSED: [2026-04-25 Sat 12:00]",
     ":PROPERTIES:",
-    ":ID: aaa11111-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: aaa11111-2222-4333-8444-555555555555",
     ":END:",
     "",
   ].join("\n");
@@ -245,11 +245,11 @@ function count(findings: Finding[], code: FindingCode): number {
   const input = [
     "* TODO Parent",
     ":PROPERTIES:",
-    ":ID: parent11-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: parent11-2222-4333-8444-555555555555",
     ":END:",
     "** STARTED Child",
     ":PROPERTIES:",
-    ":ID: childaa1-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: childaa1-2222-4333-8444-555555555555",
     ":END:",
     "",
   ].join("\n");
@@ -264,11 +264,11 @@ function count(findings: Finding[], code: FindingCode): number {
   const input = [
     "* TODO Parent",
     ":PROPERTIES:",
-    ":ID: parent22-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: parent22-2222-4333-8444-555555555555",
     ":END:",
     "** TODO Child",
     ":PROPERTIES:",
-    ":ID: childbb1-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: childbb1-2222-4333-8444-555555555555",
     ":END:",
     "",
   ].join("\n");
@@ -284,7 +284,7 @@ function count(findings: Finding[], code: FindingCode): number {
   const input = [
     "* TODO Refers to ghost",
     ":PROPERTIES:",
-    ":ID: ghost001-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: ghost001-2222-4333-8444-555555555555",
     ":BLOCKED-BY: task:does-not-exist-anywhere",
     ":BLOCKED-BY+: url:https://example.com",
     ":END:",
@@ -304,11 +304,11 @@ function count(findings: Finding[], code: FindingCode): number {
   const input = [
     "* DONE Real dep",
     ":PROPERTIES:",
-    ":ID: realdep1-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: realdep1-2222-4333-8444-555555555555",
     ":END:",
     "* TODO Gated",
     ":PROPERTIES:",
-    ":ID: gated001-2222-4333-8444-555555555555",
+    ":CUSTOM_ID: gated001-2222-4333-8444-555555555555",
     ":BLOCKED-BY: task:realdep1-2222-4333-8444-555555555555",
     ":END:",
     "",
@@ -325,7 +325,7 @@ function count(findings: Finding[], code: FindingCode): number {
   const f: Finding = {
     code: "duplicate-id",
     severity: "error",
-    message: "Duplicate :ID: foo (2 occurrences)",
+    message: "Duplicate :CUSTOM_ID: foo (2 occurrences)",
     location: { file: "/tmp/TASKS.org", line: 7, heading: "Some task" },
   };
   const line = formatFindingLine(f);

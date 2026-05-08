@@ -1,6 +1,6 @@
 #+TITLE: Task Overlay Bug Fixes
 #+DATE: 2026-04-27 Mon
-#+PARENT_ID: d36fe453-b8f8-4dfb-8ea6-5ed9d9eeee90
+#+PARENT: [[file:../../TASKS.archive.org::#d36fe453-b8f8-4dfb-8ea6-5ed9d9eeee90][Tasks overlay bugfixes :org-memory:org-tasks:tasks-extension:]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -34,7 +34,7 @@ workstream (=2026-04-25-tasks-emacs-integration.org=) was completed.
 
 ** DONE [#D] Fix compact widget not updating after selection toggle :extension:
 :PROPERTIES:
-:ID: 8e1f3c72-4a9d-4b15-a6c0-2d7e9f1b3c48
+:CUSTOM_ID: 8e1f3c72-4a9d-4b15-a6c0-2d7e9f1b3c48
 :END:
 When the user toggles =:selected:= inside the =/tasks= overlay, the
 compact widget above the editor (the "editor overlay") should reflect
@@ -56,7 +56,7 @@ Fix (=index.ts=):
   using the in-memory task state before calling =refreshTaskUi=.
 ** DONE [#D] Fix overlay cursor starting at top-level task :extension:
 :PROPERTIES:
-:ID: 3b7d5e91-6f2a-4c08-8e4b-1a9c0d7f2e35
+:CUSTOM_ID: 3b7d5e91-6f2a-4c08-8e4b-1a9c0d7f2e35
 :END:
 When the =/tasks= overlay opens, the cursor should land on the selected
 task (the one carrying =:selected:=). =focusSelectedTask()= is called in
@@ -79,7 +79,7 @@ remaining conditions correctly express the intended rules:
   completed non-ancestor tasks automatically.
 ** DONE [#D] Live-update editor overlay on external file changes :extension:
 :PROPERTIES:
-:ID: 1c4f8a2e-7d3b-4e19-9f5c-6a0b2d8e1f47
+:CUSTOM_ID: 1c4f8a2e-7d3b-4e19-9f5c-6a0b2d8e1f47
 :END:
 The original fix suppressed =refreshTaskUi='s =syncCompactWidget= call
 while the overlay was active but did nothing with the freshly-loaded

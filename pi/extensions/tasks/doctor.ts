@@ -9,7 +9,7 @@
  *
  * Checks implemented (see `Finding["code"]` for the canonical names):
  *
- *   - duplicate-id              :ID: collisions across the task graph
+ *   - duplicate-id              :CUSTOM_ID: collisions across the task graph
  *   - broken-import             #+IMPORT: with `importError` set
  *   - selected-not-found        TASKS.local.org #+SELECTED: UUID absent
  *   - waiting-without-blocker   WAITING task with no :BLOCKED-BY:
@@ -72,7 +72,7 @@ const ACTIVE_CHILD_STATUSES = new Set(["STARTED", "WAITING"]);
 /**
  * Recursively walk a task tree, yielding `{ task, parent }` pairs in
  * pre-order. Both `children` and `importChildren` are visited so the
- * walk covers every `:ID:`-bearing node in the loaded graph.
+ * walk covers every `:CUSTOM_ID:`-bearing node in the loaded graph.
  */
 function* walk(
   tasks: readonly Task[],
@@ -95,7 +95,7 @@ function locationFor(task: Task): Finding["location"] {
 }
 
 /**
- * Build a `:ID: → Task` map of every task in the graph. Repeated IDs are
+ * Build a `:CUSTOM_ID: → Task` map of every task in the graph. Repeated IDs are
  * tracked separately so the duplicate-id check can report all sites.
  */
 function buildIdIndex(tasks: readonly Task[]): {
@@ -130,7 +130,7 @@ export function runDoctor(input: DoctorInput): Finding[] {
       findings.push({
         code: "duplicate-id",
         severity: "error",
-        message: `Duplicate :ID: ${id} (${occurrences.length} occurrences)`,
+        message: `Duplicate :CUSTOM_ID: ${id} (${occurrences.length} occurrences)`,
         location: locationFor(occ),
       });
     }
@@ -143,7 +143,7 @@ export function runDoctor(input: DoctorInput): Finding[] {
       severity: "error",
       message:
         `TASKS.local.org #+SELECTED: ${input.selectedId} ` +
-        `does not match any :ID: in the loaded task graph`,
+        `does not match any :CUSTOM_ID: in the loaded task graph`,
       location: { file: input.selectedSourcePath },
     });
   }

@@ -70,7 +70,7 @@ const DRAWER_END_RE = /^\s*:END:\s*$/i;
 const PROPERTIES_END_RE = DRAWER_END_RE;
 /** Matches a `#+IMPORT:` keyword anywhere in a file (task body or root level). */
 const IMPORT_KEYWORD_RE = /^\s*#\+IMPORT:\s*(.*?)\s*$/i;
-const ID_PROPERTY_RE = /^\s*:ID:\s*(\S+)\s*$/i;
+const ID_PROPERTY_RE = /^\s*:CUSTOM_ID:\s*(\S+)\s*$/i;
 const STARTED_PROPERTY_RE = /^\s*:STARTED:\s*\[([^\]]+)\]\s*$/i;
 /**
  * Extract the target path from an org link expression:
@@ -224,7 +224,7 @@ export interface ParseTasksOptions {
   sourceContent?: string;
 }
 
-/** Return the org `:ID:` property value for a task, if present. */
+/** Return the org `:CUSTOM_ID:` property value for a task, if present. */
 export function getTaskId(task: Task): string | null {
   for (const line of task.propertyLines) {
     const match = ID_PROPERTY_RE.exec(line);
@@ -233,7 +233,7 @@ export function getTaskId(task: Task): string | null {
   return null;
 }
 
-/** True when a task already has an org `:ID:` property. */
+/** True when a task already has an org `:CUSTOM_ID:` property. */
 export function taskHasId(task: Task): boolean {
   return getTaskId(task) !== null;
 }
@@ -528,6 +528,43 @@ export function getFileKeyword(
   );
   const m = re.exec(content);
   return m?.[1] ?? null;
+}
+
+/** Extract the parent task UUID from a navigable `#+PARENT:` org link. */
+export function getPlanParentId(content: string): string | null {
+  const raw = getFileKeyword(content, "PARENT");
+  if (raw === null) return null;
+  const link = extractOrgLink(raw);
+  if (!link) return null;
+  const match = /(?:^|::)#([^\s#]+)\s*$/.exec(link.target);
+  return match?.[1]?.trim() || null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Rewrite only the task-file component of a plan's `#+PARENT:` link. */
+export function rewriteParentLinkTaskFile(
+  content: string,
+  parentId: string,
+  tasksFileRelPath: string,
+): string {
+  const id = escapeRegExp(parentId);
+  const parentLineRe = /^([\t ]*#\+PARENT:[\t ]*)(.*)$/i;
+  const linkTargetRe = new RegExp(
+    `(\\[\\[(?:file:)?)([^\\]]*?)(::#${id}(?:\\](?:\\[[^\\]]*\\])?))`,
+  );
+  const lines = content.split(/\r?\n/);
+  let changed = false;
+  const next = lines.map((line) => {
+    const parent = parentLineRe.exec(line);
+    if (!parent) return line;
+    const rewritten = parent[2]!.replace(linkTargetRe, `$1${tasksFileRelPath}$3`);
+    if (rewritten !== parent[2]) changed = true;
+    return `${parent[1]}${rewritten}`;
+  }).join("\n");
+  return changed ? next : content;
 }
 
 // ── Linked external issues (`:LINKED_ISSUES:` + `#+ISSUE_URL_BASE`) ───────

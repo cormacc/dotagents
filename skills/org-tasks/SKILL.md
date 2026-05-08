@@ -49,7 +49,7 @@ When the keyword is absent or malformed the default is
 
 | Item | Meaning | Where |
 |------|---------|-------|
-| `:ID:` | UUID v4; required on every task/subtask | `:PROPERTIES:` |
+| `:CUSTOM_ID:` | UUID v4; required on every task/subtask | `:PROPERTIES:` |
 | `:CREATED:` | creation timestamp; do not backfill existing tasks | `:PROPERTIES:` |
 | `:STARTED:` | first transition into `STARTED` | `:PROPERTIES:` |
 | `CLOSED:` | current close timestamp for `DONE`/`CANCELLED` | line above `:PROPERTIES:` |
@@ -64,7 +64,7 @@ When the keyword is absent or malformed the default is
 ```org
 ** TODO [#A] Implement feature :area:
 :PROPERTIES:
-:ID: 01234567-89ab-4def-8123-456789abcdef
+:CUSTOM_ID: 01234567-89ab-4def-8123-456789abcdef
 :CREATED: [2026-04-25 Sat 09:00]
 :END:
 :LOGBOOK:
@@ -81,7 +81,7 @@ Optional description text.
   especially top-level project tasks (`** ...` under category headings)
   and archived entries. Preserve readability spacing; do not let
   adjacent task headings run together.
-- **`:ID:`**: UUID v4, required on every task and subtask.
+- **`:CUSTOM_ID:`**: UUID v4, required on every task and subtask.
 - **`:CREATED:`**: `[YYYY-MM-DD Day HH:MM]`, set on creation. Do not
   backfill on existing tasks. Do not prefix the description with an
   inline `[YYYY-MM-DD Day]` creation marker — that role is owned by
@@ -143,7 +143,7 @@ computing them manually.
 
 ** TODO [#A] Implement authentication :backend:security:
 :PROPERTIES:
-:ID: 01234567-89ab-4def-8123-456789abcdef
+:CUSTOM_ID: 01234567-89ab-4def-8123-456789abcdef
 :CREATED: [2026-04-25 Sat 09:00]
 :END:
 :LOGBOOK:
@@ -156,7 +156,7 @@ Initial scope captured from user request.
 
 ** WAITING [#C] Update upstream dependency :nix:
 :PROPERTIES:
-:ID: fedcba98-7654-4321-8fed-cba987654321
+:CUSTOM_ID: fedcba98-7654-4321-8fed-cba987654321
 :CREATED: [2026-04-20 Mon 14:30]
 :BLOCKED-BY: url:https://github.com/example/project/pull/123
 :END:
@@ -166,7 +166,7 @@ Waiting on upstream merge.
 Keep `TASKS.org` high-level. Put detailed checklists and implementation
 history in change-record files. When existing `TASKS.org` subtasks are
 migrated into a new change-record, move the task subtrees into `* Plan`
-with their `:ID:` values intact and remove them from the parent
+with their `:CUSTOM_ID:` values intact and remove them from the parent
 `TASKS.org` subtree. The parent may keep a plain-text bullet summary,
 but only the moved plan nodes remain canonical task nodes.
 
@@ -181,7 +181,7 @@ The active task for a contributor is stored in a **gitignored**
 
 - `TASKS.local.org` is per-checkout and must be in `.gitignore`.
 - Absent file or empty `#+SELECTED:` value means "no selection".
-- Resolve the UUID against `:ID:` properties in the loaded task graph.
+- Resolve the UUID against `:CUSTOM_ID:` properties in the loaded task graph.
 - Writers must use atomic write-then-rename so file watchers never see
   a half-written file.
 
@@ -288,8 +288,9 @@ semantics, `paths.test.ts` covers import/scaffold sandboxing,
 - Prefer adding detail to change-records rather than bloating
   `TASKS.org`.
 - New change-records use `YYYY-MM-DD-short-task-name.org` under
-  `#+DEFAULT_PLAN_DIR` and declare `#+TITLE:`, `#+DATE:`, `#+PARENT_ID:`
-  (the parent task's `:ID:`), and the shared `#+TODO:` cycle.
+  `#+DEFAULT_PLAN_DIR` and declare `#+TITLE:`, `#+DATE:`, `#+PARENT:`
+  (a navigable `[[file:<rel>/TASKS.org::#<uuid>][summary]]` link to the
+  parent task's `:CUSTOM_ID:`), and the shared `#+TODO:` cycle.
 - Add discovered work as new `TODO` tasks rather than burying it in
   prose. Do not remove completed historical tasks unless asked.
 
@@ -297,7 +298,7 @@ semantics, `paths.test.ts` covers import/scaffold sandboxing,
 
 Only top-level `DONE`/`CANCELLED` tasks are archived. Archiving moves
 the complete subtree to `TASKS.archive.org` in the project root,
-preserves `:ID:` and content, and adds an `:ARCHIVED: [timestamp]`
+preserves `:CUSTOM_ID:` and content, and adds an `:ARCHIVED: [timestamp]`
 property. The `#+IMPORT:` link is preserved; plan file contents are
 not inlined.
 
@@ -307,7 +308,7 @@ If `TASKS.org` does not exist and the user wants persistent task
 memory: create it in the project root with `#+TITLE:`, the shared
 `#+TODO:`, and `#+DEFAULT_PLAN_DIR: [[file:./design/log]]`; add a
 semantic section (e.g. `* Improvements`) and the first actionable
-`TODO` with `:ID:` and `:CREATED:` properties. Detailed work items go
+`TODO` with `:CUSTOM_ID:` and `:CREATED:` properties. Detailed work items go
 in an included change-record under `#+DEFAULT_PLAN_DIR`.
 
 ## Extension points

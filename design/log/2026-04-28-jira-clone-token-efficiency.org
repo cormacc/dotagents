@@ -1,6 +1,6 @@
 #+TITLE: Token-efficient Jira clone workflow
 #+DATE: 2026-04-28 Tue
-#+PARENT_ID: 4ad4bb1b-9e74-48a0-9ce4-2d69639a8bc8
+#+PARENT: [[file:../../TASKS.archive.org::#4ad4bb1b-9e74-48a0-9ce4-2d69639a8bc8][Token-efficient Jira clone workflow]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
@@ -106,7 +106,7 @@ represent plan-only work units.
 ** DONE [#A] Shared ~tasks.insertTask~ API :tasks:
 CLOSED: [2026-04-28 Tue 16:44]
 :PROPERTIES:
-:ID: 6c2d4f8b-3a91-4e57-b04c-9d7d8a3a9b02
+:CUSTOM_ID: 6c2d4f8b-3a91-4e57-b04c-9d7d8a3a9b02
 :STARTED: [2026-04-28 Tue 16:34]
 :END:
 Factor the org-task rendering + file-insertion logic into a shared
@@ -117,7 +117,7 @@ executable units below.
 *** DONE [#A] Scaffold ~tasks.insertTask~ helper API + tests :tasks:
 CLOSED: [2026-04-28 Tue 16:42]
 :PROPERTIES:
-:ID: 3b03d011-c3c1-48a8-b999-55ad576f4fb4
+:CUSTOM_ID: 3b03d011-c3c1-48a8-b999-55ad576f4fb4
 :CREATED: [2026-04-28 Tue 15:52]
 :STARTED: [2026-04-28 Tue 16:34]
 :END:
@@ -146,7 +146,7 @@ assertions; existing assertions unchanged.
 *** DONE [#A] Implement file-side ~tasks.insertTask~ + idempotency :tasks:
 CLOSED: [2026-04-28 Tue 16:44]
 :PROPERTIES:
-:ID: f5aacdf5-1cc3-4be9-93ef-88dfe76edefd
+:CUSTOM_ID: f5aacdf5-1cc3-4be9-93ef-88dfe76edefd
 :CREATED: [2026-04-28 Tue 15:52]
 :STARTED: [2026-04-28 Tue 16:42]
 :END:
@@ -182,7 +182,7 @@ Acceptance:
 ** DONE [#A] Emission-side clone tool (re-scoped from two-step+cache) :jira:
 CLOSED: [2026-04-28 Tue 16:50]
 :PROPERTIES:
-:ID: 5a0b8c2e-f1a3-4d24-b6e8-6c1c2e9b1a01
+:CUSTOM_ID: 5a0b8c2e-f1a3-4d24-b6e8-6c1c2e9b1a01
 :STARTED: [2026-04-28 Tue 16:44]
 :END:
 Re-scoped at plan time: the original task body proposed an
@@ -194,7 +194,7 @@ dispatch.
 *** DONE [#A] Implement ~jira_clone_apply~ tool :jira:
 CLOSED: [2026-04-28 Tue 16:48]
 :PROPERTIES:
-:ID: c7fc5b20-edad-4440-9419-26cdf6f7790b
+:CUSTOM_ID: c7fc5b20-edad-4440-9419-26cdf6f7790b
 :CREATED: [2026-04-28 Tue 15:52]
 :STARTED: [2026-04-28 Tue 16:44]
 :END:
@@ -224,7 +224,7 @@ tasks-side tests.
 *** DONE [#B] Two-step ~/jira clone~ dispatch :jira:
 CLOSED: [2026-04-28 Tue 16:50]
 :PROPERTIES:
-:ID: b5162966-57a6-467f-ba23-b5221de5e443
+:CUSTOM_ID: b5162966-57a6-467f-ba23-b5221de5e443
 :CREATED: [2026-04-28 Tue 15:52]
 :STARTED: [2026-04-28 Tue 16:48]
 :END:
@@ -252,7 +252,7 @@ visibly fewer model emissions (rough token measurement noted in
 ** DONE [#C] ~/jira get KEY~ ergonomics subcommand :jira:
 CLOSED: [2026-04-28 Tue 16:52]
 :PROPERTIES:
-:ID: 8a7d832c-03e0-443d-b359-f158e8e47983
+:CUSTOM_ID: 8a7d832c-03e0-443d-b359-f158e8e47983
 :STARTED: [2026-04-28 Tue 16:50]
 :END:
 Landed as ~buildGetPrompt~ in ~jira/utils.ts~ + ~/jira get~ subcommand wired in ~index.ts~. Reuses ~resolveKey~ + cloudId resolution + the same field filter as the
@@ -280,7 +280,7 @@ the rendered block is human-readable.
 ** DONE [#C] Documentation + retrospective measurement :docs:
 CLOSED: [2026-04-28 Tue 16:54]
 :PROPERTIES:
-:ID: 4bf3bcb0-d881-4a65-9050-10de89c4a3c6
+:CUSTOM_ID: 4bf3bcb0-d881-4a65-9050-10de89c4a3c6
 :CREATED: [2026-04-28 Tue 15:52]
 :STARTED: [2026-04-28 Tue 16:52]
 :END:

@@ -1,6 +1,6 @@
 #+TITLE: Review org-memory protocol as agent memory
 #+DATE: 2026-05-01 Fri
-#+PARENT_ID: 724c0332-e491-4b66-900f-e11478057eb1
+#+PARENT: [[file:../../TASKS.archive.org::#724c0332-e491-4b66-900f-e11478057eb1][Review org-memory protocol as agent memory]]
 #+STATUS: Complete
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
@@ -63,7 +63,7 @@ legacy task data.
 ** DONE [#A] Make subtask-migration the canonical identity behaviour in the protocol :protocol:identity:
 CLOSED: [2026-05-01 Fri 10:23]
 :PROPERTIES:
-:ID: a548e995-d923-4006-8a30-b26c597f19f6
+:CUSTOM_ID: a548e995-d923-4006-8a30-b26c597f19f6
 :CREATED: [2026-05-01 Fri 08:51]
 :STARTED: [2026-05-01 Fri 09:41]
 :END:
@@ -91,7 +91,7 @@ Validation:
 ** DONE [#A] Define lifecycle LOGBOOK and timestamp semantics :protocol:timestamps:
 CLOSED: [2026-05-01 Fri 10:23]
 :PROPERTIES:
-:ID: 5b98e7a6-99d6-41be-8e66-0574c185b6b1
+:CUSTOM_ID: 5b98e7a6-99d6-41be-8e66-0574c185b6b1
 :CREATED: [2026-05-01 Fri 08:51]
 :STARTED: [2026-05-01 Fri 09:41]
 :END:
@@ -120,7 +120,7 @@ Acceptance criteria:
 ** DONE [#B] Enforce lifecycle LOGBOOK in the tasks extension and tests :timestamps:tooling:
 CLOSED: [2026-05-05 Tue 22:01]
 :PROPERTIES:
-:ID: df56da09-db3e-40ac-8dc8-4da96670f0d8
+:CUSTOM_ID: df56da09-db3e-40ac-8dc8-4da96670f0d8
 :CREATED: [2026-05-01 Fri 08:51]
 :STARTED: [2026-05-01 Fri 09:41]
 :END:
@@ -147,7 +147,7 @@ Acceptance criteria:
 ** DONE [#B] Propagate lifecycle LOGBOOK conventions into org-plan guidance :plan:timestamps:
 CLOSED: [2026-05-01 Fri 10:23]
 :PROPERTIES:
-:ID: bd8c6b11-9d8b-480e-9715-dab93f91ae14
+:CUSTOM_ID: bd8c6b11-9d8b-480e-9715-dab93f91ae14
 :CREATED: [2026-05-01 Fri 08:51]
 :STARTED: [2026-05-01 Fri 09:41]
 :END:
@@ -169,7 +169,7 @@ Acceptance criteria:
 ** DONE [#B] Sandbox `#+IMPORT:` and scaffolded plan paths :security:protocol:
 CLOSED: [2026-05-05 Tue 22:01]
 :PROPERTIES:
-:ID: 89f529bd-b282-43b1-854e-a5a5deaa6cda
+:CUSTOM_ID: 89f529bd-b282-43b1-854e-a5a5deaa6cda
 :CREATED: [2026-05-01 Fri 08:51]
 :STARTED: [2026-05-01 Fri 09:41]
 :END:
@@ -194,7 +194,7 @@ Acceptance criteria:
 ** DONE [#C] Document linked-issue URL trust boundary and audit opener :security:docs:
 CLOSED: [2026-05-01 Fri 10:23]
 :PROPERTIES:
-:ID: 7413a856-3dcf-4c8d-8bb6-eb0538fd5707
+:CUSTOM_ID: 7413a856-3dcf-4c8d-8bb6-eb0538fd5707
 :CREATED: [2026-05-01 Fri 08:51]
 :STARTED: [2026-05-01 Fri 09:41]
 :END:
@@ -212,7 +212,7 @@ Acceptance criteria:
 ** DONE [#C] Extract legacy metadata compatibility policy :compatibility:followup:
 CLOSED: [2026-05-05 Tue 22:05]
 :PROPERTIES:
-:ID: cb04c07b-d513-4001-b072-187a561cc753
+:CUSTOM_ID: cb04c07b-d513-4001-b072-187a561cc753
 :CREATED: [2026-05-01 Fri 08:51]
 :END:
 :LOGBOOK:
@@ -227,7 +227,7 @@ metadata, doctor warnings, and optional normalization.
 ** DONE [#B] Write agent-memory resume + reconstruction guidance :memory:docs:
 CLOSED: [2026-05-01 Fri 10:23]
 :PROPERTIES:
-:ID: 7f1d0f91-24bf-4eea-9b00-79727517c4b2
+:CUSTOM_ID: 7f1d0f91-24bf-4eea-9b00-79727517c4b2
 :CREATED: [2026-05-01 Fri 08:51]
 :STARTED: [2026-05-01 Fri 09:41]
 :END:
@@ -248,7 +248,7 @@ Acceptance criteria:
 ** DONE [#B] Add agent-memory regression tests :memory:tests:
 CLOSED: [2026-05-05 Tue 22:01]
 :PROPERTIES:
-:ID: 69836e04-f4ff-4f8a-b538-234ef8109659
+:CUSTOM_ID: 69836e04-f4ff-4f8a-b538-234ef8109659
 :CREATED: [2026-05-01 Fri 08:51]
 :STARTED: [2026-05-01 Fri 09:41]
 :END:
@@ -275,7 +275,7 @@ Acceptance criteria:
 ** DONE [#C] Extract Jira-specific follow-up work :jira:followup:
 CLOSED: [2026-05-05 Tue 21:51]
 :PROPERTIES:
-:ID: 0dabf5d7-b925-4187-9f1a-22d9e539e757
+:CUSTOM_ID: 0dabf5d7-b925-4187-9f1a-22d9e539e757
 :CREATED: [2026-05-05 Tue 21:51]
 :END:
 :LOGBOOK:

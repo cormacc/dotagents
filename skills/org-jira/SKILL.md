@@ -30,7 +30,7 @@ Jira keys are stored as **bare `PROJ-NNN` tokens** in the generic
 ```org
 * TODO Refactor stim driver
 :PROPERTIES:
-:ID: 01234567-89ab-4def-8123-456789abcdef
+:CUSTOM_ID: 01234567-89ab-4def-8123-456789abcdef
 :LINKED_ISSUES: MBFW-123 MBE-45
 :END:
 ```
@@ -174,7 +174,7 @@ Procedure for each Jira-shaped token:
      status. Use this list to seed `** Design decisions` or to derive
      fresh level-2 `* Plan` headings when the user wants the plan to
      track Jira decomposition one-to-one. Jira keys are never org
-     `:ID:` values; Jira-derived plan tasks get normal UUIDs and link
+     `:CUSTOM_ID:` values; Jira-derived plan tasks get normal UUIDs and link
      back via `:LINKED_ISSUES:`.
    - Note any `Blocks` / `is blocked by` relationships in `* Context`
      so dependencies are visible at planning time.

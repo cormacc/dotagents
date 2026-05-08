@@ -1,6 +1,6 @@
 #+TITLE: Define legacy org-task metadata tolerance and normalization
 #+DATE: 2026-05-05 Tue
-#+PARENT_ID: 972d5cec-0606-44e3-8276-4c7d12349cde
+#+PARENT: [[file:../../TASKS.org::#972d5cec-0606-44e3-8276-4c7d12349cde][Define legacy org-task metadata tolerance and normalization :org-memory:compatibility:followup:]]
 #+STATUS: Draft
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
@@ -40,7 +40,7 @@ the completed org-memory review.
 
 ** TODO [#B] Specify legacy read tolerance vs new-write requirements :docs:protocol:
 :PROPERTIES:
-:ID: 6fa1a8d7-9049-449b-a2a5-8dcbe3ab1c00
+:CUSTOM_ID: 6fa1a8d7-9049-449b-a2a5-8dcbe3ab1c00
 :CREATED: [2026-05-05 Tue 22:05]
 :END:
 Acceptance criteria:
@@ -54,7 +54,7 @@ Acceptance criteria:
   repair behaviour.
 ** TODO [#B] Add doctor diagnostics for legacy metadata :tasks:doctor:
 :PROPERTIES:
-:ID: 21260c85-5513-4680-95fa-088b6770c5fd
+:CUSTOM_ID: 21260c85-5513-4680-95fa-088b6770c5fd
 :CREATED: [2026-05-05 Tue 22:05]
 :END:
 Acceptance criteria:
@@ -67,7 +67,7 @@ Acceptance criteria:
   missing-ID behaviour is chosen.
 ** TODO [#C] Decide and document a one-time normalization flow :tasks:compatibility:
 :PROPERTIES:
-:ID: 138e019c-5233-451b-b33d-e7df1406ed24
+:CUSTOM_ID: 138e019c-5233-451b-b33d-e7df1406ed24
 :CREATED: [2026-05-05 Tue 22:05]
 :END:
 Acceptance criteria:
@@ -81,7 +81,7 @@ Acceptance criteria:
 - README explains that normalization is opt-in and may cause file churn.
 ** TODO [#C] Implement normalization only if the policy calls for it :tasks:tooling:
 :PROPERTIES:
-:ID: 7dd51187-45a5-4924-b2af-ff0cec903913
+:CUSTOM_ID: 7dd51187-45a5-4924-b2af-ff0cec903913
 :CREATED: [2026-05-05 Tue 22:05]
 :END:
 Acceptance criteria:

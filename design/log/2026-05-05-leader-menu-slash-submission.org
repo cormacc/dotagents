@@ -1,6 +1,6 @@
 #+TITLE: leader-menu owns slash-command submission via shared CustomEditor
 #+DATE: 2026-05-05 Tue
-#+PARENT_ID: c22975ff-5ea8-47d4-807e-6499f2ea6970
+#+PARENT: [[file:../../TASKS.archive.org::#c22975ff-5ea8-47d4-807e-6499f2ea6970][leader-menu: fix slash command dispatch :leader-menu:]]
 #+STATUS: Active
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
@@ -107,7 +107,7 @@ without a cross-extension import.
 ** DONE [#A] Add =SubmitterEditor= shared base in =extensions/lib/editor.ts= :leader-menu:vim-mode:lib:
 CLOSED: [2026-05-05 Tue 20:55]
 :PROPERTIES:
-:ID: 13b7d7f2-3657-4aa4-b995-5608e23c0910
+:CUSTOM_ID: 13b7d7f2-3657-4aa4-b995-5608e23c0910
 :CREATED: [2026-05-05 Tue 18:08]
 :STARTED: [2026-05-05 Tue 20:51]
 :END:
@@ -137,7 +137,7 @@ Implementation notes:
 ** DONE [#A] leader-menu: install =SubmitterEditor= unconditionally; route =command:= via =submitCommand= :leader-menu:editor:
 CLOSED: [2026-05-05 Tue 21:00]
 :PROPERTIES:
-:ID: b21fa068-0e3e-4b3d-b052-2f5d092e9077
+:CUSTOM_ID: b21fa068-0e3e-4b3d-b052-2f5d092e9077
 :CREATED: [2026-05-05 Tue 18:08]
 :STARTED: [2026-05-05 Tue 20:55]
 :END:
@@ -163,7 +163,7 @@ Acceptance criteria:
 ** DONE [#B] leader-menu: documentation + AGENTS.md scope update :leader-menu:docs:
 CLOSED: [2026-05-05 Tue 21:05]
 :PROPERTIES:
-:ID: 643d2933-b22b-4d7c-8310-f122a3e3e7c1
+:CUSTOM_ID: 643d2933-b22b-4d7c-8310-f122a3e3e7c1
 :CREATED: [2026-05-05 Tue 18:08]
 :STARTED: [2026-05-05 Tue 21:02]
 :END:
@@ -190,7 +190,7 @@ Acceptance criteria:
 ** DONE [#A] vim-mode: =VimEditor extends SubmitterEditor=; remove =submitCommand= duplicate :vim-mode:editor:
 CLOSED: [2026-05-05 Tue 21:02]
 :PROPERTIES:
-:ID: 505ddf2b-f91a-4864-9aa7-df2a86e00912
+:CUSTOM_ID: 505ddf2b-f91a-4864-9aa7-df2a86e00912
 :CREATED: [2026-05-05 Tue 18:08]
 :STARTED: [2026-05-05 Tue 21:00]
 :END:
@@ -213,7 +213,7 @@ Acceptance criteria:
 ** DONE [#B] vim-mode: documentation pass :vim-mode:docs:
 CLOSED: [2026-05-05 Tue 21:08]
 :PROPERTIES:
-:ID: 3bbb3c4f-a47f-49c2-a173-66659f10c90e
+:CUSTOM_ID: 3bbb3c4f-a47f-49c2-a173-66659f10c90e
 :CREATED: [2026-05-05 Tue 18:08]
 :STARTED: [2026-05-05 Tue 21:05]
 :END:
@@ -235,7 +235,7 @@ Acceptance criteria:
 ** DONE [#B] Verify: build + interactive smoke test :leader-menu:test:
 CLOSED: [2026-05-05 Tue 21:29]
 :PROPERTIES:
-:ID: 00f558a1-b182-4d94-a5a5-26654785b3bf
+:CUSTOM_ID: 00f558a1-b182-4d94-a5a5-26654785b3bf
 :CREATED: [2026-05-05 Tue 18:08]
 :STARTED: [2026-05-05 Tue 21:08]
 :END:
@@ -269,7 +269,7 @@ Acceptance criteria:
 ** DONE [#A] Invert leader-menu → vim-mode coupling: leader-menu owns no vim knowledge :leader-menu:vim-mode:docs:editor:
 CLOSED: [2026-05-05 Tue 21:35]
 :PROPERTIES:
-:ID: 9d2c4f10-9c0e-4d3a-8e76-b3a2c1f0a4d2
+:CUSTOM_ID: 9d2c4f10-9c0e-4d3a-8e76-b3a2c1f0a4d2
 :CREATED: [2026-05-05 Tue 21:20]
 :STARTED: [2026-05-05 Tue 21:20]
 :END:
@@ -302,7 +302,7 @@ Acceptance criteria:
 ** DONE [#C] Capture follow-up: re-enable vim-mode under the new architecture :vim-mode:followup:
 CLOSED: [2026-05-05 Tue 21:10]
 :PROPERTIES:
-:ID: aef78bbe-f711-4647-b901-54e0d75fc1a1
+:CUSTOM_ID: aef78bbe-f711-4647-b901-54e0d75fc1a1
 :CREATED: [2026-05-05 Tue 18:08]
 :END:
 :LOGBOOK:
