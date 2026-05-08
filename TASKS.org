@@ -20,6 +20,7 @@
 - [[#fixes][Fixes]]
 - [[#housekeeping][Housekeeping]]
 - [[#agent-feedback][Agent feedback]]
+- [[#org-memory----make-parent_id-property-navigable][org-memory -- make PARENT_ID property navigable]]
 
 * Improvements
 
@@ -281,3 +282,28 @@ install but committed as-is). The remaining concern only applies to
 *future* installed skills we don't want to vendor — for those, either
 use `.git/info/exclude` (per-clone) instead of `.gitignore`, or pursue
 the upstream pi fix. Lower priority than originally filed.
+
+** TODO Document no-hard-wrapping convention for org task content :skill_org-tasks:skill_org-plan:
+:PROPERTIES:
+:ID: 51e61638-c311-4986-b602-98fddaa4d8e0
+:CREATED: [2026-05-08 Fri 11:25]
+:END:
+:LOGBOOK:
+- Created [2026-05-08 Fri 11:25]
+:END:
+Friction reported from session subagent-chat-019e06e5: agents hard-wrap generated org prose in TASKS.org entries and change-records under design/log, but the preferred convention is one narrative paragraph per logical line so Emacs/org-mode can apply reader-local soft wrapping. Update org-tasks/SKILL.md, and cross-reference from org-plan/SKILL.md because both flows generate change-records. The convention should apply to narrative paragraph prose only; headings, list bullets, drawer lines, property values, code blocks, and tables are not subject to the rule.
+
+Suggested wording: **Wrapping**: do not hard-wrap prose paragraphs in generated org content. One paragraph = one logical line. Readers configure their own soft-wrap (visual-line-mode, org-startup-truncated nil, Emacs fill-column). Hard wrapping at an agent-chosen column makes diffs noisy when the convention changes and is redundant with org's display-time wrapping.
+
+Origin: /home/cormacc/nmd/products/connect/portal on branch fix-org-user-association-errors, git@gitlab.com:lenire-tinnitus-treatment/portal.git, timestamp [2026-05-08 Fri 11:15]. Triggering quote: "Better yet, don't wrap at all - let emacs/org mode apply its own softwrapping configuration. Record the decision globally at org-tasks skill level."
+* TODO org-memory -- make PARENT_ID property navigable
+:PROPERTIES:
+:ID: 69e24b8a-d86a-4c1e-b4bf-d19f8d2b56b7
+:CREATED: [2026-05-08 Fri 11:31]
+:END:
+:LOGBOOK:
+- Created [2026-05-08 Fri 11:31]
+:END:
+#+IMPORT: [[file:design/log/2026-05-08-custom-id-and-parent-link.org]]
+The +IMPORT makes it easy to navigate from a task to its linked plan, but not to reverse the direction of travel.
+Would it make sense to store task ID as a NAME or CUSTOM_ID property instead, and a plan could embed a navigable org-mode anchor link as #+PARENT instead of the current un-navigable #+PARENT_ID
