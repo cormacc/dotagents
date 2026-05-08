@@ -30,7 +30,7 @@ Paths are in the system prompt under "Additional docs" and "Examples".
 ## Guidelines
 
 - **Shared utilities** :: check `extensions/lib/*.ts` for reusable helpers
-  (e.g. `getExtensionName`, `registerLeaderMenu`) before writing new code.
+  (e.g. `getExtensionName`) before writing new code.
 - **Extension structure** :: single-file extensions go in `extensions/foo.ts`;
   multi-file extensions go in `extensions/foo/index.ts` with supporting modules.
 - **Imports** :: use `@mariozechner/pi-coding-agent` for the extension API,
@@ -45,33 +45,19 @@ Paths are in the system prompt under "Additional docs" and "Examples".
 
 ## Events, Commands & Keybindings
 
-Extensions should expose their actions via **events on `pi.events`** under a
-common prefix (e.g. `term:toggle`, `term:prev`). Three layers wire them up:
+Extensions should expose reusable actions via **events on `pi.events`** under a common prefix (e.g. `term:toggle`, `term:prev`). Slash commands, shortcuts, tools, and other extensions should dispatch those same events instead of duplicating action logic.
+
+Typical layers:
 
 1. **Event listeners** — implement the action, registered with `pi.events.on`.
-2. **Slash command** — parses subcommands and dispatches via
-   `pi.events.emit("ext:action")`. This is the user-facing entry point.
-3. **Leader-menu contributions** — registered with the `leader-menu`
-   extension via `registerLeaderMenu`. Each binding uses the event name as
-   its `action` (e.g. `action: "foo:toggle"`). The `leader-menu` extension
-   treats any action without a `command:` or `passthrough:` prefix as an
-   event and emits it directly.
+2. **Slash command** — parses subcommands and dispatches via `pi.events.emit("ext:action")`. This is the stable user-facing entry point.
+3. **Optional shortcuts** — register direct shortcuts with `pi.registerShortcut(...)` only for actions that are worth a global key. Prefer documenting suggested bindings when the action is optional or potentially conflicting.
 
-This means the event listener is the single source of truth. The slash command,
-keybindings, global shortcuts, and other extensions all go through the same
-event. Cross-extension invocation works naturally — any extension can
-`pi.events.emit("term:run", { command: "..." })` without importing anything.
+The event listener remains the single source of truth. Cross-extension invocation works naturally — any extension can `pi.events.emit("term:run", { command: "..." })` without importing another extension.
 
 ### Pattern
 
 ```typescript
-import { getExtensionName, registerLeaderMenu } from "../lib/pi-utils.js";
-
-const EXT_NAME = getExtensionName(import.meta.url);
-
-/** Cleanup handle for the leader-menu registration, to avoid duplicates on reload. */
-let cleanupKb: (() => void) | null = null;
-
 export default function (pi: ExtensionAPI) {
   pi.on("session_start", async () => {
     // ── 1. Action helpers ────────────────────────────────
@@ -108,20 +94,12 @@ export default function (pi: ExtensionAPI) {
       },
     });
 
-    // ── 4. Leader-menu contributions ─────────────────────
-    //   Bare event names — the leader-menu extension treats any action
-    //   without a `command:` or `passthrough:` prefix as an event.
+    // ── 4. Optional shortcut ─────────────────────────────
 
-    cleanupKb = registerLeaderMenu(pi, EXT_NAME, {
-      globalMenu: {
-        items: {
-          f: {
-            label: "+foo",
-            items: {
-              t: { label: "Toggle", action: "foo:toggle" },
-            },
-          },
-        },
+    pi.registerShortcut("ctrl+shift+f", {
+      description: "Toggle foo",
+      handler: async () => {
+        pi.events.emit("foo:toggle");
       },
     });
 
@@ -130,8 +108,6 @@ export default function (pi: ExtensionAPI) {
     pi.on("session_shutdown", async () => {
       unsubToggle();
       unsubRun();
-      cleanupKb?.();
-      cleanupKb = null;
     });
   });
 }
@@ -139,21 +115,7 @@ export default function (pi: ExtensionAPI) {
 
 ### Key rules
 
-- **Do NOT bind keys explicitly** — use `registerLeaderMenu` from
-  `extensions/lib/pi-utils.ts` to contribute bindings to the `leader-menu`
-  extension.
-- Call `registerLeaderMenu` inside `session_start` (not at the top level of the
-  default function) and store the cleanup handle at **module level** so it
-  survives reloads.
-- Unsubscribe all event listeners and call the leader-menu cleanup function on
-  `session_shutdown`.
-- Use bare event names in leader-menu actions (e.g. `"foo:toggle"`). The
-  `command:` and `passthrough:` prefixes are reserved for slash commands and
-  key passthrough respectively — everything else is emitted as an event.
-  The legacy `"event:"` prefix is still accepted for backward compatibility
-  but is not required.
-- For a unified view of every registered chord, run `/leader-menu bindings
-  --export` — this prints an org-mode table of the entire merged tree
-  (defaults + every contributing extension). It replaces the hand-maintained
-  `extensions/keybindings.org` file from before the leader-menu / vim-mode
-  split.
+- Prefer slash commands and documented suggested keybindings for most extension actions; reserve `pi.registerShortcut` for high-value global shortcuts.
+- Keep implementation behind `pi.events` so slash commands, shortcuts, tools, and other extensions share one action path.
+- Read `keybindings.md` before choosing a default shortcut, and avoid collisions with built-in bindings.
+- Do not recommend new leader-menu integrations. The old `leader-menu` extension is retired/disabled and should be treated as legacy compatibility code only.
