@@ -766,6 +766,7 @@ CLOSED: [2026-05-05 Tue 23:13]
 :END:
 Automatic writes by skill/tooling clobber whitespace. This may be resolvable via one-line addition to the org-tasks skill? Though maybe worth adding a general-purpose org-mode skill...
 DECISION Updated the org-tasks skill - no need for a dedicated writing skill for now
+
 * DONE [#D] Package org-memory protocol / extensions
 CLOSED: [2026-05-06 Wed 22:50]
 :PROPERTIES:
@@ -783,3 +784,18 @@ Good to either extract them, or come up with a packaging/deployment strategy to 
 interested parties.
 Ideally the approach would allow me to continue editing skills/extensions live and reloading without having to go through a
 rebuild install step.
+
+* DONE org-memory -- make PARENT_ID property navigable
+CLOSED: [2026-05-08 Fri 18:07]
+:PROPERTIES:
+:CUSTOM_ID: 69e24b8a-d86a-4c1e-b4bf-d19f8d2b56b7
+:CREATED: [2026-05-08 Fri 11:31]
+:ARCHIVED: [2026-05-08 Fri 18:07]
+:END:
+:LOGBOOK:
+- Created [2026-05-08 Fri 11:31]
+- State "DONE" from "TODO" [2026-05-08 Fri 18:07]
+:END:
+#+IMPORT: [[file:design/log/2026-05-08-custom-id-and-parent-link.org]]
+The +IMPORT makes it easy to navigate from a task to its linked plan, but not to reverse the direction of travel.
+Would it make sense to store task ID as a NAME or CUSTOM_ID property instead, and a plan could embed a navigable org-mode anchor link as #+PARENT instead of the current un-navigable #+PARENT_ID

@@ -294,14 +294,3 @@ Friction reported from session subagent-chat-019e06e5: agents hard-wrap generate
 Suggested wording: **Wrapping**: do not hard-wrap prose paragraphs in generated org content. One paragraph = one logical line. Readers configure their own soft-wrap (visual-line-mode, org-startup-truncated nil, Emacs fill-column). Hard wrapping at an agent-chosen column makes diffs noisy when the convention changes and is redundant with org's display-time wrapping.
 
 Origin: /home/cormacc/nmd/products/connect/portal on branch fix-org-user-association-errors, git@gitlab.com:lenire-tinnitus-treatment/portal.git, timestamp [2026-05-08 Fri 11:15]. Triggering quote: "Better yet, don't wrap at all - let emacs/org mode apply its own softwrapping configuration. Record the decision globally at org-tasks skill level."
-* TODO org-memory -- make PARENT_ID property navigable
-:PROPERTIES:
-:CUSTOM_ID: 69e24b8a-d86a-4c1e-b4bf-d19f8d2b56b7
-:CREATED: [2026-05-08 Fri 11:31]
-:END:
-:LOGBOOK:
-- Created [2026-05-08 Fri 11:31]
-:END:
-#+IMPORT: [[file:design/log/2026-05-08-custom-id-and-parent-link.org]]
-The +IMPORT makes it easy to navigate from a task to its linked plan, but not to reverse the direction of travel.
-Would it make sense to store task ID as a NAME or CUSTOM_ID property instead, and a plan could embed a navigable org-mode anchor link as #+PARENT instead of the current un-navigable #+PARENT_ID
