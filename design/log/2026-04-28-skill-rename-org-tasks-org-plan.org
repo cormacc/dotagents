@@ -5,50 +5,21 @@
 
 * Context
 
-The two existing skills =org-memory= and =plan= form a single coherent
-system: =org-memory= owns the durable file protocol, =plan= owns the
-section conventions of the change-record artefact, and they reference
-each other.  Their current names don't reflect the relationship: the
-asymmetric pair (one prefixed with =org-=, the other not) reads like
-two unrelated skills, and =org-memory= is an indirect name for what is
-fundamentally a task-management system.
+The two existing skills =org-memory= and =plan= form a single coherent system: =org-memory= owns the durable file protocol, =plan= owns the section conventions of the change-record artefact, and they reference each other.  Their current names don't reflect the relationship: the asymmetric pair (one prefixed with =org-=, the other not) reads like two unrelated skills, and =org-memory= is an indirect name for what is fundamentally a task-management system.
 
-This plan adopts *Variant B* from the proposal discussion: rename both
-skills to share the =org-= prefix and let =org-memory= survive only as
-an informal umbrella term in prose.  The =tasks= extension is *not*
-renamed: extension naming optimises for user-facing concision (the
-=/tasks= command, the =SPC t t= keybinding, and the \"Tasks\" widget
-label all benefit from the short word), while skill naming optimises
-for symmetry and namespace clarity in the agent's skill registry.
+This plan adopts *Variant B* from the proposal discussion: rename both skills to share the =org-= prefix and let =org-memory= survive only as an informal umbrella term in prose.  The =tasks= extension is *not* renamed: extension naming optimises for user-facing concision (the =/tasks= command, the =SPC t t= keybinding, and the \"Tasks\" widget label all benefit from the short word), while skill naming optimises for symmetry and namespace clarity in the agent's skill registry.
 
 ** Design decisions
 
-- *Skill rename, not extension rename* :: Skills and extensions serve
-  different audiences (LLM vs human user) with different
-  cost/benefit profiles for verbose names.  The skill rename is a
-  documentation-layer change with low blast radius.  The extension
-  rename would touch slash commands, keybindings, and the deployed
-  filesystem layout in =~/.pi/agent/extensions/= for negligible gain.
+- *Skill rename, not extension rename* :: Skills and extensions serve different audiences (LLM vs human user) with different cost/benefit profiles for verbose names.  The skill rename is a documentation-layer change with low blast radius.  The extension rename would touch slash commands, keybindings, and the deployed filesystem layout in =~/.pi/agent/extensions/= for negligible gain.
 
-- *=org-memory= survives as prose* :: The umbrella concept (\"the
-  org-memory protocol\") still has a place in cross-references and
-  descriptions, but no longer names a skill.  Sentences like \"the
-  org-memory system, implemented by the =org-tasks= and =org-plan=
-  skills\" are encouraged.
+- *=org-memory= survives as prose* :: The umbrella concept (\"the org-memory protocol\") still has a place in cross-references and descriptions, but no longer names a skill.  Sentences like \"the org-memory system, implemented by the =org-tasks= and =org-plan= skills\" are encouraged.
 
-- *Use =git mv= for directory renames* :: Preserves file history so
-  =git log --follow= continues to work on the moved =SKILL.md= files.
+- *Use =git mv= for directory renames* :: Preserves file history so =git log --follow= continues to work on the moved =SKILL.md= files.
 
-- *Description fields are unchanged* :: The =description:= frontmatter
-  field is what the LLM matches against when picking a skill.  The
-  underlying behaviour didn't change, only the name, so descriptions
-  stay intact.  (One small tweak: the description text may incidentally
-  mention =org-memory= or =plan=; those mentions are updated to refer
-  to the new names where they appear as skill identifiers, not where
-  they refer to the umbrella concept.)
+- *Description fields are unchanged* :: The =description:= frontmatter field is what the LLM matches against when picking a skill.  The underlying behaviour didn't change, only the name, so descriptions stay intact.  (One small tweak: the description text may incidentally mention =org-memory= or =plan=; those mentions are updated to refer to the new names where they appear as skill identifiers, not where they refer to the umbrella concept.)
 
-- *No backwards-compatibility shim* :: Pre-release; no need to keep
-  redirects from old names.  A clean rename is fine.
+- *No backwards-compatibility shim* :: Pre-release; no need to keep redirects from old names.  A clean rename is fine.
 
 * Plan
 
@@ -59,16 +30,11 @@ CLOSED: [2026-04-28 Tue 01:03]
 :END:
 - =git mv agents/skills/org-memory agents/skills/org-tasks=
 - =git mv agents/skills/plan agents/skills/org-plan=
-- Update =agents/skills/org-tasks/SKILL.md= frontmatter:
-  =name: org-memory= \u2192 =name: org-tasks=
-- Update =agents/skills/org-plan/SKILL.md= frontmatter:
-  =name: plan= \u2192 =name: org-plan=
-- Verify =agents.nix= still works: it symlinks =agents/skills/= as a
-  whole, so no individual references to update.
+- Update =agents/skills/org-tasks/SKILL.md= frontmatter: =name: org-memory= \u2192 =name: org-tasks=
+- Update =agents/skills/org-plan/SKILL.md= frontmatter: =name: plan= \u2192 =name: org-plan=
+- Verify =agents.nix= still works: it symlinks =agents/skills/= as a whole, so no individual references to update.
 
-Acceptance: =git log --follow= on the moved =SKILL.md= files traces
-back through history; =name:= field in each matches the new directory
-name.
+Acceptance: =git log --follow= on the moved =SKILL.md= files traces back through history; =name:= field in each matches the new directory name.
 ** DONE [#A] Update cross-references between the two skill bodies
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
@@ -76,20 +42,11 @@ CLOSED: [2026-04-28 Tue 01:03]
 :END:
 Each skill references the other via path and by name:
 
-- =org-tasks/SKILL.md= contains =../plan/SKILL.md= references and
-  prose mentions of \"the plan skill\".  Update path \u2192
-  =../org-plan/SKILL.md=; prose \u2192 \"the =org-plan= skill\" (or just
-  =org-plan=).
-- =org-plan/SKILL.md= contains =../org-memory/SKILL.md= references and
-  prose mentions of \"the org-memory skill\".  Update path \u2192
-  =../org-tasks/SKILL.md=; prose \u2192 \"the =org-tasks= skill\".
-- Where prose refers to the *umbrella concept* (e.g. \"the org-memory
-  protocol\"), preserve the term \u2014 it survives as an informal
-  collective noun.
+- =org-tasks/SKILL.md= contains =../plan/SKILL.md= references and prose mentions of \"the plan skill\".  Update path \u2192 =../org-plan/SKILL.md=; prose \u2192 \"the =org-plan= skill\" (or just =org-plan=).
+- =org-plan/SKILL.md= contains =../org-memory/SKILL.md= references and prose mentions of \"the org-memory skill\".  Update path \u2192 =../org-tasks/SKILL.md=; prose \u2192 \"the =org-tasks= skill\".
+- Where prose refers to the *umbrella concept* (e.g. \"the org-memory protocol\"), preserve the term \u2014 it survives as an informal collective noun.
 
-Acceptance: no occurrence of =skills/org-memory/= or =skills/plan/= in
-either =SKILL.md= file; cross-link paths resolve from the moved
-locations.
+Acceptance: no occurrence of =skills/org-memory/= or =skills/plan/= in either =SKILL.md= file; cross-link paths resolve from the moved locations.
 ** DONE [#A] Update body prose in both skill files
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
@@ -98,17 +55,13 @@ CLOSED: [2026-04-28 Tue 01:03]
 Both =SKILL.md= bodies contain phrases like:
 
 - \"the plan skill\" / \"plan skill\" \u2192 \"the =org-plan= skill\"
-- \"the org-memory skill\" / \"org-memory skill\" \u2192 \"the =org-tasks=
-  skill\"
+- \"the org-memory skill\" / \"org-memory skill\" \u2192 \"the =org-tasks= skill\"
 - \"the plan SKILL.md\" \u2192 \"the =org-plan= SKILL.md\"
 - \"the org-memory SKILL.md\" \u2192 \"the =org-tasks= SKILL.md\"
 
-Care must be taken to *not* rewrite generic uses of the word \"plan\"
-(e.g. \"draft a plan\", \"the =* Plan= section\") \u2014 only the skill-name
-references.
+Care must be taken to *not* rewrite generic uses of the word \"plan\" (e.g. \"draft a plan\", \"the =* Plan= section\") \u2014 only the skill-name references.
 
-Acceptance: =rg \"plan skill\\|org-memory skill\"= in the two files
-returns no results.
+Acceptance: =rg \"plan skill\\|org-memory skill\"= in the two files returns no results.
 ** DONE [#A] Update tasks extension code and docs
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
@@ -116,94 +69,61 @@ CLOSED: [2026-04-28 Tue 01:03]
 :END:
 =agents/pi/extensions/tasks/= contains skill-name references in:
 
-- =index.ts= \u2014 the =buildChangeRecordPrompt= helpers and any
-  agent-prompt strings that mention \"the plan skill\" / \"org-memory
-  protocol\".
+- =index.ts= \u2014 the =buildChangeRecordPrompt= helpers and any agent-prompt strings that mention \"the plan skill\" / \"org-memory protocol\".
 - =README.md= \u2014 prose references to the skills.
 
-Sweep with =rg= and update; preserve umbrella-concept uses of
-\"org-memory\" in prose.
+Sweep with =rg= and update; preserve umbrella-concept uses of \"org-memory\" in prose.
 
-Acceptance: =rg \"plan skill\\|org-memory skill\"= in
-=agents/pi/extensions/tasks/= returns no results; agent prompts
-reference the new skill names.
+Acceptance: =rg \"plan skill\\|org-memory skill\"= in =agents/pi/extensions/tasks/= returns no results; agent prompts reference the new skill names.
 ** DONE [#B] Update existing change-records and TASKS.org body text
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
 :CUSTOM_ID: d2e3f4a5-0005-4000-8000-400000000005
 :END:
-Change-records under =design/log/*.org= and task-body prose in
-=TASKS.org= / =TASKS.archive.org= mention the old skill names in
-historical context (\"per the plan skill\", \"the org-memory protocol\"
-etc.).
+Change-records under =design/log/*.org= and task-body prose in =TASKS.org= / =TASKS.archive.org= mention the old skill names in historical context (\"per the plan skill\", \"the org-memory protocol\" etc.).
 
-Update *only* skill-name references, not umbrella-concept uses or
-historical narrative that quotes the old names verbatim.  When a
-mention is genuinely historical (e.g. \"this was added by the plan
-skill on 2026-04-25\"), leave it; the file already records the date.
+Update *only* skill-name references, not umbrella-concept uses or historical narrative that quotes the old names verbatim.  When a mention is genuinely historical (e.g. \"this was added by the plan skill on 2026-04-25\"), leave it; the file already records the date.
 
-A pragmatic rule: skim each match and update only if rewording with
-the new name still makes sense in context.  Preserve historical
-quotation.
+A pragmatic rule: skim each match and update only if rewording with the new name still makes sense in context.  Preserve historical quotation.
 
-Acceptance: live skill references use new names; historical
-narrative reads sensibly.
+Acceptance: live skill references use new names; historical narrative reads sensibly.
 ** DONE [#C] Update AGENTS.md files
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
 :CUSTOM_ID: d2e3f4a5-0006-4000-8000-400000000006
 :END:
-The repo root and =agents/= subdirectories may have =AGENTS.md= files
-mentioning the old skill names in guidance text for downstream agents.
-Update these so newly-spawned agents see the correct names.
+The repo root and =agents/= subdirectories may have =AGENTS.md= files mentioning the old skill names in guidance text for downstream agents. Update these so newly-spawned agents see the correct names.
 
-Acceptance: =rg \"org-memory\\|plan skill\"= across =AGENTS.md= files
-returns only umbrella-concept uses, no stale skill identifiers.
+Acceptance: =rg \"org-memory\\|plan skill\"= across =AGENTS.md= files returns only umbrella-concept uses, no stale skill identifiers.
 ** DONE [#C] Final sweep
 CLOSED: [2026-04-28 Tue 01:03]
 :PROPERTIES:
 :CUSTOM_ID: d2e3f4a5-0007-4000-8000-400000000007
 :END:
-Run a final =rg= across the whole repo for any stale references that
-slipped through earlier subtasks:
+Run a final =rg= across the whole repo for any stale references that slipped through earlier subtasks:
 
 #+begin_src bash
 rg \"skills/org-memory\\|skills/plan\\b\\|name: org-memory\\|name: plan$\"
 rg \"the plan skill\\|the org-memory skill\"
 #+end_src
 
-Resolve any remaining hits.  Document any kept-as-historical uses in
-the change-record's =* Implementation= section.
+Resolve any remaining hits.  Document any kept-as-historical uses in the change-record's =* Implementation= section.
 
-Acceptance: zero hits for skill-path patterns; remaining \"org-memory\"
-hits are exclusively umbrella-concept uses.
+Acceptance: zero hits for skill-path patterns; remaining \"org-memory\" hits are exclusively umbrella-concept uses.
 * Implementation
 
 ** Files changed (live)
 
-- =agents/skills/org-tasks/= (was =org-memory/=) — directory rename via
-  =git mv=; =SKILL.md= frontmatter =name:= updated and 5 internal
-  prose/cross-ref edits.
-- =agents/skills/org-plan/= (was =plan/=) — directory rename via
-  =git mv=; =SKILL.md= frontmatter =name:= updated and 6 internal
-  prose/cross-ref edits.
-- =agents/pi/extensions/tasks/index.ts= — 2 prose edits in JSDoc and
-  agent-prompt template (=buildProactiveChangeRecordPrompt=).
-- =agents/pi/extensions/tasks/README.md= — 3 prose edits (skill-path
-  reference, "the plan skill" \u2192 "the =org-plan= skill", "org-memory
-  skill protocol" \u2192 "=org-tasks= skill protocol").
+- =agents/skills/org-tasks/= (was =org-memory/=) — directory rename via =git mv=; =SKILL.md= frontmatter =name:= updated and 5 internal prose/cross-ref edits.
+- =agents/skills/org-plan/= (was =plan/=) — directory rename via =git mv=; =SKILL.md= frontmatter =name:= updated and 6 internal prose/cross-ref edits.
+- =agents/pi/extensions/tasks/index.ts= — 2 prose edits in JSDoc and agent-prompt template (=buildProactiveChangeRecordPrompt=).
+- =agents/pi/extensions/tasks/README.md= — 3 prose edits (skill-path reference, "the plan skill" \u2192 "the =org-plan= skill", "org-memory skill protocol" \u2192 "=org-tasks= skill protocol").
 
 ** Subtasks 5 and 6 were effective no-ops
 
-- =TASKS.org= and =TASKS.archive.org= mention the old skill names only
-  in (a) the rename task's own body text (which proposes the rename
-  using the old names \u2014 historical) and (b) archived task descriptions
-  describing past work on those skills (also historical).  Per the
-  design decision to preserve historical narrative, no edits were made.
-- =design/log/*.org= references are all historical change-records of
-  prior work on the skills.  No edits.
-- =AGENTS.md= files at repo root and =agents/AGENTS.md= contained no
-  skill-name references at all.
+- =TASKS.org= and =TASKS.archive.org= mention the old skill names only in (a) the rename task's own body text (which proposes the rename using the old names \u2014 historical) and (b) archived task descriptions describing past work on those skills (also historical).  Per the design decision to preserve historical narrative, no edits were made.
+- =design/log/*.org= references are all historical change-records of prior work on the skills.  No edits.
+- =AGENTS.md= files at repo root and =agents/AGENTS.md= contained no skill-name references at all.
 
 ** Verification
 
@@ -211,15 +131,10 @@ Final =rg= sweeps returned zero hits for:
 
 - =skills/org-memory= and =skills/plan= (path references)
 - =name: org-memory$= and =name: plan$= (frontmatter)
-- ="the plan skill"= and ="the org-memory skill"= in active code,
-  active docs, and =AGENTS.md= files
+- ="the plan skill"= and ="the org-memory skill"= in active code, active docs, and =AGENTS.md= files
 
-Remaining occurrences of "org-memory", "plan skill", etc. live entirely
-in =design/log/*.org= historical change-records and the original
-proposing prose of TASKS.org tasks \u2014 all intentionally preserved.
+Remaining occurrences of "org-memory", "plan skill", etc. live entirely in =design/log/*.org= historical change-records and the original proposing prose of TASKS.org tasks \u2014 all intentionally preserved.
 
 ** No backwards-compatibility shim
 
-As planned, no redirects or aliases from the old names.  The skill
-loader picks up the new names directly from the (renamed) directory
-layout.  Pre-release; no deployed agents to migrate.
+As planned, no redirects or aliases from the old names.  The skill loader picks up the new names directly from the (renamed) directory layout.  Pre-release; no deployed agents to migrate.

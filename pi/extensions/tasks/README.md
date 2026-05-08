@@ -19,18 +19,21 @@ Subcommand auto-completion is exposed via `getArgumentCompletions`, so typing
 
 ### Keybindings
 
-Registered with `leader-menu` under `<leader> t`:
+| Chord   | Action              | Event        |
+| ------- | ------------------- | ------------ |
+| `Alt+T` | Expand the tasks UI | `tasks:show` |
 
-| Chord          | Action             | Event          |
-| -------------- | ------------------ | -------------- |
-| `<leader> t t` | Expand the tasks UI | `tasks:show`   |
-| `<leader> t n` | New top-level task  | `tasks:new`    |
-| `<leader> t d` | Doctor check        | `tasks:doctor` |
+The shortcut dispatches `tasks:show` on the pi event bus rather than
+submitting the `/tasks` slash command, so opening the tasks UI never
+overwrites text already entered in the prompt. The slash commands
+(`/tasks`, `/tasks new`, `/tasks doctor`) remain available and dispatch
+the same events.
 
-These leader bindings dispatch events directly rather than submitting
-`/tasks` slash commands, so opening the tasks UI never overwrites text already
-entered in the prompt. The slash commands remain available and dispatch the
-same events for compatibility.
+On macOS, the terminal must be configured to send Alt as Meta (e.g.
+iTerm2: "Use Option as Meta"; kitty: `macos_option_as_alt yes`). Users
+can rebind via `~/.pi/agent/keybindings.json` once pi exposes the
+extension's shortcut id; in the meantime the binding is fixed in
+`index.ts`.
 
 ### Compact selected-task widget
 
@@ -88,7 +91,7 @@ The expanded UI is a centered split pane — task tree on the left, details for 
 | `P` (shift-p)             | Publish local task → `TASKS.org` (local tasks only)        |
 | `U` (shift-u)             | Unpublish task → `TASKS.local.org` (top-level shared tasks only) |
 | `J` (shift-j)             | Open linked-issue URLs in the browser (see *Linked external issues* below) |
-| `Esc` / `q`               | Close                              |
+| `Esc` / `Alt+T`           | Close (Alt+T toggles)              |
 
 ### Local tasks
 
@@ -401,4 +404,4 @@ Requires `tsx` on `$PATH` (e.g. via `npx tsx` or a global install).
 
 ## Dependencies
 
-- `lib/pi-utils.ts` — `getExtensionName`, `registerLeaderMenu`
+None beyond `@mariozechner/pi-coding-agent` and `@mariozechner/pi-tui`.

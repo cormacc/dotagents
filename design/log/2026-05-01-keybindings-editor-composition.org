@@ -5,16 +5,9 @@
 
 * Context
 
-Pi 0.71.0 added =ctx.ui.getEditorComponent()= ([[https://github.com/badlogic/pi-mono/issues/3935][issue #3935]]) so editor-replacing
-extensions can /wrap/ a previously installed editor instead of
-clobbering it. =setEditorComponent()= remains single-owner — last
-writer wins, the previous editor's container is cleared — so any two
-extensions that both replace the editor silently disable one of them
-(same single-owner pattern as #3071, #3541, #3536).
+Pi 0.71.0 added =ctx.ui.getEditorComponent()= ([[https://github.com/badlogic/pi-mono/issues/3935][issue #3935]]) so editor-replacing extensions can /wrap/ a previously installed editor instead of clobbering it. =setEditorComponent()= remains single-owner — last writer wins, the previous editor's container is cleared — so any two extensions that both replace the editor silently disable one of them (same single-owner pattern as #3071, #3541, #3536).
 
-Our =keybindings= extension installs =VimEditor= unconditionally from
-=session_start= ([[file:../../agents/pi/extensions/keybindings/index.ts]]
-around line 2438):
+Our =keybindings= extension installs =VimEditor= unconditionally from =session_start= ([[file:../../agents/pi/extensions/keybindings/index.ts]] around line 2438):
 
 #+begin_src typescript
 ctx.ui.setEditorComponent(
@@ -26,73 +19,23 @@ ctx.ui.setEditorComponent(
 );
 #+end_src
 
-It does not read =getEditorComponent()=, and =VimEditor='s constructor
-has no =base= parameter. So today we silently lose to (or silently
-disable) any other editor extension — e.g. =pi-vim=,
-=@jordyvd/pi-image-attachments= — depending on load order.
+It does not read =getEditorComponent()=, and =VimEditor='s constructor has no =base= parameter. So today we silently lose to (or silently disable) any other editor extension — e.g. =pi-vim=, =@jordyvd/pi-image-attachments= — depending on load order.
 
-There is no current in-tree collision: no other extension under
-=agents/pi/extensions/= calls =setEditorComponent=. This is
-future-proofing rather than a live bug. It is worth doing because
-=keybindings= is the editor extension we expect to combine with
-third-party editor extensions.
+There is no current in-tree collision: no other extension under =agents/pi/extensions/= calls =setEditorComponent=. This is future-proofing rather than a live bug. It is worth doing because =keybindings= is the editor extension we expect to combine with third-party editor extensions.
 
-The pi binary on this machine is 0.71.0 (=/nix/store/...-pi-0.71.0=),
-so =getEditorComponent()= is available at runtime. Older pi installs
-do not have the API, so the call must be guarded.
+The pi binary on this machine is 0.71.0 (=/nix/store/...-pi-0.71.0=), so =getEditorComponent()= is available at runtime. Older pi installs do not have the API, so the call must be guarded.
 
 ** Design decisions
 
-- Do not compose invisible editor instances :: The first draft planned
-  to instantiate the previous editor factory and delegate unhandled
-  Insert-mode keys to that editor. Final review rejected this: the
-  wrapped editor would keep its own invisible text/render/autocomplete
-  state while =VimEditor= remained the returned component. That risks
-  lost edits, duplicated app-keybinding handling, and hard-to-debug
-  state skew.
-- Leader menu first, editor replacement second :: The primary feature
-  is the which-key-style leader menu. Since modal editing is disabled
-  by default, the default path should not call =setEditorComponent()=
-  at all. Use upstream's extension shortcut + custom overlay APIs for
-  insert-only leader menus, and reserve custom-editor replacement for
-  actual modal editing.
-- Upstream API patterns :: Follow the linked =extensions.md= examples:
-  use =pi.registerShortcut()= for global shortcuts, =ctx.ui.custom(...,
-  { overlay: true })= for temporary key-capturing UI, =ctx.ui.setWidget=
-  only for persistent/simple widgets, and =ctx.ui.setStatus()= for
-  footer state. Follow =modal-editor.ts= / =rainbow-editor.ts= by
-  keeping =VimEditor= self-contained and using =super.handleInput()=
-  for normal editor fallback rather than attempting to layer two full
-  editor instances.
-- Modal install policy :: On =session_start=, install =VimEditor= only
-  when persisted settings have ={ modal: true }=. In insert-only mode,
-  preserve pi's default editor or any third-party editor already
-  installed by another extension.
-- Runtime mode switching :: Keep the existing =keybindings:set-mode-vim=
-  and =keybindings:set-mode-emacs= events. Switching to vim mode should
-  install =VimEditor= and remember the previous editor factory when
-  =getEditorComponent()= is available. Switching back should restore
-  that remembered factory when possible; otherwise pass =undefined= to
-  restore pi's default editor.
-- Conflict handling :: If vim mode is enabled while another editor
-  factory is already present, warn the user that modal mode replaces
-  the current editor. Do not attempt unsafe input delegation. The
-  =getEditorComponent()= API is still useful for detection and restore,
-  even if we avoid composition for now.
-- Mode/status rendering :: Prefer =ctx.ui.setStatus("keybindings", …)=
-  for =INSERT=/=NORMAL=/=VISUAL= feedback over appending mode text to
-  the editor border. This uses the documented status/footer API and
-  reduces editor rendering coupling. Keep border rendering only if
-  status proves insufficient during implementation.
-- Action dispatch :: Extract leader action dispatch away from
-  =VimEditor=. Command and event actions should work from both overlay
-  and modal paths. Existing =passthrough:= actions should be replaced
-  with explicit action handlers where public APIs exist; any remaining
-  unsupported passthrough should fail with a clear notification rather
-  than synthesizing raw keys into an invisible editor.
-- Out of scope :: True editor middleware/chaining remains out of
-  scope until there is a real second editor extension to support and
-  upstream exposes a safer composition contract than read-then-replace.
+- Do not compose invisible editor instances :: The first draft planned to instantiate the previous editor factory and delegate unhandled Insert-mode keys to that editor. Final review rejected this: the wrapped editor would keep its own invisible text/render/autocomplete state while =VimEditor= remained the returned component. That risks lost edits, duplicated app-keybinding handling, and hard-to-debug state skew.
+- Leader menu first, editor replacement second :: The primary feature is the which-key-style leader menu. Since modal editing is disabled by default, the default path should not call =setEditorComponent()= at all. Use upstream's extension shortcut + custom overlay APIs for insert-only leader menus, and reserve custom-editor replacement for actual modal editing.
+- Upstream API patterns :: Follow the linked =extensions.md= examples: use =pi.registerShortcut()= for global shortcuts, =ctx.ui.custom(..., { overlay: true })= for temporary key-capturing UI, =ctx.ui.setWidget= only for persistent/simple widgets, and =ctx.ui.setStatus()= for footer state. Follow =modal-editor.ts= / =rainbow-editor.ts= by keeping =VimEditor= self-contained and using =super.handleInput()= for normal editor fallback rather than attempting to layer two full editor instances.
+- Modal install policy :: On =session_start=, install =VimEditor= only when persisted settings have ={ modal: true }=. In insert-only mode, preserve pi's default editor or any third-party editor already installed by another extension.
+- Runtime mode switching :: Keep the existing =keybindings:set-mode-vim= and =keybindings:set-mode-emacs= events. Switching to vim mode should install =VimEditor= and remember the previous editor factory when =getEditorComponent()= is available. Switching back should restore that remembered factory when possible; otherwise pass =undefined= to restore pi's default editor.
+- Conflict handling :: If vim mode is enabled while another editor factory is already present, warn the user that modal mode replaces the current editor. Do not attempt unsafe input delegation. The =getEditorComponent()= API is still useful for detection and restore, even if we avoid composition for now.
+- Mode/status rendering :: Prefer =ctx.ui.setStatus("keybindings", …)= for =INSERT=/=NORMAL=/=VISUAL= feedback over appending mode text to the editor border. This uses the documented status/footer API and reduces editor rendering coupling. Keep border rendering only if status proves insufficient during implementation.
+- Action dispatch :: Extract leader action dispatch away from =VimEditor=. Command and event actions should work from both overlay and modal paths. Existing =passthrough:= actions should be replaced with explicit action handlers where public APIs exist; any remaining unsupported passthrough should fail with a clear notification rather than synthesizing raw keys into an invisible editor.
+- Out of scope :: True editor middleware/chaining remains out of scope until there is a real second editor extension to support and upstream exposes a safer composition contract than read-then-replace.
 
 * Plan
 
@@ -105,13 +48,10 @@ CLOSED: [2026-05-01 Fri 18:04]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2026-05-01 Fri 18:04]
 :END:
-Decouple =buildMenuTree= / =buildAction= from the concrete
-=VimEditor= class. Introduce a small action host that can be backed by
-session context rather than raw editor key injection.
+Decouple =buildMenuTree= / =buildAction= from the concrete =VimEditor= class. Introduce a small action host that can be backed by session context rather than raw editor key injection.
 
 Acceptance:
-- Command actions and event actions can be invoked without a
-  =VimEditor= instance.
+- Command actions and event actions can be invoked without a =VimEditor= instance.
 - Modal editor path can still invoke the same action dispatch.
 - Existing keybinding suggestion merge behaviour is unchanged.
 ** DONE [#B] Add insert-only leader overlay via =registerShortcut= + =ctx.ui.custom= :keybindings:ui:
@@ -123,15 +63,10 @@ CLOSED: [2026-05-01 Fri 18:04]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2026-05-01 Fri 18:04]
 :END:
-Register direct root shortcuts with =pi.registerShortcut()=: =alt+space=
-for the Space leader and =alt+,= for the comma leader. In each handler,
-open a custom overlay component using =ctx.ui.custom(..., { overlay: true })=
-that displays the selected leader node and consumes follow-up keys until
-an action fires or the user cancels.
+Register direct root shortcuts with =pi.registerShortcut()=: =alt+space= for the Space leader and =alt+,= for the comma leader. In each handler, open a custom overlay component using =ctx.ui.custom(..., { overlay: true })= that displays the selected leader node and consumes follow-up keys until an action fires or the user cancels.
 
 Acceptance:
-- With ={ modal: false }=, the extension does not call
-  =setEditorComponent()= during =session_start=.
+- With ={ modal: false }=, the extension does not call =setEditorComponent()= during =session_start=.
 - =alt+space= and =alt+,= open discoverable overlays without replacing the editor.
 - Nested menus and cancellation continue to work.
 ** DONE [#B] Install =VimEditor= only for modal mode and restore previous editor on emacs mode :keybindings:editor:
@@ -143,20 +78,13 @@ CLOSED: [2026-05-01 Fri 18:04]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2026-05-01 Fri 18:04]
 :END:
-Change =session_start= and mode-switch events so =VimEditor= is
-installed only when modal mode is enabled. When entering vim mode,
-remember =ctx.ui.getEditorComponent?.()= before replacement. When
-leaving vim mode, restore the remembered factory when available, else
-restore default with =setEditorComponent(undefined)=.
+Change =session_start= and mode-switch events so =VimEditor= is installed only when modal mode is enabled. When entering vim mode, remember =ctx.ui.getEditorComponent?.()= before replacement. When leaving vim mode, restore the remembered factory when available, else restore default with =setEditorComponent(undefined)=.
 
 Acceptance:
-- Default insert-only mode preserves pi's default editor and any
-  earlier third-party editor.
+- Default insert-only mode preserves pi's default editor and any earlier third-party editor.
 - =keybindings:set-mode-vim= installs modal editing at runtime.
-- =keybindings:set-mode-emacs= removes modal editing and restores the
-  previous/default editor.
-- If a previous editor exists, user receives a warning that modal mode
-  replaces it rather than composing with it.
+- =keybindings:set-mode-emacs= removes modal editing and restores the previous/default editor.
+- If a previous editor exists, user receives a warning that modal mode replaces it rather than composing with it.
 ** DONE [#C] Move mode feedback to documented status/footer API :keybindings:ui:
 CLOSED: [2026-05-01 Fri 18:04]
 :PROPERTIES:
@@ -166,10 +94,7 @@ CLOSED: [2026-05-01 Fri 18:04]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2026-05-01 Fri 18:04]
 :END:
-Use =ctx.ui.setStatus("keybindings", …)= for modal state. Update the
-status when mode changes, when modal mode is enabled/disabled, and on
-session shutdown/restore. Remove or simplify custom border suffix
-rendering if status output is sufficient.
+Use =ctx.ui.setStatus("keybindings", …)= for modal state. Update the status when mode changes, when modal mode is enabled/disabled, and on session shutdown/restore. Remove or simplify custom border suffix rendering if status output is sufficient.
 
 Acceptance:
 - Current mode is visible without depending on editor-border mutation.
@@ -183,17 +108,10 @@ CLOSED: [2026-05-01 Fri 18:04]
 :LOGBOOK:
 - State "DONE"       from "TODO"       [2026-05-01 Fri 18:04]
 :END:
-Audit =defaults.json= actions that currently synthesize keys
-(=ctrl+l=, =shift+tab=, =ctrl+o=, =ctrl+t=, =ctrl+g=). Replace them
-with explicit action handlers where public extension APIs exist
-(e.g. =ctx.ui.getToolsExpanded()/setToolsExpanded()=, pi thinking
-APIs, built-in slash commands via user-message routing if verified).
-For actions with no safe public API, surface a notification and leave
-fallback to the normal built-in shortcut.
+Audit =defaults.json= actions that currently synthesize keys (=ctrl+l=, =shift+tab=, =ctrl+o=, =ctrl+t=, =ctrl+g=). Replace them with explicit action handlers where public extension APIs exist (e.g. =ctx.ui.getToolsExpanded()/setToolsExpanded()=, pi thinking APIs, built-in slash commands via user-message routing if verified). For actions with no safe public API, surface a notification and leave fallback to the normal built-in shortcut.
 
 Acceptance:
-- Insert-only overlay does not depend on a hidden editor to trigger
-  passthrough actions.
+- Insert-only overlay does not depend on a hidden editor to trigger passthrough actions.
 - Unsupported passthroughs fail visibly instead of silently no-oping.
 - Modal path behaviour remains at least as good as before.
 ** DONE [#C] Update README and generated keybindings map :keybindings:docs:
@@ -206,15 +124,12 @@ CLOSED: [2026-05-01 Fri 18:04]
 - State "DONE"       from "TODO"       [2026-05-01 Fri 18:04]
 :END:
 Document the revised architecture:
-- insert-only mode uses direct root shortcuts (=alt+space= / =alt+,=) +
-  overlay and does not replace the editor;
+- insert-only mode uses direct root shortcuts (=alt+space= / =alt+,=) + overlay and does not replace the editor;
 - vim mode installs a modal =CustomEditor=;
-- =getEditorComponent()= is used for conflict detection/restore, not
-  unsafe composition;
+- =getEditorComponent()= is used for conflict detection/restore, not unsafe composition;
 - unsupported passthrough actions, if any.
 
-Regenerate =agents/pi/extensions/keybindings.org= after extension
-changes per the extension-development guidelines.
+Regenerate =agents/pi/extensions/keybindings.org= after extension changes per the extension-development guidelines.
 ** DONE [#C] Manual interactive reload verification :keybindings:test:
 CLOSED: [2026-05-01 Fri 18:17]
 :PROPERTIES:
@@ -232,40 +147,16 @@ Reload pi interactively and verify:
 - unsupported passthroughs show visible warnings.
 * Implementation
 
-- 2026-05-01 final review revised the plan before implementation.
-  The original read-then-wrap idea was replaced with a simpler design:
-  keep leader menus independent of editor replacement, use upstream
-  =registerShortcut= and overlay APIs for insert-only mode, and install
-  =VimEditor= only when modal editing is actually enabled.
-- Implemented a =LeaderActionHost= abstraction so menu construction is
-  independent of =VimEditor=. The default action host delegates to the
-  active modal editor when one exists; otherwise it uses public UI/API
-  calls where available or inserts slash commands for manual Enter.
-- Added =LeaderMenuOverlay= for insert-only =alt+space= / =alt+,=
-  navigation via =ctx.ui.custom(..., { overlay: true })=. Default insert-only session
-  startup now leaves the current editor untouched.
-- Vim mode now remembers =ctx.ui.getEditorComponent?.()= before
-  replacement and restores that factory (or pi default editor) when
-  switching back to emacs mode.
-- Mode feedback moved to =ctx.ui.setStatus("keybindings", …)=. The
-  editor border now only shows pending count/operator/leader state.
-- Follow-up after interactive verification: =alt+m= conflicted with
-  pi-intercom's registered shortcut. Replaced the single prefix with
-  direct root shortcuts: =alt+space= for the Space leader and =alt+,=
-  for the comma leader. Vim Insert mode uses the same direct roots.
-- Verification: =bun build agents/pi/extensions/keybindings/index.ts
-  --target=node --external @mariozechner/pi-coding-agent --external
-  @mariozechner/pi-tui= succeeds.
-- User confirmed the updated implementation works interactively after
-  replacing =alt+m= with =alt+space= / =alt+,=.
+- 2026-05-01 final review revised the plan before implementation. The original read-then-wrap idea was replaced with a simpler design: keep leader menus independent of editor replacement, use upstream =registerShortcut= and overlay APIs for insert-only mode, and install =VimEditor= only when modal editing is actually enabled.
+- Implemented a =LeaderActionHost= abstraction so menu construction is independent of =VimEditor=. The default action host delegates to the active modal editor when one exists; otherwise it uses public UI/API calls where available or inserts slash commands for manual Enter.
+- Added =LeaderMenuOverlay= for insert-only =alt+space= / =alt+,= navigation via =ctx.ui.custom(..., { overlay: true })=. Default insert-only session startup now leaves the current editor untouched.
+- Vim mode now remembers =ctx.ui.getEditorComponent?.()= before replacement and restores that factory (or pi default editor) when switching back to emacs mode.
+- Mode feedback moved to =ctx.ui.setStatus("keybindings", …)=. The editor border now only shows pending count/operator/leader state.
+- Follow-up after interactive verification: =alt+m= conflicted with pi-intercom's registered shortcut. Replaced the single prefix with direct root shortcuts: =alt+space= for the Space leader and =alt+,= for the comma leader. Vim Insert mode uses the same direct roots.
+- Verification: =bun build agents/pi/extensions/keybindings/index.ts --target=node --external @mariozechner/pi-coding-agent --external @mariozechner/pi-tui= succeeds.
+- User confirmed the updated implementation works interactively after replacing =alt+m= with =alt+space= / =alt+,=.
 
 * Open questions
 
-- (Resolved 2026-05-01) /Real third-party editor extension to
-  compose with?/ — None on this machine. Smoke-test task dropped;
-  change is purely defensive future-proofing.
-- (Resolved 2026-05-01) /Forward =editor:width-constraint= to =base=?/
-  — Non-issue. The event is private to our =git-diff= ↔
-  =keybindings= pair, and in the wrap design only =VimEditor=
-  renders; =base= only receives unconsumed keystrokes. Layout
-  constraints have nothing to constrain on =base=.
+- (Resolved 2026-05-01) /Real third-party editor extension to compose with?/ — None on this machine. Smoke-test task dropped; change is purely defensive future-proofing.
+- (Resolved 2026-05-01) /Forward =editor:width-constraint= to =base=?/ — Non-issue. The event is private to our =git-diff= ↔ =keybindings= pair, and in the wrap design only =VimEditor= renders; =base= only receives unconsumed keystrokes. Layout constraints have nothing to constrain on =base=.

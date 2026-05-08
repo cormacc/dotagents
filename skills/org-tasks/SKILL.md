@@ -59,6 +59,39 @@ When the keyword is absent or malformed the default is
 | `#+IMPORT:` | linked change-record / imported task file | task body or file root |
 | `#+SELECTED:` | local active task UUID | `TASKS.local.org` |
 
+### Line wrapping
+
+Do **not** hard-wrap prose in org files this skill produces or edits
+(`TASKS.org`, `TASKS.local.org`, `TASKS.archive.org`, change-records).
+Each paragraph is a single logical line; readers rely on
+`visual-line-mode` / soft-wrap. Rationale:
+
+- Hard wraps force re-flow on every edit and noise diffs for prose
+  changes.
+- Agents and the tasks extension's serializer round-trip single-line
+  paragraphs cleanly; reflowed paragraphs lose their original wrap
+  points on rewrite.
+- Org structural elements (headings, list items, drawers, table rows,
+  `#+KEYWORD:` lines) are already line-bound — wrapping rules only
+  affect body prose.
+
+Exceptions, which keep their natural line breaks:
+
+- Code/quote/example blocks (`#+BEGIN_SRC`, `#+BEGIN_EXAMPLE`,
+  `#+BEGIN_QUOTE`).
+- Bullet/numbered list items — one item per line; do not wrap a single
+  item across multiple physical lines.
+- Tables, `:PROPERTIES:` / `:LOGBOOK:` drawer entries, `#+IMPORT:` and
+  other `#+KEYWORD:` lines.
+- `:BLOCKED-BY:` / `:BLOCKED-BY+:` continuation lines (already
+  line-structured).
+
+When editing an existing file that *was* hard-wrapped by a prior
+author, do not opportunistically re-flow paragraphs you aren't
+otherwise touching — only unwrap paragraphs you are already modifying,
+to keep diffs minimal. Bulk normalisation should be its own dedicated
+commit.
+
 ### Task headings
 
 ```org
@@ -287,6 +320,8 @@ semantics, `paths.test.ts` covers import/scaffold sandboxing,
   a concrete outcome that can become `DONE`.
 - Prefer adding detail to change-records rather than bloating
   `TASKS.org`.
+- Author body prose as single-line paragraphs (no hard wrap); see
+  *Line wrapping* above.
 - New change-records use `YYYY-MM-DD-short-task-name.org` under
   `#+DEFAULT_PLAN_DIR` and declare `#+TITLE:`, `#+DATE:`, `#+PARENT:`
   (a navigable `[[file:<rel>/TASKS.org::#<uuid>][summary]]` link to the

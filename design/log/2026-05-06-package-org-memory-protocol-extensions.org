@@ -238,45 +238,21 @@ Files explicitly excluded from package output:
 :END:
 
 Files added to the source tree:
-- =agents/package.json= — pi package manifest. Uses explicit slice paths
-  (`./pi/extensions/tasks` etc.) so only the four packaged extensions and
-  three packaged skills are exposed when the directory is consumed as a
-  pi package. Helper directory `pi/extensions/lib/` is in `files` (so it
-  ships in the npm/git tarball) but is *not* listed in `pi.extensions`,
-  so pi's loader ignores it as a candidate extension. `peerDependencies`
-  declares `@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, and
-  `@sinclair/typebox` with `"*"` ranges per the spike.
-- =agents/README.md= — top-level package README aimed at collaborators.
-  Documents the bundle contents, two install modes (pi-package vs
-  Nix/Home Manager), filter syntax, runtime requirements (pi, Emacs
-  server, Node 20+), and explicitly calls out what the bundle does
-  *not* ship (settings, other skills/extensions, tests).
+- =agents/package.json= — pi package manifest. Uses explicit slice paths (`./pi/extensions/tasks` etc.) so only the four packaged extensions and three packaged skills are exposed when the directory is consumed as a pi package. Helper directory `pi/extensions/lib/` is in `files` (so it ships in the npm/git tarball) but is *not* listed in `pi.extensions`, so pi's loader ignores it as a candidate extension. `peerDependencies` declares `@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, and `@sinclair/typebox` with `"*"` ranges per the spike.
+- =agents/README.md= — top-level package README aimed at collaborators. Documents the bundle contents, two install modes (pi-package vs Nix/Home Manager), filter syntax, runtime requirements (pi, Emacs server, Node 20+), and explicitly calls out what the bundle does *not* ship (settings, other skills/extensions, tests).
 
 Validation performed:
-- `jq` confirms `pi`, `peerDependencies`, and `files` keys parse and
-  contain the expected entries.
+- `jq` confirms `pi`, `peerDependencies`, and `files` keys parse and contain the expected entries.
 - All eight referenced paths resolve relative to `agents/`.
-- `pi install -l /Users/cormacc/dotfiles/agents` in a throwaway
-  directory installs cleanly, registers the package in the
-  project-local `.pi/settings.json`, and shows up under `pi list`'s
-  "Project packages" section without errors. (Live extension load
-  with a real session deferred to Task 4.)
+- `pi install -l /Users/cormacc/dotfiles/agents` in a throwaway directory installs cleanly, registers the package in the project-local `.pi/settings.json`, and shows up under `pi list`'s "Project packages" section without errors. (Live extension load with a real session deferred to Task 4.)
 
 Non-changes:
-- Source tree layout under `agents/` is otherwise untouched. Editable
-  mode keeps working because Home Manager symlinks bypass the
-  manifest entirely — pi auto-discovers from the convention dirs.
-- `agents/AGENTS.md` (owner-facing pi instructions) and
-  `agents/skills/README.org` (dotfiles-internal index) are not
-  shipped: they're absent from the manifest's `files` list.
+- Source tree layout under `agents/` is otherwise untouched. Editable mode keeps working because Home Manager symlinks bypass the manifest entirely — pi auto-discovers from the convention dirs.
+- `agents/AGENTS.md` (owner-facing pi instructions) and `agents/skills/README.org` (dotfiles-internal index) are not shipped: they're absent from the manifest's `files` list.
 
 Follow-ups inherited by Task 2 (Nix package):
-- Build a filtered copy of `agents/` that excludes `*.test.ts`,
-  `test.sh`, `default.nix`, `AGENTS.md`, `settings.json`, `disabled/`,
-  and the `skills/README.org` index, while preserving the
-  `pi/extensions/…` and `skills/…` paths the manifest depends on.
-- Verify the package builds under `nix build` and that the resulting
-  store path is install-able via `pi install /nix/store/…`.
+- Build a filtered copy of `agents/` that excludes `*.test.ts`, `test.sh`, `default.nix`, `AGENTS.md`, `settings.json`, `disabled/`, and the `skills/README.org` index, while preserving the `pi/extensions/…` and `skills/…` paths the manifest depends on.
+- Verify the package builds under `nix build` and that the resulting store path is install-able via `pi install /nix/store/…`.
 
 ** Documentation
 :PROPERTIES:
@@ -284,52 +260,19 @@ Follow-ups inherited by Task 2 (Nix package):
 :END:
 
 Files updated:
-- =agents/README.md= (the package-output README) gained four new
-  sections and tightened wording in three existing ones:
-  - *Why the directory split* explains why generic skills land under
-    `~/.agents/skills/` (cross-agent location per the Agent Skills
-    spec) while pi-specific code lands under `~/.pi/agent/extensions/`
-    (pi's own discovery location), and why keeping them separate
-    matters for non-pi consumers of the protocol.
-  - *Consuming from another Nix flake* gives a copy-pasteable example
-    of importing the dotfiles flake as an input and selecting
-    `agents.mode = "packaged"` with `agents.package =
-    agent-org-memory.packages.<system>.agent-org-memory` in another
-    Home Manager configuration.
-  - *Extraction roadmap* documents the five concrete steps required
-    to migrate the slice to a dedicated repository (move files,
-    optionally flatten the layout, update repository fields, update
-    install URLs, tag a release) and notes that no source-code
-    changes are needed in the extensions or skills themselves.
-  - *Helper modules* paragraph now describes the packaged-mode `lib`
-    symlink behaviour discovered during Task 4 validation, instead
-    of the earlier (incorrect) claim that no separate symlink was
-    needed.
-  - *Packaged mode* bullet says "eight org-memory resources" (3
-    skills + 4 extensions + 1 helper directory) instead of the
-    earlier stale "seven".
-- =agents/skills/README.org= (dotfiles-internal skills index) gained
-  a paragraph pointing collaborators at the package README for
-  install routes and the editable-vs-packaged mode split. The file
-  itself is not shipped in the package output — it remains an index
-  for the dotfiles owner.
-- =README.org= (top-level dotfiles overview) entry for `agents/` now
-  describes the published `agent-org-memory` package, the flake
-  output, and the `agents.mode` toggle.
-- =AGENTS.md= (top-level pi/Claude operating guidance) entry for
-  `agents/` and the Nix-Specific Notes section both updated: the
-  bullet that previously said `agents.nix` blindly symlinks `agents/pi/`
-  contents now describes the editable/packaged mode split and the
-  Home Manager option schema.
+- =agents/README.md= (the package-output README) gained four new sections and tightened wording in three existing ones:
+  - *Why the directory split* explains why generic skills land under `~/.agents/skills/` (cross-agent location per the Agent Skills spec) while pi-specific code lands under `~/.pi/agent/extensions/` (pi's own discovery location), and why keeping them separate matters for non-pi consumers of the protocol.
+  - *Consuming from another Nix flake* gives a copy-pasteable example of importing the dotfiles flake as an input and selecting `agents.mode = "packaged"` with `agents.package = agent-org-memory.packages.<system>.agent-org-memory` in another Home Manager configuration.
+  - *Extraction roadmap* documents the five concrete steps required to migrate the slice to a dedicated repository (move files, optionally flatten the layout, update repository fields, update install URLs, tag a release) and notes that no source-code changes are needed in the extensions or skills themselves.
+  - *Helper modules* paragraph now describes the packaged-mode `lib` symlink behaviour discovered during Task 4 validation, instead of the earlier (incorrect) claim that no separate symlink was needed.
+  - *Packaged mode* bullet says "eight org-memory resources" (3 skills + 4 extensions + 1 helper directory) instead of the earlier stale "seven".
+- =agents/skills/README.org= (dotfiles-internal skills index) gained a paragraph pointing collaborators at the package README for install routes and the editable-vs-packaged mode split. The file itself is not shipped in the package output — it remains an index for the dotfiles owner.
+- =README.org= (top-level dotfiles overview) entry for `agents/` now describes the published `agent-org-memory` package, the flake output, and the `agents.mode` toggle.
+- =AGENTS.md= (top-level pi/Claude operating guidance) entry for `agents/` and the Nix-Specific Notes section both updated: the bullet that previously said `agents.nix` blindly symlinks `agents/pi/` contents now describes the editable/packaged mode split and the Home Manager option schema.
 
 Validation performed:
-- `nix build .#agent-org-memory --impure` rebuilds the package with
-  the updated README at
-  `/nix/store/…-agent-org-memory-0.1.0/README.md`. Tree shape and
-  file count (28) unchanged.
-- `nix eval .#homeConfigurations.default.activationPackage --impure`
-  and `nix eval .#darwinConfigurations."Cormacs-MacBook-Air".system
-  --impure` both still evaluate to derivations.
+- `nix build .#agent-org-memory --impure` rebuilds the package with the updated README at `/nix/store/…-agent-org-memory-0.1.0/README.md`. Tree shape and file count (28) unchanged.
+- `nix eval .#homeConfigurations.default.activationPackage --impure` and `nix eval .#darwinConfigurations."Cormacs-MacBook-Air".system --impure` both still evaluate to derivations.
 
 ** Discovery, hot reload, install paths
 :PROPERTIES:
@@ -337,74 +280,27 @@ Validation performed:
 :END:
 
 *** Editable mode
-- The current pi session driving this work is the editable-mode
-  consumer. The `tasks` and `jira` extensions are providing the
-  `tasks_insert_task` and `jira_clone_apply` tools to this very
-  session, which proves both extensions and their helper modules
-  under `pi/extensions/lib/` are loading from the symlinked
-  checkout. Hot reload via `/reload` is the standard pi behaviour
-  for files in `~/.pi/agent/extensions/` and is unchanged.
-- Per-extension test scripts run cleanly against the editable
-  checkout: `tasks/test.sh` (35 ok), `jira/test.sh` (45 ok),
-  `emacsclient/test.sh` (53 ok / 1 fail). The single emacsclient
-  failure is environment-sensitive (`tsx` resolution under the
-  ad-hoc nix shell wrapper) and reproduces on master before this
-  change — not a regression.
+- The current pi session driving this work is the editable-mode consumer. The `tasks` and `jira` extensions are providing the `tasks_insert_task` and `jira_clone_apply` tools to this very session, which proves both extensions and their helper modules under `pi/extensions/lib/` are loading from the symlinked checkout. Hot reload via `/reload` is the standard pi behaviour for files in `~/.pi/agent/extensions/` and is unchanged.
+- Per-extension test scripts run cleanly against the editable checkout: `tasks/test.sh` (35 ok), `jira/test.sh` (45 ok), `emacsclient/test.sh` (53 ok / 1 fail). The single emacsclient failure is environment-sensitive (`tsx` resolution under the ad-hoc nix shell wrapper) and reproduces on master before this change — not a regression.
 
 *** Packaged mode
 Bug discovered and fixed during validation:
-- pi's extension loader resolves `../lib/…` imports from the
-  *symlink path* (`~/.pi/agent/extensions/<ext>/index.ts`), not from
-  the realpath. Without a sibling `lib/` entry under the same
-  parent, all four packaged extensions fail to load with
-  `Cannot find module '../lib/…'` errors.
-- Fix: packaged mode now also creates
-  `~/.pi/agent/extensions/lib` as a symlink to
-  `${cfg.package}/pi/extensions/lib`. The lib directory has no
-  `index.ts` and no `package.json`, so pi's extension scanner
-  silently skips it as a candidate extension while keeping it
-  reachable for sibling-import resolution.
-- The change-record's earlier `Decisions falling out of the spike`
-  entry asserting that no `lib/` symlink was needed is therefore
-  stale; the corrected behaviour is captured here.
+- pi's extension loader resolves `../lib/…` imports from the *symlink path* (`~/.pi/agent/extensions/<ext>/index.ts`), not from the realpath. Without a sibling `lib/` entry under the same parent, all four packaged extensions fail to load with `Cannot find module '../lib/…'` errors.
+- Fix: packaged mode now also creates `~/.pi/agent/extensions/lib` as a symlink to `${cfg.package}/pi/extensions/lib`. The lib directory has no `index.ts` and no `package.json`, so pi's extension scanner silently skips it as a candidate extension while keeping it reachable for sibling-import resolution.
+- The change-record's earlier `Decisions falling out of the spike` entry asserting that no `lib/` symlink was needed is therefore stale; the corrected behaviour is captured here.
 
-Validation in a sandboxed `$HOME` simulating packaged mode (manually
-building the same per-entry symlinks the Home Manager module would
-create):
-- Layout matches expectations: three skill symlinks under
-  `.agents/skills/{org-jira,org-plan,org-tasks}`, four extension
-  symlinks plus the `lib` helper under
-  `.pi/agent/extensions/{tasks,jira,leader-menu,emacsclient,lib}`,
-  each resolving to the corresponding subdirectory of the store
-  output. No other entries written.
-- Running pi against the sandboxed `HOME` with a deliberately
-  invalid API key produces zero `Failed to load extension` errors
-  for the four packaged extensions; the only error is the expected
-  `INVALID_ARGUMENT` from the model API, which is past the
-  extension-discovery / load phase. Helper directory `lib` is not
-  reported as a separate extension.
-- `pi install -l /nix/store/…-agent-org-memory-0.1.0` in a
-  throwaway directory installs cleanly and registers the package in
-  project-local `.pi/settings.json`. `pi list` shows it under
-  "Project packages" with the resolved store path.
+Validation in a sandboxed `$HOME` simulating packaged mode (manually building the same per-entry symlinks the Home Manager module would create):
+- Layout matches expectations: three skill symlinks under `.agents/skills/{org-jira,org-plan,org-tasks}`, four extension symlinks plus the `lib` helper under `.pi/agent/extensions/{tasks,jira,leader-menu,emacsclient,lib}`, each resolving to the corresponding subdirectory of the store output. No other entries written.
+- Running pi against the sandboxed `HOME` with a deliberately invalid API key produces zero `Failed to load extension` errors for the four packaged extensions; the only error is the expected `INVALID_ARGUMENT` from the model API, which is past the extension-discovery / load phase. Helper directory `lib` is not reported as a separate extension.
+- `pi install -l /nix/store/…-agent-org-memory-0.1.0` in a throwaway directory installs cleanly and registers the package in project-local `.pi/settings.json`. `pi list` shows it under "Project packages" with the resolved store path.
 
 *** Build and module evaluation
-- `nix build .#agent-org-memory --impure` reproducibly produces the
-  store path the validation steps consume.
-- `nix eval .#homeConfigurations.default.activationPackage --impure`
-  evaluates to a derivation; editable mode unaffected by the
-  packaged-mode lib symlink fix.
-- `nix eval .#darwinConfigurations."Cormacs-MacBook-Air".system
-  --impure` evaluates to a derivation.
-- Editable-mode entry-set check after the lib fix: still six entries,
-  identical to the pre-refactor baseline.
-- Packaged-mode entry-set check after the lib fix: now eight
-  entries (three skills + four extensions + the new lib helper),
-  matching the symlink layout that pi successfully loads.
-- `nix flake check --impure --no-build` exposes a pre-existing
-  `home.homeDirectory` conflict in `nixosConfigurations` that
-  reproduces verbatim on master before any of these changes; not a
-  regression introduced by this work.
+- `nix build .#agent-org-memory --impure` reproducibly produces the store path the validation steps consume.
+- `nix eval .#homeConfigurations.default.activationPackage --impure` evaluates to a derivation; editable mode unaffected by the packaged-mode lib symlink fix.
+- `nix eval .#darwinConfigurations."Cormacs-MacBook-Air".system --impure` evaluates to a derivation.
+- Editable-mode entry-set check after the lib fix: still six entries, identical to the pre-refactor baseline.
+- Packaged-mode entry-set check after the lib fix: now eight entries (three skills + four extensions + the new lib helper), matching the symlink layout that pi successfully loads.
+- `nix flake check --impure --no-build` exposes a pre-existing `home.homeDirectory` conflict in `nixosConfigurations` that reproduces verbatim on master before any of these changes; not a regression introduced by this work.
 
 ** Home Manager wiring
 :PROPERTIES:
@@ -413,60 +309,29 @@ create):
 
 Files changed:
 - =agents.nix= rewritten as a Home Manager module that:
-  - Declares two options under the `agents` namespace: `agents.mode`
-    (enum `editable` | `packaged`, default `editable`) and
-    `agents.package` (`package` type defaulting to
-    `pkgs.callPackage ./agents/agent-org-memory.nix { }`).
-  - Reads the org-memory slice from `agents/package.json` via
-    `lib.importJSON` so the Home Manager wiring and the pi package
-    share a single source of truth for which extensions/skills make
-    up the slice. Adding or removing an entry in the manifest
-    automatically flows through to packaged-mode symlinks without
-    touching `agents.nix`.
-  - In `editable` mode, restores the original whole-directory
-    `mkOutOfStoreSymlink` wiring byte-for-byte: `~/.agents/skills`,
-    `~/.pi/agent/{AGENTS.md,prompts,settings.json,extensions,skills}`
-    point at the live `${HOME}/dotfiles/agents` checkout. The dotfiles
-    owner's full local suite still installs unchanged.
-  - In `packaged` mode, generates per-entry symlinks: one
-    `~/.agents/skills/<skill>` per entry in `pi.skills`, one
-    `~/.pi/agent/extensions/<extension>` per entry in `pi.extensions`,
-    each pointing at the corresponding subdirectory of the
-    `agents.package` Nix store output. Helper modules under
-    `pi/extensions/lib/` are intentionally not symlinked: each
-    extension resolves `../lib/…` against its own resolved store
-    path, so imports succeed via the bundled sibling `lib/` inside
-    the package output.
+  - Declares two options under the `agents` namespace: `agents.mode` (enum `editable` | `packaged`, default `editable`) and `agents.package` (`package` type defaulting to `pkgs.callPackage ./agents/agent-org-memory.nix { }`).
+  - Reads the org-memory slice from `agents/package.json` via `lib.importJSON` so the Home Manager wiring and the pi package share a single source of truth for which extensions/skills make up the slice. Adding or removing an entry in the manifest automatically flows through to packaged-mode symlinks without touching `agents.nix`.
+  - In `editable` mode, restores the original whole-directory `mkOutOfStoreSymlink` wiring byte-for-byte: `~/.agents/skills`, `~/.pi/agent/{AGENTS.md,prompts,settings.json,extensions,skills}` point at the live `${HOME}/dotfiles/agents` checkout. The dotfiles owner's full local suite still installs unchanged.
+  - In `packaged` mode, generates per-entry symlinks: one `~/.agents/skills/<skill>` per entry in `pi.skills`, one `~/.pi/agent/extensions/<extension>` per entry in `pi.extensions`, each pointing at the corresponding subdirectory of the `agents.package` Nix store output. Helper modules under `pi/extensions/lib/` are intentionally not symlinked: each extension resolves `../lib/…` against its own resolved store path, so imports succeed via the bundled sibling `lib/` inside the package output.
 
 Validation performed:
-- `nix eval .#homeConfigurations.default.activationPackage --impure`
-  evaluates to a derivation. Existing Linux config unaffected.
-- `nix eval .#darwinConfigurations."Cormacs-MacBook-Air".system --impure`
-  evaluates to a derivation. Existing Darwin config unaffected.
-- Editable-mode entry-set check: configuring the home module without
-  setting `agents.mode` produces exactly the same six `home.file`
-  entries as the pre-refactor `agents.nix`:
+- `nix eval .#homeConfigurations.default.activationPackage --impure` evaluates to a derivation. Existing Linux config unaffected.
+- `nix eval .#darwinConfigurations."Cormacs-MacBook-Air".system --impure` evaluates to a derivation. Existing Darwin config unaffected.
+- Editable-mode entry-set check: configuring the home module without setting `agents.mode` produces exactly the same six `home.file` entries as the pre-refactor `agents.nix`:
   - `~/.agents/skills`
   - `~/.pi/agent/AGENTS.md`
   - `~/.pi/agent/extensions`
   - `~/.pi/agent/prompts`
   - `~/.pi/agent/settings.json`
   - `~/.pi/agent/skills`
-- Packaged-mode entry-set check: setting `agents.mode = "packaged"`
-  produces exactly the seven per-entry symlinks listed in the
-  manifest and nothing else under those parent dirs:
+- Packaged-mode entry-set check: setting `agents.mode = "packaged"` produces exactly the seven per-entry symlinks listed in the manifest and nothing else under those parent dirs:
   - `~/.agents/skills/{org-tasks,org-plan,org-jira}`
   - `~/.pi/agent/extensions/{tasks,jira,leader-menu,emacsclient}`
-  No whole-directory ownership of `~/.pi/agent/extensions/`,
-  `~/.pi/agent/skills/`, or `~/.agents/skills/`, so other entries
-  the consumer manages locally are preserved.
+  No whole-directory ownership of `~/.pi/agent/extensions/`, `~/.pi/agent/skills/`, or `~/.agents/skills/`, so other entries the consumer manages locally are preserved.
 
 Non-changes:
-- Module still consumed by `home.nix` and `home-darwin.nix` via the
-  same `import ./agents.nix` line; no caller-site changes required.
-- npm prefix wiring (`~/.npmrc`) and `home.packages` (`pi`,
-  `claude-code`, `codex`, etc.) are preserved verbatim and apply to
-  both modes.
+- Module still consumed by `home.nix` and `home-darwin.nix` via the same `import ./agents.nix` line; no caller-site changes required.
+- npm prefix wiring (`~/.npmrc`) and `home.packages` (`pi`, `claude-code`, `codex`, etc.) are preserved verbatim and apply to both modes.
 
 ** Nix package
 :PROPERTIES:
@@ -474,44 +339,14 @@ Non-changes:
 :END:
 
 Files added:
-- =agents/agent-org-memory.nix= — derivation that filters `./.` (the
-  `agents/` directory) using `lib.fileset`. The slice is an explicit
-  union of the four extensions, the helper `lib/`, the three skills,
-  `package.json`, and `README.md`; intersected with a file-level
-  predicate that drops `*.test.ts`, `test.sh`, and `default.nix`. The
-  derivation reads `version` from the manifest so the store path tracks
-  the manifest version, and exposes the unwrapped slice and parsed
-  manifest under `passthru` for downstream consumers.
-- =flake.nix= — added a `packages` output for `x86_64-linux` and
-  `aarch64-darwin`, each exposing `agent-org-memory` via
-  `pkgs.callPackage`. Darwin uses the existing `nixpkgs-darwin` pin so
-  the package evaluates on both the dotfiles owner's Linux workstation
-  and the macOS host without further plumbing.
+- =agents/agent-org-memory.nix= — derivation that filters `./.` (the `agents/` directory) using `lib.fileset`. The slice is an explicit union of the four extensions, the helper `lib/`, the three skills, `package.json`, and `README.md`; intersected with a file-level predicate that drops `*.test.ts`, `test.sh`, and `default.nix`. The derivation reads `version` from the manifest so the store path tracks the manifest version, and exposes the unwrapped slice and parsed manifest under `passthru` for downstream consumers.
+- =flake.nix= — added a `packages` output for `x86_64-linux` and `aarch64-darwin`, each exposing `agent-org-memory` via `pkgs.callPackage`. Darwin uses the existing `nixpkgs-darwin` pin so the package evaluates on both the dotfiles owner's Linux workstation and the macOS host without further plumbing.
 
 Validation performed:
-- `nix build .#agent-org-memory --impure` produces
-  `/nix/store/…-agent-org-memory-0.1.0/`. The output contains exactly
-  28 files: package manifest, top-level README, four extensions
-  (`tasks`, `jira`, `leader-menu`, `emacsclient`) with their `index.ts`,
-  sibling source modules and per-extension docs, the three helper
-  modules under `pi/extensions/lib/`, and the three skill `SKILL.md`
-  files.
-- Pattern audit confirms zero hits for `*.test.ts`, `test.sh`,
-  `default.nix`, `settings.json`, `README.org`, all out-of-slice
-  extensions (`bb-tasks`, `chromium`, `fetch`, `git-diff`, `lsp`,
-  `pi-clojure`, `term`, `webdriver`), `disabled/`, `prompts/`, and
-  `pi/skills/`. The single `AGENTS.md` hit is
-  `leader-menu/AGENTS.md` (the extension's own companion doc, an
-  intentional inclusion); the dotfiles-internal `agents/AGENTS.md` is
-  not present.
-- `pi install -l /nix/store/…-agent-org-memory-0.1.0` in a throwaway
-  directory installs cleanly and shows up under `pi list`'s "Project
-  packages" section without errors.
-- `nix flake show --impure` evaluates the new outputs:
-  `packages.x86_64-linux.agent-org-memory` and
-  `packages.aarch64-darwin.agent-org-memory`. Existing outputs
-  (`nixosConfigurations`, `homeConfigurations`, `darwinConfigurations`)
-  still evaluate.
+- `nix build .#agent-org-memory --impure` produces `/nix/store/…-agent-org-memory-0.1.0/`. The output contains exactly 28 files: package manifest, top-level README, four extensions (`tasks`, `jira`, `leader-menu`, `emacsclient`) with their `index.ts`, sibling source modules and per-extension docs, the three helper modules under `pi/extensions/lib/`, and the three skill `SKILL.md` files.
+- Pattern audit confirms zero hits for `*.test.ts`, `test.sh`, `default.nix`, `settings.json`, `README.org`, all out-of-slice extensions (`bb-tasks`, `chromium`, `fetch`, `git-diff`, `lsp`, `pi-clojure`, `term`, `webdriver`), `disabled/`, `prompts/`, and `pi/skills/`. The single `AGENTS.md` hit is `leader-menu/AGENTS.md` (the extension's own companion doc, an intentional inclusion); the dotfiles-internal `agents/AGENTS.md` is not present.
+- `pi install -l /nix/store/…-agent-org-memory-0.1.0` in a throwaway directory installs cleanly and shows up under `pi list`'s "Project packages" section without errors.
+- `nix flake show --impure` evaluates the new outputs: `packages.x86_64-linux.agent-org-memory` and `packages.aarch64-darwin.agent-org-memory`. Existing outputs (`nixosConfigurations`, `homeConfigurations`, `darwinConfigurations`) still evaluate.
 
 
 * Open questions

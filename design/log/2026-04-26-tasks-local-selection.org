@@ -4,58 +4,30 @@
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
-The org-memory protocol uses a reserved =:selected:= tag on a task heading to
-mark the contributor's currently-active task. The tag is read by the pi tasks
-extension (compact widget / overlay), the tasks-org Emacs package
-(=tasks-org-toggle-selected=), and any agent following the org-memory skill.
+The org-memory protocol uses a reserved =:selected:= tag on a task heading to mark the contributor's currently-active task. The tag is read by the pi tasks extension (compact widget / overlay), the tasks-org Emacs package (=tasks-org-toggle-selected=), and any agent following the org-memory skill.
 
-The tag lives inside the same =TASKS.org= and plan files that are version
-controlled and shared between contributors. That has three concrete problems:
+The tag lives inside the same =TASKS.org= and plan files that are version controlled and shared between contributors. That has three concrete problems:
 
-1. *Guaranteed merge conflicts*: Two contributors setting selection at the same
-   time produce a textual conflict on the same heading line. There is no good
-   semantic merge — the result is incoherent regardless of which side wins.
-2. *Personal state in shared history*: =git log= ends up tracking
-   "who selected what when," which is noise and can leak working patterns.
-3. *Cross-file scan cost*: The current Emacs implementation
-   (=tasks-org--clear-selected-everywhere=) walks every plan file referenced
-   from =TASKS.org= to clear stale selections before applying a new one.
+1. *Guaranteed merge conflicts*: Two contributors setting selection at the same time produce a textual conflict on the same heading line. There is no good semantic merge — the result is incoherent regardless of which side wins.
+2. *Personal state in shared history*: =git log= ends up tracking "who selected what when," which is noise and can leak working patterns.
+3. *Cross-file scan cost*: The current Emacs implementation (=tasks-org--clear-selected-everywhere=) walks every plan file referenced from =TASKS.org= to clear stale selections before applying a new one.
 
-The fix is to move selection out of shared content into a gitignored
-=TASKS.local.org= file, expressed as a single top-level keyword:
+The fix is to move selection out of shared content into a gitignored =TASKS.local.org= file, expressed as a single top-level keyword:
 
 #+begin_src org
 #+SELECTED: 2b87d48c-d158-44ff-8fea-87c99b570144
 #+end_src
 
-The file holds no task structure. Selection becomes an ID lookup against the
-existing task graph rather than a tag-mutation operation. Absent file or
-missing keyword means "no selection."
+The file holds no task structure. Selection becomes an ID lookup against the existing task graph rather than a tag-mutation operation. Absent file or missing keyword means "no selection."
 
 ** Design decisions
 
-- Single-keyword schema :: =TASKS.local.org= contains only =#+SELECTED: <UUID>=
-  at v1. Other local state (personal priority overrides, scratch annotations)
-  is out of scope; if needed, propose schema extensions in a follow-up plan.
-- ID lookup, not tag mutation :: Both readers and writers operate on a UUID
-  pointer in the local file. The selected heading is resolved by =:ID:= match
-  against =TASKS.org= and the plan files it references via =:PLAN:=. No
-  =:selected:= tag is written anywhere.
-- Backwards-compatible read path :: On read, if =TASKS.local.org= is missing or
-  has no =#+SELECTED:=, fall back to scanning for an existing =:selected:= tag
-  so a half-migrated repo still functions. Writers always migrate: they remove
-  any stale =:selected:= tags they encounter from shared files and write the
-  new pointer to the local file.
-- Gitignored, not gitattributes-merge :: =TASKS.local.org= is added to
-  =.gitignore=. We do not try to keep it in the index with a custom merge
-  driver — the whole point is to remove this state from version control.
-- File-watch, not direct IPC :: pi continues to refresh from disk via its
-  existing file watcher; the watcher is extended to monitor
-  =TASKS.local.org=. No new live protocol between Emacs and pi.
-- Skill documentation is part of v1 :: The org-memory skill currently lists
-  =:selected:= as the reserved operational tag. That documentation must change
-  in the same workstream so agents picking up the protocol after this change
-  do not regress to writing the tag.
+- Single-keyword schema :: =TASKS.local.org= contains only =#+SELECTED: <UUID>= at v1. Other local state (personal priority overrides, scratch annotations) is out of scope; if needed, propose schema extensions in a follow-up plan.
+- ID lookup, not tag mutation :: Both readers and writers operate on a UUID pointer in the local file. The selected heading is resolved by =:ID:= match against =TASKS.org= and the plan files it references via =:PLAN:=. No =:selected:= tag is written anywhere.
+- Backwards-compatible read path :: On read, if =TASKS.local.org= is missing or has no =#+SELECTED:=, fall back to scanning for an existing =:selected:= tag so a half-migrated repo still functions. Writers always migrate: they remove any stale =:selected:= tags they encounter from shared files and write the new pointer to the local file.
+- Gitignored, not gitattributes-merge :: =TASKS.local.org= is added to =.gitignore=. We do not try to keep it in the index with a custom merge driver — the whole point is to remove this state from version control.
+- File-watch, not direct IPC :: pi continues to refresh from disk via its existing file watcher; the watcher is extended to monitor =TASKS.local.org=. No new live protocol between Emacs and pi.
+- Skill documentation is part of v1 :: The org-memory skill currently lists =:selected:= as the reserved operational tag. That documentation must change in the same workstream so agents picking up the protocol after this change do not regress to writing the tag.
 
 * Plan
 
@@ -64,49 +36,33 @@ CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
 :CUSTOM_ID: d4e7f218-3a5b-49c2-b08d-e1f6a4c9d2b3
 :END:
-Replace the =:selected:= tag convention in
-=agents/skills/org-memory/SKILL.md= with the =TASKS.local.org= +
-=#+SELECTED: <UUID>= scheme.
+Replace the =:selected:= tag convention in =agents/skills/org-memory/SKILL.md= with the =TASKS.local.org= + =#+SELECTED: <UUID>= scheme.
 
 Acceptance criteria:
-- "Reserved operational tag" section either drops =:selected:= entirely or
-  describes it as a deprecated read-fallback only.
-- A new "Selection state" subsection documents =TASKS.local.org= location, the
-  =#+SELECTED:= keyword, gitignore expectation, and the read/write protocol.
-- "Starting or resuming work" step 2 references the new file rather than the
-  tag.
-- Archiving rules drop the "strip =:selected:=" instruction (or note it as a
-  legacy concern when archiving repos that pre-date this change).
+- "Reserved operational tag" section either drops =:selected:= entirely or describes it as a deprecated read-fallback only.
+- A new "Selection state" subsection documents =TASKS.local.org= location, the =#+SELECTED:= keyword, gitignore expectation, and the read/write protocol.
+- "Starting or resuming work" step 2 references the new file rather than the tag.
+- Archiving rules drop the "strip =:selected:=" instruction (or note it as a legacy concern when archiving repos that pre-date this change).
 - Example =TASKS.org= no longer shows =:selected:= as the canonical pattern.
 ** DONE [#A] pi tasks extension: read selection from TASKS.local.org :extension:read:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
 :CUSTOM_ID: f1c8e2a5-9d4b-4e36-8f72-1a3c5e7d9b04
 :END:
-Update =agents/pi/extensions/tasks/parser.ts= and
-=agents/pi/extensions/tasks/index.ts= to source the selected task ID from the
-local file.
+Update =agents/pi/extensions/tasks/parser.ts= and =agents/pi/extensions/tasks/index.ts= to source the selected task ID from the local file.
 
 Acceptance criteria:
-- =parser.ts= exposes a parser for top-level =#+SELECTED:= keywords (returns
-  =string | null=).
-- =index.ts= adds a =TASKS_LOCAL_FILE= constant and a helper to read the
-  selected ID from disk, tolerating missing file / missing keyword.
-- =findSelectedTask= resolves the heading by =:ID:= match across the loaded
-  task graph (=TASKS.org= and any =:PLAN:= -linked files).
-- Backwards-compatible fallback: if =TASKS.local.org= has no selection but a
-  =:selected:= tag exists in the loaded graph, return that task and emit a
-  one-line warning so the migration path is visible.
-- The =SELECTED_TAG= constant is either removed or relegated to the
-  fallback-read path only; no code path writes the tag.
+- =parser.ts= exposes a parser for top-level =#+SELECTED:= keywords (returns =string | null=).
+- =index.ts= adds a =TASKS_LOCAL_FILE= constant and a helper to read the selected ID from disk, tolerating missing file / missing keyword.
+- =findSelectedTask= resolves the heading by =:ID:= match across the loaded task graph (=TASKS.org= and any =:PLAN:= -linked files).
+- Backwards-compatible fallback: if =TASKS.local.org= has no selection but a =:selected:= tag exists in the loaded graph, return that task and emit a one-line warning so the migration path is visible.
+- The =SELECTED_TAG= constant is either removed or relegated to the fallback-read path only; no code path writes the tag.
 *** DONE [#B] Watch TASKS.local.org for changes :extension:watch:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
 :CUSTOM_ID: 0c5a3d9e-8f1b-4c27-a653-2e8f9d1b4a76
 :END:
-Extend the existing file watcher to refresh the compact widget / overlay when
-=TASKS.local.org= changes, so toggling selection in Emacs immediately reflects
-in pi.
+Extend the existing file watcher to refresh the compact widget / overlay when =TASKS.local.org= changes, so toggling selection in Emacs immediately reflects in pi.
 
 Acceptance criteria:
 - Watcher reacts to create / modify / delete of =TASKS.local.org=.
@@ -117,54 +73,36 @@ CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
 :CUSTOM_ID: 7b2c4d8e-9f0a-4e15-83cd-6f2a8b1e4c9d
 :END:
-Update =agents/pi/extensions/tasks/overlay.ts= so the selection toggle writes
-the local file instead of mutating the =:selected:= tag in the shared graph.
+Update =agents/pi/extensions/tasks/overlay.ts= so the selection toggle writes the local file instead of mutating the =:selected:= tag in the shared graph.
 
 Acceptance criteria:
-- Selecting a task writes =#+SELECTED: <UUID>= to =TASKS.local.org=, creating
-  the file if absent.
+- Selecting a task writes =#+SELECTED: <UUID>= to =TASKS.local.org=, creating the file if absent.
 - Toggling the currently-selected task removes the keyword (or the file).
-- The overlay no longer calls into save/parse paths for =TASKS.org= or plan
-  files when the only change is a selection update.
-- If a =:selected:= tag is found in the loaded graph during a write, strip it
-  in the same operation so the migration completes opportunistically.
+- The overlay no longer calls into save/parse paths for =TASKS.org= or plan files when the only change is a selection update.
+- If a =:selected:= tag is found in the loaded graph during a write, strip it in the same operation so the migration completes opportunistically.
 ** DONE [#A] tasks-org Emacs package: read/write TASKS.local.org :emacs:selection:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
 :CUSTOM_ID: 4e9f1c5b-8a7d-4632-9e0c-3d8a1f6b7c25
 :END:
-Refactor the selection helpers in
-=editors/emacs/spacemacs/layers/org-user/local/tasks-org/tasks-org.el= to use
-the local file.
+Refactor the selection helpers in =editors/emacs/spacemacs/layers/org-user/local/tasks-org/tasks-org.el= to use the local file.
 
 Acceptance criteria:
-- =tasks-org-toggle-selected= reads the current heading's =:ID:= (creating one
-  via =tasks-org-ensure-id= if missing) and writes it to =TASKS.local.org=
-  under the project root, replacing any existing =#+SELECTED:= line.
+- =tasks-org-toggle-selected= reads the current heading's =:ID:= (creating one via =tasks-org-ensure-id= if missing) and writes it to =TASKS.local.org= under the project root, replacing any existing =#+SELECTED:= line.
 - Toggling the currently-selected heading removes the =#+SELECTED:= keyword.
-- =tasks-org--clear-selected-everywhere= is removed (or kept only as a
-  legacy migration helper called once on first run).
-- A new helper, e.g. =tasks-org-selected-id=, reads the keyword from
-  =TASKS.local.org= for use by other commands and any future indicator UI.
-- Project-root resolution continues to use =projectile-project-root= with the
-  same fallback chain documented in the existing plan
-  (=2026-04-25-tasks-emacs-integration.org=).
+- =tasks-org--clear-selected-everywhere= is removed (or kept only as a legacy migration helper called once on first run).
+- A new helper, e.g. =tasks-org-selected-id=, reads the keyword from =TASKS.local.org= for use by other commands and any future indicator UI.
+- Project-root resolution continues to use =projectile-project-root= with the same fallback chain documented in the existing plan (=2026-04-25-tasks-emacs-integration.org=).
 *** CANCELLED [#C] Optional: visual indicator for selected heading :emacs:ui:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
 :CUSTOM_ID: 2a6c8e1f-3b9d-4527-a8f4-5e7c0d2b6a98
 :END:
-Without the =:selected:= tag, the active task is no longer visually marked in
-the buffer. Decide whether to add a lightweight overlay/face for the heading
-whose =:ID:= matches =#+SELECTED:=, or accept that selection is invisible in
-Emacs and discoverable only via =tasks-org-jump-to-selected= (new command
-candidate).
+Without the =:selected:= tag, the active task is no longer visually marked in the buffer. Decide whether to add a lightweight overlay/face for the heading whose =:ID:= matches =#+SELECTED:=, or accept that selection is invisible in Emacs and discoverable only via =tasks-org-jump-to-selected= (new command candidate).
 
 Acceptance criteria:
 - Decision recorded in *Implementation* with rationale.
-- If implemented, the indicator is non-destructive (overlay/face only, no text
-  insertion) and updates on buffer save and on
-  =tasks-org-toggle-selected=.
+- If implemented, the indicator is non-destructive (overlay/face only, no text insertion) and updates on buffer save and on =tasks-org-toggle-selected=.
 ** DONE [#B] Add TASKS.local.org to .gitignore :infra:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
@@ -173,25 +111,19 @@ CLOSED: [2026-04-27 Mon 18:52]
 Acceptance criteria:
 - Project root =.gitignore= includes =TASKS.local.org=.
 - =git status= in a repo with selection set is clean.
-- The skill documents that consumers of the protocol must do the same in their
-  own repos.
+- The skill documents that consumers of the protocol must do the same in their own repos.
 ** DONE [#B] Migrate existing :selected: tags :migration:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
 :CUSTOM_ID: 1f8b4d2e-9c5a-4863-b07f-a1c4d8e3f9b2
 :END:
-A small one-shot migration: read any existing =:selected:= tag from
-=TASKS.org= and =:PLAN:= -linked files, write the corresponding ID to
-=TASKS.local.org=, and remove the tag from the shared files in a dedicated
-commit.
+A small one-shot migration: read any existing =:selected:= tag from =TASKS.org= and =:PLAN:= -linked files, write the corresponding ID to =TASKS.local.org=, and remove the tag from the shared files in a dedicated commit.
 
 Acceptance criteria:
 - Migration script (or manual edit recipe) documented in *Implementation*.
 - After migration, =rg ":selected:" TASKS.org design/log/= returns nothing.
-- =TASKS.local.org= contains the previously-selected task's ID, or is absent
-  if nothing was selected.
-- Migration commit is separate from code/skill changes so the conversion is
-  reviewable in isolation.
+- =TASKS.local.org= contains the previously-selected task's ID, or is absent if nothing was selected.
+- Migration commit is separate from code/skill changes so the conversion is reviewable in isolation.
 ** DONE [#B] End-to-end validation :verification:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
@@ -200,19 +132,12 @@ CLOSED: [2026-04-27 Mon 18:52]
 Smoke-test the round trip across Emacs, the file system, and the pi widget.
 
 Acceptance criteria:
-- Toggle selection in Emacs; confirm =TASKS.local.org= is created/updated and
-  =git status= remains clean.
-- Confirm the pi compact widget refreshes to the new selection within the
-  watcher's normal latency.
-- Toggle selection in the pi overlay; confirm =TASKS.local.org= updates and
-  Emacs picks up the change on next read (and indicator updates if
-  implemented).
-- Delete =TASKS.local.org= manually; confirm both Emacs and pi treat it as
-  "no selection" without errors.
+- Toggle selection in Emacs; confirm =TASKS.local.org= is created/updated and =git status= remains clean.
+- Confirm the pi compact widget refreshes to the new selection within the watcher's normal latency.
+- Toggle selection in the pi overlay; confirm =TASKS.local.org= updates and Emacs picks up the change on next read (and indicator updates if implemented).
+- Delete =TASKS.local.org= manually; confirm both Emacs and pi treat it as "no selection" without errors.
 - Verify a fresh =git clone= of the repo has no selection state checked in.
-- Verify the backwards-compat read path: temporarily reintroduce a
-  =:selected:= tag, confirm it is recognised and a deprecation warning is
-  emitted, then confirm a write path opportunistically clears it.
+- Verify the backwards-compat read path: temporarily reintroduce a =:selected:= tag, confirm it is recognised and a deprecation warning is emitted, then confirm a write path opportunistically clears it.
 * Implementation
 
 [2026-04-27 Mon] Implemented in full.
@@ -220,33 +145,17 @@ Acceptance criteria:
 ** Decisions recorded
 
 - Keyword name: =#+SELECTED:= — no collision found via =rg= across the repo.
-- Write atomicity: =writeFile(tmpPath)= + =rename(tmp, dest)= in both TypeScript
-  and Emacs Lisp, so the pi watcher never sees a transient empty file.
+- Write atomicity: =writeFile(tmpPath)= + =rename(tmp, dest)= in both TypeScript and Emacs Lisp, so the pi watcher never sees a transient empty file.
 - Multiple working copies: per-checkout selection confirmed as desired behaviour.
-- Emacs visual indicator (subtask =2a6c8e1f=): deferred. The pi compact widget
-  provides sufficient visibility; an Emacs overlay can be added in a follow-up.
-- =:PLAN:= vs =:INCLUDE:= naming discrepancy between skill and extension is out
-  of scope for this workstream.
+- Emacs visual indicator (subtask =2a6c8e1f=): deferred. The pi compact widget provides sufficient visibility; an Emacs overlay can be added in a follow-up.
+- =:PLAN:= vs =:INCLUDE:= naming discrepancy between skill and extension is out of scope for this workstream.
 
 ** Implementation summary
 
 - =parser.ts=: added =parseSelectedKeyword(content)= exporting =string | null=.
-- =index.ts=: added =TASKS_LOCAL_FILE=, =readSelectedId=, =writeSelectedId=
-  (exported), =findTaskById= (exported); updated =findSelectedTask= to ID-based
-  with tag fallback; updated =collectWatchPaths= to always include the local
-  file; updated =refreshTaskUi=, =syncCompactWidget=, =buildCompactLines=, and
-  =CompactTasksWidget= to carry =selectedId= through the display chain; updated
-  the overlay construction to pass =selectedId= and =onSelectionChange=.
-- =overlay.ts=: added =selectedId= field; replaced tag-based =findSelectedTask=
-  and =clearSelectedTags= with ID-based =findTaskById= and
-  =stripLegacySelectedTags=; updated =toggleSelect= to write via
-  =onSelectionChange= callback rather than mutating tags; added =save()=
-  opportunistic tag stripping; updated =refreshTasks= to accept =selectedId=.
-- =tasks-org.el=: added =tasks-org-local-file-name= custom var,
-  =tasks-org--local-file=, =tasks-org-selected-id=,
-  =tasks-org--write-local-selection=, =tasks-org--strip-legacy-selected-tag=;
-  rewrote =tasks-org-toggle-selected= to use the local-file scheme;
-  kept =tasks-org--clear-selected-everywhere= as a legacy helper.
+- =index.ts=: added =TASKS_LOCAL_FILE=, =readSelectedId=, =writeSelectedId= (exported), =findTaskById= (exported); updated =findSelectedTask= to ID-based with tag fallback; updated =collectWatchPaths= to always include the local file; updated =refreshTaskUi=, =syncCompactWidget=, =buildCompactLines=, and =CompactTasksWidget= to carry =selectedId= through the display chain; updated the overlay construction to pass =selectedId= and =onSelectionChange=.
+- =overlay.ts=: added =selectedId= field; replaced tag-based =findSelectedTask= and =clearSelectedTags= with ID-based =findTaskById= and =stripLegacySelectedTags=; updated =toggleSelect= to write via =onSelectionChange= callback rather than mutating tags; added =save()= opportunistic tag stripping; updated =refreshTasks= to accept =selectedId=.
+- =tasks-org.el=: added =tasks-org-local-file-name= custom var, =tasks-org--local-file=, =tasks-org-selected-id=, =tasks-org--write-local-selection=, =tasks-org--strip-legacy-selected-tag=; rewrote =tasks-org-toggle-selected= to use the local-file scheme; kept =tasks-org--clear-selected-everywhere= as a legacy helper.
 - =.gitignore=: added =TASKS.local.org= and =TASKS.local.org.tmp=.
 - =TASKS.local.org=: created with =#+SELECTED: a8f3c2e1-...= (current task).
 - =TASKS.org=: stripped =:selected:= tag from the task heading.
@@ -256,22 +165,8 @@ Acceptance criteria:
 
 Resolve before or during implementation; record outcomes in *Implementation*.
 
-- Keyword name :: =#+SELECTED:= is the chosen name. Confirm there is no
-  collision with org-mode's reserved keywords or any existing project keyword
-  before locking it in. (Quick sanity check: grep org sources / docs and
-  =rg "^#\\+SELECTED" .= across the repo.)
-- Write atomicity :: =TASKS.local.org= is small but read concurrently by the
-  pi watcher. Decide whether to write via =rename(2)= for atomic replacement
-  (recommended) or accept transient empty-file reads.
-- Multiple working copies :: A contributor with multiple checkouts of the same
-  repo will have independent =TASKS.local.org= files. Confirm this is the
-  desired behaviour (per-checkout selection) rather than per-user state stored
-  outside the repo (e.g. =$XDG_STATE_HOME/pi/<repo-id>/selected=).
-- Indicator scope :: If the optional Emacs indicator (subtask
-  =2a6c8e1f=) is implemented, decide whether it lives in =tasks-org-mode= by
-  default or behind a customisation flag. Default-on is more discoverable;
-  default-off avoids surprising users who don't use selection.
-- Skill renaming consequences :: The recent rename of =:PLAN:= → =:INCLUDE:=
-  in the org-memory skill has not been applied to =TASKS.org= or the existing
-  plan file. Decide whether to bundle that cleanup with this workstream or
-  keep it strictly out of scope. Default: out of scope; track separately.
+- Keyword name :: =#+SELECTED:= is the chosen name. Confirm there is no collision with org-mode's reserved keywords or any existing project keyword before locking it in. (Quick sanity check: grep org sources / docs and =rg "^#\\+SELECTED" .= across the repo.)
+- Write atomicity :: =TASKS.local.org= is small but read concurrently by the pi watcher. Decide whether to write via =rename(2)= for atomic replacement (recommended) or accept transient empty-file reads.
+- Multiple working copies :: A contributor with multiple checkouts of the same repo will have independent =TASKS.local.org= files. Confirm this is the desired behaviour (per-checkout selection) rather than per-user state stored outside the repo (e.g. =$XDG_STATE_HOME/pi/<repo-id>/selected=).
+- Indicator scope :: If the optional Emacs indicator (subtask =2a6c8e1f=) is implemented, decide whether it lives in =tasks-org-mode= by default or behind a customisation flag. Default-on is more discoverable; default-off avoids surprising users who don't use selection.
+- Skill renaming consequences :: The recent rename of =:PLAN:= → =:INCLUDE:= in the org-memory skill has not been applied to =TASKS.org= or the existing plan file. Decide whether to bundle that cleanup with this workstream or keep it strictly out of scope. Default: out of scope; track separately.

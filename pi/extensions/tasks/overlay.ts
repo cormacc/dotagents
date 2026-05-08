@@ -311,7 +311,9 @@ export class TasksOverlay {
    *  purely for the debug logger — callers other than `handleInput` should
    *  not depend on its exact wording. */
   private dispatchInput(data: string): string {
-    if (matchesKey(data, "escape") || matchesKey(data, "q")) {
+    // Close on Escape, or on the same shortcut that opened the overlay
+    // (`alt+t`) so the activation key acts as a toggle.
+    if (matchesKey(data, "escape") || matchesKey(data, "alt+t")) {
       this.done(undefined);
       return "close";
     }
@@ -1040,7 +1042,7 @@ export class TasksOverlay {
     lines.push(th.fg("borderMuted", hBar(width)));
     const helpText = th.fg(
       "dim",
-      " ↑↓/jk nav • ←→/hl status • Enter toggle • s select • e edit • p plan • n new • N subtask • A archive • P publish • U unpublish • Ctrl-d/u scroll • q close",
+      " ↑↓/jk nav • ←→/hl status • Enter toggle • s select • e edit • p plan • n new • N subtask • A archive • P publish • U unpublish • Ctrl-d/u scroll • Esc/Alt-t close",
     );
     lines.push(truncateToWidth(pad(helpText, width), width));
     lines.push(th.fg("border", hBar(width)));

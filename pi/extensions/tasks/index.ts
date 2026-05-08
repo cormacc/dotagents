@@ -35,7 +35,6 @@ import { randomUUID } from "node:crypto";
 import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { homedir } from "node:os";
-import { getExtensionName, registerLeaderMenu } from "../lib/pi-utils.ts";
 import { ensureEmacsServer } from "../emacsclient/emacsclient.ts";
 import { Type } from "@sinclair/typebox";
 import { TasksOverlay } from "./overlay.ts";
@@ -61,7 +60,6 @@ import { insertTasksIntoPlanSection, scaffoldPlan } from "./scaffold.ts";
 import { resolveProjectPath } from "./paths.ts";
 import { colorIssues, colorPriority, colorStatus, colorTags } from "./status-colors.ts";
 
-const EXT_NAME = getExtensionName(import.meta.url);
 const TASKS_FILE = "TASKS.org";
 /** Gitignored local file that stores per-contributor selection state. */
 const TASKS_LOCAL_FILE = "TASKS.local.org";
@@ -93,9 +91,6 @@ function loadTasksSettings(): TasksSettings {
   } catch { /* fall through to defaults */ }
   return { changeRecordOnDone: true };
 }
-
-/** Cleanup handle for keybinding suggestions. */
-let cleanupKb: (() => void) | null = null;
 
 /** Compact selected-task widget state. */
 let compactWidgetComponent: CompactTasksWidget | null = null;
@@ -736,30 +731,27 @@ function registerInsertTaskTool(pi: ExtensionAPI): void {
 export default function (pi: ExtensionAPI) {
   registerInsertTaskTool(pi);
 
-  // ── Keybinding suggestions + startup compact widget restore ─────────
+  // ── Keyboard shortcut: Alt+T opens the tasks UI ──────────────────────
+  //
+  // `Alt+T` is mnemonic ("T" for tasks) and free of pi's built-in
+  // keybindings. macOS users may need their terminal configured to send
+  // Alt as Meta (e.g. iTerm2: "Use Option as Meta"; kitty: `macos_option_as_alt`).
+  // Override via `~/.pi/agent/keybindings.json` for a different chord.
+
+  pi.registerShortcut("alt+t", {
+    description: "Show tasks (TASKS.org)",
+    handler: (ctx) => {
+      pi.events.emit("tasks:show", { ctx });
+    },
+  });
+
+  // ── Startup compact widget restore ──────────────────────────────────
 
   pi.on("session_start", async (_ev, ctx) => {
-    cleanupKb = registerLeaderMenu(pi, EXT_NAME, {
-      globalMenu: {
-        items: {
-          t: {
-            label: "+tasks",
-            items: {
-              t: { label: "Show tasks", action: "tasks:show" },
-              n: { label: "New task", action: "tasks:new" },
-              d: { label: "Doctor (health check)", action: "tasks:doctor" },
-            },
-          },
-        },
-      },
-    });
-
     await refreshTaskUi(ctx, ctx.cwd);
   });
 
   pi.on("session_shutdown", async () => {
-    cleanupKb?.();
-    cleanupKb = null;
     closeAllFileWatchers();
     clearCompactWidget(activeCtx ?? undefined);
     activeCtx = null;

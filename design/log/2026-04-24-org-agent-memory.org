@@ -4,22 +4,14 @@
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Context
-This retrospective plan records the first implementation of plain-org project
-memory in this repository: `TASKS.org` as the durable task index, linked org plan
-files via `:PLAN:`, and the pi tasks extension as an optional UI over those
-files. The work established parser/serializer support, task selection, linked
-plans, archive handling, and the initial `org-memory` and `plan` skills.
+This retrospective plan records the first implementation of plain-org project memory in this repository: `TASKS.org` as the durable task index, linked org plan files via `:PLAN:`, and the pi tasks extension as an optional UI over those files. The work established parser/serializer support, task selection, linked plans, archive handling, and the initial `org-memory` and `plan` skills.
 
 ** Design decisions
-- Plain org files are the source of truth; pi provides UI but must not be
-  required to read or maintain task memory.
-- `TASKS.org` stays high-level, while detailed workstreams can live in linked
-  plan files.
+- Plain org files are the source of truth; pi provides UI but must not be required to read or maintain task memory.
+- `TASKS.org` stays high-level, while detailed workstreams can live in linked plan files.
 - `:selected:` is a reserved operational tag managed by task-selection tooling.
-- `:PLAN:` values should prefer clickable org file links while preserving older
-  bare-path forms.
-- `org-memory` owns the durable file protocol; `plan` owns implementation-plan
-  structure and execution workflow.
+- `:PLAN:` values should prefer clickable org file links while preserving older bare-path forms.
+- `org-memory` owns the durable file protocol; `plan` owns implementation-plan structure and execution workflow.
 
 * Plan
 
@@ -27,117 +19,82 @@ plans, archive handling, and the initial `org-memory` and `plan` skills.
 :PROPERTIES:
 :CUSTOM_ID: 85f5b5e1-2b74-4b8a-98c8-469926ea9dd6
 :END:
-  Added and iterated on the tasks extension so project tasks can be
-  represented with org-mode TODO headings in TASKS.org.
+  Added and iterated on the tasks extension so project tasks can be represented with org-mode TODO headings in TASKS.org.
 ** DONE [#A] Parse and serialize org TODO task trees :parser:
 :PROPERTIES:
 :CUSTOM_ID: a300d00e-ee3a-4009-bed0-023c95a73f42
 :END:
-  Implemented org heading parsing for TODO, STARTED, WAITING, and DONE
-  states, optional priorities, trailing tags, nested subtasks, descriptions,
-  and round-trip serialization.
+  Implemented org heading parsing for TODO, STARTED, WAITING, and DONE states, optional priorities, trailing tags, nested subtasks, descriptions, and round-trip serialization.
 ** DONE [#B] Clean up parser and overlay issues found during review :maintenance:
 :PROPERTIES:
 :CUSTOM_ID: a0d689dc-0b65-4e8b-b8c6-8ba40358818a
 :END:
-  Removed dead overlay state, removed unused render locals, improved
-  top-level task serialization readability, and prevented non-task headings
-  from being swallowed into the previous task description.
+  Removed dead overlay state, removed unused render locals, improved top-level task serialization readability, and prevented non-task headings from being swallowed into the previous task description.
 ** DONE [#A] Add task selection using a :selected: tag :selection:
 :PROPERTIES:
 :CUSTOM_ID: d6a43acc-5629-4fbe-90e7-3e20de93a970
 :END:
-  Added single-selection support to the main tasks overlay. Selecting a task
-  writes :selected: to TASKS.org, clears prior selections, focuses the
-  selected subtree, and collapses unrelated branches.
+  Added single-selection support to the main tasks overlay. Selecting a task writes :selected: to TASKS.org, clears prior selections, focuses the selected subtree, and collapses unrelated branches.
 ** DONE [#B] Improve selection highlighting in the main overlay :ui:
 :PROPERTIES:
 :CUSTOM_ID: 0234e459-cc74-4a03-ab4e-a1de2f9f2033
 :END:
-  Differentiated selected tasks and descendants from non-selected context
-  by dimming unrelated rows and applying clearer markers and accent styling
-  to the selected subtree.
+  Differentiated selected tasks and descendants from non-selected context by dimming unrelated rows and applying clearer markers and accent styling to the selected subtree.
 ** DONE [#A] Add a persistent selected-task view :ui:overlay:
 :PROPERTIES:
 :CUSTOM_ID: ef56118b-7e95-4a02-b628-58cc07e60bf9
 :END:
-  Added a non-capturing top-pinned overlay that shows the selected task and
-  its subtasks without stealing focus from the editor.
+  Added a non-capturing top-pinned overlay that shows the selected task and its subtasks without stealing focus from the editor.
 ** DONE [#B] Apply a consistent task status colour scheme :ui:
 :PROPERTIES:
 :CUSTOM_ID: 5346afd9-0fc3-47b8-b85d-1005b92f3c99
 :END:
-  Added shared status colouring so TODO is yellow, WAITING is orange,
-  STARTED is blue, and DONE is green in both the main overlay and the
-  pinned overlay.
+  Added shared status colouring so TODO is yellow, WAITING is orange, STARTED is blue, and DONE is green in both the main overlay and the pinned overlay.
 ** DONE [#A] Update the pinned selected-task overlay immediately :ui:
 :PROPERTIES:
 :CUSTOM_ID: 69b47668-e5f6-4af4-b802-895b9a2aef1e
 :END:
-  Changed status and selection updates in the main overlay to refresh the
-  pinned overlay immediately, instead of waiting for the main overlay to
-  close.
+  Changed status and selection updates in the main overlay to refresh the pinned overlay immediately, instead of waiting for the main overlay to close.
 ** DONE [#A] Support linked plan files via a PLAN property :plan:parser:
 :PROPERTIES:
 :CUSTOM_ID: 91318030-f1ae-4a0f-b408-e64954bb1669
 :END:
-  Updated the parser to read :PLAN: from org properties drawers, load
-  linked org plan files, parse them using the same task syntax, and inject
-  their tasks as children of the parent task in the tasks UI.
+  Updated the parser to read :PLAN: from org properties drawers, load linked org plan files, parse them using the same task syntax, and inject their tasks as children of the parent task in the tasks UI.
 ** DONE [#B] Preserve source locations for linked plan tasks :emacs:
 :PROPERTIES:
 :CUSTOM_ID: 7f2cc7b2-b6fd-459e-b273-f886fd91d4f1
 :END:
-  Tracked task source paths and line numbers so editing a task injected
-  from a linked plan opens the correct plan file and line in Emacs.
+  Tracked task source paths and line numbers so editing a task injected from a linked plan opens the correct plan file and line in Emacs.
 ** DONE [#A] Draft org-memory skill documentation :skills:memory:
 :PROPERTIES:
 :CUSTOM_ID: 6b50103e-18a7-4da5-beb1-6469dd384a47
 :END:
-  Created ./agents/skills/org-memory/SKILL.md describing how to use the org
-  task memory system with or without the pi-specific tasks extension.
+  Created ./agents/skills/org-memory/SKILL.md describing how to use the org task memory system with or without the pi-specific tasks extension.
 
-  Decision: keep org-memory and plan as separate, cross-referenced skills.
-  org-memory owns the durable TASKS.org/:PLAN: protocol; plan owns generic
-  implementation planning and execution workflow while emitting
-  org-compatible task trees when project memory is in use.
+  Decision: keep org-memory and plan as separate, cross-referenced skills. org-memory owns the durable TASKS.org/:PLAN: protocol; plan owns generic implementation planning and execution workflow while emitting org-compatible task trees when project memory is in use.
 *** DONE [#A] Draft plan skill documentation :skills:plan:memory:
 :PROPERTIES:
 :CUSTOM_ID: 8bc9aeb8-bbdd-434a-ad53-0a3329d1c034
 :END:
-    Created ./agents/skills/plan/SKILL.md. The plan skill covers drafting,
-    reviewing, and executing implementation plans, including retrospective
-    plans, with explicit cross-reference back to org-memory for persisted
-    task memory.
+    Created ./agents/skills/plan/SKILL.md. The plan skill covers drafting, reviewing, and executing implementation plans, including retrospective plans, with explicit cross-reference back to org-memory for persisted task memory.
 *** DONE [#C] Validate skill trigger behaviour after reload :skills:
 CLOSED: [2026-04-24 Fri 20:30]
 :PROPERTIES:
 :CUSTOM_ID: 52e134b8-7fe3-4ea1-ac1c-78811b2248a2
 :END:
     Static validation performed:
-    - `agents/skills/org-memory/SKILL.md` — frontmatter name matches
-      directory; description covers task memory, PLAN properties, status
-      updates, and pi tasks extension compatibility.
-    - `agents/skills/plan/SKILL.md` — frontmatter name matches directory;
-      description covers drafting, reviewing, and executing plans with
-      link back to org-memory.
-    - Cross-references resolve: org-memory→plan uses `../plan/SKILL.md`
-      and plan→org-memory uses `../org-memory/SKILL.md` — both valid
-      relative paths from each skill directory.
+    - `agents/skills/org-memory/SKILL.md` — frontmatter name matches directory; description covers task memory, PLAN properties, status updates, and pi tasks extension compatibility.
+    - `agents/skills/plan/SKILL.md` — frontmatter name matches directory; description covers drafting, reviewing, and executing plans with link back to org-memory.
+    - Cross-references resolve: org-memory→plan uses `../plan/SKILL.md` and plan→org-memory uses `../org-memory/SKILL.md` — both valid relative paths from each skill directory.
 
     Remaining as manual verification after the next `/reload`:
     - Both skills appear in the system prompt resource list.
-    - Prompts like "draft a plan" or "update TASKS.org" trigger the
-      relevant skill without needing `/skill:plan` or `/skill:org-memory`
-      explicitly.
+    - Prompts like "draft a plan" or "update TASKS.org" trigger the relevant skill without needing `/skill:plan` or `/skill:org-memory` explicitly.
 ** DONE [#B] Define a required plan-file structure :skills:plan:
 :PROPERTIES:
 :CUSTOM_ID: f52c8b77-5fc2-4354-af0a-ffa40ba08da5
 :END:
-  Extended the plan skill to specify plan file structure: title, Context,
-  Plan, and optional Implementation and Open questions sections. TODO items
-  live inside * Plan at level 2 so they remain parseable by the tasks
-  extension.
+  Extended the plan skill to specify plan file structure: title, Context, Plan, and optional Implementation and Open questions sections. TODO items live inside * Plan at level 2 so they remain parseable by the tasks extension.
 ** DONE [#A] Add a keyboard shortcut to edit the linked plan :ui:emacs:
 CLOSED: [2026-04-24 Fri 15:00]
 :PROPERTIES:
@@ -145,11 +102,8 @@ CLOSED: [2026-04-24 Fri 15:00]
 :END:
   Added the `p` keybinding in the main /tasks overlay:
   - Existing :PLAN: → open that file in Emacs at line 1.
-  - No plan → suggest `YYYY-MM-DD-<slug>.org` under `design/log/`, `plans/`,
-    or alongside the source org file. User approves/edits via `ctx.ui.input`.
-  - On approval: scaffold the file with the plan skill's required structure
-    (#+TITLE, * Context, * Plan), attach `:PLAN:` to the task, save the
-    source file, then open the new plan in Emacs.
+  - No plan → suggest `YYYY-MM-DD-<slug>.org` under `design/log/`, `plans/`, or alongside the source org file. User approves/edits via `ctx.ui.input`.
+  - On approval: scaffold the file with the plan skill's required structure (#+TITLE, * Context, * Plan), attach `:PLAN:` to the task, save the source file, then open the new plan in Emacs.
   - Auto-starts `emacs --daemon` via `pi.exec` when no server is reachable.
 ** DONE [#B] Investigate PLAN as an Emacs hyperlink :org:emacs:
 CLOSED: [2026-04-24 Fri 20:30]
@@ -157,39 +111,22 @@ CLOSED: [2026-04-24 Fri 20:30]
 :CUSTOM_ID: 2ace89a6-84f2-4620-b4f3-a47b07e8c43c
 :END:
   Findings:
-  - Emacs org-mode follows `[[file:...]]` / `[[file:...][desc]]` links in
-    property drawer values via `C-c C-o` (`org-open-at-point`). No custom
-    link type is required.
-  - Extended the parser to detect org-link syntax in the `:PLAN:` value and
-    extract the target path, while storing the raw value (`planRaw`) so
-    the original form round-trips byte-for-byte.
-  - Supported forms:
-      :PLAN: plans/foo.org
-      :PLAN: [[plans/foo.org]]
-      :PLAN: [[file:plans/foo.org]]
-      :PLAN: [[file:plans/foo.org][Description]]
-  - When the `p` keybinding creates a new plan, it now writes the link form
-    (`[[file:...]]`) by default so the resulting property is clickable in
-    Emacs without any user action.
-  - Verified via the `.agents/tmp/verify-plan-link.ts` smoke test that all
-    four forms round-trip cleanly and produce the same extracted path.
+  - Emacs org-mode follows `[[file:...]]` / `[[file:...][desc]]` links in property drawer values via `C-c C-o` (`org-open-at-point`). No custom link type is required.
+  - Extended the parser to detect org-link syntax in the `:PLAN:` value and extract the target path, while storing the raw value (`planRaw`) so the original form round-trips byte-for-byte.
+  - Supported forms: :PLAN: plans/foo.org :PLAN: [[plans/foo.org]] :PLAN: [[file:plans/foo.org]] :PLAN: [[file:plans/foo.org][Description]]
+  - When the `p` keybinding creates a new plan, it now writes the link form (`[[file:...]]`) by default so the resulting property is clickable in Emacs without any user action.
+  - Verified via the `.agents/tmp/verify-plan-link.ts` smoke test that all four forms round-trip cleanly and produce the same extracted path.
 ** DONE [#A] Add archive shortcut for completed top-level tasks :archive:
 CLOSED: [2026-04-24 Fri 20:10]
 :PROPERTIES:
 :CUSTOM_ID: 9351b6f3-4c9d-4f59-b789-1aa1d78dcaf9
 :END:
   Added the `A` (shift-a) keybinding in the main /tasks overlay:
-  - Resolves the top-level TASKS.org ancestor of the cursor's task (walking
-    through both regular children and injected plan children).
+  - Resolves the top-level TASKS.org ancestor of the cursor's task (walking through both regular children and injected plan children).
   - Confirms via `ctx.ui.confirm` (nested overlay on top of /tasks).
-  - Inlines linked plan children into the archived copy so
-    `TASKS.ARCHIVE.org` is self-contained and not coupled to plan files
-    that may later move.
-  - Appends to `TASKS.ARCHIVE.org` in archive-date order. Because we
-    typically archive just after completion, this matches CLOSED order in
-    normal use.
-  - Stamps `:ARCHIVED: [timestamp]` on the archived heading, reusing the
-    task's CLOSED timestamp when present (fallback: now).
+  - Inlines linked plan children into the archived copy so `TASKS.ARCHIVE.org` is self-contained and not coupled to plan files that may later move.
+  - Appends to `TASKS.ARCHIVE.org` in archive-date order. Because we typically archive just after completion, this matches CLOSED order in normal use.
+  - Stamps `:ARCHIVED: [timestamp]` on the archived heading, reusing the task's CLOSED timestamp when present (fallback: now).
   - Strips `:selected:` from the archived copy.
   - Rolls back the in-memory tree on write failure.
   - Now accepts top-level tasks in either `DONE` or `CANCELLED`.
@@ -201,10 +138,7 @@ CLOSED: [2026-04-24 Fri 21:05]
     Implemented follow-up requested by the archive task:
     - Parser heading regex now accepts `CANCELLED`.
     - Overlay status cycle now includes `CANCELLED`.
-    - `DONE` and `CANCELLED` are both treated as closed states for
-      `CLOSED:` timestamp semantics: entering either stamps if missing,
-      moving between them preserves the stamp, and moving back to an open
-      state clears it.
+    - `DONE` and `CANCELLED` are both treated as closed states for `CLOSED:` timestamp semantics: entering either stamps if missing, moving between them preserves the stamp, and moving back to an open state clears it.
     - Status colour palette adds `CANCELLED` in red.
     - Archive flow now allows either `DONE` or `CANCELLED` top-level tasks.
     - README and org-memory skill docs updated to mention the new status.
@@ -214,48 +148,37 @@ CLOSED: [2026-04-24 Fri 21:05]
 :CUSTOM_ID: bd782ba7-7e90-4c91-af86-0a9e267a45b1
 :END:
   Updated selection semantics:
-  - The `:selected:` marker still lives on the exact focused task, so it can
-    move down through subtasks.
-  - The selected *tree* is now rooted at the containing top-level TASKS.org
-    task, both in the main overlay and in the pinned overlay.
-  - The main overlay dims/collapses everything outside that top-level tree
-    instead of only the selected leaf's ancestor chain + descendants.
-  - The pinned overlay now shows the top-level root as its header while the
-    `★` marker follows the actual selected descendant inside that tree.
+  - The `:selected:` marker still lives on the exact focused task, so it can move down through subtasks.
+  - The selected *tree* is now rooted at the containing top-level TASKS.org task, both in the main overlay and in the pinned overlay.
+  - The main overlay dims/collapses everything outside that top-level tree instead of only the selected leaf's ancestor chain + descendants.
+  - The pinned overlay now shows the top-level root as its header while the `★` marker follows the actual selected descendant inside that tree.
 ** DONE [#B] Housekeeping
 CLOSED: [2026-04-24 Fri 21:45]
 :PROPERTIES:
 :CUSTOM_ID: 43715d7a-38bf-45df-bbb1-bb5c6d1df881
 :END:
-  Follow-up patch list from the final skills/extension review. Decisions below
-  were approved and implemented.
+  Follow-up patch list from the final skills/extension review. Decisions below were approved and implemented.
 *** DONE [#C] Unify Emacs bootstrap behavior for `e` and `p` :emacs:
 CLOSED: [2026-04-24 Fri 21:45]
 :PROPERTIES:
 :CUSTOM_ID: 2f7230df-03dc-40af-b756-9303c5b5a0ce
 :END:
-   The `emacs:open` event in the emacsclient extension now bootstraps
-   `emacs --daemon` when no server is reachable, and the tasks extension uses
-   the same server-check path before `e` and `p` open files.
+   The `emacs:open` event in the emacsclient extension now bootstraps `emacs --daemon` when no server is reachable, and the tasks extension uses the same server-check path before `e` and `p` open files.
 *** DONE [#C] Decide whether linked-plan task parsing should be constrained to `* Plan` :parser:skills:
 CLOSED: [2026-04-24 Fri 21:45]
 :PROPERTIES:
 :CUSTOM_ID: 0c7c7023-6ec0-4928-8523-bba0aa685e21
 :END:
-   Kept the parser permissive. Updated the tasks README to state that `* Plan`
-   is a recommended convention for readability, not a parser requirement.
+   Kept the parser permissive. Updated the tasks README to state that `* Plan` is a recommended convention for readability, not a parser requirement.
 *** DONE [#D] Preserve archive ordering by closed/archive timestamp :archive:
 CLOSED: [2026-04-24 Fri 21:45]
 :PROPERTIES:
 :CUSTOM_ID: 390bd896-e7c9-4faf-9bad-cb94a2a5e7cb
 :END:
-   The archive flow now reloads `TASKS.ARCHIVE.org`, inserts the new archived
-   task, sorts top-level archive entries by `CLOSED:` timestamp (falling back
-   to `:ARCHIVED:`), and rewrites the archive file.
+   The archive flow now reloads `TASKS.ARCHIVE.org`, inserts the new archived task, sorts top-level archive entries by `CLOSED:` timestamp (falling back to `:ARCHIVED:`), and rewrites the archive file.
 *** DONE [#D] Refresh stale inline extension comments to match current semantics :maintenance:
 CLOSED: [2026-04-24 Fri 21:45]
 :PROPERTIES:
 :CUSTOM_ID: 86a19f11-58b4-483c-8a86-da9c6dfed703
 :END:
-   Updated stale comments and extension docs to reflect current semantics for
-   Emacs bootstrap, permissive linked-plan parsing, and archive behavior.
+   Updated stale comments and extension docs to reflect current semantics for Emacs bootstrap, permissive linked-plan parsing, and archive behavior.

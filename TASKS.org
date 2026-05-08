@@ -32,14 +32,8 @@
 :LOGBOOK:
 - Created [2026-05-07 Thu 22:44]
 :END:
-Add a second pi package alongside ~agent-org-memory~ for the
-clojure-development skill family. The =clj-nrepl= skill, =pi-clojure=
-extension, and any future Clojure-specific helpers should ship as a
-separate slice with its own ~package.json~ / Nix derivation, mirroring
-the shape of ~agent-org-memory.nix~. Decide between sibling
-~package.json~ files vs a workspaces layout when the second slice
-actually has more than one entry to bind together. Captured as a
-follow-up to the 2026-05-07 dotfiles → dotagents extraction.
+#+IMPORT: [[file:design/log/2026-05-08-bootstrap-a-clojure-development-skill.org]]
+Add a second pi package alongside ~agent-org-memory~ for the clojure-development skill family. The =clj-nrepl= skill, =pi-clojure= extension, and any future Clojure-specific helpers should ship as a separate slice with its own ~package.json~ / Nix derivation, mirroring the shape of ~agent-org-memory.nix~. Decide between sibling ~package.json~ files vs a workspaces layout when the second slice actually has more than one entry to bind together. Captured as a follow-up to the 2026-05-07 dotfiles → dotagents extraction.
 ** TODO [#B] Re-tier self-improvement skill routing for the dotfiles/dotagents split :self-improvement:routing:
 :PROPERTIES:
 :CUSTOM_ID: 7e21788d-b4e6-439b-b300-ca84ab4a2fcc
@@ -48,28 +42,17 @@ follow-up to the 2026-05-07 dotfiles → dotagents extraction.
 :LOGBOOK:
 - Created [2026-05-07 Thu 22:44]
 :END:
-=skills/self-improvement/SKILL.md= currently routes "global" agent
-feedback at a single dotfiles-side TASKS.org. After the 2026-05-07
-extraction, global feedback splits across two repos:
+=skills/self-improvement/SKILL.md= currently routes "global" agent feedback at a single dotfiles-side TASKS.org. After the 2026-05-07 extraction, global feedback splits across two repos:
 
-- *dotagents* :: skills, pi extensions, prompts, the pi-side
-  =AGENTS.md=. Feedback about agent behaviour or skill content lands
-  here.
-- *dotfiles* :: =agents.nix=, =agents-config/pi/settings.json=, NixOS
-  / Home Manager / nix-darwin wiring. Feedback about installation,
-  packaging, or the dotfiles AGENTS.md lands here.
+- *dotagents* :: skills, pi extensions, prompts, the pi-side =AGENTS.md=. Feedback about agent behaviour or skill content lands here.
+- *dotfiles* :: =agents.nix=, =agents-config/pi/settings.json=, NixOS / Home Manager / nix-darwin wiring. Feedback about installation, packaging, or the dotfiles AGENTS.md lands here.
 
-Update the skill's routing rules accordingly: classify by affected
-artefact, hand off to the right repo via ~pi-intercom~, and document
-the two-tier model. Carried forward from the extraction
-change-record.
+Update the skill's routing rules accordingly: classify by affected artefact, hand off to the right repo via ~pi-intercom~, and document the two-tier model. Carried forward from the extraction change-record.
 ** TODO [#C] Improve terminal extension
 :PROPERTIES:
 :CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af
 :END:
-The terminal extension is only half cooked.
-We refactored a while ago to use tmux across all backends for pane management and do minimal pane creation/deletion using sway, kitty etc.
-This was a good choice, but the key bindings / workflows should be reviewed and updated - they hark back to an earlier design (or lack thereof).
+The terminal extension is only half cooked. We refactored a while ago to use tmux across all backends for pane management and do minimal pane creation/deletion using sway, kitty etc. This was a good choice, but the key bindings / workflows should be reviewed and updated - they hark back to an earlier design (or lack thereof).
 - Evaluate whether we should use zellij rather than tmux as the terminal multiplexer.
 - Redesign the slash commands and keybindings around the multiplexer workflow / semantics.
 ** TODO [#D] Investigate Allium
@@ -87,20 +70,17 @@ May be a useful complement to tasks / memory system?
 - State "CANCELLED"      from "TODO"      [2026-05-08 Fri 07:41]
 - State "TODO"      from "CANCELLED"      [2026-05-08 Fri 07:41]
 :END:
-https://pi.dev/packages/@juicesharp/rpiv-todo
-Haven't checked it out yet, but might be a nicer overlay, with a different underlying task store.
+https://pi.dev/packages/@juicesharp/rpiv-todo Haven't checked it out yet, but might be a nicer overlay, with a different underlying task store.
 ** TODO [#D] Check out rpiv-btw
 :PROPERTIES:
 :CUSTOM_ID: ec8e6eb3-dcfc-4124-ad1c-17e88d8562b6
 :END:
-https://pi.dev/packages/@juicesharp/rpiv-btw
-Ask a one-off question without polluting context... sounds useful
+https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without polluting context... sounds useful
 ** TODO [#C] Evaluate context-mode plugin
 :PROPERTIES:
 :CUSTOM_ID: dea3b890-b265-4372-a663-c584d04b4a68
 :END:
-https://pi.dev/packages/context-mode
-Also sounds useful...
+https://pi.dev/packages/context-mode Also sounds useful...
 ** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol
 :PROPERTIES:
 :CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
@@ -109,21 +89,12 @@ Also sounds useful...
 :LOGBOOK:
 - Created [2026-05-02 Sat 12:22]
 :END:
-Spawned from the dev-agent-backlog prior-art review (parent task
-5aed17ed-cfc4-4ae3-bb24-57c7d974a142). The review deferred dev-agent-backlog's
-"solution / lesson capture" idea on the basis that it overlaps with the
-existing self-improvement skill and is a separate concern from the task
-lifecycle protocol.
+Spawned from the dev-agent-backlog prior-art review (parent task 5aed17ed-cfc4-4ae3-bb24-57c7d974a142). The review deferred dev-agent-backlog's "solution / lesson capture" idea on the basis that it overlaps with the existing self-improvement skill and is a separate concern from the task lifecycle protocol.
 
-Re-examine the self-improvement skill against the org-memory protocol
-(org-tasks, org-plan, org-jira) and decide:
-- whether durable lessons / solutions should land as their own org artefacts,
-  separate change-records, or knowledge-base files
-- whether the skill should integrate with TASKS.org via spawned TODOs vs
-  remain orthogonal
-- whether anything in the dev-agent-backlog HTML summary
-  (design/log/2026-05-01-dev-agent-backlog-review-summary.html) should be
-  borrowed for the self-improvement skill specifically
+Re-examine the self-improvement skill against the org-memory protocol (org-tasks, org-plan, org-jira) and decide:
+- whether durable lessons / solutions should land as their own org artefacts, separate change-records, or knowledge-base files
+- whether the skill should integrate with TASKS.org via spawned TODOs vs remain orthogonal
+- whether anything in the dev-agent-backlog HTML summary (design/log/2026-05-01-dev-agent-backlog-review-summary.html) should be borrowed for the self-improvement skill specifically
 ** TODO [#D] Decompose vim-mode/index.ts into index + buffer + core :vim-mode:refactor:
 :PROPERTIES:
 :CUSTOM_ID: 6b087caf-4b69-4266-bd90-c6447ef361d7
@@ -168,22 +139,12 @@ Captured in the change-record's `* Implementation` → "Evaluation" section as o
 :LOGBOOK:
 - Created [2026-05-05 Tue 21:01]
 :END:
-Follow-up captured by the 2026-05-05 leader-menu slash-submission
-change-record (task aef78bbe). Move pi/extensions/disabled/vim-mode/ back
-into pi/extensions/vim-mode/ and verify single-keystroke
-command: dispatch survives the load-order race introduced by
-leader-menu owning the editor install:
+Follow-up captured by the 2026-05-05 leader-menu slash-submission change-record (task aef78bbe). Move pi/extensions/disabled/vim-mode/ back into pi/extensions/vim-mode/ and verify single-keystroke command: dispatch survives the load-order race introduced by leader-menu owning the editor install:
 
-- Load order: vim-mode's setEditorComponent() runs *after*
-  leader-menu's at session_start so VimEditor is the registered
-  active submitter (not the leader-menu base instance).
-- getActiveSubmitter() resolves to the live VimEditor (verify by
-  inspecting the registry from leader-menu's command: handler).
-- Existing default-local-leader / vim-grammar conflicts (the `,`
-  repeat-find note in disabled/vim-mode/README.md and archived task
-  32e3b4a9) remain unaffected.
-- VimEditor still extends SubmitterEditor (via ../lib/editor.js);
-  do not regress to extending CustomEditor directly.
+- Load order: vim-mode's setEditorComponent() runs *after* leader-menu's at session_start so VimEditor is the registered active submitter (not the leader-menu base instance).
+- getActiveSubmitter() resolves to the live VimEditor (verify by inspecting the registry from leader-menu's command: handler).
+- Existing default-local-leader / vim-grammar conflicts (the `,` repeat-find note in disabled/vim-mode/README.md and archived task 32e3b4a9) remain unaffected.
+- VimEditor still extends SubmitterEditor (via ../lib/editor.js); do not regress to extending CustomEditor directly.
 
 Not a blocker for closing the slash-submission change-record.
 ** TODO [#D] Review Jira integration against org-memory protocol :jira:org-memory:followup:
@@ -216,9 +177,7 @@ When I do the following....
 - Create an empty TASKS.org
 - Create a new task in TASKS.local.org
 - In the pi tasks extension, select the new task
-The new task is initially duplicated to TASKS.org, then deleted from TASKS.local.org
-It's possible that I accidentally hit promote, but don't believe so.
-Investigate -- reproduce manually, then follow up as appropriate.
+The new task is initially duplicated to TASKS.org, then deleted from TASKS.local.org It's possible that I accidentally hit promote, but don't believe so. Investigate -- reproduce manually, then follow up as appropriate.
 * Housekeeping
 
 ** STARTED Create self-improvement skill
@@ -242,29 +201,14 @@ https://pi.dev/packages/@dreki-gg/pi-lsp
 :LOGBOOK:
 - Created [2026-05-08 Fri 00:15]
 :END:
-Pi's startup skill scanner appears to honour `.gitignore` files when
-discovering skills under `~/.agents/skills`. `agents-src/.gitignore`
-intentionally excludes `find-skills/` and `skill-creator/` from the
-dotagents submodule (they were installed via `npx skills` rather than
-authored / owned by us, so we don't want them committed upstream), but
-the side effect is that pi silently filters them out of the
-available_skills list at session startup.
+Pi's startup skill scanner appears to honour `.gitignore` files when discovering skills under `~/.agents/skills`. `agents-src/.gitignore` intentionally excludes `find-skills/` and `skill-creator/` from the dotagents submodule (they were installed via `npx skills` rather than authored / owned by us, so we don't want them committed upstream), but the side effect is that pi silently filters them out of the available_skills list at session startup.
 
-Repro: with both directories present and listed in
-`~/.agents/skills/.gitignore`, neither appears in the skills section
-of the system prompt; removing them from `.gitignore` makes them
-appear. SKILL.md frontmatter is well-formed in both cases.
+Repro: with both directories present and listed in `~/.agents/skills/.gitignore`, neither appears in the skills section of the system prompt; removing them from `.gitignore` makes them appear. SKILL.md frontmatter is well-formed in both cases.
 
 Design options to weigh during planning:
-- Upstream fix in pi: don't apply `.gitignore` filtering to skill
-  discovery (or only honour a dedicated `.skillignore`).
-- Workaround in dotagents: stop using `.gitignore` for local-only
-  exclusion of `npx skills`-installed skills. Move them to a separate
-  path (e.g. `~/.agents/installed-skills/`) wired up via `agents.nix`,
-  and keep the submodule's `.gitignore` empty.
-- Workaround in dotagents: keep them under `agents-src/` but mark them
-  untracked via `.git/info/exclude` (per-clone) instead of
-  `.gitignore` (in-tree).
+- Upstream fix in pi: don't apply `.gitignore` filtering to skill discovery (or only honour a dedicated `.skillignore`).
+- Workaround in dotagents: stop using `.gitignore` for local-only exclusion of `npx skills`-installed skills. Move them to a separate path (e.g. `~/.agents/installed-skills/`) wired up via `agents.nix`, and keep the submodule's `.gitignore` empty.
+- Workaround in dotagents: keep them under `agents-src/` but mark them untracked via `.git/info/exclude` (per-clone) instead of `.gitignore` (in-tree).
 
 Origin:
 - session: agents-src (current)
@@ -273,24 +217,4 @@ Origin:
 - timestamp: [2026-05-08 Fri 00:13]
 - sender: human
 
-Update [2026-05-08 Fri]: scope narrowed. `find-skills/` and
-`skill-creator/` were de-gitignored and committed into the dotagents
-submodule (skill-creator was rewritten to be agent-agnostic, so we
-now effectively own it; find-skills is still the verbatim `npx skills`
-install but committed as-is). The remaining concern only applies to
-*future* installed skills we don't want to vendor — for those, either
-use `.git/info/exclude` (per-clone) instead of `.gitignore`, or pursue
-the upstream pi fix. Lower priority than originally filed.
-** TODO Document no-hard-wrapping convention for org task content :skill_org-tasks:skill_org-plan:
-:PROPERTIES:
-:CUSTOM_ID: 51e61638-c311-4986-b602-98fddaa4d8e0
-:CREATED: [2026-05-08 Fri 11:25]
-:END:
-:LOGBOOK:
-- Created [2026-05-08 Fri 11:25]
-:END:
-Friction reported from session subagent-chat-019e06e5: agents hard-wrap generated org prose in TASKS.org entries and change-records under design/log, but the preferred convention is one narrative paragraph per logical line so Emacs/org-mode can apply reader-local soft wrapping. Update org-tasks/SKILL.md, and cross-reference from org-plan/SKILL.md because both flows generate change-records. The convention should apply to narrative paragraph prose only; headings, list bullets, drawer lines, property values, code blocks, and tables are not subject to the rule.
-
-Suggested wording: **Wrapping**: do not hard-wrap prose paragraphs in generated org content. One paragraph = one logical line. Readers configure their own soft-wrap (visual-line-mode, org-startup-truncated nil, Emacs fill-column). Hard wrapping at an agent-chosen column makes diffs noisy when the convention changes and is redundant with org's display-time wrapping.
-
-Origin: /home/cormacc/nmd/products/connect/portal on branch fix-org-user-association-errors, git@gitlab.com:lenire-tinnitus-treatment/portal.git, timestamp [2026-05-08 Fri 11:15]. Triggering quote: "Better yet, don't wrap at all - let emacs/org mode apply its own softwrapping configuration. Record the decision globally at org-tasks skill level."
+Update [2026-05-08 Fri]: scope narrowed. `find-skills/` and `skill-creator/` were de-gitignored and committed into the dotagents submodule (skill-creator was rewritten to be agent-agnostic, so we now effectively own it; find-skills is still the verbatim `npx skills` install but committed as-is). The remaining concern only applies to *future* installed skills we don't want to vendor — for those, either use `.git/info/exclude` (per-clone) instead of `.gitignore`, or pursue the upstream pi fix. Lower priority than originally filed.

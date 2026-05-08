@@ -5,85 +5,29 @@
 
 * Context
 
-Tasks that warrant up-front planning get a *change-record* file under
-=#+DEFAULT_PLAN_DIR=, linked from the parent task via =#+IMPORT:=, with
-=* Context=, =* Plan=, and =* Implementation= sections.  The file begins
-life as a plan (the =* Plan= section drives the work) and becomes a
-durable record once the work lands (=* Implementation= captures what
-actually shipped, including failures rolled back).
+Tasks that warrant up-front planning get a *change-record* file under =#+DEFAULT_PLAN_DIR=, linked from the parent task via =#+IMPORT:=, with =* Context=, =* Plan=, and =* Implementation= sections.  The file begins life as a plan (the =* Plan= section drives the work) and becomes a durable record once the work lands (=* Implementation= captures what actually shipped, including failures rolled back).
 
-Simple tasks \u2014 a one-line bug fix, a doc tweak, a version bump \u2014 don't
-warrant up-front planning, so they currently go directly =TODO \u2192 DONE=
-with no change-record at all.  The git log captures *what changed* but
-not *why* in any task-localised form, and there is nothing for an agent
-or future contributor to read when resuming context.  The recent
-keybindings rollback is the counter-example: that task had a
-change-record, so the four failed attempts and what we learned now live
-in its =* Implementation= section.  For a plan-less task, that record
-would have nowhere to land.
+Simple tasks \u2014 a one-line bug fix, a doc tweak, a version bump \u2014 don't warrant up-front planning, so they currently go directly =TODO \u2192 DONE= with no change-record at all.  The git log captures *what changed* but not *why* in any task-localised form, and there is nothing for an agent or future contributor to read when resuming context.  The recent keybindings rollback is the counter-example: that task had a change-record, so the four failed attempts and what we learned now live in its =* Implementation= section.  For a plan-less task, that record would have nowhere to land.
 
-This plan adds a *retrospective flow* that produces the same
-change-record artefact.  No new file shape, no new nomenclature: a
-change-record is a change-record whether authored proactively (existing
-flow, =p= keybinding in the tasks overlay) or retrospectively (new flow,
-triggered by closing a task that has no =#+IMPORT:=).  The org-memory
-skill is updated to describe the dual flow; the tasks extension is
-updated to offer the retrospective scaffolding.
+This plan adds a *retrospective flow* that produces the same change-record artefact.  No new file shape, no new nomenclature: a change-record is a change-record whether authored proactively (existing flow, =p= keybinding in the tasks overlay) or retrospectively (new flow, triggered by closing a task that has no =#+IMPORT:=).  The org-memory skill is updated to describe the dual flow; the tasks extension is updated to offer the retrospective scaffolding.
 
 ** Design decisions
 
-- *Single artefact, two flows* :: The change-record file shape is
-  unchanged from today's plan layout (=#+TITLE=, =#+DATE=, =#+PARENT_ID=,
-  =#+TODO=, =* Context=, =* Plan=, =* Implementation=).  Whether the file
-  is created before work begins or after work ends, the structure is
-  identical.  In the proactive flow the agent helps draft =* Context=
-  and =* Plan= up front; in the retrospective flow the agent drafts
-  =* Context= and =* Implementation= from git history and
-  conversation, and =* Plan= is either empty or contains a brief
-  retrospective listing (with =DONE= / =CANCELLED= entries for the
-  steps actually taken).  Either way, the file is referred to as a
-  *change-record* in skill prose, and is linked from the parent task
-  via =#+IMPORT:=.
+- *Single artefact, two flows* :: The change-record file shape is unchanged from today's plan layout (=#+TITLE=, =#+DATE=, =#+PARENT_ID=, =#+TODO=, =* Context=, =* Plan=, =* Implementation=).  Whether the file is created before work begins or after work ends, the structure is identical.  In the proactive flow the agent helps draft =* Context= and =* Plan= up front; in the retrospective flow the agent drafts =* Context= and =* Implementation= from git history and conversation, and =* Plan= is either empty or contains a brief retrospective listing (with =DONE= / =CANCELLED= entries for the steps actually taken).  Either way, the file is referred to as a *change-record* in skill prose, and is linked from the parent task via =#+IMPORT:=.
 
-- *Reuse the existing plumbing* :: =handlePlanEdit= in =index.ts=
-  already does path-prompt + scaffold + =#+IMPORT:= attach + source
-  save + agent prompt.  The retrospective flow is the same flow with
-  a different agent-prompt body.  Parameterise the handler over a
-  mode (=proactive= vs =retrospective=); leave the scaffold body
-  identical.
+- *Reuse the existing plumbing* :: =handlePlanEdit= in =index.ts= already does path-prompt + scaffold + =#+IMPORT:= attach + source save + agent prompt.  The retrospective flow is the same flow with a different agent-prompt body.  Parameterise the handler over a mode (=proactive= vs =retrospective=); leave the scaffold body identical.
 
-- *When the retrospective prompt fires* :: On the status transition
-  =TODO \u2192 DONE= or =STARTED \u2192 DONE= for a task that has no
-  =#+IMPORT:= attached.  =CANCELLED= does not trigger.  A user setting
-  (=tasks.changeRecordOnDone=, default =true=) lets people opt out per
-  project.
+- *When the retrospective prompt fires* :: On the status transition =TODO \u2192 DONE= or =STARTED \u2192 DONE= for a task that has no =#+IMPORT:= attached.  =CANCELLED= does not trigger.  A user setting (=tasks.changeRecordOnDone=, default =true=) lets people opt out per project.
 
-- *Who triggers the prompt* :: The pi tasks extension only.  Closures
-  done outside the extension (Emacs status cycle, manual edit) are not
-  auto-prompted; the user can attach a retrospective change-record at
-  any time via the existing =p= keybinding (the same proactive flow
-  works on a closed task).
+- *Who triggers the prompt* :: The pi tasks extension only.  Closures done outside the extension (Emacs status cycle, manual edit) are not auto-prompted; the user can attach a retrospective change-record at any time via the existing =p= keybinding (the same proactive flow works on a closed task).
 
-- *No Emacs-side scaffolding command* :: The proactive flow stays
-  reachable from Emacs via =tasks-org-open-plan=, which already
-  creates a change-record when none exists.  The retrospective flow
-  is exclusive to the pi harness.
+- *No Emacs-side scaffolding command* :: The proactive flow stays reachable from Emacs via =tasks-org-open-plan=, which already creates a change-record when none exists.  The retrospective flow is exclusive to the pi harness.
 
-- *Existing-file behaviour* :: If the path-prompt resolves to a file
-  that already exists, the scaffold appends to =* Implementation=
-  (retrospective) or =* Plan= (proactive) and never overwrites
-  existing content.  Mirrors the proactive flow's current
-  =insertTasksIntoPlanSection= behaviour.
+- *Existing-file behaviour* :: If the path-prompt resolves to a file that already exists, the scaffold appends to =* Implementation= (retrospective) or =* Plan= (proactive) and never overwrites existing content.  Mirrors the proactive flow's current =insertTasksIntoPlanSection= behaviour.
 
-- *First-STARTED timestamp* :: To make the retrospective git-history
-  scope precise, the extension records the first =TODO \u2192 STARTED=
-  transition as a =:STARTED:= property on the task (written once per
-  task; subsequent re-opens do not overwrite).  The retrospective
-  prompt uses this property as the lower bound of the git window.
+- *First-STARTED timestamp* :: To make the retrospective git-history scope precise, the extension records the first =TODO \u2192 STARTED= transition as a =:STARTED:= property on the task (written once per task; subsequent re-opens do not overwrite).  The retrospective prompt uses this property as the lower bound of the git window.
 
-- *CANCELLED tasks are out of scope* :: Recording rationale for
-  abandoned work is a plausible second-iteration feature but
-  deliberately not part of this plan.
+- *CANCELLED tasks are out of scope* :: Recording rationale for abandoned work is a plausible second-iteration feature but deliberately not part of this plan.
 
 * Plan
 
@@ -92,77 +36,43 @@ CLOSED: [2026-04-28 Tue 00:46]
 :PROPERTIES:
 :CUSTOM_ID: c1d2e3f4-0001-4000-8000-300000000001
 :END:
-Replace any wording that distinguishes "plan files" from "task files"
-with a single concept: *change-records* linked from a task via
-=#+IMPORT:=.  Document that change-records are authored in either of
-two flows:
+Replace any wording that distinguishes "plan files" from "task files" with a single concept: *change-records* linked from a task via =#+IMPORT:=.  Document that change-records are authored in either of two flows:
 
-1. *Proactive*: scaffold up front, draft =* Context= + =* Plan=, then
-   execute and fill =* Implementation= as work lands.  This is the
-   flow the =p= keybinding and =tasks-org-open-plan= already produce.
-2. *Retrospective*: scaffold after the task closes, draft =* Context=
-   and =* Implementation= from git history and conversation; =* Plan=
-   may be empty or contain a brief retrospective list of steps
-   actually taken.
+1. *Proactive*: scaffold up front, draft =* Context= + =* Plan=, then execute and fill =* Implementation= as work lands.  This is the flow the =p= keybinding and =tasks-org-open-plan= already produce.
+2. *Retrospective*: scaffold after the task closes, draft =* Context= and =* Implementation= from git history and conversation; =* Plan= may be empty or contain a brief retrospective list of steps actually taken.
 
-The file shape stays as documented today (the plan skill is the source
-of truth for section conventions); this skill change is purely
-documentation of the new flow and naming.
+The file shape stays as documented today (the plan skill is the source of truth for section conventions); this skill change is purely documentation of the new flow and naming.
 
-Acceptance: an agent reading the skill alone can decide which flow to
-use for a given task and produces a change-record file that matches
-the existing structure either way.
+Acceptance: an agent reading the skill alone can decide which flow to use for a given task and produces a change-record file that matches the existing structure either way.
 
 ** DONE [#A] Update plan SKILL.md to use "change-record" naming
 CLOSED: [2026-04-28 Tue 00:46]
 :PROPERTIES:
 :CUSTOM_ID: c1d2e3f4-0002-4000-8000-300000000002
 :END:
-The plan skill owns the section conventions (=* Context=, =* Plan=,
-=* Implementation=).  Rename phrases like "plan file" to
-"change-record" where appropriate, while keeping the section names
-themselves unchanged (the =* Plan= section is still called =* Plan=).
-Add a sentence noting that the change-record may also be authored
-retrospectively (cross-reference the org-memory skill for the
-retrospective protocol).
+The plan skill owns the section conventions (=* Context=, =* Plan=, =* Implementation=).  Rename phrases like "plan file" to "change-record" where appropriate, while keeping the section names themselves unchanged (the =* Plan= section is still called =* Plan=). Add a sentence noting that the change-record may also be authored retrospectively (cross-reference the org-memory skill for the retrospective protocol).
 
-Acceptance: plan skill remains the source of truth for section
-structure; cross-reference is one-way (plan -> org-memory) and
-non-circular.
+Acceptance: plan skill remains the source of truth for section structure; cross-reference is one-way (plan -> org-memory) and non-circular.
 
 ** DONE [#A] Tasks extension: scaffold change-record on DONE transition
 CLOSED: [2026-04-28 Tue 00:46]
 :PROPERTIES:
 :CUSTOM_ID: c1d2e3f4-0003-4000-8000-300000000003
 :END:
-In =overlay.ts='s =cycleStatus()=, when the new status is =DONE= and
-=task.importPath= is null, emit a new workflow request via a new
-=onCreateChangeRecord= callback (mirroring =onEditPlan=).
+In =overlay.ts='s =cycleStatus()=, when the new status is =DONE= and =task.importPath= is null, emit a new workflow request via a new =onCreateChangeRecord= callback (mirroring =onEditPlan=).
 
-In =index.ts=, route the request to the existing =handlePlanEdit=
-flow with a new =mode: "retrospective"= argument.  The handler:
+In =index.ts=, route the request to the existing =handlePlanEdit= flow with a new =mode: "retrospective"= argument.  The handler:
 
-- Uses the same path prompt, the same scaffold body, the same
-  =#+IMPORT:= attach, the same source save.
-- Branches only on the agent prompt: =buildPlanDevelopmentPrompt=
-  becomes =buildChangeRecordPrompt(mode)= and emits a different
-  body for retrospective vs proactive (see task #5).
-- If the resolved path already points to an existing file, appends
-  to =* Implementation= rather than overwriting.
+- Uses the same path prompt, the same scaffold body, the same =#+IMPORT:= attach, the same source save.
+- Branches only on the agent prompt: =buildPlanDevelopmentPrompt= becomes =buildChangeRecordPrompt(mode)= and emits a different body for retrospective vs proactive (see task #5).
+- If the resolved path already points to an existing file, appends to =* Implementation= rather than overwriting.
 
-A user setting =tasks.changeRecordOnDone= controls whether the
-prompt fires (default =true=); when =false=, status cycle to DONE
-behaves as it does today.
+A user setting =tasks.changeRecordOnDone= controls whether the prompt fires (default =true=); when =false=, status cycle to DONE behaves as it does today.
 
-The path-prompt overlay title can stay unchanged
-(=New change-record for: <task summary>=) for both flows; the
-distinction is conveyed by what the agent does next, not by the
-prompt title.
+The path-prompt overlay title can stay unchanged (=New change-record for: <task summary>=) for both flows; the distinction is conveyed by what the agent does next, not by the prompt title.
 
 Acceptance:
-- Cycling a TODO/STARTED task to DONE in the overlay opens the path
-  prompt; accepting it scaffolds the change-record file, attaches
-  =#+IMPORT:=, and sends the retrospective agent prompt.
+- Cycling a TODO/STARTED task to DONE in the overlay opens the path prompt; accepting it scaffolds the change-record file, attaches =#+IMPORT:=, and sends the retrospective agent prompt.
 - Cycling a task that already has =#+IMPORT:= does *not* prompt.
 - Cancelling the path prompt leaves the task DONE with no record.
 - Cycling DONE -> CANCELLED does not prompt.
@@ -173,25 +83,14 @@ CLOSED: [2026-04-28 Tue 00:46]
 :PROPERTIES:
 :CUSTOM_ID: c1d2e3f4-0004-4000-8000-300000000004
 :END:
-In =overlay.ts='s =cycleStatus()=, when the new status is =STARTED= and
-the task does not yet have a =:STARTED:= property, write
-=:STARTED: [YYYY-MM-DD Day HH:MM]= into the property drawer using the
-same timestamp format as =:CLOSED:=.  Subsequent transitions back to
-=STARTED= must not rewrite this value (it captures *first* start, not
-most-recent).
+In =overlay.ts='s =cycleStatus()=, when the new status is =STARTED= and the task does not yet have a =:STARTED:= property, write =:STARTED: [YYYY-MM-DD Day HH:MM]= into the property drawer using the same timestamp format as =:CLOSED:=.  Subsequent transitions back to =STARTED= must not rewrite this value (it captures *first* start, not most-recent).
 
-This timestamp is consumed by the retrospective agent prompt to scope
-=git log= precisely.  It is also harmless when present on tasks that
-never enter the retrospective flow.
+This timestamp is consumed by the retrospective agent prompt to scope =git log= precisely.  It is also harmless when present on tasks that never enter the retrospective flow.
 
 Acceptance:
-- A task transitioning =TODO -> STARTED= for the first time gains a
-  =:STARTED:= property; the file round-trips cleanly through the
-  parser.
-- A task transitioning =DONE -> STARTED= (re-open) preserves the
-  original =:STARTED:= value.
-- =:STARTED:= is parsed and serialised as an ordinary property line
-  (no special handling needed).
+- A task transitioning =TODO -> STARTED= for the first time gains a =:STARTED:= property; the file round-trips cleanly through the parser.
+- A task transitioning =DONE -> STARTED= (re-open) preserves the original =:STARTED:= value.
+- =:STARTED:= is parsed and serialised as an ordinary property line (no special handling needed).
 
 ** DONE [#C] Retrospective agent-prompt template
 CLOSED: [2026-04-28 Tue 00:46]
@@ -200,33 +99,17 @@ CLOSED: [2026-04-28 Tue 00:46]
 :END:
 The agent prompt sent on retrospective scaffolding should:
 
-1. Use the task's =:STARTED:= property (when present) as the lower
-   bound of the git window; =CLOSED:= as the upper bound.  Fall back
-   to "recent commits since the task was created" when =:STARTED:= is
-   absent.
-2. Run =git log --oneline= over that window scoped to files plausibly
-   related to the task; OK to surface all recent commits when scoping
-   is uncertain.
-3. Draft the change-record's =* Context= (problem statement) and
-   =* Implementation= (what shipped, including any rolled-back
-   attempts) from the commit messages and code context.  =* Plan= may
-   be left empty or filled with a retrospective bullet list of steps
-   actually taken.
+1. Use the task's =:STARTED:= property (when present) as the lower bound of the git window; =CLOSED:= as the upper bound.  Fall back to "recent commits since the task was created" when =:STARTED:= is absent.
+2. Run =git log --oneline= over that window scoped to files plausibly related to the task; OK to surface all recent commits when scoping is uncertain.
+3. Draft the change-record's =* Context= (problem statement) and =* Implementation= (what shipped, including any rolled-back attempts) from the commit messages and code context.  =* Plan= may be left empty or filled with a retrospective bullet list of steps actually taken.
 4. Show the draft to the user for approval before writing to disk.
 
-Acceptance: prompt template lives alongside the existing
-=buildPlanDevelopmentPrompt= as =buildChangeRecordPrompt(mode)=; the
-agent reliably produces a usable retrospective draft for simple cases.
+Acceptance: prompt template lives alongside the existing =buildPlanDevelopmentPrompt= as =buildChangeRecordPrompt(mode)=; the agent reliably produces a usable retrospective draft for simple cases.
 
 ** DONE [#C] Documentation
 CLOSED: [2026-04-28 Tue 00:46]
 :PROPERTIES:
 :CUSTOM_ID: c1d2e3f4-0008-4000-8000-300000000008
 :END:
-- Tasks extension README: document the retrospective flow, the
-  =tasks.changeRecordOnDone= setting, and the unified "change-record"
-  terminology.  Where the README currently says "plan file", update to
-  "change-record" except where the proactive flow is specifically
-  meant.  Document the =:STARTED:= property semantics.
-- This change-record's =* Implementation= section: brief notes on what
-  shipped vs what was deferred (filled in as work completes).
+- Tasks extension README: document the retrospective flow, the =tasks.changeRecordOnDone= setting, and the unified "change-record" terminology.  Where the README currently says "plan file", update to "change-record" except where the proactive flow is specifically meant.  Document the =:STARTED:= property semantics.
+- This change-record's =* Implementation= section: brief notes on what shipped vs what was deferred (filled in as work completes).

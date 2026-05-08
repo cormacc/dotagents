@@ -5,42 +5,23 @@
 
 * Context
 
-Gap analysis of the org-memory and plan skills identified missing conventions,
-ambiguous protocols, and unnecessary coupling between skill content and
-extension-specific UI details.
+Gap analysis of the org-memory and plan skills identified missing conventions, ambiguous protocols, and unnecessary coupling between skill content and extension-specific UI details.
 
-A pre-implementation review also found a serious round-trip preservation concern:
-when task files are saved by tooling, org metadata and non-task structure must not
-be discarded. This plan therefore includes both protocol-documentation updates and
-a tasks-extension verification/fix item.
+A pre-implementation review also found a serious round-trip preservation concern: when task files are saved by tooling, org metadata and non-task structure must not be discarded. This plan therefore includes both protocol-documentation updates and a tasks-extension verification/fix item.
 
 ** Design decisions
 
-- *:selected: stays an org tag.* It is already established and managed by the
-  tasks extension/human task-selection workflow. Agents should preserve and
-  respect it, and should not create, move, or clear it unless explicitly asked or
-  acting through a task-selection tool.
+- *:selected: stays an org tag.* It is already established and managed by the tasks extension/human task-selection workflow. Agents should preserve and respect it, and should not create, move, or clear it unless explicitly asked or acting through a task-selection tool.
 
-- *Blocking context uses :BLOCKED-BY:, not a :blocked: tag.* Tags are semantic
-  category labels. The WAITING TODO keyword conveys blocked state; :BLOCKED-BY:
-  records the reason or dependency in a machine-readable property.
+- *Blocking context uses :BLOCKED-BY:, not a :blocked: tag.* Tags are semantic category labels. The WAITING TODO keyword conveys blocked state; :BLOCKED-BY: records the reason or dependency in a machine-readable property.
 
-- *Tasks carry :ID: UUID properties.* Use the standard org-mode :ID: property
-  with UUID v4 values, compatible with org-id.el. IDs provide stable machine
-  identity across renamed or restructured tasks.
+- *Tasks carry :ID: UUID properties.* Use the standard org-mode :ID: property with UUID v4 values, compatible with org-id.el. IDs provide stable machine identity across renamed or restructured tasks.
 
-- *Skills define protocol; extension implements UI.* Skill files should specify
-  the file format contract and agent behaviour. Extension-specific UI details,
-  keybindings, rendering, and safe write mechanics belong in the tasks extension.
+- *Skills define protocol; extension implements UI.* Skill files should specify the file format contract and agent behaviour. Extension-specific UI details, keybindings, rendering, and safe write mechanics belong in the tasks extension.
 
-- *Task memory files declare TODO keywords explicitly.* `TASKS.org` and newly
-  scaffolded linked plan files should include `#+TODO: TODO(t) STARTED(s)
-  WAITING(w) | DONE(d) CANCELLED(c)` so org-mode users get the same state cycle
-  without relying on global Emacs configuration.
+- *Task memory files declare TODO keywords explicitly.* `TASKS.org` and newly scaffolded linked plan files should include `#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)` so org-mode users get the same state cycle without relying on global Emacs configuration.
 
-- *Plan files may include a `** Design decisions` subsection under `* Context`.*
-  Use it when alternatives, constraints, or rationale will matter to future
-  humans/agents. Keep it optional for trivial plans.
+- *Plan files may include a `** Design decisions` subsection under `* Context`.* Use it when alternatives, constraints, or rationale will matter to future humans/agents. Keep it optional for trivial plans.
 
 * Plan
 
@@ -49,117 +30,98 @@ CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: a2a08773-4523-4c68-a16a-29df7e0cbbfc
 :END:
-Implemented source-preserving serialization in the tasks extension. Task saves now
-replace parsed task subtrees in-place instead of rewriting files as task-only
-content. Verified with temporary round-trip checks for both TASKS.org and this
-linked plan file.
+Implemented source-preserving serialization in the tasks extension. Task saves now replace parsed task subtrees in-place instead of rewriting files as task-only content. Verified with temporary round-trip checks for both TASKS.org and this linked plan file.
 
 ** DONE [#A] Clarify skill/extension responsibility boundary :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: 5a1ab014-0439-4430-91ef-323a74a25b28
 :END:
-Documented the boundary in org-memory and referenced the org-memory protocol from
-the tasks extension README.
+Documented the boundary in org-memory and referenced the org-memory protocol from the tasks extension README.
 
 ** DONE [#A] Add TASKS.org structural example to org-memory :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: b93f03db-4bf6-4a1f-a39c-895144302ccd
 :END:
-Added a complete minimal TASKS.org example with metadata, category headings,
-priority, tags, :ID:, :PLAN:, a subtask, and WAITING/:BLOCKED-BY: usage.
+Added a complete minimal TASKS.org example with metadata, category headings, priority, tags, :ID:, :PLAN:, a subtask, and WAITING/:BLOCKED-BY: usage.
 
 ** DONE [#A] Clarify :selected: tag semantics and reserved tag protocol :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: 17012494-4682-47b4-9c42-2d00f6d39d21
 :END:
-Documented :selected: as the single reserved operational tag, normally managed by
-task-selection tooling. Agents preserve and respect it rather than moving it by
-hand unless explicitly asked or acting through a selection tool.
+Documented :selected: as the single reserved operational tag, normally managed by task-selection tooling. Agents preserve and respect it rather than moving it by hand unless explicitly asked or acting through a selection tool.
 
 ** DONE [#A] Add :ID: UUID protocol to both skills :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: 57f300c5-bdb1-4494-9837-9474722c3182
 :END:
-Added :ID: UUID requirements to org-memory and plan. Backfilled IDs for loaded
-TASKS.org tasks/subtasks that lacked them. Updated extension-created tasks to
-start with an :ID: property.
+Added :ID: UUID requirements to org-memory and plan. Backfilled IDs for loaded TASKS.org tasks/subtasks that lacked them. Updated extension-created tasks to start with an :ID: property.
 
 ** DONE [#A] Specify note format in org-memory :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: 61c78ab6-eb52-4d44-91b4-6edc529470c4
 :END:
-Documented plain text task notes with optional inactive timestamps, without
-requiring :LOGBOOK: drawers.
+Documented plain text task notes with optional inactive timestamps, without requiring :LOGBOOK: drawers.
 
 ** DONE [#A] Specify preferred :PLAN: path form :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: 42564249-766a-41ac-8082-830e1401106e
 :END:
-Specified [[file:...]] as the preferred new :PLAN: form while preserving existing
-bare paths or labelled file links.
+Specified [[file:...]] as the preferred new :PLAN: form while preserving existing bare paths or labelled file links.
 
 ** DONE [#B] Define WAITING/:BLOCKED-BY: protocol in org-memory :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: 7ef55c0e-22f8-41f7-9992-57264b3a5483
 :END:
-Documented WAITING plus :BLOCKED-BY: semantics, examples for human/task/url/jira
-blockers, and unblocking behavior.
+Documented WAITING plus :BLOCKED-BY: semantics, examples for human/task/url/jira blockers, and unblocking behavior.
 
 ** DONE [#B] Add "Resuming interrupted work" section to org-memory :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: 9c451d26-4e0b-4f34-88a7-25aaf1ff7051
 :END:
-Added an explicit resume protocol based on TASKS.org, :selected:, STARTED tasks,
-linked plans, and nearby context/implementation notes.
+Added an explicit resume protocol based on TASKS.org, :selected:, STARTED tasks, linked plans, and nearby context/implementation notes.
 
 ** DONE [#B] Add bootstrap protocol to org-memory :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: 5c138b4b-8456-47a5-a252-c31363cdcf8f
 :END:
-Added initial TASKS.org creation guidance including title, semantic section, first
-TODO with :ID:, and linked plan directory conventions.
+Added initial TASKS.org creation guidance including title, semantic section, first TODO with :ID:, and linked plan directory conventions.
 
 ** DONE [#B] Trim extension section in org-memory, reference README instead :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: 75c83dde-3a5c-4ddb-a683-6768b2470877
 :END:
-Replaced detailed keybinding/UI duplication with a short explanation and pointer
-to agents/pi/extensions/tasks/README.md.
+Replaced detailed keybinding/UI duplication with a short explanation and pointer to agents/pi/extensions/tasks/README.md.
 
 ** DONE [#C] Update plan skill: :selected: awareness and nesting clarification :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: ee903cdf-575b-48c4-8007-d00997f50a1d
 :END:
-Updated execution guidance to respect :selected: without writing it directly.
-Clarified that deeper nested TODO headings are parsed but parent status is not
-automatically propagated.
+Updated execution guidance to respect :selected: without writing it directly. Clarified that deeper nested TODO headings are parsed but parent status is not automatically propagated.
 
 ** DONE [#C] Define tag conventions in org-memory :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: c459c449-3436-45d2-84e6-f8e10977517a
 :END:
-Documented semantic tag usage and discouraged operational tags beyond the reserved
-:selected: tag.
+Documented semantic tag usage and discouraged operational tags beyond the reserved :selected: tag.
 
 ** DONE [#D] Add archiving guidance for non-pi workflow :agents:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: 488c78fe-4025-46f0-8d33-6c40bbac6d4b
 :END:
-Added non-pi archiving rules: DONE/CANCELLED only, move to TASKS.ARCHIVE.org,
-preserve :ID:, strip :selected:, add :ARCHIVED:, and preserve/inline context.
+Added non-pi archiving rules: DONE/CANCELLED only, move to TASKS.ARCHIVE.org, preserve :ID:, strip :selected:, add :ARCHIVED:, and preserve/inline context.
 
 * Implementation
 
@@ -175,13 +137,9 @@ Files changed during implementation:
 
 Extension implementation notes:
 
-- Parser now tracks each parsed task subtree's original line range and source
-  content.
-- `serializeTasksPreservingFile` replaces existing root task subtrees in-place,
-  removes omitted root tasks for archiving, and appends new root tasks while
-  keeping non-task org content intact.
-- Overlay saves, plan attachment, task creation, and archiving now use preserved
-  serialization for TASKS.org/plan files.
+- Parser now tracks each parsed task subtree's original line range and source content.
+- `serializeTasksPreservingFile` replaces existing root task subtrees in-place, removes omitted root tasks for archiving, and appends new root tasks while keeping non-task org content intact.
+- Overlay saves, plan attachment, task creation, and archiving now use preserved serialization for TASKS.org/plan files.
 - Extension-created tasks now include an :ID: UUID property.
 
 Verification performed:
@@ -191,17 +149,12 @@ Verification performed:
 - `node --experimental-strip-types --check agents/pi/extensions/tasks/parser.ts`
 - `node --experimental-strip-types --check agents/pi/extensions/tasks/index.ts`
 - `node --experimental-strip-types --check agents/pi/extensions/tasks/overlay.ts`
-- LSP diagnostics for parser are clean. LSP diagnostics for index/overlay still
-  report pre-existing unresolved external module/type declarations in this
-  extension environment.
+- LSP diagnostics for parser are clean. LSP diagnostics for index/overlay still report pre-existing unresolved external module/type declarations in this extension environment.
 
-UUID v4 format: 8-4-4-4-12 lowercase hex digits, e.g.
-7a48756f-95b2-440c-9810-09a9ae60e452.
+UUID v4 format: 8-4-4-4-12 lowercase hex digits, e.g. 7a48756f-95b2-440c-9810-09a9ae60e452.
 
-The :ID: property is compatible with Emacs org-id.el, which uses the same
-property and format. Agents and Emacs can both manage IDs without conflict.
+The :ID: property is compatible with Emacs org-id.el, which uses the same property and format. Agents and Emacs can both manage IDs without conflict.
 
 * Questions for batch review
 
-None currently outstanding. The previous questions were resolved as design
-decisions recorded under `* Context` / `** Design decisions`.
+None currently outstanding. The previous questions were resolved as design decisions recorded under `* Context` / `** Design decisions`.

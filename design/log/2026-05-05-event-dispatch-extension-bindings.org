@@ -6,29 +6,17 @@
 
 * Context
 
-Activating in-repo extension UIs through leader-menu currently uses
-=command:= actions such as =command:/tasks= and =command:/diff toggle=.
-leader-menu implements =command:= by writing the slash command into the
-active editor and submitting it through =SubmitterEditor=. That is correct
-for slash-command shortcuts, but undesirable for UI toggles when the user has
-already typed text: the intermediate =setEditorText()= clobbers the input
-area.
+Activating in-repo extension UIs through leader-menu currently uses =command:= actions such as =command:/tasks= and =command:/diff toggle=. leader-menu implements =command:= by writing the slash command into the active editor and submitting it through =SubmitterEditor=. That is correct for slash-command shortcuts, but undesirable for UI toggles when the user has already typed text: the intermediate =setEditorText()= clobbers the input area.
 
-The fix is to make extension leader bindings dispatch events directly. Slash
-commands remain available for typed use, but command handlers dispatch the
-same event path as the keybinding so the implementation has a single entry
-point.
+The fix is to make extension leader bindings dispatch events directly. Slash commands remain available for typed use, but command handlers dispatch the same event path as the keybinding so the implementation has a single entry point.
 
 Affected in-repo extensions for this bug: =tasks= and =git-diff=.
 
 ** Design decisions
 
-- Event-dispatch for keybindings :: Leader-menu bindings should use bare event
-  names, not =command:=, when the desired action is an extension UI action.
-- Slash commands as compatibility shims :: =/tasks= and =/diff= remain, but
-  their handlers emit the same events used by leader-menu bindings.
-- Keep =command:= for actual slash-command shortcuts :: leader-menu's local
-  built-ins like =/compact= still intentionally submit commands.
+- Event-dispatch for keybindings :: Leader-menu bindings should use bare event names, not =command:=, when the desired action is an extension UI action.
+- Slash commands as compatibility shims :: =/tasks= and =/diff= remain, but their handlers emit the same events used by leader-menu bindings.
+- Keep =command:= for actual slash-command shortcuts :: leader-menu's local built-ins like =/compact= still intentionally submit commands.
 
 * Plan
 
@@ -47,10 +35,8 @@ CLOSED: [2026-05-05 Tue 22:21]
 :END:
 Acceptance criteria:
 - tasks leader entries use event names instead of =command:/tasks...=.
-- =/tasks=, =/tasks new=, and =/tasks doctor= emit the same events used by the
-  leader bindings.
-- Event handlers run the existing overlay / create / doctor logic without
-  touching editor text.
+- =/tasks=, =/tasks new=, and =/tasks doctor= emit the same events used by the leader bindings.
+- Event handlers run the existing overlay / create / doctor logic without touching editor text.
 ** DONE [#A] Refactor git-diff bindings and command handler to event dispatch :git-diff:leader-menu:
 CLOSED: [2026-05-05 Tue 22:21]
 :PROPERTIES:
@@ -65,8 +51,7 @@ CLOSED: [2026-05-05 Tue 22:21]
 Acceptance criteria:
 - git-diff leader entries use event names instead of =command:/diff...=.
 - =/diff= subcommands emit the same events used by leader bindings.
-- Event handlers preserve existing toggle/focus/scroll/fold behaviour without
-  writing to the editor.
+- Event handlers preserve existing toggle/focus/scroll/fold behaviour without writing to the editor.
 ** DONE [#B] Document and verify event-binding convention :docs:test:
 CLOSED: [2026-05-05 Tue 22:21]
 :PROPERTIES:
@@ -78,20 +63,15 @@ CLOSED: [2026-05-05 Tue 22:21]
   README docs updated; static searches and bundle/test checks passed.
 :END:
 Acceptance criteria:
-- Relevant README/docs note that leader bindings for extension UI actions use
-  events to avoid clobbering editor text.
-- Static checks confirm no =command:/tasks= or =command:/diff= leader actions
-  remain.
+- Relevant README/docs note that leader bindings for extension UI actions use events to avoid clobbering editor text.
+- Static checks confirm no =command:/tasks= or =command:/diff= leader actions remain.
 - Existing tasks and git-diff TypeScript parse/bundle checks pass.
 * Implementation
 
-- Updated tasks leader-menu registrations to dispatch `tasks:show`,
-  `tasks:new`, and `tasks:doctor` events.
-- Refactored `/tasks` so typed slash commands dispatch those same events;
-  event handlers run the existing overlay, task creation, and doctor logic.
+- Updated tasks leader-menu registrations to dispatch `tasks:show`, `tasks:new`, and `tasks:doctor` events.
+- Refactored `/tasks` so typed slash commands dispatch those same events; event handlers run the existing overlay, task creation, and doctor logic.
 - Updated git-diff leader-menu registrations to dispatch `git-diff:*` events.
-- Refactored `/diff` so slash subcommands validate arguments and emit the same
-  event names used by keybindings.
+- Refactored `/diff` so slash subcommands validate arguments and emit the same event names used by keybindings.
 - Documented the event-dispatch convention in the tasks and git-diff READMEs.
 
 * Verification

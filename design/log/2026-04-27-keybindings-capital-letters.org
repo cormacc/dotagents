@@ -5,8 +5,7 @@
 
 * Context
 
-The keybindings extension's leader-menu dispatch uses raw string equality
-to match incoming key data against configured key strings:
+The keybindings extension's leader-menu dispatch uses raw string equality to match incoming key data against configured key strings:
 
 #+begin_example
 // handleLeader — current
@@ -16,48 +15,26 @@ const match = node.children?.find((c) => c.key === data);
 const idx = existing.findIndex((c) => c.key === child.key);
 #+end_example
 
-Raw equality works when both sides agree on the representation.  It
-fails when one side uses a normalised key name and the other uses the
-raw terminal byte:
+Raw equality works when both sides agree on the representation.  It fails when one side uses a normalised key name and the other uses the raw terminal byte:
 
 - Terminal sends capital A as the single byte =0x41= = the string ="A"=.
 - =matchesKey(data, "A")= returns =true=.
-- =matchesKey(data, "shift+a")= also returns =true= — =matchesKey= treats
-  the two forms as equivalent.
-- But ="shift+a" === "A"= is =false=, so a config entry written as
-  =key: "shift+a"= will never fire when the user presses =A=.
+- =matchesKey(data, "shift+a")= also returns =true= — =matchesKey= treats the two forms as equivalent.
+- But ="shift+a" === "A"= is =false=, so a config entry written as =key: "shift+a"= will never fire when the user presses =A=.
 
-The symptom is =SPC t A= silently exiting the leader without running an
-action when the config entry for that slot was written in the
-=shift+letter= normalised form rather than the bare capital-letter form.
+The symptom is =SPC t A= silently exiting the leader without running an action when the config entry for that slot was written in the =shift+letter= normalised form rather than the bare capital-letter form.
 
-The same mismatch affects =mergeChildren=: a config with =key: "A"= and
-a suggested config with =key: "shift+a"= for the same slot are not
-recognised as clashing, so both entries end up in the tree and only the
-first one ever fires.
+The same mismatch affects =mergeChildren=: a config with =key: "A"= and a suggested config with =key: "shift+a"= for the same slot are not recognised as clashing, so both entries end up in the tree and only the first one ever fires.
 
-A third affected site is =warnClashingLeaderKeys=, which checks whether
-a trigger key conflicts with a vim normal-mode binding by looking it up
-in the =NORMAL_MODE_KEYS= set.  The set contains bare capitals (="A"=,
-="I"= etc.), so a trigger specified as ="shift+a"= silently misses the
-warning.
+A third affected site is =warnClashingLeaderKeys=, which checks whether a trigger key conflicts with a vim normal-mode binding by looking it up in the =NORMAL_MODE_KEYS= set.  The set contains bare capitals (="A"=, ="I"= etc.), so a trigger specified as ="shift+a"= silently misses the warning.
 
 ** Design decisions
 
-- Use =matchesKey= for all comparisons :: Replacing raw equality with
-  =matchesKey(incoming, configured)= (or =matchesKey(a, b)= for
-  symmetric clash detection) makes every comparison consistent with the
-  rest of the extension, which already uses =matchesKey= everywhere else.
-  No new normalisation helper is needed.
+- Use =matchesKey= for all comparisons :: Replacing raw equality with =matchesKey(incoming, configured)= (or =matchesKey(a, b)= for symmetric clash detection) makes every comparison consistent with the rest of the extension, which already uses =matchesKey= everywhere else. No new normalisation helper is needed.
 
-- Canonical key name in the tree :: After matching with =matchesKey=, the
-  winning entry's =key= field retains whatever string was in the config.
-  This is intentional: the canonical form is preserved for the overlay
-  display; only the =match= step needs to be lenient.
+- Canonical key name in the tree :: After matching with =matchesKey=, the winning entry's =key= field retains whatever string was in the config. This is intentional: the canonical form is preserved for the overlay display; only the =match= step needs to be lenient.
 
-- =warnClashingLeaderKeys= :: Change the NORMAL_MODE_KEYS lookup to use
-  =matchesKey= so that =key: "shift+a"= correctly warns about clashing
-  with the vim =A= (insert-at-end-of-line) binding.
+- =warnClashingLeaderKeys= :: Change the NORMAL_MODE_KEYS lookup to use =matchesKey= so that =key: "shift+a"= correctly warns about clashing with the vim =A= (insert-at-end-of-line) binding.
 
 * Plan
 
@@ -75,9 +52,7 @@ with:
 const match = node.children?.find((c) => matchesKey(data, c.key));
 #+end_example
 
-Acceptance: pressing =A= fires a leader-menu entry whose =key= is either
-="A"= or ="shift+a"=; pressing =a= (lowercase) does not fire the capital
-entry.
+Acceptance: pressing =A= fires a leader-menu entry whose =key= is either ="A"= or ="shift+a"=; pressing =a= (lowercase) does not fire the capital entry.
 ** CANCELLED [#A] Fix mergeChildren to use matchesKey for clash detection
 CLOSED: [2026-04-28 Tue 22:57]
 :PROPERTIES:
@@ -92,9 +67,7 @@ with:
 const idx = existing.findIndex((c) => matchesKey(child.key, c.key));
 #+end_example
 
-Acceptance: a suggested binding with =key: "shift+a"= is treated as
-clashing with an existing =key: "A"= entry (and vice-versa), and the
-warning is emitted rather than silently adding a duplicate.
+Acceptance: a suggested binding with =key: "shift+a"= is treated as clashing with an existing =key: "A"= entry (and vice-versa), and the warning is emitted rather than silently adding a duplicate.
 ** CANCELLED [#B] Fix warnClashingLeaderKeys to use matchesKey
 CLOSED: [2026-04-28 Tue 22:57]
 :PROPERTIES:
@@ -105,9 +78,7 @@ CLOSED: [2026-04-28 Tue 22:57]
 if (NORMAL_MODE_KEYS.has(triggerKey)) { ... }
 #+end_example
 
-=NORMAL_MODE_KEYS= stores bare capitals (="A"=, ="I"=, etc.) so
-=NORMAL_MODE_KEYS.has("shift+a")= is =false= even though =shift+a= is
-the same key.
+=NORMAL_MODE_KEYS= stores bare capitals (="A"=, ="I"=, etc.) so =NORMAL_MODE_KEYS.has("shift+a")= is =false= even though =shift+a= is the same key.
 
 Replace with an explicit scan using =matchesKey=:
 #+begin_example
@@ -115,117 +86,61 @@ const clashes = [...NORMAL_MODE_KEYS].some((k) => matchesKey(triggerKey, k));
 if (clashes) { ... }
 #+end_example
 
-Acceptance: a leader root key specified as ="shift+a"= correctly
-produces a "clashes with normal-mode vim binding" warning.
+Acceptance: a leader root key specified as ="shift+a"= correctly produces a "clashes with normal-mode vim binding" warning.
 ** CANCELLED [#C] Add #+A / #+P / #+U to tasks leader menu and update docs
 CLOSED: [2026-04-28 Tue 22:57]
 :PROPERTIES:
 :CUSTOM_ID: e1f2a3b4-0004-4000-8000-200000000004
 :END:
-Once the matching fix lands, extend the tasks extension's
-=suggestKeybindings= call to expose the overlay's capital-letter actions
-in the leader menu so they are discoverable outside the overlay:
+Once the matching fix lands, extend the tasks extension's =suggestKeybindings= call to expose the overlay's capital-letter actions in the leader menu so they are discoverable outside the overlay:
 
 | =SPC t A= | Archive top-level task (mirrors overlay =A=)  |
 | =SPC t P= | Publish local task (mirrors overlay =P=)      |
 | =SPC t U= | Unpublish shared task (mirrors overlay =U=)   |
 
-These open the =/tasks= overlay with the current task pre-selected and
-the corresponding action immediately triggered, OR dispatch the action
-directly if the task context is unambiguous.  (Simplest first
-implementation: just open =/tasks= so the user can then press the key
-inside the overlay.)
+These open the =/tasks= overlay with the current task pre-selected and the corresponding action immediately triggered, OR dispatch the action directly if the task context is unambiguous.  (Simplest first implementation: just open =/tasks= so the user can then press the key inside the overlay.)
 
 Update the keybindings README and the tasks extension README.md.
 * Implementation
 
 ** Failed attempts (2026-04-27)
 
-Four implementation attempts on top of the plan commit
-=20e439901c2b0a5972097548e183daa0576e0bb4= were all rolled back without
-landing because none of them changed the observed user-facing behaviour:
-=SPC t A= still failed to fire its bound action.  The user reported that
-the binding only fires after pressing =shift=, releasing it, and then
-pressing the lower-case letter \u2014 a sequence the analysis below could
-never explain from first principles.
+Four implementation attempts on top of the plan commit =20e439901c2b0a5972097548e183daa0576e0bb4= were all rolled back without landing because none of them changed the observed user-facing behaviour: =SPC t A= still failed to fire its bound action.  The user reported that the binding only fires after pressing =shift=, releasing it, and then pressing the lower-case letter \u2014 a sequence the analysis below could never explain from first principles.
 
 Rolled-back commits, in chronological order:
 
-- =891d491= - first pass: replaced raw =c.key === data= with
-  =matchesKey(data, c.key)= in three sites: =handleLeader=,
-  =mergeChildren=, and =warnClashingLeaderKeys=.  Also added
-  =SPC t A/P/U= entries to the tasks leader menu.
-  *Outcome:* user reported behaviour unchanged.
-- =f7f4fe4= - normalised config keys to =shift+lowercase= form at
-  build time via a new =normalizeConfigKey()= helper applied in
-  =buildMenuNode=, on the theory that =matchesKey(kittyEsc, "A")= fails
-  because the no-modifier path looks for raw =0x41= rather than the
-  Kitty =shift+97= sequence.  Updated =defaults.json= and
-  =tasks/index.ts= to write =shift+r/e/a/p/u= explicitly.
-  *Outcome:* user reported behaviour unchanged.
+- =891d491= - first pass: replaced raw =c.key === data= with =matchesKey(data, c.key)= in three sites: =handleLeader=, =mergeChildren=, and =warnClashingLeaderKeys=.  Also added =SPC t A/P/U= entries to the tasks leader menu. *Outcome:* user reported behaviour unchanged.
+- =f7f4fe4= - normalised config keys to =shift+lowercase= form at build time via a new =normalizeConfigKey()= helper applied in =buildMenuNode=, on the theory that =matchesKey(kittyEsc, "A")= fails because the no-modifier path looks for raw =0x41= rather than the Kitty =shift+97= sequence.  Updated =defaults.json= and =tasks/index.ts= to write =shift+r/e/a/p/u= explicitly. *Outcome:* user reported behaviour unchanged.
 - =4a05754= - canonicalised both sides of the comparison (=parseKey=
   + =normalizeConfigKey= on incoming raw data, plus existing config
-  normalisation), eliminating =matchesKey= from the leader path entirely
-  in favour of plain =string===.  Theory: =matchesKey("A", "shift+a")=
-  is false on legacy terminals because =parseKeyId= lowercases the
-  key-id and the no-modifier branch tests =data === "a"=.
-  *Outcome:* user reported behaviour unchanged.
-- =496dbd0= - belt-and-braces: tried canonical equality, raw equality,
-  and =matchesKey= in sequence so that any of the three matching
-  strategies would catch the binding.  Added an opt-in
-  =TASKS_KB_DEBUG=1= notification reporting raw bytes, canonicalised
-  form, and available config keys at the current menu node when no
-  match is found, so the failure mode could be observed concretely.
-  *Outcome:* user reported behaviour unchanged.
+  normalisation), eliminating =matchesKey= from the leader path entirely in favour of plain =string===.  Theory: =matchesKey("A", "shift+a")= is false on legacy terminals because =parseKeyId= lowercases the key-id and the no-modifier branch tests =data === "a"=. *Outcome:* user reported behaviour unchanged.
+- =496dbd0= - belt-and-braces: tried canonical equality, raw equality, and =matchesKey= in sequence so that any of the three matching strategies would catch the binding.  Added an opt-in =TASKS_KB_DEBUG=1= notification reporting raw bytes, canonicalised form, and available config keys at the current menu node when no match is found, so the failure mode could be observed concretely. *Outcome:* user reported behaviour unchanged.
 
 ** What we know after these attempts
 
 - The three matching strategies are individually correct in isolation:
-  - Legacy ="A"=: =canonicalizeInput("A") === "shift+a"= and
-    =matchesKey("A", "shift+a")= both return true.
-  - Kitty ESC[97;2u: =parseKey= decodes to ="shift+a"= which equals the
-    stored key.
-- =parseKey("A")= returns the raw character ="A"= verbatim, *not*
-  ="shift+a"=, because pi-tui's catch-all for printable ASCII at the
-  bottom of =parseKey= returns =data= unchanged.  This is the trap that
-  invalidated the matchesKey-only approach.
-- Files at =~/.pi/agent/extensions/keybindings/= are byte-identical to
-  the dotfiles repo source after each commit, so the "stale code" theory
-  is ruled out at the file-system level.
-- We did not confirm whether pi/Bun has a runtime module cache that
-  survives =/reload= or session restart.  This remains the most likely
-  reason the user's observation that "behaviour is unchanged" persisted
-  across structurally different fixes.
-- The user's specific symptom \u2014 "the binding fires only after shift is
-  pressed, released, and the lower-case letter is pressed" \u2014 cannot be
-  explained by any of the comparison logic we inspected.  It would
-  require either:
-  - some upstream layer (pi-tui, pi core, or the terminal) to be
-    accumulating modifier state across discrete key events, or
-  - the user's terminal sending a sequence that we haven't seen and
-    therefore haven't designed for.
+  - Legacy ="A"=: =canonicalizeInput("A") === "shift+a"= and =matchesKey("A", "shift+a")= both return true.
+  - Kitty ESC[97;2u: =parseKey= decodes to ="shift+a"= which equals the stored key.
+- =parseKey("A")= returns the raw character ="A"= verbatim, *not* ="shift+a"=, because pi-tui's catch-all for printable ASCII at the bottom of =parseKey= returns =data= unchanged.  This is the trap that invalidated the matchesKey-only approach.
+- Files at =~/.pi/agent/extensions/keybindings/= are byte-identical to the dotfiles repo source after each commit, so the "stale code" theory is ruled out at the file-system level.
+- We did not confirm whether pi/Bun has a runtime module cache that survives =/reload= or session restart.  This remains the most likely reason the user's observation that "behaviour is unchanged" persisted across structurally different fixes.
+- The user's specific symptom \u2014 "the binding fires only after shift is pressed, released, and the lower-case letter is pressed" \u2014 cannot be explained by any of the comparison logic we inspected.  It would require either:
+  - some upstream layer (pi-tui, pi core, or the terminal) to be accumulating modifier state across discrete key events, or
+  - the user's terminal sending a sequence that we haven't seen and therefore haven't designed for.
 
 ** Recommended next steps
 
-The user has chosen to roll back to lower-case-only bindings rather
-than continue chasing this.  The simplest implementation that works
-across every terminal is:
+The user has chosen to roll back to lower-case-only bindings rather than continue chasing this.  The simplest implementation that works across every terminal is:
 
 - Use only lower-case letters as leader-menu keys.
-- Where capital-letter overlay shortcuts already exist (=A=, =P=, =U=
-  in the tasks overlay), keep them inside the overlay and do *not* try
-  to surface them at the leader-menu level.
-- If a capital-letter binding is genuinely needed in future, first
-  reproduce the failure with =TASKS_KB_DEBUG=1= so the actual raw byte
-  sequence is visible \u2014 *then* design the fix against real input.
+- Where capital-letter overlay shortcuts already exist (=A=, =P=, =U= in the tasks overlay), keep them inside the overlay and do *not* try to surface them at the leader-menu level.
+- If a capital-letter binding is genuinely needed in future, first reproduce the failure with =TASKS_KB_DEBUG=1= so the actual raw byte sequence is visible \u2014 *then* design the fix against real input.
 
 ** Resolution (2026-04-28) \u2014 misdiagnosis
 
 Task cancelled. The keybindings extension was never the bug.
 
-While adding parallel debug logging to the tasks overlay's =handleInput=
-(so we could see what the overlay was actually receiving when the leader
-fired through to it), we found the overlay calling:
+While adding parallel debug logging to the tasks overlay's =handleInput= (so we could see what the overlay was actually receiving when the leader fired through to it), we found the overlay calling:
 
 #+begin_example
 if (matchesKey(data, "A")) { ... }   // archive
@@ -235,18 +150,9 @@ if (matchesKey(data, "N")) { ... }   // new-child
 if (matchesKey(data, "J")) { ... }   // open-linked-issues
 #+end_example
 
-=matchesKey= expects the canonical name (=shift+a=, =shift+p=,
-=shift+u=, =shift+n=, =shift+j=) for shifted letters, not the literal
-uppercase character. Fixing the five call sites in
-=agents/pi/extensions/tasks/overlay.ts= resolved the original symptom.
+=matchesKey= expects the canonical name (=shift+a=, =shift+p=, =shift+u=, =shift+n=, =shift+j=) for shifted letters, not the literal uppercase character. Fixing the five call sites in =agents/pi/extensions/tasks/overlay.ts= resolved the original symptom.
 
 Lessons:
-- The four rolled-back commits all chased the wrong layer. Every change
-  was internally consistent and correct; none addressed the actual
-  consumer of the dispatched key.
-- The =TASKS_KB_DEBUG=1= notification approach mooted above turned out
-  to be the right diagnostic instinct \u2014 but it needed to live in the
-  *consumer* (overlay) too, not only in the leader.
-- A no-op fix at the leader level looked like "behaviour unchanged"
-  precisely because the leader was already forwarding the key correctly;
-  the overlay was silently rejecting it.
+- The four rolled-back commits all chased the wrong layer. Every change was internally consistent and correct; none addressed the actual consumer of the dispatched key.
+- The =TASKS_KB_DEBUG=1= notification approach mooted above turned out to be the right diagnostic instinct \u2014 but it needed to live in the *consumer* (overlay) too, not only in the leader.
+- A no-op fix at the leader level looked like "behaviour unchanged" precisely because the leader was already forwarding the key correctly; the overlay was silently rejecting it.
