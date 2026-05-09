@@ -1,6 +1,6 @@
 ---
 name: org-tasks
-description: "Use when maintaining or resuming project work stored in TASKS.org and linked change-record files. Covers the org task-memory protocol: TODO states, IDs, IMPORT links, change-records (proactive and retrospective), status discipline, archiving, and resume workflows."
+description: "The org-mode task-memory protocol for TASKS.org. Use whenever the user asks to add, edit, resume, archive, or review tasks; mentions TASKS.org, TASKS.local.org, TASKS.archive.org, #+IMPORT:, #+SELECTED:, :CUSTOM_ID:, :BLOCKED-BY:, or :HANDOFF:; or wants to bootstrap task memory in a new project. Owns file format, TODO lifecycle, selection state, archive layout, and the resume read order. The change-record section contract is owned by `org-plan`."
 ---
 
 # Org-mode task management and memory protocol
@@ -13,9 +13,9 @@ keyword.
 
 This skill owns the durable file protocol: file format, properties,
 keywords, statuses, selection, and archive layout. The change-record
-section structure (`* Context`, `* Plan`, `* Implementation`, optional
-`* Open questions`) is owned by the `org-plan` skill
-(`../org-plan/SKILL.md`).
+section structure (`* Summary`, optional `* Context`, `* Plan`,
+`* Implementation`, optional `* Open questions`) is owned by the
+`org-plan` skill (`../org-plan/SKILL.md`).
 
 ## Locating `TASKS.org`
 
@@ -227,28 +227,17 @@ to other checkouts until published.
 A *change-record* is a separate org file linked from a task via
 `#+IMPORT:`. Two flows produce the same artefact:
 
-1. **Proactive** — created before work begins. Agent drafts `* Summary`
-   (a draft is fine) plus `* Context` and `* Plan` up front;
-   `* Implementation` and `* Summary` fill in as plan tasks
-   transition `TODO -> STARTED -> DONE`.
-2. **Retrospective** — created after the parent task closed without a
-   prior plan. Agent uses the parent's `:STARTED:` and `CLOSED:`
-   timestamps to scope `git log`, then drafts `* Summary`, `* Context`,
-   and `* Implementation` from the commit history. `* Plan` may be
-   empty or hold a brief retrospective list including failed
-   attempts.
+1. **Proactive** — created before work begins, usually via the `p`
+   keybinding or equivalent plan creation flow.
+2. **Retrospective** — created after the parent task closes without a
+   prior plan; use the parent's `:STARTED:` (or creation timestamp) and
+   `CLOSED:` as the `git log` scope.
 
-`* Summary` is the condensed memory layer: a one-paragraph synopsis
-plus optional `** Decisions`, `** Shipped`, `** Gotchas`,
-`** Validation`, `** Follow-ups` subsections. It is required on
-every change-record (any size, any status past Draft) and is the
-cheap reconstruction surface for future agents. `* Summary`
-supersedes the legacy `** Outcome` / `** Shipped` heading under
-`* Implementation`. `* Context` is optional and included only when
-durable rationale exceeds what `* Summary` can carry.
-
-See `../org-plan/SKILL.md` for the full section structure both
-flows produce and the planning workflow.
+`org-plan` owns the change-record section contract, including required
+`* Summary`, optional `* Context`, proactive/retrospective authoring
+rules, and TASKS.org subtask migration into `* Plan`. This skill owns
+the `#+IMPORT:` link, task lifecycle, selection, archive, and resume
+protocol around that file.
 
 ## Status discipline
 
@@ -276,19 +265,7 @@ flows produce and the planning workflow.
   to keep parent status meaningful (e.g. parent `TODO -> STARTED` when
   any child reaches `STARTED`).
 
-## Starting or resuming work
-
-1. Read `TASKS.org` and `TASKS.local.org`.
-2. Resolve `#+SELECTED:` from `TASKS.local.org` against the task graph;
-   fall back to a user-named task, the first `STARTED` task, or context.
-3. Follow the active task's `#+IMPORT:` link if present. In a plan,
-   resume the first `STARTED` task or the first actionable `TODO`.
-4. Read nearby task notes plus relevant `* Context`, `* Implementation`,
-   `* Open questions`, blockers, linked issues, and LOGBOOK lifecycle
-   history before editing code.
-5. Keep statuses and durable notes synchronized as work proceeds.
-
-## Agent memory
+## Resuming and agent memory
 
 For cross-session reconstruction, treat org files as durable memory and
 agent conversation as ephemeral. Load eagerly only the task index
@@ -297,10 +274,9 @@ change-record. Load other imports on demand when they are on the active
 path or referenced by blockers / linked issues.
 
 The condensed surface a future agent reads first is the change-record's
-`* Summary`. It is the cheap reconstruction surface for large records
-and supersedes the legacy `** Outcome` / `** Shipped` heading. Detailed
-`* Plan` task bodies, completed plan tasks, and lengthy `* Implementation`
-notes are loaded on demand once the agent has decided what to do next.
+`* Summary` (defined by `org-plan`). Detailed `* Plan` task bodies,
+completed plan tasks, and lengthy `* Implementation` notes are loaded
+on demand once the agent has decided what to do next.
 
 Resume checklist (read order):
 
@@ -325,34 +301,20 @@ Resume checklist (read order):
 5. Defer until needed: full `* Implementation` notes, completed
    `DONE`/`CANCELLED` plan task bodies, and detailed acceptance
    criteria for tasks not on the active path.
-6. `* Summary` is always present, so the cheap path always works.
-   When a record's `* Plan` + `* Implementation` history grows beyond
-   cheap re-ingestion (≥ ~150 lines is a useful soft threshold), the
-   right response is to *split* completed historical context into a
-   follow-up record or *archive* old top-level tasks — not to omit
-   `* Summary` or to truncate history silently.
+Durable state: task headings, properties, LOGBOOK, imports, blockers,
+linked issues, and change-record files. Per-session state: MCP fetch
+results, agent scratch reasoning, UI cursor position, and unsaved
+editor buffers.
 
-Durable state: task headings, properties, LOGBOOK, change-records,
-imports, blockers, linked issues, `* Summary`, `* Context`,
-`* Implementation`. Per-session state: MCP fetch results, agent scratch
-reasoning, UI cursor position, and any unsaved editor buffers.
+Closure discipline: refresh the linked change-record's `* Summary`
+before closing a top-level task; see `org-plan` § *Closure-time
+summary refresh*.
 
-Closure discipline: before transitioning a top-level task to `DONE`,
-refresh the linked change-record's `* Summary` so the next agent can
-rebuild context cheaply. The tasks extension prompts the agent to
-generate or refresh `* Summary` when a top-level task transitions to
-`DONE` and the linked change-record either lacks the section or has
-not been touched since the last status transition. The skill is the
-durable contract; the extension prompt is a cheap reinforcement.
-See `../org-plan/SKILL.md` § *Closure-time summary refresh* for the
-full workflow.
-
-The tasks extension regression suites are the executable contract for
-this behaviour: `lifecycle.test.ts` covers lifecycle LOGBOOK status
-semantics, `paths.test.ts` covers import/scaffold sandboxing,
-`doctor.test.ts` covers loaded-graph health checks, and
-`memory.test.ts` covers scenario-style selected-task reconstruction
-(including `* Summary` ingestion order).
+When a record's `* Plan` + `* Implementation` history grows beyond
+cheap re-ingestion (~150 lines is a useful soft threshold), split
+completed history into a follow-up record or archive old top-level
+tasks — don't omit `* Summary` or truncate silently. Executable
+regression coverage for this protocol lives in `pi/extensions/tasks/`.
 
 ## Creating tasks and change-records
 

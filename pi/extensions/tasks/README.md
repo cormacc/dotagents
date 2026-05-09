@@ -357,9 +357,9 @@ Extension-specific notes:
   parsed task subtrees are rewritten. Within task subtrees,
   `:PROPERTIES:` and `:LOGBOOK:` drawers are preserved structurally.
   In linked change-records, sections like `#+TITLE`, `#+TODO`,
-  `* Context`, `** Design decisions`, `* Plan`, `* Implementation`,
-  and `* Open questions` are preserved; only parsed task subtrees are
-  rewritten.
+  `* Summary`, `* Context`, `** Design decisions`, `* Plan`,
+  `* Implementation`, and `* Open questions` are preserved; only
+  parsed task subtrees are rewritten.
 - **Permissive parsing**: actionable task headings may appear
   anywhere in a linked change-record. Using `* Plan` is the
   recommended convention but not required.

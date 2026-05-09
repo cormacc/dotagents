@@ -204,10 +204,11 @@ function assertContains(haystack: string, needle: string, message: string): void
     ":LOGBOOK: survives round-trip");
 }
 
-// ── scaffoldPlan canonical-skeleton snapshot ──────────────────────────
+// ── scaffoldPlan minimal-scaffold snapshot ────────────────────────────
 //
-// Regression guard against unintentional changes to the canonical
-// change-record skeleton documented in `skills/org-plan/SKILL.md`.
+// Regression guard against unintentional changes to the minimal
+// extension-owned change-record scaffold. The `org-plan` skill owns the
+// richer human-facing summary subsection conventions.
 // (Plan creation only happens via the agent harness; the elisp side
 // has no scaffolder so there is no cross-implementation pairing.)
 
@@ -254,7 +255,7 @@ function assertContains(haystack: string, needle: string, message: string): void
     ].join("\n");
     const actual = scaffoldPlan(fixture);
     assertEqual(actual, expected,
-      "scaffoldPlan canonical-skeleton snapshot (org-plan SKILL)");
+      "scaffoldPlan minimal extension scaffold snapshot");
   } finally {
     globalThis.Date = realDate;
   }

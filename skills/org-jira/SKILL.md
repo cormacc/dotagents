@@ -1,6 +1,6 @@
 ---
 name: org-jira
-description: "Use when working with tasks that link to Jira issues. Covers Jira-specific authoring conventions on top of the org-tasks protocol — :LINKED_ISSUES: drawer key shape, #+JIRA_* keywords, agent prompts that drive the atlassian MCP for clone/claim/comment/create/transition workflows."
+description: "Jira-specific authoring conventions on top of the org-tasks protocol. Use whenever the user mentions Jira keys (PROJ-123), Atlassian, /jira slash commands (clone/get/claim/comment/create/transition), :LINKED_ISSUES:, or #+JIRA_* keywords; wants to plan from a Jira Epic or issue tree; or asks about the Atlassian MCP connection. Owns Jira semantics; the underlying tracker-agnostic :LINKED_ISSUES: drawer and #+ISSUE_URL_BASE keyword belong to the tasks extension."
 ---
 
 # Jira integration for org-tasks
@@ -129,77 +129,44 @@ URLs. Fully offline-safe.
 
 ### Planning / resume context (tasks with `:LINKED_ISSUES:`)
 
-When the [`org-plan`](../org-plan/SKILL.md) skill is drafting or
-refining a change-record — or when an agent is resuming work — for a
-task that has Jira-shaped tokens in `:LINKED_ISSUES:`, fetch the issue
-tree from Jira *before* writing or relying on `* Context` so the plan
-reflects current upstream scope, decomposition, and language. This
-applies whether the plan is proactive, retrospective, or resumed after
-another session.
+When [`org-plan`](../org-plan/SKILL.md) is drafting/refining a
+change-record — or when an agent resumes work — for a task with
+Jira-shaped `:LINKED_ISSUES:`, fetch current Jira scope before relying
+on stale local prose. Keep fetched data ephemeral: distil only
+plan-relevant facts into the change-record according to `org-plan`'s
+section contract (`* Summary` first, promote `* Context` only when the
+Jira rationale/scope exceeds the summary, use `* Open questions` for
+gaps).
 
 Procedure for each Jira-shaped token:
 
 1. Ensure the Atlassian MCP is connected (see above). If not, surface
-   the reconnect instruction and proceed without the Jira context
-   rather than blocking the plan.
+   the reconnect instruction and proceed without blocking the plan.
 2. Resolve the cloudId per "cloudId resolution" above.
-3. Call `atlassian_getJiraIssue` for the parent key. Capture:
-   - `summary`, `status.name`, `issuetype.name`, `priority.name`,
-     `assignee.displayName`.
-   - `description` (plain-text rendering of the ADF body).
-   - `issuelinks` — note `Blocks`, `is blocked by`, `relates to`
-     relationships; their keys are candidates for follow-up fetches
-     when relevant to scope.
-   - `parent.key` if present (issue sits under an Epic / parent task).
-4. Walk children one level at a time, depth-first only when a child's
-   summary suggests it materially shapes the plan. Use
-   `atlassian_searchJiraIssuesUsingJql` with the appropriate clause:
-   - **Epic** → `"parent" = KEY` (covers stories/tasks under the Epic
-     in modern Jira; legacy projects may need `"Epic Link" = KEY`).
-   - **Task / Story / Bug** → `parent = KEY` (returns subtasks).
-   - Project the same fields as step 3 (`summary,status,issuetype,
-     priority,assignee,parent`) and request a generous `fields` list
-     plus a sensible `maxResults` (50 is usually enough; raise if a
-     page boundary is hit).
-5. Stop descending when:
-   - A subtree is `Done` / `Closed` and not load-bearing for the new
-     work, or
-   - The branch is clearly out-of-scope for the task at hand, or
-   - Depth exceeds two levels below the linked issue (deeper trees
-     are rare and almost always noise for planning).
-6. Summarise the gathered tree into `* Context` of the change-record:
-   - One short paragraph naming each linked parent issue (key,
-     summary, status, type) and how it frames the task.
-   - A bullet list of in-scope children with their key, summary, and
-     status. Use this list to seed `** Design decisions` or to derive
-     fresh level-2 `* Plan` headings when the user wants the plan to
-     track Jira decomposition one-to-one. Jira keys are never org
-     `:CUSTOM_ID:` values; Jira-derived plan tasks get normal UUIDs and link
-     back via `:LINKED_ISSUES:`.
-   - Note any `Blocks` / `is blocked by` relationships in `* Context`
-     so dependencies are visible at planning time.
-7. Do **not** mint new Jira issues from this read-only walk. Surface
-   gaps ("the linked Epic has no subtasks covering X") in
-   `* Open questions` and let the user decide whether to
-   `/jira create` them.
+3. Fetch the parent with `atlassian_getJiraIssue`, capturing summary,
+   status, issue type, priority, assignee, plain-text description,
+   parent key, and relevant issue links (`Blocks`, `is blocked by`,
+   `relates to`).
+4. Walk children only while they materially shape scope. For Epics use
+   `"parent" = KEY` (or legacy `"Epic Link" = KEY` if needed); for
+   Tasks/Stories/Bugs use `parent = KEY`. Stop at done/out-of-scope
+   branches or beyond two levels below the linked issue.
+5. Distil results:
+   - Mention each linked parent issue (key, summary, status/type) and
+     why it frames the work.
+   - Include in-scope children only when they affect the plan; create
+     local plan tasks with normal UUIDs only when tracking Jira
+     decomposition one-to-one is useful. Jira keys are never org
+     `:CUSTOM_ID:` values; link Jira-derived local tasks via
+     `:LINKED_ISSUES:`.
+   - Record blocking relationships where they affect planning.
+   - Surface gaps in `* Open questions`; do **not** mint Jira issues
+     during this read-only walk.
 
-Keep the fetched data ephemeral — do not paste raw issue JSON or full
-ADF descriptions into the change-record. Distil to plan-relevant
-prose and bullets. Re-fetch on subsequent planning or resume sessions
-rather than caching, since Jira state drifts.
-
-Subtask migration from `TASKS.org` into a change-record (owned by
-`org-tasks` / `org-plan`) is orthogonal to Jira fetching. A plan may
-contain migrated local subtasks with their original UUIDs and separate
-Jira-derived plan tasks with fresh UUIDs linked via `:LINKED_ISSUES:`.
-
-Jira-linked change-records inherit the section structure from
-[`org-plan`](../org-plan/SKILL.md), including the top-level `* Summary`
-condensed memory layer (which supersedes the legacy `** Outcome` /
-`** Shipped` heading under `* Implementation`) and the closure-time
-summary refresh workflow. When fetching Jira context for a resume,
-start with the change-record's `* Summary` before re-fetching the
-issue tree.
+Re-fetch on later planning/resume sessions rather than caching raw Jira
+JSON or full ADF descriptions. Subtask migration from `TASKS.org` into
+`* Plan` is owned by `org-plan` and remains orthogonal to Jira-derived
+plan tasks.
 
 ### Clone (`/jira clone <KEY>`)
 
@@ -268,32 +235,26 @@ it to TASKS.org. It is the read-only counterpart of `/jira clone`.
 
 ### Claim (`/jira claim`)
 
-1. Resolve the cursor task's `:LINKED_ISSUES:` and filter to Jira-shaped
-   tokens.
-2. Call `atlassian_atlassianUserInfo` once to get the current user's
-   accountId.
-3. For each Jira key, call `atlassian_editJiraIssue` setting
-   `assignee.accountId`.
-4. Surface a one-line summary per key (key, success / error message).
+Filter the cursor task's `:LINKED_ISSUES:` for Jira tokens, fetch the
+current user's accountId via `atlassian_atlassianUserInfo` (once), then
+call `atlassian_editJiraIssue` per key setting
+`assignee.accountId`. Surface a one-line per-key result.
 
 ### Comment (`/jira comment <markdown>`)
 
-1. Filter `:LINKED_ISSUES:` for Jira tokens.
-2. For each, call `atlassian_addCommentToJiraIssue` with the markdown
-   body. The MCP server handles markdown → ADF conversion.
-3. Surface a one-line summary per key.
+Filter `:LINKED_ISSUES:` for Jira tokens and call
+`atlassian_addCommentToJiraIssue` per key with the markdown body (the
+MCP server handles markdown → ADF). Surface a one-line per-key result.
 
 ### Create (`/jira create [PROJECT] [--type Task|Story|Bug|Epic]`)
 
-1. Project defaults to `#+JIRA_PROJECT`. Refuse if neither argument nor
-   keyword provides one.
-2. Issue type defaults to `Task`. Validate via
-   `atlassian_getJiraProjectIssueTypesMetadata` before submitting.
-3. Call `atlassian_createJiraIssue` with summary = task heading,
-   description = task body.
-4. On success, append the returned key to the task's `:LINKED_ISSUES:`
-   via `setDrawerProperty`.
-5. Smoke test against `SAND` only.
+Project defaults to `#+JIRA_PROJECT` (refuse if neither argument nor
+keyword provides one). Issue type defaults to `Task`; validate via
+`atlassian_getJiraProjectIssueTypesMetadata` before submitting. Call
+`atlassian_createJiraIssue` with summary = task heading and description
+= task body; on success append the returned key to the task's
+`:LINKED_ISSUES:` via `setDrawerProperty`. Smoke test against `SAND`
+only.
 
 ### Transition (auto, optional)
 
@@ -317,11 +278,9 @@ extension point lands.
 
 ## Question-handling
 
-Default mode for this work: batch minor implementation ambiguities into
-the parent change-record's `* Open questions`; raise immediately
-anything that affects downstream design (extension API, data shape,
-cross-extension contract). See the parent
-`design/log/2026-04-28-jira-integration.org` for the latest list.
+Follow `org-plan` § *Executing from a change-record*: batch minor
+ambiguities into `* Open questions`; raise design-affecting questions
+(extension API, data shape, cross-extension contract) immediately.
 
 ## Sandbox
 

@@ -3,10 +3,11 @@
  *
  * Kept in a standalone module (no pi-tui / pi-coding-agent dependency) so
  * the snapshot test in `parser.test.ts` can import these functions
- * directly via `tsx`. The output of `scaffoldPlan()` is the canonical
- * skeleton documented in the `org-plan` skill. Plan creation lives
- * exclusively on the agent-harness side; the Emacs `tasks-org` mode is
- * read/edit/reorganise only.
+ * directly via `tsx`. The output of `scaffoldPlan()` is the minimal
+ * extension scaffold for a change-record; the `org-plan` skill owns the
+ * richer human-facing section conventions and optional summary subsections.
+ * Plan creation lives exclusively on the agent-harness side; the Emacs
+ * `tasks-org` mode is read/edit/reorganise only.
  */
 
 import {
@@ -33,7 +34,7 @@ function parentLink(tasksFileRelPath: string, parentId: string, summary: string)
   return description ? `[[${target}][${description}]]` : `[[${target}]]`;
 }
 
-/** Scaffold a minimal change-record body consistent with the `org-plan` skill. */
+/** Scaffold the minimal extension-owned change-record body. */
 export function scaffoldPlan(
   task: Task,
   optionsOrPlanTasks: ScaffoldPlanOptions | Task[] = {},

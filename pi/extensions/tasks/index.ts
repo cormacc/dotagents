@@ -33,6 +33,7 @@ import {
 import {
   existsSync,
   readFileSync,
+  realpathSync,
   statSync,
   watch,
   type FSWatcher,
@@ -63,7 +64,7 @@ import {
 } from "./parser.ts";
 import { formatFindingsReport, runDoctor } from "./doctor.ts";
 import { insertTasksIntoPlanSection, scaffoldPlan } from "./scaffold.ts";
-import { resolveProjectPath } from "./paths.ts";
+import { isWithinRoot, resolveProjectPath } from "./paths.ts";
 import {
   evaluateSummaryRefresh,
   type SummaryRefreshReason,
@@ -935,11 +936,16 @@ export default function (pi: ExtensionAPI) {
           } catch {
             return false;
           }
-          // Sandbox: refuse anything outside the project root. Mirrors the
-          // load-time check in resolveProjectPath without requiring async.
-          const rel = relative(ctx.cwd, absPlan);
-          if (rel.startsWith("..") || isAbsolute(rel)) return false;
-          if (!existsSync(absPlan)) return false;
+          // Sandbox: refuse anything outside the project root after symlink
+          // resolution. Mirrors resolveProjectPath() without async because
+          // this callback must decide synchronously whether to close the UI.
+          try {
+            const rootReal = realpathSync(ctx.cwd);
+            absPlan = realpathSync(absPlan);
+            if (!isWithinRoot(absPlan, rootReal)) return false;
+          } catch {
+            return false;
+          }
           let content: string;
           let mtimeMs: number | null;
           try {
@@ -1386,10 +1392,12 @@ async function promptForPlanPath(
  * agent does next:
  *
  * - `proactive`: the user wants to plan up front.  Agent asks scoping
- *   questions, drafts * Context and * Plan, then the user executes.
+ *   questions, drafts * Summary and * Plan, promoting * Context only when
+ *   rationale warrants it, then the user executes.
  * - `retrospective`: the task already closed without a plan.  Agent uses
  *   the task's :STARTED: / :CLOSED: timestamps to scope `git log`, then
- *   drafts * Context and * Implementation from the commit history.
+ *   drafts * Summary and * Implementation, promoting * Context only when
+ *   rationale warrants it.
  */
 function buildChangeRecordPrompt(
   mode: "proactive" | "retrospective",
@@ -1519,9 +1527,10 @@ function buildRetrospectiveChangeRecordPrompt(
  *
  * `mode` selects the agent-prompt body that follows scaffolding:
  * - `proactive` (default): agent helps plan up front.
- * - `retrospective`: task is already closed; agent drafts * Context and
- *   * Implementation from git history.  Triggered by status cycle to DONE
- *   on a task with no existing #+IMPORT: link.
+ * - `retrospective`: task is already closed; agent drafts * Summary and
+ *   * Implementation from git history, promoting * Context only when
+ *   rationale warrants it. Triggered by status cycle to DONE on a task with
+ *   no existing #+IMPORT: link.
  */
 async function handlePlanEdit(
   pi: ExtensionAPI,

@@ -1,6 +1,6 @@
 ---
 name: org-plan
-description: Use when asked to draft, review, or execute an implementation plan. Produces concrete plans as change-record files, then guides stepwise implementation and verification.
+description: "Drafting, reviewing, and executing implementation plans as change-record files linked from TASKS.org. Use whenever the user asks for a plan, says 'let's plan X', wants a design write-up before coding, asks for a retrospective record after work has shipped, or needs to refresh a change-record's * Summary at task closure. Owns the change-record section contract (* Summary, optional * Context, * Plan, * Implementation, optional * Open questions), TASKS.org subtask migration, and the closure-time summary refresh workflow."
 ---
 
 # Plan
@@ -16,13 +16,17 @@ This skill owns planning methodology and section conventions;
 
 ## Planning principles
 
-- Prefer plans that can be executed and verified task-by-task.
-- Separate outcomes from implementation details.
-- Include validation criteria for non-trivial tasks.
-- Capture important design decisions in `* Context` so later sessions
-  understand why work was shaped this way.
-- Do not plan endlessly. Once the plan is good enough and the user
-  wants action, start executing.
+- Prefer plans that can be executed and verified task-by-task — a
+  plan task is only useful when its acceptance criteria are
+  observable.
+- Keep `* Summary` (condensed final state) distinct from
+  `* Implementation` (decisions, gotchas, validation outcomes); they
+  serve different reading audiences.
+- Capture durable design decisions in `* Summary` (or promoted
+  `* Context` when the rationale exceeds the synopsis) so later
+  sessions don't have to reverse-engineer them from `git log`.
+- Stop planning once the plan is actionable. Endless planning is
+  itself a failure mode.
 
 ## Change-record sections
 
@@ -43,8 +47,7 @@ Required on every change-record:
 - `* Implementation` — notes on decisions, tricky details, validation
   outcomes, and maintenance context discovered while executing.
   Filled in as work lands (proactive flow) or drafted from `git log`
-  (retrospective flow). Does **not** carry a final `** Outcome` /
-  `** Shipped` heading — that role is owned by `* Summary`.
+  (retrospective flow).
 
 Optional:
 
@@ -125,18 +128,6 @@ Optional further task body prose follows the acceptance criteria.
 * Open questions
 ```
 
-Subsections under `* Summary` are conventional, not mandatory; small
-change-records may use a single paragraph plus only the subsections
-that carry content. Keep the summary terse: it is the surface a
-future agent reads first, not a duplicate of the implementation
-ledger.
-
-`* Context` is intentionally absent from the minimal skeleton. Promote
-it to a top-level section between `* Summary` and `* Plan` when
-durable rationale exceeds what `* Summary` can carry; otherwise leave
-it out so the record stays compact. The minimal skeleton ships only
-the sections that are required on every record.
-
 ### `#+STATUS:` lifecycle (advisory)
 
 Change-records *may* declare a coarse lifecycle status as a preamble
@@ -161,24 +152,12 @@ for humans and agents skimming change-records. Task-level status
 discipline is owned entirely by `org-tasks`; the keyword is
 orthogonal to per-task TODO states.
 
-### Acceptance criteria and summary conventions
+### Acceptance criteria
 
-- For non-trivial plan tasks, place a short **Acceptance criteria**
-  bullet list at the top of the task body, before any other prose.
-  Each bullet should be a concrete observable outcome (“X renders”,
-  “Y round-trips byte-identically”) rather than an implementation
-  step. The minimal skeleton above shows the shape.
-- `* Summary` carries the durable condensed surface for the whole
-  change-record: a one-paragraph synopsis plus the conventional
-  `** Decisions`, `** Shipped`, `** Gotchas`, `** Validation`, and
-  `** Follow-ups` subsections. It supersedes the legacy
-  `** Outcome` / `** Shipped` heading under `* Implementation`; new
-  change-records do not carry that legacy heading.
-- Avoid duplicating detail across `* Summary`, `* Context`, plan
-  task bodies, and `* Implementation`. Acceptance criteria live on
-  plan tasks, terse progress/file notes live in the implementation
-  log, durable rationale lives in `* Context`, and `* Summary` holds
-  the condensed final state.
+For non-trivial plan tasks, place a short **Acceptance criteria**
+bullet list at the top of the task body, before any other prose. Each
+bullet should be a concrete observable outcome (“X renders”, “Y
+round-trips byte-identically”) rather than an implementation step.
 
 ### Closure-time summary refresh
 
@@ -190,32 +169,20 @@ Before transitioning a top-level task to `DONE`:
 2. Ensure any newly-discovered follow-up work exists as `TODO`
    tasks (in `TASKS.org` for cross-cutting work, under `* Plan`
    for plan-local work) rather than buried in prose.
-3. If a `* Summary` is missing, generate one from `* Context`,
-   completed plan tasks, and `* Implementation` notes before
-   closing.
+3. If a `* Summary` is missing, generate one from promoted `* Context`
+   (when present), completed plan tasks, and `* Implementation` notes
+   before closing.
 
 Draft summaries on active records may be terse and are expected to
 evolve; the final summary is written or refreshed at closure. The
 tasks extension prompts the agent to generate or refresh `* Summary`
 when a top-level task transitions to `DONE` and the linked
-change-record either lacks the section or has not been touched
-since the last status transition. The skill is the durable contract;
-the extension prompt is a cheap reinforcement.
+change-record either lacks the section or has not been touched since
+the parent task's `:STARTED:` timestamp (with a small same-minute
+grace window). The skill is the durable contract; the extension
+prompt is a cheap reinforcement.
 
-### When `* Summary` is required
-
-`* Summary` is required on every change-record, regardless of size
-or status. Even a one-sentence summary is preferable to none — it
-gives the agent a deterministic ingestion entry point and forces the
-author to confirm what shipped ("nothing surprising happened here"
-is itself a useful memory signal).
-
-`* Context` is optional and is included only when durable rationale,
-alternatives, or scope materially exceed what `* Summary` can carry.
-For small fixes, mechanical renames, doc tweaks, and single-cause
-bugs, `* Summary` typically suffices and `* Context` is omitted. The
-size of the record is not the criterion — the question is whether the
-rationale exceeds the synopsis.
+### Plan task metadata and status
 
 Plan task headings may nest deeper than level 2. Status discipline
 (including parent propagation, `:STARTED:`, `CLOSED:`, and
@@ -304,11 +271,8 @@ where appropriate) and remove the legacy heading. Preserve
 status, and the rest of the `* Implementation` audit detail — this
 is a memory-summary pass, not a history rewrite.
 
-When the work is *fully* closed and there was no prior plan, the
-harness may scaffold an empty change-record and ask the agent to
-populate `* Summary`, `* Context`, and `* Implementation` from
-`git log` scoped to the parent task's `:STARTED:` and `CLOSED:`
-timestamps. The section structure above still applies. See
+Tooling may scaffold an empty record and prompt the agent for a
+retrospective fill; the section structure above still applies. See
 `../org-tasks/SKILL.md` for the retrospective trigger and timestamp
 protocol.
 
@@ -317,7 +281,7 @@ protocol.
 Before starting: ask whether questions should be batched in
 `* Open questions` for final review or raised immediately.
 
-Resume via `org-tasks` § "Starting or resuming work" (which owns
+Resume via `org-tasks` § *Resuming and agent memory* (which owns
 `:HANDOFF:` / `OPEN` question surfacing), then for each plan task:
 
 1. Mark it `STARTED` if beginning now (parent status follows from
