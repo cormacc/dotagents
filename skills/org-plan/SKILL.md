@@ -5,59 +5,56 @@ description: "Drafting, reviewing, and executing implementation plans as change-
 
 # Plan
 
-Use this skill when the user asks for a plan. A plan is the leading
-content of a *change-record* — a separate org file linked from a task
-via `#+IMPORT:` that begins life as a plan and becomes a record of what
-shipped as work proceeds. This skill owns planning methodology and
-change-record section conventions; `org-tasks` (`../org-tasks/SKILL.md`)
-owns file format, task lifecycle, and persistence rules.
+Use this skill when the user asks for a plan. A plan is the leading content of a
+*change-record* — a separate org file linked from a task via `#+IMPORT:` that
+begins life as a plan and becomes a record of what shipped as work proceeds.
+This skill owns planning methodology and change-record section conventions;
+`org-tasks` (`../org-tasks/SKILL.md`) owns file format, task lifecycle, and
+persistence rules.
 
 ## Planning principles
 
-- Prefer plans that can be executed and verified task-by-task — a
-  plan task is only useful when its acceptance criteria are
-  observable.
-- Keep `* Summary` (condensed final state) distinct from
-  `* Implementation` (decisions, gotchas, validation outcomes); they
-  serve different reading audiences.
-- Capture durable design decisions in `* Summary` (or promoted
-  `* Context` when the rationale exceeds the synopsis) so later
-  sessions don't have to reverse-engineer them from `git log`.
-- Stop planning once the plan is actionable. Endless planning is
-  itself a failure mode.
+- Prefer plans that can be executed and verified task-by-task — a plan task is
+  only useful when its acceptance criteria are observable.
+- Keep `* Summary` (condensed final state) distinct from `* Implementation`
+  (decisions, gotchas, validation outcomes); they serve different reading
+  audiences.
+- Capture durable design decisions in `* Summary` (or promoted `* Context` when
+  the rationale exceeds the synopsis) so later sessions don't have to
+  reverse-engineer them from `git log`.
+- Stop planning once the plan is actionable. Endless planning is itself a
+  failure mode.
 
 ## Change-record sections
 
 Required on every change-record:
 
-- `* Summary` — condensed memory layer; the cheap reconstruction
-  surface for future agents and humans. Placed first so resume tools
-  can ingest it before the detailed ledger. A compact paragraph plus
-  optional subsections: `** Decisions`, `** Shipped`, `** Gotchas`,
-  `** Validation`, `** Follow-ups`. Required on every change-record
-  regardless of size or status (even a one-sentence summary is
-  preferable to none). See *Closure-time summary refresh* below.
-- `* Plan` — executable org TODO headings. Top-level plan tasks are
-  `** TODO …` so they live under `* Plan` while remaining parseable
-  by task tooling. May be empty in a retrospective change-record.
-- `* Implementation` — notes on decisions, tricky details, validation
-  outcomes, and maintenance context discovered while executing.
-  Filled in as work lands (proactive flow) or drafted from `git log`
-  (retrospective flow).
+- `* Summary` — condensed memory layer; the cheap reconstruction surface for
+  future agents and humans. Placed first so resume tools can ingest it before
+  the detailed ledger. A compact paragraph plus optional subsections:
+  `** Decisions`, `** Shipped`, `** Gotchas`, `** Validation`, `** Follow-ups`.
+  Required on every change-record regardless of size or status (even a
+  one-sentence summary is preferable to none). See *Closure-time summary
+  refresh* below.
+- `* Plan` — executable org TODO headings. Top-level plan tasks are `** TODO …`
+  so they live under `* Plan` while remaining parseable by task tooling. May be
+  empty in a retrospective change-record.
+- `* Implementation` — notes on decisions, tricky details, validation outcomes,
+  and maintenance context discovered while executing. Filled in as work lands
+  (proactive flow) or drafted from `git log` (retrospective flow).
 
 Optional:
 
 - `* Context` — background, motivation, scope, rationale. Use
-  `** Design decisions` when alternatives, constraints, or trade-offs
-  matter. Promote from "omit" to "include" when durable rationale
-  materially exceeds what `* Summary` can carry; omit when `* Summary`
-  already says everything (typical for small fixes, mechanical
-  renames, doc tweaks, single-cause bugs). The size of the record is
-  not the criterion — the question is whether the rationale exceeds
-  the synopsis.
+  `** Design decisions` when alternatives, constraints, or trade-offs matter.
+  Promote from "omit" to "include" when durable rationale materially exceeds
+  what `* Summary` can carry; omit when `* Summary` already says everything
+  (typical for small fixes, mechanical renames, doc tweaks, single-cause bugs).
+  The size of the record is not the criterion — the question is whether the
+  rationale exceeds the synopsis.
 
-- `* Open questions` — deferred questions, using plain heading
-  prefixes rather than TODO states:
+- `* Open questions` — deferred questions, using plain heading prefixes rather
+  than TODO states:
 
   ```org
   * Open questions
@@ -69,9 +66,9 @@ Optional:
   Decision: retain `:BLOCKED-BY:`; no `:WAITS_FOR:` field.
   ```
 
-  `OPEN` / `DECIDED` are heading-text markers, not task nodes — no
-  `:CUSTOM_ID:` or lifecycle metadata required. Resume tooling surfaces
-  remaining `OPEN` items.
+  `OPEN` / `DECIDED` are heading-text markers, not task nodes — no `:CUSTOM_ID:`
+  or lifecycle metadata required. Resume tooling surfaces remaining `OPEN`
+  items.
 
 ### Minimal skeleton
 
@@ -125,8 +122,7 @@ Optional further task body prose follows the acceptance criteria.
 
 ### `#+STATUS:` lifecycle (advisory)
 
-Change-records *may* declare a coarse lifecycle status as a preamble
-keyword:
+Change-records *may* declare a coarse lifecycle status as a preamble keyword:
 
 ```org
 #+STATUS: Draft | Review | Accepted | Active | Complete | Archived
@@ -141,66 +137,62 @@ keyword:
 | Complete | Change-record deliverable complete; parent closure is governed by `TASKS.org` |
 | Archived | Superseded or cancelled at the change-record level       |
 
-`#+STATUS:` is **advisory only** — no tooling enforces transitions or
-blocks workflow on a particular status. It is an index/filter signal
-for humans and agents skimming change-records. Task-level status
-discipline is owned entirely by `org-tasks`; the keyword is
-orthogonal to per-task TODO states.
+`#+STATUS:` is **advisory only** — no tooling enforces transitions or blocks
+workflow on a particular status. It is an index/filter signal for humans and
+agents skimming change-records. Task-level status discipline is owned entirely
+by `org-tasks`; the keyword is orthogonal to per-task TODO states.
 
 ### Acceptance criteria
 
-For non-trivial plan tasks, place a short **Acceptance criteria**
-bullet list at the top of the task body, before any other prose. Each
-bullet should be a concrete observable outcome (“X renders”, “Y
-round-trips byte-identically”) rather than an implementation step.
+For non-trivial plan tasks, place a short **Acceptance criteria** bullet list at
+the top of the task body, before any other prose. Each bullet should be a
+concrete observable outcome (“X renders”, “Y round-trips byte-identically”)
+rather than an implementation step.
 
 ### Closure-time summary refresh
 
 Before transitioning a top-level task to `DONE`:
 
-1. Refresh the linked change-record's `* Summary` so the paragraph
-   plus `** Shipped`, `** Gotchas`, and `** Validation` reflect
-   what actually landed.
-2. Ensure any newly-discovered follow-up work exists as `TODO`
-   tasks (in `TASKS.org` for cross-cutting work, under `* Plan`
-   for plan-local work) rather than buried in prose.
-3. If a `* Summary` is missing, generate one from promoted `* Context`
-   (when present), completed plan tasks, and `* Implementation` notes
-   before closing.
+1. Refresh the linked change-record's `* Summary` so the paragraph plus
+   `** Shipped`, `** Gotchas`, and `** Validation` reflect what actually landed.
+2. Ensure any newly-discovered follow-up work exists as `TODO` tasks (in
+   `TASKS.org` for cross-cutting work, under `* Plan` for plan-local work)
+   rather than buried in prose.
+3. If a `* Summary` is missing, generate one from promoted `* Context` (when
+   present), completed plan tasks, and `* Implementation` notes before closing.
 
-Draft summaries on active records may be terse and are expected to
-evolve; the final summary is written or refreshed at closure. The
-tasks extension prompts the agent to generate or refresh `* Summary`
-when a top-level task transitions to `DONE` and the linked
-change-record either lacks the section or has not been touched since
-the parent task's `:STARTED:` timestamp (with a small same-minute
-grace window). The skill is the durable contract; the extension
-prompt is a cheap reinforcement.
+Draft summaries on active records may be terse and are expected to evolve; the
+final summary is written or refreshed at closure. The tasks extension prompts
+the agent to generate or refresh `* Summary` when a top-level task transitions
+to `DONE` and the linked change-record either lacks the section or has not been
+touched since the parent task's `:STARTED:` timestamp (with a small same-minute
+grace window). The skill is the durable contract; the extension prompt is a
+cheap reinforcement.
 
 ### Plan task metadata and status
 
-Plan task headings may nest deeper than level 2. Status discipline
-(including parent propagation, `:STARTED:`, `CLOSED:`, and
-`:LOGBOOK:` lifecycle entries) is owned by `org-tasks`.
+Plan task headings may nest deeper than level 2. Status discipline (including
+parent propagation, `:STARTED:`, `CLOSED:`, and `:LOGBOOK:` lifecycle entries)
+is owned by `org-tasks`.
 
-The `:LOGBOOK:` drawer shown above is optional in hand-authored
-skeletons until the first automated status write. When present, it
-lives after `:PROPERTIES:` and before task body text. Prefer changing
-status through tooling so the heading status, `:STARTED:`, `CLOSED:`,
-parent propagation, and lifecycle log remain synchronized.
+The `:LOGBOOK:` drawer shown above is optional in hand-authored skeletons until
+the first automated status write. When present, it lives after `:PROPERTIES:`
+and before task body text. Prefer changing status through tooling so the heading
+status, `:STARTED:`, `CLOSED:`, parent propagation, and lifecycle log remain
+synchronized.
 
 ### Subtask migration from TASKS.org
 
-When a task in `TASKS.org` already has subtasks and a proactive
-change-record is created, those subtask trees are **moved** into the
-change-record under `* Plan` with their existing `:CUSTOM_ID:` values intact.
-They are removed from the parent `TASKS.org` subtree so the loaded task
-graph contains one canonical node per UUID.
+When a task in `TASKS.org` already has subtasks and a proactive change-record is
+created, those subtask trees are **moved** into the change-record under `* Plan`
+with their existing `:CUSTOM_ID:` values intact. They are removed from the
+parent `TASKS.org` subtree so the loaded task graph contains one canonical node
+per UUID.
 
-The parent task may retain a plain-text bullet summary of migrated
-subtasks for readability, but those bullets are not tasks and contain
-no `:CUSTOM_ID:` drawers. The canonical writable task nodes live in the
-change-record after migration.
+The parent task may retain a plain-text bullet summary of migrated subtasks for
+readability, but those bullets are not tasks and contain no `:CUSTOM_ID:`
+drawers. The canonical writable task nodes live in the change-record after
+migration.
 
 Example before planning:
 
@@ -235,59 +227,56 @@ Migrated subtasks:
 :END:
 ```
 
-Finer-grained level-3+ subtasks introduced by the plan get fresh
-UUIDs and `:CREATED:` properties. New plan-only level-2 work units
-that have no TASKS.org analogue (e.g. "Documentation + measurement")
-also get fresh UUIDs.
+Finer-grained level-3+ subtasks introduced by the plan get fresh UUIDs and
+`:CREATED:` properties. New plan-only level-2 work units that have no TASKS.org
+analogue (e.g. "Documentation + measurement") also get fresh UUIDs.
 
 
 ## Retrospective change-records
 
 When drafting after work has started or completed:
 
-- Mark already-completed work `DONE`; mark current work `STARTED`;
-  add remaining follow-ups as `TODO`.
+- Mark already-completed work `DONE`; mark current work `STARTED`; add remaining
+  follow-ups as `TODO`.
 - Draft `* Summary` from `git log` and `* Implementation` notes.
 - Record key implementation outcomes and verification notes in
   `* Implementation`.
-- Do not rewrite history to look planned in advance. Label
-  retrospective context clearly when useful.
-- Treat `:LOGBOOK:` lifecycle history as evidence, not fiction: preserve
-  entries emitted by tooling and avoid hand-editing status history to
-  make retrospective work appear proactive.
+- Do not rewrite history to look planned in advance. Label retrospective context
+  clearly when useful.
+- Treat `:LOGBOOK:` lifecycle history as evidence, not fiction: preserve entries
+  emitted by tooling and avoid hand-editing status history to make retrospective
+  work appear proactive.
 
-Tooling may scaffold an empty record and prompt the agent for a
-retrospective fill; the section structure above still applies. See
-`../org-tasks/SKILL.md` for the retrospective trigger and timestamp
-protocol.
+Tooling may scaffold an empty record and prompt the agent for a retrospective
+fill; the section structure above still applies. See `../org-tasks/SKILL.md` for
+the retrospective trigger and timestamp protocol.
 
 ## Executing from a change-record
 
-Before starting: ask whether questions should be batched in
-`* Open questions` for final review or raised immediately.
+Before starting: ask whether questions should be batched in `* Open questions`
+for final review or raised immediately.
 
-Resume via `org-tasks` § *Resuming and agent memory* (which owns
-`:HANDOFF:` / `OPEN` question surfacing), then for each plan task:
+Resume via `org-tasks` § *Resuming and agent memory* (which owns `:HANDOFF:` /
+`OPEN` question surfacing), then for each plan task:
 
-1. Mark it `STARTED` if beginning now (parent status follows from
-   `org-tasks` rules). Prefer tooling-driven transitions so lifecycle
-   logging is kept in sync.
+1. Mark it `STARTED` if beginning now (parent status follows from `org-tasks`
+   rules). Prefer tooling-driven transitions so lifecycle logging is kept in
+   sync.
 2. Implement the smallest change that satisfies the task.
 3. Verify the change.
 4. Mark it `DONE` and add a short result note if useful.
-5. Add newly discovered follow-up work as new `TODO` tasks under
-   `* Plan` rather than as inline prose.
-6. Handle questions per the agreed mode: append to
-   `* Open questions` or raise immediately.
+5. Add newly discovered follow-up work as new `TODO` tasks under `* Plan` rather
+   than as inline prose.
+6. Handle questions per the agreed mode: append to `* Open questions` or raise
+   immediately.
 
 ## Updating change-records after discoveries
 
-Update the change-record when implementation reveals durable work or
-rationale (prerequisites, decisions, validation gaps, refactors,
-blockers, deferred questions). Keep additions concise — one task per
-concrete outcome.
+Update the change-record when implementation reveals durable work or rationale
+(prerequisites, decisions, validation gaps, refactors, blockers, deferred
+questions). Keep additions concise — one task per concrete outcome.
 
-For discovered prerequisites that are themselves tasks elsewhere in
-the graph, express the dependency via `:BLOCKED-BY:` (and `:BLOCKED-BY+:`
-for multiples). See `../org-tasks/SKILL.md` for the property's full
-shape and ready-task semantics.
+For discovered prerequisites that are themselves tasks elsewhere in the graph,
+express the dependency via `:BLOCKED-BY:` (and `:BLOCKED-BY+:` for multiples).
+See `../org-tasks/SKILL.md` for the property's full shape and ready-task
+semantics.
