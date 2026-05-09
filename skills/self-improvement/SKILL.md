@@ -4,10 +4,12 @@ description: |
   Capture friction with agent / pi configuration (AGENTS.md, skills, prompts,
   pi extensions, project conventions) at the moment it arises in any session
   and route it as actionable TODO work to the right tier — project-local
-  config goes into the current project's TASKS.org; global config (managed
-  in ~/dotfiles) goes into the dotfiles repo's TASKS.org via pi-intercom.
-  Use whenever the user (or you yourself) notices something durable that
-  should change about how the agent works.
+  config goes into the current project's TASKS.org; global config splits
+  between two repos via pi-intercom: dotagents (skills, pi extensions,
+  prompts, pi-side AGENTS.md) and dotfiles (Home Manager / NixOS /
+  nix-darwin wiring, agents.nix, pi settings.json, dotfiles-side
+  AGENTS.md). Use whenever the user (or you yourself) notices something
+  durable that should change about how the agent works.
 ---
 
 # Self-improvement skill
@@ -18,21 +20,10 @@ directly — every change goes through a normal TODO entry, optionally
 promoted into a change-record via the [`org-plan`](../org-plan/SKILL.md)
 flow, so the team and the project history stay in the loop.
 
-> **Routing under review.** As of 2026-05-07 the agent skills, pi
-> extensions, and prompts shipped from `~/dotfiles` were extracted into
-> a sibling repo (`cormacc/dotagents`, mounted under `~/dotfiles/agents-src`).
-> "Global" feedback now splits across two repos: dotagents (skills /
-> extensions / prompts / agent behaviour) and dotfiles (Home Manager
-> wiring, Nix configuration, dotfiles `AGENTS.md`). The routing rules
-> below still describe the single-tier dotfiles flow; a follow-up task
-> in dotagents `TASKS.org` (`7e21788d-…`) tracks rewriting them for
-> the two-tier model. Until that lands, treat skill/extension/prompt
-> feedback as a dotagents concern, even where the rules below mention
-> dotfiles.
-
 The skill is repo-agnostic. It is invoked from whichever session
 notices the friction, and routes the resulting TODO to the tier that
-owns the affected artefact.
+owns the affected artefact. "Global" splits across two sibling
+repos (see *Routing* below); both are reached via `pi-intercom`.
 
 ## When to use
 
@@ -124,34 +115,54 @@ Use the slow loop when **any** of these hold:
 The slow-loop pipeline (routing, transport, triage routine,
 entry conventions) is documented in the rest of this file.
 
-## Routing: project-local vs dotfiles-global
+## Routing: three tiers
 
 Before doing anything else, classify the affected artefact's
 *tier*. The TODO must end up in the `TASKS.org` of the repo that
-owns the fix.
+owns the fix. There are three tiers:
+
+- **project-local** — the current session's repo (anything that
+  isn't dotfiles or dotagents).
+- **dotagents** — `~/dotfiles/agents-src/` (a git submodule
+  pointing at `cormacc/dotagents`). Owns reusable agent assets:
+  skills, pi extensions, prompts, the pi-side `AGENTS.md`, and
+  dotagents package contents / manifests (`agent-org-memory.nix`,
+  `package.json`). These are symlinked into `~/.agents/skills`
+  and `~/.pi/agent/{AGENTS.md,prompts,extensions,skills}` by
+  `agents.nix`.
+- **dotfiles** — `~/dotfiles/` itself. Owns Home Manager / NixOS /
+  nix-darwin configuration, `agents.nix` (the wiring that
+  installs dotagents), `agents-config/pi/settings.json` (user-local
+  pi settings), and the dotfiles-side `AGENTS.md`.
 
 ### Decision rules
 
+Resolve the affected file (follow symlinks — `realpath` or
+`readlink -f`) and apply the first matching row:
+
 | Signal | Tier |
 |--------|------|
-| Affected file resolves under `$HOME/dotfiles` | global |
-| Affected file resolves under `~/.agents/` or `~/.pi/agent/` (these are symlinks into dotfiles via `agents.nix`) | global |
-| Affected artefact is a skill, pi extension, prompt, or `AGENTS.md` shipped from dotfiles | global |
-| Affected artefact is a project-only `AGENTS.md`, project-scoped script, project-specific convention, or project tooling | project-local |
-| Affected artefact lives in a sibling repo unrelated to dotfiles or the current project | project-local *to that repo* — but routing to a third repo is out of scope; ask the user |
+| File resolves under `$HOME/dotfiles/agents-src/` | **dotagents** |
+| File is a skill (`~/.agents/skills/<name>/`) or lives under `~/.pi/agent/{skills,extensions,prompts}/` | **dotagents** (these are symlinks into `agents-src/`) |
+| File is the pi-side `AGENTS.md` (`~/.pi/agent/AGENTS.md`, resolves to `agents-src/AGENTS.md`) | **dotagents** |
+| File resolves under `$HOME/dotfiles/` but **not** under `agents-src/` (e.g. `agents.nix`, `agents-config/pi/settings.json`, `home*.nix`, `hosts/`, `darwin-configuration.nix`, the dotfiles `AGENTS.md`) | **dotfiles** |
+| Project-only `AGENTS.md`, project-scoped script, project-specific convention, or project tooling | **project-local** |
+| Artefact lives in a sibling repo unrelated to the three tiers above | project-local *to that repo* — but routing to a third repo is out of scope; ask the user |
 
-When in doubt, run `realpath` on the affected file and check
-whether it resolves into `$HOME/dotfiles`. The `~/.agents` and
-`~/.pi/agent` paths are symlinks; the destination matters, not
-the source.
+Quick heuristic for the dotagents-vs-dotfiles split when the
+artefact is conceptual rather than file-bound:
+
+- *"How the agent behaves / what a skill says / how an extension works / what a dotagents package contains"* → **dotagents**.
+- *"How dotagents gets installed / which local package inputs are enabled / Nix wiring / shell environment"* → **dotfiles**.
 
 ### Ambiguous cases
 
 If the classification isn't clear from the signals above, ask the
-user once: *"is this a fix in this project, or in your dotfiles?"*
-If they decline to disambiguate, default to the **current
-project** (least disruptive) and add the tag `:tier-unknown:` to
-the entry so it can be re-routed later.
+user once: *"is this a fix in this project, in dotagents (skills /
+extensions / prompts), or in dotfiles (Nix wiring)?"* If they
+decline to disambiguate, default to the **current project**
+(least disruptive) and add the tag `:tier-unknown:` to the entry
+so it can be re-routed later.
 
 ## Slow-loop transport: two flows
 
@@ -183,25 +194,37 @@ it edits the file in the current session's repo and commits.
    it now (org-plan) or leave on the backlog?"* and act on their
    answer.
 
-### Flow B: dotfiles-global (pi-intercom hand-off)
+### Flow B: global (pi-intercom hand-off to dotagents *or* dotfiles)
 
 The originating session does *not* triage; it hands a structured
-envelope to a session running in the dotfiles repo.
+envelope to a session running in the *target* repo. The repo
+selected by the routing rules is the **target repo**: either
+`$HOME/dotfiles/agents-src` (dotagents) or `$HOME/dotfiles`
+(dotfiles).
 
 1. Collect description + auto-detect metadata (as in Flow A,
    step 2).
-2. Discover a live dotfiles session:
+2. Discover a live target session:
    ```
    intercom action: list
    ```
-   Filter for a session whose `cwd` is under `$HOME/dotfiles`.
-3. If none is alive, **auto-spawn** one (see "Spawn recipe"
-   below) and wait for it to register with intercom.
+   Filter for a session whose `cwd` matches the target repo:
+   - **dotagents** target: `cwd` is under `$HOME/dotfiles/agents-src`.
+   - **dotfiles** target: `cwd` is under `$HOME/dotfiles` **but
+     not** under `agents-src/`.
+
+   Be careful with the dotfiles match: a session whose `cwd` is
+   `~/dotfiles/agents-src` is **not** a dotfiles session — it's
+   a dotagents session that happens to sit inside the parent
+   checkout.
+3. If no session for the target repo is alive, **auto-spawn**
+   one (see "Spawn recipe" below) and wait for it to register
+   with intercom.
 4. Send the envelope (fire-and-forget, *not* `ask`):
    ```
    intercom({
      action: "send",
-     to: "<dotfiles session name>",
+     to: "<target session name>",
      message: "[self-improvement] <one-line summary>\n\n" +
               "<free-form body>\n\n" +
               "Origin:\n" +
@@ -214,9 +237,9 @@ envelope to a session running in the dotfiles repo.
    })
    ```
    The `[self-improvement]` prefix in the first line is what the
-   dotfiles-side triage routine matches on to recognise the
+   target-side triage routine matches on to recognise the
    message as feedback.
-5. Return immediately. Do **not** block on triage; the dotfiles
+5. Return immediately. Do **not** block on triage; the target
    session will reply asynchronously with the new task UUID and
    a "plan now or backlog?" prompt that lands in this session's
    inbox. When that prompt arrives, treat it like any other
@@ -224,22 +247,29 @@ envelope to a session running in the dotfiles repo.
 
 ### Spawn recipe (Flow B fallback)
 
-When no dotfiles session is alive, spawn one. Prefer `cmux`,
-fall back to `tmux`, mirroring the conventions in
-[`pi-intercom`](../../../.cache/npm/lib/node_modules/pi-intercom/skills/pi-intercom/SKILL.md):
+When no session for the target repo is alive, spawn one. Prefer
+`cmux`, fall back to `tmux`, mirroring the conventions in
+[`pi-intercom`](../../../../.cache/npm/lib/node_modules/pi-intercom/skills/pi-intercom/SKILL.md).
+Substitute the target's working directory:
+
+- **dotagents** target → `cd $HOME/dotfiles/agents-src`.
+- **dotfiles** target → `cd $HOME/dotfiles`.
 
 ```bash
+# Pick the target cwd:
+TARGET_CWD="$HOME/dotfiles/agents-src"   # or "$HOME/dotfiles"
+TARGET_NAME="dotagents-feedback"          # or "dotfiles-feedback"
+
 # cmux preferred — visible split:
 cmux new-split right
 sleep 0.5
-cmux send --surface right "cd $HOME/dotfiles && pi\n"
+cmux send --surface right "cd $TARGET_CWD && pi\n"
 
 # tmux fallback:
 SOCKET_DIR=${TMPDIR:-/tmp}/pi-tmux-sockets
 mkdir -p "$SOCKET_DIR"
 SOCKET="$SOCKET_DIR/pi.sock"
-SESSION=dotfiles-feedback
-tmux -S "$SOCKET" new -d -s "$SESSION" -c "$HOME/dotfiles" 'pi'
+tmux -S "$SOCKET" new -d -s "$TARGET_NAME" -c "$TARGET_CWD" 'pi'
 ```
 
 After spawn, poll `intercom action: list` (a few times, ~1 s
@@ -251,8 +281,8 @@ feedback.
 ## Triage routine
 
 Same routine for project-local entries (run in the originating
-session) and for dotfiles inbound messages (run in the dotfiles
-session).
+session) and for global inbound messages (run in the target repo's
+session: dotagents or dotfiles).
 
 1. **Parse** the envelope (or local-call args) → body +
    metadata + sender type.
@@ -293,11 +323,11 @@ session).
 7. **Acknowledge.** Tell the sender:
    - For local triage: prompt the user inline ("Filed as <UUID>.
      Plan now or backlog?").
-   - For cross-tier triage in the dotfiles session: send back
+   - For cross-tier triage in the target repo session: send back
      via `intercom action: send` (or `action: reply` if the
      inbound was an `ask`, though the standard flow uses `send`)
      to the originating session: *"[self-improvement] Filed as
-     <UUID> in dotfiles/TASKS.org. Plan now or backlog?"*
+     <UUID> in <target-label>/TASKS.org. Plan now or backlog?"*
 
 ## `* Agent feedback` entry conventions
 
@@ -344,10 +374,10 @@ short-circuits that flow.
 ### Tight loop
 
 The user corrects the agent's commit headline to follow
-Conventional Commits. AGENTS.md doesn't document the convention
-(trigger 2 + 3 fit). The current session is in the dotfiles
-repo; the fix is a one-line addition to `agents/AGENTS.md`. All
-tight-loop preconditions hold:
+Conventional Commits. The pi-side AGENTS.md doesn't document
+the convention (trigger 2 + 3 fit). The current session is in
+the dotagents repo; the fix is a one-line addition to
+`agents-src/AGENTS.md`. All tight-loop preconditions hold:
 
 1. Agent drafts the diff:
    ```
@@ -362,17 +392,19 @@ tight-loop preconditions hold:
    message that itself respects the convention being added).
 4. Done. No `TASKS.org` entry needed.
 
-### Slow loop
+### Slow loop — dotagents target
 
 A user in `~/code/some-project` corrects the agent's misuse of
 `tasks_insert_task` (the agent forgot `allowCreateSection`).
-Tracing back, the AGENTS.md guideline for `tasks_insert_task` is
-unclear. The agent self-proposes:
+Tracing back, the pi-side `AGENTS.md` guideline for
+`tasks_insert_task` is unclear. The agent self-proposes:
 
-1. Classify tier: `AGENTS.md` snippet lives in
-   `$HOME/dotfiles/agents/AGENTS.md` → **global**.
-2. Discover dotfiles session via `intercom action: list`. None
-   alive → spawn via `cmux` recipe.
+1. Classify tier: pi-side `AGENTS.md` resolves to
+   `$HOME/dotfiles/agents-src/AGENTS.md` → **dotagents**.
+2. Discover dotagents session via `intercom action: list`
+   (filter `cwd` under `~/dotfiles/agents-src`). None alive →
+   spawn via `cmux` recipe with
+   `TARGET_CWD=$HOME/dotfiles/agents-src`.
 3. Send envelope:
    ```
    [self-improvement] AGENTS.md guidance on tasks_insert_task
@@ -392,15 +424,34 @@ unclear. The agent self-proposes:
    ```
 4. Originating session returns immediately and continues the
    user's actual task.
-5. Dotfiles session receives, parses, classifies tag
+5. Dotagents session receives, parses, classifies tag
    `:agents-md:`, finds no near-duplicate, drafts summary +
    body, sees sender is `agent` → skips confirmation, inserts
-   into `~/dotfiles/TASKS.org` under `* Agent feedback`.
-6. Dotfiles session replies via `intercom action: send` to the
+   into `~/dotfiles/agents-src/TASKS.org` under `* Agent feedback`.
+6. Dotagents session replies via `intercom action: send` to the
    originating session: *"[self-improvement] Filed as
-   01234567-… in dotfiles/TASKS.org. Plan now or backlog?"*
+   01234567-… in dotagents/TASKS.org. Plan now or backlog?"*
 7. The originating-session agent surfaces that prompt to the
    user when convenient.
+
+### Slow loop — dotfiles target
+
+The user complains that `home-manager switch` keeps re-staging
+`agents-config/pi/settings.json` whenever the default model
+changes, and the README's note on the clean filter is buried.
+The affected artefact is the dotfiles-side `README.org` and the
+`agents-config/install-git-filter.sh` wiring.
+
+1. Classify tier: both files resolve under `$HOME/dotfiles/`
+   but **not** under `agents-src/` → **dotfiles**.
+2. Discover dotfiles session (filter `cwd` under `~/dotfiles`,
+   excluding `agents-src/`). None alive → spawn via `cmux`
+   recipe with `TARGET_CWD=$HOME/dotfiles`.
+3. Send the `[self-improvement]` envelope as above, addressed
+   to the dotfiles session.
+4. Dotfiles session triages, inserts into
+   `~/dotfiles/TASKS.org` under `* Agent feedback`, replies
+   with the new UUID.
 
 ## See also
 
@@ -408,6 +459,10 @@ unclear. The agent self-proposes:
   protocol, `tasks_insert_task` insertion, idempotency rules.
 - [`../org-plan/SKILL.md`](../org-plan/SKILL.md) — promoting an
   entry into a planned change-record.
-- [`pi-intercom`](../../../.cache/npm/lib/node_modules/pi-intercom/skills/pi-intercom/SKILL.md) —
+- [`pi-intercom`](../../../../.cache/npm/lib/node_modules/pi-intercom/skills/pi-intercom/SKILL.md) —
   transport semantics (`send` / `ask` / `reply` / `list`),
   spawn recipes.
+- `~/dotfiles/agents.nix` — the wiring that symlinks
+  `~/dotfiles/agents-src/` into `~/.agents/skills` and
+  `~/.pi/agent/{AGENTS.md,prompts,extensions,skills}`. Useful
+  when verifying which tier a symlinked path belongs to.

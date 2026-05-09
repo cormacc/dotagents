@@ -34,12 +34,14 @@
 :END:
 #+IMPORT: [[file:design/log/2026-05-08-bootstrap-a-clojure-development-skill.org]]
 Add a second pi package alongside ~agent-org-memory~ for the clojure-development skill family. The =clj-nrepl= skill, =pi-clojure= extension, and any future Clojure-specific helpers should ship as a separate slice with its own ~package.json~ / Nix derivation, mirroring the shape of ~agent-org-memory.nix~. Decide between sibling ~package.json~ files vs a workspaces layout when the second slice actually has more than one entry to bind together. Captured as a follow-up to the 2026-05-07 dotfiles → dotagents extraction.
-** TODO [#B] Re-tier self-improvement skill routing for the dotfiles/dotagents split :self-improvement:routing:
+** DONE [#B] Re-tier self-improvement skill routing for the dotfiles/dotagents split :self-improvement:routing:
+CLOSED: [2026-05-09 Sat 10:43]
 :PROPERTIES:
 :CUSTOM_ID: 7e21788d-b4e6-439b-b300-ca84ab4a2fcc
 :CREATED: [2026-05-07 Thu 22:44]
 :END:
 :LOGBOOK:
+- State "DONE"      from "TODO"      [2026-05-09 Sat 10:43]
 - Created [2026-05-07 Thu 22:44]
 :END:
 =skills/self-improvement/SKILL.md= currently routes "global" agent feedback at a single dotfiles-side TASKS.org. After the 2026-05-07 extraction, global feedback splits across two repos:
