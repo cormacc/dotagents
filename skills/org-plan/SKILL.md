@@ -6,13 +6,11 @@ description: "Drafting, reviewing, and executing implementation plans as change-
 # Plan
 
 Use this skill when the user asks for a plan. A plan is the leading
-content of a *change-record* — the artefact owned by the `org-tasks`
-skill (`../org-tasks/SKILL.md`), linked from a task via `#+IMPORT:`.
-A change-record begins life as a plan and becomes a record of what
-shipped as work proceeds.
-
-This skill owns planning methodology and section conventions;
-`org-tasks` owns file format and persistence rules.
+content of a *change-record* — a separate org file linked from a task
+via `#+IMPORT:` that begins life as a plan and becomes a record of what
+shipped as work proceeds. This skill owns planning methodology and
+change-record section conventions; `org-tasks` (`../org-tasks/SKILL.md`)
+owns file format, task lifecycle, and persistence rules.
 
 ## Planning principles
 
@@ -71,10 +69,9 @@ Optional:
   Decision: retain `:BLOCKED-BY:`; no `:WAITS_FOR:` field.
   ```
 
-  `OPEN` / `DECIDED` are heading-text markers, not task nodes and not
-  `#+TODO:` states. They need no `:CUSTOM_ID:` or lifecycle metadata; a
-  `DECIDED` heading may optionally record `:DECIDED: [timestamp]`.
-  Resume tooling should surface remaining `OPEN` items.
+  `OPEN` / `DECIDED` are heading-text markers, not task nodes — no
+  `:CUSTOM_ID:` or lifecycle metadata required. Resume tooling surfaces
+  remaining `OPEN` items.
 
 ### Minimal skeleton
 
@@ -285,14 +282,12 @@ Resume via `org-tasks` § *Resuming and agent memory* (which owns
 
 ## Updating change-records after discoveries
 
-Update the change-record when implementation reveals a prerequisite
-task, an architectural decision, a validation gap, a follow-up
-refactor, a blocked dependency, or a question that should be
-reviewed later. Keep additions concise and actionable. Prefer one
-task per concrete outcome.
+Update the change-record when implementation reveals durable work or
+rationale (prerequisites, decisions, validation gaps, refactors,
+blockers, deferred questions). Keep additions concise — one task per
+concrete outcome.
 
-When a discovered prerequisite is itself a task elsewhere in the task
-graph, capture the dependency via `:BLOCKED-BY:` on the dependent
-task (using `:BLOCKED-BY+:` continuation lines for multiple
-prerequisites). See `../org-tasks/SKILL.md` for the property's full
+For discovered prerequisites that are themselves tasks elsewhere in
+the graph, express the dependency via `:BLOCKED-BY:` (and `:BLOCKED-BY+:`
+for multiples). See `../org-tasks/SKILL.md` for the property's full
 shape and ready-task semantics.

@@ -157,10 +157,8 @@ Optional description text.
   the task body, after any metadata drawers. Resolves relative to the
   file containing the keyword. May also appear at file root (before
   any heading) to inject tasks from another file at the root. Preserve
-  any existing bare or labelled link form on round-trip.
-  `#+IMPORT:` paths and scaffolded plan paths must resolve, after
-  symlink resolution, under the project root unless the user has
-  explicitly allowed an external directory.
+  any existing bare or labelled link form on round-trip. Resolution
+  applies symlink-realpath sandboxing per *Locating TASKS.org* above.
 
 Always obtain timestamps via `date +"%Y-%m-%d %a %H:%M"` rather than
 computing them manually.
@@ -197,11 +195,8 @@ Waiting on upstream merge.
 ```
 
 Keep `TASKS.org` high-level. Put detailed checklists and implementation
-history in change-record files. When existing `TASKS.org` subtasks are
-migrated into a new change-record, move the task subtrees into `* Plan`
-with their `:CUSTOM_ID:` values intact and remove them from the parent
-`TASKS.org` subtree. The parent may keep a plain-text bullet summary,
-but only the moved plan nodes remain canonical task nodes.
+history in change-record files. Subtask migration into a change-record
+is owned by `org-plan` § *Subtask migration from TASKS.org*.
 
 ## Selection state
 
@@ -233,11 +228,8 @@ A *change-record* is a separate org file linked from a task via
    prior plan; use the parent's `:STARTED:` (or creation timestamp) and
    `CLOSED:` as the `git log` scope.
 
-`org-plan` owns the change-record section contract, including required
-`* Summary`, optional `* Context`, proactive/retrospective authoring
-rules, and TASKS.org subtask migration into `* Plan`. This skill owns
-the `#+IMPORT:` link, task lifecycle, selection, archive, and resume
-protocol around that file.
+Section contract, authoring rules, and subtask migration are owned by
+`org-plan` (see top of file).
 
 ## Status discipline
 
