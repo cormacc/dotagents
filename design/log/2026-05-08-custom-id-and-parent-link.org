@@ -4,6 +4,28 @@
 #+STATUS: Complete
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Replaced =:ID:= with =:CUSTOM_ID:= and =#+PARENT_ID:= with a navigable =#+PARENT: [[file:...::#<uuid>][summary]]= link across the org-memory protocol so plan→task navigation is a clickable org link grounded in org's =::#anchor= resolution rules. One-shot migration across =~/dotfiles/agents-src=, =~/dotfiles=, and =~/nmd/products/connect/portal= with no legacy tolerance window.
+
+** Shipped
+- Schema migration landed in =agents-src= commit =0981538= (parser/writer/scaffolder/archive behaviour, docs, fixtures, local content sweep).
+- Companion content sweeps landed in =~/dotfiles= commit =b899243= and =~/nmd/products/connect/portal= commit =77d824d5=.
+- Archiving rewrites a plan's =#+PARENT:= link target from =TASKS.org= to =TASKS.archive.org= when the parent task is archived.
+- Jira extension user-facing strings updated to refer to =:CUSTOM_ID:=.
+
+** Decisions
+- =:CUSTOM_ID:= replaces =:ID:= outright :: No dual-slot, no drift surface. The protocol's task graph maintains its own UUID index; org-id machinery is not a dependency.
+- =#+PARENT:= carries an org link :: =[[file:<rel>/TASKS.org::#<uuid>][<summary>]]=, with link descriptions sanitised or omitted when unsafe.
+- No legacy tolerance window :: Three projects on one machine were swept atomically; tolerant reader stays cheap to add later if needed.
+
+** Gotchas
+- =#+PARENT:= summary text goes stale if the parent task is later renamed; the UUID anchor still resolves so navigation works, only the human label drifts.
+- Dropping =:ID:= means these headings are no longer targets for =[[id:UUID]]= links from outside the project. Not currently relied upon.
+
+** Validation
+- =pi/extensions/tasks/test.sh= passes after the migration.
+- =rg '^\s*:ID:|^\s*#\+PARENT_ID:' TASKS*.org design/log= is clean in =agents-src=.
+
 * Context
 
 Today the org-tasks/org-plan protocol stores task identity as =:ID: <uuid>= and back-links plans to their parent task with =#+PARENT_ID: <uuid>= — a bare keyword. Plan→task navigation requires a UUID grep; for a project-local task graph that is the only direction in the system that is not a clickable org link.
@@ -235,10 +257,7 @@ Acceptance criteria:
 - The =~/dotfiles= commit also records the updated =agents-src= submodule pointer after the dotagents implementation commit.
 * Implementation
 
-** Outcome
-Shipped the schema migration in =agents-src= commit =0981538=, including parser/writer/scaffolder/archive behaviour, docs, fixtures, and the local content sweep. The companion sweeps landed in =~/dotfiles= commit =b899243= and =~/nmd/products/connect/portal= commit =77d824d5=.
-
-Verification: =pi/extensions/tasks/test.sh= passes after this task-state cleanup, and =rg '^\s*:ID:|^\s*#\+PARENT_ID:' TASKS*.org design/log= is clean in =agents-src=.
+Outcome content absorbed into top-level =* Summary= during the 2026-05-09 retrospective summary sweep; see that section for the condensed final state.
 
 * Open questions
 

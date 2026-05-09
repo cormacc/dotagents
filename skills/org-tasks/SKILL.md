@@ -227,17 +227,28 @@ to other checkouts until published.
 A *change-record* is a separate org file linked from a task via
 `#+IMPORT:`. Two flows produce the same artefact:
 
-1. **Proactive** — created before work begins. Agent drafts `* Context`
-   and `* Plan` up front; `* Implementation` fills in as plan tasks
+1. **Proactive** — created before work begins. Agent drafts `* Summary`
+   (a draft is fine) plus `* Context` and `* Plan` up front;
+   `* Implementation` and `* Summary` fill in as plan tasks
    transition `TODO -> STARTED -> DONE`.
 2. **Retrospective** — created after the parent task closed without a
    prior plan. Agent uses the parent's `:STARTED:` and `CLOSED:`
-   timestamps to scope `git log`, then drafts `* Context` and
-   `* Implementation` from the commit history. `* Plan` may be empty
-   or hold a brief retrospective list including failed attempts.
+   timestamps to scope `git log`, then drafts `* Summary`, `* Context`,
+   and `* Implementation` from the commit history. `* Plan` may be
+   empty or hold a brief retrospective list including failed
+   attempts.
 
-See `../org-plan/SKILL.md` for the section structure both flows produce
-and the planning workflow.
+`* Summary` is the condensed memory layer: a one-paragraph synopsis
+plus optional `** Decisions`, `** Shipped`, `** Gotchas`,
+`** Validation`, `** Follow-ups` subsections. It is required on
+every change-record (any size, any status past Draft) and is the
+cheap reconstruction surface for future agents. `* Summary`
+supersedes the legacy `** Outcome` / `** Shipped` heading under
+`* Implementation`. `* Context` is optional and included only when
+durable rationale exceeds what `* Summary` can carry.
+
+See `../org-plan/SKILL.md` for the full section structure both
+flows produce and the planning workflow.
 
 ## Status discipline
 
@@ -285,34 +296,63 @@ agent conversation as ephemeral. Load eagerly only the task index
 change-record. Load other imports on demand when they are on the active
 path or referenced by blockers / linked issues.
 
-Resume checklist:
+The condensed surface a future agent reads first is the change-record's
+`* Summary`. It is the cheap reconstruction surface for large records
+and supersedes the legacy `** Outcome` / `** Shipped` heading. Detailed
+`* Plan` task bodies, completed plan tasks, and lengthy `* Implementation`
+notes are loaded on demand once the agent has decided what to do next.
+
+Resume checklist (read order):
 
 1. Identify the selected task via `#+SELECTED:`; otherwise use the first
    active `STARTED` task or ask the user.
-2. Read the selected task subtree, its `#+IMPORT:` change-record, and
-   its LOGBOOK to understand actual lifecycle history.
-3. Read `* Context`, actionable `* Plan` items, `* Implementation`, and
-   `* Open questions` from the change-record.
-4. Check `:BLOCKED-BY:` (including any `:BLOCKED-BY+:` continuation
-   lines), `:HANDOFF:`, and `:LINKED_ISSUES:`. Surface any `:HANDOFF:`
-   note and any `OPEN` items under the change-record's `* Open
-   questions` immediately on resume. Tracker-specific skills such as
-   `org-jira` define when linked upstream state should be re-fetched;
-   local summaries may be stale.
-5. If a change-record has grown too large for cheap re-ingestion, split
-   completed historical context into a follow-up record or archive old
-   top-level tasks rather than truncating history silently.
+2. Read the selected task subtree (heading, properties, body) and its
+   LOGBOOK to understand actual lifecycle history.
+3. Open the linked change-record and read, in order:
+   1. `* Summary` — condensed final / current state. Always present.
+   2. `* Context` — durable rationale, when the record promotes it.
+      Skip when absent; `* Summary` is the contract surface.
+   3. `:HANDOFF:` (on the parent task or any plan-subtask heading).
+   4. `:BLOCKED-BY:` plus any `:BLOCKED-BY+:` continuation lines.
+   5. `:LINKED_ISSUES:` (tracker-specific skills such as `org-jira`
+      define when linked upstream state should be re-fetched; local
+      summaries may be stale).
+   6. Remaining `OPEN` items under `* Open questions`.
+   7. Actionable plan items: the first `STARTED` plan task or the
+      first ready `TODO`.
+4. Surface any `:HANDOFF:` note and any `OPEN` questions immediately
+   on resume.
+5. Defer until needed: full `* Implementation` notes, completed
+   `DONE`/`CANCELLED` plan task bodies, and detailed acceptance
+   criteria for tasks not on the active path.
+6. `* Summary` is always present, so the cheap path always works.
+   When a record's `* Plan` + `* Implementation` history grows beyond
+   cheap re-ingestion (≥ ~150 lines is a useful soft threshold), the
+   right response is to *split* completed historical context into a
+   follow-up record or *archive* old top-level tasks — not to omit
+   `* Summary` or to truncate history silently.
 
 Durable state: task headings, properties, LOGBOOK, change-records,
-imports, blockers, linked issues. Per-session state: MCP fetch results,
-agent scratch reasoning, UI cursor position, and any unsaved editor
-buffers.
+imports, blockers, linked issues, `* Summary`, `* Context`,
+`* Implementation`. Per-session state: MCP fetch results, agent scratch
+reasoning, UI cursor position, and any unsaved editor buffers.
+
+Closure discipline: before transitioning a top-level task to `DONE`,
+refresh the linked change-record's `* Summary` so the next agent can
+rebuild context cheaply. The tasks extension prompts the agent to
+generate or refresh `* Summary` when a top-level task transitions to
+`DONE` and the linked change-record either lacks the section or has
+not been touched since the last status transition. The skill is the
+durable contract; the extension prompt is a cheap reinforcement.
+See `../org-plan/SKILL.md` § *Closure-time summary refresh* for the
+full workflow.
 
 The tasks extension regression suites are the executable contract for
 this behaviour: `lifecycle.test.ts` covers lifecycle LOGBOOK status
 semantics, `paths.test.ts` covers import/scaffold sandboxing,
 `doctor.test.ts` covers loaded-graph health checks, and
-`memory.test.ts` covers scenario-style selected-task reconstruction.
+`memory.test.ts` covers scenario-style selected-task reconstruction
+(including `* Summary` ingestion order).
 
 ## Creating tasks and change-records
 

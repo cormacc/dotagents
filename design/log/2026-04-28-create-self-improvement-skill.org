@@ -3,6 +3,32 @@
 #+PARENT: [[file:../../TASKS.org::#2262ed25-f0fc-40fd-9d21-41a0b16fb3a1][Create self-improvement skill]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+A single =self-improvement= skill (=skills/self-improvement/SKILL.md=) captures friction with agent / pi configuration at the moment it arises and routes it as actionable TODO work to the right tier. Project-local feedback (project =AGENTS.md=, project skills, project conventions) lands in the current project's =TASKS.org= under =* Agent feedback= via =tasks_insert_task=. Global feedback (dotfiles =AGENTS.md=, =~/.agents/skills=, =~/.pi/agent=) is sent via =pi-intercom= to a live dotfiles session (auto-spawned in tmux if none alive) which triages and inserts into =~/dotfiles/TASKS.org=. Spec-only skill artefact: no scripts. Unified triage routine handles classify→tag→dedupe→confirm→insert→ack at both tiers.
+
+** Decisions
+- Single skill, repo-agnostic :: keys behaviour off *what the feedback is about*, not which repo it's invoked in.
+- Routing by target tier :: project-local vs dotfiles-global; ambiguous defaults to current project with a =:tier-unknown:= tag.
+- Submit + triage as one flow :: no separate client/server; the routing session also runs triage when local.
+- Cross-tier transport :: =pi-intercom=, fire-and-forget =send=, prefix tag =[self-improvement]=. Plain prose envelope, structured =Origin:= block; no JSON schema.
+- Confirmation policy inverted from usual default :: human-sender confirms wording (dotfiles agent has reformulated their words); agent-sender auto-inserts (no human at submit-time).
+- Persistence under =* Agent feedback= :: feedback becomes durable TODOs via =tasks_insert_task=; standard org-tasks lifecycle / archive applies. No parallel inbox.
+- Auto-spawn dotfiles session :: cmux-preferred / tmux-fallback recipe with intercom-registration polling and retry budget.
+
+** Shipped
+- =skills/self-improvement/SKILL.md= covering when-to-use (user- and agent-invoked), routing, two flows (local insert / cross-tier intercom), spawn recipe, triage routine, =* Agent feedback= entry conventions, and a worked example.
+- =skills/README.org= populated with intro and one-line entries for every existing skill so the new entry has context.
+
+** Gotchas
+- Acknowledgement uses =send= not =reply=: the original submit was fire-and-forget so there is no in-flight =ask= to =reply= to. The originating agent watches for inbound messages with the =[self-improvement]= prefix as the planning prompt.
+
+** Validation
+- Static verification (in lieu of deferred two-session smoke test): skill visible at =~/.agents/skills/self-improvement/SKILL.md=; YAML frontmatter parses; sibling skill references resolve; =pi-intercom= skill path resolves; all tool dependencies (=tasks_insert_task=, =intercom=, =date=, =git remote=, =cmux=/=tmux=) are part of the standard surface.
+
+** Follow-ups
+- End-to-end smoke test across two pi sessions (deferred from plan).
+- Re-tier routing for the dotfiles ↔ dotagents extraction landed later in TASKS.org task =7e21788d=.
+
 * Context
 
 Agent / pi configuration is layered: a *global* tier lives in this dotfiles repo (=AGENTS.md=, =agents/skills/=, =agents/pi/=) and is symlinked into =~/.agents= and =~/.pi/agent= via [[file:agents.nix]]; a *project-local* tier may live in any repo (a project-level =AGENTS.md=, project-scoped skills, project-specific pi extensions or conventions). Friction with either tier is most visible while working *in some project*, but the durable fix has to land at the right tier — global friction is fixed in dotfiles, project-local friction is fixed in that project.
@@ -143,6 +169,8 @@ CLOSED: [2026-04-29 Wed 08:03]
 :END:
 Add a short entry summarising purpose, routing model, and where feedback lands so contributors stumbling on the skill directory can grok it without reading SKILL.md cover-to-cover. Acceptance: README.org has a one-paragraph entry for =self-improvement= and links to its =SKILL.md=.
 * Implementation
+
+Outcome / decisions / verification absorbed into top-level =* Summary= during the 2026-05-09 retrospective summary sweep; see that section for the condensed final state. Detailed sections below preserved as audit history.
 
 ** Skill artefact
 

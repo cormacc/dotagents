@@ -3,6 +3,33 @@
 #+PARENT: [[file:../../TASKS.archive.org::#2b87d48c-d158-44ff-8fea-87c99b570144][Add emacs-side tooling for tasks extension :org-memory:org-tasks:tasks-extension:emacs]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Added a lightweight =tasks-org= minor mode to the Spacemacs =org-user= layer providing transparent helpers for the plain-org task-memory protocol: stable =:ID:= properties on plan creation, single-selection via the reserved =:selected:= tag, =:PLAN:= open/create commands using clickable org links, and jump-to-parent. Activation gates on filename match plus the =#+DEFAULT_PLAN_DIR:= keyword so the mode only loads in real task-memory buffers. Pi continues to refresh from disk via its file watchers; no Emacs↔pi RPC.
+
+** Decisions
+- Lightweight minor mode :: discoverable commands without replacing org-mode behaviour.
+- Keep package local to =org-user= layer :: extractable later with minimal coupling.
+- Explicit commands over surprising hooks :: mutation is opt-in / conservative; the optional save-time ID backfill defaults off.
+- File protocol remains canonical :: pi, agents, humans all consume the same plain org files.
+- Activation by filename match AND keyword :: =tasks-org-auto-enable-paths= (default =TASKS.org=, =design/log/*.org=) OR =#+DEFAULT_PLAN_DIR:= keyword. Manual =M-x tasks-org-mode= for other buffers.
+- Project root via projectile :: fall back to buffer directory then =default-directory=.
+- Spacemacs key prefix =, ;= :: free, no =org-shiftup= unbinding required, reachable without Shift. Two earlier prefixes (=, p=, =, K=) rejected.
+- Subtask absorption deferred :: first-pass plan creation scaffolds an empty file; absorption tracked as separate workstream.
+- ID backfill is not an Emacs responsibility :: pi and the agent skill already backfill on load/resume; the only Emacs-side ID assignment is internal to plan creation. Public =tasks-org-ensure-id= / =tasks-org-backfill-ids-in-buffer= and the save hook were removed post-validation (2026-04-27).
+
+** Shipped
+- Package at =editors/emacs/spacemacs/layers/org-user/local/tasks-org/tasks-org.el= wired into =org-user-packages= via =(tasks-org :location local)=.
+- Keymap on local-leader =, ;=: =, ; s= toggle selected, =, ; p= / =, ; P= open plan (same/other window), =, ; t= jump to parent task.
+- ID helpers via =org-id-new=; =org-entry-get/put= leaves unrelated drawers untouched.
+- Selection: =tasks-org--clear-selected-everywhere= reads =:PLAN:= links from TASKS.org via property regex, opens each file with =find-file-noselect= (killing only the buffers it opened), uses =org-set-tags= to mutate, saves. =tasks-org-toggle-selected= clears-then-applies so single-selection is always enforced.
+- Plan helpers: =tasks-org--extract-plan-path= recognises bare paths, =[[file:...]]=, and =[[file:...][label]]=; =::search-option= suffixes stripped before resolving (post-v1 fix). Plan creation always writes the clickable =[[file:...]]= form and ensures the source task has an =:ID:= before saving.
+
+** Validation
+- Manual end-to-end interactive validation (2026-04-27): selection toggle, plan open/create, jump-to-parent, buffer-cleanup correctness all confirmed.
+
+** Follow-ups
+- Subtask absorption tracked as a separate TASKS.org task (was followed up in =2026-04-28-tasks-org-subtask-absorption.org=).
+
 * Context
 This plan adds Emacs-side tooling for the plain-org task memory protocol used by `TASKS.org`, linked plan files, and the pi tasks extension. The first implementation should live inside the existing Spacemacs `org-user` layer at `editors/emacs/spacemacs/layers/org-user/`, probably as a local package such as `local/tasks-org/tasks-org.el`, with layer wiring in `packages.el` and user-facing documentation in the layer README.
 

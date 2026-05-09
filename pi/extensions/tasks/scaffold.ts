@@ -43,13 +43,18 @@ export function scaffoldPlan(
   const options = Array.isArray(optionsOrPlanTasks) ? {} : optionsOrPlanTasks;
   const planTasks = Array.isArray(optionsOrPlanTasks) ? optionsOrPlanTasks : maybePlanTasks;
   const tasksFileRelPath = options.tasksFileRelPath ?? "../../TASKS.org";
+  // The minimal skeleton emits only the sections required on every
+  // change-record per `skills/org-plan/SKILL.md`: * Summary, * Plan,
+  // * Implementation. * Context is optional and is added by the agent
+  // (between * Summary and * Plan) only when durable rationale exceeds
+  // what * Summary can carry.
   const content = [
     `#+TITLE: ${task.summary}`,
     `#+DATE: ${formatOrgDate()}`,
     parentId ? `#+PARENT: ${parentLink(tasksFileRelPath, parentId, task.summary)}` : null,
     "#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)",
     "",
-    "* Context",
+    "* Summary",
     "",
     "* Plan",
     "",

@@ -4,6 +4,20 @@
 #+STATUS: Draft
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Draft follow-up plan extracted from =design/log/2026-05-01-org-memory-agent-memory-review.org= so the generic org-memory review can close around shared protocol mechanics. Prior org-memory implementation pass already landed Jira-side documentation alignment (=org-jira= no longer describes Jira-derived plan tasks as UUID mirrors; Jira config documented as project-local trusted configuration; agent-memory cross-links Jira planning/resume context; =jira_clone_apply= delegates to =tasks_insert_task= and inherits the project-root sandbox). Remaining Jira-specific scope is policy detail and validation: reopen / multi-transition semantics for auto-transition, clone-specific sandbox regression coverage, a Jira-linked agent-memory scenario test, and a final docs review. Status remains Draft until the scope is accepted.
+
+** Decisions
+- Jira-specific checks out of the generic org-memory review :: shared protocol vs Jira-specific external-state semantics deserve separate plans.
+- Treat prior shipped Jira docs/code as context, not active work :: this plan records what landed and focuses on remaining gaps.
+- Prefer offline regression coverage :: stub Jira fields and status events; live MCP only for explicit smoke tests.
+
+** Follow-ups (the plan body itself)
+- Auto-transition reopen semantics + status-event matrix.
+- =jira_clone_apply= clone-specific sandbox regression suite.
+- Jira-linked agent-memory scenario coverage.
+- Documentation re-read after remaining org-memory tasks land.
+
 * Context
 
 This draft plan extracts the Jira-specific follow-up work that was originally mixed into the broader org-memory review change-record (=design/log/2026-05-01-org-memory-agent-memory-review.org=, parent task =724c0332=). The generic org-memory task should focus on shared task/plan protocol mechanics; Jira-specific integration checks can be considered separately.

@@ -3,6 +3,23 @@
 #+PARENT: [[file:../../TASKS.archive.org::#f4a2c819-3e7d-4b08-a901-6d7c0e5b2f38][tasks-org: subtask absorption on plan create]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Closed retrospectively: the requested subtask-absorption behaviour was already shipped two days *before* this task was filed (commit =f833776=, 2026-04-25, =Refine tasks extension planning workflow=). When =#+IMPORT:= is created on a task that already has local subtasks, the pi extension moves them into the new change-record under =* Plan= preserving =:ID:=, and leaves a plain-text bullet summary on the parent. Emacs-side parity is intentionally scoped out per =tasks-org.el= commentary ("plan and task scaffolding are the remit of the agent harness"). Pi extension is the single source of truth.
+
+** Decisions
+- Single point of plan creation :: pi extension owns it; =tasks-org-open-plan= signals a =user-error= directing the user to the pi =p= keybinding when no =#+IMPORT:= exists.
+- Subtasks preserve =:ID:= :: =cloneTaskForPlan= copies =propertyLines= so =:ID:= and =:CREATED:= survive the move; this was the most fragile part of the requirement.
+
+** Shipped (already, in commit =f833776=)
+- =index.ts:cloneTaskForPlan= / =cloneSubtasksForPlan= clone children at level 2, recursively, preserving =propertyLines=. Source-graph metadata (=sourceRoot=, =sourcePath=, =lineNumber=, =endLine=, =importChildren=) is reset on clones.
+- =scaffold.ts:insertTasksIntoPlanSection= inserts cloned plan tasks under =* Plan= in the scaffolded change-record (or an existing one).
+- =index.ts:appendExtractedSubtaskList= / =formatExtractedSubtaskList= appends a bullet summary to the parent's description ("Extracted subtasks moved to linked plan:").
+- =index.ts:handlePlanEdit= orchestrates the above and writes the TASKS.org parent via =writeTaskFilePreserving=.
+- =README.md= documents the behaviour under "Subtask absorption".
+
+** Follow-ups
+- The subtask-absorption code path has no direct unit test. A =scaffoldPlan(task, planTasks)= snapshot test feeding a parent with two children (one with grandchildren) would close the gap cheaply.
+
 * Context
 
 Filed on 2026-04-27 as a follow-up requesting that Emacs and the pi extension behave consistently when a `#+IMPORT:` is created on a task that already has local subtasks: the subtasks should move into the new change-record (preserving =:ID:= properties) and the parent should retain a plain-text summary.

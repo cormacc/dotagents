@@ -4,6 +4,24 @@
 #+STATUS: Complete
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Fixed a UX bug where leader-menu UI toggles (e.g. =SPC t t= for the tasks overlay) clobbered any text the user had already typed into the editor. Root cause: leader-menu's =command:= action implementation writes the slash command into the active editor and submits via =SubmitterEditor=, which calls =setEditorText()= and overwrites in-progress input. Fix: extension UI bindings dispatch events directly instead of routing through =command:=. Slash commands stay available for typed use; their handlers dispatch the same events used by the leader bindings so there is a single entry point. Applied to =tasks= and =git-diff=.
+
+** Decisions
+- Event-dispatch for keybindings :: leader-menu bindings use bare event names, not =command:=, when the action is an extension UI toggle.
+- Slash commands as compatibility shims :: =/tasks=, =/tasks new=, =/tasks doctor=, and =/diff *= still work; their handlers emit the same events.
+- Keep =command:= for actual slash-command shortcuts :: leader-menu local built-ins like =/compact= still intentionally submit commands.
+
+** Shipped
+- =pi/extensions/tasks/index.ts=: leader registrations dispatch =tasks:show=, =tasks:new=, =tasks:doctor=; =/tasks= subcommand router dispatches the same events.
+- =pi/extensions/git-diff/index.ts=: leader registrations dispatch =git-diff:*= events; =/diff= subcommands validate arguments and emit those events.
+- Both READMEs document the event-dispatch convention.
+
+** Validation
+- =rg "command:/tasks|command:/diff" pi/extensions/tasks pi/extensions/git-diff= zero hits.
+- =esbuild= bundle checks on both =index.ts= entry points clean.
+- =cd pi/extensions/tasks && ./test.sh= clean.
+
 * Context
 
 Activating in-repo extension UIs through leader-menu currently uses =command:= actions such as =command:/tasks= and =command:/diff toggle=. leader-menu implements =command:= by writing the slash command into the active editor and submitting it through =SubmitterEditor=. That is correct for slash-command shortcuts, but undesirable for UI toggles when the user has already typed text: the intermediate =setEditorText()= clobbers the input area.

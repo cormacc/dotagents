@@ -3,6 +3,32 @@
 #+PARENT: [[file:../../TASKS.archive.org::#c94bab43-aedf-4ccf-984c-a2e1167e880a][Review 0.71.0 changes re. editor]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Defensive future-proofing pass against pi 0.71.0's new =ctx.ui.getEditorComponent()= API. The original draft planned to read-then-wrap the previous editor; final review replaced that with a simpler design: leader menus are independent of editor replacement (=LeaderMenuOverlay= via =ctx.ui.custom(..., { overlay: true })= plus =alt+space= / =alt+,= shortcuts), and =VimEditor= is installed only when modal editing is actually enabled. Switching out of modal mode restores the previously installed editor factory captured via =getEditorComponent()=. Mode feedback moves to =ctx.ui.setStatus("keybindings", …)= rather than embedded editor border text.
+
+** Decisions
+- Do not compose invisible editor instances :: read-then-wrap risks lost edits, duplicated app-keybinding handling, and state skew between the two editors. Rejected.
+- Leader menu first, editor replacement second :: insert-only mode does not call =setEditorComponent()= at all. =LeaderActionHost= abstraction makes menu construction independent of =VimEditor=.
+- Modal install policy :: install =VimEditor= only when persisted settings have ={ modal: true }=; otherwise preserve pi's default or any third-party editor already installed.
+- Runtime mode switching :: store the previous factory via =getEditorComponent?.()= and restore it on switch-back; pass =undefined= to fall back to pi's default if unavailable.
+- Conflict handling :: warn when vim mode is enabled with another editor factory already installed; do not attempt unsafe input delegation.
+- Mode rendering :: =ctx.ui.setStatus= over editor-border embedding.
+- Action dispatch :: extract leader-action dispatch away from =VimEditor=; raw =passthrough:= replaced with explicit handlers; unsupported passthrough fails with a notification rather than synthesising keys into an invisible editor.
+- Out of scope :: true editor middleware/chaining until a real second editor extension exists and upstream exposes a safer composition contract.
+
+** Shipped
+- =LeaderActionHost= abstraction; default host delegates to the active modal editor when one exists, else uses public UI/API calls or inserts slash commands for manual Enter.
+- =LeaderMenuOverlay= for insert-only =alt+space= / =alt+,= navigation.
+- Vim mode captures the previous editor factory before replacement and restores on emacs-mode switch.
+- Mode feedback via =ctx.ui.setStatus("keybindings", …)=; editor border now only shows pending count / operator / leader state.
+
+** Gotchas
+- Original =alt+m= prefix conflicted with pi-intercom's registered shortcut. Replaced with direct root shortcuts =alt+space= (Space leader) and =alt+,= (comma leader). Vim Insert mode uses the same direct roots.
+
+** Validation
+- =bun build agents/pi/extensions/keybindings/index.ts --target=node --external @mariozechner/pi-coding-agent --external @mariozechner/pi-tui= clean.
+- Interactive: =alt+space= / =alt+,= open overlays and nested menus; =SPC t E v= / =SPC t E e= toggle vim mode; modal status appears and clears in the footer; unsupported passthroughs show visible warnings.
+
 * Context
 
 Pi 0.71.0 added =ctx.ui.getEditorComponent()= ([[https://github.com/badlogic/pi-mono/issues/3935][issue #3935]]) so editor-replacing extensions can /wrap/ a previously installed editor instead of clobbering it. =setEditorComponent()= remains single-owner — last writer wins, the previous editor's container is cleared — so any two extensions that both replace the editor silently disable one of them (same single-owner pattern as #3071, #3541, #3536).

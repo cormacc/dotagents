@@ -3,6 +3,36 @@
 #+PARENT: [[file:../../TASKS.archive.org::#0276a6c7-0ca8-4c39-a90a-05587ad64698][Add some sort of Jira integration for the tasks extension]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Added Jira integration as a new =jira= pi extension and =org-jira= skill, layered on top of generic external-issue support added to the =tasks= extension. =tasks= and the =org-tasks= / =org-plan= skills stay tracker-agnostic: =tasks= renders =:LINKED_ISSUES:= badges and resolves bare keys against =#+ISSUE_URL_BASE=, with =J= opening URLs in the browser. All Jira-specific knowledge (MCP routing, workflow names, =#+JIRA_*= keywords, slash commands) lives in =jira= and =org-jira=. Slash commands =/jira clone=, =/jira claim=, =/jira comment=, =/jira create= are agent-prompt builders — the extension itself is I/O-free; the agent performs MCP calls via the existing =atlassian= MCP server. =/jira clone= seeds new tasks; =/jira claim= and =/jira comment= operate on the existing =:LINKED_ISSUES:= list; auto-transition reacts to =tasks:status-changed= events.
+
+** Decisions
+- New =jira= extension and =org-jira= skill :: keep =tasks= and =org-tasks= / =org-plan= tracker-agnostic; Jira's surface will grow.
+- =:LINKED_ISSUES:= drawer property + =#+ISSUE_URL_BASE= keyword :: multi-valued; tokens are bare keys (resolved against the URL template) or full =[[URL][LABEL]]= org links; the two forms mix freely. Tag form (=:MBFW-123:=) rejected to avoid polluting the =:tag:= namespace.
+- =:LINKED_ISSUES:= created on first use, never backfilled :: mirrors =:STARTED:= behaviour. New tasks don't pre-create the drawer entry.
+- =jira= writes bare keys, not org links :: org-link form reserved for non-templatable trackers; keeps =/jira clone= / =/jira create= compact and link-renderer-free.
+- Subtasks are independent issues :: deliberately don't mirror org parent/child onto Jira Epic/Story/Sub-task. Each task carries its own (possibly empty) =:LINKED_ISSUES:=; relationships expressed in the org tree.
+- All Jira access via the =atlassian= MCP server, agent-driven :: extension is I/O-free; slash commands draft prompts, agent performs MCP calls.
+- Two-tier UX :: read-only badge / browser-open works without =jira= installed; workflows that touch Jira require =jira= and =atlassian= MCP.
+- Sandbox-only writes :: all write-path smoke tests during stages B and C against the =SAND= project.
+- Graceful degradation when MCP offline :: display + browser navigation work unconditionally; MCP-dependent paths surface a "run /mcp reconnect atlassian" notification.
+- Confluence out of scope :: noted as a follow-up.
+
+** Shipped
+- Three checkpoint commits: =0fc160e= (tasks generic linked-issues foundations), =3668329= (=jira= extension scaffold + =org-jira= skill + =TASKS.org= keywords; includes parser fix for empty =#+KEYWORD:= lines), =e24cfde= (=/jira clone= read-only stage), plus subsequent commits for =/jira claim=, =/jira comment=, =/jira create=, and the auto-transition primitive (=tasks:status-changed= event in =tasks=, listener in =jira=).
+- New: =pi/extensions/jira/{index.ts,utils.ts,jira.test.ts,test.sh,README.md}=, =skills/org-jira/SKILL.md=.
+- Modified: =pi/extensions/tasks/{parser.ts,overlay.ts,index.ts,status-colors.ts,parser.test.ts,test.sh,README.md}=, =skills/org-tasks/SKILL.md= (Extension points section), =TASKS.org= (umbrella =#+IMPORT:=, =#+ISSUE_URL_BASE=, =#+JIRA_*= keywords).
+
+** Validation
+- =tasks= extension: 53 parser-level assertions, all passing.
+- =jira= extension: 34 helper-level assertions, all passing.
+- All five extension TS files compile via esbuild without warnings.
+- Live write-path verification (=clone= / =claim= / =comment= / =create= / auto-transition) deferred to user end-to-end against =SAND= per the plan's acceptance criteria; the extension is I/O-free for those paths.
+
+** Follow-ups
+- Confluence integration (would mirror Jira keywords / use =:LINKED_ISSUES:= via org-link form).
+- Jira-org-memory alignment was carried forward to TASKS.org task =2b4d4ca7= and draft plan =design/log/2026-05-05-jira-org-memory-alignment.org=.
+
 * Context
 
 The =tasks= extension and the =org-tasks= / =org-plan= skills currently treat =TASKS.org= as a self-contained per-project task graph.  Day-job work for the team lives in Jira at https://your-org.atlassian.net.  The two universes don't talk: a contributor pulling a Jira ticket has to retype the title and lose the Jira ID; a contributor closing a task has to context switch to the browser to update the corresponding ticket.

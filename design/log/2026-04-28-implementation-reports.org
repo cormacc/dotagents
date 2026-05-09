@@ -3,6 +3,25 @@
 #+PARENT: [[file:../../TASKS.archive.org::#9f233338-833b-43c1-81d2-e413a536d586][Update org-memory skill to prompt to generate an implementation report for tasks without a plan]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Unified the previously distinct "plan file" and "task file" concepts into a single artefact — the *change-record* — with two authoring flows: *proactive* (existing flow, =p= keybinding) and *retrospective* (new flow, fired when a task without =#+IMPORT:= cycles to =DONE=). File shape stays identical across flows; only the agent prompt body differs. Plumbing reuses =handlePlanEdit= parameterised by mode. New first-=STARTED= transition stamp is written as =:STARTED:= on the task to scope retrospective =git log= queries precisely. New =tasks.changeRecordOnDone= setting (default =true=) controls the retrospective prompt; pi tasks extension is the only trigger — closures from Emacs / manual edit don't auto-prompt and use the proactive =p= path instead.
+
+** Decisions
+- Single artefact, two flows :: change-record file shape unchanged; flows differ only in which sections the agent drafts first.
+- Reuse the existing plumbing :: =handlePlanEdit= takes a =mode= param; scaffold body identical; agent prompt body branches.
+- Trigger only on =TODO/STARTED → DONE= without =#+IMPORT:= :: =CANCELLED= does not trigger; tasks already linked to a record skip the prompt.
+- Pi tasks extension only :: Emacs / manual edits don't auto-fire; user can attach retrospective change-records anytime via =p=.
+- Existing-file behaviour :: scaffold appends to =* Implementation= (retrospective) or =* Plan= (proactive); never overwrites.
+- =:STARTED:= captures first-start :: subsequent =DONE → STARTED= reopens preserve the original value; consumed by the retrospective prompt as the =git log= lower bound.
+- =CANCELLED= records out of scope :: plausible second-iteration feature, deliberately deferred.
+
+** Shipped
+- =overlay.ts= =cycleStatus()=: =onCreateChangeRecord= callback fires on =DONE= when =importPath= is null; first =STARTED= transition writes =:STARTED:= property.
+- =index.ts=: =handlePlanEdit= takes a =mode: "proactive" | "retrospective"= argument; =buildChangeRecordPrompt(mode)= replaces =buildPlanDevelopmentPrompt=.
+- =tasks.changeRecordOnDone= user setting (default =true=).
+- Skill updates: =org-memory= documents the dual flow; =plan= renames "plan file" to "change-record" and adds a one-way cross-reference to org-memory for the retrospective protocol.
+- Tasks extension README documents the retrospective flow, the new setting, and the =:STARTED:= semantics.
+
 * Context
 
 Tasks that warrant up-front planning get a *change-record* file under =#+DEFAULT_PLAN_DIR=, linked from the parent task via =#+IMPORT:=, with =* Context=, =* Plan=, and =* Implementation= sections.  The file begins life as a plan (the =* Plan= section drives the work) and becomes a durable record once the work lands (=* Implementation= captures what actually shipped, including failures rolled back).

@@ -4,6 +4,37 @@
 #+STATUS: Complete
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Replaced the ~3000-line =keybindings= monolith with two focused extensions: =leader-menu= (~700 LOC) for leader-chord discovery and dispatch, and =vim-mode= (~2100 LOC) for the modal editor. The split was decision-then-execute: =kepatrick/vim-motions-pi= was evaluated up front and KEEP_OWN was chosen, preserving the existing =VimEditor= grammar plus one upstream-inspired addition. The two extensions communicate purely through events and are independently loadable. =/kb= and =keybindings.org= are gone; =/leader-menu bindings --export= replaces the hand-maintained reference table.
+
+** Shipped
+- =pi/extensions/leader-menu/= and =pi/extensions/vim-mode/= as standalone extensions; the original =keybindings/= directory removed.
+- Cross-extension API: =registerLeaderMenu()= consumed by =tasks=, =term=, =git-diff=; events =leader-menu:register=, =leader-menu:ready=, =leader-menu:keys-resolved=, =leader-menu:open=.
+- =/leader-menu bindings --export= prints the live-merged binding tree in the same format as the retired =extensions/keybindings.org=.
+- Settings: =~/.pi/agent/leader-menu.json= owns =globalLeader=, =localLeader=, =debug=; =vim-mode.json= no longer exists.
+- vim-mode is always on when loaded; =modal= toggle and =/vim-mode= command removed.
+- Bare leader keys in Normal mode now open leader-menu's standard centered overlay (replaces the legacy 500 ms in-editor widget hint).
+
+** Decisions
+- Two extensions, not three :: =leader-menu= owns leader menus + cross-extension API; =vim-mode= owns the modal editor; shared helpers in =extensions/lib/=.
+- Decision before split :: =vim-motions-pi= evaluated against the full =VimEditor= feature set up front → KEEP_OWN.
+- Breaking changes, one-step migration :: slash commands, settings file, and event names renamed freely; in-tree consumers updated atomically.
+- =/kb= dropped entirely; no alias shim.
+- =keybindings.org= replaced by an auto-export to eliminate drift.
+
+** Gotchas
+- Default local leader =,= conflicts with Vim repeat-find-backward; in Normal mode comma is handled by Vim grammar first. Use =alt+,= or configure =localLeader= to a non-conflicting key (e.g. =;=) for bare Normal-mode local menu access.
+- Final settings shape (after follow-up commits =3939073=, =df7b890=) supersedes the initial split contract preserved below for historical context.
+
+** Validation
+- Manual interactive smoke test: leader-menu chords, vim-mode modal interactions, slash commands across =tasks=, =term=, =git-diff=.
+- =esbuild= bundle check on each new extension.
+
+** Follow-ups
+- vim-mode re-enable under leader-menu SubmitterEditor architecture (TASKS.org task =fe6b1c6d=).
+- Decompose vim-mode/index.ts into index + buffer + core (TASKS.org task =6b087caf=).
+- Add clipboard sync to vim-mode (TASKS.org task =08678bfb=).
+
 * Context
 
 The =keybindings= pi extension under =agents/pi/extensions/keybindings/= has grown into two distinct responsibilities living in one ~3000-line =index.ts=:
@@ -185,20 +216,7 @@ CLOSED: [2026-05-02 Sat 17:14]
 - The =keybindings.org= sibling file is either deleted or moved into =leader-menu=, whichever the docs pass concluded.
 * Implementation
 
-** Outcome
-
-The single =keybindings= extension (~3000 LOC monolith) was replaced by two focused extensions:
-
-- =leader-menu/= (~700 LOC) — leader-chord discovery, dispatch, the cross-extension =registerLeaderMenu()= API consumed by =tasks=, =term=, =git-diff=, and the new =/leader-menu bindings --export= org-format dump.
-- =vim-mode/= (~2100 LOC) — the modal editor, with the existing =VimEditor= grammar preserved per the KEEP_OWN evaluation outcome and one upstream-inspired addition (repeat-find-backward =,=). It is always on when loaded and has no settings file or runtime toggle.
-
-The two extensions are independently loadable and communicate purely through events (=leader-menu:register=, =leader-menu:ready=, =leader-menu:keys-resolved=, =leader-menu:open=). The hand-rolled =extensions/keybindings.org= reference table is gone, replaced by =/leader-menu bindings --export= which prints the live-merged tree.
-
-Final settings shape:
-- =~/.pi/agent/leader-menu.json= owns =globalLeader=, =localLeader=, and the shared key-dispatch =debug= flag.
-- =~/.pi/agent/vim-mode.json= no longer exists. =leader-menu= migrates only =debug= from legacy =vim-mode.json= / =keybindings-ext.json= and intentionally drops =modal=.
-
-Deliberate UX shift: bare configured leaders in Normal mode now open leader-menu's standard centered overlay instead of the legacy 500 ms in-editor widget hint. Caveat from final review: the default local leader =,= conflicts with Vim repeat-find-backward, so in Normal mode comma is handled by Vim grammar first; use =alt+,= or configure =localLeader= to a non-conflicting key (for example =;=) for bare Normal-mode local menu access. Captured below as a follow-up candidate if the default should change.
+Final-state outcome and decisions absorbed into top-level =* Summary= during the 2026-05-09 retrospective summary sweep. Sections below preserve the historical contract used during the split and the cross-extension delegation evolution; treat them as audit history rather than current truth.
 
 ** Cross-extension delegation — =leader-menu:open= (added in task =0634cd5f=)
 

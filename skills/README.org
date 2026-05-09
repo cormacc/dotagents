@@ -22,10 +22,14 @@ and the editable-vs-packaged Home Manager modes.
   =org-tasks= — =:LINKED_ISSUES:= drawer key, =#+JIRA_*= keywords,
   agent prompts that drive the atlassian MCP.
 - [[file:org-plan/SKILL.md][org-plan]] :: Drafting, reviewing, and executing implementation
-  plans as change-record files linked from =TASKS.org=.
+  plans as change-record files linked from =TASKS.org=. Owns the
+  change-record section structure (=* Summary=, =* Context=,
+  =* Plan=, =* Implementation=, =* Open questions=) and the
+  closure-time =* Summary= refresh workflow.
 - [[file:org-tasks/SKILL.md][org-tasks]] :: The =TASKS.org= task-memory protocol — TODO
   states, IDs, =#+IMPORT:= links, change-records, status
-  discipline, archiving, and the resume workflow.
+  discipline, archiving, and the resume workflow. Defines the
+  layered read order that loads =* Summary= first.
 - [[file:review/SKILL.md][review]] :: Run a code-review sub-agent via a harness-agnostic
   wrapper script.
 - [[file:self-improvement/SKILL.md][self-improvement]] :: Capture friction with agent / pi

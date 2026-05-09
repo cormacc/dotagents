@@ -34,22 +34,6 @@
 :END:
 #+IMPORT: [[file:design/log/2026-05-08-bootstrap-a-clojure-development-skill.org]]
 Add a second pi package alongside ~agent-org-memory~ for the clojure-development skill family. The =clj-nrepl= skill, =pi-clojure= extension, and any future Clojure-specific helpers should ship as a separate slice with its own ~package.json~ / Nix derivation, mirroring the shape of ~agent-org-memory.nix~. Decide between sibling ~package.json~ files vs a workspaces layout when the second slice actually has more than one entry to bind together. Captured as a follow-up to the 2026-05-07 dotfiles → dotagents extraction.
-** DONE [#B] Re-tier self-improvement skill routing for the dotfiles/dotagents split :self-improvement:routing:
-CLOSED: [2026-05-09 Sat 10:43]
-:PROPERTIES:
-:CUSTOM_ID: 7e21788d-b4e6-439b-b300-ca84ab4a2fcc
-:CREATED: [2026-05-07 Thu 22:44]
-:END:
-:LOGBOOK:
-- State "DONE"      from "TODO"      [2026-05-09 Sat 10:43]
-- Created [2026-05-07 Thu 22:44]
-:END:
-=skills/self-improvement/SKILL.md= currently routes "global" agent feedback at a single dotfiles-side TASKS.org. After the 2026-05-07 extraction, global feedback splits across two repos:
-
-- *dotagents* :: skills, pi extensions, prompts, the pi-side =AGENTS.md=. Feedback about agent behaviour or skill content lands here.
-- *dotfiles* :: =agents.nix=, =agents-config/pi/settings.json=, NixOS / Home Manager / nix-darwin wiring. Feedback about installation, packaging, or the dotfiles AGENTS.md lands here.
-
-Update the skill's routing rules accordingly: classify by affected artefact, hand off to the right repo via ~pi-intercom~, and document the two-tier model. Carried forward from the extraction change-record.
 ** TODO [#C] Improve terminal extension
 :PROPERTIES:
 :CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af
@@ -169,6 +153,24 @@ Extracted from the org-memory agent-memory review (parent task 724c0332). Jira-s
 :END:
 #+IMPORT: [[file:design/log/2026-05-05-legacy-org-task-metadata.org]]
 Extracted from the org-memory agent-memory review (parent task 724c0332). Compatibility policy for legacy task data is useful but not a blocker for closing the generic org-memory review.
+** DONE [#B] Add condensed memory summaries to org-memory change-records :org-memory:memory:protocol:
+CLOSED: [2026-05-09 Sat 13:12]
+:PROPERTIES:
+:CUSTOM_ID: 777bf685-93c9-4ca2-ab5c-005fe4c40817
+:CREATED: [2026-05-09 Sat 11:25]
+:STARTED: [2026-05-09 Sat 11:49]
+:END:
+:LOGBOOK:
+- State "DONE"      from "STARTED"   [2026-05-09 Sat 13:12]
+- State "STARTED"   from "DONE"      [2026-05-09 Sat 12:56]
+- State "DONE"      from "STARTED"   [2026-05-09 Sat 12:49]
+- State "STARTED"   from "DONE"      [2026-05-09 Sat 12:45]
+- State "DONE"      from "STARTED"   [2026-05-09 Sat 12:11]
+- State "STARTED"   from "TODO"      [2026-05-09 Sat 11:49]
+- Created [2026-05-09 Sat 11:25]
+:END:
+#+IMPORT: [[file:design/log/2026-05-09-org-memory-condensed-summaries.org]]
+Make change-records cheaper for future agents to ingest by adding a first-class condensed memory layer, clear resume/read-order guidance, and closure-time summary discipline while preserving the detailed plan and implementation ledger.
 * Fixes
 
 ** TODO Local tasks duplicated in overlay when selected?

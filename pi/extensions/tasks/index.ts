@@ -30,7 +30,13 @@ import {
   type Focusable,
   type TUI,
 } from "@mariozechner/pi-tui";
-import { existsSync, readFileSync, watch, type FSWatcher } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  statSync,
+  watch,
+  type FSWatcher,
+} from "node:fs";
 import { randomUUID } from "node:crypto";
 import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
@@ -58,6 +64,10 @@ import {
 import { formatFindingsReport, runDoctor } from "./doctor.ts";
 import { insertTasksIntoPlanSection, scaffoldPlan } from "./scaffold.ts";
 import { resolveProjectPath } from "./paths.ts";
+import {
+  evaluateSummaryRefresh,
+  type SummaryRefreshReason,
+} from "./summary.ts";
 import { colorIssues, colorPriority, colorStatus, colorTags } from "./status-colors.ts";
 
 const TASKS_FILE = "TASKS.org";
@@ -79,6 +89,9 @@ interface TasksSettings {
   /** Default true. When false, status cycle to DONE behaves as it did
       pre-feature — no retrospective change-record path prompt. */
   changeRecordOnDone: boolean;
+  /** Default true. When false, suppress the closure-time `* Summary`
+      refresh prompt for tasks with an existing #+IMPORT: change-record. */
+  summaryOnDone: boolean;
 }
 
 /** Read user settings on demand (cheap; avoids a stale snapshot). */
@@ -86,10 +99,13 @@ function loadTasksSettings(): TasksSettings {
   try {
     if (existsSync(TASKS_SETTINGS_PATH)) {
       const parsed = JSON.parse(readFileSync(TASKS_SETTINGS_PATH, "utf-8"));
-      return { changeRecordOnDone: parsed?.changeRecordOnDone !== false };
+      return {
+        changeRecordOnDone: parsed?.changeRecordOnDone !== false,
+        summaryOnDone: parsed?.summaryOnDone !== false,
+      };
     }
   } catch { /* fall through to defaults */ }
-  return { changeRecordOnDone: true };
+  return { changeRecordOnDone: true, summaryOnDone: true };
 }
 
 /** Compact selected-task widget state. */
@@ -856,6 +872,7 @@ export default function (pi: ExtensionAPI) {
         | { type: "edit"; task: Task }
         | { type: "plan"; task: Task }
         | { type: "publish"; task: Task }
+        | { type: "summaryRefresh"; task: Task; reason: SummaryRefreshReason; absPlan: string }
         | { type: "unpublish"; task: Task };
 
       let reopen = true;
@@ -899,6 +916,45 @@ export default function (pi: ExtensionAPI) {
           // let the overlay continue normally.
           if (!loadTasksSettings().changeRecordOnDone) return false;
           workflow.request = { type: "changeRecord", task };
+          return true;
+        };
+
+        // Detect missing/stale `* Summary` synchronously so we only close
+        // the overlay when there is actually a workflow to run. Any failure
+        // to resolve / read the change-record file is a soft skip — the
+        // overlay continues normally and the close persists as before.
+        const onRefreshSummary = (task: Task): boolean => {
+          if (!loadTasksSettings().summaryOnDone) return false;
+          if (!task.importPath || !task.sourcePath) return false;
+          const baseDir = dirname(task.sourcePath);
+          let absPlan: string;
+          try {
+            absPlan = isAbsolute(task.importPath)
+              ? task.importPath
+              : join(baseDir, task.importPath);
+          } catch {
+            return false;
+          }
+          // Sandbox: refuse anything outside the project root. Mirrors the
+          // load-time check in resolveProjectPath without requiring async.
+          const rel = relative(ctx.cwd, absPlan);
+          if (rel.startsWith("..") || isAbsolute(rel)) return false;
+          if (!existsSync(absPlan)) return false;
+          let content: string;
+          let mtimeMs: number | null;
+          try {
+            content = readFileSync(absPlan, "utf-8");
+            mtimeMs = statSync(absPlan).mtimeMs;
+          } catch {
+            return false;
+          }
+          const reason = evaluateSummaryRefresh(
+            content,
+            getTaskStarted(task),
+            mtimeMs,
+          );
+          if (reason === null) return false;
+          workflow.request = { type: "summaryRefresh", task, reason, absPlan };
           return true;
         };
 
@@ -968,6 +1024,7 @@ export default function (pi: ExtensionAPI) {
               onPublish,
               onUnpublish,
               onCreateChangeRecord,
+              onRefreshSummary,
               selectedId,
               onSelectionChange,
               onOpenUrls,
@@ -1046,6 +1103,28 @@ export default function (pi: ExtensionAPI) {
           if (fresh) await handlePlanEdit(pi, ctx, fresh, "retrospective");
           tasks = await loadTasks(ctx.cwd);
           reopen = true;
+        } else if (request.type === "summaryRefresh") {
+          const fresh = await reloadAndResolve(request.task, "refresh summary for");
+          if (fresh) {
+            const planRel = fresh.importPath ?? request.absPlan;
+            ctx.ui.notify(
+              request.reason === "missing"
+                ? `Change-record lacks * Summary: ${planRel}`
+                : `Change-record * Summary may be stale: ${planRel}`,
+              "info",
+            );
+            pi.sendUserMessage(
+              buildSummaryRefreshPrompt(
+                fresh,
+                planRel,
+                request.absPlan,
+                request.reason,
+              ),
+              { deliverAs: "followUp" },
+            );
+          }
+          tasks = await loadTasks(ctx.cwd);
+          reopen = false;
         } else if (request.type === "create") {
           // Reload first; then resolve parent/insertAfter against the fresh
           // tree. A stale parent/insertAfter ID that no longer resolves is a
@@ -1345,7 +1424,7 @@ function buildProactiveChangeRecordPrompt(
       ? "Existing TASKS.org subtasks were moved into the linked change-record under * Plan, and the parent task now retains a plain-text summary of the extracted subtasks."
       : "The parent task had no local subtasks to absorb.",
     "",
-    "Use the `org-plan` and `org-tasks` skills. Start by asking me any scoping questions needed to develop the plan. Once the plan is agreed, write the final org content to the change-record file above. New `** TODO` plan tasks must include `:CUSTOM_ID:` and `:CREATED: [YYYY-MM-DD Day HH:MM]` properties (use `date +'%Y-%m-%d %a %H:%M'` to obtain the timestamp). Prefer tool-driven status changes so `:LOGBOOK:` lifecycle history stays synchronized. After writing it, offer to open the file in Emacs.",
+    "Use the `org-plan` and `org-tasks` skills. Start by asking me any scoping questions needed to develop the plan. Once the plan is agreed, write the final org content to the change-record file above. The scaffold ships the required sections (`* Summary`, `* Plan`, `* Implementation`); promote `* Context` to a top-level section between `* Summary` and `* Plan` only when durable rationale exceeds what `* Summary` can carry. New `** TODO` plan tasks must include `:CUSTOM_ID:` and `:CREATED: [YYYY-MM-DD Day HH:MM]` properties (use `date +'%Y-%m-%d %a %H:%M'` to obtain the timestamp). Prefer tool-driven status changes so `:LOGBOOK:` lifecycle history stays synchronized. After writing it, offer to open the file in Emacs.",
   ].join("\n");
 }
 
@@ -1359,6 +1438,43 @@ function taskCreatedTimestamp(task: Task): string | null {
     if (match) return match[1]!.trim();
   }
   return null;
+}
+
+/**
+ * Build the prompt the agent receives when a top-level task closes
+ * and its linked change-record either lacks `* Summary` or has not
+ * been touched since the parent task started. The prompt asks the
+ * agent to author or refresh the condensed memory layer per the
+ * `org-plan` skill's *Closure-time summary refresh* section.
+ */
+function buildSummaryRefreshPrompt(
+  task: Task,
+  planRelToSource: string,
+  absPlan: string,
+  reason: SummaryRefreshReason,
+): string {
+  const reasonNote = reason === "missing"
+    ? "The change-record has no `* Summary` heading."
+    : "The change-record has a `* Summary` heading but has not been touched since the parent task started, so the summary may be stale.";
+  return [
+    "Refresh the condensed memory layer for the just-closed TASKS.org task.",
+    "",
+    `Task: ${task.status} ${task.priority ? `[#${task.priority}] ` : ""}${task.summary}`,
+    `Change-record link: [[file:${planRelToSource}]]`,
+    `Change-record file: ${absPlan}`,
+    "",
+    reasonNote,
+    "",
+    "Use the `org-plan` and `org-tasks` skills. Generate or refresh the change-record's `* Summary` so a future agent can rebuild context cheaply:",
+    "",
+    "1. Read the change-record's existing sections (`* Plan`, `* Implementation`, and `* Context` if present).",
+    "2. If a legacy `** Outcome` or `** Shipped` heading exists under `* Implementation`, absorb its text (condensing where appropriate) into the new `* Summary` and remove the legacy heading.",
+    "3. Place `* Summary` at the top of the change-record (the first top-level section). Use a one-paragraph synopsis followed by the conventional subsections (`** Decisions`, `** Shipped`, `** Gotchas`, `** Validation`, `** Follow-ups`); include only the subsections that carry content.",
+    "4. Keep the summary terse: it is the surface a future agent reads first, not a duplicate of the implementation ledger.",
+    "5. Leave `* Context` alone if it already exists. If it does not exist, do NOT add an empty one — `* Context` is optional and is included only when durable rationale materially exceeds what `* Summary` can carry.",
+    "6. Preserve `:CUSTOM_ID:`, `#+PARENT:`, LOGBOOK history, and the existing `* Implementation` audit detail.",
+    "7. Show me the draft, then write the final content to the change-record file. Offer to open the file in Emacs after writing.",
+  ].join("\n");
 }
 
 function buildRetrospectiveChangeRecordPrompt(
@@ -1380,15 +1496,16 @@ function buildRetrospectiveChangeRecordPrompt(
     `Change-record link: [[file:${planRelToSource}]]`,
     `Change-record file: ${absPlan}`,
     "",
-    "The tasks extension has already attached the #+IMPORT: keyword and scaffolded the change-record file with empty * Context, * Plan, and * Implementation sections.",
+    "The tasks extension has already attached the #+IMPORT: keyword and scaffolded the change-record file with empty * Summary, * Plan, and * Implementation sections.",
     "",
     "Steps:",
     `1. ${scopeNote} A reasonable invocation is \`git log --oneline --since="${lowerBound ?? "<fallback>"}" --until="${closed ?? "now"}"\` when a lower bound is available.`,
     "2. Inspect the relevant commits and code changes.",
-    "3. Draft the * Context section: a short problem statement (1-2 paragraphs).",
+    "3. Draft the * Summary section: a one-paragraph synopsis of what shipped and why, plus any of `** Decisions`, `** Shipped`, `** Gotchas`, `** Validation`, `** Follow-ups` subsections that carry content.",
     "4. Draft the * Implementation section: bullet points listing what was changed and why, citing commits where useful. Include any rolled-back attempts or dead-ends if they appear in the history \u2014 the failure record is the most valuable part of a retrospective.",
-    "5. Leave * Plan empty unless there were notable steps worth recording retrospectively.",
-    "6. Show me the draft for approval, then write the final content to the change-record file. After writing, offer to open it in Emacs.",
+    "5. Promote `* Context` to a top-level section between `* Summary` and `* Plan` ONLY if durable rationale (background, alternatives, scope) materially exceeds what `* Summary` can carry. For typical retrospective records, omit `* Context` entirely.",
+    "6. Leave * Plan empty unless there were notable steps worth recording retrospectively.",
+    "7. Show me the draft for approval, then write the final content to the change-record file. After writing, offer to open it in Emacs.",
   ].join("\n");
 }
 

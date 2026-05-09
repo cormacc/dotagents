@@ -151,26 +151,29 @@ Task creation, plan path approval, and archive confirmation prompts temporarily 
 
 ### Change-records (proactive and retrospective)
 
-The file linked from a task via `#+IMPORT:` is called a *change-record*. The file shape (sections `* Context`, `* Plan`, `* Implementation`) is owned by the `org-plan` skill; the same shape is produced by both flows below.
+The file linked from a task via `#+IMPORT:` is called a *change-record*. The file shape is owned by the `org-plan` skill: required on every record are `* Summary`, `* Plan`, and `* Implementation`; `* Context` and `* Open questions` are optional. The same shape is produced by both flows below. `* Summary` supersedes the legacy `** Outcome` / `** Shipped` heading under `* Implementation` — new change-records do not carry that legacy heading. `* Context` is promoted from "omit" to "include" only when durable rationale materially exceeds what `* Summary` can carry.
 
-**Proactive flow** — press `p` on a task that has no `#+IMPORT:`, accept the path prompt, and the agent helps draft `* Context` and `* Plan` up front. As work proceeds, plan tasks transition `TODO -> STARTED -> DONE` and `* Implementation` is filled in.
+**Proactive flow** — press `p` on a task that has no `#+IMPORT:`, accept the path prompt, and the agent helps draft `* Summary` and `* Plan` up front (promoting `* Context` only when needed). As work proceeds, plan tasks transition `TODO -> STARTED -> DONE`; `* Implementation` and `* Summary` are refreshed along the way.
 
-**Retrospective flow** — cycle a task to `DONE` (via `→` / `l`) when it has no `#+IMPORT:` already attached. The extension prompts for a path, scaffolds the change-record file, attaches `#+IMPORT:` to the parent task, and sends the agent a prompt to draft `* Context` and `* Implementation` from `git log` scoped to the task's `:STARTED:` and `CLOSED:` timestamps. The user-facing behaviour:
+**Retrospective flow** — cycle a task to `DONE` (via `→` / `l`) when it has no `#+IMPORT:` already attached. The extension prompts for a path, scaffolds the change-record file, attaches `#+IMPORT:` to the parent task, and sends the agent a prompt to draft `* Summary` and `* Implementation` (and `* Context` if rationale warrants it) from `git log` scoped to the task's `:STARTED:` and `CLOSED:` timestamps. The user-facing behaviour:
 
 - Triggers only on `TODO -> DONE` and `STARTED -> DONE`. `CANCELLED` does not trigger; cycling away from `DONE` does not trigger.
 - Triggers only when the parent task has no `#+IMPORT:` yet. Tasks with an existing change-record (planned or retrospective) skip the prompt.
 - If the resolved path already points to an existing file, content is appended (never overwritten).
 - Cancelling the path prompt leaves the task `DONE` with no record attached. The user can attach one later via the `p` keybinding.
 
+**Closure-time `* Summary` refresh** — cycling a task with an existing `#+IMPORT:` to `DONE` triggers a parallel check: the extension reads the linked change-record and, when the file either lacks `* Summary` or has not been touched since the parent task's `:STARTED:` timestamp, sends the agent a prompt to author or refresh `* Summary` per the `org-plan` skill's *Closure-time summary refresh* section. The check is sandboxed to the project root and silently skips when the change-record cannot be read.
+
 **Setting:** `~/.pi/agent/tasks-ext.json`
 
 ```json
 {
-  "changeRecordOnDone": true
+  "changeRecordOnDone": true,
+  "summaryOnDone": true
 }
 ```
 
-Default is `true`. When `false`, the retrospective flow is suppressed and `TODO/STARTED -> DONE` behaves as it did before the feature.
+Both default to `true`. Setting `changeRecordOnDone` to `false` suppresses the retrospective scaffold flow; setting `summaryOnDone` to `false` suppresses the closure-time `* Summary` refresh prompt. The two flows are mutually exclusive (no `#+IMPORT:` triggers the first; with `#+IMPORT:` triggers the second).
 
 ### Timestamps
 
@@ -389,8 +392,11 @@ regression suites:
 - `doctor.test.ts` — loaded-graph health checks (duplicate IDs,
   broken imports, stale selection, blockers, stale parent status).
 - `memory.test.ts` — scenario-style agent-memory reconstruction for a
-  selected task with imported plan context, implementation notes, and
-  blockers.
+  selected task with imported plan context, implementation notes,
+  blockers, and `* Summary` ingestion order.
+- `summary.test.ts` — closure-time `* Summary` refresh detection:
+  missing-section trigger, stale-mtime trigger, and the no-op case
+  where `* Summary` already exists and is recent.
 
 These tests are the authoritative behavioural contract for the
 org-memory protocol implemented by this extension. The scaffold

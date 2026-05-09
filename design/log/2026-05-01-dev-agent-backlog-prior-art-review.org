@@ -4,6 +4,35 @@
 #+STATUS: Complete
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Review-and-implement change-record for the [[https://github.com/farra/dev-agent-backlog][dev-agent-backlog]] prior-art review. Decided adopt/defer/reject across nine candidate ideas, ratified org-native =:BLOCKED-BY+:= continuation lines for multi-valued blockers, and shipped both the protocol updates and the supporting tasks-extension code in a single change-record. Durable HTML review summary lives at [[file:2026-05-01-dev-agent-backlog-review-summary.html]].
+
+** Shipped
+- Skill updates: =org-tasks/SKILL.md= gains multi-blocker, =:HANDOFF:=, non-goals, and an extended resume checklist; =org-plan/SKILL.md= gains =#+STATUS:= lifecycle, =OPEN= / =DECIDED= question conventions, acceptance-criteria + =** Outcome= body conventions, and resume-time surfacing notes.
+- Tasks extension parser API: multi-valued drawer property accessors, blocker classification, =isTaskReady= predicate, =:HANDOFF:= accessors. Single-value =:BLOCKED-BY:= round-trips byte-identically; the new continuation-line convention is dogfooded in this very change-record.
+- Tasks overlay surfaces =Handoff= and =Blocked by= blocks (with task-ref resolution and readiness colour) on the cursor task's right pane.
+- =/tasks doctor= subcommand with seven health checks (duplicate IDs, broken imports, stale selection, blockers, stale parent status, =CLOSED:= without timestamp, invalid task blockers) and jumpable-location findings; runs clean on the live dotfiles graph.
+- 174 passing extension tests (93 parser + 56 insert + 25 doctor).
+
+** Decisions
+- Multi-blocker carrier :: =:BLOCKED-BY+:= org continuation lines. Local =:BLOCKED-BY:= retained; upstream =:WAITS_FOR:= rejected.
+- =:HANDOFF:= placement :: allowed on both top-level tasks and plan-subtask headings; surfaced by resume tooling.
+- =#+STATUS:= :: advisory only; no state-machine enforcement at the protocol level.
+- =** Outcome= body convention :: short closing paragraph under =* Implementation= summarising what landed (later superseded by the top-level =* Summary= layer added in =design/log/2026-05-09-org-memory-condensed-summaries.org=).
+- Solution / lesson capture :: deferred; routed to the self-improvement skill review (TASKS.org task =64a816ea=) rather than the task-lifecycle protocol.
+
+** Gotchas
+- Three previously top-level TASKS.org tasks were migrated into =* Plan= under this change-record (SKILL updates =d49dad0e=, parser + ready-query =3b5918d5=, =/tasks doctor= =77a0ce57=) preserving their UUIDs, =:CREATED:=, LOGBOOK, and body content. The self-improvement review (=64a816ea=) is a sibling review and stayed top-level.
+- =** Outcome= guidance from this change-record was the first concrete summary convention; the 2026-05-09 retrospective sweep promotes that role to a top-level =* Summary= section (this section).
+
+** Validation
+- =cd pi/extensions/tasks && ./test.sh= — 174 tests pass.
+- =/tasks doctor= run against the live dotfiles graph — zero findings.
+- Dogfood: this change-record uses =:BLOCKED-BY+:= and =:HANDOFF:= round-trip in the live overlay.
+
+** Follow-ups
+- Self-improvement skill review against the org-memory protocol (TASKS.org task =64a816ea=).
+
 * Context
 The selected task is to review the third-party org-based memory system at https://github.com/farra/dev-agent-backlog and identify ideas worth adapting for the local org-memory system (`org-tasks`, `org-plan`, `org-jira`, and the associated pi extensions).
 
@@ -233,14 +262,7 @@ Checks to implement:
 - 2026-05-02: All eight plan tasks under * Plan are DONE (5 decisions + 3 implementations); change-record advanced to `#+STATUS: Complete`.
 - 2026-05-02: Final-review clarity pass: compressed duplicated implementation detail in this change-record and shortened the updated skills (quick reference table, concise blocker section, non-goals table, less duplicated resume guidance, clarified `#+STATUS: Complete`).
 
-** Outcome
-Review-and-implement change-record covering both the dev-agent-backlog prior-art review and the protocol/code work that flows from it. Decided adopt/defer/reject for nine candidate ideas, ratified the org-native `:BLOCKED-BY+:` continuation-line convention for multi-valued blockers, and shipped:
-- SKILL updates to `org-tasks` (multi-blocker, `:HANDOFF:`, non-goals, extended resume checklist) and `org-plan` (`#+STATUS:` lifecycle, `OPEN`/`DECIDED` questions, acceptance-criteria + `** Outcome` body conventions, resume-time surfacing notes).
-- New parser API in the `tasks` pi extension: multi-valued drawer property accessors, blocker classification + `isTaskReady` predicate, and `:HANDOFF:` accessors. Single-value `:BLOCKED-BY:` round-trips byte-identically; the new convention is dogfooded on the change-record itself.
-- Overlay surfacing of `Handoff` and `Blocked by` blocks (with task-ref resolution + readiness colour) on the cursor task's right pane.
-- New `/tasks doctor` subcommand with seven health checks and jumpable-location findings; runs clean against the live dotfiles graph.
-- 174 passing extension tests (93 parser + 56 insert + 25 doctor).
-Deploy SKILL copies under `~/.agents/skills/` via `hms` when ready. One sibling review task (`64a816ea-…`, self-improvement skill vs org-memory) remains in `TASKS.org` as an independent follow-up.
+Outcome content absorbed into top-level =* Summary= during the 2026-05-09 retrospective summary sweep; see that section for the condensed final state.
 
 * Open questions
 ** DECIDED Should `:HANDOFF:` be task-level only, plan-subtask-level, or both?

@@ -3,6 +3,29 @@
 #+PARENT: [[file:../../TASKS.archive.org::#a8f3c2e1-7b4d-4f9c-8a52-3e6c1d8b9f47][Move task selection state to .gitignored TASKS.local.org :org-memory:org-tasks:]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Moved single-task selection state out of shared =TASKS.org= / plan-file =:selected:= tags into a per-checkout gitignored =TASKS.local.org= expressed as =#+SELECTED: <UUID>=. Selection becomes an ID lookup against the existing task graph rather than a tag-mutation operation. Eliminates merge conflicts when two contributors select simultaneously, removes personal working state from git history, and replaces the cross-file =:selected:= tag scan with a single keyword read. Backwards-compatible read path falls back to scanning =:selected:= tags so half-migrated repos still function; writers always migrate by stripping stale tags they encounter.
+
+** Decisions
+- Single-keyword schema :: =TASKS.local.org= contains only =#+SELECTED: <UUID>= at v1. Other local state (priority overrides, annotations) is out of scope.
+- ID lookup, not tag mutation :: heading resolved by =:ID:= match against =TASKS.org= and its =:PLAN:=-referenced files; no =:selected:= written anywhere.
+- Gitignored, not gitattributes-merge :: file is in =.gitignore=; the whole point is to remove this state from version control.
+- File-watch, not direct IPC :: pi extends its existing watcher to =TASKS.local.org=; no new Emacs↔pi RPC.
+- Atomic writes :: =writeFile(tmpPath)= + =rename(tmp, dest)= in both TS and elisp so the watcher never sees a transient empty file.
+- Per-checkout selection :: confirmed as desired behaviour for multiple working copies.
+
+** Shipped
+- =parser.ts=: =parseSelectedKeyword(content): string | null=.
+- =index.ts=: =TASKS_LOCAL_FILE=, =readSelectedId=, =writeSelectedId=, =findTaskById=; ID-based selection resolution with tag fallback; watcher includes the local file; overlay receives =selectedId= + =onSelectionChange=.
+- =overlay.ts=: =selectedId= field; ID-based =findTaskById= replaces tag-based =findSelectedTask=; =toggleSelect= writes via callback; =save()= opportunistically strips legacy =:selected:= tags; =refreshTasks= accepts =selectedId=.
+- =tasks-org.el=: =tasks-org-local-file-name= custom var, =tasks-org--local-file=, =tasks-org-selected-id=, =tasks-org--write-local-selection=, =tasks-org--strip-legacy-selected-tag=; =tasks-org-toggle-selected= rewritten on the local-file scheme; legacy =tasks-org--clear-selected-everywhere= retained.
+- =.gitignore= adds =TASKS.local.org= and =TASKS.local.org.tmp=.
+- =agents/skills/org-memory/SKILL.md= documents the new selection scheme.
+
+** Follow-ups
+- Emacs visual indicator for selected task: deferred (pi compact widget provides sufficient visibility).
+- =:PLAN:= vs =:INCLUDE:= naming discrepancy between skill and extension flagged as out-of-scope here (later resolved as =#+IMPORT:=).
+
 * Context
 The org-memory protocol uses a reserved =:selected:= tag on a task heading to mark the contributor's currently-active task. The tag is read by the pi tasks extension (compact widget / overlay), the tasks-org Emacs package (=tasks-org-toggle-selected=), and any agent following the org-memory skill.
 

@@ -3,6 +3,16 @@
 #+PARENT: [[file:../../TASKS.archive.org::#9ae2bf39-c61c-4a2d-8fa5-882a5ce3eca7][Implement an org-based memory system for pi-agent :org-memory:]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+First implementation of plain-org project memory: =TASKS.org= as the durable task index, linked org plan files via =:PLAN:=, and the pi tasks extension as an optional UI over those files. Established parser/serializer for TODO trees with priorities/tags/descriptions, single-selection via the =:selected:= tag, a persistent selected-task overlay, archive handling, consistent status colours, and the initial =org-memory= and =plan= skills owning the file protocol and plan-execution workflow respectively. Retrospective record — plain org files are the source of truth; pi UI is optional.
+
+** Decisions
+- Plain org files are the source of truth :: pi provides UI but is not required for task memory.
+- =TASKS.org= stays high-level :: detailed workstreams live in linked plan files.
+- =:selected:= is a reserved operational tag :: managed by task-selection tooling.
+- =:PLAN:= values prefer clickable org file links :: older bare-path forms preserved on round-trip.
+- Skill split :: =org-memory= owns the durable file protocol; =plan= owns plan structure and execution workflow.
+
 * Context
 This retrospective plan records the first implementation of plain-org project memory in this repository: `TASKS.org` as the durable task index, linked org plan files via `:PLAN:`, and the pi tasks extension as an optional UI over those files. The work established parser/serializer support, task selection, linked plans, archive handling, and the initial `org-memory` and `plan` skills.
 

@@ -244,7 +244,7 @@ function assertContains(haystack: string, needle: string, message: string): void
       "#+PARENT: [[file:../../TASKS.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Refine org-memory protocol]]",
       "#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)",
       "",
-      "* Context",
+      "* Summary",
       "",
       "* Plan",
       "",

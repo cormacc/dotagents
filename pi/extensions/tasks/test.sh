@@ -71,4 +71,11 @@ if command -v tsx >/dev/null 2>&1; then
 else
   npx --yes tsx ./memory.test.ts || CODE=1
 fi
+
+echo "# Running closure-time summary unit tests..."
+if command -v tsx >/dev/null 2>&1; then
+  tsx ./summary.test.ts || CODE=1
+else
+  npx --yes tsx ./summary.test.ts || CODE=1
+fi
 exit "$CODE"

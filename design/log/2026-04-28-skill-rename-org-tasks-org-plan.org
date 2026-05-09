@@ -3,6 +3,30 @@
 #+PARENT: [[file:../../TASKS.archive.org::#ce69ef5e-5967-4623-a2e3-f22e0bd1a745][Consider whether to rename the 'org-memory' skill to just 'tasks']]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Renamed the two skills that form the org-memory protocol so they share a symmetric =org-= prefix: =org-memory \u2192 org-tasks= (file/persistence protocol) and =plan \u2192 org-plan= (planning methodology / change-record sections). The =tasks= pi extension is *not* renamed \u2014 extension naming optimises for user-facing concision (=/tasks=, =SPC t t=, the "Tasks" widget label) where skill naming optimises for symmetry and namespace clarity in the agent registry. "org-memory" survives as an informal umbrella term in prose. =git mv= preserves history; no backwards-compatibility shim.
+
+** Decisions
+- Skill rename, not extension rename :: skills serve LLMs (verbose names cheap); extensions serve humans (short names matter). Skill rename has low blast radius.
+- =org-memory= survives as prose :: "the org-memory system, implemented by =org-tasks= and =org-plan=" is encouraged.
+- =git mv= for directory renames :: =git log --follow= keeps tracing through history.
+- Description fields unchanged :: behaviour didn't change, only names.
+- No backwards-compatibility shim :: pre-release; clean rename is fine.
+
+** Shipped
+- =skills/org-tasks/= and =skills/org-plan/= directories (was =org-memory/= and =plan/=); =SKILL.md= frontmatter =name:= updated; internal prose / cross-ref edits.
+- =pi/extensions/tasks/index.ts= JSDoc + =buildProactiveChangeRecordPrompt= prose edits.
+- =pi/extensions/tasks/README.md= prose edits.
+
+** Gotchas
+- Care taken not to rewrite generic uses of "plan" (e.g. "draft a plan", "=* Plan= section") \u2014 only skill-name references.
+- =TASKS.org= / =TASKS.archive.org= / =design/log/*.org= mentions of old skill names are historical and were left intact per the design decision to preserve historical narrative.
+
+** Validation
+- =rg "skills/org-memory|skills/plan\b|name: org-memory|name: plan$"= zero hits.
+- =rg "the plan skill|the org-memory skill"= zero hits in active code, active docs, and AGENTS.md files.
+- Remaining "org-memory" / "plan skill" occurrences live in =design/log/*.org= historical records and original proposing prose \u2014 all intentionally preserved.
+
 * Context
 
 The two existing skills =org-memory= and =plan= form a single coherent system: =org-memory= owns the durable file protocol, =plan= owns the section conventions of the change-record artefact, and they reference each other.  Their current names don't reflect the relationship: the asymmetric pair (one prefixed with =org-=, the other not) reads like two unrelated skills, and =org-memory= is an indirect name for what is fundamentally a task-management system.
@@ -111,6 +135,8 @@ Resolve any remaining hits.  Document any kept-as-historical uses in the change-
 
 Acceptance: zero hits for skill-path patterns; remaining \"org-memory\" hits are exclusively umbrella-concept uses.
 * Implementation
+
+Files-changed and verification details absorbed into top-level =* Summary= during the 2026-05-09 retrospective summary sweep; see that section. Detailed sections preserved below as audit history.
 
 ** Files changed (live)
 

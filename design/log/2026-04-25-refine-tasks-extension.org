@@ -3,6 +3,32 @@
 #+PARENT: [[file:../../TASKS.archive.org::#f92b7b2f-c7fc-4933-9e27-20c0e411cbe4][Refine tasks extension :org-memory:org-tasks:]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+UX and persistence refinements to the pi tasks extension: load-time =:ID:= backfill for TASKS.org and linked plans, merger of compact selected-task surface and expanded =/tasks= UI under a single load/refresh flow, default collapse rules, plan-link display in the details pane, prompt-strategy redesign so create/archive dialogs stay visible, and =STARTED= propagation from plan subtasks to their TASKS.org ancestor. Compact selected-task UI moved from a top-pinned overlay to a reserved above-editor widget so it no longer masks scrollback.
+
+** Decisions
+- Default collapse rules :: collapse completed subtrees by default; always keep the selected path visible; with no selection show only top-level tasks; with a selection expand the selected path and collapse siblings.
+- Compact selected-task UI placement :: above-editor widget (reserved layout space), not an overlay; capped at 6 lines.
+- Prompt strategy :: temporarily close the expanded tasks UI and use normal =ctx.ui.input= / =ctx.ui.confirm= dialogs, then refresh and reopen.
+- ID backfill preservation :: preserve org semantics and unchanged non-task content; do not promise byte-for-byte preservation of rewritten task subtrees.
+- =STARTED= propagation :: when any plan subtask first transitions to =STARTED= via the tasks UI, the top-level =TASKS.org= ancestor auto-advances from =TODO= to =STARTED=. Skills updated to document the rule and the manual-edit exception.
+
+** Shipped
+- Parser helpers for =:ID:= detection and =planError= metadata; load-time UUID backfill for =TASKS.org= and loaded linked plans.
+- Compact above-editor widget replaces the top-pinned selected-task overlay; hidden while the expanded UI is open and refreshed from the shared task graph afterward.
+- Create/archive prompts moved out of the expanded overlay lifecycle so built-in dialogs remain visible.
+- Default collapse rules in =TasksOverlay=; linked-plan metadata and load-error display in the details pane.
+- Tasks README and generated =agents/pi/extensions/keybindings.org= updated.
+- =org-memory= / =plan= skills updated for =STARTED= propagation.
+
+** Gotchas
+- Compact widget height does not always collapse on task deselection: root cause is a pi TUI framework limitation (=setWidget(id, undefined/[])= does not trigger layout reflow without a terminal resize). Extension code is correct; experimental patches were reverted. Issue noted for upstream reporting.
+
+** Validation
+- =npx esbuild agents/pi/extensions/tasks/index.ts --bundle --platform=node --format=esm --packages=external= clean.
+- LSP diagnostics clean on changed task files (modulo unresolved external module declarations in the standalone checkout).
+- Interactive =/reload= and UI smoke tests in pi: status cycling, selection toggle, collapse, plan display, prompt flows all pass.
+
 * Context
 The selected workstream is `Refine tasks extension`, covering UX and persistence refinements for the pi tasks extension under `agents/pi/extensions/tasks/`.
 

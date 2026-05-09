@@ -3,6 +3,19 @@
 #+PARENT: [[file:../../TASKS.archive.org::#d9789ed7-ff34-490a-a818-bf7a79fa1180][Update keybindings extension to handle capital letter properly]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Misdiagnosis. Originally framed as a keybindings-extension bug (raw =key === data= equality vs =matchesKey=) so that =SPC t A= was silently failing for capital-letter overlay shortcuts. Four candidate fixes at the leader level were prototyped and rolled back; debug logging in the *consumer* (the tasks overlay) finally exposed the real bug: =overlay.ts= called =matchesKey(data, "A")= et al with literal uppercase characters where =matchesKey= expects the canonical =shift+a= form. Fix landed in =overlay.ts= (five call-sites: =A=, =P=, =U=, =N=, =J=). Plan tasks remain CANCELLED to record the misdiagnosis chain accurately; the actual fix is a small overlay patch.
+
+** Decisions
+- Cancelled the keybindings-layer fixes :: every prototype was internally consistent but addressed the wrong layer; the leader was already forwarding the key correctly.
+- Real fix lives in the consumer :: =matchesKey(data, "shift+<letter>")= in =overlay.ts= for all five overlay shortcuts.
+- Diagnostic principle :: when a key dispatch "silently fails", instrument both the leader *and* the consumer; a no-op fix at the leader looks like "behaviour unchanged" precisely because the leader was correct.
+- Lower-case-only bindings preferred :: capital-letter shortcuts stay inside the consuming overlay, not surfaced at the leader level. If a capital-letter leader binding is needed in future, reproduce with =TASKS_KB_DEBUG=1= against real input first.
+
+** Shipped
+- =overlay.ts= call-sites for =A= / =P= / =U= / =N= / =J= switched from literal-character match to =matchesKey(data, "shift+<letter>")=.
+- Plan tasks marked =CANCELLED= with rationale preserved as a misdiagnosis record.
+
 * Context
 
 The keybindings extension's leader-menu dispatch uses raw string equality to match incoming key data against configured key strings:

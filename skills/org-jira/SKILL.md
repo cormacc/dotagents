@@ -193,6 +193,14 @@ Subtask migration from `TASKS.org` into a change-record (owned by
 contain migrated local subtasks with their original UUIDs and separate
 Jira-derived plan tasks with fresh UUIDs linked via `:LINKED_ISSUES:`.
 
+Jira-linked change-records inherit the section structure from
+[`org-plan`](../org-plan/SKILL.md), including the top-level `* Summary`
+condensed memory layer (which supersedes the legacy `** Outcome` /
+`** Shipped` heading under `* Implementation`) and the closure-time
+summary refresh workflow. When fetching Jira context for a resume,
+start with the change-record's `* Summary` before re-fetching the
+issue tree.
+
 ### Clone (`/jira clone <KEY>`)
 
 *Two-step dispatch:* the slash command builds a prompt that asks the

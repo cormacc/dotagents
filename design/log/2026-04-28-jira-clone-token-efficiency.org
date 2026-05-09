@@ -3,6 +3,35 @@
 #+PARENT: [[file:../../TASKS.archive.org::#4ad4bb1b-9e74-48a0-9ce4-2d69639a8bc8][Token-efficient Jira clone workflow]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Reduced =/jira clone= token cost on the emission side by introducing a shared =tasks.insertTask= JS helper plus its =tasks_insert_task= LLM-tool wrapper, and a =jira_clone_apply= tool that delegates the deterministic org-rendering to that helper. The model no longer re-emits the rendered =:PROPERTIES:= drawer / UUID / =:CREATED:= timestamp / heading boilerplate; only the body and structured fields cross the wire. =buildClonePrompt= reworked into a two-step dispatch (call =atlassian_getJiraIssue=, then call =jira_clone_apply=). Idempotency is enforced at the helper: scanning the target file plus =alsoScan= siblings (and recursive =#+IMPORT:= imports) for matching =:LINKED_ISSUES:= tokens; duplicate clones refuse without model involvement.
+
+Fetch-side optimisation (originally =jira_clone_fetch=) deferred: pi-mcp-adapter does not expose a JS-callable MCP client to extensions today, so any MCP fetch must remain LLM-brokered. Documented as a follow-up.
+
+** Decisions
+- Re-scope to emission-side win :: drop =jira_clone_fetch= and any cache; revisit if the ExtensionAPI gains a JS-callable MCP primitive.
+- =tasks.insertTask= owns deterministic org assembly :: priority mapping (Highest..Lowest → #A..#D), UUID, =:CREATED:=, drawer assembly, section-existence checks, idempotency on =:LINKED_ISSUES:= match. Tracker-agnostic.
+- =jira_clone_apply= is the only Jira-side runtime addition :: parses Jira fields, performs Jira-specific transforms (priority-name → cookie, label list → org tags), delegates the write to =tasks.insertTask=. No org-mode strings inside the jira extension.
+- Two-step dispatch in =/jira clone= :: prompt instructs the agent to fetch then apply; user-facing slash command unchanged.
+- Body normalisation stays out of scope :: the model still owns ADF→markdown cleanup; helper writes body verbatim.
+- =/jira get= reduced to a prompt-builder slash command :: no underlying tool today; renders compact human-readable summary.
+
+** Shipped
+- =pi/extensions/tasks/insert.ts=: =buildTaskBlock= (org rendering, no I/O) + =insertTaskIntoFile= (file splice + idempotency). Importable JS, no =pi-tui= / =pi-coding-agent= dependency.
+- =tasks_insert_task= (in =tasks/index.ts=) and =jira_clone_apply= (in =jira/index.ts=) as thin TypeBox-schema adapters; =jira_clone_apply= calls =insertTaskIntoFile= directly via JS import.
+- =buildClonePrompt= rewritten as the two-step dispatch describing structured =jira_clone_apply= args and =inserted= / =duplicate= / =section_not_found= / =error= return shapes.
+- Idempotency contract: scan target + =alsoScan= + recursive =#+IMPORT:= for matching =:LINKED_ISSUES:=; first match wins; refuse with =status: "duplicate"= and =existingId= / =existingFile= / =conflictingToken=. =jira_clone_apply= passes =alsoScan: [TASKS.local.org]= when target is =TASKS.org= and vice-versa.
+
+** Validation
+- =pi/extensions/tasks/insert.test.ts=: 51/51 pass (34 pure-helper + 17 file-side assertions).
+- =pi/extensions/jira/jira.test.ts=: 45/45 pass (prompt-builder regression covering =buildClonePrompt= and =buildGetPrompt=).
+- Throwaway driver =.agents/tmp/drive-insert-task.mjs= confirms literal post-insert fixture and idempotent duplicate refusal.
+
+** Follow-ups
+- Empirical token measurement against a body-heavy SAND issue (open question on file).
+- Fetch-side optimisation (=jira_clone_fetch= + cache) revisits if pi-mcp-adapter exposes a JS-callable MCP client to extensions.
+- =jira/= scratch-file end-to-end test if Jira-side transforms grow (label sanitisation, project-aware defaults).
+
 * Context
 
 The current =/jira clone= path is a pure prompt-builder that asks the agent to call =atlassian_getJiraIssue=, parse the response, render the org task body, and emit an =edit= tool call to insert it into a =TASKS*.org= file.  Token cost is dominated by:

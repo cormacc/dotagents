@@ -89,10 +89,16 @@ const planContent = [
   "#+TITLE: Review org-memory protocol as agent memory",
   `#+PARENT: [[file:../../TASKS.org::#${parentId}][Review org-memory protocol]]`,
   "",
+  "* Summary",
+  "Org-memory protocol now reconstructs selected work across sessions via condensed `* Summary` plus task graph.",
+  "** Decisions",
+  "- Layered memory :: `* Summary` first, full ledger on demand.",
+  "",
   "* Context",
   "This plan records why org-memory must reconstruct selected work across sessions.",
   "",
   "* Plan",
+
   "** STARTED Add regression coverage :memory:tests:",
   ":PROPERTIES:",
   `:CUSTOM_ID: ${selectedId}`,
@@ -123,8 +129,19 @@ tasks[0]!.importChildren = planTasks;
 
 const selected = findTaskById(tasks, parseSelectedKeyword(localContent));
 assertEqual(selected?.summary, "Add regression coverage", "memory scenario: selected plan task resolves through imported change-record");
+assertContains(planContent, "* Summary\nOrg-memory protocol now reconstructs selected work", "memory scenario: condensed `* Summary` is the first reconstruction surface");
 assertContains(planContent, "This plan records why org-memory must reconstruct", "memory scenario: plan context is available for reconstruction");
 assertContains(planContent, "Implementation notes survive as durable resume context", "memory scenario: implementation notes are available for reconstruction");
+
+// Resume read order: `* Summary` precedes `* Context`, which precedes `* Implementation`.
+const summaryIdx = planContent.indexOf("* Summary");
+const contextIdx = planContent.indexOf("* Context");
+const implIdx = planContent.indexOf("* Implementation");
+assertEqual(
+  summaryIdx >= 0 && summaryIdx < contextIdx && contextIdx < implIdx,
+  true,
+  "memory scenario: `* Summary` precedes `* Context` precedes `* Implementation` for resume ingestion order",
+);
 assertEqual(getTaskBlockers(selected!).map((b) => b.raw), [`task:${blockerId}`], "memory scenario: selected task blockers are surfaced");
 assertEqual(
   isTaskReady(selected!, (id) => findTaskById(tasks, id)).ready,

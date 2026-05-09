@@ -4,6 +4,20 @@
 #+STATUS: Draft
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Draft compatibility-policy plan extracted from the org-memory agent-memory review so the generic protocol could close cleanly. Open question: how strictly should tooling treat historical org-task data that predates the current metadata rules (=:CUSTOM_ID:= UUID, bracketed =:CREATED: [YYYY-MM-DD Day HH:MM]=, tool-driven =:LOGBOOK:=)? The extension currently silently repairs missing IDs via =backfillMissingIds()=, which conflicts with the newer "tolerate legacy reads, avoid silent rewrites" posture. Plan separates *read tolerance* (loose) from *new-write requirements* (strict), proposes doctor diagnostics over silent repair, and leaves an opt-in normalization flow as a follow-on decision. Status remains Draft until the policy is accepted.
+
+** Decisions (proposed)
+- Separate read tolerance from write requirements :: new writes stay strict and deterministic; existing files remain loadable even when metadata is incomplete.
+- Avoid surprise file churn :: any normalization that rewrites historical data should be explicit and user-initiated unless there is a strong compatibility reason to keep automatic ID backfill.
+- Prefer diagnostics first :: =/tasks doctor= is the natural warning surface for malformed legacy metadata; users decide whether to normalize.
+
+** Follow-ups (the plan body itself)
+- Specify legacy-read vs new-write rules in =org-tasks/SKILL.md=.
+- Add =/tasks doctor= diagnostics for missing/malformed =:CREATED:= and (if applicable) missing =:ID:=.
+- Decide on a one-time normalization flow (=/tasks normalize=, doctor-assisted, or manual procedure) including the provenance rule for backfilled timestamps.
+- Implement normalization only if the policy calls for it.
+
 * Context
 
 This draft plan was extracted from the org-memory agent-memory review (=design/log/2026-05-01-org-memory-agent-memory-review.org=, parent task =724c0332=). The generic protocol now has clear identity, LOGBOOK, sandboxing, and resume semantics, plus regression coverage. One remaining compatibility question is how strictly tooling should treat historical org-task data that predates the current metadata rules.

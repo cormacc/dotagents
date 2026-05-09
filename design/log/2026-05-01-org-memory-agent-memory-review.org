@@ -4,6 +4,38 @@
 #+STATUS: Complete
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+First pass at treating the org-memory protocol explicitly as agent memory rather than only a human task list. Identified protocol gaps that made cross-session resume ambiguous (duplicate IDs from subtask-mirroring, mutable =CLOSED:=, unspecified import trust boundary, unclear retrospective scoping when =:STARTED:= absent, and informal =:CREATED:= shape) and shipped the protocol decisions plus the tasks-extension changes that lock them in.
+
+** Shipped
+- =org-plan/SKILL.md=: subtask migration (move into =* Plan=, remove from parent) is now the canonical identity behaviour, replacing the earlier UUID-mirroring guidance.
+- =org-tasks/SKILL.md=: introduced the task-local =:LOGBOOK:= lifecycle drawer (append-only audit history), reopen/direct-close rules, =#+IMPORT:= path sandboxing under the project root, and the first-cut =Agent memory= resume checklist.
+- =org-jira/SKILL.md= + jira README: trust-boundary wording, planning/resume context, Jira-derived task identity, and LOGBOOK vs live status-change events.
+- Tasks extension: shared =lifecycle.ts= helper for append-only LOGBOOK transitions, shared =paths.ts= sandbox helper for import/scaffold paths, =doctor.ts= health checks, and =memory.test.ts= scenario-style reconstruction.
+- Linked-issue URLs documented as project-local trusted configuration; =J= opener verified to use argv (no shell interpolation).
+
+** Decisions
+- Subtask migration is the identity model :: One canonical node per UUID; the parent retains a plain-text bullet summary, not duplicate task nodes.
+- LOGBOOK is the durable history :: Heading status and =CLOSED:= are mutable current-state caches; =:LOGBOOK:= is append-only.
+- Reopen semantics are explicit :: Leaving a closed state clears current =CLOSED:= but preserves the old close in LOGBOOK; re-close writes a fresh =CLOSED:= and appends another LOGBOOK entry.
+- Direct =TODO -> DONE= retrospective scoping :: Use =:STARTED:= when present, otherwise the LOGBOOK created event / =:CREATED:= as the lower bound.
+- Imports are sandboxed :: =#+IMPORT:= paths and scaffolded plan paths must resolve under the project root after symlink resolution.
+- Linked-issue URLs are trusted :: Non-HTTPS schemes intentionally permitted; opener uses argv-based =open= / =xdg-open= invocation.
+
+** Gotchas
+- Behavioural change for downstream consumers: =#+IMPORT:= paths that resolve outside the project root after symlink resolution are now rejected at load time. Pre-existing files with out-of-tree imports load with empty =importChildren= and an =importError= rather than silently following the link. This dotfiles repo has no such imports.
+- The first-cut =Agent memory= resume checklist landed here; the 2026-05-09 condensed-summary work refines that read order and adds the =* Summary= layer.
+
+** Validation
+- =cd pi/extensions/tasks && ./test.sh= — 93 parser/scaffold, 56 insert, 13 lifecycle, 6 path-sandbox, 25 doctor, 10 memory tests pass.
+- =cd pi/extensions/jira && ./test.sh= — 45 tests pass.
+- =esbuild= parse/bundle checks for the tasks and jira extension entry points.
+
+** Follow-ups
+- Jira-specific protocol/regression follow-ups extracted to TASKS.org task =2b4d4ca7= and draft plan =design/log/2026-05-05-jira-org-memory-alignment.org=.
+- Legacy metadata compatibility / normalization policy extracted to TASKS.org task =972d5cec= and draft plan =design/log/2026-05-05-legacy-org-task-metadata.org=.
+- Condensed summary layer (=* Summary= section) added subsequently in =design/log/2026-05-09-org-memory-condensed-summaries.org=.
+
 * Context
 The selected task asks for a review of the org-memory protocol — primarily the `org-tasks` and `org-plan` skills plus the tasks extension documentation — as a cross-session memory mechanism for agents, not only as a human task list.
 

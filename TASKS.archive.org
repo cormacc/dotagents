@@ -637,7 +637,6 @@ CLOSED: [2026-05-08 Fri 18:07]
 :END:
 #+IMPORT: [[file:design/log/2026-05-08-custom-id-and-parent-link.org]]
 The +IMPORT makes it easy to navigate from a task to its linked plan, but not to reverse the direction of travel. Would it make sense to store task ID as a NAME or CUSTOM_ID property instead, and a plan could embed a navigable org-mode anchor link as #+PARENT instead of the current un-navigable #+PARENT_ID
-
 ** DONE Document no-hard-wrapping convention for org task content :skill_org-tasks:skill_org-plan:
 CLOSED: [2026-05-08 Fri 23:07]
 :PROPERTIES:
@@ -654,3 +653,21 @@ Friction reported from session subagent-chat-019e06e5: agents hard-wrap generate
 Suggested wording: **Wrapping**: do not hard-wrap prose paragraphs in generated org content. One paragraph = one logical line. Readers configure their own soft-wrap (visual-line-mode, org-startup-truncated nil, Emacs fill-column). Hard wrapping at an agent-chosen column makes diffs noisy when the convention changes and is redundant with org's display-time wrapping.
 
 Origin: /home/cormacc/nmd/products/connect/portal on branch fix-org-user-association-errors, git@gitlab.com:lenire-tinnitus-treatment/portal.git, timestamp [2026-05-08 Fri 11:15]. Triggering quote: "Better yet, don't wrap at all - let emacs/org mode apply its own softwrapping configuration. Record the decision globally at org-tasks skill level."
+
+** DONE [#B] Re-tier self-improvement skill routing for the dotfiles/dotagents split :self-improvement:routing:
+CLOSED: [2026-05-09 Sat 10:43]
+:PROPERTIES:
+:CUSTOM_ID: 7e21788d-b4e6-439b-b300-ca84ab4a2fcc
+:CREATED: [2026-05-07 Thu 22:44]
+:ARCHIVED: [2026-05-09 Sat 10:43]
+:END:
+:LOGBOOK:
+- State "DONE"      from "TODO"      [2026-05-09 Sat 10:43]
+- Created [2026-05-07 Thu 22:44]
+:END:
+=skills/self-improvement/SKILL.md= currently routes "global" agent feedback at a single dotfiles-side TASKS.org. After the 2026-05-07 extraction, global feedback splits across two repos:
+
+- *dotagents* :: skills, pi extensions, prompts, the pi-side =AGENTS.md=. Feedback about agent behaviour or skill content lands here.
+- *dotfiles* :: =agents.nix=, =agents-config/pi/settings.json=, NixOS / Home Manager / nix-darwin wiring. Feedback about installation, packaging, or the dotfiles AGENTS.md lands here.
+
+Update the skill's routing rules accordingly: classify by affected artefact, hand off to the right repo via ~pi-intercom~, and document the two-tier model. Carried forward from the extraction change-record.

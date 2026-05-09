@@ -3,6 +3,21 @@
 #+PARENT: [[file:../../TASKS.archive.org::#7a48756f-95b2-440c-9810-09a9ae60e452][Refine org-memory/plan protocol :org-memory:]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Gap-analysis pass on the original =org-memory= and =plan= skills closed missing conventions and unnecessary coupling between skill content and extension UI. Tasks-extension round-trip preservation hardened so saves no longer discard non-task structure or org metadata. Skills now require explicit =#+TODO:= keyword declarations in =TASKS.org= and scaffolded plans, document =:ID:= UUID v4 properties, formalise =:BLOCKED-BY:= over a =:blocked:= tag, keep =:selected:= as a reserved operational tag, and admit an optional =** Design decisions= subsection under =* Context= for plan files.
+
+** Decisions
+- =:selected:= stays an org tag :: managed by the tasks extension; agents preserve and respect it but do not mutate without an explicit selection action.
+- Blocking context uses =:BLOCKED-BY:=, not a =:blocked:= tag :: tags are semantic categories; =WAITING= conveys blocked state; =:BLOCKED-BY:= holds the reason in a machine-readable property.
+- Tasks carry =:ID:= UUID v4 :: compatible with =org-id.el=; stable across renames/restructures.
+- Skills define protocol; extension implements UI :: file format and agent behaviour in skills; UI details / keybindings / safe write mechanics in the tasks extension.
+- Task memory files declare =#+TODO:= explicitly :: so org-mode users get the cycle without relying on global config.
+- Plan files may include =** Design decisions= under =* Context= :: optional, used when alternatives or rationale matter.
+
+** Shipped
+- Source-preserving serialization in the tasks extension; task saves replace parsed subtrees in-place rather than rewriting files as task-only content.
+- Skill updates encoding the decisions above; bootstrap protocol added; archiving guidance for non-pi workflow added; trimmed extension-specific section of =org-memory= in favour of a README pointer.
+
 * Context
 
 Gap analysis of the org-memory and plan skills identified missing conventions, ambiguous protocols, and unnecessary coupling between skill content and extension-specific UI details.

@@ -3,6 +3,21 @@
 #+PARENT: [[file:../../TASKS.archive.org::#d36fe453-b8f8-4dfb-8ea6-5ed9d9eeee90][Tasks overlay bugfixes :org-memory:org-tasks:tasks-extension:]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Three small but irritating tasks-extension overlay bugs fixed: (1) compact widget not refreshing after selection toggle from within the expanded =/tasks= overlay (race between async save and file-watcher), (2) overlay cursor not landing on the selected task when it lived as a =planChild= under a =DONE=/=CANCELLED= parent (collapse logic incorrectly collapsed ancestors), and (3) external file changes (Emacs selection toggle, status edits) were silently discarded by the open overlay because =refreshTaskUi= skipped the live overlay entirely. Fixes use existing data structures — no new lifecycle hooks; new module-level =isOverlayActive= flag and =activeOverlayInstance= ref plus a =TasksOverlay.refreshTasks()= method.
+
+** Shipped
+- =index.ts=: =isOverlayActive= module flag suppresses =syncCompactWidget= during the overlay session; immediate in-memory widget sync after the overlay loop exits; =activeOverlayInstance= ref drives live-refresh.
+- =overlay.ts=: erroneous third condition removed from =applyDefaultCollapseView= so =keepVisible= ancestors stay expanded; new =TUI= constructor param and =refreshTasks(newTasks)= public method that replaces task state, rebuilds collapse state and rows, preserves cursor by task ID (falling back to selected), and triggers re-render.
+
+** Decisions
+- No new lifecycle hooks :: existing module-level flags follow the same pattern as =compactWidgetComponent=, =activeCtx=.
+- In-memory-first widget sync :: after overlay close, sync from already-mutated task state; subsequent =refreshTaskUi= still reads disk to converge with external edits.
+- Collapse-logic simplification :: removing the erroneous condition makes the implementation match its own doc comment; the two remaining conditions cover all cases.
+
+** Validation
+- Original two fixes: commit =4b04886=. Live-update follow-up: =2b7cffc=. Verified interactively post-commit.
+
 * Context
 
 Two minor behavioural bugs in the pi tasks extension, both involving the interaction between the expanded =/tasks= overlay modal and the compact task widget (the selection banner displayed above the editor input area).

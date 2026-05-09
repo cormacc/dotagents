@@ -128,6 +128,11 @@ export class TasksOverlay {
         without an existing #+IMPORT:.  Returns true to indicate the request
         was accepted (overlay should close); false to keep the overlay open. */
     private onCreateChangeRecord?: (task: Task) => boolean,
+    /** Request a `* Summary` refresh when a task with an existing #+IMPORT:
+        closes and the linked change-record either lacks `* Summary` or has
+        not been touched since the parent task started.  Returns true when
+        the workflow was queued (overlay should close); false otherwise. */
+    private onRefreshSummary?: (task: Task) => boolean,
     selectedId: string | null = null,
     /** Called when the user toggles selection; should write TASKS.local.org. */
     private onSelectionChange?: (id: string | null) => Promise<void>,
@@ -480,17 +485,21 @@ export class TasksOverlay {
     // watchers see the on-disk update before consumers act on it.
     this.onStatusChanged?.(row.task, currentStatus);
 
-    // After persisting, if the user just closed a task that has no
-    // #+IMPORT: linked change-record, offer to scaffold one retrospectively.
+    // After persisting, the close transition can trigger one of two
+    // mutually-exclusive workflow handoffs:
+    //   1. No #+IMPORT: linked change-record → offer retrospective scaffold.
+    //   2. With #+IMPORT: → check for missing/stale `* Summary` and prompt
+    //      the agent to refresh it.
     // Done last so the on-disk DONE+CLOSED state is committed before the
     // overlay closes for the workflow handoff.
-    if (
-      isClosed && !wasClosed && nextStatus === "DONE"
-      && !row.task.importPath
-      && this.onCreateChangeRecord
-    ) {
-      const accepted = this.onCreateChangeRecord(row.task);
-      if (accepted) this.done(undefined);
+    if (isClosed && !wasClosed && nextStatus === "DONE") {
+      if (!row.task.importPath && this.onCreateChangeRecord) {
+        const accepted = this.onCreateChangeRecord(row.task);
+        if (accepted) this.done(undefined);
+      } else if (row.task.importPath && this.onRefreshSummary) {
+        const accepted = this.onRefreshSummary(row.task);
+        if (accepted) this.done(undefined);
+      }
     }
   }
 

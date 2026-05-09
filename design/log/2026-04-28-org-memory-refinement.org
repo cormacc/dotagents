@@ -3,6 +3,28 @@
 #+PARENT: [[file:../../TASKS.archive.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Refine org-memory protocol]]
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
+* Summary
+Refinement pass closing consistency gaps across the four artefacts implementing the protocol (=org-tasks= SKILL, =org-plan= SKILL, tasks extension, =tasks-org= Emacs minor mode). =CLOSED:= placement realigned with org-mode's native convention (above =:PROPERTIES:=, where =org-todo= writes it); =:CREATED:= adopted as a first-class drawer property alongside =:STARTED:= and =CLOSED:=; single-source-of-truth split across artefacts (=org-tasks= owns file shape; =org-plan= owns plan structure; README defers to skills). Skill prose slimmed substantially; anti-drift snapshot tests added on both sides. Elisp scaffolder removed in favour of =p= in the pi tasks extension to retire the cross-implementation snapshot pairing.
+
+** Decisions
+- =CLOSED:= above =:PROPERTIES:= :: matches =org-todo='s native behaviour; the extension serializer was already correct.
+- =:CREATED:= as a drawer property :: machine-readable; replaces the inline =[YYYY-MM-DD Day]= prefix in descriptions; format matches =:STARTED:= and =CLOSED:=.
+- Single source of truth :: =org-tasks= for file format / properties / keywords / =#+SELECTED:=; README and =org-plan= link in.
+- Single canonical change-record skeleton :: snapshot-tested in both the TS scaffolder and (formerly) the elisp scaffolder so drift becomes a CI failure rather than a docs inconsistency.
+- Emacs and the extension stay independent at runtime :: parity via tests, not RPC.
+- Terminology :: skill / user prose use *change-record*; internal symbol names (=plan=, =scaffoldPlan=) stay as-is.
+
+** Shipped
+- Skills: =org-tasks= 295→202 lines; =org-plan= 130→120 lines; tasks-extension README 257→200 lines (file format moved to the skill).
+- Extension: =createTask= writes =:ID:= + =:CREATED:= on creation; proactive-flow agent prompt instructs the agent to include =:CREATED:= on plan tasks; =scaffold.ts= split out of =index.ts= so the snapshot test can import via =tsx= without =pi-tui=; =formatOrgDate()= added (date-only form for =#+DATE:= matches existing change-record files).
+- Emacs: scaffold matched the canonical skeleton (=#+PARENT_ID:=, =* Implementation=); =#+DEFAULT_PLAN_DIR:= resolved from =TASKS.org= and used as both new-plan default directory and auto-enable matcher; =:STARTED:= written via =org-after-todo-state-change-hook= on first transition (preserved on re-opens); =tasks-org-toggle-selected= docstring corrected.
+- Tests: =parser.test.ts= 9/9 (=CLOSED:= in both positions → always above-drawer on write, =:CREATED:= round-trip, =scaffoldPlan()= literal snapshot); =tasks-org-tests.el= 7/7 (scaffolder structure, =:STARTED:= timestamp format, plan-dir resolution, literal snapshot matching the TS one).
+- Follow-up: elisp scaffolder retired; =tasks-org-open-plan= now opens existing =#+IMPORT:='d records or signals a =user-error= directing the user to =p= in the pi tasks extension. Cross-implementation snapshot pairing dropped.
+
+** Gotchas
+- =:STARTED:= via the Emacs hook fires only when =tasks-org-mode= is active. Power users editing =TASKS.org= without the mode (plain =org-mode=, other editors) won't get the property. Accepted as out-of-scope.
+- Snapshot caught two divergences: TS used =formatOrgTimestamp()= for =#+DATE:= while elisp used date-only =format-time-string "%Y-%m-%d %a"= (resolved by adding =formatOrgDate()= and switching TS); elisp scaffold ended without trailing blank line, TS ended with =\n\n= (resolved by aligning elisp). Both byte-identical after fix.
+
 * Context
 
 A review of the four artefacts that implement the project's org-memory protocol revealed consistency gaps, redundant prose across two skill files plus the tasks-extension README, and a few correctness/parity issues in the Emacs minor mode.
