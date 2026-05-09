@@ -95,7 +95,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   );
 }
 
-// ── CLOSED: below the drawer (legacy / pre-amendment) ─────────────────
+// ── CLOSED: below the drawer (parser robustness) ───────────────────
 
 {
   const input = [
@@ -640,7 +640,7 @@ function assertContains(haystack: string, needle: string, message: string): void
   assertEqual(
     getDrawerProperty(tasks[0]!, "BLOCKED-BY"),
     "url:https://example.com/pr/1",
-    "single-value :BLOCKED-BY: still readable via legacy single-value getter",
+    "single-value :BLOCKED-BY: still readable via the single-value getter",
   );
   const out = serializeTasks(tasks);
   assertContains(

@@ -38,9 +38,7 @@ Required on every change-record:
   optional subsections: `** Decisions`, `** Shipped`, `** Gotchas`,
   `** Validation`, `** Follow-ups`. Required on every change-record
   regardless of size or status (even a one-sentence summary is
-  preferable to none). `* Summary` supersedes the legacy `** Outcome`
-  / `** Shipped` heading under `* Implementation`; new records carry
-  `* Summary` only. See *Closure-time summary refresh* below.
+  preferable to none). See *Closure-time summary refresh* below.
 - `* Plan` — executable org TODO headings. Top-level plan tasks are
   `** TODO …` so they live under `* Plan` while remaining parseable
   by task tooling. May be empty in a retrospective change-record.
@@ -252,9 +250,7 @@ When drafting after work has started or completed:
 
 - Mark already-completed work `DONE`; mark current work `STARTED`;
   add remaining follow-ups as `TODO`.
-- Draft `* Summary` from `git log`, `* Implementation` notes, and
-  any pre-existing `** Outcome` / `** Shipped` content absorbed
-  (and condensed) from a legacy record.
+- Draft `* Summary` from `git log` and `* Implementation` notes.
 - Record key implementation outcomes and verification notes in
   `* Implementation`.
 - Do not rewrite history to look planned in advance. Label
@@ -262,14 +258,6 @@ When drafting after work has started or completed:
 - Treat `:LOGBOOK:` lifecycle history as evidence, not fiction: preserve
   entries emitted by tooling and avoid hand-editing status history to
   make retrospective work appear proactive.
-
-When retrofitting a legacy change-record that still carries an
-`** Outcome` or `** Shipped` heading under `* Implementation`,
-absorb that text into the new top-level `* Summary` (condensing
-where appropriate) and remove the legacy heading. Preserve
-`:CUSTOM_ID:`, `#+PARENT:` links, LOGBOOK history, plan task
-status, and the rest of the `* Implementation` audit detail — this
-is a memory-summary pass, not a history rewrite.
 
 Tooling may scaffold an empty record and prompt the agent for a
 retrospective fill; the section structure above still applies. See

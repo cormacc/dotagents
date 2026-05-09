@@ -39,9 +39,9 @@ assertEqual(
 );
 
 assertEqual(
-  hasSummaryHeading("* Implementation\n** Outcome\nThis used to be the summary.\n"),
+  hasSummaryHeading("* Implementation\n** Outcome\nNot a top-level Summary heading.\n"),
   false,
-  "hasSummaryHeading: legacy ** Outcome heading does not count as * Summary",
+  "hasSummaryHeading: a level-2 ** heading under * Implementation does not count as * Summary",
 );
 
 assertEqual(
@@ -87,19 +87,18 @@ const richContent = [
   "",
 ].join("\n");
 
-const legacyContent = [
+const noSummaryContent = [
   "* Context",
   "Background.",
   "* Implementation",
-  "** Outcome",
-  "Shipped.",
+  "Did the thing.",
   "",
 ].join("\n");
 
 assertEqual(
-  evaluateSummaryRefresh(legacyContent, "2026-05-01 Fri 09:00", Date.now()),
+  evaluateSummaryRefresh(noSummaryContent, "2026-05-01 Fri 09:00", Date.now()),
   "missing",
-  "evaluateSummaryRefresh: legacy record without * Summary returns missing",
+  "evaluateSummaryRefresh: record without * Summary returns missing",
 );
 
 assertEqual(

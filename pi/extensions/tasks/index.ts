@@ -1476,12 +1476,11 @@ function buildSummaryRefreshPrompt(
     "Use the `org-plan` and `org-tasks` skills. Generate or refresh the change-record's `* Summary` so a future agent can rebuild context cheaply:",
     "",
     "1. Read the change-record's existing sections (`* Plan`, `* Implementation`, and `* Context` if present).",
-    "2. If a legacy `** Outcome` or `** Shipped` heading exists under `* Implementation`, absorb its text (condensing where appropriate) into the new `* Summary` and remove the legacy heading.",
-    "3. Place `* Summary` at the top of the change-record (the first top-level section). Use a one-paragraph synopsis followed by the conventional subsections (`** Decisions`, `** Shipped`, `** Gotchas`, `** Validation`, `** Follow-ups`); include only the subsections that carry content.",
-    "4. Keep the summary terse: it is the surface a future agent reads first, not a duplicate of the implementation ledger.",
-    "5. Leave `* Context` alone if it already exists. If it does not exist, do NOT add an empty one — `* Context` is optional and is included only when durable rationale materially exceeds what `* Summary` can carry.",
-    "6. Preserve `:CUSTOM_ID:`, `#+PARENT:`, LOGBOOK history, and the existing `* Implementation` audit detail.",
-    "7. Show me the draft, then write the final content to the change-record file. Offer to open the file in Emacs after writing.",
+    "2. Place `* Summary` at the top of the change-record (the first top-level section). Use a one-paragraph synopsis followed by the conventional subsections (`** Decisions`, `** Shipped`, `** Gotchas`, `** Validation`, `** Follow-ups`); include only the subsections that carry content.",
+    "3. Keep the summary terse: it is the surface a future agent reads first, not a duplicate of the implementation ledger.",
+    "4. Leave `* Context` alone if it already exists. If it does not exist, do NOT add an empty one — `* Context` is optional and is included only when durable rationale materially exceeds what `* Summary` can carry.",
+    "5. Preserve `:CUSTOM_ID:`, `#+PARENT:`, LOGBOOK history, and the existing `* Implementation` audit detail.",
+    "6. Show me the draft, then write the final content to the change-record file. Offer to open the file in Emacs after writing.",
   ].join("\n");
 }
 

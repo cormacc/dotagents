@@ -151,7 +151,7 @@ Task creation, plan path approval, and archive confirmation prompts temporarily 
 
 ### Change-records (proactive and retrospective)
 
-The file linked from a task via `#+IMPORT:` is called a *change-record*. The file shape is owned by the `org-plan` skill: required on every record are `* Summary`, `* Plan`, and `* Implementation`; `* Context` and `* Open questions` are optional. The same shape is produced by both flows below. `* Summary` supersedes the legacy `** Outcome` / `** Shipped` heading under `* Implementation` — new change-records do not carry that legacy heading. `* Context` is promoted from "omit" to "include" only when durable rationale materially exceeds what `* Summary` can carry.
+The file linked from a task via `#+IMPORT:` is called a *change-record*. The file shape is owned by the `org-plan` skill: required on every record are `* Summary`, `* Plan`, and `* Implementation`; `* Context` and `* Open questions` are optional. The same shape is produced by both flows below. `* Context` is promoted from "omit" to "include" only when durable rationale materially exceeds what `* Summary` can carry.
 
 **Proactive flow** — press `p` on a task that has no `#+IMPORT:`, accept the path prompt, and the agent helps draft `* Summary` and `* Plan` up front (promoting `* Context` only when needed). As work proceeds, plan tasks transition `TODO -> STARTED -> DONE`; `* Implementation` and `* Summary` are refreshed along the way.
 
