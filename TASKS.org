@@ -23,17 +23,6 @@
 
 * Improvements
 
-** TODO [#B] Bootstrap a clojure-development skill package :clojure:packaging:
-:PROPERTIES:
-:CUSTOM_ID: 5f847a49-c227-4284-a49d-c9b3db972da6
-:CREATED: [2026-05-07 Thu 22:44]
-:END:
-:LOGBOOK:
-- Created [2026-05-07 Thu 22:44]
-:END:
-#+IMPORT: [[file:design/log/2026-05-08-bootstrap-a-clojure-development-skill.org]]
-Add a second pi package alongside ~agent-org-memory~ for the clojure-development skill family. The =clojure= skill (formerly =clj-nrepl=), =pi-clojure= extension, and any future Clojure-specific helpers should ship as a separate slice with its own ~package.json~ / Nix derivation, mirroring the shape of ~agent-org-memory.nix~. Decide between sibling ~package.json~ files vs a workspaces layout when the second slice actually has more than one entry to bind together. Captured as a follow-up to the 2026-05-07 dotfiles → dotagents extraction.
-
 ** TODO [#C] Improve terminal extension
 :PROPERTIES:
 :CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af
