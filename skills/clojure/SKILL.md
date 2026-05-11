@@ -61,7 +61,10 @@ Before modifying Clojure code:
    definition/references for related symbols, call sites, and dependencies.
 2. **Find port and verify connection** - pi-clojure: `clojure_find_nrepl_port`
    then `clojure_eval { port: PORT, code: "(+ 1 1)" }`; CLI fallback:
-   `clj-nrepl-eval --discover-ports "(+ 1 1)"`.
+   `clj-nrepl-eval --discover-ports "(+ 1 1)"`. **Reuse an existing nREPL
+   process when one is already running — do not spawn a second.** A discovered
+   port (from `.nrepl-port`, `.shadow-cljs/nrepl.port`, or `.cider-nrepl.port`)
+   means a server is up; connect to it rather than starting your own.
 3. **Explore unfamiliar functions** - eval `(clojure.repl/doc function-name)`
    via `clojure_eval` or `clj-nrepl-eval`.
 4. **Test in REPL** - Define and validate functions before saving.
@@ -73,7 +76,21 @@ Before modifying Clojure code:
    relevant tests must pass.
 
 If nREPL fails, ask: "Please start your nREPL server (e.g., `bb nrepl` or
-`lein repl :headless`)"
+`lein repl :headless`)".
+
+### ClojureScript runtime requirement
+
+A ClojureScript nREPL session evaluates against a connected browser tab — the
+JS runtime *is* the browser. Before evaluating `.cljs` code:
+
+- Confirm a browser tab is connected to the cljs REPL (e.g. shadow-cljs
+  `:browser` or `:browser-repl` target with the app loaded, or a figwheel
+  client page open).
+- If no tab is connected, use the `chromium` skill to open one against the
+  dev server URL before evaluating.
+- A `.cljs` eval that returns `:cljs.user> nil` with no observable effect (or
+  hangs) is the classic symptom of a disconnected runtime; check the tab
+  before debugging the form.
 
 ### Agent Loop
 
