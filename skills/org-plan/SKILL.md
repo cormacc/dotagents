@@ -16,9 +16,10 @@ persistence rules.
 
 - Prefer plans that can be executed and verified task-by-task — a plan task is
   only useful when its acceptance criteria are observable.
-- Keep `* Summary` (condensed final state) distinct from `* Implementation`
-  (decisions, gotchas, validation outcomes); they serve different reading
-  audiences.
+- Keep `* Summary` (condensed final state, prescriptive — what a resuming
+  agent needs to act) distinct from `* Implementation` (the detailed ledger —
+  tactical decisions, tricky details, validation outcomes); they serve
+  different reading audiences.
 - Capture durable design decisions in `* Summary` (or promoted `* Context` when
   the rationale exceeds the synopsis) so later sessions don't have to
   reverse-engineer them from `git log`.
@@ -57,17 +58,26 @@ Required on every change-record:
 - `* Summary` — condensed memory layer; the cheap reconstruction surface for
   future agents and humans. Placed first so resume tools can ingest it before
   the detailed ledger. A compact paragraph plus optional subsections:
-  `** Decisions`, `** Shipped`, `** Gotchas`, `** Validation`, `** Follow-ups`.
-  Follow *Voice and density* above — terse, engineer-facing, no preamble.
-  Required on every change-record regardless of size or status (even a
-  one-sentence summary is preferable to none). See *Closure-time summary
-  refresh* below.
+  `** Decisions`, `** Shipped`, `** Gotchas`, `** Follow-ups`. All Summary
+  subsections are prescriptive and forward-facing — they shape what the next
+  agent does. Evidentiary / backward-facing material (test commands run,
+  validation outcomes, tactical implementation choices) belongs in
+  `* Implementation`. `** Decisions` here means *strategic* durable design
+  choices that constrain future work, not every tactical call made while
+  coding. Follow *Voice and density* above — terse, engineer-facing, no
+  preamble. Required on every change-record regardless of size or status
+  (even a one-sentence summary is preferable to none). See *Closure-time
+  summary refresh* below.
 - `* Plan` — executable org TODO headings. Top-level plan tasks are `** TODO …`
   so they live under `* Plan` while remaining parseable by task tooling. May be
   empty in a retrospective change-record.
-- `* Implementation` — notes on decisions, tricky details, validation outcomes,
-  and maintenance context discovered while executing. Filled in as work lands
-  (proactive flow) or drafted from `git log` (retrospective flow).
+- `* Implementation` — the detailed ledger: tactical decisions, tricky
+  details, validation outcomes (commands / tests / manual checks run), and
+  maintenance context discovered while executing. Owns validation receipts;
+  Summary should only surface a verification finding when it's durable enough
+  to constrain future work (in which case it's a `** Gotcha`, not a
+  validation note). Filled in as work lands (proactive flow) or drafted from
+  `git log` (retrospective flow).
 
 Optional:
 
@@ -111,16 +121,14 @@ as plan tasks close and finalised before the parent task transitions
 to `DONE`.
 
 ** Decisions
-- Decision :: Rationale.
+- Strategic decision :: Rationale (only durable design choices that
+  constrain future work).
 
 ** Shipped
 - User-visible / protocol / code outcomes (filled in as work lands).
 
 ** Gotchas
 - Things future agents should not have to rediscover.
-
-** Validation
-- Commands / tests / manual checks run.
 
 ** Follow-ups
 - Pointers to TASKS.org tasks rather than buried prose.
@@ -142,6 +150,8 @@ Acceptance criteria:
 Optional: one non-obvious constraint or pointer, if needed.
 
 * Implementation
+- Tactical decisions and tricky details discovered while executing.
+- Validation :: commands / tests / manual checks run, with outcomes.
 
 * Open questions
 ```
@@ -181,7 +191,9 @@ non-obvious constraint or pointer is needed (see *Voice and density*).
 Before transitioning a top-level task to `DONE`:
 
 1. Refresh the linked change-record's `* Summary` so the paragraph plus
-   `** Shipped`, `** Gotchas`, and `** Validation` reflect what actually landed.
+   `** Shipped` and `** Gotchas` reflect what actually landed, and refresh
+   the validation notes under `* Implementation` so the verification record
+   matches what was actually run.
 2. Ensure any newly-discovered follow-up work exists as `TODO` tasks (in
    `TASKS.org` for cross-cutting work, under `* Plan` for plan-local work)
    rather than buried in prose.
