@@ -5,314 +5,103 @@ description: REPL-driven Clojure, ClojureScript, EDN, and Babashka development. 
 
 # Clojure Development
 
-## Scope and Precedence
+REPL-first development against `.clj` / `.cljs` / `.cljc` / `.edn` / `.bb` files.
+Most tasks land entirely in source files — prefer extending existing namespaces
+to creating new files, and don't introduce sibling `*.md` notes unless asked.
 
-Follow the project's `AGENTS.md` for architecture, commands, conventions, and
-test infrastructure. These Clojure rules apply only to Clojure work; do not let
-them override planning, documentation, git operations, or non-Clojure code
-tasks.
+Defer to the project's `AGENTS.md` for architecture, commands, and test
+infrastructure. These rules govern Clojure work only; they don't override
+planning, documentation, git, or non-Clojure tasks.
 
-Most Clojure tasks land entirely inside `.clj` / `.cljs` / `.cljc` / `.edn` /
-`.bb` files. Prefer extending existing namespaces over creating new files, and
-do not introduce sibling `*.md` notes or README updates unless the user asked
-for documentation — they're almost always noise.
+Default style reference: <https://guide.clojure.style/>. When reporting changes,
+cite code as `file_path:line_number`.
 
-When reporting Clojure changes, reference code with `file_path:line_number`
-so the user can jump to it.
+## Core workflow
 
-## Style Reference
+**Never write Clojure without REPL validation.** Every task is a
+gather-context → take-action → verify-output loop:
 
-Idiomatic, functional Clojure following community conventions. Default external
-style reference: https://guide.clojure.style/
+1. **Read the target file.** Use `lsp` (`definition`, `references`,
+   `workspace_symbol`) for related symbols, call sites, and dependencies.
+   Review namespace imports and match local patterns.
+2. **Connect to nREPL.** Use `clojure_find_nrepl_port` + `clojure_eval` if the
+   pi-clojure extension is loaded; otherwise `clj-nrepl-eval --discover-ports`
+   to find a port, then `-p PORT "code"` to evaluate.
+   **Reuse an existing nREPL — never spawn a second.** A discovered port file
+   (`.nrepl-port`, `.shadow-cljs/nrepl.port`, `.cider-nrepl.port`) means a
+   server is up.
+   If no nREPL is reachable, ask the user to start one
+   (`bb nrepl`, `lein repl :headless`, `clj -M:repl`, etc.).
+3. **Explore unfamiliar code in the REPL.** `(clojure.repl/doc x)`,
+   `(clojure.repl/source x)`, `(clojure.repl/dir ns)`.
+4. **Define and validate in the REPL before saving** — happy path, nil, empty
+   collections, edge cases.
+5. **Save with `edit` or `write`.**
+6. **Reload and re-verify** — `(require '[project.ns] :reload)` for `.clj`;
+   shadow-cljs/figwheel watch loops typically auto-reload `.cljs`. Re-run the
+   changed function and any directly-relevant tests.
+7. **Do not report success before verification passes.**
 
-## Tool Availability
+Ask for clarification when requirements are ambiguous, when materially
+different approaches exist, or when an architectural decision is needed.
 
-Two tool sets provide nREPL evaluation. **Prefer pi-clojure** (native pi tools,
-direct TCP, no process-spawn overhead) when the extension is loaded. Fall back
-to the **CLI tools** otherwise.
+### ClojureScript runtime
 
-| Capability | pi-clojure (preferred) | CLI fallback |
-|---|---|---|
-| Find port | `clojure_find_nrepl_port` | read `.nrepl-port` or `clj-nrepl-eval --discover-ports` |
-| Eval | `clojure_eval` | `clj-nrepl-eval -p PORT` |
-| Paren repair (file) | read + `clojure_paren_repair` + write | `clj-paren-repair file.clj` (preferred for files) |
-| Paren repair (string) | `clojure_paren_repair` | `echo '...' \| clj-paren-repair` |
-
-**Detecting availability:**
-- pi-clojure: `clojure_eval` appears in your tool list when the extension is
-  loaded
-- CLI tools: `which clj-nrepl-eval` / `which clj-paren-repair`
-
-> `clj-paren-repair` is preferred for file repair even when pi-clojure is loaded
-> because it uses a real Clojure reader (edamame), parinfer-rust, and cljfmt.
-
-## Core Workflow
-
-**Never write code without REPL validation.**
-
-Every coding task follows this loop:
-1. Gather context
-2. Take action
-3. Verify output
-
-Before modifying Clojure code:
-
-1. **Understand existing code** - Read the target file and use LSP
-   definition/references for related symbols, call sites, and dependencies.
-2. **Find port and verify connection** - pi-clojure: `clojure_find_nrepl_port`
-   then `clojure_eval { port: PORT, code: "(+ 1 1)" }`; CLI fallback:
-   `clj-nrepl-eval --discover-ports "(+ 1 1)"`. **Reuse an existing nREPL
-   process when one is already running — do not spawn a second.** A discovered
-   port (from `.nrepl-port`, `.shadow-cljs/nrepl.port`, or `.cider-nrepl.port`)
-   means a server is up; connect to it rather than starting your own.
-3. **Explore unfamiliar functions** - eval `(clojure.repl/doc function-name)`
-   via `clojure_eval` or `clj-nrepl-eval`.
-4. **Test in REPL** - Define and validate functions before saving.
-5. **Check edge cases** - nil, empty collections, invalid inputs.
-6. **Save only after validation** - Use `edit` or `write`.
-7. **Reload before verifying edits** - eval `(require '[project.core] :reload)`
-   via `clojure_eval` or `clj-nrepl-eval`.
-8. **Do not report success before verification** - changed functions and
-   relevant tests must pass.
-
-If nREPL fails, ask: "Please start your nREPL server (e.g., `bb nrepl` or
-`lein repl :headless`)".
-
-### ClojureScript runtime requirement
-
-A ClojureScript nREPL session evaluates against a connected browser tab — the
-JS runtime *is* the browser. Before evaluating `.cljs` code:
-
-- Confirm a browser tab is connected to the cljs REPL (e.g. shadow-cljs
-  `:browser` or `:browser-repl` target with the app loaded, or a figwheel
-  client page open).
-- If no tab is connected, use the `chromium` skill to open one against the
-  dev server URL before evaluating.
-- A `.cljs` eval that returns `:cljs.user> nil` with no observable effect (or
-  hangs) is the classic symptom of a disconnected runtime; check the tab
-  before debugging the form.
-
-### Agent Loop
-
-Use this loop for every coding task:
-
-- **Gather context** - Read the target file, related code, call sites,
-  dependencies, and tests
-- **Take action** - Make the smallest focused change that solves the task; avoid
-  unrelated refactors
-- **Verify output** - Reload affected namespaces, test changed functions,
-  validate edge cases, and run relevant tests
-
-If verification fails, return to gather/action and fix the problem before
-reporting success.
-
-### Failure Recovery and Clarification
-
-If REPL evaluation, test execution, or namespace loading fails:
-
-1. Read the exact error message
-2. Isolate the failing expression or function
-3. Fix the root cause
-4. Reload affected namespaces
-5. Rerun verification
-
-If delimiter errors occur, use `clj-paren-repair` (files) or
-`clojure_paren_repair` (strings) instead of manual repair.
-
-Ask for clarification when requirements are ambiguous, multiple approaches have
-materially different trade-offs, or an architectural decision is required.
-
-## Essential Patterns
-
-### Threading Macros (always prefer over nesting)
-
-```clojure
-;; -> for transformations
-(-> user
-    (assoc :last-login (now))
-    (update :login-count inc))
-
-;; ->> for sequences
-(->> users
-     (filter active?)
-     (map :email)
-     (str/join ", "))
-
-;; some-> for nil-safe navigation
-(some-> user :address :postal-code (subs 0 5))
-
-;; cond-> for conditional changes
-(cond-> request
-  authenticated? (assoc :user current-user))
-```
-
-### Naming Rules
-
-| Pattern | Example |
-|---------|---------|
-| kebab-case | `calculate-total`, `max-retries` |
-| predicates end with `?` | `valid?`, `active?` |
-| conversions use `->` | `map->vector`, `string->int` |
-| `!` suffix for unsafe mutation | `swap!`, `reset!`, `save-user!` |
-| `!` prefix for mutable refs | `!conn`, `!store` |
-
-### Control Flow
-
-```clojure
-;; when for side effects
-(when (valid? data)
-  (log "Processing")
-  (process data))
-
-;; cond for multiple branches
-(cond
-  (< n 0) :negative
-  (= n 0) :zero
-  :else   :positive)
-```
-
-### Docstrings (required for public functions)
-
-```clojure
-(defn calculate-total
-  "Calculate total price including tax.
-
-   Args:
-     price - base price (number)
-     rate  - tax rate as decimal (0.08 = 8%)
-
-   Returns:
-     number - total price
-
-   Example:
-     (calculate-total 100 0.08) => 108"
-  [price rate]
-  ...)
-```
-
-### Namespace Templates
-
-JVM Clojure (`.clj`):
-
-```clojure
-(ns project.module
-  "Brief description."
-  (:require
-   [clojure.string :as str]
-   [clojure.set :as set])
-  (:import
-   (java.time LocalDate)))
-
-(set! *warn-on-reflection* true)
-```
-
-ClojureScript (`.cljs`) or cross-platform (`.cljc`):
-
-```clojure
-(ns project.module
-  "Brief description."
-  (:require
-   [clojure.string :as str]))
-```
+A ClojureScript nREPL evaluates against a connected JS runtime — usually a
+browser tab (shadow-cljs `:browser` / `:browser-repl`, figwheel), occasionally
+Node or a self-hosted runtime. Before evaluating `.cljs`, confirm a runtime is
+attached. For the browser case use the `chromium` skill to open a tab against
+the dev server URL. A `.cljs` eval that hangs or returns `nil` with no effect
+is the classic disconnected-runtime symptom — check the runtime before
+debugging the form.
 
 ## Tools
 
-### Eval - pi-clojure (preferred)
+| Capability     | pi-clojure (preferred)    | CLI fallback                                              |
+| -------------- | ------------------------- | --------------------------------------------------------- |
+| Find port      | `clojure_find_nrepl_port` | `clj-nrepl-eval --discover-ports`                         |
+| Eval           | `clojure_eval`            | `clj-nrepl-eval -p PORT "code"`                           |
+| Paren — file   | n/a                       | `clj-paren-repair file.clj`                               |
+| Paren — string | `clojure_paren_repair`    | `echo '…' \| clj-paren-repair`                            |
 
-Available when the `pi-clojure` extension is loaded. Direct TCP to nREPL, no
-process-spawn overhead.
+Detect availability by tool list (`clojure_eval` appears when pi-clojure is
+loaded) and `which clj-nrepl-eval` / `which clj-paren-repair` for the CLI.
 
-```
-# Discover port (checks .nrepl-port, .shadow-cljs/nrepl.port, .cider-nrepl.port, then defaults)
-clojure_find_nrepl_port {}
+**Use `clj-paren-repair` for file repair even when pi-clojure is loaded** — it
+uses a real Clojure reader (edamame), parinfer-rust, and cljfmt, so the output
+is also formatted. `clojure_paren_repair` (JS parinfer) is for string repair
+before writing a new file. Never hand-fix delimiter errors.
 
-# Evaluate expressions
-clojure_eval { port: PORT, code: "(+ 1 2 3)" }
-clojure_eval { port: PORT, code: "(defn sum [nums] (reduce + nums))" }
-clojure_eval { port: PORT, code: "(sum [1 2 3])" }
+See [references/tool-guide.md](references/tool-guide.md) for parameters,
+session persistence, the `clj-nrepl-eval --connected-ports` listing, and
+troubleshooting.
 
-# Discover functions
-clojure_eval { port: PORT, code: "(clojure.repl/dir clojure.string)" }
-clojure_eval { port: PORT, code: "(clojure.repl/doc map)" }
-clojure_eval { port: PORT, code: "(clojure.repl/apropos \"split\")" }
-clojure_eval { port: PORT, code: "(clojure.repl/source filter)" }
+## Idioms
 
-# Load project code
-clojure_eval { port: PORT, code: "(require '[project.core :as core] :reload)" }
+Match codebase conventions; default to community idiom otherwise. The
+short list:
 
-# Evaluate in a specific namespace
-clojure_eval { port: PORT, ns: "project.core", code: "(my-fn 42)" }
-```
+- Prefer threading macros (`->`, `->>`, `some->`, `cond->`) over deep nesting.
+- `kebab-case` names; predicates end in `?`; conversions use `->`;
+  `!` suffix marks unsafe mutation (`swap!`, `save-user!`), `!` prefix marks
+  mutable refs (`!conn`).
+- Docstrings on public functions describing args, return, and at least one
+  example.
+- `(set! *warn-on-reflection* true)` in JVM namespaces that interop with Java.
 
-### Eval - clj-nrepl-eval (fallback)
+See [references/idioms.md](references/idioms.md) for threading-macro,
+control-flow, data-structure, error-handling, testing, and anti-pattern
+detail.
 
-Use when `clojure_eval` is not in your tool list.
+## Failure recovery
 
-```shell
-clj-nrepl-eval --discover-ports "(+ 1 2 3)"
-clj-nrepl-eval -p PORT "(defn sum [nums] (reduce + nums))"
-clj-nrepl-eval -p PORT "(clojure.repl/dir clojure.string)"
-clj-nrepl-eval -p PORT "(clojure.repl/doc map)"
-clj-nrepl-eval -p PORT "(require '[project.core :as core] :reload)"
-```
+If REPL eval, namespace load, or a test fails:
 
-### Paren repair - clj-paren-repair (preferred for files)
+1. Read the exact error message.
+2. Isolate the failing expression.
+3. Fix the root cause.
+4. Reload affected namespaces.
+5. Re-run verification.
 
-Uses edamame + parinfer-rust + cljfmt: repairs and formats in place. Preferred
-even when pi-clojure is loaded.
-
-```shell
-clj-paren-repair src/core.clj
-clj-paren-repair src/*.clj test/*.clj
-```
-
-### Paren repair - clojure_paren_repair (string repair)
-
-Available when pi-clojure is loaded. Use for string-based repair or when
-`clj-paren-repair` is unavailable.
-
-```
-clojure_paren_repair { code: "(defn foo [x]" }
-clojure_paren_repair { code: "(defn foo [x])", check: true }
-```
-
-**Never** manually fix parenthesis errors - use one of the tools above.
-
-## Validation Checklist
-
-Before saving any code:
-
-- [ ] Tested happy path in REPL
-- [ ] Tested nil handling
-- [ ] Tested empty collection handling
-- [ ] Used threading macros over deep nesting
-- [ ] Added docstring if public function
-- [ ] Checked naming conventions
-- [ ] Code under 80 characters per line
-- [ ] Closing parens on single line
-
-## Code Review Workflow
-
-Before modifying code:
-
-1. Read the target file.
-2. Use LSP `definition`, `references`, or `workspace_symbol` for target
-   namespaces, functions, vars, and call sites.
-3. Use REPL exploration for runtime behavior and library docs.
-4. Review namespace imports and local patterns.
-5. Match codebase conventions.
-
-## Detailed References
-
-- **Tool usage**: See [references/tool-guide.md](references/tool-guide.md) for
-  complete documentation of all eval and paren-repair tools
-- **Idiomatic patterns**: See [references/idioms.md](references/idioms.md) for
-  threading macros, control flow, data structures, error handling, and
-  anti-patterns
-
-Load these references when you need:
-- Detailed tool commands
-- Advanced idioms or patterns
-- Error handling examples
-- Testing patterns
-- Research citations
+For unbalanced-delimiter / EOF errors, run `clj-paren-repair` (file) or
+`clojure_paren_repair` (string) instead of editing by hand.

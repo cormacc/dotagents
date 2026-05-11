@@ -124,17 +124,21 @@ clj-nrepl-eval [options] "clojure-expression"
 ```
 
 Options:
-- `-p, --port PORT` — nREPL port
-- `-h, --host HOST` — nREPL host (default: localhost)
-- `--discover-ports` — auto-discover from port file or common defaults
+- `-p, --port PORT` — nREPL port (required for eval)
+- `-H, --host HOST` — nREPL host (default: 127.0.0.1)
+- `-t, --timeout MS` — timeout (default 120000)
+- `-r, --reset-session` — reset persistent session for `host:port`
+- `-d, --discover-ports` — scan `.nrepl-port` + running JVM/Babashka procs and exit (does **not** evaluate code)
+- `-c, --connected-ports` — list previously connected servers and exit
 
 ### Examples
 
 ```shell
-# Auto-discover port
-clj-nrepl-eval --discover-ports "(+ 1 2 3)"
+# Discover a port (prints servers and exits)
+clj-nrepl-eval --discover-ports
 
-# Explicit port
+# Then evaluate against it
+clj-nrepl-eval -p PORT "(+ 1 2 3)"
 clj-nrepl-eval -p PORT "(defn greet [name] (str \"Hello, \" name))"
 clj-nrepl-eval -p PORT "(greet \"World\")"
 
