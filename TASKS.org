@@ -32,7 +32,7 @@
 - Created [2026-05-07 Thu 22:44]
 :END:
 #+IMPORT: [[file:design/log/2026-05-08-bootstrap-a-clojure-development-skill.org]]
-Add a second pi package alongside ~agent-org-memory~ for the clojure-development skill family. The =clj-nrepl= skill, =pi-clojure= extension, and any future Clojure-specific helpers should ship as a separate slice with its own ~package.json~ / Nix derivation, mirroring the shape of ~agent-org-memory.nix~. Decide between sibling ~package.json~ files vs a workspaces layout when the second slice actually has more than one entry to bind together. Captured as a follow-up to the 2026-05-07 dotfiles → dotagents extraction.
+Add a second pi package alongside ~agent-org-memory~ for the clojure-development skill family. The =clojure= skill (formerly =clj-nrepl=), =pi-clojure= extension, and any future Clojure-specific helpers should ship as a separate slice with its own ~package.json~ / Nix derivation, mirroring the shape of ~agent-org-memory.nix~. Decide between sibling ~package.json~ files vs a workspaces layout when the second slice actually has more than one entry to bind together. Captured as a follow-up to the 2026-05-07 dotfiles → dotagents extraction.
 
 ** TODO [#C] Improve terminal extension
 :PROPERTIES:
@@ -105,6 +105,55 @@ CLOSED: [2026-05-09 Sat 13:12]
 :END:
 #+IMPORT: [[file:design/log/2026-05-09-org-memory-condensed-summaries.org]]
 Make change-records cheaper for future agents to ingest by adding a first-class condensed memory layer, clear resume/read-order guidance, and closure-time summary discipline while preserving the detailed plan and implementation ledger.
+
+** TODO [#C] tasks extension: section-scoped change-record reader
+:PROPERTIES:
+:CUSTOM_ID: 1b496799-6198-46ca-8084-7a1fbed6f250
+:CREATED: [2026-05-11 Mon 21:33]
+:END:
+:LOGBOOK:
+- Created [2026-05-11 Mon 21:33]
+:END:
+Expose a primitive that returns a single top-level section of a change-record file (`* Summary`, `* Context`, `* Plan`, `* Implementation`, `* Validation`, `* Open questions`), including any nested subheadings up to the next level-1 boundary, so agents on resume / review can fetch just the surface the `org-tasks` protocol declares "eagerly loaded" without pulling the entire ledger into context.
+
+Motivation:
+- `org-tasks` § *Resuming and agent memory* says only `* Summary` (and `* Context` when promoted, plus `OPEN` items under `* Open questions`) should be eagerly loaded; `* Implementation` and completed plan-task bodies are explicitly "defer until needed".
+- Today the `tasks` extension exposes no read tool, so agents either `read` the whole file (expensive when records carry a 150+ line Implementation ledger) or do a `rg` + ranged `read` two-step.
+- The closure-refresh helpers in `summary.ts` already know how to locate `* Summary`; section extraction is the same shape generalised over a heading name.
+
+Acceptance criteria:
+- New tool (working name `tasks_read_section`) accepts `{ file, section }` where `section` is one of the canonical change-record sections plus arbitrary level-1 headings (so third-party sections round-trip).
+- Returns the section heading plus body up to (but not including) the next level-1 heading, with nested `**`/`***` subheadings preserved verbatim.
+- Returns a structured "not found" result (not an exception) when the section is absent, so callers can fall back gracefully.
+- `section` defaults to `Summary` for the common case.
+- Unit tests cover: section present, section absent, section is the last in the file, file with no headings, and a section whose body contains literal `* ` characters in source blocks (must not terminate the slice early).
+- README documents the tool alongside `tasks_insert_task` and links the `org-tasks` resume checklist.
+
+** TODO [#D] tasks extension: resume-brief convenience tool
+:PROPERTIES:
+:CUSTOM_ID: 70cd5222-825f-4dad-b264-cb8c8ded06dc
+:CREATED: [2026-05-11 Mon 21:33]
+:END:
+:LOGBOOK:
+- Created [2026-05-11 Mon 21:33]
+:END:
+Once the section-scoped reader exists, add a higher-level convenience tool that returns the full "cheap resume surface" for a task in one call, matching the `org-tasks` § *Resuming and agent memory* read order 1:1.
+
+Blocked by: tasks_read_section primitive (sibling task).
+
+Proposed shape: `tasks_resume_brief({ taskId?: string })` — defaults to the currently `#+SELECTED:` task — returns a structured bundle containing:
+- Parent task heading, status, priority, tags.
+- Relevant `:PROPERTIES:` (`:CUSTOM_ID:`, `:CREATED:`, `:STARTED:`, `CLOSED:`, `:HANDOFF:`, `:BLOCKED-BY:` + continuations, `:LINKED_ISSUES:`).
+- The linked change-record's `* Summary` (always) and `* Context` (when present).
+- The list of `OPEN` items under `* Open questions` (just heading text, not full bodies).
+- The first actionable plan task: first `STARTED` task, else first ready `TODO` (respecting `:BLOCKED-BY:`).
+
+Acceptance criteria:
+- Returns a structured object (not concatenated org text) so the agent can render or quote selectively.
+- Handles a task with no `#+IMPORT:` change-record gracefully (returns just the heading + properties bundle).
+- Handles a task whose change-record lacks `* Summary` by surfacing the same "missing" signal `summary.ts` already produces, rather than failing.
+- Does not eagerly load `* Implementation`, `* Validation`, or completed plan-task bodies.
+- Unit tests cover: task with full record, task with no record, record missing Summary, multiple blockers, no selection set.
 
 * Fixes
 

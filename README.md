@@ -27,7 +27,7 @@ dotagents/
 │   ├── org-tasks/       # task-memory protocol
 │   ├── org-plan/        # change-record structure
 │   ├── org-jira/        # Jira-on-org-tasks layer
-│   └── …                # other generic skills (clj-nrepl, review, self-improvement, …)
+│   └── …                # other generic skills (clojure, review, self-improvement, …)
 └── pi/
     ├── skills/          # pi-specific skills (depend on pi extensions; install under ~/.pi/agent/skills)
     └── extensions/      # loadable pi extensions

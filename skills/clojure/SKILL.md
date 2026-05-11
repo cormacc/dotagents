@@ -1,9 +1,9 @@
 ---
-name: clj-nrepl
+name: clojure
 description: REPL-driven Clojure, ClojureScript, EDN, and Babashka development. Use whenever the user mentions Clojure code, .clj/.cljs/.cljc/.edn/.bb files, deps.edn, project.clj, bb.edn, shadow-cljs, lein, nREPL, namespaces, vars, or clojure-lsp / clj-kondo workflows. Covers writing, editing, debugging, paren-repair, and REPL-first validation.
 ---
 
-# Clojure REPL-Driven Development
+# Clojure Development
 
 ## Scope and Precedence
 

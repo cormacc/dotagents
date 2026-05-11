@@ -45,7 +45,7 @@ The following are in-development, or in some cases just vague statements of inte
 I.e. skills adopted/adapted from other sources (primarily via `npx skills find`).
 In most cases there's been some modification / drift from the source.
 
-- [[file:clj-nrepl/SKILL.md][clj-nrepl]] :: REPL-driven Clojure development for writing,
+- [[file:clojure/SKILL.md][clojure]] :: REPL-driven Clojure development for writing,
   editing, and debugging code. Triggers on =.clj=, =.cljs=, =.cljc=,
   =.edn=, namespaces, and Clojure tooling.
 - [[file:find-skills/SKILL.md][find-skills]] :: Discover and install agent skills from the
