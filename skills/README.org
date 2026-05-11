@@ -48,3 +48,13 @@ In most cases there's been some modification / drift from the source.
 - [[file:clj-nrepl/SKILL.md][clj-nrepl]] :: REPL-driven Clojure development for writing,
   editing, and debugging code. Triggers on =.clj=, =.cljs=, =.cljc=,
   =.edn=, namespaces, and Clojure tooling.
+- [[file:find-skills/SKILL.md][find-skills]] :: Discover and install agent skills from the
+  open skills ecosystem via the Skills CLI. Triggers when users ask how to do
+  something that might have an existing skill, ask to find a skill, or want to
+  extend agent capabilities.
+- [[file:gitlab-cli-skills/SKILL.md][gitlab-cli-skills]] :: Comprehensive GitLab
+  CLI (=glab=) command reference and workflows. Covers GitLab auth, repos,
+  issues, merge requests, CI/CD, releases, and related automation.
+- [[file:skill-creator/SKILL.md][skill-creator]] :: Create, modify, and improve
+  agent skills. Supports drafting new skills, running evals, benchmarking,
+  iterating on behavior, and optimizing skill descriptions for triggering.

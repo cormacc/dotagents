@@ -58,14 +58,14 @@ the three extensions and three skills listed under
 *source*, not part of the pi package.
 
 ```bash
-# From a published npm release
-pi install npm:@cormacc/agent-org-memory
-
 # Directly from this repo
 pi install git:github.com/cormacc/dotagents
 
 # From a local checkout
 pi install /path/to/dotagents
+
+# From a published npm release (N.B. we have no such thing as yet)
+pi install npm:@cormacc/agent-org-memory
 ```
 
 `pi install` writes the entry to `~/.pi/agent/settings.json` (or
