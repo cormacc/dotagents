@@ -5,59 +5,36 @@
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
-Added a first-class condensed memory layer to change-records so future agents can rebuild context from a small, stable surface before reading the full execution ledger. =* Summary= becomes a top-level section required on every change-record (any size, any status past Draft), superseding the legacy =** Outcome= / =** Shipped= heading under =* Implementation=. =* Context= is demoted from required to optional and is promoted only when durable rationale exceeds what =* Summary= can carry. =org-tasks= teaches a layered resume read order that loads =* Summary= first, then =* Context= (when present), =:HANDOFF:=, blockers, open questions, and actionable plan items, deferring full =* Implementation= and completed plan bodies. A closure-time prompt in the tasks extension nudges the agent to generate =* Summary= when a top-level task transitions to =DONE= and its linked change-record either lacks the section or has not been touched since =:STARTED:=. Convention applied retrospectively to nine high-value records across this repository, =~/dotfiles=, and =~/nmd/products/connect/portal=.
+Added a first-class condensed memory layer so future agents can rebuild context from a small, stable surface before reading the full execution ledger. =* Summary= is now a top-level section required on every change-record (any size, any status past Draft), superseding the legacy =** Outcome= / =** Shipped= heading under =* Implementation=. =* Context= is demoted from required to optional and is promoted only when durable rationale exceeds what =* Summary= can carry. =org-tasks= teaches a layered resume read order that loads =* Summary= first, then =* Context= (when present), =:HANDOFF:=, blockers, open questions, and actionable plan items, deferring full =* Implementation= and completed plan bodies. A closure-time prompt in the tasks extension nudges the agent to generate =* Summary= when a top-level task transitions to =DONE= and the linked change-record either lacks the section or has not been touched since =:STARTED:=. Convention applied retrospectively to 32 records across =agents-src=, =~/dotfiles=, and =~/nmd/products/connect/portal=.
 
 ** Decisions
-- Layered memory, not less detail :: Granular plans and implementation notes preserved for auditability; =* Summary= is the default agent-ingestion surface.
-- Section name :: =* Summary= (over =* Memory=) — matches existing =** Outcome= / =** Shipped= language; "memory" is the section's purpose, not its name.
-- =* Summary= supersedes =** Outcome= / =** Shipped= :: One canonical condensed surface, not two. Retrospective summaries absorb prior outcome text and remove legacy headings.
-- =* Summary= always-on; =* Context= optional :: Inverts the original threshold model. =* Summary= is required on every change-record regardless of size; =* Context= is included only when durable rationale exceeds the synopsis. The size of a record is no longer a criterion for *whether* to summarize — only for whether to split or archive completed history.
-- Closure discipline lives in skill *and* tasks extension :: Skill is the durable contract; extension prompts on =DONE= when =* Summary= is missing or stale (file mtime predates =:STARTED:= with a 60s grace).
-- Comprehensive retrospective backfill :: All existing change-records across the three known org-memory repositories adopt =* Summary= in this same change to match the always-on rule. The earlier "existing records are not bulk-rewritten" carve-out was a v1 artefact and has been retired.
+- Layered memory, not less detail :: granular plans and implementation notes preserved for auditability; =* Summary= is the default agent-ingestion surface.
+- Section name :: =* Summary= over =* Memory= — matches existing =** Outcome= / =** Shipped= language; "memory" is the purpose, not the name.
+- =* Summary= supersedes =** Outcome= / =** Shipped= :: one canonical condensed surface, not two. Retrospective summaries absorb prior outcome text and remove legacy headings.
+- =* Summary= always-on; =* Context= optional :: inverts the original threshold model. Size no longer triggers summarize-or-not; it triggers splitting/archiving instead.
+- Closure discipline lives in skill *and* tasks extension :: skill is the durable contract; extension prompts on =DONE= when =* Summary= is missing or stale (file mtime predates =:STARTED:= with 60s grace).
+- Comprehensive retrospective backfill :: all existing change-records across the three known org-memory repositories adopt =* Summary= in this same change. The earlier "existing records are not bulk-rewritten" carve-out was a v1 artefact, retired.
 
 ** Shipped
-- =skills/org-plan/SKILL.md=: =* Summary= required on every change-record; =* Context= demoted to optional with a "promote when rationale exceeds the synopsis" rule; closure-time refresh workflow; retrospective-sweep guidance for absorbing =** Outcome= text; refreshed minimal skeleton drops =* Context= so it is added intentionally rather than habitually.
-- =skills/org-tasks/SKILL.md=: layered resume read order treats =* Context= as conditional; =Agent memory= section names =* Summary= as the cheap reconstruction surface; size signal reframed as a *splitting* criterion, not a summarize-or-not criterion; closure discipline references =org-plan='s workflow.
-- =skills/org-jira/SKILL.md= + =skills/README.org=: cross-references the new section structure.
-- =pi/extensions/tasks/scaffold.ts=: emits =* Summary=, =* Plan=, =* Implementation= only; =* Context= dropped from the scaffold so it is added intentionally rather than habitually.
-- =pi/extensions/tasks/summary.ts= + =summary.test.ts=: pure helpers (=hasSummaryHeading=, =parseOrgTimestamp=, =evaluateSummaryRefresh=) detecting missing/stale =* Summary= for the closure-time prompt; 15 tests.
-- =pi/extensions/tasks/index.ts= + =overlay.ts=: new =summaryOnDone= setting (default true), new =summaryRefresh= workflow request, =buildSummaryRefreshPrompt= agent prompt, and updated proactive / retrospective change-record prompts that name =* Summary= as required and =* Context= as promote-when-needed. The proactive change-record scaffold and the closure-time summary refresh are mutually exclusive (no =#+IMPORT:= triggers the scaffold path; with =#+IMPORT:= triggers the summary refresh path).
-- =pi/extensions/tasks/parser.test.ts= snapshot regenerated for the new scaffold shape (=* Summary=, =* Plan=, =* Implementation=); =memory.test.ts= covers the resume read order; =README.md= documents the new convention and the =summaryOnDone= setting.
-- Comprehensive retrospective sweep covered every change-record across the three repositories (33 records: 23 in =agents-src= + 2 in =~/dotfiles= + 8 in =~/nmd/products/connect/portal=); see plan tasks =7377277f= (initial length-gated sweep, 9 records) and =b376bf99= (comprehensive sweep, 31 additional records). Where legacy =** Outcome= / =** Shipped= text existed, it was absorbed into =* Summary= and the legacy heading replaced with a pointer line. Records without legacy outcome text got fresh summaries drafted from =* Context= + completed plan + =* Implementation= notes. Drafts and TODO-only plans got proposal-style summaries with =** Follow-ups= mirroring the un-executed plan body. The single untracked =2026-05-08-bootstrap-a-clojure-development-skill.org= in =agents-src= is intentionally out of scope (authored in a prior session, not part of this commit).
+- =skills/org-plan/SKILL.md= :: =* Summary= required on every change-record; =* Context= demoted to optional with promote-when-rationale-exceeds-synopsis rule; closure-time refresh workflow; retrospective-sweep guidance; minimal skeleton drops =* Context=.
+- =skills/org-tasks/SKILL.md= :: layered resume read order; =Agent memory= names =* Summary= as the cheap reconstruction surface; size reframed as a *splitting* criterion.
+- =skills/org-jira/SKILL.md= + =skills/README.org= :: cross-reference the new section structure.
+- =pi/extensions/tasks/scaffold.ts= :: emits =* Summary=, =* Plan=, =* Implementation= only.
+- =pi/extensions/tasks/summary.ts= + =summary.test.ts= :: pure helpers (=hasSummaryHeading=, =parseOrgTimestamp=, =evaluateSummaryRefresh=) detecting missing/stale =* Summary= for the closure-time prompt; 15 tests.
+- =pi/extensions/tasks/index.ts= + =overlay.ts= :: new =summaryOnDone= setting (default true); =summaryRefresh= workflow request; =buildSummaryRefreshPrompt= agent prompt; proactive scaffold and closure-time summary refresh are mutually exclusive (no =#+IMPORT:= triggers scaffold path; with =#+IMPORT:= triggers summary refresh).
+- =parser.test.ts= snapshot regenerated; =memory.test.ts= covers the resume read order; =README.md= documents the convention and the =summaryOnDone= setting.
+- Retrospective sweep across 33 records (23 =agents-src= + 2 =~/dotfiles= + 8 =~/nmd/products/connect/portal=) — see plan tasks =7377277f= (initial 9-record length-gated sweep) and =b376bf99= (comprehensive sweep covering remaining 24). =rg '^\* Summary$' design/log/= shows full coverage in all three repos. Single untracked =2026-05-08-bootstrap-a-clojure-development-skill.org= intentionally out of scope.
 
 ** Gotchas
 - =* Summary= should link to follow-up TASKS.org tasks rather than burying new work in prose.
 - Retrospective sweeps preserve =:CUSTOM_ID:=, =#+PARENT:= links, LOGBOOK history, plan task status, and existing =* Implementation= audit detail. Summary absorption is condensation, not rewriting.
-- The closure-time prompt is best-effort: it sandboxes the change-record path under =cwd=, silently skips when the file cannot be read, and falls back to no-prompt rather than failing the close.
-- The 60s mtime grace window in =evaluateSummaryRefresh= prevents same-minute saves from looking stale; longer grace would require richer LOGBOOK comparison.
-
-** Validation
-- =cd pi/extensions/tasks && ./test.sh= — 224 tests pass across parser/scaffold (97), insert (56), lifecycle (13), paths (6), doctor (25), memory (12), and summary (15). Re-run after the always-on / Context-optional refinement — still 224/224.
-- =npx esbuild --bundle pi/extensions/tasks/index.ts ...= — bundles cleanly (~111 kb).
-- =rg '^\* Summary$' design/log/= shows =* Summary= present in all touched records across the three repositories.
-- Spot-check: =#+PARENT:= links on the four touched =agents-src= records resolve to live =:CUSTOM_ID:= anchors in =TASKS.archive.org=.
+- Closure-time prompt is best-effort: sandboxes the change-record path under =cwd=, silently skips when the file can't be read, falls back to no-prompt rather than failing the close.
+- 60s mtime grace window in =evaluateSummaryRefresh= prevents same-minute saves from looking stale; longer grace would require richer LOGBOOK comparison.
 
 ** Follow-ups
-- Selected-task memory digest command was deferred (plan task =32f00426= DECIDED). Open a TASKS.org follow-up only if a concrete need emerges (multi-record digests, agent harnesses that cannot read change-record files cheaply).
-- =~/dotfiles= records still use legacy =:ID:= / =#+PARENT_ID:= rather than =:CUSTOM_ID:= / =#+PARENT:= link form. Migration is out of scope here; tracked separately if it becomes important.
-- Short historical change-records (< the retrospective-sweep cutoff) without =* Summary= can adopt the new section opportunistically when next touched, per the always-on rule.
-
-* Context
-The org-memory skill set is working well as task-tracking and planning infrastructure, but the change-records are also serving as durable agent memory. Recent records show the useful tension: detailed =* Plan= and =* Implementation= sections are valuable while executing and auditing work, but they can be expensive and noisy when a later agent only needs to regain context for future planning.
-
-The desired direction is to keep the detailed record rather than flattening it, while adding a compact memory surface. Agents should ingest =* Summary= plus =* Context=, =:HANDOFF:=, blockers, open questions, and actionable plan items first; completed task details, LOGBOOK entries, and lengthy implementation notes should be read only when needed.
-
-This plan continues the agent-memory work captured in =design/log/2026-05-01-org-memory-agent-memory-review.org=, which added the =Agent memory= section to =org-tasks/SKILL.md=, lifecycle LOGBOOK semantics, and import-path sandboxing. That review built the resume checklist and identified per-record cost as the next pressure point; this plan adds the condensed summary layer the resume checklist needs.
-
-This plan intentionally applies the proposed convention to itself: it leads with =* Summary=, keeps detailed rationale in =* Context=, tracks executable work in =* Plan=, and leaves =* Implementation= as the future audit trail.
-
-** Design decisions
-- =* Summary= is required on non-trivial change-records :: Top-level placement before =* Context= so agents and humans see the compact final state before the detailed rationale and ledger.
-- =* Summary= supersedes =** Outcome= / =** Shipped= :: One canonical condensed surface, not two. Retrospective summaries on existing records absorb the prior =** Outcome= text and remove the legacy heading.
-- Summary subsections are conventional, not mandatory for tiny records :: =** Decisions=, =** Shipped=, =** Gotchas=, =** Validation=, and =** Follow-ups= provide a repeatable shape. Small records may use a single paragraph plus only the relevant subsections.
-- Closure discipline lives in skill *and* tasks extension :: The skill is the durable contract; the extension prompt is a cheap reinforcement that keeps the convention from rotting under deadline pressure.
-- =* Summary= always-on; =* Context= optional :: After the v1 implementation pass, the size threshold for triggering =* Summary= was identified as redundant (closure-time tooling already enforced always-on) and as conflating two concerns. Refined: =* Summary= is unconditional, =* Context= is promoted only when durable rationale exceeds the synopsis. Size is now a *splitting* signal for completed history, not a summarize-or-not signal.
-- Tooling should scaffold the convention :: The tasks extension's change-record scaffolder emits =* Summary= up front so new records start in the right shape.
+- Selected-task memory digest command was deferred (plan task =32f00426=). Open a TASKS.org follow-up only if a concrete need emerges (multi-record digests, harnesses that can't read change-records cheaply).
+- =~/dotfiles= records still use legacy =:ID:= / =#+PARENT_ID:= rather than =:CUSTOM_ID:= / =#+PARENT:= link form. Migration tracked separately.
+- Short historical records without =* Summary= can adopt the new section opportunistically when next touched.
 
 * Plan
 
@@ -73,12 +50,7 @@ CLOSED: [2026-05-09 Sat 11:50]
 - State "STARTED"   from "TODO"      [2026-05-09 Sat 11:49]
 - Created [2026-05-09 Sat 11:25]
 :END:
-Acceptance criteria:
-- =skills/org-plan/SKILL.md= documents =* Summary= as the first top-level section for non-trivial change-records, before =* Context=.
-- The minimal skeleton includes =* Summary= with a compact paragraph and optional =** Decisions= / =** Shipped= / =** Gotchas= / =** Validation= / =** Follow-ups= subsections.
-- The protocol explicitly states that =* Summary= supersedes the prior =** Outcome= / =** Shipped= convention; new records carry =* Summary= only, and retrospective summaries absorb (condense) any pre-existing =** Outcome= / =** Shipped= content while removing the legacy headings.
-- Closure guidance says agents refresh =* Summary= before transitioning the parent task to =DONE= and avoid duplicating detail across summary, plan task bodies, and implementation notes.
-- Retrospective change-record guidance says the retrospective summary is drafted from git history plus implementation notes plus any absorbed =** Outcome= text.
+Outcome: =* Summary= becomes the first top-level section; supersedes =** Outcome= / =** Shipped=; minimal skeleton + subsection set documented; closure refresh workflow added; retrospective draft-from-history guidance added.
 
 ** DONE [#A] Update org-tasks agent-memory resume guidance :skills:memory:
 CLOSED: [2026-05-09 Sat 11:51]
@@ -92,11 +64,7 @@ CLOSED: [2026-05-09 Sat 11:51]
 - State "STARTED"   from "TODO"      [2026-05-09 Sat 11:50]
 - Created [2026-05-09 Sat 11:25]
 :END:
-Acceptance criteria:
-- =skills/org-tasks/SKILL.md= teaches a layered read order: task subtree, =* Summary=, =* Context=, =:HANDOFF:=, blockers, linked issues, open questions, and actionable plan items first; full =* Implementation= and completed plan bodies on demand.
-- The =Agent memory= section names =* Summary= as the preferred cheap reconstruction surface for large change-records and references the new section as superseding =** Outcome=.
-- The guidance preserves existing durable-memory rules for LOGBOOK, imports, blockers, linked issues, and status discipline.
-- The size heuristic recommends explicit summarization for change-records ≥ ~150 lines and notes that agent judgement applies below that threshold.
+Outcome: layered read order (task subtree → =* Summary= → =* Context= → =:HANDOFF:= → blockers → linked issues → open questions → actionable plan items; full =* Implementation= on demand). LOGBOOK / import / blocker / linked-issue rules preserved.
 
 ** DONE [#B] Define closure-time summary workflow :workflow:status:tasks:
 CLOSED: [2026-05-09 Sat 12:00]
@@ -112,11 +80,7 @@ CLOSED: [2026-05-09 Sat 12:00]
 - State "STARTED"   from "TODO"      [2026-05-09 Sat 11:51]
 - Created [2026-05-09 Sat 11:25]
 :END:
-Acceptance criteria:
-- =skills/org-tasks/SKILL.md= and =skills/org-plan/SKILL.md= state that before transitioning a top-level task to =DONE=, agents refresh the linked change-record's =* Summary= and ensure follow-up work exists as TODO tasks rather than hidden prose.
-- The workflow distinguishes draft summaries for active records from final summaries for complete records.
-- The tasks extension prompts the agent to generate or refresh =* Summary= when a top-level task transitions to =DONE= and its linked change-record either lacks the section or has not been touched since the last status transition.
-- The prompt is cheap (no blocking on user input by default) and discoverable: tests cover the trigger and the no-op case where =* Summary= already exists and is recent.
+Outcome: skill prescribes summary refresh before =DONE=; extension prompts agent when =* Summary= missing/stale. Tests cover trigger and no-op when summary already exists and is recent.
 
 ** DONE [#B] Update scaffolding, docs, and tests in the tasks extension :tasks:tooling:
 CLOSED: [2026-05-09 Sat 11:59]
@@ -132,12 +96,7 @@ CLOSED: [2026-05-09 Sat 11:59]
 - State "STARTED"   from "TODO"      [2026-05-09 Sat 12:00]
 - Created [2026-05-09 Sat 11:25]
 :END:
-Acceptance criteria:
-- =pi/extensions/tasks/scaffold.ts= emits =* Summary= before =* Context= in the change-record skeleton, with the conventional subsection placeholders.
-- =pi/extensions/tasks/README.md= section on change-record structure documents the new shape and the supersession of =** Outcome= / =** Shipped=.
-- =pi/extensions/tasks/parser.test.ts= snapshot of the change-record skeleton regenerates with =* Summary=.
-- =pi/extensions/tasks/memory.test.ts= covers the preferred digest fields: summary, context, handoff, blockers, open questions, and actionable TODOs.
-- Existing parser/round-trip remains tolerant of older records without =* Summary= (no error on load; doctor may emit a hint).
+Outcome: =scaffold.ts= emits =* Summary= first; README documents new shape and =** Outcome= supersession; =parser.test.ts= snapshot regenerated; =memory.test.ts= covers preferred digest fields; older records without =* Summary= still load (doctor may emit hint).
 
 ** DONE [#C] Companion docs cross-reference sweep :docs:skills:
 CLOSED: [2026-05-09 Sat 12:00]
@@ -153,11 +112,7 @@ CLOSED: [2026-05-09 Sat 12:00]
 - State "STARTED"   from "TODO"      [2026-05-09 Sat 11:59]
 - Created [2026-05-09 Sat 11:46]
 :END:
-Acceptance criteria:
-- =skills/org-jira/SKILL.md= adds a one-paragraph cross-reference noting that Jira-linked change-records inherit the =* Summary= shape from =org-plan=.
-- =skills/README.org= catalogue text mentions =* Summary= where it currently describes change-record sections.
-- =pi/extensions/tasks/README.md= cross-references the updated =org-plan/SKILL.md= section structure.
-- No protocol or behavioural changes; documentation only.
+Outcome: =org-jira/SKILL.md=, =skills/README.org=, =tasks/README.md= cross-references added. No protocol changes.
 
 ** DONE [#C] Decide whether to add a selected-task memory digest command :tasks:ux:
 CLOSED: [2026-05-09 Sat 12:00]
@@ -171,14 +126,7 @@ CLOSED: [2026-05-09 Sat 12:00]
 - State "STARTED"   from "TODO"      [2026-05-09 Sat 12:00]
 - Created [2026-05-09 Sat 11:25]
 :END:
-Decision: deferred. The closure-time `* Summary` refresh prompt plus the org-tasks `Agent memory` resume read order (load `* Summary` first) gives both humans and agents a cheap reconstruction path without a dedicated digest command. Adding a separate command would duplicate that surface and add a maintenance edge for negligible benefit at current usage.
-
-Follow-up: surfaced in the parent change-record's =* Summary= → =** Follow-ups= as a conditional TASKS.org task to be opened only if a concrete need emerges (e.g. multi-record digests, agent harnesses that cannot easily read change-record files).
-
-Acceptance criteria:
-- Decide whether the tasks extension should expose a compact selected-task digest containing summary, context, next action, blockers, open questions, and validation state. → deferred.
-- If adopted, add the smallest useful command or detail-pane display change and tests. → n/a.
-- If deferred, document the reason in the parent =* Summary= → =** Follow-ups= and capture a TASKS.org follow-up only if the need remains concrete. → done.
+Decision: deferred. The closure-time =* Summary= refresh prompt plus the resume read order already give both humans and agents a cheap reconstruction path. A dedicated digest command would duplicate that surface for negligible benefit at current usage. Conditional follow-up captured in =** Follow-ups=.
 
 ** DONE [#A] Refinement: drop size threshold; * Summary always-on; * Context optional :protocol:refinement:
 CLOSED: [2026-05-09 Sat 12:49]
@@ -192,6 +140,7 @@ CLOSED: [2026-05-09 Sat 12:49]
 - State "STARTED"   from "TODO"      [2026-05-09 Sat 12:45]
 - Created [2026-05-09 Sat 12:45]
 :END:
+Outcome: the ≥150-line threshold was prose-only (closure-time prompt fired unconditionally on missing summary) and conflated "trigger summary" with "avoid Summary/Context duplication". Inverted optionality: =* Summary= required on every record; =* Context= promoted only when rationale exceeds synopsis. Size becomes a *splitting* signal. Skill files, scaffold, parser snapshot, and README all updated; tests still pass.
 
 ** DONE [#A] Comprehensive retrospective sweep: backfill * Summary on every change-record :migration:retrospective:
 CLOSED: [2026-05-09 Sat 13:12]
@@ -206,47 +155,11 @@ CLOSED: [2026-05-09 Sat 13:12]
 - State "STARTED"   from "TODO"      [2026-05-09 Sat 12:56]
 - Created [2026-05-09 Sat 12:56]
 :END:
-Sweep summary: backfilled =* Summary= on the 32 remaining change-records identified after the v2 (always-on) refinement, bringing all three repositories to 100% conformance modulo a single intentionally-skipped untracked file in =agents-src=.
-
-=~/dotfiles/agents-src= (23 records covered + 1 skipped):
-- Covered: =2026-04-24-org-agent-memory=, =2026-04-25-refine-org-memory-plan-protocol=, =2026-04-25-refine-tasks-extension=, =2026-04-25-tasks-emacs-integration=, =2026-04-26-tasks-local-selection=, =2026-04-27-import-keyword=, =2026-04-27-keybindings-capital-letters=, =2026-04-27-local-tasks=, =2026-04-27-task-overlay-bugfixes=, =2026-04-28-create-self-improvement-skill=, =2026-04-28-implementation-reports=, =2026-04-28-jira-clone-token-efficiency=, =2026-04-28-jira-integration=, =2026-04-28-org-memory-refinement=, =2026-04-28-skill-rename-org-tasks-org-plan=, =2026-04-28-tasks-archive-fix=, =2026-04-28-tasks-org-subtask-absorption=, =2026-05-01-keybindings-editor-composition=, =2026-05-05-event-dispatch-extension-bindings=, =2026-05-05-jira-org-memory-alignment=, =2026-05-05-leader-menu-slash-submission=, =2026-05-05-legacy-org-task-metadata=, =2026-05-06-package-org-memory-protocol-extensions=.
-- Skipped: =design/log/2026-05-08-bootstrap-a-clojure-development-skill.org= — untracked, authored in a prior session, out of scope. Will adopt =* Summary= when its author commits it under the always-on rule.
-
-=~/dotfiles= (0 additional): both records were already covered in the v1 length-gated sweep.
-
-=~/nmd/products/connect/portal= (8 records covered):
-- =2026-03-27-webserial-display-refactor= (ADR-style; =* Summary= added at top, original =* Status= / =* Decision= / =* Consequences= preserved).
-- =2026-04-27-gitlab-ci-speedup= (draft, not executed; =* Summary= captures the proposal and =** Follow-ups= the plan body).
-- =2026-04-28-patient-outcomes-view=.
-- =2026-05-01-clinical-outcome-analytics= (legacy =** Outcome= absorbed).
-- =2026-05-06-app-schema-version-compatibility= (draft).
-- =2026-05-06-tx-log-sync-id-rename= (draft).
-- =2026-05-07-disable-config-inputs-when-disconnected= (legacy =** Outcome= absorbed).
-- =2026-05-08-fix-org-user-association-errors= (legacy =** Outcome= absorbed).
-
-=rg '^\* Summary$' design/log/= shows full coverage in all three repositories. =cd pi/extensions/tasks && ./test.sh= still passes 224/224. The parent change-record's =Decisions= no longer carries the obsolete "Existing records are not bulk-rewritten" carve-out.
-Review-of-implementation observation: the v1 retrospective sweep (plan task =7377277f=) gated by record length plus =#+STATUS: Complete=, in line with the v1 size-threshold model. After the v2 refinement (plan task =246864d1=) made =* Summary= required on every change-record, the gated scope leaves 32 known non-conformant records (24 in =agents-src=, 0 in =~/dotfiles=, 8 in =~/nmd/products/connect/portal=). Folded into the same change before commit so the protocol ships uniformly conformant.
-
-Acceptance criteria:
-- Every existing change-record under =design/log/= in =agents-src=, =~/dotfiles=, and =~/nmd/products/connect/portal= carries a top-level =* Summary= section, regardless of size or status.
-- Where legacy =** Outcome= / =** Shipped= text exists under =* Implementation=, it is absorbed (condensed) into =* Summary= and the legacy heading is replaced with a pointer line.
-- For records without legacy outcome text, =* Summary= is drafted from =* Context= + completed plan + any =* Implementation= notes; for in-flight records, a draft summary is added and may be refined later.
-- Preserve =:CUSTOM_ID:= / =:ID:= / =#+PARENT:= / =#+PARENT_ID:= / LOGBOOK history / plan task status / existing =* Implementation= audit detail. Memory-summary pass only.
-- Untracked records (e.g. =design/log/2026-05-08-bootstrap-a-clojure-development-skill.org=) are out of scope; their authors will adopt =* Summary= when committing under the always-on rule.
-- =rg '^\* Summary$' design/log/= shows full coverage in all three repositories at the end of the sweep.
-- Existing =rg '^\*\* (Outcome|Shipped)$' design/log/= matches that remain are =** Shipped= subsections under top-level =* Summary= (the new convention), not legacy headings under =* Implementation=.
-- The parent change-record's =Decisions= drops the now-obsolete "Existing records are not bulk-rewritten" carve-out.
-Review-of-implementation observation: the ≥ ~150-line size heuristic for triggering =* Summary= was prose-only (closure-time prompt fires unconditionally on missing summary regardless of size). The threshold's real motivation was avoiding =* Summary= / =* Context= duplication on short records. The cleaner answer is to invert the optionality: make =* Summary= required on every change-record and demote =* Context= to optional / promote-when-needed. Folded into the same change before commit.
-
-Acceptance criteria:
-- =skills/org-plan/SKILL.md=: =* Summary= required on every record (any size, any status past Draft); =* Context= moves from required to optional with a "promote when rationale exceeds the synopsis" rule. Size threshold prose removed.
-- =skills/org-tasks/SKILL.md=: ≥ ~150-line clause dropped from the Agent memory size heuristic; reframed as a *splitting* signal ("when =* Plan= + =* Implementation= history grows beyond cheap re-ingestion, prefer splitting / archiving rather than truncating").
-- =pi/extensions/tasks/scaffold.ts=: emits =* Summary=, =* Plan=, =* Implementation= only; =* Context= dropped from the scaffold so it is added intentionally rather than habitually.
-- =pi/extensions/tasks/parser.test.ts=: snapshot regenerates with the new shape.
-- =pi/extensions/tasks/README.md=: change-records section reflects required vs optional split.
-- Existing closure-time prompt and resume read order unchanged — they were already aligned with the always-on model.
-- Parent change-record's =* Summary= and Context decisions refreshed; the threshold-related =DECIDED= open question superseded.
-- Tests pass.
+Outcome: backfilled =* Summary= on 32 remaining records identified after the v2 refinement, bringing all three repos to 100% conformance modulo one intentionally-skipped untracked file.
+- =agents-src= (23 covered + 1 skipped): covered records span =2026-04-24-org-agent-memory= through =2026-05-06-package-org-memory-protocol-extensions=. Skipped: =2026-05-08-bootstrap-a-clojure-development-skill.org= (untracked, prior session, out of scope).
+- =~/dotfiles= (0 additional): both records were already covered in the v1 length-gated sweep.
+- =~/nmd/products/connect/portal= (8 covered): includes =2026-03-27-webserial-display-refactor= (ADR-style; =* Summary= added at top, original =* Status= / =* Decision= / =* Consequences= preserved), draft records (=2026-04-27-gitlab-ci-speedup=, =2026-05-06-app-schema-version-compatibility=, =2026-05-06-tx-log-sync-id-rename=), and three records with legacy =** Outcome= absorbed.
+- Parent =Decisions= dropped the obsolete "Existing records are not bulk-rewritten" carve-out.
 
 ** DONE [#B] Apply summary conventions retrospectively across known org-memory repositories :migration:retrospective:
 CLOSED: [2026-05-09 Sat 12:09]
@@ -263,57 +176,41 @@ CLOSED: [2026-05-09 Sat 12:09]
 - State "STARTED"   from "TODO"      [2026-05-09 Sat 12:00]
 - Created [2026-05-09 Sat 11:27]
 :END:
-Sweep summary: 9 records absorbed `** Outcome` / `** Shipped` content into top-level =* Summary= across three repositories.
+Outcome (v1 length-gated sweep, 9 records absorbed legacy =** Outcome= / =** Shipped= into top-level =* Summary=):
+- =agents-src= (4): =2026-05-08-custom-id-and-parent-link=, =2026-05-02-refactor-keybindings-extension=, =2026-05-01-dev-agent-backlog-prior-art-review=, =2026-05-01-org-memory-agent-memory-review=.
+- =~/dotfiles= (2): =2026-05-07-extract-agent-skills=, =2026-05-06-emacs-org-memory-ui= (Accepted; draft summary added).
+- =~/nmd/products/connect/portal= (3): =2026-05-05-pta-editing-state=, =2026-05-05-patient-re-association-review=, =2026-05-01-file-put-queue-refactor=.
 
-=~/dotfiles/agents-src= (4 records):
-- =design/log/2026-05-08-custom-id-and-parent-link.org=
-- =design/log/2026-05-02-refactor-keybindings-extension.org=
-- =design/log/2026-05-01-dev-agent-backlog-prior-art-review.org=
-- =design/log/2026-05-01-org-memory-agent-memory-review.org=
-
-=~/dotfiles= (2 records):
-- =design/log/2026-05-07-extract-agent-skills.org=
-- =design/log/2026-05-06-emacs-org-memory-ui.org= (Accepted; draft summary added)
-
-=~/nmd/products/connect/portal= (3 records):
-- =design/log/2026-05-05-pta-editing-state.org=
-- =design/log/2026-05-05-patient-re-association-review.org=
-- =design/log/2026-05-01-file-put-queue-refactor.org=
-
-Intentionally skipped: change-records below the ~150-line threshold without =** Outcome= / =** Shipped= text and not on an active selected-task lineage. They can adopt =* Summary= opportunistically when next touched. =rg '^\* Summary$' design/log/= confirms presence in the absorbed records; =rg '^\*\* (Outcome|Shipped)$' design/log/= shows no remaining legacy headings under =* Implementation= in the touched records (the matches that remain are =** Shipped= subsections under top-level =* Summary= in newer records, which is the new convention).
-
-=#+PARENT:= link spot-check on the four agents-src records: all resolve to live =:CUSTOM_ID:= anchors in =TASKS.archive.org=. =cd pi/extensions/tasks && ./test.sh= passes (224 tests across parser/scaffold, insert, lifecycle, paths, doctor, memory, summary).
-Acceptance criteria:
-- Review design change-records in this repository (=~/dotfiles/agents-src=), the parent dotfiles repository (=~/dotfiles=), and =~/nmd/products/connect/portal=.
-- In-scope heuristic: records ≥ ~150 lines, records carrying =#+STATUS: Complete=, and records linked from currently-active selected-task lineage. Remaining records may be left as-is.
-- Add or refresh =* Summary= sections in scope; absorb (condense) any existing =** Outcome= / =** Shipped= content into =* Summary= and remove the legacy headings.
-- Preserve =:CUSTOM_ID:=, =#+PARENT:= links, LOGBOOK history, plan task status, and existing =* Implementation= audit detail. Memory-summary pass only; not a history rewrite.
-- One commit per repository, conventional-commits subject (e.g. =docs(org-memory): backfill * Summary on long change-records=). The =~/dotfiles= commit bumps the =agents-src= submodule pointer only if protocol files in the submodule changed in this batch.
-- Run =pi/extensions/tasks/test.sh= in =agents-src= and a structural sanity check (=rg '^\* Summary$' design/log/= plus a spot-check that one =#+PARENT:= link still resolves) in each repository before commit.
-- Document which records were summarized and any records intentionally skipped, in the parent =* Summary= → =** Shipped= subsection on close.
+In-scope heuristic at this stage was records ≥ ~150 lines, =#+STATUS: Complete=, or active selected-task lineage; remaining records picked up by =b376bf99= after the v2 refinement.
 
 * Implementation
-Not started. This change-record is in =Accepted= state; implementation begins on the next pass.
+Protocol + tooling changes landed in lockstep so the closure-time prompt, scaffold, parser snapshot, README, and skills moved together. Validation evidence under =* Validation= below.
+
+* Validation
+
+- =cd pi/extensions/tasks && ./test.sh= — 224 tests pass.
+- =npx esbuild --bundle pi/extensions/tasks/index.ts ...= — bundles cleanly (~111 kB).
+- =rg '^\* Summary$' design/log/= shows full coverage in all three repositories.
+- Spot-check =#+PARENT:= links on the four touched =agents-src= records resolve to live =:CUSTOM_ID:= anchors.
+
 
 * Open questions
 
-** DECIDED Section name: =* Summary= or =* Memory= ?
+** DECIDED Section name: =* Summary= or =* Memory=?
 :PROPERTIES:
 :DECIDED: [2026-05-09 Sat 11:46]
 :END:
-Decision: =* Summary=. Matches existing =** Outcome= / =** Shipped= language; "memory" is the section's purpose, not its name.
+Decision: =* Summary=. Matches existing =** Outcome= / =** Shipped= language; "memory" is the purpose, not the name.
 
 ** DECIDED Should closure warnings be implemented in tooling now?
 :PROPERTIES:
 :DECIDED: [2026-05-09 Sat 11:46]
 :END:
-Decision: yes. The skill prescribes summary refresh on closure; the tasks extension prompts the agent to generate =* Summary= when a top-level task transitions to =DONE= and its linked change-record lacks the section. Implementation tracked under plan task =ffa17eee=.
+Decision: yes. Implementation under plan task =ffa17eee=.
 
 ** DECIDED What threshold should trigger stronger summary discipline?
 :PROPERTIES:
 :DECIDED: [2026-05-09 Sat 11:46]
 :SUPERSEDED: [2026-05-09 Sat 12:49]
 :END:
-Initial decision: ≈150 lines as a soft heuristic.
-
-Superseded 2026-05-09 Sat 12:49 (plan task =246864d1=): the threshold was prose-only (closure-time prompt fires unconditionally on missing =* Summary= regardless of size) and conflated "trigger summary" with "avoid Summary/Context duplication". The cleaner rule inverts the optionality: =* Summary= is required on every change-record, and =* Context= is optional / promoted-when-needed. Size now signals splitting/archiving, not whether to write a summary. Retrospective sweep already used the ≈150-line cutoff plus =#+STATUS: Complete= to scope its first pass; remaining short records can adopt =* Summary= when next touched.
+Initial decision: ≈150 lines as a soft heuristic. Superseded by =246864d1=: =* Summary= required on every record; =* Context= optional/promoted-when-needed. Size now signals splitting/archiving, not summarize-or-not.

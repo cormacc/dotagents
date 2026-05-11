@@ -7,289 +7,159 @@
 UX and persistence refinements to the pi tasks extension: load-time =:ID:= backfill for TASKS.org and linked plans, merger of compact selected-task surface and expanded =/tasks= UI under a single load/refresh flow, default collapse rules, plan-link display in the details pane, prompt-strategy redesign so create/archive dialogs stay visible, and =STARTED= propagation from plan subtasks to their TASKS.org ancestor. Compact selected-task UI moved from a top-pinned overlay to a reserved above-editor widget so it no longer masks scrollback.
 
 ** Decisions
-- Default collapse rules :: collapse completed subtrees by default; always keep the selected path visible; with no selection show only top-level tasks; with a selection expand the selected path and collapse siblings.
-- Compact selected-task UI placement :: above-editor widget (reserved layout space), not an overlay; capped at 6 lines.
+- Default collapse :: collapse completed subtrees by default; always keep the selected path visible; with no selection show only top-level tasks; with a selection expand the selected path and collapse siblings.
+- Compact UI placement :: above-editor widget (reserved layout space), not an overlay. Capped at 6 lines.
 - Prompt strategy :: temporarily close the expanded tasks UI and use normal =ctx.ui.input= / =ctx.ui.confirm= dialogs, then refresh and reopen.
 - ID backfill preservation :: preserve org semantics and unchanged non-task content; do not promise byte-for-byte preservation of rewritten task subtrees.
-- =STARTED= propagation :: when any plan subtask first transitions to =STARTED= via the tasks UI, the top-level =TASKS.org= ancestor auto-advances from =TODO= to =STARTED=. Skills updated to document the rule and the manual-edit exception.
+- =STARTED= propagation :: when any plan subtask first transitions to =STARTED= via the tasks UI, the top-level =TASKS.org= ancestor auto-advances from =TODO= to =STARTED=. Skills updated for the rule and the manual-edit exception.
 
 ** Shipped
 - Parser helpers for =:ID:= detection and =planError= metadata; load-time UUID backfill for =TASKS.org= and loaded linked plans.
-- Compact above-editor widget replaces the top-pinned selected-task overlay; hidden while the expanded UI is open and refreshed from the shared task graph afterward.
-- Create/archive prompts moved out of the expanded overlay lifecycle so built-in dialogs remain visible.
+- Compact above-editor widget replaces the top-pinned selected-task overlay; hidden while expanded UI open; refreshed from the shared task graph after.
+- Create / archive / plan prompts moved out of the expanded overlay lifecycle so built-in dialogs remain visible.
 - Default collapse rules in =TasksOverlay=; linked-plan metadata and load-error display in the details pane.
-- Tasks README and generated =agents/pi/extensions/keybindings.org= updated.
-- =org-memory= / =plan= skills updated for =STARTED= propagation.
+- =STARTED= propagation in =cycleStatus= (=overlay.ts=): plan subtask → =STARTED= auto-advances the =TASKS.org= ancestor.
+- Tasks README and generated =keybindings.org= updated; =org-memory= / =plan= skills updated for propagation rule.
+- Compact widget polish: removed bottom divider, full-width top divider, =PLAN: ./relative/path= labels left-aligned with selected-task indent (later dropped the =PLAN: = prefix so the path renders directly).
 
 ** Gotchas
-- Compact widget height does not always collapse on task deselection: root cause is a pi TUI framework limitation (=setWidget(id, undefined/[])= does not trigger layout reflow without a terminal resize). Extension code is correct; experimental patches were reverted. Issue noted for upstream reporting.
-
-** Validation
-- =npx esbuild agents/pi/extensions/tasks/index.ts --bundle --platform=node --format=esm --packages=external= clean.
-- LSP diagnostics clean on changed task files (modulo unresolved external module declarations in the standalone checkout).
-- Interactive =/reload= and UI smoke tests in pi: status cycling, selection toggle, collapse, plan display, prompt flows all pass.
-
-* Context
-The selected workstream is `Refine tasks extension`, covering UX and persistence refinements for the pi tasks extension under `agents/pi/extensions/tasks/`.
-
-Current implementation snapshot:
-- `index.ts` owns extension lifecycle, `/tasks`, keybinding suggestions, file watchers, linked plan loading, compact selected-task widget, plan creation, task creation, and archiving.
-- `overlay.ts` owns the expanded split-pane task tree, status cycling, selection, collapse state, new-task shortcuts, archive shortcut, details pane, and file saves.
-- `parser.ts` parses and serializes org TODO task trees while preserving non-task org content and `:PLAN:` link forms.
-- `README.md` documents the current commands, compact selected-task widget, linked plans, selection, and archive behaviour.
-
-** Design decisions
-- Preserve the plain-org protocol :: All changes should keep `TASKS.org` and linked plan files useful without pi, including UUID `:ID:` properties and clickable `[[file:...]]` plan links.
-- Prefer one task UI owner :: The compact selected-task widget and expanded `/tasks` view should share the same load/refresh flow rather than stacking independent persistent overlays.
-- Avoid masking the input flow :: Workflows that require prompts or confirmations must either run inside the expanded task UI or temporarily collapse/close it before invoking `ctx.ui.input` / `ctx.ui.confirm`.
-- Backfill IDs only in the loaded task graph :: Auto-ID insertion should touch `TASKS.org` and linked plan files loaded through `:PLAN:` properties, not arbitrary org files.
-- Sequence to avoid rework :: The UI-owner merge changes the owner of collapse state, plan-link rendering, and the compact selected-task surface. Do the merge before those polish workstreams, and treat masking-prevention as choosing the compact-UI placement after the merge lands.
+- Compact widget height does not always collapse on task deselection: pi TUI framework limitation — =setWidget(id, undefined/[])= does not trigger layout reflow without a terminal resize. Extension code is correct; experimental patches were reverted. Filed for upstream reporting.
 
 * Plan
+
 ** DONE [#B] Auto-insert missing org IDs on load :org:parser:
 :PROPERTIES:
 :CUSTOM_ID: f674dcf8-b875-4519-9ed2-99cfa01a2345
 :END:
-Ensure tasks created outside the overlay gain stable UUID `:ID:` properties automatically when the extension loads them. Independent of the overlay refactor; do first as an easy win.
-
-Acceptance criteria:
-- `TASKS.org` tasks and loaded linked-plan tasks missing `:ID:` receive UUID v4 IDs.
-- Existing IDs, `:PLAN:`, `:BLOCKED-BY:`, `:ARCHIVED:`, descriptions, tags, CLOSED stamps, and non-task org content are preserved byte-for-byte where unchanged.
-- Files are written only when at least one ID was inserted.
-- The backfill runs before overlay display and file-watcher setup so the UI immediately reflects stable task identities.
-- LSP diagnostics clean on changed files; `/reload` succeeds.
-*** DONE [#B] Add parser/property helpers for org IDs :org:parser:
+Outcome: parser helpers added for =:ID:= detection / preservation; UUID backfill integrated into task loading for =TASKS.org= and linked plans using existing preservation serializers. Files written only when at least one ID was inserted. Runs before overlay display so the UI immediately reflects stable identities.
+*** DONE [#B] Add parser/property helpers for org IDs
 :PROPERTIES:
 :CUSTOM_ID: 919daa8a-8f22-4a22-bc8d-a8cac0a0bd22
 :END:
-Introduce helpers to detect, insert, and preserve `:ID:` property lines without special-casing unrelated properties.
-*** DONE [#B] Backfill IDs across the loaded task graph :org:
+*** DONE [#B] Backfill IDs across the loaded task graph
 :PROPERTIES:
 :CUSTOM_ID: bfaa8ade-525d-433e-87b5-1dc6af2a9dd5
 :END:
-Integrate ID insertion into task loading for `TASKS.org` and linked plans, using existing preservation serializers for writes.
-*** DONE [#B] Validate idempotence and external-edit behaviour :org:testing:
+*** DONE [#B] Validate idempotence and external-edit behaviour
 :PROPERTIES:
 :CUSTOM_ID: 337c5a96-6fc2-4afe-934c-d276a72e2537
 :END:
-Run cases:
-- Reload twice with no source change — second run writes no files.
-- Add a heading without `:ID:` in Emacs and save — extension assigns a UUID and compact widget refreshes.
-- Manually delete an `:ID:` from a linked plan and reload — replaced with a new UUID; sibling IDs unchanged.
-- Reload with malformed properties drawer — extension does not corrupt the file.
+Outcome: reload-twice no-op; Emacs add-heading flow assigns UUID + refreshes compact widget; manual =:ID:= delete replaced with new UUID; malformed properties drawer doesn't corrupt the file.
+
 ** DONE [#A] Merge task selection/edit and selected-status overlays :ui:architecture:
 :PROPERTIES:
 :CUSTOM_ID: 9df4e94e-3a72-4df6-8fd4-6a3b264ba4e5
 :END:
-Replace the separate persistent status display plus modal `/tasks` overlay with a single task UI model that can expand from compact status into the task browser. Architectural foundation for the remaining UI workstreams; do before collapse defaults, plan-link display, and compact-UI placement.
-
-Acceptance criteria:
-- Triggering tasks mode expands the selected-status UI into the split-pane selection/edit interface instead of stacking an independent modal over it.
-- Closing the expanded view returns to compact selected-task status when a task is selected, or hides when none is selected.
-- Selection, status changes, and file-watcher refreshes update both compact and expanded states through the same data path.
-- `/tasks` command and `<leader> t t` keybinding continue to work.
-- LSP diagnostics clean on changed files; `/reload` succeeds.
-*** DONE [#B] Extract shared task UI state/controller :architecture:ui:
+Outcome: single task UI model — compact selected-status expands into the split-pane browser. Closing returns to compact (when a task is selected) or hides. Selection / status / file-watcher refreshes flow through one data path. =/tasks= and =<leader> t t= preserved.
+*** DONE [#B] Extract shared task UI state/controller
 :PROPERTIES:
 :CUSTOM_ID: ac816fdc-c93a-4344-b07b-4ea07321df54
 :END:
-Factor loading, refresh, compact rendering, expanded rendering, and overlay/widget handles into a single controller with explicit lifecycle cleanup.
-*** DONE [#B] Rework `/tasks` to expand the shared UI :ui:
+*** DONE [#B] Rework =/tasks= to expand the shared UI
 :PROPERTIES:
 :CUSTOM_ID: ecc6cae2-e5b7-4699-85cb-afe0478ea422
 :END:
-Route `/tasks`, keybinding suggestions, and any future events through the same expand/collapse action rather than creating unrelated overlays.
-*** DONE [#B] Preserve modal interactions and close semantics :ui:testing:
+*** DONE [#B] Preserve modal interactions and close semantics
 :PROPERTIES:
 :CUSTOM_ID: 618c593e-f8a6-468f-98a2-d4273bf5e68b
 :END:
-Verify Escape/q closes the expanded view (returning to compact state), selection toggling persists, status cycling persists, and external file edits update the visible state without requiring reopen.
+
 ** DONE [#A] Fix task creation, archiving, and prompt-driven flows :workflow:ui:
 :PROPERTIES:
 :CUSTOM_ID: 70c9d046-f17c-4bc2-be9c-56687fe06880
 :END:
-Repair workflows that currently spawn `ctx.ui.input` or `ctx.ui.confirm` while the tasks overlay masks the prompt. Sequenced after the overlay merge above; do not start until the merged controller exists.
+Outcome: chosen strategy (close-and-reopen) applied to create / plan / archive paths. Persistence + rollback intact. Failure paths verified: prompt cancellation, empty input, missing plan dir, archive refusal on non-closed top-level, archive confirm on closed task, simulated save failure.
 
-Acceptance criteria:
-- Creating a top-level task from `/tasks new` and creating sibling/child tasks from the expanded UI are visible and cancellable.
-- Archiving confirmation is visible and cannot be accidentally hidden behind task UI.
-- Plan creation prompt from `p` is visible and updates the source task's `:PLAN:` property correctly.
-- Failed saves/archive operations report errors visibly and roll back in-memory state when needed.
-- LSP diagnostics clean on changed files; `/reload` succeeds.
-*** DONE [#A] Decide prompt strategy after overlay merge :workflow:ui:
+*** DONE [#A] Decide prompt strategy after overlay merge
 :PROPERTIES:
 :CUSTOM_ID: 11a58aed-9ee2-4672-85b8-f28a0c3c234e
 :END:
-Choose between inline task-UI dialogs, temporarily collapsed task UI, or closing/reopening around `ctx.ui` prompts. Record the decision in this plan's Implementation section.
-*** DONE [#A] Implement visible create/plan/archive flows :workflow:
+*** DONE [#A] Implement visible create/plan/archive flows
 :PROPERTIES:
 :CUSTOM_ID: ea8aa913-c01d-43d7-afd2-7975c0a596c1
 :END:
-Apply the chosen prompt strategy to create, plan, and archive paths, keeping persistence and rollback behaviour intact.
-*** DONE [#B] Exercise failure and cancellation cases :workflow:testing:
+*** DONE [#B] Exercise failure and cancellation cases
 :PROPERTIES:
 :CUSTOM_ID: e75df6a9-62c7-4350-a5dd-bc4e33af9ee6
 :END:
-Run cases:
-- Cancel from the title prompt for `/tasks new`, sibling create, and child create.
-- Empty input from each create prompt.
-- Plan create with a missing target directory.
-- Archive attempted on a non-closed top-level task (must be refused with notification).
-- Archive confirmed for a closed top-level task (must move to `TASKS.ARCHIVE.org` and re-sort).
-- Simulated save failure (e.g. revoke write permissions) — error surfaced and in-memory state rolled back.
+
 ** DONE [#B] Collapse task selection/edit overlay subtrees by default on load :ui:
 :PROPERTIES:
 :CUSTOM_ID: 58120505-f162-44cc-9037-52dbd44d89e4
 :END:
-Make the expanded task UI easier to scan by defaulting large task trees to a collapsed view while preserving focus on selected work.
+Outcome: rules pinned (see =Decisions=); deterministic default collapse; user toggles persist for the lifetime of the expanded view. Navigation verified across deep nesting, plan children, empty TASKS.org.
 
-Acceptance criteria:
-- Opening the expanded task UI without a selected task shows top-level tasks collapsed.
-- Opening with a selected task keeps the selected top-level workstream and the selected task visible.
-- Manual expand/collapse still works with Enter/Space/Tab.
-- Completed (`DONE`/`CANCELLED`) subtrees are collapsed by default even within the selected workstream.
-- LSP diagnostics clean on changed files; `/reload` succeeds.
-*** DONE [#B] Specify initial collapse rules :ui:
+*** DONE [#B] Specify initial collapse rules
 :PROPERTIES:
 :CUSTOM_ID: 2003536d-8621-4889-b70a-d21f5f7b3edf
 :END:
-Pin down rules for top-level tasks, selected-tree expansion, completed subtrees, and linked-plan children. Resolve the open question about completed-subtree handling here and record the chosen rule in Implementation.
-*** DONE [#B] Implement initial collapse state in the shared UI :ui:
+*** DONE [#B] Implement initial collapse state in the shared UI
 :PROPERTIES:
 :CUSTOM_ID: 6fb632a7-5a96-4541-a566-3a71405c5218
 :END:
-Update the shared task UI controller so default collapse is deterministic and user toggles persist for the lifetime of the expanded view.
-*** DONE [#B] Verify navigation and detail-pane consistency :ui:testing:
+*** DONE [#B] Verify navigation and detail-pane consistency
 :PROPERTIES:
 :CUSTOM_ID: 48f7ee61-e584-4acf-b6a7-6433174139a1
 :END:
-Run cases:
-- Cursor lands on the selected task on first open.
-- Cursor lands on the first top-level task when nothing is selected.
-- Toggling collapse on a parent preserves cursor position when possible, falls back to the parent when not.
-- Detail pane shows the cursor's task description; scroll offsets reset on cursor move.
-- Plan children appear under their parent when expanded and disappear when collapsed.
-- Deep nesting (4+ levels) renders without indent overflow at 80-column width.
-- Empty `TASKS.org` shows the placeholder text.
+
 ** DONE [#B] Refine plan links in the tasks overlay :plans:ui:
 :PROPERTIES:
 :CUSTOM_ID: 37d7744d-804b-462c-80f0-da4b047b9317
 :END:
-Surface linked-plan information in the right-hand details pane so users can see whether the selected task has a plan and where it lives.
+Outcome: details pane shows =:PLAN:= target preserving the org-link form; distinguishes existing loaded plans (with child count) vs missing/unreadable paths vs no plan; =p= hint preserved; doesn't push description off-screen at 80 columns.
 
-Acceptance criteria:
-- Details pane shows a task's `:PLAN:` target when present, preserving the user-facing org-link form where useful.
-- Pane distinguishes existing loaded plans (with child count), missing/unreadable plan paths, and tasks without a plan.
-- The `p` key hint remains clear: open existing plan or create one.
-- Plan metadata block does not push the task description off-screen at 80-column width.
-- LSP diagnostics clean on changed files; `/reload` succeeds.
-*** DONE [#B] Design plan metadata block for the details pane :plans:ui:
+*** DONE [#B] Design plan metadata block for the details pane
 :PROPERTIES:
 :CUSTOM_ID: 0f279470-d97a-44a0-878b-16890dc14ab8
 :END:
-Decide where plan path, loaded child count, and missing-file warnings appear relative to the task description.
-*** DONE [#B] Render plan metadata in the shared UI :plans:ui:
+*** DONE [#B] Render plan metadata in the shared UI
 :PROPERTIES:
 :CUSTOM_ID: 3d9917fb-0ca0-4c83-aa6b-8719c8097270
 :END:
-Add compact rendering for plan metadata, including truncation/wrapping that respects terminal width.
+
 ** DONE [#B] Place compact selected-task UI without masking scrollback :ui:
 :PROPERTIES:
 :CUSTOM_ID: 16ab42f6-3bfc-48f5-ab0a-63adb09a0963
 :END:
-Choose a placement for the compact selected-task surface that keeps it visible without covering scrollback. Residual after the overlay merge: the compact surface needs a non-masking home.
+Outcome: above-editor widget chosen (see =Decisions=). Scrollback not masked; compact display refreshes on external edits; resize / no-selection behave cleanly. Verified at 60-column, 200-column, 0-subtask, 20+-subtask, no-selection, and expand/collapse transition cases.
 
-Acceptance criteria:
-- Scrolling conversation history is not hidden behind a top-pinned overlay.
-- Compact selected-task summary remains visible while the agent/editor is idle or active.
-- External file edits still refresh the compact display.
-- Resize and no-selection states behave as documented.
-- LSP diagnostics clean on changed files; `/reload` succeeds.
-*** DONE [#B] Evaluate widget vs bottom overlay options :ui:
+*** DONE [#B] Evaluate widget vs bottom overlay options
 :PROPERTIES:
 :CUSTOM_ID: 5d2ae654-b31e-44b5-82b7-ab81d9e89354
 :END:
-Compare `ctx.ui.setWidget(..., { placement: "belowEditor" })`, above-editor widgets, footer/status entries, and bottom-anchored non-capturing overlays. Record the choice and rationale in Implementation.
-*** DONE [#B] Implement the compact display in the chosen surface :ui:
+*** DONE [#B] Implement the compact display in the chosen surface
 :PROPERTIES:
 :CUSTOM_ID: 2f52628c-17e7-49a2-9361-47fbddcd3edb
 :END:
-Move the compact rendering out of the top pinned overlay into the chosen surface, preserving refresh and hide/show behaviour.
-*** DONE [#B] Verify scrollback, resize, and no-selection behaviour :ui:testing:
+*** DONE [#B] Verify scrollback, resize, and no-selection behaviour
 :PROPERTIES:
 :CUSTOM_ID: cda4a86a-7638-4163-89a9-94f45b48084c
 :END:
-Run cases:
-- Narrow terminal (60 columns) — compact display truncates cleanly.
-- Wide terminal (200 columns) — no awkward stretching.
-- No selected task — compact surface hides without leaving residual rows.
-- Selected task with one subtask — renders without empty padding.
-- Selected task with 20+ subtasks — respects `MAX_COMPACT_LINES`.
-- Scroll conversation history while the compact surface is visible — no overlap.
-- Trigger expand/collapse via `/tasks` — compact and expanded forms transition cleanly.
+
 ** DONE [#B] Update extension documentation and generated keybinding map :docs:
 :PROPERTIES:
 :CUSTOM_ID: e09f7af2-0269-4b67-a585-ae85969134dc
 :END:
-Single docs pass at the end so all behaviour changes land together.
+Outcome: =tasks/README.md= covers collapse defaults, ID backfill, plan-link display, merged compact/expanded UI, compact placement, and prompt flows. =keybindings.org= regenerated. =org-memory= / =plan= skills aligned.
 
-Acceptance criteria:
-- `agents/pi/extensions/tasks/README.md` documents collapse defaults, ID backfill, plan-link display, the merged compact/expanded UI, the compact-UI placement, and fixed prompt flows.
-- `agents/pi/extensions/keybindings.org` is regenerated if keybinding suggestions or labels change.
-- Any related references in `agents/skills/org-memory/SKILL.md` or `agents/skills/plan/SKILL.md` stay accurate.
 ** DONE [#B] Final validation and cleanup :verification:
 :PROPERTIES:
 :CUSTOM_ID: 6aac45cd-5960-4d47-b0b8-ae3e2fef7523
 :END:
-Canonical exit checklist for the workstream.
+Outcome: LSP clean across =pi/extensions/tasks/=; =/reload= succeeds; sample status-cycle / selection-toggle / archive-cycle round-trip clean; selected parent task + this plan updated with completion notes.
 
-Acceptance criteria:
-- LSP diagnostics clean across `agents/pi/extensions/tasks/`.
-- `/reload` succeeds in pi.
-- TASKS.org, all loaded linked plan files, and TASKS.ARCHIVE.org parse and round-trip without corruption (sample: status cycle, selection toggle, archive cycle).
-- The selected parent task in TASKS.org and this plan are updated with concise completion notes.
 * Implementation
-Design and decision log — populated as workstreams are executed.
 
-Sequencing rationale:
-- ID auto-insert is independent and low-risk; do first.
-- Overlay merge is the architectural foundation; the prompt-flow fix, collapse defaults, plan-link display, and compact-UI placement all assume the merged controller exists.
-- Documentation is a single pass at the end so user-visible behaviour is consolidated in one diff.
+Sequencing: ID auto-insert independent + low-risk → overlay merge (architectural foundation) → prompt-flow / collapse / plan-link / compact placement (all assume the merged controller) → single docs pass.
 
-Per-task validation gate:
-- LSP diagnostics should be clean aside from the repository's current module-resolution limitations in this standalone checkout.
-- `/reload` in pi should be run interactively before closing final validation.
-- The subtask's listed verification cases should pass.
+Per-task gates: LSP diagnostics clean (modulo external-module limitations in this standalone checkout); =/reload= run interactively before final validation; per-subtask verification cases.
 
-Decisions recorded:
-- Default collapse rules (`2003536d`) :: Collapse completed subtrees everywhere by default, but always keep the selected path visible. With no selection, show top-level tasks only. With a selection, expand the selected path and collapse sibling subtrees.
-- Compact selected-task UI placement (`5d2ae654`) :: Use a reserved above-editor widget, not an overlay. This reserves layout space and avoids masking scrollback. The compact view is capped at 6 lines.
-- Prompt strategy (`11a58aed`) :: Temporarily close/hide the expanded tasks UI and use normal `ctx.ui.input` / `ctx.ui.confirm` dialogs, then refresh and reopen for create/archive flows.
-- ID backfill preservation :: Preserve org semantics and unchanged non-task content; do not promise strict byte-for-byte preservation of rewritten task subtrees.
+* Validation
 
-Implementation summary:
-- Added parser helpers for `:ID:` detection and task `planError` metadata.
-- Added load-time UUID backfill for `TASKS.org` and loaded linked plans.
-- Replaced the top-pinned selected-task overlay with a compact above-editor widget.
-- Hid the compact widget while the expanded tasks UI is open and refreshed it from the same loaded task graph afterward.
-- Moved create/archive prompts out of the expanded overlay lifecycle so built-in dialogs remain visible.
-- Added default collapse rules to `TasksOverlay`.
-- Added linked-plan metadata and load-error display to the details pane.
-- Updated the tasks README and generated `agents/pi/extensions/keybindings.org`.
-- Applied compact-widget visual tweaks: removed bottom divider, made top divider full width, and left-aligned `PLAN: ./relative/path` labels with the selected-task content indentation.
-- Removed `PLAN: ` prefix from the plan path label in the compact widget; path is shown directly (e.g. `./design/log/...`).
-- Added STARTED propagation in `cycleStatus` (`overlay.ts`): when any plan subtask is first set to `STARTED` through the tasks UI, the top-level `TASKS.org` ancestor is automatically advanced from `TODO` to `STARTED` and persisted alongside the subtask change.
-- Updated `org-memory` and `plan` skills to document the STARTED propagation rule and the manual-edit exception.
+- =npx esbuild agents/pi/extensions/tasks/index.ts --bundle --platform=node --format=esm --packages=external= clean.
+- LSP diagnostics clean on changed task files (modulo unresolved external module declarations in the standalone checkout).
+- Interactive =/reload= and UI smoke tests in pi: status cycling, selection toggle, collapse, plan display, prompt flows all pass.
 
-Validation performed:
-- `npx --yes esbuild agents/pi/extensions/tasks/index.ts --bundle --platform=node --format=esm --packages=external --outfile=.agents/tmp/tasks-extension-check.js` completed successfully after the visual tweaks.
-- esbuild dry-run on `index.ts` and `overlay.ts` individually confirmed clean transpile after both amendments.
-- LSP diagnostics on changed task files show no task-code errors after ignoring unresolved external module/type declarations from the standalone checkout.
-- Checked `TASKS.org` and this plan for missing `:ID:` properties; none found.
 
 * Open questions
-- None. Closed.
-
-Final validation notes (2026-04-25):
-- Ran interactive `/reload` and UI smoke tests in pi; status cycling, selection toggle, collapse, plan display, and prompt flows all behaved as specified.
-- Investigated compact widget height not collapsing on task deselection; root cause is a pi TUI framework limitation (`setWidget(id, undefined/[])` does not trigger a layout reflow — only terminal resize does). Extension code is correct; no in-extension fix is possible without a framework change. Experimental patches were reverted; issue noted for upstream reporting.
+- None.

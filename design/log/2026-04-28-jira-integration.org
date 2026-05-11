@@ -4,104 +4,34 @@
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
-Added Jira integration as a new =jira= pi extension and =org-jira= skill, layered on top of generic external-issue support added to the =tasks= extension. =tasks= and the =org-tasks= / =org-plan= skills stay tracker-agnostic: =tasks= renders =:LINKED_ISSUES:= badges and resolves bare keys against =#+ISSUE_URL_BASE=, with =J= opening URLs in the browser. All Jira-specific knowledge (MCP routing, workflow names, =#+JIRA_*= keywords, slash commands) lives in =jira= and =org-jira=. Slash commands =/jira clone=, =/jira claim=, =/jira comment=, =/jira create= are agent-prompt builders — the extension itself is I/O-free; the agent performs MCP calls via the existing =atlassian= MCP server. =/jira clone= seeds new tasks; =/jira claim= and =/jira comment= operate on the existing =:LINKED_ISSUES:= list; auto-transition reacts to =tasks:status-changed= events.
+Added Jira integration as a new =jira= pi extension and =org-jira= skill, layered on top of generic external-issue support added to the =tasks= extension. =tasks= and the =org-tasks= / =org-plan= skills stay tracker-agnostic: =tasks= renders =:LINKED_ISSUES:= badges and resolves bare keys against =#+ISSUE_URL_BASE=, with =J= opening URLs in the browser. All Jira-specific knowledge (MCP routing, workflow names, =#+JIRA_*= keywords, slash commands) lives in =jira= and =org-jira=. Slash commands =/jira clone=, =/jira claim=, =/jira comment=, =/jira create= are agent-prompt builders — the extension is I/O-free; the agent performs MCP calls via the existing =atlassian= MCP server. =/jira clone= seeds new tasks; =/jira claim= / =/jira comment= operate on the existing =:LINKED_ISSUES:= list; auto-transition reacts to =tasks:status-changed= events.
 
 ** Decisions
 - New =jira= extension and =org-jira= skill :: keep =tasks= and =org-tasks= / =org-plan= tracker-agnostic; Jira's surface will grow.
-- =:LINKED_ISSUES:= drawer property + =#+ISSUE_URL_BASE= keyword :: multi-valued; tokens are bare keys (resolved against the URL template) or full =[[URL][LABEL]]= org links; the two forms mix freely. Tag form (=:MBFW-123:=) rejected to avoid polluting the =:tag:= namespace.
+- =:LINKED_ISSUES:= drawer property + =#+ISSUE_URL_BASE= keyword :: multi-valued; tokens are bare keys (resolved against the URL template) or full =[[URL][LABEL]]= org links; forms mix freely. Tag form (=:MBFW-123:=) rejected to avoid polluting the =:tag:= namespace.
 - =:LINKED_ISSUES:= created on first use, never backfilled :: mirrors =:STARTED:= behaviour. New tasks don't pre-create the drawer entry.
-- =jira= writes bare keys, not org links :: org-link form reserved for non-templatable trackers; keeps =/jira clone= / =/jira create= compact and link-renderer-free.
-- Subtasks are independent issues :: deliberately don't mirror org parent/child onto Jira Epic/Story/Sub-task. Each task carries its own (possibly empty) =:LINKED_ISSUES:=; relationships expressed in the org tree.
-- All Jira access via the =atlassian= MCP server, agent-driven :: extension is I/O-free; slash commands draft prompts, agent performs MCP calls.
+- =jira= writes bare keys, not org links :: org-link form reserved for non-templatable trackers; keeps =/jira clone= / =/jira create= compact.
+- Subtasks are independent issues :: don't mirror org parent/child onto Jira Epic/Story/Sub-task. Each task carries its own (possibly empty) =:LINKED_ISSUES:=; relationships expressed in the org tree.
+- All Jira access via the =atlassian= MCP server, agent-driven :: extension is I/O-free; slash commands draft prompts.
 - Two-tier UX :: read-only badge / browser-open works without =jira= installed; workflows that touch Jira require =jira= and =atlassian= MCP.
-- Sandbox-only writes :: all write-path smoke tests during stages B and C against the =SAND= project.
+- Sandbox-only writes :: all write-path smoke tests against the =SAND= project.
 - Graceful degradation when MCP offline :: display + browser navigation work unconditionally; MCP-dependent paths surface a "run /mcp reconnect atlassian" notification.
 - Confluence out of scope :: noted as a follow-up.
 
 ** Shipped
-- Three checkpoint commits: =0fc160e= (tasks generic linked-issues foundations), =3668329= (=jira= extension scaffold + =org-jira= skill + =TASKS.org= keywords; includes parser fix for empty =#+KEYWORD:= lines), =e24cfde= (=/jira clone= read-only stage), plus subsequent commits for =/jira claim=, =/jira comment=, =/jira create=, and the auto-transition primitive (=tasks:status-changed= event in =tasks=, listener in =jira=).
+- Three checkpoint commits: =0fc160e= (tasks generic linked-issues foundations), =3668329= (=jira= extension scaffold + =org-jira= skill + =TASKS.org= keywords; includes parser fix for empty =#+KEYWORD:= lines), =e24cfde= (=/jira clone= read-only), plus subsequent commits for =/jira claim=, =/jira comment=, =/jira create=, and the auto-transition primitive (=tasks:status-changed= event in =tasks=, listener in =jira=).
 - New: =pi/extensions/jira/{index.ts,utils.ts,jira.test.ts,test.sh,README.md}=, =skills/org-jira/SKILL.md=.
 - Modified: =pi/extensions/tasks/{parser.ts,overlay.ts,index.ts,status-colors.ts,parser.test.ts,test.sh,README.md}=, =skills/org-tasks/SKILL.md= (Extension points section), =TASKS.org= (umbrella =#+IMPORT:=, =#+ISSUE_URL_BASE=, =#+JIRA_*= keywords).
 
-** Validation
-- =tasks= extension: 53 parser-level assertions, all passing.
-- =jira= extension: 34 helper-level assertions, all passing.
-- All five extension TS files compile via esbuild without warnings.
-- Live write-path verification (=clone= / =claim= / =comment= / =create= / auto-transition) deferred to user end-to-end against =SAND= per the plan's acceptance criteria; the extension is I/O-free for those paths.
+** Gotchas
+- Parser regression caught while wiring keywords: empty =#+KEYWORD:= lines were bleeding into the next line because =getFileKeyword='s regex used =\s*= (matches =\n=) around the captured value. Fixed to =[\t ]*= and added regression test.
+- =J= and =shift-J= collapsed into one =J= binding (same key on the wire); opens up to 5 resolvable URLs with notification on over-cap or unresolvable.
+- Status-change events from external editors (Emacs save) are *not* emitted; only the in-overlay status-cycle path fires =tasks:status-changed=. Diff-based detection on file-watcher reload would close the gap (filed as future enhancement in the =tasks= README).
+- Helpers extracted into =jira/utils.ts= so tests can exercise them without pulling in =pi-tui= via =../lib/pi-utils.ts=.
 
 ** Follow-ups
 - Confluence integration (would mirror Jira keywords / use =:LINKED_ISSUES:= via org-link form).
-- Jira-org-memory alignment was carried forward to TASKS.org task =2b4d4ca7= and draft plan =design/log/2026-05-05-jira-org-memory-alignment.org=.
-
-* Context
-
-The =tasks= extension and the =org-tasks= / =org-plan= skills currently treat =TASKS.org= as a self-contained per-project task graph.  Day-job work for the team lives in Jira at https://your-org.atlassian.net.  The two universes don't talk: a contributor pulling a Jira ticket has to retype the title and lose the Jira ID; a contributor closing a task has to context switch to the browser to update the corresponding ticket.
-
-The Atlassian MCP server (=atlassian= in pi's MCP config) was wired up recently and exposes ~39 tools covering Jira issues, transitions, comments, JQL search and worklogs against cloud =00000000-0000-4000-8000-000000000000=.  Available scopes are =read:jira-work= and =write:jira-work=.  Auth is delegated to the MCP server, so the extension and skills can stay credential-free.
-
-We expect Jira surfaces (search, my open issues, cross-task views) to grow beyond per-task linkage, so the integration is built as a /new/ =jira= pi extension and a new =org-jira= skill (extending =org-tasks=) rather than absorbed into the existing =tasks= extension.  =org-tasks= and =org-plan= stay tracker-agnostic; they only gain a documented extension-point convention.
-
-The =tasks= extension itself gains /generic/ external-issue support (property name =:LINKED_ISSUES:=, file keyword =#+ISSUE_URL_BASE:=) that is intentionally tracker-agnostic: =tasks= renders badges and opens browser links for any issue tracker the user configures.  All Jira-specific knowledge — MCP routing, workflow names, slash commands — lives in the =jira= extension and =org-jira= skill, so =tasks= stays useful for users who don't have the =jira= extension installed (badges still render, =J= still opens the browser).
-
-The change-record for this work covers the umbrella task and all four nested subtasks; each is rendered as one or more concrete plan items under =* Plan= so they can be picked up incrementally.
-
-** Design decisions
-
-- /New =jira= pi extension; =tasks= and the existing skills stay tracker-agnostic./  Decision (2026-04-28): a separate extension is worth the extra surface because Jira use is expected to grow beyond per-task linkage.
-  - =jira= pi extension owns slash commands (=/jira clone=, =/jira claim=, =/jira comment=, =/jira create=), MCP-driven workflows, and any Jira-only UI.
-  - =org-jira= skill (new) owns the Jira-aware authoring conventions (which subset of =:LINKED_ISSUES:= tokens map to Jira; what =#+JIRA_*= keywords mean) and the agent prompts that drive MCP calls.  It /extends/ =org-tasks= rather than living inside it.
-  - =tasks= extension gains generic =:LINKED_ISSUES:= rendering and URL composition, but holds /no/ Jira knowledge.
-  - =org-tasks= / =org-plan= skills must not mention Jira.  They document the extension-point convention (unknown =#+= keywords and drawer properties round-trip cleanly) and nothing more.
-
-- /Generic external-issue linkage in =tasks=./  A multi-valued =:LINKED_ISSUES:= drawer property holds whitespace-separated tokens. Each token is either:
-  1. A bare key, e.g. =MBFW-123=, resolved against =#+ISSUE_URL_BASE= (see below); rendered as the key itself.
-  2. A full org link =[[URL][LABEL]]=, resolved directly; rendered as =LABEL=.
-  The two forms can mix freely on the same line:
-  #+begin_example
-  :PROPERTIES:
-  :CUSTOM_ID: 01234567-89ab-…
-  :LINKED_ISSUES: MBFW-123 MBE-45 [[https://github.com/foo/bar/issues/42][gh#42]]
-  :END:
-  #+end_example
-  Tag form (=:MBFW-123:= on the heading) was rejected to avoid polluting the semantic =:tag:= namespace.
-
-- /URL template via =#+ISSUE_URL_BASE=, owned by =tasks=./  Add to =TASKS.org= preamble:
-  #+begin_example
-  #+ISSUE_URL_BASE: https://your-org.atlassian.net/browse/{ID}
-  #+end_example
-  Resolution rule for bare keys:
-  1. If the template contains the substring =[[{ID}]]=, replace it with the key (after URL-encoding).
-  2. Otherwise treat the template as a prefix and append the key.
-  This means both =https://example/browse/{ID}= and =https://example/browse/= work for the common cases, and unusual URL shapes (=https://issues.example.com/?id={ID}&view=full=) are also expressible.  =TASKS.local.org= may override the keyword (last-write-wins, mirroring =#+SELECTED:=).  When the keyword is absent, bare keys still render but =J= refuses with a notification pointing to the missing keyword.
-
-- /=jira= owns its own =#+= keywords, scoped to MCP concerns./ =#+JIRA_CLOUDID:=, =#+JIRA_PROJECT:=, =#+JIRA_BASE_URL:= are read /only/ by =jira= and =org-jira=.  =tasks= never sees them.  Their purposes:
-  - =#+JIRA_CLOUDID= — avoid an =atlassian_getAccessibleAtlassianResources= round-trip per call.
-  - =#+JIRA_PROJECT= — disambiguate short keys (=123=) and seed =/jira create=.
-  - =#+JIRA_BASE_URL= — host-prefix used by =jira= to identify which =:LINKED_ISSUES:= tokens are "its own" when running =/jira claim=, =/jira comment=, etc.
-
-- /Atlassian MCP, not direct REST./  All Jira access goes through the existing =atlassian= MCP server, exclusively driven by the agent. The =jira= extension itself stays I/O-free; slash commands draft a prompt, the agent performs MCP calls, and results are written back into org files via the existing tasks-extension scaffolding.
-
-- /Two-tier UX: read-only properties + agent-driven workflows./
-  - Read-only display (=:LINKED_ISSUES:= badges, =J= browser-open) is handled by =tasks= directly — no MCP needed for the happy path; works without =jira= installed.
-  - Workflows that touch Jira (=clone=, =claim=, =comment=, =create=, =transition=) are exposed by =jira= as slash commands that /draft an agent prompt/ rather than executing themselves.  This keeps extension code small, lets the user review the action, and works the same way as the existing change-record retrospective flow.
-
-- /=jira= writes bare keys, not org links, into =:LINKED_ISSUES:=./ When =/jira clone= or =/jira create= mutates the property, it appends or sets bare keys (=MBFW-123=).  The org-link form is for manual entries to non-templatable trackers.  This keeps the common case compact and lets =/jira= work without any link rendering of its own.
-
-- /=:LINKED_ISSUES:= is created on first use, never backfilled./ Existing tasks are not migrated.  New tasks created by the =tasks= extension (=/tasks new=, =n=, =N=) do not pre-create the property. The drawer entry only appears when:
-  1. A user manually adds it.
-  2. =/jira clone= seeds a new task with the cloned issue's key.
-  3. =/jira create= appends the new key after promoting an existing task to a Jira issue.
-  Mirrors the existing =:STARTED:= behaviour (only written on first transition out of =TODO=).  Keeps =TASKS.org= compact for tasks that have no external issues.
-
-- /Subtasks are independent issues, not Jira sub-tasks./  We deliberately /do not/ try to mirror the org parent/child hierarchy onto Jira Epic/Story/Sub-task hierarchy.  Each task carries its own (possibly empty) =:LINKED_ISSUES:= list; the relationship between them is a human-readable one expressed in the org tree.  A future task can add Epic-link awareness if there's demand.
-
-- /Confluence is out of scope./  The MCP server also exposes Confluence tools.  Noted as a future follow-up (=#+CONFLUENCE_*= keywords could mirror the Jira keywords, or Confluence pages can ride on =:LINKED_ISSUES:= via the org-link form) but not implemented here.
-
-- /Sandbox is =SAND=./  All write-path smoke tests during stages B and C run against the =SAND= project.  No write-path call hits any other project until the relevant stage is signed off.
-
-- /Graceful degradation when MCP is offline./  Display of cached =:LINKED_ISSUES:= and browser-link navigation work unconditionally (they live in =tasks= and don't touch the MCP).  Anything that needs the MCP surfaces a clear notification ("Atlassian MCP not connected — run /mcp reconnect atlassian") rather than failing silently.
-
-- /Question-handling mode./  Minor implementation ambiguities batch into =* Open questions= for end-of-stage review.  Anything that affects downstream design (data shape, public extension API, cross-extension contract) is raised immediately.
+- Jira-org-memory alignment carried forward to TASKS.org task =2b4d4ca7= and draft plan =design/log/2026-05-05-jira-org-memory-alignment.org=.
 
 * Plan
 
@@ -112,11 +42,8 @@ CLOSED: [2026-04-28 Tue 13:47]
 :CREATED: [2026-04-25 Sat 09:00]
 :STARTED: [2026-04-28 Tue 13:27]
 :END:
-Two strands of foundation work:
-1. /Tracker-agnostic/ external-issue support added to the =tasks= extension and documented as a stable contract.
-2. Scaffolding for the new =jira= extension and =org-jira= skill that build on (1) without =tasks= knowing they exist.
+Two strands: tracker-agnostic external-issue support added to =tasks=, and scaffolding for =jira= / =org-jira=. No MCP traffic; no Jira-specific code in =tasks= or =org-tasks=.
 
-No MCP traffic in this stage.  No Jira-specific code lands in =tasks= or =org-tasks=.
 *** DONE [#A] Document extension-point conventions in =org-tasks/SKILL.md=
 CLOSED: [2026-04-28 Tue 13:29]
 :PROPERTIES:
@@ -124,13 +51,8 @@ CLOSED: [2026-04-28 Tue 13:29]
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:27]
 :END:
-- New short "Extension points" section.  Specify that:
-  - Unknown =#+= keywords in =TASKS.org= preamble (and =TASKS.local.org=) round-trip untouched and may be claimed by other skills/extensions.
-  - Unknown drawer properties on task headings round-trip untouched and may be claimed by other skills/extensions.
-  - Convention: third-party properties/keywords use an =UPPERCASE_PREFIX_= naming form (e.g. =NAMESPACE_FOO=) so they don't collide with first-party metadata.
-  - =TASKS.local.org= overrides of file-level keywords are last-write-wins, matching the existing =#+SELECTED:= rule.
-- Mention that =:LINKED_ISSUES:= and =#+ISSUE_URL_BASE= are first-party generic features in =tasks= (with a forward link to the =tasks= README), but do /not/ mention any specific tracker.
-- Acceptance: skill renders cleanly, references no third-party integrations by name; harness still loads it.
+Outcome: new "Extension points" section documents unknown =#+= keywords and drawer properties round-trip untouched; third-party namespace convention =UPPERCASE_PREFIX_=; =TASKS.local.org= overrides last-write-wins. =:LINKED_ISSUES:= / =#+ISSUE_URL_BASE= named as first-party generic in =tasks= with forward link; no tracker referenced.
+
 *** DONE [#A] Lock in generic round-trip in =tasks=' parser
 CLOSED: [2026-04-28 Tue 13:36]
 :PROPERTIES:
@@ -138,10 +60,8 @@ CLOSED: [2026-04-28 Tue 13:36]
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:29]
 :END:
-The existing pass-through behaviour for unknown keywords and drawer properties is the contract on which third-party extensions build. Lock it in before anything else depends on it.
-- Add an explicit round-trip test in =parser.test.ts= using fictional namespaces (=#+FOO_BAR=, drawer =:FOO_BAZ:=).  Parse → serialize → assert byte-equal.
-- Add /generic/ accessor helpers (no Jira knowledge): =getDrawerProperty(task, name): string | null=, =setDrawerProperty(task, name, value): void=, =getFileKeyword(parsed, name): string | null=.
-- Acceptance: =./test.sh= passes with the new test; helpers exported.
+Outcome: round-trip test with fictional namespaces (=#+FOO_BAR=, =:FOO_BAZ:=) added. Generic accessors exported: =getDrawerProperty=, =setDrawerProperty=, =getFileKeyword=.
+
 *** DONE [#A] First-class =:LINKED_ISSUES:= + =#+ISSUE_URL_BASE= in =tasks=
 CLOSED: [2026-04-28 Tue 13:39]
 :PROPERTIES:
@@ -149,19 +69,11 @@ CLOSED: [2026-04-28 Tue 13:39]
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:36]
 :END:
-Implementation note: collapsed =J= and =shift-J= into a single =J= binding (they’re the same key on the wire). =J= now opens up to 5 resolvable URLs at once, with notifications for over-cap and unresolvable-token cases. Also fixed =test.sh= to fall back to =npx tsx= when =tsx= isn’t on PATH. Native, tracker-agnostic support added to =tasks=' parser, overlay, and key handler.
-- =parser.ts= helpers:
-  - =getLinkedIssues(task): { url: string; label: string; rawToken: string }[]= — splits the property on whitespace, classifies each token: org-link form via =extractOrgLinkTarget= (already exists) yields =(url = link target, label = link description ?? target)=; bare token yields =(url = resolveIssueUrl(base, token), label = token)= where =base= is the value of =#+ISSUE_URL_BASE= or null.
-  - =setLinkedIssues(task, items: string[]): void= — writes a single =:LINKED_ISSUES:= line composed of whitespace-joined tokens; preserves any other property lines.
-  - =resolveIssueUrl(template, key): string | null= — URL-encodes the key, replaces =[[{ID}]]= if present, otherwise appends.  Returns null when =template= is null/empty.
-- =overlay.ts=: when rendering a task row (expanded UI and compact selected-task widget), append a styled run after the tag run with one entry per linked issue (label only).  Pick a colour distinct from the status/priority/tag palette — propose mid-cyan (=#5BC0BE= equivalent) with a leading =⤴= glyph.  No-op when the property is empty/absent.
-- =overlay.ts= keybindings:
-  - =J= → open the first linked issue's URL via the existing open-url helper.
-  - =shift-J= → open all of them, capped at 5 with a notification when exceeded.
-  - When =:LINKED_ISSUES:= is empty, =J= is a no-op (silent).
-  - When a bare token has no resolvable URL (no =#+ISSUE_URL_BASE=), =J= shows a notification: "Set =#+ISSUE_URL_BASE= in =TASKS.org= to enable browser-open for bare keys."
-- =parser.test.ts=: round-trip fixtures covering bare keys, org-link tokens, mixed lines, missing template (bare keys still render but resolve to null URL), and =[[{ID}]]= placeholder substitution.
-- Acceptance: =./test.sh= passes with new tests; manual smoke test on a fixture task with =MBFW-123 [[https://example/x][x]]= shows two badges and =J= opens both URLs in turn.
+Outcome:
+- =parser.ts=: =getLinkedIssues= splits on whitespace and classifies each token (org-link via =extractOrgLinkTarget=, or bare → =resolveIssueUrl(base, token)=); =setLinkedIssues=; =resolveIssueUrl= URL-encodes the key, replaces =[[{ID}]]= or appends.
+- =overlay.ts=: styled run of =⤴= badges in mid-cyan after tag run; =J= opens up to 5 URLs with notification on over-cap; silent on empty; missing-template notification points at =#+ISSUE_URL_BASE=.
+- =test.sh= falls back to =npx tsx= when =tsx= isn't on =PATH=.
+
 *** DONE [#A] Update the =tasks= README for =:LINKED_ISSUES:= + =J=
 CLOSED: [2026-04-28 Tue 13:40]
 :PROPERTIES:
@@ -169,11 +81,8 @@ CLOSED: [2026-04-28 Tue 13:40]
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:39]
 :END:
-- New section "Linked external issues" in =agents/pi/extensions/tasks/README.md=.
-- Document =:LINKED_ISSUES:= drawer property (multi-valued, mixed bare-key / org-link tokens) and =#+ISSUE_URL_BASE= keyword (with =[[{ID}]]= placeholder + suffix-append fallback).
-- Document =J= / =shift-J= bindings and the badge styling.
-- Note that issue-tracker-specific workflows (e.g. claim, transition, create) live in companion extensions like =jira=.
-- Acceptance: README rendered and reviewed; cross-link from =org-tasks/SKILL.md= "Extension points" section.
+Outcome: "Linked external issues" section in README; cross-link from =org-tasks/SKILL.md= "Extension points".
+
 *** DONE [#A] Scaffold the =jira= pi extension
 CLOSED: [2026-04-28 Tue 13:44]
 :PROPERTIES:
@@ -181,26 +90,17 @@ CLOSED: [2026-04-28 Tue 13:44]
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:40]
 :END:
-MCP-detection approach: =pi.getAllTools()= filtered for the =atlassian_= prefix. Avoids actually invoking any MCP tool just for a status check. Connection visible at =~/.pi/agent/extensions/jira/= via the existing =agents.nix= symlink (no nix change required).
-- =agents/pi/extensions/jira/= with =index.ts=, =README.md=, =test.sh=, and a minimal =/jira= slash command that prints "Atlassian MCP: <connected|disconnected>".
-- Detect MCP connection by inspecting pi's MCP runtime state, or, if that surface isn't exposed, by trying =atlassian_atlassianUserInfo= once and caching the result.
-- Acceptance: =/jira= prints the right line in both states; the extension installs cleanly via the existing =agents.nix= symlink rule.
-*** DONE [#A] Scaffold =agents/skills/org-jira/SKILL.md=
+Outcome: =jira/= scaffold (=index.ts=, =README.md=, =test.sh=). MCP-detection uses =pi.getAllTools()= filtered for =atlassian_= prefix (avoids invoking an MCP tool just for a status check). Connection visible via existing =agents.nix= symlink.
+
+*** DONE [#A] Scaffold =skills/org-jira/SKILL.md=
 CLOSED: [2026-04-28 Tue 13:46]
 :PROPERTIES:
 :CUSTOM_ID: fffb7c63-1508-45f3-934e-96d16f376def
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:44]
 :END:
-New skill positioned as "extends =org-tasks= with Jira awareness". Documents:
-- That Jira keys go in the generic =:LINKED_ISSUES:= drawer property (defined by =tasks=) as bare =PROJ-NNN= tokens; validation regex =/^[A-Z][A-Z0-9_]+-\d+$/=.
-- =#+ISSUE_URL_BASE= should be set to the user's Jira instance, e.g. =https://<host>.atlassian.net/browse/{ID}=, so =tasks= renders Jira badges as clickable links.
-- =#+JIRA_CLOUDID:=, =#+JIRA_PROJECT:=, =#+JIRA_BASE_URL:= keywords, read only by =jira= and =org-jira=, with =TASKS.local.org= override semantics.
-- The four Jira workflows (clone, claim+comment, create, transition) and the MCP tool surface each maps to.
-- cloudId resolution rule: prefer =#+JIRA_CLOUDID:=, else call =atlassian_getAccessibleAtlassianResources= and pick the resource matching =#+JIRA_BASE_URL=.
-- How =jira= identifies its tokens within =:LINKED_ISSUES:= (match bare token shape against the validation regex; match link target host against =#+JIRA_BASE_URL=).
-- Offline-degradation contract.
-- Acceptance: skill listed in the harness's available-skills index on the next session.
+Outcome: positioned as "extends =org-tasks= with Jira awareness". Documents Jira-shape =PROJ-NNN= in =:LINKED_ISSUES:= (validation regex =/^[A-Z][A-Z0-9_]+-\d+$/=); =#+ISSUE_URL_BASE= templating; =#+JIRA_CLOUDID=/=PROJECT=/=BASE_URL= (read only by =jira= / =org-jira=); cloudId resolution (prefer =#+JIRA_CLOUDID=, else =atlassian_getAccessibleAtlassianResources= → pick matching =#+JIRA_BASE_URL=); token identification within =:LINKED_ISSUES:=; offline degradation.
+
 *** DONE [#A] Add file-level keywords to =TASKS.org=
 CLOSED: [2026-04-28 Tue 13:47]
 :PROPERTIES:
@@ -208,10 +108,8 @@ CLOSED: [2026-04-28 Tue 13:47]
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:46]
 :END:
-Flushed out a regression in =getFileKeyword= while verifying: an empty =#+KEYWORD:= line was bleeding into the next line because the regex used =\s*= (which includes =\n=) around the captured value.  Fixed to =[\t ]*= so blank values yield =""=, not the next line’s content. Added a regression test.
-- Insert =#+ISSUE_URL_BASE= =https://your-org.atlassian.net/browse/{ID}= into the =TASKS.org= preamble.
-- Insert =#+JIRA_CLOUDID:=, =#+JIRA_PROJECT:=, =#+JIRA_BASE_URL:= into the preamble.  Leave =JIRA_PROJECT= empty initially.
-- Acceptance: covered by the round-trip test from the foundations task; visual check that the keywords survive a save-from-Emacs cycle.
+Outcome: =#+ISSUE_URL_BASE=, =#+JIRA_CLOUDID=, =#+JIRA_PROJECT=, =#+JIRA_BASE_URL= inserted. Verifying surfaced and fixed the empty-keyword parser regression (see Gotchas).
+
 ** DONE [#A] Read-only Jira integration :jira:
 CLOSED: [2026-04-28 Tue 13:52]
 :PROPERTIES:
@@ -219,7 +117,8 @@ CLOSED: [2026-04-28 Tue 13:52]
 :CREATED: [2026-04-25 Sat 09:00]
 :STARTED: [2026-04-28 Tue 13:48]
 :END:
-The display half ("see and click my Jira tickets from a task") falls out of the foundations stage — generic =:LINKED_ISSUES:= rendering in =tasks=, with =#+ISSUE_URL_BASE= pointing at the day-job Jira instance, gives us badges and =J= for free.  This stage covers the remaining read-only Jira-specific work: pulling new tasks from Jira and codifying the Jira-shape conventions in =org-jira=.
+Display half fell out of foundations (generic =:LINKED_ISSUES:= rendering with =#+ISSUE_URL_BASE= pointed at the day-job Jira → badges + =J= for free).
+
 *** DONE [#A] Document Jira reference conventions in =org-jira=
 CLOSED: [2026-04-28 Tue 13:48]
 :PROPERTIES:
@@ -227,32 +126,17 @@ CLOSED: [2026-04-28 Tue 13:48]
 :CREATED: [2026-04-25 Sat 09:00]
 :STARTED: [2026-04-28 Tue 13:48]
 :END:
-Covered by the org-jira SKILL.md scaffold (fffb7c63): the “File-format conventions” section documents the bare =PROJ-NNN= key shape, the validation regex, and how =:LINKED_ISSUES:= + =#+ISSUE_URL_BASE= produce badges and =J= browser-open via the generic =tasks= mechanism. Skill-level documentation (no code).
-- =org-jira= explains: write Jira keys as bare =PROJ-NNN= tokens in =:LINKED_ISSUES:= and set =#+ISSUE_URL_BASE= to the Jira browse URL with =[[{ID}]]= placeholder.  Badges + =J= then work via =tasks=' generic mechanism.
-- Note the validation regex and a one-line example.
-- /No code work in this task./
-- Acceptance: skill content reviewed; matches the actual behaviour of the foundations stage.
-*** DONE [#B] Clone Jira issues into tasks
-CLOSED: [2026-04-28 Tue 13:52]
-:PROPERTIES:
-:CUSTOM_ID: edbea049-3a56-40ad-9aa5-660843364524
-:CREATED: [2026-04-25 Sat 09:00]
-:STARTED: [2026-04-28 Tue 13:48]
-:END:
-User-visible behaviour: a slash command =/jira clone <KEY>= creates a new task seeded from the Jira issue.  Whether the new task lands in =TASKS.org= or =TASKS.local.org= follows the existing tasks-extension new-task rule (cursor context); the Jira flow itself does not care.
-**** DONE [#B] =/jira clone= slash command (agent-driven)
+Outcome: covered by the org-jira SKILL.md scaffold (=fffb7c63=).
+
+*** DONE [#B] =/jira clone= slash command (agent-driven)
 CLOSED: [2026-04-28 Tue 13:52]
 :PROPERTIES:
 :CUSTOM_ID: 93502d76-a566-449c-a0c3-49dc28938338
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:48]
 :END:
-Implementation note: extracted =resolveKey=, =buildClonePrompt=, and =getFileKeyword= into =jira/utils.ts= so the test runner can exercise them without pulling in =pi-tui= via =../lib/pi-utils.ts=.  The slash-command handler in =index.ts= drives them and uses =pi.sendUserMessage= to dispatch the structured prompt to the agent (no live MCP smoke test yet — deferred to user-side verification on =SAND=).
-- =jira= extension parses =KEY= argument(s); validates against =#+JIRA_PROJECT= prefix when given as a bare number.
-- Hands a structured prompt to the agent: "Use =atlassian_getJiraIssue= for each KEY, then create a task via the =tasks= extension with the issue summary as the heading, the description as the body, and the priority mapped per the table below.  Set =:LINKED_ISSUES:= to the bare keys via =setDrawerProperty= (single line, whitespace-separated if multiple)."
-- Priority map: =Highest=→=#A=, =High=→=#B=, =Medium=→=#C=, =Low=, =Lowest=→=#D=.  No custom field mapping.
-- /Smoke test against =SAND= only./
-- Acceptance: cloning =SAND-…= creates a top-level task with the right ID, summary, body, priority, and =:LINKED_ISSUES:=.  Badge appears via =tasks=' native rendering, no =jira=-side display work needed.
+Outcome: =jira= validates =KEY=, builds a structured prompt via =buildClonePrompt= (lives in =jira/utils.ts=) instructing the agent to call =atlassian_getJiraIssue= then create a task with priority map =Highest→#A=, =High→#B=, =Medium→#C=, =Low/Lowest→#D=. Dispatched via =pi.sendUserMessage=. Live smoke deferred to user-side =SAND= verification.
+
 ** DONE [#B] Write/edit Jira integration :jira:
 CLOSED: [2026-04-28 Tue 13:59]
 :PROPERTIES:
@@ -260,116 +144,77 @@ CLOSED: [2026-04-28 Tue 13:59]
 :CREATED: [2026-04-25 Sat 09:00]
 :STARTED: [2026-04-28 Tue 13:53]
 :END:
-Promotes Jira from a passive reference to an active sink.  Gated on the read-only stage being stable.
-*** DONE [#B] Update Jira issues from task transitions
-CLOSED: [2026-04-28 Tue 13:59]
-:PROPERTIES:
-:CUSTOM_ID: 6a808310-54c6-4ab6-ae47-8c8ef0bd6e55
-:CREATED: [2026-04-25 Sat 09:00]
-:STARTED: [2026-04-28 Tue 13:53]
-:END:
-User-visible behaviour: claim a Jira issue, add a comment, transition it through its workflow.  Triggered by explicit slash commands and optionally by task status cycling.
+All Jira-side commands enumerate =:LINKED_ISSUES:= via =getDrawerProperty=, then filter to Jira-shaped tokens (bare =/^[A-Z][A-Z0-9_]+-\d+$/= or org-link with target host matching =#+JIRA_BASE_URL=). Non-matching tokens ignored — same task can carry GitHub / Linear links without confusing the workflow.
 
-All Jira-side commands enumerate =:LINKED_ISSUES:= via =getDrawerProperty=, then filter to Jira-shaped tokens (bare tokens matching =/^[A-Z][A-Z0-9_]+-\d+$/=, or org-link tokens whose target host matches =#+JIRA_BASE_URL=).  Tokens that don't match are ignored — the same task can carry GitHub or Linear links without confusing the Jira workflow.
-**** DONE [#B] =/jira claim= command — set assignee to current user
+*** DONE [#B] =/jira claim= command — set assignee to current user
 CLOSED: [2026-04-28 Tue 13:56]
 :PROPERTIES:
 :CUSTOM_ID: 28f047ba-061c-4325-950b-6d9262762e47
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:53]
 :END:
-- For each Jira-shaped key in =:LINKED_ISSUES:= on the selected task: agent calls =atlassian_atlassianUserInfo= once, then =atlassian_editJiraIssue= to set =assignee=.
-- Acceptance: a =SAND= sandbox issue is reassigned successfully.
-**** DONE [#B] =/jira comment= — add a comment to issue(s)
+Outcome: agent calls =atlassian_atlassianUserInfo= once, then =atlassian_editJiraIssue= per Jira-shaped key.
+
+*** DONE [#B] =/jira comment= — add a comment to issue(s)
 CLOSED: [2026-04-28 Tue 13:56]
 :PROPERTIES:
 :CUSTOM_ID: a99074ae-4e91-4be8-9a2e-deca3f2c0478
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:53]
 :END:
-- Argument is a free-form markdown comment; agent calls =atlassian_addCommentToJiraIssue= per Jira-shaped key.
-- Acceptance: comment visible in Jira UI on a sandbox issue.
-**** DONE [#C] Optional auto-transition on task =STARTED= / =DONE=
+Outcome: free-form markdown arg; agent calls =atlassian_addCommentToJiraIssue= per Jira-shaped key.
+
+*** DONE [#C] Optional auto-transition on task =STARTED= / =DONE=
 CLOSED: [2026-04-28 Tue 13:59]
 :PROPERTIES:
 :CUSTOM_ID: c8243c28-0030-4a50-b33f-86a5f4adc9eb
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:59]
 :END:
-Implementation:
-- Added a generic =tasks:status-changed= event emit in the =tasks= overlay’s status-cycle path (after =persistChange=, so file watchers see the on-disk update first). Payload: ={ id, status, prevStatus, summary, closed }=. Documented in the =tasks= README under “Cross-extension events”. No Jira knowledge in =tasks=.
-- =jira= extension subscribes via =pi.events.on("tasks:status-changed", …)=. Filters to =STARTED= and =DONE=. Reads =~/.pi/agent/jira-ext.json= for =autoTransition= (default =false=). When enabled, dispatches =buildTransitionPrompt= via =pi.sendUserMessage=.
-- Status-change events from external editors (Emacs save) are *not* yet emitted; only the in-overlay status-cycle path fires the event. Diff-based detection on file-watcher reload would close that gap; filed as a future enhancement in the =tasks= README.
-- Acceptance gating remains user-side smoke test on =SAND= with =autoTransition: true= in the settings file.
-*** DONE [#C] Create Jira issues from tasks
-CLOSED: [2026-04-28 Tue 13:56]
-:PROPERTIES:
-:CUSTOM_ID: cfc094b3-870c-4c93-833b-f5a05d478d4a
-:CREATED: [2026-04-25 Sat 09:00]
-:STARTED: [2026-04-28 Tue 13:53]
-:END:
-User-visible behaviour: a task with no Jira-shaped tokens in =:LINKED_ISSUES:= can be promoted to a real Jira issue via =/jira create=.  The new key is appended to =:LINKED_ISSUES:=.
-**** DONE [#C] =/jira create [project]= command
+Outcome:
+- =tasks= emits =tasks:status-changed= after =persistChange= (so watchers see disk first). Payload =({ id, status, prevStatus, summary, closed })=. Documented under "Cross-extension events" in the README. No Jira knowledge in =tasks=.
+- =jira= subscribes via =pi.events.on=. Filters to =STARTED= / =DONE=. Reads =~/.pi/agent/jira-ext.json=' =autoTransition= (default =false=); when enabled, dispatches =buildTransitionPrompt= via =pi.sendUserMessage=.
+- External-editor (Emacs save) status changes don't emit yet — filed as future enhancement.
+
+*** DONE [#C] =/jira create [project]= command
 CLOSED: [2026-04-28 Tue 13:56]
 :PROPERTIES:
 :CUSTOM_ID: 5c127e9f-7824-49c8-b78a-747e5d1889d4
 :CREATED: [2026-04-28 Tue 11:57]
 :STARTED: [2026-04-28 Tue 13:53]
 :END:
-- Project key argument optional; falls back to =#+JIRA_PROJECT=.
-- Issue type defaults to =Task=; user can override with =--type Story= etc.  Agent calls =atlassian_getJiraProjectIssueTypesMetadata= to validate the type for the project.
-- Description is the task body; summary is the heading.
-- On success, append the new bare key to =:LINKED_ISSUES:= via =setDrawerProperty= and refresh the overlay.  Badge appears via =tasks=' native rendering.
-- Acceptance: =/jira create SAND= on a task creates a =SAND-…= ticket, writes back the key, and the badge appears.
+Outcome: project arg falls back to =#+JIRA_PROJECT=. Type defaults =Task=; agent calls =atlassian_getJiraProjectIssueTypesMetadata= to validate. Description = body, summary = heading. Appends new bare key to =:LINKED_ISSUES:= via =setDrawerProperty= and refreshes the overlay.
+
 * Implementation
 
-Delivered between 2026-04-28 13:27 and 2026-04-28 13:59 across three checkpoint commits:
-
-1. =tasks: generic linked-issues support (foundations)= (=0fc160e=) — generic accessor helpers, =:LINKED_ISSUES:= + =#+ISSUE_URL_BASE= first-class support in parser/overlay/compact widget, =J= keybinding, README update, =org-tasks= extension-points doc, test harness updated for =npx tsx= fallback.
-2. =jira: scaffold extension + org-jira skill + TASKS.org keywords= (=3668329=) — new =jira= pi extension, =org-jira= skill, file-level keywords. Includes a parser regression fix for empty =#+KEYWORD:= lines bleeding into the next line.
-3. =jira: implement /jira clone (read-only stage)= (=e24cfde=) and subsequent commits for =/jira claim=, =/jira comment=, =/jira create=, plus the auto-transition primitive (=tasks:status-changed= event emit in =tasks=, listener in =jira=).
-
-** Test counts
-
-- =tasks= extension: 53 parser-level assertions, all passing.
-- =jira= extension: 34 helper-level assertions, all passing.
-- All five extension TS files (=tasks/index.ts=, =tasks/overlay.ts=, =tasks/parser.ts=, =jira/index.ts=, =jira/utils.ts=) compile via esbuild without warnings.
-
-** Live verification (deferred to user)
-
-All write-path workflows (=clone=, =claim=, =comment=, =create=, auto-transition) end-to-end against =SAND= are user-side verification per the plan’s acceptance criteria. The extension itself is I/O-free for those paths — they dispatch via =pi.sendUserMessage= so the agent performs MCP calls at runtime.
+Delivered 2026-04-28 13:27–13:59 in three checkpoint commits (=0fc160e=, =3668329=, =e24cfde=) plus follow-ons for =claim= / =comment= / =create= and the auto-transition primitive.
 
 ** Cross-extension contract
 
-- =tasks= owns =:LINKED_ISSUES:= (drawer property), =#+ISSUE_URL_BASE= (file keyword), badge rendering, =J= browser-open, and the =tasks:status-changed= event. Tracker-agnostic.
-- =org-tasks= and =org-plan= skills make no reference to Jira; only the generic =Extension points= section in =org-tasks/SKILL.md= mentions the new generic features by name.
+- =tasks= owns =:LINKED_ISSUES:= (drawer), =#+ISSUE_URL_BASE= (file keyword), badge rendering, =J= browser-open, and the =tasks:status-changed= event. Tracker-agnostic.
+- =org-tasks= / =org-plan= skills make no reference to Jira; only the generic "Extension points" section in =org-tasks/SKILL.md= names the new generic features.
 - =jira= and =org-jira= own all Jira-specific authoring conventions, =#+JIRA_*= keywords, and slash commands.
-- The =jira= extension is optional: =tasks= renders badges and opens URLs without it.
+- =jira= is optional: =tasks= renders badges and opens URLs without it.
 
 ** Files touched
 
 - New: =agents/pi/extensions/jira/{index.ts,utils.ts,jira.test.ts,test.sh,README.md}=
 - New: =agents/skills/org-jira/SKILL.md=
-- New: =design/log/2026-04-28-jira-integration.org= (this file)
 - Modified: =agents/pi/extensions/tasks/{parser.ts,overlay.ts,index.ts,status-colors.ts,parser.test.ts,test.sh,README.md}=
-- Modified: =agents/skills/org-tasks/SKILL.md= (Extension points section)
+- Modified: =agents/skills/org-tasks/SKILL.md= (Extension points)
 - Modified: =TASKS.org= (umbrella IMPORT, =#+ISSUE_URL_BASE=, =#+JIRA_*= keywords)
+
+* Validation
+
+- =tasks= extension: 53 parser-level assertions, all passing.
+- =jira= extension: 34 helper-level assertions, all passing.
+- All five extension TS files compile via esbuild without warnings.
+- Live write-path verification (=clone= / =claim= / =comment= / =create= / auto-transition) deferred to user end-to-end against =SAND= per the plan's acceptance criteria; the extension is I/O-free for those paths.
+
 
 * Open questions
 
-All eight questions raised so far have been resolved on 2026-04-28 and folded into =* Context= / =** Design decisions=:
+All eight questions raised so far have been resolved on 2026-04-28 and folded into =* Summary → Decisions=. Remaining items to surface during execution:
 
-- Extension boundary → new =jira= extension + =org-jira= skill; =org-tasks= / =org-plan= stay tracker-agnostic.
-- Property shape → =:LINKED_ISSUES:=, generic, in =tasks= (drawer; mixed bare-key / org-link tokens).
-- URL composition → =#+ISSUE_URL_BASE= with =[[{ID}]]= placeholder + suffix-append fallback, in =tasks=.
-- Cross-extension hook → not needed; =tasks= renders =:LINKED_ISSUES:= natively.  =jira= owns slash commands only.
-- Confluence → out of scope.
-- Sandbox project → =SAND=.
-- Question-handling → batch minor, raise significant immediately.
-- Property entry by =jira= → bare keys, not org links.
-- Migration / drawer backfill → never; property created on first link only, mirroring =:STARTED:=.
-
-Remaining items expected to surface during execution:
-
-- /Status-change event from =tasks=./  Required for the auto-transition task in stage C; if =tasks= doesn't already publish one on the pi event bus, adding it is a foundations-stage prerequisite.  Treat as significant; raise as soon as the auto- transition task starts.
-- /Token-shape validation./  Should =tasks= warn at parse time if a bare token in =:LINKED_ISSUES:= contains characters that would break URL templating (whitespace, =[[=, =]]=)?  Default: parser skips invalid tokens silently and logs to a debug channel.  Treat as minor; review if real users report friction.
+- /Status-change event from =tasks=/ — shipped as =tasks:status-changed= (foundations prerequisite for auto-transition).
+- /Token-shape validation/ — parser skips invalid tokens silently and logs to a debug channel. Review if real users report friction.
