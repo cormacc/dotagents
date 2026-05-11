@@ -1,6 +1,6 @@
 ---
 name: org-plan
-description: "Drafting, reviewing, and executing implementation plans as change-record files linked from TASKS.org. Use whenever the user asks for a plan, says 'let's plan X', wants a design write-up before coding, asks for a retrospective record after work has shipped, or needs to refresh a change-record's * Summary at task closure. Owns the change-record section contract (* Summary, optional * Context, * Plan, * Implementation, optional * Open questions), TASKS.org subtask migration, and the closure-time summary refresh workflow."
+description: "Drafting, reviewing, and executing implementation plans as change-record files linked from TASKS.org. Use whenever the user asks for a plan, says 'let's plan X', wants a design write-up before coding, asks for a retrospective record after work has shipped, or needs to refresh a change-record's * Summary at task closure. Owns the change-record section contract (* Summary, optional * Context, * Plan, * Implementation, * Validation, optional * Open questions), TASKS.org subtask migration, and the closure-time summary refresh workflow."
 ---
 
 # Plan
@@ -18,8 +18,9 @@ persistence rules.
   only useful when its acceptance criteria are observable.
 - Keep `* Summary` (condensed final state, prescriptive — what a resuming
   agent needs to act) distinct from `* Implementation` (the detailed ledger —
-  tactical decisions, tricky details, validation outcomes); they serve
-  different reading audiences.
+  tactical decisions, tricky details) and `* Validation` (evidentiary record
+  of commands / tests / manual checks run); the three serve different reading
+  audiences.
 - Capture durable design decisions in `* Summary` (or promoted `* Context` when
   the rationale exceeds the synopsis) so later sessions don't have to
   reverse-engineer them from `git log`.
@@ -72,12 +73,13 @@ Required on every change-record:
   so they live under `* Plan` while remaining parseable by task tooling. May be
   empty in a retrospective change-record.
 - `* Implementation` — the detailed ledger: tactical decisions, tricky
-  details, validation outcomes (commands / tests / manual checks run), and
-  maintenance context discovered while executing. Owns validation receipts;
-  Summary should only surface a verification finding when it's durable enough
-  to constrain future work (in which case it's a `** Gotcha`, not a
-  validation note). Filled in as work lands (proactive flow) or drafted from
-  `git log` (retrospective flow).
+  details, and maintenance context discovered while executing. Filled in as
+  work lands (proactive flow) or drafted from `git log` (retrospective flow).
+- `* Validation` — evidentiary record of how the change was verified:
+  commands run, test counts and outcomes, manual checks, smoke tests. May be
+  empty or a single "no automated checks; manual smoke only" line on trivial
+  records, but the heading should be present so resume tooling and reviewers
+  always know where to look.
 
 Optional:
 
@@ -151,7 +153,9 @@ Optional: one non-obvious constraint or pointer, if needed.
 
 * Implementation
 - Tactical decisions and tricky details discovered while executing.
-- Validation :: commands / tests / manual checks run, with outcomes.
+
+* Validation
+- Commands / tests / manual checks run, with outcomes.
 
 * Open questions
 ```
@@ -192,8 +196,7 @@ Before transitioning a top-level task to `DONE`:
 
 1. Refresh the linked change-record's `* Summary` so the paragraph plus
    `** Shipped` and `** Gotchas` reflect what actually landed, and refresh
-   the validation notes under `* Implementation` so the verification record
-   matches what was actually run.
+   `* Validation` so the verification record matches what was actually run.
 2. Ensure any newly-discovered follow-up work exists as `TODO` tasks (in
    `TASKS.org` for cross-cutting work, under `* Plan` for plan-local work)
    rather than buried in prose.
@@ -277,9 +280,9 @@ When drafting after work has started or completed:
 
 - Mark already-completed work `DONE`; mark current work `STARTED`; add remaining
   follow-ups as `TODO`.
-- Draft `* Summary` from `git log` and `* Implementation` notes.
-- Record key implementation outcomes and verification notes in
-  `* Implementation`.
+- Draft `* Summary` from `git log`.
+- Record key implementation outcomes in `* Implementation` and verification
+  evidence in `* Validation`.
 - Do not rewrite history to look planned in advance. Label retrospective context
   clearly when useful.
 - Treat `:LOGBOOK:` lifecycle history as evidence, not fiction: preserve entries
