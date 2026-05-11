@@ -25,6 +25,31 @@ persistence rules.
 - Stop planning once the plan is actionable. Endless planning is itself a
   failure mode.
 
+## Voice and density
+
+Plans are written for engineers with project context. Optimise for signal
+density, not narrative.
+
+- Assume the reader knows the codebase, terminology, and motivation that led to
+  the task. Don't restate the task title or recap `git log`.
+- Prefer terse declarative bullets over paragraphs. Use paragraphs only when a
+  single bullet won't carry the rationale.
+- Default to omitting `* Context`. Promote only when durable rationale
+  (alternatives weighed, constraints, trade-offs) materially exceeds what
+  `* Summary` can carry.
+- Plan-task bodies are acceptance criteria plus, at most, one pointer or
+  non-obvious constraint. Skip prose that paraphrases the heading.
+
+Avoid:
+
+- Preamble ("This plan describes…", "The goal of this change is…").
+- Future-tense narrative in `* Implementation` once work has landed — record
+  outcomes, not intentions.
+- Marketing tone, hedging, or restating decisions already captured under
+  `** Decisions`.
+- "First we will…, then we will…" step prose where the bulleted task list
+  already says the same thing.
+
 ## Change-record sections
 
 Required on every change-record:
@@ -33,6 +58,7 @@ Required on every change-record:
   future agents and humans. Placed first so resume tools can ingest it before
   the detailed ledger. A compact paragraph plus optional subsections:
   `** Decisions`, `** Shipped`, `** Gotchas`, `** Validation`, `** Follow-ups`.
+  Follow *Voice and density* above — terse, engineer-facing, no preamble.
   Required on every change-record regardless of size or status (even a
   one-sentence summary is preferable to none). See *Closure-time summary
   refresh* below.
@@ -113,7 +139,7 @@ Acceptance criteria:
 - Concrete observable outcome 1.
 - Concrete observable outcome 2.
 
-Optional further task body prose follows the acceptance criteria.
+Optional: one non-obvious constraint or pointer, if needed.
 
 * Implementation
 
@@ -147,7 +173,8 @@ by `org-tasks`; the keyword is orthogonal to per-task TODO states.
 For non-trivial plan tasks, place a short **Acceptance criteria** bullet list at
 the top of the task body, before any other prose. Each bullet should be a
 concrete observable outcome (“X renders”, “Y round-trips byte-identically”)
-rather than an implementation step.
+rather than an implementation step. Keep the body to the bullet list unless a
+non-obvious constraint or pointer is needed (see *Voice and density*).
 
 ### Closure-time summary refresh
 
