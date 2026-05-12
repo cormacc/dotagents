@@ -1,6 +1,6 @@
 #+TITLE: org_read_section: section-scoped org-file reader (in tasks extension)
 #+DATE: 2026-05-12 Tue
-#+PARENT: [[file:../../TASKS.org::#1b496799-6198-46ca-8084-7a1fbed6f250][tasks extension: section-scoped change-record reader]]
+#+PARENT: [[file:../../TASKS.archive.org::#1b496799-6198-46ca-8084-7a1fbed6f250][tasks extension: section-scoped change-record reader]]
 #+STATUS: Complete
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
@@ -156,7 +156,6 @@ Acceptance criteria:
   is the final one in the file, file with zero headings, body containing
   literal =* = inside a src block (must not terminate early), case-insensitive
   match with trailing tags, default-to-Summary path.
-
 ** DONE [#C] Register =org_read_section= MCP tool :tasks:
 CLOSED: [2026-05-12 Tue 10:25]
 :PROPERTIES:
@@ -187,7 +186,6 @@ Acceptance criteria:
   back without inspecting =isError=.
 - Manual smoke: invoke the tool against =design/log/= records and confirm
   Summary / Plan / Implementation each return the expected slice.
-
 ** DONE [#C] Document =org_read_section= in README :docs:
 CLOSED: [2026-05-12 Tue 10:26]
 :PROPERTIES:
@@ -211,7 +209,6 @@ Acceptance criteria:
   readers understand why the primitive exists.
 - Notes the literal-file-only scope and points at the future
   =tasks_resume_brief= tool as the composer for =#+IMPORT:= chains.
-
 * Implementation
 - =readSection= implemented as a single-pass line scanner with two
   state variables: =inBlock= / =blockKind= for source-block tracking,

@@ -1,6 +1,6 @@
 #+TITLE: Add condensed memory summaries to org-memory change-records
 #+DATE: 2026-05-09 Sat
-#+PARENT: [[file:../../TASKS.org::#777bf685-93c9-4ca2-ab5c-005fe4c40817][Add condensed memory summaries to org-memory change-records]]
+#+PARENT: [[file:../../TASKS.archive.org::#777bf685-93c9-4ca2-ab5c-005fe4c40817][Add condensed memory summaries to org-memory change-records]]
 #+STATUS: Complete
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 

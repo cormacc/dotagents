@@ -653,7 +653,6 @@ Friction reported from session subagent-chat-019e06e5: agents hard-wrap generate
 Suggested wording: **Wrapping**: do not hard-wrap prose paragraphs in generated org content. One paragraph = one logical line. Readers configure their own soft-wrap (visual-line-mode, org-startup-truncated nil, Emacs fill-column). Hard wrapping at an agent-chosen column makes diffs noisy when the convention changes and is redundant with org's display-time wrapping.
 
 Origin: /home/cormacc/nmd/products/connect/portal on branch fix-org-user-association-errors, git@gitlab.com:lenire-tinnitus-treatment/portal.git, timestamp [2026-05-08 Fri 11:15]. Triggering quote: "Better yet, don't wrap at all - let emacs/org mode apply its own softwrapping configuration. Record the decision globally at org-tasks skill level."
-
 ** DONE [#B] Re-tier self-improvement skill routing for the dotfiles/dotagents split :self-improvement:routing:
 CLOSED: [2026-05-09 Sat 10:43]
 :PROPERTIES:
@@ -671,3 +670,51 @@ CLOSED: [2026-05-09 Sat 10:43]
 - *dotfiles* :: =agents.nix=, =agents-config/pi/settings.json=, NixOS / Home Manager / nix-darwin wiring. Feedback about installation, packaging, or the dotfiles AGENTS.md lands here.
 
 Update the skill's routing rules accordingly: classify by affected artefact, hand off to the right repo via ~pi-intercom~, and document the two-tier model. Carried forward from the extraction change-record.
+** DONE [#B] Add condensed memory summaries to org-memory change-records :org-memory:memory:protocol:
+CLOSED: [2026-05-09 Sat 13:12]
+:PROPERTIES:
+:CUSTOM_ID: 777bf685-93c9-4ca2-ab5c-005fe4c40817
+:CREATED: [2026-05-09 Sat 11:25]
+:STARTED: [2026-05-09 Sat 11:49]
+:ARCHIVED: [2026-05-09 Sat 13:12]
+:END:
+:LOGBOOK:
+- State "DONE"      from "STARTED"   [2026-05-09 Sat 13:12]
+- State "STARTED"   from "DONE"      [2026-05-09 Sat 12:56]
+- State "DONE"      from "STARTED"   [2026-05-09 Sat 12:49]
+- State "STARTED"   from "DONE"      [2026-05-09 Sat 12:45]
+- State "DONE"      from "STARTED"   [2026-05-09 Sat 12:11]
+- State "STARTED"   from "TODO"      [2026-05-09 Sat 11:49]
+- Created [2026-05-09 Sat 11:25]
+:END:
+#+IMPORT: [[file:design/log/2026-05-09-org-memory-condensed-summaries.org]]
+Make change-records cheaper for future agents to ingest by adding a first-class condensed memory layer, clear resume/read-order guidance, and closure-time summary discipline while preserving the detailed plan and implementation ledger.
+
+** DONE [#C] tasks extension: section-scoped change-record reader
+CLOSED: [2026-05-12 Tue 10:26]
+:PROPERTIES:
+:CUSTOM_ID: 1b496799-6198-46ca-8084-7a1fbed6f250
+:CREATED: [2026-05-11 Mon 21:33]
+:STARTED: [2026-05-12 Tue 10:21]
+:ARCHIVED: [2026-05-12 Tue 10:26]
+:END:
+:LOGBOOK:
+- State "DONE"      from "STARTED"   [2026-05-12 Tue 10:26]
+- State "STARTED"   from "TODO"      [2026-05-12 Tue 10:21]
+- Created [2026-05-11 Mon 21:33]
+:END:
+#+IMPORT: [[file:design/log/2026-05-12-tasks-read-section.org]]
+Expose a primitive that returns a single top-level section of a change-record file (`* Summary`, `* Context`, `* Plan`, `* Implementation`, `* Validation`, `* Open questions`), including any nested subheadings up to the next level-1 boundary, so agents on resume / review can fetch just the surface the `org-tasks` protocol declares "eagerly loaded" without pulling the entire ledger into context.
+
+Motivation:
+- `org-tasks` § *Resuming and agent memory* says only `* Summary` (and `* Context` when promoted, plus `OPEN` items under `* Open questions`) should be eagerly loaded; `* Implementation` and completed plan-task bodies are explicitly "defer until needed".
+- Today the `tasks` extension exposes no read tool, so agents either `read` the whole file (expensive when records carry a 150+ line Implementation ledger) or do a `rg` + ranged `read` two-step.
+- The closure-refresh helpers in `summary.ts` already know how to locate `* Summary`; section extraction is the same shape generalised over a heading name.
+
+Acceptance criteria:
+- New tool (working name `tasks_read_section`) accepts `{ file, section }` where `section` is one of the canonical change-record sections plus arbitrary level-1 headings (so third-party sections round-trip).
+- Returns the section heading plus body up to (but not including) the next level-1 heading, with nested `**`/`***` subheadings preserved verbatim.
+- Returns a structured "not found" result (not an exception) when the section is absent, so callers can fall back gracefully.
+- `section` defaults to `Summary` for the common case.
+- Unit tests cover: section present, section absent, section is the last in the file, file with no headings, and a section whose body contains literal `* ` characters in source blocks (must not terminate the slice early).
+- README documents the tool alongside `tasks_insert_task` and links the `org-tasks` resume checklist.

@@ -36,7 +36,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:00]
 :END:
-
 ** DONE [#A] Specify the routing classifier
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -45,7 +44,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
 Outcome: path-based signals (resolves under =$HOME/dotfiles= or =~/.agents= / =~/.pi/agent= → global; else project-local) + artefact-based signals (dotfiles-shipped → global; project-only =AGENTS.md= / scripts / conventions → project-local) + ambiguity handling (ask; default to project + =:tier-unknown:= if declined).
-
 ** DONE [#A] Implement local-tier submit+insert flow
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -54,7 +52,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
 Outcome: collect description → auto-detect metadata (session / cwd / git remote+branch / timestamp / sender type) → classify → dedupe → confirm-if-human → insert via =tasks_insert_task= with =allowCreateSection: true= → prompt "plan now or backlog?".
-
 ** DONE [#A] Implement cross-tier submit flow (intercom send)
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -63,7 +60,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
 Outcome: discover live dotfiles sessions via =intercom action:list= (filter by cwd under =$HOME/dotfiles=); spawn one if none exists (see next task); =intercom action:send= with structured envelope (free-form body + metadata + sender-type marker); return immediately, don't block on triage.
-
 ** DONE [#B] Auto-spawn dotfiles session when none alive
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -72,7 +68,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
 Outcome: tmux session named =dotfiles-feedback= running =pi= with cwd =$HOME/dotfiles=; poll for intercom registration with retry budget; surface clear error if it never appears.
-
 ** DONE [#A] Implement triage-mode flow (dotfiles inbound + local self-triage)
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -81,7 +76,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
 Outcome: unified routine (inbound intercom in dotfiles session OR local self-triage): parse envelope → classify → dedupe against open entries in the target repo's =* Agent feedback= (merge evidence on near-match) → draft summary+body → confirm-if-human → insert via =tasks_insert_task= with =allowCreateSection: true= → ack sender with new task UUID and "plan now or backlog?".
-
 ** DONE [#B] Document =* Agent feedback= entry conventions
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -90,7 +84,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
 Outcome: heading =** TODO [summary]= with affected-target tag; body = free-form description + =Origin:= block (session / cwd / git remote+branch / timestamp / sender type) + optional verbatim transcript; promotion = standard =org-plan= flow.
-
 ** DONE [#C] Define agent self-proposal trigger heuristics
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -99,7 +92,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
 Outcome: triggers narrow enough to avoid noise — user correction of an agent action traceable to explicit =AGENTS.md= / skill guideline; repeated tool misuse rooted in unclear documentation; discovered protocol gaps.
-
 ** TODO [#C] End-to-end smoke test across two pi sessions
 :PROPERTIES:
 :CUSTOM_ID: 4a8e0d6b-1c2d-4e3f-9a0b-1c2d3e4f5a6b
@@ -108,7 +100,6 @@ Outcome: triggers narrow enough to avoid noise — user correction of an agent a
 Deferred — requires a second live pi session in another project plus interactive observation of the dotfiles-side ack. Static checks covered in =* Implementation → Static verification=.
 - *Local tier*: invoke skill in some project with a fake project-local observation; verify entry lands in that project's =TASKS.org= with the right tag; second near-duplicate submission collapses via dedupe.
 - *Cross tier*: invoke skill with a fake dotfiles-global observation; verify the dotfiles session is discovered or spawned, entry lands in =~/dotfiles/TASKS.org=, async ack reaches sender.
-
 ** DONE [#C] Document the skill in agents/skills/README.org
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -117,7 +108,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
 Outcome: one-paragraph entry for =self-improvement= linking its =SKILL.md=.
-
 * Implementation
 
 ** Skill artefact
