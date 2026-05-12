@@ -1,0 +1,352 @@
+#+TITLE: tasks_scan_summaries: prior-art discovery for the planning agent
+#+DATE: 2026-05-12 Tue
+#+PARENT: [[file:../../TASKS.archive.org::#70cd5222-825f-4dad-b264-cb8c8ded06dc][tasks extension: scan-summaries tool for prior-art discovery]]
+#+STATUS: Complete
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Summary
+Add =tasks_scan_summaries= to the tasks extension so an agent drafting
+a plan can mechanically discover prior art \u2014 walk every task in
+=TASKS.org= + =TASKS.archive.org= (and their =#+IMPORT:= chains),
+return a flat list of =[{ task header, * Summary body | absent }]=
+records, and let the agent relevance-filter before pulling any full
+change-records into prompt context. The =org-plan= skill's
+*Planning principles* recommends checking prior art before drafting;
+today that's a manual =rg= + filename-scan + N =Read= dance. This
+tool collapses it to one call atop the existing =loadTasks= +
+=readSection= primitives.
+
+** Decisions
+- Use case is prior-art discovery, not resume :: the original
+  =tasks_resume_brief= framing conflated "resume an in-progress task"
+  (where you want the full plan + Implementation, just =Read= the
+  change-record) with "scan many tasks looking for related prior art"
+  (where you want =* Summary= only from each). The latter is the real
+  consumer for a structured tool; the former needs no convenience
+  layer. =tasks_resume_brief= cancelled accordingly \u2014 see the
+  rewritten TASKS.org task heading.
+- No duplication into =TASKS.archive.org= :: =* Summary= lives in
+  change-records exclusively. Mirroring summaries into the archive at
+  archive-time was considered and rejected: it introduces drift
+  (closure-time refresh updates change-records, not the archive copy),
+  bloats =TASKS.archive.org= without bound, and saves zero tokens for
+  the agent (the scanner returns the same chars as a tool result
+  regardless of which file the I/O happens against). Walking N small
+  change-record files on demand is sub-second on a modern SSD.
+- Surface :: pure helper =scanSummaries()= in
+  =pi/extensions/tasks/scan.ts= wrapped by an MCP tool registered
+  from =index.ts=. Same =insert.ts= / =section.ts= / =readSection=
+  pattern: helper imported directly by cross-extension JS callers,
+  tool registry is for LLM dispatch only. =readSection= is invoked
+  in-process; no registry round-trip.
+- Result shape :: flat array of =ScanRow= objects, one per scanned
+  task:
+  #+BEGIN_SRC ts
+  type ScanRow = {
+    id: string;
+    summary: string;          // task heading text
+    status: string;           // TODO / STARTED / DONE / CANCELLED / WAITING
+    priority: string | null;  // 'A' | 'B' | 'C' | 'D' | null
+    tags: string[];
+    sourcePath: string;       // TASKS.org | TASKS.archive.org | imported file
+    importPath: string | null;
+    recordSummary:            // discriminated; mirrors org_read_section
+      | { found: true; body: string }
+      | { found: false }
+      | null;                 // null = task has no #+IMPORT: at all
+    hasContext: boolean;      // true when change-record has a `* Context`
+                              // heading; agent fetches the body via
+                              // org_read_section if relevance scoring
+                              // says it's worth pulling in.
+  };
+  #+END_SRC
+  Flat (not nested) because the consumer is a relevance-scoring
+  loop, not a presentation-layer renderer; flat keys are easier to
+  filter on. The =recordSummary= null case is distinct from the
+  =found: false= case so the agent can choose whether to consider
+  un-planned tasks at all.
+- Scope and filters :: =scope?: "active" | "archived" | "all"= selects
+  which top-level files contribute tasks; default =all=. =tags?:
+  string[]= optional whitelist (a task is included if it carries any
+  listed tag). No status filter \u2014 the agent applies that post-hoc
+  from the structured rows; including =STARTED= tasks is valuable
+  prior-art for "what's happening right now in this area".
+- Subtasks are included :: the walker descends into =task.children=
+  and =task.importChildren= so plan-task headings inside change-records
+  are scannable too. Each row's =sourcePath= identifies whether it
+  came from the top-level task index, an imported change-record's
+  =* Plan=, or elsewhere.
+- Token budget :: typical row size is ~1KB (heading + a short
+  =* Summary= body, capped at the first ~500 chars when the actual
+  Summary is longer). Even at 200 archived tasks that's ~200KB =
+  ~50K tokens for the full scan \u2014 well within budget for a one-shot
+  prior-art tool call whose result is discarded after filtering.
+  A =maxBodyChars?: number= parameter (default 500) lets the caller
+  bound this precisely.
+- =* Context= not inlined :: =scanSummaries= does not include
+  =* Context= body in the result. Surfaces a boolean =hasContext=
+  flag instead; the agent fetches the body via =org_read_section=
+  when relevance scoring says a row is worth pulling further into
+  context. Rationale: =* Context= is promoted only when durable
+  rationale exceeds what =* Summary= can carry, so when it exists
+  it tends to be long; bulk-inlining defeats the prior-art scanner's
+  whole point (cheap surface, agent decides what to deepen). The
+  =* Open questions= section gets the same treatment by omission
+  — if a follow-up reveals scan consumers want OPEN headings too,
+  add =openCount: number= or =openHeadings: string[]= as a sibling
+  signal then.
+- Out-of-root and unreadable change-records :: silently surface as
+  =recordSummary: { found: false }=. =org-tasks=' existing
+  =loadLinkedPlans= already swallows these errors; replicating the
+  same behaviour keeps the scanner robust against half-moved or
+  pruned design-log files. Diagnostics live in =/tasks doctor=, not
+  here.
+- Ordering :: rows are returned in the order =loadTasks= already
+  produces (file-position order across =TASKS.org=,
+  =TASKS.archive.org=, and walked imports). Predictable; agents that
+  want chronological or relevance ordering re-sort the rows
+  themselves.
+
+** Shipped
+- =pi/extensions/tasks/scan.ts= :: pure helper =scanSummaries(input,
+  options)= returning =ScanRow[]=. Walks =activeRoots= +
+  =archivedRoots= depth-first (including =task.children= and
+  =task.importChildren=). Per-row record content fetched via the
+  caller-supplied =readChangeRecord(task)= sync callback (so the
+  helper stays fs-free for tests). Body cap default 500 chars with
+  =\u2026= sentinel; =DEFAULT_MAX_BODY_CHARS= exported. =hasContext=
+  detected via a second =readSection(content, "Context")= call —
+  cheap, consistent with =readSection='s case-insensitive +
+  trailing-tags matching.
+- =pi/extensions/tasks/scan.test.ts= :: 33-case unit suite covering
+  empty graph, full record, missing/unreadable record, record without
+  =* Summary=, task with no =#+IMPORT:=, =hasContext= true/false per
+  record, =scope= filter (active/archived/all/default), tags filter
+  (single, OR, mismatch, empty-array), =maxBodyChars= truncation
+  (with sentinel, without sentinel, default cap), tasks without
+  =:CUSTOM_ID:= skipped, plan tasks inside change-records emitting
+  their own rows with =sourcePath= pointing at the record file, and
+  =[#A]= priority capture.
+- =pi/extensions/tasks/index.ts= :: =tasks_scan_summaries= MCP tool
+  registered alongside =tasks_insert_task= / =org_read_section=. New
+  helpers =loadArchivedTasks(cwd)= (parses =TASKS.archive.org= and
+  walks its =#+IMPORT:= chains; missing-file is silent) and
+  =prepareReadChangeRecord(cwd, activeRoots, archivedRoots)=
+  (pre-resolves every import path, reads each unique resolved file
+  exactly once, returns the sync lookup the helper needs). Typebox
+  schema =({ scope?, tags?, maxBodyChars? })=. Tool return shape:
+  =content[].text= renders a one-line-per-row summary table (capped
+  at 60 rows) for ad-hoc inspection; =details.rows= carries the full
+  =ScanRow[]=.
+- =pi/extensions/tasks/test.sh= :: scan suite wired in.
+- =pi/extensions/tasks/README.md= :: =tasks_scan_summaries= documented
+  under *Cross-extension tools* with the *Why not just Read?*
+  framing, parameter table, =ScanRow= shape, the =* Context= /
+  =hasContext= rationale, the no-duplication-into-archive rationale,
+  and behaviour details (memoised reads, subtask walk, out-of-root
+  fallback, =:CUSTOM_ID:= skip, ordering). Test listing extended.
+  The =org_read_section= entry's stale reference to "the resume-brief
+  composer" updated to point at =tasks_scan_summaries=.
+
+** Gotchas
+- =* Context= body is intentionally absent from =ScanRow=. Agents
+  evaluating a row's prior-art relevance use =recordSummary.body= +
+  =hasContext: true= to decide whether to call
+  =org_read_section({ section: "Context" })=. Bulk-inlining
+  =* Context= would defeat the scanner's token-budget design.
+- =loadArchivedTasks= is *separate* from =loadTasks= rather than
+  bolted on. The UI overlay's =loadTasks= path intentionally does not
+  include archived tasks (the overlay shows only live work); making
+  it conditional would have leaked the scanner's concern into UI
+  loading. The cost of two parser passes is negligible — tens of
+  microseconds for typical archives.
+- =prepareReadChangeRecord= caches by *resolved absolute path*, not
+  by =Task= object identity — so two distinct tasks pointing at the
+  same change-record file share one read. Per-task caching would
+  have read duplicate files in the rare case of plan-task children
+  whose parents share a record.
+- Tasks emitted by the walker include both top-level workstream
+  roots *and* plan-task children inside change-records. The agent
+  filtering rows for prior art should typically prefer rows where
+  =importPath !== null= (workstream roots) or filter by =status=,
+  rather than including every nested =** TODO Step= as its own
+  candidate. README documents the ordering and the recommended
+  filter style; the helper does not pre-filter because callers may
+  legitimately want nested rows (e.g. a doctor-like "find every
+  STARTED plan task across the project" view).
+- The =\u2026= truncation sentinel is one UTF-8 character (3 bytes,
+  1 code point). Callers concerned about byte-level budgets should
+  treat =maxBodyChars= as a code-point cap, not a byte cap.
+
+** Follow-ups
+- Wire a "consider prior art via =tasks_scan_summaries=" pointer into
+  the =org-plan= skill's *Planning principles* once the tool ships
+  and we've used it in anger a few times. Tracked as a separate skill
+  edit, not a plan-task here, so skill changes don't get bundled into
+  an extension change.
+
+* Plan
+
+** DONE [#C] Add =scanSummaries()= pure helper :tasks:
+CLOSED: [2026-05-12 Tue 11:09]
+:PROPERTIES:
+:CUSTOM_ID: 821923c0-8559-4f5b-9682-736df748441e
+:CREATED: [2026-05-12 Tue 10:57]
+:STARTED: [2026-05-12 Tue 11:03]
+:END:
+:LOGBOOK:
+- State "DONE"      from "STARTED"   [2026-05-12 Tue 11:09]
+- State "STARTED"   from "TODO"      [2026-05-12 Tue 11:03]
+- Created [2026-05-12 Tue 10:57]
+:END:
+Acceptance criteria:
+- New module =pi/extensions/tasks/scan.ts= exports
+  =scanSummaries(input): ScanRow[]= where =input= carries the
+  pre-loaded task graph, the optional =scope= / =tags= /
+  =maxBodyChars= filters, and a =readChangeRecord(path): string |
+  null= callback (mirroring =buildResumeBrief='s design from the
+  prior draft, so the helper stays pure / synchronous and unit
+  tests don't need real fs).
+- Walks =task.children= and =task.importChildren= depth-first; emits
+  one =ScanRow= per task. Plan-task headings inside change-records
+  are included.
+- =scope= filter operates on the =sourcePath= of the *top-level
+  containing root*: a plan task whose root lives in =TASKS.org= is
+  counted as =active=; one whose root lives in =TASKS.archive.org=
+  is =archived=. Imported change-records contribute to whichever
+  scope their root falls under. Default =all=.
+- =tags= filter is OR-semantics: a row is included when its task
+  carries any listed tag. Empty / unset = no tag filtering.
+- For each task with an =#+IMPORT:=, the helper resolves the
+  change-record path via the same =sourcePath= + =importPath= +
+  relative-resolve dance =loadLinkedPlans= already does, calls the
+  =readChangeRecord= callback, then runs =readSection(content,
+  "Summary")=. =recordSummary= reflects the result. Tasks with no
+  =#+IMPORT:= surface =recordSummary: null=.
+- Body capping: when =maxBodyChars= is set and the matched Summary
+  body exceeds it, the body is truncated to the cap with a trailing
+  "\u2026" sentinel character. Default cap = 500.
+- Sibling =scan.test.ts= covers: empty task list, single TASKS.org
+  task with full Summary, archived task whose change-record is
+  missing Summary, archived task with no =#+IMPORT:= at all,
+  scope=active filter, scope=archived filter, tags filter
+  inclusion + exclusion, maxBodyChars truncation (with and without
+  the sentinel), =hasContext= true when the change-record has a
+  =* Context= heading and false when it doesn't, and a plan task
+  nested under =* Plan= surfacing as its own row with =sourcePath=
+  pointing at the change-record file.
+- Tests use a fake =readChangeRecord= map so the unit suite stays
+  fs-free, matching =memory.test.ts= conventions.
+** DONE [#C] Register =tasks_scan_summaries= MCP tool :tasks:
+CLOSED: [2026-05-12 Tue 11:09]
+:PROPERTIES:
+:CUSTOM_ID: 2352c88a-4a80-4c93-9415-dc2d495526ab
+:CREATED: [2026-05-12 Tue 10:57]
+:STARTED: [2026-05-12 Tue 11:09]
+:END:
+:LOGBOOK:
+- State "DONE"      from "STARTED"   [2026-05-12 Tue 11:09]
+- State "STARTED"   from "TODO"      [2026-05-12 Tue 11:09]
+- Created [2026-05-12 Tue 10:57]
+:END:
+Acceptance criteria:
+- =index.ts= gains =registerScanSummariesTool(pi)= alongside the
+  existing =registerInsertTaskTool= / =registerReadSectionTool=,
+  registered unconditionally at extension load.
+- Typebox schema: =scope?: "active" | "archived" | "all"= (default
+  =all=), =tags?: string[]=, =maxBodyChars?: number= (default 500).
+- =execute()= performs the I/O wrapper: calls =loadTasks(ctx.cwd)= to
+  build the task graph including =TASKS.archive.org= contents (extend
+  =loadTasks= to also parse the archive file if it doesn't already),
+  resolves change-record paths via =resolveProjectPath= sandboxed
+  under =ctx.cwd=, reads each file once with results memoised so
+  imports referenced by multiple tasks don't double-read, then hands
+  the resolved inputs to =scanSummaries=.
+- Tool return shape: =content[].text= with a one-line per-row tabular
+  rendering (id\u00a0\u2013\u00a0status\u00a0\u2013\u00a0summary) for ad-hoc human inspection,
+  plus structured =details= carrying the full =ScanRow[]= array.
+- Out-of-root change-record paths surface as =recordSummary: { found:
+  false }= rather than failing the whole scan (matches
+  =loadLinkedPlans='s existing behaviour).
+- Whether =TASKS.archive.org= is currently loaded by =loadTasks= or
+  not is treated as an implementation detail; the scan must include
+  archive tasks regardless, so the registration may need to extend
+  the existing loader (or do a sibling parse). Decide during
+  implementation and record the choice in =* Implementation=.
+** DONE [#C] Document =tasks_scan_summaries= in README :docs:
+CLOSED: [2026-05-12 Tue 11:10]
+:PROPERTIES:
+:CUSTOM_ID: 41edeef8-9336-49c9-8800-f8388e28c742
+:CREATED: [2026-05-12 Tue 10:57]
+:STARTED: [2026-05-12 Tue 11:09]
+:END:
+:LOGBOOK:
+- State "DONE"      from "STARTED"   [2026-05-12 Tue 11:10]
+- State "STARTED"   from "TODO"      [2026-05-12 Tue 11:09]
+- Created [2026-05-12 Tue 10:57]
+:END:
+Acceptance criteria:
+- =pi/extensions/tasks/README.md= documents =tasks_scan_summaries=
+  under *Cross-extension tools* with the same section style used for
+  =tasks_insert_task= and =org_read_section=: tool name, parameters,
+  return shape, example call.
+- Documents the prior-art-discovery use case explicitly (vs. the
+  rejected resume-brief framing) so future readers don't reopen the
+  question.
+- Notes the no-duplication design decision and cross-references this
+  change-record's =** Decisions= section for the rationale.
+- Adds =scan.test.ts= to the *Tests* section.
+* Implementation
+- =scanSummaries= is a single-pass depth-first walker over
+  =task.children= + =task.importChildren=. Tasks without =:CUSTOM_ID:=
+  are skipped early; tag-filter check fires before the (potentially
+  expensive) =readChangeRecord= call to avoid unneeded reads for
+  filtered-out rows.
+- Helper kept fs-free for testability: all I/O lives in =index.ts='s
+  =prepareReadChangeRecord= which walks the same task trees once
+  asynchronously, resolves each =importPath= via =resolveProjectPath=
+  (sandboxed under =ctx.cwd=), reads each unique resolved file once,
+  and returns a sync =readChangeRecord= closure for the helper.
+- =hasContext= detection uses a second =readSection(content,
+  "Context")= call rather than a regex. Slightly redundant compared
+  to a single-pass parser, but the consistency win (=readSection='s
+  case-insensitive + trailing-tag rules apply identically to both
+  Summary and Context) outweighs the few microseconds. Future
+  optimisation: a =readSections(content, names[])= primitive that
+  returns multiple sections from one pass. Not worth doing until a
+  real workload demands it.
+- =loadArchivedTasks= mirrors =loadTasks='s structure but reads
+  =TASKS.archive.org= and walks its imports. Missing-file is silent
+  (returns =[]=) so the tool works on new projects with no archive
+  yet.
+- Two test-expectation off-by-one slips during the first test pass
+  (trailing newlines on slices between =* = headings). Same pattern
+  as the section-reader work; corrected the tests, not the helper.
+- Manual smoke against the live project via =.agents/tmp/scan-smoke.ts=:
+  68 total rows (11 active TASKS.org + 57 archive), 25 with a found
+  =* Summary=, 8 with =hasContext=, 43 with no =#+IMPORT:=. The
+  =hasContext= signal is rare in practice (8/25 ≈ 32% of records with
+  Summary also have Context), confirming the org-plan skill's
+  "promote only when needed" guidance is actually followed.
+
+* Validation
+- =cd pi/extensions/tasks && bash ./test.sh= — 277 tests pass, no
+  failures. New =scan.test.ts= contributes 33 cases; pre-existing
+  suites (parser 97, insert 56, lifecycle 13, paths 6, doctor 25,
+  memory 12, summary 15, section 20) all unchanged and green.
+- Manual smoke (see =* Implementation=) against TASKS.org +
+  TASKS.archive.org + 23 design-log records confirmed cross-file
+  composition, =hasContext= signal, =maxBodyChars= truncation,
+  source-path classification, and the no-#+IMPORT: fallback path.
+
+* Open questions
+** DECIDED Should =scanSummaries= also expose =* Context= alongside =* Summary=?
+:PROPERTIES:
+:DECIDED: [2026-05-12 Tue 11:03]
+:END:
+Decision: no — surface a boolean =hasContext= flag instead and let
+the agent fetch the body via =org_read_section= when relevance scoring
+says a row is worth pulling further into context. =* Context= is
+promoted only when durable rationale exceeds what =* Summary= can
+carry, so when present it tends to be long; bulk-inlining defeats the
+scanner's whole point (cheap surface, agent decides what to deepen).

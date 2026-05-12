@@ -689,7 +689,6 @@ CLOSED: [2026-05-09 Sat 13:12]
 :END:
 #+IMPORT: [[file:design/log/2026-05-09-org-memory-condensed-summaries.org]]
 Make change-records cheaper for future agents to ingest by adding a first-class condensed memory layer, clear resume/read-order guidance, and closure-time summary discipline while preserving the detailed plan and implementation ledger.
-
 ** DONE [#C] tasks extension: section-scoped change-record reader
 CLOSED: [2026-05-12 Tue 10:26]
 :PROPERTIES:
@@ -718,3 +717,22 @@ Acceptance criteria:
 - `section` defaults to `Summary` for the common case.
 - Unit tests cover: section present, section absent, section is the last in the file, file with no headings, and a section whose body contains literal `* ` characters in source blocks (must not terminate the slice early).
 - README documents the tool alongside `tasks_insert_task` and links the `org-tasks` resume checklist.
+
+** DONE [#D] tasks extension: scan-summaries tool for prior-art discovery
+CLOSED: [2026-05-12 Tue 11:10]
+:PROPERTIES:
+:CUSTOM_ID: 70cd5222-825f-4dad-b264-cb8c8ded06dc
+:CREATED: [2026-05-11 Mon 21:33]
+:BLOCKED-BY: 1b496799-6198-46ca-8084-7a1fbed6f250
+:STARTED: [2026-05-12 Tue 11:03]
+:ARCHIVED: [2026-05-12 Tue 11:10]
+:END:
+:LOGBOOK:
+- State "DONE"      from "STARTED"   [2026-05-12 Tue 11:10]
+- State "STARTED"   from "TODO"      [2026-05-12 Tue 11:03]
+- Created [2026-05-11 Mon 21:33]
+:END:
+#+IMPORT: [[file:design/log/2026-05-12-tasks-scan-summaries.org]]
+Originally drafted as `tasks_resume_brief` (a layered "cheap resume surface" matching the `org-tasks` resume read order 1:1). On re-examination during planning that framing was rejected: agents resuming an in-progress task want the *whole* change-record in context (just `Read` it), while agents *batch-scanning* prior tasks during planning want `* Summary` only — the latter is the real consumer for a structured tool. Repurposed accordingly.
+
+New design: `tasks_scan_summaries({ scope?: "active" | "archived" | "all", tags?: string[], maxBodyChars?: number })` walks every task in `TASKS.org` + `TASKS.archive.org` (and their `#+IMPORT:` chains), returns a flat `ScanRow[]` of `{ id, summary, status, priority, tags, sourcePath, importPath, recordSummary: { found, body } | null }`. The agent relevance-filters before pulling any full change-records into prompt context. No duplication of `* Summary` into `TASKS.archive.org` (single source of truth; zero drift; same token cost). See linked change-record for the full Decisions ledger.

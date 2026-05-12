@@ -85,4 +85,11 @@ if command -v tsx >/dev/null 2>&1; then
 else
   npx --yes tsx ./section.test.ts || CODE=1
 fi
+
+echo "# Running scan-summaries unit tests..."
+if command -v tsx >/dev/null 2>&1; then
+  tsx ./scan.test.ts || CODE=1
+else
+  npx --yes tsx ./scan.test.ts || CODE=1
+fi
 exit "$CODE"

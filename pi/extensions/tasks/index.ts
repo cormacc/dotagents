@@ -71,6 +71,11 @@ import {
 } from "./summary.ts";
 import { colorIssues, colorPriority, colorStatus, colorTags } from "./status-colors.ts";
 import { DEFAULT_SECTION, readSection, type SectionResult } from "./section.ts";
+import {
+  DEFAULT_MAX_BODY_CHARS,
+  scanSummaries,
+  type ScanRow,
+} from "./scan.ts";
 
 const TASKS_FILE = "TASKS.org";
 /** Gitignored local file that stores per-contributor selection state. */
@@ -825,6 +830,179 @@ function registerReadSectionTool(pi: ExtensionAPI): void {
   });
 }
 
+// ── tasks_scan_summaries: cross-extension tool ********************
+//
+// Prior-art discovery for the planning agent. Walks the active task
+// graph (loaded via `loadTasks`) and the archived task graph (parsed
+// separately from `TASKS.archive.org`), follows their #+IMPORT:
+// chains, and returns a flat `ScanRow[]` capturing each task's
+// heading metadata plus its change-record's `* Summary` body (or
+// "missing" / "no record" signal) and a `hasContext` flag.
+//
+// Body inlining is capped (default 500 chars per row) so a 200-task
+// archive sweep returns ~100KB of structured data the agent can
+// relevance-filter before pulling specific change-records via
+// `org_read_section`. `* Context` is *not* inlined; agents fetch it
+// on demand for rows where `hasContext === true`.
+
+async function loadArchivedTasks(cwd: string): Promise<Task[]> {
+  const sourcePath = join(cwd, TASKS_ARCHIVE_FILE);
+  try {
+    const content = await readFile(sourcePath, "utf-8");
+    const { tasks } = parseTasks(content, { sourcePath });
+    // Walk #+IMPORT: chains from archived tasks too — the archive
+    // preserves links to design/log/*.org records that are still on
+    // disk, and the scanner needs their contents to surface
+    // `* Summary` bodies.
+    await loadLinkedPlans(tasks, sourcePath, cwd);
+    return tasks;
+  } catch {
+    // No archive file (common for new projects) is a no-op, not an
+    // error — the scanner just sees no archived rows.
+    return [];
+  }
+}
+
+/**
+ * Walk every import-bearing task in the active + archived graphs and
+ * pre-resolve their change-record content into a `Map<resolved-path,
+ * content | null>` plus a per-task `Map<Task, resolved-path | null>`.
+ * Returns a synchronous `readChangeRecord(task)` lookup so the pure
+ * `scanSummaries` helper can stay fs-free.
+ *
+ * Each file is read at most once even when multiple tasks share a
+ * change-record (e.g. a top-level workstream and its plan-task
+ * children both reference the same record).
+ */
+async function prepareReadChangeRecord(
+  cwd: string,
+  activeRoots: Task[],
+  archivedRoots: Task[],
+): Promise<(task: Task) => string | null> {
+  const contentByPath = new Map<string, string | null>();
+  const pathByTask = new Map<Task, string | null>();
+  const visited = new Set<Task>();
+
+  const visit = async (tasks: readonly Task[]): Promise<void> => {
+    for (const task of tasks) {
+      if (visited.has(task)) continue;
+      visited.add(task);
+      if (task.importPath && task.sourcePath) {
+        const baseDir = dirname(task.sourcePath);
+        const resolved = await resolveProjectPath(
+          cwd, baseDir, task.importPath,
+        );
+        pathByTask.set(task, resolved);
+        if (resolved && !contentByPath.has(resolved)) {
+          try {
+            contentByPath.set(resolved, await readFile(resolved, "utf-8"));
+          } catch {
+            contentByPath.set(resolved, null);
+          }
+        }
+      }
+      await visit(task.children);
+      if (task.importChildren) await visit(task.importChildren);
+    }
+  };
+
+  await visit(activeRoots);
+  await visit(archivedRoots);
+
+  return (task: Task): string | null => {
+    const path = pathByTask.get(task);
+    if (!path) return null;
+    return contentByPath.get(path) ?? null;
+  };
+}
+
+const SCOPE_VALUES = ["active", "archived", "all"] as const;
+
+const ScanSummariesParams = Type.Object({
+  scope: Type.Optional(Type.Union(
+    SCOPE_VALUES.map((v) => Type.Literal(v)),
+    {
+      description:
+        "Which top-level files contribute tasks. `active` walks " +
+        "TASKS.org (+ TASKS.local.org and file-level #+IMPORT: chains); " +
+        "`archived` walks TASKS.archive.org; `all` walks both. Default: all.",
+    },
+  )),
+  tags: Type.Optional(Type.Array(Type.String(), {
+    description:
+      "Optional tag whitelist (OR-semantics): a task is included when " +
+      "its heading carries any listed tag. Empty / omitted disables " +
+      "tag filtering.",
+  })),
+  maxBodyChars: Type.Optional(Type.Number({
+    description:
+      "Cap on inlined `* Summary` body length per row. Bodies longer " +
+      "than this are truncated with a trailing '…' sentinel. " +
+      `Default: ${DEFAULT_MAX_BODY_CHARS}.`,
+  })),
+});
+
+function summarizeRowForLLM(row: ScanRow): string {
+  const id = row.id.slice(0, 8);
+  const prio = row.priority ? `[#${row.priority}] ` : "";
+  const tags = row.tags.length > 0 ? ` :${row.tags.join(":")}:` : "";
+  const recordSig =
+    row.recordSummary === null
+      ? ""
+      : row.recordSummary.found
+        ? row.hasContext ? " … (+ctx)" : " …"
+        : " (no summary)";
+  return `[${row.status}] ${id} ${prio}${row.summary}${tags}${recordSig}`;
+}
+
+function registerScanSummariesTool(pi: ExtensionAPI): void {
+  pi.registerTool({
+    name: "tasks_scan_summaries",
+    label: "Tasks: scan prior-art summaries",
+    description:
+      "Walk every task in the project's TASKS.org + TASKS.archive.org " +
+      "(and their #+IMPORT: change-record chains) and return a flat " +
+      "array of { id, summary, status, priority, tags, sourcePath, " +
+      "importPath, recordSummary, hasContext } rows. Designed for an " +
+      "agent drafting a plan: scan many tasks, relevance-filter the " +
+      "rows, then load specific change-records via org_read_section. " +
+      "`* Summary` bodies are capped (default 500 chars) so a full " +
+      "sweep stays in budget. `* Context` is not inlined — fetch it " +
+      "via org_read_section when `hasContext: true` and the row looks " +
+      "relevant.",
+    promptSnippet:
+      "Scan prior tasks for related work before drafting a new plan",
+    parameters: ScanSummariesParams,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const activeRoots = await loadTasks(ctx.cwd);
+      const archivedRoots = await loadArchivedTasks(ctx.cwd);
+      const readChangeRecord = await prepareReadChangeRecord(
+        ctx.cwd, activeRoots, archivedRoots,
+      );
+      const rows = scanSummaries(
+        { activeRoots, archivedRoots, readChangeRecord },
+        {
+          scope: params.scope,
+          tags: params.tags,
+          maxBodyChars: params.maxBodyChars,
+        },
+      );
+      const scope = params.scope ?? "all";
+      const lines = [
+        `# tasks_scan_summaries: ${rows.length} row(s) (scope=${scope})`,
+        ...rows.slice(0, 60).map(summarizeRowForLLM),
+      ];
+      if (rows.length > 60) {
+        lines.push(`… ${rows.length - 60} more row(s) in details.rows`);
+      }
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        details: { rows, scope, count: rows.length },
+      };
+    },
+  });
+}
+
 function registerInsertTaskTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "tasks_insert_task",
@@ -864,6 +1042,7 @@ function registerInsertTaskTool(pi: ExtensionAPI): void {
 export default function (pi: ExtensionAPI) {
   registerInsertTaskTool(pi);
   registerReadSectionTool(pi);
+  registerScanSummariesTool(pi);
 
   // ── Keyboard shortcut: Alt+T opens the tasks UI ──────────────────────
   //

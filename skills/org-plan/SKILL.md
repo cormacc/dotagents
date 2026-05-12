@@ -71,10 +71,17 @@ Required on every change-record:
   summary refresh* below.
 - `* Plan` — executable org TODO headings. Top-level plan tasks are `** TODO …`
   so they live under `* Plan` while remaining parseable by task tooling. May be
-  empty in a retrospective change-record.
+  empty in a retrospective change-record. Investigation- or discovery-shaped
+  work legitimately collapses to a single plan task once the investigation
+  resolves — a single-task plan is a valid shape, not a sign of
+  under-planning.
 - `* Implementation` — the detailed ledger: tactical decisions, tricky
   details, and maintenance context discovered while executing. Filled in as
   work lands (proactive flow) or drafted from `git log` (retrospective flow).
+  When the canonical tactical record lives in a linked external artifact
+  (upstream PR, commit body, vendor doc, RFC), `* Implementation` may be a
+  one-line pointer to that artifact rather than a duplicated ledger; capture
+  *only* the project-side tactical notes that did not belong downstream.
 - `* Validation` — evidentiary record of how the change was verified:
   commands run, test counts and outcomes, manual checks, smoke tests. May be
   empty or a single "no automated checks; manual smoke only" line on trivial

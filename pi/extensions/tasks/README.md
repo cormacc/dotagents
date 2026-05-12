@@ -363,9 +363,9 @@ across that move.
 ```
 
 The `not found` case is **not** an error — it returns the structured
-result so callers can fall back gracefully (e.g. the resume-brief
-composer surfacing "this change-record lacks `* Summary`" just like
-the closure-time refresh path already does).
+result so callers can fall back gracefully (e.g. the
+`tasks_scan_summaries` composer surfacing "this change-record lacks
+`* Summary`" just like the closure-time refresh path already does).
 
 The `content[].text` view of a found section renders heading + body
 verbatim so simple LLM consumers can ingest it without unpacking
@@ -382,6 +382,101 @@ verbatim so simple LLM consumers can ingest it without unpacking
   uses a direct regex on file contents because it must decide
   synchronously whether to close the overlay. Routing through this
   tool would add latency to that hot path for no gain.
+
+### `tasks_scan_summaries`
+
+Walks every task in the project's `TASKS.org` + `TASKS.archive.org`
+(and their `#+IMPORT:` change-record chains) and returns a flat array
+of `ScanRow` objects capturing each task's heading metadata, the linked
+change-record's `* Summary` body, and a `hasContext` flag. Designed
+for the planning agent's prior-art discovery step: scan many tasks,
+relevance-filter the rows, then load specific change-records via
+`org_read_section`.
+
+Why not just `Read` change-records directly? Two reasons:
+
+1. **Token economy**. A 200-task archive sweep returns ~100KB of
+   structured data at the default 500-char body cap; reading the same
+   change-records in full would be ~10× that and largely irrelevant.
+2. **Cross-file composition**. Parent headings live in `TASKS.org` /
+   `TASKS.archive.org`; `* Summary` lives in `design/log/*.org`. The
+   scanner stitches them together and follows `#+IMPORT:` chains so
+   plan-task headings inside change-records surface as their own rows.
+
+The rejected `tasks_resume_brief` framing ("the cheap resume surface
+for an in-progress task") collapsed into this design: resuming an
+in-progress task wants the *whole* change-record (just `Read` it); the
+real consumer for a structured tool is *batch* prior-art scanning.
+Full rationale lives in `design/log/2026-05-12-tasks-scan-summaries.org`.
+
+**Args** (TypeBox schema in `index.ts`):
+
+| Field          | Type                                  | Description                                                                                                                                            |
+| -------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `scope`        | `"active" \| "archived" \| "all"`?     | Which top-level files contribute tasks. `active` walks `TASKS.org` (+ `TASKS.local.org` + file-level imports); `archived` walks `TASKS.archive.org`; `all` walks both. Default `all`. |
+| `tags`         | `string[]?`                            | OR-semantics whitelist. A row is included when its heading carries any listed tag. Empty / omitted disables tag filtering.                              |
+| `maxBodyChars` | `number?`                              | Cap on inlined `* Summary` body per row. Bodies longer than this are truncated with a trailing `…` sentinel. Default `500`.                          |
+
+**`ScanRow` shape** (in `details.rows`):
+
+```ts
+type ScanRow = {
+  id: string;                    // :CUSTOM_ID:
+  summary: string;               // task heading text
+  status: string;                // TODO / STARTED / WAITING / DONE / CANCELLED
+  priority: string | null;       // 'A' | 'B' | 'C' | 'D' | null
+  tags: string[];
+  sourcePath: string | null;     // absolute path of the defining file
+  importPath: string | null;     // #+IMPORT: value verbatim, or null
+  recordSummary:
+    | { found: true; body: string }    // body capped at maxBodyChars
+    | { found: false }                  // record unreadable / no * Summary
+    | null;                             // task has no #+IMPORT: at all
+  hasContext: boolean;           // record has a top-level * Context heading
+};
+```
+
+**Why `* Context` is not inlined.** The `org-plan` skill says `* Context`
+is promoted only when durable rationale exceeds what `* Summary` can
+carry — so when it exists it tends to be long. Bulk-inlining it would
+defeat the scanner's whole point (cheap surface, agent decides what to
+deepen). The `hasContext` boolean lets the agent decide whether to
+fetch the body via `org_read_section({ section: "Context" })` for
+relevant rows. The `* Open questions` section gets the same treatment
+by omission; if a follow-up reveals consumers want OPEN headings
+alongside, add an `openHeadings: string[]` field then.
+
+**Why no duplication into `TASKS.archive.org`.** Mirroring `* Summary`
+into archived task bodies at archive-time was considered and rejected:
+it would introduce drift (closure-time `* Summary` refresh updates the
+change-record, not the archive copy), bloat the archive without bound,
+and save zero tokens (the scanner returns the same chars to the agent
+regardless of which file the I/O happens against). Walking N small
+change-record files on demand is sub-second on a modern SSD.
+
+**Behaviour details:**
+
+- **Memoised reads.** Each change-record file is read at most once per
+  call even when multiple tasks share a record (e.g. a workstream root
+  and its plan-task children both pointing at the same file).
+- **Subtask walk.** The scanner descends into `task.children` *and*
+  `task.importChildren`, so plan-task headings inside change-records
+  emit their own rows with `sourcePath` pointing at the record file.
+- **Out-of-root / unreadable records.** Surface as `recordSummary: {
+  found: false }` rather than failing the whole scan (mirrors
+  `loadLinkedPlans`).
+- **Tasks without `:CUSTOM_ID:`** are skipped — without an id the
+  agent has no handle to fetch more context. The `/tasks doctor`
+  command surfaces them as a separate finding.
+- **Ordering.** Rows are emitted in walker order (depth-first,
+  file-position within each root; active roots before archived when
+  `scope: "all"`). Agents that want chronological / relevance ordering
+  re-sort post-hoc.
+
+The `content[].text` view renders one line per row
+(`[STATUS] short-id  [#P] summary :tags: … (+ctx)`) for ad-hoc
+inspection, capped at 60 rows so the chat view stays readable; the
+full row array always lives in `details.rows`.
 
 ## Cross-extension events
 
@@ -467,6 +562,12 @@ regression suites:
   inside `#+BEGIN_SRC` / `#+BEGIN_EXAMPLE`, case-insensitive matching
   with trailing `:tags:`, default-to-Summary, nested subheadings
   preserved, and duplicate-section first-match-wins.
+- `scan.test.ts` — `tasks_scan_summaries` primitive: rich record,
+  missing record content, record without `* Summary`, task with no
+  `#+IMPORT:`, `hasContext` flag per record, `scope=active`/`archived`/`all`,
+  tags OR-semantics, `maxBodyChars` truncation (with and without the
+  `…` sentinel) and default cap, tasks without `:CUSTOM_ID:` skipped,
+  plan tasks inside change-records emitting their own rows.
 
 These tests are the authoritative behavioural contract for the
 org-memory protocol implemented by this extension. The scaffold
