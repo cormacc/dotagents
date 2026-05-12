@@ -78,4 +78,11 @@ if command -v tsx >/dev/null 2>&1; then
 else
   npx --yes tsx ./summary.test.ts || CODE=1
 fi
+
+echo "# Running section reader unit tests..."
+if command -v tsx >/dev/null 2>&1; then
+  tsx ./section.test.ts || CODE=1
+else
+  npx --yes tsx ./section.test.ts || CODE=1
+fi
 exit "$CODE"

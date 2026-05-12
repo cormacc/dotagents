@@ -30,7 +30,6 @@
 The terminal extension is only half cooked. We refactored a while ago to use tmux across all backends for pane management and do minimal pane creation/deletion using sway, kitty etc. This was a good choice, but the key bindings / workflows should be reviewed and updated - they hark back to an earlier design (or lack thereof).
 - Evaluate whether we should use zellij rather than tmux as the terminal multiplexer.
 - Redesign the slash commands and keybindings around the multiplexer workflow / semantics.
-
 ** TODO [#D] Investigate Allium
 :PROPERTIES:
 :CUSTOM_ID: a46d6a4d-e72f-4923-8472-2daf28cb29d0
@@ -38,7 +37,6 @@ The terminal extension is only half cooked. We refactored a while ago to use tmu
 May be a useful complement to tasks / memory system?
 - https://juxt.github.io/allium/
 - https://plugins.eca.dev/plugins/allium/
-
 ** TODO [#D] Check out rpiv-todo overlay for ideas
 :PROPERTIES:
 :CUSTOM_ID: 60e8eff5-26a9-4d4b-8c1a-3c70321beccd
@@ -48,19 +46,16 @@ May be a useful complement to tasks / memory system?
 - State "TODO"      from "CANCELLED"      [2026-05-08 Fri 07:41]
 :END:
 https://pi.dev/packages/@juicesharp/rpiv-todo Haven't checked it out yet, but might be a nicer overlay, with a different underlying task store.
-
 ** TODO [#D] Check out rpiv-btw
 :PROPERTIES:
 :CUSTOM_ID: ec8e6eb3-dcfc-4124-ad1c-17e88d8562b6
 :END:
 https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without polluting context... sounds useful
-
 ** TODO [#C] Evaluate context-mode plugin
 :PROPERTIES:
 :CUSTOM_ID: dea3b890-b265-4372-a663-c584d04b4a68
 :END:
 https://pi.dev/packages/context-mode Also sounds useful...
-
 ** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol
 :PROPERTIES:
 :CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
@@ -75,34 +70,19 @@ Re-examine the self-improvement skill against the org-memory protocol (org-tasks
 - whether durable lessons / solutions should land as their own org artefacts, separate change-records, or knowledge-base files
 - whether the skill should integrate with TASKS.org via spawned TODOs vs remain orthogonal
 - whether anything in the dev-agent-backlog HTML summary (design/log/2026-05-01-dev-agent-backlog-review-summary.html) should be borrowed for the self-improvement skill specifically
-
-** DONE [#B] Add condensed memory summaries to org-memory change-records :org-memory:memory:protocol:
-CLOSED: [2026-05-09 Sat 13:12]
-:PROPERTIES:
-:CUSTOM_ID: 777bf685-93c9-4ca2-ab5c-005fe4c40817
-:CREATED: [2026-05-09 Sat 11:25]
-:STARTED: [2026-05-09 Sat 11:49]
-:END:
-:LOGBOOK:
-- State "DONE"      from "STARTED"   [2026-05-09 Sat 13:12]
-- State "STARTED"   from "DONE"      [2026-05-09 Sat 12:56]
-- State "DONE"      from "STARTED"   [2026-05-09 Sat 12:49]
-- State "STARTED"   from "DONE"      [2026-05-09 Sat 12:45]
-- State "DONE"      from "STARTED"   [2026-05-09 Sat 12:11]
-- State "STARTED"   from "TODO"      [2026-05-09 Sat 11:49]
-- Created [2026-05-09 Sat 11:25]
-:END:
-#+IMPORT: [[file:design/log/2026-05-09-org-memory-condensed-summaries.org]]
-Make change-records cheaper for future agents to ingest by adding a first-class condensed memory layer, clear resume/read-order guidance, and closure-time summary discipline while preserving the detailed plan and implementation ledger.
-
-** TODO [#C] tasks extension: section-scoped change-record reader
+** DONE [#C] tasks extension: section-scoped change-record reader
+CLOSED: [2026-05-12 Tue 10:26]
 :PROPERTIES:
 :CUSTOM_ID: 1b496799-6198-46ca-8084-7a1fbed6f250
 :CREATED: [2026-05-11 Mon 21:33]
+:STARTED: [2026-05-12 Tue 10:21]
 :END:
 :LOGBOOK:
+- State "DONE"      from "STARTED"   [2026-05-12 Tue 10:26]
+- State "STARTED"   from "TODO"      [2026-05-12 Tue 10:21]
 - Created [2026-05-11 Mon 21:33]
 :END:
+#+IMPORT: [[file:design/log/2026-05-12-tasks-read-section.org]]
 Expose a primitive that returns a single top-level section of a change-record file (`* Summary`, `* Context`, `* Plan`, `* Implementation`, `* Validation`, `* Open questions`), including any nested subheadings up to the next level-1 boundary, so agents on resume / review can fetch just the surface the `org-tasks` protocol declares "eagerly loaded" without pulling the entire ledger into context.
 
 Motivation:
@@ -117,7 +97,6 @@ Acceptance criteria:
 - `section` defaults to `Summary` for the common case.
 - Unit tests cover: section present, section absent, section is the last in the file, file with no headings, and a section whose body contains literal `* ` characters in source blocks (must not terminate the slice early).
 - README documents the tool alongside `tasks_insert_task` and links the `org-tasks` resume checklist.
-
 ** TODO [#D] tasks extension: resume-brief convenience tool
 :PROPERTIES:
 :CUSTOM_ID: 70cd5222-825f-4dad-b264-cb8c8ded06dc
@@ -144,6 +123,33 @@ Acceptance criteria:
 - Does not eagerly load `* Implementation`, `* Validation`, or completed plan-task bodies.
 - Unit tests cover: task with full record, task with no record, record missing Summary, multiple blockers, no selection set.
 
+** TODO [#D] Extract org-mode tooling to a dedicated pi extension with a tree-sitter foundation :pi:extension:org:refactor:
+:PROPERTIES:
+:CUSTOM_ID: f361c429-45dd-4364-9fa3-1f77bd7c600a
+:CREATED: [2026-05-12 Tue 10:18]
+:BLOCKED-BY: 1b496799-6198-46ca-8084-7a1fbed6f250
+:END:
+:LOGBOOK:
+- Created [2026-05-12 Tue 10:18]
+:END:
+Once `org_read_section` ships in-place inside `pi/extensions/tasks/`, promote org-file primitives out into their own `pi/extensions/org/` extension so non-task consumers (jira, emacsclient, future doc tooling) can depend on org parsing without pulling in the tasks UI.
+
+Motivation:
+- The section-reader primitive (TASKS.org task 1b496799 / change-record `design/log/2026-05-12-tasks-read-section.org`) is registered under the `org_*` tool namespace specifically to anticipate this extraction — the contract stays stable across the move.
+- `nvim-orgmode/tree-sitter-org` is an actively maintained tree-sitter grammar (MIT, weekly-touched, backs nvim-orgmode) whose `(section)` / `(headline)` / `(body)` node shapes map cleanly onto the slicing and parsing tasks we hand-roll today in `pi/extensions/tasks/parser.ts` and `section.ts`.
+- Pi today has no JS-side tree-sitter runtime; introducing one for a single ~50-line primitive was rejected as disproportionate. Doing it once, as part of an extension extraction that amortises across multiple consumers, is the right time.
+
+Acceptance criteria:
+- New extension at `pi/extensions/org/` with its own `package.json`, `index.ts`, `README.md`.
+- `web-tree-sitter` (or native bindings, decided during the work) wired up with `tree-sitter-org.wasm` bundled or fetched at install time; async grammar init handled lazily so cold-start cost only hits the first call.
+- `org_read_section` migrated from `pi/extensions/tasks/` to the new extension and reimplemented using a tree-sitter query against `(document (section (headline (item) @name)) @section)`. Tool contract (name, parameters, return shape) unchanged so existing callers keep working.
+- Decision documented in the new extension's README on whether to migrate `parser.ts`'s heading / property-drawer regexes to tree-sitter queries in the same change, or leave that as a follow-up.
+- Closure-time `evaluateSummaryRefresh` path in the tasks extension continues to work synchronously — either by keeping a thin regex-based `hasSummaryHeading` check in `summary.ts`, or by ensuring the tree-sitter init is eager enough that the sync read remains viable. Recorded as a Decision.
+- Unit tests for the migrated primitive cover the same five acceptance-criteria cases as the original (section present, absent, last, no headings, literal `* ` inside src block).
+- README cross-references the `org-tasks` resume read order and the future `tasks_resume_brief` consumer.
+
+Blocked by the in-place `org_read_section` primitive shipping first (TASKS.org task 1b496799) — no point doing both at once.
+
 * Fixes
 
 ** TODO Local tasks duplicated in overlay when selected?
@@ -155,7 +161,6 @@ When I do the following....
 - Create a new task in TASKS.local.org
 - In the pi tasks extension, select the new task
 The new task is initially duplicated to TASKS.org, then deleted from TASKS.local.org It's possible that I accidentally hit promote, but don't believe so. Investigate -- reproduce manually, then follow up as appropriate.
-
 * Housekeeping
 
 ** STARTED Create self-improvement skill
@@ -165,7 +170,6 @@ The new task is initially duplicated to TASKS.org, then deleted from TASKS.local
 :STARTED: [2026-04-29 Wed 08:00]
 :END:
 #+IMPORT: [[file:design/log/2026-04-28-create-self-improvement-skill.org]]
-
 * Agent feedback
 
 ** TODO [#D] Evaluate pi-lsp over home-rolled lsp

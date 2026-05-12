@@ -1,0 +1,253 @@
+#+TITLE: org_read_section: section-scoped org-file reader (in tasks extension)
+#+DATE: 2026-05-12 Tue
+#+PARENT: [[file:../../TASKS.org::#1b496799-6198-46ca-8084-7a1fbed6f250][tasks extension: section-scoped change-record reader]]
+#+STATUS: Complete
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Summary
+Add =org_read_section= to the tasks extension so agents can fetch a single
+top-level section of any org file (=* Summary=, =* Context=, =* Plan=,
+=* Implementation=, =* Validation=, =* Open questions=, or any other level-1
+heading) without reading the entire file. Backs the layered resume read order
+the =org-tasks= protocol declares "eagerly loaded" and lets the sibling
+=tasks_resume_brief= task (70cd5222) compose its surface from this primitive.
+
+The tool is namespaced =org_*= (not =tasks_*=) because the primitive is
+generically org-file shaped, not task-shaped; the helper lives in the tasks
+extension for now and migrates to a dedicated =pi/extensions/org/= extension
+in follow-up task f361c429.
+
+** Decisions
+- Tool namespace :: =org_*= rather than =tasks_*=. The contract is
+  generically org-file shaped, with no task semantics in the parameters or
+  return shape. The default section value (="Summary"=) is a convention from
+  =org-plan= but is overridable; nothing else carries protocol assumptions.
+  Naming it =org_*= now keeps the contract stable across the planned move to
+  a dedicated =pi/extensions/org/= extension (TASKS.org task f361c429) — no
+  tool-name churn for downstream callers.
+- Surface :: pure helper =readSection()= in =pi/extensions/tasks/section.ts=,
+  wrapped by an MCP tool =org_read_section= registered from =index.ts=.
+  Mirrors the =insert.ts= / =insertTaskIntoFile= split so cross-extension JS
+  callers (e.g. the upcoming resume-brief tool) skip the registry round-trip.
+  The file lives in the tasks extension until the extraction in f361c429.
+- Return shape :: discriminated union
+  ={ found: true, heading, body } | { found: false, section }=. Matches the
+  =InsertResult= style and lets agents branch on =found= without falsy checks.
+- Heading match :: case-insensitive, tolerates trailing =:tags:=. Accepts
+  =section: "summary"= → =* Summary :foo:=. Rationale: change-record authors
+  occasionally tag the =* Plan= heading; agents shouldn't have to round-trip
+  the exact case + tag list.
+- Source-block aware :: scanner tracks =#+BEGIN_SRC= / =#+END_SRC= regions so
+  literal =* = inside example blocks doesn't terminate the slice early.
+  Required by the acceptance-criteria test case.
+- Implementation strategy :: line-by-line TS scanner reusing =parser.ts='s
+  heading regex. Considered two alternatives and rejected both for this
+  primitive:
+  - =conao3/lsp-org-mode= (LSP server backed by batch Emacs + Python): 9
+    stars, effectively unmaintained, capability gap (LSP doesn't expose
+    section-body extraction directly), heavy runtime stack disproportionate
+    to a section-slice primitive.
+  - =nvim-orgmode/tree-sitter-org= (actively maintained MIT grammar, used by
+    the nvim-orgmode plugin; =(section)= / =(headline)= / =(body)= node
+    shapes match our needs exactly): pi has no JS-side tree-sitter runtime
+    today, so adopting it means a new =web-tree-sitter= or native-bindings
+    dep plus a WASM/grammar build pipeline — too much foundation work for a
+    ~50-line primitive. The right time to introduce it is when we promote
+    org tooling to its own extension (TASKS.org task f361c429), where the
+    runtime cost amortises across multiple consumers and potentially across
+    a =parser.ts= migration. Routing through =emacs_ts_query= was also
+    rejected: couples the primitive to a running Emacs and adds latency to
+    the closure-time =evaluateSummaryRefresh= path that reads synchronously.
+- Scope :: literal-file only. =#+IMPORT:= chains are not followed; the
+  resume-brief composer resolves imports if it needs to.
+- Path resolution + sandbox :: same shape as =tasks_insert_task=
+  (cwd-relative or absolute, =resolveProjectPath= + =isWithinRoot=). Reuse,
+  don't reinvent.
+- Default section :: =Summary= when caller omits the parameter.
+
+** Shipped
+- =pi/extensions/tasks/section.ts= :: pure helper =readSection(content,
+  section?)= returning the =SectionResult= discriminated union. Default
+  section ="Summary"= exported as =DEFAULT_SECTION=. Case-insensitive
+  heading match with trailing =:tags:= tolerated. Source-block scanner
+  tracks =#+BEGIN_<kind>= / =#+END_<kind>= regions case-insensitively so
+  literal =* = inside src/example/quote blocks doesn't terminate the
+  slice.
+- =pi/extensions/tasks/section.test.ts= :: 20-case unit suite covering
+  the five acceptance-criteria edge cases plus default-to-Summary,
+  empty-body, duplicate-section first-match-wins, ** Summary not
+  matched as level-1, case-insensitive directives, and EOF-mid-line.
+- =pi/extensions/tasks/index.ts= :: =org_read_section= MCP tool
+  registered alongside =tasks_insert_task= (no =session_start= gate).
+  Typebox schema =({ file, section? })=. File path sandboxed via
+  =resolveProjectPath(ctx.cwd, ctx.cwd, file)=; out-of-root rejected
+  with =kind: "error", error: "out_of_root"=. Read failures surface as
+  =kind: "error", error: "unreadable"=. Not-found is a structured
+  result (no =isError=) so callers fall back gracefully.
+- =pi/extensions/tasks/test.sh= :: section suite wired into the test
+  runner.
+- =pi/extensions/tasks/README.md= :: =org_read_section= documented under
+  *Cross-extension tools* with the namespace rationale, the
+  discriminated-union return shape, and a pointer at the planned
+  extraction (TASKS.org task =f361c429=). Test listing extended with
+  =section.test.ts=.
+
+** Gotchas
+- The tool's =content[].text= view renders =heading + "\n" + body=
+  verbatim. =body= preserves its own internal trailing newlines exactly
+  as they appear in the source slice — callers that join =heading= and
+  =body= manually should not insert their own separator.
+- =* = inside =#+BEGIN_EXAMPLE= and =#+BEGIN_QUOTE= is also shielded
+  (not just =#+BEGIN_SRC=). The block scanner matches any =#+BEGIN_\w+= /
+  =#+END_\w+= pair case-insensitively. Org's "flat-only" block-nesting
+  rule means a simple in/out flag suffices, not a stack.
+- The closure-time =evaluateSummaryRefresh= path in =summary.ts= was
+  intentionally **not** routed through this tool. It needs to decide
+  synchronously inside =onRefreshSummary= whether to close the overlay,
+  and routing through the tool registry would force async + read-twice.
+  =hasSummaryHeading= stays a regex; the duplication is justified.
+- Multiple =* Summary= sections in the same file: =readSection= returns
+  the **first** match and its slice ends at the second =* Summary=. This
+  matches how Emacs's =org-element= treats consecutive level-1 sections
+  and is the convention change-records already follow.
+- Trailing-tag heuristic accepts characters =[A-Za-z0-9_@#%:-]= inside
+  the colon-delimited list. Org's own tag grammar is slightly stricter
+  (no embedded =-=); the looser pattern was chosen to be forgiving of
+  hand-authored variation and never matches a non-tag suffix in
+  practice.
+
+** Follow-ups
+- =tasks_resume_brief= convenience tool (TASKS.org task =70cd5222=) is the
+  primary downstream consumer; depends on this primitive shipping first.
+- Extract org-mode tooling to a dedicated =pi/extensions/org/= extension with
+  a tree-sitter foundation (TASKS.org task =f361c429=, blocked by this one).
+  The =org_*= tool namespace was chosen specifically so that move is a
+  no-churn migration for callers.
+
+* Plan
+
+** DONE [#C] Add =readSection= pure helper + unit tests :tasks:
+CLOSED: [2026-05-12 Tue 10:23]
+:PROPERTIES:
+:CUSTOM_ID: 5caaea1c-7df5-41ab-a3a3-4234ea90a620
+:CREATED: [2026-05-12 Tue 10:05]
+:STARTED: [2026-05-12 Tue 10:21]
+:END:
+:LOGBOOK:
+- State "DONE"      from "STARTED"   [2026-05-12 Tue 10:23]
+- State "STARTED"   from "TODO"      [2026-05-12 Tue 10:21]
+- Created [2026-05-12 Tue 10:05]
+:END:
+Acceptance criteria:
+- New module =pi/extensions/tasks/section.ts= exports
+  =readSection(content: string, section?: string): SectionResult= where
+  =SectionResult= is the discriminated union from the Decisions.
+- Default =section= is ="Summary"= when omitted or empty.
+- Heading match: case-insensitive, ignores trailing whitespace and =:tag:=
+  suffix on the level-1 heading line.
+- Body slice runs from the line after the matching heading to the line
+  before the next column-0 =* = heading (or EOF).
+- Source-block-aware: while inside a =#+BEGIN_SRC= … =#+END_SRC= block
+  (case-insensitive directive match), column-0 =* = lines are treated as
+  body, not as the next section boundary.
+- Returns =heading= verbatim (the original heading line including any
+  =:tags:= the file used) so callers can echo it.
+- Sibling =section.test.ts= covers: section present, section absent, section
+  is the final one in the file, file with zero headings, body containing
+  literal =* = inside a src block (must not terminate early), case-insensitive
+  match with trailing tags, default-to-Summary path.
+
+** DONE [#C] Register =org_read_section= MCP tool :tasks:
+CLOSED: [2026-05-12 Tue 10:25]
+:PROPERTIES:
+:CUSTOM_ID: b3253e2f-22c8-479b-8360-414a0e527c26
+:CREATED: [2026-05-12 Tue 10:05]
+:STARTED: [2026-05-12 Tue 10:23]
+:END:
+:LOGBOOK:
+- State "DONE"      from "STARTED"   [2026-05-12 Tue 10:25]
+- State "STARTED"   from "TODO"      [2026-05-12 Tue 10:23]
+- Created [2026-05-12 Tue 10:05]
+:END:
+Acceptance criteria:
+- =index.ts= gains =registerReadSectionTool(pi)= alongside
+  =registerInsertTaskTool=, registered unconditionally at extension load
+  (no =session_start= gate).
+- Tool name is =org_read_section= (not =tasks_read_section=) — see the
+  *Tool namespace* decision in =* Summary=.
+- Typebox schema: =file: string=, =section?: string= (default ="Summary"=);
+  descriptions explain the literal-file-only scope and the default.
+- File path resolution mirrors =insertTaskIntoFile=: =resolveProjectPath= +
+  =isWithinRoot= sandbox under =ctx.cwd=. Out-of-root or unreadable paths
+  return a structured error result, not an exception.
+- Tool return shape: =content[].text= summary plus structured =details=
+  carrying the =SectionResult= union (same pattern as
+  =insertResultToToolReturn=).
+- =not found= surfaces as a non-error structured result so callers can fall
+  back without inspecting =isError=.
+- Manual smoke: invoke the tool against =design/log/= records and confirm
+  Summary / Plan / Implementation each return the expected slice.
+
+** DONE [#C] Document =org_read_section= in README :docs:
+CLOSED: [2026-05-12 Tue 10:26]
+:PROPERTIES:
+:CUSTOM_ID: dfa82974-7c6e-4b6a-a4eb-846c11b90cc5
+:CREATED: [2026-05-12 Tue 10:05]
+:STARTED: [2026-05-12 Tue 10:25]
+:END:
+:LOGBOOK:
+- State "DONE"      from "STARTED"   [2026-05-12 Tue 10:26]
+- State "STARTED"   from "TODO"      [2026-05-12 Tue 10:25]
+- Created [2026-05-12 Tue 10:05]
+:END:
+Acceptance criteria:
+- =pi/extensions/tasks/README.md= documents =org_read_section= in the same
+  section style used for =tasks_insert_task=: tool name, parameters, return
+  shape (with the discriminated union), and an example call.
+- README notes that the primitive currently lives in the tasks extension for
+  packaging convenience but is generically org-shaped, and points at the
+  planned extraction (TASKS.org task =f361c429=).
+- Cross-references =org-tasks= § *Resuming and agent memory* read order so
+  readers understand why the primitive exists.
+- Notes the literal-file-only scope and points at the future
+  =tasks_resume_brief= tool as the composer for =#+IMPORT:= chains.
+
+* Implementation
+- =readSection= implemented as a single-pass line scanner with two
+  state variables: =inBlock= / =blockKind= for source-block tracking,
+  and =matchStart= / =matchHeading= for the slice boundary. Once
+  =matchStart= is set, every subsequent column-0 =* = heading
+  (outside a block) terminates the loop — no second pass needed.
+- =parseLevel1HeadingText= splits the heading line via
+  =LEVEL_1_HEADING= (=^\* (.+?)\s*$=) then strips trailing =:tags:=
+  via =TRAILING_TAGS= before normalising whitespace. The =startsWith("* ")=
+  pre-filter on the hot path avoids the regex for every non-heading
+  line.
+- Tool registration follows the =registerInsertTaskTool= shape:
+  Typebox schema, async =execute= that returns a content+details
+  bundle. Path sandboxing reuses =resolveProjectPath= from
+  =paths.ts= rather than reimplementing the =sandboxPath= helper
+  that lives inside =insert.ts=.
+- Two test-expectation off-by-one errors were caught during the first
+  test run: the slice between two =* = headings separated by a blank
+  line ends with one =\n=, not two; and the slice between adjacent
+  =* = headings with no body is the empty string. Implementation was
+  correct in both cases; tests were corrected, not the helper.
+- Manual smoke against =design/log/2026-05-09-org-memory-condensed-summaries.org=
+  via =.agents/tmp/section-smoke.ts=: extracted =* Summary= (5034 chars),
+  case-insensitive =plan= (7920 chars, with nested =** TODO= subheadings
+  preserved), =* Implementation= (184 chars), =* Validation= (339 chars);
+  =NotARealSection= returned the structured not-found result.
+
+* Validation
+- =cd pi/extensions/tasks && bash ./test.sh= — 244 tests pass, no
+  failures. New =section.test.ts= contributes 20 cases; pre-existing
+  suites (parser 97, insert 56, lifecycle 13, paths 6, doctor 25,
+  memory 12, summary 15) all unchanged and green.
+- =lsp typescript diagnostics= on =index.ts= and =section.ts= — clean,
+  no diagnostics.
+- Manual smoke (see =* Implementation=) against an existing change-record
+  confirmed Summary / plan / Implementation / Validation slices and the
+  not-found path.
+
+* Open questions

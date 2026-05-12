@@ -70,6 +70,7 @@ import {
   type SummaryRefreshReason,
 } from "./summary.ts";
 import { colorIssues, colorPriority, colorStatus, colorTags } from "./status-colors.ts";
+import { DEFAULT_SECTION, readSection, type SectionResult } from "./section.ts";
 
 const TASKS_FILE = "TASKS.org";
 /** Gitignored local file that stores per-contributor selection state. */
@@ -709,6 +710,121 @@ function insertResultToToolReturn(result: InsertResult) {
   }
 }
 
+// ── org_read_section: cross-extension tool ************************
+//
+// Generic org-file primitive: returns a single top-level section
+// (heading + body up to the next column-0 `* ` heading) without
+// reading the entire file. Namespaced `org_*` rather than `tasks_*`
+// because the contract has no task semantics; the helper lives in
+// this extension for now and will migrate to a dedicated
+// `pi/extensions/org/` extension once tree-sitter infrastructure
+// lands (TASKS.org task f361c429). The `org_*` namespace makes that
+// move a no-churn migration for downstream callers.
+//
+// The closure-time `evaluateSummaryRefresh` path in this same
+// extension still uses the regex-based `hasSummaryHeading` helper
+// in `summary.ts` and is intentionally *not* routed through this
+// tool — it needs to remain a synchronous in-process check.
+
+const ReadSectionParams = Type.Object({
+  file: Type.String({
+    description:
+      "Absolute or cwd-relative path to the org file to read. Sandboxed " +
+      "under the project root; out-of-root paths are rejected.",
+  }),
+  section: Type.Optional(Type.String({
+    description:
+      "Section name to extract. Matched case-insensitively and ignoring " +
+      "any trailing org `:tags:` on the heading line. Operates on the " +
+      "literal file only — `#+IMPORT:` chains are not followed. " +
+      `Default: "${DEFAULT_SECTION}".`,
+  })),
+});
+
+type ReadSectionToolErrorKind = "out_of_root" | "unreadable";
+
+type ReadSectionToolResult =
+  | { kind: "section"; section: SectionResult; file: string }
+  | { kind: "error"; error: ReadSectionToolErrorKind; file: string; message: string };
+
+function readSectionResultToToolReturn(result: ReadSectionToolResult) {
+  if (result.kind === "error") {
+    return {
+      content: [{ type: "text" as const, text: `Error: ${result.message}` }],
+      details: result,
+      isError: true,
+    };
+  }
+  const { section, file } = result;
+  if (section.found) {
+    return {
+      content: [{
+        type: "text" as const,
+        // Render heading + body verbatim so simple LLM consumers can
+        // ingest the section without unpacking `details`.
+        text: `${section.heading}\n${section.body}`,
+      }],
+      details: result,
+    };
+  }
+  return {
+    content: [{
+      type: "text" as const,
+      text: `Section '${section.section}' not found in ${file}.`,
+    }],
+    details: result,
+  };
+}
+
+function registerReadSectionTool(pi: ExtensionAPI): void {
+  pi.registerTool({
+    name: "org_read_section",
+    label: "Org: read section",
+    description:
+      "Return a single top-level section of an org file (heading + body up " +
+      "to the next `* ` heading, with nested `**`/`***` subheadings " +
+      "preserved). Designed for the `org-tasks` resume read order so agents " +
+      "can fetch just `* Summary` / `* Context` / `* Open questions` from a " +
+      "change-record without pulling its full `* Implementation` ledger into " +
+      "context. Source-block (`#+BEGIN_…`/`#+END_…`) regions are tracked so " +
+      "literal `* ` inside example or src blocks does not terminate the " +
+      "slice. Section matching is case-insensitive and tolerates trailing " +
+      "`:tags:`. Returns a structured `not found` result rather than an " +
+      "error when the section is absent, so callers can fall back gracefully.",
+    promptSnippet:
+      "Read a single * section of an org file (Summary, Plan, etc.) without loading the whole file",
+    parameters: ReadSectionParams,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const requestedSection = (params.section ?? "").trim() || DEFAULT_SECTION;
+      const resolved = await resolveProjectPath(ctx.cwd, ctx.cwd, params.file);
+      if (!resolved) {
+        return readSectionResultToToolReturn({
+          kind: "error",
+          error: "out_of_root",
+          file: params.file,
+          message: `Path '${params.file}' resolves outside the project root.`,
+        });
+      }
+      let content: string;
+      try {
+        content = await readFile(resolved, "utf-8");
+      } catch (err) {
+        return readSectionResultToToolReturn({
+          kind: "error",
+          error: "unreadable",
+          file: resolved,
+          message: `Cannot read ${resolved}: ${(err as Error).message}`,
+        });
+      }
+      return readSectionResultToToolReturn({
+        kind: "section",
+        file: resolved,
+        section: readSection(content, requestedSection),
+      });
+    },
+  });
+}
+
 function registerInsertTaskTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "tasks_insert_task",
@@ -747,6 +863,7 @@ function registerInsertTaskTool(pi: ExtensionAPI): void {
 
 export default function (pi: ExtensionAPI) {
   registerInsertTaskTool(pi);
+  registerReadSectionTool(pi);
 
   // ── Keyboard shortcut: Alt+T opens the tasks UI ──────────────────────
   //

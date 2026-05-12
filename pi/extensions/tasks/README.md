@@ -318,6 +318,71 @@ integrations (github / linear / gitlab / `/jira create` reverse path)
 should use the same primitive. The helper rejects target and scan paths
 that resolve outside the project root after symlink resolution.
 
+### `org_read_section`
+
+Returns a single top-level section of an org file — the heading line
+plus the body up to (but not including) the next column-0 `* ` heading,
+with nested `**`/`***` subheadings preserved verbatim. Backs the
+layered resume read order the `org-tasks` skill declares "eagerly
+loaded" (`skills/org-tasks/SKILL.md` § *Resuming and agent memory*),
+so agents fetching `* Summary` / `* Context` / `* Open questions` from
+a change-record never have to pull the full `* Implementation` ledger
+into context.
+
+Namespaced `org_*` (not `tasks_*`) because the contract is generically
+org-file shaped: it carries no task semantics in its parameters or
+return shape. The default section value (`"Summary"`) is a convention
+from `org-plan` but is overridable. The helper currently lives in this
+extension for packaging convenience; it migrates to a dedicated
+`pi/extensions/org/` extension as part of the tree-sitter-backed
+org-tooling extraction (TASKS.org task
+`f361c429-45dd-4364-9fa3-1f77bd7c600a`). The tool name will not change
+across that move.
+
+**Args** (TypeBox schema in `index.ts`):
+
+| Field     | Type     | Description                                                                                                                                                                                                                                                       |
+| --------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `file`    | string   | Absolute or cwd-relative path to the org file. Sandboxed under the project root; out-of-root paths are rejected.                                                                                                                                                  |
+| `section` | string?  | Section name to extract. Matched case-insensitively and ignoring any trailing `:tags:` on the heading line. Operates on the literal file only — `#+IMPORT:` chains are not followed (the `tasks_resume_brief` composer resolves imports). Default: `"Summary"`. |
+
+**Return shapes** (in `details`):
+
+```ts
+// section matched — heading is verbatim, body is the slice between
+// the heading line (exclusive) and the next * heading (exclusive)
+// or EOF.
+{ kind: "section", file, section: { found: true,  heading, body } }
+
+// no section with the requested name was present in the file.
+// `section` echoes the user-requested casing.
+{ kind: "section", file, section: { found: false, section } }
+
+// path resolved outside the project root, or read failed.
+{ kind: "error", error: "out_of_root" | "unreadable", file, message }
+```
+
+The `not found` case is **not** an error — it returns the structured
+result so callers can fall back gracefully (e.g. the resume-brief
+composer surfacing "this change-record lacks `* Summary`" just like
+the closure-time refresh path already does).
+
+The `content[].text` view of a found section renders heading + body
+verbatim so simple LLM consumers can ingest it without unpacking
+`details`. Behaviour details:
+
+- **Source-block aware** — `#+BEGIN_<kind>` / `#+END_<kind>` regions
+  (case-insensitive on the directive) are tracked so a literal `* `
+  inside an example or src block doesn't terminate the slice early.
+- **First match wins** — when a file contains multiple `* Summary`
+  sections, the first one is returned and its slice ends at the
+  second.
+- **Synchronous closure-time path bypasses this tool** — the
+  closure-time `evaluateSummaryRefresh` check in `summary.ts` still
+  uses a direct regex on file contents because it must decide
+  synchronously whether to close the overlay. Routing through this
+  tool would add latency to that hot path for no gain.
+
 ## Cross-extension events
 
 The extension uses a small set of events on the shared pi event bus
@@ -397,6 +462,11 @@ regression suites:
 - `summary.test.ts` — closure-time `* Summary` refresh detection:
   missing-section trigger, stale-mtime trigger, and the no-op case
   where `* Summary` already exists and is recent.
+- `section.test.ts` — `org_read_section` primitive: present, absent,
+  final-section-runs-to-EOF, file-with-zero-headings, literal `* `
+  inside `#+BEGIN_SRC` / `#+BEGIN_EXAMPLE`, case-insensitive matching
+  with trailing `:tags:`, default-to-Summary, nested subheadings
+  preserved, and duplicate-section first-match-wins.
 
 These tests are the authoritative behavioural contract for the
 org-memory protocol implemented by this extension. The scaffold
