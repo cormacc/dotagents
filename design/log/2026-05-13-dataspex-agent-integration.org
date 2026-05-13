@@ -1,0 +1,178 @@
+#+TITLE: Dataspex integration for agent-assisted Clojure dev
+#+DATE: 2026-05-13 Wed
+#+PARENT: [[file:../../TASKS.archive.org::#0b3cf4b7-dabe-475e-82a7-434e71573f64][Add clojure dataspex skill/extension]]
+#+STATUS: Complete
+#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+
+* Summary
+pi-coding-agent has runtime visibility into a ClojureScript app's state — atoms, datascript DBs, taps, change/audit log, nexus action log — via Dataspex's in-process client. Reads route through ~dataspex.core/store~ over ~shadow.cljs.devtools.api/cljs-eval~ on the JVM nREPL. A pi extension wraps the path as token-disciplined tools; a portable skill documents the same workflow plus ~clojure_eval~ fallbacks for non-pi agents.
+
+** Decisions
+- Read path :: ~shadow/cljs-eval~ from the JVM nREPL, reading ~dataspex.core/store~ directly. ~browser_eval~ rejected (~store~ is not ~^:export~-tagged, breaks under ~:advanced~). Hiccup-via-render-host rejected (rendered, not raw).
+- Scope :: CLJS browser runtime only; JVM-side ~dataspex.server~ (port 7117) parked.
+- Shape :: extension + skill, shipped together. Action log and audit-history volume make a skill-only path a recurring token tax.
+- Parallel-label convention :: agent-registered tracking uses ~<label>-audit~. Re-calling ~dataspex/inspect~ on an existing label is forbidden — it overwrites the app's panel state. Cleanup via ~dataspex_untrack~.
+- Skill is fallback-first :: each capability pairs the ~dataspex_*~ tool call with a copy-pasteable ~clojure_eval~ form.
+
+** Shipped
+- Extension :: ~pi/extensions/dataspex/~ registers ~dataspex_labels~, ~dataspex_value~, ~dataspex_history~, ~dataspex_track~, ~dataspex_untrack~, ~dataspex_db_query~, ~dataspex_actions_tail~.
+- Refusal semantics :: ~dataspex_track~ throws on ~:missing-label~ / ~:audit-label-exists~ / ~:not-watchable~ (~isError: true~). ~dataspex_untrack~ returns ~{:untracked label :was-present? bool}~.
+- Skill :: ~skills/dataspex/SKILL.md~ + ~skills/dataspex/references/fallback.md~.
+- Wiring :: ~../agents.nix~ installs local extension deps on Home Manager activation, alongside ~chromium~ and ~pi-clojure~.
+
+** Gotchas
+- *Read path must return a bounded string.* Shadow's remote writer enforces a 1 MB limit on the cljs return-value serialisation, *outside* any ~(binding [*print-length* ...])~ block in the form. ~dataspex_value~ against the whole ~state~ atom triggered this even with ~limit: 10, level: 2~. Fix: ~(with-out-str (binding [...] (pr <expr>)))~ so the cljs return value is itself a bounded string.
+- *Do not rely on `:out` from `cljs-eval`.* Concurrent calls against the same build share the runtime's ~*out*~; each request's ~:out~ snapshot can include sibling-request bytes. Empirically: three concurrent ~(print "A-")~ / ~(print "B-")~ / ~(print "C-")~ requests returned ~:out~ of ~"A-B-"~ / ~"A-B-C-"~ / ~"A-B-C-"~. The harness is sequential and missed this; pi runs tools in parallel by default. Read ~:results[0]~ and ~clojure.edn/read-string~ it instead.
+- *Implicit pi-clojure dependency at runtime.* dataspex imports ~evalExpr~ from ~../pi-clojure/nrepl-client~, which imports ~bencode~. dataspex's ~package.json~ declares no runtime deps — ~bencode~ resolves from ~pi-clojure/node_modules~ via Node's parent-walk. ~agents.nix~ activates both for this checkout; a future standalone pi package would need its own ~bencode~ dep.
+- *TypeScript-template `\"` is not a CLJS quote escape.* In template literals, write ~\\"~ to produce ~\"~ in the embedded CLJS form. First iteration of the throw-based refusal messages used ~\"~, which TS reduced to ~"~, producing strings like ~(str "" label# "")~ that swallowed the binding's quotes.
+
+** Follow-ups
+- JVM-side ~dataspex.server~ + port 7117 parked unless a concrete JVM-inspection need emerges.
+- If advanced-compiled browser access without nREPL is ever needed, consider an upstream PR exporting a safe ~dataspex.core/store~ accessor.
+
+* Plan
+
+** DONE [#A] Map Dataspex CLJS in-process API surface :discovery:
+CLOSED: [2026-05-13 Wed 12:20]
+:PROPERTIES:
+:CUSTOM_ID: c0a91f05-36e3-4098-872c-5e14966b3c0b
+:CREATED: [2026-05-13 Wed 12:01]
+:STARTED: [2026-05-13 Wed 12:18]
+:END:
+:LOGBOOK:
+- Created [2026-05-13 Wed 12:01]
+- State "STARTED"    from "TODO"       [2026-05-13 Wed 12:18]
+- State "DONE"       from "STARTED"    [2026-05-13 Wed 12:20]
+:END:
+Document the CLJS surface the agent can read: public ~dataspex.core~ API, ~store~ shape, datafy/Watchable extension points, codec relevance.
+** DONE [#A] Spike: read in-process Dataspex state from the live CLJS dev tab :spike:
+CLOSED: [2026-05-13 Wed 13:10]
+:PROPERTIES:
+:CUSTOM_ID: c0cd3715-8da8-4697-9671-91f5d364d6f9
+:CREATED: [2026-05-13 Wed 12:01]
+:STARTED: [2026-05-13 Wed 12:26]
+:END:
+:LOGBOOK:
+- Created [2026-05-13 Wed 12:01]
+- State "STARTED"    from "TODO"       [2026-05-13 Wed 12:26]
+- State "DONE"       from "STARTED"    [2026-05-13 Wed 13:10]
+:END:
+Reach the in-process client from the live ~connect/portal~ dev tab via ~clojure_eval~ on the cljs nREPL, read the current value of a named inspectee, trigger a mutation, observe the audit-log diff, capture surprises in Gotchas.
+** DONE [#A] Decision: extension / skill / both, plus MVP scope :decision:
+CLOSED: [2026-05-13 Wed 14:18]
+:PROPERTIES:
+:CUSTOM_ID: c9895653-0ad8-4fbf-9cdd-dfd75de60b3c
+:CREATED: [2026-05-13 Wed 12:01]
+:STARTED: [2026-05-13 Wed 14:18]
+:END:
+:LOGBOOK:
+- Created [2026-05-13 Wed 12:01]
+- State "STARTED"    from "TODO"       [2026-05-13 Wed 14:18]
+- State "DONE"       from "STARTED"    [2026-05-13 Wed 14:18]
+:END:
+Resolved: ship extension + skill together. Recorded in Summary § Decisions.
+** DONE [#A] MVP: ~dataspex~ pi extension + portable skill
+CLOSED: [2026-05-13 Wed 16:04]
+:PROPERTIES:
+:CUSTOM_ID: 286eb103-fa9d-4221-a6ff-daeb838f3679
+:CREATED: [2026-05-13 Wed 14:18]
+:STARTED: [2026-05-13 Wed 15:51]
+:END:
+:LOGBOOK:
+- Created [2026-05-13 Wed 14:18]
+- State "STARTED"    from "TODO"       [2026-05-13 Wed 15:51]
+- State "DONE"       from "STARTED"    [2026-05-13 Wed 16:04]
+:END:
+Acceptance criteria:
+- Extension at ~pi/extensions/dataspex/~ mirroring ~chromium~/~pi-clojure~ shape, registering the seven tools (names in Summary § Shipped). Uses ~shadow/cljs-eval~ via the JVM nREPL; no chromium / dataspex-browser-ext dependency.
+- Build/port auto-discovery via ~shadow/active-builds~ and standard nREPL port files; ambiguous-build errors list candidates.
+- Skill at ~skills/dataspex/SKILL.md~ documents each capability as tool-call / cljs-fallback pair plus the gotchas; portable forms in ~skills/dataspex/references/fallback.md~.
+- ~../agents.nix~ activation installs local deps for dataspex alongside chromium / pi-clojure.
+- Smoke validation against ~connect/portal~ ~:app~ build covers all seven tools; refusal paths covered separately.
+* Implementation
+
+** Task 1: API surface map
+Source read at ~no.cjohansen/dataspex~ HEAD ~1be4df8~ (cloned read-only into ~.agents/tmp/dataspex/~).
+
+Headline: ~dataspex.core/store~ (defonce, ~src/dataspex/core.cljs:39~) is the single canonical read surface. Every inspected value, revision, and audit history lives in that one CLJS atom. No need to hook hiccup, the render channel, or the browser extension.
+
+Store shape:
+#+begin_src clojure
+{"App state" {:rev 7
+              :val {...}                    ; current value
+              :ref <atom>                   ; original watchable
+              :idx 0
+              :history [{:created-at #inst "..."
+                         :rev 7
+                         :val {...}
+                         :diff <editscript>
+                         :dataspex.audit/summary <opt>  ; via IAuditable; sparse
+                         :dataspex.audit/details <opt>}
+                        ...]                ; bounded by :history-limit, default 25
+              :dataspex/path []
+              :dataspex/inspectee "App state"}
+ :dataspex/host-str "..."                   ; internal bookkeeping mixed in
+ :dataspex/remotes #{}
+ :dataspex.render-host/channels [...]}
+#+end_src
+
+Access patterns: list user labels via ~(filter string? (keys @store))~; current value via ~(get-in @store [label :val])~; history (when tracked) via ~(get-in @store [label :history])~.
+
+Public ~dataspex.core~ functions (all ~^:export~-tagged): ~inspect~, ~uninspect~, ~inspect-taps~, ~uninspect-taps~, ~connect-remote-inspector~, ~inspect-remote~, ~uninspect-remote~. ~store~ itself is *not* exported. Datascript extends ~dataspex.protocols/Watchable~; datomic/datalevin/datahike are JVM-only.
+
+** Task 2: Spike against live ~connect/portal~
+shadow build ~:app~ on nREPL port 9000, Chrome runtime attached. ~connect.app/spex~ registers five labels: ~"state"~ (app atom), ~"db"~ (datascript conn), ~"Taps"~, ~"Actions"~ (~nexus.inspector/LogInspector~), ~"hiccup"~ (UI vector).
+
+Verdict: viable, no ~browser_eval~ fallback needed under dev compilation. Canonical idiom:
+
+#+begin_src clojure
+(require '[shadow.cljs.devtools.api :as shadow])
+(shadow/cljs-eval :app "(get @dataspex.core/store \"state\")" {})
+#+end_src
+
+Surprises surfaced into Summary § Gotchas:
+- App-registered labels lack ~:track-changes? true~, so ~:history~ stays empty. Agent must register a parallel ~<label>-audit~ to see diffs.
+- ~Actions~ ~:val~ is a ~LogInspector~ deftype: not ISeqable; the log is only reachable via ~(aget log-inspector "log")~.
+- ~IAuditable~ is sparse: datascript history entries carry only ~:diff~.
+
+** Task 4: MVP extension + skill
+Extension wraps the canonical idiom via ~pi-clojure~'s nREPL client.
+
+Tool parameters: ~buildId?~ / ~port?~ / ~host?~ for target selection (port from project port files, build from ~shadow/active-builds~). ~dataspex_value~'s ~path~ is an EDN vector string; ~dataspex_db_query~'s ~q~ / ~args~ are EDN strings. ~dataspex_history~ prefers ~<label>-audit~ when present, so the normal flow is ~dataspex_track {label: "state"}~ → mutate → ~dataspex_history {label: "state"}~ → ~dataspex_untrack {label: "state"}~.
+
+Read tools use ~(with-out-str (binding [*print-length* L *print-level* D] (pr <expr>)))~ so the cljs return value is itself bounded. JVM wrapper reads ~:results[0]~ (per-call, never accumulated) and ~clojure.edn/read-string~ unwraps shadow's outer pr-str. Side-effect tools (track, untrack) return their map literal directly; ~edn/read-string~ handles both paths uniformly.
+
+* Validation
+
+** Task 1
+Source review only; no code executed. ~^:export~ status cross-checked against ~core.cljs~.
+
+** Task 2
+Against live ~:app~ build at ~localhost:9000~:
+- ~(shadow/active-builds)~ → ~#{:app-portfolio :app :test}~; ~(shadow/repl-runtimes :app)~ → one Chrome runtime.
+- ~(filter string? (keys @dataspex.core/store))~ → ~("state" "db" "Taps" "Actions" "hiccup")~.
+- Audit log: registered ~"state-audit"~ with ~:track-changes?~, ~swap!~'d a probe tag, history grew 1 → 2 with editscript diff ~([[:agent-probe/tag] :+ "poke-<uuid>"])~.
+- Datascript: registered ~"db-audit"~, transacted a probe datom, history grew 1 → 2; ~:diff~ present, ~:dataspex.audit/summary~ / ~:details~ absent.
+- Action log: 123 entries; per-entry keys ~[:dispatched-at :actions :dispatch-data :dispatch-start :state :expansions :effects]~.
+- Cleanup: ~uninspect~'d both ~-audit~ labels and removed the probe tag; final label set matches initial.
+
+** Task 4
+- Runtime validation used the compiled extension harness plus in-session pi smoke. Standalone TypeScript diagnostics are not a reliable acceptance check in this checkout because the local extension is not a standalone TS project and imports pi-provided runtime deps plus ~../pi-clojure/nrepl-client.ts~ / its untyped ~bencode~ dependency.
+- Extension harness compiled into ~.agents/tmp/dataspex-build/~ and ran ~Promise.all~ of all seven tools against ~connect/portal~ on port 9000. All returned ~isError: false~. Byte counts: labels 530, value-whole 329 (limit 5 level 2), value-path 13, track 43, history 94, untrack 46, db-query 6, actions-tail 165.
+- Refusal harness: ~dataspex_track~ on missing-label / non-watchable / pre-existing audit-label each returned ~isError: true~ with the label correctly interpolated. ~dataspex_untrack~ reported ~:was-present? true~ then ~:was-present? false~.
+- Cross-call isolation: parallel harness verified each tool's output contains only its own data (no ~:patient~ keys leaking into the labels / db-query / actions-tail responses).
+- In-session smoke: same parallel call pattern via the loaded pi extension against the live app returned isolated, bounded results.
+- Post-review path hardening: evaluated the new ~cljs.reader/read-string~ path form against ~:app~; valid vector path returned ~"1027::24597"~, non-vector EDN returned ~dataspex_value: path must be an EDN vector~.
+
+* Open questions
+** DECIDED Should the MVP target ~no.cjohansen/dataspex~ at a pinned version, or follow upstream?
+:PROPERTIES:
+:DECIDED: [2026-05-13 Wed 16:04]
+:END:
+Do not pin. The tools inspect whatever Dataspex the target app loaded; compatibility is tied to the ~dataspex.core/store~ shape, which is stable. Revisit only if upstream changes that shape.
+
+** DECIDED Does the user run Dataspex regularly today, or would the agent be the first consumer?
+:PROPERTIES:
+:DECIDED: [2026-05-13 Wed 12:01]
+:END:
+The user's dev project is already running Dataspex via shadow-cljs watch. The skill/extension assumes an already-running CLJS runtime + active ~dataspex/inspect~ call; it does *not* bootstrap one.

@@ -1,0 +1,111 @@
+---
+name: dataspex
+description: "Use this skill whenever the user wants to inspect or debug live runtime state in a running ClojureScript app: dump app-state atoms from the browser tab, read Dataspex labels, view audit/change history, tail nexus/action dispatch logs, inspect taps, or query a runtime datascript DB. Trigger on prompts like what's in app state, what changed after a mutation, last action dispatched, stale UI/state debugging, shadow-cljs browser runtime, Dataspex/datspex, LogInspector, taps, or audit logs. Do not use for installing Dataspex, editing source to add inspect calls, screenshots/devtools-panel rendering, localStorage, JVM-side Dataspex, Datomic/Datahike/DataScript schema design, or non-CLJS debugging."
+---
+
+# Dataspex
+
+Read inspected values, audit history, and the nexus action log from a running
+ClojureScript app. All reads route through `dataspex.core/store` — the single
+CLJS atom that holds every inspected value.
+
+## Anti-triggers
+
+Do **not** use this skill to *render* data for a human reader — that's the
+Dataspex devtools panel's job. This skill is for the *agent* reading raw
+values out of `@dataspex.core/store`.
+
+Do not bootstrap Dataspex into a project that isn't already using it. If
+preconditions fail, surface the gap to the user.
+
+## Preconditions
+
+1. The project depends on `no.cjohansen/dataspex` and the app's bootstrap
+   calls `(dataspex.core/inspect <label> <ref>)` for at least one ref.
+2. A shadow-cljs watch is running with a browser runtime attached to the
+   build. Verify via `(shadow.cljs.devtools.api/repl-runtimes :app)` — the
+   list must be non-empty.
+3. The agent can reach the nREPL (`.shadow-cljs/nrepl.port` or `.nrepl-port`
+   at the project root).
+
+## Two paths
+
+**Pi sessions with the `dataspex` extension loaded** use the `dataspex_*`
+tools below. They ship default projections and length/depth bounds, so a
+naive call doesn't dump tens of KB into context.
+
+**Non-pi agents (or pi sessions without the dataspex extension)** use the
+canonical cljs forms in [`references/fallback.md`](references/fallback.md).
+They mirror each tool below with the same default projections and bounds,
+evaluated via the host agent's Clojure eval tool.
+
+## Tool surface
+
+| Tool | Shape | Default output |
+|---|---|---|
+| `dataspex_labels` | `{ buildId?, port?, host? }` | One row per user label: `{label, rev, idx, history-len, val-type, has-ref?}` |
+| `dataspex_value` | `{ label, path?, fresh?, limit?, level?, buildId?, port?, host? }` | `:val` (or `:ref` deref if `fresh?`) navigated by `path` (an EDN vector string such as `[:patient]`), bounded by `*print-length*` / `*print-level*` |
+| `dataspex_history` | `{ label, n?, includeVal?, buildId?, port?, host? }` | Last `n` (default 10) entries projected to `{rev, created-at, diff}` — full `:val` only when `includeVal? = true`; prefers `<label>-audit` when present |
+| `dataspex_track` | `{ label, historyLimit?, buildId?, port?, host? }` | Registers parallel `<label>-audit` with `{:track-changes? true}` |
+| `dataspex_untrack` | `{ label, buildId?, port?, host? }` | `uninspect`'s the parallel `<label>-audit` |
+| `dataspex_db_query` | `{ label, q, args?, buildId?, port?, host? }` | `datascript.core/q` results — DB never crosses the wire; `q` and `args` are EDN strings |
+| `dataspex_actions_tail` | `{ label?, n?, buildId?, port?, host? }` | Last `n` (default 20) actions projected to `[:dispatched-at :dispatch-data]` — `:expansions`/`:effects`/`:state`/`:f` dropped |
+
+`port` defaults to standard nREPL port files in the current project. `buildId`
+defaults to the single active shadow build; tools error with the candidate
+list when more than one is running.
+
+## Workflow
+
+1. **Verify preconditions.** Run `dataspex_labels` first — an empty result
+   means either the build is wrong or the app hasn't called `inspect` yet.
+2. **Read what's already inspected.** Use `dataspex_value` for current state.
+   Default to `path` navigation rather than pulling the whole map; agents
+   over-fetch otherwise.
+3. **For "what changed?" questions:** first check whether a history source already exists (`history-len` on the label, or a `<label>-audit` label from a prior agent). If not, say that Dataspex cannot reconstruct earlier mutations retroactively, call `dataspex_track`, wait for the next relevant mutation, then `dataspex_history`. Always `dataspex_untrack` when done — the watch is a real subscription, leaving it registered leaks memory.
+4. **For taps:** treat `Taps` as an ordinary Dataspex label. Use `dataspex_value` with `label: "Taps"` and a narrow `path` / low print bounds before widening.
+5. **For DB questions:** prefer `dataspex_db_query` over fetching the DB —
+   keeps token cost O(result-set), not O(DB).
+6. **For action-log questions:** `dataspex_actions_tail` first. Only widen
+   the projection (drop into `clojure_eval` with custom `select-keys`) if
+   the default fields don't answer the question.
+
+## Conventions
+
+- **Parallel-label suffix `-audit`.** Agent-registered tracking labels use
+  `<label>-audit`. Never re-call `dataspex/inspect` on a label the app
+  already registered — that would overwrite the app's panel state. The
+  `dataspex_track` tool encodes this; if you drop down to `clojure_eval`,
+  preserve the convention.
+- **Pick `:history-limit` generously at register time.** It's frozen on
+  registration; can't be widened retroactively from outside. 50–100 is a
+  reasonable default for development.
+
+## Gotchas
+
+- **`:val` in `@store` is a snapshot** — the last value at notification time,
+  not a live deref. Use `dataspex_value :fresh? true` (or the fallback's
+  `some-> :ref deref` form) when freshness matters.
+- **`:fresh? true` is only meaningful for atom-backed labels.** Dataspex deftypes like Nexus' `LogInspector` (`Actions`) and Dataspex' own `TapInspector` (`Taps`) have a `:ref` but `deref`-ing it is not useful. Use `:fresh? true` only when the label's `val-type` (from `dataspex_labels`) is `map`/`vector`/`set`/`seq` and `has-ref?` is true.
+- **`:val` snapshots are unbounded under `includeVal: true`.** `dataspex_history` applies length/depth bounds at the outer structure, but a single `:val` snapshot can still be very large. Keep `n` small or stick to the default diff-only projection.
+- **`:dataspex.audit/summary` / `:dataspex.audit/details` are sparsely populated.** They require the inspected value to extend `dataspex.protocols/IAuditable`. The spiked CLJS datascript DB did not populate these fields, so datascript history entries may carry only `:diff`. Plain atoms also lack the summary fields. Treat `:diff` as the reliable change signal.
+- **Nexus `LogInspector` is JS-interop-flavoured.** It's not `ISeqable` and
+  `clojure.datafy/datafy` returns it opaque. The log is reachable only via
+  `(aget log-inspector "log")`. The `dataspex_actions_tail` tool wraps this.
+- **`@store` mixes user labels (strings) with internal namespaced keys**
+  like `:dataspex/host-str`, `:dataspex/remotes`,
+  `:dataspex.render-host/channels`. Filtering for user labels means
+  `(filter string? (keys @store))`.
+- **`dataspex.core/store` is not `^:export`-tagged.** Under `:advanced`
+  compilation the JS symbol munges, so `browser_eval`-style reads break.
+  The cljs nREPL path is immune. Don't try to reach `store` from
+  `browser_eval`.
+
+## Pointers
+
+- Upstream: <https://github.com/cjohansen/dataspex>
+- Fallback forms (for non-pi agents):
+  [`references/fallback.md`](references/fallback.md)
+- Design record (history, decisions, spike output):
+  `~/dotfiles/agents-src/design/log/2026-05-13-dataspex-agent-integration.org`
+- See also: the `clojure` skill (REPL workflow, port discovery, paren repair).
