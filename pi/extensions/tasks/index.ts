@@ -1064,10 +1064,31 @@ export default function (pi: ExtensionAPI) {
     await refreshTaskUi(ctx, ctx.cwd);
   });
 
+  // Track `pi.events.on` unsubscribers so we can detach on session_shutdown.
+  //
+  // Why: pi's shared event bus (resource-loader.js → loadExtensions(eventBus))
+  // is *not* cleared on /reload. The extension factory runs again, appending a
+  // fresh listener per channel each time. Without explicit cleanup, after N
+  // reloads `tasks:show` has N+1 listeners → one Alt+T press fans out to N+1
+  // `ctx.ui.custom` calls → user has to press Esc N+1 times to dismiss the
+  // stacked overlays. Per-extension registrations (shortcuts, commands,
+  // `pi.on(...)` handlers) live on the discarded Extension instance and
+  // don't leak; only `pi.events` subscriptions do.
+  const eventUnsubs: Array<() => void> = [];
+
   pi.on("session_shutdown", async () => {
     closeAllFileWatchers();
     clearCompactWidget(activeCtx ?? undefined);
     activeCtx = null;
+    while (eventUnsubs.length > 0) {
+      const off = eventUnsubs.pop();
+      try {
+        off?.();
+      } catch {
+        // Best-effort cleanup; ignore individual unsubscribe failures so a
+        // single bad listener can't strand the rest.
+      }
+    }
   });
 
   // ── /tasks command ──────────────────────────────────────────────────
@@ -1110,21 +1131,27 @@ export default function (pi: ExtensionAPI) {
     return supplied ?? activeCtx;
   }
 
-  pi.events.on("tasks:show", async (data: unknown) => {
-    const ctx = eventCtx(data);
-    if (!ctx) return;
-    await runTasksCommand("", ctx);
-  });
-  pi.events.on("tasks:new", async (data: unknown) => {
-    const ctx = eventCtx(data);
-    if (!ctx) return;
-    await runTasksCommand("new", ctx);
-  });
-  pi.events.on("tasks:doctor", async (data: unknown) => {
-    const ctx = eventCtx(data);
-    if (!ctx) return;
-    await runTasksCommand("doctor", ctx);
-  });
+  eventUnsubs.push(
+    pi.events.on("tasks:show", async (data: unknown) => {
+      const ctx = eventCtx(data);
+      if (!ctx) return;
+      await runTasksCommand("", ctx);
+    }),
+  );
+  eventUnsubs.push(
+    pi.events.on("tasks:new", async (data: unknown) => {
+      const ctx = eventCtx(data);
+      if (!ctx) return;
+      await runTasksCommand("new", ctx);
+    }),
+  );
+  eventUnsubs.push(
+    pi.events.on("tasks:doctor", async (data: unknown) => {
+      const ctx = eventCtx(data);
+      if (!ctx) return;
+      await runTasksCommand("doctor", ctx);
+    }),
+  );
 
   async function runTasksCommand(args: string | undefined, ctx: ExtensionContext): Promise<void> {
       if (!ctx.hasUI) {
