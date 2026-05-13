@@ -1,6 +1,6 @@
 ---
 name: org-plan
-description: "Drafting, reviewing, and executing implementation plans as change-record files linked from TASKS.org. Use whenever the user asks for a plan, says 'let's plan X', wants a design write-up before coding, asks for a retrospective record after work has shipped, or needs to refresh a change-record's * Summary at task closure. Owns the change-record section contract (* Summary, optional * Context, * Plan, * Implementation, * Validation, optional * Open questions), TASKS.org subtask migration, and the closure-time summary refresh workflow."
+description: "Drafting, reviewing, and executing implementation plans as change-record files linked from TASKS.org. Use whenever the user asks for a plan, says 'let's plan X', wants a design write-up before coding, asks for a retrospective record after work has shipped, or needs to review, tighten, refresh, or prune an existing change-record or design log, including at task closure. Owns the change-record section contract (* Summary, optional * Context, * Plan, * Implementation, * Validation, optional * Open questions), TASKS.org subtask migration, and the closure-time refresh-and-prune workflow."
 ---
 
 # Plan
@@ -51,6 +51,14 @@ Avoid:
   `** Decisions`.
 - "First we will…, then we will…" step prose where the bulleted task list
   already says the same thing.
+- Spike-style `* Implementation` subsections (`*** What worked`,
+  `*** What's awkward`, `*** Implications for task N`). These read like
+  planning artefacts mid-execution. At closure: condense to outcomes,
+  promote durable findings into `** Decisions` or `** Gotchas`, delete the
+  rest.
+- Restating `* Summary` content in different words elsewhere. If a fact
+  appears in both `* Summary` and `* Implementation`, it belongs in one
+  place — usually `* Summary`.
 
 ## Change-record sections
 
@@ -65,10 +73,15 @@ Required on every change-record:
   validation outcomes, tactical implementation choices) belongs in
   `* Implementation`. `** Decisions` here means *strategic* durable design
   choices that constrain future work, not every tactical call made while
-  coding. Follow *Voice and density* above — terse, engineer-facing, no
-  preamble. Required on every change-record regardless of size or status
-  (even a one-sentence summary is preferable to none). See *Closure-time
-  summary refresh* below.
+  coding. `** Gotchas` means *project-side* surprises hit during execution —
+  things a future implementer in this codebase shouldn't have to rediscover.
+  Library-level facts (protocol semantics, API quirks, documented limits,
+  default values) belong in the relevant skill or reference when one exists;
+  duplicating them here loses to drift. If no durable reference exists yet,
+  keep a compact pointer here and create follow-up work to move it. Follow
+  *Voice and density* above — terse, engineer-facing, no preamble. Required
+  on every change-record regardless of size or status (even a one-sentence
+  summary is preferable to none). See *Closure-time refresh and prune* below.
 - `* Plan` — executable org TODO headings. Top-level plan tasks are `** TODO …`
   so they live under `* Plan` while remaining parseable by task tooling. May be
   empty in a retrospective change-record. Investigation- or discovery-shaped
@@ -94,9 +107,12 @@ Optional:
   `** Design decisions` when alternatives, constraints, or trade-offs matter.
   Promote from "omit" to "include" when durable rationale materially exceeds
   what `* Summary` can carry; omit when `* Summary` already says everything
-  (typical for small fixes, mechanical renames, doc tweaks, single-cause bugs).
-  The size of the record is not the criterion — the question is whether the
-  rationale exceeds the synopsis.
+  (typical for small fixes, mechanical renames, doc tweaks, single-cause bugs,
+  and most features once their decisions are baked into Summary). The size of
+  the record is not the criterion — the question is whether the rationale
+  exceeds the synopsis. *At closure*: re-evaluate, and delete `* Context`
+  unless it still carries rationale Summary doesn't subsume (see *Closure-time
+  refresh and prune* § 4).
 
 - `* Open questions` — deferred questions, using plain heading prefixes rather
   than TODO states:
@@ -137,7 +153,8 @@ to `DONE`.
 - User-visible / protocol / code outcomes (filled in as work lands).
 
 ** Gotchas
-- Things future agents should not have to rediscover.
+- Project-side surprises hit during execution — not library-level facts
+  (those belong in the relevant skill).
 
 ** Follow-ups
 - Pointers to TASKS.org tasks rather than buried prose.
@@ -197,9 +214,14 @@ concrete observable outcome (“X renders”, “Y round-trips byte-identically�
 rather than an implementation step. Keep the body to the bullet list unless a
 non-obvious constraint or pointer is needed (see *Voice and density*).
 
-### Closure-time summary refresh
+### Closure-time refresh and prune
 
-Before transitioning a top-level task to `DONE`:
+Before transitioning a top-level task to `DONE`, walk the record end-to-end
+with two questions in mind: does each section still earn its place, and does
+it still follow *Voice and density* above? The planning-time rules read once
+at draft time go stale by closure — this is the natural enforcement point.
+
+Refresh:
 
 1. Refresh the linked change-record's `* Summary` so the paragraph plus
    `** Shipped` and `** Gotchas` reflect what actually landed, and refresh
@@ -208,7 +230,29 @@ Before transitioning a top-level task to `DONE`:
    `TASKS.org` for cross-cutting work, under `* Plan` for plan-local work)
    rather than buried in prose.
 3. If a `* Summary` is missing, generate one from promoted `* Context` (when
-   present), completed plan tasks, and `* Implementation` notes before closing.
+   present), completed plan tasks, and `* Implementation` notes before
+   closing.
+
+Prune:
+
+4. *`* Context`*: delete it unless it still carries durable rationale that
+   `* Summary` doesn't subsume. Decisions baked into `** Decisions` make the
+   rest of Context redundant by definition.
+5. *Plan-task bodies for completed tasks*: trim verbose prose from completed
+   plan-task bodies. Preserve only a compact acceptance summary when it differs
+   from the heading or carries audit value; otherwise reduce the body to a
+   one-line goal. The `:LOGBOOK:` preserves timing; `* Implementation`
+   captures actual outcomes; the planning intent is no longer load-bearing.
+6. *`* Implementation` subsections*: remove planning-flavoured headings like
+   `*** What worked`, `*** What's awkward`, or `*** Implications for task N`.
+   Condense durable content into outcomes, `** Gotchas`, or `** Decisions`;
+   delete the rest.
+7. *`** Gotchas`*: each entry must describe a *project-side surprise* — a
+   thing the implementer hit that future implementers shouldn't have to
+   rediscover. Library-level facts (protocol semantics, API quirks,
+   documented limits, default values) belong in the relevant skill or
+   reference when one exists. If no durable reference exists yet, keep a
+   compact pointer here and create follow-up work to move it.
 
 Draft summaries on active records may be terse and are expected to evolve; the
 final summary is written or refreshed at closure. The tasks extension prompts
@@ -216,7 +260,8 @@ the agent to generate or refresh `* Summary` when a top-level task transitions
 to `DONE` and the linked change-record either lacks the section or has not been
 touched since the parent task's `:STARTED:` timestamp (with a small same-minute
 grace window). The skill is the durable contract; the extension prompt is a
-cheap reinforcement.
+cheap reinforcement. Even when tooling prompts only for Summary refresh, the
+agent should self-trigger this full prune checklist.
 
 ### Plan task metadata and status
 
