@@ -4,7 +4,7 @@
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
-Extended =TASKS.local.org= from a single-keyword =#+SELECTED:= file to a full task carrier: private draft tasks that have not yet been promoted to shared =TASKS.org=. Tasks extension surfaces them in the same overlay with a distinct =⊠= marker and magenta tint under a =⊠  Local drafts= separator. Publish (=P=) promotes a local task to =TASKS.org=; unpublish (=U=) demotes a shared task to =TASKS.local.org=. =writeSelectedId= rewritten to be non-destructive (preserves task headings). Emacs gets =, ; L p= / =, ; L u= bindings for the same workflow.
+Extended =TASKS.local.org= from a single-keyword =#+SELECTED:= file to a full task carrier: private draft tasks that have not yet been promoted to shared =TASKS.org=. Tasks extension surfaces them in the same overlay with a distinct =⊠= marker and magenta tint under a =⊠  Local drafts= separator. Publish (=P=) promotes a local task to =TASKS.org=; unpublish (=U=) demotes a shared task to =TASKS.local.org=. =writeSelectedId= rewritten to be non-destructive (preserves task headings).
 
 ** Decisions
 - =isLocal= flag on =Task= :: set by the loader from =sourcePath=; not stored in the org file (no tag pollution).
@@ -19,7 +19,6 @@ Extended =TASKS.local.org= from a single-keyword =#+SELECTED:= file to a full ta
 - Overlay rendering with =⊠= marker, magenta tint, separator row, and =P= / =U= bindings.
 - =createTask= routes to =TASKS.local.org= when the parent / cursor context is local; =n= on a local task creates a local sibling.
 - =writeSelectedId= rewritten to be non-destructive.
-- =tasks-org-publish-task= and =tasks-org-unpublish-task= elisp commands; Spacemacs bindings under =, ; L p= / =, ; L u=; layer README updated.
 - README and =org-memory/SKILL.md= document local-task semantics and publish/unpublish.
 
 * Context
@@ -58,8 +57,6 @@ This plan covers the full feature:
 - Archive guard :: Archiving a local task is refused with a notification ("Local tasks cannot be archived — publish first or delete manually").
 
 - New local task :: =n= / =N= keybindings when the cursor is on a local task create the new task in =TASKS.local.org= rather than =TASKS.org=.  When the cursor is on a shared task, behaviour is unchanged.
-
-- Emacs side :: =tasks-org-publish-task= and =tasks-org-unpublish-task= commands in =tasks-org.el=, bound under =, ; L= (local) sub-map.  Both operate on the heading at point and perform an atomic move between the two files.
 
 * Plan
 

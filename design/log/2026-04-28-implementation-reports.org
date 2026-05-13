@@ -40,8 +40,6 @@ This plan adds a *retrospective flow* that produces the same change-record artef
 
 - *Who triggers the prompt* :: The pi tasks extension only.  Closures done outside the extension (Emacs status cycle, manual edit) are not auto-prompted; the user can attach a retrospective change-record at any time via the existing =p= keybinding (the same proactive flow works on a closed task).
 
-- *No Emacs-side scaffolding command* :: The proactive flow stays reachable from Emacs via =tasks-org-open-plan=, which already creates a change-record when none exists.  The retrospective flow is exclusive to the pi harness.
-
 - *Existing-file behaviour* :: If the path-prompt resolves to a file that already exists, the scaffold appends to =* Implementation= (retrospective) or =* Plan= (proactive) and never overwrites existing content.  Mirrors the proactive flow's current =insertTasksIntoPlanSection= behaviour.
 
 - *First-STARTED timestamp* :: To make the retrospective git-history scope precise, the extension records the first =TODO \u2192 STARTED= transition as a =:STARTED:= property on the task (written once per task; subsequent re-opens do not overwrite).  The retrospective prompt uses this property as the lower bound of the git window.
@@ -57,7 +55,7 @@ CLOSED: [2026-04-28 Tue 00:46]
 :END:
 Replace any wording that distinguishes "plan files" from "task files" with a single concept: *change-records* linked from a task via =#+IMPORT:=.  Document that change-records are authored in either of two flows:
 
-1. *Proactive*: scaffold up front, draft =* Context= + =* Plan=, then execute and fill =* Implementation= as work lands.  This is the flow the =p= keybinding and =tasks-org-open-plan= already produce.
+1. *Proactive*: scaffold up front, draft =* Context= + =* Plan=, then execute and fill =* Implementation= as work lands.  This is the flow the =p= keybinding produces.
 2. *Retrospective*: scaffold after the task closes, draft =* Context= and =* Implementation= from git history and conversation; =* Plan= may be empty or contain a brief retrospective list of steps actually taken.
 
 The file shape stays as documented today (the plan skill is the source of truth for section conventions); this skill change is purely documentation of the new flow and naming.

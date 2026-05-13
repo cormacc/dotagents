@@ -361,7 +361,7 @@ not in this protocol.
 
 ## Tooling
 
-The pi tasks extension and the `tasks-org` Emacs minor mode automate ID
-assignment, `:CREATED:` / `:STARTED:` / `CLOSED:` timestamps, parent status
-propagation, and archive mechanics against this protocol. When editing task
-files by hand, follow the rules above explicitly.
+The pi tasks extension automates ID assignment, `:CREATED:` / `:STARTED:` /
+`CLOSED:` timestamps, parent status propagation, and archive mechanics against
+this protocol. When editing task files by hand, follow the rules above
+explicitly.

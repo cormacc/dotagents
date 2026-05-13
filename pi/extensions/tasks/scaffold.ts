@@ -6,8 +6,7 @@
  * directly via `tsx`. The output of `scaffoldPlan()` is the minimal
  * extension scaffold for a change-record; the `org-plan` skill owns the
  * richer human-facing section conventions and optional summary subsections.
- * Plan creation lives exclusively on the agent-harness side; the Emacs
- * `tasks-org` mode is read/edit/reorganise only.
+ * Plan creation lives exclusively on the agent-harness side.
  */
 
 import {

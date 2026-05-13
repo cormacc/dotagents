@@ -59,7 +59,7 @@ CLOSED: [2026-04-27 Mon 18:52]
 :ARCHIVED: [2026-04-27 Mon 18:52]
 :END:
 #+IMPORT: [[file:design/log/2026-04-26-tasks-local-selection.org]]
-Selection state (which task the contributor is actively working on) is currently expressed via the reserved =:selected:= tag embedded in =TASKS.org= and plan files. That puts per-contributor, per-machine working state into shared, version-controlled content. On multi-contributor repos this produces guaranteed merge conflicts whenever two people set selection simultaneously, and the tag is semantically incoherent across the team (only one person can be "selected"). Move selection to a gitignored =TASKS.local.org= using top-level =#+SELECTED: <UUID>= metadata; update the org-memory skill, the pi tasks extension, and the tasks-org Emacs package to read/write the new location.
+Selection state (which task the contributor is actively working on) is currently expressed via the reserved =:selected:= tag embedded in =TASKS.org= and plan files. That puts per-contributor, per-machine working state into shared, version-controlled content. On multi-contributor repos this produces guaranteed merge conflicts whenever two people set selection simultaneously, and the tag is semantically incoherent across the team (only one person can be "selected"). Move selection to a gitignored =TASKS.local.org= using top-level =#+SELECTED: <UUID>= metadata; update the org-memory skill and the pi tasks extension to read/write the new location.
 
 * DONE [#C] Replace :INCLUDE: drawer property with #+IMPORT: keyword  :org-memory:org-tasks:
 CLOSED: [2026-04-27 Mon 21:53]
@@ -87,16 +87,6 @@ CLOSED: [2026-04-27 Mon 21:53]
 - =loadLinkedPlans=: field renames throughout; also resolve =fileImports= inside included files (one level deep).
 - =overlay.ts=: update all four =importChildren/importPath/importRaw/importError= reference sites.
 - Fix two type errors introduced by the return-type change (=findSelectedTask= null guard; archive =parseTasks= destructure).
-** DONE [#B] Update tasks-org.el
-CLOSED: [2026-04-27 Mon 21:53]
-:PROPERTIES:
-:CUSTOM_ID: a1b2c3d4-0003-4000-8000-000000000003
-:END:
-- Replace =org-entry-get/put= for =:INCLUDE:= with new helpers:
-  - =tasks-org--get-import-raw=: regex search over the heading body.
-  - =tasks-org--set-import=: insert/replace =#+IMPORT:= line at the correct position (after =:END:= or =CLOSED:= line, or directly after heading).
-- Rename =tasks-org--extract-plan-path= → =tasks-org--extract-import-path=.
-- Update =tasks-org-open-plan=, =tasks-org--create-plan-for-current-task=, and =tasks-org-jump-to-parent-task=.
 ** DONE [#C] Migrate TASKS.org and update docs
 CLOSED: [2026-04-27 Mon 21:53]
 :PROPERTIES:
@@ -105,7 +95,6 @@ CLOSED: [2026-04-27 Mon 21:53]
 - Migrate 2 existing =:INCLUDE:= drawer entries in =TASKS.org= to =#+IMPORT:=.
 - Update =agents/skills/org-memory/SKILL.md=.
 - Update =agents/pi/extensions/tasks/README.md= (also fix stale =:selected:= tag references left over from the =TASKS.local.org= selection migration).
-- Update =editors/emacs/spacemacs/layers/org-user/README.org=.
 
 * DONE [#C] Add emacs-side tooling for tasks extension :org-memory:org-tasks:tasks-extension:emacs
 :PROPERTIES:
@@ -140,7 +129,7 @@ CLOSED: [2026-04-28 Tue 01:03]
 :END:
 #+IMPORT: [[file:design/log/2026-04-28-skill-rename-org-tasks-org-plan.org]]
 Currently we've got 'org-memory' and 'plan' -- maybe more useful to refer to 'tasks' and 'plan', and refer to the combination as org-memory? Or 'org-tasks' and 'org-plan' skills, with the combination of the two making up 'org-memory'? Consider, rename as appropriate and update docs accordingly.
-** DONE [#B] Refine org-memory protocol :emacs:pi:skills:
+** DONE [#B] Refine org-memory protocol :pi:skills:
 CLOSED: [2026-04-28 Tue 11:12]
 :PROPERTIES:
 :CUSTOM_ID: 80ea589b-501c-42d9-86e7-4d414c0c314e
@@ -149,7 +138,7 @@ CLOSED: [2026-04-28 Tue 11:12]
 :ARCHIVED: [2026-04-28 Tue 11:12]
 :END:
 #+IMPORT: [[file:design/log/2026-04-28-org-memory-refinement.org]]
-Review of skills + tasks extension + tasks-org Emacs minor mode identified consistency gaps, repetition, and verbosity. This task tracks refining the org-memory protocol into a single source of truth, closing Emacs-side parity gaps, and aligning =CLOSED:= placement with the standard org convention (before the properties drawer).
+Review of skills + tasks extension identified consistency gaps, repetition, and verbosity. This task tracks refining the org-memory protocol into a single source of truth and aligning =CLOSED:= placement with the standard org convention (before the properties drawer).
 ** DONE [#D] Fix compact widget not updating after selection toggle :extension:
 :PROPERTIES:
 :CUSTOM_ID: 8e1f3c72-4a9d-4b15-a6c0-2d7e9f1b3c48
@@ -184,151 +173,6 @@ Fix (=index.ts= + =overlay.ts=):
 - Added =activeOverlayInstance= module-level ref; set in the =ctx.ui.custom= factory callback, cleared after =await=.
 - =refreshTaskUi= now calls =activeOverlayInstance?.refreshTasks(tasks)= instead of skipping entirely when =isOverlayActive=.
 - =TasksOverlay= gains a =TUI= constructor parameter and a public =refreshTasks(newTasks)= method that replaces =this.tasks=, rebuilds collapse state and rows, preserves cursor by task ID (falling back to the selected task), calls =invalidate()= + =tui.requestRender()=.
-** DONE [#A] Add local `tasks-org` package skeleton to the `org-user` layer :emacs:spacemacs:
-:PROPERTIES:
-:CUSTOM_ID: 07689ad9-982f-48da-816d-1ac37c8829c7
-:END:
-Create a local package under the existing Spacemacs layer and wire it into layer loading without changing normal org-mode behavior.
-
-Acceptance criteria:
-- Add `editors/emacs/spacemacs/layers/org-user/local/tasks-org/tasks-org.el`.
-- Add `(tasks-org :location local)` to `org-user-packages`.
-- Add `org-user/init-tasks-org` in `packages.el` using `use-package`.
-- Auto-enable `tasks-org-mode` on buffers visiting `TASKS.org` or any `*.org` under a `design/log/` directory (filename-based detection). Manual `M-x tasks-org-mode` remains available for other buffers.
-- Package loads cleanly in Emacs/Spacemacs without requiring pi.
-*** DONE [#B] Define package namespace and customization variables :emacs:
-:PROPERTIES:
-:CUSTOM_ID: 9c49ed92-b353-4f4e-b10d-dfe71e3efc1b
-:END:
-Use a self-contained namespace such as `tasks-org-` and define customization variables for the TASKS file name, default plans directory, and whether save-time ID backfill is enabled.
-*** DONE [#B] Add minor mode and keymap :emacs:ui:
-:PROPERTIES:
-:CUSTOM_ID: 73d6082a-c0c1-4331-984b-19797e9b7276
-:END:
-Provide `tasks-org-mode` with a small keymap under an org-friendly prefix. Candidate bindings: select current task, ensure ID, open/create plan, jump to TASKS root, and refresh/reparse helpers.
-** DONE [#A] Implement org task identity helpers :org:ids:
-:PROPERTIES:
-:CUSTOM_ID: e437db55-7933-4ef5-911c-89dc81dd3ae3
-:END:
-Add functions that operate on the current org heading and preserve standard org semantics.
-
-Acceptance criteria:
-- Detect whether point is on or inside an actionable task heading using org APIs.
-- Ensure the current task has a UUID v4 `:ID:` property compatible with org-id.el.
-- Backfill missing IDs in the current buffer or narrowed subtree via explicit commands.
-- Optional save-time ID backfill is disabled by default or clearly documented as conservative.
-- Existing IDs and unrelated properties are preserved.
-*** DONE [#B] Implement UUID/property primitives :org:ids:
-:PROPERTIES:
-:CUSTOM_ID: bd0a484b-9e37-40a5-a295-e0d62e40edef
-:END:
-Wrap `org-entry-get`, `org-entry-put`, and org-id facilities where appropriate. Avoid custom parsing when org APIs can safely handle the operation.
-*** DONE [#B] Validate ID helpers on TASKS.org and linked plans :testing:
-:PROPERTIES:
-:CUSTOM_ID: c98342fd-9292-47de-9d16-e0c3b2fdb3e0
-:END:
-Test current heading, subtree, whole buffer, existing ID preservation, and files with unrelated properties such as `:PLAN:` and `:BLOCKED-BY:`.
-** DONE [#A] Implement explicit task selection helpers :selection:org:
-:PROPERTIES:
-:CUSTOM_ID: 2e6b4633-f11b-4e64-814c-ff9714308492
-:END:
-Provide Emacs commands for the reserved `:selected:` tag while keeping selection semantics consistent with the pi tasks extension.
-
-Acceptance criteria:
-- Command toggles `:selected:` on the current task.
-- Existing `:selected:` tags are cleared across the project task graph before a new selection is written.
-- Toggling the currently selected task clears selection.
-- Command refuses or explains when point is not on an actionable task heading.
-- Saving the buffer is enough for pi's file watcher to refresh the compact widget/overlay.
-*** DONE [#B] Locate task graph files for selection clearing :selection:
-:PROPERTIES:
-:CUSTOM_ID: e896d385-2e31-4fa4-a8c9-b5e5fa0e332d
-:END:
-Use `projectile-project-root` to locate the project root and resolve `TASKS.org` plus any plan files referenced by `:PLAN:` properties. Fall back to the buffer's own directory if projectile cannot resolve a root. Prefer safe, explicit file updates over scanning arbitrary org files.
-*** DONE [#B] Preserve normal org tag editing :selection:ux:
-:PROPERTIES:
-:CUSTOM_ID: f3594aeb-1eea-4e07-a02c-f4732f978f86
-:END:
-Ensure the helper coexists with `org-set-tags-command` and does not rewrite semantic tags unexpectedly.
-** DONE [#A] Implement plan open/create helpers :plans:org:
-:PROPERTIES:
-:CUSTOM_ID: 594900c9-5760-4ae1-ae03-a265aed20a41
-:END:
-Mirror the tasks extension's plan-link conventions from Emacs: prefer clickable `[[file:...]]` values, respect top-level `#+PLANS`, and keep plan files in the standard structure.
-
-Acceptance criteria:
-- Command opens an existing `:PLAN:` link with normal org link behavior.
-- Command creates a missing `:PLAN:` using `#+PLANS: [[file:...]]`, defaulting to `./design/log` when absent.
-- New plan files include `#+TITLE`, `#+DATE`, `#+TODO`, `* Context`, and `* Plan`.
-- Existing bare path or labelled link forms are preserved unless the command is explicitly creating/replacing the plan link.
-- v1 scaffolds an empty plan file only; moving local subtasks into the new plan is deferred to a separate workstream (see Design decisions).
-*** DONE [#B] Reuse org link APIs for clickable PLAN values :plans:emacs:
-:PROPERTIES:
-:CUSTOM_ID: a5b33e4f-a544-4fa4-8a2b-8c64c47d77f1
-:END:
-Use org link parsing/opening primitives where possible rather than maintaining a separate Emacs Lisp parser for org links.
-*** DONE [#B] Implement plan file scaffold :plans:org:
-:PROPERTIES:
-:CUSTOM_ID: 78c69fdf-c448-4df6-b960-60b2e1be271b
-:END:
-Create the new plan file with `#+TITLE`, `#+DATE`, `#+TODO`, `* Context`, and `* Plan` sections. Update or set the parent task's `:PLAN:` property to the clickable `[[file:...]]` form. Subtask absorption is explicitly out of scope for v1 — see Design decisions.
-** DONE [#B] Document usage in the `org-user` layer README :docs:
-:PROPERTIES:
-:CUSTOM_ID: 22f593f9-8229-4ffa-ade5-3aa47410a8ed
-:END:
-Update `editors/emacs/spacemacs/layers/org-user/README.org` with purpose, activation, commands, keybindings, and the relationship to pi's tasks extension.
-
-Acceptance criteria:
-- README explains that files remain plain org and pi is optional.
-- README lists commands and keybindings.
-- README documents `:ID:`, `:selected:`, `:PLAN:`, and `#+PLANS` conventions.
-- README notes that sync is currently save/file-watcher based.
-** DONE [#B] Validate transparent Emacs/pi workflow :verification:
-:PROPERTIES:
-:CUSTOM_ID: 437d6716-1135-4459-ad0f-ee9f88eff294
-:END:
-Run an end-to-end smoke test using normal org editing plus the new helpers.
-
-[2026-04-27 Sun] All acceptance criteria passed via manual validation.
-
-Acceptance criteria:
-- Open `TASKS.org` in Emacs, enable/use `tasks-org-mode`, and ensure an ID on a task.
-- Toggle selection in Emacs, save, and confirm pi's compact widget/overlay refreshes from disk.
-- Create/open a plan from Emacs and confirm pi loads injected plan tasks.
-- Edit a linked plan task in Emacs, save, and confirm pi refreshes status/title changes.
-- Verify ordinary org editing commands still behave normally.
-- Record any follow-up work as new tasks rather than expanding this initial implementation beyond the transparent-helper scope.
-** DONE [#C] Rework tasks-org Spacemacs keybinding strategy :emacs:ui:
-:PROPERTIES:
-:CUSTOM_ID: b1c8e7a3-9f4d-4c2e-a7d3-8b2f1c0e9d4a
-:END:
-Deferred follow-up. The current bindings (=, K {s,i,I,p,t}=) work but the implementation is ugly:
-- Capital =K= is not mnemonic for "tasks".
-- =, p= (the original choice) was already bound by Spacemacs's org layer to =org-priority=; capital =, K= turned out to be bound to =org-kill-note-or-show-branches=.
-- We unbind =, K= and then re-declare it as our prefix, deferring the whole sequence via =with-eval-after-load 'org= to win the timing race against =+lang/org='s late binding.
-
-Acceptance criteria:
-- A keybinding scheme that does not require unbinding existing Spacemacs org-layer bindings, OR
-- A clearly justified scheme under a stable prefix that is unlikely to be reclaimed by upstream Spacemacs.
-- README and plan design-decisions updated to match the new scheme.
-
-Candidate approaches to evaluate:
-- Move to a global leader (e.g. =SPC a t= for "applications > tasks") so bindings don't compete with org-mode prefixes at all.
-- Use a special-character prefix (e.g. =, != or =, ;=) that Spacemacs does not bind in any layer.
-- Nest under a sub-prefix already declared by Spacemacs (requires surveying which prefixes are designated for layer extension).
-- Accept the current scheme as intentional and document the trade-off.
-
-[2026-04-27 Sun] Adopted =, ;= as the prefix. =;= is free in the Spacemacs org layer, reachable without Shift, and requires no unbinding of existing bindings. The =with-eval-after-load 'org= timing workaround was removed entirely. Candidate approaches evaluated and rejected: =SPC a t= (global leader, too many keystrokes for frequent use), single free capital letters (non-mnemonic). =;= is non-mnemonic too but is the most ergonomic free key.
-
-Not blocking v1. Revisit when the package is stable enough that a breaking key change is acceptable, or before sharing the package beyond personal use.
-** DONE [#D] Add convenience keybinding
-:PROPERTIES:
-:CUSTOM_ID: ddb2529d-6588-40ed-b4ac-81bcb6c31765
-:END:
-[2026-04-27 Sun] Implemented.
-
-- =, ; P= (=tasks-org-open-plan-other-window=) :: Threads `find-fn` through =tasks-org--open-plan-link= and =tasks-org--create-plan-for-current-task= as an optional parameter (defaulting to =#'find-file=). =tasks-org-open-plan= accepts the same optional arg; the new command passes =#'find-file-other-window=.
-- =, ; u= (=tasks-org-jump-to-parent-task=) :: Searches TASKS.org for a =:PLAN:= property whose resolved absolute path matches the current buffer's file; jumps to that heading via =find-file-noselect= + =org-back-to-heading= + =org-show-entry=. Only searches TASKS.org (not nested plan files); sufficient for the common case where plan files are linked directly from the task root.
 ** DONE [#B] Tasks extension - archive function mistakenly won't archive some issues
 CLOSED: [2026-04-28 Tue 11:38]
 :PROPERTIES:
@@ -337,15 +181,6 @@ CLOSED: [2026-04-28 Tue 11:38]
 :ARCHIVED: [2026-04-28 Tue 11:38]
 :END:
 #+IMPORT: [[file:design/log/2026-04-28-tasks-archive-fix.org]]
-** DONE [#D] tasks-org: subtask absorption on plan create :emacs:pi:
-CLOSED: [2026-04-28 Tue 11:52]
-:PROPERTIES:
-:CUSTOM_ID: f4a2c819-3e7d-4b08-a901-6d7c0e5b2f38
-:STARTED: [2026-04-28 Tue 11:45]
-:ARCHIVED: [2026-04-28 Tue 11:52]
-:END:
-#+IMPORT: [[file:design/log/2026-04-28-tasks-org-subtask-absorption.org]]
-When creating a new =#+IMPORT:= for a task that already has local subtasks, offer to move those subtasks into the new plan file (preserving =:ID:= properties and leaving a summary under the parent). Coordinate behaviour with the pi tasks extension's parser so results are consistent across editor and CLI.
 ** DONE [#C] Add some sort of Jira integration for the tasks extension
 CLOSED: [2026-04-28 Tue 14:00]
 :PROPERTIES:

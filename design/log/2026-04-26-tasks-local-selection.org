@@ -18,7 +18,6 @@ Moved single-task selection state out of shared =TASKS.org= / plan-file =:select
 - =parser.ts=: =parseSelectedKeyword(content): string | null=.
 - =index.ts=: =TASKS_LOCAL_FILE=, =readSelectedId=, =writeSelectedId=, =findTaskById=; ID-based selection resolution with tag fallback; watcher includes the local file; overlay receives =selectedId= + =onSelectionChange=.
 - =overlay.ts=: =selectedId= field; ID-based =findTaskById= replaces tag-based =findSelectedTask=; =toggleSelect= writes via callback; =save()= opportunistically strips legacy =:selected:= tags; =refreshTasks= accepts =selectedId=.
-- =tasks-org.el=: =tasks-org-local-file-name= custom var, =tasks-org--local-file=, =tasks-org-selected-id=, =tasks-org--write-local-selection=, =tasks-org--strip-legacy-selected-tag=; =tasks-org-toggle-selected= rewritten on the local-file scheme; legacy =tasks-org--clear-selected-everywhere= retained.
 - =.gitignore= adds =TASKS.local.org= and =TASKS.local.org.tmp=.
 - =agents/skills/org-memory/SKILL.md= documents the new selection scheme.
 
@@ -27,13 +26,13 @@ Moved single-task selection state out of shared =TASKS.org= / plan-file =:select
 - =:PLAN:= vs =:INCLUDE:= naming discrepancy between skill and extension flagged as out-of-scope here (later resolved as =#+IMPORT:=).
 
 * Context
-The org-memory protocol uses a reserved =:selected:= tag on a task heading to mark the contributor's currently-active task. The tag is read by the pi tasks extension (compact widget / overlay), the tasks-org Emacs package (=tasks-org-toggle-selected=), and any agent following the org-memory skill.
+The org-memory protocol uses a reserved =:selected:= tag on a task heading to mark the contributor's currently-active task. The tag is read by the pi tasks extension (compact widget / overlay) and any agent following the org-memory skill.
 
 The tag lives inside the same =TASKS.org= and plan files that are version controlled and shared between contributors. That has three concrete problems:
 
 1. *Guaranteed merge conflicts*: Two contributors setting selection at the same time produce a textual conflict on the same heading line. There is no good semantic merge — the result is incoherent regardless of which side wins.
 2. *Personal state in shared history*: =git log= ends up tracking "who selected what when," which is noise and can leak working patterns.
-3. *Cross-file scan cost*: The current Emacs implementation (=tasks-org--clear-selected-everywhere=) walks every plan file referenced from =TASKS.org= to clear stale selections before applying a new one.
+3. *Cross-file scan cost*: Clearing stale selections walks every plan file referenced from =TASKS.org= before applying a new one.
 
 The fix is to move selection out of shared content into a gitignored =TASKS.local.org= file, expressed as a single top-level keyword:
 

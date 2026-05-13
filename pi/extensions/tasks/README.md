@@ -570,12 +570,7 @@ regression suites:
   plan tasks inside change-records emitting their own rows.
 
 These tests are the authoritative behavioural contract for the
-org-memory protocol implemented by this extension. The scaffold
-snapshot is paired with an equivalent `ert` test in the spacemacs
-`tasks-org` layer
-(`editors/emacs/spacemacs/layers/org-user/local/tasks-org/tasks-org-tests.el`)
-so drift between the TS scaffolder and the elisp helpers is caught on
-both sides.
+org-memory protocol implemented by this extension.
 
 Requires `tsx` on `$PATH` (e.g. via `npx tsx` or a global install).
 

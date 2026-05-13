@@ -4,26 +4,19 @@
 #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
-Refinement pass closing consistency gaps across the four artefacts implementing the protocol (=org-tasks= SKILL, =org-plan= SKILL, tasks extension, =tasks-org= Emacs minor mode). =CLOSED:= placement realigned with org-mode's native convention (above =:PROPERTIES:=, where =org-todo= writes it); =:CREATED:= adopted as a first-class drawer property alongside =:STARTED:= and =CLOSED:=; single-source-of-truth split across artefacts (=org-tasks= owns file shape; =org-plan= owns plan structure; README defers to skills). Skill prose slimmed substantially; anti-drift snapshot tests added on both sides. Elisp scaffolder removed in favour of =p= in the pi tasks extension to retire the cross-implementation snapshot pairing.
+Refinement pass closing consistency gaps across the protocol artefacts (=org-tasks= SKILL, =org-plan= SKILL, tasks extension). =CLOSED:= placement realigned with org-mode's native convention (above =:PROPERTIES:=, where =org-todo= writes it); =:CREATED:= adopted as a first-class drawer property alongside =:STARTED:= and =CLOSED:=; single-source-of-truth split across artefacts (=org-tasks= owns file shape; =org-plan= owns plan structure; README defers to skills). Skill prose slimmed substantially; anti-drift snapshot tests added.
 
 ** Decisions
 - =CLOSED:= above =:PROPERTIES:= :: matches =org-todo='s native behaviour; the extension serializer was already correct.
 - =:CREATED:= as a drawer property :: machine-readable; replaces the inline =[YYYY-MM-DD Day]= prefix in descriptions; format matches =:STARTED:= and =CLOSED:=.
 - Single source of truth :: =org-tasks= for file format / properties / keywords / =#+SELECTED:=; README and =org-plan= link in.
-- Single canonical change-record skeleton :: snapshot-tested in both the TS scaffolder and (formerly) the elisp scaffolder so drift becomes a CI failure rather than a docs inconsistency.
-- Emacs and the extension stay independent at runtime :: parity via tests, not RPC.
+- Single canonical change-record skeleton :: snapshot-tested in the TS scaffolder so drift becomes a CI failure rather than a docs inconsistency.
 - Terminology :: skill / user prose use *change-record*; internal symbol names (=plan=, =scaffoldPlan=) stay as-is.
 
 ** Shipped
 - Skills: =org-tasks= 295→202 lines; =org-plan= 130→120 lines; tasks-extension README 257→200 lines (file format moved to the skill).
 - Extension: =createTask= writes =:ID:= + =:CREATED:= on creation; proactive-flow agent prompt instructs the agent to include =:CREATED:= on plan tasks; =scaffold.ts= split out of =index.ts= so the snapshot test can import via =tsx= without =pi-tui=; =formatOrgDate()= added (date-only form for =#+DATE:= matches existing change-record files).
-- Emacs: scaffold matched the canonical skeleton (=#+PARENT_ID:=, =* Implementation=); =#+DEFAULT_PLAN_DIR:= resolved from =TASKS.org= and used as both new-plan default directory and auto-enable matcher; =:STARTED:= written via =org-after-todo-state-change-hook= on first transition (preserved on re-opens); =tasks-org-toggle-selected= docstring corrected.
-- Tests: =parser.test.ts= 9/9 (=CLOSED:= in both positions → always above-drawer on write, =:CREATED:= round-trip, =scaffoldPlan()= literal snapshot); =tasks-org-tests.el= 7/7 (scaffolder structure, =:STARTED:= timestamp format, plan-dir resolution, literal snapshot matching the TS one).
-- Follow-up: elisp scaffolder retired; =tasks-org-open-plan= now opens existing =#+IMPORT:='d records or signals a =user-error= directing the user to =p= in the pi tasks extension. Cross-implementation snapshot pairing dropped.
-
-** Gotchas
-- =:STARTED:= via the Emacs hook fires only when =tasks-org-mode= is active. Power users editing =TASKS.org= without the mode (plain =org-mode=, other editors) won't get the property. Accepted as out-of-scope.
-- Snapshot caught two divergences: TS used =formatOrgTimestamp()= for =#+DATE:= while elisp used date-only =format-time-string "%Y-%m-%d %a"= (resolved by adding =formatOrgDate()= and switching TS); elisp scaffold ended without trailing blank line, TS ended with =\n\n= (resolved by aligning elisp). Both byte-identical after fix.
+- Tests: =parser.test.ts= 9/9 (=CLOSED:= in both positions → always above-drawer on write, =:CREATED:= round-trip, =scaffoldPlan()= literal snapshot).
 
 * Context
 
@@ -34,7 +27,6 @@ Artefacts in scope:
 - =agents/skills/org-tasks/SKILL.md= — file-format / persistence skill.
 - =agents/skills/org-plan/SKILL.md= — planning methodology skill.
 - =agents/pi/extensions/tasks/= — pi tasks extension (TUI, parser, serializer, agent prompts, change-record scaffolder).
-- =editors/emacs/spacemacs/layers/org-user/local/tasks-org/tasks-org.el= — Emacs minor mode for working with =TASKS.org= and linked plan files.
 
 The change-record =2026-04-25-refine-org-memory-plan-protocol.org= is the previous round of this work and shaped most of the current structure; this task refines it further now that the implementation has settled.
 
@@ -45,7 +37,7 @@ The change-record =2026-04-25-refine-org-memory-plan-protocol.org= is the previo
 - Single source of truth for file format :: =org-tasks= SKILL is authoritative for file shape, properties, keywords, and the =#+SELECTED:= protocol. The tasks-extension README and =org-plan= SKILL link to =org-tasks= rather than restating the format.
 - Single source of truth for the change-record skeleton :: One canonical skeleton (matching =org-plan='s "Minimal skeleton") is asserted by snapshot tests in both the TS scaffolder and the elisp scaffolder, so future drift becomes a CI failure rather than a docs inconsistency.
 - Emacs and the extension stay independent at runtime :: No live IPC, no shared template files; both implementations read =TASKS.org= directly. Parity is enforced by tests against documented invariants, not by a runtime dependency.
-- Terminology :: Skill and user-facing prose use *change-record* exclusively. Internal symbol names in code (=plan=, =tasks-org-plans-directory=, =scaffoldPlan=) are stable API and stay as-is to avoid a churny rename.
+- Terminology :: Skill and user-facing prose use *change-record* exclusively. Internal symbol names in code (=plan=, =scaffoldPlan=) are stable API and stay as-is to avoid a churny rename.
 
 * Plan
 

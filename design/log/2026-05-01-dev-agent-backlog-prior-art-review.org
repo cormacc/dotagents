@@ -143,7 +143,7 @@ CLOSED: [2026-05-02 Sat 12:46]
 - Migrated from TASKS.org top-level into change-record [2026-05-02 Sat 12:35]
 - Created [2026-05-02 Sat 12:24]
 :END:
-Outcome: parser/serializer recognises =:BLOCKED-BY+:= continuation lines and accumulates values into a list. Single-value rows round-trip byte-identically; multi-value rows render and edit cleanly. Ready-task query exposed in the extension API. =:HANDOFF:= surfaced in overlay + resume. =tasks-org.el= needed no code change (its parser was already tolerant).
+Outcome: parser/serializer recognises =:BLOCKED-BY+:= continuation lines and accumulates values into a list. Single-value rows round-trip byte-identically; multi-value rows render and edit cleanly. Ready-task query exposed in the extension API. =:HANDOFF:= surfaced in overlay + resume.
 
 ** DONE [#D] Implement /tasks doctor health-check command :extensions:
 CLOSED: [2026-05-02 Sat 12:52]
