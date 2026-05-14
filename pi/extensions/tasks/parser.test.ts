@@ -14,6 +14,7 @@
  */
 
 import {
+  expandOrgLinkTarget,
   extractOrgLink,
   getDrawerProperty,
   getDrawerPropertyValues,
@@ -24,8 +25,8 @@ import {
   getTaskHandoff,
   isTaskReady,
   parseBlocker,
+  parseLinkTemplates,
   parseTasks,
-  resolveIssueUrl,
   rewriteParentLinkTaskFile,
   serializeTasks,
   serializeTasksPreservingFile,
@@ -243,7 +244,7 @@ function assertContains(haystack: string, needle: string, message: string): void
       "#+TITLE: Refine org-memory protocol",
       "#+DATE: 2026-04-28 Tue",
       "#+PARENT: [[file:../../TASKS.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Refine org-memory protocol]]",
-      "#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)",
+      "#+SETUPFILE: ../../TASKS.setup.org",
       "",
       "* Summary",
       "",
@@ -367,6 +368,80 @@ function assertContains(haystack: string, needle: string, message: string): void
     "getFileKeyword: line after empty keyword still resolvable");
 }
 
+// ── parseLinkTemplates helper ─────────────────────────────────────────
+
+{
+  const links = parseLinkTemplates([
+    "#+LINK: jira https://example.atlassian.net/browse/%s",
+    "#+LINK: gh https://github.com/%s",
+    "",
+  ].join("\n"));
+  assertEqual(links.get("jira"), "https://example.atlassian.net/browse/%s",
+    "parseLinkTemplates: parses jira template");
+  assertEqual(links.get("gh"), "https://github.com/%s",
+    "parseLinkTemplates: parses second template");
+}
+
+// ── expandOrgLinkTarget helper ───────────────────────────────────────
+
+{
+  const content = [
+    "#+LINK: jira https://example.atlassian.net/browse/%s",
+    "#+LINK: plan file:design/log/%s",
+    "",
+  ].join("\n");
+
+  // file: templates resolve to a project-root-relative path and keep keys literal.
+  const plan = expandOrgLinkTarget("plan:2026-05-13-foo.org", content);
+  assertEqual(plan.target, "design/log/2026-05-13-foo.org",
+    "expandOrgLinkTarget: plan: typed target expands through file: template");
+  assertEqual(plan.fromProjectRoot, true,
+    "expandOrgLinkTarget: file: template marks target as project-root-relative");
+
+  // file: template keys keep slashes literal (no URL encoding).
+  const nested = expandOrgLinkTarget("plan:subdir/foo.org", content);
+  assertEqual(nested.target, "design/log/subdir/foo.org",
+    "expandOrgLinkTarget: nested keys keep `/` literal under a file: template");
+  assertEqual(nested.fromProjectRoot, true,
+    "expandOrgLinkTarget: nested file: result is still project-root-relative");
+
+  // URL templates URL-encode the key.
+  const jira = expandOrgLinkTarget("jira:PROJ 1", content);
+  assertEqual(jira.target, "https://example.atlassian.net/browse/PROJ%201",
+    "expandOrgLinkTarget: URL templates URL-encode key separators");
+  assertEqual(jira.fromProjectRoot, false,
+    "expandOrgLinkTarget: URL templates do not flag fromProjectRoot");
+
+  // file: typed targets pass through unchanged.
+  const file = expandOrgLinkTarget("file:design/log/explicit.org", content);
+  assertEqual(file.target, "file:design/log/explicit.org",
+    "expandOrgLinkTarget: file: typed targets pass through verbatim");
+  assertEqual(file.fromProjectRoot, false,
+    "expandOrgLinkTarget: file: typed targets are not marked as resolved");
+
+  // Unknown prefix returns the original target.
+  const unknown = expandOrgLinkTarget("slack:C1234", content);
+  assertEqual(unknown.target, "slack:C1234",
+    "expandOrgLinkTarget: unknown prefix returns target verbatim");
+  assertEqual(unknown.fromProjectRoot, false,
+    "expandOrgLinkTarget: unknown prefix is not marked as resolved");
+
+  // Plain paths (no typed prefix) pass through.
+  const plain = expandOrgLinkTarget("design/log/legacy.org", content);
+  assertEqual(plain.target, "design/log/legacy.org",
+    "expandOrgLinkTarget: plain paths pass through verbatim");
+  assertEqual(plain.fromProjectRoot, false,
+    "expandOrgLinkTarget: plain paths are not marked as resolved");
+
+  // A bare LinkTemplateMap is accepted in lieu of content.
+  const templates = parseLinkTemplates(content);
+  const fromMap = expandOrgLinkTarget("plan:foo.org", templates);
+  assertEqual(fromMap.target, "design/log/foo.org",
+    "expandOrgLinkTarget: LinkTemplateMap argument resolves identically");
+  assertEqual(fromMap.fromProjectRoot, true,
+    "expandOrgLinkTarget: LinkTemplateMap argument preserves fromProjectRoot");
+}
+
 // ── getDrawerProperty / setDrawerProperty helpers ────────────────────
 
 {
@@ -445,62 +520,22 @@ function assertContains(haystack: string, needle: string, message: string): void
   );
 }
 
-// ── resolveIssueUrl helper ──────────────────────────────────────────
-
-{
-  assertEqual(
-    resolveIssueUrl("https://example/browse/{ID}", "MBFW-123"),
-    "https://example/browse/MBFW-123",
-    "resolveIssueUrl: {ID} placeholder substitution",
-  );
-  assertEqual(
-    resolveIssueUrl("https://example/browse/", "MBFW-123"),
-    "https://example/browse/MBFW-123",
-    "resolveIssueUrl: suffix-append fallback when no placeholder",
-  );
-  assertEqual(
-    resolveIssueUrl("https://example/issues?id={ID}&v=full", "42"),
-    "https://example/issues?id=42&v=full",
-    "resolveIssueUrl: placeholder mid-template",
-  );
-  assertEqual(
-    resolveIssueUrl("https://example/{ID}/comments?id={ID}", "X-1"),
-    "https://example/X-1/comments?id=X-1",
-    "resolveIssueUrl: replaces every occurrence of {ID}",
-  );
-  assertEqual(
-    resolveIssueUrl(null, "MBFW-123"),
-    null,
-    "resolveIssueUrl: null template returns null",
-  );
-  assertEqual(
-    resolveIssueUrl("", "MBFW-123"),
-    null,
-    "resolveIssueUrl: empty template returns null",
-  );
-  assertEqual(
-    resolveIssueUrl("https://example/browse/{ID}", "a/b"),
-    "https://example/browse/a%2Fb",
-    "resolveIssueUrl: URL-encodes the key",
-  );
-}
-
 // ── getLinkedIssues + setLinkedIssues round-trip ──────────────────────
 
 {
   const input = [
-    "* TODO Mixed bare-key and org-link tokens",
+    "* TODO Mixed typed-link and raw org-link tokens",
     ":PROPERTIES:",
     ":CUSTOM_ID: dddddddd-eeee-4fff-8000-111122223333",
-    ":LINKED_ISSUES: MBFW-123 MBE-45 [[https://github.com/foo/bar/issues/42][gh#42]]",
+    ":LINKED_ISSUES: [[jira:MBFW-123]] [[jira:MBE-45]] [[https://github.com/foo/bar/issues/42][gh#42]]",
     ":END:",
     "",
   ].join("\n");
 
   const { tasks } = parseTasks(input);
   const task = tasks[0]!;
-  const base = "https://your-org.atlassian.net/browse/{ID}";
-  const issues = getLinkedIssues(task, base);
+  const content = "#+LINK: jira https://your-org.atlassian.net/browse/%s";
+  const issues = getLinkedIssues(task, content);
 
   assertEqual(issues.length, 3, "getLinkedIssues: returns three tokens");
   assertEqual(
@@ -508,18 +543,18 @@ function assertContains(haystack: string, needle: string, message: string): void
     {
       url: "https://your-org.atlassian.net/browse/MBFW-123",
       label: "MBFW-123",
-      rawToken: "MBFW-123",
+      rawToken: "[[jira:MBFW-123]]",
     },
-    "getLinkedIssues: bare key resolves via template",
+    "getLinkedIssues: typed Jira link resolves via #+LINK template",
   );
   assertEqual(
     issues[1],
     {
       url: "https://your-org.atlassian.net/browse/MBE-45",
       label: "MBE-45",
-      rawToken: "MBE-45",
+      rawToken: "[[jira:MBE-45]]",
     },
-    "getLinkedIssues: second bare key resolves",
+    "getLinkedIssues: second typed Jira link resolves",
   );
   assertEqual(
     issues[2],
@@ -533,23 +568,22 @@ function assertContains(haystack: string, needle: string, message: string): void
 }
 
 {
-  // Missing #+ISSUE_URL_BASE: bare keys still parse, url is null.
   const input = [
-    "* TODO Bare keys without template",
+    "* TODO Missing link template",
     ":PROPERTIES:",
     ":CUSTOM_ID: eeeeeeee-ffff-4000-8111-222233334444",
-    ":LINKED_ISSUES: MBFW-123",
+    ":LINKED_ISSUES: [[jira:MBFW-123]]",
     ":END:",
     "",
   ].join("\n");
 
   const { tasks } = parseTasks(input);
-  const issues = getLinkedIssues(tasks[0]!, null);
-  assertEqual(issues.length, 1, "getLinkedIssues: bare key without template still listed");
+  const issues = getLinkedIssues(tasks[0]!, "");
+  assertEqual(issues.length, 1, "getLinkedIssues: typed link without template still listed");
   assertEqual(issues[0]!.url, null,
-    "getLinkedIssues: bare key without template has null url");
-  assertEqual(issues[0]!.label, "MBFW-123",
-    "getLinkedIssues: bare key label preserved");
+    "getLinkedIssues: typed link without template has null url");
+  assertEqual(issues[0]!.error, "Missing #+LINK declaration for prefix jira",
+    "getLinkedIssues: missing template is a hard-resolution error");
 }
 
 {
@@ -562,7 +596,7 @@ function assertContains(haystack: string, needle: string, message: string): void
     "",
   ].join("\n");
   const { tasks } = parseTasks(input);
-  assertEqual(getLinkedIssues(tasks[0]!, "https://x/{ID}").length, 0,
+  assertEqual(getLinkedIssues(tasks[0]!, "#+LINK: jira https://x/%s").length, 0,
     "getLinkedIssues: returns [] when property absent");
 }
 
@@ -578,12 +612,12 @@ function assertContains(haystack: string, needle: string, message: string): void
   const { tasks } = parseTasks(input);
   const task = tasks[0]!;
 
-  setLinkedIssues(task, ["MBFW-123", "MBE-45"]);
-  assertEqual(getDrawerProperty(task, "LINKED_ISSUES"), "MBFW-123 MBE-45",
-    "setLinkedIssues: writes whitespace-joined tokens");
+  setLinkedIssues(task, ["[[jira:MBFW-123]]", "[[jira:MBE-45]]"]);
+  assertEqual(getDrawerProperty(task, "LINKED_ISSUES"), "[[jira:MBFW-123]] [[jira:MBE-45]]",
+    "setLinkedIssues: writes whitespace-joined org-link tokens");
 
   const out = serializeTasks(tasks);
-  assertContains(out, ":LINKED_ISSUES: MBFW-123 MBE-45",
+  assertContains(out, ":LINKED_ISSUES: [[jira:MBFW-123]] [[jira:MBE-45]]",
     "setLinkedIssues: round-trips through serializer");
 
   setLinkedIssues(task, []);
@@ -595,12 +629,12 @@ function assertContains(haystack: string, needle: string, message: string): void
 
 {
   const input = [
-    "#+ISSUE_URL_BASE: https://your-org.atlassian.net/browse/{ID}",
+    "#+LINK: jira https://your-org.atlassian.net/browse/%s",
     "",
     "* TODO Round-trip",
     ":PROPERTIES:",
     ":CUSTOM_ID: 11223344-5566-4777-8888-99aabbccddee",
-    ":LINKED_ISSUES: MBFW-123 [[https://x/y][y]]",
+    ":LINKED_ISSUES: [[jira:MBFW-123]] [[https://x/y][y]]",
     ":END:",
     "Body.",
     "",
@@ -608,11 +642,11 @@ function assertContains(haystack: string, needle: string, message: string): void
 
   const out = serializeTasksPreservingFile(input, parseTasks(input).tasks);
   assertContains(out,
-    "#+ISSUE_URL_BASE: https://your-org.atlassian.net/browse/{ID}",
-    "#+ISSUE_URL_BASE preamble round-trips",
+    "#+LINK: jira https://your-org.atlassian.net/browse/%s",
+    "#+LINK preamble round-trips",
   );
   assertContains(out,
-    ":LINKED_ISSUES: MBFW-123 [[https://x/y][y]]",
+    ":LINKED_ISSUES: [[jira:MBFW-123]] [[https://x/y][y]]",
     ":LINKED_ISSUES: drawer line round-trips verbatim",
   );
 }

@@ -23,6 +23,7 @@ dotagents/
 ├── agent-org-memory.nix # Nix derivation for the org-memory slice
 ├── flake.nix            # exposes packages.<system>.agent-org-memory
 ├── prompts/             # prompt templates (init.md, system/*.md)
+├── emacs/               # lightweight Emacs companions for protocol skills (e.g. tasks-org)
 ├── skills/              # generic harness-agnostic skills (Vercel-Labs-skills compatible)
 │   ├── org-tasks/       # task-memory protocol
 │   ├── org-plan/        # change-record structure
@@ -71,6 +72,8 @@ pi install npm:@cormacc/agent-org-memory
 `pi install` writes the entry to `~/.pi/agent/settings.json` (or
 `.pi/settings.json` with `-l`) so missing packages reinstall on
 startup.
+
+The org-memory file protocol intentionally aligns with native org-mode features: lifecycle hints use `#+TODO:` bang/at markers plus `#+STARTUP: logdone logdrawer`, archives use `#+ARCHIVE:`, external issues and plan paths use org-native `#+LINK:` abbreviations, and task/change-record files share root preamble through `TASKS.setup.org`. The pi extension remains the standalone implementation for headless/TUI writes; Emacs produces the same shapes when used as an editor.
 
 ### Via the flake
 

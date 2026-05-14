@@ -27,19 +27,19 @@ and `#+IMPORT:` resolution.
 
 ## File protocol
 
-`TASKS.org` and included task files declare the shared TODO cycle:
+Repositories declare shared org-tasks options in a root `TASKS.setup.org` and reference it from `TASKS.org`, `TASKS.archive.org`, and change-records via `#+SETUPFILE:`. A minimal setupfile:
 
 ```org
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)
+#+STARTUP: logdone logdrawer
+#+LINK: plan file:design/log/%s
 ```
 
-`TASKS.org` may also declare the default change-record directory:
+`TASKS.org` and `TASKS.archive.org` reference the setupfile so they pick up the same TODO cycle, `:LOGBOOK:` shape, and link abbreviations without repeating the preamble inline. Change-records use the same `#+SETUPFILE:` pointer (typically `../../TASKS.setup.org`).
 
-```org
-#+DEFAULT_PLAN_DIR: [[file:./design/log]]
-```
+The `CLOSED:` line and `:LOGBOOK:` state entries described below are the on-disk contract. Org-mode emits them natively in Emacs with the declarations above; the pi tasks extension emits byte-identical shapes for headless / TUI edits and must remain fully usable without Emacs.
 
-When the keyword is absent or malformed the default is `[[file:./design/log]]`.
+The `plan` link abbreviation replaces the older `#+DEFAULT_PLAN_DIR` keyword. Tooling derives a suggested change-record path by substituting the generated filename into `#+LINK: plan .../%s`; when the abbreviation is absent it falls back to `./design/log/<file>.org`.
 
 ### Quick reference
 
@@ -47,8 +47,8 @@ When the keyword is absent or malformed the default is `[[file:./design/log]]`.
 |------|---------|-------|
 | `:CUSTOM_ID:` | UUID v4; required on every task/subtask | `:PROPERTIES:` |
 | `:CREATED:` | creation timestamp; do not backfill existing tasks | `:PROPERTIES:` |
-| `:STARTED:` | first transition into `STARTED` | `:PROPERTIES:` |
-| `CLOSED:` | current close timestamp for `DONE`/`CANCELLED` | line above `:PROPERTIES:` |
+| `:STARTED:` | fast cache for the first `STARTED` transition; source of truth is the first STARTED entry in `:LOGBOOK:` | `:PROPERTIES:` |
+| `CLOSED:` | current close timestamp for `DONE`/`CANCELLED`, emitted by org-mode or the pi extension in byte-identical format | line above `:PROPERTIES:` |
 | `:LOGBOOK:` | append-only lifecycle audit trail | drawer after `:PROPERTIES:` |
 | `:BLOCKED-BY:` / `:BLOCKED-BY+:` | one or more blocker refs | `:PROPERTIES:` |
 | `:HANDOFF:` | short “start here” note for next session | `:PROPERTIES:` |
@@ -94,7 +94,7 @@ should be its own dedicated commit.
 :LOGBOOK:
 - Created [2026-04-25 Sat 09:00]
 :END:
-#+IMPORT: [[file:design/log/2026-04-25-feature.org]]
+#+IMPORT: [[plan:2026-04-25-feature.org]]
 Optional description text.
 ```
 
@@ -109,19 +109,9 @@ Optional description text.
 - **`:CREATED:`**: `[YYYY-MM-DD Day HH:MM]`, set on creation. Do not backfill on
   existing tasks. Do not prefix the description with an inline
   `[YYYY-MM-DD Day]` creation marker — that role is owned by the property.
-- **`:STARTED:`**: `[YYYY-MM-DD Day HH:MM]`, written the first time a task
-  transitions into `STARTED`. Preserved on subsequent `DONE -> STARTED`
-  re-opens. Used as a fast lower-bound cache for retrospective `git log`
-  scoping.
-- **`CLOSED:`**: `[YYYY-MM-DD Day HH:MM]`, written on transition to `DONE` or
-  `CANCELLED`. Lives on its own line *between the heading and the `:PROPERTIES:`
-  drawer* (matches `org-todo`'s native behaviour). It is the current
-  closed-state cache: clear it when reopening a task, then write a fresh value
-  on the next close.
-- **`:LOGBOOK:`**: task-local lifecycle drawer after `:PROPERTIES:` and before
-  task body text. It is append-only audit history: one `- Created [timestamp]`
-  entry and one `- State "NEW" from "OLD" [timestamp]` entry for each status
-  transition. Preserve historical entries; never replay them as pending actions.
+- **`:STARTED:`**: `[YYYY-MM-DD Day HH:MM]`, a fast lower-bound cache for retrospective `git log` scoping and resume heuristics. Its source of truth is the first `- State "STARTED" ... [timestamp]` entry in `:LOGBOOK:`. The pi extension may write it on first transition; Emacs-derived flows may fill it later if absent. Preserve it on subsequent `DONE -> STARTED` re-opens.
+- **`CLOSED:`**: `[YYYY-MM-DD Day HH:MM]`, written on transition to `DONE` or `CANCELLED` by org-mode or the pi extension in byte-identical format. Lives on its own line *between the heading and the `:PROPERTIES:` drawer* (matches `org-todo`'s native behaviour). It is the current closed-state cache: clear it when reopening a task, then write a fresh value on the next close.
+- **`:LOGBOOK:`**: task-local lifecycle drawer after `:PROPERTIES:` and before task body text. It is append-only audit history: one `- Created [timestamp]` entry and one `- State "NEW" from "OLD" [timestamp]` entry for each status transition. Org-mode emits transition entries via `#+TODO` bang/at markers and `#+STARTUP: logdrawer`; the pi extension emits the same shape headlessly. Preserve historical entries; never replay them as pending actions.
 - **`:BLOCKED-BY:`**: blocker reference(s), usually on `WAITING` tasks but also
   valid on `TODO` tasks as a readiness gate. First blocker uses `:BLOCKED-BY:`;
   additional blockers use org-native continuation lines:
@@ -140,12 +130,14 @@ Optional description text.
   for the next session or agent. Allowed on top-level task headings and on
   plan-subtask headings inside change-records. Surfaced by resume /
   selected-task tooling so the next reader sees a concrete “start here” pointer.
-- **`#+IMPORT:`**: clickable `[[file:...]]` link on its own line in the task
-  body, after any metadata drawers. Resolves relative to the file containing the
-  keyword. May also appear at file root (before any heading) to inject tasks
-  from another file at the root. Preserve any existing bare or labelled link
-  form on round-trip. Resolution applies symlink-realpath sandboxing per
-  *Locating TASKS.org* above.
+- **`#+IMPORT:`**: clickable org link on its own line in the task body, after
+  any metadata drawers. Canonical change-record links use `[[plan:<file.org>]]`,
+  resolved through the repository's `#+LINK: plan file:design/log/%s`
+  abbreviation. Plain `[[file:...]]` links remain valid for non-plan imports and
+  resolve relative to the file containing the keyword. May also appear at file
+  root (before any heading) to inject tasks from another file at the root.
+  Preserve any existing bare or labelled link form on round-trip. Resolution
+  applies symlink-realpath sandboxing per *Locating TASKS.org* above.
 
 Always obtain timestamps via `date +"%Y-%m-%d %a %H:%M"` rather than computing
 them manually.
@@ -154,8 +146,8 @@ them manually.
 
 ```org
 #+TITLE: Project Tasks
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
-#+DEFAULT_PLAN_DIR: [[file:./design/log]]
+#+SETUPFILE: ./TASKS.setup.org
+#+ARCHIVE: TASKS.archive.org::* From %s
 
 * Improvements
 
@@ -167,7 +159,7 @@ them manually.
 :LOGBOOK:
 - Created [2026-04-25 Sat 09:00]
 :END:
-#+IMPORT: [[file:design/log/2026-04-25-authentication.org]]
+#+IMPORT: [[plan:2026-04-25-authentication.org]]
 Initial scope captured from user request.
 
 * Housekeeping
@@ -296,28 +288,42 @@ or truncate silently. Executable regression coverage for this protocol lives in
 - Prefer adding detail to change-records rather than bloating `TASKS.org`.
 - Author body prose as single-line paragraphs (no hard wrap); see *Line
   wrapping* above.
-- New change-records use `YYYY-MM-DD-short-task-name.org` under
-  `#+DEFAULT_PLAN_DIR` and declare `#+TITLE:`, `#+DATE:`, `#+PARENT:` (a
-  navigable `[[file:<rel>/TASKS.org::#<uuid>][summary]]` link to the parent
-  task's `:CUSTOM_ID:`), and the shared `#+TODO:` cycle.
+- New change-records use `YYYY-MM-DD-short-task-name.org` under the path
+  resolved from the root `#+LINK: plan .../%s` abbreviation. Each record
+  declares `#+TITLE:`, `#+DATE:`, `#+SETUPFILE: ../../TASKS.setup.org`, and a
+  `#+PARENT:` link (`[[file:<rel>/TASKS.org::#<uuid>][summary]]`) pointing at
+  the parent task's `:CUSTOM_ID:`. Shared `#+TODO:`, `#+STARTUP:`, and org-link
+  abbreviations come from the setupfile rather than being inlined.
 - Add discovered work as new `TODO` tasks rather than burying it in prose. Do
   not remove completed historical tasks unless asked.
 
 ## Archiving
 
-Only top-level `DONE`/`CANCELLED` tasks are archived. Archiving moves the
-complete subtree to `TASKS.archive.org` in the project root, preserves
-`:CUSTOM_ID:` and content, and adds an `:ARCHIVED: [timestamp]` property. The
-`#+IMPORT:` link is preserved; plan file contents are not inlined.
+Only top-level `DONE`/`CANCELLED` tasks are archived. `TASKS.org` declares `#+ARCHIVE: TASKS.archive.org::* From %s`; Emacs users may archive with native `org-archive-subtree` (`C-c C-x C-a`) and the pi tasks extension provides the standalone/headless equivalent. Both paths move the complete subtree to `TASKS.archive.org` in the project root, preserve `:CUSTOM_ID:`, content, and `:LOGBOOK:`, add an `:ARCHIVED: [timestamp]` property, and keep the `#+IMPORT:` link without inlining plan contents.
 
 ## Bootstrap
 
-If `TASKS.org` does not exist and the user wants persistent task memory: create
-it in the project root with `#+TITLE:`, the shared `#+TODO:`, and
-`#+DEFAULT_PLAN_DIR: [[file:./design/log]]`; add a semantic section (e.g.
-`* Improvements`) and the first actionable `TODO` with `:CUSTOM_ID:` and
-`:CREATED:` properties. Detailed work items go in an included change-record
-under `#+DEFAULT_PLAN_DIR`.
+If `TASKS.org` does not exist and the user wants persistent task memory:
+
+1. Create `TASKS.setup.org` at the project root with the shared preamble:
+
+   ```org
+   #+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)
+   #+STARTUP: logdone logdrawer
+   #+LINK: plan file:design/log/%s
+   ```
+
+2. Create `TASKS.org` referencing it:
+
+   ```org
+   #+TITLE: Project Tasks
+   #+SETUPFILE: ./TASKS.setup.org
+   #+ARCHIVE: TASKS.archive.org::* From %s
+
+   * Improvements
+   ```
+
+3. Add the first actionable `TODO` under a semantic section (e.g. `* Improvements`) with `:CUSTOM_ID:` and `:CREATED:` properties. Detailed work items go in an included change-record under the `plan` link target.
 
 ## Extension points
 
@@ -339,14 +345,10 @@ their own data without modifying this protocol:
 First-party generic extension features in the `tasks` extension itself
 (documented in `pi/extensions/tasks/README.md`):
 
-- **`:LINKED_ISSUES:`** drawer property — multi-valued list of external-tracker
-  references; rendered as badges on task rows.
-- **`#+ISSUE_URL_BASE:`** keyword — URL template used to resolve bare keys in
-  `:LINKED_ISSUES:` to clickable URLs.
+- **`:LINKED_ISSUES:`** drawer property — multi-valued list of external-tracker references rendered as badges on task rows. Accepted token forms are org-native typed links (`[[type:key]]`, canonical) and raw URL org links (`[[https://...][label]]`). Bare keys are not part of the protocol.
+- **`#+LINK:`** org keyword — native link abbreviation declarations used to resolve typed issue links, e.g. `#+LINK: jira https://example.atlassian.net/browse/%s`. Multiple prefixes may be declared in one file.
 
-These two features are tracker-agnostic; tracker-specific behaviour (workflow
-names, MCP routing, slash commands) lives in companion extensions and skills,
-not in this protocol.
+These features are tracker-agnostic; tracker-specific behaviour (workflow names, MCP routing, slash commands, and the meaning of a link prefix such as `jira`) lives in companion extensions and skills, not in this protocol.
 
 ## Non-goals
 
@@ -354,6 +356,7 @@ not in this protocol.
 |----------|--------|--------------|
 | Transient checkout/reconcile `backlog.org` as core model | `TASKS.org` + `#+IMPORT:` is the canonical graph; avoid duplicated task state | a separate working-surface workflow proves necessary |
 | Vendor-specific core metadata | tracker/agent fields belong in companion skills/extensions | a vendor-neutral abstraction emerges |
+| Rich Emacs follow handlers for tracker links | first-class syntax uses org-native `#+LINK:`; tracker-specific Emacs packages may add `org-link-set-parameters` later | a tracker-specific editor workflow needs MCP-aware links |
 | Transcript/chat-log links by default | durable memory is org files; sessions are ephemeral | transcript retention becomes an explicit user requirement |
 | Bidirectional external-tracker sync by default | linked issues are references; companion skills re-fetch when needed | a project requires true sync semantics |
 | Human-readable IDs replacing UUIDs | UUIDs are stable and collision-resistant | aliases are added as a layer, not a replacement |
@@ -361,7 +364,4 @@ not in this protocol.
 
 ## Tooling
 
-The pi tasks extension automates ID assignment, `:CREATED:` / `:STARTED:` /
-`CLOSED:` timestamps, parent status propagation, and archive mechanics against
-this protocol. When editing task files by hand, follow the rules above
-explicitly.
+The pi tasks extension automates ID assignment, `:CREATED:` / `:STARTED:` / `CLOSED:` timestamps, LOGBOOK state entries, parent status propagation, linked-issue badge rendering, and archive mechanics against this protocol without requiring Emacs. Native org-mode features (`logdone`, `logdrawer`, `#+ARCHIVE:`, `#+LINK:`) are deliberately aligned with those artefacts so Emacs edits and pi headless/TUI edits converge on the same file shapes. The optional Emacs companion lives at `emacs/tasks-org/` and provides editor conveniences for finding `TASKS.org`, capturing new tasks, toggling task/plan buffers, and toggling `#+SELECTED:`.

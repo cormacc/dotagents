@@ -340,9 +340,9 @@ overwriting.
 ### Promotion to a change-record
 
 When the entry is ready to be planned, follow the standard `org-plan` flow: a
-change-record under the target repo's `#+DEFAULT_PLAN_DIR` (defaults to
-`[[file:./design/log]]`), linked from the task via `#+IMPORT:`. Nothing about
-this skill short-circuits that flow.
+change-record under the target repo's `#+LINK: plan ...` abbreviation (defaults
+to `file:design/log/%s` when absent), linked from the task via `#+IMPORT:
+[[plan:<file.org>]]`. Nothing about this skill short-circuits that flow.
 
 ## Worked examples
 

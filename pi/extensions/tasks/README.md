@@ -147,7 +147,7 @@ Pressing `A` (shift-a) archives the top-level task containing the cursor's task.
 - Clears `TASKS.local.org` selection when the selected task is archived, so the compact widget doesn't point at a task that no longer exists.
 - Preserves the `#+IMPORT:` link in the archived copy; plan file contents are **not** inlined. The archive entry is a faithful copy of the task as it stood in `TASKS.org`.
 
-Task creation, plan path approval, and archive confirmation prompts temporarily close the expanded UI so input/confirmation dialogs remain visible. After create/archive flows complete or are cancelled, the expanded UI reopens with a refreshed task tree. When creating a new plan, the path prompt is prefilled with the suggested `#+DEFAULT_PLAN_DIR`-based path; accepting it scaffolds and links the file, then sends an agent prompt to develop the plan interactively.
+Task creation, plan path approval, and archive confirmation prompts temporarily close the expanded UI so input/confirmation dialogs remain visible. After create/archive flows complete or are cancelled, the expanded UI reopens with a refreshed task tree. When creating a new plan, the path prompt is prefilled from the `#+LINK: plan file:design/log/%s` abbreviation (usually supplied by `TASKS.setup.org`); accepting it scaffolds and links the file, then sends an agent prompt to develop the plan interactively.
 
 ### Change-records (proactive and retrospective)
 
@@ -201,59 +201,39 @@ Both default to `true`. Setting `changeRecordOnDone` to `false` suppresses the r
 Tasks may reference issues in external trackers (Jira, GitHub, Linear,
 etc.) via a generic, tracker-agnostic mechanism owned by this extension.
 
-**Drawer property `:LINKED_ISSUES:`** — multi-valued, whitespace-separated
-list of tokens. Each token is either:
+**Drawer property `:LINKED_ISSUES:`** — multi-valued, whitespace-separated list of org-link tokens. Each token is either:
 
-1. **Bare key** (e.g. `MBFW-123`) — resolved against `#+ISSUE_URL_BASE`
-   (see below) to produce a clickable URL. Rendered as the key itself.
-2. **Org link** `[[url][label]]` — resolved directly, no template needed.
-   Rendered as `label`.
+1. **Typed link** (canonical) — `[[jira:MBFW-123]]`, resolved through an org-native `#+LINK:` abbreviation declared in the file preamble.
+2. **Raw URL org link** — `[[https://github.com/foo/bar/issues/42][gh#42]]`, resolved directly and rendered as its label.
 
 The two forms can mix freely on a single line:
 
 ```org
+#+LINK: jira https://your-org.atlassian.net/browse/%s
+
 :PROPERTIES:
 :CUSTOM_ID: 01234567-…
-:LINKED_ISSUES: MBFW-123 MBE-45 [[https://github.com/foo/bar/issues/42][gh#42]]
+:LINKED_ISSUES: [[jira:MBFW-123]] [[jira:MBE-45]] [[https://github.com/foo/bar/issues/42][gh#42]]
 :END:
 ```
 
-The property is created on first link only — never auto-backfilled on
-existing tasks or pre-created on new tasks (mirroring `:STARTED:`).
+The property is created on first link only — never auto-backfilled on existing tasks or pre-created on new tasks (mirroring `:STARTED:`). Bare keys are not part of the protocol; existing adopting repos were migrated to typed links in a one-time sweep.
 
-**File keyword `#+ISSUE_URL_BASE:`** — URL template used to resolve bare
-keys. Two forms accepted:
+**File keyword `#+LINK:`** — org-native link abbreviation used to resolve typed links. The URL template uses `%s` as the encoded target placeholder:
 
 ```org
-#+ISSUE_URL_BASE: https://your-org.atlassian.net/browse/{ID}
-#+ISSUE_URL_BASE: https://your-org.atlassian.net/browse/
+#+LINK: jira https://your-org.atlassian.net/browse/%s
+#+LINK: gh https://github.com/%s
 ```
 
-Resolution rule for bare keys:
-
-1. URL-encode the key.
-2. If the template contains `{ID}`, substitute the encoded key for every
-   occurrence.
-3. Otherwise treat the template as a prefix and append the encoded key.
-
-Unusual URL shapes (`https://issues.example.com/?id={ID}&v=full`) are
-also expressible. Non-HTTPS schemes are intentionally permitted because
-issue URL bases are project-local trusted configuration. `TASKS.local.org`
-may override the keyword (last-write-wins, mirroring `#+SELECTED:`) as
-part of the user's checkout-local trust boundary.
+Non-HTTPS schemes are intentionally permitted because issue link templates are project-local trusted configuration. `TASKS.local.org` may override the keyword (last-write-wins, mirroring `#+SELECTED:`) as part of the user's checkout-local trust boundary.
 
 **Rendering** — each linked issue appears as a cyan badge prefixed with
 `⤴`, immediately before the tags suffix on the task row. Badges show
 in both the expanded UI and the compact selected-task widget. Tasks
 with no `:LINKED_ISSUES:` are rendered unchanged.
 
-**`J` keybinding (expanded UI)** — opens every resolvable URL on the
-cursor task in the user's browser, capped at 5 with a notification when
-exceeded. Empty/absent property is a silent no-op. Bare tokens with no
-resolvable URL (no `#+ISSUE_URL_BASE` and not an org link) trigger a
-notification pointing at the missing keyword. Browser is invoked via
-`open` (macOS) or `xdg-open` (Linux/other), passing each URL as a
-separate argv element rather than through shell interpolation.
+**`J` keybinding (expanded UI)** — opens every resolvable URL on the cursor task in the user's browser, capped at 5 with a notification when exceeded. Empty/absent property is a silent no-op. Typed links whose prefix has no matching `#+LINK:` declaration trigger a notification naming the missing prefix. Browser is invoked via `open` (macOS) or `xdg-open` (Linux/other), passing each URL as a separate argv element rather than through shell interpolation.
 
 **Tracker-specific workflows** (claim, transition, comment, create) are
 intentionally *not* part of this extension. They live in companion
@@ -505,7 +485,7 @@ only. Diff-based detection on reload is a possible future addition.
 ## File format
 
 File-format details (heading syntax, properties, `#+IMPORT:`,
-`#+DEFAULT_PLAN_DIR:`, `#+SELECTED:`, change-record sections) live
+`#+SETUPFILE:`, `#+SELECTED:`, change-record sections) live
 in the `org-tasks` skill: `skills/org-tasks/SKILL.md`. The
 extension implements that protocol; this README only covers the UI
 and extension-specific behaviour.
@@ -523,10 +503,12 @@ Extension-specific notes:
 - **Permissive parsing**: actionable task headings may appear
   anywhere in a linked change-record. Using `* Plan` is the
   recommended convention but not required.
-- **`#+IMPORT:` link form**: the value can be a bare path,
-  `[[file:...]]`, or `[[file:...][label]]`. Whichever form is on
-  disk is preserved exactly. New change-records scaffolded by `p`
-  are written in `[[file:...]]` form so they're clickable in Emacs.
+- **`#+IMPORT:` link form**: canonical change-record imports use
+  `[[plan:<file.org>]]`, resolved through `#+LINK: plan file:design/log/%s`.
+  Bare paths, `[[file:...]]`, and `[[file:...][label]]` remain valid for other
+  imports. Whichever form is on disk is preserved exactly. New change-records
+  scaffolded by `p` are written in `[[plan:...]]` form when they live under the
+  configured plan directory.
 - **Subtask absorption**: if `p` is pressed on a task that already
   has local subtasks, those subtask trees are moved into the new
   change-record under `* Plan`; the parent retains a plain-text

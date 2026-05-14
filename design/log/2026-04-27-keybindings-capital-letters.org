@@ -1,7 +1,7 @@
 #+TITLE: Fix keybindings extension capital-letter matching
 #+DATE: 2026-04-27 Mon
 #+PARENT: [[file:../../TASKS.archive.org::#d9789ed7-ff34-490a-a818-bf7a79fa1180][Update keybindings extension to handle capital letter properly]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Misdiagnosis. Originally framed as a keybindings-extension bug (raw =key === data= equality vs =matchesKey=) so that =SPC t A= was silently failing for capital-letter overlay shortcuts. Four candidate fixes at the leader level were prototyped and rolled back; debug logging in the *consumer* (the tasks overlay) finally exposed the real bug: =overlay.ts= called =matchesKey(data, "A")= et al with literal uppercase characters where =matchesKey= expects the canonical =shift+a= form. Fix landed in =overlay.ts= (five call-sites: =A=, =P=, =U=, =N=, =J=). Plan tasks remain CANCELLED to record the misdiagnosis chain accurately; the actual fix is a small overlay patch.

@@ -73,7 +73,7 @@ const tasksContent = [
   "- Created [2026-05-01 Fri 08:51]",
   "- State \"STARTED\" from \"TODO\" [2026-05-01 Fri 09:41]",
   ":END:",
-  "#+IMPORT: [[file:design/log/org-memory.org]]",
+  "#+IMPORT: [[plan:org-memory.org]]",
   "Migrated subtasks:",
   "- STARTED Add regression coverage",
   "** DONE Prerequisite blocker",
@@ -156,7 +156,7 @@ assertEqual(findings.filter((f) => f.code === "selected-not-found").length, 0,
   "memory scenario: selected task is present in loaded graph");
 
 const serialized = serializeTasks(tasks);
-assertContains(serialized, "#+IMPORT: [[file:design/log/org-memory.org]]", "memory scenario: import link form round-trips");
+assertContains(serialized, "#+IMPORT: [[plan:org-memory.org]]", "memory scenario: import link form round-trips");
 assertContains(serialized, "- STARTED Add regression coverage", "memory scenario: parent retains plain-text migrated-subtask summary");
 assertEqual(serialized.includes("*** STARTED Add regression coverage"), false,
   "memory scenario: migrated subtask is not duplicated as TASKS.org child heading");

@@ -1,27 +1,28 @@
+#+TITLE: dotagents archived tasks
+#+SETUPFILE: ./TASKS.setup.org
+
 * DONE [#A] Implement an org-based memory system for pi-agent :org-memory:
 CLOSED: [2026-04-24 Fri 23:53]
 :PROPERTIES:
 :CUSTOM_ID: 9ae2bf39-c61c-4a2d-8fa5-882a5ce3eca7
 :ARCHIVED: [2026-04-24 Fri 23:53]
 :END:
-#+IMPORT: [[file:design/log/2026-04-24-org-agent-memory.org]]
-
+#+IMPORT: [[plan:2026-04-24-org-agent-memory.org]]
 * DONE [#B] Refine org-memory/plan protocol :org-memory:
 CLOSED: [2026-04-25 Sat 13:03]
 :PROPERTIES:
 :CUSTOM_ID: 7a48756f-95b2-440c-9810-09a9ae60e452
 :ARCHIVED: [2026-04-25 Sat 13:03]
 :END:
-#+IMPORT: [[file:design/log/2026-04-25-refine-org-memory-plan-protocol.org]]
+#+IMPORT: [[plan:2026-04-25-refine-org-memory-plan-protocol.org]]
 [2026-04-25 Sat] Implemented skill protocol refinements, task extension round-trip preservation, and ID backfill.
-
 * DONE [#A] Refine tasks extension :org-memory:org-tasks:
 CLOSED: [2026-04-25 Sat 18:03]
 :PROPERTIES:
 :CUSTOM_ID: f92b7b2f-c7fc-4933-9e27-20c0e411cbe4
 :ARCHIVED: [2026-04-25 Sat 16:57]
 :END:
-#+IMPORT: [[file:design/log/2026-04-25-refine-tasks-extension.org]]
+#+IMPORT: [[plan:2026-04-25-refine-tasks-extension.org]]
 UX and persistence refinements for the pi tasks extension. See linked plan for the full breakdown. Scope:
 - Auto-insert missing org IDs on load.
 - Merge the modal selection/edit overlay with the persistent selected-task status display into a single expand/collapse UI owner.
@@ -31,7 +32,6 @@ UX and persistence refinements for the pi tasks extension. See linked plan for t
 - Place the compact selected-task UI so it doesn't mask conversation scrollback.
 
 Implemented the first pass in the linked plan: ID backfill, compact above-editor widget, expanded UI prompt handoff, default collapse, plan metadata display, README updates, and generated keybindings map. Final interactive `/reload` and UI smoke tests remain to close validation.
-
 * DONE [#D] TASKS skill - fix completion timestamp insertion :org-memory:org-tasks:
 CLOSED: [2026-04-27 Mon 15:13]
 :PROPERTIES:
@@ -42,7 +42,6 @@ When completing a task, a completion timestamp is inserted below the properties 
 - Ensure the timestamp is in the expected format AND correct.
 - Ensure the timestamp is prefixed with "CLOSED: " and placed immediately below the task heading.
 - Ensure remaining content continues on the next line, rather than on the same line as the timestamp.
-
 * DONE [#D] Tasks overlay bugfixes :org-memory:org-tasks:tasks-extension:
 CLOSED: [2026-04-27 Mon 17:39]
 :PROPERTIES:
@@ -51,16 +50,14 @@ CLOSED: [2026-04-27 Mon 17:39]
 :END:
 - Toggling selection updates status overlay BUT not editor overlay
 - Editor overlay should open with insertion point at selected subtask, not top level task
-
 * DONE [#A] Move task selection state to .gitignored TASKS.local.org :org-memory:org-tasks:
 CLOSED: [2026-04-27 Mon 18:52]
 :PROPERTIES:
 :CUSTOM_ID: a8f3c2e1-7b4d-4f9c-8a52-3e6c1d8b9f47
 :ARCHIVED: [2026-04-27 Mon 18:52]
 :END:
-#+IMPORT: [[file:design/log/2026-04-26-tasks-local-selection.org]]
+#+IMPORT: [[plan:2026-04-26-tasks-local-selection.org]]
 Selection state (which task the contributor is actively working on) is currently expressed via the reserved =:selected:= tag embedded in =TASKS.org= and plan files. That puts per-contributor, per-machine working state into shared, version-controlled content. On multi-contributor repos this produces guaranteed merge conflicts whenever two people set selection simultaneously, and the tag is semantically incoherent across the team (only one person can be "selected"). Move selection to a gitignored =TASKS.local.org= using top-level =#+SELECTED: <UUID>= metadata; update the org-memory skill and the pi tasks extension to read/write the new location.
-
 * DONE [#C] Replace :INCLUDE: drawer property with #+IMPORT: keyword  :org-memory:org-tasks:
 CLOSED: [2026-04-27 Mon 21:53]
 :PROPERTIES:
@@ -95,7 +92,6 @@ CLOSED: [2026-04-27 Mon 21:53]
 - Migrate 2 existing =:INCLUDE:= drawer entries in =TASKS.org= to =#+IMPORT:=.
 - Update =agents/skills/org-memory/SKILL.md=.
 - Update =agents/pi/extensions/tasks/README.md= (also fix stale =:selected:= tag references left over from the =TASKS.local.org= selection migration).
-
 * DONE [#C] Add emacs-side tooling for tasks extension :org-memory:org-tasks:tasks-extension:emacs
 :PROPERTIES:
 :CUSTOM_ID: 2b87d48c-d158-44ff-8fea-87c99b570144
@@ -111,7 +107,7 @@ CLOSED: [2026-04-27 Mon 22:32]
 :CUSTOM_ID: 6bee9f80-d1b5-4121-ab9c-f795e4884d3e
 :ARCHIVED: [2026-04-27 Mon 22:32]
 :END:
-#+IMPORT: [[file:design/log/2026-04-27-local-tasks.org]]
+#+IMPORT: [[plan:2026-04-27-local-tasks.org]]
 If TASKS.local.org includes tasks, consider these local/draft/gitignored tasks. Not checked in, but surfaced in the extension UI. Update task extension and emacs plugins to include publish/unpublish bindings -- promoting a local task from TASKS.local.org and vice versa.
 ** DONE [#B] Update org-memory skill to prompt to generate an implementation report for tasks without a plan
 CLOSED: [2026-04-28 Tue 00:46]
@@ -119,7 +115,7 @@ CLOSED: [2026-04-28 Tue 00:46]
 :CUSTOM_ID: 9f233338-833b-43c1-81d2-e413a536d586
 :ARCHIVED: [2026-04-28 Tue 00:46]
 :END:
-#+IMPORT: [[file:design/log/2026-04-28-implementation-reports.org]]
+#+IMPORT: [[plan:2026-04-28-implementation-reports.org]]
 I.e. if we just implement a simple task that didn't need formal planning, useful to log an implementation report anyway...
 ** DONE [#C] Consider whether to rename the 'org-memory' skill to just 'tasks'
 CLOSED: [2026-04-28 Tue 01:03]
@@ -127,7 +123,7 @@ CLOSED: [2026-04-28 Tue 01:03]
 :CUSTOM_ID: ce69ef5e-5967-4623-a2e3-f22e0bd1a745
 :ARCHIVED: [2026-04-28 Tue 01:03]
 :END:
-#+IMPORT: [[file:design/log/2026-04-28-skill-rename-org-tasks-org-plan.org]]
+#+IMPORT: [[plan:2026-04-28-skill-rename-org-tasks-org-plan.org]]
 Currently we've got 'org-memory' and 'plan' -- maybe more useful to refer to 'tasks' and 'plan', and refer to the combination as org-memory? Or 'org-tasks' and 'org-plan' skills, with the combination of the two making up 'org-memory'? Consider, rename as appropriate and update docs accordingly.
 ** DONE [#B] Refine org-memory protocol :pi:skills:
 CLOSED: [2026-04-28 Tue 11:12]
@@ -137,7 +133,7 @@ CLOSED: [2026-04-28 Tue 11:12]
 :STARTED: [2026-04-28 Tue 10:57]
 :ARCHIVED: [2026-04-28 Tue 11:12]
 :END:
-#+IMPORT: [[file:design/log/2026-04-28-org-memory-refinement.org]]
+#+IMPORT: [[plan:2026-04-28-org-memory-refinement.org]]
 Review of skills + tasks extension identified consistency gaps, repetition, and verbosity. This task tracks refining the org-memory protocol into a single source of truth and aligning =CLOSED:= placement with the standard org convention (before the properties drawer).
 ** DONE [#D] Fix compact widget not updating after selection toggle :extension:
 :PROPERTIES:
@@ -180,7 +176,7 @@ CLOSED: [2026-04-28 Tue 11:38]
 :STARTED: [2026-04-28 Tue 11:00]
 :ARCHIVED: [2026-04-28 Tue 11:38]
 :END:
-#+IMPORT: [[file:design/log/2026-04-28-tasks-archive-fix.org]]
+#+IMPORT: [[plan:2026-04-28-tasks-archive-fix.org]]
 ** DONE [#C] Add some sort of Jira integration for the tasks extension
 CLOSED: [2026-04-28 Tue 14:00]
 :PROPERTIES:
@@ -188,18 +184,17 @@ CLOSED: [2026-04-28 Tue 14:00]
 :STARTED: [2026-04-28 Tue 13:27]
 :ARCHIVED: [2026-04-28 Tue 14:00]
 :END:
-#+IMPORT: [[file:design/log/2026-04-28-jira-integration.org]]
+#+IMPORT: [[plan:2026-04-28-jira-integration.org]]
 ** CANCELLED [#B] Update keybindings extension to handle capital letter properly
 CLOSED: [2026-04-28 Tue 22:57]
 :PROPERTIES:
 :CUSTOM_ID: d9789ed7-ff34-490a-a818-bf7a79fa1180
 :ARCHIVED: [2026-04-28 Tue 22:57]
 :END:
-#+IMPORT: [[file:design/log/2026-04-27-keybindings-capital-letters.org]]
+#+IMPORT: [[plan:2026-04-27-keybindings-capital-letters.org]]
 Currently a key sequence SPACE t A isn't activated as expected. The keybindings extension toggles on the sequence SPACE t SHIFT a.
 
 Cancelled 2026-04-28: misdiagnosis. The real bug was in =tasks/overlay.ts=, which called =matchesKey(data, "A")= directly rather than =matchesKey(data, "shift+a")=. The leader/keybindings extension itself was not at fault. Fix landed via a one-line change in =overlay.ts=. See change record for the four failed attempts down the wrong path.
-
 * DONE [#C] Token-efficient Jira clone workflow
 CLOSED: [2026-04-28 Tue 16:54]
 :PROPERTIES:
@@ -208,9 +203,8 @@ CLOSED: [2026-04-28 Tue 16:54]
 :STARTED: [2026-04-28 Tue 16:34]
 :ARCHIVED: [2026-04-28 Tue 16:54]
 :END:
-#+IMPORT: [[file:design/log/2026-04-28-jira-clone-token-efficiency.org]]
+#+IMPORT: [[plan:2026-04-28-jira-clone-token-efficiency.org]]
 Follow-up to the read-only Jira integration. Today's `/jira clone` round-trips the entire `atlassian_getJiraIssue` JSON and the rendered org body through the model, which is wasteful (~17KB ingested for ~6 fields used). Step 1 (field-list filter in the prompt) shipped on 2026-04-28. The remaining wins below are tracked here.
-
 * DONE Review 0.71.0 changes re. editor
 CLOSED: [2026-05-01 Fri 18:17]
 :PROPERTIES:
@@ -222,14 +216,13 @@ CLOSED: [2026-05-01 Fri 18:17]
 - State "STARTED"    from "TODO"       [2026-05-01 Fri 17:43]
 - State "DONE"       from "STARTED"    [2026-05-01 Fri 18:17]
 :END:
-#+IMPORT: [[file:design/log/2026-05-01-keybindings-editor-composition.org]]
+#+IMPORT: [[plan:2026-05-01-keybindings-editor-composition.org]]
 Changelog for latest pi release includes the following:
 - Added `ctx.ui.getEditorComponent()` so extensions can wrap the currently configured custom editor factory ([#3935](https://github.com/badlogic/pi-mono/issues/3935)).
 
 This new section in the docs includes some relevant examples: https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/extensions.md#widgets-status-and-footer
 
 And the commit including the change...
-
 * DONE [#C] Review prior art w.r.t. org-memory protocol
 CLOSED: [2026-05-02 Sat 13:58]
 :PROPERTIES:
@@ -243,9 +236,8 @@ CLOSED: [2026-05-02 Sat 13:58]
 - Created [2026-04-29 Wed 09:51]
 - State "STARTED" from "TODO" [2026-05-01 Fri 19:28]
 :END:
-#+IMPORT: [[file:design/log/2026-05-01-dev-agent-backlog-prior-art-review.org]]
+#+IMPORT: [[plan:2026-05-01-dev-agent-backlog-prior-art-review.org]]
 Just saw this while looking for something else: https://github.com/farra/dev-agent-backlog (Reddit source link: https://www.reddit.com/r/emacs/comments/1q415fx/my_orgmode_based_designtask_tracking_system_for/) Looks like a slightly different spin, but interesting to take a look at to see if there are some ideas that would benefit my system.
-
 * DONE [#C] Refactor keybindings extension
 CLOSED: [2026-05-02 Sat 17:15]
 :PROPERTIES:
@@ -257,10 +249,9 @@ CLOSED: [2026-05-02 Sat 17:15]
 - State "DONE" from "STARTED" [2026-05-02 Sat 17:15]
 - State "STARTED" from "TODO" [2026-05-02 Sat 14:55]
 :END:
-#+IMPORT: [[file:design/log/2026-05-02-refactor-keybindings-extension.org]]
+#+IMPORT: [[plan:2026-05-02-refactor-keybindings-extension.org]]
 - Separate the keybindings extension into a 'which-key' extension (for the leader key / sequence stuff) and a modal editor extension
 - Consider whether to eliminate our own modal extension entirely and use this package: https://github.com/kepatrick/vim-motions-pi
-
 * DONE [#D] Make leader keys configurable via leader-menu.json :leader-menu:refactor:
 CLOSED: [2026-05-02 Sat 17:30]
 :PROPERTIES:
@@ -279,7 +270,6 @@ Done. Follow-up to the keybindings refactor (00e1772c). The leader-menu extensio
 Migration: the legacy `menus: { foo: { key: " ", items: {...} } }` registration shape is no longer accepted; consumers (tasks, term, git-diff) updated to globalMenu. term moved from `'` to `Space '`.
 
 Closing this task and committing in the same commit as the implementation.
-
 * DONE [#D] Drop redundant vim-mode toggle (single-responsibility cleanup) :vim-mode:refactor:
 CLOSED: [2026-05-02 Sat 17:50]
 :PROPERTIES:
@@ -310,7 +300,6 @@ Moved:
 Net diff: vim-mode/index.ts shrank ~150 lines; defaults.json's globalMenu has no items left (all chords now contributed by other extensions).
 
 To disable vim-mode now, remove the extension directory or comment out its inclusion in agents.nix (TODO: add a clean Nix-level enable flag for this — captured below as a separate follow-up).
-
 * DONE [#D] Resolve default local leader conflict with vim-mode comma repeat :leader-menu:vim-mode:ux:
 CLOSED: [2026-05-03 Sun 13:05]
 :PROPERTIES:
@@ -343,7 +332,6 @@ Decide and implement one of:
 3. Add a priority/escape mechanism so users can choose whether leader or Vim grammar wins for conflicting keys.
 
 Do not resolve accidentally by dropping repeat-find-backward; that was intentionally imported from the upstream evaluation.
-
 * DONE leader-menu: fix slash command dispatch :leader-menu:
 CLOSED: [2026-05-05 Tue 21:29]
 :PROPERTIES:
@@ -360,8 +348,7 @@ CLOSED: [2026-05-05 Tue 21:29]
 - Created [2026-05-05 Tue 20:46]
 - State "STARTED" from "TODO" [2026-05-05 Tue 20:47]
 :END:
-#+IMPORT: [[file:design/log/2026-05-05-leader-menu-slash-submission.org]]
-
+#+IMPORT: [[plan:2026-05-05-leader-menu-slash-submission.org]]
 * DONE [#B] Review org-memory protocol as agent memory
 CLOSED: [2026-05-05 Tue 22:05]
 :PROPERTIES:
@@ -379,9 +366,8 @@ CLOSED: [2026-05-05 Tue 22:05]
 - State "WAITING" from "DONE" [2026-05-02 Sat 14:22]
 - State "STARTED" from "WAITING" [2026-05-02 Sat 14:22]
 :END:
-#+IMPORT: [[file:design/log/2026-05-01-org-memory-agent-memory-review.org]]
+#+IMPORT: [[plan:2026-05-01-org-memory-agent-memory-review.org]]
 The org-memory protocol (the combination of org-tasks and org-plan skills) is intended to provide a cross-session memory mechanism for agents to learn and rebuild context as well as a task management and planning tool for humans. Review in this context and identify gaps / suggest improvements
-
 * DONE Activating tasks overlay clobbers text in input area
 CLOSED: [2026-05-05 Tue 22:21]
 :PROPERTIES:
@@ -393,9 +379,8 @@ CLOSED: [2026-05-05 Tue 22:21]
 - State "DONE" from "STARTED" [2026-05-05 Tue 22:21]
 - State "STARTED" from "TODO" [2026-05-05 Tue 22:18]
 :END:
-#+IMPORT: [[file:design/log/2026-05-05-event-dispatch-extension-bindings.org]]
+#+IMPORT: [[plan:2026-05-05-event-dispatch-extension-bindings.org]]
 This is irritating -- address.
-
 * CANCELLED [#D] Add Nix-level enable flag for individual pi extensions :dotfiles:nix:feature:
 CLOSED: [2026-05-05 Tue 22:57]
 :PROPERTIES:
@@ -426,7 +411,6 @@ Useful for:
 - Testing builds with one extension excluded
 
 Cancelled eventually -- implementation worked, but was big and ugly -- not worth the maintenance overhead.
-
 * CANCELLED [#D] Add org-mode writing skill?
 CLOSED: [2026-05-05 Tue 23:13]
 :PROPERTIES:
@@ -444,7 +428,6 @@ CLOSED: [2026-05-05 Tue 23:13]
 - State "CANCELLED" from "TODO" [2026-05-05 Tue 23:13]
 :END:
 Automatic writes by skill/tooling clobber whitespace. This may be resolvable via one-line addition to the org-tasks skill? Though maybe worth adding a general-purpose org-mode skill... DECISION Updated the org-tasks skill - no need for a dedicated writing skill for now
-
 * DONE [#D] Package org-memory protocol / extensions
 CLOSED: [2026-05-06 Wed 22:50]
 :PROPERTIES:
@@ -456,9 +439,8 @@ CLOSED: [2026-05-06 Wed 22:50]
 - State "DONE"       from "STARTED"    [2026-05-06 Wed 22:50]
 - State "STARTED"    from "TODO"       [2026-05-06 Wed 21:56]
 :END:
-#+IMPORT: [[file:design/log/2026-05-06-package-org-memory-protocol-extensions.org]]
+#+IMPORT: [[plan:2026-05-06-package-org-memory-protocol-extensions.org]]
 Currently the skills and extensions are embedded in this repo. Good to either extract them, or come up with a packaging/deployment strategy to facilitate sharing them with the team / other interested parties. Ideally the approach would allow me to continue editing skills/extensions live and reloading without having to go through a rebuild install step.
-
 * DONE org-memory -- make PARENT_ID property navigable
 CLOSED: [2026-05-08 Fri 18:07]
 :PROPERTIES:
@@ -470,7 +452,7 @@ CLOSED: [2026-05-08 Fri 18:07]
 - Created [2026-05-08 Fri 11:31]
 - State "DONE" from "TODO" [2026-05-08 Fri 18:07]
 :END:
-#+IMPORT: [[file:design/log/2026-05-08-custom-id-and-parent-link.org]]
+#+IMPORT: [[plan:2026-05-08-custom-id-and-parent-link.org]]
 The +IMPORT makes it easy to navigate from a task to its linked plan, but not to reverse the direction of travel. Would it make sense to store task ID as a NAME or CUSTOM_ID property instead, and a plan could embed a navigable org-mode anchor link as #+PARENT instead of the current un-navigable #+PARENT_ID
 ** DONE Document no-hard-wrapping convention for org task content :skill_org-tasks:skill_org-plan:
 CLOSED: [2026-05-08 Fri 23:07]
@@ -522,7 +504,7 @@ CLOSED: [2026-05-09 Sat 13:12]
 - State "STARTED"   from "TODO"      [2026-05-09 Sat 11:49]
 - Created [2026-05-09 Sat 11:25]
 :END:
-#+IMPORT: [[file:design/log/2026-05-09-org-memory-condensed-summaries.org]]
+#+IMPORT: [[plan:2026-05-09-org-memory-condensed-summaries.org]]
 Make change-records cheaper for future agents to ingest by adding a first-class condensed memory layer, clear resume/read-order guidance, and closure-time summary discipline while preserving the detailed plan and implementation ledger.
 ** DONE [#C] tasks extension: section-scoped change-record reader
 CLOSED: [2026-05-12 Tue 10:26]
@@ -537,7 +519,7 @@ CLOSED: [2026-05-12 Tue 10:26]
 - State "STARTED"   from "TODO"      [2026-05-12 Tue 10:21]
 - Created [2026-05-11 Mon 21:33]
 :END:
-#+IMPORT: [[file:design/log/2026-05-12-tasks-read-section.org]]
+#+IMPORT: [[plan:2026-05-12-tasks-read-section.org]]
 Expose a primitive that returns a single top-level section of a change-record file (`* Summary`, `* Context`, `* Plan`, `* Implementation`, `* Validation`, `* Open questions`), including any nested subheadings up to the next level-1 boundary, so agents on resume / review can fetch just the surface the `org-tasks` protocol declares "eagerly loaded" without pulling the entire ledger into context.
 
 Motivation:
@@ -566,11 +548,10 @@ CLOSED: [2026-05-12 Tue 11:10]
 - State "STARTED"   from "TODO"      [2026-05-12 Tue 11:03]
 - Created [2026-05-11 Mon 21:33]
 :END:
-#+IMPORT: [[file:design/log/2026-05-12-tasks-scan-summaries.org]]
+#+IMPORT: [[plan:2026-05-12-tasks-scan-summaries.org]]
 Originally drafted as `tasks_resume_brief` (a layered "cheap resume surface" matching the `org-tasks` resume read order 1:1). On re-examination during planning that framing was rejected: agents resuming an in-progress task want the *whole* change-record in context (just `Read` it), while agents *batch-scanning* prior tasks during planning want `* Summary` only — the latter is the real consumer for a structured tool. Repurposed accordingly.
 
 New design: `tasks_scan_summaries({ scope?: "active" | "archived" | "all", tags?: string[], maxBodyChars?: number })` walks every task in `TASKS.org` + `TASKS.archive.org` (and their `#+IMPORT:` chains), returns a flat `ScanRow[]` of `{ id, summary, status, priority, tags, sourcePath, importPath, recordSummary: { found, body } | null }`. The agent relevance-filters before pulling any full change-records into prompt context. No duplication of `* Summary` into `TASKS.archive.org` (single source of truth; zero drift; same token cost). See linked change-record for the full Decisions ledger.
-
 ** DONE [#B] Add clojure dataspex skill/extension
 CLOSED: [2026-05-13 Wed 16:04]
 :PROPERTIES:
@@ -582,7 +563,7 @@ CLOSED: [2026-05-13 Wed 16:04]
 - State "STARTED"    from "TODO"       [2026-05-13 Wed 12:18]
 - State "DONE"       from "STARTED"    [2026-05-13 Wed 16:04]
 :END:
-#+IMPORT: [[file:design/log/2026-05-13-dataspex-agent-integration.org]]
+#+IMPORT: [[plan:2026-05-13-dataspex-agent-integration.org]]
 Dataspex is a key dev tool we use for runtime inspection of our Clojure(Script) projects.
 https://github.com/cjohansen/dataspex
 

@@ -1,7 +1,7 @@
 #+TITLE: Refine org-memory/plan Protocol
 #+DATE: 2026-04-25 Sat
 #+PARENT: [[file:../../TASKS.archive.org::#7a48756f-95b2-440c-9810-09a9ae60e452][Refine org-memory/plan protocol :org-memory:]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Gap-analysis pass on the original =org-memory= and =plan= skills closed missing conventions and unnecessary coupling between skill content and extension UI. Tasks-extension round-trip preservation hardened so saves no longer discard non-task structure or org metadata. Skills now require explicit =#+TODO:= keyword declarations in =TASKS.org= and scaffolded plans, document =:ID:= UUID v4 properties, formalise =:BLOCKED-BY:= over a =:blocked:= tag, keep =:selected:= as a reserved operational tag, and admit an optional =** Design decisions= subsection under =* Context= for plan files.

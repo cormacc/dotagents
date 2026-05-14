@@ -1,0 +1,79 @@
+;;; tasks-org-tests.el --- Tests for tasks-org.el -*- lexical-binding: t; -*-
+
+(require 'ert)
+(require 'org)
+(require 'tasks-org)
+
+(defmacro tasks-org-test--with-temp-project (&rest body)
+  `(let* ((root (make-temp-file "tasks-org" t))
+          (default-directory root))
+     (make-directory (expand-file-name ".git" root))
+     (unwind-protect
+         (progn ,@body)
+       (delete-directory root t))))
+
+(ert-deftest tasks-org-test-find-tasks-hard-error ()
+  (tasks-org-test--with-temp-project
+   (should-error (tasks-org-find-tasks-file) :type 'user-error)))
+
+(ert-deftest tasks-org-test-capture-templates-tagged-and-untagged ()
+  (let ((org-capture-templates nil))
+    (tasks-org-register-capture-template)
+    (let* ((tagged (assoc "t" org-capture-templates))
+           (untagged (assoc "T" org-capture-templates))
+           (tagged-template (nth 4 tagged))
+           (untagged-template (nth 4 untagged)))
+      (should tagged)
+      (should untagged)
+      (should (string-match-p "%^{Summary}" tagged-template))
+      (should (string-match-p "%\\^G" tagged-template))
+      (should (string-match-p "%^{Summary}" untagged-template))
+      (should-not (string-match-p "%\\^G" untagged-template)))))
+
+(ert-deftest tasks-org-test-capture-metadata-shape ()
+  (let ((metadata (tasks-org--capture-metadata)))
+    (should (string-match-p ":PROPERTIES:\n:CUSTOM_ID: [0-9a-f-]+\n:CREATED: \\[" metadata))
+    (should (string-match-p ":LOGBOOK:\n- Created \\[" metadata))))
+
+(ert-deftest tasks-org-test-toggle-task-and-plan-round-trip ()
+  (tasks-org-test--with-temp-project
+   (make-directory (expand-file-name "design/log" root) t)
+   (let ((tasks-file (expand-file-name "TASKS.org" root))
+         (setup-file (expand-file-name "TASKS.setup.org" root))
+         (plan-file (expand-file-name "design/log/plan.org" root)))
+     (write-region "#+LINK: plan file:design/log/%s\n" nil setup-file)
+     (write-region "#+SETUPFILE: ./TASKS.setup.org\n* Improvements\n\n** TODO Parent\n:PROPERTIES:\n:CUSTOM_ID: 11111111-2222-4333-8444-555555555555\n:END:\n#+IMPORT: [[plan:plan.org]]\n" nil tasks-file)
+     (write-region "#+TITLE: Plan\n#+PARENT: [[file:../../TASKS.org::#11111111-2222-4333-8444-555555555555][Parent]]\n\n* Summary\n" nil plan-file)
+     (find-file tasks-file)
+     (goto-char (point-min))
+     (re-search-forward "Parent")
+     (tasks-org-toggle-task-and-plan)
+     (should (equal (buffer-file-name) plan-file))
+     (tasks-org-toggle-task-and-plan)
+     (should (equal (buffer-file-name) tasks-file))
+     (should (equal (org-entry-get (point) "CUSTOM_ID") "11111111-2222-4333-8444-555555555555")))))
+
+(ert-deftest tasks-org-test-toggle-selected-preserves-local-content ()
+  (tasks-org-test--with-temp-project
+   (let ((tasks-file (expand-file-name "TASKS.org" root))
+         (local-file (expand-file-name "TASKS.local.org" root)))
+     (write-region "* Improvements\n\n** TODO Parent\n:PROPERTIES:\n:CUSTOM_ID: 11111111-2222-4333-8444-555555555555\n:END:\n*** TODO Child\n:PROPERTIES:\n:CUSTOM_ID: 22222222-3333-4444-8555-666666666666\n:END:\n" nil tasks-file)
+     (write-region "#+IMPORT: [[file:local.org]]\n\n* Local\nBody\n" nil local-file)
+     (find-file tasks-file)
+     (goto-char (point-min))
+     (re-search-forward "Child")
+     (tasks-org-toggle-selected)
+     (with-temp-buffer
+       (insert-file-contents local-file)
+       (should (search-forward "#+SELECTED: 11111111-2222-4333-8444-555555555555" nil t))
+       (should (search-forward "#+IMPORT: [[file:local.org]]" nil t))
+       (should (search-forward "* Local" nil t)))
+     (tasks-org-toggle-selected)
+     (with-temp-buffer
+       (insert-file-contents local-file)
+       (should-not (search-forward "#+SELECTED:" nil t))
+       (should (search-forward "#+IMPORT: [[file:local.org]]" nil t))
+       (should (search-forward "* Local" nil t))))))
+
+(provide 'tasks-org-tests)
+;;; tasks-org-tests.el ends here

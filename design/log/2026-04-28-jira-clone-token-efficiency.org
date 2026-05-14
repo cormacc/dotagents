@@ -1,7 +1,7 @@
 #+TITLE: Token-efficient Jira clone workflow
 #+DATE: 2026-04-28 Tue
 #+PARENT: [[file:../../TASKS.archive.org::#4ad4bb1b-9e74-48a0-9ce4-2d69639a8bc8][Token-efficient Jira clone workflow]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Reduced =/jira clone= token cost on the emission side by introducing a shared =tasks.insertTask= JS helper plus its =tasks_insert_task= LLM-tool wrapper, and a =jira_clone_apply= tool that delegates the deterministic org-rendering to that helper. The model no longer re-emits the rendered =:PROPERTIES:= drawer / UUID / =:CREATED:= timestamp / heading boilerplate; only the body and structured fields cross the wire. =buildClonePrompt= reworked into a two-step dispatch (call =atlassian_getJiraIssue=, then call =jira_clone_apply=). Idempotency is enforced at the helper: scanning the target file plus =alsoScan= siblings (and recursive =#+IMPORT:= imports) for matching =:LINKED_ISSUES:= tokens; duplicate clones refuse without model involvement. Fetch-side optimisation deferred: pi-mcp-adapter does not expose a JS-callable MCP client to extensions today, so any MCP fetch must remain LLM-brokered.

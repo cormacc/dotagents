@@ -18,7 +18,10 @@ import { readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import {
   createdLogEntry,
+  expandOrgLinkTarget,
+  extractOrgLinkTarget,
   getDrawerProperty,
+  getFileKeyword,
   getTaskId,
   formatOrgTimestamp,
   parseTasks,
@@ -355,6 +358,20 @@ async function sandboxPath(path: string, projectRoot: string): Promise<{ ok: tru
   return isWithinRoot(real, root) ? { ok: true, path: real } : { ok: false, path: real };
 }
 
+async function readEffectiveOrgContent(projectRoot: string, filePath: string, content: string): Promise<string> {
+  const rawSetup = getFileKeyword(content, "SETUPFILE");
+  if (!rawSetup) return content;
+  const setupTarget = extractOrgLinkTarget(rawSetup) ?? rawSetup.trim();
+  if (!setupTarget) return content;
+  const setupAbs = isAbsolute(setupTarget) ? setupTarget : resolve(dirname(filePath), setupTarget);
+  const sandboxed = await sandboxPath(setupAbs, projectRoot);
+  if (!sandboxed.ok) return content;
+  const setup = await readMaybe(sandboxed.path);
+  return setup === null ? content : `${setup}\n${content}`;
+}
+
+
+
 async function collectAllTasks(
   paths: string[],
   projectRoot: string,
@@ -367,7 +384,8 @@ async function collectAllTasks(
     visited.add(absPath);
     const content = await readMaybe(absPath);
     if (content === null) return;
-    const { tasks, fileImports } = parseTasks(content, { sourcePath: absPath });
+    const effectiveContent = await readEffectiveOrgContent(projectRoot, absPath, content);
+    const { tasks, fileImports } = parseTasks(content, { sourcePath: absPath, effectiveSourceContent: effectiveContent });
     const dir = dirname(absPath);
 
     // Collect imports *after* walking the in-file tasks so we don't
@@ -379,9 +397,11 @@ async function collectAllTasks(
         out.push({ task: t, file: absPath });
         await recurseTasks(t.children);
         if (t.importPath) {
-          const importAbs = isAbsolute(t.importPath)
-            ? t.importPath
-            : resolve(dir, t.importPath);
+          const expanded = expandOrgLinkTarget(t.importPath, t.effectiveSourceContent ?? effectiveContent);
+          const baseDir = expanded.fromProjectRoot ? projectRoot : dir;
+          const importAbs = isAbsolute(expanded.target)
+            ? expanded.target
+            : resolve(baseDir, expanded.target);
           const sandboxed = await sandboxPath(importAbs, projectRoot);
           if (sandboxed.ok) walkLater.push(sandboxed.path);
         }
@@ -389,7 +409,9 @@ async function collectAllTasks(
     };
     await recurseTasks(tasks);
     for (const fp of fileImports) {
-      const importAbs = isAbsolute(fp) ? fp : resolve(dir, fp);
+      const expanded = expandOrgLinkTarget(fp, effectiveContent);
+      const baseDir = expanded.fromProjectRoot ? projectRoot : dir;
+      const importAbs = isAbsolute(expanded.target) ? expanded.target : resolve(baseDir, expanded.target);
       const sandboxed = await sandboxPath(importAbs, projectRoot);
       if (sandboxed.ok) walkLater.push(sandboxed.path);
     }

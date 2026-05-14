@@ -1,7 +1,7 @@
 #+TITLE: Move Task Selection to TASKS.local.org
 #+DATE: 2026-04-26 Sun
 #+PARENT: [[file:../../TASKS.archive.org::#a8f3c2e1-7b4d-4f9c-8a52-3e6c1d8b9f47][Move task selection state to .gitignored TASKS.local.org :org-memory:org-tasks:]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Moved single-task selection state out of shared =TASKS.org= / plan-file =:selected:= tags into a per-checkout gitignored =TASKS.local.org= expressed as =#+SELECTED: <UUID>=. Selection becomes an ID lookup against the existing task graph rather than a tag-mutation operation. Eliminates merge conflicts when two contributors select simultaneously, removes personal working state from git history, and replaces the cross-file =:selected:= tag scan with a single keyword read. Backwards-compatible read path falls back to scanning =:selected:= tags so half-migrated repos still function; writers always migrate by stripping stale tags they encounter.

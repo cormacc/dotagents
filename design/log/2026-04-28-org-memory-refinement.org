@@ -1,7 +1,7 @@
 #+TITLE: Refine org-memory protocol
 #+DATE: 2026-04-28 Tue
 #+PARENT: [[file:../../TASKS.archive.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Refine org-memory protocol]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Refinement pass closing consistency gaps across the protocol artefacts (=org-tasks= SKILL, =org-plan= SKILL, tasks extension). =CLOSED:= placement realigned with org-mode's native convention (above =:PROPERTIES:=, where =org-todo= writes it); =:CREATED:= adopted as a first-class drawer property alongside =:STARTED:= and =CLOSED:=; single-source-of-truth split across artefacts (=org-tasks= owns file shape; =org-plan= owns plan structure; README defers to skills). Skill prose slimmed substantially; anti-drift snapshot tests added.

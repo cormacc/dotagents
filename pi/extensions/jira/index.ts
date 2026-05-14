@@ -2,7 +2,7 @@
  * Jira Extension for pi — agent-driven workflows against the Atlassian MCP.
  *
  * Companion artefacts:
- * - `:LINKED_ISSUES:` drawer property + `#+ISSUE_URL_BASE` keyword are
+ * - `:LINKED_ISSUES:` drawer property + org-native `#+LINK:` declarations are
  *   owned by the `tasks` extension (tracker-agnostic). This extension
  *   reads/writes those when interacting with Jira issues but does not
  *   define them.
@@ -248,7 +248,7 @@ function registerCloneApplyTool(pi: ExtensionAPI): void {
         priorityName: params.priorityName ?? null,
         body: params.body ?? null,
         labels: params.labels ?? null,
-        linkedIssues: [params.key],
+        linkedIssues: [`[[jira:${params.key}]]`],
         allowCreateSection: params.allowCreateSection ?? false,
         alsoScan: [sibling],
       });

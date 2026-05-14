@@ -1,8 +1,8 @@
 #+TITLE: Dataspex integration for agent-assisted Clojure dev
 #+DATE: 2026-05-13 Wed
 #+PARENT: [[file:../../TASKS.archive.org::#0b3cf4b7-dabe-475e-82a7-434e71573f64][Add clojure dataspex skill/extension]]
+#+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
 pi-coding-agent has runtime visibility into a ClojureScript app's state — atoms, datascript DBs, taps, change/audit log, nexus action log — via Dataspex's in-process client. Reads route through ~dataspex.core/store~ over ~shadow.cljs.devtools.api/cljs-eval~ on the JVM nREPL. A pi extension wraps the path as token-disciplined tools; a portable skill documents the same workflow plus ~clojure_eval~ fallbacks for non-pi agents.

@@ -1,0 +1,266 @@
+#+TITLE: Simple Emacs extension for org-tasks
+#+DATE: 2026-05-13 Wed
+#+PARENT: [[file:../../TASKS.archive.org::#7528b900-1931-49ba-a9a5-9f10efdaea47][Add simple emacs extension]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+
+* Summary
+The org-tasks protocol now leans on native org-mode features — =#+TODO:= bang/at markers, =#+STARTUP: logdone logdrawer=, =#+ARCHIVE:=, =#+SETUPFILE:=, and =#+LINK:= abbreviations — so org-mode edits and the pi tasks extension produce byte-identical =CLOSED:= / =:LOGBOOK:= / archive / link artefacts. Repositories declare shared lifecycle and link config in a root =TASKS.setup.org= referenced by =TASKS.org=, =TASKS.archive.org=, and change-records via =#+SETUPFILE:=. A small Emacs companion (=emacs/tasks-org/=) provides locate, capture, plan-toggle, and selection-toggle commands; pi remains the canonical headless lifecycle implementation.
+
+** Decisions
+- Two-runtime split :: Pi owns lifecycle automation (status transitions, =CLOSED:= / =:LOGBOOK:= writes, archive mechanics, ID backfill, badge rendering) and must remain fully usable without Emacs. =emacs/tasks-org/= is a thin editor surface — four commands (locate, capture, toggle task↔plan, toggle selection) — with no minor mode, no hooks, no parallel parsers.
+- =:CUSTOM_ID:= is the UUID slot :: The protocol uses =:CUSTOM_ID:= (not =:ID:=) because org natively resolves =[[#uuid]]= against it, and that is the slot =#+PARENT:= links target. Emacs capture and pi both write this property; the prior =tasks-org.el= use of =:ID:= via =org-id= was incompatible and is gone.
+- Native org-mode shapes are the contract :: =#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)= plus =#+STARTUP: logdone logdrawer= and =#+ARCHIVE: TASKS.archive.org::* From %s= ensure org-mode (=org-todo=, =org-archive-subtree=) and pi emit byte-identical artefacts. =:STARTED:= is a fast cache; the first =STARTED= entry in =:LOGBOOK:= is source of truth.
+- Root =TASKS.setup.org= owns shared metadata :: Shared =#+TODO:=, =#+STARTUP:=, and =#+LINK:= abbreviations live in =TASKS.setup.org=. =TASKS.org= / =TASKS.archive.org= / change-records reference it via =#+SETUPFILE:= instead of repeating preambles inline. The pi parser and =emacs/tasks-org= both walk one level of =#+SETUPFILE:= so link templates resolve from any of those files. =#+ARCHIVE:= stays local to =TASKS.org= because it is task-index-specific.
+- Typed org links replace bespoke keywords :: =:LINKED_ISSUES:= carries =[[jira:KEY]]= resolved via =#+LINK: jira https://.../%s=; =#+IMPORT:= for change-records carries =[[plan:foo.org]]= resolved via =#+LINK: plan file:design/log/%s=. Legacy =#+ISSUE_URL_BASE:= and =#+DEFAULT_PLAN_DIR:= are removed outright; bare =PROJ-NNN= keys are no longer recognised. Companion extensions (e.g. jira) own their prefix's URL template; the tasks extension owns only the syntax.
+- Capture stays separate from scaffold :: The =org-capture= template (key =t= with =%^G= tag prompt; =T= for no-tag capture) inserts protocol-conformant TODO headings under a configurable section. Change-record scaffolding stays in pi's =p= keybinding so the skeleton has one source of truth.
+- Packaging boundary :: =emacs/tasks-org/= is consumed by the dotfiles =org-user= Spacemacs layer via the existing =agents-src= submodule and is intentionally **not** bundled into =agent-org-memory.nix=. Mixing runtimes for no reuse benefit; a future flake output =packages.<system>.tasks-org-el= can be added if external consumers appear.
+
+** Shipped
+- Protocol preamble symmetry :: root =TASKS.setup.org= carries =#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)=, =#+STARTUP: logdone logdrawer=, =#+LINK: jira .../%s=, and =#+LINK: plan file:design/log/%s=; task files and change-records reference it via =#+SETUPFILE:=.
+- Linked issues :: =#+ISSUE_URL_BASE:= removed in favour of =#+LINK: jira= + canonical =[[jira:KEY]]= tokens; pi parser/overlay resolve typed links via parsed =#+LINK:= declarations.
+- Change-record imports :: canonical form is =#+IMPORT: [[plan:<file.org>]]=; pi loader and =emacs/tasks-org-toggle-task-and-plan= follow the same =#+LINK: plan= chain so =C-c C-o= and =, g a= open the same file.
+- Pi tasks parity :: new-file writes seed canonical preambles, plan scaffolds emit =#+SETUPFILE:=, archive writes preserve preambles, selection clear removes only the =#+SELECTED:= line.
+- Emacs companion :: =emacs/tasks-org/tasks-org.el= provides =tasks-org-find-tasks-file=, =tasks-org-register-capture-template=, =tasks-org-toggle-task-and-plan= (+ =-other-window=), and =tasks-org-toggle-selected= with ERT coverage. Capture registers both =t= (tag prompt) and =T= (no-tag) templates.
+- Dotfiles wiring :: parent =org-user= Spacemacs layer loads the live =agents-src/emacs/tasks-org= package and binds =SPC m g a= / =SPC m g A= / =SPC m SPC=.
+- Cross-repo migration :: one-time sweep applied the protocol changes to the three adopting repos (this repo, =/Users/cormacc/dotfiles=, =/Users/cormacc/dev/blog=).
+
+** Gotchas
+- Emacs regexp syntax :: literal =+= in =#+KEYWORD= regexes uses =[+]=; =\\+= means repetition in Emacs regexps and silently broke selection-clear.
+- Capture tags :: =%^G= prompts for tags and may inherit/default unwanted tags from the current org context (e.g. =TOC_2_gh=). The =T= template omits =%^G= for empty-tag capture.
+- =TASKS.local.org= shape :: selection-only files are allowed to remain preamble-free; writers must preserve draft tasks/imports and remove only the =#+SELECTED:= line on clear.
+- Emacs =#+LINK= regex needs the literal colon :: =tasks-org--link-template-in-current-buffer= requires =#+LINK:= (not =#+LINK =); without the colon the lookup silently returns =nil= and =[[plan:...]]= toggles fail.
+- =%s= substitution distinguishes =file:= vs URL templates :: =expandOrgLinkTarget= URL-encodes keys for URL templates (so =jira:PROJ 1= → =.../browse/PROJ%201=) but keeps them literal for =file:= templates (so =plan:subdir/foo.org= stays =subdir/foo.org=). Org's own =org-link-expand-abbrev= is always literal; pi diverges for URL templates because consumers expect ready-to-open URLs.
+- =#+LINK: plan= templates must be =file:=-prefixed for scaffold suggestions :: =planDirFromTemplate= falls back to =./design/log= for non-=file:= =plan= templates rather than emit URL-shaped scaffold paths.
+
+** Follow-ups
+- If a non-dotfiles consumer appears, package =emacs/tasks-org= as a flake output or standalone elisp package.
+- Consolidate =readEffectiveOrgContent= into a shared helper :: =parser.ts= now owns =expandOrgLinkTarget=, but =readEffectiveOrgContent= is duplicated between =index.ts= (uses =resolveProjectPath= sandbox) and =insert.ts= (uses =sandboxPath=). A shared helper parameterised by the path-resolution callback would prevent drift.
+
+* Plan
+
+** DONE [#A] Align protocol declarations with org-native defaults :protocol:symmetry:
+CLOSED: [2026-05-14 Thu 04:45]
+:PROPERTIES:
+:CUSTOM_ID: 617d201e-79b2-46d9-a00d-80ce23c9db73
+:CREATED: [2026-05-13 Wed 22:38]
+:STARTED: [2026-05-14 Thu 00:22]
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-05-14 Thu 04:45]
+- State "STARTED" from "TODO" [2026-05-14 Thu 00:22]
+:END:
+Acceptance criteria:
+- =skills/org-tasks/SKILL.md= "File protocol" section: canonical =#+TODO:= line becomes =#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)=. Add =#+STARTUP: logdone logdrawer= as a required preamble line. Add a paragraph framing the =CLOSED:= and =:LOGBOOK:= shapes as the *contract*, written symmetrically by both org-mode (when emacs touches the file) and the pi tasks extension (in headless / TUI flows). Neither side may diverge.
+- =skills/org-tasks/SKILL.md= "Quick reference" clarifies =:STARTED:= as a fast cache whose source of truth is the first =STARTED= entry in =:LOGBOOK:=. Pi may write it on first transition; emacs-derived flows may fill it later if absent. =CLOSED:= row clarified: "emitted on transition into =DONE= / =CANCELLED= by both emacs and the pi extension; format byte-identical".
+- =skills/org-plan/SKILL.md= "Minimal skeleton" replaces the inline =#+TODO:= line with =#+SETUPFILE: ../../TASKS.setup.org= and adds a one-line note explaining the setupfile contract.
+- =TASKS.org= and =TASKS.archive.org= updated to reference root =TASKS.setup.org=; =TASKS.org= keeps its local =#+ARCHIVE:=. =TASKS.local.org= may remain selection-only; when it already contains task drafts, writers preserve or add setupfile-aware content without forcing it for a bare =#+SELECTED:= file.
+- =TASKS.setup.org= created with the shared lifecycle/link preamble (=#+TODO:=, =#+STARTUP: logdone logdrawer=, =#+LINK: jira .../%s=, =#+LINK: plan file:design/log/%s=).
+- All existing change-records under =design/log/= migrated to use =#+SETUPFILE:= in a dedicated commit (mechanical replacement, no content changes).
+- =pi/extensions/tasks/lifecycle.ts= updated:
+  - Recognises (and tolerates) the new bang/at markers in =#+TODO:= preambles when parsing existing files.
+  - Emits root =TASKS.setup.org= on bootstrap / first-write and references it from =TASKS.org= / =TASKS.archive.org= / change-records rather than re-declaring inline. Selection-only =TASKS.local.org= files are not forced to carry a preamble; local task drafts do.
+  - Continues to write =CLOSED:= and =:LOGBOOK:= entries unchanged — it must remain the standalone canonical implementation, fully usable with no emacs available — with new tests that pin the output shape.
+- =pi/extensions/tasks/lifecycle.test.ts= gains a *symmetry* test driven by a small batch-elisp script: cycle TODO→STARTED→DONE on the same fixture twice, once via the pi writer and once via emacs/org against the same starting file; assert the resulting lifecycle artefacts diff cleanly after normalising timestamps. Same test for reopen (DONE→STARTED) and for =CANCELLED=.
+- Migration of in-flight files: existing tasks already carry hand-written =CLOSED:= / =:LOGBOOK:= entries that match the org format; document in =* Implementation= that no rewrite is needed, only that future writes converge.
+** DONE [#B] Promote =:LINKED_ISSUES:= entries to first-class org links :protocol:linked-issues:
+CLOSED: [2026-05-14 Thu 04:45]
+:PROPERTIES:
+:CUSTOM_ID: f50c6f0d-2fa6-40ef-a358-7e2ab359bd10
+:CREATED: [2026-05-14 Thu 00:10]
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-14 Thu 04:45]
+:END:
+Acceptance criteria:
+- =skills/org-tasks/SKILL.md= "Extension points" → "first-party generic extension features" updated:
+  - =:LINKED_ISSUES:= drawer property documented with two accepted token forms: typed link =[[type:key]]= (canonical) and raw URL =[[https://...][label]]=. No bare keys.
+  - =#+LINK:= (org's native link abbreviation keyword) is the URL-template mechanism. Format: =#+LINK: <prefix> <url-with-%s>=. Multiple =#+LINK:= lines permitted.
+  - All references to =#+ISSUE_URL_BASE:= removed from the protocol docs.
+- =skills/org-jira/SKILL.md= updated:
+  - Mandates =#+LINK: jira <base>%s= as the URL template, alongside the existing =#+JIRA_CLOUDID= / =#+JIRA_PROJECT= / =#+JIRA_BASE_URL= keywords (which carry Jira-specific config beyond a URL template and stay unchanged).
+  - Jira-token identification regex: =[[jira:KEY]]= (typed link, =KEY= matches =/^[A-Z][A-Z0-9_]+-\d+$/=) OR an org-link whose target host matches =#+JIRA_BASE_URL=. Bare-key form is no longer a recognised token shape.
+  - =/jira clone= / =/jira create= prompts emit =[[jira:KEY]]= into =:LINKED_ISSUES:=.
+- =pi/extensions/tasks/parser.ts= recognises =[[type:key]]= and =[[https://...][label]]= tokens in =:LINKED_ISSUES:= and parses =#+LINK:= preamble declarations into a =Map<prefix, urlTemplate>=. Token → URL resolution: typed link via =#+LINK:= map, else raw URL link. Missing =#+LINK:= for a referenced prefix is a hard error reported once per file. All =#+ISSUE_URL_BASE:= parsing code deleted.
+- =pi/extensions/tasks/overlay.ts= badge renderer and =J= browser-open use the unified resolver. Tests for the legacy fallback and the missing-template warning are deleted; replaced with the hard-error path.
+- =pi/extensions/jira/= updated:
+  - Token-identification helpers recognise only the typed-link and host-matched org-link forms.
+  - =/jira clone= and =/jira create= always write =[[jira:KEY]]=. No fallback path.
+  - Bootstrap path replaces =#+ISSUE_URL_BASE:= with =#+LINK: jira <#+JIRA_BASE_URL>/browse/%s= when migrating an existing =TASKS.org=, and emits =#+LINK: jira ...= directly on fresh bootstraps.
+- One-time conversion sweep across all three adopting repos (this dotagents repo + the two others the author owns; enumerate exact paths in =* Implementation= as the work lands). Per repo:
+  - Replace =#+ISSUE_URL_BASE: <url-with-{ID}>= with =#+LINK: jira <url-with-%s>= (note: placeholder syntax changes from =\{ID\}= to =%s=).
+  - Rewrite every bare-key entry in every =:LINKED_ISSUES:= drawer to =[[jira:KEY]]=.
+  - Land each repo's conversion in a dedicated mechanical commit.
+- Tests:
+  - =pi/extensions/tasks/parser.test.ts= covers both token forms, mixed-form drawers, multiple =#+LINK:= declarations, and the hard-error path when a typed link references an undeclared prefix.
+  - Emacs smoke test (manual or =emacs --batch=): =org-open-at-point= on a =[[jira:PROJ-123]]= token in =TASKS.org= opens the resolved URL via the browser handler.
+- =skills/org-tasks/SKILL.md= "Non-goals" table gains a row noting that link-type registration in elisp (e.g. richer =[[jira:KEY]]= follow handlers via MCP) is intentionally out of scope here; tracker-specific emacs companions can layer on later.
+** DONE [#B] Symmetrical archive via =#+ARCHIVE:= + pi parity :archive:symmetry:
+CLOSED: [2026-05-14 Thu 04:45]
+:PROPERTIES:
+:CUSTOM_ID: 33fda7e6-abff-4b93-b439-e8e55656a5ba
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-14 Thu 04:45]
+:END:
+Acceptance criteria:
+- =TASKS.org= preamble declares =#+ARCHIVE: TASKS.archive.org::* From %s=.
+- =skills/org-tasks/SKILL.md= "Archiving" section explicitly names two equivalent paths: =org-archive-subtree= (=C-c C-x C-a= in emacs) and the pi tasks extension's archive flow. Both must produce byte-identical output: same =:ARCHIVED:= property timestamp format, same destination heading shape, same preserved =:CUSTOM_ID:= / body / =:LOGBOOK:=. The pi extension is the standalone canonical implementation and must function with no emacs available.
+- =pi/extensions/tasks/overlay.ts= (or wherever archive is implemented) updated to emit the matching shape; symmetry pinned by tests.
+- Round-trip test in =pi/extensions/tasks/=: archive a synthetic =DONE= top-level task via the pi writer, archive the same fixture via =emacs --batch -l org -f org-archive-subtree=, assert the two resulting =TASKS.archive.org= files diff cleanly.
+- Pi extension's archive bootstrap also writes =#+ARCHIVE:= into =TASKS.org= when missing, so headless-only repos converge on the same preamble.
+- =emacs/tasks-org/README.org= notes that archiving is plain =org-archive-subtree= (no tasks-org-specific command needed).
+** DONE [#A] Scaffold =emacs/tasks-org/= package skeleton :emacs:scaffold:
+CLOSED: [2026-05-14 Thu 04:45]
+:PROPERTIES:
+:CUSTOM_ID: b3baf6c3-5254-4744-8b16-82a794ee06cf
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-14 Thu 04:45]
+:END:
+Acceptance criteria:
+- =emacs/tasks-org/tasks-org.el= exists with the standard package header (=Author=, =URL=, =Keywords=, =Package-Requires: ((emacs "27.1") (org "9.4") (projectile "2.0"))=, =Commentary=, =;;; Code:=, =provide=).
+- File compiles cleanly under =emacs --batch -Q -L . -f batch-byte-compile tasks-org.el= with no warnings.
+- =emacs/tasks-org/README.org= documents the five public commands, the project-root rule (no ancestor walk), and how the dotfiles =org-user= layer loads it.
+- A short =emacs/README.org= at the =emacs/= root explains that this directory holds the Emacs companion to the protocol skills, separate from the pi extension.
+** DONE [#A] Implement project-root + =TASKS.org= locator :emacs:core:
+CLOSED: [2026-05-14 Thu 04:45]
+:PROPERTIES:
+:CUSTOM_ID: 03422c49-31d4-4aae-937d-209043d7b7d5
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-14 Thu 04:45]
+:END:
+Acceptance criteria:
+- =tasks-org--project-root= returns =projectile-project-root= when projectile is loaded; falls back to =locate-dominating-file= for =.git=; falls back to =default-directory= when both fail; never walks past the resolved root.
+- =tasks-org--tasks-file= returns =<project-root>/TASKS.org= regardless of whether the file exists.
+- =tasks-org-find-tasks-file= (interactive) opens =TASKS.org= at the project root, or signals a clear error ("No TASKS.org at <root>; run /tasks bootstrap first") when absent — does not auto-create.
+- Inline ert tests in =emacs/tasks-org/tasks-org-tests.el= cover: projectile present, projectile absent + =.git= present, both absent.
+** DONE [#A] Implement =org-capture= template for new tasks :emacs:capture:
+CLOSED: [2026-05-14 Thu 04:45]
+:PROPERTIES:
+:CUSTOM_ID: 06f83426-1e33-4eb4-830a-3febce209558
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-14 Thu 04:45]
+:END:
+Acceptance criteria:
+- =tasks-org-register-capture-template= adds an entry to =org-capture-templates= with key =t= (configurable via =tasks-org-capture-key=) targeting =(file+headline tasks-file section)= where =section= defaults to =Improvements= and is customisable via =tasks-org-capture-section=.
+- The captured heading expands to =** TODO [#%^{Priority|B|A|C|D}] %^{Summary} %^G= followed by a =:PROPERTIES:= drawer containing a freshly-generated UUID v4 in =:CUSTOM_ID:= and the current timestamp in =:CREATED:= (format =[%Y-%m-%d %a %H:%M]=), plus an initial =:LOGBOOK:= drawer with =- Created [timestamp]= so pi-created and emacs-captured tasks share the same creation audit shape.
+- UUID generation uses =org-id-uuid= when available, else a small fallback emitting a v4 UUID; never reuses =org-id= 's =:ID:= property.
+- The capture template does **not** re-declare =#+TODO:= or =#+STARTUP:= — those live in the target file's preamble (or its =#+SETUPFILE:=). The template assumes the target file is already protocol-conformant; if not, =tasks-org-find-tasks-file= 's missing-file error path covers bootstrap.
+- A round-trip test (=ert=, batch-mode) captures a task into a temp file pre-seeded with the protocol preamble, cycles the task TODO→STARTED→DONE via =org-todo=, and asserts: heading shape parses cleanly with the pi tasks extension's parser; =CLOSED:= line is present; =:LOGBOOK:= contains exactly three entries (=Created= from capture plus =STARTED= / =DONE= from org-mode); no helper code wrote the lifecycle transition entries.
+** DONE [#A] Implement task ↔ plan toggle command :emacs:nav:
+CLOSED: [2026-05-14 Thu 04:45]
+:PROPERTIES:
+:CUSTOM_ID: 5b794ae0-fc8e-42e3-a4ae-607f102eec65
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-14 Thu 04:45]
+:END:
+Acceptance criteria:
+- =tasks-org-toggle-task-and-plan= (interactive) behaves as follows:
+  - When point is on a task heading with a body =#+IMPORT: [[plan:...]]= or =#+IMPORT: [[file:...]]= line: open that file (plan links resolved via =#+LINK: plan=; file links relative to the heading's file).
+  - When the current buffer's file is a change-record (has a =#+PARENT: [[file:...::#<uuid>][...]]= keyword): jump to the parent =TASKS.org= heading whose =:CUSTOM_ID:= matches the UUID in the link.
+  - When neither applies: signal a user-error explaining the two valid contexts.
+- Resolution does **not** rely on =org-id-find= 's global database; it parses the keyword/property in-buffer and uses =find-file= + =org-find-property=.
+- Sibling command =tasks-org-toggle-task-and-plan-other-window= shares the same resolution helper but invokes =find-file-other-window= (or =switch-to-buffer-other-window= when the target is already open) instead of =find-file=. Single source of truth for the resolution logic; only the dispatch step differs.
+- Suggested keybindings documented in README: =, g a= (same window) and =, g A= (other window) via =spacemacs/set-leader-keys-for-major-mode 'org-mode=.
+- ert coverage: task → plan happy path, plan → task happy path, error path (heading without =#+IMPORT:= and not in a change-record), and an other-window variant test confirming the originating buffer remains visible after dispatch.
+** DONE [#A] Implement top-level-task selection toggle :emacs:selection:
+CLOSED: [2026-05-14 Thu 04:45]
+:PROPERTIES:
+:CUSTOM_ID: 11877620-ec76-4472-999e-fe5769c6e4e0
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-14 Thu 04:45]
+:END:
+Acceptance criteria:
+- =tasks-org--top-level-task-id= resolves the surrounding top-level task's =:CUSTOM_ID:=:
+  - In =TASKS.org=: walk up via =org-up-heading-safe= until the heading is a direct child of a level-1 category section (i.e. a level-2 heading); return that heading's =:CUSTOM_ID:=. Signal a user-error if point is not within a task subtree.
+  - In a change-record: parse the top-of-file =#+PARENT: [[file:...::#<uuid>][...]]= keyword and return the embedded UUID. Signal a user-error if =#+PARENT:= is absent or malformed.
+- =tasks-org--local-file= returns =<project-root>/TASKS.local.org=.
+- =tasks-org--read-selected-id= returns the UUID after =#+SELECTED:= in =TASKS.local.org=, or =nil= when the file or keyword is absent.
+- =tasks-org--write-selected-id= replaces or inserts a single =#+SELECTED: <uuid>= line in =TASKS.local.org= atomically: load existing content (empty string when the file is absent), rewrite the =#+SELECTED:= line in-place if present else prepend it as the first line, =write-region= to =TASKS.local.org.tmp=, then =rename-file= over the destination (matches the pi-side atomic-write rule). All other content (task headings, =#+IMPORT:= keywords, other keywords) round-trips byte-identically.
+- =tasks-org--clear-selected= removes the =#+SELECTED:= line *only*; the file itself is never deleted (the protocol allows local task drafts and =#+IMPORT:= keywords to coexist with selection state). When clearing leaves the file empty, leave the empty file in place rather than deleting it — simpler invariant, no race with the pi watcher's create/delete signal.
+- =tasks-org-toggle-selected= (interactive): if the resolved UUID equals the current =#+SELECTED:=, clear; otherwise write the UUID. Echoes =Selected: <heading>= / =Selection cleared= on completion.
+- Suggested keybinding documented in README: =, SPC= → =SPC m SPC= via =spacemacs/set-leader-keys-for-major-mode 'org-mode=.
+- ert coverage: subtask → top-level resolution, top-level heading itself, change-record =#+PARENT:= resolution, malformed =#+PARENT:= error, toggle-on / toggle-off round trip (asserting atomic-write artefacts do not leak), and a *preservation* test — =TASKS.local.org= containing a =#+SELECTED:= line plus a sibling top-level task heading with body text round-trips byte-identically except for the =#+SELECTED:= line on both toggle-on and toggle-off.
+** DONE [#B] Wire into parent dotfiles =org-user= Spacemacs layer :dotfiles:wiring:
+CLOSED: [2026-05-14 Thu 04:45]
+:PROPERTIES:
+:CUSTOM_ID: 842f7e92-d22d-454f-bef5-a5c0fa536178
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-14 Thu 04:45]
+:END:
+Acceptance criteria:
+- =editors/emacs/spacemacs/layers/org-user/funcs.el= (or a small =init-tasks-org= entry in =packages.el=) loads =~/dotfiles/agents-src/emacs/tasks-org/tasks-org.el= via =load-file= or adds the directory to =load-path= and =require='s the feature. No duplication of the elisp into =org-user/local/=.
+- =org-user/init-tasks-org= calls =tasks-org-register-capture-template= and binds, for =org-mode= buffers: =tasks-org-toggle-task-and-plan= to =SPC m g a=, =tasks-org-toggle-task-and-plan-other-window= to =SPC m g A=, and =tasks-org-toggle-selected= to =SPC m SPC=.
+- =editors/emacs/spacemacs/layers/org-user/README.org= gains a brief "tasks-org" section under *Features* and a key-bindings entry covering both =g a= and =SPC=.
+- Smoke test: launch Spacemacs, open this repo's =TASKS.org=, hit =SPC m g a= on the selected task heading — change-record opens. From a subtask under that change-record's =* Plan=, hit =SPC m SPC= — =TASKS.local.org= updates with the *top-level* parent UUID (not the subtask's), confirmed by =cat TASKS.local.org=. Hit =SPC m SPC= again — selection clears.
+** DONE [#C] Document the package and update repo-level docs :docs:
+CLOSED: [2026-05-14 Thu 04:45]
+:PROPERTIES:
+:CUSTOM_ID: 2004967e-9694-42ff-84fa-2d7df5c5da1e
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-14 Thu 04:45]
+:END:
+Acceptance criteria:
+- =README.md= "Repository layout" tree gains an =emacs/= entry with a one-line description.
+- =skills/org-tasks/SKILL.md= "Tooling" section gains a one-line cross-reference to =emacs/tasks-org/= as the editor companion (parallel to the pi tasks extension reference), naming the five public commands.
+- =README.md= and =skills/org-tasks/SKILL.md= note that the protocol leans on org-mode's native =logdone= / =logdrawer= / =#+ARCHIVE:= / =#+LINK:= behaviour and that root =TASKS.setup.org= is the canonical shared preamble.
+- =skills/org-jira/SKILL.md= records the one-time conversion sweep that updated all three adopting repos to =#+LINK: jira= + =[[jira:KEY]]=; no legacy support is maintained.
+- =emacs/tasks-org/README.org= installation snippet shows both the dotfiles-submodule path (recommended) and a generic =(add-to-list 'load-path "/path/to/dotagents/emacs/tasks-org") (require 'tasks-org)= for non-Spacemacs consumers.
+* Implementation
+- Migrated this repo to root =TASKS.setup.org= containing canonical =#+TODO:= / =#+STARTUP:= / =#+LINK: jira= / =#+LINK: plan= declarations. =TASKS.org= and =TASKS.archive.org= now reference it, while =TASKS.org= keeps =#+ARCHIVE:= locally. Replaced every =design/log/*.org= inline =#+TODO:= with =#+SETUPFILE: ../../TASKS.setup.org=.
+- Applied the same one-time protocol preamble/setupfile migration to the other two adopting repos: =/Users/cormacc/dotfiles= and =/Users/cormacc/dev/blog=.
+- Updated =skills/org-tasks=, =skills/org-plan=, and =skills/org-jira= to document lifecycle symmetry, setupfiles, typed linked issues, and the absence of legacy =#+ISSUE_URL_BASE:= / bare-key support.
+- Updated =pi/extensions/tasks/parser.ts= with =#+LINK:= parsing and typed-link resolution, =overlay.ts= / compact rendering call sites to use the resolver, =scaffold.ts= to emit root setupfile references, and =index.ts= to follow one level of =#+SETUPFILE:= plus derive plan suggestions from =#+LINK: plan= while preserving standalone pi behaviour.
+- Migrated canonical change-record imports from the old =file:design/log/...= link form to =#+IMPORT: [[plan:...]]= in this repo's task indexes, skill examples, and the other two adopting repos' task indexes. Updated the pi tasks extension and =emacs/tasks-org= toggle path so =[[plan:...]]= imports resolve through root =TASKS.setup.org=.
+- Updated =pi/extensions/jira= so =jira_clone_apply= writes =[[jira:KEY]]= and docs/prompts describe typed-link filtering.
+- Added =emacs/tasks-org= package plus ERT tests and wired it into the parent dotfiles =org-user= Spacemacs layer.
+- Split capture into two templates after manual exercise showed =%^G= could insert an unwanted inherited/default =TOC_2_gh= tag: =t= keeps the tag prompt as the default, while =T= omits =%^G= for no-tag capture; added regression coverage for both shapes.
+- Post-review tightening :: Consolidated three near-duplicate link-expansion helpers into a single exported =expandOrgLinkTarget(target, contentOrTemplates): { target, fromProjectRoot }= in =pi/extensions/tasks/parser.ts=; =index.ts= and =insert.ts= now consume it. Fixed =%s= substitution to leave keys literal for =file:=-prefixed templates while keeping URL-template encoding intact, so nested =plan:= keys (e.g. =plan:subdir/foo.org=) resolve as filesystem paths instead of =subdir%2Ffoo.org=. Tightened =planDirFromTemplate= to ignore non-=file:= =plan= templates rather than emit URL-shaped scaffold paths. Added 14 parser-level unit tests covering both =file:= and URL template branches plus the unknown-prefix and plain-path passthroughs, and 2 integration tests in =insert.test.ts= that exercise the full =#+SETUPFILE:= → =#+LINK: plan= → =[[plan:foo.org]]= duplicate-detection chain end to end.
+
+* Validation
+- =cd pi/extensions/tasks && ./test.sh= — 289 tasks-side assertions passed (parser/scaffold 106, insert 59, lifecycle 13, path-sandbox 6, doctor 25, memory 12, summary 15, section 20, scan 33) after the =TASKS.setup.org= / =#+LINK: plan= / =[[plan:...]]= migration and the post-review helper-consolidation pass.
+  - 14 new parser-level cases pin =expandOrgLinkTarget= behaviour across =file:= templates (literal keys, =fromProjectRoot=true=), URL templates (URL-encoded keys), file/http/unknown/plain passthroughs, and the =LinkTemplateMap= form.
+  - 2 new insert-level cases drive an on-disk fixture through =#+SETUPFILE:= → =#+LINK: plan file:design/log/%s= → =#+IMPORT: [[plan:plan.org]]= and assert =insertTaskIntoFile='s duplicate scanner attributes the conflicting token to the plan-file target.
+- =cd pi/extensions/jira && ./test.sh= — 45 Jira-side assertions passed.
+- =cd emacs/tasks-org && emacs --batch -Q -L . -f batch-byte-compile tasks-org.el= — byte-compile succeeded with no warnings.
+- =cd emacs/tasks-org && emacs --batch -Q -L . -l tasks-org-tests.el -f ert-run-tests-batch-and-exit= — 5 ERT tests passed, including tagged/no-tagged capture templates and the =[[plan:...]]= toggle round-trip via =#+SETUPFILE:=.
+- =lsp diagnostics pi/extensions/tasks/parser.ts= — one pre-existing TypeScript hint unrelated to this change; =overlay.ts= diagnostics only report missing harness/node type declarations in the LSP environment while runtime tests pass.
+
+* Open questions
+** DECIDED Should =tasks-org-toggle-task-and-plan= grow an other-window variant (=, g A=) in v1?
+:PROPERTIES:
+:DECIDED: [2026-05-14 Thu 00:10]
+:END:
+Decision: yes. Sibling command =tasks-org-toggle-task-and-plan-other-window= bound to =, g A= shares the resolution helper and only differs in the dispatch step (=find-file-other-window= instead of =find-file=). Folded into plan task =5b794ae0= and the wiring task =842f7e92=.
+** DECIDED Should =tasks-org-find-tasks-file= bootstrap when =TASKS.org= is absent?
+:PROPERTIES:
+:DECIDED: [2026-05-14 Thu 00:10]
+:END:
+Decision: no. Hard error with a clear message pointing at =/tasks bootstrap=. Bootstrap is the protocol-skill / pi-extension's responsibility; the emacs companion stays a thin editor surface and does not duplicate scaffolding. Already reflected in plan task =03422c49=.
+** DECIDED Future flake output =packages.<system>.tasks-org-el=?
+:PROPERTIES:
+:DECIDED: [2026-05-14 Thu 00:10]
+:END:
+Decision: deferred. The dotfiles =agents-src= submodule + =load-path= path is sufficient for the only consumer today (this author's =org-user= layer). Packaging will be considered in a later exercise if a non-dotfiles consumer materialises; no flake-output work in this plan.
+** DECIDED =WAITING= keyword bang/at marker: =w@/!= or =w!=?
+:PROPERTIES:
+:DECIDED: [2026-05-14 Thu 00:10]
+:END:
+Decision: =w@/!= (note + state log). Prompt-on-block matches the "explain why we're blocked" intent that =:BLOCKED-BY:= already encodes informally. Revisit if the prompt becomes a friction point in practice.
+** DECIDED Should the pi extension parse the bang/at markers in =#+TODO:=, or cargo-cult the canonical line?
+:PROPERTIES:
+:DECIDED: [2026-05-14 Thu 00:10]
+:END:
+Decision: cargo-cult. =lifecycle.ts= keeps a hardcoded behaviour matching the canonical =#+TODO:= line; no marker-driven parsing in v1. Simpler, matches current code, no behavioural surface for downstream tweaks. Revisit if a concrete consumer needs file-local lifecycle customisation.
+** DECIDED Should =:LINKED_ISSUES:= entries become first-class org link types?
+:PROPERTIES:
+:DECIDED: [2026-05-14 Thu 00:10]
+:END:
+Decision: yes, but via org's native =#+LINK:= *link abbreviations* (=#+LINK: jira <base>%s= + =[[jira:KEY]]=) rather than =org-link-set-parameters=. =#+LINK:= is per-file, parseable from both elisp and TS, and gets =org-open-at-point= click-through for free without requiring an emacs companion package per tracker. Bare keys and =#+ISSUE_URL_BASE:= are removed outright — the author owns all three adopting repos and a one-time conversion sweep is cheaper than carrying a deprecated read-path indefinitely. =org-link-set-parameters= remains available to tracker-specific emacs packages that want richer follow handlers (e.g. resolving =[[jira:KEY]]= through MCP rather than the browser), but is intentionally out of scope here. Tracked as plan task =f50c6f0d=.

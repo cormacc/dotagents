@@ -1,7 +1,7 @@
 #+TITLE: Retrospective change-records for tasks without prior planning
 #+DATE: 2026-04-28 Tue
 #+PARENT: [[file:../../TASKS.archive.org::#9f233338-833b-43c1-81d2-e413a536d586][Update org-memory skill to prompt to generate an implementation report for tasks without a plan]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Unified the previously distinct "plan file" and "task file" concepts into a single artefact — the *change-record* — with two authoring flows: *proactive* (existing flow, =p= keybinding) and *retrospective* (new flow, fired when a task without =#+IMPORT:= cycles to =DONE=). File shape stays identical across flows; only the agent prompt body differs. Plumbing reuses =handlePlanEdit= parameterised by mode. New first-=STARTED= transition stamp is written as =:STARTED:= on the task to scope retrospective =git log= queries precisely. New =tasks.changeRecordOnDone= setting (default =true=) controls the retrospective prompt; pi tasks extension is the only trigger — closures from Emacs / manual edit don't auto-prompt and use the proactive =p= path instead.

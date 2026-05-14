@@ -1,7 +1,7 @@
 #+TITLE: Create self-improvement skill
 #+DATE: 2026-04-29 Wed
 #+PARENT: [[file:../../TASKS.org::#2262ed25-f0fc-40fd-9d21-41a0b16fb3a1][Create self-improvement skill]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 A single =self-improvement= skill (=skills/self-improvement/SKILL.md=) captures friction with agent / pi configuration at the moment it arises and routes it as actionable TODO work to the right tier. Project-local feedback (project =AGENTS.md=, project skills, project conventions) lands in the current project's =TASKS.org= under =* Agent feedback= via =tasks_insert_task=. Global feedback (dotfiles =AGENTS.md=, =~/.agents/skills=, =~/.pi/agent=) is sent via =pi-intercom= to a live dotfiles session (auto-spawned in tmux if none alive) which triages and inserts into =~/dotfiles/TASKS.org=. Spec-only skill artefact: no scripts. Unified triage routine handles classify→tag→dedupe→confirm→insert→ack at both tiers.

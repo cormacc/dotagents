@@ -1,7 +1,7 @@
 #+TITLE: Fix tasks-extension archive: stale refs + filename casing
 #+DATE: 2026-04-28 Tue
 #+PARENT: [[file:../../TASKS.archive.org::#84085b11-837b-449a-8cf8-190c607f480c][Tasks extension - archive function mistakenly won't archive some issues]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Fixed two related archive defects: (1) the first archive attempt for a freshly-completed task spuriously failed with "Task is not a top-level entry; cannot archive" because the overlay's task tree had been replaced from disk (file-watcher re-load), so object-identity comparisons across the overlay/handler boundary broke; (2) archive writes were going to a newly-created =TASKS.ARCHIVE.org= rather than the existing canonical =TASKS.archive.org= already in the project root, splitting the archive across two files. Reconciled by introducing reload-and-resolve-by-=:ID:= for every mutating workflow and lowercasing =TASKS_ARCHIVE_FILE= to match the on-disk file. Two stray entries from the wrongly-named file were merged back in.

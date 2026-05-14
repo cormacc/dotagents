@@ -1,7 +1,7 @@
 #+TITLE: Replace :INCLUDE: drawer property with #+IMPORT: keyword
 #+DATE: 2026-04-27 Mon
 #+PARENT: [[file:../../TASKS.archive.org::#9adb8c66-8aba-4e11-9922-70d6225f5a0e][Replace :INCLUDE: drawer property with #+IMPORT: keyword  :org-memory:org-tasks:]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Replaced the drawer-bound =:INCLUDE:= property with a =#+IMPORT:= keyword that can appear anywhere in an org file: in a task body, at file root, or after a non-task heading. Lifts the original drawer-only constraint that blocked using imports on category headings or splitting =TASKS.org= across multiple files via a lightweight index. The keyword carries an org-link value (=[[file:...]]=) for clickability via =C-c C-o=; plain paths are also accepted and round-trip cleanly. Required parser, extension, and skill/README updates landed in a single workstream.
@@ -36,7 +36,7 @@ Replaced =:INCLUDE:= with a =#+IMPORT:= keyword that can appear anywhere in an o
 The keyword uses org-link syntax for clickability in Emacs (=C-c C-o=):
 
 #+begin_example
-#+IMPORT: [[file:design/log/2026-04-25-feature.org]]
+#+IMPORT: [[plan:2026-04-25-feature.org]]
 #+end_example
 
 Plain-path values are also accepted and round-trip cleanly.

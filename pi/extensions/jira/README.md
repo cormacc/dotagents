@@ -4,7 +4,7 @@ Agent-driven Jira workflows backed by the [Atlassian
 MCP](https://developer.atlassian.com/) server. Owns slash commands, MCP
 routing, and Jira-specific authoring conventions; stays composable on top
 of the generic `tasks` extension's tracker-agnostic linkage features
-(`:LINKED_ISSUES:` drawer property + `#+ISSUE_URL_BASE` keyword).
+(`:LINKED_ISSUES:` drawer property + org-native `#+LINK:` declarations).
 
 ## Status
 
@@ -70,37 +70,26 @@ without invoking them directly.
 
 ## Linkage to tasks
 
-Jira keys live in the generic `:LINKED_ISSUES:` drawer property defined
-by the `tasks` extension (see
-`pi/extensions/tasks/README.md#linked-external-issues`). Jira
-keys are stored as **bare `PROJ-NNN` tokens**, not full org links — the
-`tasks` extension resolves them to clickable URLs via
-`#+ISSUE_URL_BASE`.
+Jira keys live in the generic `:LINKED_ISSUES:` drawer property defined by the `tasks` extension (see `pi/extensions/tasks/README.md#linked-external-issues`). Jira keys are stored as typed org links, resolved by the org-native `#+LINK: jira` abbreviation.
 
 ```org
+#+LINK: jira https://your-org.atlassian.net/browse/%s
+
 * TODO Refactor stim driver
 :PROPERTIES:
 :CUSTOM_ID: 01234567-…
-:LINKED_ISSUES: MBFW-123 MBE-45
+:LINKED_ISSUES: [[jira:MBFW-123]] [[jira:MBE-45]]
 :END:
 ```
 
-`tasks` renders these as cyan badges and opens them with `J`. URL bases
-and `#+JIRA_*` keywords are project-local trusted configuration; see
-the `org-jira` skill's trust-boundary section for details. This
-extension's planned `/jira *` commands enumerate `:LINKED_ISSUES:`,
-filter to Jira-shaped tokens (matching `^[A-Z][A-Z0-9_]+-\d+$` for
-bare tokens or matching `#+JIRA_BASE_URL` host for org-link tokens),
-and operate only on those. Tokens belonging to other trackers (GitHub,
-Linear, Confluence pages) are ignored, so a single task can carry
-multi-tracker references without confusing the Jira workflow.
+`tasks` renders these as cyan badges and opens them with `J`. Link templates and `#+JIRA_*` keywords are project-local trusted configuration; see the `org-jira` skill's trust-boundary section for details. This extension's `/jira *` commands enumerate `:LINKED_ISSUES:`, filter to typed Jira links (`[[jira:KEY]]`) or raw org links whose target host matches `#+JIRA_BASE_URL`, and operate only on those. Tokens belonging to other trackers (GitHub, Linear, Confluence pages) are ignored, so a single task can carry multi-tracker references without confusing the Jira workflow.
 
 ## Configuration
 
-Three optional `#+` keywords in `TASKS.org` (or override in
-`TASKS.local.org`):
+One `tasks`-owned link abbreviation plus three optional Jira keywords in `TASKS.org` (or override in `TASKS.local.org`):
 
 ```org
+#+LINK: jira https://your-org.atlassian.net/browse/%s
 #+JIRA_CLOUDID: 00000000-0000-4000-8000-000000000000
 #+JIRA_PROJECT: MBFW
 #+JIRA_BASE_URL: https://your-org.atlassian.net
@@ -108,6 +97,7 @@ Three optional `#+` keywords in `TASKS.org` (or override in
 
 | Keyword            | Purpose                                                       |
 | ------------------ | ------------------------------------------------------------- |
+| `#+LINK: jira`     | Org-native URL template for `[[jira:KEY]]` badges and `J` browser-open. |
 | `#+JIRA_CLOUDID`   | Skip the `atlassian_getAccessibleAtlassianResources` round-trip on every call. |
 | `#+JIRA_PROJECT`   | Default project for `/jira create`; disambiguates short keys. |
 | `#+JIRA_BASE_URL`  | Identifies which `:LINKED_ISSUES:` org-link tokens are Jira links. |

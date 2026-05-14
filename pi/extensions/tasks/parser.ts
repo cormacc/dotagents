@@ -50,6 +50,8 @@ export interface Task {
   sourcePath?: string;
   /** Original source content of sourcePath, used for preserving non-task org content on save. */
   sourceContent?: string;
+  /** Source content with one-level #+SETUPFILE content prepended for keyword/link lookup. */
+  effectiveSourceContent?: string;
   /** Root task tree for sourcePath, used to save linked plan files. */
   sourceRoot?: Task[];
   /** 1-indexed line number of the heading in the source file. */
@@ -222,6 +224,8 @@ export interface ParseTasksOptions {
   sourcePath?: string;
   /** Original source content. Defaults to the parsed content. */
   sourceContent?: string;
+  /** Effective content after applying setupfile keywords, used for lookup only. */
+  effectiveSourceContent?: string;
 }
 
 /** Return the org `:CUSTOM_ID:` property value for a task, if present. */
@@ -567,76 +571,171 @@ export function rewriteParentLinkTaskFile(
   return changed ? next : content;
 }
 
-// ── Linked external issues (`:LINKED_ISSUES:` + `#+ISSUE_URL_BASE`) ───────
+// ── Linked external issues (`:LINKED_ISSUES:` + `#+LINK`) ───────────────
 //
 // Tracker-agnostic external-issue references stored in the `:LINKED_ISSUES:`
-// drawer property as whitespace-separated tokens. Each token is either:
-//   1. A bare key (e.g. `MBFW-123`), resolved against `#+ISSUE_URL_BASE`.
-//   2. A full org link `[[url][label]]`, resolved directly.
+// drawer property as org-link tokens. Accepted forms:
+//   1. typed link `[[type:key]]`, resolved through a `#+LINK: type URL/%s`.
+//   2. raw URL link `[[https://...][label]]`, resolved directly.
 //
 // Tracker-specific behaviour (workflow, MCP routing, slash commands)
 // lives in companion extensions; this module knows nothing about them.
 
 export interface LinkedIssue {
-  /** Resolved URL, or null when a bare token has no usable `#+ISSUE_URL_BASE`. */
+  /** Resolved URL, or null when a typed link references an undeclared prefix. */
   url: string | null;
-  /** Human-readable badge label (key for bare tokens, description for org links). */
+  /** Human-readable badge label (key for typed links, description for URL links). */
   label: string;
-  /** Original whitespace-separated token from the drawer line. */
+  /** Original org-link token from the drawer line. */
   rawToken: string;
+  /** Resolution error for hard-fail callers / notifications. */
+  error?: string;
 }
 
-/**
- * Compose a URL for a bare issue key against an `#+ISSUE_URL_BASE` template.
- *
- * Resolution rule:
- *   1. URL-encode the key.
- *   2. If `template` contains `{ID}`, substitute the encoded key for every
- *      occurrence.
- *   3. Otherwise treat `template` as a prefix and append the encoded key.
- *
- * Returns null when `template` is null or empty.
- */
-export function resolveIssueUrl(
-  template: string | null | undefined,
-  key: string,
-): string | null {
-  if (!template) return null;
-  const encoded = encodeURIComponent(key);
-  if (template.includes("{ID}")) {
-    return template.split("{ID}").join(encoded);
+export type LinkTemplateMap = Map<string, string>;
+
+/** Parse all org-native `#+LINK: prefix template` declarations in CONTENT. */
+export function parseLinkTemplates(content: string): LinkTemplateMap {
+  const templates: LinkTemplateMap = new Map();
+  const re = /^[\t ]*#\+LINK[\t ]*:[\t ]*(\S+)[\t ]+(.+?)[\t ]*$/gim;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(content)) !== null) {
+    const prefix = match[1]?.trim();
+    const template = match[2]?.trim();
+    if (prefix && template) templates.set(prefix, template);
   }
-  return template + encoded;
+  return templates;
 }
 
 /**
- * Parse `:LINKED_ISSUES:` for a task, classifying each token and resolving
- * URLs via the supplied `#+ISSUE_URL_BASE` template (may be null).
+ * Substitute KEY into TEMPLATE's `%s` placeholder. Keys are URL-encoded for
+ * URL-shaped templates (e.g. `https://.../%s`) so tracker keys with spaces or
+ * slashes are escaped, but left literal for `file:` templates so plan-path
+ * abbreviations like `#+LINK: plan file:design/log/%s` keep `/` in nested
+ * filenames. Org-mode's own `org-link-expand-abbrev` is similarly literal; we
+ * only diverge by URL-encoding for non-`file:` templates because pi consumers
+ * expect ready-to-open URLs.
+ */
+function resolveLinkTemplate(template: string, key: string): string {
+  const replacement = template.startsWith("file:") ? key : encodeURIComponent(key);
+  return template.includes("%s") ? template.split("%s").join(replacement) : template + replacement;
+}
+
+/**
+ * Result of expanding an org-link target against `#+LINK:` abbreviations.
+ * `fromProjectRoot` is true when the target resolved through a `file:`
+ * template, signalling callers to resolve relative paths against the project
+ * root rather than the source file's directory.
+ */
+export interface ExpandedLinkTarget {
+  /** Either the substituted path/URL, or the original target on a miss. */
+  target: string;
+  /** True only when expansion produced a path via a `file:` template. */
+  fromProjectRoot: boolean;
+}
+
+/**
+ * Expand a typed link target (`prefix:key`) through `#+LINK:` abbreviations.
  *
- * Empty/absent property returns an empty array. Malformed tokens (anything
- * that's not a clean bare key or a parseable org link) are kept as bare
- * tokens with whatever URL `resolveIssueUrl` produces — the parser does
- * not validate token shape; rendering and `J` open are best-effort.
+ * Returns the original target unchanged for:
+ * - non-typed targets (plain paths)
+ * - `file:` typed targets (already a path)
+ * - `http`/`https` typed targets (already a URL)
+ * - typed targets whose prefix has no matching `#+LINK:` declaration
+ *
+ * Callers can use `fromProjectRoot` to decide whether the resolved target
+ * should be joined to the project root (file templates) or treated as the
+ * source-directory-relative path it always was.
+ */
+export function expandOrgLinkTarget(
+  target: string,
+  contentOrTemplates: string | LinkTemplateMap | null | undefined,
+): ExpandedLinkTarget {
+  if (!target) return { target, fromProjectRoot: false };
+  const typed = typedLinkParts(target);
+  if (!typed || typed.prefix === "file") return { target, fromProjectRoot: false };
+  const templates = typeof contentOrTemplates === "string"
+    ? parseLinkTemplates(contentOrTemplates)
+    : contentOrTemplates ?? new Map<string, string>();
+  const template = templates.get(typed.prefix);
+  if (!template) return { target, fromProjectRoot: false };
+  const expanded = resolveLinkTemplate(template, typed.key);
+  if (expanded.startsWith("file:")) {
+    return { target: expanded.slice("file:".length), fromProjectRoot: true };
+  }
+  return { target: expanded, fromProjectRoot: false };
+}
+
+function splitLinkedIssueTokens(value: string): string[] {
+  const tokens: string[] = [];
+  let i = 0;
+  while (i < value.length) {
+    while (i < value.length && /\s/.test(value[i]!)) i++;
+    if (i >= value.length) break;
+    if (value.startsWith("[[", i)) {
+      const end = value.indexOf("]]", i + 2);
+      if (end >= 0) {
+        tokens.push(value.slice(i, end + 2));
+        i = end + 2;
+        continue;
+      }
+    }
+    let j = i;
+    while (j < value.length && !/\s/.test(value[j]!)) j++;
+    tokens.push(value.slice(i, j));
+    i = j;
+  }
+  return tokens.filter((t) => t.length > 0);
+}
+
+function typedLinkParts(target: string): { prefix: string; key: string } | null {
+  if (/^https?:\/\//i.test(target)) return null;
+  const match = /^([A-Za-z][A-Za-z0-9+.-]*):(.+)$/.exec(target);
+  if (!match) return null;
+  return { prefix: match[1]!, key: match[2]! };
+}
+
+/**
+ * Parse `:LINKED_ISSUES:` for a task, resolving typed links via `#+LINK:`
+ * declarations found in SOURCE-CONTENT. Missing templates are surfaced as
+ * entries with `url: null` and `error` populated; callers may choose to render
+ * a hard error while preserving the task row.
  */
 export function getLinkedIssues(
   task: Task,
-  urlBaseTemplate: string | null,
+  sourceContentOrTemplates: string | LinkTemplateMap | null | undefined,
 ): LinkedIssue[] {
   const value = getDrawerProperty(task, "LINKED_ISSUES");
   if (!value) return [];
-  const tokens = value.split(/\s+/).filter((t) => t.length > 0);
+  const templates = typeof sourceContentOrTemplates === "string"
+    ? parseLinkTemplates(sourceContentOrTemplates)
+    : sourceContentOrTemplates ?? new Map<string, string>();
+  const tokens = splitLinkedIssueTokens(value);
   return tokens.map((rawToken) => {
     const link = extractOrgLink(rawToken);
-    if (link) {
+    if (!link) {
+      return { url: null, label: rawToken, rawToken, error: "LINKED_ISSUES token is not an org link" };
+    }
+    const typed = typedLinkParts(link.target);
+    if (typed) {
+      const template = templates.get(typed.prefix);
+      if (!template) {
+        return {
+          url: null,
+          label: link.description ?? typed.key,
+          rawToken,
+          error: `Missing #+LINK declaration for prefix ${typed.prefix}`,
+        };
+      }
       return {
-        url: link.target,
-        label: link.description ?? link.target,
+        url: resolveLinkTemplate(template, typed.key),
+        label: link.description ?? typed.key,
         rawToken,
       };
     }
     return {
-      url: resolveIssueUrl(urlBaseTemplate, rawToken),
-      label: rawToken,
+      url: link.target,
+      label: link.description ?? link.target,
       rawToken,
     };
   });
@@ -645,7 +744,7 @@ export function getLinkedIssues(
 /**
  * Replace the `:LINKED_ISSUES:` drawer property with the given tokens
  * (whitespace-joined). Tokens are written verbatim — callers are
- * responsible for choosing bare-key vs `[[url][label]]` form per token.
+ * responsible for choosing typed-link vs raw-URL org-link form per token.
  * Passing an empty array clears the property.
  */
 export function setLinkedIssues(task: Task, tokens: string[]): void {
@@ -671,6 +770,7 @@ export function parseTasks(
   const root: Task[] = [];
   const fileImports: string[] = [];
   const sourceContent = options.sourceContent ?? content;
+  const effectiveSourceContent = options.effectiveSourceContent ?? sourceContent;
 
   // Stack tracks the current nesting path.
   // Each entry: { task, level } — the task and its heading level.
@@ -722,6 +822,7 @@ export function parseTasks(
         closed: null,
         sourcePath: options.sourcePath,
         sourceContent,
+        effectiveSourceContent,
         lineNumber: i + 1,
         endLine: lines.length + 1,
       };
@@ -793,6 +894,7 @@ export function parseTasks(
       if (options.sourcePath) {
         task.sourceRoot = root;
         task.sourceContent = sourceContent;
+        task.effectiveSourceContent = effectiveSourceContent;
       }
       attachSourceRoot(task.children);
     }

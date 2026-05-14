@@ -1,8 +1,8 @@
 #+TITLE: Preserve editor input when leader bindings open extension UIs
 #+DATE: 2026-05-05 Tue
 #+PARENT: [[file:../../TASKS.archive.org::#1f8a039b-ef3d-4461-952e-1dc2b2b9a780][Activating tasks overlay clobbers text in input area]]
+#+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
 Fixed a UX bug where leader-menu UI toggles (e.g. =SPC t t= for the tasks overlay) clobbered any text the user had already typed into the editor. Root cause: leader-menu's =command:= action writes the slash command into the active editor and submits via =SubmitterEditor=, which calls =setEditorText()= and overwrites in-progress input. Fix: extension UI bindings dispatch events directly instead of routing through =command:=. Slash commands stay available for typed use; their handlers dispatch the same events used by the leader bindings so there is a single entry point. Applied to =tasks= and =git-diff=.

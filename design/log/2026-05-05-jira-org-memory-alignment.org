@@ -1,8 +1,8 @@
 #+TITLE: Review Jira integration against org-memory protocol
 #+DATE: 2026-05-05 Tue
 #+PARENT: [[file:../../TASKS.org::#2b4d4ca7-6648-4e58-b4cf-b970565e79c7][Review Jira integration against org-memory protocol :jira:org-memory:followup:]]
+#+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Draft
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
 Draft follow-up plan extracted from =design/log/2026-05-01-org-memory-agent-memory-review.org= so the generic org-memory review can close around shared protocol mechanics. Prior org-memory implementation pass already landed Jira-side documentation alignment (=org-jira= no longer describes Jira-derived plan tasks as UUID mirrors; Jira config documented as project-local trusted configuration; agent-memory cross-links Jira planning/resume context; =jira_clone_apply= delegates to =tasks_insert_task= and inherits the project-root sandbox). Remaining Jira-specific scope is policy detail and validation: reopen / multi-transition semantics for auto-transition, clone-specific sandbox regression coverage, a Jira-linked agent-memory scenario test, and a final docs review. Status remains Draft until the scope is accepted.

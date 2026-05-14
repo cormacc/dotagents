@@ -20,6 +20,7 @@ Thumbs.db
 \#*\#
 .idea/
 .vscode/
+*.elc
 
 # Local agent state
 .agents/tmp/

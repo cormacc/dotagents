@@ -1,7 +1,7 @@
 #+TITLE: Keybindings extension: compose with prior editor (pi 0.71.0)
 #+DATE: 2026-05-01 Fri
 #+PARENT: [[file:../../TASKS.archive.org::#c94bab43-aedf-4ccf-984c-a2e1167e880a][Review 0.71.0 changes re. editor]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Defensive future-proofing pass against pi 0.71.0's new =ctx.ui.getEditorComponent()= API (pi-mono #3935). =setEditorComponent()= remains single-owner, so any two extensions that both replace the editor silently disable one. The original draft planned to read-then-wrap the previous editor; final review replaced that with a simpler design: leader menus are independent of editor replacement (=LeaderMenuOverlay= via =ctx.ui.custom(..., { overlay: true })= plus =alt+space= / =alt+,= shortcuts), and =VimEditor= is installed only when modal editing is actually enabled. Switching out of modal mode restores the previously installed editor factory captured via =getEditorComponent()=. Mode feedback moves to =ctx.ui.setStatus("keybindings", …)= rather than embedded editor border text.

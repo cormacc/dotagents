@@ -1,13 +1,9 @@
-# #+TITLE: dotagents tasks
-# #+AUTHOR: Cormac Cannon
-# #+LANGUAGE: en
-# #+DATE: 2026-05-07
-# #+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
-# #+DEFAULT_PLAN_DIR: [[file:./design/log]]
-
-# # Tracker linkage (consumed by the `tasks` extension for badge rendering
-# and `J` browser-open of bare keys in `:LINKED_ISSUES:`).
-#+ISSUE_URL_BASE: https://your-org.atlassian.net/browse/{ID}
+#+TITLE: dotagents tasks
+#+AUTHOR: Cormac Cannon
+#+LANGUAGE: en
+#+DATE: 2026-05-07
+#+SETUPFILE: ./TASKS.setup.org
+#+ARCHIVE: TASKS.archive.org::* From %s
 
 # Jira-specific keywords (consumed by the `jira` extension only).
 #+JIRA_CLOUDID: 00000000-0000-4000-8000-000000000000
@@ -23,21 +19,21 @@
 
 * Improvements
 
-** TODO [#C] Improve terminal extension
+** TODO [#C] Improve terminal extension :pi:
 :PROPERTIES:
 :CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af
 :END:
 The terminal extension is only half cooked. We refactored a while ago to use tmux across all backends for pane management and do minimal pane creation/deletion using sway, kitty etc. This was a good choice, but the key bindings / workflows should be reviewed and updated - they hark back to an earlier design (or lack thereof).
 - Evaluate whether we should use zellij rather than tmux as the terminal multiplexer.
 - Redesign the slash commands and keybindings around the multiplexer workflow / semantics.
-** TODO [#D] Investigate Allium
+** TODO [#D] Investigate Allium :org:
 :PROPERTIES:
 :CUSTOM_ID: a46d6a4d-e72f-4923-8472-2daf28cb29d0
 :END:
 May be a useful complement to tasks / memory system?
 - https://juxt.github.io/allium/
 - https://plugins.eca.dev/plugins/allium/
-** TODO [#D] Check out rpiv-todo overlay for ideas
+** TODO [#D] Check out rpiv-todo overlay for ideas :org:
 :PROPERTIES:
 :CUSTOM_ID: 60e8eff5-26a9-4d4b-8c1a-3c70321beccd
 :END:
@@ -46,32 +42,26 @@ May be a useful complement to tasks / memory system?
 - State "TODO"      from "CANCELLED"      [2026-05-08 Fri 07:41]
 :END:
 https://pi.dev/packages/@juicesharp/rpiv-todo Haven't checked it out yet, but might be a nicer overlay, with a different underlying task store.
-** TODO [#D] Check out rpiv-btw
+** TODO [#D] Check out rpiv-btw :pi:
 :PROPERTIES:
 :CUSTOM_ID: ec8e6eb3-dcfc-4124-ad1c-17e88d8562b6
 :END:
 https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without polluting context... sounds useful
-** DONE [#C] Evaluate context-mode plugin
-CLOSED: [2026-05-12 Tue 11:23]
-:PROPERTIES:
-:CUSTOM_ID: dea3b890-b265-4372-a663-c584d04b4a68
-:END:
-https://pi.dev/packages/context-mode Also sounds useful...
-** TODO [#D] Evaluate PiArgus as a replacement for search/browser tools
+** TODO [#D] Evaluate PiArgus as a replacement for search/browser tools :pi:
 :PROPERTIES:
 :CUSTOM_ID: c354bc27-af23-494c-a1ce-7abfa832d7cf
 :END:
 This has some nice integration with PiDocs, and uses searx as a search backend...
 - https://github.com/GeneGulanesJr/PiArgus
 - https://github.com/searxng/searxng
-** TODO [#C] Evaluate PiLapis as complement to org-memory
+** TODO [#C] Evaluate PiLapis as complement to org-memory :org:
 :PROPERTIES:
 :CUSTOM_ID: df50e088-86c0-44be-8d0a-3a09fce88d2b
 :END:
 This extension looks interesting -- I'm enjoying the org-memory flow for task tracking and planning,
 but maybe there's some potential synergy here... a lower layer more immediately useful to the agent...
 https://github.com/GeneGulanesJr/LaPis
-** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol
+** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:
 :PROPERTIES:
 :CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
 :CREATED: [2026-05-02 Sat 12:22]
@@ -113,7 +103,7 @@ Acceptance criteria:
 Blocked by the in-place `org_read_section` primitive shipping first (TASKS.org task 1b496799) — no point doing both at once.
 * Fixes
 
-** TODO Local tasks duplicated in overlay when selected?
+** TODO Local tasks duplicated in overlay when selected? :bug:pi:
 :PROPERTIES:
 :CUSTOM_ID: 0c48e3b3-6a32-4158-9d4c-59c17c073abe
 :END:
@@ -124,16 +114,16 @@ When I do the following....
 The new task is initially duplicated to TASKS.org, then deleted from TASKS.local.org It's possible that I accidentally hit promote, but don't believe so. Investigate -- reproduce manually, then follow up as appropriate.
 * Housekeeping
 
-** STARTED Create self-improvement skill
+** STARTED Create self-improvement skill :pi:
 :PROPERTIES:
 :CUSTOM_ID: 2262ed25-f0fc-40fd-9d21-41a0b16fb3a1
 :CREATED: [2026-04-29 Wed 00:55]
 :STARTED: [2026-04-29 Wed 08:00]
 :END:
-#+IMPORT: [[file:design/log/2026-04-28-create-self-improvement-skill.org]]
+#+IMPORT: [[plan:2026-04-28-create-self-improvement-skill.org]]
 * Agent feedback
 
-** TODO [#D] Evaluate pi-lsp over home-rolled lsp
+** TODO [#D] Evaluate pi-lsp over home-rolled lsp :pi:
 :PROPERTIES:
 :CUSTOM_ID: 0ed56048-9f53-44b4-8a5a-2dbc858e6f04
 :END:

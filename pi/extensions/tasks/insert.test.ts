@@ -23,7 +23,7 @@ import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 
-const { mkdtemp, readFile, realpath, rm, symlink, writeFile } = fsp;
+const { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } = fsp;
 const { join } = path;
 const { tmpdir } = os;
 
@@ -347,7 +347,7 @@ await withTempDir(async (dir) => {
     tasksPath,
     [
       "#+TITLE: Fixture",
-      "#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)",
+      "#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)",
       "",
       "* Improvements",
       "** TODO Pre-existing task",
@@ -382,7 +382,7 @@ await withTempDir(async (dir) => {
   const written = await readFile(tasksPath, "utf-8");
   const expected = [
     "#+TITLE: Fixture",
-    "#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)",
+    "#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)",
     "",
     "* Improvements",
     "** TODO Pre-existing task",
@@ -497,6 +497,79 @@ await withTempDir(async (dir) => {
   if (result.status === "duplicate") {
     assertEqual(result.existingFile, await realpath(localPath),
       "insertTaskIntoFile: attributes duplicate to TASKS.local.org");
+  }
+});
+
+// ── File-side: duplicate scan follows `[[plan:...]]` imports via #+SETUPFILE: + #+LINK ──
+//
+// Pins the full SETUPFILE → #+LINK: plan → [[plan:...]] resolution chain that
+// `loadTasks` and `collectAllTasks` share. The duplicate token lives inside a
+// change-record reachable only when the loader follows
+//   TASKS.org#+SETUPFILE: → TASKS.setup.org#+LINK: plan file:design/log/%s
+// and rewrites `[[plan:foo.org]]` to `design/log/foo.org`.
+
+await withTempDir(async (dir) => {
+  const tasksPath = join(dir, "TASKS.org");
+  const setupPath = join(dir, "TASKS.setup.org");
+  const planDir = join(dir, "design", "log");
+  await mkdir(planDir, { recursive: true });
+  const planPath = join(planDir, "plan.org");
+
+  await writeFile(
+    setupPath,
+    [
+      "#+LINK: plan file:design/log/%s",
+      "",
+    ].join("\n"),
+    "utf-8",
+  );
+  await writeFile(
+    tasksPath,
+    [
+      "#+SETUPFILE: ./TASKS.setup.org",
+      "",
+      "* Improvements",
+      "** TODO Parent",
+      ":PROPERTIES:",
+      ":CUSTOM_ID: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      ":END:",
+      "#+IMPORT: [[plan:plan.org]]",
+      "",
+    ].join("\n"),
+    "utf-8",
+  );
+  await writeFile(
+    planPath,
+    [
+      "#+TITLE: Plan",
+      "",
+      "* Plan",
+      "** TODO Already cloned",
+      ":PROPERTIES:",
+      ":CUSTOM_ID: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+      ":LINKED_ISSUES: SAND-77",
+      ":END:",
+      "",
+    ].join("\n"),
+    "utf-8",
+  );
+
+  const result = await insertTaskIntoFile({
+    file: tasksPath,
+    projectRoot: dir,
+    section: "Improvements",
+    summary: "Re-clone of SAND-77",
+    linkedIssues: ["SAND-77"],
+    id: FIXED_ID,
+    createdAt: FIXED_TS,
+  });
+  assertEqual(result.status, "duplicate",
+    "insertTaskIntoFile: follows [[plan:...]] imports via #+SETUPFILE: + #+LINK: plan");
+  if (result.status === "duplicate") {
+    assertEqual(result.existingFile, await realpath(planPath),
+      "insertTaskIntoFile: attributes duplicate to plan: import target");
+    assertEqual(result.conflictingToken, "SAND-77",
+      "insertTaskIntoFile: surfaces the conflicting token after typed-link expansion");
   }
 });
 

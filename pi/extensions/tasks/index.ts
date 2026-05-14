@@ -48,12 +48,14 @@ import { TasksOverlay } from "./overlay.ts";
 import { insertTaskIntoFile, type InsertResult } from "./insert.ts";
 import {
   appendCreatedLog,
+  expandOrgLinkTarget,
   extractOrgLinkTarget,
   formatOrgTimestamp,
   getFileKeyword,
   getLinkedIssues,
   getTaskId,
   getTaskStarted,
+  parseLinkTemplates,
   parseTasks,
   parseSelectedKeyword,
   rewriteParentLinkTaskFile,
@@ -81,8 +83,10 @@ const TASKS_FILE = "TASKS.org";
 /** Gitignored local file that stores per-contributor selection state. */
 const TASKS_LOCAL_FILE = "TASKS.local.org";
 const TASKS_ARCHIVE_FILE = "TASKS.archive.org";
+const TODO_PREAMBLE = "#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)";
+const STARTUP_PREAMBLE = "#+STARTUP: logdone logdrawer";
+const ARCHIVE_PREAMBLE = "#+ARCHIVE: TASKS.archive.org::* From %s";
 const DEFAULT_PLANS_DIR = "./design/log";
-const DEFAULT_PLAN_DIR_KEYWORD_RE = /^\s*#\+DEFAULT_PLAN_DIR:\s*(.*?)\s*$/im;
 const CLOSED_STATUSES = new Set<string>(["DONE", "CANCELLED"]);
 /** Hard cap so the compact selected-task widget never dominates the screen. */
 const MAX_COMPACT_LINES = 6;
@@ -179,23 +183,25 @@ async function readSelectedId(cwd: string): Promise<string | null> {
 
 /**
  * Write the selected task UUID to TASKS.local.org atomically (write-then-rename).
- * Pass null to deselect - the file is retained with an empty #+SELECTED: keyword
- * so it remains in place (e.g. for version-control ignore-list purposes).
+ * Pass null to deselect: only the #+SELECTED line is removed. Any local task
+ * drafts, imports, or other keywords in TASKS.local.org are preserved.
  */
 export async function writeSelectedId(
   cwd: string,
   id: string | null,
 ): Promise<void> {
   const localPath = join(cwd, TASKS_LOCAL_FILE);
-  const selectedLine = id ? `#+SELECTED: ${id}` : `#+SELECTED:`;
+  const selectedLine = id ? `#+SELECTED: ${id}` : null;
 
   // Non-destructive: preserve any task headings already in the file.
   let existing = "";
   try { existing = await readFile(localPath, "utf-8"); } catch { /* new file */ }
 
-  const updated = /^#\+SELECTED:/im.test(existing)
-    ? existing.replace(/^#\+SELECTED:.*$/im, selectedLine)
-    : (existing ? `${selectedLine}\n${existing}` : `${selectedLine}\n`);
+  const updated = selectedLine
+    ? (/^#\+SELECTED:/im.test(existing)
+      ? existing.replace(/^#\+SELECTED:.*$/im, selectedLine)
+      : (existing ? `${selectedLine}\n${existing}` : `${selectedLine}\n`))
+    : existing.replace(/^#\+SELECTED:.*(?:\r?\n)?/im, "");
 
   const tmpPath = `${localPath}.tmp`;
   await writeFile(tmpPath, updated, "utf-8");
@@ -273,18 +279,37 @@ function markLocal(tasks: Task[]): void {
   }
 }
 
+async function readEffectiveOrgContent(cwd: string, filePath: string, content: string): Promise<string> {
+  const rawSetup = getFileKeyword(content, "SETUPFILE");
+  if (!rawSetup) return content;
+  const setupTarget = extractOrgLinkTarget(rawSetup) ?? rawSetup.trim();
+  if (!setupTarget) return content;
+  const setupPath = await resolveProjectPath(cwd, dirname(filePath), setupTarget);
+  if (!setupPath) return content;
+  try {
+    const setup = await readFile(setupPath, "utf-8");
+    return `${setup}\n${content}`;
+  } catch {
+    return content;
+  }
+}
+
 async function loadTasks(cwd: string): Promise<Task[]> {
   const sourcePath = join(cwd, TASKS_FILE);
   let tasks: Task[] = [];
   try {
     const content = await readFile(sourcePath, "utf-8");
-    const { tasks: shared, fileImports } = parseTasks(content, { sourcePath });
+    const effectiveSourceContent = await readEffectiveOrgContent(cwd, sourcePath, content);
+    const { tasks: shared, fileImports } = parseTasks(content, { sourcePath, effectiveSourceContent });
     for (const fp of fileImports) {
-      const absPath = await resolveProjectPath(cwd, dirname(sourcePath), fp);
+      const expandedFp = expandOrgLinkTarget(fp, effectiveSourceContent);
+      const fpBaseDir = expandedFp.fromProjectRoot ? cwd : dirname(sourcePath);
+      const absPath = await resolveProjectPath(cwd, fpBaseDir, expandedFp.target);
       if (!absPath) continue;
       try {
         const ic = await readFile(absPath, "utf-8");
-        const { tasks: it } = parseTasks(ic, { sourcePath: absPath });
+        const effectiveImportContent = await readEffectiveOrgContent(cwd, absPath, ic);
+        const { tasks: it } = parseTasks(ic, { sourcePath: absPath, effectiveSourceContent: effectiveImportContent });
         shared.push(...it);
       } catch { /* ignore missing or unreadable import files */ }
     }
@@ -296,7 +321,8 @@ async function loadTasks(cwd: string): Promise<Task[]> {
   const localPath = join(cwd, TASKS_LOCAL_FILE);
   try {
     const localContent = await readFile(localPath, "utf-8");
-    const { tasks: localTasks } = parseTasks(localContent, { sourcePath: localPath });
+    const effectiveLocalContent = await readEffectiveOrgContent(cwd, localPath, localContent);
+    const { tasks: localTasks } = parseTasks(localContent, { sourcePath: localPath, effectiveSourceContent: effectiveLocalContent });
     markLocal(localTasks);
     tasks.push(...localTasks);
   } catch { /* no local tasks file or no task headings in it */ }
@@ -319,7 +345,10 @@ async function loadLinkedPlans(
   const sourceDir = dirname(sourcePath);
   for (const task of tasks) {
     if (task.importPath) {
-      const importPath = await resolveProjectPath(cwd, sourceDir, task.importPath);
+      const sourceForLinks = task.effectiveSourceContent ?? task.sourceContent;
+      const expandedImportPath = expandOrgLinkTarget(task.importPath, sourceForLinks);
+      const importBaseDir = expandedImportPath.fromProjectRoot ? cwd : sourceDir;
+      const importPath = await resolveProjectPath(cwd, importBaseDir, expandedImportPath.target);
       if (!importPath) {
         task.importChildren = [];
         task.importError = "Import path resolves outside project root";
@@ -331,14 +360,18 @@ async function loadLinkedPlans(
         } else {
           try {
             const content = await readFile(importPath, "utf-8");
-            const { tasks: importTasks, fileImports } = parseTasks(content, { sourcePath: importPath });
+            const effectiveContent = await readEffectiveOrgContent(cwd, importPath, content);
+            const { tasks: importTasks, fileImports } = parseTasks(content, { sourcePath: importPath, effectiveSourceContent: effectiveContent });
             const importDir = dirname(importPath);
             for (const fp of fileImports) {
-              const absPath = await resolveProjectPath(cwd, importDir, fp);
+              const expandedFp = expandOrgLinkTarget(fp, effectiveContent);
+              const fpBaseDir = expandedFp.fromProjectRoot ? cwd : importDir;
+              const absPath = await resolveProjectPath(cwd, fpBaseDir, expandedFp.target);
               if (!absPath) continue;
               try {
                 const nc = await readFile(absPath, "utf-8");
-                const { tasks: nt } = parseTasks(nc, { sourcePath: absPath });
+                const effectiveNestedContent = await readEffectiveOrgContent(cwd, absPath, nc);
+                const { tasks: nt } = parseTasks(nc, { sourcePath: absPath, effectiveSourceContent: effectiveNestedContent });
                 importTasks.push(...nt);
               } catch { /* ignore */ }
             }
@@ -413,11 +446,8 @@ function formatTaskLine(
   const priority = colorPriority(t.priority);
   const visibleTags = t.tags;
   const tags = colorTags(visibleTags);
-  const urlBase = t.sourceContent
-    ? getFileKeyword(t.sourceContent, "ISSUE_URL_BASE")
-    : null;
   const issues = colorIssues(
-    getLinkedIssues(t, urlBase).map((i) => i.label),
+    getLinkedIssues(t, t.effectiveSourceContent ?? t.sourceContent ?? "").map((i) => i.label),
   );
   const left = `${indent}${marker}${colorStatus(t.status)} ${priority ? `${priority} ` : ""}${t.summary}`;
   // Suffix = issues + tags (right-aligned). Issues come first so tags
@@ -849,7 +879,8 @@ async function loadArchivedTasks(cwd: string): Promise<Task[]> {
   const sourcePath = join(cwd, TASKS_ARCHIVE_FILE);
   try {
     const content = await readFile(sourcePath, "utf-8");
-    const { tasks } = parseTasks(content, { sourcePath });
+    const effectiveSourceContent = await readEffectiveOrgContent(cwd, sourcePath, content);
+    const { tasks } = parseTasks(content, { sourcePath, effectiveSourceContent });
     // Walk #+IMPORT: chains from archived tasks too — the archive
     // preserves links to design/log/*.org records that are still on
     // disk, and the scanner needs their contents to surface
@@ -888,9 +919,11 @@ async function prepareReadChangeRecord(
       if (visited.has(task)) continue;
       visited.add(task);
       if (task.importPath && task.sourcePath) {
-        const baseDir = dirname(task.sourcePath);
+        const sourceForLinks = task.effectiveSourceContent ?? task.sourceContent;
+        const expandedImportPath = expandOrgLinkTarget(task.importPath, sourceForLinks);
+        const baseDir = expandedImportPath.fromProjectRoot ? cwd : dirname(task.sourcePath);
         const resolved = await resolveProjectPath(
-          cwd, baseDir, task.importPath,
+          cwd, baseDir, expandedImportPath.target,
         );
         pathByTask.set(task, resolved);
         if (resolved && !contentByPath.has(resolved)) {
@@ -1250,12 +1283,14 @@ export default function (pi: ExtensionAPI) {
         const onRefreshSummary = (task: Task): boolean => {
           if (!loadTasksSettings().summaryOnDone) return false;
           if (!task.importPath || !task.sourcePath) return false;
-          const baseDir = dirname(task.sourcePath);
+          const sourceForLinks = task.effectiveSourceContent ?? task.sourceContent;
+          const expandedImportPath = expandOrgLinkTarget(task.importPath, sourceForLinks);
+          const baseDir = expandedImportPath.fromProjectRoot ? ctx.cwd : dirname(task.sourcePath);
           let absPlan: string;
           try {
-            absPlan = isAbsolute(task.importPath)
-              ? task.importPath
-              : join(baseDir, task.importPath);
+            absPlan = isAbsolute(expandedImportPath.target)
+              ? expandedImportPath.target
+              : join(baseDir, expandedImportPath.target);
           } catch {
             return false;
           }
@@ -1522,14 +1557,49 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
+function defaultSetupFileContent(): string {
+  return [
+    TODO_PREAMBLE,
+    STARTUP_PREAMBLE,
+    "#+LINK: jira https://your-org.atlassian.net/browse/%s",
+    "#+LINK: plan file:design/log/%s",
+    "",
+  ].join("\n");
+}
+
+function defaultOrgPreamble(path: string): string {
+  if (path.endsWith(TASKS_FILE)) {
+    return [
+      "#+TITLE: Project Tasks",
+      "#+SETUPFILE: ./TASKS.setup.org",
+      ARCHIVE_PREAMBLE,
+      "",
+    ].join("\n");
+  }
+  if (path.endsWith(TASKS_ARCHIVE_FILE)) {
+    return [
+      "#+TITLE: Archived Tasks",
+      "#+SETUPFILE: ./TASKS.setup.org",
+      "",
+    ].join("\n");
+  }
+  return "";
+}
+
 async function writeTaskFilePreserving(path: string, tasks: Task[]): Promise<void> {
+  if (path.endsWith(TASKS_FILE) || path.endsWith(TASKS_ARCHIVE_FILE)) {
+    const setupPath = join(dirname(path), "TASKS.setup.org");
+    if (!(await pathExists(setupPath))) {
+      await writeFile(setupPath, defaultSetupFileContent(), "utf-8");
+    }
+  }
   const cachedOriginal = tasks.find((t) => t.sourceContent)?.sourceContent;
   const original = cachedOriginal ?? ((await pathExists(path))
     ? await readFile(path, "utf-8")
     : "");
   const content = original
     ? serializeTasksPreservingFile(original, tasks)
-    : serializeTasks(tasks);
+    : `${defaultOrgPreamble(path)}${serializeTasks(tasks)}`;
   await writeFile(path, content, "utf-8");
 }
 
@@ -1548,13 +1618,37 @@ function getEmacsOptions(pi: ExtensionAPI) {
   };
 }
 
-/** Read the project-wide default plan directory from `#+DEFAULT_PLAN_DIR: [[file:...]]`. */
+/**
+ * Project-root-relative plan directory derived from a `#+LINK: plan ...`
+ * template. Only `file:`-prefixed templates are honoured — a URL-shaped
+ * `plan` template (e.g. `https://.../%s`) wouldn't yield a meaningful local
+ * scaffold path, so we fall back to the default rather than emit a
+ * URL-shaped suggestion the user has to delete.
+ */
+function planDirFromTemplate(template: string | undefined): string {
+  if (!template) return DEFAULT_PLANS_DIR;
+  if (!template.startsWith("file:")) return DEFAULT_PLANS_DIR;
+  const stripped = template.slice("file:".length);
+  const beforePlaceholder = stripped.includes("%s")
+    ? stripped.slice(0, stripped.indexOf("%s"))
+    : stripped;
+  const trimmed = beforePlaceholder.replace(/\/+$/, "");
+  return trimmed || DEFAULT_PLANS_DIR;
+}
+
+/**
+ * Read the project-wide default plan directory from `#+LINK: plan file:.../%s`.
+ * Resolution follows `TASKS.org` and one level of `#+SETUPFILE:`; this is the
+ * canonical place for the abbreviation so we do not also probe
+ * `TASKS.local.org` (intentional — shared config does not belong in a
+ * gitignored file).
+ */
 async function readPlansDir(cwd: string): Promise<string> {
   try {
-    const content = await readFile(join(cwd, TASKS_FILE), "utf-8");
-    const match = DEFAULT_PLAN_DIR_KEYWORD_RE.exec(content);
-    if (!match) return DEFAULT_PLANS_DIR;
-    return extractOrgLinkTarget(match[1] ?? "") ?? DEFAULT_PLANS_DIR;
+    const tasksPath = join(cwd, TASKS_FILE);
+    const content = await readFile(tasksPath, "utf-8");
+    const effective = await readEffectiveOrgContent(cwd, tasksPath, content);
+    return planDirFromTemplate(parseLinkTemplates(effective).get("plan"));
   } catch {
     return DEFAULT_PLANS_DIR;
   }
@@ -1567,10 +1661,20 @@ function joinPlanDir(dir: string, filename: string): string {
   return join(trimmed, filename);
 }
 
+function importLinkForPlanPath(cwd: string, sourceDir: string, absPlan: string, plansDir: string): { path: string; raw: string } {
+  const planRoot = isAbsolute(plansDir) ? plansDir : join(cwd, plansDir);
+  const planSuffix = relative(planRoot, absPlan).replace(/\\/g, "/");
+  if (planSuffix && !planSuffix.startsWith("..") && !isAbsolute(planSuffix)) {
+    const path = `plan:${planSuffix}`;
+    return { path, raw: `[[${path}]]` };
+  }
+  const filePath = relative(sourceDir, absPlan).replace(/\\/g, "/");
+  return { path: filePath, raw: `[[file:${filePath}]]` };
+}
+
 /**
  * Suggest a plan path for a task that has no #+IMPORT: yet.
- * Uses `#+DEFAULT_PLAN_DIR: [[file:...]]` from TASKS.org as the plan directory, falling
- * back to `./design/log` when unspecified or malformed.
+ * Uses `#+LINK: plan file:.../%s` from TASKS.setup.org/TASKS.org as the plan template, falling back to `./design/log` when unspecified or malformed.
  */
 async function suggestPlanPath(task: Task, cwd: string): Promise<string> {
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -1617,6 +1721,7 @@ function cloneTaskForPlan(task: Task, level: number): Task {
     importError: null,
     sourcePath: undefined,
     sourceContent: undefined,
+    effectiveSourceContent: undefined,
     sourceRoot: undefined,
     lineNumber: 0,
     endLine: 0,
@@ -1737,6 +1842,12 @@ function buildChangeRecordPrompt(
   );
 }
 
+function displayChangeRecordLink(target: string): string {
+  if (target.startsWith("[[")) return target;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:.+/.test(target) && !target.startsWith("file:")) return `[[${target}]]`;
+  return `[[file:${target}]]`;
+}
+
 function buildProactiveChangeRecordPrompt(
   task: Task,
   planRelToSource: string,
@@ -1747,7 +1858,7 @@ function buildProactiveChangeRecordPrompt(
     "Develop a linked org change-record for the selected TASKS.org task.",
     "",
     `Task: ${task.status} ${task.priority ? `[#${task.priority}] ` : ""}${task.summary}`,
-    `Change-record link: [[file:${planRelToSource}]]`,
+    `Change-record link: ${displayChangeRecordLink(planRelToSource)}`,
     `Change-record file: ${absPlan}`,
     "",
     "The tasks extension has already attached the #+IMPORT: keyword and scaffolded the change-record file.",
@@ -1791,7 +1902,7 @@ function buildSummaryRefreshPrompt(
     "Refresh the condensed memory layer for the just-closed TASKS.org task.",
     "",
     `Task: ${task.status} ${task.priority ? `[#${task.priority}] ` : ""}${task.summary}`,
-    `Change-record link: [[file:${planRelToSource}]]`,
+    `Change-record link: ${displayChangeRecordLink(planRelToSource)}`,
     `Change-record file: ${absPlan}`,
     "",
     reasonNote,
@@ -1799,7 +1910,7 @@ function buildSummaryRefreshPrompt(
     "Use the `org-plan` and `org-tasks` skills. Generate or refresh the change-record's `* Summary` so a future agent can rebuild context cheaply:",
     "",
     "1. Read the change-record's existing sections (`* Plan`, `* Implementation`, and `* Context` if present).",
-    "2. Place `* Summary` at the top of the change-record (the first top-level section). Use a one-paragraph synopsis followed by the conventional subsections (`** Decisions`, `** Shipped`, `** Gotchas`, `** Validation`, `** Follow-ups`); include only the subsections that carry content.",
+    "2. Place `* Summary` at the top of the change-record (the first top-level section). Use a one-paragraph synopsis followed by the conventional subsections (`** Decisions`, `** Shipped`, `** Gotchas`, `** Follow-ups`); include only the subsections that carry content. Evidentiary material (commands run, test counts) belongs in the sibling top-level `* Validation` section, not under `* Summary`.",
     "3. Keep the summary terse: it is the surface a future agent reads first, not a duplicate of the implementation ledger.",
     "4. Leave `* Context` alone if it already exists. If it does not exist, do NOT add an empty one — `* Context` is optional and is included only when durable rationale materially exceeds what `* Summary` can carry.",
     "5. Preserve `:CUSTOM_ID:`, `#+PARENT:`, LOGBOOK history, and the existing `* Implementation` audit detail.",
@@ -1823,7 +1934,7 @@ function buildRetrospectiveChangeRecordPrompt(
     "Generate a retrospective change-record for the just-closed TASKS.org task.",
     "",
     `Task: ${task.status} ${task.priority ? `[#${task.priority}] ` : ""}${task.summary}`,
-    `Change-record link: [[file:${planRelToSource}]]`,
+    `Change-record link: ${displayChangeRecordLink(planRelToSource)}`,
     `Change-record file: ${absPlan}`,
     "",
     "The tasks extension has already attached the #+IMPORT: keyword and scaffolded the change-record file with empty * Summary, * Plan, and * Implementation sections.",
@@ -1831,7 +1942,7 @@ function buildRetrospectiveChangeRecordPrompt(
     "Steps:",
     `1. ${scopeNote} A reasonable invocation is \`git log --oneline --since="${lowerBound ?? "<fallback>"}" --until="${closed ?? "now"}"\` when a lower bound is available.`,
     "2. Inspect the relevant commits and code changes.",
-    "3. Draft the * Summary section: a one-paragraph synopsis of what shipped and why, plus any of `** Decisions`, `** Shipped`, `** Gotchas`, `** Validation`, `** Follow-ups` subsections that carry content.",
+    "3. Draft the * Summary section: a one-paragraph synopsis of what shipped and why, plus any of `** Decisions`, `** Shipped`, `** Gotchas`, `** Follow-ups` subsections that carry content. Evidentiary material (commands run, test counts) belongs in the sibling top-level `* Validation` section, not under `* Summary`.",
     "4. Draft the * Implementation section: bullet points listing what was changed and why, citing commits where useful. Include any rolled-back attempts or dead-ends if they appear in the history \u2014 the failure record is the most valuable part of a retrospective.",
     "5. Promote `* Context` to a top-level section between `* Summary` and `* Plan` ONLY if durable rationale (background, alternatives, scope) materially exceeds what `* Summary` can carry. For typical retrospective records, omit `* Context` entirely.",
     "6. Leave * Plan empty unless there were notable steps worth recording retrospectively.",
@@ -1865,7 +1976,10 @@ async function handlePlanEdit(
 
   // ── Open existing plan ──
   if (task.importPath) {
-    const absPlan = await resolveProjectPath(ctx.cwd, sourceDir, task.importPath);
+    const sourceForLinks = task.effectiveSourceContent ?? task.sourceContent;
+    const expandedImportPath = expandOrgLinkTarget(task.importPath, sourceForLinks);
+    const importBaseDir = expandedImportPath.fromProjectRoot ? ctx.cwd : sourceDir;
+    const absPlan = await resolveProjectPath(ctx.cwd, importBaseDir, expandedImportPath.target);
     if (!absPlan) {
       ctx.ui.notify("Plan path resolves outside project root", "error");
       return;
@@ -1890,7 +2004,9 @@ async function handlePlanEdit(
     ctx.ui.notify("Plan path resolves outside project root", "error");
     return;
   }
-  const planRelToSource = relative(sourceDir, absPlan);
+  const planRelToSource = relative(sourceDir, absPlan).replace(/\\/g, "/");
+  const plansDir = await readPlansDir(ctx.cwd);
+  const planImport = importLinkForPlanPath(ctx.cwd, sourceDir, absPlan, plansDir);
 
   const originalChildren = task.children;
   const originalDescription = task.description;
@@ -1910,10 +2026,16 @@ async function handlePlanEdit(
         );
       }
     } else {
-      const tasksFileRelPath = relative(dirname(absPlan), sourcePath).replace(/\\/g, "/");
+      const planDir = dirname(absPlan);
+      const setupPath = join(ctx.cwd, "TASKS.setup.org");
+      if (!(await pathExists(setupPath))) {
+        await writeFile(setupPath, defaultSetupFileContent(), "utf-8");
+      }
+      const tasksFileRelPath = relative(planDir, sourcePath).replace(/\\/g, "/");
+      const setupFileRelPath = relative(planDir, setupPath).replace(/\\/g, "/");
       await writeFile(
         absPlan,
-        scaffoldPlan(task, { tasksFileRelPath }, extractedPlanTasks),
+        scaffoldPlan(task, { tasksFileRelPath, setupFileRelPath }, extractedPlanTasks),
         "utf-8",
       );
     }
@@ -1924,8 +2046,8 @@ async function handlePlanEdit(
     // raw value on round-trip. If the task already had local subtasks, move
     // those task headings into the new plan and leave a plain-text summary on
     // the parent so TASKS.org stays high-level without losing browse context.
-    task.importPath = planRelToSource;
-    task.importRaw = `[[file:${planRelToSource}]]`;
+    task.importPath = planImport.path;
+    task.importRaw = planImport.raw;
     if (originalChildren.length > 0) {
       task.description = appendExtractedSubtaskList(
         originalDescription,
@@ -1954,7 +2076,7 @@ async function handlePlanEdit(
     buildChangeRecordPrompt(
       mode,
       task,
-      planRelToSource,
+      planImport.path,
       absPlan,
       originalChildren.length > 0,
     ),
@@ -2015,6 +2137,7 @@ async function createTask(
     logbookLines: [],
     sourcePath: targetPath,
     sourceContent: targetRoot.find((t) => t.sourceContent)?.sourceContent,
+    effectiveSourceContent: targetRoot.find((t) => t.effectiveSourceContent)?.effectiveSourceContent,
     sourceRoot: targetRoot,
     lineNumber: 0,
     endLine: 0,
@@ -2068,6 +2191,7 @@ function taskForArchive(task: Task): Task {
     importError: null,
     sourceRoot: undefined,
     sourceContent: undefined,
+    effectiveSourceContent: undefined,
   };
 }
 
@@ -2106,7 +2230,10 @@ async function prepareArchivedPlanParentLink(
   const parentId = getTaskId(task);
   if (!parentId || !task.importPath) return null;
   const sourcePath = task.sourcePath ?? join(ctx.cwd, TASKS_FILE);
-  const absPlan = await resolveProjectPath(ctx.cwd, dirname(sourcePath), task.importPath);
+  const sourceForLinks = task.effectiveSourceContent ?? task.sourceContent;
+  const expandedImportPath = expandOrgLinkTarget(task.importPath, sourceForLinks);
+  const importBaseDir = expandedImportPath.fromProjectRoot ? ctx.cwd : dirname(sourcePath);
+  const absPlan = await resolveProjectPath(ctx.cwd, importBaseDir, expandedImportPath.target);
   if (!absPlan) {
     throw new Error("Plan path resolves outside project root");
   }
@@ -2186,12 +2313,18 @@ async function archiveTopLevel(
     const existing = (await pathExists(archivePath))
       ? await readFile(archivePath, "utf-8")
       : "";
+    const effectiveArchiveContent = existing.trim() === ""
+      ? existing
+      : await readEffectiveOrgContent(ctx.cwd, archivePath, existing);
     const archivedTasks = existing.trim() === ""
       ? []
-      : parseTasks(existing, { sourcePath: archivePath }).tasks;
+      : parseTasks(existing, { sourcePath: archivePath, effectiveSourceContent: effectiveArchiveContent }).tasks;
     archivedTasks.push(archiveCopy);
     const sortedArchive = sortArchivedTasks(archivedTasks);
-    await writeFile(archivePath, serializeTasks(sortedArchive), "utf-8");
+    const archiveContent = existing.trim() === ""
+      ? `${defaultOrgPreamble(archivePath)}${serializeTasks(sortedArchive)}`
+      : serializeTasksPreservingFile(existing, sortedArchive);
+    await writeFile(archivePath, archiveContent, "utf-8");
     await writeTaskFilePreserving(tasksPath, tasks);
     if (planRewrite) {
       await writeFile(planRewrite.absPlan, planRewrite.content, "utf-8");
@@ -2244,6 +2377,7 @@ async function publishTask(
   task.sourcePath = sharedPath;
   task.sourceRoot = sharedTasks;
   task.sourceContent = sharedTasks.find((t) => t.sourceContent)?.sourceContent;
+  task.effectiveSourceContent = sharedTasks.find((t) => t.effectiveSourceContent)?.effectiveSourceContent;
   sharedTasks.push(task);
 
   try {
@@ -2285,7 +2419,8 @@ async function unpublishTask(
   // Read existing local content and parse its current task list.
   let localContent = "";
   try { localContent = await readFile(localPath, "utf-8"); } catch { /* new file */ }
-  const { tasks: localRoot } = parseTasks(localContent, { sourcePath: localPath });
+  const effectiveLocalContent = await readEffectiveOrgContent(cwd, localPath, localContent);
+  const { tasks: localRoot } = parseTasks(localContent, { sourcePath: localPath, effectiveSourceContent: effectiveLocalContent });
 
   // Re-home the task into TASKS.local.org.
   task.isLocal = true;
@@ -2294,6 +2429,7 @@ async function unpublishTask(
   task.sourcePath = localPath;
   task.sourceRoot = localRoot;
   task.sourceContent = localContent || undefined;
+  task.effectiveSourceContent = localContent || undefined;
   markLocal([task]);
   localRoot.push(task);
 

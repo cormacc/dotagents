@@ -137,8 +137,8 @@ Optional:
 #+TITLE: Descriptive change-record title
 #+DATE: 2026-04-25 Sat
 #+PARENT: [[file:../../TASKS.org::#01234567-89ab-4def-8123-456789abcdef][Descriptive parent task]]
+#+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Draft
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
 One-paragraph condensed summary of what changes and why. Refreshed
@@ -183,6 +183,19 @@ Optional: one non-obvious constraint or pointer, if needed.
 
 * Open questions
 ```
+
+The setupfile reference assumes each repository provides a root
+`TASKS.setup.org` carrying the shared org-tasks preamble:
+
+```org
+#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)
+#+STARTUP: logdone logdrawer
+#+LINK: plan file:design/log/%s
+```
+
+New change-records reference it via `#+SETUPFILE: ../../TASKS.setup.org`
+instead of repeating the preamble inline. See `org-tasks` for the full file
+protocol.
 
 ### `#+STATUS:` lifecycle (advisory)
 
@@ -308,7 +321,7 @@ Example after planning:
 :PROPERTIES:
 :CUSTOM_ID: parent-id
 :END:
-#+IMPORT: [[file:design/log/authentication.org]]
+#+IMPORT: [[plan:authentication.org]]
 Migrated subtasks:
 - TODO Add login endpoint
 ```

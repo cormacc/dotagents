@@ -4,7 +4,7 @@
  * packages that aren't installed in the test environment.
  */
 
-/** Validation regex for bare Jira keys, e.g. `MBFW-123`. */
+/** Validation regex for Jira keys, e.g. `MBFW-123`. */
 export const JIRA_KEY_RE = /^[A-Z][A-Z0-9_]+-\d+$/;
 /** A bare integer (no project prefix) — resolves against `#+JIRA_PROJECT`. */
 export const BARE_NUMBER_RE = /^\d+$/;
@@ -216,10 +216,10 @@ export function buildClaimPrompt(
     "Steps:",
     `1. ${cloudIdInstruction(cfg)}`,
     `2. Read the selected task's \`:LINKED_ISSUES:\` drawer property from ${tasksFile} or its imports. Filter to Jira-shaped tokens:`,
-    "   - Bare tokens matching `^[A-Z][A-Z0-9_]+-\\d+$`.",
+    "   - Typed links `[[jira:KEY]]` where KEY matches `^[A-Z][A-Z0-9_]+-\\d+$`.",
     cfg.baseUrl
-      ? `   - Org-link tokens whose target host equals \`${new URL(cfg.baseUrl).host}\`.`
-      : "   - Org-link tokens are skipped when #+JIRA_BASE_URL is unset.",
+      ? `   - Raw org-link tokens whose target host equals \`${new URL(cfg.baseUrl).host}\`.`
+      : "   - Raw org-link tokens are skipped when #+JIRA_BASE_URL is unset.",
     "3. Call `atlassian_atlassianUserInfo` once to obtain the current user's `accountId`.",
     "4. For each Jira-shaped key, call `atlassian_editJiraIssue` with `assignee.accountId` set to that value.",
     "5. Surface a one-line summary per key with success or error message.",
@@ -309,7 +309,7 @@ export function buildCreatePrompt(
     `2. Verify the issue type \`${opts.type}\` exists in project \`${project}\` via \`atlassian_getJiraProjectIssueTypesMetadata\`. If not, surface the available types and stop.`,
     `3. Read the selected task's heading and body from ${tasksFile} (or its imports). The heading becomes the issue \`summary\`; the body becomes the issue \`description\` (markdown → ADF; the MCP server handles conversion).`,
     `4. Call \`atlassian_createJiraIssue\` with project \`${project}\`, issue type \`${opts.type}\`, summary, and description.`,
-    "5. On success, append the returned key to the selected task's `:LINKED_ISSUES:` drawer property (whitespace-separated; preserve any existing tokens).",
+    "5. On success, append `[[jira:<returned-key>]]` to the selected task's `:LINKED_ISSUES:` drawer property (whitespace-separated org-link tokens; preserve any existing tokens).",
     "6. Save the file. Confirm by surfacing the new key and Jira URL.",
     "",
     "Sandbox-only during development: only run against project `SAND` until the workflow is signed off.",

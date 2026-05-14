@@ -1,8 +1,8 @@
 #+TITLE: Migrate :ID: → :CUSTOM_ID: and #+PARENT_ID: → #+PARENT: link
 #+DATE: 2026-05-08 Fri
 #+PARENT: [[file:../../TASKS.archive.org::#69e24b8a-d86a-4c1e-b4bf-d19f8d2b56b7][org-memory -- make PARENT_ID property navigable]]
+#+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
 Replaced =:ID:= with =:CUSTOM_ID:= and =#+PARENT_ID:= with a navigable =#+PARENT: [[file:...::#<uuid>][summary]]= link across the org-memory protocol so plan→task navigation is a clickable org link grounded in org's =::#anchor= resolution rules (which resolve only against =:CUSTOM_ID:=, not =:ID:=). One-shot migration across =~/dotfiles/agents-src=, =~/dotfiles=, and =~/nmd/products/connect/portal= with no legacy tolerance window.

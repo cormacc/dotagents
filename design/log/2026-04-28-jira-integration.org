@@ -1,7 +1,7 @@
 #+TITLE: Jira integration via a new jira extension
 #+DATE: 2026-04-28 Tue
 #+PARENT: [[file:../../TASKS.archive.org::#0276a6c7-0ca8-4c39-a90a-05587ad64698][Add some sort of Jira integration for the tasks extension]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Added Jira integration as a new =jira= pi extension and =org-jira= skill, layered on top of generic external-issue support added to the =tasks= extension. =tasks= and the =org-tasks= / =org-plan= skills stay tracker-agnostic: =tasks= renders =:LINKED_ISSUES:= badges and resolves bare keys against =#+ISSUE_URL_BASE=, with =J= opening URLs in the browser. All Jira-specific knowledge (MCP routing, workflow names, =#+JIRA_*= keywords, slash commands) lives in =jira= and =org-jira=. Slash commands =/jira clone=, =/jira claim=, =/jira comment=, =/jira create= are agent-prompt builders — the extension is I/O-free; the agent performs MCP calls via the existing =atlassian= MCP server. =/jira clone= seeds new tasks; =/jira claim= / =/jira comment= operate on the existing =:LINKED_ISSUES:= list; auto-transition reacts to =tasks:status-changed= events.

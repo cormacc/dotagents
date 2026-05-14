@@ -1,7 +1,7 @@
 #+TITLE: Task Overlay Bug Fixes
 #+DATE: 2026-04-27 Mon
 #+PARENT: [[file:../../TASKS.archive.org::#d36fe453-b8f8-4dfb-8ea6-5ed9d9eeee90][Tasks overlay bugfixes :org-memory:org-tasks:tasks-extension:]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Three tasks-extension overlay bugs fixed: (1) compact widget not refreshing after selection toggle (race between async =save()= and the file watcher), (2) overlay cursor not landing on the selected task when it lived as a =planChild= under a DONE/CANCELLED parent (collapse logic incorrectly collapsed ancestors), (3) external file changes silently discarded by the live overlay because =refreshTaskUi= skipped it entirely. No new lifecycle hooks — module-level =isOverlayActive= flag, =activeOverlayInstance= ref, and a =TasksOverlay.refreshTasks()= method.

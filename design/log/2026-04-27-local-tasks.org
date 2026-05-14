@@ -1,7 +1,7 @@
 #+TITLE: Surface TASKS.local.org tasks in the extension UI
 #+DATE: 2026-04-27 Mon
 #+PARENT: [[file:../../TASKS.archive.org::#6bee9f80-d1b5-4121-ab9c-f795e4884d3e][Update tasks extension to include local tasks]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Extended =TASKS.local.org= from a single-keyword =#+SELECTED:= file to a full task carrier: private draft tasks that have not yet been promoted to shared =TASKS.org=. Tasks extension surfaces them in the same overlay with a distinct =⊠= marker and magenta tint under a =⊠  Local drafts= separator. Publish (=P=) promotes a local task to =TASKS.org=; unpublish (=U=) demotes a shared task to =TASKS.local.org=. =writeSelectedId= rewritten to be non-destructive (preserves task headings).

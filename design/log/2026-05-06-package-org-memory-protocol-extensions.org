@@ -1,8 +1,8 @@
 #+TITLE: Package org-memory protocol / extensions
 #+DATE: 2026-05-06 Wed
 #+PARENT: [[file:../../TASKS.archive.org::#79d6f4f5-70f9-404d-9b4c-0cf0ef0e7adb][Package org-memory protocol / extensions]]
+#+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Review
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
 Added an in-repo dual-mode package around the org-memory subset (=org-tasks=, =org-plan=, =org-jira= skills; =tasks=, =jira=, =leader-menu=, =emacsclient= pi extensions; =extensions/lib/= helper modules). Editable mode keeps the existing whole-directory =mkOutOfStoreSymlink= wiring for the dotfiles owner; packaged mode exposes the explicit org-memory resource set via per-entry symlinks from a Nix store derivation, so collaborators get exactly the documented bundle and nothing else. =agents/package.json= manifest lets pi install the bundle directly via =pi install=. User settings (=settings.json=, =tasks-ext.json=, =jira-ext.json=, =leader-menu.json=) are out of scope and remain dotfiles-local.

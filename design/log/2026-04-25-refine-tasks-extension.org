@@ -1,7 +1,7 @@
 #+TITLE: Refine Tasks Extension Implementation Plan
 #+DATE: 2026-04-25 Sat
 #+PARENT: [[file:../../TASKS.archive.org::#f92b7b2f-c7fc-4933-9e27-20c0e411cbe4][Refine tasks extension :org-memory:org-tasks:]]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 UX and persistence refinements to the pi tasks extension: load-time =:ID:= backfill for TASKS.org and linked plans, merger of compact selected-task surface and expanded =/tasks= UI under a single load/refresh flow, default collapse rules, plan-link display in the details pane, prompt-strategy redesign so create/archive dialogs stay visible, and =STARTED= propagation from plan subtasks to their TASKS.org ancestor. Compact selected-task UI moved from a top-pinned overlay to a reserved above-editor widget so it no longer masks scrollback.

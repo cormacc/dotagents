@@ -1,8 +1,8 @@
 #+TITLE: Refactor keybindings extension
 #+DATE: 2026-05-02 Sat
 #+PARENT: [[file:../../TASKS.archive.org::#00e1772c-92eb-4a5b-afc5-bf1bbbb51e5b][Refactor keybindings extension]]
+#+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
 Replaced the ~3000-line =keybindings= monolith with two focused extensions: =leader-menu= (~700 LOC) for leader-chord discovery and dispatch, and =vim-mode= (~2100 LOC) for the modal editor. Decision-then-execute: =kepatrick/vim-motions-pi= evaluated up front against the full =VimEditor= feature set and =KEEP_OWN= chosen (the package lacks dot-repeat, indent operators, bracket text objects, BIG-WORD motions, and visual case toggle — ~30% of daily usage). The two extensions communicate purely through events and load independently. =/kb= and =keybindings.org= are gone; =/leader-menu bindings --export= replaces the hand-maintained reference.

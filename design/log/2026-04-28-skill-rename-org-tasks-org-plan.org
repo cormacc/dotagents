@@ -1,7 +1,7 @@
 #+TITLE: Rename skills: org-memory → org-tasks, plan → org-plan
 #+DATE: 2026-04-28 Tue
 #+PARENT: [[file:../../TASKS.archive.org::#ce69ef5e-5967-4623-a2e3-f22e0bd1a745][Consider whether to rename the 'org-memory' skill to just 'tasks']]
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
+#+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 Renamed the two skills that form the org-memory protocol so they share a symmetric =org-= prefix: =org-memory → org-tasks= (file/persistence protocol) and =plan → org-plan= (planning methodology / change-record sections). The =tasks= pi extension is *not* renamed — extension naming optimises for user-facing concision (=/tasks=, =SPC t t=, the "Tasks" widget label) where skill naming optimises for symmetry and namespace clarity in the agent registry. "org-memory" survives as an informal umbrella term in prose. =git mv= preserves history; no backwards-compatibility shim.

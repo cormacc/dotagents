@@ -1,0 +1,5 @@
+#+TITLE: dotagents Emacs helpers
+
+This directory contains the Emacs companion code for the org-tasks / org-plan protocol. These helpers are editor conveniences only; the pi tasks extension remains the standalone implementation for parsing, lifecycle writes, selection state, and archive flows.
+
+- =tasks-org/= — lightweight commands for finding =TASKS.org=, capturing new tasks, toggling between a task and its linked change-record, and toggling =TASKS.local.org= selection.

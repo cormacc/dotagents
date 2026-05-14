@@ -19,6 +19,8 @@ import {
 export interface ScaffoldPlanOptions {
   /** Path from the plan file's directory to the task file containing the parent. */
   tasksFileRelPath?: string;
+  /** Path from the plan file's directory to the repository task setup file. */
+  setupFileRelPath?: string;
 }
 
 function safeOrgLinkDescription(summary: string): string | null {
@@ -43,6 +45,7 @@ export function scaffoldPlan(
   const options = Array.isArray(optionsOrPlanTasks) ? {} : optionsOrPlanTasks;
   const planTasks = Array.isArray(optionsOrPlanTasks) ? optionsOrPlanTasks : maybePlanTasks;
   const tasksFileRelPath = options.tasksFileRelPath ?? "../../TASKS.org";
+  const setupFileRelPath = options.setupFileRelPath ?? "../../TASKS.setup.org";
   // The minimal skeleton emits only the sections required on every
   // change-record per `skills/org-plan/SKILL.md`: * Summary, * Plan,
   // * Implementation. * Context is optional and is added by the agent
@@ -52,7 +55,7 @@ export function scaffoldPlan(
     `#+TITLE: ${task.summary}`,
     `#+DATE: ${formatOrgDate()}`,
     parentId ? `#+PARENT: ${parentLink(tasksFileRelPath, parentId, task.summary)}` : null,
-    "#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)",
+    `#+SETUPFILE: ${setupFileRelPath}`,
     "",
     "* Summary",
     "",

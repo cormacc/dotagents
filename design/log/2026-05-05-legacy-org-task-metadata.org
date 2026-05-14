@@ -1,8 +1,8 @@
 #+TITLE: Define legacy org-task metadata tolerance and normalization
 #+DATE: 2026-05-05 Tue
 #+PARENT: [[file:../../TASKS.org::#972d5cec-0606-44e3-8276-4c7d12349cde][Define legacy org-task metadata tolerance and normalization :org-memory:compatibility:followup:]]
+#+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Draft
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
 Draft compatibility-policy plan extracted from the org-memory agent-memory review so the generic protocol could close cleanly. Open question: how strictly should tooling treat historical org-task data that predates the current metadata rules (=:CUSTOM_ID:= UUID, bracketed =:CREATED: [YYYY-MM-DD Day HH:MM]=, tool-driven =:LOGBOOK:=)? The extension currently silently repairs missing IDs via =backfillMissingIds()=, which conflicts with the newer "tolerate legacy reads, avoid silent rewrites" posture. Plan separates *read tolerance* (loose) from *new-write requirements* (strict), proposes doctor diagnostics over silent repair, and leaves an opt-in normalization flow as a follow-on decision. Status remains Draft until the policy is accepted.

@@ -1,8 +1,8 @@
 #+TITLE: leader-menu owns slash-command submission via shared CustomEditor
 #+DATE: 2026-05-05 Tue
 #+PARENT: [[file:../../TASKS.archive.org::#c22975ff-5ea8-47d4-807e-6499f2ea6970][leader-menu: fix slash command dispatch :leader-menu:]]
+#+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Active
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
 Made leader-menu's =command:= leader actions submit slash commands in a single keystroke, regardless of whether vim-mode is loaded. Previously leader-menu populated the editor via =setEditorText()= and asked the user to press Enter; only vim-mode's =CustomEditor= subclass had a programmatic =submitCommand=. Introduced a thin =SubmitterEditor= base (=extensions/lib/editor.ts=) that adds one method (=setEditorText(text); super.handleInput("\r")=) and a module-scope active-instance registry. leader-menu installs =SubmitterEditor= unconditionally at =session_start=; vim-mode (when re-enabled) extends =SubmitterEditor= rather than =CustomEditor= so single-step submission survives editor swaps. Trivially stateless: no fields beyond the base, no overrides beyond =submitCommand=.

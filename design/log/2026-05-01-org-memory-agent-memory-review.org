@@ -1,8 +1,8 @@
 #+TITLE: Review org-memory protocol as agent memory
 #+DATE: 2026-05-01 Fri
 #+PARENT: [[file:../../TASKS.archive.org::#724c0332-e491-4b66-900f-e11478057eb1][Review org-memory protocol as agent memory]]
+#+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
-#+TODO: TODO(t) STARTED(s) WAITING(w) | DONE(d) CANCELLED(c)
 
 * Summary
 First pass at treating the org-memory protocol explicitly as agent memory rather than only a human task list. Identified protocol gaps that made cross-session resume ambiguous (duplicate IDs from subtask-mirroring, mutable =CLOSED:=, unspecified import trust boundary, unclear retrospective scoping when =:STARTED:= absent, and informal =:CREATED:= shape) and shipped the protocol decisions plus the tasks-extension changes that lock them in.

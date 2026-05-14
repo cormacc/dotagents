@@ -1,0 +1,39 @@
+#+TITLE: tasks-org.el
+
+Lightweight Emacs companion for the org-tasks protocol. The pi tasks extension remains the standalone implementation for lifecycle writes, archive mechanics, parsing, and rendering; this package only adds editor conveniences.
+
+* Commands
+
+- =tasks-org-find-tasks-file= — open the project-root =TASKS.org=. Signals a hard error when absent; bootstrap belongs to the org-tasks skill / pi extension.
+- =tasks-org-register-capture-template= — register two =org-capture= templates for new protocol-conformant tasks under =tasks-org-capture-section= (default =Improvements=): =t= prompts for tags, =T= captures without tags.
+- =tasks-org-toggle-task-and-plan= — from a task with =#+IMPORT:=, open its change-record; from a change-record with =#+PARENT:=, jump back to the parent task.
+- =tasks-org-toggle-task-and-plan-other-window= — same resolution, but open the target in another window.
+- =tasks-org-toggle-selected= — toggle =#+SELECTED:= in =TASKS.local.org= for the surrounding top-level task. From a plan file, the selected task is resolved via =#+PARENT:=. Clearing selection removes only the =#+SELECTED:= line and preserves any local task drafts / imports.
+
+* Project-root rule
+
+Project resolution uses =projectile-project-root= when available, falls back to the nearest =.git= directory, and finally to =default-directory=. The package then looks for =TASKS.org= at that resolved root only; it does not walk into parent projects.
+
+* Spacemacs / dotfiles install
+
+The parent dotfiles repo consumes this checkout as =agents-src=. In the =org-user= layer, add the directory to =load-path= and require the feature:
+
+#+begin_src emacs-lisp
+(add-to-list 'load-path "~/dotfiles/agents-src/emacs/tasks-org")
+(require 'tasks-org)
+(tasks-org-register-capture-template)
+(spacemacs/set-leader-keys-for-major-mode 'org-mode
+  "ga" #'tasks-org-toggle-task-and-plan
+  "gA" #'tasks-org-toggle-task-and-plan-other-window
+  "SPC" #'tasks-org-toggle-selected)
+#+end_src
+
+* Generic install
+
+#+begin_src emacs-lisp
+(add-to-list 'load-path "/path/to/dotagents/emacs/tasks-org")
+(require 'tasks-org)
+(tasks-org-register-capture-template)
+#+end_src
+
+Both capture templates emit =:CUSTOM_ID:=, =:CREATED:=, and an initial =:LOGBOOK:= =- Created ...= entry. Use =t= when you want a tag prompt; use =T= when you want no tags and want to avoid accepting an unwanted completion candidate. Lifecycle transitions are still handled by org-mode / pi according to the protocol preamble in =TASKS.org=.

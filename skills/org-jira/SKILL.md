@@ -1,6 +1,6 @@
 ---
 name: org-jira
-description: "Jira-specific authoring conventions on top of the org-tasks protocol. Use whenever the user mentions Jira keys (PROJ-123), Atlassian, /jira slash commands (clone/get/claim/comment/create/transition), :LINKED_ISSUES:, or #+JIRA_* keywords; wants to plan from a Jira Epic or issue tree; or asks about the Atlassian MCP connection. Owns Jira semantics; the underlying tracker-agnostic :LINKED_ISSUES: drawer and #+ISSUE_URL_BASE keyword belong to the tasks extension."
+description: "Jira-specific authoring conventions on top of the org-tasks protocol. Use whenever the user mentions Jira keys (PROJ-123), Atlassian, /jira slash commands (clone/get/claim/comment/create/transition), :LINKED_ISSUES:, #+LINK: jira, or #+JIRA_* keywords; wants to plan from a Jira Epic or issue tree; or asks about the Atlassian MCP connection. Owns Jira semantics; the underlying tracker-agnostic :LINKED_ISSUES: drawer and #+LINK keyword belong to the tasks extension."
 ---
 
 # Jira integration for org-tasks
@@ -12,41 +12,37 @@ authoring conventions and agent prompts. Use it when:
 - The user asks to clone, claim, comment on, transition, or create a Jira issue.
 - The user wants to know the Atlassian MCP connection state.
 
-This skill owns Jira semantics. The underlying file format (`:LINKED_ISSUES:`
-drawer property, `#+ISSUE_URL_BASE` keyword, badge rendering, browser-open) is
-owned by the [`tasks`
-extension](../../pi/extensions/tasks/README.md#linked-external-issues) and is
-*tracker-agnostic* — the rules below apply only to Jira-shaped links.
+This skill owns Jira semantics. The underlying file format (`:LINKED_ISSUES:` drawer property, `#+LINK:` declarations, badge rendering, browser-open) is owned by the [`tasks` extension](../../pi/extensions/tasks/README.md#linked-external-issues) and is *tracker-agnostic* — the rules below apply only to Jira-shaped links.
 
 ## File-format conventions
 
 ### Issue keys
 
-Jira keys are stored as **bare `PROJ-NNN` tokens** in the generic
-`:LINKED_ISSUES:` drawer property defined by the `tasks` extension:
+Jira keys are stored as typed org links in the generic `:LINKED_ISSUES:` drawer property defined by the `tasks` extension:
 
 ```org
+#+LINK: jira https://your-org.atlassian.net/browse/%s
+
 * TODO Refactor stim driver
 :PROPERTIES:
 :CUSTOM_ID: 01234567-89ab-4def-8123-456789abcdef
-:LINKED_ISSUES: MBFW-123 MBE-45
+:LINKED_ISSUES: [[jira:MBFW-123]] [[jira:MBE-45]]
 :END:
 ```
 
-- Validation regex: `^[A-Z][A-Z0-9_]+-\d+$`.
-- Whitespace-separated; `:LINKED_ISSUES:` is multi-valued.
-- A single task may link to many Jira issues; mixing bare Jira keys with
-  non-Jira org-link tokens (`[[https://github.com/.../issues/42][gh#42]]`) in
-  the same drawer line is supported.
-- The property is created on first link only — never auto-backfilled on existing
-  tasks (mirrors `:STARTED:` behaviour).
+- The `jira:` prefix is resolved through the file's `#+LINK: jira <base>/browse/%s` declaration (typically inherited from `TASKS.setup.org`). Without that declaration `[[jira:KEY]]` tokens parse but cannot be opened or rendered as badges; the `tasks` extension surfaces a hard error so the missing declaration is caught early.
+- Link target key validation regex: `^[A-Z][A-Z0-9_]+-\d+$`.
+- Whitespace-separated org-link tokens; `:LINKED_ISSUES:` is multi-valued.
+- A single task may link to many Jira issues; mixing Jira typed links with non-Jira raw URL org-link tokens (`[[https://github.com/.../issues/42][gh#42]]`) in the same drawer line is supported. Typed `[[jira:KEY]]` links keep the issue key portable across checkouts (no hostname baked into the token); raw URL links work as a fallback when no `#+LINK:` declaration is available.
+- Bare `PROJ-NNN` tokens are no longer part of the protocol; all adopting repos were migrated in a one-time conversion sweep.
+- The property is created on first link only — never auto-backfilled on existing tasks (mirrors `:STARTED:` behaviour).
 
 ### File-level keywords
 
 `TASKS.org` (overridable in `TASKS.local.org`):
 
 ```org
-#+ISSUE_URL_BASE: https://your-org.atlassian.net/browse/{ID}
+#+LINK: jira https://your-org.atlassian.net/browse/%s
 #+JIRA_CLOUDID: 00000000-0000-4000-8000-000000000000
 #+JIRA_PROJECT: MBFW
 #+JIRA_BASE_URL: https://your-org.atlassian.net
@@ -54,13 +50,12 @@ Jira keys are stored as **bare `PROJ-NNN` tokens** in the generic
 
 | Keyword            | Owner          | Purpose                                                    |
 | ------------------ | -------------- | ---------------------------------------------------------- |
-| `#+ISSUE_URL_BASE` | `tasks`        | URL template for bare keys; rendered badges & `J` open.    |
+| `#+LINK: jira`     | `tasks`        | Org-native link abbreviation for Jira badges & `J` open.   |
 | `#+JIRA_CLOUDID`   | `jira`         | MCP routing: skip `getAccessibleAtlassianResources`.       |
 | `#+JIRA_PROJECT`   | `jira`         | Default project for `/jira create`; short-key disambiguation. |
 | `#+JIRA_BASE_URL`  | `jira`         | Filter `:LINKED_ISSUES:` for Jira-shaped tokens.           |
 
-The `tasks` extension reads only `#+ISSUE_URL_BASE`. The three `#+JIRA_*`
-keywords are read only by the `jira` extension and this skill.
+The `tasks` extension reads `#+LINK:` declarations for badge URL resolution. The three `#+JIRA_*` keywords are read only by the `jira` extension and this skill.
 
 `TASKS.local.org` overrides any of these (last-write-wins, mirroring
 `#+SELECTED:`). Useful for per-checkout overrides like a different default
@@ -68,25 +63,17 @@ project.
 
 ### Trust boundary
 
-`#+ISSUE_URL_BASE` and `#+JIRA_*` keywords are project-local trusted
-configuration. Values from `TASKS.local.org` are part of the user's
-checkout-local trust boundary, not untrusted remote input. Non-HTTPS issue URL
-bases are allowed; opener implementations must pass URLs as arguments rather
-than shell-interpolated command strings.
+`#+LINK:` and `#+JIRA_*` keywords are project-local trusted configuration. Values from `TASKS.local.org` are part of the user's checkout-local trust boundary, not untrusted remote input. Non-HTTPS issue URL bases are allowed; opener implementations must pass URLs as arguments rather than shell-interpolated command strings.
 
 ### Identifying Jira tokens within `:LINKED_ISSUES:`
 
 When `/jira *` commands need to operate only on Jira-shaped tokens (claim,
 transition, comment), they apply this filter:
 
-1. **Bare token** matches `/^[A-Z][A-Z0-9_]+-\d+$/` → Jira key.
-2. **Org-link token** `[[url][label]]` whose target host matches
-   `#+JIRA_BASE_URL` → Jira key. (Uncommon — Jira keys are usually stored bare
-   so they can be reused across machines.)
+1. **Typed Jira link** `[[jira:KEY]]`, where `KEY` matches `/^[A-Z][A-Z0-9_]+-\d+$/` → Jira key.
+2. **Raw org-link token** `[[url][label]]` whose target host matches `#+JIRA_BASE_URL` → Jira key.
 
-Tokens that match neither are silently ignored by Jira workflows — a task
-carrying `MBFW-123 [[https://github.com/foo/bar/issues/42][gh#42]]` exposes only
-`MBFW-123` to `/jira claim`.
+Tokens that match neither are silently ignored by Jira workflows — a task carrying `[[jira:MBFW-123]] [[https://github.com/foo/bar/issues/42][gh#42]]` exposes only `MBFW-123` to `/jira claim`.
 
 ## Atlassian MCP connection
 
@@ -120,9 +107,7 @@ never invokes MCP tools directly.
 
 ### Reference (read-only)
 
-No prompt needed. The user types a Jira key into `:LINKED_ISSUES:` and sets
-`#+ISSUE_URL_BASE` once; `tasks` renders badges and `J` opens URLs. Fully
-offline-safe.
+No prompt needed. The user types `[[jira:KEY]]` into `:LINKED_ISSUES:` and sets `#+LINK: jira <base>/browse/%s` once; `tasks` renders badges and `J` opens URLs. Fully offline-safe.
 
 ### Planning / resume context (tasks with `:LINKED_ISSUES:`)
 

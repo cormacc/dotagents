@@ -13,8 +13,8 @@ import {
 import type { LinkedIssue, Task } from "./parser.ts";
 import {
   formatOrgTimestamp,
-  getFileKeyword,
   getLinkedIssues,
+  parseLinkTemplates,
   getTaskBlockers,
   getTaskHandoff,
   getTaskId,
@@ -94,12 +94,8 @@ export class TasksOverlay {
    *  loadKeybindingsDebugFlag above. Read once at construction time. */
   private debugEnabled: boolean = loadKeybindingsDebugFlag();
 
-  /**
-   * Cache of `#+ISSUE_URL_BASE` per source-file content. Keyed by the
-   * `sourceContent` string identity (different files have different
-   * content strings). Reset on `refreshTasks`.
-   */
-  private urlBaseCache = new Map<string, string | null>();
+  /** Cache of `#+LINK:` declarations per source-file content. Reset on `refreshTasks`. */
+  private linkTemplateCache = new Map<string, ReturnType<typeof parseLinkTemplates>>();
 
   /** UUID of the currently selected task (from TASKS.local.org), or null. */
   private selectedId: string | null;
@@ -168,7 +164,7 @@ export class TasksOverlay {
       : null;
 
     this.tasks = newTasks;
-    this.urlBaseCache = new Map();
+    this.linkTemplateCache = new Map();
     this.applyDefaultCollapseView();
     this.rebuildRows();
 
@@ -238,24 +234,20 @@ export class TasksOverlay {
     return [...task.children, ...(task.importChildren ?? [])];
   }
 
-  /**
-   * Resolve `#+ISSUE_URL_BASE` for a task by reading its `sourceContent`.
-   * Memoised per-content-string to avoid re-scanning on every render.
-   */
-  private urlBaseFor(task: Task): string | null {
-    const content = task.sourceContent ?? "";
-    if (!content) return null;
-    if (this.urlBaseCache.has(content)) {
-      return this.urlBaseCache.get(content) ?? null;
-    }
-    const value = getFileKeyword(content, "ISSUE_URL_BASE");
-    this.urlBaseCache.set(content, value);
+  /** Resolve `#+LINK:` templates for a task by reading its `sourceContent`. */
+  private linkTemplatesFor(task: Task): ReturnType<typeof parseLinkTemplates> {
+    const content = task.effectiveSourceContent ?? task.sourceContent ?? "";
+    if (!content) return new Map();
+    const cached = this.linkTemplateCache.get(content);
+    if (cached) return cached;
+    const value = parseLinkTemplates(content);
+    this.linkTemplateCache.set(content, value);
     return value;
   }
 
-  /** Resolve `:LINKED_ISSUES:` for a task using cached `#+ISSUE_URL_BASE`. */
+  /** Resolve `:LINKED_ISSUES:` for a task using cached `#+LINK:` templates. */
   private linkedIssuesFor(task: Task): LinkedIssue[] {
-    return getLinkedIssues(task, this.urlBaseFor(task));
+    return getLinkedIssues(task, this.linkTemplatesFor(task));
   }
 
   /**
@@ -584,10 +576,7 @@ export class TasksOverlay {
   }
 
   /**
-   * Open every URL in the cursor task's `:LINKED_ISSUES:` in the user's
-   * browser via `onOpenUrls`. Caps at 5 to avoid spawning a tab storm.
-   * Bare tokens with no `#+ISSUE_URL_BASE` template are skipped with a
-   * notification pointing the user at the missing keyword.
+   * Open every URL in the cursor task's `:LINKED_ISSUES:` in the user's browser via `onOpenUrls`. Caps at 5 to avoid spawning a tab storm. Typed links whose prefix has no `#+LINK:` declaration are skipped with a notification.
    */
   private openLinkedIssues(): void {
     const row = this.rows[this.cursor];
@@ -596,12 +585,10 @@ export class TasksOverlay {
     if (issues.length === 0) return; // silent no-op when property absent
 
     const resolvable = issues.filter((i) => i.url !== null);
-    const unresolvable = issues.length - resolvable.length;
+    const unresolvable = issues.filter((i) => i.url === null);
     if (resolvable.length === 0) {
-      this.onNotify?.(
-        "Set #+ISSUE_URL_BASE in TASKS.org to enable browser-open for bare keys.",
-        "warn",
-      );
+      const first = unresolvable[0]?.error ?? "No resolvable linked-issue URLs.";
+      this.onNotify?.(first, "warn");
       return;
     }
 
@@ -612,9 +599,9 @@ export class TasksOverlay {
         `Opening first ${CAP} of ${resolvable.length} linked issues.`,
         "info",
       );
-    } else if (unresolvable > 0) {
+    } else if (unresolvable.length > 0) {
       this.onNotify?.(
-        `Opening ${resolvable.length} linked issues; ${unresolvable} skipped (no #+ISSUE_URL_BASE).`,
+        `Opening ${resolvable.length} linked issues; ${unresolvable.length} skipped (${unresolvable[0]?.error ?? "unresolved"}).`,
         "info",
       );
     }
