@@ -1,0 +1,12 @@
+{
+  "hideThinkingBlock": true,
+  "defaultThinkingLevel": "high",
+  "packages": [
+    "npm:@gotgenes/pi-anthropic-auth",
+    "npm:pi-mcp-adapter",
+    "npm:pi-web-access",
+    "npm:pi-intercom",
+    "npm:context-mode",
+    "npm:@latentminds/pi-quotas"
+  ]
+}

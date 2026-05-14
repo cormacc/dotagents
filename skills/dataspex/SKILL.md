@@ -107,5 +107,5 @@ list when more than one is running.
 - Fallback forms (for non-pi agents):
   [`references/fallback.md`](references/fallback.md)
 - Design record (history, decisions, spike output):
-  `~/dotfiles/agents-src/design/log/2026-05-13-dataspex-agent-integration.org`
+  `~/dotfiles/agents/design/log/2026-05-13-dataspex-agent-integration.org`
 - See also: the `clojure` skill (REPL workflow, port discovery, paren repair).

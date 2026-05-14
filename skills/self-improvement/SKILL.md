@@ -115,15 +115,15 @@ tiers:
 
 - **project-local** — the current session's repo (anything that isn't dotfiles
   or dotagents).
-- **dotagents** — `~/dotfiles/agents-src/` (a git submodule pointing at
+- **dotagents** — `~/dotfiles/agents/` (a git submodule pointing at
   `cormacc/dotagents`). Owns reusable agent assets: skills, pi extensions,
-  prompts, the pi-side `AGENTS.md`, and dotagents package contents / manifests
-  (`agent-org-memory.nix`, `package.json`). These are symlinked into
-  `~/.agents/skills` and `~/.pi/agent/{AGENTS.md,prompts,extensions,skills}` by
-  `agents.nix`.
+  prompts, the pi-side `AGENTS.md`, user-local pi settings (`pi/settings.json`,
+  symlinked to `~/.pi/agent/settings.json`), and dotagents package contents /
+  manifests (`agent-org-memory.nix`, `package.json`). These are symlinked into
+  `~/.agents/skills` and `~/.pi/agent/{AGENTS.md,prompts,extensions,skills,settings.json}`
+  by `agents.nix`.
 - **dotfiles** — `~/dotfiles/` itself. Owns Home Manager / NixOS / nix-darwin
-  configuration, `agents.nix` (the wiring that installs dotagents),
-  `agents-config/pi/settings.json` (user-local pi settings), and the
+  configuration, `agents.nix` (the wiring that installs dotagents), and the
   dotfiles-side `AGENTS.md`.
 
 ### Decision rules
@@ -133,10 +133,10 @@ apply the first matching row:
 
 | Signal | Tier |
 |--------|------|
-| File resolves under `$HOME/dotfiles/agents-src/` | **dotagents** |
-| File is a skill (`~/.agents/skills/<name>/`) or lives under `~/.pi/agent/{skills,extensions,prompts}/` | **dotagents** (these are symlinks into `agents-src/`) |
-| File is the pi-side `AGENTS.md` (`~/.pi/agent/AGENTS.md`, resolves to `agents-src/AGENTS.md`) | **dotagents** |
-| File resolves under `$HOME/dotfiles/` but **not** under `agents-src/` (e.g. `agents.nix`, `agents-config/pi/settings.json`, `home*.nix`, `hosts/`, `darwin-configuration.nix`, the dotfiles `AGENTS.md`) | **dotfiles** |
+| File resolves under `$HOME/dotfiles/agents/` | **dotagents** |
+| File is a skill (`~/.agents/skills/<name>/`) or lives under `~/.pi/agent/{skills,extensions,prompts,settings.json}` | **dotagents** (these are symlinks into `agents/`) |
+| File is the pi-side `AGENTS.md` (`~/.pi/agent/AGENTS.md`, resolves to `agents/AGENTS.md`) | **dotagents** |
+| File resolves under `$HOME/dotfiles/` but **not** under `agents/` (e.g. `agents.nix`, `home*.nix`, `hosts/`, `darwin-configuration.nix`, the dotfiles `AGENTS.md`) | **dotfiles** |
 | Project-only `AGENTS.md`, project-scoped script, project-specific convention, or project tooling | **project-local** |
 | Artefact lives in a sibling repo unrelated to the three tiers above | project-local *to that repo* — but routing to a third repo is out of scope; ask the user |
 
@@ -185,7 +185,7 @@ bypasses both: it edits the file in the current session's repo and commits.
 
 The originating session does *not* triage; it hands a structured envelope to a
 session running in the *target* repo. The repo selected by the routing rules is
-the **target repo**: either `$HOME/dotfiles/agents-src` (dotagents) or
+the **target repo**: either `$HOME/dotfiles/agents` (dotagents) or
 `$HOME/dotfiles` (dotfiles).
 
 1. Collect description + auto-detect metadata (as in Flow A, step 2).
@@ -194,12 +194,12 @@ the **target repo**: either `$HOME/dotfiles/agents-src` (dotagents) or
    intercom action: list
    ```
    Filter for a session whose `cwd` matches the target repo:
-   - **dotagents** target: `cwd` is under `$HOME/dotfiles/agents-src`.
+   - **dotagents** target: `cwd` is under `$HOME/dotfiles/agents`.
    - **dotfiles** target: `cwd` is under `$HOME/dotfiles` **but not** under
-     `agents-src/`.
+     `agents/`.
 
    Be careful with the dotfiles match: a session whose `cwd` is
-   `~/dotfiles/agents-src` is **not** a dotfiles session — it's a dotagents
+   `~/dotfiles/agents` is **not** a dotfiles session — it's a dotagents
    session that happens to sit inside the parent checkout.
 3. If no session for the target repo is alive, **auto-spawn** one (see "Spawn
    recipe" below) and wait for it to register with intercom.
@@ -233,12 +233,12 @@ back to `tmux`, mirroring the conventions in
 [`pi-intercom`](../../../../.cache/npm/lib/node_modules/pi-intercom/skills/pi-intercom/SKILL.md).
 Substitute the target's working directory:
 
-- **dotagents** target → `cd $HOME/dotfiles/agents-src`.
+- **dotagents** target → `cd $HOME/dotfiles/agents`.
 - **dotfiles** target → `cd $HOME/dotfiles`.
 
 ```bash
 # Pick the target cwd:
-TARGET_CWD="$HOME/dotfiles/agents-src"   # or "$HOME/dotfiles"
+TARGET_CWD="$HOME/dotfiles/agents"   # or "$HOME/dotfiles"
 TARGET_NAME="dotagents-feedback"          # or "dotfiles-feedback"
 
 # cmux preferred — visible split:
@@ -351,7 +351,7 @@ to `file:design/log/%s` when absent), linked from the task via `#+IMPORT:
 The user corrects the agent's commit headline to follow Conventional Commits.
 The pi-side AGENTS.md doesn't document the convention (trigger 2 + 3 fit). The
 current session is in the dotagents repo; the fix is a one-line addition to
-`agents-src/AGENTS.md`. All tight-loop preconditions hold:
+`agents/AGENTS.md`. All tight-loop preconditions hold:
 
 1. Agent drafts the diff:
    ```
@@ -374,10 +374,10 @@ pi-side `AGENTS.md` guideline for `tasks_insert_task` is unclear. The agent
 self-proposes:
 
 1. Classify tier: pi-side `AGENTS.md` resolves to
-   `$HOME/dotfiles/agents-src/AGENTS.md` → **dotagents**.
+   `$HOME/dotfiles/agents/AGENTS.md` → **dotagents**.
 2. Discover dotagents session via `intercom action: list` (filter `cwd` under
-   `~/dotfiles/agents-src`). None alive → spawn via `cmux` recipe with
-   `TARGET_CWD=$HOME/dotfiles/agents-src`.
+   `~/dotfiles/agents`). None alive → spawn via `cmux` recipe with
+   `TARGET_CWD=$HOME/dotfiles/agents`.
 3. Send envelope:
    ```
    [self-improvement] AGENTS.md guidance on tasks_insert_task
@@ -398,7 +398,7 @@ self-proposes:
 4. Originating session returns immediately and continues the user's actual task.
 5. Dotagents session receives, parses, classifies tag `:agents-md:`, finds no
    near-duplicate, drafts summary + body, sees sender is `agent` → skips
-   confirmation, inserts into `~/dotfiles/agents-src/TASKS.org` under
+   confirmation, inserts into `~/dotfiles/agents/TASKS.org` under
    `* Agent feedback`.
 6. Dotagents session replies via `intercom action: send` to the originating
    session: *"[self-improvement] Filed as 01234567-… in dotagents/TASKS.org.
@@ -409,15 +409,17 @@ self-proposes:
 ### Slow loop — dotfiles target
 
 The user complains that `home-manager switch` keeps re-staging
-`agents-config/pi/settings.json` whenever the default model changes, and the
+`agents/pi/settings.json` whenever the default model changes, and the
 README's note on the clean filter is buried. The affected artefact is the
-dotfiles-side `README.org` and the `agents-config/install-git-filter.sh` wiring.
+dotagents-side `agents/install-git-filter.sh` wiring and the dotfiles-side
+`README.org` reference to it.
 
-1. Classify tier: both files resolve under `$HOME/dotfiles/` but **not** under
-   `agents-src/` → **dotfiles**.
-2. Discover dotfiles session (filter `cwd` under `~/dotfiles`, excluding
-   `agents-src/`). None alive → spawn via `cmux` recipe with
-   `TARGET_CWD=$HOME/dotfiles`.
+1. Classify tier: `install-git-filter.sh` lives under `agents/` →
+   **dotagents**; the `README.org` change is **dotfiles**. Pick the one with
+   the bigger surface (here: dotagents) and cross-reference the other in the
+   feedback body.
+2. Discover dotagents session (filter `cwd` under `~/dotfiles/agents`). None
+   alive → spawn via `cmux` recipe with `TARGET_CWD=$HOME/dotfiles/agents`.
 3. Send the `[self-improvement]` envelope as above, addressed to the dotfiles
    session.
 4. Dotfiles session triages, inserts into `~/dotfiles/TASKS.org` under
@@ -431,7 +433,7 @@ dotfiles-side `README.org` and the `agents-config/install-git-filter.sh` wiring.
   planned change-record.
 - [`pi-intercom`](../../../../.cache/npm/lib/node_modules/pi-intercom/skills/pi-intercom/SKILL.md)
   — transport semantics (`send` / `ask` / `reply` / `list`), spawn recipes.
-- `~/dotfiles/agents.nix` — the wiring that symlinks `~/dotfiles/agents-src/`
+- `~/dotfiles/agents.nix` — the wiring that symlinks `~/dotfiles/agents/`
   into `~/.agents/skills` and
-  `~/.pi/agent/{AGENTS.md,prompts,extensions,skills}`. Useful when verifying
-  which tier a symlinked path belongs to.
+  `~/.pi/agent/{AGENTS.md,prompts,extensions,skills,settings.json}`. Useful
+  when verifying which tier a symlinked path belongs to.

@@ -106,7 +106,7 @@ point Home Manager symlinks at the submodule working tree:
 
 ```bash
 cd ~/dotfiles
-git submodule add git@github.com:cormacc/dotagents agents-src
+git submodule add git@github.com:cormacc/dotagents agents
 git submodule update --init --recursive
 ```
 
@@ -114,9 +114,9 @@ Then in your Home Manager module:
 
 ```nix
 "${piConfig}/extensions".source =
-  config.lib.file.mkOutOfStoreSymlink "${dotRoot}/agents-src/pi/extensions";
+  config.lib.file.mkOutOfStoreSymlink "${dotRoot}/agents/pi/extensions";
 "${agentsConfig}/skills".source =
-  config.lib.file.mkOutOfStoreSymlink "${dotRoot}/agents-src/skills";
+  config.lib.file.mkOutOfStoreSymlink "${dotRoot}/agents/skills";
 # …etc.
 ```
 

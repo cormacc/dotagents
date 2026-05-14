@@ -16,10 +16,10 @@ Project resolution uses =projectile-project-root= when available, falls back to 
 
 * Spacemacs / dotfiles install
 
-The parent dotfiles repo consumes this checkout as =agents-src=. In the =org-user= layer, add the directory to =load-path= and require the feature:
+The parent dotfiles repo consumes this checkout as =agents= (a git submodule). In the =org-user= layer, add the directory to =load-path= and require the feature:
 
 #+begin_src emacs-lisp
-(add-to-list 'load-path "~/dotfiles/agents-src/emacs/tasks-org")
+(add-to-list 'load-path "~/dotfiles/agents/emacs/tasks-org")
 (require 'tasks-org)
 (tasks-org-register-capture-template)
 (spacemacs/set-leader-keys-for-major-mode 'org-mode

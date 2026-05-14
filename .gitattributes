@@ -1,0 +1,6 @@
+# Strip volatile pi-coding-agent runtime fields (defaultProvider,
+# defaultModel, lastChangelogVersion) from pi/settings.json when
+# staging. The filter must be registered per-clone via:
+#     ./install-git-filter.sh
+# (the filter config lives in .git/config, which is not version-controlled).
+pi/settings.json filter=pi-settings
