@@ -144,6 +144,16 @@ Optional description text.
   defaults; `TASKS.org` and `TASKS.archive.org` must declare local overrides
   *before* `#+SETUPFILE:` so org-mode's first-declared abbreviation resolves
   task links correctly from the task files themselves.
+- **`#+SETUPFILE:` chain (local before shared)**: `TASKS.org` and
+  `TASKS.archive.org` declare two setupfiles in order:
+  `#+SETUPFILE: ./TASKS.local.org` followed by `#+SETUPFILE: ./TASKS.setup.org`.
+  Org-mode merges both files' in-buffer settings using first-declared-wins
+  semantics, so any `#+KEYWORD` in the gitignored `TASKS.local.org` (e.g.
+  `#+JIRA_CLOUDID`, `#+JIRA_PROJECT`) overrides the shared default in
+  `TASKS.setup.org`. `TASKS.local.org` is always created at bootstrap (even
+  if empty apart from `#+SELECTED:`) so org does not warn about a missing
+  setupfile on fresh checkouts. Task headings inside `TASKS.local.org` are
+  *not* inlined by `#+SETUPFILE:`; only file-level keywords flow through.
 
 Always obtain timestamps via `date +"%Y-%m-%d %a %H:%M"` rather than computing
 them manually.
@@ -154,6 +164,7 @@ them manually.
 #+TITLE: Project Tasks
 #+LINK: task file:TASKS.org::#%s
 #+LINK: archive file:TASKS.archive.org::#%s
+#+SETUPFILE: ./TASKS.local.org
 #+SETUPFILE: ./TASKS.setup.org
 #+ARCHIVE: TASKS.archive.org::* From %s
 
@@ -324,17 +335,24 @@ If `TASKS.org` does not exist and the user wants persistent task memory:
    #+LINK: archive file:../../TASKS.archive.org::#%s
    ```
 
-2. Create `TASKS.org` referencing it:
+2. Create `TASKS.org` referencing it. Declare `TASKS.local.org` as the
+   first setupfile so gitignored per-checkout overrides win over shared
+   defaults:
 
    ```org
    #+TITLE: Project Tasks
    #+LINK: task file:TASKS.org::#%s
    #+LINK: archive file:TASKS.archive.org::#%s
+   #+SETUPFILE: ./TASKS.local.org
    #+SETUPFILE: ./TASKS.setup.org
    #+ARCHIVE: TASKS.archive.org::* From %s
 
    * Improvements
    ```
+
+   Always create an empty (or `#+SELECTED:`-only) `TASKS.local.org` at the
+   same time so org-mode does not emit *Unable to read file* warnings on
+   fresh checkouts. The file must remain in `.gitignore`.
 
 3. Add the first actionable `TODO` under a semantic section (e.g. `* Improvements`) with `:CUSTOM_ID:` and `:CREATED:` properties. Detailed work items go in an included change-record under the `plan` link target.
 

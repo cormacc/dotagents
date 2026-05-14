@@ -1,0 +1,123 @@
+#+TITLE: Evaluate vulpea for org-memory
+#+DATE: 2026-05-14 Thu
+#+PARENT: [[archive:e8ad59a8-6a46-47d3-b7db-376705409fa3][Evaluate vulpea for use within org-memory protocol]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+
+* Summary
+Decision: defer/no-adopt for the agent-facing org-memory stack. Vulpea is a solid Emacs-local SQLite/index/query foundation, but this repository's task protocol is intentionally `:CUSTOM_ID:`-centric and currently has zero `:ID:` properties, so a vanilla vulpea index sees no task/change-record notes. A disposable bridge fixture proved that mirroring `CUSTOM_ID` into `ID` makes task headings queryable by ID, property, TODO state, priority, and tags, but org-memory traversal still needs custom work because `#+IMPORT`/`#+PARENT` are keyword-level links and `task:` link abbreviations resolve as file links rather than stable typed task edges. Keep pi's flat-file parser/tools as the agent source of truth; revisit vulpea only as an Emacs-local UI foundation after an explicit protocol decision to add an `ID` mirror or a custom vulpea extractor/export adapter.
+
+** Decisions
+- Agent stack :: No adoption. `tasks_scan_summaries`, `org_read_section`, and the task parser remain simpler, Emacs-independent, source-of-truth aligned, and fast enough for the current corpus.
+- Protocol compatibility :: `:CUSTOM_ID:` is not enough for vulpea indexing; `vulpea-db-query-by-property` can find `CUSTOM_ID` only after a note already has `:ID:`.
+- Bridge shape :: If revisited, prefer an Emacs-local bridge that mirrors `CUSTOM_ID` into `ID` or registers a custom extractor/exporter; do not make agents consume vulpea's SQLite schema directly.
+- UI scope :: `vulpea-ui` is only worth a follow-up if we commit to the ID/extractor bridge and want a custom org-memory sidebar; generic outline/backlink/link widgets are insufficient for selected task, imported Summary/Context, plan TODOs, blockers, linked issues, and validation state.
+
+** Shipped
+- Completed source/docs review of vulpea core, v2 migration/rationale, API/config/plugin docs, changelog, vulpea-ui, and consult-vulpea.
+- Ran disposable Emacs/vulpea prototypes against the repo and an ID-mirrored fixture without mutating source org files.
+- Recorded evidence and validation commands below; no implementation follow-up tasks were created because the chosen path is no-adopt/defer.
+
+** Gotchas
+- Vulpea's scanner intentionally ignores hidden directories, so project-policy temp fixtures under `.agents/tmp` must be updated file-by-file with `vulpea-db-update-file` or moved to a non-hidden disposable path for prototype-only runs.
+- `#+LINK: task file:TASKS.org::#%s` makes `[[task:UUID]]` parse as a `file` link in vulpea, not as a queryable `task` edge; an org-memory graph view needs an explicit extractor rather than relying on link type alone.
+
+* Plan
+
+** DONE [#A] Characterise vulpea's data model and operational constraints :research:
+CLOSED: [2026-05-15 Fri 09:32]
+:PROPERTIES:
+:CUSTOM_ID: 8b178bab-5f8f-4f95-b766-fcec76021ea9
+:CREATED: [2026-05-14 Thu 14:48]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 14:48]
+- State "STARTED" from "TODO" [2026-05-15 Fri 09:32]
+- State "DONE" from "STARTED" [2026-05-15 Fri 09:32]
+:END:
+Completed: core docs/source/changelog reviewed; ID/CUSTOM_ID mismatch, note fields, plugin hooks, metadata/link support, TODO/priority extraction, and runtime packaging constraints captured in Implementation.
+
+** DONE [#A] Run a disposable prototype against this repository's task corpus :prototype:
+CLOSED: [2026-05-15 Fri 09:32]
+:PROPERTIES:
+:CUSTOM_ID: 28b1ead2-e744-4e76-96bb-4d62017a3d53
+:CREATED: [2026-05-14 Thu 14:48]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 14:48]
+- State "STARTED" from "TODO" [2026-05-15 Fri 09:32]
+- State "DONE" from "STARTED" [2026-05-15 Fri 09:32]
+:END:
+Completed: vanilla repo index produced zero notes; ID-mirrored fixture produced queryable task notes and exposed link/import gaps.
+
+** DONE [#B] Compare agent integration paths against existing pi tools :agent:
+CLOSED: [2026-05-15 Fri 09:32]
+:PROPERTIES:
+:CUSTOM_ID: 8994f72b-6f22-48c8-957f-16337b5a5c0d
+:CREATED: [2026-05-14 Thu 14:48]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 14:48]
+- State "STARTED" from "TODO" [2026-05-15 Fri 09:32]
+- State "DONE" from "STARTED" [2026-05-15 Fri 09:32]
+:END:
+Completed: Emacs-mediated queries and exported read models are feasible after a bridge, but both add stale-DB/local-Emacs/schema/API failure modes without improving current agent resume needs.
+
+** DONE [#B] Evaluate Emacs UI value from vulpea-ui and consult-vulpea :emacs:ui:
+CLOSED: [2026-05-15 Fri 09:32]
+:PROPERTIES:
+:CUSTOM_ID: e4e32703-3885-4458-9dab-28d3bb3f20dc
+:CREATED: [2026-05-14 Thu 14:48]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 14:48]
+- State "STARTED" from "TODO" [2026-05-15 Fri 09:32]
+- State "DONE" from "STARTED" [2026-05-15 Fri 09:32]
+:END:
+Completed: vulpea-ui has useful sidebar/widget primitives and consult-vulpea has useful live-preview navigation, but both need an ID/extractor bridge before org-memory data is first-class.
+
+** DONE [#A] Write the decision record and follow-up tasks :decision:
+CLOSED: [2026-05-15 Fri 09:32]
+:PROPERTIES:
+:CUSTOM_ID: 39bd60c0-4ab0-4c43-b95f-c0848b91dffe
+:CREATED: [2026-05-14 Thu 14:48]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 14:48]
+- State "STARTED" from "TODO" [2026-05-15 Fri 09:32]
+- State "DONE" from "STARTED" [2026-05-15 Fri 09:32]
+:END:
+Completed: Summary, Implementation, and Validation refreshed with defer/no-adopt decision; no concrete implementation follow-ups added because no implementation path was chosen.
+
+* Implementation
+
+** Evidence table
+| Area | Evidence | Implication |
+| Core model | Vulpea v2 is a standalone Emacs Lisp library with a persisted SQLite database, file watchers/async sync, and a public `vulpea-note` struct/query API; source/docs reviewed at [[https://github.com/d12frosted/vulpea/blob/master/README.org][README]], [[https://github.com/d12frosted/vulpea/blob/master/docs/api-reference.org][API reference]], [[https://github.com/d12frosted/vulpea/blob/master/docs/configuration.org][configuration]], [[https://github.com/d12frosted/vulpea/blob/master/docs/plugin-guide.org][plugin guide]], and [[https://github.com/d12frosted/vulpea/blob/master/docs/comparison.org][comparison]]. | Good Emacs-local foundation; not an agent runtime replacement by itself. |
+| Required ID | README/troubleshooting and source extraction require `:ID:`; file-level and heading-level notes without `ID` are skipped, while properties are stored only on indexed notes. | Current org-memory `:CUSTOM_ID:` tasks are invisible unless mirrored into `ID` or handled by a custom extractor/export. |
+| Indexed fields | API/source exposes ID, path, level, title, aliases, tags, links, metadata, properties, TODO, priority, scheduled/deadline/closed, outline path, attachment dir, and file title. | Once a task is a vulpea note, TODO/tag/priority/property filters are useful for Emacs UI. |
+| Links/imports | Ordinary body `id:` links were captured in the bridge fixture; `#+IMPORT`/`#+PARENT` keyword links did not become useful task edges, and `[[task:UUID]]` resolved via `#+LINK` as a file link. | Org-memory traversal still needs a custom extractor that understands `#+IMPORT`, `#+PARENT`, `:BLOCKED-BY:`, `:LINKED_ISSUES:`, and task/archive abbreviations. |
+| Plugins | Plugin guide documents parse-once extractors, custom schemas, priorities, versioned schema registry, and access to file/heading note data including properties/tags/TODO. | A custom org-memory extractor is plausible if Emacs UI becomes a priority. |
+| Runtime/deps | Package requires Emacs 27.2+, org 9.4.4, emacsql, s, dash; current nixpkgs has `emacsPackages.vulpea`; current host has Emacs, fswatch, and fd, while `sqlite3` CLI is not needed for `emacsql-sqlite-builtin`. | Dotfiles packaging is feasible on Emacs hosts; agents/servers without Emacs should not depend on it. |
+| Maturity | Changelog shows active v2.x work through v2.2.x, including query APIs, link descriptions, async sync fixes, and rebuild behaviour; v2 rationale explains the org-roam split. | Mature enough for experimentation, but active API/schema movement argues against treating SQLite internals as a stable agent contract. |
+| vulpea-ui | README/search results describe a per-frame sidebar, default outline/backlinks/forward-links/stats widgets, and custom widget API on vui.el. | Useful UI substrate only after org-memory extraction/ID bridge; generic widgets do not render selected-task/resume semantics. |
+| consult-vulpea | README/search results describe Consult-backed find/insert/grep with live previews and narrowing. | Low-risk navigation enhancement after indexing works; not enough to justify protocol changes by itself. |
+
+** Prototype results
+- Corpus scan before vulpea :: A local parser found 40 non-hidden org files, 327 `:CUSTOM_ID:` task headings, 0 `:ID:` properties, 29 `#+IMPORT`, 33 `#+PARENT`, 15 blockers, 133 logbooks, and 5 open questions.
+- Vanilla vulpea run :: `/home/cormacc/dotfiles/agents/.agents/tmp/prototype-vulpea.el` used a throwaway nix Emacs profile and `vulpea-db-sync-update-directory` against `/home/cormacc/dotfiles/agents`; result was `elapsed_seconds=0.705`, `org_files=67`, `notes_total=0`, `file_notes=0`, `heading_notes=0`, `todo_notes=0`, selected lookup by `CUSTOM_ID` property = 0, selected lookup by ID = 0, `org` tag query = 0.
+- Bridge fixture run :: `/home/cormacc/dotfiles/agents/.agents/tmp/prototype-vulpea-bridge.el` indexed a disposable fixture whose `ID` values mirrored `CUSTOM_ID`; result was `elapsed_seconds=0.238`, `notes_total=3`, selected lookup by ID = 1, selected lookup by `CUSTOM_ID` property = 1, `org` tag = 1, `research` tag = 1, TODO notes = 3, links total = 2.
+- Bridge fixture details :: The parent task note preserved `TODO`, priority `B`, tag `org`, `CREATED`, `CUSTOM_ID`, and `LINKED_ISSUES`; plan task notes preserved TODO, priority `A`, tags, and `CUSTOM_ID`; body `id:` links were captured, but `task:` abbreviation resolved as a file link and `#+IMPORT` did not provide an import edge.
+
+** Integration comparison
+- Emacs-mediated query tool :: Most faithful to vulpea APIs and could drive an Emacs sidebar, but requires Emacs/vulpea running or batch-started, local DB freshness, ID/extractor bridge, and an agent wrapper; failure modes include stale DB, hidden temp paths, multi-checkout local state, API drift, and no benefit on headless/minimal agents.
+- Exported cache/read model :: Could let Emacs maintain a JSON/EDN task read model from vulpea/plugin data while pi tools remain non-Emacs, but then cache invalidation and source-of-truth rules duplicate the existing parser work; still needs ID/extractor bridge and explicit writer discipline.
+- Human UX only :: Best current path. Keep org files and pi parser as canonical; optionally add vulpea/consult/vulpea-ui to Emacs later if a human-facing side-panel task is selected.
+
+* Validation
+- `web_search` queries read: `vulpea org-mode SQLite note database d12frosted vulpea v2 ID properties async indexing API`; `vulpea.el documentation org roam standalone database note metadata links plugin hooks ID CUSTOM_ID`; `d12frosted vulpea v2 breaking up with org-roam why article`; `d12frosted vulpea-ui sidebar widget framework outline backlinks forward links stats custom widgets`; `consult-vulpea package completion navigation org mode vulpea`; `vulpea-ui README widget API sidebar custom widgets`.
+- Source clone: `git clone --depth 1 https://github.com/d12frosted/vulpea.git .agents/tmp/vulpea`.
+- Source/doc analysis: context-mode scans over `README.org`, `docs/comparison.org`, `docs/troubleshooting.org`, `docs/migration.org`, `CHANGELOG.org`, `docs/api-reference.org`, `docs/configuration.org`, `docs/plugin-guide.org`, `vulpea-db-query.el`, `vulpea-db-extract.el`, `vulpea-note.el`, `vulpea-db-sync.el`, and `vulpea.el`.
+- Runtime/package checks: `emacs --batch --eval` confirmed Emacs 30.2 and missing user-profile `emacsql/s/dash`; `nix eval --impure --expr 'let pkgs = import <nixpkgs> {}; in builtins.hasAttr "vulpea" pkgs.emacsPackages'` returned true; `nix eval --impure --expr 'let pkgs = import <nixpkgs> {}; in pkgs.emacsPackages.vulpea.version'` returned `20260308.1107`; `command -v` found Emacs, fswatch, and fd.
+- Prototype command: `nix shell --impure --expr 'with import <nixpkgs> {}; (emacsPackagesFor emacs).emacsWithPackages (epkgs: [ epkgs.vulpea ])' -c emacs --batch -Q -l /home/cormacc/dotfiles/agents/.agents/tmp/prototype-vulpea.el`.
+- Bridge command: `nix shell --impure --expr 'with import <nixpkgs> {}; (emacsPackagesFor emacs).emacsWithPackages (epkgs: [ epkgs.vulpea ])' -c emacs --batch -Q -l /home/cormacc/dotfiles/agents/.agents/tmp/prototype-vulpea-bridge.el`.

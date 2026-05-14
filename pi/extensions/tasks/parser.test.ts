@@ -19,6 +19,7 @@ import {
   getDrawerProperty,
   getDrawerPropertyValues,
   getFileKeyword,
+  getFileKeywords,
   getLinkedIssues,
   getPlanParentId,
   getPlanParentRef,
@@ -374,6 +375,17 @@ function assertContains(haystack: string, needle: string, message: string): void
     "getFileKeyword: empty value yields empty string, not next-line content");
   assertEqual(getFileKeyword(withBlank, "JIRA_BASE_URL"), "https://example.com",
     "getFileKeyword: line after empty keyword still resolvable");
+
+  const withRepeated = [
+    "#+SETUPFILE: ./TASKS.local.org",
+    "#+SETUPFILE: ./TASKS.setup.org",
+    "#+TITLE: Tasks",
+    "",
+  ].join("\n");
+  assertEqual(getFileKeywords(withRepeated, "SETUPFILE"), ["./TASKS.local.org", "./TASKS.setup.org"],
+    "getFileKeywords returns repeated keywords in declaration order");
+  assertEqual(getFileKeywords(withRepeated, "MISSING"), [],
+    "getFileKeywords returns an empty list for absent keywords");
 }
 
 // ── parseLinkTemplates helper ─────────────────────────────────────────

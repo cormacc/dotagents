@@ -44,6 +44,13 @@ else
   npx --yes tsx ./insert.test.ts || CODE=1
 fi
 
+echo "# Running SETUPFILE expansion unit tests..."
+if command -v tsx >/dev/null 2>&1; then
+  tsx ./effective.test.ts || CODE=1
+else
+  npx --yes tsx ./effective.test.ts || CODE=1
+fi
+
 echo "# Running lifecycle unit tests..."
 if command -v tsx >/dev/null 2>&1; then
   tsx ./lifecycle.test.ts || CODE=1

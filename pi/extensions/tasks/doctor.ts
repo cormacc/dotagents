@@ -40,7 +40,9 @@ export type FindingCode =
   | "stale-parent-status"
   | "invalid-task-blocker"
   | "missing-link-template"
-  | "misordered-link-template";
+  | "misordered-link-template"
+  | "missing-local-setupfile"
+  | "misordered-setupfile";
 
 /** A single doctor finding. */
 export interface Finding {
@@ -172,7 +174,36 @@ function checkLinkTemplates(findings: Finding[], files: ProtocolFiles | undefine
   for (const file of [files.tasks, files.archive]) {
     if (!file) continue;
     const templates = parseLinkTemplates(file.content);
-    const setupLine = lineNumberOf(file.content, /^[\t ]*#\+SETUPFILE[\t ]*:/i);
+    const sharedSetupLine = lineNumberOf(file.content, /^[\t ]*#\+SETUPFILE[\t ]*:[\t ]*\.?\/?TASKS\.setup\.org\s*$/i);
+    const localSetupLine = lineNumberOf(file.content, /^[\t ]*#\+SETUPFILE[\t ]*:[\t ]*\.?\/?TASKS\.local\.org\s*$/i);
+    if (sharedSetupLine === undefined) {
+      findings.push({
+        code: "missing-link-template",
+        severity: "warn",
+        message: `${file.path} should declare #+SETUPFILE: ./TASKS.setup.org`,
+        location: { file: file.path },
+      });
+    }
+    if (localSetupLine === undefined) {
+      findings.push({
+        code: "missing-local-setupfile",
+        severity: "warn",
+        message: `${file.path} should declare #+SETUPFILE: ./TASKS.local.org so gitignored overrides flow through`,
+        location: { file: file.path },
+      });
+    } else if (sharedSetupLine !== undefined && localSetupLine > sharedSetupLine) {
+      findings.push({
+        code: "misordered-setupfile",
+        severity: "warn",
+        message: `#+SETUPFILE: ./TASKS.local.org must appear before ./TASKS.setup.org so local keywords win`,
+        location: { file: file.path, line: localSetupLine },
+      });
+    }
+    const firstSetupLine = Math.min(
+      sharedSetupLine ?? Number.POSITIVE_INFINITY,
+      localSetupLine ?? Number.POSITIVE_INFINITY,
+    );
+    const setupLine = Number.isFinite(firstSetupLine) ? firstSetupLine : undefined;
     for (const [prefix, expected] of REQUIRED_LOCAL_LINKS.entries()) {
       const linkRe = new RegExp(`^[\\t ]*#\\+LINK[\\t ]*:[\\t ]*${prefix}[\\t ]+${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\t ]*$`, "i");
       const linkLine = lineNumberOf(file.content, linkRe);

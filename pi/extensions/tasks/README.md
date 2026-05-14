@@ -146,6 +146,7 @@ Pressing `A` (shift-a) archives the top-level task containing the cursor's task.
 - Adds an `:ARCHIVED: [timestamp]` property to the archived heading. The timestamp uses the task's `CLOSED` value when present, otherwise the current time.
 - Clears `TASKS.local.org` selection when the selected task is archived, so the compact widget doesn't point at a task that no longer exists.
 - Preserves the `#+IMPORT:` link in the archived copy; plan file contents are **not** inlined. The archive entry is a faithful copy of the task as it stood in `TASKS.org`.
+- Resolves `#+IMPORT: [[plan:...]]` through every `#+SETUPFILE:` declaration in order, so the standard `TASKS.local.org` → `TASKS.setup.org` chain still exposes the shared `#+LINK: plan file:design/log/%s` abbreviation during archive-time parent-link rewrites.
 
 Task creation, plan path approval, and archive confirmation prompts temporarily close the expanded UI so input/confirmation dialogs remain visible. After create/archive flows complete or are cancelled, the expanded UI reopens with a refreshed task tree. When creating a new plan, the path prompt is prefilled from the `#+LINK: plan file:design/log/%s` abbreviation (usually supplied by `TASKS.setup.org`); accepting it scaffolds and links the file, then sends an agent prompt to develop the plan interactively.
 

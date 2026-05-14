@@ -340,6 +340,7 @@ function count(findings: Finding[], code: FindingCode): number {
           "#+TITLE: Project Tasks",
           "#+LINK: task file:TASKS.org::#%s",
           "#+LINK: archive file:TASKS.archive.org::#%s",
+          "#+SETUPFILE: ./TASKS.local.org",
           "#+SETUPFILE: ./TASKS.setup.org",
         ].join("\n"),
       },
@@ -349,6 +350,59 @@ function count(findings: Finding[], code: FindingCode): number {
     "link-template checks: valid setup/local declarations pass");
   assertEqual(count(findings, "misordered-link-template"), 0,
     "link-template checks: valid local declarations before setup pass");
+  assertEqual(count(findings, "missing-local-setupfile"), 0,
+    "link-template checks: local setupfile present passes");
+  assertEqual(count(findings, "misordered-setupfile"), 0,
+    "link-template checks: local setupfile before shared setupfile passes");
+}
+
+{
+  const findings = runDoctor({
+    tasks: [],
+    selectedId: null,
+    protocolFiles: {
+      setup: { path: "/tmp/TASKS.setup.org", content: [
+        "#+LINK: task file:../../TASKS.org::#%s",
+        "#+LINK: archive file:../../TASKS.archive.org::#%s",
+      ].join("\n") },
+      tasks: {
+        path: "/tmp/TASKS.org",
+        content: [
+          "#+TITLE: Project Tasks",
+          "#+LINK: task file:TASKS.org::#%s",
+          "#+LINK: archive file:TASKS.archive.org::#%s",
+          "#+SETUPFILE: ./TASKS.setup.org",
+          "#+SETUPFILE: ./TASKS.local.org",
+        ].join("\n"),
+      },
+    },
+  });
+  assertEqual(count(findings, "misordered-setupfile"), 1,
+    "link-template checks: local setupfile after shared setupfile is reported");
+}
+
+{
+  const findings = runDoctor({
+    tasks: [],
+    selectedId: null,
+    protocolFiles: {
+      setup: { path: "/tmp/TASKS.setup.org", content: [
+        "#+LINK: task file:../../TASKS.org::#%s",
+        "#+LINK: archive file:../../TASKS.archive.org::#%s",
+      ].join("\n") },
+      tasks: {
+        path: "/tmp/TASKS.org",
+        content: [
+          "#+TITLE: Project Tasks",
+          "#+LINK: task file:TASKS.org::#%s",
+          "#+LINK: archive file:TASKS.archive.org::#%s",
+          "#+SETUPFILE: ./TASKS.setup.org",
+        ].join("\n"),
+      },
+    },
+  });
+  assertEqual(count(findings, "missing-local-setupfile"), 1,
+    "link-template checks: missing local setupfile is reported");
 }
 
 {

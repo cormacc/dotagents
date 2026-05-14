@@ -49,9 +49,7 @@ import { insertTaskIntoFile, type InsertResult } from "./insert.ts";
 import {
   appendCreatedLog,
   expandOrgLinkTarget,
-  extractOrgLinkTarget,
   formatOrgTimestamp,
-  getFileKeyword,
   getLinkedIssues,
   getTaskId,
   getTaskStarted,
@@ -78,6 +76,7 @@ import {
   scanSummaries,
   type ScanRow,
 } from "./scan.ts";
+import { readEffectiveOrgContent } from "./effective.ts";
 
 const TASKS_FILE = "TASKS.org";
 /** Gitignored local file that stores per-contributor selection state. */
@@ -276,21 +275,6 @@ function markLocal(tasks: Task[]): void {
   for (const t of tasks) {
     t.isLocal = true;
     markLocal(t.children);
-  }
-}
-
-async function readEffectiveOrgContent(cwd: string, filePath: string, content: string): Promise<string> {
-  const rawSetup = getFileKeyword(content, "SETUPFILE");
-  if (!rawSetup) return content;
-  const setupTarget = extractOrgLinkTarget(rawSetup) ?? rawSetup.trim();
-  if (!setupTarget) return content;
-  const setupPath = await resolveProjectPath(cwd, dirname(filePath), setupTarget);
-  if (!setupPath) return content;
-  try {
-    const setup = await readFile(setupPath, "utf-8");
-    return `${setup}\n${content}`;
-  } catch {
-    return content;
   }
 }
 
@@ -1576,6 +1560,8 @@ function defaultSetupFileContent(): string {
     TODO_PREAMBLE,
     STARTUP_PREAMBLE,
     "#+LINK: jira https://your-org.atlassian.net/browse/%s",
+    "#+JIRA_CLOUDID: 00000000-0000-4000-8000-000000000000",
+    "#+JIRA_PROJECT:",
     "#+LINK: plan file:design/log/%s",
     "# Default task/archive link targets assume plan files live under design/log/.",
     "# TASKS.org and TASKS.archive.org declare local overrides before #+SETUPFILE:",
@@ -1593,11 +1579,24 @@ function defaultTaskLinkOverrides(): string[] {
   ];
 }
 
+function defaultLocalFileContent(): string {
+  return [
+    "#+SELECTED:",
+    "",
+    "# Per-checkout overrides for shared TASKS.setup.org defaults.",
+    "# TASKS.org loads this file via #+SETUPFILE before TASKS.setup.org, so",
+    "# any #+KEYWORD declared here wins over the shared default (org-mode",
+    "# resolves the first-declared occurrence).",
+    "",
+  ].join("\n");
+}
+
 function defaultOrgPreamble(path: string): string {
   if (path.endsWith(TASKS_FILE)) {
     return [
       "#+TITLE: Project Tasks",
       ...defaultTaskLinkOverrides(),
+      "#+SETUPFILE: ./TASKS.local.org",
       "#+SETUPFILE: ./TASKS.setup.org",
       ARCHIVE_PREAMBLE,
       "",
@@ -1607,6 +1606,7 @@ function defaultOrgPreamble(path: string): string {
     return [
       "#+TITLE: Archived Tasks",
       ...defaultTaskLinkOverrides(),
+      "#+SETUPFILE: ./TASKS.local.org",
       "#+SETUPFILE: ./TASKS.setup.org",
       "",
     ].join("\n");
@@ -1619,6 +1619,13 @@ async function writeTaskFilePreserving(path: string, tasks: Task[]): Promise<voi
     const setupPath = join(dirname(path), "TASKS.setup.org");
     if (!(await pathExists(setupPath))) {
       await writeFile(setupPath, defaultSetupFileContent(), "utf-8");
+    }
+    // Ensure TASKS.local.org exists so the #+SETUPFILE chain does not warn
+    // on missing-file. The file stays gitignored and may carry per-checkout
+    // #+SELECTED, #+JIRA_CLOUDID overrides, etc.
+    const localPath = join(dirname(path), TASKS_LOCAL_FILE);
+    if (!(await pathExists(localPath))) {
+      await writeFile(localPath, defaultLocalFileContent(), "utf-8");
     }
   }
   const cachedOriginal = tasks.find((t) => t.sourceContent)?.sourceContent;
@@ -2445,7 +2452,7 @@ async function unpublishTask(
   // Read existing local content and parse its current task list.
   let localContent = "";
   try { localContent = await readFile(localPath, "utf-8"); } catch { /* new file */ }
-  const effectiveLocalContent = await readEffectiveOrgContent(cwd, localPath, localContent);
+  const effectiveLocalContent = await readEffectiveOrgContent(ctx.cwd, localPath, localContent);
   const { tasks: localRoot } = parseTasks(localContent, { sourcePath: localPath, effectiveSourceContent: effectiveLocalContent });
 
   // Re-home the task into TASKS.local.org.
@@ -2455,7 +2462,7 @@ async function unpublishTask(
   task.sourcePath = localPath;
   task.sourceRoot = localRoot;
   task.sourceContent = localContent || undefined;
-  task.effectiveSourceContent = localContent || undefined;
+  task.effectiveSourceContent = effectiveLocalContent || undefined;
   markLocal([task]);
   localRoot.push(task);
 

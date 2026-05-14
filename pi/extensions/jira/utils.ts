@@ -12,7 +12,14 @@ export const BARE_NUMBER_RE = /^\d+$/;
 export interface JiraConfig {
   cloudId: string | null;
   project: string | null;
+  /** Derived from `#+LINK: jira https://host/browse/%s`. */
   baseUrl: string | null;
+}
+
+export interface JiraConfigContent {
+  setup?: string;
+  shared?: string;
+  local?: string;
 }
 
 /**
@@ -35,6 +42,51 @@ export function getFileKeyword(
   return m?.[1] ?? null;
 }
 
+export function parseLinkTemplates(content: string): Map<string, string> {
+  const templates = new Map<string, string>();
+  const re = /^[\t ]*#\+LINK[\t ]*:[\t ]*(\S+)[\t ]+(.+?)[\t ]*$/gim;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(content)) !== null) {
+    const prefix = match[1]?.trim();
+    const template = match[2]?.trim();
+    if (prefix && template && !templates.has(prefix)) templates.set(prefix, template);
+  }
+  return templates;
+}
+
+export function deriveJiraBaseUrl(template: string | null | undefined): string | null {
+  if (!template) return null;
+  const trimmed = template.trim();
+  const match = /^https?:\/\/[^\s]+\/browse\/%s$/i.exec(trimmed);
+  if (!match) return null;
+  return trimmed.slice(0, -"/browse/%s".length);
+}
+
+export function resolveJiraConfig(content: JiraConfigContent): JiraConfig {
+  const setup = content.setup ?? "";
+  const shared = content.shared ?? "";
+  const local = content.local ?? "";
+  const pickKeyword = (name: string): string | null => {
+    for (const source of [local, shared, setup]) {
+      const value = getFileKeyword(source, name);
+      if (value !== null && value !== "") return value;
+    }
+    return null;
+  };
+  const pickLinkTemplate = (prefix: string): string | null => {
+    for (const source of [local, shared, setup]) {
+      const value = parseLinkTemplates(source).get(prefix);
+      if (value) return value;
+    }
+    return null;
+  };
+  return {
+    cloudId: pickKeyword("JIRA_CLOUDID"),
+    project: pickKeyword("JIRA_PROJECT"),
+    baseUrl: deriveJiraBaseUrl(pickLinkTemplate("jira")),
+  };
+}
+
 /**
  * Resolve a user-supplied key argument into a fully-qualified `PROJ-NNN`
  * key. Returns either `{ key }` on success or `{ error }` with a
@@ -48,7 +100,7 @@ export function resolveKey(
   if (BARE_NUMBER_RE.test(arg)) {
     if (!project) {
       return {
-        error: `Bare number "${arg}" needs a project. Set #+JIRA_PROJECT in TASKS.org or pass the full key (e.g. SAND-${arg}).`,
+        error: `Bare number "${arg}" needs a project. Set #+JIRA_PROJECT in TASKS.setup.org (or TASKS.local.org) or pass the full key (e.g. SAND-${arg}).`,
       };
     }
     return { key: `${project}-${arg}` };
@@ -172,7 +224,7 @@ export function buildGetPrompt(
     "   - Description preview: first paragraph of the description, max 300 characters; mark truncation with “…”.",
     cfg.baseUrl
       ? `   - Footer link: \`${cfg.baseUrl}/browse/<KEY>\`.`
-      : "   - Footer link: skip when `#+JIRA_BASE_URL` is unset.",
+      : "   - Footer link: skip when the `#+LINK: jira` template is unset or non-standard.",
     "",
     "Render each key as its own block separated by a blank line. Do not write to any TASKS file.",
   ].join("\n");
@@ -219,7 +271,7 @@ export function buildClaimPrompt(
     "   - Typed links `[[jira:KEY]]` where KEY matches `^[A-Z][A-Z0-9_]+-\\d+$`.",
     cfg.baseUrl
       ? `   - Raw org-link tokens whose target host equals \`${new URL(cfg.baseUrl).host}\`.`
-      : "   - Raw org-link tokens are skipped when #+JIRA_BASE_URL is unset.",
+      : "   - Raw org-link tokens are skipped when the `#+LINK: jira` template is unset or non-standard.",
     "3. Call `atlassian_atlassianUserInfo` once to obtain the current user's `accountId`.",
     "4. For each Jira-shaped key, call `atlassian_editJiraIssue` with `assignee.accountId` set to that value.",
     "5. Surface a one-line summary per key with success or error message.",
@@ -289,7 +341,7 @@ export function buildCreatePrompt(
   const project = opts.project ?? cfg.project;
   if (!project) {
     return [
-      "Refuse the /jira create request: no project given on the command line and #+JIRA_PROJECT is not set in TASKS.org.",
+      "Refuse the /jira create request: no project given on the command line and #+JIRA_PROJECT is not set in TASKS.setup.org or TASKS.local.org.",
       "Notify the user to either pass a PROJECT argument or set #+JIRA_PROJECT.",
     ].join("\n");
   }

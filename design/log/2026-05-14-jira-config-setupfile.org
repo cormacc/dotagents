@@ -1,0 +1,149 @@
+#+TITLE: Move Jira project configuration into TASKS.setup.org
+#+DATE: 2026-05-14 Thu
+#+PARENT: [[archive:eb5d44ea-cece-48c7-be0e-d6f4a9552200][Move Jira project configuration into TASKS.setup.org]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+
+* Summary
+Normalize Jira project configuration so shared defaults live with the rest of the task-memory preamble in =TASKS.setup.org=. =#+JIRA_CLOUDID= and =#+JIRA_PROJECT= move out of =TASKS.org=; =#+JIRA_BASE_URL= becomes derived from the org-native =#+LINK: jira https://.../browse/%s= template and is no longer required as a stored keyword. =TASKS.local.org= remains the checkout-local override layer.
+
+** Decisions
+- =#+LINK: jira= is the canonical URL source :: It already drives badge/open URL resolution. Derive =baseUrl= by stripping the browse suffix from the Jira link template instead of maintaining a duplicate =#+JIRA_BASE_URL= keyword.
+- =TASKS.setup.org= carries shared Jira defaults :: =#+JIRA_CLOUDID= and =#+JIRA_PROJECT= are project-level config alongside =#+LINK:= declarations, TODO keywords, and startup settings. Keeping them in setup reduces root =TASKS.org= noise.
+- =TASKS.local.org= remains highest precedence :: Local checkout overrides should still win over both =TASKS.org= and =TASKS.setup.org= for cloudId/project/baseUrl.
+- Use a =#+SETUPFILE: TASKS.local.org= chain (declared before =TASKS.setup.org=) so org-mode resolves overrides natively :: Empirical check (2026-05-14) showed org-mode merges keywords from multiple =#+SETUPFILE:= entries with first-declared-wins semantics, so a local-first chain gives the same override behaviour the pi config loader applies in code. The pi extension still reads files directly today; aligning the pi side onto a multi-=#+SETUPFILE:= walk is tracked as a follow-up.
+- No =#+JIRA_BASE_URL= compatibility read :: =baseUrl= is derived only from =#+LINK: jira .../browse/%s=. Existing =#+JIRA_BASE_URL= keywords are removed during migration rather than treated as overrides.
+
+** Shipped
+- Jira config loader now reads =TASKS.setup.org= through =#+SETUPFILE:= and applies precedence =TASKS.local.org= > =TASKS.org= > =TASKS.setup.org=.
+- =baseUrl= is derived solely from =#+LINK: jira .../browse/%s=; =#+JIRA_BASE_URL= is no longer read.
+- Fresh setup scaffolding emits =#+JIRA_CLOUDID:= and =#+JIRA_PROJECT:= in =TASKS.setup.org=.
+- =TASKS.org= / =TASKS.archive.org= scaffolding now declares =#+SETUPFILE: ./TASKS.local.org= before =#+SETUPFILE: ./TASKS.setup.org=, and bootstrap touches an empty =TASKS.local.org= so org-mode never warns about a missing local setupfile.
+- Doctor gained =missing-local-setupfile= / =misordered-setupfile= checks.
+- =org-tasks= skill documents the local-first =#+SETUPFILE:= chain in its quick-reference and bootstrap sections.
+- Migrated Jira keywords in =~/dotfiles/agents=, =~/dotfiles=, and =~/nmd/products/connect/portal=, and added the =TASKS.local.org= setupfile line to each repo's =TASKS.org= / =TASKS.archive.org=.
+- Updated =org-jira= skill and Jira extension README.
+
+** Gotchas
+- The Jira extension currently reads only =TASKS.org= and =TASKS.local.org= in =loadJiraConfig=. It must learn the same one-level =#+SETUPFILE:= inclusion used by the tasks extension before content moves.
+- =#+LINK: jira= templates may be either =https://host/browse/%s= or a project-specific shape. Derivation accepts only the known =/browse/%s= suffix; if the template is absent or non-matching, =baseUrl= remains unset.
+- =#+JIRA_PROJECT:= may intentionally be blank. Empty values should not override a non-empty setup default unless we deliberately introduce a clear/disable syntax. Preserve current non-empty override semantics.
+- =#+SETUPFILE: ./TASKS.local.org= must precede the shared one; reversing the order makes shared defaults win and silently breaks the override channel. The doctor =misordered-setupfile= check catches this.
+
+** Follow-ups
+- Remove stale references to =#+JIRA_BASE_URL= from docs/tests during implementation.
+
+* Plan
+
+** DONE [#A] Phase 1.1 — Read Jira config from effective task setup :jira:config:
+CLOSED: [2026-05-14 Thu 13:41]
+:PROPERTIES:
+:CUSTOM_ID: a9c940a5-1853-46f8-acc5-0dda9a4114dc
+:CREATED: [2026-05-14 Thu 13:19]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 13:19]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:41]
+:END:
+Acceptance criteria:
+- =loadJiraConfig(cwd)= reads =TASKS.org= plus one =#+SETUPFILE:= target, then overlays =TASKS.local.org=.
+- Precedence: non-empty =TASKS.local.org= > non-empty =TASKS.org= > non-empty =TASKS.setup.org=.
+- Missing =TASKS.org= / missing setupfile remains non-fatal.
+- Unit tests cover setup-only defaults and local overrides.
+** DONE [#A] Phase 1.2 — Derive baseUrl from #+LINK: jira :jira:config:
+CLOSED: [2026-05-14 Thu 13:41]
+:PROPERTIES:
+:CUSTOM_ID: 94d6980a-e82e-4a32-8a8c-25eb2f438a46
+:CREATED: [2026-05-14 Thu 13:19]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 13:19]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:41]
+:END:
+Acceptance criteria:
+- =baseUrl= is derived from =#+LINK: jira https://host/browse/%s=.
+- =#+JIRA_BASE_URL= is ignored even when present.
+- Derivation rejects non-HTTP(S), missing placeholder, or non-=/browse/%s= templates without throwing.
+- Prompt builders that mention footer links / raw URL filtering continue to receive the same =baseUrl= value in tests.
+** DONE [#A] Phase 1.3 — Bootstrap/scaffold emits Jira config in TASKS.setup.org :tasks:jira:
+CLOSED: [2026-05-14 Thu 13:41]
+:PROPERTIES:
+:CUSTOM_ID: 91c3eb7f-b9b1-46ed-b942-20535c042688
+:CREATED: [2026-05-14 Thu 13:19]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 13:19]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:41]
+:END:
+Acceptance criteria:
+- Fresh setup scaffolding emits =#+JIRA_CLOUDID:= and =#+JIRA_PROJECT:= in =TASKS.setup.org=, not =TASKS.org=.
+- Fresh scaffolding does not emit =#+JIRA_BASE_URL:=.
+- Existing =#+LINK: jira .../browse/%s= line remains the Jira URL source.
+- Tests / snapshots updated.
+** DONE [#B] Phase 2.1 — Content migration in affected repos :migration:
+CLOSED: [2026-05-14 Thu 13:41]
+:PROPERTIES:
+:CUSTOM_ID: 85ce0433-6ae6-4f90-a947-52c7508b2ef7
+:CREATED: [2026-05-14 Thu 13:19]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 13:19]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:41]
+:END:
+Acceptance criteria:
+- Move =#+JIRA_CLOUDID= and =#+JIRA_PROJECT= from =TASKS.org= to =TASKS.setup.org= in =~/dotfiles/agents= and any other repo carrying them.
+- Remove =#+JIRA_BASE_URL= wherever present.
+- Preserve local overrides in =TASKS.local.org= unchanged.
+- Verify =/jira= status still reports the expected config after migration.
+** DONE [#B] Phase 2.2 — Update org-jira docs :docs:jira:
+CLOSED: [2026-05-14 Thu 13:41]
+:PROPERTIES:
+:CUSTOM_ID: 83d1b5a3-47a1-438a-a0c6-6e1156f86458
+:CREATED: [2026-05-14 Thu 13:19]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 13:19]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:41]
+:END:
+Acceptance criteria:
+- =org-jira/SKILL.md= documents =TASKS.setup.org= as the shared config home.
+- =#+JIRA_BASE_URL= is removed from the documented config surface.
+- Jira extension README mirrors the same contract.
+
+** DONE [#A] Phase 3.1 — Local-first =#+SETUPFILE:= chain :tasks:setupfile:
+CLOSED: [2026-05-14 Thu 14:33]
+:PROPERTIES:
+:CUSTOM_ID: 528b4b27-10ce-4f42-9c3a-b5e4471b8678
+:CREATED: [2026-05-14 Thu 14:33]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 14:33]
+- State "DONE" from "TODO" [2026-05-14 Thu 14:33]
+:END:
+Acceptance criteria:
+- =defaultOrgPreamble= emits =#+SETUPFILE: ./TASKS.local.org= immediately before =#+SETUPFILE: ./TASKS.setup.org= in both =TASKS.org= and =TASKS.archive.org= preambles.
+- =writeTaskFilePreserving= ensures =TASKS.local.org= exists (via =defaultLocalFileContent=) whenever it touches =TASKS.org= or =TASKS.archive.org=, so org-mode never warns about a missing local setupfile on a fresh checkout.
+- Doctor reports =missing-local-setupfile= when the local =#+SETUPFILE:= line is absent and =misordered-setupfile= when it falls after the shared one; passing-case tests and failing-case tests both ship.
+- =skills/org-tasks/SKILL.md= quick-reference adds a =task:= / =archive:= entry describing the =#+SETUPFILE:= chain, and the bootstrap section emits the local-first chain plus a =TASKS.local.org= touch step.
+- All three affected repos (=~/dotfiles/agents=, =~/dotfiles=, =~/nmd/products/connect/portal=) carry =#+SETUPFILE: ./TASKS.local.org= ahead of =#+SETUPFILE: ./TASKS.setup.org= in =TASKS.org= and =TASKS.archive.org=.
+- Added pure Jira config helpers in =pi/extensions/jira/utils.ts=: =parseLinkTemplates=, =deriveJiraBaseUrl=, and =resolveJiraConfig=.
+- Updated =loadJiraConfig= in =pi/extensions/jira/index.ts= to read one =#+SETUPFILE:= target and delegate precedence/derivation to =resolveJiraConfig=.
+- Updated prompt text to refer to =TASKS.setup.org= / =TASKS.local.org= for =#+JIRA_PROJECT=.
+- Updated =defaultSetupFileContent= in the tasks extension to scaffold =#+JIRA_CLOUDID:= and =#+JIRA_PROJECT:= in =TASKS.setup.org=.
+- Added =defaultLocalFileContent= and extended =defaultOrgPreamble= in the tasks extension to declare the local-first =#+SETUPFILE:= chain; =writeTaskFilePreserving= now creates =TASKS.local.org= alongside =TASKS.setup.org= on bootstrap.
+- Doctor: added =missing-local-setupfile= and =misordered-setupfile= finding codes plus passing/failing-case tests.
+- Skill docs: =skills/org-tasks/SKILL.md= quick-reference and bootstrap sections now describe the local-first =#+SETUPFILE:= chain.
+- Moved Jira config in the three affected repos; removed =#+JIRA_BASE_URL= and the obsolete local =#+ISSUE_URL_BASE= override; added =#+SETUPFILE: ./TASKS.local.org= ahead of =#+SETUPFILE: ./TASKS.setup.org= in each repo's =TASKS.org= and =TASKS.archive.org=.
+
+* Validation
+- =pi/extensions/jira/test.sh= clean: 49 passed, 0 failed.
+- =pi/extensions/tasks/test.sh= clean (includes new doctor regression tests for local-first =#+SETUPFILE:=).
+- Config scan confirms no =#+JIRA_BASE_URL= remains in =TASKS*.org= across =~/dotfiles/agents=, =~/dotfiles=, or =~/nmd/products/connect/portal=, and every =TASKS.org= / =TASKS.archive.org= now declares =#+SETUPFILE: ./TASKS.local.org= before =#+SETUPFILE: ./TASKS.setup.org=.
+- Empirical org-mode check confirmed multi-=#+SETUPFILE:= keyword merging is first-declared-wins; missing local file degrades to a warning rather than an error.
+
+* Open questions
+** DECIDED Should blank =#+JIRA_PROJECT:= in TASKS.org suppress a setup default?
+:PROPERTIES:
+:DECIDED: [2026-05-14 Thu 13:41]
+:END:
+Decision: no. Current config reader ignores empty values; keep that behaviour. If a real need appears for explicitly suppressing a setup default, add a separate sentinel rather than overloading blank.

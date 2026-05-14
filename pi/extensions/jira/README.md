@@ -82,29 +82,27 @@ Jira keys live in the generic `:LINKED_ISSUES:` drawer property defined by the `
 :END:
 ```
 
-`tasks` renders these as cyan badges and opens them with `J`. Link templates and `#+JIRA_*` keywords are project-local trusted configuration; see the `org-jira` skill's trust-boundary section for details. This extension's `/jira *` commands enumerate `:LINKED_ISSUES:`, filter to typed Jira links (`[[jira:KEY]]`) or raw org links whose target host matches `#+JIRA_BASE_URL`, and operate only on those. Tokens belonging to other trackers (GitHub, Linear, Confluence pages) are ignored, so a single task can carry multi-tracker references without confusing the Jira workflow.
+`tasks` renders these as cyan badges and opens them with `J`. Link templates and `#+JIRA_*` keywords are project-local trusted configuration; see the `org-jira` skill's trust-boundary section for details. This extension's `/jira *` commands enumerate `:LINKED_ISSUES:`, filter to typed Jira links (`[[jira:KEY]]`) or raw org links whose target host matches the base URL derived from `#+LINK: jira`, and operate only on those. Tokens belonging to other trackers (GitHub, Linear, Confluence pages) are ignored, so a single task can carry multi-tracker references without confusing the Jira workflow.
 
 ## Configuration
 
-One `tasks`-owned link abbreviation plus three optional Jira keywords in `TASKS.org` (or override in `TASKS.local.org`):
+One `tasks`-owned link abbreviation plus two optional Jira keywords live in `TASKS.setup.org` (or override in `TASKS.local.org`):
 
 ```org
 #+LINK: jira https://your-org.atlassian.net/browse/%s
 #+JIRA_CLOUDID: 00000000-0000-4000-8000-000000000000
 #+JIRA_PROJECT: MBFW
-#+JIRA_BASE_URL: https://your-org.atlassian.net
 ```
 
 | Keyword            | Purpose                                                       |
 | ------------------ | ------------------------------------------------------------- |
-| `#+LINK: jira`     | Org-native URL template for `[[jira:KEY]]` badges and `J` browser-open. |
+| `#+LINK: jira`     | Org-native URL template for `[[jira:KEY]]` badges, `J` browser-open, raw-URL filtering, and base URL derivation. |
 | `#+JIRA_CLOUDID`   | Skip the `atlassian_getAccessibleAtlassianResources` round-trip on every call. |
 | `#+JIRA_PROJECT`   | Default project for `/jira create`; disambiguates short keys. |
-| `#+JIRA_BASE_URL`  | Identifies which `:LINKED_ISSUES:` org-link tokens are Jira links. |
 
 When `#+JIRA_CLOUDID` is absent, the agent calls
 `atlassian_getAccessibleAtlassianResources` and picks the resource whose
-URL matches `#+JIRA_BASE_URL`. Values from `TASKS.local.org` override
+URL matches the base URL derived from `#+LINK: jira .../browse/%s`. Values from `TASKS.local.org` override
 shared configuration for the current checkout only.
 
 ## Skill

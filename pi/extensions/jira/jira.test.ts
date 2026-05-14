@@ -17,8 +17,10 @@ import {
   buildCreatePrompt,
   buildGetPrompt,
   buildTransitionPrompt,
+  deriveJiraBaseUrl,
   getFileKeyword,
   parseCreateArgs,
+  resolveJiraConfig,
   resolveKey,
 } from "./utils.ts";
 
@@ -93,7 +95,7 @@ assertEqual(
   const content = [
     "#+JIRA_CLOUDID: abc-123",
     "#+JIRA_PROJECT:",
-    "#+JIRA_BASE_URL: https://example.com",
+    "#+JIRA_FOO: after-empty",
     "",
   ].join("\n");
 
@@ -108,8 +110,8 @@ assertEqual(
     "getFileKeyword: empty value yields empty string (not next-line)",
   );
   assertEqual(
-    getFileKeyword(content, "JIRA_BASE_URL"),
-    "https://example.com",
+    getFileKeyword(content, "JIRA_FOO"),
+    "after-empty",
     "getFileKeyword: line after empty keyword still resolvable",
   );
   assertEqual(
@@ -123,6 +125,56 @@ assertEqual(
     "getFileKeyword: case-insensitive on name",
   );
 }
+
+// ── Jira config resolution ────────────────────────────────────────────
+
+assertEqual(
+  deriveJiraBaseUrl("https://example.atlassian.net/browse/%s"),
+  "https://example.atlassian.net",
+  "deriveJiraBaseUrl: strips /browse/%s suffix",
+);
+
+assertEqual(
+  deriveJiraBaseUrl("https://example.atlassian.net/jira/software/c/projects/SAND/issues/%s"),
+  null,
+  "deriveJiraBaseUrl: rejects non-browse templates",
+);
+
+assertEqual(
+  resolveJiraConfig({
+    setup: [
+      "#+LINK: jira https://setup.atlassian.net/browse/%s",
+      "#+JIRA_CLOUDID: setup-cloud",
+      "#+JIRA_PROJECT: SETUP",
+    ].join("\n"),
+    shared: "",
+    local: "",
+  }),
+  { cloudId: "setup-cloud", project: "SETUP", baseUrl: "https://setup.atlassian.net" },
+  "resolveJiraConfig: reads defaults from TASKS.setup.org content",
+);
+
+assertEqual(
+  resolveJiraConfig({
+    setup: [
+      "#+LINK: jira https://setup.atlassian.net/browse/%s",
+      "#+JIRA_CLOUDID: setup-cloud",
+      "#+JIRA_PROJECT: SETUP",
+    ].join("\n"),
+    shared: [
+      "#+LINK: jira https://shared.atlassian.net/browse/%s",
+      "#+JIRA_CLOUDID: shared-cloud",
+      "#+JIRA_PROJECT: SHARED",
+    ].join("\n"),
+    local: [
+      "#+LINK: jira https://local.atlassian.net/browse/%s",
+      "#+JIRA_CLOUDID: local-cloud",
+      "#+JIRA_PROJECT: LOCAL",
+    ].join("\n"),
+  }),
+  { cloudId: "local-cloud", project: "LOCAL", baseUrl: "https://local.atlassian.net" },
+  "resolveJiraConfig: local overrides shared and setup",
+);
 
 // ── buildClonePrompt: structural sanity ───────────────────────────
 
@@ -513,7 +565,7 @@ assertEqual(
   }
   if (single.includes("https://example.atlassian.net/browse/<KEY>")) {
     passed++;
-    console.log("ok - buildGetPrompt: footer link uses #+JIRA_BASE_URL");
+    console.log("ok - buildGetPrompt: footer link uses derived Jira base URL");
   } else {
     failed++;
     console.log("not ok - buildGetPrompt: should compose footer link from baseUrl");
@@ -547,7 +599,7 @@ assertEqual(
   );
   if (!/example\.atlassian\.net\/browse/.test(noBaseUrl)) {
     passed++;
-    console.log("ok - buildGetPrompt: no footer link when #+JIRA_BASE_URL absent");
+    console.log("ok - buildGetPrompt: no footer link when Jira base URL is unavailable");
   } else {
     failed++;
     console.log("not ok - buildGetPrompt: should suppress footer link when baseUrl null");

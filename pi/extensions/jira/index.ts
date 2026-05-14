@@ -33,6 +33,7 @@ import {
   getFileKeyword,
   JIRA_KEY_RE,
   parseCreateArgs,
+  resolveJiraConfig,
   resolveKey,
   type JiraConfig,
 } from "./utils.ts";
@@ -105,9 +106,26 @@ function getAtlassianAvailability(pi: ExtensionAPI): {
   }
 }
 
+function extractOrgLinkTarget(value: string): string | null {
+  const match = /^\[\[(?:file:)?([^\]]+?)\](?:\[[^\]]*\])?\]$/.exec(value.trim());
+  return match?.[1]?.trim() || null;
+}
+
+async function readSetupContent(cwd: string, shared: string): Promise<string> {
+  const raw = getFileKeyword(shared, "SETUPFILE");
+  if (!raw) return "";
+  const target = extractOrgLinkTarget(raw) ?? raw.trim().replace(/^file:/, "");
+  if (!target) return "";
+  try {
+    return await readFile(join(cwd, target), "utf-8");
+  } catch {
+    return "";
+  }
+}
+
 /**
- * Read Jira config from the project's TASKS.org, with TASKS.local.org
- * overriding any keyword present in both files (mirrors `#+SELECTED:`).
+ * Read Jira config from TASKS.setup.org/TASKS.org/TASKS.local.org.
+ * Precedence mirrors selection overrides: local > shared task file > setupfile.
  */
 async function loadJiraConfig(cwd: string): Promise<JiraConfig> {
   let shared = "";
@@ -122,20 +140,8 @@ async function loadJiraConfig(cwd: string): Promise<JiraConfig> {
   } catch {
     /* TASKS.local.org is optional. */
   }
-
-  const pick = (name: string): string | null => {
-    const val = getFileKeyword(local, name);
-    if (val !== null && val !== "") return val;
-    const sharedVal = getFileKeyword(shared, name);
-    if (sharedVal !== null && sharedVal !== "") return sharedVal;
-    return null;
-  };
-
-  return {
-    cloudId: pick("JIRA_CLOUDID"),
-    project: pick("JIRA_PROJECT"),
-    baseUrl: pick("JIRA_BASE_URL"),
-  };
+  const setup = await readSetupContent(cwd, shared);
+  return resolveJiraConfig({ setup, shared, local });
 }
 
 // `resolveKey`, `buildClonePrompt`, `getFileKeyword`, and the
@@ -505,7 +511,7 @@ export default function (pi: ExtensionAPI) {
         const cfg = await loadJiraConfig(ctx.cwd);
         if (!opts.project && !cfg.project) {
           ctx.ui.notify(
-            "Usage: /jira create [PROJECT] [--type Task|Story|Bug|Epic]   (or set #+JIRA_PROJECT in TASKS.org)",
+            "Usage: /jira create [PROJECT] [--type Task|Story|Bug|Epic]   (or set #+JIRA_PROJECT in TASKS.setup.org / TASKS.local.org)",
             "warn",
           );
           return;

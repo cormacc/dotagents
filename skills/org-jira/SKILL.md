@@ -39,23 +39,21 @@ Jira keys are stored as typed org links in the generic `:LINKED_ISSUES:` drawer 
 
 ### File-level keywords
 
-`TASKS.org` (overridable in `TASKS.local.org`):
+`TASKS.setup.org` (overridable in `TASKS.local.org`):
 
 ```org
 #+LINK: jira https://your-org.atlassian.net/browse/%s
 #+JIRA_CLOUDID: 00000000-0000-4000-8000-000000000000
 #+JIRA_PROJECT: MBFW
-#+JIRA_BASE_URL: https://your-org.atlassian.net
 ```
 
 | Keyword            | Owner          | Purpose                                                    |
 | ------------------ | -------------- | ---------------------------------------------------------- |
-| `#+LINK: jira`     | `tasks`        | Org-native link abbreviation for Jira badges & `J` open.   |
+| `#+LINK: jira`     | `tasks`        | Org-native link abbreviation for Jira badges, `J` open, raw-URL filtering, and base URL derivation. |
 | `#+JIRA_CLOUDID`   | `jira`         | MCP routing: skip `getAccessibleAtlassianResources`.       |
 | `#+JIRA_PROJECT`   | `jira`         | Default project for `/jira create`; short-key disambiguation. |
-| `#+JIRA_BASE_URL`  | `jira`         | Filter `:LINKED_ISSUES:` for Jira-shaped tokens.           |
 
-The `tasks` extension reads `#+LINK:` declarations for badge URL resolution. The three `#+JIRA_*` keywords are read only by the `jira` extension and this skill.
+The `tasks` extension reads `#+LINK:` declarations for badge URL resolution. The `jira` extension reads `#+JIRA_CLOUDID` / `#+JIRA_PROJECT` and derives its base URL from the `jira` link template.
 
 `TASKS.local.org` overrides any of these (last-write-wins, mirroring
 `#+SELECTED:`). Useful for per-checkout overrides like a different default
@@ -71,7 +69,7 @@ When `/jira *` commands need to operate only on Jira-shaped tokens (claim,
 transition, comment), they apply this filter:
 
 1. **Typed Jira link** `[[jira:KEY]]`, where `KEY` matches `/^[A-Z][A-Z0-9_]+-\d+$/` → Jira key.
-2. **Raw org-link token** `[[url][label]]` whose target host matches `#+JIRA_BASE_URL` → Jira key.
+2. **Raw org-link token** `[[url][label]]` whose target host matches the base URL derived from `#+LINK: jira .../browse/%s` → Jira key.
 
 Tokens that match neither are silently ignored by Jira workflows — a task carrying `[[jira:MBFW-123]] [[https://github.com/foo/bar/issues/42][gh#42]]` exposes only `MBFW-123` to `/jira claim`.
 
@@ -96,7 +94,7 @@ instruction to the user rather than retrying.
 When making MCP calls, prefer `#+JIRA_CLOUDID` from the file. If absent:
 
 1. Call `atlassian_getAccessibleAtlassianResources`.
-2. Pick the resource whose `url` field equals `#+JIRA_BASE_URL`.
+2. Pick the resource whose `url` field equals the base URL derived from `#+LINK: jira .../browse/%s`.
 3. Use its `id` as the `cloudId` for subsequent calls.
 
 ## Workflows

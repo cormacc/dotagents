@@ -1,6 +1,8 @@
 #+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)
 #+STARTUP: logdone logdrawer
 #+LINK: jira https://your-org.atlassian.net/browse/%s
+#+JIRA_CLOUDID: 00000000-0000-4000-8000-000000000000
+#+JIRA_PROJECT:
 #+LINK: plan file:design/log/%s
 # Default task/archive link targets assume plan files live under design/log/.
 # TASKS.org and TASKS.archive.org declare local overrides before #+SETUPFILE:

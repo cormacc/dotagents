@@ -518,20 +518,31 @@ export function setTaskHandoff(task: Task, value: string | null): void {
  * (` `, `\t`) is allowed between the colon and the value, so a blank
  * keyword line never leaks into the next line.
  */
-export function getFileKeyword(
+export function getFileKeywords(
   content: string,
   name: string,
-): string | null {
+): string[] {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   // Use [\t ]* (horizontal whitespace only) around the captured value
   // so an empty `#+NAME:` line doesn't consume the following newline
   // and bleed into the next line's content.
   const re = new RegExp(
     `^[\\t ]*#\\+${escaped}[\\t ]*:[\\t ]*(.*?)[\\t ]*$`,
-    "im",
+    "gim",
   );
-  const m = re.exec(content);
-  return m?.[1] ?? null;
+  const values: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    values.push(m[1] ?? "");
+  }
+  return values;
+}
+
+export function getFileKeyword(
+  content: string,
+  name: string,
+): string | null {
+  return getFileKeywords(content, name)[0] ?? null;
 }
 
 export type PlanParentKind = "task" | "archive";

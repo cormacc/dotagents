@@ -500,21 +500,32 @@ await withTempDir(async (dir) => {
   }
 });
 
-// ── File-side: duplicate scan follows `[[plan:...]]` imports via #+SETUPFILE: + #+LINK ──
+// ── File-side: duplicate scan follows `[[plan:...]]` imports via chained #+SETUPFILE: + #+LINK ──
 //
-// Pins the full SETUPFILE → #+LINK: plan → [[plan:...]] resolution chain that
-// `loadTasks` and `collectAllTasks` share. The duplicate token lives inside a
-// change-record reachable only when the loader follows
+// Pins the full SETUPFILE chain → #+LINK: plan → [[plan:...]] resolution path
+// that `loadTasks` and `collectAllTasks` share. The duplicate token lives inside
+// a change-record reachable only when the loader follows both setupfiles:
+//   TASKS.org#+SETUPFILE: → TASKS.local.org (no plan link)
 //   TASKS.org#+SETUPFILE: → TASKS.setup.org#+LINK: plan file:design/log/%s
 // and rewrites `[[plan:foo.org]]` to `design/log/foo.org`.
 
 await withTempDir(async (dir) => {
   const tasksPath = join(dir, "TASKS.org");
+  const localPath = join(dir, "TASKS.local.org");
   const setupPath = join(dir, "TASKS.setup.org");
   const planDir = join(dir, "design", "log");
   await mkdir(planDir, { recursive: true });
   const planPath = join(planDir, "plan.org");
 
+  await writeFile(
+    localPath,
+    [
+      "#+SELECTED:",
+      "#+JIRA_PROJECT: LOCAL",
+      "",
+    ].join("\n"),
+    "utf-8",
+  );
   await writeFile(
     setupPath,
     [
@@ -526,8 +537,8 @@ await withTempDir(async (dir) => {
   await writeFile(
     tasksPath,
     [
-      "#+SETUPFILE: ./TASKS.setup.org",
-      "",
+      "#+SETUPFILE: ./TASKS.local.org",
+      "#+SETUPFILE: ./TASKS.setup.org",      "",
       "* Improvements",
       "** TODO Parent",
       ":PROPERTIES:",
@@ -564,7 +575,7 @@ await withTempDir(async (dir) => {
     createdAt: FIXED_TS,
   });
   assertEqual(result.status, "duplicate",
-    "insertTaskIntoFile: follows [[plan:...]] imports via #+SETUPFILE: + #+LINK: plan");
+    "insertTaskIntoFile: follows [[plan:...]] imports via chained #+SETUPFILE: + #+LINK: plan");
   if (result.status === "duplicate") {
     assertEqual(result.existingFile, await realpath(planPath),
       "insertTaskIntoFile: attributes duplicate to plan: import target");

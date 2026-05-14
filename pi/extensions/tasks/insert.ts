@@ -19,14 +19,13 @@ import { dirname, isAbsolute, relative, resolve } from "node:path";
 import {
   createdLogEntry,
   expandOrgLinkTarget,
-  extractOrgLinkTarget,
   getDrawerProperty,
-  getFileKeyword,
   getTaskId,
   formatOrgTimestamp,
   parseTasks,
   type Task,
 } from "./parser.ts";
+import { readEffectiveOrgContent } from "./effective.ts";
 
 /** Args accepted by {@link buildTaskBlock}. */
 export interface BuildTaskArgs {
@@ -357,20 +356,6 @@ async function sandboxPath(path: string, projectRoot: string): Promise<{ ok: tru
   const real = await resolveExistingOrParent(abs);
   return isWithinRoot(real, root) ? { ok: true, path: real } : { ok: false, path: real };
 }
-
-async function readEffectiveOrgContent(projectRoot: string, filePath: string, content: string): Promise<string> {
-  const rawSetup = getFileKeyword(content, "SETUPFILE");
-  if (!rawSetup) return content;
-  const setupTarget = extractOrgLinkTarget(rawSetup) ?? rawSetup.trim();
-  if (!setupTarget) return content;
-  const setupAbs = isAbsolute(setupTarget) ? setupTarget : resolve(dirname(filePath), setupTarget);
-  const sandboxed = await sandboxPath(setupAbs, projectRoot);
-  if (!sandboxed.ok) return content;
-  const setup = await readMaybe(sandboxed.path);
-  return setup === null ? content : `${setup}\n${content}`;
-}
-
-
 
 async function collectAllTasks(
   paths: string[],
