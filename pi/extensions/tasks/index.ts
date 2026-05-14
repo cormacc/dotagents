@@ -58,7 +58,7 @@ import {
   parseLinkTemplates,
   parseTasks,
   parseSelectedKeyword,
-  rewriteParentLinkTaskFile,
+  rewriteParentLinkKind,
   serializeTasks,
   serializeTasksPreservingFile,
   taskHasId,
@@ -1206,10 +1206,24 @@ export default function (pi: ExtensionAPI) {
       if (args?.trim() === "doctor") {
         const tasks = await loadTasks(ctx.cwd);
         const selectedId = await readSelectedId(ctx.cwd);
+        const setupPath = join(ctx.cwd, "TASKS.setup.org");
+        const tasksPath = join(ctx.cwd, TASKS_FILE);
+        const archivePath = join(ctx.cwd, TASKS_ARCHIVE_FILE);
         const findings = runDoctor({
           tasks,
           selectedId,
           selectedSourcePath: join(ctx.cwd, TASKS_LOCAL_FILE),
+          protocolFiles: {
+            setup: (await pathExists(setupPath))
+              ? { path: setupPath, content: await readFile(setupPath, "utf-8") }
+              : undefined,
+            tasks: (await pathExists(tasksPath))
+              ? { path: tasksPath, content: await readFile(tasksPath, "utf-8") }
+              : undefined,
+            archive: (await pathExists(archivePath))
+              ? { path: archivePath, content: await readFile(archivePath, "utf-8") }
+              : undefined,
+          },
         });
         const report = formatFindingsReport(findings);
         if (findings.length === 0) {
@@ -1563,14 +1577,27 @@ function defaultSetupFileContent(): string {
     STARTUP_PREAMBLE,
     "#+LINK: jira https://your-org.atlassian.net/browse/%s",
     "#+LINK: plan file:design/log/%s",
+    "# Default task/archive link targets assume plan files live under design/log/.",
+    "# TASKS.org and TASKS.archive.org declare local overrides before #+SETUPFILE:",
+    "# so org-mode resolves task links correctly from the task files themselves.",
+    "#+LINK: task file:../../TASKS.org::#%s",
+    "#+LINK: archive file:../../TASKS.archive.org::#%s",
     "",
   ].join("\n");
+}
+
+function defaultTaskLinkOverrides(): string[] {
+  return [
+    "#+LINK: task file:TASKS.org::#%s",
+    "#+LINK: archive file:TASKS.archive.org::#%s",
+  ];
 }
 
 function defaultOrgPreamble(path: string): string {
   if (path.endsWith(TASKS_FILE)) {
     return [
       "#+TITLE: Project Tasks",
+      ...defaultTaskLinkOverrides(),
       "#+SETUPFILE: ./TASKS.setup.org",
       ARCHIVE_PREAMBLE,
       "",
@@ -1579,6 +1606,7 @@ function defaultOrgPreamble(path: string): string {
   if (path.endsWith(TASKS_ARCHIVE_FILE)) {
     return [
       "#+TITLE: Archived Tasks",
+      ...defaultTaskLinkOverrides(),
       "#+SETUPFILE: ./TASKS.setup.org",
       "",
     ].join("\n");
@@ -2031,11 +2059,10 @@ async function handlePlanEdit(
       if (!(await pathExists(setupPath))) {
         await writeFile(setupPath, defaultSetupFileContent(), "utf-8");
       }
-      const tasksFileRelPath = relative(planDir, sourcePath).replace(/\\/g, "/");
       const setupFileRelPath = relative(planDir, setupPath).replace(/\\/g, "/");
       await writeFile(
         absPlan,
-        scaffoldPlan(task, { tasksFileRelPath, setupFileRelPath }, extractedPlanTasks),
+        scaffoldPlan(task, { setupFileRelPath }, extractedPlanTasks),
         "utf-8",
       );
     }
@@ -2238,8 +2265,7 @@ async function prepareArchivedPlanParentLink(
     throw new Error("Plan path resolves outside project root");
   }
   const current = await readFile(absPlan, "utf-8");
-  const tasksFileRelPath = relative(dirname(absPlan), archivePath).replace(/\\/g, "/");
-  const next = rewriteParentLinkTaskFile(current, parentId, tasksFileRelPath);
+  const next = rewriteParentLinkKind(current, parentId, "archive");
   return next === current ? null : { absPlan, content: next };
 }
 

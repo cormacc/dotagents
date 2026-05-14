@@ -1,6 +1,6 @@
 #+TITLE: Package org-memory protocol / extensions
 #+DATE: 2026-05-06 Wed
-#+PARENT: [[file:../../TASKS.archive.org::#79d6f4f5-70f9-404d-9b4c-0cf0ef0e7adb][Package org-memory protocol / extensions]]
+#+PARENT: [[archive:79d6f4f5-70f9-404d-9b4c-0cf0ef0e7adb][Package org-memory protocol / extensions]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Review
 

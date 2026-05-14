@@ -1,6 +1,6 @@
 #+TITLE: Token-efficient Jira clone workflow
 #+DATE: 2026-04-28 Tue
-#+PARENT: [[file:../../TASKS.archive.org::#4ad4bb1b-9e74-48a0-9ce4-2d69639a8bc8][Token-efficient Jira clone workflow]]
+#+PARENT: [[archive:4ad4bb1b-9e74-48a0-9ce4-2d69639a8bc8][Token-efficient Jira clone workflow]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

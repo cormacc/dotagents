@@ -1,0 +1,312 @@
+#+TITLE: Introduce =task:= and =archive:= org-link abbreviations for parent links
+#+DATE: 2026-05-14 Thu
+#+PARENT: [[archive:40f66a21-bdbc-4f8b-80d2-1ec806070f1d][org-memory Create 'task' and 'archive' link types rather than current file/anchor]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+
+* Summary
+Replace =#+PARENT: [[file:../../TASKS.{org,archive.org}::#<uuid>][...]]= with
+=#+PARENT: [[task:<uuid>][...]]= and =#+PARENT: [[archive:<uuid>][...]]= via
+project-local =#+LINK:= abbreviations declared in =TASKS.setup.org=. =TASKS.org=
+and =TASKS.archive.org= each carry a local =#+LINK:= override (placed *before*
+their =#+SETUPFILE:= directive so the first-declared abbreviation wins) that
+strips the =../../= prefix, so a single =task:= / =archive:= pair resolves
+correctly whether followed from a plan file (in =design/log/=) or from the task
+files themselves. One-shot content sweep across =~/dotfiles/agents=, =~/dotfiles=,
+and =~/nmd/products/connect/portal=; no legacy tolerance window.
+
+** Decisions
+- Two link types (=task:=, =archive:=) :: matches the task body's "acceptable
+  compromise". A single overloaded type would require live-vs-archive lookup at
+  every follow; two types make the archive-rewrite a tight prefix swap on the
+  link key.
+- Local override beats =#+SETUPFILE:= defaults via declaration order :: empirical
+  test (=/tmp/orgtest=, 2026-05-14) confirms org's =org-link-abbrev-alist-local=
+  takes the *first* =#+LINK:= per key. Local override placed before
+  =#+SETUPFILE:= directive in =TASKS.org= / =TASKS.archive.org= wins; setup file's
+  =../../= default carries through to plan files unmodified.
+- Setup-file abbreviations target the default plan dir :: =file:../../TASKS.org::#%s=
+  assumes =design/log/= (one-level subdir of project root). Projects with a
+  non-default =#+DEFAULT_PLAN_DIR= override =TASKS.setup.org= at bootstrap; the
+  scaffolder already computes the relative prefix from =#+DEFAULT_PLAN_DIR=.
+- No legacy tolerance window :: same posture as the 2026-05-08
+  =:ID:= → =:CUSTOM_ID:= migration. Three local repos swept atomically; a
+  tolerant reader stays cheap to bolt on if a fourth project surfaces.
+- =:BLOCKED-BY: task:<uuid>= stays textual :: the protocol never promised
+  =:BLOCKED-BY:= entries were clickable links. Switching =task:= to an org
+  abbreviation makes them clickable *in plan files*; inside =TASKS.org= the
+  local override resolves them to the same file, which is the desired
+  behaviour. No code change needed beyond the existing
+  =task:<uuid>= textual recogniser.
+
+** Shipped
+- =task:= / =archive:= link abbreviations added to =TASKS.setup.org= with
+  local overrides in =TASKS.org= and =TASKS.archive.org=.
+- Change-record scaffolding now emits =#+PARENT: [[task:<uuid>][...]]= and
+  archive flow rewrites =task:= → =archive:= without path surgery.
+- Parser and Emacs companion now consume abbreviated parent links only; legacy
+  file-anchor parent links were swept from =~/dotfiles/agents=, =~/dotfiles=,
+  and =~/nmd/products/connect/portal=.
+- Doctor checks validate setup/local link declarations and override ordering.
+
+** Gotchas
+- Local =#+LINK:= must precede =#+SETUPFILE:= in =TASKS.org= /
+  =TASKS.archive.org=. Reversing the order silently re-establishes the
+  =../../= prefix and breaks intra-file navigation. The order constraint is
+  documented in =TASKS.setup.org= as an inline comment and asserted by the
+  doctor.
+- =~/dotfiles= (wrapper repo) has only *one* affected plan file in its own
+  =design/log/= — easy to miss because the bulk of its plan content lives
+  in the =agents/= submodule (counted under =~/dotfiles/agents=, not the
+  wrapper). The migration script must scope =rg= to exclude the submodule
+  so files aren't rewritten twice.
+- =#+SETUPFILE:= caches: stale =org-link-abbrev-alist-local= can survive across
+  buffer revisits within a single Emacs session. If a user edits
+  =TASKS.setup.org= and follows a link in an already-open plan-file buffer,
+  they may need =M-x org-mode= or a buffer reload to pick up the change. Not
+  worth tooling around; document it.
+- =:raw-link= as reported by =org-element-context= reflects parser state at the
+  *position of the link in the buffer* (so a local =#+LINK:= above the link
+  changes =:raw-link= even if the final alist disagrees). Tools that consume
+  =:raw-link= directly to derive parent UUIDs should keep parsing the
+  =[[task:UUID]]= /textual/ shape rather than expanding through org.
+
+** Follow-ups
+- (Filled in as work lands.)
+
+* Plan
+
+** DONE [#A] Phase 1.1 — Add abbreviations to TASKS.setup.org :tooling:scaffold:
+CLOSED: [2026-05-14 Thu 13:13]
+:PROPERTIES:
+:CUSTOM_ID: 40ff8bea-a9fb-4c4c-8ce1-77c19a545b1c
+:CREATED: [2026-05-14 Thu 12:12]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 12:12]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:13]
+:END:
+Acceptance criteria:
+- =TASKS.setup.org= gains two lines:
+  =#+LINK: task    file:../../TASKS.org::#%s=
+  =#+LINK: archive file:../../TASKS.archive.org::#%s=
+- Inline comment explains the local-override-must-precede-SETUPFILE
+  ordering rule for =TASKS.org= / =TASKS.archive.org=.
+- =doctor.ts= asserts both abbreviations are present in
+  =TASKS.setup.org= and warns when missing.
+
+** DONE [#A] Phase 1.2 — Local overrides in TASKS.org / TASKS.archive.org :tooling:scaffold:
+CLOSED: [2026-05-14 Thu 13:13]
+:PROPERTIES:
+:CUSTOM_ID: 351d10e6-1c76-43ae-b4c2-639fd04eb51e
+:CREATED: [2026-05-14 Thu 12:12]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 12:12]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:13]
+:END:
+Acceptance criteria:
+- =TASKS.org= header (before =#+SETUPFILE:=):
+  =#+LINK: task    file:TASKS.org::#%s=
+  =#+LINK: archive file:TASKS.archive.org::#%s=
+- =TASKS.archive.org= header (before =#+SETUPFILE:=): same two lines.
+- Root-file scaffolding emits the local override block in addition to the
+  existing =#+SETUPFILE:= line, in the correct order. Current implementation
+  surface is =defaultOrgPreamble= / =defaultSetupFileContent= in
+  =pi/extensions/tasks/index.ts= rather than exported helpers in
+  =scaffold.ts=.
+- =doctor.ts= asserts the local override block exists *and precedes*
+  =#+SETUPFILE:= in each file. Failure mode is fixable; doctor offers a
+  --fix.
+
+** DONE [#A] Phase 1.3 — Scaffolder emits abbreviated #+PARENT: link :tooling:scaffold:
+CLOSED: [2026-05-14 Thu 13:13]
+:PROPERTIES:
+:CUSTOM_ID: 470b7179-23b1-481f-96e4-506b3f27e7fa
+:CREATED: [2026-05-14 Thu 12:12]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 12:12]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:13]
+:END:
+Acceptance criteria:
+- =scaffoldPlan(task, { archived, setupFileRelPath }, planTasks?)= emits
+  =#+PARENT: [[task:<uuid>][<summary>]]= when =archived= is false (default),
+  =[[archive:<uuid>][<summary>]]= when true.
+- =tasksFileRelPath= option becomes obsolete for =#+PARENT:= path
+  computation and is removed from =ScaffoldPlanOptions= / callers in the
+  same change; only =setupFileRelPath= remains path-sensitive.
+- Tests cover both unarchived and archived emit.
+- Description escaping / safe-omission rules from the 2026-05-08 record
+  carry over unchanged.
+
+** DONE [#A] Phase 1.4 — Parser accepts abbreviated #+PARENT: link :tooling:parser:
+CLOSED: [2026-05-14 Thu 13:13]
+:PROPERTIES:
+:CUSTOM_ID: f3be25ca-71d5-4d5a-b699-ac7e4262db1a
+:CREATED: [2026-05-14 Thu 12:12]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 12:12]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:13]
+:END:
+Acceptance criteria:
+- =parser.ts= regex for =#+PARENT:= recognises =[[task:<uuid>][...]]= and
+  =[[archive:<uuid>][...]]=. File-link form removed in the same commit
+  (no tolerance window — content sweep lands together).
+- Parent parsing stays textual: extract the =task:= / =archive:= target
+  directly from the raw org-link and do *not* expand through
+  =expandOrgLinkTarget=. That helper intentionally treats =file:=
+  abbreviation targets as project-root-relative for =#+IMPORT:= / external
+  issue use-cases, while these =#+PARENT:= links are plan-file-relative
+  only when followed by org-mode.
+- Returns a discriminated record =({ kind: 'task' | 'archive', uuid, summary })=
+  so the archive-rewrite step (Phase 1.5) can flip kind cheaply.
+- =parser.test.ts= covers both kinds plus malformed inputs.
+
+** DONE [#A] Phase 1.5 — Archive rewrite flips link type :tooling:archive:
+CLOSED: [2026-05-14 Thu 13:13]
+:PROPERTIES:
+:CUSTOM_ID: c5677118-0fb7-4054-be4a-418367a039ba
+:CREATED: [2026-05-14 Thu 12:12]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 12:12]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:13]
+:END:
+Acceptance criteria:
+- =archiveTopLevel= (in =pi/extensions/tasks/index.ts=) rewrites the imported
+  plan's =#+PARENT: [[task:<uuid>][...]]= to =[[archive:<uuid>][...]]= for
+  the archived task's UUID.
+- Unarchive is explicitly out of scope; no unarchive path is added.
+- Unrelated =#+PARENT:= lines untouched.
+- No-plan archive path remains unchanged.
+- Archive tests cover the abbreviated-link rewrite.
+
+** DONE [#A] Phase 1.6 — Doctor + overlay string updates :tooling:doctor:
+CLOSED: [2026-05-14 Thu 13:13]
+:PROPERTIES:
+:CUSTOM_ID: 6a10c9e0-3a9e-4b74-a267-f575a7a97cf5
+:CREATED: [2026-05-14 Thu 12:12]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 12:12]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:13]
+:END:
+Acceptance criteria:
+- =doctor.ts= user-facing messages cite =[[task:<uuid>]]= /
+  =[[archive:<uuid>]]= where they previously cited the file-link form.
+- New doctor check: =TASKS.setup.org= declares both abbreviations.
+- New doctor check: =TASKS.org= / =TASKS.archive.org= declare local
+  overrides *before* their =#+SETUPFILE:= line.
+- =overlay.ts= comments / status strings updated.
+- =doctor.test.ts=, =overlay.ts= fixtures rewritten.
+
+** DONE [#A] Phase 1.7 — Emacs extension parent-link navigator :tooling:emacs:
+CLOSED: [2026-05-14 Thu 13:13]
+:PROPERTIES:
+:CUSTOM_ID: 0a023f5f-4b4f-4e5f-b572-a88b491d1e20
+:CREATED: [2026-05-14 Thu 12:12]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 12:12]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:13]
+:END:
+Acceptance criteria:
+- =simple-emacs-extension='s =nmd-jump-to-parent= (or equivalent) recognises
+  =#+PARENT: [[task:<uuid>][...]]= and =[[archive:<uuid>][...]]= shapes,
+  resolving the target file based on the link kind (=TASKS.org= vs
+  =TASKS.archive.org=) rather than parsing the file path out of the link.
+- File-link parsing removed.
+- Manual smoke test: =M-x nmd-jump-to-parent= from an archived plan file
+  lands on the archived task in =TASKS.archive.org=.
+
+** DONE [#A] Phase 2.1 — One-shot content sweep :migration:
+CLOSED: [2026-05-14 Thu 13:13]
+:PROPERTIES:
+:CUSTOM_ID: fe2d05ca-bf1d-42f4-a2c7-e24455fb4225
+:CREATED: [2026-05-14 Thu 12:12]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 12:12]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:13]
+:END:
+Acceptance criteria:
+- New script =.agents/tmp/migrate-parent-link-abbrev.ts= with =--dry-run=:
+  rewrites =#+PARENT: [[file:<rel>/TASKS.org::#<uuid>][...]]= →
+  =[[task:<uuid>][...]]=, and the =TASKS.archive.org= variant →
+  =[[archive:<uuid>][...]]=. Refuses if any =#+PARENT:= line is
+  unrecognised (no silent skip).
+- Local override block injected into =TASKS.org= /
+  =TASKS.archive.org= if missing, *before* =#+SETUPFILE:=.
+- =TASKS.setup.org= abbreviation lines added if missing.
+- Sweep run against three repos with expected per-repo file counts
+  asserted as a coverage check (snapshot 2026-05-14):
+  - =~/dotfiles/agents= :: 32 plan files
+  - =~/dotfiles= (=design/log/= only, excluding the =agents/= submodule) :: 1 plan file
+  - =~/nmd/products/connect/portal= :: 12 plan files
+  Script refuses to proceed if the actual count diverges by more than
+  =--drift-tolerance= (default 2) — drift implies new plan files landed
+  between snapshot and run and should be re-counted before sweep.
+- Commits land per-repo with conventional-commit messages naming this
+  change-record. Portal repo is on a separate remote (NMD GitLab); its
+  commit may need a follow-up MR rather than direct push depending on
+  branch protection.
+
+** DONE [#A] Phase 2.2 — Update org-tasks / org-plan / jira skill docs :docs:skill:
+CLOSED: [2026-05-14 Thu 13:13]
+:PROPERTIES:
+:CUSTOM_ID: 30b1ede2-9c44-4a95-8d29-73cddc5076e7
+:CREATED: [2026-05-14 Thu 12:12]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 12:12]
+- State "DONE" from "TODO" [2026-05-14 Thu 13:13]
+:END:
+Acceptance criteria:
+- =org-plan/SKILL.md= minimal skeleton + section samples updated to
+  =#+PARENT: [[task:<uuid>][...]]= shape.
+- =org-tasks/SKILL.md= references to =[[file:.../TASKS.org::#<uuid>][...]]=
+  switched to abbreviated shape; note added on local-override ordering.
+- =org-jira/SKILL.md= reviewed (no expected change but confirm).
+- =README.md= updated where it cites the file-link form.
+- Quick-reference table in =org-tasks/SKILL.md= adds rows for =task:= and
+  =archive:= alongside =plan:= and =jira:=.
+
+* Implementation
+- Added parser-level =PlanParentRef= / =getPlanParentRef= and replaced the old
+  file-target rewrite helper with =rewriteParentLinkKind=.
+- Updated =scaffoldPlan= to drop =tasksFileRelPath= and emit =task:= /
+  =archive:= parent links directly.
+- Updated archive flow in =pi/extensions/tasks/index.ts= to call
+  =rewriteParentLinkKind(..., "archive")=.
+- Added default setup/local link declaration scaffolding and doctor checks for
+  missing/misordered link declarations.
+- Updated =emacs/tasks-org= toggle support so =task:= opens =TASKS.org= and
+  =archive:= opens =TASKS.archive.org= by project root, not by parsing file
+  paths out of =#+PARENT:=.
+- Added and ran =.agents/tmp/migrate-parent-link-abbrev.mjs= across the three
+  affected repos. The agents repo sweep rewrote 31 links because this
+  change-record's parent had already been migrated during the same session;
+  dotfiles rewrote 1 link and portal rewrote 12.
+
+* Validation
+- =pi/extensions/tasks/test.sh= clean.
+- =emacs/tasks-org= ERT suite clean via =emacs --batch -L . -l tasks-org.el -l tasks-org-tests.el -f ert-run-tests-batch-and-exit=.
+- Content sweep verification: zero legacy =#+PARENT: [[file:...::#...]]= links
+  remain in =~/dotfiles/agents=, =~/dotfiles=, or
+  =~/nmd/products/connect/portal=; link counts now match =task:= /
+  =archive:= split per repo.
+- Manual browser/UI smoke not run; change is file-format/parser/scaffold logic
+  with unit coverage.
+
+* Open questions
+** OPEN Should =TASKS.local.org= also declare the local override?
+=TASKS.local.org= currently only carries =#+SELECTED:= metadata and does
+not contain task headings or =#+PARENT:= links, so abbreviation resolution
+inside it is moot. Recommend skipping the override to keep the file
+minimal, but worth confirming before Phase 1.2 lands.
+
+** OPEN Does the doctor =--fix= for missing local-override block warrant a separate change-record?
+The fix is a header-insert + ordering check; tiny enough to fold into
+Phase 1.6. Flagging in case it grows during implementation.

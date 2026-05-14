@@ -1,6 +1,6 @@
 #+TITLE: Review org-memory protocol as agent memory
 #+DATE: 2026-05-01 Fri
-#+PARENT: [[file:../../TASKS.archive.org::#724c0332-e491-4b66-900f-e11478057eb1][Review org-memory protocol as agent memory]]
+#+PARENT: [[archive:724c0332-e491-4b66-900f-e11478057eb1][Review org-memory protocol as agent memory]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 

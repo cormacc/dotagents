@@ -17,8 +17,8 @@ import {
 } from "./parser.ts";
 
 export interface ScaffoldPlanOptions {
-  /** Path from the plan file's directory to the task file containing the parent. */
-  tasksFileRelPath?: string;
+  /** Whether the parent task already lives in TASKS.archive.org. */
+  archived?: boolean;
   /** Path from the plan file's directory to the repository task setup file. */
   setupFileRelPath?: string;
 }
@@ -29,8 +29,8 @@ function safeOrgLinkDescription(summary: string): string | null {
   return trimmed;
 }
 
-function parentLink(tasksFileRelPath: string, parentId: string, summary: string): string {
-  const target = `file:${tasksFileRelPath}::#${parentId}`;
+function parentLink(kind: "task" | "archive", parentId: string, summary: string): string {
+  const target = `${kind}:${parentId}`;
   const description = safeOrgLinkDescription(summary);
   return description ? `[[${target}][${description}]]` : `[[${target}]]`;
 }
@@ -44,7 +44,7 @@ export function scaffoldPlan(
   const parentId = getTaskId(task);
   const options = Array.isArray(optionsOrPlanTasks) ? {} : optionsOrPlanTasks;
   const planTasks = Array.isArray(optionsOrPlanTasks) ? optionsOrPlanTasks : maybePlanTasks;
-  const tasksFileRelPath = options.tasksFileRelPath ?? "../../TASKS.org";
+  const parentKind = options.archived ? "archive" : "task";
   const setupFileRelPath = options.setupFileRelPath ?? "../../TASKS.setup.org";
   // The minimal skeleton emits only the sections required on every
   // change-record per `skills/org-plan/SKILL.md`: * Summary, * Plan,
@@ -54,7 +54,7 @@ export function scaffoldPlan(
   const content = [
     `#+TITLE: ${task.summary}`,
     `#+DATE: ${formatOrgDate()}`,
-    parentId ? `#+PARENT: ${parentLink(tasksFileRelPath, parentId, task.summary)}` : null,
+    parentId ? `#+PARENT: ${parentLink(parentKind, parentId, task.summary)}` : null,
     `#+SETUPFILE: ${setupFileRelPath}`,
     "",
     "* Summary",

@@ -1,6 +1,6 @@
 #+TITLE: Task Overlay Bug Fixes
 #+DATE: 2026-04-27 Mon
-#+PARENT: [[file:../../TASKS.archive.org::#d36fe453-b8f8-4dfb-8ea6-5ed9d9eeee90][Tasks overlay bugfixes :org-memory:org-tasks:tasks-extension:]]
+#+PARENT: [[archive:d36fe453-b8f8-4dfb-8ea6-5ed9d9eeee90][Tasks overlay bugfixes :org-memory:org-tasks:tasks-extension:]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

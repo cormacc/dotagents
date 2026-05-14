@@ -1,6 +1,6 @@
 #+TITLE: Refactor keybindings extension
 #+DATE: 2026-05-02 Sat
-#+PARENT: [[file:../../TASKS.archive.org::#00e1772c-92eb-4a5b-afc5-bf1bbbb51e5b][Refactor keybindings extension]]
+#+PARENT: [[archive:00e1772c-92eb-4a5b-afc5-bf1bbbb51e5b][Refactor keybindings extension]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 

@@ -1,6 +1,6 @@
 #+TITLE: Fix keybindings extension capital-letter matching
 #+DATE: 2026-04-27 Mon
-#+PARENT: [[file:../../TASKS.archive.org::#d9789ed7-ff34-490a-a818-bf7a79fa1180][Update keybindings extension to handle capital letter properly]]
+#+PARENT: [[archive:d9789ed7-ff34-490a-a818-bf7a79fa1180][Update keybindings extension to handle capital letter properly]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

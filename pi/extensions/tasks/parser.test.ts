@@ -21,13 +21,14 @@ import {
   getFileKeyword,
   getLinkedIssues,
   getPlanParentId,
+  getPlanParentRef,
   getTaskBlockers,
   getTaskHandoff,
   isTaskReady,
   parseBlocker,
   parseLinkTemplates,
   parseTasks,
-  rewriteParentLinkTaskFile,
+  rewriteParentLinkKind,
   serializeTasks,
   serializeTasksPreservingFile,
   setDrawerProperty,
@@ -243,7 +244,7 @@ function assertContains(haystack: string, needle: string, message: string): void
     const expected = [
       "#+TITLE: Refine org-memory protocol",
       "#+DATE: 2026-04-28 Tue",
-      "#+PARENT: [[file:../../TASKS.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Refine org-memory protocol]]",
+      "#+PARENT: [[task:80ea589b-501c-42d9-86e7-4d414c0c314e][Refine org-memory protocol]]",
       "#+SETUPFILE: ../../TASKS.setup.org",
       "",
       "* Summary",
@@ -280,23 +281,30 @@ function assertContains(haystack: string, needle: string, message: string): void
     lineNumber: 0,
     endLine: 0,
   };
-  const actual = scaffoldPlan(fixture, { tasksFileRelPath: "../TASKS.org" });
-  assertContains(actual, "#+PARENT: [[file:../TASKS.org::#80ea589b-501c-42d9-86e7-4d414c0c314e]]",
-    "scaffoldPlan omits unsafe parent-link descriptions and honours custom task-file path");
+  const actual = scaffoldPlan(fixture);
+  assertContains(actual, "#+PARENT: [[task:80ea589b-501c-42d9-86e7-4d414c0c314e]]",
+    "scaffoldPlan omits unsafe parent-link descriptions");
 }
 
 {
-  const content = "#+PARENT: [[file:../../TASKS.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]\n";
+  const content = "#+PARENT: [[task:80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]\n";
   assertEqual(getPlanParentId(content), "80ea589b-501c-42d9-86e7-4d414c0c314e",
-    "getPlanParentId extracts a parent UUID from a navigable parent link");
+    "getPlanParentId extracts a parent UUID from an abbreviated parent link");
+  assertEqual(getPlanParentRef(content), {
+    kind: "task",
+    uuid: "80ea589b-501c-42d9-86e7-4d414c0c314e",
+    summary: "Parent",
+  }, "getPlanParentRef extracts kind, uuid, and summary");
+  assertEqual(getPlanParentId("#+PARENT: [[file:../../TASKS.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]\n"), null,
+    "getPlanParentId rejects legacy file-link parent links");
   assertEqual(
-    rewriteParentLinkTaskFile(
-      `${content}[[file:../../TASKS.org::#other][Other]]\n`,
+    rewriteParentLinkKind(
+      `${content}[[task:other][Other]]\n`,
       "80ea589b-501c-42d9-86e7-4d414c0c314e",
-      "../../TASKS.archive.org",
+      "archive",
     ),
-    "#+PARENT: [[file:../../TASKS.archive.org::#80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]\n[[file:../../TASKS.org::#other][Other]]\n",
-    "rewriteParentLinkTaskFile rewrites only the matching #+PARENT link target",
+    "#+PARENT: [[archive:80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]\n[[task:other][Other]]\n",
+    "rewriteParentLinkKind rewrites only the matching #+PARENT link target",
   );
 }
 

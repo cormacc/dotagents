@@ -136,7 +136,7 @@ Optional:
 ```org
 #+TITLE: Descriptive change-record title
 #+DATE: 2026-04-25 Sat
-#+PARENT: [[file:../../TASKS.org::#01234567-89ab-4def-8123-456789abcdef][Descriptive parent task]]
+#+PARENT: [[task:01234567-89ab-4def-8123-456789abcdef][Descriptive parent task]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Draft
 

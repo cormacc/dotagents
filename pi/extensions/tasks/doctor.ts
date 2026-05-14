@@ -16,11 +16,14 @@
  *   - closed-without-timestamp  DONE/CANCELLED task missing CLOSED:
  *   - stale-parent-status       parent status lags behind child progress
  *   - invalid-task-blocker      :BLOCKED-BY: task:<UUID> not in graph
+ *   - missing-link-template     task/archive #+LINK declarations absent
+ *   - misordered-link-template  task/archive local override after #+SETUPFILE
  */
 
 import {
   getTaskBlockers,
   getTaskId,
+  parseLinkTemplates,
   type Task,
 } from "./parser.ts";
 
@@ -35,7 +38,9 @@ export type FindingCode =
   | "waiting-without-blocker"
   | "closed-without-timestamp"
   | "stale-parent-status"
-  | "invalid-task-blocker";
+  | "invalid-task-blocker"
+  | "missing-link-template"
+  | "misordered-link-template";
 
 /** A single doctor finding. */
 export interface Finding {
@@ -61,6 +66,19 @@ export interface DoctorInput {
   selectedId: string | null;
   /** Path to TASKS.local.org for the selected-id finding location (optional). */
   selectedSourcePath?: string;
+  /** Optional protocol-file contents for root preamble / link-template checks. */
+  protocolFiles?: ProtocolFiles;
+}
+
+export interface ProtocolFileContent {
+  path: string;
+  content: string;
+}
+
+export interface ProtocolFiles {
+  setup?: ProtocolFileContent;
+  tasks?: ProtocolFileContent;
+  archive?: ProtocolFileContent;
 }
 
 /** Closed-state statuses (used for both stale-parent and CLOSED checks). */
@@ -119,9 +137,70 @@ function buildIdIndex(tasks: readonly Task[]): {
   return { byId, duplicates };
 }
 
+const REQUIRED_SETUP_LINKS = new Map([
+  ["task", "file:../../TASKS.org::#%s"],
+  ["archive", "file:../../TASKS.archive.org::#%s"],
+]);
+
+const REQUIRED_LOCAL_LINKS = new Map([
+  ["task", "file:TASKS.org::#%s"],
+  ["archive", "file:TASKS.archive.org::#%s"],
+]);
+
+function lineNumberOf(content: string, re: RegExp): number | undefined {
+  const lines = content.split(/\r?\n/);
+  const idx = lines.findIndex((line) => re.test(line));
+  return idx >= 0 ? idx + 1 : undefined;
+}
+
+function checkLinkTemplates(findings: Finding[], files: ProtocolFiles | undefined): void {
+  if (!files) return;
+  if (files.setup) {
+    const templates = parseLinkTemplates(files.setup.content);
+    for (const [prefix, expected] of REQUIRED_SETUP_LINKS.entries()) {
+      if (templates.get(prefix) !== expected) {
+        findings.push({
+          code: "missing-link-template",
+          severity: "warn",
+          message: `TASKS.setup.org should declare #+LINK: ${prefix} ${expected}`,
+          location: { file: files.setup.path },
+        });
+      }
+    }
+  }
+
+  for (const file of [files.tasks, files.archive]) {
+    if (!file) continue;
+    const templates = parseLinkTemplates(file.content);
+    const setupLine = lineNumberOf(file.content, /^[\t ]*#\+SETUPFILE[\t ]*:/i);
+    for (const [prefix, expected] of REQUIRED_LOCAL_LINKS.entries()) {
+      const linkRe = new RegExp(`^[\\t ]*#\\+LINK[\\t ]*:[\\t ]*${prefix}[\\t ]+${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\t ]*$`, "i");
+      const linkLine = lineNumberOf(file.content, linkRe);
+      if (templates.get(prefix) !== expected || linkLine === undefined) {
+        findings.push({
+          code: "missing-link-template",
+          severity: "warn",
+          message: `${file.path} should declare #+LINK: ${prefix} ${expected}`,
+          location: { file: file.path },
+        });
+        continue;
+      }
+      if (setupLine !== undefined && linkLine > setupLine) {
+        findings.push({
+          code: "misordered-link-template",
+          severity: "warn",
+          message: `Local #+LINK: ${prefix} override must appear before #+SETUPFILE`,
+          location: { file: file.path, line: linkLine },
+        });
+      }
+    }
+  }
+}
+
 /** Top-level doctor entry point. */
 export function runDoctor(input: DoctorInput): Finding[] {
   const findings: Finding[] = [];
+  checkLinkTemplates(findings, input.protocolFiles);
   const { byId, duplicates } = buildIdIndex(input.tasks);
 
   // ── duplicate-id ────────────────────────────────────────────────────

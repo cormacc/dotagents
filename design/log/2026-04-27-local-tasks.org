@@ -1,6 +1,6 @@
 #+TITLE: Surface TASKS.local.org tasks in the extension UI
 #+DATE: 2026-04-27 Mon
-#+PARENT: [[file:../../TASKS.archive.org::#6bee9f80-d1b5-4121-ab9c-f795e4884d3e][Update tasks extension to include local tasks]]
+#+PARENT: [[archive:6bee9f80-d1b5-4121-ab9c-f795e4884d3e][Update tasks extension to include local tasks]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

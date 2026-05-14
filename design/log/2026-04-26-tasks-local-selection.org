@@ -1,6 +1,6 @@
 #+TITLE: Move Task Selection to TASKS.local.org
 #+DATE: 2026-04-26 Sun
-#+PARENT: [[file:../../TASKS.archive.org::#a8f3c2e1-7b4d-4f9c-8a52-3e6c1d8b9f47][Move task selection state to .gitignored TASKS.local.org :org-memory:org-tasks:]]
+#+PARENT: [[archive:a8f3c2e1-7b4d-4f9c-8a52-3e6c1d8b9f47][Move task selection state to .gitignored TASKS.local.org :org-memory:org-tasks:]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

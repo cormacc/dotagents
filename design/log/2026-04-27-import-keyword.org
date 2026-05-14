@@ -1,6 +1,6 @@
 #+TITLE: Replace :INCLUDE: drawer property with #+IMPORT: keyword
 #+DATE: 2026-04-27 Mon
-#+PARENT: [[file:../../TASKS.archive.org::#9adb8c66-8aba-4e11-9922-70d6225f5a0e][Replace :INCLUDE: drawer property with #+IMPORT: keyword  :org-memory:org-tasks:]]
+#+PARENT: [[archive:9adb8c66-8aba-4e11-9922-70d6225f5a0e][Replace :INCLUDE: drawer property with #+IMPORT: keyword  :org-memory:org-tasks:]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

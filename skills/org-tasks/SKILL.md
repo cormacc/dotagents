@@ -138,6 +138,12 @@ Optional description text.
   root (before any heading) to inject tasks from another file at the root.
   Preserve any existing bare or labelled link form on round-trip. Resolution
   applies symlink-realpath sandboxing per *Locating TASKS.org* above.
+- **`task:` / `archive:` link abbreviations**: change-record parent links use
+  `[[task:<UUID>][summary]]` for live parents and `[[archive:<UUID>][summary]]`
+  for archived parents. `TASKS.setup.org` defines the plan-file-relative
+  defaults; `TASKS.org` and `TASKS.archive.org` must declare local overrides
+  *before* `#+SETUPFILE:` so org-mode's first-declared abbreviation resolves
+  task links correctly from the task files themselves.
 
 Always obtain timestamps via `date +"%Y-%m-%d %a %H:%M"` rather than computing
 them manually.
@@ -146,6 +152,8 @@ them manually.
 
 ```org
 #+TITLE: Project Tasks
+#+LINK: task file:TASKS.org::#%s
+#+LINK: archive file:TASKS.archive.org::#%s
 #+SETUPFILE: ./TASKS.setup.org
 #+ARCHIVE: TASKS.archive.org::* From %s
 
@@ -291,8 +299,9 @@ or truncate silently. Executable regression coverage for this protocol lives in
 - New change-records use `YYYY-MM-DD-short-task-name.org` under the path
   resolved from the root `#+LINK: plan .../%s` abbreviation. Each record
   declares `#+TITLE:`, `#+DATE:`, `#+SETUPFILE: ../../TASKS.setup.org`, and a
-  `#+PARENT:` link (`[[file:<rel>/TASKS.org::#<uuid>][summary]]`) pointing at
-  the parent task's `:CUSTOM_ID:`. Shared `#+TODO:`, `#+STARTUP:`, and org-link
+  `#+PARENT:` link (`[[task:<uuid>][summary]]` for live parents,
+  `[[archive:<uuid>][summary]]` for archived parents) pointing at the parent
+  task's `:CUSTOM_ID:`. Shared `#+TODO:`, `#+STARTUP:`, and org-link
   abbreviations come from the setupfile rather than being inlined.
 - Add discovered work as new `TODO` tasks rather than burying it in prose. Do
   not remove completed historical tasks unless asked.
@@ -311,12 +320,16 @@ If `TASKS.org` does not exist and the user wants persistent task memory:
    #+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)
    #+STARTUP: logdone logdrawer
    #+LINK: plan file:design/log/%s
+   #+LINK: task file:../../TASKS.org::#%s
+   #+LINK: archive file:../../TASKS.archive.org::#%s
    ```
 
 2. Create `TASKS.org` referencing it:
 
    ```org
    #+TITLE: Project Tasks
+   #+LINK: task file:TASKS.org::#%s
+   #+LINK: archive file:TASKS.archive.org::#%s
    #+SETUPFILE: ./TASKS.setup.org
    #+ARCHIVE: TASKS.archive.org::* From %s
 

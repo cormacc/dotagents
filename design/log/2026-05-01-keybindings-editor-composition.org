@@ -1,6 +1,6 @@
 #+TITLE: Keybindings extension: compose with prior editor (pi 0.71.0)
 #+DATE: 2026-05-01 Fri
-#+PARENT: [[file:../../TASKS.archive.org::#c94bab43-aedf-4ccf-984c-a2e1167e880a][Review 0.71.0 changes re. editor]]
+#+PARENT: [[archive:c94bab43-aedf-4ccf-984c-a2e1167e880a][Review 0.71.0 changes re. editor]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

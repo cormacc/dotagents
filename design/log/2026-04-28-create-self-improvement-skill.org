@@ -1,6 +1,6 @@
 #+TITLE: Create self-improvement skill
 #+DATE: 2026-04-29 Wed
-#+PARENT: [[file:../../TASKS.org::#2262ed25-f0fc-40fd-9d21-41a0b16fb3a1][Create self-improvement skill]]
+#+PARENT: [[task:2262ed25-f0fc-40fd-9d21-41a0b16fb3a1][Create self-improvement skill]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

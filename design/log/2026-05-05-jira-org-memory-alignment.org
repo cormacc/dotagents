@@ -1,6 +1,6 @@
 #+TITLE: Review Jira integration against org-memory protocol
 #+DATE: 2026-05-05 Tue
-#+PARENT: [[file:../../TASKS.org::#2b4d4ca7-6648-4e58-b4cf-b970565e79c7][Review Jira integration against org-memory protocol :jira:org-memory:followup:]]
+#+PARENT: [[task:2b4d4ca7-6648-4e58-b4cf-b970565e79c7][Review Jira integration against org-memory protocol :jira:org-memory:followup:]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Draft
 

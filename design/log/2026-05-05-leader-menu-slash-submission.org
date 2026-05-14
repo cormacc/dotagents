@@ -1,6 +1,6 @@
 #+TITLE: leader-menu owns slash-command submission via shared CustomEditor
 #+DATE: 2026-05-05 Tue
-#+PARENT: [[file:../../TASKS.archive.org::#c22975ff-5ea8-47d4-807e-6499f2ea6970][leader-menu: fix slash command dispatch :leader-menu:]]
+#+PARENT: [[archive:c22975ff-5ea8-47d4-807e-6499f2ea6970][leader-menu: fix slash command dispatch :leader-menu:]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Active
 

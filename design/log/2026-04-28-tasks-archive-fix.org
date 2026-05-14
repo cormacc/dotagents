@@ -1,6 +1,6 @@
 #+TITLE: Fix tasks-extension archive: stale refs + filename casing
 #+DATE: 2026-04-28 Tue
-#+PARENT: [[file:../../TASKS.archive.org::#84085b11-837b-449a-8cf8-190c607f480c][Tasks extension - archive function mistakenly won't archive some issues]]
+#+PARENT: [[archive:84085b11-837b-449a-8cf8-190c607f480c][Tasks extension - archive function mistakenly won't archive some issues]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

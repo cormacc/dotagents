@@ -1,6 +1,6 @@
 #+TITLE: Define legacy org-task metadata tolerance and normalization
 #+DATE: 2026-05-05 Tue
-#+PARENT: [[file:../../TASKS.org::#972d5cec-0606-44e3-8276-4c7d12349cde][Define legacy org-task metadata tolerance and normalization :org-memory:compatibility:followup:]]
+#+PARENT: [[task:972d5cec-0606-44e3-8276-4c7d12349cde][Define legacy org-task metadata tolerance and normalization :org-memory:compatibility:followup:]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Draft
 

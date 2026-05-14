@@ -2,3 +2,8 @@
 #+STARTUP: logdone logdrawer
 #+LINK: jira https://your-org.atlassian.net/browse/%s
 #+LINK: plan file:design/log/%s
+# Default task/archive link targets assume plan files live under design/log/.
+# TASKS.org and TASKS.archive.org declare local overrides before #+SETUPFILE:
+# so org-mode resolves task links correctly from the task files themselves.
+#+LINK: task file:../../TASKS.org::#%s
+#+LINK: archive file:../../TASKS.archive.org::#%s

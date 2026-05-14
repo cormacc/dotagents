@@ -1,6 +1,6 @@
 #+TITLE: Dataspex integration for agent-assisted Clojure dev
 #+DATE: 2026-05-13 Wed
-#+PARENT: [[file:../../TASKS.archive.org::#0b3cf4b7-dabe-475e-82a7-434e71573f64][Add clojure dataspex skill/extension]]
+#+PARENT: [[archive:0b3cf4b7-dabe-475e-82a7-434e71573f64][Add clojure dataspex skill/extension]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 

@@ -534,37 +534,56 @@ export function getFileKeyword(
   return m?.[1] ?? null;
 }
 
-/** Extract the parent task UUID from a navigable `#+PARENT:` org link. */
-export function getPlanParentId(content: string): string | null {
+export type PlanParentKind = "task" | "archive";
+
+export interface PlanParentRef {
+  kind: PlanParentKind;
+  uuid: string;
+  summary: string | null;
+}
+
+/** Extract the parent task reference from a navigable `#+PARENT:` org link. */
+export function getPlanParentRef(content: string): PlanParentRef | null {
   const raw = getFileKeyword(content, "PARENT");
   if (raw === null) return null;
   const link = extractOrgLink(raw);
   if (!link) return null;
-  const match = /(?:^|::)#([^\s#]+)\s*$/.exec(link.target);
-  return match?.[1]?.trim() || null;
+  const match = /^(task|archive):([^\s#\]]+)$/i.exec(link.target);
+  if (!match) return null;
+  return {
+    kind: match[1]!.toLowerCase() as PlanParentKind,
+    uuid: match[2]!.trim(),
+    summary: link.description,
+  };
+}
+
+/** Extract the parent task UUID from a navigable `#+PARENT:` org link. */
+export function getPlanParentId(content: string): string | null {
+  return getPlanParentRef(content)?.uuid ?? null;
 }
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Rewrite only the task-file component of a plan's `#+PARENT:` link. */
-export function rewriteParentLinkTaskFile(
+/** Rewrite only the link kind of a plan's `#+PARENT:` link. */
+export function rewriteParentLinkKind(
   content: string,
   parentId: string,
-  tasksFileRelPath: string,
+  kind: PlanParentKind,
 ): string {
   const id = escapeRegExp(parentId);
   const parentLineRe = /^([\t ]*#\+PARENT:[\t ]*)(.*)$/i;
   const linkTargetRe = new RegExp(
-    `(\\[\\[(?:file:)?)([^\\]]*?)(::#${id}(?:\\](?:\\[[^\\]]*\\])?))`,
+    `(\\[\\[)(task|archive):${id}(\\](?:\\[[^\\]]*\\])?\\])`,
+    "i",
   );
   const lines = content.split(/\r?\n/);
   let changed = false;
   const next = lines.map((line) => {
     const parent = parentLineRe.exec(line);
     if (!parent) return line;
-    const rewritten = parent[2]!.replace(linkTargetRe, `$1${tasksFileRelPath}$3`);
+    const rewritten = parent[2]!.replace(linkTargetRe, `$1${kind}:${parentId}$3`);
     if (rewritten !== parent[2]) changed = true;
     return `${parent[1]}${rewritten}`;
   }).join("\n");

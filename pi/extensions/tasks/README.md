@@ -509,6 +509,10 @@ Extension-specific notes:
   imports. Whichever form is on disk is preserved exactly. New change-records
   scaffolded by `p` are written in `[[plan:...]]` form when they live under the
   configured plan directory.
+- **`#+PARENT:` link form**: change-record parent pointers use
+  `[[task:<uuid>][summary]]` for live tasks and `[[archive:<uuid>][summary]]`
+  after archival. The archive flow rewrites only the link prefix from `task:`
+  to `archive:`; it does not rewrite relative file paths.
 - **Subtask absorption**: if `p` is pressed on a task that already
   has local subtasks, those subtask trees are moved into the new
   change-record under `* Plan`; the parent retains a plain-text

@@ -2,6 +2,8 @@
 #+AUTHOR: Cormac Cannon
 #+LANGUAGE: en
 #+DATE: 2026-05-07
+#+LINK: task file:TASKS.org::#%s
+#+LINK: archive file:TASKS.archive.org::#%s
 #+SETUPFILE: ./TASKS.setup.org
 #+ARCHIVE: TASKS.archive.org::* From %s
 
@@ -18,6 +20,25 @@
 - [[#agent-feedback][Agent feedback]]
 
 * Improvements
+
+
+** TODO [#B] Evaluate vulpea for use within org-memory protocol :org:
+:PROPERTIES:
+:CUSTOM_ID: e8ad59a8-6a46-47d3-b7db-376705409fa3
+:CREATED: [2026-05-14 Thu 11:48]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 11:48]
+:END:
+A database layer on top of org-mode notes -- may be useful?
+See https://github.com/d12frosted/vulpea
+
+The related/ecosystem libs below may also be useful:
+- https://github.com/d12frosted/vulpea-ui
+- https://github.com/fabcontigiani/consult-vulpea
+
+There's a why article here:
+https://www.d12frosted.io/posts/2025-11-28-vulpea-v2-breaking-up-with-org-roam
 
 ** TODO [#C] Improve terminal extension :pi:
 :PROPERTIES:
@@ -101,6 +122,18 @@ Acceptance criteria:
 - README cross-references the `org-tasks` resume read order and the future `tasks_resume_brief` consumer.
 
 Blocked by the in-place `org_read_section` primitive shipping first (TASKS.org task 1b496799) — no point doing both at once.
+
+** TODO [#C] Move Jira project configuration into TASKS.setup.org :org:jira:tasks:
+:PROPERTIES:
+:CUSTOM_ID: eb5d44ea-cece-48c7-be0e-d6f4a9552200
+:CREATED: [2026-05-14 Thu 13:19]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 13:19]
+:END:
+#+IMPORT: [[plan:2026-05-14-jira-config-setupfile.org]]
+Jira config remnants in TASKS.org should be normalized: derive JIRA_BASE_URL from the `#+LINK: jira .../browse/%s` template, and move project-level `#+JIRA_CLOUDID` / `#+JIRA_PROJECT` defaults into TASKS.setup.org while preserving TASKS.local.org overrides.
+
 * Fixes
 
 ** TODO Local tasks duplicated in overlay when selected? :bug:pi:

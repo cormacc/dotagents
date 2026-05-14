@@ -1,6 +1,6 @@
 #+TITLE: Refine Tasks Extension Implementation Plan
 #+DATE: 2026-04-25 Sat
-#+PARENT: [[file:../../TASKS.archive.org::#f92b7b2f-c7fc-4933-9e27-20c0e411cbe4][Refine tasks extension :org-memory:org-tasks:]]
+#+PARENT: [[archive:f92b7b2f-c7fc-4933-9e27-20c0e411cbe4][Refine tasks extension :org-memory:org-tasks:]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

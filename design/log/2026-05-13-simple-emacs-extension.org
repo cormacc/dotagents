@@ -1,6 +1,6 @@
 #+TITLE: Simple Emacs extension for org-tasks
 #+DATE: 2026-05-13 Wed
-#+PARENT: [[file:../../TASKS.archive.org::#7528b900-1931-49ba-a9a5-9f10efdaea47][Add simple emacs extension]]
+#+PARENT: [[archive:7528b900-1931-49ba-a9a5-9f10efdaea47][Add simple emacs extension]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 

@@ -1,6 +1,6 @@
 #+TITLE: Org Agent Memory and Tasks Extension
 #+DATE: 2026-04-24 Fri
-#+PARENT: [[file:../../TASKS.archive.org::#9ae2bf39-c61c-4a2d-8fa5-882a5ce3eca7][Implement an org-based memory system for pi-agent :org-memory:]]
+#+PARENT: [[archive:9ae2bf39-c61c-4a2d-8fa5-882a5ce3eca7][Implement an org-based memory system for pi-agent :org-memory:]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

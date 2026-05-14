@@ -1,6 +1,6 @@
 #+TITLE: Review dev-agent-backlog prior art
 #+DATE: 2026-05-01 Fri
-#+PARENT: [[file:../../TASKS.archive.org::#5aed17ed-cfc4-4ae3-bb24-57c7d974a142][Review prior art w.r.t. org-memory protocol]]
+#+PARENT: [[archive:5aed17ed-cfc4-4ae3-bb24-57c7d974a142][Review prior art w.r.t. org-memory protocol]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 

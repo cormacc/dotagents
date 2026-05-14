@@ -1,6 +1,6 @@
 #+TITLE: Jira integration via a new jira extension
 #+DATE: 2026-04-28 Tue
-#+PARENT: [[file:../../TASKS.archive.org::#0276a6c7-0ca8-4c39-a90a-05587ad64698][Add some sort of Jira integration for the tasks extension]]
+#+PARENT: [[archive:0276a6c7-0ca8-4c39-a90a-05587ad64698][Add some sort of Jira integration for the tasks extension]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

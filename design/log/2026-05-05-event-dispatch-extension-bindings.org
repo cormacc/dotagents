@@ -1,6 +1,6 @@
 #+TITLE: Preserve editor input when leader bindings open extension UIs
 #+DATE: 2026-05-05 Tue
-#+PARENT: [[file:../../TASKS.archive.org::#1f8a039b-ef3d-4461-952e-1dc2b2b9a780][Activating tasks overlay clobbers text in input area]]
+#+PARENT: [[archive:1f8a039b-ef3d-4461-952e-1dc2b2b9a780][Activating tasks overlay clobbers text in input area]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 

@@ -1,6 +1,6 @@
 #+TITLE: Refine org-memory/plan Protocol
 #+DATE: 2026-04-25 Sat
-#+PARENT: [[file:../../TASKS.archive.org::#7a48756f-95b2-440c-9810-09a9ae60e452][Refine org-memory/plan protocol :org-memory:]]
+#+PARENT: [[archive:7a48756f-95b2-440c-9810-09a9ae60e452][Refine org-memory/plan protocol :org-memory:]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

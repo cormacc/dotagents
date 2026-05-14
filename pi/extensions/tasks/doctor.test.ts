@@ -319,6 +319,61 @@ function count(findings: Finding[], code: FindingCode): number {
     "invalid-task-blocker: no finding when task: blocker resolves");
 }
 
+// ── task/archive link-template checks ─────────────────────────────────
+
+{
+  const findings = runDoctor({
+    tasks: [],
+    selectedId: null,
+    protocolFiles: {
+      setup: {
+        path: "/tmp/TASKS.setup.org",
+        content: [
+          "#+LINK: plan file:design/log/%s",
+          "#+LINK: task file:../../TASKS.org::#%s",
+          "#+LINK: archive file:../../TASKS.archive.org::#%s",
+        ].join("\n"),
+      },
+      tasks: {
+        path: "/tmp/TASKS.org",
+        content: [
+          "#+TITLE: Project Tasks",
+          "#+LINK: task file:TASKS.org::#%s",
+          "#+LINK: archive file:TASKS.archive.org::#%s",
+          "#+SETUPFILE: ./TASKS.setup.org",
+        ].join("\n"),
+      },
+    },
+  });
+  assertEqual(count(findings, "missing-link-template"), 0,
+    "link-template checks: valid setup/local declarations pass");
+  assertEqual(count(findings, "misordered-link-template"), 0,
+    "link-template checks: valid local declarations before setup pass");
+}
+
+{
+  const findings = runDoctor({
+    tasks: [],
+    selectedId: null,
+    protocolFiles: {
+      setup: { path: "/tmp/TASKS.setup.org", content: "#+LINK: plan file:design/log/%s\n" },
+      tasks: {
+        path: "/tmp/TASKS.org",
+        content: [
+          "#+TITLE: Project Tasks",
+          "#+SETUPFILE: ./TASKS.setup.org",
+          "#+LINK: task file:TASKS.org::#%s",
+          "#+LINK: archive file:TASKS.archive.org::#%s",
+        ].join("\n"),
+      },
+    },
+  });
+  assertEqual(count(findings, "missing-link-template"), 2,
+    "link-template checks: missing setup declarations are reported");
+  assertEqual(count(findings, "misordered-link-template"), 2,
+    "link-template checks: local declarations after setup are reported");
+}
+
 // ── formatFindingLine / formatFindingsReport ──────────────────────────
 
 {

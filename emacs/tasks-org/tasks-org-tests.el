@@ -35,6 +35,44 @@
     (should (string-match-p ":PROPERTIES:\n:CUSTOM_ID: [0-9a-f-]+\n:CREATED: \\[" metadata))
     (should (string-match-p ":LOGBOOK:\n- Created \\[" metadata))))
 
+(ert-deftest tasks-org-test-plan-link-in-import-keyword-opens-file ()
+  (tasks-org-test--with-temp-project
+   (make-directory (expand-file-name "design/log" root) t)
+   (let ((tasks-file (expand-file-name "TASKS.org" root))
+         (setup-file (expand-file-name "TASKS.setup.org" root))
+         (plan-file (expand-file-name "design/log/plan.org" root)))
+     (write-region "#+LINK: plan file:design/log/%s\n" nil setup-file)
+     (write-region "#+TITLE: Plan\n" nil plan-file)
+     (write-region "#+SETUPFILE: ./TASKS.setup.org\n#+IMPORT: [[plan:plan.org]]\n" nil tasks-file)
+     (find-file tasks-file)
+     (goto-char (point-min))
+     (search-forward "plan:plan.org")
+     (org-open-at-point)
+     (should (equal (buffer-file-name) plan-file)))))
+
+(ert-deftest tasks-org-test-task-and-archive-links-open-custom-id ()
+  (tasks-org-test--with-temp-project
+   (let ((tasks-file (expand-file-name "TASKS.org" root))
+         (archive-file (expand-file-name "TASKS.archive.org" root)))
+     (write-region "* TODO Parent\n:PROPERTIES:\n:CUSTOM_ID: 11111111-2222-4333-8444-555555555555\n:END:\n" nil tasks-file)
+     (write-region "* DONE Archived\n:PROPERTIES:\n:CUSTOM_ID: 22222222-3333-4444-8555-666666666666\n:END:\n" nil archive-file)
+     (with-temp-buffer
+       (org-mode)
+       (insert "[[task:11111111-2222-4333-8444-555555555555]]\n[[archive:22222222-3333-4444-8555-666666666666]]\n")
+       (goto-char (point-min))
+       (search-forward "task:11111111")
+       (org-open-at-point)
+       (should (equal (buffer-file-name) tasks-file))
+       (should (equal (org-entry-get (point) "CUSTOM_ID") "11111111-2222-4333-8444-555555555555")))
+     (with-temp-buffer
+       (org-mode)
+       (insert "[[archive:22222222-3333-4444-8555-666666666666]]\n")
+       (goto-char (point-min))
+       (search-forward "archive:22222222")
+       (org-open-at-point)
+       (should (equal (buffer-file-name) archive-file))
+       (should (equal (org-entry-get (point) "CUSTOM_ID") "22222222-3333-4444-8555-666666666666"))))))
+
 (ert-deftest tasks-org-test-toggle-task-and-plan-round-trip ()
   (tasks-org-test--with-temp-project
    (make-directory (expand-file-name "design/log" root) t)
@@ -43,7 +81,7 @@
          (plan-file (expand-file-name "design/log/plan.org" root)))
      (write-region "#+LINK: plan file:design/log/%s\n" nil setup-file)
      (write-region "#+SETUPFILE: ./TASKS.setup.org\n* Improvements\n\n** TODO Parent\n:PROPERTIES:\n:CUSTOM_ID: 11111111-2222-4333-8444-555555555555\n:END:\n#+IMPORT: [[plan:plan.org]]\n" nil tasks-file)
-     (write-region "#+TITLE: Plan\n#+PARENT: [[file:../../TASKS.org::#11111111-2222-4333-8444-555555555555][Parent]]\n\n* Summary\n" nil plan-file)
+     (write-region "#+TITLE: Plan\n#+PARENT: [[task:11111111-2222-4333-8444-555555555555][Parent]]\n\n* Summary\n" nil plan-file)
      (find-file tasks-file)
      (goto-char (point-min))
      (re-search-forward "Parent")

@@ -1,6 +1,6 @@
 #+TITLE: org_read_section: section-scoped org-file reader (in tasks extension)
 #+DATE: 2026-05-12 Tue
-#+PARENT: [[file:../../TASKS.archive.org::#1b496799-6198-46ca-8084-7a1fbed6f250][tasks extension: section-scoped change-record reader]]
+#+PARENT: [[archive:1b496799-6198-46ca-8084-7a1fbed6f250][tasks extension: section-scoped change-record reader]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 

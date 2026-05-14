@@ -7,6 +7,7 @@
     "npm:pi-web-access",
     "npm:pi-intercom",
     "npm:context-mode",
-    "npm:@latentminds/pi-quotas"
+    "npm:@latentminds/pi-quotas",
+    "npm:pi-tldr"
   ]
 }

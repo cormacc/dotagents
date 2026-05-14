@@ -1,6 +1,6 @@
 #+TITLE: Retrospective change-records for tasks without prior planning
 #+DATE: 2026-04-28 Tue
-#+PARENT: [[file:../../TASKS.archive.org::#9f233338-833b-43c1-81d2-e413a536d586][Update org-memory skill to prompt to generate an implementation report for tasks without a plan]]
+#+PARENT: [[archive:9f233338-833b-43c1-81d2-e413a536d586][Update org-memory skill to prompt to generate an implementation report for tasks without a plan]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

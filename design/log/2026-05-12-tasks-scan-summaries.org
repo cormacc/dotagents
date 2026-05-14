@@ -1,6 +1,6 @@
 #+TITLE: tasks_scan_summaries: prior-art discovery for the planning agent
 #+DATE: 2026-05-12 Tue
-#+PARENT: [[file:../../TASKS.archive.org::#70cd5222-825f-4dad-b264-cb8c8ded06dc][tasks extension: scan-summaries tool for prior-art discovery]]
+#+PARENT: [[archive:70cd5222-825f-4dad-b264-cb8c8ded06dc][tasks extension: scan-summaries tool for prior-art discovery]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 

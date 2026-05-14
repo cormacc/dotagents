@@ -87,7 +87,7 @@ const tasksContent = [
 
 const planContent = [
   "#+TITLE: Review org-memory protocol as agent memory",
-  `#+PARENT: [[file:../../TASKS.org::#${parentId}][Review org-memory protocol]]`,
+  `#+PARENT: [[task:${parentId}][Review org-memory protocol]]`,
   "",
   "* Summary",
   "Org-memory protocol now reconstructs selected work across sessions via condensed `* Summary` plus task graph.",

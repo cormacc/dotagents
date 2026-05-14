@@ -38,6 +38,11 @@
   :type 'string
   :group 'tasks-org)
 
+(defcustom tasks-org-archive-file-name "TASKS.archive.org"
+  "Project-root archived task index file name."
+  :type 'string
+  :group 'tasks-org)
+
 (defcustom tasks-org-capture-key "t"
   "Key used for the tag-prompting capture template."
   :type 'string
@@ -68,6 +73,10 @@
 (defun tasks-org--local-file ()
   "Return the project-root TASKS.local.org path."
   (expand-file-name tasks-org-local-file-name (tasks-org--project-root)))
+
+(defun tasks-org--archive-file ()
+  "Return the project-root TASKS.archive.org path."
+  (expand-file-name tasks-org-archive-file-name (tasks-org--project-root)))
 
 ;;;###autoload
 (defun tasks-org-find-tasks-file ()
@@ -188,14 +197,16 @@
     (and raw (tasks-org--org-link-target raw))))
 
 (defun tasks-org--parent-id-from-target (target)
-  "Extract a CUSTOM_ID anchor from a #+PARENT link TARGET."
-  (when (and target (string-match "::#\\([^[:space:]#]+\\)\\'" target))
+  "Extract a CUSTOM_ID from an abbreviated #+PARENT link TARGET."
+  (when (and target (string-match "\\`\\(?:task\\|archive\\):\\([^[:space:]#]+\\)\\'" target))
     (match-string 1 target)))
 
 (defun tasks-org--parent-file-from-target (target)
-  "Extract the file portion from a #+PARENT link TARGET."
+  "Resolve the task file named by abbreviated #+PARENT link TARGET."
   (when target
-    (replace-regexp-in-string "::#.*\\'" "" target)))
+    (cond
+     ((string-match-p "\\`task:" target) (tasks-org--tasks-file))
+     ((string-match-p "\\`archive:" target) (tasks-org--archive-file)))))
 
 (defun tasks-org--find-heading-by-custom-id (id)
   "Move point to the heading whose CUSTOM_ID property equals ID."
@@ -244,6 +255,35 @@ file/path targets."
       (find-file-other-window file)
     (find-file file)))
 
+(defun tasks-org--follow-plan-link (path &optional _arg)
+  "Follow a `plan:' org link with PATH from any org context.
+
+Org expands `#+LINK:' abbreviations for normal parsed links, but a link inside
+an org keyword such as `#+IMPORT: [[plan:...]]' is opened as a raw link target.
+Registering an explicit follow handler keeps these keyword links clickable."
+  (let* ((template (or (tasks-org--link-template "plan") "file:design/log/%s"))
+         (expanded (replace-regexp-in-string "%s" path template t t))
+         (file (if (string-prefix-p "file:" expanded)
+                   (substring expanded 5)
+                 expanded)))
+    (tasks-org--open-target (expand-file-name file (tasks-org--project-root)))))
+
+(defun tasks-org--follow-task-link (path &optional _arg)
+  "Follow a `task:' org link to CUSTOM_ID PATH in TASKS.org."
+  (tasks-org--open-target (tasks-org--tasks-file))
+  (tasks-org--find-heading-by-custom-id path))
+
+(defun tasks-org--follow-archive-link (path &optional _arg)
+  "Follow an `archive:' org link to CUSTOM_ID PATH in TASKS.archive.org."
+  (tasks-org--open-target (tasks-org--archive-file))
+  (tasks-org--find-heading-by-custom-id path))
+
+(defun tasks-org--register-link-types ()
+  "Register org-link follow handlers for org-tasks abbreviations."
+  (org-link-set-parameters "plan" :follow #'tasks-org--follow-plan-link)
+  (org-link-set-parameters "task" :follow #'tasks-org--follow-task-link)
+  (org-link-set-parameters "archive" :follow #'tasks-org--follow-archive-link))
+
 (defun tasks-org--toggle-task-and-plan (&optional other-window)
   "Shared implementation for task/plan toggling."
   (let ((parent-target (tasks-org--parent-link)))
@@ -253,7 +293,7 @@ file/path targets."
              (parent-file (tasks-org--parent-file-from-target parent-target)))
         (unless (and parent-id parent-file)
           (user-error "Malformed #+PARENT link"))
-        (tasks-org--open-target (expand-file-name parent-file (file-name-directory (buffer-file-name))) other-window)
+        (tasks-org--open-target parent-file other-window)
         (tasks-org--find-heading-by-custom-id parent-id)))
      (t
       (let ((import (tasks-org--current-import-link)))
@@ -340,6 +380,8 @@ file/path targets."
                              lines))
          (updated (string-join kept "\n")))
     (tasks-org--write-local-content updated)))
+
+(tasks-org--register-link-types)
 
 ;;;###autoload
 (defun tasks-org-toggle-selected ()

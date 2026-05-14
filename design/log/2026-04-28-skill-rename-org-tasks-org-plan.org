@@ -1,6 +1,6 @@
 #+TITLE: Rename skills: org-memory → org-tasks, plan → org-plan
 #+DATE: 2026-04-28 Tue
-#+PARENT: [[file:../../TASKS.archive.org::#ce69ef5e-5967-4623-a2e3-f22e0bd1a745][Consider whether to rename the 'org-memory' skill to just 'tasks']]
+#+PARENT: [[archive:ce69ef5e-5967-4623-a2e3-f22e0bd1a745][Consider whether to rename the 'org-memory' skill to just 'tasks']]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

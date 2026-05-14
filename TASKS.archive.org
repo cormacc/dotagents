@@ -1,4 +1,6 @@
 #+TITLE: dotagents archived tasks
+#+LINK: task file:TASKS.org::#%s
+#+LINK: archive file:TASKS.archive.org::#%s
 #+SETUPFILE: ./TASKS.setup.org
 
 * DONE [#A] Implement an org-based memory system for pi-agent :org-memory:
@@ -574,3 +576,20 @@ It's implemented as a library embedded in the application, and a companion brows
 Consider whether this could be leveraged via a pi extension and/or skill as part of the agent-assisted clojure development process. If so, should the pi extension interact with the browser extension, or replace it and communicate directly with the dataspex apis.
 
 The linked repository includes the source for dataspex itself and the chrome and firefox extensions.
+
+* DONE [#B] org-memory Create 'task' and 'archive' link types rather than current file/anchor :org:pi:
+CLOSED: [2026-05-14 Thu 13:13]
+:PROPERTIES:
+:CUSTOM_ID: 40f66a21-bdbc-4f8b-80d2-1ec806070f1d
+:ARCHIVED: [2026-05-14 Thu 13:13]
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-14 Thu 13:13]
+:END:
+#+IMPORT: [[plan:2026-05-14-task-archive-link-types.org]]
+Currently we use absolute file:<PATH>::<CUSTOM_ID> links for links to parent.
+
+Nice to replace these with [[task:<CUSTOM_ID>]] via a project-local link type, as we do for jira and plan links currently.
+Ideally a single task link type would cover TASKS.org AND TASKS.archive.org content, but that may be impractical -- separate task: and archive: link types would be an acceptable compromise.
+
+Empirical check (2026-05-14) shows org's =#+LINK:= abbreviations honour first-declared per key, so =TASKS.org= / =TASKS.archive.org= can declare local overrides (no =../../= prefix) *before* their =#+SETUPFILE:= line and a single =task:= / =archive:= pair will work from both plan files and the task files themselves.

@@ -1,6 +1,6 @@
 #+TITLE: Migrate :ID: → :CUSTOM_ID: and #+PARENT_ID: → #+PARENT: link
 #+DATE: 2026-05-08 Fri
-#+PARENT: [[file:../../TASKS.archive.org::#69e24b8a-d86a-4c1e-b4bf-d19f8d2b56b7][org-memory -- make PARENT_ID property navigable]]
+#+PARENT: [[archive:69e24b8a-d86a-4c1e-b4bf-d19f8d2b56b7][org-memory -- make PARENT_ID property navigable]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 
