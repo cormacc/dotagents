@@ -4,14 +4,26 @@
  * Detects `bb.edn` in the project root and registers a `/bb` slash command
  * with auto-completion for available babashka tasks.
  *
- * - Regular tasks run in term's active session via `term:run`.
- * - Tasks whose name starts with "watch" run in their own tmux-backed term
- *   session via `term:spawn`.
+ * - Tasks run through pi's built-in bash tool, like any other shell command.
  */
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import {
+  createBashToolDefinition,
+  type ExtensionAPI,
+} from "@mariozechner/pi-coding-agent";
 import type { AutocompleteItem } from "@mariozechner/pi-tui";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+
+const MAX_NOTIFY_OUTPUT_LENGTH = 4000;
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function summarizeOutput(output: string): string {
+  if (output.length <= MAX_NOTIFY_OUTPUT_LENGTH) return output;
+  return `${output.slice(0, MAX_NOTIFY_OUTPUT_LENGTH)}\n…[truncated ${output.length - MAX_NOTIFY_OUTPUT_LENGTH} chars]`;
+}
 
 export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
@@ -24,7 +36,10 @@ export default function (pi: ExtensionAPI) {
 
     async function refreshTasks(): Promise<void> {
       try {
-        const r = await pi.exec("bb", ["tasks"], { timeout: 10000 });
+        const r = await pi.exec("bb", ["tasks"], {
+          cwd: ctx.cwd,
+          timeout: 10000,
+        });
         if (r.code !== 0) return;
 
         // `bb tasks` outputs lines like:
@@ -49,6 +64,24 @@ export default function (pi: ExtensionAPI) {
     }
 
     ctx.ui.notify(`bb-tasks: ${tasks.length} tasks available`, "info");
+
+    // ── run tasks through pi's built-in bash tool ────────
+
+    async function runTask(taskName: string): Promise<string> {
+      const command = `bb ${shellQuote(taskName)}`;
+      const bash = createBashToolDefinition(ctx.cwd);
+      const result = await bash.execute(
+        `bb-tasks-${taskName}`,
+        { command },
+        ctx.signal,
+        undefined,
+        ctx,
+      );
+      return result.content
+        .filter((item): item is { type: "text"; text: string } => item.type === "text")
+        .map((item) => item.text)
+        .join("\n");
+    }
 
     // ── register /bb command ─────────────────────────────
 
@@ -85,17 +118,19 @@ export default function (pi: ExtensionAPI) {
           return;
         }
 
-        const isWatch = taskName.startsWith("watch");
-
-        if (isWatch) {
-          pi.events.emit("term:spawn", {
-            command: `bb ${taskName}`,
-            title: taskName,
-          });
-          ctx.ui.notify(`Started watch task in session: ${taskName}`, "info");
-        } else {
-          pi.events.emit("term:run", { command: `bb ${taskName}` });
-          ctx.ui.notify(`Sent task to active term session: ${taskName}`, "info");
+        try {
+          ctx.ui.notify(`Running: bb ${taskName}`, "info");
+          const output = await runTask(taskName);
+          ctx.ui.notify(
+            `$ bb ${taskName}\n${summarizeOutput(output)}`,
+            "info",
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          ctx.ui.notify(
+            `bb ${taskName} failed:\n${summarizeOutput(message)}`,
+            "error",
+          );
         }
       },
     });

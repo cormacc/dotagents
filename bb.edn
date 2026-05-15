@@ -1,0 +1,19 @@
+{:tasks
+ {:requires [[clojure.string :as str]
+             [babashka.fs :as fs]]
+
+  hello    {:doc  "Print a greeting"
+            :task (println "Hello from bb-tasks!")}
+
+  echo     {:doc  "Echo arguments back"
+            :task (println (str "Args: " (str/join " " *command-line-args*)))}
+
+  files    {:doc  "List nix files in repo root"
+            :task (doseq [f (sort (fs/glob "." "*.nix"))]
+                    (println (str f)))}
+
+  watch-echo {:doc  "Long-running watch process (prints every 2s)"
+              :task (loop [i 1]
+                      (println (str "[" i "] watching... " (java.time.LocalTime/now)))
+                      (Thread/sleep 2000)
+                      (recur (inc i)))}}}
