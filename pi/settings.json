@@ -8,6 +8,7 @@
     "npm:pi-intercom",
     "npm:context-mode",
     "npm:@latentminds/pi-quotas",
-    "npm:pi-tldr"
+    "npm:pi-tldr",
+    "npm:pi-zellij-tools"
   ]
 }
