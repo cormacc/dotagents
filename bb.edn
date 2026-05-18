@@ -1,7 +1,32 @@
-{:tasks
+;; Babashka project config for the dotagents repository.
+;;
+;; - :paths / :deps drive both `bb` task execution and `bbin install`.
+;; - :bbin/bin advertises `ot` as the installable entry point. Third
+;;   parties install via:
+;;       bbin install io.github.cormacc/dotagents --as ot --latest-sha
+;;   In-tree dev runs via `bb run ot …` or skills/org-tasks/scripts/ot.
+;; - :tasks keeps the pre-existing dotagents bb tasks alongside the
+;;   new `ot` and `test` entries.
+{:paths    ["skills/org-tasks/scripts/src"]
+ :deps     {org.babashka/cli {:mvn/version "0.8.67"}}
+ :bbin/bin {ot {:main-opts ["-m" "org-tasks.cli"]}}
+ :tasks
  {:requires [[clojure.string :as str]
              [babashka.fs :as fs]]
 
+  ;; ── ot CLI ───────────────────────────────────────────────────────
+  ot   {:doc  "Run the in-tree ot CLI (org-tasks.cli/-main)"
+        :task (apply (requiring-resolve 'org-tasks.cli/-main)
+                     *command-line-args*)}
+
+  test {:doc  "Run the ot test suite (clojure.test under scripts/test)"
+        :task (do (require 'babashka.classpath)
+                  ((requiring-resolve 'babashka.classpath/add-classpath)
+                   "skills/org-tasks/scripts/test")
+                  (apply (requiring-resolve 'org-tasks.test-runner/run)
+                         *command-line-args*))}
+
+  ;; ── existing dotagents tasks ────────────────────────────────────
   hello    {:doc  "Print a greeting"
             :task (println "Hello from bb-tasks!")}
 

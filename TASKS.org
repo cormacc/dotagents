@@ -18,6 +18,16 @@
 * Improvements
 
 
+** STARTED [#B] Refactor 'tasks' extension as a thin wrapper on top of a new babashka tool
+:PROPERTIES:
+:CUSTOM_ID: fd814ac4-d12b-4fe9-90af-650447f5298f
+:STARTED: [2026-05-18 Mon 13:18]
+:HANDOFF: Plan tasks 1-6 DONE. The =ot= CLI is feature-complete: init, list, show, create, select, selected, status, archive, publish, unpublish, doctor, section, scan, record (path + create with retrospective git scoping), issue (list/add/remove/urls), blocker (list/add/remove), ready, handoff (get/set/clear) — all with the =org-tasks/v1= JSON envelope. 112 passing tests, 358 assertions. Next: plan task 7 (ee6fc19d) — refactor the pi extension into an =ot= client (graph load via =ot list --format json=, mutations via =ot status/create/select/archive/...=, =insert.ts= survives only as a thin shim into =ot create --linked-issue=, =jira_clone_apply= keeps its JS import surface). Then plan task 8 (b9b9d6be) for the SKILL/README/Home Manager wiring. Known follow-up under plan task 6: =ot record create= does not yet migrate local subtasks into =* Plan= (=absorbedSubtasks= always =false=).
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-18 Mon 13:18]
+:END:
+#+IMPORT: [[plan:2026-05-18-tasks-extension-ot-cli.org]]
 ** TODO [#C] Improve terminal extension :pi:
 :PROPERTIES:
 :CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af

@@ -1,0 +1,8 @@
+#+LINK: jira https://your-org.atlassian.net/browse/%s
+
+* TODO Round-trip
+:PROPERTIES:
+:CUSTOM_ID: 11223344-5566-4777-8888-99aabbccddee
+:LINKED_ISSUES: [[jira:MBFW-123]] [[https://x/y][y]]
+:END:
+Body.

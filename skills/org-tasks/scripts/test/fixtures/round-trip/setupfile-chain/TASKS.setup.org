@@ -1,0 +1,4 @@
+#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)
+#+STARTUP: logdone logdrawer
+#+LINK: plan file:design/log/%s
+#+JIRA_PROJECT: SHARED

@@ -1,0 +1,205 @@
+#+TITLE: Refactor tasks extension around an org-tasks CLI
+#+DATE: 2026-05-18 Mon
+#+PARENT: [[task:fd814ac4-d12b-4fe9-90af-650447f5298f][Refactor 'tasks' extension as a thin wrapper on top of a new babashka tool]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Draft
+
+* Summary
+Build =ot= as the portable org-tasks protocol engine and reduce the pi =tasks= extension to UI/event glue over that CLI. =ot= owns parsing, lifecycle writes, archive mechanics, selection, doctor checks, section reads, summary scans, and change-record scaffolding. The extension keeps the overlay, compact widget, keybindings, prompts, Emacs/browser integration, and agent follow-up prompts. =ot= ships as a Babashka project installable via =bbin= so third-party harnesses adopt it the same way pi does.
+
+** Decisions
+- Boundary :: Durable org-tasks protocol lives in =ot=; harness-specific interaction lives in the pi extension. Other coding harnesses use the same CLI without importing pi or TypeScript code.
+- CLI implementation :: Babashka + =babashka.cli/dispatch=. Per-command spec tables give Unix-shaped options, aliases, coercion, validation, and generated help.
+- Project layout :: Babashka project root at the dotagents repo root with =deps.edn= + extended =bb.edn=. CLI namespaces under =skills/org-tasks/scripts/src/org_tasks/=, entry namespace =org-tasks.cli=, tests under =skills/org-tasks/scripts/test/=. A =skills/org-tasks/scripts/ot= shell shim invokes =bb -m org-tasks.cli= for in-repo development before any install.
+- bbin packaging :: =bb.edn= declares =:bbin/bin {ot {:main-opts ["-m" "org-tasks.cli"]}}=. Third parties install via =bbin install io.github.cormacc/dotagents --as ot --latest-sha=; local development uses =bbin install <repo-root> --local/root <repo-root> --as ot=. bbin is the supported third-party install path; nothing else in the dotagents repo currently claims =:bbin/bin=, so the namespace stays clean.
+- Machine contract :: Every command supports =--format json|edn=. Envelope: ={ok, schema, result, warnings}= on success, ={ok:false, schema, error}= on failure. Schema literal is ="org-tasks/v1"=. Additive fields are non-breaking; renames or removals bump to =v2=. =ot list --format json= emits both =tree= (nested) and =rows= (flat with =parentId=) so callers pick the shape they need.
+- Migration strategy :: Per-command cutover. The extension switches to =ot <cmd>= only when golden fixtures and =bb test= both pass for that command. No temporary TypeScript fallback in the wrapper — when =ot= is missing, the extension surfaces a single actionable error.
+- =ot= discovery :: The pi extension resolves =ot= in order: =$PATH= (covers bbin's =~/.local/bin= and Home Manager entries), then =~/.pi/agent/skills/org-tasks/scripts/ot=, then =~/.agents/skills/org-tasks/scripts/ot=. The same resolution applies in any other harness that vendors the skill.
+- Jira clone path :: =insert.ts= survives as a thin shim that shells out to =ot create --linked-issue ...=. =jira_clone_apply= keeps its current JS import surface, so the jira extension does not need a coordinated cutover.
+- Emacs companion orthogonal :: =emacs/tasks-org/= continues to edit org files directly. =ot= and Emacs operate on the same files; nothing under =emacs/= changes as part of this refactor.
+
+* Context
+The current =tasks= extension mixes three concerns: org-tasks protocol semantics, agent-facing tools, and pi-specific TUI workflow. Prior work already established clean seams for protocol helpers (=insert.ts=, =section.ts=, =scan.ts=) and documented that generic org primitives should outlive the tasks UI. Moving the protocol engine to a Babashka script extends that seam beyond pi: shell users, Emacs helpers, other coding agents, and CI checks can all call the same =ot= binary, and bbin makes that adoption a one-line install for any user with Babashka. The trade-off is process-boundary overhead and an initial dual-implementation period; both are acceptable because the extension batches graph reads and golden fixtures freeze the current TypeScript output as the migration target.
+
+* Plan
+
+** DONE [#A] Lock the protocol boundary, golden fixtures, and JSON contract :design:tests:
+CLOSED: [2026-05-18 Mon 13:22]
+:PROPERTIES:
+:CUSTOM_ID: 4ee06399-bc7d-4e63-9b98-a46d23f5da9d
+:CREATED: [2026-05-18 Mon 12:44]
+:STARTED: [2026-05-18 Mon 13:18]
+:END:
+:LOGBOOK:
+- Created [2026-05-18 Mon 12:44]
+- State "STARTED" from "TODO" [2026-05-18 Mon 13:18]
+- State "DONE" from "STARTED" [2026-05-18 Mon 13:22]
+:END:
+Acceptance criteria:
+- Existing TypeScript tests are mapped to CLI-owned domains: parser/serializer, effective setupfile expansion, paths, lifecycle, doctor, insert/create, section, scan, scaffold/archive.
+- Golden org fixtures capture byte-level round trips for =TASKS.org=, =TASKS.local.org=, =TASKS.archive.org=, and representative change-records.
+- A written boundary table names which behaviours move to =ot= and which remain in the pi extension.
+- A JSON contract document under =skills/org-tasks/scripts/docs/= names every machine-readable command's envelope (=ok=, =schema=, =result=, =warnings=, =error=) with example input/output pairs for =list=, =show=, =create=, =status=, =select=, =archive=, =doctor=, =section=, =scan=, =record create=.
+
+** DONE [#A] Scaffold the =ot= Babashka project with bbin packaging :clojure:cli:packaging:
+CLOSED: [2026-05-18 Mon 13:32]
+:PROPERTIES:
+:CUSTOM_ID: 9781cca9-e352-4666-867d-7ed039a08819
+:CREATED: [2026-05-18 Mon 12:44]
+:STARTED: [2026-05-18 Mon 13:22]
+:END:
+:LOGBOOK:
+- Created [2026-05-18 Mon 12:44]
+- State "STARTED" from "TODO" [2026-05-18 Mon 13:22]
+- State "DONE" from "STARTED" [2026-05-18 Mon 13:32]
+:END:
+Acceptance criteria:
+- =deps.edn= at the dotagents repo root declares =org.babashka/cli= and test dependencies; CLI namespaces live under =skills/org-tasks/scripts/src/org_tasks/=; entry namespace is =org-tasks.cli=.
+- =bb.edn= gains =:bbin/bin {ot {:main-opts ["-m" "org-tasks.cli"]}}= and exposes =bb run ot= / =bb test= for local development.
+- =skills/org-tasks/scripts/ot= shell shim runs =exec bb -m org-tasks.cli "$@"= against the in-tree project so the binary works before any install.
+- =bbin install <repo-root> --local/root <repo-root> --as ot= installs to =~/.local/bin/ot=; =ot --help= resolves cleanly in a shell with no other dotfiles wiring.
+- Global options are uniform across subcommands: =--root=, =--format text|json|edn=, =--tasks=, =--local=, =--archive=, =--dry-run=, =--yes=, =--no-color=.
+- =ot --help= and =ot <cmd> --help= render summaries generated from the dispatch + spec table.
+
+** DONE [#A] Port org parsing, serialization, setupfile, and path resolution :parser:clojure:
+CLOSED: [2026-05-18 Mon 14:32]
+:PROPERTIES:
+:CUSTOM_ID: 131094a3-3177-4b80-8ad2-5a8cce9e103e
+:CREATED: [2026-05-18 Mon 12:44]
+:STARTED: [2026-05-18 Mon 14:23]
+:BLOCKED-BY: task:9781cca9-e352-4666-867d-7ed039a08819
+:END:
+:LOGBOOK:
+- Created [2026-05-18 Mon 12:44]
+- State "STARTED" from "TODO" [2026-05-18 Mon 14:23]
+- State "DONE" from "STARTED" [2026-05-18 Mon 14:32]
+:END:
+Acceptance criteria:
+- Clojure parser preserves headings, priorities, tags, drawers, LOGBOOK, =CLOSED:=, =#+IMPORT:=, file-level imports, unknown keywords, and unknown drawer properties matching current TypeScript fixtures.
+- =#+SETUPFILE:= expansion walks chained in-project setupfiles with cycle and depth guards, and exposes =#+LINK:= templates for plan/import resolution.
+- Path sandboxing rejects traversal and symlink escapes while allowing future in-tree scaffold paths via nearest-existing-parent resolution.
+- Round-trip tests prove unchanged non-task org content is preserved around rewritten task subtrees.
+
+** DONE [#A] Implement core task commands and stable JSON envelopes :cli:protocol:
+CLOSED: [2026-05-18 Mon 14:44]
+:PROPERTIES:
+:CUSTOM_ID: 3600a3a9-a902-45fa-b36f-8e2cea1128a4
+:CREATED: [2026-05-18 Mon 12:44]
+:STARTED: [2026-05-18 Mon 14:32]
+:BLOCKED-BY: task:131094a3-3177-4b80-8ad2-5a8cce9e103e
+:END:
+:LOGBOOK:
+- Created [2026-05-18 Mon 12:44]
+- State "STARTED" from "TODO" [2026-05-18 Mon 14:32]
+- State "DONE" from "STARTED" [2026-05-18 Mon 14:44]
+:END:
+Acceptance criteria:
+- =ot init= bootstraps =TASKS.setup.org=, =TASKS.org=, and =TASKS.local.org= using the org-tasks protocol preamble.
+- =ot list=, =ot show=, =ot create=, =ot select=, =ot selected=, and =ot status= cover the common non-archive workflow with deterministic text and JSON/EDN output.
+- =ot list --format json= emits both =tree= (nested) and =rows= (flat with =parentId=).
+- =ot status= returns =prevStatus=, =status=, and =closed= in its JSON envelope so callers can emit =tasks:status-changed= without a follow-up graph load.
+- Status transitions append LOGBOOK entries, write =:STARTED:= on first STARTED, write/clear =CLOSED:= correctly, and auto-promote parent tasks when child work starts.
+- Writes are atomic where needed, honour =--dry-run=, and return structured errors for missing sections, unknown IDs, out-of-root paths, and validation failures.
+
+** DONE [#B] Implement advanced protocol commands :archive:memory:
+CLOSED: [2026-05-18 Mon 15:45]
+:PROPERTIES:
+:CUSTOM_ID: d65fef67-985e-4c25-a1cc-879c39295113
+:CREATED: [2026-05-18 Mon 12:44]
+:STARTED: [2026-05-18 Mon 15:33]
+:BLOCKED-BY: task:3600a3a9-a902-45fa-b36f-8e2cea1128a4
+:END:
+:LOGBOOK:
+- Created [2026-05-18 Mon 12:44]
+- State "STARTED" from "TODO" [2026-05-18 Mon 15:33]
+- State "DONE" from "STARTED" [2026-05-18 Mon 15:45]
+:END:
+Acceptance criteria:
+- =ot archive=, =ot publish=, and =ot unpublish= preserve current extension semantics, including archive sorting, =:ARCHIVED:= stamping, local-task restrictions, and parent-link rewrite from =task:= to =archive:=.
+- =ot doctor= ports all current health checks and emits grouped text plus machine-readable findings.
+- =ot section= replaces =org_read_section= semantics, including source-block shielding, case-insensitive section names, trailing tag tolerance, and structured not-found results.
+- =ot scan= replaces =tasks_scan_summaries= semantics, including active/archived/all scope, tag OR-filtering, Summary body caps, =hasContext=, import walking, and unreadable-record tolerance.
+
+** DONE [#B] Implement change-record, blocker, handoff, and linked-issue helpers :agents:workflow:
+CLOSED: [2026-05-18 Mon 15:51]
+:PROPERTIES:
+:CUSTOM_ID: 58d1547e-027d-42e2-8095-95062213bc79
+:CREATED: [2026-05-18 Mon 12:44]
+:STARTED: [2026-05-18 Mon 15:45]
+:BLOCKED-BY: task:131094a3-3177-4b80-8ad2-5a8cce9e103e
+:END:
+:LOGBOOK:
+- Created [2026-05-18 Mon 12:44]
+- State "STARTED" from "TODO" [2026-05-18 Mon 15:45]
+- State "DONE" from "STARTED" [2026-05-18 Mon 15:51]
+:END:
+Follow-up: =ot record create= does not yet migrate the parent task's local subtasks into the new change-record's =* Plan= section (=absorbedSubtasks= is always =false=). This matches the TS extension's optional behaviour and is acceptable for plan task 7's cutover; track as a smaller follow-up when the extension lands.
+Acceptance criteria:
+- =ot record path= suggests plan paths from =#+LINK: plan file:.../%s= and falls back to =./design/log=.
+- =ot record create= scaffolds the required change-record sections, attaches =#+IMPORT:=, preserves and clickifies plan links, and migrates existing local subtasks into =* Plan=.
+- =ot record create --mode retrospective= resolves the parent task's =:STARTED:= and =CLOSED:= timestamps, shells out to =git log --since/--until= scoped accordingly, and emits the scope range in the JSON envelope so callers can re-use it.
+- =ot issue list/add/remove/urls= manages =:LINKED_ISSUES:= without tracker-specific behaviour.
+- =ot blocker list/add/remove/ready= and =ot handoff get/set/clear= expose generic drawer-property workflows currently embedded in parser and UI helpers.
+
+** TODO [#A] Refactor the pi tasks extension into an =ot= client :pi:refactor:
+:PROPERTIES:
+:CUSTOM_ID: ee6fc19d-6008-4b87-8de6-8e216d68a28f
+:CREATED: [2026-05-18 Mon 12:44]
+:BLOCKED-BY: task:3600a3a9-a902-45fa-b36f-8e2cea1128a4
+:BLOCKED-BY+: task:d65fef67-985e-4c25-a1cc-879c39295113
+:BLOCKED-BY+: task:58d1547e-027d-42e2-8095-95062213bc79
+:END:
+:LOGBOOK:
+- Created [2026-05-18 Mon 12:44]
+:END:
+Acceptance criteria:
+- The extension loads task graphs through =ot list --format json= and invokes =ot= for create/status/select/archive/publish/unpublish/doctor/section/scan operations.
+- =ot status='s envelope drives =tasks:status-changed= emission directly; the extension does not parse status from a separate graph load.
+- Overlay rendering, compact widget state, file watchers, keybindings, prompt/confirmation flows, Emacs opening, and browser URL opening remain extension-owned.
+- Performance budgets: graph load (=ot list --format json=) on a 200-task corpus completes in under 200 ms; per-keypress navigation never shells out; status cycle issues exactly one =ot status= call per transition.
+- File-watcher reload remains debounced at 150 ms (matches current behaviour).
+- =jira_clone_apply='s JS import of =insertTaskIntoFile= keeps working; =insert.ts= becomes a shim that shells =ot create --linked-issue ...=. Verified via the jira extension's existing test surface.
+- Existing extension tests either move to =ot= tests or become thin integration tests around the wrapper boundary.
+- The extension fails fast with one actionable error message when =ot= is missing from =$PATH= and the fallback skill locations.
+
+** TODO [#B] Wire distribution, docs, and compatibility guidance :docs:nix:packaging:
+:PROPERTIES:
+:CUSTOM_ID: b9b9d6be-64fb-4fcd-afc5-9464d22bbdf0
+:CREATED: [2026-05-18 Mon 12:44]
+:BLOCKED-BY: task:ee6fc19d-6008-4b87-8de6-8e216d68a28f
+:END:
+:LOGBOOK:
+- Created [2026-05-18 Mon 12:44]
+:END:
+Acceptance criteria:
+- =skills/org-tasks/SKILL.md= documents the =ot= command surface, machine-output contract (=org-tasks/v1=), and when agents should prefer CLI calls over hand-editing.
+- The skill includes a bbin install recipe: =bbin install io.github.cormacc/dotagents --as ot --latest-sha= for third parties and =bbin install <repo-root> --local/root <repo-root> --as ot= for in-tree development.
+- The tasks extension README states that protocol operations are delegated to =ot=, documents the discovery order (=$PATH= → =~/.pi/agent/skills/org-tasks/scripts/ot= → =~/.agents/skills/org-tasks/scripts/ot=), and names the actionable error message when =ot= is missing.
+- Dotfiles / Home Manager wiring uses bbin where available and otherwise exposes =skills/org-tasks/scripts= on =$PATH=; either path makes pi extension hot-reload work without a full Home Manager switch.
+- Migration notes describe how non-pi coding agents and CI scripts install =ot= via bbin and call it the same way the pi extension does.
+
+* Implementation
+- Initial viability assessment: Babashka is suitable because startup is low-latency, file IO is straightforward, and =babashka.cli= supports subcommand dispatch, aliases, coercion, shared options, validation, and help generation. The extension calls =ot= for graph load and discrete mutations, never per keypress.
+- bbin is the supported install path for third parties because it ships as a self-contained shell shim that fetches deps and invokes =bb=. That means non-pi harnesses pick up =ot= with one command, and Home Manager can install via bbin instead of symlinking the skill directory onto =$PATH=.
+- Prior art: =org_read_section= and =tasks_scan_summaries= established the pattern of pure protocol helpers wrapped as pi tools. This refactor generalises that pattern out of TypeScript and out of pi.
+
+* Validation
+- Golden fixture diffs :: TypeScript test suite snapshots each command's on-disk output; Clojure ports must produce byte-identical files before cutover.
+- =bb test= per ported namespace :: =scripts/test/= runs =clojure.test= via =bb test=, gating each command's cutover.
+- Pi extension smoke :: =pi/extensions/tasks/test.sh= collapses to integration smoke around the wrapper (graph load, status cycle, archive, doctor, section, scan); detailed protocol tests move to =ot=.
+- Manual overlay smoke :: Open the overlay and exercise =s=, =e=, =p=, =n=, =N=, =A=, =P=, =U=, =J=, =Ctrl-d=, =Ctrl-u= on a representative =TASKS.org= before each per-command cutover.
+
+** Verified so far
+- 2026-05-18 :: =bb run ot --help= renders the command index and global options.
+- 2026-05-18 :: =bb run ot --format json doctor= emits the contract envelope (=ok=false=, =schema="org-tasks/v1"=, =error.code="not-implemented"=) to stderr with exit code 1.
+- 2026-05-18 :: =bb run ot --format yaml doctor= emits =argument-error= with exit code 2.
+- 2026-05-18 :: =bbin install ./. --local/root . --as ot-dev= installs to =~/.local/bin/ot-dev= and runs the in-tree CLI cleanly from outside the repo.
+- 2026-05-18 :: parser/serializer/setupfile/path port: byte-identical round-trip against 6 fixtures (=closed-above-drawer=, =logbook-lifecycle=, =linked-issues-mixed=, =unknown-keywords-and-properties=, =import-link-forms=, =setupfile-chain/TASKS.org=).
+- 2026-05-18 :: =ot init=, =ot list=, =ot show=, =ot create=, =ot select=, =ot selected=, =ot status= implemented; end-to-end smoke (init + create + status DONE) writes a faithful org file with =:CUSTOM_ID:=, =:CREATED:=, =:LOGBOOK:=, =CLOSED:=, and state transition.
+- 2026-05-18 :: =ot archive= moves a closed top-level task to =TASKS.archive.org= with =:ARCHIVED:= stamp; =ot publish=/=unpublish= round-trip a task between =TASKS.org= and =TASKS.local.org=.
+- 2026-05-18 :: =ot doctor= reports zero findings against the live repo; finding-grouping/format-line tested unit-side.
+- 2026-05-18 :: =ot section= reads =* Summary= from the live change-record; =ot scan --scope active= returns 32 rows (=hasContext= flag correct on the parent).
+- 2026-05-18 :: =ot record path/create=, =ot blocker list/add/remove=, =ot ready=, =ot issue list/add/remove/urls=, =ot handoff get/set/clear= all wired with JSON envelopes; integration tests cover add→list→remove round-trips against tempdir graphs.
+- 2026-05-18 :: =bb test= passes — 112 tests, 358 assertions, 0 failures across cli/parser/lifecycle/paths/effective/commands/section/scan/doctor suites.
+
+* Open questions

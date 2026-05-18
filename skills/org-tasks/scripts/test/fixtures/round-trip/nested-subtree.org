@@ -1,0 +1,26 @@
+#+TITLE: Project Tasks
+
+* Improvements
+
+** TODO [#A] Parent task :backend:
+:PROPERTIES:
+:CUSTOM_ID: 01234567-89ab-4def-8123-456789abcdef
+:CREATED: [2026-05-01 Fri 09:00]
+:END:
+Parent description.
+
+*** TODO Child A
+:PROPERTIES:
+:CUSTOM_ID: 12345678-89ab-4def-8123-456789abcdef
+:END:
+
+*** STARTED Child B
+:PROPERTIES:
+:CUSTOM_ID: 23456789-89ab-4def-8123-456789abcdef
+:STARTED: [2026-05-01 Fri 09:30]
+:END:
+
+** TODO Second top-level task
+:PROPERTIES:
+:CUSTOM_ID: fedcba98-7654-4321-8fed-cba987654321
+:END:

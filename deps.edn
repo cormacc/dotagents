@@ -1,0 +1,13 @@
+;; tools.deps project root for the dotagents Babashka projects.
+;;
+;; Today this exposes the `ot` (org-tasks) CLI living under
+;; skills/org-tasks/scripts/. New Babashka tools should add their
+;; src/ root to :paths so a single `deps.edn` and `bb.edn` cover
+;; the whole repo.
+;;
+;; bbin install io.github.cormacc/dotagents --as ot          # third parties
+;; bbin install <repo-root> --local/root <repo-root> --as ot # local dev
+{:paths ["skills/org-tasks/scripts/src"]
+ :deps  {org.babashka/cli {:mvn/version "0.8.67"}}
+ :aliases
+ {:test {:extra-paths ["skills/org-tasks/scripts/test"]}}}

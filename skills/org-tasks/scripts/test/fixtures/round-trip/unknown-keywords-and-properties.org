@@ -1,0 +1,11 @@
+#+TITLE: Fixture
+#+FOO_BAR: hello world
+#+QUUX: 42
+
+* TODO Top-level
+:PROPERTIES:
+:CUSTOM_ID: aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee
+:FOO_BAZ: alpha beta
+:NS_ZIM: gamma
+:END:
+Description line.

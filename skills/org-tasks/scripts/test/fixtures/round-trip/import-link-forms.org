@@ -1,0 +1,17 @@
+* TODO Bare-path import
+:PROPERTIES:
+:CUSTOM_ID: bbbbbbbb-cccc-4ddd-8eee-ffffffffffff
+:END:
+#+IMPORT: design/log/bare.org
+
+* TODO File-link import
+:PROPERTIES:
+:CUSTOM_ID: cccccccc-dddd-4eee-8fff-000000000000
+:END:
+#+IMPORT: [[file:design/log/file-link.org][Plan]]
+
+* TODO Plan-typed import
+:PROPERTIES:
+:CUSTOM_ID: dddddddd-eeee-4fff-8000-111111111111
+:END:
+#+IMPORT: [[plan:typed.org]]
