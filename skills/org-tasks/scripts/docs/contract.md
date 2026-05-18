@@ -90,7 +90,10 @@ Returned by `list` (`rows[]` and within `tree[]`), `show`, `create`,
 ```
 
 Tree form additionally carries `"children": [Task]` and an `"importChildren":
-[Task]` array populated when an `#+IMPORT:` change-record is resolvable.
+[Task]` array populated when an `#+IMPORT:` change-record is resolvable. Commands
+that return a single task may include `sourceContent` and `effectiveSourceContent`
+directly on that task. `ot list` deduplicates those large strings into its
+`result.sources` map instead.
 
 ## Per-command results
 
@@ -105,6 +108,12 @@ Tree form additionally carries `"children": [Task]` and an `"importChildren":
     "tasks":   "/repo/TASKS.org",
     "local":   "/repo/TASKS.local.org",
     "archive": "/repo/TASKS.archive.org | null"
+  },
+  "sources": {
+    "/repo/TASKS.org": {
+      "sourceContent": "raw TASKS.org content",
+      "effectiveSourceContent": "content plus expanded setupfiles"
+    }
   }
 }
 ```
@@ -112,6 +121,9 @@ Tree form additionally carries `"children": [Task]` and an `"importChildren":
 - `tree` is depth-first nested by `children` and `importChildren`.
 - `rows` is the same tasks flattened in walker order, each carrying `parentId`.
 - `selectedId` echoes `#+SELECTED:` from `TASKS.local.org`.
+- `sources` is keyed by absolute source path and carries file content once per
+  path so UI clients can resolve link templates or preserve org text without
+  duplicating large strings on every task row.
 
 ### `ot show <id>`
 
@@ -136,14 +148,18 @@ Tree form additionally carries `"children": [Task]` and an `"importChildren":
 
 ```json
 "result": {
-  "task":         Task,
+  "id":           "uuid",
   "file":         "/repo/TASKS.org",
   "line":         42,
   "sectionCreated": false
 }
 ```
 
-Errors: `section-not-found`, `duplicate-linked-issue`,
+Options include `--section`, `--parent`, `--after`, `--priority`, repeated
+`--tag`, `--body`, repeated `--linked-issue`, repeated `--also-scan`,
+`--allow-create-section`, and compatibility/test overrides `--id` and
+`--created-at`. `--parent` inserts a child under that task; `--after` inserts a
+sibling after the anchor task. Errors: `section-not-found`, `duplicate-linked-issue`,
 `path-outside-project`, `empty-summary`.
 
 ### `ot status <id> <new-status>`

@@ -123,7 +123,8 @@
 
 (defn list-cmd [{:keys [opts]}]
   (let [{:keys [tasks selected-id files]} (load-context opts)
-        wire-tasks (mapv task/task->wire tasks)
+        sources    (task/collect-sources tasks)
+        wire-tasks (mapv #(task/task->wire % nil {:include-content? false}) tasks)
         rows       (task/flatten-tree wire-tasks)
         scope      (:scope opts :active)
         status-filter (set (:status-filter opts))
@@ -140,6 +141,7 @@
        :rows filtered
        :selectedId selected-id
        :files files
+       :sources sources
        :text/lines (cons (format "%-2s %s" " " "STATUS    short-id  task")
                          (map #(format-list-row % selected-id) filtered))})))
 
@@ -287,7 +289,8 @@
         ;; Mirror the pi extension's `alsoScan` heuristic: when
         ;; inserting into TASKS.org, also scan TASKS.local.org for
         ;; duplicate :LINKED_ISSUES: tokens, and vice-versa.
-        also-scan (if local? [(:tasks files)] [(:local files)])
+        also-scan (into (if local? [(:tasks files)] [(:local files)])
+                        (coerce-seq (:also-scan opts)))
         args    {:project-root project-root
                  :file file
                  :section (or (:section opts) "Improvements")
@@ -297,6 +300,9 @@
                  :linked-issues tokens
                  :labels labels
                  :parent-id (:parent opts)
+                 :after-id (:after opts)
+                 :id (:id opts)
+                 :created-at (:created-at opts)
                  :also-scan also-scan
                  :allow-create-section? (boolean (:allow-create-section opts))}]
     (cond
@@ -343,6 +349,14 @@
                                          (:file args))
                            :file (:file result)
                            :details {:section (:section args)}})
+
+          :unknown-task
+          (out/emit-error opts
+                          {:code "unknown-task"
+                           :message (:message result)
+                           :details {:reason (some-> (:reason result) name)
+                                     :parentId (:parent opts)
+                                     :afterId (:after opts)}})
 
           :error
           (out/emit-error opts

@@ -22,8 +22,16 @@ while [ -L "$script_path" ]; do
 done
 
 script_dir="$(cd "$(dirname "$script_path")" && pwd)"
-# scripts/ → org-tasks/ → skills/ → repo root
+# scripts/ → org-tasks/ → skills/ → repo root when running from a full
+# dotagents checkout. Home Manager / standalone skill installs may only
+# expose the skill subtree under ~/.agents, so fall back to a source-classpath
+# invocation in that case.
 repo_root="$(cd "$script_dir/../../.." && pwd)"
 
-exec bb --config "$repo_root/bb.edn" --deps-root "$repo_root" \
-        -m org-tasks.cli "$@"
+if [ -f "$repo_root/bb.edn" ]; then
+  exec bb --config "$repo_root/bb.edn" --deps-root "$repo_root" \
+          -m org-tasks.cli -- "$@"
+else
+  exec bb --classpath "$script_dir/src" \
+          -m org-tasks.cli -- "$@"
+fi

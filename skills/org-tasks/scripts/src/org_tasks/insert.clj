@@ -15,6 +15,7 @@
     insert-task-into-file    :: args -> result map (see :status keys)"
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
+            [org-tasks.effective :as effective]
             [org-tasks.parser :as parser]
             [org-tasks.paths :as paths]))
 
@@ -180,12 +181,15 @@
               (when (and abs-path (not (contains? @visited abs-path)))
                 (vswap! visited conj abs-path)
                 (when-let [content (safe-slurp abs-path)]
-                  (let [{:keys [tasks file-imports]}
-                        (parser/parse-tasks content {:source-path abs-path})
+                  (let [effective-content (effective/read-effective-org-content
+                                           project-root abs-path content)
+                        {:keys [tasks file-imports]}
+                        (parser/parse-tasks content {:source-path abs-path
+                                                     :effective-source-content effective-content})
                         dir (str (fs/parent abs-path))]
                     (recurse-tasks tasks abs-path dir)
                     (doseq [imp file-imports]
-                      (let [expanded (parser/expand-org-link-target imp content)
+                      (let [expanded (parser/expand-org-link-target imp effective-content)
                             base-dir (if (:from-project-root expanded) project-root dir)]
                         (when-let [abs (paths/resolve-project-path
                                          project-root base-dir (:target expanded))]
@@ -223,6 +227,30 @@
               (filter seq (str/split linked #"\s+")))))
         collected))))
 
+;; ── Source-line insertion (parent / after) ────────────────────────
+
+(defn- find-task-by-id [tasks id]
+  (when id
+    (some (fn [t]
+            (or (when (= id (parser/get-task-id t)) t)
+                (find-task-by-id (:children t) id)))
+          tasks)))
+
+(defn- relevel-block [block level]
+  (str/replace-first block #"^\*+" (apply str (repeat level "*"))))
+
+(defn- insert-block-before-line [content line-1-indexed block]
+  (let [lines (vec (str/split content #"\n" -1))
+        idx   (max 0 (dec line-1-indexed))
+        block-lines (vec (str/split (str/replace block #"\n+$" "") #"\n"))
+        insertion (cond-> []
+                    (and (pos? idx) (not= "" (nth lines (dec idx) ""))) (conj "")
+                    true (into block-lines)
+                    (not= "" (nth lines idx "")) (conj ""))
+        next-lines (vec (concat (subvec lines 0 idx) insertion (subvec lines idx)))]
+    {:content (str (str/replace (str/join "\n" next-lines) #"\n*$" "") "\n")
+     :line (inc (+ idx (if (= "" (first insertion)) 1 0)))}))
+
 ;; ── Public entry ───────────────────────────────────────────────────
 
 (defn insert-task-into-file
@@ -245,7 +273,7 @@
     {:status :section-not-found, :file, :section}
     {:status :error, :reason, :message}"
   [{:keys [file project-root section summary linked-issues also-scan
-           allow-create-section?]
+           allow-create-section? parent-id after-id]
     :or {project-root (System/getProperty "user.dir")
          also-scan []
          allow-create-section? false}
@@ -286,19 +314,56 @@
               (if duplicate
                 duplicate
                 (let [built (build-task-block args)
-                      existing (or (safe-slurp target-abs) "")
-                      spliced (splice-into-section
-                                existing section (:block built)
-                                allow-create-section?)]
-                  (cond
-                    (and (not spliced) (not allow-create-section?))
-                    {:status :section-not-found
-                     :file target-abs
-                     :section section}
+                      existing (or (safe-slurp target-abs) "")]
+                  (if (or parent-id after-id)
+                    (if (str/blank? existing)
+                      {:status :section-not-found
+                       :file target-abs
+                       :section section}
+                      (let [effective-content (effective/read-effective-org-content
+                                               project-root target-abs existing)
+                            parsed (parser/parse-tasks
+                                    existing
+                                    {:source-path target-abs
+                                     :effective-source-content effective-content})
+                            parent (find-task-by-id (:tasks parsed) parent-id)
+                            after  (find-task-by-id (:tasks parsed) after-id)]
+                        (cond
+                          (and parent-id (nil? parent))
+                          {:status :unknown-task
+                           :reason :parent-not-found
+                           :message (str "Parent task not found: " parent-id)}
 
-                    :else
-                    (do (spit target-abs (:content spliced))
-                        {:status :inserted
-                         :id (:id built)
+                          (and after-id (nil? after))
+                          {:status :unknown-task
+                           :reason :after-not-found
+                           :message (str "Anchor task not found: " after-id)}
+
+                          :else
+                          (let [anchor (or after parent)
+                                level  (if parent
+                                         (inc (:level parent))
+                                         (:level anchor))
+                                block  (relevel-block (:block built) level)
+                                spliced (insert-block-before-line
+                                         existing (:end-line anchor) block)]
+                            (spit target-abs (:content spliced))
+                            {:status :inserted
+                             :id (:id built)
+                             :file target-abs
+                             :line (:line spliced)}))))
+                    (let [spliced (splice-into-section
+                                    existing section (:block built)
+                                    allow-create-section?)]
+                      (cond
+                        (and (not spliced) (not allow-create-section?))
+                        {:status :section-not-found
                          :file target-abs
-                         :line (:line spliced)})))))))))))
+                         :section section}
+
+                        :else
+                        (do (spit target-abs (:content spliced))
+                            {:status :inserted
+                             :id (:id built)
+                             :file target-abs
+                             :line (:line spliced)})))))))))))))

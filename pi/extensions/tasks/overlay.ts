@@ -87,6 +87,7 @@ export class TasksOverlay {
   private descScrollOffset = 0;
   private cachedWidth?: number;
   private cachedLines?: string[];
+  private statusUpdateInFlight = false;
 
   private collapsedSet = new WeakSet<Task>();
 
@@ -136,8 +137,14 @@ export class TasksOverlay {
     private onOpenUrls?: (urls: string[]) => Promise<void>,
     /** Display a one-shot notification (status footer / toast). */
     private onNotify?: (message: string, kind?: "info" | "warn" | "error") => void,
-    /** Called after a task's status is cycled (via →/← / l/h). */
-    private onStatusChanged?: (task: Task, prevStatus: string) => void,
+    /** Called when a task's status is cycled (via →/← / l/h).
+        Returns a freshly loaded task tree when the caller persisted the
+        transition outside this overlay (the `ot status` path). */
+    private onStatusChanged?: (
+      task: Task,
+      prevStatus: string,
+      nextStatus: string,
+    ) => void | Promise<Task[] | void>,
   ) {
     this.theme = theme;
     this.done = done;
@@ -247,6 +254,7 @@ export class TasksOverlay {
 
   /** Resolve `:LINKED_ISSUES:` for a task using cached `#+LINK:` templates. */
   private linkedIssuesFor(task: Task): LinkedIssue[] {
+    if (task.linkedIssues) return task.linkedIssues;
     return getLinkedIssues(task, this.linkTemplatesFor(task));
   }
 
@@ -337,13 +345,13 @@ export class TasksOverlay {
 
     // Cycle status forward
     if (matchesKey(data, "right") || matchesKey(data, "l")) {
-      this.cycleStatus(1);
+      void this.cycleStatus(1);
       return "status-cycle-fwd";
     }
 
     // Cycle status backward
     if (matchesKey(data, "left") || matchesKey(data, "h")) {
-      this.cycleStatus(-1);
+      void this.cycleStatus(-1);
       return "status-cycle-back";
     }
 
@@ -450,7 +458,11 @@ export class TasksOverlay {
     return "unhandled";
   }
 
-  private cycleStatus(direction: 1 | -1): void {
+  private async cycleStatus(direction: 1 | -1): Promise<void> {
+    if (this.statusUpdateInFlight) {
+      this.onNotify?.("Status update already in progress; wait for it to finish.", "warn");
+      return;
+    }
     const row = this.rows[this.cursor];
     if (!row) return;
     const currentStatus = row.task.status as (typeof STATUS_CYCLE)[number];
@@ -458,11 +470,39 @@ export class TasksOverlay {
     if (idx === -1) return;
     const next = (idx + direction + STATUS_CYCLE.length) % STATUS_CYCLE.length;
     const nextStatus = STATUS_CYCLE[next];
+    const wasClosed = row.task.status === "DONE" || row.task.status === "CANCELLED";
+
+    if (this.onStatusChanged) {
+      this.statusUpdateInFlight = true;
+      try {
+        const id = getTaskId(row.task);
+        const freshTasks = await this.onStatusChanged(row.task, currentStatus, nextStatus);
+        let updated = row.task;
+        if (freshTasks) {
+          this.refreshTasks(freshTasks, this.selectedId);
+          updated = this.findTaskById(this.tasks, id) ?? row.task;
+        }
+        this.invalidate();
+        if (nextStatus === "DONE" && !wasClosed) {
+          if (!updated.importPath && this.onCreateChangeRecord) {
+            const accepted = this.onCreateChangeRecord(updated);
+            if (accepted) this.done(undefined);
+          } else if (updated.importPath && this.onRefreshSummary) {
+            const accepted = this.onRefreshSummary(updated);
+            if (accepted) this.done(undefined);
+          }
+        }
+      } catch (err) {
+        this.onNotify?.(`Status update failed: ${(err as Error).message}`, "error");
+      } finally {
+        this.statusUpdateInFlight = false;
+      }
+      return;
+    }
+
+    // Legacy in-process fallback, kept for isolated tests / non-pi consumers.
     const timestamp = formatOrgTimestamp();
-    const { wasClosed, isClosed } = applyStatusTransition(row.task, nextStatus, timestamp);
-    // When a subtask transitions to STARTED, auto-promote the top-level
-    // TASKS.org ancestor from TODO → STARTED so the parent reflects active
-    // work without requiring a manual status bump.
+    const { wasClosed: legacyWasClosed, isClosed } = applyStatusTransition(row.task, nextStatus, timestamp);
     if (nextStatus === "STARTED") {
       const root = this.findTopLevelRoot(row.task);
       if (root && root !== row.task && root.status === "TODO") {
@@ -471,20 +511,7 @@ export class TasksOverlay {
     }
     this.persistChange();
     this.invalidate();
-
-    // Notify any listening extension (e.g. `jira` for auto-transition)
-    // that a task's status changed. Done after persistChange so file
-    // watchers see the on-disk update before consumers act on it.
-    this.onStatusChanged?.(row.task, currentStatus);
-
-    // After persisting, the close transition can trigger one of two
-    // mutually-exclusive workflow handoffs:
-    //   1. No #+IMPORT: linked change-record → offer retrospective scaffold.
-    //   2. With #+IMPORT: → check for missing/stale `* Summary` and prompt
-    //      the agent to refresh it.
-    // Done last so the on-disk DONE+CLOSED state is committed before the
-    // overlay closes for the workflow handoff.
-    if (isClosed && !wasClosed && nextStatus === "DONE") {
+    if (isClosed && !legacyWasClosed && nextStatus === "DONE") {
       if (!row.task.importPath && this.onCreateChangeRecord) {
         const accepted = this.onCreateChangeRecord(row.task);
         if (accepted) this.done(undefined);
@@ -632,9 +659,9 @@ export class TasksOverlay {
     // Keep the cursor on the task the user just toggled, if still visible.
     const newIdx = this.rows.findIndex((r) => r.task === target);
     if (newIdx >= 0) this.cursor = newIdx;
-    // Persist task-file changes (status edits etc.) — selection is
-    // written by onSelectionChange above.
-    this.persistChange();
+    // Selection is written by onSelectionChange above. Do not call save():
+    // under the `ot` cutover the in-memory tree is a hydrated wire graph,
+    // not the protocol writer.
     this.invalidate();
   }
 

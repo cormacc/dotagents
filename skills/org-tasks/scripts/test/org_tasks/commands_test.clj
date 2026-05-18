@@ -343,6 +343,60 @@
                   "--dry-run" "create" "Dry-run task")
         (is (= before (slurp (str (fs/path root "TASKS.org")))))))))
 
+(deftest create-after-inserts-below-anchor
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [{:keys [exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "create" "Between" "--after"
+                      "11111111-2222-4333-8444-555555555551")
+            content (slurp (str (fs/path root "TASKS.org")))]
+        (is (zero? exit))
+        (is (< (str/index-of content "** TODO [#A] First")
+               (str/index-of content "** TODO Between")
+               (str/index-of content "** STARTED Second")))))))
+
+(deftest create-parent-inserts-child-task
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [{:keys [out exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "create" "Child task" "--parent"
+                      "11111111-2222-4333-8444-555555555551")
+            r (parse-json-result out)
+            content (slurp (str (fs/path root "TASKS.org")))]
+        (is (zero? exit))
+        (is (some? (:id r)))
+        (is (str/includes? content "*** TODO Child task"))
+        (is (< (str/index-of content "** TODO [#A] First")
+               (str/index-of content "*** TODO Child task")
+               (str/index-of content "** STARTED Second")))))))
+
+(deftest create-parent-honours-tasks-source-override
+  (with-temp-dir
+    (fn [root]
+      (fs/create-dirs (str (fs/path root "design" "log")))
+      (let [plan-path (str (fs/path root "design" "log" "feature.org"))
+            parent-id "plan-parent-1111-4222-8333-444444444444"]
+        (spit plan-path
+              (str "* Plan\n"
+                   "** TODO Plan parent\n"
+                   ":PROPERTIES:\n"
+                   ":CUSTOM_ID: " parent-id "\n"
+                   ":END:\n"))
+        (spit (str (fs/path root "TASKS.local.org")) "#+SELECTED:\n")
+        (let [{:keys [out exit]}
+              (run-cli! "--root" root "--tasks" plan-path "--format" "json"
+                        "create" "Plan child" "--parent" parent-id)
+              r (parse-json-result out)
+              content (slurp plan-path)]
+          (is (zero? exit))
+          (is (some? (:id r)))
+          (is (= plan-path (:file r)))
+          (is (str/includes? content "*** TODO Plan child")))))))
+
 ;; ── doctor ───────────────────────────────────────────
 
 (deftest doctor-clean-graph

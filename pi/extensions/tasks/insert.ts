@@ -8,24 +8,19 @@
  * never reimplement priority mapping, drawer ordering, or label
  * tagging.
  *
- * Pure-function module — no file I/O. The companion `tasks_insert_task`
- * pi tool lives in `index.ts` and wraps this builder with file-insertion
- * + idempotency.
+ * `buildTaskBlock` remains pure for compatibility tests and future
+ * tracker integrations. The file-side `insertTaskIntoFile` entrypoint
+ * is now a thin compatibility shim over `ot create`, so durable
+ * insertion/idempotency behaviour lives in the Babashka CLI.
  */
 
 import { randomUUID } from "node:crypto";
-import { readFile, realpath, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { basename, isAbsolute, resolve } from "node:path";
 import {
   createdLogEntry,
-  expandOrgLinkTarget,
-  getDrawerProperty,
-  getTaskId,
   formatOrgTimestamp,
-  parseTasks,
-  type Task,
 } from "./parser.ts";
-import { readEffectiveOrgContent } from "./effective.ts";
+import { runOt, type OtEnvelope } from "./ot.ts";
 
 /** Args accepted by {@link buildTaskBlock}. */
 export interface BuildTaskArgs {
@@ -294,219 +289,6 @@ export type InsertResult =
   | InsertError;
 
 /**
- * Match a level-1 heading of the form `* <section>` (tags tolerated).
- * Tags on the heading line are tolerated by stripping a trailing `:tag:` run.
- */
-function isMatchingSectionHeading(line: string, sectionName: string): boolean {
-  const m = /^\*\s+(.+?)\s*$/.exec(line);
-  if (!m) return false;
-  let text = m[1]!;
-  // Strip a trailing `:tag1:tag2:` run.
-  const tagMatch = /\s+:[\w@:]+:\s*$/.exec(text);
-  if (tagMatch) text = text.slice(0, tagMatch.index).trimEnd();
-  return text.trim() === sectionName.trim();
-}
-
-/** Index of the next top-level heading (`* `) at or after `from`, or -1. */
-function nextTopLevelHeadingIdx(lines: string[], from: number): number {
-  for (let i = from; i < lines.length; i++) {
-    if (/^\*\s+\S/.test(lines[i] ?? "")) return i;
-  }
-  return -1;
-}
-
-/** Read a file as utf-8, returning null when missing/unreadable. */
-async function readMaybe(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, "utf-8");
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Recursively collect every task across `paths` and any `#+IMPORT:` they
- * reference (file-level imports + per-task `#+IMPORT:` keywords).
- * `visited` is the absolute-path set used to break cycles.
- *
- * Returns an array of `{ task, file }` pairs so callers can attribute
- * collisions back to the originating file.
- */
-function isWithinRoot(path: string, root: string): boolean {
-  const rel = relative(root, path);
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-}
-
-async function resolveExistingOrParent(path: string): Promise<string> {
-  try {
-    return await realpath(path);
-  } catch {
-    try {
-      const parent = await realpath(dirname(path));
-      return resolve(parent, path.split(/[\\/]/).pop() ?? "");
-    } catch {
-      return resolve(path);
-    }
-  }
-}
-
-async function sandboxPath(path: string, projectRoot: string): Promise<{ ok: true; path: string } | { ok: false; path: string }> {
-  const root = await resolveExistingOrParent(projectRoot);
-  const abs = isAbsolute(path) ? path : resolve(root, path);
-  const real = await resolveExistingOrParent(abs);
-  return isWithinRoot(real, root) ? { ok: true, path: real } : { ok: false, path: real };
-}
-
-async function collectAllTasks(
-  paths: string[],
-  projectRoot: string,
-  visited = new Set<string>(),
-): Promise<{ task: Task; file: string }[]> {
-  const out: { task: Task; file: string }[] = [];
-
-  const walk = async (absPath: string) => {
-    if (visited.has(absPath)) return;
-    visited.add(absPath);
-    const content = await readMaybe(absPath);
-    if (content === null) return;
-    const effectiveContent = await readEffectiveOrgContent(projectRoot, absPath, content);
-    const { tasks, fileImports } = parseTasks(content, { sourcePath: absPath, effectiveSourceContent: effectiveContent });
-    const dir = dirname(absPath);
-
-    // Collect imports *after* walking the in-file tasks so we don't
-    // recurse mid-iteration. Ordering doesn't matter for the duplicate
-    // check itself — first hit wins.
-    const walkLater: string[] = [];
-    const recurseTasks = async (ts: Task[]) => {
-      for (const t of ts) {
-        out.push({ task: t, file: absPath });
-        await recurseTasks(t.children);
-        if (t.importPath) {
-          const expanded = expandOrgLinkTarget(t.importPath, t.effectiveSourceContent ?? effectiveContent);
-          const baseDir = expanded.fromProjectRoot ? projectRoot : dir;
-          const importAbs = isAbsolute(expanded.target)
-            ? expanded.target
-            : resolve(baseDir, expanded.target);
-          const sandboxed = await sandboxPath(importAbs, projectRoot);
-          if (sandboxed.ok) walkLater.push(sandboxed.path);
-        }
-      }
-    };
-    await recurseTasks(tasks);
-    for (const fp of fileImports) {
-      const expanded = expandOrgLinkTarget(fp, effectiveContent);
-      const baseDir = expanded.fromProjectRoot ? projectRoot : dir;
-      const importAbs = isAbsolute(expanded.target) ? expanded.target : resolve(baseDir, expanded.target);
-      const sandboxed = await sandboxPath(importAbs, projectRoot);
-      if (sandboxed.ok) walkLater.push(sandboxed.path);
-    }
-    for (const next of walkLater) await walk(next);
-  };
-
-  for (const p of paths) {
-    await walk(p);
-  }
-  return out;
-}
-
-/**
- * Scan `tasks` for any `:LINKED_ISSUES:` token that overlaps with
- * `tokens`. First collision wins. Returns null when no collision found.
- */
-function findDuplicate(
-  collected: { task: Task; file: string }[],
-  tokens: string[],
-): InsertDuplicate | null {
-  if (tokens.length === 0) return null;
-  const wanted = new Set(tokens);
-  for (const { task, file } of collected) {
-    const linked = getDrawerProperty(task, "LINKED_ISSUES");
-    if (!linked) continue;
-    const existing = linked.split(/\s+/).filter((t) => t.length > 0);
-    for (const tok of existing) {
-      if (wanted.has(tok)) {
-        return {
-          status: "duplicate",
-          existingId: getTaskId(task),
-          existingFile: file,
-          conflictingToken: tok,
-        };
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Splice `block` into `content` under the `* <section>` heading.
- *
- * - Locates the section heading (`isMatchingSectionHeading`).
- * - Inserts immediately before the next level-1 heading, or at EOF
- *   when none follows.
- * - When the section is absent and `allowCreateSection` is true, a
- *   new `* <section>` heading is appended to the file.
- *
- * Returns the new file content + the 1-indexed line of the spliced
- * heading. Returns null when the section is missing and creation is
- * disallowed.
- */
-function spliceIntoSection(
-  content: string,
-  section: string,
-  block: string,
-  allowCreateSection: boolean,
-): { content: string; line: number } | null {
-  const lines = content.split("\n");
-  const headingIdx = lines.findIndex((line) => isMatchingSectionHeading(line, section));
-
-  const blockLines = block.replace(/\n+$/, "").split("\n");
-
-  if (headingIdx === -1) {
-    if (!allowCreateSection) return null;
-    // Append at end of file: ensure exactly one blank line before the
-    // new section, then the heading, then the block.
-    while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-    const append: string[] = [];
-    if (lines.length > 0) append.push("");
-    append.push(`* ${section}`);
-    append.push("");
-    append.push(...blockLines);
-    const insertedAt = lines.length + append.indexOf(blockLines[0]!) + 1;
-    lines.push(...append);
-    return {
-      content: lines.join("\n").replace(/\n*$/, "\n"),
-      line: insertedAt,
-    };
-  }
-
-  const nextIdx = nextTopLevelHeadingIdx(lines, headingIdx + 1);
-  const insertBefore = nextIdx === -1 ? lines.length : nextIdx;
-
-  // Trim trailing blank lines belonging to this section so the spliced
-  // block doesn't push the next heading further away on each insert.
-  let tail = insertBefore;
-  while (tail > headingIdx + 1 && (lines[tail - 1] ?? "") === "") tail--;
-
-  // Ensure exactly one blank line between the existing section content
-  // and the new task block.
-  const insertion: string[] = [];
-  if (tail > headingIdx + 1) insertion.push("");
-  insertion.push(...blockLines);
-  if (nextIdx !== -1) insertion.push("");
-
-  lines.splice(tail, insertBefore - tail, ...insertion);
-
-  // Recompute the heading line after splice. The section heading is
-  // unchanged; the inserted block sits at `tail` (plus the leading
-  // blank line if we added one).
-  const blockHeadingOffset = tail + (insertion[0] === "" ? 1 : 0);
-  return {
-    content: lines.join("\n").replace(/\n*$/, "\n"),
-    line: blockHeadingOffset + 1, // 1-indexed
-  };
-}
-
-/**
  * Insert a new task into an org file under the named section,
  * refusing on duplicate `:LINKED_ISSUES:` overlap.
  *
@@ -527,72 +309,75 @@ export async function insertTaskIntoFile(
   const projectRoot = isAbsolute(args.projectRoot ?? "")
     ? args.projectRoot!
     : resolve(args.projectRoot ?? ".");
-  const targetSandbox = await sandboxPath(args.file, projectRoot);
-  if (!targetSandbox.ok) {
+
+  const cmd = ["create", args.summary];
+  if (args.section) cmd.push("--section", args.section);
+  if (args.priorityName) cmd.push("--priority", args.priorityName);
+  if (args.body) cmd.push("--body", args.body);
+  if (args.parentId) cmd.push("--parent", args.parentId);
+  if (args.allowCreateSection) cmd.push("--allow-create-section");
+  if (args.id) cmd.push("--id", args.id);
+  if (args.createdAt) cmd.push("--created-at", args.createdAt);
+  for (const token of args.linkedIssues ?? []) {
+    if (token) cmd.push("--linked-issue", token);
+  }
+  for (const label of args.labels ?? []) {
+    if (label) cmd.push("--tag", label);
+  }
+  for (const scanPath of args.alsoScan ?? []) {
+    if (scanPath) cmd.push("--also-scan", scanPath);
+  }
+
+  // `ot create --local` writes to <root>/TASKS.local.org; otherwise
+  // pass --tasks <file> as a global override so the legacy JS entry
+  // point remains file-parameter compatible for TASKS.org and tests.
+  const globalArgs = basename(args.file) === "TASKS.local.org"
+    ? []
+    : ["--tasks", args.file];
+  if (basename(args.file) === "TASKS.local.org") cmd.push("--local");
+
+  let env: OtEnvelope<{ id: string; file: string; line: number }>;
+  try {
+    env = await runOt(cmd, { root: projectRoot, globalArgs });
+  } catch (err) {
     return {
       status: "error",
-      reason: "path_outside_project",
-      message: `Target file resolves outside project root: ${targetSandbox.path}`,
+      reason: "file_unreadable",
+      message: (err as Error).message,
     };
   }
-  const targetAbs = targetSandbox.path;
 
-  const scanPaths = [targetAbs];
-  for (const p of args.alsoScan ?? []) {
-    const scanSandbox = await sandboxPath(p, projectRoot);
-    if (!scanSandbox.ok) {
+  if (env.ok) {
+    return {
+      status: "inserted",
+      id: env.result.id,
+      file: env.result.file,
+      line: env.result.line,
+    };
+  }
+
+  const { code, message, file, details } = env.error;
+  switch (code) {
+    case "duplicate-linked-issue":
       return {
-        status: "error",
-        reason: "path_outside_project",
-        message: `Scan file resolves outside project root: ${scanSandbox.path}`,
+        status: "duplicate",
+        existingId: (details?.existingId as string | null | undefined) ?? null,
+        existingFile: (details?.existingFile as string | undefined) ?? file ?? args.file,
+        conflictingToken: (details?.conflictingToken as string | undefined) ?? "",
       };
-    }
-    scanPaths.push(scanSandbox.path);
+    case "section-not-found":
+      return {
+        status: "section_not_found",
+        file: file ?? args.file,
+        section: (details?.section as string | undefined) ?? args.section,
+      };
+    case "empty-summary":
+      return { status: "error", reason: "empty_summary", message };
+    case "path-outside-project":
+      return { status: "error", reason: "path_outside_project", message };
+    case "unknown-task":
+      return { status: "error", reason: "file_unreadable", message };
+    default:
+      return { status: "error", reason: "file_unreadable", message };
   }
-
-  const tokens = (args.linkedIssues ?? []).filter((t) => t && t.length > 0);
-  if (tokens.length > 0) {
-    const collected = await collectAllTasks(scanPaths, projectRoot);
-    const duplicate = findDuplicate(collected, tokens);
-    if (duplicate) return duplicate;
-  }
-
-  const built = buildTaskBlock(args);
-
-  const existingContent = await readMaybe(targetAbs);
-  if (existingContent === null && !args.allowCreateSection) {
-    // The plan permits inserting into a missing file only when the
-    // caller is willing to scaffold, since a missing file implies a
-    // missing section. Surface a structured refusal so the caller can
-    // decide whether to retry with `allowCreateSection: true`.
-    return {
-      status: "section_not_found",
-      file: targetAbs,
-      section: args.section,
-    };
-  }
-  const baseContent = existingContent ?? "";
-
-  const spliced = spliceIntoSection(
-    baseContent,
-    args.section,
-    built.block,
-    args.allowCreateSection ?? false,
-  );
-  if (!spliced) {
-    return {
-      status: "section_not_found",
-      file: targetAbs,
-      section: args.section,
-    };
-  }
-
-  await writeFile(targetAbs, spliced.content, "utf-8");
-
-  return {
-    status: "inserted",
-    id: built.id,
-    file: targetAbs,
-    line: spliced.line,
-  };
 }

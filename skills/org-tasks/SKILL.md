@@ -395,4 +395,33 @@ These features are tracker-agnostic; tracker-specific behaviour (workflow names,
 
 ## Tooling
 
-The pi tasks extension automates ID assignment, `:CREATED:` / `:STARTED:` / `CLOSED:` timestamps, LOGBOOK state entries, parent status propagation, linked-issue badge rendering, and archive mechanics against this protocol without requiring Emacs. Native org-mode features (`logdone`, `logdrawer`, `#+ARCHIVE:`, `#+LINK:`) are deliberately aligned with those artefacts so Emacs edits and pi headless/TUI edits converge on the same file shapes. The optional Emacs companion lives at `emacs/tasks-org/` and provides editor conveniences for finding `TASKS.org`, capturing new tasks, toggling task/plan buffers, and toggling `#+SELECTED:`.
+The portable protocol engine is the Babashka CLI `ot` under `skills/org-tasks/scripts/`. Prefer `ot` over hand-editing whenever you need to create, inspect, select, transition, archive, publish/unpublish, scan, or diagnose task state programmatically. Use `--format json` for machine callers; every JSON/EDN command uses the stable envelope schema `org-tasks/v1` (`{ok,schema,result,warnings}` on success, `{ok:false,schema,error}` on failure). See `skills/org-tasks/scripts/docs/contract.md` for field-level examples.
+
+Common commands:
+
+```shell
+ot init
+ot list --format json
+ot show <id>
+ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'
+ot status <id> STARTED
+ot select <id>        # or: ot select --clear
+ot archive <id> --yes
+ot publish <id>       # TASKS.local.org -> TASKS.org
+ot unpublish <id>     # TASKS.org -> TASKS.local.org
+ot doctor --format json
+ot section design/log/foo.org Summary --format json
+ot scan --scope all --max-body-chars 500 --format json
+ot record path <id>
+ot record create <id> --mode retrospective
+```
+
+Install for third-party harnesses with bbin:
+
+```shell
+bbin install io.github.cormacc/dotagents --as ot --latest-sha
+# in-tree development / local smoke:
+bbin install ./. --local/root . --as ot
+```
+
+The pi tasks extension is now a UI/event wrapper over `ot`: it owns overlay rendering, compact-widget state, keybindings, prompts, confirmations, Emacs opening, browser URL opening, and event emission, while `ot` owns durable protocol mutations and graph reads. Native org-mode features (`logdone`, `logdrawer`, `#+ARCHIVE:`, `#+LINK:`) are deliberately aligned with those artefacts so Emacs edits, `ot` calls, and pi TUI edits converge on the same file shapes. The optional Emacs companion lives at `emacs/tasks-org/` and provides editor conveniences for finding `TASKS.org`, capturing new tasks, toggling task/plan buffers, and toggling `#+SELECTED:`.

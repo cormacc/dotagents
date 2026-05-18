@@ -99,4 +99,11 @@ if command -v tsx >/dev/null 2>&1; then
 else
   npx --yes tsx ./scan.test.ts || CODE=1
 fi
+
+printf "# Running ot wrapper integration smoke tests...\n"
+if command -v tsx >/dev/null 2>&1; then
+  tsx ./ot.test.ts || CODE=1
+else
+  npx --yes tsx ./ot.test.ts || CODE=1
+fi
 exit "$CODE"

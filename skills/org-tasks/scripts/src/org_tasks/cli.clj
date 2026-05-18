@@ -72,6 +72,13 @@
               :ref  "<text>"}
    :linked-issue {:desc "Linked issue org token (repeatable, e.g. '[[jira:ABC-1]]')"
                   :coerce []}
+   :also-scan {:desc "Additional org file to scan for duplicate linked issues (repeatable)"
+               :ref "<path>"
+               :coerce []}
+   :id {:desc "Override generated :CUSTOM_ID: (mostly for tests / shims)"
+        :ref "<uuid>"}
+   :created-at {:desc "Override :CREATED: timestamp body, without brackets"
+                :ref "<timestamp>"}
    :allow-create-section {:desc "Create the target section if missing"
                           :coerce :boolean}})
 

@@ -38,8 +38,7 @@ import {
   watch,
   type FSWatcher,
 } from "node:fs";
-import { randomUUID } from "node:crypto";
-import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { homedir } from "node:os";
 import { ensureEmacsServer } from "../emacsclient/emacsclient.ts";
@@ -47,22 +46,31 @@ import { Type } from "@sinclair/typebox";
 import { TasksOverlay } from "./overlay.ts";
 import { insertTaskIntoFile, type InsertResult } from "./insert.ts";
 import {
-  appendCreatedLog,
+  OtNotFoundError,
+  otArchiveTask,
+  otCreateTask,
+  otDoctor,
+  otList,
+  otPublishTask,
+  otSelectTask,
+  otSetStatus,
+  otUnpublishTask,
+  runOt,
+  type OtSourceContent,
+} from "./ot.ts";
+import {
   expandOrgLinkTarget,
-  formatOrgTimestamp,
   getLinkedIssues,
   getTaskId,
   getTaskStarted,
   parseLinkTemplates,
   parseTasks,
   parseSelectedKeyword,
-  rewriteParentLinkKind,
   serializeTasks,
   serializeTasksPreservingFile,
-  taskHasId,
   type Task,
 } from "./parser.ts";
-import { formatFindingsReport, runDoctor } from "./doctor.ts";
+import { formatFindingsReport, type Finding } from "./doctor.ts";
 import { insertTasksIntoPlanSection, scaffoldPlan } from "./scaffold.ts";
 import { isWithinRoot, resolveProjectPath } from "./paths.ts";
 import {
@@ -70,10 +78,9 @@ import {
   type SummaryRefreshReason,
 } from "./summary.ts";
 import { colorIssues, colorPriority, colorStatus, colorTags } from "./status-colors.ts";
-import { DEFAULT_SECTION, readSection, type SectionResult } from "./section.ts";
+import { DEFAULT_SECTION, type SectionResult } from "./section.ts";
 import {
   DEFAULT_MAX_BODY_CHARS,
-  scanSummaries,
   type ScanRow,
 } from "./scan.ts";
 import { readEffectiveOrgContent } from "./effective.ts";
@@ -189,22 +196,7 @@ export async function writeSelectedId(
   cwd: string,
   id: string | null,
 ): Promise<void> {
-  const localPath = join(cwd, TASKS_LOCAL_FILE);
-  const selectedLine = id ? `#+SELECTED: ${id}` : null;
-
-  // Non-destructive: preserve any task headings already in the file.
-  let existing = "";
-  try { existing = await readFile(localPath, "utf-8"); } catch { /* new file */ }
-
-  const updated = selectedLine
-    ? (/^#\+SELECTED:/im.test(existing)
-      ? existing.replace(/^#\+SELECTED:.*$/im, selectedLine)
-      : (existing ? `${selectedLine}\n${existing}` : `${selectedLine}\n`))
-    : existing.replace(/^#\+SELECTED:.*(?:\r?\n)?/im, "");
-
-  const tmpPath = `${localPath}.tmp`;
-  await writeFile(tmpPath, updated, "utf-8");
-  await rename(tmpPath, localPath);
+  await otSelectTask(id, { root: cwd });
 }
 
 /**
@@ -270,133 +262,121 @@ function scheduleRefresh(): void {
   }, 150);
 }
 
-/** Recursively mark a task tree as local (from TASKS.local.org). */
-function markLocal(tasks: Task[]): void {
-  for (const t of tasks) {
-    t.isLocal = true;
-    markLocal(t.children);
-  }
+interface OtWireLinkedIssue {
+  rawToken: string;
+  label: string;
+  url?: string | null;
+  error?: string;
+}
+
+type OtWireSources = Record<string, OtSourceContent>;
+
+interface OtWireTask {
+  id: string | null;
+  status: string;
+  priority: string | null;
+  summary: string;
+  description?: string | null;
+  tags?: string[];
+  level: number;
+  propertyLines?: string[];
+  logbookLines?: string[];
+  sourcePath?: string;
+  sourceContent?: string;
+  effectiveSourceContent?: string;
+  line?: number;
+  endLine?: number;
+  local?: boolean;
+  importPath?: string | null;
+  importRaw?: string | null;
+  importError?: string | null;
+  closed?: string | null;
+  linkedIssues?: OtWireLinkedIssue[];
+  children?: OtWireTask[];
+  importChildren?: OtWireTask[];
+}
+
+function wireTaskToTask(wire: OtWireTask, sources: OtWireSources = {}): Task {
+  const source = wire.sourcePath ? sources[wire.sourcePath] : undefined;
+  const task: Task = {
+    level: wire.level,
+    status: wire.status,
+    priority: wire.priority ?? null,
+    summary: wire.summary,
+    tags: wire.tags ?? [],
+    description: wire.description ?? "",
+    children: (wire.children ?? []).map((child) => wireTaskToTask(child, sources)),
+    propertyLines: wire.propertyLines ?? (wire.id ? [`:CUSTOM_ID: ${wire.id}`] : []),
+    logbookLines: wire.logbookLines ?? [],
+    isLocal: !!wire.local,
+    importPath: wire.importPath ?? null,
+    importRaw: wire.importRaw ?? null,
+    importChildren: (wire.importChildren ?? []).map((child) => wireTaskToTask(child, sources)),
+    importError: wire.importError ?? null,
+    closed: wire.closed ?? null,
+    sourcePath: wire.sourcePath,
+    sourceContent: wire.sourceContent ?? source?.sourceContent,
+    effectiveSourceContent: wire.effectiveSourceContent ?? source?.effectiveSourceContent,
+    sourceRoot: undefined,
+    lineNumber: wire.line ?? 0,
+    endLine: wire.endLine ?? 0,
+    linkedIssues: wire.linkedIssues?.map((i) => ({
+      rawToken: i.rawToken,
+      label: i.label,
+      url: i.url ?? null,
+      error: i.error,
+    })),
+  };
+  return task;
+}
+
+function assignSourceRoots(tasks: Task[]): void {
+  const rootsBySource = new Map<string, Task[]>();
+
+  const registerRootArray = (rootTasks: Task[]) => {
+    const grouped = new Map<string, Task[]>();
+    for (const task of rootTasks) {
+      if (!task.sourcePath) continue;
+      const group = grouped.get(task.sourcePath) ?? [];
+      if (!grouped.has(task.sourcePath)) grouped.set(task.sourcePath, group);
+      group.push(task);
+    }
+    for (const [sourcePath, root] of grouped) {
+      rootsBySource.set(sourcePath, root);
+    }
+    for (const task of rootTasks) {
+      for (const child of task.children) registerImportedRoots(child);
+      if (task.importChildren && task.importChildren.length > 0) {
+        registerRootArray(task.importChildren);
+      }
+    }
+  };
+
+  const registerImportedRoots = (task: Task) => {
+    for (const child of task.children) registerImportedRoots(child);
+    if (task.importChildren && task.importChildren.length > 0) {
+      registerRootArray(task.importChildren);
+    }
+  };
+
+  const assign = (task: Task) => {
+    if (task.sourcePath) {
+      task.sourceRoot = rootsBySource.get(task.sourcePath) ?? task.sourceRoot;
+    }
+    for (const child of task.children) assign(child);
+    for (const child of task.importChildren ?? []) assign(child);
+  };
+
+  registerRootArray(tasks);
+  for (const task of tasks) assign(task);
 }
 
 async function loadTasks(cwd: string): Promise<Task[]> {
-  const sourcePath = join(cwd, TASKS_FILE);
-  let tasks: Task[] = [];
-  try {
-    const content = await readFile(sourcePath, "utf-8");
-    const effectiveSourceContent = await readEffectiveOrgContent(cwd, sourcePath, content);
-    const { tasks: shared, fileImports } = parseTasks(content, { sourcePath, effectiveSourceContent });
-    for (const fp of fileImports) {
-      const expandedFp = expandOrgLinkTarget(fp, effectiveSourceContent);
-      const fpBaseDir = expandedFp.fromProjectRoot ? cwd : dirname(sourcePath);
-      const absPath = await resolveProjectPath(cwd, fpBaseDir, expandedFp.target);
-      if (!absPath) continue;
-      try {
-        const ic = await readFile(absPath, "utf-8");
-        const effectiveImportContent = await readEffectiveOrgContent(cwd, absPath, ic);
-        const { tasks: it } = parseTasks(ic, { sourcePath: absPath, effectiveSourceContent: effectiveImportContent });
-        shared.push(...it);
-      } catch { /* ignore missing or unreadable import files */ }
-    }
-    tasks = shared;
-  } catch { /* TASKS.org unreadable — start with empty list */ }
-
-  // Load tasks from TASKS.local.org (gitignored per-contributor drafts).
-  // The #+SELECTED: keyword is non-task content and is preserved verbatim.
-  const localPath = join(cwd, TASKS_LOCAL_FILE);
-  try {
-    const localContent = await readFile(localPath, "utf-8");
-    const effectiveLocalContent = await readEffectiveOrgContent(cwd, localPath, localContent);
-    const { tasks: localTasks } = parseTasks(localContent, { sourcePath: localPath, effectiveSourceContent: effectiveLocalContent });
-    markLocal(localTasks);
-    tasks.push(...localTasks);
-  } catch { /* no local tasks file or no task headings in it */ }
-
-  await loadLinkedPlans(tasks, sourcePath, cwd);
-  try {
-    await backfillMissingIds(cwd, tasks);
-  } catch {
-    // Keep the UI usable even if the automatic ID backfill cannot write.
-  }
+  const result = await otList<OtWireTask>({ root: cwd });
+  const sources = result.sources ?? {};
+  const tasks = result.tree.map((wire) => wireTaskToTask(wire, sources));
+  assignSourceRoots(tasks);
   return tasks;
-}
-
-async function loadLinkedPlans(
-  tasks: Task[],
-  sourcePath: string,
-  cwd: string,
-  cache = new Map<string, { tasks: Task[]; error: string | null }>(),
-): Promise<void> {
-  const sourceDir = dirname(sourcePath);
-  for (const task of tasks) {
-    if (task.importPath) {
-      const sourceForLinks = task.effectiveSourceContent ?? task.sourceContent;
-      const expandedImportPath = expandOrgLinkTarget(task.importPath, sourceForLinks);
-      const importBaseDir = expandedImportPath.fromProjectRoot ? cwd : sourceDir;
-      const importPath = await resolveProjectPath(cwd, importBaseDir, expandedImportPath.target);
-      if (!importPath) {
-        task.importChildren = [];
-        task.importError = "Import path resolves outside project root";
-      } else {
-        const cached = cache.get(importPath);
-        if (cached) {
-          task.importChildren = cached.tasks;
-          task.importError = cached.error;
-        } else {
-          try {
-            const content = await readFile(importPath, "utf-8");
-            const effectiveContent = await readEffectiveOrgContent(cwd, importPath, content);
-            const { tasks: importTasks, fileImports } = parseTasks(content, { sourcePath: importPath, effectiveSourceContent: effectiveContent });
-            const importDir = dirname(importPath);
-            for (const fp of fileImports) {
-              const expandedFp = expandOrgLinkTarget(fp, effectiveContent);
-              const fpBaseDir = expandedFp.fromProjectRoot ? cwd : importDir;
-              const absPath = await resolveProjectPath(cwd, fpBaseDir, expandedFp.target);
-              if (!absPath) continue;
-              try {
-                const nc = await readFile(absPath, "utf-8");
-                const effectiveNestedContent = await readEffectiveOrgContent(cwd, absPath, nc);
-                const { tasks: nt } = parseTasks(nc, { sourcePath: absPath, effectiveSourceContent: effectiveNestedContent });
-                importTasks.push(...nt);
-              } catch { /* ignore */ }
-            }
-            const entry = { tasks: importTasks, error: null };
-            cache.set(importPath, entry);
-            await loadLinkedPlans(importTasks, importPath, cwd, cache);
-            task.importChildren = importTasks;
-            task.importError = null;
-          } catch (err) {
-            const error = (err as Error).message;
-            task.importChildren = [];
-            task.importError = error;
-            cache.set(importPath, { tasks: task.importChildren, error });
-          }
-        }
-      }
-    }
-    await loadLinkedPlans(task.children, sourcePath, cwd, cache);
-  }
-}
-
-async function backfillMissingIds(cwd: string, tasks: Task[]): Promise<void> {
-  const changedRoots = new Map<string, Task[]>();
-  const visit = (taskList: Task[]) => {
-    for (const task of taskList) {
-      if (!taskHasId(task)) {
-        task.propertyLines.unshift(`:CUSTOM_ID: ${randomUUID()}`);
-        const sourcePath = task.sourcePath ?? join(cwd, TASKS_FILE);
-        changedRoots.set(sourcePath, task.sourceRoot ?? tasks);
-      }
-      visit(task.children);
-      if (task.importChildren) visit(task.importChildren);
-    }
-  };
-  visit(tasks);
-
-  await Promise.all(
-    [...changedRoots.entries()].map(([path, root]) =>
-      writeTaskFilePreserving(path, root),
-    ),
-  );
 }
 
 function taskChildren(task: Task): Task[] {
@@ -815,31 +795,52 @@ function registerReadSectionTool(pi: ExtensionAPI): void {
     parameters: ReadSectionParams,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const requestedSection = (params.section ?? "").trim() || DEFAULT_SECTION;
-      const resolved = await resolveProjectPath(ctx.cwd, ctx.cwd, params.file);
-      if (!resolved) {
+      // Shell out to `ot section` so the org-file primitive lives in
+      // the Babashka CLI rather than duplicated TS code. The CLI does
+      // its own root sandboxing + read; we map its envelope back to
+      // the existing tool-return shape so downstream callers don't
+      // need to change.
+      try {
+        const env = await runOt<{
+          file: string;
+          section: string;
+          found: boolean;
+          heading?: string;
+          body?: string;
+        }>(["section", params.file, requestedSection], { root: ctx.cwd });
+        if (env.ok) {
+          const r = env.result;
+          return readSectionResultToToolReturn({
+            kind: "section",
+            file: r.file,
+            section: r.found
+              ? { found: true, heading: r.heading ?? "", body: r.body ?? "" }
+              : { found: false, section: r.section },
+          });
+        }
+        const code = env.error.code;
         return readSectionResultToToolReturn({
           kind: "error",
-          error: "out_of_root",
-          file: params.file,
-          message: `Path '${params.file}' resolves outside the project root.`,
+          error: code === "out-of-root" ? "out_of_root" : "unreadable",
+          file: env.error.file ?? params.file,
+          message: env.error.message,
         });
-      }
-      let content: string;
-      try {
-        content = await readFile(resolved, "utf-8");
       } catch (err) {
+        if (err instanceof OtNotFoundError) {
+          return readSectionResultToToolReturn({
+            kind: "error",
+            error: "unreadable",
+            file: params.file,
+            message: err.message,
+          });
+        }
         return readSectionResultToToolReturn({
           kind: "error",
           error: "unreadable",
-          file: resolved,
-          message: `Cannot read ${resolved}: ${(err as Error).message}`,
+          file: params.file,
+          message: (err as Error).message,
         });
       }
-      return readSectionResultToToolReturn({
-        kind: "section",
-        file: resolved,
-        section: readSection(content, requestedSection),
-      });
     },
   });
 }
@@ -858,80 +859,6 @@ function registerReadSectionTool(pi: ExtensionAPI): void {
 // relevance-filter before pulling specific change-records via
 // `org_read_section`. `* Context` is *not* inlined; agents fetch it
 // on demand for rows where `hasContext === true`.
-
-async function loadArchivedTasks(cwd: string): Promise<Task[]> {
-  const sourcePath = join(cwd, TASKS_ARCHIVE_FILE);
-  try {
-    const content = await readFile(sourcePath, "utf-8");
-    const effectiveSourceContent = await readEffectiveOrgContent(cwd, sourcePath, content);
-    const { tasks } = parseTasks(content, { sourcePath, effectiveSourceContent });
-    // Walk #+IMPORT: chains from archived tasks too — the archive
-    // preserves links to design/log/*.org records that are still on
-    // disk, and the scanner needs their contents to surface
-    // `* Summary` bodies.
-    await loadLinkedPlans(tasks, sourcePath, cwd);
-    return tasks;
-  } catch {
-    // No archive file (common for new projects) is a no-op, not an
-    // error — the scanner just sees no archived rows.
-    return [];
-  }
-}
-
-/**
- * Walk every import-bearing task in the active + archived graphs and
- * pre-resolve their change-record content into a `Map<resolved-path,
- * content | null>` plus a per-task `Map<Task, resolved-path | null>`.
- * Returns a synchronous `readChangeRecord(task)` lookup so the pure
- * `scanSummaries` helper can stay fs-free.
- *
- * Each file is read at most once even when multiple tasks share a
- * change-record (e.g. a top-level workstream and its plan-task
- * children both reference the same record).
- */
-async function prepareReadChangeRecord(
-  cwd: string,
-  activeRoots: Task[],
-  archivedRoots: Task[],
-): Promise<(task: Task) => string | null> {
-  const contentByPath = new Map<string, string | null>();
-  const pathByTask = new Map<Task, string | null>();
-  const visited = new Set<Task>();
-
-  const visit = async (tasks: readonly Task[]): Promise<void> => {
-    for (const task of tasks) {
-      if (visited.has(task)) continue;
-      visited.add(task);
-      if (task.importPath && task.sourcePath) {
-        const sourceForLinks = task.effectiveSourceContent ?? task.sourceContent;
-        const expandedImportPath = expandOrgLinkTarget(task.importPath, sourceForLinks);
-        const baseDir = expandedImportPath.fromProjectRoot ? cwd : dirname(task.sourcePath);
-        const resolved = await resolveProjectPath(
-          cwd, baseDir, expandedImportPath.target,
-        );
-        pathByTask.set(task, resolved);
-        if (resolved && !contentByPath.has(resolved)) {
-          try {
-            contentByPath.set(resolved, await readFile(resolved, "utf-8"));
-          } catch {
-            contentByPath.set(resolved, null);
-          }
-        }
-      }
-      await visit(task.children);
-      if (task.importChildren) await visit(task.importChildren);
-    }
-  };
-
-  await visit(activeRoots);
-  await visit(archivedRoots);
-
-  return (task: Task): string | null => {
-    const path = pathByTask.get(task);
-    if (!path) return null;
-    return contentByPath.get(path) ?? null;
-  };
-}
 
 const SCOPE_VALUES = ["active", "archived", "all"] as const;
 
@@ -991,31 +918,49 @@ function registerScanSummariesTool(pi: ExtensionAPI): void {
       "Scan prior tasks for related work before drafting a new plan",
     parameters: ScanSummariesParams,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const activeRoots = await loadTasks(ctx.cwd);
-      const archivedRoots = await loadArchivedTasks(ctx.cwd);
-      const readChangeRecord = await prepareReadChangeRecord(
-        ctx.cwd, activeRoots, archivedRoots,
-      );
-      const rows = scanSummaries(
-        { activeRoots, archivedRoots, readChangeRecord },
-        {
-          scope: params.scope,
-          tags: params.tags,
-          maxBodyChars: params.maxBodyChars,
-        },
-      );
-      const scope = params.scope ?? "all";
-      const lines = [
-        `# tasks_scan_summaries: ${rows.length} row(s) (scope=${scope})`,
-        ...rows.slice(0, 60).map(summarizeRowForLLM),
-      ];
-      if (rows.length > 60) {
-        lines.push(`… ${rows.length - 60} more row(s) in details.rows`);
+      // Delegate to `ot scan` so the walker + change-record reader
+      // live in one place. The CLI accepts repeated `--tag` flags
+      // and `--max-body-chars`; we translate the typed-arg shape
+      // back into the existing tool return contract.
+      const argv: string[] = ["scan", "--scope", params.scope ?? "all"];
+      if (params.maxBodyChars !== undefined) {
+        argv.push("--max-body-chars", String(params.maxBodyChars));
       }
-      return {
-        content: [{ type: "text" as const, text: lines.join("\n") }],
-        details: { rows, scope, count: rows.length },
-      };
+      for (const tag of params.tags ?? []) {
+        argv.push("--tag", tag);
+      }
+      try {
+        const env = await runOt<{
+          rows: ScanRow[];
+          scope: string;
+          count: number;
+        }>(argv, { root: ctx.cwd });
+        if (!env.ok) {
+          return {
+            content: [{ type: "text" as const, text: env.error.message }],
+            details: env.error,
+            isError: true,
+          };
+        }
+        const { rows, scope, count } = env.result;
+        const lines = [
+          `# tasks_scan_summaries: ${count} row(s) (scope=${scope})`,
+          ...rows.slice(0, 60).map(summarizeRowForLLM),
+        ];
+        if (count > 60) {
+          lines.push(`\u2026 ${count - 60} more row(s) in details.rows`);
+        }
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+          details: { rows, scope, count },
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text" as const, text: (err as Error).message }],
+          details: { code: "ot-error", message: (err as Error).message },
+          isError: true,
+        };
+      }
     },
   });
 }
@@ -1186,36 +1131,20 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      // `/tasks doctor` - run health checks against the loaded task graph.
+      // `/tasks doctor` - delegate protocol health checks to `ot doctor`.
       if (args?.trim() === "doctor") {
-        const tasks = await loadTasks(ctx.cwd);
-        const selectedId = await readSelectedId(ctx.cwd);
-        const setupPath = join(ctx.cwd, "TASKS.setup.org");
-        const tasksPath = join(ctx.cwd, TASKS_FILE);
-        const archivePath = join(ctx.cwd, TASKS_ARCHIVE_FILE);
-        const findings = runDoctor({
-          tasks,
-          selectedId,
-          selectedSourcePath: join(ctx.cwd, TASKS_LOCAL_FILE),
-          protocolFiles: {
-            setup: (await pathExists(setupPath))
-              ? { path: setupPath, content: await readFile(setupPath, "utf-8") }
-              : undefined,
-            tasks: (await pathExists(tasksPath))
-              ? { path: tasksPath, content: await readFile(tasksPath, "utf-8") }
-              : undefined,
-            archive: (await pathExists(archivePath))
-              ? { path: archivePath, content: await readFile(archivePath, "utf-8") }
-              : undefined,
-          },
-        });
-        const report = formatFindingsReport(findings);
-        if (findings.length === 0) {
-          ctx.ui.notify(report, "info");
-        } else {
-          const errors = findings.filter((f) => f.severity === "error").length;
-          const kind: "warning" | "error" = errors > 0 ? "error" : "warning";
-          ctx.ui.notify(report, kind);
+        try {
+          const result = await otDoctor<Finding>({ root: ctx.cwd });
+          const findings = result.findings;
+          const report = formatFindingsReport(findings);
+          if (findings.length === 0) {
+            ctx.ui.notify(report, "info");
+          } else {
+            const kind: "warning" | "error" = result.counts.error > 0 ? "error" : "warning";
+            ctx.ui.notify(report, kind);
+          }
+        } catch (err) {
+          ctx.ui.notify((err as Error).message, "error");
         }
         return;
       }
@@ -1359,15 +1288,24 @@ export default function (pi: ExtensionAPI) {
         // Generic event emit so other extensions can react to status
         // cycles (e.g. `jira` for auto-transition). Stays generic — no
         // tracker-specific knowledge in `tasks`.
-        const onStatusChanged = (task: Task, prevStatus: string) => {
+        const onStatusChanged = async (
+          task: Task,
+          prevStatus: string,
+          nextStatus: string,
+        ): Promise<Task[]> => {
           const id = getTaskId(task);
+          if (!id) {
+            throw new Error("Task has no :CUSTOM_ID:; cannot change status.");
+          }
+          const result = await otSetStatus(id, nextStatus, { root: ctx.cwd });
           pi.events.emit("tasks:status-changed", {
             id,
-            status: task.status,
-            prevStatus,
-            summary: task.summary,
-            closed: task.status === "DONE" || task.status === "CANCELLED",
+            status: result.status,
+            prevStatus: result.prevStatus ?? prevStatus,
+            summary: result.task.summary,
+            closed: result.status === "DONE" || result.status === "CANCELLED",
           });
+          return await loadTasks(ctx.cwd);
         };
 
         await ctx.ui.custom(
@@ -2141,140 +2079,36 @@ async function createTask(
   const title = await ctx.ui.input(prompt, "");
   if (!title?.trim()) return null;
 
-  // Route to TASKS.local.org when the anchor (parent or sibling) is local.
+  // Route to the cursor's source file. Default TASKS.local.org uses
+  // `--local`; imported/change-record files use `--tasks <sourcePath>`.
+  const anchor = parentTask ?? insertAfterTask;
+  const anchorSourcePath = anchor?.sourcePath;
   const isLocal = !!(parentTask?.isLocal ?? insertAfterTask?.isLocal);
-  const targetPath = isLocal ? join(cwd, TASKS_LOCAL_FILE) : join(cwd, TASKS_FILE);
-  // The sourceRoot is the slice of `tasks` that belongs to targetPath.
-  const targetRoot = isLocal
-    ? tasks.filter((t) => t.isLocal)
-    : tasks.filter((t) => !t.isLocal);
+  const parentId = parentTask ? getTaskId(parentTask) : null;
+  const afterId = insertAfterTask ? getTaskId(insertAfterTask) : null;
 
-  const level = parentTask ? parentTask.level + 1 : 1;
-  const createdAt = formatOrgTimestamp();
-  const newTask: Task = {
-    level,
-    status: "TODO",
-    priority: null,
-    summary: title.trim(),
-    tags: [],
-    description: "",
-    children: [],
-    propertyLines: [
-      `:CUSTOM_ID: ${randomUUID()}`,
-      `:CREATED: [${createdAt}]`,
-    ],
-    importPath: null,
-    importRaw: null,
-    importChildren: undefined,
-    isLocal,
-    closed: null,
-    logbookLines: [],
-    sourcePath: targetPath,
-    sourceContent: targetRoot.find((t) => t.sourceContent)?.sourceContent,
-    effectiveSourceContent: targetRoot.find((t) => t.effectiveSourceContent)?.effectiveSourceContent,
-    sourceRoot: targetRoot,
-    lineNumber: 0,
-    endLine: 0,
-  };
-
-  appendCreatedLog(newTask, createdAt);
-
-  // For top-level inserts, push into `targetRoot` (the filtered slice that
-  // gets serialized below). Pushing into `tasks` instead would mutate the
-  // combined shared+local array but leave `targetRoot` — the array we
-  // actually write — untouched, silently dropping the new task.
-  const container: Task[] = parentTask ? parentTask.children : targetRoot;
-  if (insertAfterTask) {
-    const idx = container.indexOf(insertAfterTask);
-    if (idx >= 0) {
-      container.splice(idx + 1, 0, newTask);
-    } else {
-      container.push(newTask);
-    }
-  } else {
-    container.push(newTask);
-  }
-
+  let result: { id: string; file: string; line: number };
   try {
-    await writeTaskFilePreserving(targetPath, targetRoot);
+    result = await otCreateTask({
+      summary: title.trim(),
+      local: isLocal,
+      parentId: parentId ?? undefined,
+      afterId: afterId ?? undefined,
+      section: !parentId && !afterId ? "Improvements" : undefined,
+      sourcePath: !isLocal ? anchorSourcePath : undefined,
+    }, { root: cwd });
   } catch (err) {
     ctx.ui.notify(`Failed to save: ${(err as Error).message}`, "error");
-    const rollback = container.indexOf(newTask);
-    if (rollback >= 0) container.splice(rollback, 1);
     return null;
   }
 
-  ctx.ui.notify(`Created: ${newTask.summary}`, "info");
-  return newTask;
+  const fresh = await loadTasks(cwd);
+  const created = findTaskById(fresh, result.id);
+  ctx.ui.notify(`Created: ${created?.summary ?? title.trim()}`, "info");
+  return created;
 }
 
 // ── Archive flow ───────────────────────────────────────────────────────
-
-/**
- * Produce a copy of `task` suitable for the archive.
- * Transferred as-is: own children and #+IMPORT: link are preserved.
- * Runtime-loaded importChildren are stripped; the link remains so the
- * plan file is still reachable from the archive.
- */
-function taskForArchive(task: Task): Task {
-  return {
-    ...task,
-    propertyLines: [...task.propertyLines],
-    logbookLines: [...task.logbookLines],
-    importChildren: undefined,
-    importError: null,
-    sourceRoot: undefined,
-    sourceContent: undefined,
-    effectiveSourceContent: undefined,
-  };
-}
-
-const ARCHIVED_PROPERTY_RE = /^\s*:ARCHIVED:\s*\[([^\]]+)\]\s*$/i;
-const CLOSED_LOGBOOK_RE = /^\s*-\s+State\s+\"(?:DONE|CANCELLED)\"\s+from\s+\"[^\"]+\"\s+\[([^\]]+)\]\s*$/i;
-
-function archiveSortTimestamp(task: Task): string {
-  if (task.closed) return task.closed;
-  for (let i = task.logbookLines.length - 1; i >= 0; i--) {
-    const match = CLOSED_LOGBOOK_RE.exec(task.logbookLines[i]!);
-    if (match) return match[1]!.trim();
-  }
-  for (const line of task.propertyLines) {
-    const match = ARCHIVED_PROPERTY_RE.exec(line);
-    if (match) return match[1]!.trim();
-  }
-  return "9999-12-31 Zzz 23:59";
-}
-
-function sortArchivedTasks(tasks: Task[]): Task[] {
-  return tasks
-    .map((task, index) => ({ task, index }))
-    .sort((a, b) => {
-      const aStamp = archiveSortTimestamp(a.task);
-      const bStamp = archiveSortTimestamp(b.task);
-      return aStamp.localeCompare(bStamp) || a.index - b.index;
-    })
-    .map(({ task }) => task);
-}
-
-async function prepareArchivedPlanParentLink(
-  ctx: ExtensionContext,
-  task: Task,
-  archivePath: string,
-): Promise<{ absPlan: string; content: string } | null> {
-  const parentId = getTaskId(task);
-  if (!parentId || !task.importPath) return null;
-  const sourcePath = task.sourcePath ?? join(ctx.cwd, TASKS_FILE);
-  const sourceForLinks = task.effectiveSourceContent ?? task.sourceContent;
-  const expandedImportPath = expandOrgLinkTarget(task.importPath, sourceForLinks);
-  const importBaseDir = expandedImportPath.fromProjectRoot ? ctx.cwd : dirname(sourcePath);
-  const absPlan = await resolveProjectPath(ctx.cwd, importBaseDir, expandedImportPath.target);
-  if (!absPlan) {
-    throw new Error("Plan path resolves outside project root");
-  }
-  const current = await readFile(absPlan, "utf-8");
-  const next = rewriteParentLinkKind(current, parentId, "archive");
-  return next === current ? null : { absPlan, content: next };
-}
 
 /**
  * Archive a top-level TASKS.org task to TASKS.archive.org.
@@ -2317,54 +2151,15 @@ async function archiveTopLevel(
   );
   if (!ok) return false;
 
-  const idx = tasks.indexOf(topLevel);
-  if (idx === -1) {
-    ctx.ui.notify("Task is not a top-level entry; cannot archive.", "error");
+  const id = getTaskId(topLevel);
+  if (!id) {
+    ctx.ui.notify("Task has no :CUSTOM_ID:; cannot archive.", "error");
     return false;
   }
 
-  // Build the archive copy: transfer task as-is, stamp :ARCHIVED:.
-  // Uses CLOSED timestamp if present (fallback: now).
-  const archiveCopy = taskForArchive(topLevel);
-  const stamp = topLevel.closed ?? formatOrgTimestamp();
-  archiveCopy.propertyLines.push(`:ARCHIVED: [${stamp}]`);
-
-  const archivePath = join(ctx.cwd, TASKS_ARCHIVE_FILE);
-  const tasksPath = join(ctx.cwd, TASKS_FILE);
-  let planRewrite: { absPlan: string; content: string } | null = null;
   try {
-    planRewrite = await prepareArchivedPlanParentLink(ctx, topLevel, archivePath);
+    await otArchiveTask(id, { root: ctx.cwd });
   } catch (err) {
-    ctx.ui.notify(`Archive failed: ${(err as Error).message}`, "error");
-    return false;
-  }
-
-  // Mutate the live task tree: remove from top-level.
-  tasks.splice(idx, 1);
-
-  try {
-    const existing = (await pathExists(archivePath))
-      ? await readFile(archivePath, "utf-8")
-      : "";
-    const effectiveArchiveContent = existing.trim() === ""
-      ? existing
-      : await readEffectiveOrgContent(ctx.cwd, archivePath, existing);
-    const archivedTasks = existing.trim() === ""
-      ? []
-      : parseTasks(existing, { sourcePath: archivePath, effectiveSourceContent: effectiveArchiveContent }).tasks;
-    archivedTasks.push(archiveCopy);
-    const sortedArchive = sortArchivedTasks(archivedTasks);
-    const archiveContent = existing.trim() === ""
-      ? `${defaultOrgPreamble(archivePath)}${serializeTasks(sortedArchive)}`
-      : serializeTasksPreservingFile(existing, sortedArchive);
-    await writeFile(archivePath, archiveContent, "utf-8");
-    await writeTaskFilePreserving(tasksPath, tasks);
-    if (planRewrite) {
-      await writeFile(planRewrite.absPlan, planRewrite.content, "utf-8");
-    }
-  } catch (err) {
-    // Roll back in-memory change so the overlay stays consistent with disk.
-    tasks.splice(idx, 0, topLevel);
     ctx.ui.notify(`Archive failed: ${(err as Error).message}`, "error");
     return false;
   }
@@ -2390,36 +2185,18 @@ async function publishTask(
   );
   if (!ok) return;
 
-  const localPath = join(ctx.cwd, TASKS_LOCAL_FILE);
-  const sharedPath = join(ctx.cwd, TASKS_FILE);
-
-  // Remove from local task list.
-  const localRoot = task.sourceRoot ?? [];
-  const localIdx = localRoot.indexOf(task);
-  if (localIdx === -1) {
-    ctx.ui.notify("Could not locate task in local file.", "error");
+  const id = getTaskId(task);
+  if (!id) {
+    ctx.ui.notify("Task has no :CUSTOM_ID:; cannot publish.", "error");
     return;
   }
-  localRoot.splice(localIdx, 1);
-
-  // Re-home the task into TASKS.org.
-  const sharedTasks = tasks.filter((t) => !t.isLocal);
-  task.isLocal = false;
-  task.lineNumber = 0;
-  task.endLine = 0;
-  task.sourcePath = sharedPath;
-  task.sourceRoot = sharedTasks;
-  task.sourceContent = sharedTasks.find((t) => t.sourceContent)?.sourceContent;
-  task.effectiveSourceContent = sharedTasks.find((t) => t.effectiveSourceContent)?.effectiveSourceContent;
-  sharedTasks.push(task);
-
   try {
-    await writeTaskFilePreserving(localPath, localRoot);
-    await writeTaskFilePreserving(sharedPath, sharedTasks);
-    ctx.ui.notify(`Published: ${task.summary}`, "info");
+    await otPublishTask(id, { root: ctx.cwd });
   } catch (err) {
     ctx.ui.notify(`Publish failed: ${(err as Error).message}`, "error");
+    return;
   }
+  ctx.ui.notify(`Published: ${task.summary}`, "info");
 }
 
 /**
@@ -2437,40 +2214,16 @@ async function unpublishTask(
   );
   if (!ok) return;
 
-  const localPath = join(ctx.cwd, TASKS_LOCAL_FILE);
-  const sharedPath = join(ctx.cwd, TASKS_FILE);
-
-  // Remove from shared task list.
-  const sharedTasks = tasks.filter((t) => !t.isLocal);
-  const sharedIdx = sharedTasks.indexOf(task);
-  if (sharedIdx === -1) {
-    ctx.ui.notify("Could not locate task in TASKS.org.", "error");
+  const id = getTaskId(task);
+  if (!id) {
+    ctx.ui.notify("Task has no :CUSTOM_ID:; cannot unpublish.", "error");
     return;
   }
-  sharedTasks.splice(sharedIdx, 1);
-
-  // Read existing local content and parse its current task list.
-  let localContent = "";
-  try { localContent = await readFile(localPath, "utf-8"); } catch { /* new file */ }
-  const effectiveLocalContent = await readEffectiveOrgContent(ctx.cwd, localPath, localContent);
-  const { tasks: localRoot } = parseTasks(localContent, { sourcePath: localPath, effectiveSourceContent: effectiveLocalContent });
-
-  // Re-home the task into TASKS.local.org.
-  task.isLocal = true;
-  task.lineNumber = 0;
-  task.endLine = 0;
-  task.sourcePath = localPath;
-  task.sourceRoot = localRoot;
-  task.sourceContent = localContent || undefined;
-  task.effectiveSourceContent = effectiveLocalContent || undefined;
-  markLocal([task]);
-  localRoot.push(task);
-
   try {
-    await writeTaskFilePreserving(sharedPath, sharedTasks);
-    await writeTaskFilePreserving(localPath, localRoot);
-    ctx.ui.notify(`Unpublished: ${task.summary}`, "info");
+    await otUnpublishTask(id, { root: ctx.cwd });
   } catch (err) {
     ctx.ui.notify(`Unpublish failed: ${(err as Error).message}`, "error");
+    return;
   }
+  ctx.ui.notify(`Unpublished: ${task.summary}`, "info");
 }

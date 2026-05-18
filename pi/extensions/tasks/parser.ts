@@ -58,6 +58,8 @@ export interface Task {
   lineNumber: number;
   /** 1-indexed exclusive line number where this task subtree ended when parsed. */
   endLine: number;
+  /** Pre-resolved linked issues supplied by the `ot list` wire format. */
+  linkedIssues?: LinkedIssue[];
 }
 
 /** Matches any org heading: `* ...`, `** ...`, etc. */

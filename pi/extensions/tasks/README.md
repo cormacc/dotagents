@@ -4,7 +4,23 @@ Displays project tasks from a `TASKS.org` file in the project root using org-mod
 The extension is a UI over the plain-org task-memory protocol documented in
 `skills/org-tasks/SKILL.md`; that skill defines the durable file-format
 contract, while this extension owns commands, rendering, selection, status writes,
-and archive mechanics.
+and archive mechanics. Protocol logic is being migrated incrementally to the
+portable Babashka `ot` CLI under `skills/org-tasks/scripts/`: leaf LLM tools now
+call `ot section` / `ot scan`, `/tasks doctor` calls `ot doctor`,
+selection/status/archive/publish/unpublish use
+`ot select|status|archive|publish|unpublish`, `insertTaskIntoFile` and the
+interactive overlay create flow shell through `ot create`, and the overlay task
+graph loads from `ot list --format json`.
+
+`ot` discovery order is:
+
+1. `$PATH` (bbin installs typically land in `~/.local/bin`, Home Manager may expose the in-tree script directly),
+2. `~/.pi/agent/skills/org-tasks/scripts/ot`,
+3. `~/.agents/skills/org-tasks/scripts/ot`,
+4. the repo-local `skills/org-tasks/scripts/ot` fallback used by extension tests.
+
+If no candidate is found, the extension surfaces one actionable error:
+`ot binary not found. Install via \`bbin install io.github.cormacc/dotagents --as ot\` or place the dotagents skill on PATH.`
 
 ## Usage
 
