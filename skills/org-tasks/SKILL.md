@@ -292,13 +292,14 @@ Resume checklist (read order):
    position, and unsaved editor buffers.
 
 Closure discipline: refresh the linked change-record's `* Summary` before
-closing a top-level task; see `org-plan` § *Closure-time summary refresh*.
+closing a top-level task; see `org-plan` § *Closure-time refresh and prune*.
 
 When a record's `* Plan` + `* Implementation` history grows beyond cheap
 re-ingestion (~150 lines is a useful soft threshold), split completed history
 into a follow-up record or archive old top-level tasks — don't omit `* Summary`
-or truncate silently. Executable regression coverage for this protocol lives in
-`pi/extensions/tasks/`.
+or truncate silently. Executable regression coverage for this protocol lives
+in `skills/org-tasks/scripts/test/` (the `ot` engine) and
+`pi/extensions/tasks/` (the UI/event wrapper).
 
 ## Creating tasks and change-records
 
@@ -335,9 +336,9 @@ If `TASKS.org` does not exist and the user wants persistent task memory:
    #+LINK: archive file:../../TASKS.archive.org::#%s
    ```
 
-2. Create `TASKS.org` referencing it. Declare `TASKS.local.org` as the
-   first setupfile so gitignored per-checkout overrides win over shared
-   defaults:
+2. Create `TASKS.org` referencing it, declaring `TASKS.local.org` as the
+   first setupfile (gitignored per-checkout overrides win — see
+   *`#+SETUPFILE:` chain* above):
 
    ```org
    #+TITLE: Project Tasks
@@ -346,13 +347,10 @@ If `TASKS.org` does not exist and the user wants persistent task memory:
    #+SETUPFILE: ./TASKS.local.org
    #+SETUPFILE: ./TASKS.setup.org
    #+ARCHIVE: TASKS.archive.org::* From %s
-
-   * Improvements
    ```
 
-   Always create an empty (or `#+SELECTED:`-only) `TASKS.local.org` at the
-   same time so org-mode does not emit *Unable to read file* warnings on
-   fresh checkouts. The file must remain in `.gitignore`.
+   Also touch an empty `TASKS.local.org` (gitignored) so the setupfile chain
+   resolves on fresh checkouts.
 
 3. Add the first actionable `TODO` under a semantic section (e.g. `* Improvements`) with `:CUSTOM_ID:` and `:CREATED:` properties. Detailed work items go in an included change-record under the `plan` link target.
 
@@ -373,13 +371,14 @@ their own data without modifying this protocol:
   existing `#+SELECTED:` rule. A keyword present in both files takes its value
   from `TASKS.local.org`.
 
-First-party generic extension features in the `tasks` extension itself
-(documented in `pi/extensions/tasks/README.md`):
+First-party protocol-level metadata for external-tracker references
+(parsed/written by the `ot` engine; rendered as badges and surfaced by
+`J` in the pi tasks extension — see `pi/extensions/tasks/README.md`):
 
-- **`:LINKED_ISSUES:`** drawer property — multi-valued list of external-tracker references rendered as badges on task rows. Accepted token forms are org-native typed links (`[[type:key]]`, canonical) and raw URL org links (`[[https://...][label]]`). Bare keys are not part of the protocol.
-- **`#+LINK:`** org keyword — native link abbreviation declarations used to resolve typed issue links, e.g. `#+LINK: jira https://example.atlassian.net/browse/%s`. Multiple prefixes may be declared in one file.
+- **`:LINKED_ISSUES:`** drawer property — multi-valued, whitespace-separated list of org-link tokens. Accepted forms are org-native typed links (`[[type:key]]`, canonical) and raw URL org links (`[[https://...][label]]`). Bare keys are not part of the protocol. Created on first link; never auto-backfilled.
+- **`#+LINK:`** org keyword — native link abbreviation used to resolve typed issue links, e.g. `#+LINK: jira https://example.atlassian.net/browse/%s`. Multiple prefixes may be declared per file; `TASKS.local.org` overrides last-write-wins.
 
-These features are tracker-agnostic; tracker-specific behaviour (workflow names, MCP routing, slash commands, and the meaning of a link prefix such as `jira`) lives in companion extensions and skills, not in this protocol.
+Both are tracker-agnostic; tracker-specific behaviour (workflow names, MCP routing, slash commands, and the meaning of a prefix such as `jira`) lives in companion extensions and skills, not in this protocol.
 
 ## Non-goals
 

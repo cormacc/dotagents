@@ -1,6 +1,6 @@
 #+TITLE: Refactor tasks extension around an org-tasks CLI
 #+DATE: 2026-05-18 Mon
-#+PARENT: [[task:fd814ac4-d12b-4fe9-90af-650447f5298f][Refactor 'tasks' extension as a thin wrapper on top of a new babashka tool]]
+#+PARENT: [[archive:fd814ac4-d12b-4fe9-90af-650447f5298f][Refactor 'tasks' extension as a thin wrapper on top of a new babashka tool]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Draft
 

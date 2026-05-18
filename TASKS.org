@@ -18,18 +18,6 @@
 * Improvements
 
 
-** DONE [#B] Refactor 'tasks' extension as a thin wrapper on top of a new babashka tool
-CLOSED: [2026-05-18 Mon 17:11]
-:PROPERTIES:
-:CUSTOM_ID: fd814ac4-d12b-4fe9-90af-650447f5298f
-:STARTED: [2026-05-18 Mon 13:18]
-:HANDOFF: All plan tasks 1-8 plus review follow-ups DONE. Implemented portable Babashka ot CLI, cut pi tasks extension over to ot for graph loading and durable protocol writes, added wrapper/integration tests, documented bbin/discovery/contract guidance, exposed scripts/org-tasks/scripts on PATH via agents.nix fallback, routed overlay creates to imported source files, serialized status updates, deduplicated ot list source payloads, and pruned dead insertion helpers. Validation: bb test 115 tests/368 assertions; pi/extensions/tasks/test.sh green; local bbin smoke green; nix parse green. Remaining follow-up: ot record create still reports absorbedSubtasks=false and does not migrate local subtasks into * Plan.
-:END:
-:LOGBOOK:
-- State "STARTED" from "TODO" [2026-05-18 Mon 13:18]
-- State "DONE" from "STARTED" [2026-05-18 Mon 17:11]
-:END:
-#+IMPORT: [[plan:2026-05-18-tasks-extension-ot-cli.org]]
 ** TODO [#C] Improve terminal extension :pi:
 :PROPERTIES:
 :CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af

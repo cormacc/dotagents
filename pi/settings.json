@@ -11,5 +11,6 @@
     "npm:pi-tldr",
     "npm:pi-zellij-tools",
     "git:github.com/ramblurr/pi-nrepl@v0.1.0"
-  ]
+  ],
+  "lastChangelogVersion": "0.74.0"
 }

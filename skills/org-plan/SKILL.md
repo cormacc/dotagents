@@ -268,13 +268,10 @@ Prune:
    compact pointer here and create follow-up work to move it.
 
 Draft summaries on active records may be terse and are expected to evolve; the
-final summary is written or refreshed at closure. The tasks extension prompts
-the agent to generate or refresh `* Summary` when a top-level task transitions
-to `DONE` and the linked change-record either lacks the section or has not been
-touched since the parent task's `:STARTED:` timestamp (with a small same-minute
-grace window). The skill is the durable contract; the extension prompt is a
-cheap reinforcement. Even when tooling prompts only for Summary refresh, the
-agent should self-trigger this full prune checklist.
+final summary is written or refreshed at closure. Tooling (e.g. the pi tasks
+extension) may prompt for a `* Summary` refresh on `DONE` transitions; the
+agent should self-trigger the full prune checklist regardless of whether a
+prompt fires.
 
 ### Plan task metadata and status
 
