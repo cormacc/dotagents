@@ -9,6 +9,7 @@
     "npm:context-mode",
     "npm:@latentminds/pi-quotas",
     "npm:pi-tldr",
-    "npm:pi-zellij-tools"
+    "npm:pi-zellij-tools",
+    "git:github.com/ramblurr/pi-nrepl@v0.1.0"
   ]
 }
