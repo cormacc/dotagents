@@ -2,9 +2,8 @@
   "Filesystem loader and writer for the org-tasks graph.
 
   Owns the `TASKS.org` + `TASKS.local.org` + `#+IMPORT:` chain
-  resolution that the pi extension does today in TypeScript. Pure
-  side-effects (read/slurp, atomic write) live here so commands stay
-  thin.
+  resolution. Pure side-effects (read/slurp, atomic write) live here
+  so commands stay thin.
 
   Public surface:
 

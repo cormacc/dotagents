@@ -1,17 +1,10 @@
 (ns org-tasks.cli
   "Org-tasks (`ot`) command-line entry point.
 
-  Dispatches subcommands via `babashka.cli`. Every command is currently
-  stubbed with a structured `not-implemented` error envelope so the
-  contract surface is testable before any protocol logic ports across.
-  Subsequent plan tasks fill the stubs in:
-
-  - 131094a3 :: parser/serializer port
-  - 3600a3a9 :: core task commands (`list`, `show`, `create`, `select`,
-                `selected`, `status`, `init`)
-  - d65fef67 :: advanced protocol commands (`archive`, `publish`,
-                `unpublish`, `doctor`, `section`, `scan`)
-  - 58d1547e :: `record`, `issue`, `blocker`, `ready`, `handoff`"
+  Dispatches subcommands via `babashka.cli`. Per-command specs merge
+  over `global-spec`; the dispatch table at the bottom of this file
+  wires each `[cmd args]` shape onto a handler in `org-tasks.commands`.
+  Machine-output contract: `skills/org-tasks/scripts/docs/contract.md`."
   (:require [babashka.cli :as cli]
             [clojure.string :as str]
             [org-tasks.commands :as commands]
@@ -89,7 +82,22 @@
    :scope         {:desc "active | archived | all" :ref "<scope>" :default :active
                    :coerce :keyword
                    :validate {:pred #(contains? #{"active" "archived" "all"
-                                                   :active :archived :all} %)}}})
+                                                   :active :archived :all} %)}}
+   :levels        {:desc (str "Limit hierarchy depth (0 = top-level only, "
+                              "1 = top-level + direct children, …). "
+                              "Omit for unlimited.")
+                   :ref  "<n>"
+                   :alias :l
+                   :coerce :long
+                   :validate
+                   {:pred (fn [v]
+                            (let [n (cond (integer? v) v
+                                          (string? v) (try (Long/parseLong v)
+                                                           (catch Throwable _ nil)))]
+                              (and (integer? n) (>= n 0))))
+                    :ex-msg (fn [{:keys [value]}]
+                              (str "--levels must be a non-negative integer, got "
+                                   (pr-str value)))}}})
 
 (def ^:private scan-spec
   {:scope         {:desc "active | archived | all" :ref "<scope>" :default :all
@@ -120,29 +128,27 @@
           :validate {:pred #(contains? #{"proactive" "retrospective"
                                           :proactive :retrospective} %)}}})
 
+(def ^:private uuid-spec
+  {:count {:desc "Number of UUIDv4 values to generate"
+           :ref  "<n>"
+           :coerce :long
+           :default 1
+           :validate {:pred #(and (integer? %) (pos? %))
+                      :ex-msg (fn [{:keys [value]}]
+                                (str "--count must be a positive integer, got "
+                                     (pr-str value)))}}})
+
 (defn- merge-spec [extra]
   (merge global-spec extra))
 
-;; ── Command stubs ──────────────────────────────────────────────────
-
-(defn- not-implemented
-  "Build a stub handler that emits a `not-implemented` error envelope.
-  Replaced incrementally as plan tasks fill commands in."
-  [cmd-name]
-  (fn [{:keys [opts]}]
-    (out/emit-error opts
-                    {:code    "not-implemented"
-                     :message (str cmd-name " is not yet implemented")
-                     :details {:command cmd-name}})))
-
-;; Help command — emits a top-level summary and exits 0.
+;; ── Help ─────────────────────────────────────────────────────────
 
 (def ^:private command-summary
   "User-visible command index. Used to render `ot --help` and
   `ot help`. Entries are [name args description]; nested subcommands
   flatten with the dotted form used by the dispatch table."
   [["init"             ""                  "Bootstrap TASKS.{setup,local}.org + TASKS.org"]
-   ["list"             ""                  "List the task graph (--format json|edn for machine output)"]
+   ["list"             ""                  "List the task graph (--levels N caps depth, --format json|edn for machine output)"]
    ["show"             "<id|selected>"     "Show one task plus its plan summary"]
    ["create"           "<summary>"         "Create a new task under --section"]
    ["status"           "<id> <new-status>" "Cycle a task to STARTED / WAITING / DONE / CANCELLED / TODO"]
@@ -166,7 +172,8 @@
    ["ready"            "<id>"              "Report whether a task is ready to start"]
    ["handoff get"      "<id>"              "Print the :HANDOFF: note"]
    ["handoff set"      "<id> <text>"       "Set the :HANDOFF: note"]
-   ["handoff clear"    "<id>"              "Clear the :HANDOFF: note"]])
+   ["handoff clear"    "<id>"              "Clear the :HANDOFF: note"]
+   ["uuid"             "[--count N]"       "Generate one or more UUIDv4 values for new task IDs"]])
 
 (defn- pad [s n] (format (str "%-" n "s") s))
 
@@ -253,6 +260,8 @@
     :spec (merge-spec {}) :args->opts [:id :text]}
    {:cmds ["handoff" "clear"]    :fn commands/handoff-clear-cmd
     :spec (merge-spec {}) :args->opts [:id]}
+   {:cmds ["uuid"]               :fn commands/uuid-cmd
+    :spec (merge-spec uuid-spec)}
    ;; Catch-all → top-level help. Must be last.
    {:cmds [] :fn help-cmd}])
 
@@ -282,6 +291,8 @@
    :scope          :keyword
    :mode           :keyword
    :max-body-chars :long
+   :count          :long
+   :levels         :long
    :dry-run        :boolean
    :yes            :boolean
    :no-color       :boolean

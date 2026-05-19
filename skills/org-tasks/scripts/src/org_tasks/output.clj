@@ -4,7 +4,8 @@
   Every command emits a result via [[emit-result]] or [[emit-error]],
   which renders one of three formats:
 
-    * `:text` (default, human-readable; ANSI styling under `--no-color`)
+    * `:text` (default, human-readable; ANSI styling unless
+      `--no-color` is set or `NO_COLOR` is in the environment)
     * `:json` (the contract documented in
       `skills/org-tasks/scripts/docs/contract.md`)
     * `:edn`  (the same envelope rendered as EDN)
@@ -30,6 +31,23 @@
 
 (defn- fmt [opts]
   (or (:format opts) :text))
+
+(def ^:dynamic *getenv*
+  "Indirection for environment lookup so tests can validate NO_COLOR
+  handling without mutating the process environment."
+  (fn [k] (System/getenv k)))
+
+(defn color-enabled?
+  "Return true when text renderers should emit ANSI styling.
+
+  Explicit `:color?` opts win for tests and focused callers. Otherwise
+  `--no-color` disables styling, and the ambient NO_COLOR environment
+  variable is honoured."
+  [opts]
+  (if (contains? opts :color?)
+    (boolean (:color? opts))
+    (and (not (:no-color opts))
+         (str/blank? (*getenv* "NO_COLOR")))))
 
 (defn- strip-internal-keys
   "Recursively drop namespaced keys (e.g. `:text/lines`) from maps so

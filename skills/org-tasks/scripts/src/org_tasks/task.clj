@@ -13,8 +13,13 @@
     collect-sources        :: tasks -> {path source-map}
     flatten-tree           :: tasks -> rows
     find-by-id             :: tasks id -> task | nil
-    find-top-level-root    :: tasks task -> task | nil"
-  (:require [org-tasks.parser :as parser]))
+    find-by-id-or-prefix   :: tasks id-prefix -> {:match t} | {:ambiguous [t]} | {:none true}
+    find-top-level-by-id-or-prefix :: tasks id-prefix -> resolver result
+    find-top-level-root    :: tasks task -> task | nil
+    compact-id             :: id n -> short-id (first-n … last-n)
+    build-short-ids        :: tasks -> {full-id -> short-id-string}"
+  (:require [clojure.string :as str]
+            [org-tasks.parser :as parser]))
 
 (defn- task-children
   "Walk both `:children` and `:import-children`."
@@ -31,6 +36,134 @@
               t
               (find-by-id (task-children t) id)))
           tasks)))
+
+(def ^:private min-id-prefix-length 4)
+(def ^:private min-edge-length 4)
+(def ^:private max-edge-length 16)
+(def ^:private ellipsis "…")
+(def ^:private ascii-ellipsis "...")
+
+(defn- all-tasks
+  "Return every task reachable from `tasks` in depth-first order."
+  [tasks]
+  (mapcat (fn [t] (cons t (all-tasks (task-children t)))) tasks))
+
+(defn- id-prefix-match? [raw-id task]
+  (when-let [id (parser/get-task-id task)]
+    (str/starts-with? id raw-id)))
+
+(defn- compact-form-input
+  "If `raw-id` looks like a compact short-id (`prefix…suffix` or
+  `prefix...suffix`), return `[prefix suffix]`; otherwise nil."
+  [^String raw-id]
+  (when raw-id
+    (let [norm (-> raw-id
+                   (str/replace ellipsis "\u0001")
+                   (str/replace ascii-ellipsis "\u0001"))
+          parts (str/split norm #"\u0001")]
+      (when (and (= 2 (count parts))
+                 (every? seq parts))
+        parts))))
+
+(defn- compact-match? [^String prefix ^String suffix task]
+  (when-let [id (parser/get-task-id task)]
+    (and (str/starts-with? id prefix)
+         (str/ends-with? id suffix))))
+
+(defn- resolve-id-candidate
+  "Resolve `raw-id` against `candidates`.
+
+  Exact matches win before prefix matching. Prefix matches require at
+  least four characters so accidental one-character selections never
+  bind to a graph-dependent task. Compact short-ids of the form
+  `prefix…suffix` (or `prefix...suffix`) match tasks whose `:CUSTOM_ID:`
+  starts with `prefix` and ends with `suffix`.
+
+  Return shape is one of:
+
+    {:match task}
+    {:ambiguous [task ...]}
+    {:none true}"
+  [candidates raw-id]
+  (let [raw-id (some-> raw-id str str/trim)]
+    (cond
+      (str/blank? raw-id)
+      {:none true}
+
+      :else
+      (if-let [exact (some #(when (= raw-id (parser/get-task-id %)) %) candidates)]
+        {:match exact}
+        (if-let [[prefix suffix] (compact-form-input raw-id)]
+          (let [matches (vec (filter #(compact-match? prefix suffix %) candidates))]
+            (case (count matches)
+              0 {:none true}
+              1 {:match (first matches)}
+              {:ambiguous matches}))
+          (if (< (count raw-id) min-id-prefix-length)
+            {:none true}
+            (let [matches (vec (filter #(id-prefix-match? raw-id %) candidates))]
+              (case (count matches)
+                0 {:none true}
+                1 {:match (first matches)}
+                {:ambiguous matches}))))))))
+
+(defn compact-id
+  "Return a compact display form for `id` of the shape
+  `first-n … last-n`. Falls back to the raw id when the id is too short
+  to compact."
+  [^String id n]
+  (let [n (max min-edge-length (or n min-edge-length))
+        len (count id)]
+    (if (or (nil? id) (<= len (+ (* 2 n) 1)))
+      id
+      (str (subs id 0 n) ellipsis (subs id (- len n))))))
+
+(defn build-short-ids
+  "Return `{full-id -> short-id}` for every task reachable from `tasks`.
+
+  The smallest edge length (≥ 4) is chosen such that every full id
+  produces a unique compact form in the graph. Tasks that share a
+  shared-prefix / shared-suffix pattern collectively expand to the
+  smallest disambiguating size; other tasks share that size for visual
+  consistency. Falls back to full ids when expansion reaches the
+  configured ceiling without resolving collisions."
+  [tasks]
+  (let [ids (->> (all-tasks tasks)
+                 (keep parser/get-task-id)
+                 distinct
+                 vec)]
+    (if (empty? ids)
+      {}
+      (loop [n min-edge-length]
+        (let [m (into {} (map (fn [id] [id (compact-id id n)]) ids))]
+          (cond
+            (= (count (set (vals m))) (count ids))
+            m
+
+            (>= n max-edge-length)
+            (into {} (map (fn [id] [id id]) ids))
+
+            :else
+            (recur (inc n))))))))
+
+(defn find-by-id-or-prefix
+  "Resolve `raw-id` anywhere in the task graph.
+
+  Walks both `:children` and `:import-children`. Exact `:CUSTOM_ID:`
+  matches win before prefix matching. Prefix matches require at least
+  four characters. Returns `{:match task}`, `{:ambiguous [task ...]}`,
+  or `{:none true}`."
+  [tasks raw-id]
+  (resolve-id-candidate (all-tasks tasks) raw-id))
+
+(defn find-top-level-by-id-or-prefix
+  "Resolve `raw-id` only against the top-level task roots.
+
+  Used by operations that intentionally cannot target imported or nested
+  tasks (archive, publish, unpublish). Return shape matches
+  [[find-by-id-or-prefix]]."
+  [tasks raw-id]
+  (resolve-id-candidate tasks raw-id))
 
 (defn find-top-level-root
   "Return the top-level root whose subtree contains `target`."

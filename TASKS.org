@@ -18,6 +18,21 @@
 * Improvements
 
 
+** DONE [#B] org-tasks cli improvements :org-tasks:skills:
+CLOSED: [2026-05-19 Tue 10:51]
+:PROPERTIES:
+:CUSTOM_ID: a6dbdacb-8ac0-4745-8051-fd6fd1e1e0b2
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-19 Tue 10:12]
+- State "TODO" from "DONE" [2026-05-19 Tue 10:34]
+- State "DONE" from "TODO" [2026-05-19 Tue 10:51]
+:END:
+#+IMPORT: [[plan:2026-05-19-ot-short-ids-and-bling.org]]
+We want to make the following improvements to org-tasks:
+- Update 'show' etc. to allow the use of the short-id format used by 'list'. Currently there's a disconnect.
+- Update the text output format to use the bling library for colourised output, using bling's own documented palette / closest equivalents rather than forcing parity with pi extension ANSI colours. See https://github.com/paintparty/bling.
+
 ** TODO [#C] Improve terminal extension :pi:
 :PROPERTIES:
 :CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af

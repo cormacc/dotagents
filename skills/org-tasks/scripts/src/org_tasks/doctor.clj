@@ -1,9 +1,8 @@
 (ns org-tasks.doctor
   "`/tasks doctor` health-check engine.
 
-  Port of `pi/extensions/tasks/doctor.ts`. Pure logic over a loaded
-  task graph + optional protocol-file content snapshots; no
-  filesystem access. Returns a vector of `Finding` maps:
+  Pure logic over a loaded task graph + optional protocol-file content
+  snapshots; no filesystem access. Returns a vector of `Finding` maps:
 
     {:code     <kw>     ;; canonical code
      :severity :warn | :error
@@ -18,6 +17,8 @@
     :closed-without-timestamp
     :stale-parent-status
     :invalid-task-blocker
+    :non-uuid-v4-id
+    :patterned-sibling-ids
     :missing-link-template
     :misordered-link-template
     :missing-local-setupfile
@@ -27,6 +28,15 @@
 
 (def ^:private closed-statuses #{"DONE" "CANCELLED"})
 (def ^:private active-child-statuses #{"STARTED" "WAITING"})
+
+(def ^:private uuid-v4-re
+  #"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+
+(def ^:private patterned-prefix-threshold
+  ;; Two random UUIDv4 values share at most a handful of leading hex
+  ;; chars by chance; sibling tasks whose ids agree on 24+ leading
+  ;; characters are almost always hand-authored.
+  24)
 
 ;; ── Task walk ──────────────────────────────────────────────────────
 
@@ -258,7 +268,50 @@
                    :severity :error
                    :message (str ":BLOCKED-BY: references task:" (:ref blocker)
                                  " which is not in the loaded task graph")
+                   :location (location-for task)})))
+
+      ;; non-uuid-v4-id
+      (when-let [id (parser/get-task-id task)]
+        (when-not (re-matches uuid-v4-re (str/lower-case id))
+          (vswap! out conj
+                  {:code :non-uuid-v4-id
+                   :severity :warn
+                   :message (str ":CUSTOM_ID: " id
+                                 " is not a UUIDv4. Generate IDs with `ot uuid`"
+                                 " or `ot create` rather than authoring them by hand.")
                    :location (location-for task)}))))
+
+    ;; patterned-sibling-ids — group siblings by their leading `N`
+    ;; characters and flag any cluster of ≥ 2 sharing that prefix. This
+    ;; catches hand-numbered sequences (e.g. `…d0001`/`…d0002`) without
+    ;; demanding that *every* sibling share the prefix.
+    (letfn [(check-siblings [siblings]
+              (let [with-ids (filterv parser/get-task-id siblings)]
+                (when (>= (count with-ids) 2)
+                  (doseq [[prefix members]
+                          (group-by #(let [id (parser/get-task-id %)]
+                                       (when (>= (count id) patterned-prefix-threshold)
+                                         (subs id 0 patterned-prefix-threshold)))
+                                    with-ids)
+                          :when (and prefix (>= (count members) 2))]
+                    (doseq [sib members]
+                      (vswap! out conj
+                              {:code :patterned-sibling-ids
+                               :severity :warn
+                               :message (str "Sibling tasks share a "
+                                             patterned-prefix-threshold
+                                             "-character :CUSTOM_ID: prefix '"
+                                             prefix
+                                             "…'. Use `ot create` or `ot uuid` to"
+                                             " generate fresh UUIDv4 values per task.")
+                               :location (location-for sib)}))))))
+            (walk-siblings [siblings]
+              (check-siblings siblings)
+              (doseq [s siblings]
+                (walk-siblings (:children s))
+                (when (:import-children s)
+                  (walk-siblings (:import-children s)))))]
+      (walk-siblings tasks))
 
     @out))
 
@@ -276,6 +329,7 @@
 (def ^:private finding-order
   [:duplicate-id :selected-not-found :broken-import :invalid-task-blocker
    :waiting-without-blocker :closed-without-timestamp :stale-parent-status
+   :non-uuid-v4-id :patterned-sibling-ids
    :missing-link-template :misordered-link-template
    :missing-local-setupfile :misordered-setupfile])
 

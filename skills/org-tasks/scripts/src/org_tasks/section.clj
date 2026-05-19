@@ -1,10 +1,9 @@
 (ns org-tasks.section
   "Pure org-file primitive: extract a single level-1 section.
 
-  Port of `pi/extensions/tasks/section.ts`. Returns the section's
-  heading line verbatim plus the body up to (but not including) the
-  next column-0 `* ` heading, with nested `**`/`***` subheadings
-  preserved.
+  Returns the section's heading line verbatim plus the body up to (but
+  not including) the next column-0 `* ` heading, with nested `**`/`***`
+  subheadings preserved.
 
   Source-block (`#+BEGIN_<kind>` / `#+END_<kind>`) regions are tracked
   so literal `* ` lines inside example/src/quote blocks do not

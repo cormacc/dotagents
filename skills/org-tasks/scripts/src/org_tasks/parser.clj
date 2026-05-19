@@ -1,7 +1,7 @@
 (ns org-tasks.parser
   "Org-mode parser/serializer for the `ot` CLI.
 
-  Port of `pi/extensions/tasks/parser.ts`. Owns:
+  Owns:
 
     - heading + drawer + LOGBOOK + CLOSED parsing
     - `#+IMPORT:` extraction (task body + file root)

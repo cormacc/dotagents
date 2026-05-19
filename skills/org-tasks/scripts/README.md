@@ -7,10 +7,9 @@ doctor checks, section reads, summary scans, and change-record
 scaffolding. Other coding agents (pi, Emacs companions, CI scripts)
 shell out to `ot` rather than reimplementing the protocol.
 
-Status: **scaffold** — every subcommand currently emits a
-`not-implemented` envelope. Implementation lands command-by-command per
-the plan in
-[`design/log/2026-05-18-tasks-extension-ot-cli.org`](../../../design/log/2026-05-18-tasks-extension-ot-cli.org).
+The original cutover from the TypeScript helpers is recorded in
+[`design/log/2026-05-18-tasks-extension-ot-cli.org`](../../../design/log/2026-05-18-tasks-extension-ot-cli.org);
+the machine-output contract lives in [`docs/contract.md`](docs/contract.md).
 
 ## Install
 
@@ -108,7 +107,7 @@ skills/org-tasks/
       cli.clj                 # dispatch table + global options
       output.clj              # envelope + format renderer
       root.clj                # project-root resolution
-      parser.clj              # (stub) org parser/serializer
+      parser.clj              # org parser/serializer
     test/org_tasks/
       test_runner.clj         # clojure.test discovery + runner
       cli_test.clj            # CLI smoke tests

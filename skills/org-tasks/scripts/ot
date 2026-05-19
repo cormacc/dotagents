@@ -32,6 +32,7 @@ if [ -f "$repo_root/bb.edn" ]; then
   exec bb --config "$repo_root/bb.edn" --deps-root "$repo_root" \
           -m org-tasks.cli -- "$@"
 else
-  exec bb --classpath "$script_dir/src" \
+  cd "$script_dir"
+  exec bb -Sdeps '{:paths ["src"] :deps {io.github.paintparty/bling {:mvn/version "0.10.0"}}}' \
           -m org-tasks.cli -- "$@"
 fi

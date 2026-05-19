@@ -1,0 +1,312 @@
+#+TITLE: ot short-id resolution and bling-colourised text output
+#+DATE: 2026-05-19 Tue
+#+PARENT: [[task:a6dbdacb-8ac0-4745-8051-fd6fd1e1e0b2][org-tasks cli improvements]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+
+* Summary
+Make =ot= ergonomic on the command line. Four interlocking improvements
+shipped as one change-record because they share the id and text-output
+surfaces:
+
+1. *Short-id resolution.* Id-accepting subcommands accept a full
+   =:CUSTOM_ID:=, a compact =prefix…suffix= short-id (the form printed
+   by =ot list= and =ot scan=; both unicode `…` and ASCII `...` are
+   accepted), or any unique ≥ 4-char leading prefix. Ambiguous values
+   fail with a structured =ambiguous-id= envelope listing every match.
+2. *Robust compact-id display.* =org-tasks.task/build-short-ids= picks
+   the smallest symmetric edge size (≥ 4) that disambiguates every id
+   in the loaded graph, so hand-numbered sibling tasks no longer collide
+   on display. The wire envelope of =ot list= exposes the resulting
+   `shortIds` map for JSON callers.
+3. *Tooling-owned UUID generation.* =ot uuid [--count N]= generates
+   UUIDv4 values for hand-authored plan / change-record task blocks.
+   =org-tasks/SKILL.md= and =org-plan/SKILL.md= tell agents to call
+   the command instead of inventing IDs.
+4. *Bling-styled text output.* =--format text= renderers colourise
+   status, priority, tags, linked issues, local-draft markers, selected
+   marker, and the new compact short-id via
+   =io.github.paintparty/bling 0.10.0=. The styling lives in
+   =org-tasks.styling=, keyed only by verified bling palette keywords.
+   =--no-color= and =NO_COLOR= both suppress styling without mutating
+   the process environment. JSON/EDN output remains ANSI-free.
+
+=ot doctor= gains two warnings to protect the new invariants:
+=:non-uuid-v4-id= flags hand-authored ids; =:patterned-sibling-ids=
+flags sibling tasks whose first 24 chars match (catching the
+`…-3a6b2c4d0001` / `…0002` style that triggered this work). Both are
+warnings so legacy records keep loading.
+
+** Decisions
+- Resolver lives in =org-tasks.task= :: New =find-by-id-or-prefix= +
+  =find-top-level-by-id-or-prefix= return ={:match task}=, ={:ambiguous
+  [task ...]}=, or ={:none}=. Command modules call a shared
+  =resolve-required-id= helper that emits =unknown-task= or
+  =ambiguous-id= envelopes uniformly. No regex / interactive prompting —
+  the agent surface stays deterministic.
+- Minimum prefix length :: 4 chars. Anything shorter falls through to
+  =unknown-task= so =ot show a= can't accidentally collapse a
+  many-thousand-task graph onto whichever task happens to sort first.
+  Full 36-char UUIDs always exact-match without going through the
+  prefix branch.
+- Compact short-id shape :: `prefix…suffix`, edges expand symmetrically
+  from 4 chars up to 16 chars until every id in the loaded graph yields
+  a unique alias. The unicode `…` is what =ot list= prints; the resolver
+  also accepts ASCII `...` so shells that struggle with unicode can
+  paste compact ids back. Legacy bare prefixes still resolve when
+  unique.
+- UUIDs come from tooling :: =ot uuid= (single) and =ot uuid --count N=
+  (bulk) replace agent-authored example IDs in prose. =ot doctor= warns
+  on hand-authored or patterned siblings to keep the rule enforced in
+  practice without breaking legacy task graphs.
+- Styling library :: =io.github.paintparty/bling 0.10.0=. Babashka
+  compatible, hiccup-like markup, native =NO_COLOR= support. Added once
+  to the repo-root =deps.edn= / =bb.edn= so =bb run ot= and bbin
+  installs both pick it up.
+- Styling lives in a new =org-tasks.styling= namespace :: One canonical
+  bling-keyword palette map plus thin helpers (=status=, =priority=,
+  =tag-cluster=, =linked-issue-cluster=, =local-marker=, =short-id=).
+  Commands never reach into bling directly, so swapping styling later
+  is a one-file change.
+- Palette mapping :: Status TODO :yellow, STARTED :blue, WAITING
+  :orange, DONE :green, CANCELLED :gray (closed-and-inert reads
+  better than red here; red is reserved for genuine errors via bling's
+  =:negative= / =:error= aliases). Priority A :red, B :orange,
+  C :yellow, D :blue (traffic-light gradient from urgent to deferred —
+  chosen for bling-native clarity rather than mirroring the pi
+  extension's A=orange/B=yellow/C=green/D=blue mapping). Tags
+  :magenta with =:italic=. Linked-issue cluster :purple with the
+  existing ⤴ glyph. Local-draft marker :magenta. Short-id :gray
+  (subtle — present but never the focal point of the row). Do not use
+  undocumented colours such as =:cyan= or =:pink= unless the installed
+  bling version proves they are first-class palette keywords. The pi
+  extension's =status-colors.ts= is left alone; the two surfaces agree
+  semantically while differing in exact hue.
+- =--no-color= wiring :: Styling helpers take an explicit
+  ={:color? boolean}= / opts argument. =org-tasks.output= computes that
+  flag from command opts plus the ambient =NO_COLOR= environment and
+  passes it down; when false, helpers return plain strings without
+  calling bling. Do not attempt to mutate process environment or rely
+  on =System/setProperty= to fake =NO_COLOR=.
+- Short-id everywhere or nowhere :: All id-accepting commands route
+  through the same resolver, including =record path/create=, =issue
+  add/remove/urls=, =blocker add/remove=, =handoff set/clear=,
+  =ready=, =publish/unpublish/archive=, =select=, =status=, =show=.
+  Don't ship a half-cohort.
+- Pi extension is unaffected :: The =ot.ts= wrapper still passes full
+  UUIDs everywhere — the extension never displays the truncated id back
+  to itself. The new behaviour is purely a CLI-side affordance.
+
+* Plan
+
+** DONE [#A] Add prefix-aware id resolver and ambiguous-id error code :clojure:protocol:
+CLOSED: [2026-05-19 Tue 10:12]
+:PROPERTIES:
+:CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0001
+:CREATED: [2026-05-19 Tue 09:48]
+:END:
+:LOGBOOK:
+- Created [2026-05-19 Tue 09:48]
+- State "DONE" from "TODO" [2026-05-19 Tue 10:12]
+:END:
+Acceptance criteria:
+- =org-tasks.task/find-by-id-or-prefix= and
+  =find-top-level-by-id-or-prefix= return
+  ={:match task} | {:ambiguous [task …]} | {:none}=, walk both
+  =:children= and =:import-children=, and exact-match the full UUID
+  before any prefix branch.
+- Prefixes shorter than 4 characters never match; resolver returns
+  ={:none}=.
+- A new =org-tasks.commands/resolve-required-id= helper centralises
+  envelope emission: =unknown-task= for none, =ambiguous-id= (with
+  =details.matches= = ={:id :summary :file}= entries) for ambiguous.
+- The =ambiguous-id= code is documented in
+  =skills/org-tasks/scripts/docs/contract.md= next to =unknown-task=.
+- New =task_test.clj= is added and wired into =test_runner.clj=.
+  Tests cover exact, unique-prefix, ambiguous, too-short, and unknown
+  cases on both the global and top-level resolvers.
+
+** DONE [#A] Route every id-accepting command through the new resolver :cli:protocol:
+CLOSED: [2026-05-19 Tue 10:12]
+:PROPERTIES:
+:CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0002
+:CREATED: [2026-05-19 Tue 09:48]
+:BLOCKED-BY: task:1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0001
+:END:
+:LOGBOOK:
+- Created [2026-05-19 Tue 09:48]
+- State "DONE" from "TODO" [2026-05-19 Tue 10:12]
+:END:
+Acceptance criteria:
+- =show=, =select=, =status=, =publish=, =unpublish=, =archive=,
+  =record path=, =record create=, =issue list/add/remove/urls=,
+  =blocker list/add/remove=, =ready=, =handoff get/set/clear= all
+  accept either a full =:CUSTOM_ID:= or an =ot list=-style 8-char
+  short-id (or any unique prefix of length ≥ 4).
+- =publish=, =unpublish=, =archive= keep their existing "must be
+  top-level" semantics — they resolve through
+  =find-top-level-by-id-or-prefix=, not the graph-wide resolver.
+- Status transitions still write the canonical full UUID back to the
+  =:CUSTOM_ID:= drawer (no truncation leaks into persisted org).
+- Integration tests in =commands_test.clj= exercise =ot show <short>=
+  on the live fixture set; an ambiguity test forces two tasks with a
+  colliding 4-char prefix and asserts the =ambiguous-id= envelope.
+- =ot.ts= test surface in =pi/extensions/tasks/ot.test.ts= verifies the
+  pi wrapper still works because it always passes full UUIDs (no code
+  change required, but the assertion guards against accidental
+  regression).
+
+** DONE [#B] Adopt bling for =--format text= styling :clojure:ui:
+CLOSED: [2026-05-19 Tue 10:12]
+:PROPERTIES:
+:CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0003
+:CREATED: [2026-05-19 Tue 09:48]
+:END:
+:LOGBOOK:
+- Created [2026-05-19 Tue 09:48]
+- State "DONE" from "TODO" [2026-05-19 Tue 10:12]
+:END:
+Acceptance criteria:
+- =deps.edn= and =bb.edn= declare =io.github.paintparty/bling
+  {:mvn/version "0.10.0"}=; =bb run ot --help= still starts cleanly
+  with the new dep on a fresh classpath.
+- New =org-tasks.styling= namespace exposes =status=, =priority=,
+  =tag-cluster=, =linked-issue-cluster=, =local-marker=, =short-id=,
+  and =selected-marker=, with a single palette map keyed only by
+  verified bling keywords: status TODO :yellow / STARTED :blue /
+  WAITING :orange / DONE :green / CANCELLED :gray; priorities A :red /
+  B :orange / C :yellow / D :blue; tags =:italic.magenta=;
+  linked-issues :purple with the ⤴ prefix; local-draft :magenta;
+  short-id :gray.
+- Styling helpers accept explicit opts, e.g. ={:color? true|false}=.
+  =--no-color= (and the existing =NO_COLOR= env var) both produce
+  byte-identical, ANSI-free text output by selecting the plain-string
+  path. JSON/EDN envelopes contain no ANSI bytes under any setting
+  (=text/lines= remains the only styled surface and is stripped before
+  machine output by the existing =strip-internal-keys=).
+- Unit tests in a new =styling_test.clj= cover: installed bling accepts
+  every palette keyword used by =org-tasks.styling=, ANSI present when
+  styling enabled, ANSI absent when explicit ={:color? false}= is used,
+  ANSI absent when command opts include =:no-color true=, ANSI absent
+  when =NO_COLOR=1= is in the environment, and known-status/known-
+  priority lookups.
+
+** DONE [#B] Style the high-traffic command renderers :clojure:ui:
+CLOSED: [2026-05-19 Tue 10:12]
+:PROPERTIES:
+:CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0004
+:CREATED: [2026-05-19 Tue 09:48]
+:BLOCKED-BY: task:1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0003
+:END:
+:LOGBOOK:
+- Created [2026-05-19 Tue 09:48]
+- State "DONE" from "TODO" [2026-05-19 Tue 10:12]
+:END:
+Acceptance criteria:
+- =list-cmd=, =show-cmd= (and therefore =selected-cmd=), =status-cmd=,
+  =scan-cmd=, =doctor-cmd=, =create-cmd=, =publish/unpublish/archive-cmd=,
+  =blocker-list-cmd=, =issue-list-cmd=, =ready-cmd=, and
+  =handoff-get-cmd= render through =org-tasks.styling= helpers
+  wherever they currently emit a status token, priority cookie,
+  short-id, tag cluster, or linked-issue cluster.
+- Visual smoke (captured in =* Validation=): =ot list=, =ot show
+  <short>=, =ot status <short> STARTED=, =ot scan --scope all=, =ot
+  doctor=, =ot ready <short>=, =ot blocker list <short>=, =ot issue
+  list <short>= render readable colourised output in a 256-colour
+  terminal *and* a plain output under =NO_COLOR=1=.
+- Existing text-output tests are updated to pass explicit =:no-color
+  true= / ={:color? false}= or to strip ANSI before substring matching;
+  do not assume =:format :text= alone implies unstyled output.
+
+** DONE [#C] Document short-id and styling in SKILL.md / contract.md :docs:
+CLOSED: [2026-05-19 Tue 10:12]
+:PROPERTIES:
+:CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0005
+:CREATED: [2026-05-19 Tue 09:48]
+:BLOCKED-BY: task:1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0002
+:BLOCKED-BY+: task:1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0004
+:END:
+:LOGBOOK:
+- Created [2026-05-19 Tue 09:48]
+- State "DONE" from "TODO" [2026-05-19 Tue 10:12]
+:END:
+Acceptance criteria:
+- =skills/org-tasks/SKILL.md= notes that id-accepting commands accept
+  =ot list=-style short-ids and a one-line example
+  (=ot show a6dbdacb=).
+- =skills/org-tasks/scripts/docs/contract.md= adds the =ambiguous-id=
+  error code and shows the =details.matches= shape.
+- =pi/extensions/tasks/README.md= reaffirms that the extension passes
+  full UUIDs and is therefore unaffected by the short-id change.
+
+** DONE [#B] Adopt collision-resistant compact short IDs :cli:protocol:
+CLOSED: [2026-05-19 Tue 10:46]
+:PROPERTIES:
+:CUSTOM_ID: 496f5f58-bd3f-47bb-9589-1e8f50a55bba
+:CREATED: [2026-05-19 Tue 10:33]
+:STARTED: [2026-05-19 Tue 10:38]
+:END:
+:LOGBOOK:
+- Created [2026-05-19 Tue 10:33]
+- State "STARTED" from "TODO" [2026-05-19 Tue 10:38]
+- State "DONE" from "STARTED" [2026-05-19 Tue 10:46]
+:END:
+Acceptance criteria:
+- ot list displays compact IDs derived from both ends of the UUID (for example first4…last4) rather than a simple first-8 prefix.
+- Compact IDs expand symmetrically when needed so rows remain unique within the loaded task graph; unresolved collisions remain visibly ambiguous rather than silently choosing one task.
+- Id resolution accepts full UUIDs, legacy unique prefixes, displayed compact IDs with ellipsis, and compact IDs without ellipsis when unambiguous.
+- Tests cover sibling tasks with shared leading prefixes and differing suffixes, including the generated plan-task pattern that exposed the issue.
+
+** DONE [#B] Add ot UUID generation command for authored plan tasks :cli:workflow:
+CLOSED: [2026-05-19 Tue 10:38]
+:PROPERTIES:
+:CUSTOM_ID: 9d70eb8f-e754-4925-9341-2af9c1861441
+:CREATED: [2026-05-19 Tue 10:33]
+:STARTED: [2026-05-19 Tue 10:36]
+:END:
+:LOGBOOK:
+- Created [2026-05-19 Tue 10:33]
+- State "STARTED" from "TODO" [2026-05-19 Tue 10:36]
+- State "DONE" from "STARTED" [2026-05-19 Tue 10:38]
+:END:
+Acceptance criteria:
+- ot exposes a UUID generator command suitable for agents drafting org task blocks (for example ot uuid and ot uuid --count N) with text and json/edn output.
+- Generated IDs are UUIDv4 values from the same implementation path used by ot create; no hand-authored or sequential IDs are needed in plans.
+- org-plan and org-tasks guidance tells agents to obtain plan-task CUSTOM_ID values from ot rather than inventing them in prose.
+- Tests prove --count emits the requested number of unique UUIDv4 values and machine output uses the org-tasks/v1 envelope.
+
+** DONE [#C] Add guardrails for patterned or non-v4 task IDs :doctor:protocol:
+CLOSED: [2026-05-19 Tue 10:50]
+:PROPERTIES:
+:CUSTOM_ID: 9dd83c88-94d0-4548-bba9-e986c2a74c02
+:CREATED: [2026-05-19 Tue 10:33]
+:STARTED: [2026-05-19 Tue 10:46]
+:END:
+:LOGBOOK:
+- Created [2026-05-19 Tue 10:33]
+- State "STARTED" from "TODO" [2026-05-19 Tue 10:46]
+- State "DONE" from "STARTED" [2026-05-19 Tue 10:50]
+:END:
+Acceptance criteria:
+- ot doctor warns on task IDs that are not UUIDv4 or that form obvious hand-authored / sequential sibling patterns.
+- The warning explains that task IDs should come from ot create or ot uuid, not from agent-invented examples.
+- Existing historical tasks are warnings rather than errors so legacy records remain loadable.
+- Tests cover shared-prefix/sequential-suffix IDs and valid random UUIDv4 IDs.
+
+* Implementation
+- Added prefix-aware resolution in =org-tasks.task=: exact UUIDs win first, prefixes shorter than four chars return ={:none true}=, and unique / ambiguous prefixes return explicit resolver maps. Top-level-only operations use a separate resolver over root tasks only.
+- Routed id-taking CLI commands through shared command helpers. =show=, =select=, =status=, =publish=, =unpublish=, =archive=, =record path/create=, =issue=, =blocker=, =ready=, and =handoff= now accept full UUIDs or unique prefixes while persisting / returning canonical full UUIDs.
+- Added =ambiguous-id= to the machine contract with =details.matches= entries carrying =id=, =summary=, and =file=.
+- Added =io.github.paintparty/bling 0.10.0= to =bb.edn= and =deps.edn=, plus =org-tasks.styling= as the only namespace touching =bling.core=. Styling helpers accept explicit colour opts and honour =--no-color= / ambient =NO_COLOR= through =org-tasks.output/color-enabled?=.
+- Updated the standalone skill shim fallback to launch Babashka with =-Sdeps= and a local =src= path from =scripts/= so Home Manager / skill-only installs can still load bling without a repo-root =bb.edn=.
+- Styled high-traffic renderers for status, priority, short-id, tags, selected marker, and local marker in =list=, =show=, =status=, and =scan=. Commands without those metadata tokens remain plain.
+- Documented short-id usage in =skills/org-tasks/SKILL.md=, =contract.md=, and the tasks extension README. The pi extension continues to pass full UUIDs.
+- Replaced the first-N-prefix short-id with a `prefix…suffix` compact form via =org-tasks.task/build-short-ids=. Edges expand symmetrically (4 → 16) until every alias in the loaded graph is unique. The resolver now accepts `prefix…suffix` (and ASCII `prefix...suffix`) input alongside the legacy unique-prefix form. =list= / =scan= / =show= render the compact form; =list='s wire envelope adds a `shortIds` map.
+- Added =ot uuid [--count N]= so plan / change-record authoring no longer requires hand-written `:CUSTOM_ID:` values. =org-tasks/SKILL.md= and =org-plan/SKILL.md= now point at the command instead of inviting agents to invent UUIDs.
+- Added two doctor checks: =:non-uuid-v4-id= warns on any `:CUSTOM_ID:` that isn't UUIDv4; =:patterned-sibling-ids= groups direct siblings (`:children` + `:import-children`) by their leading 24 chars and warns when ≥ 2 share that prefix. Both are warnings so legacy records load.
+
+* Validation
+- =bb test= — 134 tests, 442 assertions, 0 failures, 0 errors.
+- =pi/extensions/tasks/test.sh= — all suites pass, including 7/0 =ot= wrapper smoke tests.
+- Live =ot doctor= against this repository now flags the historical patterned plan-task IDs in this change-record (=`1c5f0b32-9b62-4f8e-9b8c-`= group of 5) and the lone stale-parent-status reopening artefact; no other findings.
+- Manual CLI smoke: =ot uuid --count 3= produces three unique UUIDv4 values; =ot list= renders compact ids such as `1c5f…0001` for all five sibling plan tasks; =ot show '1c5f…0001'= and =ot show '1c5f...0002'= both resolve correctly.

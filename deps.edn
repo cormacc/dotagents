@@ -8,6 +8,7 @@
 ;; bbin install io.github.cormacc/dotagents --as ot          # third parties
 ;; bbin install <repo-root> --local/root <repo-root> --as ot # local dev
 {:paths ["skills/org-tasks/scripts/src"]
- :deps  {org.babashka/cli {:mvn/version "0.8.67"}}
+ :deps  {org.babashka/cli {:mvn/version "0.8.67"}
+         io.github.paintparty/bling {:mvn/version "0.10.0"}}
  :aliases
  {:test {:extra-paths ["skills/org-tasks/scripts/test"]}}}

@@ -1,10 +1,9 @@
 (ns org-tasks.effective
   "Setupfile chain expansion.
 
-  Port of `pi/extensions/tasks/effective.ts`. Walks `#+SETUPFILE:`
-  declarations in declaration order (recursive, depth-capped,
-  cycle-broken) and prepends their content so file-keyword lookups
-  and `#+LINK:` template resolution see the merged view.
+  Walks `#+SETUPFILE:` declarations in declaration order (recursive,
+  depth-capped, cycle-broken) and prepends their content so file-keyword
+  lookups and `#+LINK:` template resolution see the merged view.
 
   Unresolved or out-of-tree setupfiles are silently ignored so fresh
   checkouts continue to work as they did when only one setupfile was

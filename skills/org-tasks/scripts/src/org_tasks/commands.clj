@@ -6,13 +6,10 @@
   Commands resolve the project root, load the graph as needed, run
   their work, and emit via `org-tasks.output`.
 
-  Currently implemented:
-
-    init, list, show, create, select, selected, status,
-    archive, publish, unpublish, section, scan, doctor
-
-  The remaining commands (record, issue, blocker, ready, handoff)
-  land in plan task 58d1547e."
+  Command surface: init, list, show, create, select, selected, status,
+  archive, publish, unpublish, section, scan, doctor, record
+  path/create, issue list/add/remove/urls, blocker list/add/remove,
+  ready, handoff get/set/clear, uuid."
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
             [org-tasks.doctor :as doctor]
@@ -25,6 +22,7 @@
             [org-tasks.root :as root]
             [org-tasks.scan :as scan]
             [org-tasks.section :as section]
+            [org-tasks.styling :as style]
             [org-tasks.task :as task]))
 
 ;; ── Context helpers ────────────────────────────────────────────────
@@ -39,12 +37,43 @@
         graph (loader/load-graph project-root files)]
     (merge {:project-root project-root :files files} graph)))
 
-(defn- find-required-task [tasks id opts]
-  (or (task/find-by-id tasks id)
-      (out/emit-error opts
-                      {:code "unknown-task"
-                       :message (str "No task with :CUSTOM_ID: " id)
-                       :details {:id id}})))
+(defn- id-match->wire [task]
+  {:id (parser/get-task-id task)
+   :summary (:summary task)
+   :file (:source-path task)})
+
+(defn- resolve-required-id
+  "Resolve an id argument, accepting full UUIDs or unique prefixes.
+
+  `resolver` is usually `task/find-by-id-or-prefix`; top-level-only
+  commands pass `task/find-top-level-by-id-or-prefix` to preserve their
+  validation semantics. On failure this emits the standard error
+  envelope and exits through `out/emit-error`, matching the rest of the
+  command namespace's short-circuit style."
+  ([tasks id opts]
+   (resolve-required-id tasks id opts task/find-by-id-or-prefix))
+  ([tasks id opts resolver]
+   (let [resolved (resolver tasks id)]
+     (case (-> resolved keys first)
+       :match
+       (:match resolved)
+
+       :ambiguous
+       (let [matches (:ambiguous resolved)]
+         (out/emit-error opts
+                         {:code "ambiguous-id"
+                          :message (str "Task id prefix '" id "' is ambiguous ("
+                                        (count matches) " matches)")
+                          :details {:id id
+                                    :matches (mapv id-match->wire matches)}}))
+
+       (out/emit-error opts
+                       {:code "unknown-task"
+                        :message (str "No task with :CUSTOM_ID: " id)
+                        :details {:id id}})))))
+
+(defn- resolve-required-top-level-id [tasks id opts]
+  (resolve-required-id tasks id opts task/find-top-level-by-id-or-prefix))
 
 ;; ── Default preamble templates (used by `ot init`) ────────────────
 
@@ -75,6 +104,26 @@
              ""]))
 
 ;; ── ot init ─────────────────────────────────────────────────────────
+
+;; ── ot uuid ───────────────────────────────────
+
+(defn- random-uuid-v4-str []
+  (str (java.util.UUID/randomUUID)))
+
+(defn uuid-cmd
+  "Generate one or more UUIDv4 strings for use as `:CUSTOM_ID:` values
+  when authoring tasks. Plain text emits one UUID per line; JSON/EDN
+  emit a `:uuids` vector inside the standard envelope.
+
+  Use this instead of inventing IDs in prose so plan tasks never share
+  hand-authored prefixes / sequential suffixes."
+  [{:keys [opts]}]
+  (let [n (max 1 (or (:count opts) 1))
+        uuids (vec (repeatedly n random-uuid-v4-str))]
+    (out/emit-result opts
+                     {:uuids uuids
+                      :count (count uuids)
+                      :text/lines uuids})))
 
 (defn init-cmd [{:keys [opts]}]
   (let [{:keys [project-root files]} (resolve-context opts)
@@ -110,16 +159,85 @@
 
 ;; ── ot list ─────────────────────────────────────────────────────────
 
-(defn- format-list-row [row selected-id]
-  (let [short-id (some-> (:id row) (subs 0 (min 8 (count (:id row)))))
-        sel-mark (if (and (:id row) (= (:id row) selected-id)) "★" " ")
-        local    (if (:local row) "⊠" " ")
-        prio     (if (:priority row) (str "[#" (:priority row) "] ") "")
-        indent   (apply str (repeat (max 0 (- (or (:level row) 1) 1)) "  "))
-        tags     (if (seq (:tags row)) (str " :" (str/join ":" (:tags row)) ":") "")]
-    (str sel-mark local " " (format "%-9s" (:status row)) " "
-         (or short-id "--------") "  "
-         indent prio (:summary row) tags)))
+(defn- compute-tree-prefixes
+  "Return a vector parallel to `rows` of left-margin tree-drawing
+  prefixes inserted between the per-row sel/local/space block (always
+  at columns 0–2) and the row's STATUS column.
+
+  Top-level rows get an empty prefix — STATUS lands at column 3 right
+  after sel/local/space.
+
+  Subtasks render a 2-char tree column per intermediate ancestor
+  followed by the row's own `├─` / `└─` branch glyph, so the branch
+  glyph's first character lines up under the first character of the
+  parent row's STATUS column. The row's STATUS abuts the branch glyph
+  with no separating space.
+
+  Per-ancestor segments are 2 chars:
+  - `│ ` when that ancestor still has more siblings to come.
+  - `  ` when it was the last sibling.
+
+  The topmost (depth-1) ancestor contributes nothing — the subtask's
+  own sel/local/space block at columns 0–2 already fills the visual
+  gap below the top-level row's sel/local/space.
+
+  Rows whose `:parentId` does not appear in `rows` are treated as
+  roots so filtered views remain readable."
+  [rows]
+  (let [n (count rows)
+        id->idx (into {} (keep-indexed (fn [i r] (when (:id r) [(:id r) i])) rows))
+        sibling-key (fn [pid]
+                      (or (when (and pid (contains? id->idx pid)) pid) :root))
+        last? (let [seen (volatile! #{})
+                    acc (volatile! {})]
+                (doseq [i (reverse (range n))]
+                  (let [k (sibling-key (:parentId (nth rows i)))]
+                    (if (contains? @seen k)
+                      (vswap! acc assoc i false)
+                      (do (vswap! acc assoc i true)
+                          (vswap! seen conj k)))))
+                @acc)]
+    (mapv
+      (fn [i row]
+        (let [ancestors (loop [acc []
+                               pid (:parentId row)]
+                          (if-let [pi (get id->idx pid)]
+                            (recur (conj acc pi)
+                                   (:parentId (nth rows pi)))
+                            acc))]
+          (if (empty? ancestors)
+            ""
+            (let [reversed (vec (reverse ancestors))
+                  intermediate-segs
+                  (map (fn [a-idx]
+                         (if (get last? a-idx)
+                           style/tree-gap
+                           style/tree-pipe))
+                       (rest reversed))
+                  self-seg (if (get last? i)
+                             style/tree-last
+                             style/tree-branch)]
+              (apply str (concat intermediate-segs [self-seg]))))))
+      (range n) rows)))
+
+(defn- format-list-row [opts short-ids tree-prefix row selected-id]
+  (let [short-id (when (:id row) (get short-ids (:id row)))
+        sel-mark (if (and (:id row) (= (:id row) selected-id))
+                   (style/selected-marker opts "★")
+                   " ")
+        local    (if (:local row) (style/local-marker opts "⊠") " ")
+        status   (style/status opts (:status row) (format "%-9s" (:status row)))
+        prio     (if (:priority row)
+                   (str (style/priority opts (:priority row)) " ")
+                   "")
+        tags     (if (seq (:tags row))
+                   (str " " (style/tag-cluster opts (:tags row)))
+                   "")]
+    (str sel-mark local " "
+         (style/gutter opts tree-prefix)
+         status " "
+         (style/short-id opts (or short-id "--------")) "  "
+         prio (:summary row) tags)))
 
 (defn list-cmd [{:keys [opts]}]
   (let [{:keys [tasks selected-id files]} (load-context opts)
@@ -134,16 +252,35 @@
                           (or (= scope :all) (= scope :active)
                               ;; archived scope handled in v2; for now :active is default
                               true)))
-        filtered   (vec (filter match? rows))]
+        filtered   (vec (filter match? rows))
+        level-cap  (:levels opts)
+        kept       (if level-cap
+                     (let [id->idx (into {} (keep-indexed
+                                              (fn [i r] (when (:id r) [(:id r) i]))
+                                              filtered))]
+                       (vec (filter (fn [row]
+                                      (<= (loop [d 0
+                                                 pid (:parentId row)]
+                                            (if-let [pi (get id->idx pid)]
+                                              (recur (inc d)
+                                                     (:parentId (nth filtered pi)))
+                                              d))
+                                          level-cap))
+                                    filtered)))
+                     filtered)
+        short-ids  (task/build-short-ids tasks)
+        tree-prefixes (compute-tree-prefixes kept)]
     (out/emit-result
       opts
       {:tree wire-tasks
-       :rows filtered
+       :rows kept
        :selectedId selected-id
        :files files
        :sources sources
-       :text/lines (cons (format "%-2s %s" " " "STATUS    short-id  task")
-                         (map #(format-list-row % selected-id) filtered))})))
+       :shortIds short-ids
+       :text/lines (cons "   STATUS    short-id   task"
+                         (map #(format-list-row opts short-ids %2 %1 selected-id)
+                              kept tree-prefixes))})))
 
 ;; ── ot show ─────────────────────────────────────────────────────────
 
@@ -163,33 +300,34 @@
                        :message "ot show requires a task id (or 'selected')."})
 
       :else
-      (if-let [t (task/find-by-id tasks id)]
-        (let [wire (task/task->wire t)]
-          (out/emit-result
-            opts
-            {:task wire
-             :text/lines
-             [(str (:status wire) " "
-                   (if (:priority wire) (str "[#" (:priority wire) "] ") "")
-                   (:summary wire))
-              (str "  id        " (:id wire))
-              (str "  source    " (:sourcePath wire))
-              (when (:importPath wire)
-                (str "  plan      " (or (:importRaw wire) (:importPath wire))))
-              (when (:closed wire)
-                (str "  closed    " (:closed wire)))
-              (when (:started wire)
-                (str "  started   " (:started wire)))
-              (when (seq (:tags wire))
-                (str "  tags      :" (str/join ":" (:tags wire)) ":"))
-              (when (seq (:blockedBy wire))
-                (str "  blockers  " (str/join ", " (:blockedBy wire))))
-              (when (:handoff wire)
-                (str "  handoff   " (:handoff wire)))]}))
-        (out/emit-error opts
-                        {:code "unknown-task"
-                         :message (str "No task with :CUSTOM_ID: " id)
-                         :details {:id id}})))))
+      (let [t (resolve-required-id tasks id opts)
+            wire (task/task->wire t)
+            short-ids (task/build-short-ids tasks)
+            short (get short-ids (:id wire))]
+        (out/emit-result
+          opts
+          {:task wire
+           :shortId short
+           :text/lines
+           [(str (style/status opts (:status wire)) " "
+                 (if (:priority wire) (str (style/priority opts (:priority wire)) " ") "")
+                 (:summary wire))
+            (str "  id        " (:id wire)
+                 (when (and short (not= short (:id wire)))
+                   (str "  (" (style/short-id opts short) ")")))
+            (str "  source    " (:sourcePath wire))
+            (when (:importPath wire)
+              (str "  plan      " (or (:importRaw wire) (:importPath wire))))
+            (when (:closed wire)
+              (str "  closed    " (:closed wire)))
+            (when (:started wire)
+              (str "  started   " (:started wire)))
+            (when (seq (:tags wire))
+              (str "  tags      " (style/tag-cluster opts (:tags wire))))
+            (when (seq (:blockedBy wire))
+              (str "  blockers  " (str/join ", " (:blockedBy wire))))
+            (when (:handoff wire)
+              (str "  handoff   " (:handoff wire)))]})))))
 
 ;; ── ot select / ot selected ────────────────────────────────────────
 
@@ -204,14 +342,9 @@
                       {:code "argument-error"
                        :message "ot select requires an id (or --clear)."})
 
-      (and id (not (task/find-by-id tasks id)))
-      (out/emit-error opts
-                      {:code "unknown-task"
-                       :message (str "No task with :CUSTOM_ID: " id)
-                       :details {:id id}})
-
       :else
-      (let [new-id (when-not clear? id)]
+      (let [target (when-not clear? (resolve-required-id tasks id opts))
+            new-id (some-> target parser/get-task-id)]
         (when-not (:dry-run opts)
           (loader/write-selected-id (:local files) new-id))
         (out/emit-result
@@ -226,7 +359,7 @@
 
 (defn selected-cmd [{:keys [opts] :as result}]
   (let [{:keys [tasks selected-id]} (load-context opts)]
-    (if-let [t (and selected-id (task/find-by-id tasks selected-id))]
+    (if (and selected-id (task/find-by-id tasks selected-id))
       (show-cmd (assoc-in result [:opts :id] selected-id))
       (out/emit-result
         opts
@@ -364,7 +497,7 @@
                            :message (:message result)}))))))
 
 (defn status-cmd [{:keys [opts] :as result}]
-  (let [{:keys [tasks files]} (load-context opts)
+  (let [{:keys [tasks]} (load-context opts)
         id     (or (:id opts) (first (:args result)))
         status (some-> (or (:new-status opts) (second (:args result)))
                        str/upper-case)]
@@ -382,54 +515,53 @@
                        :details {:value status}})
 
       :else
-      (if-let [target (task/find-by-id tasks id)]
-        (let [{updated :task :keys [prev-status timestamp]}
-              (lifecycle/apply-status-transition target status)
-              tree-after (update-task-in-tree tasks id (constantly updated))
-              ;; Parent auto-promotion: when a subtask goes STARTED, walk
-              ;; ancestors and promote any TODO ancestor to STARTED.
-              promotion-acc (volatile! [])
-              tree-final
-              (if (= status "STARTED")
-                (let [path (find-path-to-id tree-after id)
-                      ancestors (vec (butlast path))]
-                  (reduce
-                    (fn [tree-acc ancestor]
-                      (if (and (= "TODO" (:status ancestor))
-                               (parser/get-task-id ancestor))
-                        (let [{a-updated :task :keys [prev-status]}
-                              (lifecycle/apply-status-transition ancestor "STARTED" timestamp)]
-                          (vswap! promotion-acc conj
-                                  {:id (parser/get-task-id ancestor)
-                                   :prevStatus prev-status
-                                   :status "STARTED"})
-                          (update-task-in-tree tree-acc (parser/get-task-id ancestor)
-                                               (constantly a-updated)))
-                        tree-acc))
-                    tree-after
-                    ancestors))
-                tree-after)]
-          (when-not (:dry-run opts)
-            (loader/save-source-roots (:project-root (resolve-context opts))
-                                      tree-final))
-          (out/emit-result
-            opts
-            {:task (task/task->wire (task/find-by-id tree-final id))
-             :prevStatus prev-status
-             :status status
-             :closed (:closed updated)
-             :started (parser/get-task-started updated)
-             :promoted @promotion-acc
-             :text/lines
-             [(str (:summary updated) ": " prev-status " → " status
-                   (when (:closed updated) (str " (closed " (:closed updated) ")")))
-              (when (seq @promotion-acc)
-                (str "Promoted ancestors: "
-                     (str/join ", " (map :id @promotion-acc))))]}))
-        (out/emit-error opts
-                        {:code "unknown-task"
-                         :message (str "No task with :CUSTOM_ID: " id)
-                         :details {:id id}})))))
+      (let [target (resolve-required-id tasks id opts)
+            full-id (parser/get-task-id target)
+            {updated :task :keys [prev-status timestamp]}
+            (lifecycle/apply-status-transition target status)
+            tree-after (update-task-in-tree tasks full-id (constantly updated))
+            ;; Parent auto-promotion: when a subtask goes STARTED, walk
+            ;; ancestors and promote any TODO ancestor to STARTED.
+            promotion-acc (volatile! [])
+            tree-final
+            (if (= status "STARTED")
+              (let [path (find-path-to-id tree-after full-id)
+                    ancestors (vec (butlast path))]
+                (reduce
+                  (fn [tree-acc ancestor]
+                    (if (and (= "TODO" (:status ancestor))
+                             (parser/get-task-id ancestor))
+                      (let [{a-updated :task :keys [prev-status]}
+                            (lifecycle/apply-status-transition ancestor "STARTED" timestamp)]
+                        (vswap! promotion-acc conj
+                                {:id (parser/get-task-id ancestor)
+                                 :prevStatus prev-status
+                                 :status "STARTED"})
+                        (update-task-in-tree tree-acc (parser/get-task-id ancestor)
+                                             (constantly a-updated)))
+                      tree-acc))
+                  tree-after
+                  ancestors))
+              tree-after)]
+        (when-not (:dry-run opts)
+          (loader/save-source-roots (:project-root (resolve-context opts))
+                                    tree-final))
+        (out/emit-result
+          opts
+          {:task (task/task->wire (task/find-by-id tree-final full-id))
+           :prevStatus prev-status
+           :status status
+           :closed (:closed updated)
+           :started (parser/get-task-started updated)
+           :promoted @promotion-acc
+           :text/lines
+           [(str (:summary updated) ": "
+                 (style/status opts prev-status prev-status) " → "
+                 (style/status opts status status)
+                 (when (:closed updated) (str " (closed " (:closed updated) ")")))
+            (when (seq @promotion-acc)
+              (str "Promoted ancestors: "
+                   (str/join ", " (map :id @promotion-acc))))]})))))
 
 ;; ── ot section ───────────────────────────────────────────
 
@@ -505,16 +637,17 @@
                   (vswap! cache assoc abs content)
                   content)))))))))
 
-(defn- scan-row->text [row]
-  (let [short-id (some-> (:id row) (subs 0 (min 8 (count (:id row)))))
-        prio    (if (:priority row) (str "[#" (:priority row) "] ") "")
-        tags    (if (seq (:tags row)) (str " :" (str/join ":" (:tags row)) ":") "")
+(defn- scan-row->text [opts short-ids row]
+  (let [short-id (when (:id row) (get short-ids (:id row)))
+        prio    (if (:priority row) (str (style/priority opts (:priority row)) " ") "")
+        tags    (if (seq (:tags row)) (str " " (style/tag-cluster opts (:tags row))) "")
         record  (cond
                   (nil? (:recordSummary row)) ""
                   (true? (:found (:recordSummary row)))
                   (if (:hasContext row) " … (+ctx)" " …")
                   :else " (no summary)")]
-    (str "[" (:status row) "] " short-id "  " prio (:summary row) tags record)))
+    (str "[" (style/status opts (:status row) (:status row)) "] "
+         (style/short-id opts short-id) "  " prio (:summary row) tags record)))
 
 (defn scan-cmd [{:keys [opts]}]
   (let [{:keys [project-root tasks files]} (load-context opts)
@@ -530,8 +663,9 @@
                         (coerce-seq (:tag opts)))
                 :max-body-chars (or (:max-body-chars opts)
                                     scan/default-max-body-chars)})
+        short-ids (task/build-short-ids (concat tasks archived))
         cap 60
-        head-lines (mapv scan-row->text (take cap rows))
+        head-lines (mapv #(scan-row->text opts short-ids %) (take cap rows))
         tail (when (> (count rows) cap)
                (str "… " (- (count rows) cap) " more row(s) in details.rows"))]
     (out/emit-result
@@ -586,8 +720,8 @@
   (-> task (assoc :is-local true)
       (update :children #(mapv mark-local-rec %))))
 
-(defn- top-level-with-id [tasks id]
-  (some #(when (= id (parser/get-task-id %)) %) tasks))
+(defn- top-level-with-id [tasks id opts]
+  (resolve-required-top-level-id tasks id opts))
 
 (defn- save-file-block!
   "Re-emit `target-path` with `top-level-tasks` serialised under its
@@ -612,7 +746,8 @@
                        :message "ot publish requires a task id."})
 
       :else
-      (if-let [target (top-level-with-id tasks id)]
+      (let [target (top-level-with-id tasks id opts)
+            full-id (parser/get-task-id target)]
         (cond
           (not (:is-local target))
           (out/emit-error opts
@@ -622,7 +757,7 @@
           :else
           (let [shared    (filterv #(not (:is-local %)) tasks)
                 local     (filterv :is-local tasks)
-                without   (vec (remove #(= id (parser/get-task-id %)) local))
+                without   (vec (remove #(= full-id (parser/get-task-id %)) local))
                 published (-> target mark-not-local-rec
                               (assoc :line-number 0 :end-line 0))
                 new-shared (conj shared published)]
@@ -634,11 +769,7 @@
               {:task (task/task->wire published)
                :from (:local files)
                :to (:tasks files)
-               :text/lines [(str "Published " (:summary target) " → " (:tasks files))]})))
-        (out/emit-error opts
-                        {:code "unknown-task"
-                         :message (str "No top-level task with :CUSTOM_ID: " id)
-                         :details {:id id}})))))
+               :text/lines [(str "Published " (:summary target) " → " (:tasks files))]})))))))
 
 (defn unpublish-cmd [{:keys [opts] :as result}]
   (let [{:keys [tasks files]} (load-context opts)
@@ -650,7 +781,8 @@
                        :message "ot unpublish requires a task id."})
 
       :else
-      (if-let [target (top-level-with-id tasks id)]
+      (let [target (top-level-with-id tasks id opts)
+            full-id (parser/get-task-id target)]
         (cond
           (:is-local target)
           (out/emit-error opts
@@ -660,7 +792,7 @@
           :else
           (let [shared      (filterv #(not (:is-local %)) tasks)
                 local       (filterv :is-local tasks)
-                without     (vec (remove #(= id (parser/get-task-id %)) shared))
+                without     (vec (remove #(= full-id (parser/get-task-id %)) shared))
                 unpublished (-> target mark-local-rec
                                 (assoc :line-number 0 :end-line 0))
                 new-local   (conj local unpublished)]
@@ -672,11 +804,7 @@
               {:task (task/task->wire unpublished)
                :from (:tasks files)
                :to (:local files)
-               :text/lines [(str "Unpublished " (:summary target) " → " (:local files))]})))
-        (out/emit-error opts
-                        {:code "unknown-task"
-                         :message (str "No top-level task with :CUSTOM_ID: " id)
-                         :details {:id id}})))))
+               :text/lines [(str "Unpublished " (:summary target) " → " (:local files))]})))))))
 
 (def ^:private closed-statuses-set #{"DONE" "CANCELLED"})
 
@@ -743,7 +871,8 @@
                        :message "ot archive requires a task id."})
 
       :else
-      (if-let [target (top-level-with-id tasks id)]
+      (let [target (top-level-with-id tasks id opts)
+            full-id (parser/get-task-id target)]
         (cond
           (:is-local target)
           (out/emit-error opts
@@ -781,7 +910,7 @@
                                     existing-archive archived-tasks))
                 remaining-shared (->> tasks
                                       (remove :is-local)
-                                      (remove #(= id (parser/get-task-id %)))
+                                      (remove #(= full-id (parser/get-task-id %)))
                                       vec)]
             (when-not (:dry-run opts)
               (let [tmp (str archive-path ".tmp")]
@@ -797,14 +926,10 @@
                :archivedAt stamp
                :planRewrite (when (:import-path target)
                               {:file (:import-path target)
-                               :from (str "task:" id)
-                               :to (str "archive:" id)})
+                               :from (str "task:" full-id)
+                               :to (str "archive:" full-id)})
                :text/lines [(str "Archived " (:summary target)
-                                 " → " archive-path)]})))
-        (out/emit-error opts
-                        {:code "unknown-task"
-                         :message (str "No top-level task with :CUSTOM_ID: " id)
-                         :details {:id id}})))))
+                                 " → " archive-path)]})))))))
 
 ;; ── ot handoff ────────────────────────────────────────────────────
 
@@ -822,17 +947,15 @@
 
 (defn handoff-get-cmd [{:keys [opts] :as result}]
   (let [{:keys [tasks]} (load-context opts)
-        id (or (:id opts) (first (:args result)))]
-    (if-let [t (task/find-by-id tasks id)]
-      (out/emit-result
-        opts
-        {:taskId id
-         :handoff (parser/get-task-handoff t)
-         :text/lines [(or (parser/get-task-handoff t)
-                          "(no :HANDOFF: set)")]})
-      (out/emit-error opts
-                      {:code "unknown-task"
-                       :message (str "No task with :CUSTOM_ID: " id)}))))
+        id (or (:id opts) (first (:args result)))
+        t (resolve-required-id tasks id opts)
+        full-id (parser/get-task-id t)]
+    (out/emit-result
+      opts
+      {:taskId full-id
+       :handoff (parser/get-task-handoff t)
+       :text/lines [(or (parser/get-task-handoff t)
+                        "(no :HANDOFF: set)")]})))
 
 (defn handoff-set-cmd [{:keys [opts] :as result}]
   (let [ctx (load-context opts)
@@ -844,29 +967,26 @@
                       {:code "argument-error"
                        :message "ot handoff set requires <id> <text>."})
       :else
-      (if-let [[updated _]
-               (mutate-task-and-save
-                 (assoc ctx :dry-run? (:dry-run opts))
-                 id #(parser/set-task-handoff % text))]
+      (let [target (resolve-required-id (:tasks ctx) id opts)
+            full-id (parser/get-task-id target)
+            [updated _] (mutate-task-and-save
+                          (assoc ctx :dry-run? (:dry-run opts))
+                          full-id #(parser/set-task-handoff % text))]
         (out/emit-result opts
-                         {:taskId id
+                         {:taskId full-id
                           :handoff (parser/get-task-handoff updated)
-                          :text/lines [(str "Set handoff: " text)]})
-        (out/emit-error opts
-                        {:code "unknown-task"
-                         :message (str "No task with :CUSTOM_ID: " id)})))))
+                          :text/lines [(str "Set handoff: " text)]})))))
 
 (defn handoff-clear-cmd [{:keys [opts] :as result}]
   (let [ctx (load-context opts)
-        id (or (:id opts) (first (:args result)))]
-    (if-let [[_ _] (mutate-task-and-save
-                     (assoc ctx :dry-run? (:dry-run opts))
-                     id #(parser/set-task-handoff % nil))]
-      (out/emit-result opts {:taskId id :handoff nil
-                             :text/lines ["Cleared handoff."]})
-      (out/emit-error opts
-                      {:code "unknown-task"
-                       :message (str "No task with :CUSTOM_ID: " id)}))))
+        id (or (:id opts) (first (:args result)))
+        target (resolve-required-id (:tasks ctx) id opts)
+        full-id (parser/get-task-id target)]
+    (mutate-task-and-save
+      (assoc ctx :dry-run? (:dry-run opts))
+      full-id #(parser/set-task-handoff % nil))
+    (out/emit-result opts {:taskId full-id :handoff nil
+                           :text/lines ["Cleared handoff."]})))
 
 ;; ── ot blocker / ot ready ────────────────────────────────────────
 
@@ -875,19 +995,16 @@
 
 (defn blocker-list-cmd [{:keys [opts] :as result}]
   (let [{:keys [tasks]} (load-context opts)
-        id (or (:id opts) (first (:args result)))]
-    (if-let [t (task/find-by-id tasks id)]
-      (out/emit-result
-        opts
-        {:taskId id
-         :blockers (mapv blocker->wire (parser/get-task-blockers t))
-         :text/lines (let [bs (parser/get-task-blockers t)]
-                       (if (empty? bs)
-                         ["(no blockers)"]
-                         (mapv :raw bs)))})
-      (out/emit-error opts
-                      {:code "unknown-task"
-                       :message (str "No task with :CUSTOM_ID: " id)}))))
+        id (or (:id opts) (first (:args result)))
+        t (resolve-required-id tasks id opts)]
+    (out/emit-result
+      opts
+      {:taskId (parser/get-task-id t)
+       :blockers (mapv blocker->wire (parser/get-task-blockers t))
+       :text/lines (let [bs (parser/get-task-blockers t)]
+                     (if (empty? bs)
+                       ["(no blockers)"]
+                       (mapv :raw bs)))})))
 
 (defn- normalise-blocker-token
   "Accept either an already-prefixed token (`task:…`, `url:…`, `human: …`,
@@ -908,22 +1025,21 @@
                       {:code "argument-error"
                        :message "ot blocker add requires <id> <token>."})
       :else
-      (if-let [[updated _]
-               (mutate-task-and-save
-                 (assoc ctx :dry-run? (:dry-run opts))
-                 id
-                 (fn [t]
-                   (let [existing (mapv :raw (parser/get-task-blockers t))]
-                     (parser/set-task-blockers t
-                                               (conj existing
-                                                     (normalise-blocker-token token))))))]
+      (let [target (resolve-required-id (:tasks ctx) id opts)
+            full-id (parser/get-task-id target)
+            [updated _]
+            (mutate-task-and-save
+              (assoc ctx :dry-run? (:dry-run opts))
+              full-id
+              (fn [t]
+                (let [existing (mapv :raw (parser/get-task-blockers t))]
+                  (parser/set-task-blockers t
+                                            (conj existing
+                                                  (normalise-blocker-token token))))))]
         (out/emit-result opts
-                         {:taskId id
+                         {:taskId full-id
                           :blockers (mapv blocker->wire (parser/get-task-blockers updated))
-                          :text/lines [(str "Added blocker: " (normalise-blocker-token token))]})
-        (out/emit-error opts
-                        {:code "unknown-task"
-                         :message (str "No task with :CUSTOM_ID: " id)})))))
+                          :text/lines [(str "Added blocker: " (normalise-blocker-token token))]})))))
 
 (defn blocker-remove-cmd [{:keys [opts] :as result}]
   (let [ctx (load-context opts)
@@ -935,47 +1051,44 @@
                       {:code "argument-error"
                        :message "ot blocker remove requires <id> <token>."})
       :else
-      (if-let [[updated _]
-               (mutate-task-and-save
-                 (assoc ctx :dry-run? (:dry-run opts))
-                 id
-                 (fn [t]
-                   (let [existing (mapv :raw (parser/get-task-blockers t))
-                         filtered (filterv #(not= % token) existing)]
-                     (parser/set-task-blockers t filtered))))]
+      (let [target (resolve-required-id (:tasks ctx) id opts)
+            full-id (parser/get-task-id target)
+            [updated _]
+            (mutate-task-and-save
+              (assoc ctx :dry-run? (:dry-run opts))
+              full-id
+              (fn [t]
+                (let [existing (mapv :raw (parser/get-task-blockers t))
+                      filtered (filterv #(not= % token) existing)]
+                  (parser/set-task-blockers t filtered))))]
         (out/emit-result opts
-                         {:taskId id
+                         {:taskId full-id
                           :blockers (mapv blocker->wire (parser/get-task-blockers updated))
-                          :text/lines [(str "Removed blocker: " token)]})
-        (out/emit-error opts
-                        {:code "unknown-task"
-                         :message (str "No task with :CUSTOM_ID: " id)})))))
+                          :text/lines [(str "Removed blocker: " token)]})))))
 
 (defn ready-cmd [{:keys [opts] :as result}]
   (let [{:keys [tasks]} (load-context opts)
-        id (or (:id opts) (first (:args result)))]
-    (if-let [t (task/find-by-id tasks id)]
-      (let [report (parser/is-task-ready t #(task/find-by-id tasks %))
-            gating-wire
-            (mapv (fn [{:keys [blocker reason]}]
-                    {:blocker (blocker->wire blocker)
-                     :reason (name reason)})
-                  (:gating report))]
-        (out/emit-result
-          opts
-          {:taskId id
-           :ready (:ready report)
-           :gating gating-wire
-           :text/lines
-           (if (:ready report)
-             [(str id ": ready")]
-             (cons (str id ": not ready (" (count gating-wire) " gating)")
-                   (map (fn [g] (str "  - " (get-in g [:blocker :raw])
-                                     " [" (:reason g) "]"))
-                        gating-wire)))}))
-      (out/emit-error opts
-                      {:code "unknown-task"
-                       :message (str "No task with :CUSTOM_ID: " id)}))))
+        id (or (:id opts) (first (:args result)))
+        t (resolve-required-id tasks id opts)
+        full-id (parser/get-task-id t)
+        report (parser/is-task-ready t #(task/find-by-id tasks %))
+        gating-wire
+        (mapv (fn [{:keys [blocker reason]}]
+                {:blocker (blocker->wire blocker)
+                 :reason (name reason)})
+              (:gating report))]
+    (out/emit-result
+      opts
+      {:taskId full-id
+       :ready (:ready report)
+       :gating gating-wire
+       :text/lines
+       (if (:ready report)
+         [(str full-id ": ready")]
+         (cons (str full-id ": not ready (" (count gating-wire) " gating)")
+               (map (fn [g] (str "  - " (get-in g [:blocker :raw])
+                                 " [" (:reason g) "]"))
+                    gating-wire)))})))
 
 ;; ── ot issue ─────────────────────────────────────────────────────
 
@@ -989,20 +1102,17 @@
 
 (defn issue-list-cmd [{:keys [opts] :as result}]
   (let [{:keys [tasks]} (load-context opts)
-        id (or (:id opts) (first (:args result)))]
-    (if-let [t (task/find-by-id tasks id)]
-      (let [templates (task-link-templates t)
-            issues (parser/get-linked-issues t templates)]
-        (out/emit-result
-          opts
-          {:taskId id
-           :issues (mapv linked-issue->wire issues)
-           :text/lines (if (empty? issues)
-                         ["(no linked issues)"]
-                         (mapv :raw-token issues))}))
-      (out/emit-error opts
-                      {:code "unknown-task"
-                       :message (str "No task with :CUSTOM_ID: " id)}))))
+        id (or (:id opts) (first (:args result)))
+        t (resolve-required-id tasks id opts)
+        templates (task-link-templates t)
+        issues (parser/get-linked-issues t templates)]
+    (out/emit-result
+      opts
+      {:taskId (parser/get-task-id t)
+       :issues (mapv linked-issue->wire issues)
+       :text/lines (if (empty? issues)
+                     ["(no linked issues)"]
+                     (mapv :raw-token issues))})))
 
 (defn- existing-issue-tokens [task]
   (vec (filter seq
@@ -1020,19 +1130,18 @@
                       {:code "argument-error"
                        :message "ot issue add requires <id> <token>."})
       :else
-      (if-let [[updated _]
-               (mutate-task-and-save
-                 (assoc ctx :dry-run? (:dry-run opts))
-                 id
-                 (fn [t]
-                   (parser/set-linked-issues t (conj (existing-issue-tokens t) token))))]
+      (let [target (resolve-required-id (:tasks ctx) id opts)
+            full-id (parser/get-task-id target)
+            [updated _]
+            (mutate-task-and-save
+              (assoc ctx :dry-run? (:dry-run opts))
+              full-id
+              (fn [t]
+                (parser/set-linked-issues t (conj (existing-issue-tokens t) token))))]
         (out/emit-result opts
-                         {:taskId id
+                         {:taskId full-id
                           :tokens (existing-issue-tokens updated)
-                          :text/lines [(str "Added linked-issue token: " token)]})
-        (out/emit-error opts
-                        {:code "unknown-task"
-                         :message (str "No task with :CUSTOM_ID: " id)})))))
+                          :text/lines [(str "Added linked-issue token: " token)]})))))
 
 (defn issue-remove-cmd [{:keys [opts] :as result}]
   (let [ctx (load-context opts)
@@ -1044,38 +1153,34 @@
                       {:code "argument-error"
                        :message "ot issue remove requires <id> <token>."})
       :else
-      (if-let [[updated _]
-               (mutate-task-and-save
-                 (assoc ctx :dry-run? (:dry-run opts))
-                 id
-                 (fn [t]
-                   (parser/set-linked-issues
-                     t (filterv #(not= % token) (existing-issue-tokens t)))))]
+      (let [target (resolve-required-id (:tasks ctx) id opts)
+            full-id (parser/get-task-id target)
+            [updated _]
+            (mutate-task-and-save
+              (assoc ctx :dry-run? (:dry-run opts))
+              full-id
+              (fn [t]
+                (parser/set-linked-issues
+                  t (filterv #(not= % token) (existing-issue-tokens t)))))]
         (out/emit-result opts
-                         {:taskId id
+                         {:taskId full-id
                           :tokens (existing-issue-tokens updated)
-                          :text/lines [(str "Removed linked-issue token: " token)]})
-        (out/emit-error opts
-                        {:code "unknown-task"
-                         :message (str "No task with :CUSTOM_ID: " id)})))))
+                          :text/lines [(str "Removed linked-issue token: " token)]})))))
 
 (defn issue-urls-cmd [{:keys [opts] :as result}]
   (let [{:keys [tasks]} (load-context opts)
-        id (or (:id opts) (first (:args result)))]
-    (if-let [t (task/find-by-id tasks id)]
-      (let [templates (task-link-templates t)
-            issues (parser/get-linked-issues t templates)
-            urls (vec (keep :url issues))]
-        (out/emit-result
-          opts
-          {:taskId id
-           :urls urls
-           :text/lines (if (empty? urls)
-                         ["(no resolvable URLs)"]
-                         urls)}))
-      (out/emit-error opts
-                      {:code "unknown-task"
-                       :message (str "No task with :CUSTOM_ID: " id)}))))
+        id (or (:id opts) (first (:args result)))
+        t (resolve-required-id tasks id opts)
+        templates (task-link-templates t)
+        issues (parser/get-linked-issues t templates)
+        urls (vec (keep :url issues))]
+    (out/emit-result
+      opts
+      {:taskId (parser/get-task-id t)
+       :urls urls
+       :text/lines (if (empty? urls)
+                     ["(no resolvable URLs)"]
+                     urls)})))
 
 ;; ── ot record path / create ──────────────────────────────────────
 
@@ -1115,7 +1220,7 @@
         trimmed (if (str/blank? trimmed) "." trimmed)]
     (cond
       (or (= trimmed ".") (= trimmed "./")) (str "./" filename)
-      (str/starts-with? trimmed "./") (str "./" (str (fs/path (subs trimmed 2) filename)))
+      (str/starts-with? trimmed "./") (str "./" (fs/path (subs trimmed 2) filename))
       :else (str (fs/path trimmed filename)))))
 
 (defn- suggest-plan-path [task project-root tasks-path]
@@ -1127,14 +1232,11 @@
 
 (defn record-path-cmd [{:keys [opts] :as result}]
   (let [{:keys [project-root tasks files]} (load-context opts)
-        id (or (:id opts) (first (:args result)))]
-    (if-let [t (task/find-by-id tasks id)]
-      (let [suggested (suggest-plan-path t project-root (:tasks files))]
-        (out/emit-result opts {:taskId id :suggested suggested
-                               :text/lines [suggested]}))
-      (out/emit-error opts
-                      {:code "unknown-task"
-                       :message (str "No task with :CUSTOM_ID: " id)}))))
+        id (or (:id opts) (first (:args result)))
+        t (resolve-required-id tasks id opts)
+        suggested (suggest-plan-path t project-root (:tasks files))]
+    (out/emit-result opts {:taskId (parser/get-task-id t) :suggested suggested
+                           :text/lines [suggested]})))
 
 (defn- safe-org-link-description? [^String summary]
   (and summary (seq summary) (not (re-find #"[\[\]\r\n]" summary))))
@@ -1146,8 +1248,27 @@
         (str "[[" (name kind) ":" id "][" summary "]]")
         (str "[[" (name kind) ":" id "]]")))))
 
+(defn- relevel-for-plan
+  "Return `task` re-levelled so direct children of `parent-level`
+  become level-2 plan tasks under `* Plan`, preserving deeper nesting."
+  [parent-level task]
+  (let [level (max 2 (inc (- (:level task) parent-level)))]
+    (-> task
+        (assoc :level level)
+        (update :children #(mapv (partial relevel-for-plan parent-level) %))
+        ;; Import-expanded children are loader state, not on-disk children to
+        ;; copy into a newly scaffolded record.
+        (dissoc :import-children))))
+
+(defn- migrated-plan-block [parent-task]
+  (let [children (mapv #(relevel-for-plan (:level parent-task) %)
+                       (:children parent-task))]
+    (when (seq children)
+      (str/trim-newline (parser/serialize-tasks children)))))
+
 (defn- scaffold-plan-content [task setup-file-rel-path]
-  (let [parent-link (parent-link-target task :task)]
+  (let [parent-link (parent-link-target task :task)
+        plan-block  (migrated-plan-block task)]
     (str/join "\n"
               (filter some?
                       [(str "#+TITLE: " (:summary task))
@@ -1158,8 +1279,11 @@
                        "* Summary"
                        ""
                        "* Plan"
+                       plan-block
                        ""
                        "* Implementation"
+                       ""
+                       "* Validation"
                        ""
                        ""]))))
 
@@ -1192,52 +1316,52 @@
                       {:code "argument-error"
                        :message "ot record create requires a task id."})
       :else
-      (if-let [target (task/find-by-id tasks id)]
-        (let [rel-path (or (:path opts) (suggest-plan-path target project-root (:tasks files)))
-              abs (paths/resolve-project-path project-root project-root rel-path)]
-          (cond
-            (nil? abs)
-            (out/emit-error opts
-                            {:code "path-outside-project"
-                             :message (str "Plan path resolves outside project root: " rel-path)})
+      (let [target (resolve-required-id tasks id opts)
+            full-id (parser/get-task-id target)
+            rel-path (or (:path opts) (suggest-plan-path target project-root (:tasks files)))
+            abs (paths/resolve-project-path project-root project-root rel-path)]
+        (cond
+          (nil? abs)
+          (out/emit-error opts
+                          {:code "path-outside-project"
+                           :message (str "Plan path resolves outside project root: " rel-path)})
 
-            :else
-            (let [target-dir  (str (fs/parent abs))
-                  setup-path  (str (fs/path project-root "TASKS.setup.org"))
-                  setup-file-rel (str (fs/relativize target-dir setup-path))
-                  content     (scaffold-plan-content target setup-file-rel)
-                  existed?    (fs/exists? abs)
-                  ;; Attach #+IMPORT to the parent task if missing.
-                  rel-to-plans (str (fs/file-name abs))
-                  import-raw  (or (:import-raw target)
-                                  (str "[[plan:" rel-to-plans "]]"))
-                  import-path (or (:import-path target)
-                                  (str "plan:" rel-to-plans))
-                  updated-target (-> target
-                                     (assoc :import-path import-path
-                                            :import-raw import-raw))
-                  tree-new (update-task-in-tree tasks id (constantly updated-target))
-                  scope (when (= mode :retrospective)
-                          (let [started (parser/get-task-started target)
-                                closed  (:closed target)]
-                            {:since started
-                             :until closed
-                             :commits (git-log-commits project-root started closed)}))]
-              (when-not (:dry-run opts)
-                (fs/create-dirs (fs/parent abs))
-                (when-not existed?
-                  (spit abs content))
-                (loader/save-source-roots project-root tree-new))
-              (out/emit-result
-                opts
-                {:taskId id
-                 :recordPath abs
-                 :importRaw import-raw
-                 :created (not existed?)
-                 :absorbedSubtasks false
-                 :scope scope
-                 :text/lines
-                 [(str (if existed? "Updated #+IMPORT → " "Scaffolded ") abs)]}))))
-        (out/emit-error opts
-                        {:code "unknown-task"
-                         :message (str "No task with :CUSTOM_ID: " id)})))))
+          :else
+          (let [target-dir  (str (fs/parent abs))
+                setup-path  (str (fs/path project-root "TASKS.setup.org"))
+                setup-file-rel (str (fs/relativize target-dir setup-path))
+                content     (scaffold-plan-content target setup-file-rel)
+                existed?    (fs/exists? abs)
+                ;; Attach #+IMPORT to the parent task if missing.
+                rel-to-plans (str (fs/file-name abs))
+                import-raw  (or (:import-raw target)
+                                (str "[[plan:" rel-to-plans "]]"))
+                import-path (or (:import-path target)
+                                (str "plan:" rel-to-plans))
+                absorbed? (and (not existed?) (seq (:children target)))
+                updated-target (cond-> (assoc target
+                                             :import-path import-path
+                                             :import-raw import-raw)
+                                 absorbed? (assoc :children []))
+                tree-new (update-task-in-tree tasks full-id (constantly updated-target))
+                scope (when (= mode :retrospective)
+                        (let [started (parser/get-task-started target)
+                              closed  (:closed target)]
+                          {:since started
+                           :until closed
+                           :commits (git-log-commits project-root started closed)}))]
+            (when-not (:dry-run opts)
+              (fs/create-dirs (fs/parent abs))
+              (when-not existed?
+                (spit abs content))
+              (loader/save-source-roots project-root tree-new))
+            (out/emit-result
+              opts
+              {:taskId full-id
+               :recordPath abs
+               :importRaw import-raw
+               :created (not existed?)
+               :absorbedSubtasks (boolean absorbed?)
+               :scope scope
+               :text/lines
+               [(str (if existed? "Updated #+IMPORT → " "Scaffolded ") abs)]})))))))

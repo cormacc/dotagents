@@ -1,10 +1,9 @@
 (ns org-tasks.scan
   "Prior-art summary scanner.
 
-  Port of `pi/extensions/tasks/scan.ts`. Walks active and archived
-  task graphs (plus their `#+IMPORT:` chains) and returns a flat
-  `[ScanRow]` capturing each task's heading metadata plus its
-  change-record's `* Summary` body (or 'missing' / 'no record').
+  Walks active and archived task graphs (plus their `#+IMPORT:` chains)
+  and returns a flat `[ScanRow]` capturing each task's heading metadata
+  plus its change-record's `* Summary` body (or 'missing' / 'no record').
 
   Pure helper: path resolution and file I/O happen in the calling
   command via a `read-change-record` callback so the scanner stays

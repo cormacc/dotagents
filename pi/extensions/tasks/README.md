@@ -10,7 +10,9 @@ call `ot section` / `ot scan`, `/tasks doctor` calls `ot doctor`,
 selection/status/archive/publish/unpublish use
 `ot select|status|archive|publish|unpublish`, `insertTaskIntoFile` and the
 interactive overlay create flow shell through `ot create`, and the overlay task
-graph loads from `ot list --format json`.
+graph loads from `ot list --format json`. The extension always passes canonical
+full UUIDs to `ot`; CLI short-id resolution is a shell-user convenience and does
+not affect overlay or tool-call behaviour.
 
 `ot` discovery order is:
 
@@ -69,7 +71,7 @@ task tree, with the selected task highlighted inside it. The widget:
 ### Status colors
 
 Status and metadata tokens use a fixed palette across the expanded tasks UI and the compact selected-task widget.
-Tags are styled separately from task titles.
+Tags are styled separately from task titles. This palette is extension-local; `ot --format text` uses bling's own documented palette / closest equivalents instead of attempting byte-level ANSI parity with these colours.
 
 | Status    | Color  |
 | --------- | ------ |

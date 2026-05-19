@@ -1,10 +1,10 @@
 (ns org-tasks.lifecycle
   "Status-transition semantics for the `ot` CLI.
 
-  Port of `pi/extensions/tasks/lifecycle.ts`. Pure: applies a single
-  status transition to a task map and returns the updated task plus
-  metadata (`prev-status`, `was-closed`, `is-closed`, `timestamp`)
-  needed by the CLI envelope and parent-promotion logic.
+  Pure: applies a single status transition to a task map and returns
+  the updated task plus metadata (`prev-status`, `was-closed`,
+  `is-closed`, `timestamp`) needed by the CLI envelope and
+  parent-promotion logic.
 
   Side-effecting concerns (file IO, parent walks, file watchers) live
   one level up in `org-tasks.commands.status`."

@@ -1,11 +1,10 @@
 (ns org-tasks.insert
   "Task insertion + idempotency across `:LINKED_ISSUES:` tokens.
 
-  Port of `pi/extensions/tasks/insert.ts`. Pure where possible:
-  `build-task-block` is fully deterministic given `id` + `created-at`
-  overrides; `insert-task-into-file` reads `target` (+ optional
-  `also-scan`), checks for duplicates, splices the new block under
-  the requested section, and writes the result atomically.
+  Pure where possible: `build-task-block` is fully deterministic given
+  `id` + `created-at` overrides; `insert-task-into-file` reads `target`
+  (+ optional `also-scan`), checks for duplicates, splices the new
+  block under the requested section, and writes the result atomically.
 
   Public surface:
 

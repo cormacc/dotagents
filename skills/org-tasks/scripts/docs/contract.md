@@ -50,13 +50,34 @@ harnesses, CI scripts, future Emacs companions). Bump rules are in
 ```
 
 - `code` is a stable kebab-case identifier (`section-not-found`,
-  `unknown-task`, `path-outside-project`, `duplicate-linked-issue`,
-  `validation`, `invalid-status`, `out-of-root`, `unreadable`,
-  `git-unavailable`, `empty-summary`).
+  `unknown-task`, `ambiguous-id`, `path-outside-project`,
+  `duplicate-linked-issue`, `validation`, `invalid-status`, `out-of-root`,
+  `unreadable`, `git-unavailable`, `empty-summary`).
 - `message` is a single-line human-readable summary.
 - `file` and `line` are populated when locatable; otherwise `null`.
 - `details` may carry command-specific extra context.
 - The process exit code is `0` on success and `1` on failure.
+
+#### `ambiguous-id`
+
+Id-accepting commands resolve exact `:CUSTOM_ID:` values first, then accept any
+unique prefix of at least four characters. When a prefix matches more than one
+task, commands fail with `code: "ambiguous-id"` and include the matching tasks in
+`details.matches`:
+
+```json
+{
+  "code": "ambiguous-id",
+  "message": "Task id prefix 'abcd' is ambiguous (2 matches)",
+  "details": {
+    "id": "abcd",
+    "matches": [
+      { "id": "abcd1111-2222-4333-8444-555555555551", "summary": "First", "file": "/repo/TASKS.org" },
+      { "id": "abcd9999-2222-4333-8444-555555555559", "summary": "Second", "file": "/repo/TASKS.local.org" }
+    ]
+  }
+}
+```
 
 ## Common task shape (`Task`)
 
@@ -114,6 +135,9 @@ directly on that task. `ot list` deduplicates those large strings into its
       "sourceContent": "raw TASKS.org content",
       "effectiveSourceContent": "content plus expanded setupfiles"
     }
+  },
+  "shortIds": {
+    "1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0001": "1c5f…0001"
   }
 }
 ```
@@ -124,8 +148,33 @@ directly on that task. `ot list` deduplicates those large strings into its
 - `sources` is keyed by absolute source path and carries file content once per
   path so UI clients can resolve link templates or preserve org text without
   duplicating large strings on every task row.
+- `shortIds` maps every full `:CUSTOM_ID:` in the loaded graph to a compact
+  display alias of the shape `prefix…suffix`. Edges expand symmetrically until
+  every alias is unique within the graph. Any value in this map is accepted by
+  id-taking commands (`show`, `status`, `select`, etc.) as a shorthand for the
+  full id.
+
+Options:
+
+- `--levels <n>` (non-negative integer) caps hierarchy depth: `0` shows
+  only top-level tasks, `1` shows top-level plus their direct children,
+  `2` adds grandchildren, and so on. Omit the flag for unlimited depth.
+  Depth is measured against the actual displayed graph, so a status
+  filter that hides a parent still resolves its surviving descendants
+  against the deepest visible ancestor.
+- `--status-filter <STATUS>` / `-S` (repeatable) keeps only matching
+  rows.
+- `--scope active | archived | all` selects which task files
+  contribute (currently advisory; the loader walks the active set in
+  every mode).
 
 ### `ot show <id>`
+
+`<id>` may be a full `:CUSTOM_ID:`, a compact short-id of the form
+`prefix…suffix` (the `…` is also accepted as ASCII `...`), or any unique
+prefix of at least four characters. Ambiguous values fail with
+`ambiguous-id`. The success payload echoes the resolved compact alias as
+`shortId`.
 
 ```json
 "result": {
@@ -286,7 +335,7 @@ or lacking `* Summary`) or `null` (task has no `#+IMPORT:` at all).
   "recordPath":       "/repo/design/log/foo.org",
   "importRaw":        "[[plan:foo.org]]",
   "created":          true,
-  "absorbedSubtasks": false,
+  "absorbedSubtasks": true,
   "scope": {
     "since":          "2026-05-18 Mon 08:30 | null",
     "until":          "2026-05-18 Mon 13:30 | null",
@@ -295,8 +344,7 @@ or lacking `* Summary`) or `null` (task has no `#+IMPORT:` at all).
 }
 ```
 
-`scope.commits` is populated only for `--mode retrospective` (via `git log`).
-Errors: `unknown-task`, `path-outside-project`, `git-unavailable`.
+`absorbedSubtasks` is true when a newly-created record absorbed existing child task trees from the parent into its `* Plan` section; the parent keeps the `#+IMPORT:` link and loses those local children so each UUID has one canonical writable location. Existing record files are not modified for migration. `scope.commits` is populated only for `--mode retrospective` (via `git log`). Errors: `unknown-task`, `path-outside-project`, `git-unavailable`.
 
 ### `ot record path <id>`
 
@@ -358,6 +406,22 @@ Errors: `unknown-task`, `path-outside-project`, `git-unavailable`.
   "handoff":  "Pick up at … | null"
 }
 ```
+
+### `ot uuid`
+
+Generate one or more UUIDv4 values for use as `:CUSTOM_ID:` on hand-authored
+task blocks. Prefer this over inventing IDs in prose; sequential / shared-prefix
+IDs collide on short-id display and may be flagged by `ot doctor`.
+
+```json
+"result": {
+  "uuids":  ["6593c6fc-d284-4f9e-b6b5-4c159345cd20"],
+  "count":  1
+}
+```
+
+Options: `--count <n>` (default `1`, must be positive). Text output is one UUID
+per line.
 
 ## Global options
 

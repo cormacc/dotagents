@@ -255,6 +255,64 @@
     (is (str/includes? line "duplicate-id"))
     (is (str/includes? line "/tmp/TASKS.org:7"))))
 
+;; ── non-uuid-v4 / patterned-sibling-ids ──────────────────
+
+(deftest non-uuid-v4-id-flags-hand-authored-ids
+  (let [{:keys [tasks]}
+        (parser/parse-tasks
+          (str "* TODO Bad ID\n"
+               ":PROPERTIES:\n"
+               ":CUSTOM_ID: parent-id\n"
+               ":END:\n"))
+        findings (doctor/run-doctor {:tasks tasks :selected-id nil})
+        f (first (filter #(= :non-uuid-v4-id (:code %)) findings))]
+    (is (= 1 (count-of findings :non-uuid-v4-id)))
+    (is (= :warn (:severity f)))
+    (is (str/includes? (:message f) "ot uuid"))))
+
+(deftest non-uuid-v4-id-passes-valid-v4
+  (let [{:keys [tasks]}
+        (parser/parse-tasks
+          (str "* TODO Good\n"
+               ":PROPERTIES:\n"
+               ":CUSTOM_ID: 6593c6fc-d284-4f9e-b6b5-4c159345cd20\n"
+               ":END:\n"))]
+    (is (zero? (count-of (doctor/run-doctor {:tasks tasks :selected-id nil})
+                         :non-uuid-v4-id)))))
+
+(deftest patterned-sibling-ids-detected
+  (let [{:keys [tasks]}
+        (parser/parse-tasks
+          (str "* TODO Plan A\n"
+               ":PROPERTIES:\n"
+               ":CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0001\n"
+               ":END:\n"
+               "\n"
+               "* TODO Plan B\n"
+               ":PROPERTIES:\n"
+               ":CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0002\n"
+               ":END:\n"))
+        findings (doctor/run-doctor {:tasks tasks :selected-id nil})
+        f (first (filter #(= :patterned-sibling-ids (:code %)) findings))]
+    (is (= 2 (count-of findings :patterned-sibling-ids)))
+    (is (= :warn (:severity f)))
+    (is (str/includes? (:message f) "ot uuid"))))
+
+(deftest patterned-sibling-ids-allows-random-v4
+  (let [{:keys [tasks]}
+        (parser/parse-tasks
+          (str "* TODO Random A\n"
+               ":PROPERTIES:\n"
+               ":CUSTOM_ID: 6593c6fc-d284-4f9e-b6b5-4c159345cd20\n"
+               ":END:\n"
+               "\n"
+               "* TODO Random B\n"
+               ":PROPERTIES:\n"
+               ":CUSTOM_ID: 9e2b9765-dd9d-4748-aed3-c3e3af0ea5e4\n"
+               ":END:\n"))]
+    (is (zero? (count-of (doctor/run-doctor {:tasks tasks :selected-id nil})
+                         :patterned-sibling-ids)))))
+
 (deftest format-findings-report-ordering
   (let [findings [{:code :duplicate-id :severity :error
                    :message "x" :location {:file "/a" :line 1}}

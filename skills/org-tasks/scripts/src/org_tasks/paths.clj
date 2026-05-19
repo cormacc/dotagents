@@ -1,11 +1,10 @@
 (ns org-tasks.paths
   "Project-root sandboxing.
 
-  Port of `pi/extensions/tasks/paths.ts`. Resolves user-supplied paths
-  against a project root and rejects anything that escapes after
-  symlink realpath resolution. Supports paths whose parent exists but
-  whose target does not yet (so future scaffold targets can be
-  validated before creation).
+  Resolves user-supplied paths against a project root and rejects
+  anything that escapes after symlink realpath resolution. Supports
+  paths whose parent exists but whose target does not yet (so future
+  scaffold targets can be validated before creation).
 
   Public surface:
 
