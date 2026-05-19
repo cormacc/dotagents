@@ -7,7 +7,7 @@
   their work, and emit via `org-tasks.output`.
 
   Command surface: init, list, show, create, select, selected, status,
-  archive, publish, unpublish, section, scan, doctor, record
+  archive, publish, unpublish, section, scan, doctor, backfill, record
   path/create, issue list/add/remove/urls, blocker list/add/remove,
   ready, handoff get/set/clear, uuid."
   (:require [babashka.fs :as fs]
@@ -124,6 +124,77 @@
                      {:uuids uuids
                       :count (count uuids)
                       :text/lines uuids})))
+
+;; ── ot backfill ───────────────────────────────────────────────────
+
+(defn- task-missing-created? [task]
+  (nil? (parser/get-drawer-property task "CREATED")))
+
+(defn- backfill-missing-task-metadata
+  "Return `{:tasks, :changes}` after filling identity metadata on tasks
+  missing `:CUSTOM_ID:`. New IDs also receive `:CREATED:` and a
+  matching created LOGBOOK entry when those fields are absent, giving
+  hand-authored headings the same shape as `ot create` without
+  rewriting legacy tasks that already have an id."
+  [tasks timestamp]
+  (let [changes (volatile! [])]
+    (letfn [(visit [task]
+              (let [missing-id? (not (parser/task-has-id? task))
+                    missing-created? (and missing-id? (task-missing-created? task))
+                    id (when missing-id? (random-uuid-v4-str))
+                    updated (cond-> task
+                              missing-id?
+                              (parser/set-drawer-property "CUSTOM_ID" id)
+
+                              missing-created?
+                              (parser/set-drawer-property "CREATED" (str "[" timestamp "]"))
+
+                              missing-created?
+                              (parser/append-created-log timestamp))
+                    updated (update updated :children #(mapv visit (or % [])))]
+                (when missing-id?
+                  (vswap! changes conj
+                          (cond-> {:id id
+                                   :summary (:summary task)
+                                   :status (:status task)
+                                   :file (:source-path task)
+                                   :line (:line-number task)
+                                   :created (when missing-created?
+                                              (str "[" timestamp "]"))}
+                            (not missing-created?) (dissoc :created))))
+                updated))]
+      {:tasks (mapv visit tasks)
+       :changes @changes})))
+
+(defn backfill-cmd
+  "Backfill protocol metadata for hand-authored task headings.
+
+  The default repair is intentionally conservative for automatic
+  file-watch use: only tasks lacking `:CUSTOM_ID:` are changed. Those
+  newly identified tasks also get a `:CREATED:` property and created
+  LOGBOOK entry if missing. Existing identified legacy tasks are left
+  alone even when they predate `:CREATED:`."
+  [{:keys [opts]}]
+  (let [{:keys [project-root tasks]} (load-context opts)
+        timestamp (or (:created-at opts) (parser/format-org-timestamp))
+        {:keys [tasks changes]} (backfill-missing-task-metadata tasks timestamp)
+        changed-count (count changes)]
+    (when (and (pos? changed-count) (not (:dry-run opts)))
+      (loader/save-source-roots project-root tasks))
+    (out/emit-result
+      opts
+      {:changed changed-count
+       :changes changes
+       :dryRun (boolean (:dry-run opts))
+       :text/lines
+       (if (pos? changed-count)
+         (into [(str "Backfilled " changed-count " task"
+                     (when (not= 1 changed-count) "s")
+                     (when (:dry-run opts) " (dry run)"))]
+               (map (fn [{:keys [id file line summary]}]
+                      (str id " " file ":" line " " summary))
+                    changes))
+         ["No task metadata backfill needed."])})))
 
 (defn init-cmd [{:keys [opts]}]
   (let [{:keys [project-root files]} (resolve-context opts)

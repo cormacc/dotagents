@@ -48,6 +48,7 @@ import { insertTaskIntoFile, type InsertResult } from "./insert.ts";
 import {
   OtNotFoundError,
   otArchiveTask,
+  otBackfill,
   otCreateTask,
   otDoctor,
   otList,
@@ -372,6 +373,11 @@ function assignSourceRoots(tasks: Task[]): void {
 }
 
 async function loadTasks(cwd: string): Promise<Task[]> {
+  try {
+    await otBackfill({ root: cwd });
+  } catch {
+    // Keep the UI usable even if automatic metadata backfill cannot write.
+  }
   const result = await otList<OtWireTask>({ root: cwd });
   const sources = result.sources ?? {};
   const tasks = result.tree.map((wire) => wireTaskToTask(wire, sources));

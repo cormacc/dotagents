@@ -138,6 +138,10 @@
                                 (str "--count must be a positive integer, got "
                                      (pr-str value)))}}})
 
+(def ^:private backfill-spec
+  {:created-at {:desc "Override generated :CREATED: timestamp body, without brackets"
+                :ref "<timestamp>"}})
+
 (defn- merge-spec [extra]
   (merge global-spec extra))
 
@@ -158,6 +162,7 @@
    ["publish"          "<id>"              "Move a local task to TASKS.org"]
    ["unpublish"        "<id>"              "Move a top-level shared task to TASKS.local.org"]
    ["doctor"           ""                  "Run protocol health checks"]
+   ["backfill"         ""                  "Fill missing :CUSTOM_ID: metadata for hand-authored tasks"]
    ["section"          "<file> [<section>]" "Read one * section of an org file"]
    ["scan"             ""                  "Walk the graph for prior-art change-record summaries"]
    ["record create"    "<id>"              "Scaffold a change-record and attach #+IMPORT:"]
@@ -230,6 +235,8 @@
     :spec (merge-spec {}) :args->opts [:id]}
    {:cmds ["doctor"]             :fn commands/doctor-cmd
     :spec (merge-spec {})}
+   {:cmds ["backfill"]           :fn commands/backfill-cmd
+    :spec (merge-spec backfill-spec)}
    {:cmds ["section"]            :fn commands/section-cmd
     :spec (merge-spec section-spec) :args->opts [:file :section]}
    {:cmds ["scan"]               :fn commands/scan-cmd

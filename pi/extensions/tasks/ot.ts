@@ -291,6 +291,23 @@ export function otDoctor<TFinding = unknown>(opts: RunOtOptions = {}): Promise<O
   return runOtResult<OtDoctorResult<TFinding>>(["doctor"], opts);
 }
 
+export interface OtBackfillResult {
+  changed: number;
+  changes: Array<{
+    id: string;
+    summary: string;
+    status: string;
+    file?: string | null;
+    line?: number | null;
+    created?: string | null;
+  }>;
+  dryRun: boolean;
+}
+
+export function otBackfill(opts: RunOtOptions = {}): Promise<OtBackfillResult> {
+  return runOtResult<OtBackfillResult>(["backfill"], opts);
+}
+
 export function otCreateTask(
   args: OtCreateTaskArgs,
   opts: RunOtOptions = {},

@@ -5,7 +5,8 @@
   any command implementations exist. Deeper protocol tests live in the
   per-domain `*-test` namespaces listed in
   `skills/org-tasks/scripts/docs/test-map.md`."
-  (:require [cheshire.core :as json]
+  (:require [babashka.fs :as fs]
+            [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [org-tasks.cli :as cli]
@@ -86,3 +87,41 @@
     (let [{:keys [err exit]} (capture #(apply cli/-main ["--format" "yaml" "doctor"]))]
       (is (= 2 exit))
       (is (str/includes? err "argument-error")))))
+
+(deftest backfill-adds-id-and-created-metadata-to-hand-authored-task
+  (testing "ot backfill repairs a manually inserted heading"
+    (let [dir (str (fs/create-temp-dir {:prefix "ot-backfill"}))
+          tasks-file (str dir "/TASKS.org")
+          local-file (str dir "/TASKS.local.org")]
+      (spit tasks-file
+            (str "#+TITLE: Tasks\n"
+                 "#+SETUPFILE: ./TASKS.local.org\n"
+                 "\n"
+                 "* Improvements\n"
+                 "\n"
+                 "** TODO [#B] Manually added task\n"
+                 "Body text\n"))
+      (spit local-file "#+SELECTED:\n")
+      (let [{:keys [out exit]} (capture #(apply cli/-main
+                                                ["--format" "json"
+                                                 "--root" dir
+                                                 "backfill"
+                                                 "--created-at" "2026-05-19 Tue 12:34"]))
+            envelope (json/parse-string out true)
+            content (slurp tasks-file)
+            id (get-in envelope [:result :changes 0 :id])]
+        (is (zero? exit))
+        (is (= 1 (get-in envelope [:result :changed])))
+        (is (re-matches #"[0-9a-f-]{36}" id))
+        (is (str/includes? content ":PROPERTIES:"))
+        (is (str/includes? content (str ":CUSTOM_ID: " id)))
+        (is (str/includes? content ":CREATED: [2026-05-19 Tue 12:34]"))
+        (is (str/includes? content ":LOGBOOK:"))
+        (is (str/includes? content "- Created [2026-05-19 Tue 12:34]")))
+      (let [{:keys [out exit]} (capture #(apply cli/-main
+                                                ["--format" "json"
+                                                 "--root" dir
+                                                 "backfill"]))
+            envelope (json/parse-string out true)]
+        (is (zero? exit))
+        (is (= 0 (get-in envelope [:result :changed])))))))

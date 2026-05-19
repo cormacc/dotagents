@@ -50,6 +50,7 @@ ot archive <id> --yes
 ot publish <id>       # TASKS.local.org -> TASKS.org
 ot unpublish <id>     # TASKS.org -> TASKS.local.org
 ot doctor --format json
+ot backfill            # add :CUSTOM_ID: / :CREATED: to hand-authored tasks missing IDs
 ot section design/log/foo.org Summary --format json
 ot scan --scope all --max-body-chars 500 --format json
 ot record path <id>
