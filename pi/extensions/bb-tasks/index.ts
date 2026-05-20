@@ -9,15 +9,24 @@
 import {
   createBashToolDefinition,
   type ExtensionAPI,
+  type ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
-import type { AutocompleteItem } from "@mariozechner/pi-tui";
+import {
+  truncateToWidth,
+  type AutocompleteItem,
+  type Component,
+} from "@mariozechner/pi-tui";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 const MAX_NOTIFY_OUTPUT_LENGTH = 4000;
+const PREVIEW_LINES = 20;
+const BB_BASH_MESSAGE_TYPE = "bb-tasks-bash";
 
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
+interface BbBashMessageDetails {
+  command: string;
+  output: string;
+  error: boolean;
 }
 
 function summarizeOutput(output: string): string {
@@ -25,7 +34,61 @@ function summarizeOutput(output: string): string {
   return `${output.slice(0, MAX_NOTIFY_OUTPUT_LENGTH)}\n…[truncated ${output.length - MAX_NOTIFY_OUTPUT_LENGTH} chars]`;
 }
 
+function renderBbBashMessage(
+  details: BbBashMessageDetails | undefined,
+  expanded: boolean,
+  theme: { fg(key: string, text: string): string; bold(text: string): string },
+): Component {
+  const command = details?.command ?? "bb";
+  const output = details?.output ?? "";
+  const error = details?.error ?? false;
+
+  return {
+    render(width: number): string[] {
+      const lineWidth = Math.max(0, width);
+      const border = theme.fg("bashMode", "─".repeat(lineWidth));
+      const rawOutputLines = (output.trimEnd() || "(no output)")
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .split("\n");
+      const outputLines = expanded
+        ? rawOutputLines
+        : rawOutputLines.slice(-PREVIEW_LINES);
+      const hiddenLineCount = rawOutputLines.length - outputLines.length;
+      const lines = [
+        border,
+        truncateToWidth(
+          `  ${theme.fg("bashMode", theme.bold(`$ ${command}`))}`,
+          lineWidth,
+        ),
+        ...outputLines.map((line) =>
+          truncateToWidth(`  ${theme.fg("muted", line)}`, lineWidth)
+        ),
+      ];
+
+      if (hiddenLineCount > 0) {
+        lines.push(
+          truncateToWidth(
+            `  ${theme.fg("muted", `... ${hiddenLineCount} more lines`)}`,
+            lineWidth,
+          ),
+        );
+      }
+      if (error) {
+        lines.push(truncateToWidth(`  ${theme.fg("error", "(failed)")}`, lineWidth));
+      }
+      lines.push(border);
+      return lines;
+    },
+    invalidate(): void {},
+  };
+}
+
 export default function (pi: ExtensionAPI) {
+  pi.registerMessageRenderer(BB_BASH_MESSAGE_TYPE, (message, { expanded }, theme) =>
+    renderBbBashMessage(message.details as BbBashMessageDetails | undefined, expanded, theme)
+  );
+
   pi.on("session_start", async (_event, ctx) => {
     const bbEdn = join(ctx.cwd, "bb.edn");
     if (!existsSync(bbEdn)) return;
@@ -60,27 +123,43 @@ export default function (pi: ExtensionAPI) {
 
     if (tasks.length === 0) {
       ctx.ui.notify("bb-tasks: no tasks found in bb.edn", "warning");
-      return;
+    } else {
+      ctx.ui.notify(`bb-tasks: ${tasks.length} tasks available`, "info");
     }
 
-    ctx.ui.notify(`bb-tasks: ${tasks.length} tasks available`, "info");
+    // ── pass /bb arguments through pi's built-in bash tool ────────
 
-    // ── run tasks through pi's built-in bash tool ────────
-
-    async function runTask(taskName: string): Promise<string> {
-      const command = `bb ${shellQuote(taskName)}`;
-      const bash = createBashToolDefinition(ctx.cwd);
+    async function runBbCommand(
+      commandArgs: string,
+      commandCtx: ExtensionContext,
+    ): Promise<{ command: string; output: string }> {
+      const command = `bb ${commandArgs}`;
+      const bash = createBashToolDefinition(commandCtx.cwd);
       const result = await bash.execute(
-        `bb-tasks-${taskName}`,
+        "bb-tasks",
         { command },
-        ctx.signal,
+        commandCtx.signal,
         undefined,
-        ctx,
+        commandCtx,
       );
-      return result.content
+      const output = result.content
         .filter((item): item is { type: "text"; text: string } => item.type === "text")
         .map((item) => item.text)
         .join("\n");
+      return { command, output };
+    }
+
+    function sendBbBashMessage(
+      command: string,
+      output: string,
+      error: boolean,
+    ): void {
+      pi.sendMessage({
+        customType: BB_BASH_MESSAGE_TYPE,
+        content: `$ ${command}\n${output}`,
+        display: true,
+        details: { command, output: summarizeOutput(output), error },
+      }, { triggerTurn: false });
     }
 
     // ── register /bb command ─────────────────────────────
@@ -102,9 +181,13 @@ export default function (pi: ExtensionAPI) {
       },
 
       handler: async (args, ctx) => {
-        const taskName = args?.trim();
-        if (!taskName) {
+        const commandArgs = args?.trim();
+        if (!commandArgs) {
           // No argument — list tasks
+          if (tasks.length === 0) {
+            ctx.ui.notify("No bb tasks discovered. Try `/bb tasks` to inspect bb directly.", "warning");
+            return;
+          }
           const listing = tasks
             .map((t) => `  ${t.name}  ${t.description}`)
             .join("\n");
@@ -112,25 +195,13 @@ export default function (pi: ExtensionAPI) {
           return;
         }
 
-        const task = tasks.find((t) => t.name === taskName);
-        if (!task) {
-          ctx.ui.notify(`Unknown task: ${taskName}`, "error");
-          return;
-        }
-
         try {
-          ctx.ui.notify(`Running: bb ${taskName}`, "info");
-          const output = await runTask(taskName);
-          ctx.ui.notify(
-            `$ bb ${taskName}\n${summarizeOutput(output)}`,
-            "info",
-          );
+          const { command, output } = await runBbCommand(commandArgs, ctx);
+          sendBbBashMessage(command, output, false);
         } catch (error) {
+          const command = `bb ${commandArgs}`;
           const message = error instanceof Error ? error.message : String(error);
-          ctx.ui.notify(
-            `bb ${taskName} failed:\n${summarizeOutput(message)}`,
-            "error",
-          );
+          sendBbBashMessage(command, message, true);
         }
       },
     });

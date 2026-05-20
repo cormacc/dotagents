@@ -14,6 +14,6 @@
     "git:github.com/lemonade-sdk/lemonade-pi-plugin@main"
   ],
   "lastChangelogVersion": "0.75.3",
-  "defaultProvider": "lemonade",
-  "defaultModel": "Qwen3.6-35B-A3B-MTP-GGUF"
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5"
 }
