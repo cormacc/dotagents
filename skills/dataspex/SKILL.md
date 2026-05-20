@@ -1,6 +1,6 @@
 ---
 name: dataspex
-description: "Use this skill whenever the user wants to inspect or debug live runtime state in a running ClojureScript app: dump app-state atoms from the browser tab, read Dataspex labels, view audit/change history, tail nexus/action dispatch logs, inspect taps, or query a runtime datascript DB. Trigger on prompts like what's in app state, what changed after a mutation, last action dispatched, stale UI/state debugging, shadow-cljs browser runtime, Dataspex/datspex, LogInspector, taps, or audit logs. Do not use for installing Dataspex, editing source to add inspect calls, screenshots/devtools-panel rendering, localStorage, JVM-side Dataspex, Datomic/Datahike/DataScript schema design, or non-CLJS debugging."
+description: "Use this skill whenever the user wants to inspect or debug live runtime state in a running ClojureScript app: read inspected ClojureScript refs (app-state atoms, taps) via Dataspex, view audit/change history, tail nexus/action dispatch logs, or query a runtime datascript DB. Trigger on prompts like what's in app state, what changed after a mutation, last action dispatched, stale UI/state debugging, shadow-cljs browser runtime, Dataspex/datspex, LogInspector, taps, or audit logs. Do not use for installing Dataspex, editing source to add inspect calls, screenshots/devtools-panel rendering, localStorage, JVM-side Dataspex, Datomic/Datahike/DataScript schema design, or non-CLJS debugging."
 ---
 
 # Dataspex
@@ -62,7 +62,7 @@ list when more than one is running.
 2. **Read what's already inspected.** Use `dataspex_value` for current state.
    Default to `path` navigation rather than pulling the whole map; agents
    over-fetch otherwise.
-3. **For "what changed?" questions:** first check whether a history source already exists (`history-len` on the label, or a `<label>-audit` label from a prior agent). If not, say that Dataspex cannot reconstruct earlier mutations retroactively, call `dataspex_track`, wait for the next relevant mutation, then `dataspex_history`. Always `dataspex_untrack` when done — the watch is a real subscription, leaving it registered leaks memory.
+3. **For "what changed?" questions:** first check whether a history source already exists (`history-len` on the label, or a `<label>-audit` label from a prior agent). If not, say that Dataspex cannot reconstruct earlier mutations retroactively, call `dataspex_track` to register passive monitoring, then re-read with `dataspex_history` after a user-performed mutation (or ask the user to trigger one). Always `dataspex_untrack` when done — the watch is a real subscription, leaving it registered leaks memory.
 4. **For taps:** treat `Taps` as an ordinary Dataspex label. Use `dataspex_value` with `label: "Taps"` and a narrow `path` / low print bounds before widening.
 5. **For DB questions:** prefer `dataspex_db_query` over fetching the DB —
    keeps token cost O(result-set), not O(DB).
@@ -89,9 +89,24 @@ list when more than one is running.
 - **`:fresh? true` is only meaningful for atom-backed labels.** Dataspex deftypes like Nexus' `LogInspector` (`Actions`) and Dataspex' own `TapInspector` (`Taps`) have a `:ref` but `deref`-ing it is not useful. Use `:fresh? true` only when the label's `val-type` (from `dataspex_labels`) is `map`/`vector`/`set`/`seq` and `has-ref?` is true.
 - **`:val` snapshots are unbounded under `includeVal: true`.** `dataspex_history` applies length/depth bounds at the outer structure, but a single `:val` snapshot can still be very large. Keep `n` small or stick to the default diff-only projection.
 - **`:dataspex.audit/summary` / `:dataspex.audit/details` are sparsely populated.** They require the inspected value to extend `dataspex.protocols/IAuditable`. The spiked CLJS datascript DB did not populate these fields, so datascript history entries may carry only `:diff`. Plain atoms also lack the summary fields. Treat `:diff` as the reliable change signal.
+- **Shadow's 1 MB remote writer limit.** Even with tight
+  `*print-length*` / `*print-level*` bindings, shadow-cljs tries to serialise
+  the CLJS form's *return value* across the runtime boundary, *outside* the
+  binding scope. If the return value is a deep atom, you'll hit
+  `The limit of 1048576 bytes was reached while printing`. Always wrap the
+  form's return value in `(with-out-str (binding [...] (pr <expr>)))` so the
+  string itself is bounded. This is the pattern used by all `dataspex_*` tools
+  and fallback forms.
+- **`:out` is unreliable under concurrent evals.** If you drop into
+  `clojure_eval` directly, read `:results[0]` (which is per-call), never
+  `:out` — sibling pi tool calls share the runtime's `*out*` and their bytes
+  leak into each other's snapshots. The `dataspex_*` tools encapsulate this.
 - **Nexus `LogInspector` is JS-interop-flavoured.** It's not `ISeqable` and
   `clojure.datafy/datafy` returns it opaque. The log is reachable only via
   `(aget log-inspector "log")`. The `dataspex_actions_tail` tool wraps this.
+- **No retroactive `:history-limit` widening.** The limit is frozen at
+  registration time; you cannot grow it later from outside. If you need more
+  history, `dataspex_untrack` and re-register with a larger `:history-limit`.
 - **`@store` mixes user labels (strings) with internal namespaced keys**
   like `:dataspex/host-str`, `:dataspex/remotes`,
   `:dataspex.render-host/channels`. Filtering for user labels means

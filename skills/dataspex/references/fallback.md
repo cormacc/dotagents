@@ -75,7 +75,7 @@ Bounded snapshot read, optionally navigated by `path`:
 
 ```clojure
 (with-out-str
-  (binding [*print-length* 20 *print-level* 4]
+  (binding [*print-length* 50 *print-level* 5]
     (pr
       (let [e (get @dataspex.core/store "state")
             v (:val e)
@@ -86,12 +86,14 @@ Bounded snapshot read, optionally navigated by `path`:
 `(with-out-str (pr ...))` inside the binding is what keeps the cljs return
 value bounded; without it, a deep app-state atom can blow shadow's 1 MB
 writer limit before `*print-length*` / `*print-level*` have any effect.
+Bounds match the `dataspex_value` tool defaults (50 / 5). For especially
+large app-state, reduce them or path-navigate before reading.
 
 Fresh deref of an atom-backed inspectee (skip the snapshot), still bounded:
 
 ```clojure
 (with-out-str
-  (binding [*print-length* 20 *print-level* 4]
+  (binding [*print-length* 50 *print-level* 5]
     (pr
       (some-> (:ref (get @dataspex.core/store "state")) deref))))
 ```
