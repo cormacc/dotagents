@@ -1,6 +1,6 @@
 #+TITLE: ot short-id resolution and bling-colourised text output
 #+DATE: 2026-05-19 Tue
-#+PARENT: [[task:a6dbdacb-8ac0-4745-8051-fd6fd1e1e0b2][org-tasks cli improvements]]
+#+PARENT: [[archive:a6dbdacb-8ac0-4745-8051-fd6fd1e1e0b2][org-tasks cli improvements]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 
@@ -97,6 +97,12 @@ warnings so legacy records keep loading.
   UUIDs everywhere — the extension never displays the truncated id back
   to itself. The new behaviour is purely a CLI-side affordance.
 
+** Follow-ups
+- The compact short-id system added here is being removed as a follow-on
+  design reversal — creation and lookup are machine-owned, so the
+  =prefix…suffix= input/output path is complexity without payoff. See
+  [[plan:2026-05-20-ot-eliminate-short-ids.org][eliminate compact short-ids]].
+
 * Plan
 
 ** DONE [#A] Add prefix-aware id resolver and ambiguous-id error code :clojure:protocol:
@@ -125,7 +131,6 @@ Acceptance criteria:
 - New =task_test.clj= is added and wired into =test_runner.clj=.
   Tests cover exact, unique-prefix, ambiguous, too-short, and unknown
   cases on both the global and top-level resolvers.
-
 ** DONE [#A] Route every id-accepting command through the new resolver :cli:protocol:
 CLOSED: [2026-05-19 Tue 10:12]
 :PROPERTIES:
@@ -155,7 +160,6 @@ Acceptance criteria:
   pi wrapper still works because it always passes full UUIDs (no code
   change required, but the assertion guards against accidental
   regression).
-
 ** DONE [#B] Adopt bling for =--format text= styling :clojure:ui:
 CLOSED: [2026-05-19 Tue 10:12]
 :PROPERTIES:
@@ -190,7 +194,6 @@ Acceptance criteria:
   ANSI absent when command opts include =:no-color true=, ANSI absent
   when =NO_COLOR=1= is in the environment, and known-status/known-
   priority lookups.
-
 ** DONE [#B] Style the high-traffic command renderers :clojure:ui:
 CLOSED: [2026-05-19 Tue 10:12]
 :PROPERTIES:
@@ -217,7 +220,6 @@ Acceptance criteria:
 - Existing text-output tests are updated to pass explicit =:no-color
   true= / ={:color? false}= or to strip ANSI before substring matching;
   do not assume =:format :text= alone implies unstyled output.
-
 ** DONE [#C] Document short-id and styling in SKILL.md / contract.md :docs:
 CLOSED: [2026-05-19 Tue 10:12]
 :PROPERTIES:
@@ -238,7 +240,6 @@ Acceptance criteria:
   error code and shows the =details.matches= shape.
 - =pi/extensions/tasks/README.md= reaffirms that the extension passes
   full UUIDs and is therefore unaffected by the short-id change.
-
 ** DONE [#B] Adopt collision-resistant compact short IDs :cli:protocol:
 CLOSED: [2026-05-19 Tue 10:46]
 :PROPERTIES:
@@ -256,7 +257,6 @@ Acceptance criteria:
 - Compact IDs expand symmetrically when needed so rows remain unique within the loaded task graph; unresolved collisions remain visibly ambiguous rather than silently choosing one task.
 - Id resolution accepts full UUIDs, legacy unique prefixes, displayed compact IDs with ellipsis, and compact IDs without ellipsis when unambiguous.
 - Tests cover sibling tasks with shared leading prefixes and differing suffixes, including the generated plan-task pattern that exposed the issue.
-
 ** DONE [#B] Add ot UUID generation command for authored plan tasks :cli:workflow:
 CLOSED: [2026-05-19 Tue 10:38]
 :PROPERTIES:
@@ -274,7 +274,6 @@ Acceptance criteria:
 - Generated IDs are UUIDv4 values from the same implementation path used by ot create; no hand-authored or sequential IDs are needed in plans.
 - org-plan and org-tasks guidance tells agents to obtain plan-task CUSTOM_ID values from ot rather than inventing them in prose.
 - Tests prove --count emits the requested number of unique UUIDv4 values and machine output uses the org-tasks/v1 envelope.
-
 ** DONE [#C] Add guardrails for patterned or non-v4 task IDs :doctor:protocol:
 CLOSED: [2026-05-19 Tue 10:50]
 :PROPERTIES:
@@ -292,7 +291,6 @@ Acceptance criteria:
 - The warning explains that task IDs should come from ot create or ot uuid, not from agent-invented examples.
 - Existing historical tasks are warnings rather than errors so legacy records remain loadable.
 - Tests cover shared-prefix/sequential-suffix IDs and valid random UUIDv4 IDs.
-
 * Implementation
 - Added prefix-aware resolution in =org-tasks.task=: exact UUIDs win first, prefixes shorter than four chars return ={:none true}=, and unique / ambiguous prefixes return explicit resolver maps. Top-level-only operations use a separate resolver over root tasks only.
 - Routed id-taking CLI commands through shared command helpers. =show=, =select=, =status=, =publish=, =unpublish=, =archive=, =record path/create=, =issue=, =blocker=, =ready=, and =handoff= now accept full UUIDs or unique prefixes while persisting / returning canonical full UUIDs.

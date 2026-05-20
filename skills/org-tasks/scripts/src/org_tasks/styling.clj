@@ -80,9 +80,6 @@
 (defn selected-marker [opts text]
   (styled opts :yellow text))
 
-(defn short-id [opts text]
-  (styled opts :gray text))
-
 (defn gutter
   "Style a left-margin tree-drawing prefix (box-drawing characters).
   Rendered subtly so the structure reads without competing with the

@@ -317,7 +317,7 @@
         (is (= "First" (get-in r [:task :summary])))
         (is (= "A"     (get-in r [:task :priority])))))))
 
-(defn- bootstrap-short-id-graph! [root]
+(defn- bootstrap-prefix-graph! [root]
   (spit (str (fs/path root "TASKS.setup.org")) setup-org-preamble)
   (spit (str (fs/path root "TASKS.org"))
         (str tasks-org-preamble
@@ -336,10 +336,10 @@
              ":END:\n"))
   (spit (str (fs/path root "TASKS.local.org")) "#+SELECTED:\n"))
 
-(deftest show-by-short-id
+(deftest show-by-id-prefix
   (with-temp-dir
     (fn [root]
-      (bootstrap-short-id-graph! root)
+      (bootstrap-prefix-graph! root)
       (let [{:keys [out exit]}
             (run-cli! "--root" root "--format" "json" "show" "beef1111")
             r (parse-json-result out)]
@@ -348,10 +348,10 @@
         (is (= "beef1111-2222-4333-8444-555555555552"
                (get-in r [:task :id])))))))
 
-(deftest short-id-ambiguity-errors
+(deftest id-prefix-ambiguity-errors
   (with-temp-dir
     (fn [root]
-      (bootstrap-short-id-graph! root)
+      (bootstrap-prefix-graph! root)
       (let [{:keys [err exit]}
             (run-cli! "--root" root "--format" "json" "show" "abcd")
             e (parse-json-error err)]

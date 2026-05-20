@@ -11,7 +11,7 @@ selection/status/archive/publish/unpublish use
 `ot select|status|archive|publish|unpublish`, `insertTaskIntoFile` and the
 interactive overlay create flow shell through `ot create`, and the overlay task
 graph loads from `ot list --format json`. The extension always passes canonical
-full UUIDs to `ot`; CLI short-id resolution is a shell-user convenience and does
+full UUIDs to `ot`; CLI prefix resolution is a shell-user convenience and does
 not affect overlay or tool-call behaviour.
 
 `ot` discovery order is:
@@ -473,7 +473,7 @@ change-record files on demand is sub-second on a modern SSD.
   re-sort post-hoc.
 
 The `content[].text` view renders one line per row
-(`[STATUS] short-id  [#P] summary :tags: … (+ctx)`) for ad-hoc
+(`[STATUS] id-prefix  [#P] summary :tags: … (+ctx)`) for ad-hoc
 inspection, capped at 60 rows so the chat view stays readable; the
 full row array always lives in `details.rows`.
 

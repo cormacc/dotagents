@@ -135,9 +135,6 @@ directly on that task. `ot list` deduplicates those large strings into its
       "sourceContent": "raw TASKS.org content",
       "effectiveSourceContent": "content plus expanded setupfiles"
     }
-  },
-  "shortIds": {
-    "1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0001": "1c5f…0001"
   }
 }
 ```
@@ -148,11 +145,11 @@ directly on that task. `ot list` deduplicates those large strings into its
 - `sources` is keyed by absolute source path and carries file content once per
   path so UI clients can resolve link templates or preserve org text without
   duplicating large strings on every task row.
-- `shortIds` maps every full `:CUSTOM_ID:` in the loaded graph to a compact
-  display alias of the shape `prefix…suffix`. Edges expand symmetrically until
-  every alias is unique within the graph. Any value in this map is accepted by
-  id-taking commands (`show`, `status`, `select`, etc.) as a shorthand for the
-  full id.
+- `--format text` renders an `id` column showing the first 8 characters of
+  each `:CUSTOM_ID:`. The prefix is pasteable into any id-accepting command
+  because it satisfies the ≥ 4-char minimum; collisions surface as
+  `ambiguous-id` at lookup time (see `ot doctor`'s `:patterned-sibling-ids`
+  for prevention).
 
 Options:
 
@@ -170,11 +167,8 @@ Options:
 
 ### `ot show <id>`
 
-`<id>` may be a full `:CUSTOM_ID:`, a compact short-id of the form
-`prefix…suffix` (the `…` is also accepted as ASCII `...`), or any unique
-prefix of at least four characters. Ambiguous values fail with
-`ambiguous-id`. The success payload echoes the resolved compact alias as
-`shortId`.
+`<id>` may be a full `:CUSTOM_ID:` or any unique prefix of at least four
+characters. Ambiguous values fail with `ambiguous-id`.
 
 ```json
 "result": {
@@ -411,7 +405,8 @@ or lacking `* Summary`) or `null` (task has no `#+IMPORT:` at all).
 
 Generate one or more UUIDv4 values for use as `:CUSTOM_ID:` on hand-authored
 task blocks. Prefer this over inventing IDs in prose; sequential / shared-prefix
-IDs collide on short-id display and may be flagged by `ot doctor`.
+IDs produce ambiguous resolution and are flagged by `ot doctor`'s
+`:patterned-sibling-ids` check.
 
 ```json
 "result": {

@@ -60,7 +60,7 @@ ot uuid --count 3
 
 Use `--format json` for machine callers. JSON/EDN commands use schema `org-tasks/v1`: `{ok,schema,result,warnings}` on success and `{ok:false,schema,error}` on failure.
 
-ID-accepting commands accept full UUIDs, compact `prefix…suffix` aliases displayed by `ot list` / `ot scan`, and legacy unique prefixes of at least four characters. Ambiguous short IDs fail with `ambiguous-id` and list candidates.
+ID-accepting commands accept full UUIDs or any unique `:CUSTOM_ID:` prefix of at least four characters (the 8-char prefix shown in `ot list` / `ot scan` is pasteable directly). Ambiguous values fail with `ambiguous-id` and list candidates.
 
 Install for third-party harnesses:
 

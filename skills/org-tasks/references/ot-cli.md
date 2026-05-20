@@ -63,7 +63,7 @@ ot handoff get|set|clear <id> [...]
 ot uuid --count 3
 ```
 
-ID-accepting commands accept full `:CUSTOM_ID:` values, compact `prefix…suffix` aliases displayed by `ot list`/`ot scan` (unicode `…` and ASCII `...` both work), or legacy unique prefixes of at least four characters. Ambiguous short IDs fail with `ambiguous-id` and include matching candidates.
+ID-accepting commands accept full `:CUSTOM_ID:` values or any unique prefix of at least four characters. `ot list` and `ot scan` print the first 8 characters of each id as an `id` column; that prefix can be pasted back into any id-accepting command. Ambiguous values fail with `ambiguous-id` and include matching candidates.
 
 ## Change-record scaffolding
 

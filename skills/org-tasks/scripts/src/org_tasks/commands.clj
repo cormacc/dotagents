@@ -291,9 +291,17 @@
               (apply str (concat intermediate-segs [self-seg]))))))
       (range n) rows)))
 
-(defn- format-list-row [opts short-ids tree-prefix row selected-id]
-  (let [short-id (when (:id row) (get short-ids (:id row)))
-        sel-mark (if (and (:id row) (= (:id row) selected-id))
+(defn- id-prefix
+  "First 8 characters of `id`, or `--------` when no id is present.
+  Pasteable into id-accepting commands because it satisfies the
+  ≥ 4-char prefix minimum."
+  [id]
+  (if (and id (>= (count id) 8))
+    (subs id 0 8)
+    "--------"))
+
+(defn- format-list-row [opts tree-prefix row selected-id]
+  (let [sel-mark (if (and (:id row) (= (:id row) selected-id))
                    (style/selected-marker opts "★")
                    " ")
         local    (if (:local row) (style/local-marker opts "⊠") " ")
@@ -307,7 +315,7 @@
     (str sel-mark local " "
          (style/gutter opts tree-prefix)
          status " "
-         (style/short-id opts (or short-id "--------")) "  "
+         (style/styled opts :gray (id-prefix (:id row))) "  "
          prio (:summary row) tags)))
 
 (defn list-cmd [{:keys [opts]}]
@@ -339,7 +347,6 @@
                                           level-cap))
                                     filtered)))
                      filtered)
-        short-ids  (task/build-short-ids tasks)
         tree-prefixes (compute-tree-prefixes kept)]
     (out/emit-result
       opts
@@ -348,9 +355,8 @@
        :selectedId selected-id
        :files files
        :sources sources
-       :shortIds short-ids
-       :text/lines (cons "   STATUS    short-id   task"
-                         (map #(format-list-row opts short-ids %2 %1 selected-id)
+       :text/lines (cons "   STATUS    id        task"
+                         (map #(format-list-row opts %2 %1 selected-id)
                               kept tree-prefixes))})))
 
 ;; ── ot show ─────────────────────────────────────────────────────────
@@ -372,20 +378,15 @@
 
       :else
       (let [t (resolve-required-id tasks id opts)
-            wire (task/task->wire t)
-            short-ids (task/build-short-ids tasks)
-            short (get short-ids (:id wire))]
+            wire (task/task->wire t)]
         (out/emit-result
           opts
           {:task wire
-           :shortId short
            :text/lines
            [(str (style/status opts (:status wire)) " "
                  (if (:priority wire) (str (style/priority opts (:priority wire)) " ") "")
                  (:summary wire))
-            (str "  id        " (:id wire)
-                 (when (and short (not= short (:id wire)))
-                   (str "  (" (style/short-id opts short) ")")))
+            (str "  id        " (:id wire))
             (str "  source    " (:sourcePath wire))
             (when (:importPath wire)
               (str "  plan      " (or (:importRaw wire) (:importPath wire))))
@@ -708,9 +709,8 @@
                   (vswap! cache assoc abs content)
                   content)))))))))
 
-(defn- scan-row->text [opts short-ids row]
-  (let [short-id (when (:id row) (get short-ids (:id row)))
-        prio    (if (:priority row) (str (style/priority opts (:priority row)) " ") "")
+(defn- scan-row->text [opts row]
+  (let [prio    (if (:priority row) (str (style/priority opts (:priority row)) " ") "")
         tags    (if (seq (:tags row)) (str " " (style/tag-cluster opts (:tags row))) "")
         record  (cond
                   (nil? (:recordSummary row)) ""
@@ -718,7 +718,8 @@
                   (if (:hasContext row) " … (+ctx)" " …")
                   :else " (no summary)")]
     (str "[" (style/status opts (:status row) (:status row)) "] "
-         (style/short-id opts short-id) "  " prio (:summary row) tags record)))
+         (style/styled opts :gray (id-prefix (:id row))) "  "
+         prio (:summary row) tags record)))
 
 (defn scan-cmd [{:keys [opts]}]
   (let [{:keys [project-root tasks files]} (load-context opts)
@@ -734,9 +735,8 @@
                         (coerce-seq (:tag opts)))
                 :max-body-chars (or (:max-body-chars opts)
                                     scan/default-max-body-chars)})
-        short-ids (task/build-short-ids (concat tasks archived))
         cap 60
-        head-lines (mapv #(scan-row->text opts short-ids %) (take cap rows))
+        head-lines (mapv #(scan-row->text opts %) (take cap rows))
         tail (when (> (count rows) cap)
                (str "… " (- (count rows) cap) " more row(s) in details.rows"))]
     (out/emit-result
