@@ -1,0 +1,136 @@
+#+TITLE: Evaluate pi-hermes-memory plugin
+#+DATE: 2026-05-21 Thu
+#+PARENT: [[task:5d36628d-818d-4823-a8b4-723b8e3145e9][Evaluate pi-hermes-memory plugin]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Summary
+Initial review of [[https://github.com/chandra447/pi-hermes-memory][=pi-hermes-memory=]] (v0.7.11, ~8.5k LoC TS, peer dep =@earendil-works/pi-coding-agent >=0.74.0=, runtime dep =better-sqlite3=) from two angles: security posture and viability as a complement to =org-tasks=. No decision yet — task remains open pending a hands-on trial. Findings below are from source-only review of =src/**= in =~/dotfiles/agents/pi/pi-hermes-memory= (clone at commit reviewed 2026-05-21).
+
+** Decisions
+- /None yet./ Open for hands-on trial before adopt/reject. See =* Open questions=.
+
+** Provisional findings — security
+- Architecture: two writers (LLM via =memory= / =skill= tools; out-of-band =pi -p --no-session= subprocess spawned by background-review + session-flush handlers). State on disk under =~/.pi/agent/pi-hermes-memory/= as plain markdown plus a SQLite mirror with FTS5 indexes for memories and past Pi sessions. Default =memoryMode= is =policy-only= (only a policy paragraph injected; memory pulled on demand via =memory_search=); =legacy-inject= is opt-in.
+- Good defaults / sound primitives:
+  - =pi.exec("pi", ["-p", "--no-session", prompt], …)= — args as array, no shell, no OS-level command injection.
+  - SQL fully parameterized (=.prepare(...).run(?, ?, …)=). No string concatenation of user data into SQL.
+  - Atomic writes via temp file + =fs.rename()= in the same directory (avoids =EXDEV=).
+  - Memory blocks wrapped in =<memory-context>= XML fences with explicit "NOT new user input" guard at injection; frozen snapshot at session start (also preserves prompt caching).
+  - Secret deny-list catches =sk-ant-=, =sk-or-v1-=, =sk-= (OpenAI), =AKIA…=, =ghp_= / =ghu_=, Slack tokens, Notion, =Bearer …=, =-----BEGIN … PRIVATE KEY-----=, plus env var names; threat deny-list catches the obvious "ignore previous instructions / cat .env / curl … $TOKEN / authorized_keys / ~/.ssh" strings on memory writes.
+  - User-controlled paths (=memoryDir=, =projectsMemoryDir=) normalized via dedicated helpers; config lives in user's homedir so traversal isn't a privilege boundary on a single-user box.
+- Concerns:
+  1. *Prompt-injection by design.* Background review / flush hand the full conversation snapshot (including anything =cat=-ed, web-fetched, or returned by MCP tools) to a child Pi that then makes real tool calls. =MEMORY_THREAT_PATTERNS= is checked only on the final memory-write payload, not the review prompt itself.
+  2. *Deny-lists trivially bypassable.* Threat regexes are literal English (=/ignore\s+(previous|all|above|prior)\s+instructions/i=). Paraphrase, base64, hex, unicode lookalikes, zero-width chars all bypass. Original Hermes had an =_INVISIBLE_CHARS= strip step; not seen in the TS port (worth confirming).
+  3. *Secret-scan coverage gaps.* Misses GCP service-account JSON, Stripe (=sk_live_= / =rk_live_=), JWT triples, Azure connection strings, Heroku, Twilio, Postgres URIs with embedded passwords, and any high-entropy generic secret. No entropy heuristic. Useful hygiene, not a credential gate.
+  4. *FTS5 escape backdoor.* =escapeFts5Query= early-returns when the query contains =\b(OR|AND|NOT|NEAR)\b=, passing raw FTS5 syntax through. Single-user DB so real risk is low; worth noting.
+  5. *Skill writes appear to bypass =scanContent=.* The =SkillStore.create / edit / patch= path writes =SKILL.md= files (frontmatter + body) without running the same threat/secret scanner used for memory writes. Skills load as Pi instructions, not as fenced context — this is the more dangerous of the two write paths. Largest concrete gap; would be the first PR to send upstream.
+  6. *User-supplied regex → ReDoS.* =correctionStrongPatterns= / =correctionWeakPatterns= / =correctionNegativePatterns= / =correctionDirectiveWords= compiled from config strings. Catastrophic-backtracking patterns DoS the correction detector. Self-inflicted on a single-user box.
+  7. *Fire-and-forget shutdown subprocess.* =session_shutdown= schedules =flush(ctx, undefined, 10000).catch(…)= without awaiting. Orphan =pi -p= processes possible on SIGKILL; every Ctrl-D may spawn a ~10s LLM call.
+- Verdict: defaults are conservative (policy-only injection, frozen snapshot, parameterized SQL, atomic writes, content scanner on memory writes). The architectural premise — "have a second Pi continuously read your conversation and persist learnings" — is inherently an attack surface; mitigations here are reasonable hardening, not guarantees. Safe to run on a single-user dev box; don't enable in environments where adversary-controlled content gets =cat=-ed into the conversation; close the skill-scan gap before relying on it.
+
+** Provisional findings — viability vs =org-tasks=
+Different problems; largely *orthogonal*.
+
+| Axis            | =org-tasks=                                          | =pi-hermes-memory=                                                |
+|-----------------+------------------------------------------------------+-------------------------------------------------------------------|
+| Primary unit    | Discrete task with lifecycle                         | Free-form fact / preference / failure                             |
+| Author          | Human (mostly), agent via =tasks_insert_task=        | Agent (mostly), human via =/memory-*= commands                    |
+| Location        | In-repo (=TASKS.org=, =TASKS.local.org=, =.archive=) | Out-of-tree (=~/.pi/agent/pi-hermes-memory/=)                     |
+| Versioned       | Yes (git)                                            | No (per-machine, agent-curated)                                   |
+| Shared with collaborators | Yes                                        | No                                                                |
+| Lifecycle       | Explicit state machine                               | Implicit (aging, auto-consolidation, FIFO evict)                  |
+| Retrieval       | Summary → Context → Plan → Implementation            | =memory_search= (FTS5), =session_search=, on-prompt recent failures |
+| Best for        | "What work, in what state, with what history"        | "Who is the user, what did we learn, what failed last time"       |
+
+Genuine complements (read-side wins):
+1. =USER.md= — communication style, name, preferences, standing instructions. No analogue in =org-tasks=.
+2. Failure memory + auto-injection of recent failures (last 7d, 5 entries). Survives across projects; doesn't need a task to be open.
+3. Session search (FTS5 across past Pi sessions). =org-tasks= doesn't index conversations.
+4. Background learning loop + session flush — automation we don't have today.
+5. Structured skill patch/update lifecycle, modest (we already have =~/.agents/skills/=).
+
+Overlaps / conflicts:
+1. *Project conventions split-brain.* "Use pnpm not npm" could land in three places: =AGENTS.md= (versioned, deterministic, in-tree), =TASKS.org= =* Context= (versioned, task-scoped), or =~/.pi/agent/projects-memory/<project>/MEMORY.md= (unversioned, agent-curated). Without a rule the agent picks one nondeterministically. Worse: project memory is keyed on directory basename, so two checkouts with the same dir name share state.
+2. *Skill ownership unclear.* Hermes manages skills in its own directory; Pi also discovers from =~/.agents/skills/= and project-local skill dirs. Same loader, different ownership.
+3. *Correction detector vs =self-improvement= skill.* Both fire on "no/wrong/actually/stop". =self-improvement= already routes durable agent-config corrections to TASKS.org or dotagents/dotfiles. Need a precedence rule, or disable =correctionDetection=.
+
+Operational cost:
+- Default =nudgeInterval: 10= ⇒ one extra =pi -p= invocation roughly every ten turns.
+- =flushOnShutdown: true= ⇒ ~10s =pi -p= on every Ctrl-D.
+- Both add token spend per session that is hard to attribute back at usage time.
+
+** Suggested trial config (if we adopt)
+Conservative first-pass at =~/.pi/agent/hermes-memory-config.json= — keep the read-side wins, disable the costly write loops until we have a feel for value vs spend:
+#+BEGIN_SRC json
+{
+  "memoryMode": "policy-only",
+  "memoryPolicyStyle": "compact",
+  "reviewEnabled": false,
+  "flushOnCompact": true,
+  "flushOnShutdown": false,
+  "correctionDetection": false,
+  "failureInjectionEnabled": true,
+  "failureInjectionMaxAgeDays": 7,
+  "failureInjectionMaxEntries": 5
+}
+#+END_SRC
+
+Hard rules to add to =AGENTS.md= so the two systems don't fight:
+- Project conventions shared with collaborators → =AGENTS.md=, never project-scoped hermes memory.
+- Per-task design state → =TASKS.org= change-records (=org-tasks= / =org-plan=).
+- User preferences / cross-project tool quirks / failures → hermes memory (=USER.md= / global =MEMORY.md= / =failures.md=).
+- Hand-authored skills → =~/.agents/skills/=; hermes =skill= tool stays disabled for human authors, or used only when the agent proposes a skill that is then human-promoted into =~/.agents/skills/=.
+
+** Follow-ups
+- Decide adopt / reject after a hands-on trial period (see =* Open questions=).
+- If adopting: file upstream PR to route skill writes through =scanContent=.
+- If adopting: verify whether the TS port carries the original Hermes =_INVISIBLE_CHARS= strip step; add if missing.
+
+* Context
+Source: this analysis was produced from a one-shot review of =~/dotfiles/agents/pi/pi-hermes-memory/src/**= on 2026-05-21, prompted by the question "review this extension from security and viability angles". No runtime trial yet. The repository is currently sitting in =dotfiles/agents/pi/= as a candidate, not installed.
+
+Why now: the project already has the =org-tasks= / =org-plan= protocol for explicit task and design memory, and a =self-improvement= skill that routes agent-config corrections. =pi-hermes-memory= would add an ambient, agent-curated memory layer on top. The orthogonality is plausible but the overlaps need an explicit rule before adoption, otherwise we get split-brain memory.
+
+* Plan
+
+** TODO [#B] Hands-on trial with conservative config
+:PROPERTIES:
+:CUSTOM_ID: 7a9e1f3c-2b54-4d6e-9c11-1b3e8f4d2a76
+:CREATED: [2026-05-21 Thu]
+:END:
+Acceptance criteria:
+- Extension installed in a sandbox =pi= session (not the daily-driver agent) with the conservative config in =* Summary=.
+- Two weeks of real use across at least three distinct projects.
+- Captured: token-spend delta (rough), false-positive rate on secret/threat scanner, value of failure-memory recall, any split-brain incidents between =TASKS.org= and hermes memory.
+
+** TODO [#B] Decide adopt / reject / fork
+:PROPERTIES:
+:CUSTOM_ID: 4c8d6b27-5f31-49a8-bd62-9e7c1a8f3d54
+:CREATED: [2026-05-21 Thu]
+:BLOCKED-BY: 7a9e1f3c-2b54-4d6e-9c11-1b3e8f4d2a76
+:END:
+Acceptance criteria:
+- Decision recorded under =** Decisions= in =* Summary=, with rationale citing trial data.
+- If adopt: precedence rules added to =AGENTS.md=; trial config promoted to default.
+- If reject: durable insights (e.g. failure-memory pattern) folded back into either =org-tasks= or a smaller bespoke extension.
+- If fork: new task created for the fork scope.
+
+* Implementation
+/Not started — pending hands-on trial./
+
+* Validation
+/Not started — pending hands-on trial./
+
+* Open questions
+
+** OPEN Does the read-side value (USER.md + failure recall + session FTS5) justify the write-side cost (background review + flush) and the prompt-injection surface increase?
+Needs the hands-on trial to answer.
+
+** OPEN Where do project conventions live — =AGENTS.md=, =TASKS.org= =* Context=, or hermes project memory?
+Strawman in =* Summary=: shared/versioned → =AGENTS.md=; per-task → change-record; per-user ambient → hermes. Decide and codify in =AGENTS.md= if we adopt.
+
+** OPEN Skills ownership — hand-authored only in =~/.agents/skills/=, or let hermes maintain a subset?
+Default lean: hand-authored only; hermes =skill= tool stays disabled. Revisit if the agent-proposed skill flow turns out to be valuable.
+
+** OPEN Does the TS port carry the Hermes =_INVISIBLE_CHARS= normalization, or did it drop?
+Source review didn't surface it; needs a focused grep before any production use.

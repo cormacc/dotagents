@@ -124,6 +124,16 @@ Acceptance:
 :END:
 Follow-on from [[plan:2026-05-14-evaluate-vulpea-org-memory.org][vulpea evaluation]]. Prototype an Emacs-local tasks side panel only after deciding the minimum ID mirror/custom extractor bridge needed to make org-memory tasks first-class vulpea notes.
 
+** TODO [#C] Evaluate pi-hermes-memory plugin :pi:memory:
+:PROPERTIES:
+:CUSTOM_ID: 5d36628d-818d-4823-a8b4-723b8e3145e9
+:CREATED: [2026-05-21 Thu 16:01]
+:END:
+:LOGBOOK:
+- Created [2026-05-21 Thu 16:01]
+:END:
+#+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
+
 * Fixes
 
 ** TODO Local tasks duplicated in overlay when selected? :bug:pi:

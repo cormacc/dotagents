@@ -12,8 +12,5 @@
     "npm:pi-zellij-tools",
     "git:github.com/ramblurr/pi-nrepl@v0.1.0",
     "git:github.com/lemonade-sdk/lemonade-pi-plugin@main"
-  ],
-  "lastChangelogVersion": "0.75.3",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.5"
+  ]
 }
