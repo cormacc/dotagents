@@ -82,22 +82,6 @@ Re-examine the self-improvement skill against the org-memory protocol (org-tasks
 - whether anything in the dev-agent-backlog HTML summary (design/log/2026-05-01-dev-agent-backlog-review-summary.html) should be borrowed for the self-improvement skill specifically
 
 
-** STARTED [#C] Rewrite terminal extension :pi:
-:PROPERTIES:
-:CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af
-:STARTED: [2026-05-22 Fri 19:39]
-:END:
-:LOGBOOK:
-- State "STARTED" from "TODO" [2026-05-22 Fri 19:39]
-:END:
-#+IMPORT: [[plan:2026-05-22-rewrite-terminal-extension.org]]
-Most of the terminal extension I wrote previously was irrelevant.
-We want to be able to do the following with tmux
-
-Both spawn AND watch should either
-- create a new pane within the tmux frame
-
-
 ** TODO [#D] Extract org-mode tooling to a dedicated pi extension with a tree-sitter foundation :pi:extension:org:refactor:
 :PROPERTIES:
 :CUSTOM_ID: f361c429-45dd-4364-9fa3-1f77bd7c600a

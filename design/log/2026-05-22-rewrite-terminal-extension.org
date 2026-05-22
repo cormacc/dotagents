@@ -1,159 +1,128 @@
 #+TITLE: Rewrite terminal extension
 #+DATE: 2026-05-22 Fri
-#+PARENT: [[task:984677a0-7d87-4ade-bacb-4bf7fe7796af][Rewrite terminal extension]]
+#+PARENT: [[archive:984677a0-7d87-4ade-bacb-4bf7fe7796af][Rewrite terminal extension]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
 
-Build a small tmux-focused pi extension that assumes pi is already running inside tmux and exposes one grouped slash command, `/tmux`, for spawning sibling windows and temporarily joining one of those windows below the current pi pane. The extension should not try to replace a terminal multiplexer; it should be a thin, predictable tmux command layer with clear failure messages when `$TMUX` or `tmux` is unavailable.
+Shipped a backend-neutral TTY pi extension at `pi/extensions/tty/` with `/t` as the grouped slash command. The current backend is tmux; naming and user-facing docs leave room for a future zellij backend. The extension supports spawning sibling windows, watching long-running processes, visually joining/monitoring windows below the pi pane, breaking them back out, killing active monitors/target windows, listing windows, and capturing pane output through agent tools.
 
 ** Decisions
-- Implement as a pi extension under `pi/extensions/tmux/` (directory layout: `index.ts` + `README.md`; no `package.json` unless npm deps later become necessary). Prompt templates/skills cannot reliably perform live tmux side effects or maintain joined-pane state.
-- Use canonical slash command `/tmux <subcommand>`. Committed subcommand surface: `spawn`, `watch`, `join`, `break`, `list`, `tail`.
-- Command args after the subcommand are joined into a single shell command line and handed to tmux (e.g. via `tmux new-window <shell-cmd>`); no argv parsing beyond the subcommand split. Quoting expectations match `!`-bash usage.
-- `/tmux watch <cmd>` runs in a non-interactive shell wrapper. The parent wrapper ignores SIGINT, but the child command runs in a subshell that restores default SIGINT handling: `trap '' INT; (trap - INT; sh -c "$cmd"); status=$?; …; sleep infinity`. First Ctrl-C cancels the user command; second Ctrl-C terminates the wrapper and closes the window.
-- Window name for `spawn`/`watch` = the trimmed command truncated to 20 chars, with tmux `automatic-rename` disabled on the new window so child processes do not overwrite it.
-- Multi-pane target windows are refused for `/tmux join` initially. Moving only the active pane out of a multi-pane window is surprising; revisit only if a real use case appears.
-- Project-local extension only. Not registered in the root `package.json` `pi.extensions` array for `@cormacc/agent-org-memory`, because tmux integration is out of scope for the org-memory package.
-- Pane output is in scope. The extension records the `pane_id` (`%N`) and `window_id` of each `spawn`/`watch` window it creates, exposes `tmux_list` so the agent can discover known panes/windows, and exposes `tmux_capture` so the agent can read pane output without visually joining the pane. `tmux_capture` may default to the latest watched pane for the current pi pane when target is omitted.
-- Ships a companion skill at `skills/pi-tmux/SKILL.md` registered via the extension's `resources_discover` hook (mirrors how the org-memory extensions ship their skills). The extension provides capability; the skill teaches the agent when to use spawn vs watch vs capture, and the subagent-via-spawn pattern.
-- Launching a sibling pi instance is a first-class documented pattern using the generic `/tmux spawn` (e.g. `/tmux spawn pi --model <m>`). No dedicated `/tmux subagent` subcommand initially; revisit if a fixed shape emerges. Cross-references `pi-intercom` for talking to the spawned instance.
+- User-facing command is `/t <subcommand>` rather than the original `/tmux`; long and short subcommands are both supported (`w|watch`, `s|spawn`, `j|join`, `m|monitor`, `k|kill`, `b|break`, `l|list`, `t|tail`).
+- Agent tools are backend-neutral: `tty_list` and `tty_capture`.
+- `/t watch` creates a tmux window, runs a Node-based watch wrapper, joins the window below pi, and keeps focus in the pi pane.
+- `/t monitor` is join-with-focus-preserved for existing single-pane target windows.
+- `/t kill` with no argument targets the currently joined/monitored pane; `/t kill <numeric>` treats numeric targets as window indices.
+- Join/break state remains in-memory keyed by the pi pane id; explicit pane ids remain the recovery path after reload/restart.
+
+** Shipped
+- Extension: `pi/extensions/tty/{index.ts,helpers.ts,index.test.ts,test.sh,README.md}`.
+- Skill: `pi/skills/pi-tty/SKILL.md`, registered via `resources_discover`.
+- Slash command: `/t` dispatching through `tty:*` events.
+- Tools: `tty_list`, `tty_capture`.
+- Tests and docs updated for short aliases and the tmux-backed tty naming.
+
+** Gotchas
+- `tmux new-window` switches focus to the new window. Any follow-up join/monitor operation must carry the saved pi pane context from before spawning.
+- Cleanup after Ctrl-C can race with pane/window disappearance; kill cleanup ignores tmux “can't find pane/window” errors while preserving real failures.
+- The watch wrapper was implemented as a Node one-liner rather than the original shell-trap sketch because non-interactive shell traps closed panes too early in smoke testing.
 
 * Plan
 
-** TODO Confirm tmux primitives against a live session
+** DONE Confirm tmux primitives against a live session
+CLOSED: [2026-05-24 Sun]
 :PROPERTIES:
 :CUSTOM_ID: 81aa0839-84e8-4014-8b21-19c00818aea1
 :END:
-Acceptance criteria:
-- Session/window/pane discovery works from inside pi's current tmux pane using `$TMUX` plus `tmux display-message`/`list-*`; stale `$TMUX` (env set, server gone) is detectable and reported with an actionable error.
-- Prototype commands prove `new-window`, `join-pane -s <target>`, and `break-pane` behaviour for the intended layout, including the case where the target window has multiple panes (decide: pick the active pane vs refuse — capture the decision in `* Implementation`).
-- The watch wrapper is verified end-to-end against a real tmux window for both clean exit and Ctrl-C paths. Required shape: parent wrapper ignores SIGINT; child command runs in a subshell that restores default SIGINT handling; after the child exits the wrapper prints status and waits in `sleep infinity` until the second Ctrl-C closes the window.
+Acceptance criteria met:
+- Context discovery reports missing/stale tmux with actionable errors.
+- `new-window`, `join-pane`, and `break-pane` behaviour validated for intended layout.
+- Multi-pane join targets are refused.
+- Watch wrapper Ctrl-C lifecycle validated.
 
-** TODO Implement `/tmux` extension command and tmux helpers
+** DONE Implement `/t` extension command and tmux helpers
+CLOSED: [2026-05-24 Sun]
 :PROPERTIES:
 :CUSTOM_ID: 2566e881-0eea-4a44-865e-de8d229450a9
 :END:
-Acceptance criteria:
-- New extension lives at `pi/extensions/tmux/index.ts` with a companion `README.md`.
-- Command fails fast with actionable messages when not inside tmux or when `tmux` is missing.
-- `tmux:spawn`, `tmux:watch`, `tmux:join`, `tmux:break`, `tmux:list`, and `tmux:tail` event listeners are the single action path; `/tmux` only parses args and emits events.
-- Shell arguments are passed through safely enough for user-authored commands; implementation avoids accidental command mangling and documents quoting expectations.
-- `resources_discover` registers `skills/pi-tmux/SKILL.md` when the extension is loaded from this checkout; path resolution is robust relative to the extension source location.
+Acceptance criteria met:
+- Extension lives at `pi/extensions/tty/` with README and helper/test files.
+- `/t` parses subcommands and dispatches through `tty:*` events.
+- Failure paths cover missing `$TMUX`, stale tmux, invalid targets, self-join/self-kill, and missing active monitor.
+- `resources_discover` registers `skills/pi-tty/SKILL.md` relative to extension location.
 
-** TODO Implement spawn/watch window creation
+** DONE Implement spawn/watch window creation
+CLOSED: [2026-05-24 Sun]
 :PROPERTIES:
 :CUSTOM_ID: 23fb78fd-5711-403d-9d87-b2562a588495
 :END:
-Acceptance criteria:
-- `/tmux spawn <cmd>` creates a new interactive tmux window in the current session and runs `<cmd>` via the user's shell.
-- `/tmux watch <cmd>` creates a new tmux window running the wrapper described in the Decisions block; clean exit and Ctrl-C interruption both leave output visible until a second Ctrl-C closes the window.
-- Created windows are named with the trimmed command truncated to 20 chars and have `automatic-rename` disabled on that window.
-- Spawn/watch capture and retain the new window's `pane_id` (e.g. via `tmux new-window -P -F '#{pane_id} #{window_id}'`) so subsequent capture/tail commands can target it without depending on window indices that may shift.
-- Created pane/window records are stored in extension memory keyed by current pi pane. They are surfaced in the UI notification, `/tmux list`, and the `tmux_list` agent tool.
+Acceptance criteria met:
+- `/t s|spawn <cmd>` creates a tmux window in the current cwd/session.
+- `/t w|watch <cmd>` creates a watch window, records ids, joins it below pi, and keeps focus in pi.
+- Window names are trimmed/truncated to 20 chars and automatic rename is disabled best-effort.
+- Pane/window records are stored per owner pi pane and shown via notifications/list/tooling.
 
-** TODO Implement join/break secondary-pane workflow
+** DONE Implement join/break/monitor/kill secondary-pane workflow
+CLOSED: [2026-05-24 Sun]
 :PROPERTIES:
 :CUSTOM_ID: e2c64646-0dff-43cb-ab48-8364943e9973
 :END:
-Acceptance criteria:
-- `/tmux join <window-index-or-id>` joins a single-pane target window as a secondary pane below the current pi pane (`join-pane -s <target> -t <pi-pane>`); refuses if the target is the same window as the pi pane, is not in the same session, or has multiple panes.
-- Re-running `/tmux join …` first runs the equivalent of `/tmux break` for any currently-joined secondary pane belonging to this pi pane, then joins the new target.
-- `/tmux break` returns the joined pane to its own window via `break-pane`, preserving the running process. Bare `/tmux break` uses in-memory state; `/tmux break <pane-id>` is an escape hatch after restart or state loss.
-- `/tmux list` prints the session's windows (index, name, pane count, known spawned/watched pane ids, whether currently joined to this pi pane) using `ctx.ui.notify` or a small renderer.
-- The extension tracks per-pi-pane joined-target state in memory keyed by `$TMUX_PANE`. State is not persisted across pi restarts; bare `/tmux break` after a restart is a documented no-op, but `/tmux break <pane-id>` can still operate on an explicit target.
+Acceptance criteria met:
+- `/t j|join <target>` joins single-pane targets below pi and moves focus to the joined pane.
+- `/t m|monitor <target>` joins single-pane targets below pi and keeps focus in pi.
+- Re-running join/monitor/watch breaks the previous joined pane first using the correct saved pi context.
+- `/t b|break [pane-id]` returns the joined pane to its own window and keeps focus in pi.
+- `/t k|kill [target]` stops and removes the active monitor or explicit target window, with idempotent cleanup.
 
-** TODO Provide pane output access for spawned/watched windows
+** DONE Provide pane output access for spawned/watched windows
+CLOSED: [2026-05-24 Sun]
 :PROPERTIES:
 :CUSTOM_ID: c82d0dd9-ef5d-4e8c-8fae-7fc81af1a517
 :END:
-Motivation: the main reason to `/tmux watch <cmd>` is so pi (the agent or the user) can look at the running command's output. Joining the pane visually is one path; programmatic capture is the other.
+Acceptance criteria met:
+- `/t t|tail [target] [lines]` captures recent pane output.
+- `tty_list` returns current-session windows plus known spawned/watched records for the current pi pane.
+- `tty_capture` captures explicit targets or the latest watched pane when omitted.
+- README documents scrollback limitations.
 
-Acceptance criteria:
-- `/tmux tail <window-or-pane>` slash subcommand prints the last N lines of pane output via `tmux capture-pane -p -S -<N>` (default N configurable; sensible default around 200). Accepts the same target syntax as `/tmux join`.
-- `tmux_list` pi tool returns known spawned/watched panes for the current pi pane plus the current tmux session's windows/panes, so the agent can discover capture targets without relying on UI notifications.
-- `tmux_capture` pi tool exposes the capture primitive to the agent with parameters for target pane/window id, scrollback line count, and whether to preserve escape sequences. It defaults to plain text and a bounded line count; if no target is supplied, it captures the latest watched pane for the current pi pane when one exists, otherwise returns an actionable error with guidance to call `tmux_list`.
-- Spawn/watch return the new `pane_id` to the caller (notified in the UI and stored in per-pi-pane state) so users and the agent can refer back to it by id rather than window index.
-- README documents both the slash subcommand and the tool, including the caveat that `capture-pane` only returns what is currently in the pane buffer + scrollback (no truncated-pre-scrollback history).
-- Manual smoke checklist covers: capture from an interactive `spawn` window, capture from a running `watch` window, capture from a `watch` window after the wrapped command has exited but before the second Ctrl-C.
-
-** TODO Author `pi-tmux` skill
+** DONE Author `pi-tty` skill
+CLOSED: [2026-05-24 Sun]
 :PROPERTIES:
 :CUSTOM_ID: f16b433b-10c6-443a-849f-c18cdb829aaa
 :END:
-Acceptance criteria:
-- New `skills/pi-tmux/SKILL.md` with a description that triggers on long-running processes, background work, `/tmux`, tmux pane capture, parallel pi, and "spawn a subagent / sibling pi".
-- Body covers: when to prefer `/tmux watch` over a blocking `bash` call; discovering panes via `tmux_list`; reading watched output via `tmux_capture` rather than asking the user; the spawn-a-sibling-pi pattern with model/preset examples only after verifying current pi CLI flags; cleanup (`/tmux break`, closing windows, restart caveat); cross-reference to `pi-intercom` for talking to spawned pi instances.
-- Extension registers the skill path via `resources_discover` so it is discovered automatically when the extension loads from this repo.
-- Skill passes the standard description / triggering review (see `skill-creator` skill); no overlap with `pi-intercom` ownership of intercom transport semantics.
+Acceptance criteria met:
+- `pi/skills/pi-tty/SKILL.md` covers long-running watchers, capture, join/monitor/break/kill, sibling pi spawning, and intercom handoff boundaries.
+- Skill description triggers on `/t`, tty/tmux/zellij, panes/windows, watches, background work, subagents, and output capture.
 
-** TODO Add docs and validation coverage
+** DONE Add docs and validation coverage
+CLOSED: [2026-05-24 Sun]
 :PROPERTIES:
 :CUSTOM_ID: d8485a2b-3eae-498d-b566-d04d4c706336
 :END:
-Acceptance criteria:
-- README documents assumptions (`$TMUX` required, single-session focus), each subcommand with examples, quoting expectations, the watch double-Ctrl-C semantics, the cross-restart limitation of bare `/tmux break`, and the subagent-via-`/tmux spawn pi` pattern. Exact pi CLI flags for model/preset/initial prompt are verified against `pi --help` or pi docs before being documented. README cross-references `skills/pi-tmux/SKILL.md` and `pi-intercom`.
-- Automated tests cover pure helpers: subcommand parser, watch-wrapper script construction, window-name derivation, and capture/list output shaping where feasible.
-- Manual smoke checklist lives next to the extension (e.g. `test.sh` or a README section): spawn, watch clean exit, watch Ctrl-C twice, join, join-refuses-multipane, join-replacement, bare break, explicit-pane break, list, `tmux_list`, `tmux_capture` default/latest, capture for spawn/watch/exited-watch, spawn-pi-subagent + intercom round-trip, run-outside-tmux error, stale-`$TMUX` error.
+Acceptance criteria met:
+- README documents assumptions, commands, aliases, examples, watch lifecycle, kill semantics, capture tools, restart caveat, and sibling-pi pattern.
+- Helper unit tests cover parser, aliases, watch wrapper construction, window-name derivation, quoting, and window grouping.
+- `test.sh` provides a manual smoke checklist for `/t` and the tmux backend.
 
 * Implementation
 
-- Added `pi/extensions/tmux/` with `index.ts`, `helpers.ts`, `index.test.ts`, `test.sh`, and `README.md`.
-- `/tmux` command registers the committed subcommands (`spawn`, `watch`, `join`, `break`, `list`, `tail`) and dispatches through `pi.events` listeners; event handlers use the current session context captured on `session_start`.
-- `spawn` / `watch` create tmux windows with `new-window -P -F` so `pane_id`, `window_id`, and `window_index` are retained in memory per owner pi pane. Window names are derived from the first 20 chars of the command; `automatic-rename off` is best-effort because short-lived commands may exit before the option write.
-- Watch wrapper implementation changed from the planned pure-shell trap shape to a Node one-liner after tmux smoke testing showed non-interactive shell traps still allowed the pane to close on first Ctrl-C. The Node wrapper spawns the child command, forwards the first SIGINT to the child, prints status, then exits on the second SIGINT.
-- `tmux_list` and `tmux_capture` tools expose window/pane discovery and bounded `capture-pane` output to the agent. `tmux_capture` defaults to the latest watched pane for the current pi pane when available.
-- `join` refuses same-window, cross-session, and multi-pane targets; bare `break` uses in-memory state and explicit `break <pane-id>` is available after state loss.
-- Added `skills/pi-tmux/SKILL.md` and registered it via `resources_discover`; the skill covers long-running watchers, pane capture, sibling pi spawning, and delegates inter-session communication semantics to `pi-intercom`.
-
-* Open questions
-
-** OPEN Should join/break state persist across pi restarts?
-Current decision is no — join state is in-memory keyed by `$TMUX_PANE`; after a pi restart bare `/tmux break` is a no-op. `/tmux break <pane-id>` remains available as an explicit escape hatch. Revisit persistence if this proves annoying in practice; recovery could be done by snapshotting joined target ids via `pi.appendEntry` on `session_shutdown` and rehydrating on `session_start`.
-
-** DECIDED How should this be implemented?
-:PROPERTIES:
-:DECIDED: [2026-05-22 Fri]
-:END:
-Decision: implement as a pi extension. Prompt templates/skills may document usage, but the running TUI side effects and stateful join/break behavior belong in extension code.
-
-** DECIDED Terminating watches
-:PROPERTIES:
-:DECIDED: [2026-05-22 Fri]
-:END:
-Decision: `/tmux watch <cmd>` uses a shell wrapper whose parent ignores SIGINT, but whose child command runs in a subshell with default SIGINT handling restored. Shape: `trap '' INT; (trap - INT; sh -c "$cmd"); status=$?; …; sleep infinity`. First Ctrl-C cancels the user command; second Ctrl-C terminates the wrapper and closes the window. No `read`/Enter handshake (avoids shell-portability quirks around `read` and SIGINT).
-
-** DECIDED Slash command layout
-:PROPERTIES:
-:DECIDED: [2026-05-22 Fri]
-:END:
-Decision: grouped `/tmux <subcommand>` with the committed surface `spawn | watch | join | break | list | tail`. Avoids consuming multiple global slash names while keeping help/autocomplete localized.
-
-** DECIDED Window naming
-:PROPERTIES:
-:DECIDED: [2026-05-22 Fri]
-:END:
-Decision: window name = the trimmed command truncated to 20 chars (no `spawn:`/`watch:` prefix; argv[0] alone collapses things like `bb watch:all` and `bb watch:kaocha`). Set `automatic-rename off` on the new window so child processes do not overwrite the name.
-
-** DECIDED Argument handling
-:PROPERTIES:
-:DECIDED: [2026-05-22 Fri]
-:END:
-Decision: args after the subcommand are joined into one shell command line and passed to `tmux new-window`; no argv parsing. Quoting expectations match `!`-bash.
-
-** DECIDED Packaging scope
-:PROPERTIES:
-:DECIDED: [2026-05-22 Fri]
-:END:
-Decision: project-local extension only. Not added to the root `package.json` `pi.extensions` array; the published `@cormacc/agent-org-memory` package stays focused on org-memory tooling.
+- Renamed the originally planned tmux extension to backend-neutral `tty`: `pi/extensions/tty` and `pi/skills/pi-tty`.
+- Registered `/t` with short and long subcommands; command parsing expands aliases before dispatch.
+- Replaced `tmux:*` events with `tty:*` events while retaining tmux backend helpers internally.
+- Renamed agent tools to `tty_list` and `tty_capture`.
+- `spawnWindow` records `pane_id`, `window_id`, `window_index`, window name, command, kind, creation timestamp, and owner pi pane id.
+- Watch wrapper uses Node to spawn the child command, forward the first SIGINT, print status, and exit on the second SIGINT.
+- `joinPane` accepts an optional saved pi context so `/t watch` can safely create a tmux window (which shifts focus) and then join it under the original pi pane.
+- `breakPane` also accepts an optional saved pi context so replacing an existing monitor uses the correct owner pane even after focus changes.
+- `killPane` sends two Ctrl-C signals, then removes either the active monitor pane or an explicit target window; missing-pane/window cleanup errors are ignored as successful cleanup races.
 
 * Validation
 
-- `pi --help` reviewed to verify documented sibling-pi flags: `--model`, `--provider`, `--thinking`, `--system-prompt`, `--append-system-prompt`, and positional initial messages.
-- `pi/extensions/tmux/test.sh` passes (helper unit tests + structural checks).
-- `npx --yes tsx -e "import('./pi/extensions/tmux/index.ts').then(()=>console.log('index import ok'))"` passes.
-- Mock factory smoke confirms the extension registers `/tmux`, `tmux_list`, and `tmux_capture`.
-- Manual tmux smoke: `new-window -d -P -F` returns parseable pane/window ids; `set-option -w automatic-rename off` works for live windows.
-- Manual tmux smoke: `capture-pane -p -S -10` captured output from a disposable tmux window.
-- Manual tmux smoke: generated watch wrapper keeps the pane open after first Ctrl-C, shows `[tmux watch exited SIGINT — Ctrl-C again to close]`, and closes after second Ctrl-C.
-- Skill quick validator attempted with `python skills/skill-creator/scripts/quick_validate.py skills/pi-tmux/SKILL.md`; blocked by missing local `yaml` module, so frontmatter was reviewed manually instead.
+- `cd pi/extensions/tty && bash test.sh` passes.
+- `npx --yes tsx -e "import('./pi/extensions/tty/index.ts').then(()=>console.log('index import ok'))"` passes.
+- Manual user smoke during implementation confirmed:
+  - `/t monitor <index>` joins below pi and keeps focus.
+  - `/t break` preserves focus in pi after breaking out the monitored pane.
+  - `/t kill <window-index>` removes the target and keeps focus in pi without noisy missing-pane errors.
+  - `/t watch <cmd>` spawns, joins below pi, and keeps focus after the saved-context fix.
+- `pi --help` was previously reviewed for documented sibling-pi flags: `--model`, `--provider`, `--thinking`, `--system-prompt`, `--append-system-prompt`, and positional initial messages.

@@ -634,7 +634,6 @@ CLOSED: [2026-05-19 Tue 10:51]
 We want to make the following improvements to org-tasks:
 - Update 'show' etc. to allow the use of the short-id format used by 'list'. Currently there's a disconnect.
 - Update the text output format to use the bling library for colourised output, using bling's own documented palette / closest equivalents rather than forcing parity with pi extension ANSI colours. See https://github.com/paintparty/bling.
-
 ** DONE [#C] Eliminate compact short-ids from ot CLI :org-tasks:skills:
 CLOSED: [2026-05-20 Wed 18:30]
 :PROPERTIES:
@@ -651,3 +650,21 @@ Reverse the compact short-id work shipped in 2026-05-19. Prefix
 resolution covers the interactive use case; compact-form input/display
 adds complexity that creation and lookup never benefit from since both
 are machine-owned.
+
+** DONE [#C] Rewrite terminal extension :pi:
+CLOSED: [2026-05-24 Sun 01:02]
+:PROPERTIES:
+:CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af
+:STARTED: [2026-05-22 Fri 19:39]
+:ARCHIVED: [2026-05-24 Sun 01:02]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-22 Fri 19:39]
+- State "DONE" from "STARTED" [2026-05-24 Sun 01:02]
+:END:
+#+IMPORT: [[plan:2026-05-22-rewrite-terminal-extension.org]]
+Most of the terminal extension I wrote previously was irrelevant.
+We want to be able to do the following with tmux
+
+Both spawn AND watch should either
+- create a new pane within the tmux frame
