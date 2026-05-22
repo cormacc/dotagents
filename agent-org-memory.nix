@@ -9,7 +9,7 @@
 # Excluded: co-located test files (*.test.ts, test.sh), per-extension
 # build wrappers (default.nix), unrelated extensions/skills (e.g.
 # pi-clojure, term, lsp, ext-dev.ts, …), pi-specific skills, the
-# disabled/ archive, owner-facing pi instructions (AGENTS.md), and
+# archive/ tree, owner-facing pi instructions (AGENTS.md), and
 # prompt templates.
 
 { lib
