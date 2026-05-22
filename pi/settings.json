@@ -9,8 +9,5 @@
     "npm:@latentminds/pi-quotas",
     "npm:pi-tldr",
     "git:github.com/lemonade-sdk/lemonade-pi-plugin@main"
-  ],
-  "lastChangelogVersion": "0.75.3",
-  "defaultProvider": "anthropic",
-  "defaultModel": "claude-opus-4-7"
+  ]
 }

@@ -10,33 +10,57 @@
 
 
 * Table of Contents                                       :TOC_1_gh:noexport:
+- [[#explorations][Explorations]]
 - [[#improvements][Improvements]]
 - [[#fixes][Fixes]]
 - [[#housekeeping][Housekeeping]]
 - [[#agent-feedback][Agent feedback]]
 
-* Improvements
+* Explorations
 
+** TODO [#C] Codebase intelligence tool evaluation
+:PROPERTIES:
+:CUSTOM_ID: 6d22d6ed-1fd1-46cb-965f-12d355612b53
+:END:
 
-** TODO [#C] Evaluate gortex for codebase intelligence
+*** Candidates
+
+**** Allium
+Clojure ecosystem...
+- https://juxt.github.io/allium/
+- https://plugins.eca.dev/plugins/allium/
+
+**** Gortex
 https://zzet.org/gortex/from-gitnexus-to-gortex/
 There's also gitnexus, which led me to gortex, but gortex supports more languages (including clojure).
 
-** TODO [#C] Improve terminal extension :pi:
+
+**** Clojure fork of QMD
+This looks interesting -- primarily built for markdown indexing, but supports org-mode and
+extended to support clojure source.
+
+https://github.com/nextdoc/qmd
+https://github.com/nextdoc/qmd/commit/e5ac6379d7535b907765a3b33427bca0f2f1d9b1
+
+**** Tony Kays code search (clojure)
+See https://clojurians.slack.com/archives/C06MAR553/p1779371259483489
+https://github.com/awkay/clj-code-search
+
+
+** TODO [#D] Explore web search tooling                                 :pi:search:
 :PROPERTIES:
-:CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af
+:CUSTOM_ID: c354bc27-af23-494c-a1ce-7abfa832d7cf
 :END:
-The terminal extension is only half cooked. We refactored a while ago to use tmux across all backends for pane management and do minimal pane creation/deletion using sway, kitty etc. This was a good choice, but the key bindings / workflows should be reviewed and updated - they hark back to an earlier design (or lack thereof).
-- Evaluate whether we should use zellij rather than tmux as the terminal multiplexer.
-- Redesign the slash commands and keybindings around the multiplexer workflow / semantics.
-** TODO [#D] Investigate Allium :org:
-:PROPERTIES:
-:CUSTOM_ID: a46d6a4d-e72f-4923-8472-2daf28cb29d0
-:END:
-May be a useful complement to tasks / memory system?
-- https://juxt.github.io/allium/
-- https://plugins.eca.dev/plugins/allium/
-** TODO [#D] Check out rpiv-todo overlay for ideas :org:
+*** Candidates
+**** SearX
+
+**** PiArgus
+This has some nice integration with PiDocs, and uses searx as a search backend...
+- https://github.com/GeneGulanesJr/PiArgus
+- https://github.com/searxng/searxng
+
+
+** TODO [#D] Check out rpiv-todo overlay for ideas                     :org:
 :PROPERTIES:
 :CUSTOM_ID: 60e8eff5-26a9-4d4b-8c1a-3c70321beccd
 :END:
@@ -45,26 +69,40 @@ May be a useful complement to tasks / memory system?
 - State "TODO"      from "CANCELLED"      [2026-05-08 Fri 07:41]
 :END:
 https://pi.dev/packages/@juicesharp/rpiv-todo Haven't checked it out yet, but might be a nicer overlay, with a different underlying task store.
+
 ** TODO [#D] Check out rpiv-btw :pi:
 :PROPERTIES:
 :CUSTOM_ID: ec8e6eb3-dcfc-4124-ad1c-17e88d8562b6
 :END:
 https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without polluting context... sounds useful
-** TODO [#D] Evaluate PiArgus as a replacement for search/browser tools :pi:
-:PROPERTIES:
-:CUSTOM_ID: c354bc27-af23-494c-a1ce-7abfa832d7cf
-:END:
-This has some nice integration with PiDocs, and uses searx as a search backend...
-- https://github.com/GeneGulanesJr/PiArgus
-- https://github.com/searxng/searxng
-** TODO [#C] Evaluate PiLapis as complement to org-memory :org:
+
+
+
+** TODO [#C] Explore agent memory options                              :org:
 :PROPERTIES:
 :CUSTOM_ID: df50e088-86c0-44be-8d0a-3a09fce88d2b
 :END:
-This extension looks interesting -- I'm enjoying the org-memory flow for task tracking and planning,
-but maybe there's some potential synergy here... a lower layer more immediately useful to the agent...
+I'm enjoying the org-tasks flow for task tracking and planning, but it's not really agent memory.
+Identify a lower layer more immediately useful to the agent. This is a crowded/interesting space.
+
+*** Candidates
+
+**** PiLapis
 https://github.com/GeneGulanesJr/LaPis
-** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:
+
+**** TODO [#C] Evaluate pi-hermes-memory plugin                :pi:memory:
+:PROPERTIES:
+:CUSTOM_ID: 5d36628d-818d-4823-a8b4-723b8e3145e9
+:CREATED: [2026-05-21 Thu 16:01]
+:END:
+:LOGBOOK:
+- Created [2026-05-21 Thu 16:01]
+:END:
+#+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
+
+* Improvements
+
+** `TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:
 :PROPERTIES:
 :CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
 :CREATED: [2026-05-02 Sat 12:22]
@@ -78,6 +116,15 @@ Re-examine the self-improvement skill against the org-memory protocol (org-tasks
 - whether durable lessons / solutions should land as their own org artefacts, separate change-records, or knowledge-base files
 - whether the skill should integrate with TASKS.org via spawned TODOs vs remain orthogonal
 - whether anything in the dev-agent-backlog HTML summary (design/log/2026-05-01-dev-agent-backlog-review-summary.html) should be borrowed for the self-improvement skill specifically
+
+
+** TODO [#C] Improve terminal extension                                 :pi:
+:PROPERTIES:
+:CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af
+:END:
+The terminal extension is only half cooked. We refactored a while ago to use tmux across all backends for pane management and do minimal pane creation/deletion using sway, kitty etc. This was a good choice, but the key bindings / workflows should be reviewed and updated - they hark back to an earlier design (or lack thereof).
+- Evaluate whether we should use zellij rather than tmux as the terminal multiplexer.
+- Redesign the slash commands and keybindings around the multiplexer workflow / semantics.
 ** TODO [#D] Extract org-mode tooling to a dedicated pi extension with a tree-sitter foundation :pi:extension:org:refactor:
 :PROPERTIES:
 :CUSTOM_ID: f361c429-45dd-4364-9fa3-1f77bd7c600a
@@ -127,17 +174,6 @@ Acceptance:
 - Created [2026-05-15 Fri 09:53]
 :END:
 Follow-on from [[plan:2026-05-14-evaluate-vulpea-org-memory.org][vulpea evaluation]]. Prototype an Emacs-local tasks side panel only after deciding the minimum ID mirror/custom extractor bridge needed to make org-memory tasks first-class vulpea notes.
-
-** TODO [#C] Evaluate pi-hermes-memory plugin :pi:memory:
-:PROPERTIES:
-:CUSTOM_ID: 5d36628d-818d-4823-a8b4-723b8e3145e9
-:CREATED: [2026-05-21 Thu 16:01]
-:END:
-:LOGBOOK:
-- Created [2026-05-21 Thu 16:01]
-:END:
-#+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
-
 ** TODO [#B] Review backlog.md for org-tasks inspiration :org-tasks:
 :PROPERTIES:
 :CUSTOM_ID: 19920e17-b7d0-4272-9de2-2a4353271fa9
@@ -146,7 +182,6 @@ Follow-on from [[plan:2026-05-14-evaluate-vulpea-org-memory.org][vulpea evaluati
 :LOGBOOK:
 - Created [2026-05-22 Fri 00:06]
 :END:
-
 ** TODO bb-tasks extension improvements                            :ext:bb-tasks:
 :PROPERTIES:
 :CUSTOM_ID: 04602946-0ff5-442b-a7d3-8c726b5970f6
@@ -172,7 +207,6 @@ UX
 Code cleanups
 - Asymmetric exec paths (pi.exec for discovery vs createBashToolDefinition for execution) is intentional but worth a comment.
 - MAX_NOTIFY_OUTPUT_LENGTH is now applied to the renderer's details output, not notify popups — rename or split.
-
 * Fixes
 
 ** TODO Local tasks duplicated in overlay when selected? :bug:pi:
@@ -184,7 +218,6 @@ When I do the following....
 - Create a new task in TASKS.local.org
 - In the pi tasks extension, select the new task
 The new task is initially duplicated to TASKS.org, then deleted from TASKS.local.org It's possible that I accidentally hit promote, but don't believe so. Investigate -- reproduce manually, then follow up as appropriate.
-
 ** TODO [#C] Fix `ot status` to operate on plan subtasks
 :PROPERTIES:
 :CUSTOM_ID: ff47f634-0e45-4734-b478-8a6646cfb8ae
@@ -218,7 +251,6 @@ Expected: `ot status` should locate the subtask in whichever file
 holds the matching `:CUSTOM_ID:` (record file *or* TASKS.org) and
 rewrite the keyword + emit the `CLOSED:` timestamp + LOGBOOK entry
 in place. Same node, same writer.
-
 * Housekeeping
 
 ** STARTED Create self-improvement skill :pi:
