@@ -1,15 +1,10 @@
 ---
 name: self-improvement
 description: |
-  Capture friction with agent / pi configuration (AGENTS.md, skills, prompts,
-  pi extensions, project conventions) at the moment it arises in any session
-  and route it as actionable TODO work to the right tier — project-local
-  config goes into the current project's TASKS.org; global config splits
-  between two repos via pi-intercom: dotagents (skills, pi extensions,
-  prompts, pi-side AGENTS.md) and dotfiles (Home Manager / NixOS /
-  nix-darwin wiring, agents.nix, pi settings.json, dotfiles-side
-  AGENTS.md). Use whenever the user (or you yourself) notices something
-  durable that should change about how the agent works.
+  Capture durable friction with agent/pi configuration, skills, prompts,
+  extensions, or project conventions and route it as TODO work to the right
+  project: local TASKS.org, dotagents, or dotfiles. Use whenever the user or
+  agent notices a durable improvement to how the agent works.
 ---
 
 # Self-improvement skill

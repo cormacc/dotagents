@@ -1,16 +1,16 @@
 {
   "hideThinkingBlock": true,
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "off",
   "packages": [
     "npm:@gotgenes/pi-anthropic-auth",
     "npm:pi-mcp-adapter",
     "npm:pi-web-access",
     "npm:pi-intercom",
-    "npm:context-mode",
     "npm:@latentminds/pi-quotas",
     "npm:pi-tldr",
-    "npm:pi-zellij-tools",
-    "git:github.com/ramblurr/pi-nrepl@v0.1.0",
     "git:github.com/lemonade-sdk/lemonade-pi-plugin@main"
-  ]
+  ],
+  "lastChangelogVersion": "0.75.3",
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-7"
 }

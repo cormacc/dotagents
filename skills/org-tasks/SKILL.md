@@ -1,6 +1,6 @@
 ---
 name: org-tasks
-description: "The org-mode task-memory protocol for TASKS.org and the `ot` CLI that mutates it. Use whenever the user asks to add, edit, resume, archive, select, diagnose, or review tasks; mentions TASKS.org, TASKS.local.org, TASKS.archive.org, #+IMPORT:, #+SELECTED:, :CUSTOM_ID:, :BLOCKED-BY:, :HANDOFF:, linked issues, or `ot`; or wants to bootstrap task memory in a new project. Owns file format, TODO lifecycle, selection state, archive layout, resume read order, and the task-side boundary with change-records. The change-record section contract is owned by `org-plan`."
+description: "Org-mode task memory for TASKS.org and the `ot` CLI. Use for adding, editing, resuming, selecting, archiving, diagnosing, or reviewing tasks; TASKS*.org, #+IMPORT:, #+SELECTED:, :CUSTOM_ID:, :BLOCKED-BY:, :HANDOFF:, linked issues, or `ot`; or bootstrapping task memory. Owns task file format/lifecycle; change-record planning belongs to `org-plan`."
 ---
 
 # Org-mode task management and memory protocol

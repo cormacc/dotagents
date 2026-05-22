@@ -1,6 +1,6 @@
 ---
 name: webdriver
-description: Browser-based verification and testing for the ClojureScript SPA. Covers using the webdriver_screenshot, webdriver_inspect, and webdriver_eval extension tools for ad-hoc verification, plus writing persistent etaoin test scripts for formal verification.
+description: Browser verification/testing for the ClojureScript SPA. Use webdriver_* tools for ad-hoc checks or etaoin scripts for persistent tests.
 ---
 
 # Browser WebDriver

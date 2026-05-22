@@ -18,6 +18,10 @@
 * Improvements
 
 
+** TODO [#C] Evaluate gortex for codebase intelligence
+https://zzet.org/gortex/from-gitnexus-to-gortex/
+There's also gitnexus, which led me to gortex, but gortex supports more languages (including clojure).
+
 ** TODO [#C] Improve terminal extension :pi:
 :PROPERTIES:
 :CUSTOM_ID: 984677a0-7d87-4ade-bacb-4bf7fe7796af
@@ -133,6 +137,41 @@ Follow-on from [[plan:2026-05-14-evaluate-vulpea-org-memory.org][vulpea evaluati
 - Created [2026-05-21 Thu 16:01]
 :END:
 #+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
+
+** TODO [#B] Review backlog.md for org-tasks inspiration :org-tasks:
+:PROPERTIES:
+:CUSTOM_ID: 19920e17-b7d0-4272-9de2-2a4353271fa9
+:CREATED: [2026-05-22 Fri 00:06]
+:END:
+:LOGBOOK:
+- Created [2026-05-22 Fri 00:06]
+:END:
+
+** TODO bb-tasks extension improvements                            :ext:bb-tasks:
+:PROPERTIES:
+:CUSTOM_ID: 04602946-0ff5-442b-a7d3-8c726b5970f6
+:CREATED: [2026-05-22 Fri 01:26]
+:END:
+:LOGBOOK:
+- Created [2026-05-22 Fri 01:26]
+:END:
+Findings from a quick review of pi/extensions/bb-tasks/index.ts.
+
+Bugs
+- Exit-code ignored: runBbCommand collects bash tool content but sendBbBashMessage always passes error:false on the non-throw path. pi's bash tool returns failures as content, not exceptions, so failed tasks render as successes. Surface and propagate the bash tool's failure flag.
+- Task parser regex requires whitespace + description; tasks without docstrings are dropped. Relax to ^(\S+)(?:\s+(.*))?$ and treat missing description as empty.
+- `bb tasks` header detection only filters the literal "The following tasks are available" line. Stricter approach: discard lines that don't match the task-line shape.
+
+Staleness
+- refreshTasks runs only at session_start. Editing bb.edn mid-session leaves autocomplete stale. Easiest fix: call refreshTasks() from getArgumentCompletions (return current snapshot, refresh in background). Optional: fs.watch on bb.edn.
+
+UX
+- /bb with no args lists tasks via ctx.ui.notify, which is cramped for many tasks. Reuse the custom renderer (or a sibling list renderer) instead.
+- Add `/bb info <task>` (or describe) to surface the task body via `bb tasks --help <name>` / `bb describe-task` without leaving pi.
+
+Code cleanups
+- Asymmetric exec paths (pi.exec for discovery vs createBashToolDefinition for execution) is intentional but worth a comment.
+- MAX_NOTIFY_OUTPUT_LENGTH is now applied to the renderer's details output, not notify popups — rename or split.
 
 * Fixes
 

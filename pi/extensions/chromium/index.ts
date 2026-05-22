@@ -206,8 +206,7 @@ export default function (pi: ExtensionAPI) {
       "Returns the screenshot as an inline image.",
     promptSnippet: "Screenshot the current browser viewport",
     promptGuidelines: [
-      "After making UI changes, use browser_screenshot to verify the rendered result visually.",
-      "Use the waitFor parameter with a CSS selector to wait for async content to load.",
+      "After UI changes, verify visually with browser_screenshot; use waitFor for async content.",
     ],
     parameters: Type.Object({
       url: Type.Optional(
@@ -288,8 +287,7 @@ export default function (pi: ExtensionAPI) {
       "Returns structured data about matched elements.",
     promptSnippet: "Extract text/attributes from browser page elements by CSS selector",
     promptGuidelines: [
-      "Use browser_inspect to verify rendered text content, element visibility, and DOM state.",
-      "Prefer browser_inspect over browser_eval for simple element queries.",
+      "Use browser_inspect for rendered text/visibility/state checks; prefer it over browser_eval for simple queries.",
     ],
     parameters: Type.Object({
       selector: Type.String({

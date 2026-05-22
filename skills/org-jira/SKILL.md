@@ -1,6 +1,6 @@
 ---
 name: org-jira
-description: "Jira-specific authoring conventions on top of the org-tasks protocol. Use whenever the user mentions Jira keys (PROJ-123), Atlassian, /jira slash commands (clone/get/claim/comment/create/transition), :LINKED_ISSUES:, #+LINK: jira, or #+JIRA_* keywords; wants to plan from a Jira Epic or issue tree; or asks about the Atlassian MCP connection. Owns Jira semantics; the underlying tracker-agnostic :LINKED_ISSUES: drawer and #+LINK keyword belong to the tasks extension."
+description: "Jira conventions on top of org-tasks. Use for Jira keys (PROJ-123), Atlassian, /jira commands, :LINKED_ISSUES:, #+LINK: jira, #+JIRA_* keywords, Jira epic/issue planning, or Atlassian MCP questions. Owns Jira semantics."
 ---
 
 # Jira integration for org-tasks

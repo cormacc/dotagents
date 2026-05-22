@@ -626,11 +626,9 @@ export default function (pi: ExtensionAPI) {
     promptSnippet:
       "LSP operations (definition, references, rename, symbols, diagnostics) for nix, python, typescript, and go",
     promptGuidelines: [
-      "ALWAYS use the lsp tool FOR ANY coding related action instead grep-based approaches.",
-      "IMPORTANT: USE lsp tool instead of read or ripgrep for searching code snippets, functions, variables or symbols in code.",
-      "Use 'definition' or 'references' with a 'query' parameter to look up symbols by name. 'definition' returns the implementation body, 'references' returns all usages. 'workspace_symbol' only lists names and locations.",
-      "Before renaming a symbol, use 'references' to see all usages, then use 'rename' to apply the workspace edit returned by the language server.",
-      "Line and character numbers for the lsp tool are 1-based (matching what the read tool shows).",
+      "Use lsp for code-symbol lookup and rename instead of plain text search when language support is available.",
+      "Use the 'query' parameter on definition/references to look up symbols by name without a file/position.",
+      "Use references before rename; line and character positions are 1-based.",
     ],
     parameters: LspParams,
 

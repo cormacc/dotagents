@@ -1,6 +1,6 @@
 ---
 name: ext-dev
-description: Develop, modify, or debug pi extensions. Use when creating new extensions, modifying existing ones, or troubleshooting extension issues. Covers the extension API, TUI components, keybindings, theming, and custom editors.
+description: Develop/debug pi extensions. Use for creating or modifying extensions, or troubleshooting extension APIs, TUI, keybindings, themes, and custom editors.
 ---
 
 # Pi Extension Development
@@ -31,12 +31,6 @@ Paths are in the system prompt under "Additional docs" and "Examples".
 
 - **Shared utilities** :: check `extensions/lib/*.ts` for reusable helpers
   (e.g. `getExtensionName`) before writing new code.
-- **Extension structure** :: single-file extensions go in `extensions/foo.ts`;
-  multi-file extensions go in `extensions/foo/index.ts` with supporting modules.
-- **Imports** :: use `@mariozechner/pi-coding-agent` for the extension API,
-  `@mariozechner/pi-tui` for TUI primitives, `@sinclair/typebox` for tool
-  parameter schemas.
-- **Testing** :: use `/reload` to hot-reload extensions during development.
 - **Documentation** :: Create a short README.md per extension.
   - Multi-file extensions :: `extensions/foo/README.md`
   - Single-file extensions :: `extensions/foo.md`

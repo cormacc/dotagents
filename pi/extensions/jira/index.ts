@@ -221,7 +221,7 @@ function registerCloneApplyTool(pi: ExtensionAPI): void {
     promptSnippet:
       "Apply a Jira issue's fields to TASKS.org without re-emitting the rendered org body",
     promptGuidelines: [
-      "Use jira_clone_apply after atlassian_getJiraIssue when /jira clone is in progress; never assemble the org task block manually via the `edit` tool.",
+      "Use jira_clone_apply for /jira clone after fetching the Jira issue.",
     ],
     parameters: CloneApplyParams,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

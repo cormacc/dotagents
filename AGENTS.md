@@ -11,8 +11,7 @@
 - For commit messages, see the `git-commit` skill. Commit bodies should refer to associated design change records rather than restating detail.
 
 # File operations
-- When searching file content, ALWAYS use `rg` rather than `find`
-- When you want to write a new file, ALWAYS use the write tool.
+- Use `rg` for file and content searches.
 
 # Temporary files
 Use `$PROJECT_ROOT/.agents/tmp/` for scripts, data or temporary files for experiments,

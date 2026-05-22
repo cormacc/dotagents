@@ -985,7 +985,7 @@ function registerInsertTaskTool(pi: ExtensionAPI): void {
     promptSnippet:
       "Insert a new TASKS.org task with auto-generated :CUSTOM_ID:, :CREATED:, drawer + tags",
     promptGuidelines: [
-      "Use tasks_insert_task whenever you would otherwise hand-assemble an org task heading + drawer; prefer it over `edit` for inserts so duplicate :LINKED_ISSUES: tokens are caught and priority/UUID/timestamp formatting stays consistent.",
+      "Use tasks_insert_task instead of hand-assembling org task blocks.",
     ],
     parameters: InsertTaskParams,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

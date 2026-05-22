@@ -1,6 +1,6 @@
 ---
 name: org-plan
-description: "Drafting, reviewing, and executing implementation plans as change-record files linked from TASKS.org. Use whenever the user asks for a plan, says 'let's plan X', wants a design write-up before coding, asks for a retrospective record after work has shipped, or needs to review, tighten, refresh, or prune an existing change-record or design log, including at task closure. Owns the change-record section contract (* Summary, optional * Context, * Plan, * Implementation, * Validation, optional * Open questions), TASKS.org subtask migration semantics, and the closure-time refresh-and-prune workflow."
+description: "Draft, review, and execute implementation plans as TASKS.org-linked change-records. Use when the user asks for a plan/design write-up, says 'let's plan', wants a retrospective record, or needs to refresh/prune a change-record at closure. Owns change-record sections, subtask migration, and closure-time pruning."
 ---
 
 # Plan
