@@ -98,6 +98,14 @@ Acceptance criteria:
 
 * Implementation
 
+- Added `pi/extensions/tmux/` with `index.ts`, `helpers.ts`, `index.test.ts`, `test.sh`, and `README.md`.
+- `/tmux` command registers the committed subcommands (`spawn`, `watch`, `join`, `break`, `list`, `tail`) and dispatches through `pi.events` listeners; event handlers use the current session context captured on `session_start`.
+- `spawn` / `watch` create tmux windows with `new-window -P -F` so `pane_id`, `window_id`, and `window_index` are retained in memory per owner pi pane. Window names are derived from the first 20 chars of the command; `automatic-rename off` is best-effort because short-lived commands may exit before the option write.
+- Watch wrapper implementation changed from the planned pure-shell trap shape to a Node one-liner after tmux smoke testing showed non-interactive shell traps still allowed the pane to close on first Ctrl-C. The Node wrapper spawns the child command, forwards the first SIGINT to the child, prints status, then exits on the second SIGINT.
+- `tmux_list` and `tmux_capture` tools expose window/pane discovery and bounded `capture-pane` output to the agent. `tmux_capture` defaults to the latest watched pane for the current pi pane when available.
+- `join` refuses same-window, cross-session, and multi-pane targets; bare `break` uses in-memory state and explicit `break <pane-id>` is available after state loss.
+- Added `skills/pi-tmux/SKILL.md` and registered it via `resources_discover`; the skill covers long-running watchers, pane capture, sibling pi spawning, and delegates inter-session communication semantics to `pi-intercom`.
+
 * Open questions
 
 ** OPEN Should join/break state persist across pi restarts?
@@ -141,4 +149,11 @@ Decision: project-local extension only. Not added to the root `package.json` `pi
 
 * Validation
 
-Planning only; no implementation validation run yet.
+- `pi --help` reviewed to verify documented sibling-pi flags: `--model`, `--provider`, `--thinking`, `--system-prompt`, `--append-system-prompt`, and positional initial messages.
+- `pi/extensions/tmux/test.sh` passes (helper unit tests + structural checks).
+- `npx --yes tsx -e "import('./pi/extensions/tmux/index.ts').then(()=>console.log('index import ok'))"` passes.
+- Mock factory smoke confirms the extension registers `/tmux`, `tmux_list`, and `tmux_capture`.
+- Manual tmux smoke: `new-window -d -P -F` returns parseable pane/window ids; `set-option -w automatic-rename off` works for live windows.
+- Manual tmux smoke: `capture-pane -p -S -10` captured output from a disposable tmux window.
+- Manual tmux smoke: generated watch wrapper keeps the pane open after first Ctrl-C, shows `[tmux watch exited SIGINT — Ctrl-C again to close]`, and closes after second Ctrl-C.
+- Skill quick validator attempted with `python skills/skill-creator/scripts/quick_validate.py skills/pi-tmux/SKILL.md`; blocked by missing local `yaml` module, so frontmatter was reviewed manually instead.
