@@ -184,6 +184,41 @@ When I do the following....
 - Create a new task in TASKS.local.org
 - In the pi tasks extension, select the new task
 The new task is initially duplicated to TASKS.org, then deleted from TASKS.local.org It's possible that I accidentally hit promote, but don't believe so. Investigate -- reproduce manually, then follow up as appropriate.
+
+** TODO [#C] Fix `ot status` to operate on plan subtasks
+:PROPERTIES:
+:CUSTOM_ID: ff47f634-0e45-4734-b478-8a6646cfb8ae
+:CREATED: [2026-05-22 Fri 02:33]
+:END:
+:LOGBOOK:
+- Created [2026-05-22 Fri 02:33]
+:END:
+`ot status <id> DONE` for a task whose `:CUSTOM_ID:` lives inside a
+change-record's `* Plan` (i.e. the subtask was migrated out of
+TASKS.org into a `#+IMPORT:`-linked plan file) reports
+`TODO → DONE` in stdout but does not actually rewrite the heading
+keyword in the record file. `ot list` then continues to show the
+subtask as `TODO`.
+
+Repro (encountered 2026-05-22 during the *Refactor flake* task):
+
+1. Create a top-level task, run `ot record create <id>` to scaffold
+   a change-record at `design/log/…org`.
+2. Hand-author `** TODO …` headings under `* Plan` with their own
+   `:CUSTOM_ID:` UUIDs.
+3. Run `ot status <subtask-uuid> STARTED` — prints success.
+4. Run `ot status <subtask-uuid> DONE` — prints success.
+5. Grep the record file: heading is still `** TODO`.
+6. `ot list --levels 3` shows the subtask as `TODO`.
+
+Workaround used: hand-edit the heading + add `CLOSED:` + `:LOGBOOK:`
+entries directly in the record file.
+
+Expected: `ot status` should locate the subtask in whichever file
+holds the matching `:CUSTOM_ID:` (record file *or* TASKS.org) and
+rewrite the keyword + emit the `CLOSED:` timestamp + LOGBOOK entry
+in place. Same node, same writer.
+
 * Housekeeping
 
 ** STARTED Create self-improvement skill :pi:
