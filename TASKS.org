@@ -164,6 +164,23 @@ UX
 Code cleanups
 - Asymmetric exec paths (pi.exec for discovery vs createBashToolDefinition for execution) is intentional but worth a comment.
 - MAX_NOTIFY_OUTPUT_LENGTH is now applied to the renderer's details output, not notify popups — rename or split.
+
+** WAITING [#C] Add a zellij backend to the tty plugin :pi:tty:zellij:
+:PROPERTIES:
+:CUSTOM_ID: 77d82282-8e08-4087-890e-c9b59d5b57f3
+:CREATED: [2026-05-24 Sun 01:18]
+:STARTED: [2026-05-24 Sun 02:55]
+:END:
+:LOGBOOK:
+- Created [2026-05-24 Sun 01:18]
+- State "WAITING" from "TODO" [2026-05-24 Sun 02:15]
+- State "TODO" from "WAITING" [2026-05-24 Sun 02:55]
+- State "STARTED" from "TODO" [2026-05-24 Sun 02:55]
+- State "WAITING" from "STARTED" [2026-05-24 Sun 02:55]
+:END:
+#+IMPORT: [[plan:2026-05-24-add-a-zellij-backend-to-the-tty-plugin.org]]
+Extend the tty extension beyond its current tmux backend with a zellij backend while preserving the `/t` command surface and backend-neutral tool names.
+
 * Fixes
 
 ** TODO Local tasks duplicated in overlay when selected? :bug:pi:

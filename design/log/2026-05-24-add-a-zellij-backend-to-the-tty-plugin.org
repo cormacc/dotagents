@@ -1,0 +1,97 @@
+#+TITLE: Add a zellij backend to the tty plugin
+#+DATE: 2026-05-24 Sun
+#+PARENT: [[task:77d82282-8e08-4087-890e-c9b59d5b57f3][Add a zellij backend to the tty plugin]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Summary
+
+Extend `pi/extensions/tty` from tmux-only to a backend-selected tty layer. `/t`, `tty:*` events, `tty_list`, and `tty_capture` stay backend-neutral; runtime dispatch detects tmux vs zellij from the environment and routes to the matching backend.
+
+** Decisions
+- Keep tmux implementation first-class and simple: wrap the existing tmux code behind an adapter with minimal behavioural change, rather than forcing tmux through zellij-shaped abstractions.
+- Implement the same `/t` behaviour for tmux and zellij where both have native primitives: `spawn`, `watch`, `kill`, `list`, `tail`, plus `tty_list` / `tty_capture`.
+- `/t join`, `/t monitor`, `/t break` remain tmux-only and keep the existing tmux semantics. On zellij they return "Join implemented only for tmux backend" (and equivalent for monitor/break). No zellij feasibility spike.
+- Detection order: tmux when `$TMUX` is set, otherwise zellij when `ZELLIJ` or `ZELLIJ_PANE_ID` is defined (presence, not value). Nested multiplexers are unsupported; selected backend is reported in `tty_list` and errors.
+- Backend-specific command execution stays backend-specific: tmux keeps its known-working shell-string path; zellij uses `sh -lc <command>` after `zellij action ... --` to preserve `/t spawn <shell line>` quoting semantics.
+- Zellij `/t spawn` = `zellij action new-tab` (tmux `new-window` analogue). Zellij `/t watch` = `zellij action new-pane --direction down --near-current-pane` with `--close-on-exit` so the second Ctrl-C closes the pane.
+- Zellij `tty_capture` dumps full scrollback via `zellij action dump-screen` and truncates to `lines` in-process.
+- Public ids stay backend-native in tool output (`%1`/`@1` for tmux, `terminal_1`/`plugin_2` for zellij); tool docs retain explicit tmux examples.
+
+* Context
+
+`pi/extensions/tty/index.ts` currently hardcodes tmux for context discovery, listing, target resolution, spawn, capture, join, monitor, break, and kill. Live zellij 0.44.3 exposes the primitives we need (`list-panes`/`list-tabs --json`, `new-pane`, `new-tab`, `dump-screen`, `close-pane`, `write`) but no CLI for moving a live pane between tabs, which is why join/monitor/break are scoped tmux-only rather than emulated.
+
+* Plan
+
+** TODO Extract a backend interface and preserve tmux behaviour
+:PROPERTIES:
+:CUSTOM_ID: 32da90e4-12bf-4f28-916a-9471efe97bc9
+:STARTED: [2026-05-24 Sun 02:55]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-24 Sun 02:55]
+- State "TODO" from "STARTED" [2026-05-24 Sun 02:55]
+:END:
+Acceptance criteria:
+- Current tmux implementation moves behind a typed backend interface with methods for the cross-backend operations (`getContext`, `listPanes`, `spawn`, `watch`, `capture`, `kill`) plus tmux-only methods (`join`, `monitor`, `break`).
+- Tmux helper functions and state shape stay as close as possible to the current code; no shared abstraction rewrites tmux command execution, focus restoration, `joinedByOwner`, or no-arg `/t kill` semantics.
+- `/t`, `tty:*`, `tty_list`, `tty_capture` contracts unchanged; existing helper tests and tmux smoke checklist pass before zellij-specific work is considered complete.
+- Shared records include backend/session identity where needed, but tmux-owned records can retain tmux-native ids and names.
+
+** TODO Runtime backend detection and dispatcher
+:PROPERTIES:
+:CUSTOM_ID: 20bf7b1f-706d-45c2-b170-0caf74765a3d
+:END:
+Acceptance criteria:
+- `$TMUX` defined → tmux backend; otherwise `ZELLIJ` or `ZELLIJ_PANE_ID` defined → zellij backend; otherwise actionable "start pi inside tmux or zellij" error.
+- Dispatcher routes `/t join`, `/t monitor`, `/t break` directly to the tmux adapter when active backend is tmux; only zellij hits the tmux-only refusal guard.
+- No-arg `/t kill` remains backend-specific: tmux keeps the active joined/monitored target behaviour; zellij gets an explicit policy in the zellij task.
+- `tty_list` output includes the active backend and current-pane identity.
+
+** TODO Implement zellij backend
+:PROPERTIES:
+:CUSTOM_ID: 21b927b3-b8bb-4b82-936e-ee5c4e4c5050
+:END:
+Acceptance criteria:
+- `getContext` reads `ZELLIJ_PANE_ID` from the env and `zellij action list-panes --json` to identify the current pane (session name is not a reliable env var; derive it from the panes listing if needed).
+- `listPanes` parses `zellij action list-panes --all --json`; non-selectable plugin panes are excluded or clearly marked.
+- `spawn` uses `zellij action new-tab --cwd … --name … -- sh -lc <cmd>`; zellij switches focus to the new tab by default (same as tmux `new-window`); records tab/pane identity to list and later kill spawned tabs. Consider `--close-on-exit` later if orphaned tabs accumulate.
+- `watch` uses `zellij action new-pane --direction down --near-current-pane --cwd … --name … -- sh -lc <wrapper>` with the existing Node watch wrapper (no `--close-on-exit` — the wrapper stays alive via `setInterval` until the second Ctrl-C, then exits and the pane closes naturally); focus returns to pi after watch.
+- `capture` uses `zellij action dump-screen --pane-id <id> --full` (with `-a` for `preserveEscapes`), then truncates to the requested line count in-process.
+- `kill` sends two Ctrl-C bytes via `zellij action write --pane-id <id> 3`, then closes the recorded pane or tab (`close-pane` / `close-tab-by-id` as appropriate); missing-target errors are tolerated.
+- No-arg zellij `/t kill` policy is explicit and does not affect tmux: target the latest watched pane if known, otherwise return a target-required message.
+
+** TODO Docs and tool descriptions
+:PROPERTIES:
+:CUSTOM_ID: 9d4f2e45-6261-4bd3-9cba-b5c37829a235
+:END:
+Acceptance criteria:
+- `pi/extensions/tty/README.md` documents backend detection, the tmux-only scope of join/monitor/break, zellij target id forms, and unsupported nested multiplexers.
+- `pi/skills/pi-tty/SKILL.md` no longer says "current backend is tmux" and notes that join/monitor/break are tmux-only.
+- `tty_list` / `tty_capture` tool descriptions accept backend-native target ids and retain explicit tmux examples (`%pane`, `@window`, window index/name) plus zellij examples (`terminal_1`, tab id/name).
+
+** TODO Automated coverage
+:PROPERTIES:
+:CUSTOM_ID: 8ac11447-efd1-446e-9734-038405f9803a
+:END:
+Acceptance criteria:
+- Unit tests cover zellij `list-panes --json` / `list-tabs --json` parsing (terminal, plugin, focused, exited panes) and zellij spawned-tab record handling.
+- Unit tests cover backend detection for tmux-only, zellij-only, both-set (deterministic tmux-first), and neither.
+- Unit tests cover the tmux-only guard returning the expected refusal message on zellij and bypassing the guard on tmux.
+- Existing tmux helper tests remain green without rewriting their expectations around zellij behaviour.
+
+** TODO Validate in live tmux and zellij sessions
+:PROPERTIES:
+:CUSTOM_ID: 4e8b6397-ec6e-4351-82e1-c08706a62e99
+:END:
+Acceptance criteria:
+- Tmux smoke: existing checklist passes, including `/t watch` focus restoration, join/monitor/break, no-arg `/t kill`, and explicit target `/t kill`.
+- Zellij smoke: `/t s`, `/t w` (Ctrl-C twice closes pane), `/t k`, `/t l`, `/t t`, `tty_list`, `tty_capture`; confirm `/t j`/`/t m`/`/t b` return the tmux-only message.
+- Any zellij gap discovered during smoke is noted in `* Summary` before closing.
+
+* Validation
+
+Planning-only validation:
+- Read `pi/extensions/tty/{index.ts,helpers.ts,index.test.ts,test.sh,README.md}` and prior record `design/log/2026-05-22-rewrite-terminal-extension.org`.
+- Verified `zellij --version` (`0.44.3`), `zellij action list-panes/list-tabs --all --json`, `new-pane`, `new-tab`, `dump-screen`, `close-pane`, `write` from this session.
+- Confirmed zellij CLI does not expose a cross-tab pane move action, so join/monitor/break stay tmux-only.
