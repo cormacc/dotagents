@@ -218,7 +218,7 @@ sibling after the anchor task. Errors: `section-not-found`, `duplicate-linked-is
 }
 ```
 
-`promoted` lists ancestor auto-promotions performed by the same call. Errors:
+`promoted` lists ancestor auto-promotions performed by the same call. ID-accepting mutators resolve targets across the full loaded graph, including tasks in `TASKS.org`, `TASKS.local.org`, and `#+IMPORT:`-linked plan/change-record files. For linked plan targets, writes persist to the task's own `sourcePath`; ancestor auto-promotion may also update the importing TASKS file. Errors:
 `unknown-task`, `invalid-status`, `validation`.
 
 ### `ot select [<id>]`

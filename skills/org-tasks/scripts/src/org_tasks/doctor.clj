@@ -19,6 +19,7 @@
     :invalid-task-blocker
     :non-uuid-v4-id
     :patterned-sibling-ids
+    :import-child-not-saveable
     :missing-link-template
     :misordered-link-template
     :missing-local-setupfile
@@ -89,6 +90,32 @@
                    by-id
                    (update dups id (fnil conj [existing]) t))
             (recur (rest todo) (assoc by-id id t) dups)))))))
+
+(defn- import-child-source-index
+  "Return `{source-path first-import-child}` for every source file that
+  is reachable through `:import-children`."
+  [tasks]
+  (let [out (volatile! {})]
+    (letfn [(visit-task [task]
+              (doseq [child (:children task)]
+                (visit-task child))
+              (doseq [child (:import-children task)]
+                (when-let [src (:source-path child)]
+                  (vswap! out #(if (contains? % src) % (assoc % src child))))
+                (visit-task child)))]
+      (doseq [task tasks]
+        (visit-task task)))
+    @out))
+
+(defn- saveable-source-paths
+  "Return the set of source files that have at least one parsed file root.
+  `loader/save-source-roots` relies on these `:file-root?` tasks as the
+  serialization roots for each mutated source file."
+  [tasks]
+  (->> (walk-tasks tasks)
+       (filter :file-root?)
+       (keep :source-path)
+       set))
 
 ;; ── Link template checks ───────────────────────────────────────────
 
@@ -281,6 +308,22 @@
                                  " or `ot create` rather than authoring them by hand.")
                    :location (location-for task)}))))
 
+    ;; import-child-not-saveable — every imported source file must have
+    ;; at least one parsed file root. Otherwise `save-source-roots` would
+    ;; have no serialization root for that file and mutations to its
+    ;; import children would be silently lost if the loader regressed.
+    (let [saveable (saveable-source-paths tasks)]
+      (doseq [[src task] (import-child-source-index tasks)
+              :when (not (contains? saveable src))]
+        (vswap! out conj
+                {:code :import-child-not-saveable
+                 :severity :warn
+                 :message (str "Tasks from #+IMPORT:-linked file " src
+                               " are reachable, but that file has no parsed"
+                               " :file-root? serialization roots. Mutations to"
+                               " those imported tasks may not persist.")
+                 :location (location-for task)})))
+
     ;; patterned-sibling-ids — group siblings by their leading `N`
     ;; characters and flag any cluster of ≥ 2 sharing that prefix. This
     ;; catches hand-numbered sequences (e.g. `…d0001`/`…d0002`) without
@@ -329,7 +372,7 @@
 (def ^:private finding-order
   [:duplicate-id :selected-not-found :broken-import :invalid-task-blocker
    :waiting-without-blocker :closed-without-timestamp :stale-parent-status
-   :non-uuid-v4-id :patterned-sibling-ids
+   :non-uuid-v4-id :patterned-sibling-ids :import-child-not-saveable
    :missing-link-template :misordered-link-template
    :missing-local-setupfile :misordered-setupfile])
 

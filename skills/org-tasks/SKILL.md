@@ -39,7 +39,7 @@ ot init
 ot list --format json
 ot show <id-or-selected>
 ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'
-ot status <id> STARTED
+ot status <id> STARTED   # also works for tasks inside linked plan files
 ot select <id>        # or: ot select --clear
 ot archive <id> --yes
 ot publish <id>       # TASKS.local.org -> TASKS.org
@@ -60,7 +60,7 @@ ot uuid --count 3
 
 Use `--format json` for machine callers. JSON/EDN commands use schema `org-tasks/v1`: `{ok,schema,result,warnings}` on success and `{ok:false,schema,error}` on failure.
 
-ID-accepting commands accept full UUIDs or any unique `:CUSTOM_ID:` prefix of at least four characters (the 8-char prefix shown in `ot list` / `ot scan` is pasteable directly). Ambiguous values fail with `ambiguous-id` and list candidates.
+ID-accepting commands accept full UUIDs or any unique `:CUSTOM_ID:` prefix of at least four characters (the 8-char prefix shown in `ot list` / `ot scan` is pasteable directly). Mutators such as `status`, `handoff`, `blocker`, `issue`, and `ready` also target tasks inside `#+IMPORT:`-linked plan files and persist to the owning file. Ambiguous values fail with `ambiguous-id` and list candidates.
 
 Install for third-party harnesses:
 

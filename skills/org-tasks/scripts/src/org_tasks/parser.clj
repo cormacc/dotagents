@@ -195,7 +195,8 @@
 
          new-task!
          (fn [parsed line-1-indexed]
-           (let [task {:level                    (:level parsed)
+           (let [file-root? (empty? @stack)
+                 task {:level                    (:level parsed)
                        :status                   (:status parsed)
                        :priority                 (:priority parsed)
                        :summary                  (:summary parsed)
@@ -213,8 +214,14 @@
                        :source-content           source-content
                        :effective-source-content effective-source-content
                        :line-number              line-1-indexed
-                       :end-line                 (inc line-count)}
-                 path (if (empty? @stack)
+                       :end-line                 (inc line-count)
+                       ;; True iff this task was placed at the top
+                       ;; level of its source file by `parse-tasks`.
+                       ;; Used by `loader/save-source-roots` to find
+                       ;; the per-file root set after the graph has
+                       ;; been re-assembled via `:import-children`.
+                       :file-root?               file-root?}
+                 path (if file-root?
                         (do (vswap! roots conj task)
                             [(dec (count @roots))])
                         (let [parent-path (:path (peek @stack))

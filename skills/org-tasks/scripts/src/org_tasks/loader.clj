@@ -176,41 +176,48 @@
     (fs/create-dirs (fs/parent local-path))
     (atomic-write local-path updated)))
 
-(defn- collect-tasks-by-source
-  "Group every task in `tasks` (including recursive children and
-  imported children) by `:source-path`."
+(defn- collect-file-roots-by-source
+  "Walk the full task graph (including `:children` and
+  `:import-children`) and group tasks tagged `:file-root? true` by
+  their `:source-path`. Each entry's vector is sorted by
+  `:line-number` so `serialize-tasks-preserving-file` can match
+  supplied roots against parsed originals."
   [tasks]
   (let [out (volatile! {})]
     (letfn [(walk [ts]
               (doseq [t ts]
-                (when-let [src (:source-path t)]
-                  (vswap! out update src (fnil conj []) t))
+                (when (and (:file-root? t) (:source-path t))
+                  (vswap! out update (:source-path t) (fnil conj []) t))
                 (walk (:children t))
                 (when (:import-children t)
                   (walk (:import-children t)))))]
       (walk tasks))
-    @out))
+    (into {}
+          (map (fn [[src roots]]
+                 [src (vec (sort-by #(or (:line-number %) 0) roots))]))
+          @out)))
 
 (defn save-source-roots
-  "Persist a mutated task graph back to disk. For each source file
-  detected in the supplied tasks, gather the originally top-level
-  tasks belonging to that file and re-emit via
-  `serialize-tasks-preserving-file` against the file's last-known
-  source content. Atomic writes."
+  "Persist a mutated task graph back to disk.
+
+  Walks the full graph (top-level tasks + `:children` +
+  `:import-children`) and, for each source file, gathers the tasks
+  tagged `:file-root? true` by `parser/parse-tasks` — i.e. the
+  tasks that were originally parsed as top-level roots of that file.
+  Re-emits each file via `parser/serialize-tasks-preserving-file`
+  against the file's last-known source content. Atomic writes;
+  per-file no-op when the serialized output matches the original.
+
+  This is what makes mutations to tasks living inside
+  `#+IMPORT:`-linked plan files (attached to the in-memory graph as
+  `:import-children`) persist back to the plan file, not just to
+  TASKS.org."
   [^String project-root tasks]
-  ;; We only persist top-level changes when the task tree explicitly
-  ;; carries the matching `:source-path`. Pass the top-level vector
-  ;; for each file rather than a flat collection to keep round-trip
-  ;; semantics intact.
-  (let [by-file (volatile! {})]
-    (doseq [t tasks
-            :let [src (:source-path t)]
-            :when src]
-      (vswap! by-file update src (fnil conj []) t))
-    (doseq [[src ts] @by-file]
-      (let [original (or (some :source-content ts)
+  (let [by-file (collect-file-roots-by-source tasks)]
+    (doseq [[src roots] by-file]
+      (let [original (or (some :source-content roots)
                          (safe-slurp src)
                          "")
-            updated  (parser/serialize-tasks-preserving-file original ts)]
+            updated  (parser/serialize-tasks-preserving-file original roots)]
         (when (not= updated original)
           (atomic-write src updated))))))

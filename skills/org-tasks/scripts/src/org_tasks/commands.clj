@@ -151,7 +151,11 @@
 
                               missing-created?
                               (parser/append-created-log timestamp))
-                    updated (update updated :children #(mapv visit (or % [])))]
+                    updated (-> updated
+                                (update :children #(mapv visit (or % [])))
+                                (cond->
+                                  (:import-children task)
+                                  (update :import-children #(mapv visit (or % [])))))]
                 (when missing-id?
                   (vswap! changes conj
                           (cond-> {:id id
@@ -461,8 +465,10 @@
 
 (defn- find-path-to-id
   "Return the path of tasks from a top-level root to the task with
-  :CUSTOM_ID: = `id` (inclusive). Walks `:children` only — parent
-  auto-promotion follows the literal task tree, not import children."
+  :CUSTOM_ID: = `id` (inclusive). Walks both `:children` and
+  `:import-children` so that auto-promotion crosses `#+IMPORT:`
+  boundaries (e.g. a STARTED transition on a plan-file subtask
+  promotes its TASKS.org parent)."
   [tasks id]
   (letfn [(walk [ts trail]
             (some
@@ -470,7 +476,8 @@
                 (let [trail' (conj trail t)]
                   (if (= id (parser/get-task-id t))
                     trail'
-                    (walk (:children t) trail'))))
+                    (or (walk (:children t) trail')
+                        (walk (:import-children t) trail')))))
               ts))]
     (walk tasks [])))
 

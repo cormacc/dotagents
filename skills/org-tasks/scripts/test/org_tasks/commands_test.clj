@@ -10,6 +10,7 @@
             [clojure.test :refer [deftest is testing]]
             [org-tasks.cli :as cli]
             [org-tasks.output :as out]
+            [org-tasks.parser :as parser]
             [org-tasks.styling :as styling]))
 
 (defn- with-temp-dir [f]
@@ -137,6 +138,53 @@
              ":END:\n"))
   (spit (str (fs/path root "TASKS.local.org"))
         (str "#+SELECTED: 22229999-2222-4333-8444-555555555552\n")))
+
+(def ^:private linked-plan-parent-id
+  "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa")
+
+(def ^:private linked-plan-child-id
+  "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb")
+
+(def ^:private linked-plan-second-child-id
+  "cccccccc-3333-4333-8333-cccccccccccc")
+
+(defn- linked-plan-content []
+  (str "#+TITLE: Linked Plan\n"
+       "#+SETUPFILE: ../../TASKS.setup.org\n"
+       "\n"
+       "* Summary\n"
+       "Fixture for linked plan mutation tests.\n"
+       "\n"
+       "* Plan\n"
+       "** TODO Plan child\n"
+       ":PROPERTIES:\n"
+       ":CUSTOM_ID: " linked-plan-child-id "\n"
+       ":END:\n"
+       "Acceptance criteria:\n"
+       "- mutate this task from ot.\n"
+       "\n"
+       "** TODO Second plan child\n"
+       ":PROPERTIES:\n"
+       ":CUSTOM_ID: " linked-plan-second-child-id "\n"
+       ":END:\n"
+       "\n"
+       "** TODO Hand-authored child without metadata\n"
+       "Needs backfill.\n"))
+
+(defn- bootstrap-linked-plan-graph! [root]
+  (fs/create-dirs (str (fs/path root "design" "log")))
+  (spit (str (fs/path root "TASKS.setup.org")) setup-org-preamble)
+  (spit (str (fs/path root "TASKS.org"))
+        (str tasks-org-preamble
+             "* Improvements\n"
+             "** TODO Parent with linked plan\n"
+             ":PROPERTIES:\n"
+             ":CUSTOM_ID: " linked-plan-parent-id "\n"
+             ":END:\n"
+             "#+IMPORT: [[plan:linked-plan.org]]\n"))
+  (spit (str (fs/path root "TASKS.local.org")) "#+SELECTED:\n")
+  (spit (str (fs/path root "design" "log" "linked-plan.org"))
+        (linked-plan-content)))
 
 (deftest list-emits-tree-and-rows
   (with-temp-dir
@@ -462,6 +510,125 @@
             e (parse-json-error err)]
         (is (= 1 exit))
         (is (= "invalid-status" (:code e)))))))
+
+;; ── linked plan mutation coverage ───────────────────────────────
+
+(deftest linked-plan-fixture-round-trips-before-mutation
+  (let [content (linked-plan-content)
+        parsed (:tasks (parser/parse-tasks content))]
+    (is (= content (parser/serialize-tasks-preserving-file content parsed)))))
+
+(deftest status-mutates-linked-plan-task-and-promotes-parent
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (let [tasks-path (str (fs/path root "TASKS.org"))
+            plan-path  (str (fs/path root "design" "log" "linked-plan.org"))
+            {:keys [out exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "status" linked-plan-child-id "STARTED")
+            r (parse-json-result out)
+            tasks-content (slurp tasks-path)
+            plan-content  (slurp plan-path)]
+        (is (zero? exit))
+        (is (= "STARTED" (:status r)))
+        (is (= plan-path (get-in r [:task :sourcePath])))
+        (is (= [linked-plan-parent-id]
+               (mapv :id (:promoted r))))
+        (is (str/includes? plan-content "** STARTED Plan child"))
+        (is (str/includes? plan-content ":STARTED:"))
+        (is (str/includes? plan-content "- State \"STARTED\" from \"TODO\""))
+        (is (str/includes? tasks-content "** STARTED Parent with linked plan"))
+        (is (str/includes? tasks-content ":STARTED:")))
+
+      (let [{:keys [out exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "status" linked-plan-child-id "DONE")
+            r (parse-json-result out)
+            plan-content (slurp (str (fs/path root "design" "log" "linked-plan.org")))]
+        (is (zero? exit))
+        (is (= "DONE" (:status r)))
+        (is (str/includes? plan-content "** DONE Plan child"))
+        (is (str/includes? plan-content "CLOSED:")))
+
+      (let [{:keys [out exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "status" linked-plan-child-id "TODO")
+            r (parse-json-result out)
+            plan-content (slurp (str (fs/path root "design" "log" "linked-plan.org")))]
+        (is (zero? exit))
+        (is (= "TODO" (:status r)))
+        (is (str/includes? plan-content "** TODO Plan child"))
+        (is (not (str/includes? plan-content "CLOSED:")))))))
+
+(deftest linked-plan-id-mutators-persist-to-plan-file
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (let [plan-path (str (fs/path root "design" "log" "linked-plan.org"))]
+        (testing "handoff set/clear"
+          (let [{:keys [out exit]}
+                (run-cli! "--root" root "--format" "json"
+                          "handoff" "set" linked-plan-child-id "resume here")
+                r (parse-json-result out)]
+            (is (zero? exit))
+            (is (= "resume here" (:handoff r)))
+            (is (str/includes? (slurp plan-path) ":HANDOFF: resume here")))
+          (let [{:keys [exit]}
+                (run-cli! "--root" root "--format" "json"
+                          "handoff" "clear" linked-plan-child-id)]
+            (is (zero? exit))
+            (is (not (str/includes? (slurp plan-path) ":HANDOFF:")))))
+
+        (testing "blocker add/remove and ready"
+          (let [{:keys [exit]}
+                (run-cli! "--root" root "--format" "json"
+                          "blocker" "add" linked-plan-child-id "blocked by human")]
+            (is (zero? exit))
+            (is (str/includes? (slurp plan-path) ":BLOCKED-BY: human: blocked by human")))
+          (let [{:keys [out exit]}
+                (run-cli! "--root" root "--format" "json"
+                          "ready" linked-plan-child-id)
+                r (parse-json-result out)]
+            (is (zero? exit))
+            (is (false? (:ready r)))
+            (is (= "human: blocked by human"
+                   (get-in r [:gating 0 :blocker :raw]))))
+          (let [{:keys [exit]}
+                (run-cli! "--root" root "--format" "json"
+                          "blocker" "remove" linked-plan-child-id "human: blocked by human")]
+            (is (zero? exit))
+            (is (not (str/includes? (slurp plan-path) ":BLOCKED-BY:")))))
+
+        (testing "issue add/remove"
+          (let [{:keys [exit]}
+                (run-cli! "--root" root "--format" "json"
+                          "issue" "add" linked-plan-child-id "[[jira:OT-1]]")]
+            (is (zero? exit))
+            (is (str/includes? (slurp plan-path) ":LINKED_ISSUES: [[jira:OT-1]]")))
+          (let [{:keys [exit]}
+                (run-cli! "--root" root "--format" "json"
+                          "issue" "remove" linked-plan-child-id "[[jira:OT-1]]")]
+            (is (zero? exit))
+            (is (not (str/includes? (slurp plan-path) ":LINKED_ISSUES:")))))))))
+
+(deftest backfill-mutates-hand-authored-linked-plan-task
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (let [plan-path (str (fs/path root "design" "log" "linked-plan.org"))
+            {:keys [out exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "backfill" "--created-at" "2026-05-24 Sun 10:00")
+            r (parse-json-result out)
+            plan-content (slurp plan-path)]
+        (is (zero? exit))
+        (is (= 1 (:changed r)))
+        (is (= plan-path (get-in r [:changes 0 :file])))
+        (is (str/includes? plan-content "** TODO Hand-authored child without metadata"))
+        (is (str/includes? plan-content ":CUSTOM_ID:"))
+        (is (str/includes? plan-content ":CREATED: [2026-05-24 Sun 10:00]"))
+        (is (str/includes? plan-content "- Created [2026-05-24 Sun 10:00]"))))))
 
 ;; ── create ───────────────────────────────────────────
 

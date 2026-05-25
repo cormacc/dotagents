@@ -1,0 +1,113 @@
+#+TITLE: Fix ot mutations silently dropped for tasks inside imported plan files
+#+DATE: 2026-05-24 Sun
+#+PARENT: [[task:bb77504b-1398-483f-9f20-67af4be3453f][Fix ot mutations silently dropped for tasks inside imported plan files]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Summary
+
+`ot` now persists mutations for tasks inside `#+IMPORT:`-linked plan/change-record files. The loader tags parsed top-level tasks with `:file-root?`, `save-source-roots` walks the full graph (`:children` and `:import-children`) and serializes each affected source file from its own file roots, and parent auto-promotion crosses import boundaries. ID mutators (`status`, `handoff`, `blocker`, `issue`, `ready`, `backfill`) work against imported plan subtasks and write to the owning plan file.
+
+** Shipped
+
+- `parser/parse-tasks` marks source-file roots with `:file-root?`.
+- `loader/save-source-roots` groups reachable file roots by `:source-path`, including imported plans.
+- `commands/find-path-to-id` and backfill/update walkers traverse `:import-children`.
+- `doctor` warns with `import-child-not-saveable` if imported tasks are reachable but their source file has no saveable file root.
+- Contract and skill docs now state that ID mutators support linked plan-file tasks.
+- Integration coverage exercises linked-plan `status` STARTED/DONE/reopen, `handoff`, `blocker`, `issue`, `ready`, `backfill`, parent promotion, and fixture round-tripping.
+
+** Gotchas
+
+- Imported plan tasks are not top-level TASKS.org tasks; archive/publish/unpublish still intentionally target top-level task roots only.
+- `:file-root?` is loader/parser metadata, not org syntax. If future graph transforms drop it from imported roots, `doctor` should catch the persistence regression.
+
+* Plan
+
+** DONE Make `loader/save-source-roots` walk the full graph and re-serialize per file-root
+CLOSED: [2026-05-24 Sun 02:54]
+:PROPERTIES:
+:CUSTOM_ID: 6b771764-ce8d-4280-b567-6ac12ed5c798
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-24 Sun 02:54]
+:END:
+Acceptance criteria:
+- `save-source-roots` walks the full task graph (top-level + `:children` + `:import-children`), groups by `:source-path`, and for each file passes the file's *parsed top-level roots* (with `:children` intact) to `serialize-tasks-preserving-file`.
+- A node is a "file-root" if `parse-tasks` placed it at the top level of its file. Implementation: tag each task with `:file-root? true` in `parser/parse-tasks` when its stack is empty at creation time. `save-source-roots` filters to `:file-root?` per source.
+- Output ordering preserved: roots emitted in original `:line-number` order so `serialize-tasks-preserving-file` can match by line.
+- TASKS.org write path unchanged byte-for-byte for graphs with no `#+IMPORT:` (regression-safe).
+
+** DONE Persist mutations into `#+IMPORT:`-linked plan files for every affected command
+CLOSED: [2026-05-24 Sun 02:54]
+:PROPERTIES:
+:CUSTOM_ID: 51a945c8-c2c7-4391-8ef1-f284d1decc75
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-24 Sun 02:54]
+:END:
+Acceptance criteria:
+- `ot status <plan-subtask-id> STARTED|DONE` rewrites the heading keyword, stamps `CLOSED:` on terminal entry, and appends a LOGBOOK state entry inside the plan file.
+- `ot handoff set/clear`, `ot blocker add/remove`, `ot issue add/remove`, `ot ready` operate identically whether the target lives in TASKS.org or a plan file.
+- `ot backfill` adds `:CUSTOM_ID:` / `:CREATED:` and the initial LOGBOOK entry to hand-authored plan-file headings missing them.
+- No new behaviour for `archive`/`publish`/`unpublish` — they continue to refuse non-top-level targets with the existing error.
+
+** DONE Extend parent auto-promotion across the import boundary
+CLOSED: [2026-05-24 Sun 02:56]
+:PROPERTIES:
+:CUSTOM_ID: 7385cb15-2ef4-4f60-adcf-8b4291d05225
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-24 Sun 02:56]
+:END:
+Acceptance criteria:
+- `find-path-to-id` walks `:import-children` in addition to `:children`.
+- Transitioning a plan-file subtask to STARTED auto-promotes its TASKS.org parent task (and any TODO ancestors) to STARTED with the matching timestamp, matching the existing in-file behaviour.
+- The promoted parent's LOGBOOK and `:STARTED:` writes persist (covered by Task 1's full-graph save).
+- Existing in-file promotion tests still pass.
+
+** DONE Add unit + integration coverage for plan-file mutations
+CLOSED: [2026-05-25 Mon 09:30]
+:PROPERTIES:
+:CUSTOM_ID: 6787f1be-8a76-43d0-8c96-5e81b41258f6
+:STARTED: [2026-05-24 Sun 21:55]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-24 Sun 21:55]
+- State "DONE" from "STARTED" [2026-05-25 Mon 09:30]
+:END:
+Acceptance criteria:
+- New fixture: TASKS.org with one parent task that `#+IMPORT:`s a plan file containing `** TODO` subtasks with their own `:CUSTOM_ID:`.
+- Integration tests assert the persisted on-disk content of both files for: `status STARTED`, `status DONE`, `status DONE → TODO` reopen, `handoff set/clear`, `blocker add/remove`, `issue add/remove`, `ready`, `backfill`.
+- Parent-promotion test: `status <plan-subtask> STARTED` promotes the TASKS.org parent on disk.
+- Round-trip test: parse → serialize is idempotent for the fixture before any mutation.
+
+** DONE Add `doctor` check + contract note as regression guards
+CLOSED: [2026-05-25 Mon 09:26]
+:PROPERTIES:
+:CUSTOM_ID: fa5813ef-a9e7-4956-b983-202c17a2d8ab
+:STARTED: [2026-05-24 Sun 22:00]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-24 Sun 22:00]
+- State "DONE" from "STARTED" [2026-05-25 Mon 09:26]
+:END:
+Acceptance criteria:
+- New `doctor` finding "import-child not saveable" that flags any `:source-path` reachable via `:import-children` whose `:file-root?` task collection would produce an empty serialization input (i.e. the loader regressed and dropped the file). Severity warn.
+- `skills/org-tasks/scripts/docs/contract.md` documents that all ID-accepting mutators operate identically on TASKS.org and `#+IMPORT:`-linked plan-file targets.
+- `skills/org-tasks/SKILL.md` § "Tooling quick reference" mentions plan-subtask support explicitly for `ot status` and friends (one line).
+
+* Implementation
+
+- Added `:file-root?` in `skills/org-tasks/scripts/src/org_tasks/parser.clj` when a parsed task is a top-level root of its source file.
+- Replaced top-level-only save grouping in `skills/org-tasks/scripts/src/org_tasks/loader.clj` with full-graph `collect-file-roots-by-source` traversal over `:children` and `:import-children`.
+- Updated `skills/org-tasks/scripts/src/org_tasks/commands.clj` so backfill and parent auto-promotion traverse imported plan children.
+- Added `import-child-not-saveable` diagnostics in `skills/org-tasks/scripts/src/org_tasks/doctor.clj` plus unit coverage.
+- Added linked-plan integration fixtures and command assertions in `skills/org-tasks/scripts/test/org_tasks/commands_test.clj`.
+- Updated `skills/org-tasks/scripts/docs/contract.md` and `skills/org-tasks/SKILL.md` with linked-plan mutator support.
+
+* Validation
+
+- `bb test org-tasks.doctor-test` — passed.
+- `bb test org-tasks.commands-test` — passed.
+- `bb test` — passed: 145 tests, 509 assertions, 0 failures, 0 errors.
+- Manual smoke via `ot` against a temp copied task graph confirmed linked-plan `show`, `ready`, `status`, `handoff`, and `blocker` operations persist to the imported plan file.

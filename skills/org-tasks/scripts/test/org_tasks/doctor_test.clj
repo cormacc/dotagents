@@ -66,6 +66,58 @@
     (is (= "/tmp/TASKS.org" (get-in f [:location :file])))
     (is (= 1 (get-in f [:location :line])))))
 
+(deftest import-child-with-file-root-no-saveability-finding
+  (let [tasks [{:level 1 :status "STARTED" :priority nil
+                :summary "Parent" :tags []
+                :description "" :children []
+                :property-lines [":CUSTOM_ID: 6593c6fc-d284-4f9e-b6b5-4c159345cd20"]
+                :logbook-lines [] :import-path "plan.org"
+                :import-raw "[[plan:plan.org]]" :import-error nil
+                :import-children [{:level 2 :status "TODO" :priority nil
+                                   :summary "Plan child" :tags []
+                                   :description "" :children []
+                                   :property-lines [":CUSTOM_ID: 9e2b9765-dd9d-4748-aed3-c3e3af0ea5e4"]
+                                   :logbook-lines [] :import-path nil
+                                   :import-raw nil :import-error nil
+                                   :import-children nil :closed nil
+                                   :source-path "/tmp/plan.org"
+                                   :line-number 10 :end-line 15
+                                   :file-root? true}]
+                :closed nil
+                :source-path "/tmp/TASKS.org"
+                :line-number 1 :end-line 5
+                :file-root? true}]
+        findings (doctor/run-doctor {:tasks tasks :selected-id nil})]
+    (is (zero? (count-of findings :import-child-not-saveable)))))
+
+(deftest import-child-without-file-root-is-reported
+  (let [tasks [{:level 1 :status "STARTED" :priority nil
+                :summary "Parent" :tags []
+                :description "" :children []
+                :property-lines [":CUSTOM_ID: 6593c6fc-d284-4f9e-b6b5-4c159345cd20"]
+                :logbook-lines [] :import-path "plan.org"
+                :import-raw "[[plan:plan.org]]" :import-error nil
+                :import-children [{:level 2 :status "TODO" :priority nil
+                                   :summary "Plan child" :tags []
+                                   :description "" :children []
+                                   :property-lines [":CUSTOM_ID: 9e2b9765-dd9d-4748-aed3-c3e3af0ea5e4"]
+                                   :logbook-lines [] :import-path nil
+                                   :import-raw nil :import-error nil
+                                   :import-children nil :closed nil
+                                   :source-path "/tmp/plan.org"
+                                   :line-number 10 :end-line 15
+                                   :file-root? false}]
+                :closed nil
+                :source-path "/tmp/TASKS.org"
+                :line-number 1 :end-line 5
+                :file-root? true}]
+        findings (doctor/run-doctor {:tasks tasks :selected-id nil})
+        f (first (filter #(= :import-child-not-saveable (:code %)) findings))]
+    (is (= 1 (count-of findings :import-child-not-saveable)))
+    (is (= :warn (:severity f)))
+    (is (= "/tmp/plan.org" (get-in f [:location :file])))
+    (is (str/includes? (:message f) ":file-root?"))))
+
 (deftest selected-not-found-reported
   (let [{:keys [tasks]}
         (parser/parse-tasks
