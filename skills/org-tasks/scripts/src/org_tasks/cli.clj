@@ -15,7 +15,7 @@
 (def ^:private global-spec
   "Options accepted by every subcommand. Per-command specs merge over
   this map so command-specific options can shadow defaults."
-  {:root      {:desc "Project root (default: git rev-parse --show-toplevel, else cwd)"
+  {:root      {:desc "Project root (default: nearest TASKS.org ancestor, else cwd)"
                :ref  "<dir>"}
    :format    {:desc "Output format: text | json | edn"
                :ref  "<fmt>"

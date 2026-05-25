@@ -1,38 +1,39 @@
 (ns org-tasks.root
   "Project-root resolution for the `ot` CLI.
 
-  Resolution order (per
-  `skills/org-tasks/SKILL.md` § Locating `TASKS.org`):
+  Resolution order:
 
     1. Explicit `--root` option, if provided.
-    2. `git rev-parse --show-toplevel` against the current working directory.
-    3. Fallback to the current working directory.
+    2. Current working directory or nearest ancestor containing `TASKS.org`.
+    3. Fallback to the current working directory when no `TASKS.org` is found.
 
-  Do not walk up parent directories looking for `TASKS.org` — a parent
-  project's index is not this project's."
-  (:require [babashka.fs :as fs]
-            [babashka.process :as p]))
+  This intentionally has no git dependency: task memory is anchored by
+  `TASKS.org`, not by repository metadata."
+  (:require [babashka.fs :as fs]))
 
-(defn- git-root [^String cwd]
-  (try
-    (let [{:keys [exit out]}
-          (p/shell {:out :string :err :string :continue true :dir cwd}
-                   "git" "rev-parse" "--show-toplevel")]
-      (when (zero? exit)
-        (let [trimmed (.trim ^String out)]
-          (when-not (.isEmpty trimmed)
-            trimmed))))
-    (catch Throwable _ nil)))
+(defn- tasks-org-root
+  "Return the nearest directory at or above `cwd` containing `TASKS.org`,
+  or nil when no ancestor has one."
+  [cwd]
+  (loop [dir (fs/absolutize cwd)]
+    (cond
+      (fs/exists? (fs/path dir "TASKS.org"))
+      (str dir)
+
+      :else
+      (let [parent (fs/parent dir)]
+        (when (and parent (not= (str parent) (str dir)))
+          (recur parent))))))
 
 (defn resolve-root
   "Resolve the project root from CLI options and the current directory.
 
   Returns an absolute path string. Never throws; falls back to `cwd`
-  when neither `--root` nor `git rev-parse` produces a usable answer."
+  when neither `--root` nor a `TASKS.org` ancestor produces a usable answer."
   ([opts]
    (resolve-root opts (System/getProperty "user.dir")))
   ([opts cwd]
-   (let [candidate (or (:root opts) (git-root cwd) cwd)]
+   (let [candidate (or (:root opts) (tasks-org-root cwd) cwd)]
      (str (fs/absolutize candidate)))))
 
 (defn resolve-protocol-files

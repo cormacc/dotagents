@@ -424,7 +424,7 @@ All commands accept:
 
 | Flag             | Default                                                 | Notes                                              |
 | ---------------- | ------------------------------------------------------- | -------------------------------------------------- |
-| `--root <dir>`   | git rev-parse --show-toplevel, else cwd                 | Anchors all relative paths.                        |
+| `--root <dir>`   | nearest `TASKS.org` ancestor, else cwd                  | Anchors all relative paths; explicit value wins.   |
 | `--format <fmt>` | `text` for TTY, `json` for non-TTY (configurable)       | `text`, `json`, `edn`.                             |
 | `--tasks <path>` | `<root>/TASKS.org`                                      |                                                    |
 | `--local <path>` | `<root>/TASKS.local.org`                                |                                                    |
