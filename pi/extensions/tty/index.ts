@@ -66,6 +66,7 @@ interface CreatedPaneRecord {
 interface JoinedPaneRecord {
   paneId: string;
   fromWindowId: string;
+  fromWindowName?: string;
   ownerPaneId: string;
   keepFocus?: boolean;
 }
@@ -289,7 +290,7 @@ async function joinPane(target: string, keepFocus = false, piContext?: TmuxConte
     joinedByOwner.delete(current.paneId);
   }
   await runTmux(["join-pane", "-s", paneId, "-t", current.paneId, "-v"]);
-  joinedByOwner.set(current.paneId, { paneId, fromWindowId: win.windowId, ownerPaneId: current.paneId, keepFocus });
+  joinedByOwner.set(current.paneId, { paneId, fromWindowId: win.windowId, fromWindowName: win.windowName, ownerPaneId: current.paneId, keepFocus });
   if (keepFocus) {
     await runTmux(["select-pane", "-t", current.paneId]);
   }
@@ -298,12 +299,23 @@ async function joinPane(target: string, keepFocus = false, piContext?: TmuxConte
 
 async function breakPane(explicitPaneId?: string, quietNoop = false, piContext?: TmuxContext): Promise<string> {
   const current = piContext ?? await requireTmuxContext();
-  const targetPane = explicitPaneId?.trim() || joinedByOwner.get(current.paneId)?.paneId;
+  const joinedRecord = explicitPaneId?.trim() ? undefined : joinedByOwner.get(current.paneId);
+  const targetPane = explicitPaneId?.trim() || joinedRecord?.paneId;
   if (!targetPane) {
     if (quietNoop) return "No joined pane to break.";
     throw new Error("No joined pane is recorded for this pi pane. Use /t break <pane-id> after restart/state loss.");
   }
-  await runTmux(["break-pane", "-s", targetPane]);
+  const savedName = joinedRecord?.fromWindowName;
+  const breakArgs = ["break-pane", "-s", targetPane, "-P", "-F", "#{window_id}"];
+  if (savedName) breakArgs.push("-n", savedName);
+  const newWindowId = (await runTmux(breakArgs)).trimEnd();
+  if (newWindowId) {
+    try {
+      await runTmux(["set-option", "-t", newWindowId, "-w", "automatic-rename", "off"]);
+    } catch {
+      // Best effort: short-lived broken-out panes may exit before the option write.
+    }
+  }
   await runTmux(["select-window", "-t", current.windowIndex]);
   if (!explicitPaneId) joinedByOwner.delete(current.paneId);
   return `Broke ${targetPane} back into its own window.`;
