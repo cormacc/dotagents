@@ -2,7 +2,7 @@
 
 Reference data for agents that don't have the pi `dataspex` extension loaded.
 Each form here is the canonical, token-disciplined equivalent of one
-`dataspex_*` tool in `SKILL.md`. Mirror the same default projections and
+`dataspex` op in `SKILL.md`. Mirror the same default projections and
 length/depth bounds — paste verbatim and adjust the label / path / `n` as
 needed.
 
@@ -45,7 +45,7 @@ If more than one build is active, ask the user which to target.
 
 ## Forms
 
-### Equivalent of `dataspex_labels`
+### Equivalent of `dataspex op=labels`
 
 ```clojure
 (with-out-str
@@ -69,7 +69,7 @@ If more than one build is active, ask the user which to target.
            :has-ref? (some? (:ref e))})))))
 ```
 
-### Equivalent of `dataspex_value`
+### Equivalent of `dataspex op=value`
 
 Bounded snapshot read, optionally navigated by `path`:
 
@@ -86,7 +86,7 @@ Bounded snapshot read, optionally navigated by `path`:
 `(with-out-str (pr ...))` inside the binding is what keeps the cljs return
 value bounded; without it, a deep app-state atom can blow shadow's 1 MB
 writer limit before `*print-length*` / `*print-level*` have any effect.
-Bounds match the `dataspex_value` tool defaults (50 / 5). For especially
+Bounds match the `dataspex op=value` defaults (50 / 5). For especially
 large app-state, reduce them or path-navigate before reading.
 
 Fresh deref of an atom-backed inspectee (skip the snapshot), still bounded:
@@ -98,7 +98,7 @@ Fresh deref of an atom-backed inspectee (skip the snapshot), still bounded:
       (some-> (:ref (get @dataspex.core/store "state")) deref))))
 ```
 
-### Equivalent of `dataspex_history` (diffs only)
+### Equivalent of `dataspex op=history` (diffs only)
 
 ```clojure
 (with-out-str
@@ -129,7 +129,7 @@ Opt in to full `:val` snapshots only when needed:
                        (mapv (fn [h] (select-keys h [:rev :created-at :diff :val]))))}))))
 ```
 
-### Equivalent of `dataspex_track`
+### Equivalent of `dataspex op=track`
 
 ```clojure
 (let [label "state"
@@ -138,16 +138,16 @@ Opt in to full `:val` snapshots only when needed:
       ref (:ref entry)]
   (cond
     (nil? entry)
-    (throw (ex-info (str "dataspex_track: no such label \"" label "\"")
+    (throw (ex-info (str "dataspex track: no such label \"" label "\"")
                     {:reason :missing-label :label label}))
 
     (contains? @dataspex.core/store audit-label)
-    (throw (ex-info (str "dataspex_track: audit label \"" audit-label
+    (throw (ex-info (str "dataspex track: audit label \"" audit-label
                          "\" already exists; untrack first")
                     {:reason :audit-label-exists :label audit-label}))
 
     (nil? ref)
-    (throw (ex-info (str "dataspex_track: label \"" label "\" has no :ref to watch")
+    (throw (ex-info (str "dataspex track: label \"" label "\" has no :ref to watch")
                     {:reason :not-watchable :label label}))
 
     :else
@@ -156,7 +156,7 @@ Opt in to full `:val` snapshots only when needed:
         {:tracked audit-label :history-limit 50})))
 ```
 
-### Equivalent of `dataspex_untrack`
+### Equivalent of `dataspex op=untrack`
 
 ```clojure
 (let [label "state"
@@ -166,24 +166,23 @@ Opt in to full `:val` snapshots only when needed:
   {:untracked audit-label :was-present? was-present?})
 ```
 
-### Equivalent of `dataspex_db_query`
+### Equivalent of `dataspex op=db_query`
 
 Server-side projection — only the result set crosses the wire, never the DB:
 
 ```clojure
 (do
-  (require '[cljs.reader :as reader]
-           '[datascript.core :as d])
+  (require 'cljs.reader 'datascript.core)
   (with-out-str
     (binding [*print-length* 100 *print-level* 5]
       (pr
         (let [db (:val (get @dataspex.core/store "db"))
-              q (reader/read-string "[:find ?e ?id :where [?e :patient/id ?id]]")
-              args (reader/read-string "[]")]
-          (apply d/q q db args))))))
+              q (cljs.reader/read-string "[:find ?e ?id :where [?e :patient/id ?id]]")
+              args (cljs.reader/read-string "[]")]
+          (apply datascript.core/q q db args))))))
 ```
 
-### Equivalent of `dataspex_actions_tail`
+### Equivalent of `dataspex op=actions_tail`
 
 `LogInspector` is JS-interop-flavoured — the underlying log is only reachable
 via `aget`:
@@ -197,7 +196,9 @@ via `aget`:
         (->> log
              (take-last 20)
              (mapv (fn [entry]
-                     (select-keys entry [:dispatched-at :dispatch-data]))))))))
+                     {:dispatched-at (:dispatched-at entry)
+                      :actions (some-> (:actions entry) (.-data))
+                      :dispatch-data (:dispatch-data entry)})))))))
 ```
 
 ## Pitfalls

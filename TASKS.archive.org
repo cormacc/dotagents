@@ -667,7 +667,6 @@ We want to be able to do the following with tmux
 
 Both spawn AND watch should either
 - create a new pane within the tmux frame
-
 ** DONE [#B] Fix ot mutations silently dropped for tasks inside imported plan files :ot:bug:org-tasks:
 CLOSED: [2026-05-25 Mon 09:31]
 :PROPERTIES:
@@ -682,3 +681,38 @@ CLOSED: [2026-05-25 Mon 09:31]
 - State "DONE" from "STARTED" [2026-05-25 Mon 09:31]
 :END:
 #+IMPORT: [[plan:2026-05-24-fix-ot-mutations-silently-dropped-for-ta.org]]
+** DONE [#C] Consolidate dataspex extension tools into a single dispatch tool :dataspex:pi-extension:
+CLOSED: [2026-05-27 Wed 11:30]
+:PROPERTIES:
+:CUSTOM_ID: fb7b59ff-d5e1-4505-b306-321d03d8461a
+:CREATED: [2026-05-27 Wed 10:51]
+:STARTED: [2026-05-27 Wed 11:00]
+:ARCHIVED: [2026-05-27 Wed 11:30]
+:END:
+:LOGBOOK:
+- Created [2026-05-27 Wed 10:51]
+- State "STARTED" from "TODO" [2026-05-27 Wed 11:00]
+- State "DONE" from "STARTED" [2026-05-27 Wed 11:30]
+:END:
+#+IMPORT: [[plan:2026-05-27-consolidate-dataspex-extension-tools-int.org]]
+Review and implement a lower-context Dataspex extension surface: replace or supplement the current seven `dataspex_*` tools with a single operation-dispatch tool, update the dataspex skill/README/fallback docs, and preserve tool effectiveness for live CLJS state inspection.
+
+** DONE Fix Qwen model configuration in lemonade-pi-plugin :pi:local-llm:
+CLOSED: [2026-05-27 Wed]
+:PROPERTIES:
+:CUSTOM_ID: 362a79a1-def3-4b9f-b090-c73dfc280cbd
+:CREATED: [2026-05-26 Tue 14:47]
+:STARTED: [2026-05-26 Tue 14:56]
+:ARCHIVED: [2026-05-27 Wed]
+:END:
+:LOGBOOK:
+- Created [2026-05-26 Tue 14:47]
+- State "STARTED" from "TODO" [2026-05-26 Tue 14:56]
+- State "DONE" from "STARTED" [2026-05-27 Wed]
+:END:
+#+IMPORT: [[plan:2026-05-26-fix-qwen-model-configuration-in-lemonade.org]]
+Qwen models deal with thinking level differently from anthropic/openai, causing failures when connecting from PI with default settings.
+This applies to all Qwen models I've tried so far apart from 3.6-35B-A3B-MTP.
+
+The issue and workaround are documented here: https://github.com/earendil-works/pi/issues/4862
+Update the lemonade-pi-plugin extension to apply the configuration change dynamically for all models including 'qwen' in the name.

@@ -1,6 +1,6 @@
 #+TITLE: Fix Qwen model configuration in lemonade-pi-plugin :pi:local-llm:
 #+DATE: 2026-05-26 Tue
-#+PARENT: [[task:362a79a1-def3-4b9f-b090-c73dfc280cbd][Fix Qwen model configuration in lemonade-pi-plugin :pi:local-llm:]]
+#+PARENT: [[archive:362a79a1-def3-4b9f-b090-c73dfc280cbd][Fix Qwen model configuration in lemonade-pi-plugin :pi:local-llm:]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary

@@ -1,0 +1,238 @@
+#+TITLE: Consolidate dataspex extension tools into a single dispatch tool :dataspex:pi-extension:
+#+DATE: 2026-05-27 Wed
+#+PARENT: [[archive:fb7b59ff-d5e1-4505-b306-321d03d8461a][Consolidate dataspex extension tools into a single dispatch tool :dataspex:pi-extension:]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Summary
+Collapse the seven active ~dataspex_*~ tools into one canonical ~dataspex~ tool with an ~op~ discriminator. Preserve the existing nREPL/shadow bridge, per-op CLJS forms, bounded-output protections, audit-label semantics, and result shapes; change only the registration surface, parameter schema, docs, and JS-side dispatch/validation. The intent is to reduce tool-list and provider-schema context while keeping Dataspex runtime inspection equally reliable.
+
+** Decisions
+- Register one active tool named ~dataspex~; do not keep active ~dataspex_*~ compatibility wrappers because they preserve the context cost being removed.
+- Use ~op~ as the discriminator with values ~labels~, ~value~, ~history~, ~track~, ~untrack~, ~db_query~, and ~actions_tail~. Underscores mirror the old tool-name suffixes and make migration mechanical. Hyphenated form is rejected; do not relitigate.
+- Implement the ~op~ enum with ~@sinclair/typebox~'s ~Type.Union(values.map(Type.Literal))~. ~StringEnum~ from ~@earendil-works/pi-ai~ / ~@mariozechner/pi-ai~ is not resolvable from this extension directory; typebox is the only available primitive.
+- Prefer a flat schema with optional op-specific fields plus TypeScript runtime narrowing over a seven-branch discriminated union. The union is stricter but likely pushes more JSON Schema into provider requests.
+- Validate op-specific required fields and numeric bounds in TypeScript before templating CLJS forms.
+- Do not add a TypeScript-side EDN-vector validator for ~value.path~ or ~db_query.args~; keep that error inside the CLJS form so existing reader/vector-check parity is preserved.
+- Copy the existing CLJS bodies and output projections verbatim where practical; do not combine this refactor with semantic changes to Dataspex reads.
+- Update README and skill prose to the new op surface; keep fallback CLJS forms functionally unchanged.
+
+** Gotchas
+- ~value~ defaults ~path~ to ~"[]"~; ~actions_tail~ defaults ~label~ to ~"Actions"~ only for that op; ~value~ and ~db_query~ use different ~limit~ defaults. Dispatcher code must apply per-op defaults, not global defaults.
+- Read ops return bounded strings from CLJS; ~track~ and ~untrack~ return Clojure data. Do not add an extra ~pr-str~ layer or otherwise change the ~unwrapClojureString~ path.
+- ~evalCljs~'s ~:results[0]~ + ~edn/read-string~ unwrap and explicit avoidance of ~:out~ are load-bearing for parallel tool execution.
+- The single tool name is less self-descriptive than ~dataspex_value~ etc.; the description and one-line ~promptSnippet~ must enumerate the op set without reintroducing verbose per-op prose.
+- Numeric params currently flow through ~Number(...)~ and are interpolated into CLJS. ~NaN~, non-finite, or negative values should become tool errors, not malformed CLJS.
+- ~buildLiteral~ remains the chokepoint for user-supplied shadow build ids.
+- Interactive sessions need ~/reload~ before the new tool surface is visible.
+- A standalone measurement harness for context savings must load ~index.ts~ via jiti or precompile it to ~.js~; plain ~node --import~ will fail on TS syntax. The May 2026 spike's ~.agents/tmp/dataspex-build/~ precompile approach is the precedent.
+- ~package.json~ and ~node_modules/~ of the dataspex extension are untouched by this refactor. ~bencode~ continues to resolve from ~pi-clojure/node_modules~ via Node's parent-walk; no ~agents.nix~ re-activation should be required.
+- ~actions_tail~ against a missing label currently throws inside CLJS via ~(aget nil "log")~. Parity tests must confirm the same error shape is preserved through the new dispatcher.
+- Resumed sessions may try retired ~dataspex_*~ names once before the skill update steers the model to the new spelling. Acceptable; surface in the README migration note.
+
+* Plan
+** DONE Define the consolidated tool contract
+CLOSED: [2026-05-27 Wed 11:17]
+:PROPERTIES:
+:CUSTOM_ID: 8ce61cd7-7615-4ddb-a831-1fcfd0b4be9e
+:CREATED: [2026-05-27 Wed]
+:STARTED: [2026-05-27 Wed 11:08]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-27 Wed 11:08]
+- State "DONE" from "STARTED" [2026-05-27 Wed 11:17]
+:END:
+Acceptance criteria:
+- Contract records tool name ~dataspex~, discriminator ~op~, exact op values, schema strategy, and per-op required fields.
+- Required fields are: ~value~ → ~label~; ~history~ → ~label~; ~track~ → ~label~; ~untrack~ → ~label~; ~db_query~ → ~label~, ~q~; ~labels~ → none; ~actions_tail~ → none.
+- ~op~ is implemented with ~Type.Union(Type.Literal(...))~ from ~@sinclair/typebox~; no other enum helper is introduced as a dependency.
+- Per-op default table is recorded inline: ~value~ ~{limit=50, level=5, path="[]"}~; ~db_query~ ~{limit=100, level=5, args="[]"}~; ~history~ ~{n=10, includeVal=false}~; ~actions_tail~ ~{label="Actions", n=20}~; ~track~ ~{historyLimit=50}~. The dispatcher applies these per op, not as schema defaults.
+
+** DONE Refactor ~index.ts~ into per-op handlers
+CLOSED: [2026-05-27 Wed 11:17]
+:PROPERTIES:
+:CUSTOM_ID: 4889bbe3-2cc4-46bf-9823-6b34278b5028
+:CREATED: [2026-05-27 Wed]
+:STARTED: [2026-05-27 Wed 11:10]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-27 Wed 11:10]
+- State "DONE" from "STARTED" [2026-05-27 Wed 11:17]
+:END:
+Acceptance criteria:
+- Existing shared helpers stay shared: ~resolveTarget~, ~evalCljs~, ~success~, ~errorResult~, ~stringLiteral~, ~buildLiteral~, ~unwrapClojureString~, ~byteLength~.
+- Seven handler functions cover the current operations: ~opLabels~, ~opValue~, ~opHistory~, ~opTrack~, ~opUntrack~, ~opDbQuery~, ~opActionsTail~.
+- Each handler preserves its current CLJS form, ~with-out-str~ / ~binding~ wrappers, projections, and ~details~ fields where practical.
+- Old and new code paths coexist in a single in-progress diff so per-op result text and ~details~ shape can be compared byte-for-byte before the seven old registrations are removed.
+- ~package.json~ and ~node_modules/~ for the extension are not modified by this task.
+
+** DONE Add dispatch-boundary validation and defaults
+CLOSED: [2026-05-27 Wed 11:17]
+:PROPERTIES:
+:CUSTOM_ID: 257a7a5b-8599-47b1-ac23-eeb912c2ba90
+:CREATED: [2026-05-27 Wed]
+:STARTED: [2026-05-27 Wed 11:10]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-27 Wed 11:10]
+- State "DONE" from "STARTED" [2026-05-27 Wed 11:17]
+:END:
+Acceptance criteria:
+- Helpers such as ~positiveInt~ and ~requireString~ reject invalid inputs with ~isError: true~ before any CLJS eval.
+- ~limit~, ~level~, ~n~, and ~historyLimit~ are finite positive integers with the same per-op defaults as today.
+- Required ~label~ and ~q~ fields are non-empty strings for ops that need them.
+- ~path~ and ~args~ default to ~"[]"~; EDN parsing remains in CLJS so existing reader errors and vector checks are preserved.
+- No TypeScript-side validation of ~value.path~ or ~db_query.args~ beyond ~requireString~ plus the ~"[]"~ default. EDN reader errors continue to come from ~cljs.reader/read-string~ inside CLJS.
+
+** DONE Replace seven tool registrations with one ~dataspex~ dispatcher
+CLOSED: [2026-05-27 Wed 11:17]
+:PROPERTIES:
+:CUSTOM_ID: 951d07d6-b9e1-4b8a-9616-ca66089edacd
+:CREATED: [2026-05-27 Wed]
+:STARTED: [2026-05-27 Wed 11:10]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-27 Wed 11:10]
+- State "DONE" from "STARTED" [2026-05-27 Wed 11:17]
+:END:
+Acceptance criteria:
+- The extension registers exactly one active Dataspex tool: ~name: "dataspex"~, ~label: "Dataspex"~.
+- Parameters include required ~op~, shared target params once (~host?~, ~port?~, ~buildId?~), and flat optional op-specific fields.
+- ~execute~ resolves the target once, dispatches on ~op~, and returns actionable errors for unknown ops or missing op-specific fields.
+- Retired tool names are no longer registered: ~dataspex_labels~, ~dataspex_value~, ~dataspex_history~, ~dataspex_track~, ~dataspex_untrack~, ~dataspex_db_query~, ~dataspex_actions_tail~.
+- Single-sentence ~description~ ≤ 400 bytes and single-line ~promptSnippet~ ≤ 200 bytes; both enumerate the seven ~op~ values once.
+- After a pi ~/reload~, exactly one Dataspex tool is present in the tool registry and none of the seven retired names are callable.
+
+** DONE Update README, skill, and fallback headings
+CLOSED: [2026-05-27 Wed 11:17]
+:PROPERTIES:
+:CUSTOM_ID: bf6935b1-20cf-4513-ba0b-c35c541f4de9
+:CREATED: [2026-05-27 Wed]
+:STARTED: [2026-05-27 Wed 11:12]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-27 Wed 11:12]
+- State "DONE" from "STARTED" [2026-05-27 Wed 11:17]
+:END:
+Acceptance criteria:
+- ~pi/extensions/dataspex/README.md~ documents one ~dataspex~ tool with an op table and a short migration sentence from old tool names; migration note acknowledges that resumed sessions may try the old names once before the model adapts.
+- ~skills/dataspex/SKILL.md~ updates "Two paths", "Tool surface", workflow steps, and gotchas to call ~dataspex {op: ...}~.
+- Skill frontmatter is not modified in this change. Any trigger-quality regression is recorded as a follow-up TODO rather than handled inline.
+- Inline tool-name references in SKILL.md ~## Anti-triggers~, ~## Workflow~, ~## Conventions~, and ~## Gotchas~ are rewritten or removed. Specifically: ~dataspex_value :fresh? true~, ~dataspex_track~/~dataspex_untrack~ workflow callouts, ~The dataspex_* tools encapsulate this~, ~The dataspex_actions_tail tool wraps this~, ~The dataspex_track tool encodes this~.
+- ~skills/dataspex/references/fallback.md~ retitles headings from "Equivalent of ~dataspex_*~" to "Equivalent of ~dataspex op=...~"; CLJS forms remain functionally unchanged.
+- Remaining references to retired names are clearly migration/history/fallback references, not active instructions.
+
+** DONE Measure realised context saving
+CLOSED: [2026-05-27 Wed 11:17]
+:PROPERTIES:
+:CUSTOM_ID: 69efa307-6433-4aa1-a2e9-cbc220b35ac5
+:CREATED: [2026-05-27 Wed]
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-27 Wed 11:17]
+:END:
+Acceptance criteria:
+- A lightweight harness records before/after Dataspex tool count and rough provider-schema byte count, e.g. serialised registered tool parameter schemas.
+- Post-consolidation count is exactly one active Dataspex tool.
+- Post-consolidation serialised tool-schema payload for Dataspex tools is ≤ 50% of the pre-consolidation total. If 50–80%, descriptions are trimmed and re-measured before closing. If > 80%, the schema strategy is revisited and the flat-vs-union open question is reopened.
+- Measurement harness loads ~index.ts~ via jiti (preferred) or a one-shot ~tsc~/~esbuild~ step under ~.agents/tmp/dataspex-consolidation/~, mirroring the May 2026 spike's ~.agents/tmp/dataspex-build/~ precedent. The chosen approach is recorded in ~* Validation~.
+
+** DONE Validate parity and failure paths
+CLOSED: [2026-05-27 Wed 11:17]
+:PROPERTIES:
+:CUSTOM_ID: 6e6876f7-1f77-490a-9d87-1392388d4794
+:CREATED: [2026-05-27 Wed]
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-27 Wed 11:17]
+:END:
+Acceptance criteria:
+- Harness load asserts one registered tool named ~dataspex~.
+- Per-op smoke covers ~labels~, ~value~ (whole and path), ~history~, ~track~, ~untrack~, ~db_query~, and ~actions_tail~ with the same representative args used by the previous seven tools.
+- ~track~ refusal cases still return ~isError: true~ for missing label, non-watchable label, and pre-existing audit label.
+- ~actions_tail~ against a missing label produces the same CLJS-side error shape as the pre-consolidation behaviour.
+- ~value~ with a non-vector ~path~ still returns the ~"path must be an EDN vector"~ error coming from CLJS.
+- Parallel smoke uses ~Promise.all~ across multiple ops and confirms output isolation still comes from ~:results[0]~, not ~:out~.
+- Docs grep confirms retired ~dataspex_*~ names remain only in migration/history/fallback contexts.
+- If no live Dataspex-enabled shadow-cljs app is available, record the validation gap and create a follow-up smoke task rather than silently closing it.
+
+** DONE Run live Dataspex smoke for the consolidated tool
+CLOSED: [2026-05-27 Wed 11:27]
+:PROPERTIES:
+:CUSTOM_ID: 6ee7477b-ac7f-48a6-8f65-d5730c37b474
+:CREATED: [2026-05-27 Wed]
+:STARTED: [2026-05-27 Wed 11:27]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-27 Wed 11:27]
+- State "DONE" from "STARTED" [2026-05-27 Wed 11:27]
+:END:
+Acceptance criteria:
+- Against a Dataspex-enabled shadow-cljs browser runtime, run all seven ops through the consolidated ~dataspex~ tool: ~labels~, ~value~ (whole and path), ~history~, ~track~, ~untrack~, ~db_query~, and ~actions_tail~.
+- Confirm ~track~ refusal cases, ~actions_tail~ missing-label error shape, ~value~ non-vector path error, and parallel ~:results[0]~ isolation.
+- Record target app/build/port and smoke outputs in ~* Validation~ before closing this follow-up.
+
+* Implementation
+- ~pi/extensions/dataspex/index.ts~ now registers one active tool named ~dataspex~. The flat schema exposes required ~op~ plus optional op-specific fields and shared target params once. ~op~ uses typebox literals/union only.
+- Current seven operations moved into per-op helpers: ~opLabels~, ~opValue~, ~opHistory~, ~opTrack~, ~opUntrack~, ~opDbQuery~, and ~opActionsTail~. Shared bridge helpers remain in place, including ~evalCljs~, ~buildLiteral~, ~unwrapClojureString~, and bounded read forms.
+- Dispatch-boundary validators ~requireString~, ~optionalString~, and ~positiveInt~ reject missing required fields and invalid numeric params before target resolution / CLJS eval. EDN parsing for ~path~ and ~args~ remains in CLJS.
+- Per-op defaults preserved: ~value~ ~path="[]" limit=50 level=5~; ~db_query~ ~args="[]" limit=100 level=5~; ~history~ ~n=10 includeVal=false~; ~actions_tail~ ~label="Actions" n=20~; ~track~ ~historyLimit=50~.
+- README and skill docs now present one ~dataspex {op: ...}~ surface. Fallback headings were retitled to op names. Live smoke exposed same-form alias warnings for ~cljs.reader~ / ~datascript.core~ in shadow cljs-eval, so fallback ~db_query~ now uses fully qualified namespace calls matching the fixed extension form.
+- ~opActionsTail~ projection refined post-spike to include the dispatched Nexus actions: ~{:dispatched-at :actions :dispatch-data}~ where ~:actions~ unwraps ~Action.data~ via ~(some-> (:actions entry#) (.-data))~. Default-projection text in README and SKILL was updated to match.
+- Final-review pass also renamed the live CLJS ~ex-info~ message prefixes from ~dataspex_track:~ / ~dataspex_value:~ to ~dataspex track:~ / ~dataspex value:~ so error text aligns with the consolidated tool surface. Fallback ~track~ form was updated to match. The ~ex-info~ ~:reason~ payload keys and dispatcher ~isError~ shape are unchanged.
+- ~SKILL.md~ ~fresh~ gotcha bullet was normalised to the JS-style ~fresh: true~ form to match the actual parameter name.
+- ~pi/extensions/dataspex/package.json~ and ~node_modules/~ were not modified. Temporary validation files live under ~.agents/tmp/dataspex-consolidation/~.
+
+* Validation
+- Registration/schema harness: ~node .agents/tmp/dataspex-consolidation/tool-surface-harness.cjs~. It loads before/after sources through jiti with temp typebox/nREPL stubs, asserts one post-change tool named ~dataspex~, and records schema footprint in ~tool-surface-report.json~.
+  - Before: 7 Dataspex tools, 6326 payload bytes.
+  - After: 1 Dataspex tool, 1595 payload bytes.
+  - Ratio: 25.2%, below the ≤50% target.
+  - Description: 101 bytes; promptSnippet: 81 bytes.
+- Dispatch validation harness: ~node .agents/tmp/dataspex-consolidation/dispatch-validation.cjs~. Confirmed unknown op, missing ~label~, missing ~q~, negative ~n~, and non-integer ~limit~ all return ~isError: true~ before invoking ~evalExpr~.
+- Grep checks:
+  - ~rg -n "pi\\.registerTool" pi/extensions/dataspex/index.ts~ → 1.
+  - ~rg -n "name: \"dataspex_" pi/extensions/dataspex/index.ts~ → 0.
+  - ~rg -n "dataspex_(labels|value|history|track|untrack|db_query|actions_tail)" skills/dataspex/SKILL.md~ → one migration-note hit only.
+  - Repo docs grep leaves only README migration names and fallback ~dataspex_track~ CLJS error strings.
+- Live shadow-cljs/Dataspex smoke ran against ~/home/cormacc/nmd/products/connect/portal~, shadow build ~:app~, nREPL port ~9000~.
+  - ~dataspex {op: "labels"}~ returned labels ~Actions~, ~hiccup~, ~state~, ~db~, and ~Taps~.
+  - ~value~ whole-state smoke returned a bounded map; ~value~ path smoke with ~[:patient]~ returned ~{:editing? false, :edit nil}~.
+  - First live ~value~ path and ~db_query~ attempts exposed shadow warnings for aliases introduced by same-form ~(require '[cljs.reader :as reader])~ / ~(require '[datascript.core :as d])~. Fixed extension and fallback forms to require namespaces by symbol and call ~cljs.reader/read-string~ / ~datascript.core/q~ fully qualified; rerun passed.
+  - ~db_query~ with ~[:find ?e :where [?e :patient/id]]~ returned ~#{[3] [21]}~.
+  - ~actions_tail~ initially returned only ~[:dispatched-at :dispatch-data]~, which omitted the dispatched Nexus actions. Follow-up live inspection showed the actions live under Nexus' ~Action.data~ at ~(:actions entry)~. Updated ~opActionsTail~ and fallback docs to project ~{:dispatched-at (:dispatched-at entry) :actions (some-> (:actions entry) (.-data)) :dispatch-data (:dispatch-data entry)}~; verified against the live app that the last entry includes ~[[:db-sync/save-sync-status] [:db-sync/upload-completed]]~.
+  - Track/history/untrack smoke used a temporary ~pi-smoke~ atom inspected via CLJS, then ~track~ registered ~pi-smoke-audit~, mutation produced history diff ~([[:n] :+ 1] [[:n] :- 0])~, and ~untrack~ removed the audit label. Temporary ~pi-smoke~ label was cleaned up with ~dataspex.core/uninspect~.
+  - Refusal smoke passed: missing label, non-watchable ~hiccup~, pre-existing ~pi-smoke-audit~, non-vector ~value~ path, and missing ~actions_tail~ label all returned expected CLJS-side errors.
+  - Parallel smoke via concurrent ~labels~, ~value~, ~db_query~, and ~actions_tail~ calls returned isolated outputs, preserving the ~:results[0]~ / no-~:out~ guarantee.
+- Post-live-fix validation reran ~node .agents/tmp/dataspex-consolidation/tool-surface-harness.cjs~ and ~node .agents/tmp/dataspex-consolidation/dispatch-validation.cjs~; schema ratio remains 25.2%, one active ~dataspex~ tool, and dispatch validation still has five expected error cases. After the ~actions_tail~ projection correction the surface harness reran clean: payload remains 1595 bytes / 25.2%.
+- Final-review pass: harnesses reran a third time after the ~ex-info~ message-prefix rename and the ~fresh~ gotcha normalisation; still 1 active ~dataspex~ tool, 1595 bytes, 25.2% of baseline, and the same five dispatch-error cases. Live refusal smoke against the running ~connect/portal~ runtime confirmed the dispatcher still returns ~isError: true~ for missing label, non-watchable ~hiccup~, and non-vector ~value~ path; the *message text* still showed the old prefix in this session because the running pi has not yet been ~/reload~ed, but the source is updated for the next reload.
+
+* Open questions
+** DECIDED Which enum helper should implement ~op~?
+:PROPERTIES:
+:DECIDED: [2026-05-27 Wed]
+:END:
+Decision: ~@sinclair/typebox~'s ~Type.Union(values.map(Type.Literal))~. Verified that neither ~@earendil-works/pi-ai~ nor ~@mariozechner/pi-ai~ resolves from the dataspex extension directory; typebox is the only available primitive.
+
+** DECIDED Should op values use underscores or hyphens?
+:PROPERTIES:
+:DECIDED: [2026-05-27 Wed]
+:END:
+Decision: underscores. They match the existing tool-name suffixes and make migration from ~dataspex_db_query~ → ~dataspex {op: "db_query"}~ mechanical.
+
+** DECIDED Should the schema use a discriminated union instead of flat optionals?
+:PROPERTIES:
+:DECIDED: [2026-05-27 Wed]
+:END:
+Decision: use flat optionals plus runtime validation. The measured post-change payload is 25.2% of the seven-tool baseline, so a discriminated union is unnecessary unless model argument quality regresses.
+
+** DECIDED Should old wrappers be retained behind an opt-in compatibility flag?
+:PROPERTIES:
+:DECIDED: [2026-05-27 Wed]
+:END:
+Decision: no. Active wrappers defeat the context-reduction goal; aliases will be reconsidered only if external automation proves it needs them.
+
+** DECIDED Should the final description/snippet be shortened further?
+:PROPERTIES:
+:DECIDED: [2026-05-27 Wed]
+:END:
+Decision: no immediate shortening. The current description is 101 bytes, promptSnippet is 81 bytes, and the combined schema payload is 25.2% of baseline. Revisit only if model selection quality regresses.

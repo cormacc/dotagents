@@ -18,6 +18,22 @@
 
 * Explorations
 
+** TODO [#B] Evaluate subagent workflow options
+:PROPERTIES:
+:CUSTOM_ID: 720b13c6-c46c-4ffd-9c87-5248c39f54ef
+:CREATED: [2026-05-27 Wed 11:00]
+:END:
+:LOGBOOK:
+- Created [2026-05-27 Wed 11:00]
+:END:
+Currently I'm using the pi-subagents extension from pi-dev, but it may be a bit too opinionated...
+Evaluate some lighter weight alternative.
+- Roll my own?
+- https://github.com/hazat/pi-interactive-subagents
+- https://github.com/elpapi42/pi-fork / https://github.com/elpapi42/pi-minimal-subagent
+- Others?
+The hazat one above looks interesting. Fairly mature, multiple contributors and some nice UX (widget, discrete window per agent, tmux/zellij integration etc.)
+
 ** TODO [#C] Codebase intelligence tool evaluation
 :PROPERTIES:
 :CUSTOM_ID: 6d22d6ed-1fd1-46cb-965f-12d355612b53
@@ -54,6 +70,8 @@ https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without poll
 :END:
 I'm enjoying the org-tasks flow for task tracking and planning, but it's not really agent memory.
 Identify a lower layer more immediately useful to the agent. This is a crowded/interesting space.
+
+Here's one https://github.com/elpapi42/pi-observational-memory
 **** TODO [#C] Evaluate pi-hermes-memory plugin :pi:memory:
 :PROPERTIES:
 :CUSTOM_ID: 5d36628d-818d-4823-a8b4-723b8e3145e9
@@ -182,26 +200,6 @@ Code cleanups
 Extend the tty extension beyond its current tmux backend with a zellij backend while preserving the `/t` command surface and backend-neutral tool names.
 
 * Fixes
-
-** DONE Fix Qwen model configuration in lemonade-pi-plugin :pi:local-llm:
-CLOSED: [2026-05-27 Wed]
-:PROPERTIES:
-:CUSTOM_ID: 362a79a1-def3-4b9f-b090-c73dfc280cbd
-:CREATED: [2026-05-26 Tue 14:47]
-:STARTED: [2026-05-26 Tue 14:56]
-:END:
-:LOGBOOK:
-- Created [2026-05-26 Tue 14:47]
-- State "STARTED" from "TODO" [2026-05-26 Tue 14:56]
-- State "DONE" from "STARTED" [2026-05-27 Wed]
-:END:
-#+IMPORT: [[plan:2026-05-26-fix-qwen-model-configuration-in-lemonade.org]]
-Qwen models deal with thinking level differently from anthropic/openai, causing failures when connecting from PI with default settings.
-This applies to all Qwen models I've tried so far apart from 3.6-35B-A3B-MTP.
-
-The issue and workaround are documented here: https://github.com/earendil-works/pi/issues/4862
-Update the lemonade-pi-plugin extension to apply the configuration change dynamically for all models including 'qwen' in the name.
-
 
 ** TODO Local tasks duplicated in overlay when selected? :bug:pi:
 :PROPERTIES:

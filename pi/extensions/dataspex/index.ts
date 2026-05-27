@@ -18,6 +18,9 @@ const PORT_FILES = [
   ".cider-nrepl.port",
 ];
 
+const OP_VALUES = ["labels", "value", "history", "track", "untrack", "db_query", "actions_tail"] as const;
+type DataspexOp = typeof OP_VALUES[number];
+
 function stringLiteral(value: string): string {
   return JSON.stringify(value);
 }
@@ -149,23 +152,28 @@ function errorResult(message: string, extra: Record<string, unknown> = {}) {
   };
 }
 
-const targetParams = {
-  buildId: Type.Optional(Type.String({ description: "shadow-cljs build id, with or without leading ':'" })),
-  port: Type.Optional(Type.Number({ description: "nREPL port. Defaults to standard port files in the current working directory." })),
-  host: Type.Optional(Type.String({ description: "nREPL host", default: "localhost" })),
-};
+function requireString(value: unknown, name: string): string {
+  if (value == null) throw new Error(`dataspex: ${name} is required`);
+  const text = String(value);
+  if (text.trim().length === 0) throw new Error(`dataspex: ${name} must be a non-empty string`);
+  return text;
+}
 
-export default function (pi: ExtensionAPI) {
-  pi.registerTool(defineTool({
-    name: "dataspex_labels",
-    label: "Dataspex Labels",
-    description: "List Dataspex user labels in a running ClojureScript app via shadow-cljs nREPL, excluding Dataspex internal store keys.",
-    promptSnippet: "List Dataspex inspect labels in a running CLJS app",
-    parameters: Type.Object({ ...targetParams }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const target = await resolveTarget(params, ctx.cwd);
-        const text = await evalCljs(target, `
+function optionalString(value: unknown, defaultValue: string): string {
+  return value != null ? String(value) : defaultValue;
+}
+
+function positiveInt(value: unknown, defaultValue: number, name: string): number {
+  if (value == null) return defaultValue;
+  const number = Number(value);
+  if (!Number.isFinite(number) || !Number.isInteger(number) || number <= 0) {
+    throw new Error(`dataspex: ${name} must be a positive integer`);
+  }
+  return number;
+}
+
+async function opLabels(target: DataspexTarget) {
+  const text = await evalCljs(target, `
 (with-out-str
   (binding [*print-length* 200 *print-level* 5]
     (pr
@@ -185,74 +193,34 @@ export default function (pi: ExtensionAPI) {
                          (seq? v#) "seq"
                          :else (subs t# 0 (min 80 (count t#)))))
            :has-ref? (some? (:ref e))})))))`);
-        return success(text, target);
-      } catch (e) {
-        return errorResult(e instanceof Error ? e.message : String(e));
-      }
-    },
-  }));
+  return success(text, target, { op: "labels" });
+}
 
-  pi.registerTool(defineTool({
-    name: "dataspex_value",
-    label: "Dataspex Value",
-    description: "Read a bounded current value from a Dataspex label. Optional path is an EDN vector such as [:patient :name]; fresh dereferences the underlying ref when present.",
-    promptSnippet: "Read current value from a Dataspex label",
-    parameters: Type.Object({
-      label: Type.String({ description: "Dataspex label to read" }),
-      path: Type.Optional(Type.String({ description: "EDN vector path to navigate, e.g. [:patient :name]. Defaults to []." })),
-      fresh: Type.Optional(Type.Boolean({ description: "Dereference :ref instead of reading the last :val snapshot" })),
-      limit: Type.Optional(Type.Number({ description: "CLJS *print-length* bound (default 50)" })),
-      level: Type.Optional(Type.Number({ description: "CLJS *print-level* bound (default 5)" })),
-      ...targetParams,
-    }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const target = await resolveTarget(params, ctx.cwd);
-        const label = stringLiteral(String(params.label));
-        const navPath = params.path ? String(params.path) : "[]";
-        const navPathLiteral = stringLiteral(navPath);
-        const limit = Number(params.limit ?? 50);
-        const level = Number(params.level ?? 5);
-        const valueExpr = params.fresh
-          ? `(some-> (:ref entry#) deref)`
-          : `(:val entry#)`;
-        const text = await evalCljs(target, `
+async function opValue(target: DataspexTarget, params: { label: string; path: string; fresh: boolean; limit: number; level: number }) {
+  const label = stringLiteral(params.label);
+  const navPathLiteral = stringLiteral(params.path);
+  const valueExpr = params.fresh
+    ? `(some-> (:ref entry#) deref)`
+    : `(:val entry#)`;
+  const text = await evalCljs(target, `
 (do
-  (require '[cljs.reader :as reader])
+  (require 'cljs.reader)
   (with-out-str
-    (binding [*print-length* ${limit} *print-level* ${level}]
+    (binding [*print-length* ${params.limit} *print-level* ${params.level}]
       (pr
         (let [entry# (get @dataspex.core/store ${label})
               value# ${valueExpr}
-              path# (reader/read-string ${navPathLiteral})]
+              path# (cljs.reader/read-string ${navPathLiteral})]
           (when-not (vector? path#)
-            (throw (ex-info "dataspex_value: path must be an EDN vector" {:path path#})))
+            (throw (ex-info "dataspex value: path must be an EDN vector" {:path path#})))
           (if (seq path#) (get-in value# path#) value#))))))`);
-        return success(text, target, { label: params.label, path: navPath, fresh: Boolean(params.fresh) });
-      } catch (e) {
-        return errorResult(e instanceof Error ? e.message : String(e));
-      }
-    },
-  }));
+  return success(text, target, { op: "value", label: params.label, path: params.path, fresh: params.fresh });
+}
 
-  pi.registerTool(defineTool({
-    name: "dataspex_history",
-    label: "Dataspex History",
-    description: "Read the latest Dataspex audit history entries for a label. If <label>-audit exists, it is used as the parallel tracking label.",
-    promptSnippet: "Read Dataspex audit history for a label",
-    parameters: Type.Object({
-      label: Type.String({ description: "Dataspex label or original label with a parallel <label>-audit tracker" }),
-      n: Type.Optional(Type.Number({ description: "Number of latest entries to return (default 10)" })),
-      includeVal: Type.Optional(Type.Boolean({ description: "Include full :val snapshots; default false" })),
-      ...targetParams,
-    }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const target = await resolveTarget(params, ctx.cwd);
-        const label = stringLiteral(String(params.label));
-        const n = Number(params.n ?? 10);
-        const keys = params.includeVal ? "[:rev :created-at :diff :val]" : "[:rev :created-at :diff]";
-        const text = await evalCljs(target, `
+async function opHistory(target: DataspexTarget, params: { label: string; n: number; includeVal: boolean }) {
+  const label = stringLiteral(params.label);
+  const keys = params.includeVal ? "[:rev :created-at :diff :val]" : "[:rev :created-at :diff]";
+  const text = await evalCljs(target, `
 (with-out-str
   (binding [*print-length* 80 *print-level* 6]
     (pr
@@ -262,145 +230,165 @@ export default function (pi: ExtensionAPI) {
             hist# (:history (get @dataspex.core/store actual-label#))]
         {:label actual-label#
          :history (->> hist#
-                       (take ${n})
+                       (take ${params.n})
                        (mapv (fn [h#] (select-keys h# ${keys}))))}))))`);
-        return success(text, target, { label: params.label, n, includeVal: Boolean(params.includeVal) });
-      } catch (e) {
-        return errorResult(e instanceof Error ? e.message : String(e));
-      }
-    },
-  }));
+  return success(text, target, { op: "history", label: params.label, n: params.n, includeVal: params.includeVal });
+}
 
-  pi.registerTool(defineTool({
-    name: "dataspex_track",
-    label: "Dataspex Track",
-    description: "Register a parallel <label>-audit Dataspex label with :track-changes? true. Refuses to overwrite an existing audit label.",
-    promptSnippet: "Track Dataspex changes with a parallel audit label",
-    parameters: Type.Object({
-      label: Type.String({ description: "Existing Dataspex label whose :ref should be tracked" }),
-      historyLimit: Type.Optional(Type.Number({ description: "History limit fixed at registration time (default 50)" })),
-      ...targetParams,
-    }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const target = await resolveTarget(params, ctx.cwd);
-        const label = stringLiteral(String(params.label));
-        const historyLimit = Number(params.historyLimit ?? 50);
-        const text = await evalCljs(target, `
+async function opTrack(target: DataspexTarget, params: { label: string; historyLimit: number }) {
+  const label = stringLiteral(params.label);
+  const text = await evalCljs(target, `
 (let [label# ${label}
       audit-label# (str label# "-audit")
       entry# (get @dataspex.core/store label#)
       ref# (:ref entry#)]
   (cond
     (nil? entry#)
-    (throw (ex-info (str "dataspex_track: no such label \\"" label# "\\"") {:reason :missing-label :label label#}))
+    (throw (ex-info (str "dataspex track: no such label \\"" label# "\\"") {:reason :missing-label :label label#}))
 
     (contains? @dataspex.core/store audit-label#)
-    (throw (ex-info (str "dataspex_track: audit label \\"" audit-label# "\\" already exists; untrack first") {:reason :audit-label-exists :label audit-label#}))
+    (throw (ex-info (str "dataspex track: audit label \\"" audit-label# "\\" already exists; untrack first") {:reason :audit-label-exists :label audit-label#}))
 
     (nil? ref#)
-    (throw (ex-info (str "dataspex_track: label \\"" label# "\\" has no :ref to watch") {:reason :not-watchable :label label#}))
+    (throw (ex-info (str "dataspex track: label \\"" label# "\\" has no :ref to watch") {:reason :not-watchable :label label#}))
 
     :else
-    (do (dataspex.core/inspect audit-label# ref# {:track-changes? true :history-limit ${historyLimit}})
-        {:tracked audit-label# :history-limit ${historyLimit}})))`);
-        return success(text, target, { label: params.label, historyLimit });
-      } catch (e) {
-        return errorResult(e instanceof Error ? e.message : String(e));
-      }
-    },
-  }));
+    (do (dataspex.core/inspect audit-label# ref# {:track-changes? true :history-limit ${params.historyLimit}})
+        {:tracked audit-label# :history-limit ${params.historyLimit}})))`);
+  return success(text, target, { op: "track", label: params.label, historyLimit: params.historyLimit });
+}
 
-  pi.registerTool(defineTool({
-    name: "dataspex_untrack",
-    label: "Dataspex Untrack",
-    description: "Remove the parallel <label>-audit Dataspex label created by dataspex_track.",
-    promptSnippet: "Remove a Dataspex parallel audit label",
-    parameters: Type.Object({
-      label: Type.String({ description: "Original label or explicit <label>-audit label" }),
-      ...targetParams,
-    }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const target = await resolveTarget(params, ctx.cwd);
-        const label = stringLiteral(String(params.label));
-        const text = await evalCljs(target, `
+async function opUntrack(target: DataspexTarget, params: { label: string }) {
+  const label = stringLiteral(params.label);
+  const text = await evalCljs(target, `
 (let [label# ${label}
       audit-label# (if (.endsWith label# "-audit") label# (str label# "-audit"))
       was-present?# (contains? @dataspex.core/store audit-label#)]
   (dataspex.core/uninspect audit-label#)
   {:untracked audit-label# :was-present? was-present?#})`);
-        return success(text, target, { label: params.label });
-      } catch (e) {
-        return errorResult(e instanceof Error ? e.message : String(e));
-      }
-    },
-  }));
+  return success(text, target, { op: "untrack", label: params.label });
+}
 
-  pi.registerTool(defineTool({
-    name: "dataspex_db_query",
-    label: "Dataspex DB Query",
-    description: "Run a datascript query against a DB stored under a Dataspex label. Returns the result set only, never the whole DB.",
-    promptSnippet: "Query a runtime Datascript DB exposed through Dataspex",
-    parameters: Type.Object({
-      label: Type.String({ description: "Dataspex label whose value is a datascript DB or conn snapshot" }),
-      q: Type.String({ description: "EDN datascript query, e.g. [:find ?e :where [?e :patient/id]]" }),
-      args: Type.Optional(Type.String({ description: "EDN vector of extra query args after the DB, default []" })),
-      limit: Type.Optional(Type.Number({ description: "CLJS *print-length* bound (default 100)" })),
-      level: Type.Optional(Type.Number({ description: "CLJS *print-level* bound (default 5)" })),
-      ...targetParams,
-    }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const target = await resolveTarget(params, ctx.cwd);
-        const label = stringLiteral(String(params.label));
-        const q = stringLiteral(String(params.q));
-        const args = stringLiteral(String(params.args ?? "[]"));
-        const limit = Number(params.limit ?? 100);
-        const level = Number(params.level ?? 5);
-        const text = await evalCljs(target, `
+async function opDbQuery(target: DataspexTarget, params: { label: string; q: string; args: string; limit: number; level: number }) {
+  const label = stringLiteral(params.label);
+  const q = stringLiteral(params.q);
+  const args = stringLiteral(params.args);
+  const text = await evalCljs(target, `
 (do
-  (require '[cljs.reader :as reader] '[datascript.core :as d])
+  (require 'cljs.reader 'datascript.core)
   (with-out-str
-    (binding [*print-length* ${limit} *print-level* ${level}]
+    (binding [*print-length* ${params.limit} *print-level* ${params.level}]
       (pr
         (let [db# (:val (get @dataspex.core/store ${label}))
-              q# (reader/read-string ${q})
-              args# (reader/read-string ${args})]
-          (apply d/q q# db# args#))))))`);
-        return success(text, target, { label: params.label });
-      } catch (e) {
-        return errorResult(e instanceof Error ? e.message : String(e));
-      }
-    },
-  }));
+              q# (cljs.reader/read-string ${q})
+              args# (cljs.reader/read-string ${args})]
+          (apply datascript.core/q q# db# args#))))))`);
+  return success(text, target, { op: "db_query", label: params.label });
+}
 
-  pi.registerTool(defineTool({
-    name: "dataspex_actions_tail",
-    label: "Dataspex Actions Tail",
-    description: "Read the latest nexus action log entries from a Dataspex LogInspector label, projected to dispatch time and data by default.",
-    promptSnippet: "Tail nexus action log entries exposed through Dataspex",
-    parameters: Type.Object({
-      label: Type.Optional(Type.String({ description: "Dataspex action-log label (default Actions)" })),
-      n: Type.Optional(Type.Number({ description: "Number of latest entries to return (default 20)" })),
-      ...targetParams,
-    }),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      try {
-        const target = await resolveTarget(params, ctx.cwd);
-        const label = stringLiteral(String(params.label ?? "Actions"));
-        const n = Number(params.n ?? 20);
-        const text = await evalCljs(target, `
+async function opActionsTail(target: DataspexTarget, params: { label: string; n: number }) {
+  const label = stringLiteral(params.label);
+  const text = await evalCljs(target, `
 (with-out-str
   (binding [*print-length* 80 *print-level* 5]
     (pr
       (let [li# (:val (get @dataspex.core/store ${label}))
             log# (aget li# "log")]
         (->> log#
-             (take-last ${n})
+             (take-last ${params.n})
              (mapv (fn [entry#]
-                     (select-keys entry# [:dispatched-at :dispatch-data]))))))))`);
-        return success(text, target, { label: params.label ?? "Actions", n });
+                     {:dispatched-at (:dispatched-at entry#)
+                      :actions (some-> (:actions entry#) (.-data))
+                      :dispatch-data (:dispatch-data entry#)})))))))`);
+  return success(text, target, { op: "actions_tail", label: params.label, n: params.n });
+}
+
+const targetParams = {
+  buildId: Type.Optional(Type.String({ description: "shadow-cljs build id" })),
+  port: Type.Optional(Type.Number({ description: "nREPL port" })),
+  host: Type.Optional(Type.String({ description: "nREPL host", default: "localhost" })),
+};
+
+const opSchema = Type.Union(OP_VALUES.map((op) => Type.Literal(op)));
+
+export default function (pi: ExtensionAPI) {
+  pi.registerTool(defineTool({
+    name: "dataspex",
+    label: "Dataspex",
+    description: "Inspect Dataspex CLJS runtime state with op labels,value,history,track,untrack,db_query,actions_tail.",
+    promptSnippet: "Inspect Dataspex with op labels/value/history/track/untrack/db_query/actions_tail",
+    parameters: Type.Object({
+      op: opSchema,
+      label: Type.Optional(Type.String({ description: "Dataspex label" })),
+      path: Type.Optional(Type.String({ description: "EDN vector path" })),
+      fresh: Type.Optional(Type.Boolean({ description: "deref :ref for value" })),
+      n: Type.Optional(Type.Number({ description: "entry count" })),
+      includeVal: Type.Optional(Type.Boolean({ description: "include history :val" })),
+      historyLimit: Type.Optional(Type.Number({ description: "audit history limit" })),
+      q: Type.Optional(Type.String({ description: "EDN datascript query" })),
+      args: Type.Optional(Type.String({ description: "EDN query args vector" })),
+      limit: Type.Optional(Type.Number({ description: "print length" })),
+      level: Type.Optional(Type.Number({ description: "print level" })),
+      ...targetParams,
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      try {
+        const op = String(params.op) as DataspexOp;
+        if (!(OP_VALUES as readonly string[]).includes(op)) {
+          throw new Error(`dataspex: unknown op ${String(params.op)}; expected one of ${OP_VALUES.join(", ")}`);
+        }
+
+        let run: (target: DataspexTarget) => Promise<unknown>;
+        switch (op) {
+          case "labels":
+            run = (target) => opLabels(target);
+            break;
+          case "value": {
+            const label = requireString(params.label, "label");
+            const path = params.path ? String(params.path) : "[]";
+            const fresh = Boolean(params.fresh);
+            const limit = positiveInt(params.limit, 50, "limit");
+            const level = positiveInt(params.level, 5, "level");
+            run = (target) => opValue(target, { label, path, fresh, limit, level });
+            break;
+          }
+          case "history": {
+            const label = requireString(params.label, "label");
+            const n = positiveInt(params.n, 10, "n");
+            const includeVal = Boolean(params.includeVal);
+            run = (target) => opHistory(target, { label, n, includeVal });
+            break;
+          }
+          case "track": {
+            const label = requireString(params.label, "label");
+            const historyLimit = positiveInt(params.historyLimit, 50, "historyLimit");
+            run = (target) => opTrack(target, { label, historyLimit });
+            break;
+          }
+          case "untrack": {
+            const label = requireString(params.label, "label");
+            run = (target) => opUntrack(target, { label });
+            break;
+          }
+          case "db_query": {
+            const label = requireString(params.label, "label");
+            const q = requireString(params.q, "q");
+            const args = optionalString(params.args, "[]");
+            const limit = positiveInt(params.limit, 100, "limit");
+            const level = positiveInt(params.level, 5, "level");
+            run = (target) => opDbQuery(target, { label, q, args, limit, level });
+            break;
+          }
+          case "actions_tail": {
+            const label = optionalString(params.label, "Actions");
+            const n = positiveInt(params.n, 20, "n");
+            run = (target) => opActionsTail(target, { label, n });
+            break;
+          }
+        }
+
+        const target = await resolveTarget(params, ctx.cwd);
+        return await run(target);
       } catch (e) {
         return errorResult(e instanceof Error ? e.message : String(e));
       }
