@@ -650,7 +650,6 @@ Reverse the compact short-id work shipped in 2026-05-19. Prefix
 resolution covers the interactive use case; compact-form input/display
 adds complexity that creation and lookup never benefit from since both
 are machine-owned.
-
 ** DONE [#C] Rewrite terminal extension :pi:
 CLOSED: [2026-05-24 Sun 01:02]
 :PROPERTIES:
@@ -668,3 +667,18 @@ We want to be able to do the following with tmux
 
 Both spawn AND watch should either
 - create a new pane within the tmux frame
+
+** DONE [#B] Fix ot mutations silently dropped for tasks inside imported plan files :ot:bug:org-tasks:
+CLOSED: [2026-05-25 Mon 09:31]
+:PROPERTIES:
+:CUSTOM_ID: bb77504b-1398-483f-9f20-67af4be3453f
+:CREATED: [2026-05-24 Sun 02:48]
+:STARTED: [2026-05-24 Sun 02:51]
+:ARCHIVED: [2026-05-25 Mon 09:31]
+:END:
+:LOGBOOK:
+- Created [2026-05-24 Sun 02:48]
+- State "STARTED" from "TODO" [2026-05-24 Sun 02:51]
+- State "DONE" from "STARTED" [2026-05-25 Mon 09:31]
+:END:
+#+IMPORT: [[plan:2026-05-24-fix-ot-mutations-silently-dropped-for-ta.org]]

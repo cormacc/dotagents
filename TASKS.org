@@ -183,6 +183,26 @@ Extend the tty extension beyond its current tmux backend with a zellij backend w
 
 * Fixes
 
+** DONE Fix Qwen model configuration in lemonade-pi-plugin :pi:local-llm:
+CLOSED: [2026-05-27 Wed]
+:PROPERTIES:
+:CUSTOM_ID: 362a79a1-def3-4b9f-b090-c73dfc280cbd
+:CREATED: [2026-05-26 Tue 14:47]
+:STARTED: [2026-05-26 Tue 14:56]
+:END:
+:LOGBOOK:
+- Created [2026-05-26 Tue 14:47]
+- State "STARTED" from "TODO" [2026-05-26 Tue 14:56]
+- State "DONE" from "STARTED" [2026-05-27 Wed]
+:END:
+#+IMPORT: [[plan:2026-05-26-fix-qwen-model-configuration-in-lemonade.org]]
+Qwen models deal with thinking level differently from anthropic/openai, causing failures when connecting from PI with default settings.
+This applies to all Qwen models I've tried so far apart from 3.6-35B-A3B-MTP.
+
+The issue and workaround are documented here: https://github.com/earendil-works/pi/issues/4862
+Update the lemonade-pi-plugin extension to apply the configuration change dynamically for all models including 'qwen' in the name.
+
+
 ** TODO Local tasks duplicated in overlay when selected? :bug:pi:
 :PROPERTIES:
 :CUSTOM_ID: 0c48e3b3-6a32-4158-9d4c-59c17c073abe
@@ -225,20 +245,6 @@ Expected: `ot status` should locate the subtask in whichever file
 holds the matching `:CUSTOM_ID:` (record file *or* TASKS.org) and
 rewrite the keyword + emit the `CLOSED:` timestamp + LOGBOOK entry
 in place. Same node, same writer.
-
-** DONE [#B] Fix ot mutations silently dropped for tasks inside imported plan files :ot:bug:org-tasks:
-CLOSED: [2026-05-25 Mon 09:31]
-:PROPERTIES:
-:CUSTOM_ID: bb77504b-1398-483f-9f20-67af4be3453f
-:CREATED: [2026-05-24 Sun 02:48]
-:STARTED: [2026-05-24 Sun 02:51]
-:END:
-:LOGBOOK:
-- Created [2026-05-24 Sun 02:48]
-- State "STARTED" from "TODO" [2026-05-24 Sun 02:51]
-- State "DONE" from "STARTED" [2026-05-25 Mon 09:31]
-:END:
-#+IMPORT: [[plan:2026-05-24-fix-ot-mutations-silently-dropped-for-ta.org]]
 
 * Housekeeping
 

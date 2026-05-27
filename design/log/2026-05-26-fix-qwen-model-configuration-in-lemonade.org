@@ -1,0 +1,235 @@
+#+TITLE: Fix Qwen model configuration in lemonade-pi-plugin :pi:local-llm:
+#+DATE: 2026-05-26 Tue
+#+PARENT: [[task:362a79a1-def3-4b9f-b090-c73dfc280cbd][Fix Qwen model configuration in lemonade-pi-plugin :pi:local-llm:]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Summary
+
+Qwen models served by Lemonade need Pi's ~qwen-chat-template~ OpenAI compat
+path, not Pi's default reasoning wire format. The extension now detects Qwen by
+id/name, forces ~reasoning: true~, sets
+~compat.thinkingFormat: "qwen-chat-template"~ plus
+~requiresReasoningContentOnAssistantMessages: true~, and exposes only the
+thinking states Lemonade actually honors: off/high.
+
+The task also fixed two issues found during live validation: model-load requests
+now set Lemonade's runtime ~ctx_size~ from model metadata (with health metadata
+as a fallback), and raw JSON error blobs wrapped in HTTP 200
+~text/event-stream~ responses are surfaced as actionable errors instead of Pi's
+opaque "Stream ended without finish_reason".
+
+** Decisions
+
+- Match Qwen by id/name, not Lemonade's ~labels: ["reasoning"]~; several Qwen
+  models that need the workaround are not labeled as reasoning models.
+- Use ~thinkingFormat: "qwen-chat-template"~. Pi's plain ~"qwen"~ path emits a
+  top-level ~enable_thinking~ field that Lemonade ignores; the chat-template path
+  emits ~chat_template_kwargs.enable_thinking~ and ~preserve_thinking: true~.
+- Force ~reasoning: true~ for Qwen so Pi takes the qwen-chat-template branch.
+- Keep the UX trade-off: non-thinking Qwen variants may show a thinking toggle,
+  but Lemonade ignores unsupported ~chat_template_kwargs~ and still responds.
+- Register ~/api/v1/models[].max_context_window~ as the provider context window
+  and pass it as ~ctx_size~ on ~/api/v1/load~ for context-size recipes. If model
+  metadata lacks a max window, fall back to loaded health ~ctx_size~ and then the
+  conservative default.
+
+** Shipped
+
+- ~extensions/index.ts~:
+  - Qwen model detection and compat mapping.
+  - loaded-context merge from ~/api/v1/health~.
+  - model-load requests that pass ~ctx_size~ where the recipe supports it.
+  - narrow fetch wrapper for Lemonade ~/v1/chat/completions~ error blobs.
+  - ~/lemonade status~ output for loaded models with context size.
+  - ~__test__~ exports for the harness.
+- ~scripts/test-qwen-mapping.mjs~: static coverage for Qwen mapping, context
+  metadata, load-request bodies, and Lemonade error normalization.
+- ~package.json~: ~tsx~ dev dependency and ~npm test~ script.
+- ~README.md~: notes on context-size metadata and Lemonade's SSE-wrapped JSON
+  error behavior.
+- ~.gitignore~: ignores ~node_modules/~ and ~.agents/~.
+
+** Gotchas
+
+- ~requiresReasoningContentOnAssistantMessages~ is needed because localhost
+  Lemonade URLs do not trigger Pi's URL-based Qwen compatibility defaults.
+- A compatible Pi build must include ~"qwen-chat-template"~ in
+  ~OpenAICompletionsCompat.thinkingFormat~; verified in pi-ai 0.75.5.
+- Lemonade 10.6.0 can return context-overflow failures as HTTP 200
+  ~text/event-stream~ with a raw JSON body. The extension normalizes those to a
+  ~context_length_exceeded:~ error including ~n_prompt_tokens~ and ~n_ctx~.
+- Live manual validation exercised the llama.cpp recipe only; ONNX-Runtime-GenAI
+  / FLM recipes remain untested.
+
+** Follow-ups
+
+- Upstream Pi API request for a per-provider fetch hook is tracked in the
+  lemonade-pi-plugin task file; the current global fetch wrapper should be
+  removed when Pi exposes a provider-scoped response interception API.
+
+* Plan
+
+** DONE Capture runtime payload sent by Pi to Lemonade for a Qwen model
+CLOSED: [2026-05-26 Tue 17:18]
+:PROPERTIES:
+:CUSTOM_ID: b258076b-5f97-4fa8-8477-a56a00b2a508
+:CREATED: [2026-05-26 Tue]
+:END:
+Acceptance criteria:
+- Outbound ~/v1/chat/completions~ body contains
+  ~chat_template_kwargs.enable_thinking~ and ~preserve_thinking: true~.
+- Body does not contain top-level ~enable_thinking~ or ~reasoning_effort~.
+- Captured payload is recorded in ~* Validation~.
+
+** DONE Multi-turn Qwen smoke test with thinking on/off
+CLOSED: [2026-05-27 Wed]
+:PROPERTIES:
+:CUSTOM_ID: c6d0eba2-cbce-4ed7-9986-2c7dc2181f08
+:CREATED: [2026-05-26 Tue]
+:STARTED: [2026-05-27 Wed]
+:END:
+Acceptance criteria:
+- ≥3 user/assistant turns against a Qwen model via the patched extension.
+- Prior assistant turns carry ~reasoning_content~ for multi-turn preservation.
+- Model responds coherently with thinking=high and thinking=off; no Lemonade
+  errors.
+- Outcome is recorded in ~* Validation~.
+
+** DONE Handle Lemonade context size via max_context_window and health fallback
+CLOSED: [2026-05-26 Tue 17:46]
+:PROPERTIES:
+:CUSTOM_ID: 4580fed5-7eb6-473e-9655-0c06e12d5690
+:CREATED: [2026-05-26 Tue]
+:STARTED: [2026-05-26 Tue 17:43]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-26 Tue 17:43]
+- State "DONE" from "STARTED" [2026-05-26 Tue 17:46]
+:END:
+Acceptance criteria:
+- Provider model context uses model max metadata, loaded health metadata, or a
+  conservative fallback.
+- Context-size-capable load requests include ~ctx_size~ from model metadata.
+- Static coverage validates model-max, loaded-health, and fallback branches.
+
+** DONE Surface Lemonade 200/SSE-wrapped JSON error blobs
+CLOSED: [2026-05-26 Tue 17:49]
+:PROPERTIES:
+:CUSTOM_ID: 0c53a412-d928-4329-b4ad-cddb6a76c6ba
+:CREATED: [2026-05-26 Tue]
+:STARTED: [2026-05-26 Tue 17:49]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-26 Tue 17:49]
+- State "DONE" from "STARTED" [2026-05-26 Tue 17:49]
+:END:
+Acceptance criteria:
+- Raw JSON ~{"error":...}~ bodies returned as ~text/event-stream~ are detected.
+- Normalized errors include Lemonade ~error.type~, ~error.code~, and
+  ~error.message~.
+- Context-overflow errors include ~n_prompt_tokens~ and ~n_ctx~ and are prefixed
+  with ~context_length_exceeded:~.
+
+* Implementation
+
+- Upstream Pi check:
+  - ~qwen-chat-template~ emits
+    ~chat_template_kwargs: { enable_thinking, preserve_thinking: true }~ gated
+    on ~model.reasoning~.
+  - plain ~qwen~ emits top-level ~enable_thinking~.
+  - ~requiresReasoningContentOnAssistantMessages~ backfills
+    ~reasoning_content: ""~ on assistant turns that lack it.
+  - Per-model compat merges over URL-detected defaults.
+- ~mapToProviderModel~ now:
+  - identifies Qwen by case-insensitive id/name match;
+  - forces ~reasoning: true~ for Qwen;
+  - installs qwen-chat-template compat and collapses intermediate thinking
+    levels;
+  - reports context window from model max metadata, loaded health metadata, or
+    the conservative fallback, in that order used by the shipped code.
+- ~registerLemonadeProvider~ fetches ~/api/v1/models~ and ~/api/v1/health~ and
+  builds the provider model list from both.
+- ~ensureRequestModelLoadedWithMaxContext~ sends ~/api/v1/load~ with ~ctx_size~
+  for recipes that support runtime context sizing.
+- The Lemonade error wrapper is intentionally narrow: only tracked Lemonade
+  ~/v1/chat/completions~ URLs are inspected, and normal SSE streams pass through
+  unchanged.
+- Scratch research was moved under ~lemonade-pi-plugin/.agents/tmp/~.
+
+* Validation
+
+** Static harness
+
+#+begin_src text
+$ npm test
+✔ Qwen id with no reasoning label still gets qwen-chat-template compat
+✔ Qwen name-only match (id missing qwen) still triggers compat
+✔ non-Qwen reasoning model is unchanged (no qwen compat, no thinkingLevelMap)
+✔ non-Qwen non-reasoning model is unchanged
+✔ case-insensitive matching: lowercase qwen in id triggers compat
+✔ max_context_window is the registered contextWindow default
+✔ unloaded models use theoretical max_context_window
+✔ models without max_context_window fall back to loaded health ctx_size
+✔ models without max_context_window or loaded ctx_size use conservative fallback
+✔ load request includes max_context_window as ctx_size for context-size recipes
+✔ load request omits ctx_size for recipes that do not support it
+✔ Lemonade context overflow error is normalized for pi auto-compaction
+✔ SSE-wrapped raw JSON error body is detected
+ℹ tests 13
+ℹ pass 13
+ℹ fail 0
+#+end_src
+
+** Runtime payload capture
+
+Harness: ~.agents/tmp/capture-qwen-payload.mjs~ in the plugin checkout, using
+~@earendil-works/pi-ai@0.75.5~ plus the local ~__test__.mapToProviderModel~.
+The captured Pi request body for ~Qwen3-Coder-Next-GGUF-Q4_K_M~ contained:
+
+#+begin_src json
+{
+  "model": "Qwen3-Coder-Next-GGUF-Q4_K_M",
+  "messages": [{"role": "user", "content": "ping"}],
+  "stream": true,
+  "stream_options": {"include_usage": true},
+  "store": false,
+  "chat_template_kwargs": {
+    "enable_thinking": true,
+    "preserve_thinking": true
+  }
+}
+#+end_src
+
+The thinking-off pass was identical except
+~chat_template_kwargs.enable_thinking: false~. Neither pass emitted top-level
+~enable_thinking~ or ~reasoning_effort~.
+
+** Live Lemonade checks
+
+Against Lemonade 10.6.0 on ~strix:13305~, llama.cpp recipe,
+~Qwen3-Coder-Next-GGUF-Q4_K_M~ loaded at ~ctx_size=262144~:
+
+- Minimal requests with ~enable_thinking: true~ and ~false~ returned coherent
+  completions and clean finish reasons.
+- Tool-call request returned a valid tool call and clean finish reason.
+- 16K-token request against a 4K-loaded model reproduced Lemonade's raw JSON
+  ~exceed_context_size_error~ inside ~text/event-stream~.
+- The same 16K-token request after loading with ~ctx_size=262144~ completed
+  cleanly.
+
+** Multi-turn smoke test
+
+This pi session ran the patched Lemonade provider against the loaded Qwen model.
+The conversation covered multiple user/assistant turns with thinking enabled,
+then continued coherently after switching thinking off. No Lemonade errors or
+"Stream ended without finish_reason" failures occurred.
+
+Acceptance result:
+
+| Criterion                                      | Status |
+|------------------------------------------------+--------|
+| ≥3 user/assistant turns via patched extension  | PASS   |
+| multi-turn Qwen preservation did not degrade   | PASS   |
+| coherent responses with thinking=high          | PASS   |
+| coherent responses with thinking=off           | PASS   |
+| no Lemonade errors                             | PASS   |

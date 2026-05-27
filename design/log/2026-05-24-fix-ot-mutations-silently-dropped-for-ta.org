@@ -1,6 +1,6 @@
 #+TITLE: Fix ot mutations silently dropped for tasks inside imported plan files
 #+DATE: 2026-05-24 Sun
-#+PARENT: [[task:bb77504b-1398-483f-9f20-67af4be3453f][Fix ot mutations silently dropped for tasks inside imported plan files]]
+#+PARENT: [[archive:bb77504b-1398-483f-9f20-67af4be3453f][Fix ot mutations silently dropped for tasks inside imported plan files]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 * Summary
