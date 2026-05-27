@@ -1,6 +1,6 @@
 ---
 name: org-tasks
-description: "Org-mode task memory for TASKS.org and the `ot` CLI. Use for adding, editing, resuming, selecting, archiving, diagnosing, or reviewing tasks; TASKS*.org, #+IMPORT:, #+SELECTED:, :CUSTOM_ID:, :BLOCKED-BY:, :HANDOFF:, linked issues, or `ot`; or bootstrapping task memory. Owns task file format/lifecycle; change-record planning belongs to `org-plan`."
+description: "Org-mode task memory for TASKS.org and the `ot` CLI — owns task file format and lifecycle (planning belongs to `org-plan`). Use for adding/editing/resuming/archiving tasks, TASKS*.org, #+IMPORT:, #+SELECTED:, :CUSTOM_ID:, :BLOCKED-BY:, :HANDOFF:, linked issues, or `ot`."
 ---
 
 # Org-mode task management and memory protocol

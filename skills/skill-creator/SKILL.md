@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Create, edit, review, audit, or measure skills. Use whenever the user asks to create a skill from scratch, modify or refactor an existing skill (including SKILL.md frontmatter, description, scope, or body), review or critique a skill or proposed changes to one, run evals or benchmarks against a skill, analyse why a skill is or isn't triggering, or optimise a skill's description for better triggering accuracy. Triggers on phrases like 'review this skill', 'audit the SKILL.md', 'why isn't my skill loading', 'tune the description', 'benchmark this skill', not just 'create a skill'.
+description: Create, edit, review, audit, or benchmark skills, including SKILL.md frontmatter/description tuning and diagnosing why a skill isn't triggering. Use for 'create a skill', 'review this skill', 'audit the SKILL.md', 'why isn't my skill loading', 'tune the description'.
 ---
 
 # Skill Creator

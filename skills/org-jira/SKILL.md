@@ -1,6 +1,6 @@
 ---
 name: org-jira
-description: "Jira conventions on top of org-tasks. Use for Jira keys (PROJ-123), Atlassian, /jira commands, :LINKED_ISSUES:, #+LINK: jira, #+JIRA_* keywords, Jira epic/issue planning, or Atlassian MCP questions. Owns Jira semantics."
+description: "Jira semantics on top of org-tasks. Use for Jira keys (PROJ-123), /jira commands, :LINKED_ISSUES:, #+LINK: jira, #+JIRA_* keywords, Jira epic/issue planning, or Atlassian MCP questions."
 ---
 
 # Jira integration for org-tasks
