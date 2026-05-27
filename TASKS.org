@@ -183,21 +183,52 @@ Code cleanups
 - Asymmetric exec paths (pi.exec for discovery vs createBashToolDefinition for execution) is intentional but worth a comment.
 - MAX_NOTIFY_OUTPUT_LENGTH is now applied to the renderer's details output, not notify popups — rename or split.
 
-** WAITING [#C] Add a zellij backend to the tty plugin :pi:tty:zellij:
+** TODO [#D] Add multi-backend support to tty extension by vendoring cmux primitives :pi:tty:
 :PROPERTIES:
-:CUSTOM_ID: 77d82282-8e08-4087-890e-c9b59d5b57f3
-:CREATED: [2026-05-24 Sun 01:18]
-:STARTED: [2026-05-24 Sun 02:55]
+:CUSTOM_ID: c8fb457c-d205-4fb9-bb07-f6844061c35e
+:CREATED: [2026-05-27 Wed 13:05]
 :END:
 :LOGBOOK:
-- Created [2026-05-24 Sun 01:18]
-- State "WAITING" from "TODO" [2026-05-24 Sun 02:15]
-- State "TODO" from "WAITING" [2026-05-24 Sun 02:55]
-- State "STARTED" from "TODO" [2026-05-24 Sun 02:55]
-- State "WAITING" from "STARTED" [2026-05-24 Sun 02:55]
+- Created [2026-05-27 Wed 13:05]
 :END:
-#+IMPORT: [[plan:2026-05-24-add-a-zellij-backend-to-the-tty-plugin.org]]
-Extend the tty extension beyond its current tmux backend with a zellij backend while preserving the `/t` command surface and backend-neutral tool names.
+Vendor a small subset (~150 LOC) of pi-interactive-subagents' `cmux.ts` into
+the tty extension as `mux.ts`, replacing the current tmux-only call sites.
+Gives the tty extension multi-backend support (cmux / tmux / zellij /
+wezterm) with a proven implementation, without forking the full
+pi-interactive-subagents package.
+
+Supersedes the previous from-scratch zellij approach (was task
+77d82282-8e08-4087-890e-c9b59d5b57f3, now removed along with its plan).
+
+Scope:
+- Extract the primitives tty actually needs: `getMuxBackend()`,
+  `isMuxAvailable()`, a simplified `createWindow(name, command, cwd)`
+  (tty uses new-window, not split), `sendCommand(surface, command)`,
+  `readScreen(surface, lines)` (for `tty_capture`), `closeSurface(surface)`
+  (for `/t kill`).
+- Drop the subagent-specific concerns: focus snapshot/restore, the
+  `cmuxSubagentPane` tab-reuse tracking, zellij split-direction prediction
+  and stacked-pane placement, the zellij lock mechanism.
+- Keep tmux-only features (`/t join`, `/t monitor`, `/t break`) as tmux-only;
+  surface a clear "not supported on <backend>" message elsewhere.
+- Preserve the `/t` command surface and backend-neutral tool names
+  (`tty_list`, `tty_capture`).
+- Public ids stay backend-native in tool output (`%1` / `@1` for tmux,
+  `terminal_1` / `plugin_2` for zellij, etc.).
+
+Out of scope (track separately if needed):
+- Event-bus coordination between tty and pi-interactive-subagents
+  (`subagent:surface-created` → `tty_list`). The analysis flags this as a
+  later step only if there's demand.
+
+Analysis & rationale (lives in the parent dotfiles repo, not this submodule):
+~/dotfiles/.pi/plans/2026-05-27-tty-subagents-integration/plan.md
+
+Upstream reference:
+~/.pi/agent/npm/node_modules/pi-interactive-subagents/lib/cmux.ts (or the
+equivalent installed location — confirm at start of work). Re-vendor when
+upstream materially changes the primitives we depend on; otherwise the
+local copy is stable.
 
 * Fixes
 
