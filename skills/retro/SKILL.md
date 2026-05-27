@@ -124,3 +124,7 @@ After all changes:
 This skill references:
 - **`/rules`** — for the memory hierarchy, size guidelines, audit process, and anti-patterns
 - **`/skill`** — for skill file format, frontmatter fields, and editing conventions
+- **`self-improvement`** — sibling skill for *mid-session* capture of
+  durable friction into TODO work items. Use `retro` at end of session
+  for synthesis into rule changes; use `self-improvement` when something
+  comes up and the user wants to keep moving.

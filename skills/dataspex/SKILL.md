@@ -1,6 +1,6 @@
 ---
 name: dataspex
-description: "Use this skill whenever the user wants to inspect or debug live runtime state in a running ClojureScript app: read inspected ClojureScript refs (app-state atoms, taps) via Dataspex, view audit/change history, tail nexus/action dispatch logs, or query a runtime datascript DB. Trigger on prompts like what's in app state, what changed after a mutation, last action dispatched, stale UI/state debugging, shadow-cljs browser runtime, Dataspex/datspex, LogInspector, taps, or audit logs. Do not use for installing Dataspex, editing source to add inspect calls, screenshots/devtools-panel rendering, localStorage, JVM-side Dataspex, Datomic/Datahike/DataScript schema design, or non-CLJS debugging."
+description: "Inspect or debug live runtime state in a running ClojureScript app: read inspected refs (app-state atoms, taps), audit/change history, nexus/action dispatch logs, or runtime datascript DB. Trigger on prompts like what's in app state, what changed after a mutation, last action dispatched, stale UI/state debugging, shadow-cljs browser runtime, Dataspex/datspex, LogInspector, taps, audit logs. Runtime inspection only — not for installing Dataspex or non-CLJS debugging (see body for anti-triggers)."
 ---
 
 # Dataspex
