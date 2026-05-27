@@ -1,6 +1,6 @@
 {
-  "hideThinkingBlock": false,
-  "defaultThinkingLevel": "off",
+  "hideThinkingBlock": true,
+  "defaultThinkingLevel": "high",
   "packages": [
     "npm:@gotgenes/pi-anthropic-auth",
     "npm:pi-mcp-adapter",
@@ -9,8 +9,8 @@
     "npm:@latentminds/pi-quotas",
     "npm:pi-tldr",
     "npm:@ryan_nookpi/pi-extension-diff-review",
-    "npm:pi-subagents",
-    "git:github.com/cormacc/lemonade-pi-plugin@qwen-thinking"
+    "git:github.com/cormacc/lemonade-pi-plugin@qwen-thinking",
+    "git:github.com/HazAT/pi-interactive-subagents"
   ],
   "theme": "dark"
 }

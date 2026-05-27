@@ -2,6 +2,12 @@
 
 A change-record is an org file linked from a task by `#+IMPORT:`. It starts as a plan and becomes the durable record of what shipped. Prefer `ot record create <task-id>` to scaffold one; use `--mode retrospective` when creating it after work started or finished.
 
+## Section order
+
+`* Intent` → optional `* User story` → optional `* Behavior` → `* Summary` → optional `* Context` → `* Plan` → `* Implementation` → `* Validation` → optional `* Open questions`.
+
+Required: `* Intent`, `* Summary`, `* Plan`, `* Implementation`, `* Validation`. Optional sections marked above.
+
 ## Minimal skeleton
 
 ```org
@@ -11,17 +17,34 @@ A change-record is an org file linked from a task by `#+IMPORT:`. It starts as a
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Draft
 
+* Intent
+One to three sentences. What we are building and why. Stable across the work.
+
 * Summary
+*Level:* MVP · *Tests:* smoke · *Docs:* inline
+
 One compact paragraph describing current/final state.
 
+** Scope
+*** In scope
+- Concrete item 1.
+- Concrete item 2.
+*** Out of scope
+- Deferred item.
+
 ** Decisions
-- Strategic decision :: Rationale that constrains future work.
+- Chose Approach X :: Rationale that constrains future work.
+  Rejected:
+  - Approach Y: brief reason it lost.
 
 ** Shipped
 - User-visible / protocol / code outcomes.
 
 ** Gotchas
 - Project-side surprises future implementers should not rediscover.
+
+** Risks
+- Accepted risk (from premortem): mitigation or rationale for accepting.
 
 ** Follow-ups
 - Pointers to TASKS.org or plan TODOs.
@@ -38,6 +61,9 @@ One compact paragraph describing current/final state.
 :END:
 Acceptance criteria:
 - Concrete observable outcome.
+- Must not: side effect we want to prevent.
+
+See `src/services/AuthService.ts:15-40` for the existing pattern.
 
 * Implementation
 - Tactical outcomes, tricky details, and maintenance context discovered while executing.
@@ -54,7 +80,39 @@ Acceptance criteria:
 Decision: retain `:BLOCKED-BY:`; no `:WAITS_FOR:` field.
 ```
 
-Required sections: `* Summary`, `* Plan`, `* Implementation`, `* Validation`. Optional sections: `* Context`, `* Open questions`.
+## Optional sections — when to include
+
+### `* User story`
+
+```org
+* User story
+As a [role], I want [capability], so that [outcome].
+```
+
+Include when there is a real end-user or operator perspective worth preserving. The "so that" clause is the most leaked motivation in any artifact — once captured here, it survives the telephone game through plan → plan tasks → commits.
+
+Skip for refactors, infra, dev-tooling, observability work.
+
+### `* Behavior`
+
+```org
+* Behavior
+** Happy path
+1. User does X.
+2. System responds with Y.
+3. Z is persisted.
+
+** Edge cases
+- Empty input: return a typed error rather than crashing.
+- Concurrent request: last writer wins; no merge attempted.
+- Network failure mid-request: client retries with backoff; server idempotent.
+```
+
+Include for feature work where the user-facing flow is load-bearing. Drafting-time aid — at closure, the happy path is in Implementation and edge cases are anti-criteria or `** Gotchas`; prune unless the walkthrough still carries unique value.
+
+### `* Context`
+
+Background, motivation, alternatives, constraints, trade-offs. **Default to omitting.** Promote only when durable rationale materially exceeds what `* Summary` can carry.
 
 ## `#+STATUS:` lifecycle
 
