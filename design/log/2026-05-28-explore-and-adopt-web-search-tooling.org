@@ -104,13 +104,17 @@ Acceptance criteria:
 
 Repo: =~/dotfiles=. Edit alongside the existing =environment = { ... }= attrset at =/Users/cormacc/dotfiles/hosts/strix/nixos-configuration.nix:82=. Reference: [[https://docs.openwebui.com/features/chat-conversations/web-search/searxng/]]. Note Open WebUI persists these to its sqlite DB on first boot — if a previous value sticks, change it in the admin UI or wipe =/var/lib/open-webui/webui.db= (existing module comment already warns about this).
 
-** TODO [#A] Add Vane oci-container to strix host :nixos:strix:docker:
+** DONE [#A] Add Vane oci-container to strix host :nixos:strix:docker:
+CLOSED: [2026-05-29 Fri 00:00]
 :PROPERTIES:
 :CUSTOM_ID: 5312e420-0342-4b86-9bae-46101997b3fc
 :CREATED: [2026-05-28 Thu 23:42]
+:STARTED: [2026-05-28 Thu 23:59]
 :END:
 :LOGBOOK:
 - Created [2026-05-28 Thu 23:42]
+- State "STARTED" from "TODO" [2026-05-28 Thu 23:59]
+- State "DONE" from "STARTED" [2026-05-29 Fri 00:00]
 :END:
 :BLOCKED-BY: 10d30616-53cc-4c60-b774-463203834f39
 Acceptance criteria:
@@ -191,6 +195,12 @@ Repo: =~/dotfiles= (firewall/tailscale tweaks if needed) + this record (validati
 - Enabled the =wolframalpha= engine via SearXNG's no-API engine to avoid introducing a per-user secret in Nix. If Vane requires the paid Wolfram API backend later, wire an =environmentFile= outside the store in a follow-up rather than committing a key.
 - Wired =services.open-webui.environment= to enable RAG web search using local SearXNG: =ENABLE_RAG_WEB_SEARCH = "True"=, =RAG_WEB_SEARCH_ENGINE = "searxng"=, and =SEARXNG_QUERY_URL = "http://127.0.0.1:8888/search?q=<query>"=.
 - Preserved the existing Lemonade OpenAI-compatible base URL/key and telemetry-off defaults in the same env attrset.
+- Added =virtualisation.oci-containers= on strix using the existing Docker backend (no Podman flip) and defined =containers.vane=.
+- Pinned Vane to upstream Docker Hub image =itzcrazykns1337/vane:slim-v1.12.2=; Docker Hub still has floating =slim-latest=, but =slim-v1.12.2= is the current specific slim release tag from 2026-04-10.
+- Bound Vane to =0.0.0.0:3001= and added =vanePort= to =networking.firewall.allowedTCPPorts= for LAN/tailnet reachability.
+- Wired Vane to the host services through Docker's host-gateway alias: =SEARXNG_API_URL=http://host.docker.internal:8888=, =LEMONADE_BASE_URL=http://host.docker.internal:13305/v1=, and =LEMONADE_API_KEY=sk-local-lemonade=.
+- Mounted persistent Vane state at =/var/lib/vane:/home/vane/data=.
+- Ordered =docker-vane.service= after/wanting =lemond.service= and =searx.service= to avoid a normal-boot race with its two local dependencies.
 
 * Validation
 
@@ -199,3 +209,8 @@ Repo: =~/dotfiles= (firewall/tailscale tweaks if needed) + this record (validati
 - =nix build .#nixosConfigurations.strix.config.system.build.toplevel --impure= evaluated the strix system and began realisation, then stopped because this session is =aarch64-darwin= and cannot build =x86_64-linux= derivations locally. No Nix option/type errors surfaced before the platform mismatch.
 - =nix eval --impure .#nixosConfigurations.strix.config.services.open-webui.environment --json | jq '{ENABLE_RAG_WEB_SEARCH,RAG_WEB_SEARCH_ENGINE,SEARXNG_QUERY_URL,OPENAI_API_BASE_URL,OPENAI_API_KEY,SCARF_NO_ANALYTICS,DO_NOT_TRACK,ANONYMIZED_TELEMETRY}'= -> web search enabled with =searxng= and =http://127.0.0.1:8888/search?q=<query>=; existing Lemonade =http://127.0.0.1:13305/v1= and telemetry-off values unchanged.
 - =nix eval --impure .#nixosConfigurations.strix.config.system.build.toplevel.drvPath --raw= -> =/nix/store/rn835mq27aidi3mybx1x0qpgfskhbqb8-nixos-system-strix-26.05.20260523.64c08a7.drv=.
+- Docker Hub tag check via =https://hub.docker.com/v2/repositories/itzcrazykns1337/vane/tags= -> =slim-v1.12.2= is present; =slim-latest= remains floating and was not used.
+- =nix eval --impure .#nixosConfigurations.strix.config.virtualisation.oci-containers.containers.vane --json | jq .= -> image =itzcrazykns1337/vane:slim-v1.12.2=, serviceName =docker-vane=, port =0.0.0.0:3001:3000=, env contains SearXNG + Lemonade URLs/keys, volume =/var/lib/vane:/home/vane/data=, and host-gateway extra option.
+- =nix eval --impure .#nixosConfigurations.strix.config.virtualisation.oci-containers.backend --raw= -> =docker=.
+- =nix eval --impure .#nixosConfigurations.strix.config.networking.firewall.allowedTCPPorts --json | jq .= -> includes =3001= alongside existing SearXNG/Open WebUI/Lemonade ports.
+- =nix eval --impure .#nixosConfigurations.strix.config.system.build.toplevel.drvPath --raw= -> =/nix/store/k0h0hjvzmzlv73j7ds16fgjpbh3kjf01-nixos-system-strix-26.05.20260523.64c08a7.drv= after adding Vane.
