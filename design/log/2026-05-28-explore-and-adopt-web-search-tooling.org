@@ -131,13 +131,17 @@ Acceptance criteria:
 
 Repo: =~/dotfiles=. Pattern for an =oci-containers= entry: search dotfiles for any existing =oci-containers.containers.= reference and mirror its style; if none exists, follow the upstream NixOS docs. Vane refs: [[https://github.com/ItzCrazyKns/Vane]], [[https://github.com/ItzCrazyKns/Vane/blob/master/README.md]]. Confirm Wolfram is enabled in SearXNG before merging — Vane will otherwise return empty answers for math-flavoured queries.
 
-** TODO [#A] Add mcp-searxng to dotagents mcp.json :pi:mcp:
+** DONE [#A] Add mcp-searxng to dotagents mcp.json :pi:mcp:
+CLOSED: [2026-05-29 Fri 00:02]
 :PROPERTIES:
 :CUSTOM_ID: 1a1ce54a-8314-4acf-8f92-149a2731bf23
 :CREATED: [2026-05-28 Thu 23:42]
+:STARTED: [2026-05-29 Fri 00:02]
 :END:
 :LOGBOOK:
 - Created [2026-05-28 Thu 23:42]
+- State "STARTED" from "TODO" [2026-05-29 Fri 00:02]
+- State "DONE" from "STARTED" [2026-05-29 Fri 00:02]
 :END:
 :BLOCKED-BY: 10d30616-53cc-4c60-b774-463203834f39
 Acceptance criteria:
@@ -201,6 +205,8 @@ Repo: =~/dotfiles= (firewall/tailscale tweaks if needed) + this record (validati
 - Wired Vane to the host services through Docker's host-gateway alias: =SEARXNG_API_URL=http://host.docker.internal:8888=, =LEMONADE_BASE_URL=http://host.docker.internal:13305/v1=, and =LEMONADE_API_KEY=sk-local-lemonade=.
 - Mounted persistent Vane state at =/var/lib/vane:/home/vane/data=.
 - Ordered =docker-vane.service= after/wanting =lemond.service= and =searx.service= to avoid a normal-boot race with its two local dependencies.
+- Added =searxng= to dotagents =mcp.json= using upstream =ihor-sokoliuk/mcp-searxng= via =npx -y mcp-searxng= and =SEARXNG_URL=http://strix:8888=.
+- Kept MCP pointed directly at SearXNG over Tailscale MagicDNS; no Vane hop, no API key, and no direct edits to =~/.config/mcp/mcp.json=.
 
 * Validation
 
@@ -214,3 +220,8 @@ Repo: =~/dotfiles= (firewall/tailscale tweaks if needed) + this record (validati
 - =nix eval --impure .#nixosConfigurations.strix.config.virtualisation.oci-containers.backend --raw= -> =docker=.
 - =nix eval --impure .#nixosConfigurations.strix.config.networking.firewall.allowedTCPPorts --json | jq .= -> includes =3001= alongside existing SearXNG/Open WebUI/Lemonade ports.
 - =nix eval --impure .#nixosConfigurations.strix.config.system.build.toplevel.drvPath --raw= -> =/nix/store/k0h0hjvzmzlv73j7ds16fgjpbh3kjf01-nixos-system-strix-26.05.20260523.64c08a7.drv= after adding Vane.
+- =npm view mcp-searxng name version repository.url bin --json= -> package =mcp-searxng=, version =1.0.5=, repository =git+https://github.com/ihor-sokoliuk/mcp-searxng.git=, bin =mcp-searxng=.
+- =npm view mcp-searxng time.modified version repository.url --json= -> version =1.0.5=, modified =2026-05-25T23:46:42.811Z=, confirming the chosen upstream is current at implementation time.
+- =npm view mcp-searxng readme= -> README config uses ="command": "npx"=, ="args": ["-y", "mcp-searxng"]=, and env =SEARXNG_URL=.
+- =jq . mcp.json= succeeded after adding =searxng=.
+- =curl -sS --max-time 5 'http://strix:8888/search?q=test&format=json'= timed out from this Darwin session; MCP search smoke is deferred to task #5 after =strix= is switched/running.

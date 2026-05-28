@@ -11,6 +11,13 @@
       "type": "remote",
       "url": "https://mcp.context7.com/mcp/oauth",
       "enabled": true
+    },
+    "searxng": {
+      "command": "npx",
+      "args": ["-y", "mcp-searxng"],
+      "env": {
+        "SEARXNG_URL": "http://strix:8888"
+      }
     }
   }
 }
