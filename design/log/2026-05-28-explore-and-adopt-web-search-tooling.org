@@ -80,13 +80,17 @@ Acceptance criteria:
 
 Repo: =~/dotfiles=. Existing nearby pattern: =/Users/cormacc/dotfiles/hosts/strix/nixos-configuration.nix:76= (=services.open-webui=). Watch for uWSGI bug [[https://github.com/NixOS/nixpkgs/issues/292652]] (researcher flag); if SearXNG fails to start, check the module-issue thread before patching locally. Reference: [[https://wiki.nixos.org/wiki/SearXNG]].
 
-** TODO [#A] Wire Open WebUI to local SearXNG :nixos:strix:
+** DONE [#A] Wire Open WebUI to local SearXNG :nixos:strix:
+CLOSED: [2026-05-28 Thu 23:57]
 :PROPERTIES:
 :CUSTOM_ID: 04eaa62a-699d-4771-a9d3-53c479043aba
 :CREATED: [2026-05-28 Thu 23:42]
+:STARTED: [2026-05-28 Thu 23:56]
 :END:
 :LOGBOOK:
 - Created [2026-05-28 Thu 23:42]
+- State "STARTED" from "TODO" [2026-05-28 Thu 23:56]
+- State "DONE" from "STARTED" [2026-05-28 Thu 23:57]
 :END:
 :BLOCKED-BY: 10d30616-53cc-4c60-b774-463203834f39
 Acceptance criteria:
@@ -185,9 +189,13 @@ Repo: =~/dotfiles= (firewall/tailscale tweaks if needed) + this record (validati
 - Bound SearXNG to =0.0.0.0:8888= with =openFirewall = true= and =search.formats = [ "html" "json" ]=.
 - Curated default engines with =use_default_settings.engines.keep_only= for =duckduckgo=, =brave=, =mojeek=, =google=, =wikipedia=, =github=, and =wolframalpha=.
 - Enabled the =wolframalpha= engine via SearXNG's no-API engine to avoid introducing a per-user secret in Nix. If Vane requires the paid Wolfram API backend later, wire an =environmentFile= outside the store in a follow-up rather than committing a key.
+- Wired =services.open-webui.environment= to enable RAG web search using local SearXNG: =ENABLE_RAG_WEB_SEARCH = "True"=, =RAG_WEB_SEARCH_ENGINE = "searxng"=, and =SEARXNG_QUERY_URL = "http://127.0.0.1:8888/search?q=<query>"=.
+- Preserved the existing Lemonade OpenAI-compatible base URL/key and telemetry-off defaults in the same env attrset.
 
 * Validation
 
 - =nix eval --impure --raw .#nixosConfigurations.strix.pkgs.path= -> pinned nixpkgs path; grep confirmed only =services.searx= is present in =nixos/modules/services/networking/searx.nix=.
 - =nix eval --impure .#nixosConfigurations.strix.config.services.searx.settings --json | jq '{server,search,use_default_settings,engines}'= -> server =0.0.0.0:8888=, formats include =html= and =json=, curated =keep_only= engine list, and explicit enabled =wolframalpha= engine.
 - =nix build .#nixosConfigurations.strix.config.system.build.toplevel --impure= evaluated the strix system and began realisation, then stopped because this session is =aarch64-darwin= and cannot build =x86_64-linux= derivations locally. No Nix option/type errors surfaced before the platform mismatch.
+- =nix eval --impure .#nixosConfigurations.strix.config.services.open-webui.environment --json | jq '{ENABLE_RAG_WEB_SEARCH,RAG_WEB_SEARCH_ENGINE,SEARXNG_QUERY_URL,OPENAI_API_BASE_URL,OPENAI_API_KEY,SCARF_NO_ANALYTICS,DO_NOT_TRACK,ANONYMIZED_TELEMETRY}'= -> web search enabled with =searxng= and =http://127.0.0.1:8888/search?q=<query>=; existing Lemonade =http://127.0.0.1:13305/v1= and telemetry-off values unchanged.
+- =nix eval --impure .#nixosConfigurations.strix.config.system.build.toplevel.drvPath --raw= -> =/nix/store/rn835mq27aidi3mybx1x0qpgfskhbqb8-nixos-system-strix-26.05.20260523.64c08a7.drv=.
