@@ -1,17 +1,26 @@
 # tty extension
 
-A small pi extension for TTY-centric workflows. The current backend is tmux; the user-facing slash command is `/t` so other backends (for example zellij) can be added later.
+A small pi extension for TTY-centric workflows. The user-facing slash command is `/t`; backend selection is automatic and can be overridden with `PI_TTY_MUX=cmux|tmux|zellij|wezterm`.
+
+## Backends
+
+| Backend | spawn/watch | join/monitor | break | capture | notes |
+| --- | --- | --- | --- | --- | --- |
+| tmux | new window | `join-pane` below pi | `break-pane` | scrollback, optional ANSI | full listing/target resolution |
+| zellij | managed floating pane in the pi tab, titled `<index>: <cmd>` | embed managed pane; focus pi for monitor or target for join; accepts bare terminal index (`/t j 1`) | float managed pane | screen dump, no ANSI preservation | no arbitrary cross-tab adoption |
+| cmux | new surface titled `<index>: <cmd>` | `move-surface` into caller pane; accepts bare surface index | `split-off` fallback | read-screen | full id `surface:42` also accepted |
+| wezterm | new tab titled from the command | cross-tab `split-pane --move-pane-id`; accepts the displayed WezTerm tab index | new tab with restored title | get-text | same-tab attach refused |
 
 ## Assumptions
 
-- The tmux backend requires pi to be running inside tmux (`$TMUX` is set and points at a live server).
+- pi must be running inside the selected backend with live backend environment (`$TMUX`, `$ZELLIJ*`, `$CMUX_SOCKET_PATH`, or `$WEZTERM_UNIX_SOCKET`).
 - Commands operate on the current backend/session.
 - Join/break state is kept in extension memory keyed by the current pi pane id. After `/reload` or a pi restart, bare `/t break` may not know what to break; use `/t break <pane-id>` as the escape hatch.
 
 ## Slash commands
 
 ```text
-/t s|spawn <command>        Create a new tmux window and run <command>.
+/t s|spawn <command>        Create a new backend surface/window and run <command>.
 /t w|watch <command>        Run <command>; joins it below pi; focus stays in pi.
 /t j|join <target>          Join a single-pane target window below pi.
 /t m|monitor <target>       Same as join but keep focus in the pi pane.
@@ -21,7 +30,7 @@ A small pi extension for TTY-centric workflows. The current backend is tmux; the
 /t t|tail [target] [lines]  Capture recent pane output.
 ```
 
-Targets may be tmux pane ids (`%12`), window ids (`@7`), window indices (`2`), or window names where unambiguous.
+Targets are backend-native ids. Tmux accepts pane ids (`%12`), window ids (`@7`), window indices (`2`), or window names where unambiguous. Zellij and cmux managed panes/surfaces are titled with a numeric prefix (`1: bb watch-echo`) and accept that bare number for `/t join`, `/t monitor`, `/t kill`, and explicit `/t break`; their full backend ids (`terminal_1`, `surface:1`) also work. WezTerm uses the displayed 1-based tab index (derived from current-window `wezterm cli list --format json` order) for join/monitor/kill; the extension does not add a separate numeric prefix to WezTerm titles.
 
 ## Examples
 
@@ -40,7 +49,7 @@ Targets may be tmux pane ids (`%12`), window ids (`@7`), window indices (`2`), o
 
 Long and short subcommand forms are equivalent (`s`/`spawn`, `w`/`watch`, `j`/`join`, `m`/`monitor`, `k`/`kill`, `b`/`break`, `l`/`list`, `t`/`tail`). `/t spawn` and `/t watch` treat everything after the subcommand as one shell command line. Quoting expectations match pi's `!` bash surface.
 
-New windows are named from the first 20 characters of the command (`bb watch:kaocha`, `pi --model claude-…`) and tmux `automatic-rename` is disabled for those windows.
+New surfaces/windows are named from the first 20 characters of the command (`bb watch:kaocha`, `pi --model claude-…`) and tmux `automatic-rename` is disabled for those windows.
 
 ## Watch lifecycle
 
@@ -60,29 +69,29 @@ This avoids a fragile `read`/Enter prompt while still leaving output visible aft
 The extension registers two agent tools:
 
 - `tty_list` — lists current-session windows/panes plus panes created by `/t spawn` and `/t watch`.
-- `tty_capture` — captures recent output via backend capture (tmux `capture-pane` today).
+- `tty_capture` — captures recent output via backend capture.
 
 `tty_capture` accepts:
 
 - `target`: optional pane/window target. If omitted, the tool captures the latest watched pane for the current pi pane when one exists.
 - `lines`: number of scrollback lines, default 200, max 5000.
-- `preserveEscapes`: preserve ANSI escapes/colors, default false.
+- `preserveEscapes`: preserve ANSI escapes/colors, default false. This is tmux-only for v1.
 
-The tmux backend can only return the pane's current buffer plus tmux scrollback. It cannot recover output that has already fallen out of scrollback.
+Backends can only return the pane's current buffer/screen plus available scrollback. They cannot recover output that has already fallen out of backend history.
 
 ## Killing panes
 
-`/t kill` with no argument sends two Ctrl-C signals to the currently joined/monitored pane (first to stop the process, second to close the wrapper) then kills the pane. With an argument, numeric targets are window indices; the command sends the same Ctrl-C sequence to the target and removes the target window — window indices (`2`), window ids (`@7`), or window names. Cleanup tolerates already-closed panes/windows.
+`/t kill` with no argument sends two Ctrl-C signals to the currently joined/monitored pane (first to stop the process, second to close the wrapper) then kills the pane. With an argument under tmux, numeric targets are window indices; the command sends the same Ctrl-C sequence to the target and removes the target window — window indices (`2`), window ids (`@7`), or window names. Non-tmux backends close the explicit backend-native target id. Cleanup tolerates already-closed panes/windows.
 
 ## Joining panes
 
-`/t join <target>` joins a **single-pane** target window below the current pi pane. Multi-pane targets are refused initially because moving only one active pane out of a multi-pane window is surprising. After joining, focus moves to the joined pane.
+`/t join <target>` joins/embeds a target below the current pi pane. Tmux targets must be **single-pane** windows; multi-pane targets are refused because moving only one active pane out of a multi-pane window is surprising. Zellij and cmux targets can be addressed by the numeric prefix shown in the spawned title (`/t j 1` for `1: bb watch-echo`). WezTerm targets use the displayed tab index shown by WezTerm. Zellij targets must be tty-managed panes from the current pi tab. After joining, focus moves to the joined pane.
 
-`/t monitor <target>` does the same thing but keeps focus in the pi pane.
+`/t monitor <target>` does the same attach/embed operation but keeps focus in the pi pane.
 
 `/t w` / `/t watch` also joins the newly created window below pi with focus in pi. Re-running `/t w`, `/t m` or `/t j …` first breaks any joined pane recorded for the current pi pane, then joins the new target.
 
-`/t break` uses in-memory state and keeps focus in the pi pane. `/t break <pane-id>` works as an explicit escape hatch after reload/restart or state loss.
+`/t break` uses in-memory state and keeps focus in the pi pane. In zellij, break means returning the managed embedded pane to floating. `/t break <pane-id>` works as an explicit escape hatch after reload/restart or state loss where the backend allows explicit ids.
 
 ## Sibling pi / subagent pattern
 

@@ -10,6 +10,7 @@ import {
   type PaneInfo,
   type WindowInfo,
 } from "./helpers";
+import * as mux from "./mux";
 
 const DEFAULT_CAPTURE_LINES = 200;
 const FIELD_SEP = "\t";
@@ -45,6 +46,16 @@ const skillPath = join(baseDir, "..", "..", "skills", "pi-tty", "SKILL.md");
 type SpawnKind = "spawn" | "watch";
 
 interface TmuxContext {
+  backend: "tmux";
+  paneId: string;
+  sessionId: string;
+  sessionName: string;
+  windowId: string;
+  windowIndex: string;
+}
+
+interface MuxContext {
+  backend: mux.MuxBackend;
   paneId: string;
   sessionId: string;
   sessionName: string;
@@ -117,7 +128,7 @@ async function runTmuxIgnoringMissingTarget(args: string[]): Promise<void> {
 
 async function requireTmuxContext(): Promise<TmuxContext> {
   if (!process.env.TMUX) {
-    throw new Error("Not inside tmux: $TMUX is not set. Start pi inside a tmux session before using /t.");
+    throw new Error("Not inside tmux: $TMUX is not set. Start pi inside a tmux session before using tmux-only /t operations.");
   }
   let out: string;
   try {
@@ -129,7 +140,15 @@ async function requireTmuxContext(): Promise<TmuxContext> {
   if (!paneId || !sessionId || !sessionName || !windowId) {
     throw new Error("tmux returned incomplete pane context; cannot continue.");
   }
-  return { paneId, sessionId, sessionName, windowId, windowIndex };
+  return { backend: "tmux", paneId, sessionId, sessionName, windowId, windowIndex };
+}
+
+async function requireMuxContext(): Promise<MuxContext> {
+  const backend = mux.requireMuxBackend();
+  if (backend === "tmux") return requireTmuxContext();
+  const paneId = backend === "wezterm" ? process.env.WEZTERM_PANE : backend === "zellij" ? process.env.ZELLIJ_PANE_ID : process.env.CMUX_PANE_REF;
+  if (!paneId) throw new Error(`Cannot identify current ${backend} pane from environment.`);
+  return { backend, paneId, sessionId: backend, sessionName: backend, windowId: paneId, windowIndex: "" };
 }
 
 function parsePaneLine(line: string): PaneInfo | null {
@@ -205,8 +224,9 @@ async function resolveCapturePane(target: string | undefined, current: TmuxConte
   throw new Error("No target supplied and no watched pane is known for this pi pane. Call tty_list first, then pass target.");
 }
 
-function formatKnown(record: CreatedPaneRecord): string {
-  return `${record.kind.padEnd(5)} ${record.paneId} ${record.windowId} [${record.windowIndex}] ${record.windowName} — ${record.command}`;
+function formatKnown(record: CreatedPaneRecord, current?: MuxContext): string {
+  const liveIndex = current?.backend === "wezterm" ? mux.displayTargetForSurface(record.paneId) : undefined;
+  return `${record.kind.padEnd(5)} ${record.paneId} ${record.windowId} [${liveIndex ?? record.windowIndex}] ${record.windowName} — ${record.command}`;
 }
 
 function formatWindow(win: WindowInfo, current: TmuxContext): string {
@@ -215,59 +235,52 @@ function formatWindow(win: WindowInfo, current: TmuxContext): string {
   return `${marker} [${win.windowIndex}] ${win.windowName} ${win.windowId} panes=${win.paneCount} active=${win.activePaneId ?? "?"} (${paneIds})`;
 }
 
-async function ttyListText(current: TmuxContext, _params?: Record<string, unknown>): Promise<{ text: string; details: TtyToolResultDetails }> {
-  const windows = groupWindows(await listPanes()).filter((w) => w.sessionId === current.sessionId);
+async function ttyListText(current: MuxContext, _params?: Record<string, unknown>): Promise<{ text: string; details: TtyToolResultDetails }> {
+  const windows = current.backend === "tmux" ? groupWindows(await listPanes()).filter((w) => w.sessionId === current.sessionId) : [];
   const known = knownFor(current.paneId);
   const joined = joinedByOwner.get(current.paneId);
   const lines = [
-    `Current pane: ${current.paneId} session=${current.sessionName} window=${current.windowIndex}`,
+    `Current pane: ${current.paneId} backend=${current.backend} session=${current.sessionName} window=${current.windowIndex}`,
     "",
     "Windows:",
-    ...(windows.length ? windows.map((w) => formatWindow(w, current)) : ["(none)"]),
+    ...(current.backend === "tmux" ? (windows.length ? windows.map((w) => formatWindow(w, current as TmuxContext)) : ["(none)"]) : ["(backend-native listing not implemented; use known ids or explicit target ids)"]),
     "",
     "Known spawned/watched panes:",
-    ...(known.length ? known.map(formatKnown) : ["(none)"]),
+    ...(known.length ? known.map((record) => formatKnown(record, current)) : ["(none)"]),
     "",
     `Joined pane: ${joined?.paneId ?? "(none)"}`,
   ];
   return { text: lines.join("\n"), details: { currentPane: current.paneId, knownPanes: known, windows } };
 }
 
-async function capturePaneText(target: string | undefined, lines: number, preserveEscapes: boolean, current: TmuxContext): Promise<{ text: string; paneId: string }> {
-  const paneId = await resolveCapturePane(target, current);
+async function capturePaneText(target: string | undefined, lines: number, preserveEscapes: boolean, current: MuxContext): Promise<{ text: string; paneId: string }> {
+  const paneId = current.backend === "tmux" ? await resolveCapturePane(target, current as TmuxContext) : (target?.trim() || latestWatched(current.paneId)?.paneId);
+  if (!paneId) throw new Error("No target supplied and no watched pane is known for this pi pane. Pass a backend-native pane/surface id.");
   const count = Math.max(1, Math.min(lines || DEFAULT_CAPTURE_LINES, 5000));
-  const args = ["capture-pane", "-t", paneId, "-p", "-S", `-${count}`];
-  if (preserveEscapes) args.splice(4, 0, "-e");
-  const text = await runTmux(args);
+  if (preserveEscapes) {
+    if (current.backend !== "tmux") throw new Error("preserveEscapes is only supported by the tmux backend.");
+    const text = await runTmux(["capture-pane", "-t", paneId, "-p", "-e", "-S", `-${count}`]);
+    return { text: text.trimEnd() || "(no captured output)", paneId };
+  }
+  const text = mux.readScreen(paneId, count);
   return { text: text.trimEnd() || "(no captured output)", paneId };
 }
 
 async function spawnWindow(kind: SpawnKind, command: string, ctx: ExtensionContext): Promise<CreatedPaneRecord> {
-  const current = await requireTmuxContext();
+  const current = await requireMuxContext();
   if (!command.trim()) throw new Error(`Usage: /t ${kind} <command>`);
   const windowName = deriveWindowName(command);
   const shellCommand = kind === "watch" ? buildWatchScript(command, ctx.cwd) : command;
-  const out = await runTmux([
-    "new-window",
-    "-c", ctx.cwd,
-    "-n", windowName,
-    "-P",
-    "-F", `#{pane_id}${FIELD_SEP}#{window_id}${FIELD_SEP}#{window_index}${FIELD_SEP}#{window_name}`,
-    shellCommand,
-  ]);
-  const [paneId, windowId, windowIndex, actualWindowName] = out.trimEnd().split(FIELD_SEP);
-  if (!paneId || !windowId) throw new Error(`tmux new-window did not return pane/window ids: ${out}`);
-  try {
-    await runTmux(["set-option", "-t", windowId, "-w", "automatic-rename", "off"]);
-  } catch {
-    // Best effort: short-lived spawn commands may exit before the option write.
-  }
+  const out = mux.createWindow(windowName, shellCommand, ctx.cwd);
+  const [paneIdRaw, windowIdRaw, windowIndexRaw, actualWindowName] = out.trimEnd().split(FIELD_SEP);
+  const paneId = paneIdRaw || out.trimEnd();
+  if (!paneId) throw new Error(`${current.backend} createWindow did not return a pane/surface id: ${out}`);
   const record: CreatedPaneRecord = {
     kind,
     command,
     paneId,
-    windowId,
-    windowIndex,
+    windowId: windowIdRaw || paneId,
+    windowIndex: windowIndexRaw || paneId,
     windowName: actualWindowName || windowName,
     createdAt: nowIso(),
     ownerPaneId: current.paneId,
@@ -276,62 +289,68 @@ async function spawnWindow(kind: SpawnKind, command: string, ctx: ExtensionConte
   return record;
 }
 
-async function joinPane(target: string, keepFocus = false, piContext?: TmuxContext): Promise<string> {
-  const current = piContext ?? await requireTmuxContext();
-  if (!target.trim()) throw new Error("Usage: /t join <window-index|window-id|pane-id>");
-  const win = await resolveWindowTarget(target, current);
-  if (win.windowId === current.windowId) throw new Error("Refusing to join the current pi window into itself.");
-  if (win.paneCount !== 1) throw new Error(`Refusing to join ${target}: target window has ${win.paneCount} panes; only single-pane windows are supported.`);
-  const paneId = win.activePaneId ?? win.panes[0]?.paneId;
-  if (!paneId) throw new Error(`Target ${target} has no pane to join.`);
-  try {
-    await breakPane(undefined, true, current);
-  } catch {
-    joinedByOwner.delete(current.paneId);
+async function joinPane(target: string, keepFocus = false, piContext?: MuxContext): Promise<string> {
+  const current = piContext ?? await requireMuxContext();
+  if (!target.trim()) throw new Error("Usage: /t join <target-id>");
+  let paneId = target.trim();
+  let fromWindowId = paneId;
+  let fromWindowName: string | undefined;
+  if (current.backend === "tmux") {
+    const win = await resolveWindowTarget(target, current as TmuxContext);
+    if (win.windowId === current.windowId) throw new Error("Refusing to join the current pi window into itself.");
+    if (win.paneCount !== 1) throw new Error(`Refusing to join ${target}: target window has ${win.paneCount} panes; only single-pane windows are supported.`);
+    paneId = win.activePaneId ?? win.panes[0]?.paneId ?? "";
+    fromWindowId = win.windowId;
+    fromWindowName = win.windowName;
+  } else {
+    const trimmedTarget = target.trim();
+    const known = knownFor(current.paneId).find((record) => {
+      if (current.backend !== "wezterm") return trimmedTarget === record.paneId || trimmedTarget === record.windowId || trimmedTarget === record.windowIndex;
+      const liveDisplayIndex = mux.displayTargetForSurface(record.paneId);
+      return trimmedTarget === record.paneId || (!!liveDisplayIndex && trimmedTarget === liveDisplayIndex);
+    });
+    if (known) {
+      paneId = known.paneId;
+      fromWindowId = known.windowId;
+      fromWindowName = known.windowName;
+    }
   }
-  await runTmux(["join-pane", "-s", paneId, "-t", current.paneId, "-v"]);
-  joinedByOwner.set(current.paneId, { paneId, fromWindowId: win.windowId, fromWindowName: win.windowName, ownerPaneId: current.paneId, keepFocus });
-  if (keepFocus) {
-    await runTmux(["select-pane", "-t", current.paneId]);
-  }
+  if (!paneId) throw new Error(`Target ${target} has no pane/surface to join.`);
+  try { await breakPane(undefined, true, current); } catch { joinedByOwner.delete(current.paneId); }
+  const attachedPaneId = mux.attachSurface(paneId, { focus: keepFocus ? "owner" : "target", ownerPaneId: current.paneId });
+  paneId = attachedPaneId || paneId;
+  joinedByOwner.set(current.paneId, { paneId, fromWindowId, fromWindowName, ownerPaneId: current.paneId, keepFocus });
   return `${keepFocus ? "Monitored" : "Joined"} ${paneId} below ${current.paneId}.`;
 }
 
-async function breakPane(explicitPaneId?: string, quietNoop = false, piContext?: TmuxContext): Promise<string> {
-  const current = piContext ?? await requireTmuxContext();
+async function breakPane(explicitPaneId?: string, quietNoop = false, piContext?: MuxContext): Promise<string> {
+  const current = piContext ?? await requireMuxContext();
   const joinedRecord = explicitPaneId?.trim() ? undefined : joinedByOwner.get(current.paneId);
   const targetPane = explicitPaneId?.trim() || joinedRecord?.paneId;
   if (!targetPane) {
     if (quietNoop) return "No joined pane to break.";
     throw new Error("No joined pane is recorded for this pi pane. Use /t break <pane-id> after restart/state loss.");
   }
-  const savedName = joinedRecord?.fromWindowName;
-  const breakArgs = ["break-pane", "-s", targetPane, "-P", "-F", "#{window_id}"];
-  if (savedName) breakArgs.push("-n", savedName);
-  const newWindowId = (await runTmux(breakArgs)).trimEnd();
-  if (newWindowId) {
-    try {
-      await runTmux(["set-option", "-t", newWindowId, "-w", "automatic-rename", "off"]);
-    } catch {
-      // Best effort: short-lived broken-out panes may exit before the option write.
-    }
-  }
-  await runTmux(["select-window", "-t", current.windowIndex]);
+  mux.detachSurface(targetPane, current.backend === "tmux" ? { ownerWindowIndex: (current as TmuxContext).windowIndex, windowName: joinedRecord?.fromWindowName } : { windowName: joinedRecord?.fromWindowName });
   if (!explicitPaneId) joinedByOwner.delete(current.paneId);
-  return `Broke ${targetPane} back into its own window.`;
+  return current.backend === "zellij" ? `Floated ${targetPane}.` : `Broke ${targetPane} back into its own window.`;
 }
 
 async function killPane(target: string): Promise<string> {
-  const current = await requireTmuxContext();
+  const current = await requireMuxContext();
   const joined = joinedByOwner.get(current.paneId);
   const trimmed = target.trim();
   let paneId: string | undefined;
   let windowId: string | undefined;
   if (trimmed) {
-    const win = await resolveWindowTarget(trimmed, current);
-    if (win.windowId === current.windowId) throw new Error("Refusing to kill the current pi window.");
-    paneId = win.activePaneId ?? win.panes[0]?.paneId;
-    windowId = win.windowId;
+    if (current.backend === "tmux") {
+      const win = await resolveWindowTarget(trimmed, current as TmuxContext);
+      if (win.windowId === current.windowId) throw new Error("Refusing to kill the current pi window.");
+      paneId = win.activePaneId ?? win.panes[0]?.paneId;
+      windowId = win.windowId;
+    } else {
+      paneId = trimmed;
+    }
   } else {
     paneId = joined?.paneId;
   }
@@ -339,9 +358,13 @@ async function killPane(target: string): Promise<string> {
     throw new Error("No active monitor — try '/t kill <window-index>'.");
   }
   // Ctrl-C may already close the target; remaining cleanup should be idempotent.
-  await runTmuxIgnoringMissingTarget(["send-keys", "-t", paneId, "C-c"]);
-  await runTmuxIgnoringMissingTarget(["send-keys", "-t", paneId, "C-c"]);
-  await runTmuxIgnoringMissingTarget(windowId ? ["kill-window", "-t", windowId] : ["kill-pane", "-t", paneId]);
+  if (current.backend === "tmux") {
+    await runTmuxIgnoringMissingTarget(["send-keys", "-t", paneId, "C-c"]);
+    await runTmuxIgnoringMissingTarget(["send-keys", "-t", paneId, "C-c"]);
+    await runTmuxIgnoringMissingTarget(windowId ? ["kill-window", "-t", windowId] : ["kill-pane", "-t", paneId]);
+  } else {
+    mux.closeSurface(paneId);
+  }
   if (!trimmed) joinedByOwner.delete(current.paneId);
   return `Killed ${paneId}.`;
 }
@@ -378,11 +401,11 @@ export default function ttyExtension(pi: ExtensionAPI) {
     };
 
   const toolExec = (
-    handler: (ctx: Awaited<ReturnType<typeof requireTmuxContext>>, params: Record<string, unknown>) => Promise<{ text: string; details: TtyToolResultDetails }>,
+    handler: (ctx: Awaited<ReturnType<typeof requireMuxContext>>, params: Record<string, unknown>) => Promise<{ text: string; details: TtyToolResultDetails }>,
   ) =>
     async (_toolCallId: string, params: Record<string, unknown>) => {
       try {
-        const current = await requireTmuxContext();
+        const current = await requireMuxContext();
         const { text, details } = await handler(current, params);
         return { content: [{ type: "text", text }], details };
       } catch (error) {
@@ -405,8 +428,8 @@ export default function ttyExtension(pi: ExtensionAPI) {
   }));
 
   pi.events.on("tty:watch", withCtx(async (ctx, data) => {
-    // Save pi context *before* spawning — tmux new-window switches focus.
-    const piCtx = await requireTmuxContext();
+    // Save pi context *before* spawning — some backends switch focus.
+    const piCtx = await requireMuxContext();
     const record = await spawnWindow("watch", data.command, ctx);
     ctx.ui.notify(`Watching ${record.paneId} in window [${record.windowIndex}] ${record.windowName}`, "info");
     // Join the new watch window below pi, keeping focus in the pi pane.
@@ -430,13 +453,13 @@ export default function ttyExtension(pi: ExtensionAPI) {
   }));
 
   pi.events.on("tty:list", withCtx(async (ctx) => {
-    const current = await requireTmuxContext();
+    const current = await requireMuxContext();
     const { text } = await ttyListText(current);
     ctx.ui.notify(text, "info");
   }));
 
   pi.events.on("tty:tail", withCtx(async (ctx, data) => {
-    const current = await requireTmuxContext();
+    const current = await requireMuxContext();
     const { text, paneId } = await capturePaneText(data.target, data.lines ?? DEFAULT_CAPTURE_LINES, false, current);
     ctx.ui.notify(`Captured ${paneId}:\n${text}`, "info");
   }));

@@ -5,11 +5,11 @@ description: Use pi TTY workflows for long-running commands, background watchers
 
 # pi tty workflows
 
-Use this skill when a terminal multiplexer can keep work visible and inspectable without blocking the current pi session. The current backend is tmux; the user-facing command is backend-neutral `/t`.
+Use this skill when a terminal multiplexer can keep work visible and inspectable without blocking the current pi session. The user-facing command is backend-neutral `/t`; the extension auto-detects cmux, tmux, zellij, or wezterm and supports `PI_TTY_MUX=cmux|tmux|zellij|wezterm` to override detection.
 
 The `pi/extensions/tty` extension owns the actual capability:
 
-- `/t s|spawn <cmd>` — run an interactive command in a new tmux window.
+- `/t s|spawn <cmd>` — run an interactive command in a new backend surface/window.
 - `/t w|watch <cmd>` — run a long-lived command with double-Ctrl-C cleanup; joins the window below pi and keeps focus in pi.
 - `/t l|list` — show windows plus spawned/watched pane ids.
 - `/t t|tail [target] [lines]` — capture recent output for the user.
@@ -18,6 +18,14 @@ The `pi/extensions/tty` extension owns the actual capability:
 - `/t j|join <target>` / `/t b|break [pane-id]` — temporarily show/hide a single-pane target below the current pi pane.
 - `/t m|monitor <target>` — same as join but keeps the focus/cursor in the parent (pi) pane.
 - `/t k|kill [target]` — send two Ctrl-C signals (stop process + close wrapper) then remove the target; defaults to the joined/monitored pane.
+
+## Backends
+
+- tmux: full window/pane listing, target resolution by `%pane`, `@window`, index, or name; join uses `join-pane`; break uses `break-pane`; ANSI-preserving capture is supported.
+- zellij: `/t spawn` creates a tty-managed floating pane in the current pi tab and renames it `<index>: <cmd>`; `/t monitor` embeds it and restores focus to pi; `/t join` embeds it and focuses the target; `/t break` floats it again. Use the displayed terminal index (`/t j 1`) or full pane id (`terminal_1`); arbitrary cross-tab adoption is intentionally unsupported.
+- cmux: spawned surfaces are renamed `<index>: <cmd>`; use the displayed surface index (`/t j 42`) or full id (`surface:42`). Attach moves a surface into the caller pane and break splits it off.
+- wezterm: spawned commands open as new tabs titled from the command; use the displayed 1-based tab index (`/t j 2`). The extension resolves it from current-window `wezterm cli list --format json` order. Attach moves a cross-tab pane below pi; same-tab attach is refused due to a known wezterm move bug; break moves the pane to a new tab and restores the command title.
+- `tty_capture` works across backends where screen capture exists, but `preserveEscapes: true` is tmux-only.
 
 ## Choosing bash vs tty
 
@@ -83,7 +91,7 @@ Use the `pi-intercom` skill/tooling to communicate with spawned pi instances. Th
 
 ## Join/break guidance
 
-Use `/t j <target>` (alias `/t join`) when the user wants to see another window below the current pi pane and then interact with it directly. Targets must be in the same backend/session and currently single-pane; multi-pane windows are refused to avoid surprising pane moves.
+Use `/t j <target>` (alias `/t join`) when the user wants to see another window below the current pi pane and then interact with it directly. Targets must be in the same backend/session and currently single-pane; multi-pane windows are refused to avoid surprising pane moves. In zellij and cmux, use the numeric prefix shown in the spawned title (`/t j 1` for `1: bb watch-echo`) or the full backend id. In WezTerm, use the displayed 1-based tab index.
 
 Use `/t m <target>` (alias `/t monitor`) when the user wants to see another window below the current pi pane but keep the focus/cursor in the pi pane (e.g., to read output from the other window without switching focus). Same single-pane target constraints. Use this after `/t w` if you want to switch which window is shown below pi.
 
@@ -91,7 +99,7 @@ Use `/t b` (alias `/t break`) to return the joined pane to its own window. After
 
 ## Kill guidance
 
-Use `/t k` (alias `/t kill`) to stop the process and remove the currently joined/monitored pane. Use `/t k <target>` to do the same for a specific window — numeric targets are window indices (`2`); window ids (`@7`) and window names are also accepted.
+Use `/t k` (alias `/t kill`) to stop the process and remove the currently joined/monitored pane. Use `/t k <target>` to do the same for a specific target. Tmux accepts numeric window indices (`2`), window ids (`@7`), pane ids, and window names; zellij/cmux accept the numeric prefix shown in the spawned title as well as the full backend id; WezTerm accepts its displayed 1-based tab index.
 
 The command sends two Ctrl-C signals: the first stops the process (the watch wrapper catches it and waits), the second closes the wrapper shell. Then it removes the target (`kill-pane` for the joined pane; `kill-window` for an explicit target in the tmux backend). Cleanup tolerates already-closed panes/windows.
 

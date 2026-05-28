@@ -1,0 +1,409 @@
+#+TITLE: Add multi-backend support to tty extension by vendoring cmux primitives
+#+DATE: 2026-05-28 Thu
+#+PARENT: [[archive:c8fb457c-d205-4fb9-bb07-f6844061c35e][Add multi-backend support to tty extension by vendoring cmux primitives]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Intent
+Give the tty extension (currently tmux-only) a thin vendored backend layer
+modelled on ~pi-interactive-subagents~' ~cmux.ts~, so ~/t spawn~, ~/t watch~,
+~/t join~, ~/t monitor~, ~/t break~, and ~tty_capture~ can use the best
+available cmux / tmux / zellij / wezterm primitives without taking on the full
+pi-interactive-subagents package or its subagent-specific coordination
+(subagent focus snapshots, cmux subagent tab reuse, zellij stacked-pane
+prediction).
+
+* Summary
+*Level:* MVP · *Tests:* smoke (extend existing helpers tests; manual smoke per
+backend) · *Docs:* inline + extension README + ~pi-tty~ skill backend note.
+
+The tty extension's ~pi/extensions/tty/index.ts~ talks to tmux directly via a
+local ~runTmux~ helper plus a tmux-only ~requireTmuxContext~. We replace the
+narrow set of mux operations the extension actually needs with a vendored
+module (~pi/extensions/tty/mux.ts~, target ≤ ~350 LOC) that exposes a
+backend-neutral surface: ~getMuxBackend~, ~isMuxAvailable~, ~muxSetupHint~,
+~createWindow(name, command, cwd)~, ~sendCommand(surface, command)~,
+~readScreen(surface, lines)~, ~closeSurface(surface)~, plus
+~attachSurface(surface, {focus})~ / ~detachSurface(surface)~ for
+~/t monitor~, ~/t join~, and ~/t break~.
+
+The vendored base module is derived from
+~~/.pi/agent/git/github.com/HazAT/pi-interactive-subagents/pi-extension/subagents/cmux.ts~
+(confirmed installed location; upstream npm package
+~pi-interactive-subagents~ is *not* present in ~~/.pi/agent/npm/node_modules~
+on this machine, contra the task body — use the git checkout). The
+attach/detach operations are backend-specific additions validated by the
+2026-05-28 parallel review; re-vendor the base primitives on material upstream
+changes, but keep tty's attach/detach policy local.
+
+** Scope
+*** In scope
+- New file ~pi/extensions/tty/mux.ts~ with the primitives above plus internal
+  helpers (~hasCommand~, ~shellEscape~, ~tailLines~, ~requireMuxBackend~,
+  backend-specific owner-pane/current-pane lookup).
+- Refactor ~pi/extensions/tty/index.ts~ to drive ~/t spawn~, ~/t watch~,
+  ~/t join~, ~/t monitor~, ~/t break~, ~/t kill~, ~/t tail~, and
+  ~tty_capture~ through ~mux.ts~ where the current backend supports the
+  requested operation.
+- Implement join/monitor as one attach primitive with explicit focus policy:
+  ~monitor~ attaches below the pi pane then restores/fixes focus to pi;
+  ~join~ attaches below the pi pane then focuses the attached surface.
+- Implement break as the inverse detach primitive where available, restoring
+  focus to the pi pane after the operation. In zellij, detach means
+  "undock back to floating" rather than "move to a separate tab".
+- For zellij, ~/t spawn~ creates a floating pane in the pi tab; ~/t monitor~ /
+  ~/t join~ dock that managed floating pane into the tiled layout with
+  different focus outcomes; ~/t break~ floats it again.
+- Backend-native ids in tool output (~%1~/~@1~ for tmux, ~terminal_1~ for
+  zellij, ~surface:42~ for cmux, numeric for wezterm).
+- Update ~pi/extensions/tty/README.md~ and ~pi/skills/pi-tty/SKILL.md~ with a
+  backend capability table rather than a blanket tmux-only caveat.
+
+*** Out of scope
+- Event-bus coordination between tty and pi-interactive-subagents
+  (~subagent:surface-created~ → ~tty_list~).
+- Vendoring subagent-only primitives: ~createSurfaceSplit~,
+  ~cmuxSubagentPane~ tab reuse, ~captureCmuxFocusSnapshot~ /
+  ~restoreCmuxFocusSnapshot~, ~predictZellijSplitDirection~,
+  ~selectZellijPlacement~, ~withZellijSurfaceLock~, ~sendLongCommand~,
+  ~pollForExit~.
+- Adopting arbitrary user-created zellij panes from other tabs. The extension
+  only needs to manage processes spawned from the current pi session; zellij
+  support is therefore built around tty-spawned floating panes in the pi tab.
+- Fragile zellij keyboard automation (~switch-mode tab~ + ~send-keys b~) for
+  true tab break. The supported zellij break operation is floating/undocking a
+  managed pane.
+- Replacing window-listing for every backend in v1. Use explicit
+  backend-native ids for non-tmux attach/detach where discovery is not yet
+  implemented; keep broader ~tty_list~ parity as follow-up work.
+
+** Decisions
+- *Vendor, do not depend on pi-interactive-subagents.* The package is not a
+  runtime dep today and the upstream module is 1334 LOC of mostly
+  subagent-specific concerns. Vendoring the shared primitives keeps the tty
+  extension free-standing and makes upgrades a deliberate re-vendor.
+  Rejected:
+  - Add ~pi-interactive-subagents~ as a dependency — pulls in unrelated
+    surface area, ties tty's release cadence to upstream.
+  - Fork upstream and reuse the JS file directly — same coupling, plus
+    distribution overhead.
+  - Roll a zellij-only backend in the existing index.ts (previous
+    approach, task 77d82282…) — concentrates effort in one backend and
+    duplicates work already done upstream.
+- *Do not keep join/monitor/break tmux-only.* The initial plan was too
+  conservative: tmux, cmux, and wezterm all expose native move/adopt/detach
+  operations. Model these as tty-owned attach/detach primitives with explicit
+  focus policy, and let each backend pick the cheapest correct sequence.
+- *Zellij uses a managed floating-pane model.* Because tty only needs to
+  operate on processes spawned from the current pi session, zellij does not
+  need arbitrary cross-tab adoption. Create spawned processes as floating
+  panes in the pi tab; monitor/join embed them via
+  ~toggle-pane-embed-or-floating~ (then focus pi or target respectively);
+  break toggles them back to floating and restores focus to pi. Idempotency
+  guards read live zellij state from ~list-panes --json --tab --state
+  --geometry~ rather than trusting only tty's in-memory ledger.
+- *Use ~PI_TTY_MUX~ rather than ~PI_SUBAGENT_MUX~.* The tty extension is not a
+  subagent extension; keeping its override name local avoids coupling while
+  still allowing users to set both env vars if they want cross-extension
+  consistency.
+- *Keep ANSI-preserving capture tmux-only for v1.* If ~tty_capture~ is called
+  with ~preserveEscapes=true~, bypass generic ~mux.readScreen~ and use the
+  existing tmux capture path; non-tmux backends ignore or reject the flag with
+  documentation rather than inventing inconsistent ANSI capture semantics.
+- *Single per-backend dispatch module, no per-backend subclasses.* Match
+  upstream cmux.ts shape (~switch~ on ~MuxBackend~ inside each exported
+  function). Premature abstraction otherwise.
+- *Backend-native ids leak into tool output.* Matches how cmux.ts itself
+  treats surface ids; lets users copy-paste ids into ~tmux~/~zellij~/~cmux~
+  CLI without translation. Documented in ~tty_capture~ tool description.
+- *~tty_list~ parity is follow-up work, not a blocker for attach/detach.*
+  Tmux already has full discovery; wezterm/zellij/cmux have possible list
+  commands, but v1 can accept explicit backend-native ids and document any
+  discovery gaps.
+
+** Risks
+- *Upstream cmux.ts drifts.* Vendored copy becomes stale; mitigation is the
+  ** Follow-ups note + a header comment in ~mux.ts~ citing the source
+  commit/path.
+- *Zellij toggle is not idempotent.* ~toggle-pane-embed-or-floating~ must be
+  guarded by ~list-panes --json --tab --state --geometry~ (or tracked state)
+  so monitor/join only embed floating panes and break only floats embedded
+  panes. Mitigate with tests for repeated monitor/break calls.
+- *Zellij placement is approximate.* Embedding a floating pane lets zellij pick
+  its tiled layout position; add optional ~move-pane --pane-id <target> down~ /
+  resize polish only if the default placement is awkward during smoke.
+- *Wezterm same-tab move bug.* ~split-pane --move-pane-id~ has a known
+  same-tab bug; guard against source/destination in the same tab or refuse
+  that case. Cross-tab moves are the intended path.
+- *Cmux split-off availability is uncertain.* ~move-surface~ is confirmed;
+  ~split-off~ is documented in cmux's agent reference but absent from the
+  public website docs. Probe at runtime and fall back to ~new-split~ +
+  ~move-surface~ + ~close-surface~ if needed.
+- *Wezterm/cmux not present on the workstation.* Cannot smoke-test those
+  paths locally; verify command construction with tests and mark manual smoke
+  pending for machines running those backends.
+
+* Plan
+** DONE Vendor mux.ts skeleton with backend detection
+CLOSED: [2026-05-28 Thu 20:27]
+:PROPERTIES:
+:CUSTOM_ID: a742b377-f81f-4dc2-8bc6-9d408d0f6969
+:CREATED: [2026-05-28 Thu]
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-28 Thu 20:27]
+:END:
+Acceptance criteria:
+- ~pi/extensions/tty/mux.ts~ exists with ~MuxBackend~ type and exported
+  ~getMuxBackend~, ~isMuxAvailable~, ~muxSetupHint~, ~requireMuxBackend~.
+- Internal helpers ~hasCommand~, ~shellEscape~, ~tailLines~ ported verbatim
+  from upstream cmux.ts (cite source path in header comment).
+- ~PI_TTY_MUX~ env override honoured (rename of upstream
+  ~PI_SUBAGENT_MUX~ — tty has no "subagent" concern; document in README).
+- Must not: import from ~pi-interactive-subagents~ or add it to
+  ~package.json~ deps.
+- Must not: vendor focus-snapshot, lock, or cmuxSubagentPane code.
+
+Reference: lines 1–117 of
+~/home/cormacc/.pi/agent/git/github.com/HazAT/pi-interactive-subagents/pi-extension/subagents/cmux.ts~.
+
+** DONE Vendor mux.ts primitives including attach/detach focus policy
+CLOSED: [2026-05-28 Thu 20:27]
+:PROPERTIES:
+:CUSTOM_ID: 9d37695c-b8f3-4a3b-8b8c-b75a2bc21fe3
+:CREATED: [2026-05-28 Thu]
+:BLOCKED-BY: a742b377-f81f-4dc2-8bc6-9d408d0f6969
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-28 Thu 20:27]
+:END:
+Acceptance criteria:
+- ~createWindow(name: string, command: string, cwd: string): string~
+  returns a backend-native id and uses ~tmux new-window~ for tmux,
+  ~cmux new-surface~ for cmux, ~zellij action new-pane --floating --tab-id
+  <pi-tab-id> --name~ for zellij, ~wezterm cli spawn --new-window~ for
+  wezterm.
+- ~sendCommand~, ~readScreen~, ~closeSurface~ ported from upstream lines
+  1011–1216 with the ~requireMuxBackend()~ dispatch shape preserved.
+- ~attachSurface(surface, {focus})~ implements shared join/monitor semantics:
+  tmux uses ~join-pane -s <surface> -t <owner> -v~ plus conditional
+  ~select-pane~; cmux uses ~move-surface --surface <surface> --pane
+  <caller.pane_ref> --focus <bool>~; wezterm uses ~split-pane --pane-id
+  $WEZTERM_PANE --bottom --top-level --move-pane-id <surface>~ plus explicit
+  ~activate-pane~; zellij toggles a tty-managed floating pane to embedded via
+  ~toggle-pane-embed-or-floating --pane-id <surface>~ only when needed, then
+  uses ~zellij action focus-pane-id <pi-pane-id|target-pane-id>~ to focus pi
+  for monitor or target for join.
+- ~detachSurface(surface)~ implements break where reliable: tmux
+  ~break-pane~; cmux ~split-off~ with runtime fallback to ~new-split~ +
+  ~move-surface~ + ~close-surface~; wezterm ~move-pane-to-new-tab~ plus
+  optional ~set-tab-title~; zellij toggles a tty-managed embedded pane back
+  to floating and restores focus to pi with ~focus-pane-id~.
+- Wezterm attach checks source/destination tab ids before using
+  ~split-pane --move-pane-id~ and refuses same-tab moves until the known bug
+  is fixed; normal tty-spawned targets are separate tabs/windows.
+- ~readScreen~ defaults to ~DEFAULT_CAPTURE_LINES~ (200) to match the
+  existing ~tty_capture~ default rather than upstream's 50. ANSI-preserving
+  capture remains tmux-only: when ~preserveEscapes=true~, bypass generic
+  ~mux.readScreen~ and use the existing tmux capture path.
+- Joined/monitored state records backend-native ids plus any restoration
+  data needed by detach (~original window/title/pane ref~); zellij
+  idempotency uses live ~list-panes --json --tab --state --geometry~ state.
+  Recovery by explicit target id still works after pi restart where the
+  backend allows it.
+- Total LOC of ~mux.ts~ ≤ ~350.
+- Must not: re-export ~createSurfaceSplit~, ~sendLongCommand~,
+  ~sendEscape~, ~readScreenAsync~, ~pollForExit~, or any zellij placement
+  prediction helpers.
+
+Sketch:
+#+begin_src ts
+export function attachSurface(surface: string, opts: { focus: "owner" | "target" }): void {
+  const backend = requireMuxBackend();
+  // monitor: opts.focus === "owner"; join: opts.focus === "target".
+  // Always perform an explicit focus correction after layout-changing commands.
+}
+#+end_src
+
+** DONE Refactor index.ts to dispatch through mux.ts
+CLOSED: [2026-05-28 Thu 20:27]
+:PROPERTIES:
+:CUSTOM_ID: 6424da31-e274-4262-9f18-03771c8eee8d
+:CREATED: [2026-05-28 Thu]
+:BLOCKED-BY: 9d37695c-b8f3-4a3b-8b8c-b75a2bc21fe3
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-28 Thu 20:27]
+:END:
+Acceptance criteria:
+- ~spawnWindow~ in ~pi/extensions/tty/index.ts~ delegates to
+  ~mux.createWindow~ for the ~"spawn"~ kind on any backend.
+- ~capturePaneText~ delegates to ~mux.readScreen~ on any backend.
+- ~killPane~ delegates to ~mux.closeSurface~ when called with an explicit
+  target on a non-tmux backend; tmux behaviour (two Ctrl-C + kill-window)
+  is preserved when backend is tmux.
+- ~/t monitor <target>~ and ~/t join <target>~ delegate to
+  ~mux.attachSurface(target, {focus: "owner" | "target"})~ and share all
+  target validation/state tracking possible for the backend.
+- ~/t break [target]~ delegates to ~mux.detachSurface~; zellij break means
+  "return the managed embedded pane to floating" and does not attempt true
+  tab break or keyboard automation.
+- ~/t watch~ uses the same attach path for the "show below pi" leg; on
+  zellij, the watched command is created as a floating pane in the pi tab and
+  then embedded for monitor/watch display.
+- Unsupported capability errors are backend-specific, e.g. zellij refuses
+  unmanaged/foreign panes rather than claiming join/monitor/break are
+  tmux-only.
+- Must not: regress existing tmux behaviour; ~pi/extensions/tty/index.test.ts~
+  continues to pass.
+- Must not: leak ~%1~/~@1~ id translation into tool output (ids pass
+  through verbatim).
+
+Reference: current dispatch lives in
+~pi/extensions/tty/index.ts:218-310~ (~spawnWindow~, ~capturePaneText~,
+~killPane~) and ~:480-508~ (tool registrations).
+
+** DONE Tests, README, and pi-tty skill updates
+CLOSED: [2026-05-28 Thu 20:27]
+:PROPERTIES:
+:CUSTOM_ID: f560e406-c2a7-459c-bdd2-79f3713cc203
+:CREATED: [2026-05-28 Thu]
+:BLOCKED-BY: 6424da31-e274-4262-9f18-03771c8eee8d
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-05-28 Thu 20:27]
+:END:
+Acceptance criteria:
+- ~pi/extensions/tty/index.test.ts~ gains stub-backed tests for
+  ~mux.getMuxBackend~ overrides and attach/detach command construction for
+  tmux, cmux, and wezterm.
+- Tests cover zellij command construction/state guards: spawn uses
+  ~new-pane --floating --tab-id <pi-tab-id>~, monitor/join embed only when
+  currently floating, break floats only when currently embedded, and repeated
+  calls are idempotent at the tty layer.
+- Tests cover zellij unsupported paths for unmanaged/foreign panes with a
+  zellij-specific message.
+- ~pi/extensions/tty/README.md~ documents supported backends, the
+  attach/detach capability table, zellij's managed floating-pane model, and
+  the ~PI_TTY_MUX~ override.
+- ~pi/skills/pi-tty/SKILL.md~ frontmatter description still triggers on
+  "tmux", and the body gains a "Backends" section enumerating
+  cmux/tmux/zellij/wezterm capability differences.
+- ~bb test~ (or the project's ~npm test~ equivalent for the tty
+  extension) is green.
+- Manual smoke under tmux: ~/t spawn ls~, ~/t monitor <target>, ~/t join
+  <target>, ~/t break~, ~/t tail~, ~/t kill~ recorded in ~* Validation~ on
+  completion.
+- Manual smoke under zellij when available: ~/t spawn~ creates a floating
+  pane, ~/t monitor~ embeds and restores focus to pi, ~/t join~ embeds and
+  focuses target, ~/t break~ floats and restores focus to pi.
+
+* Implementation
+- Added ~pi/extensions/tty/mux.ts~ (158 LOC) with backend detection via
+  ~PI_TTY_MUX~, vendored cmux/tmux/zellij/wezterm send/read/close primitives,
+  backend-native creation, and tty-local attach/detach focus policy.
+- Refactored ~pi/extensions/tty/index.ts~ so spawn/watch, capture, join,
+  monitor, break, and non-tmux explicit kill dispatch through ~mux.ts~ while
+  preserving tmux target resolution/listing and ANSI-preserving capture.
+- Added stub-backed mux tests in ~pi/extensions/tty/index.test.ts~ covering
+  override detection and attach/detach command construction/idempotency for
+  tmux, cmux, wezterm, and zellij.
+- Updated ~pi/extensions/tty/README.md~ and ~pi/skills/pi-tty/SKILL.md~ with
+  backend capability notes, zellij managed floating-pane model, and
+  ~PI_TTY_MUX~ override.
+- Fixed live zellij smoke issue: ~focus-pane-id <pi-pane>~ returns an error
+  when the pane is already focused, so zellij focus correction now skips the
+  action when live ~list-panes~ state already shows the target focused and
+  tolerates the "already focused" error defensively.
+- Fixed live tmux watch issue: tmux ~new-window~ can switch the active client
+  to the newly spawned pane before the join step runs. ~index.ts~ now passes
+  the pre-spawn pi pane id into ~mux.attachSurface~, and the tmux branch uses
+  that explicit owner pane for ~join-pane -t~ instead of rediscovering the
+  current pane after focus moved.
+- Fixed tmux title regression after join/break: ~joinedByOwner~ already
+  records the source window name, so ~breakPane~ now passes it to
+  ~mux.detachSurface~; the tmux detach branch uses ~break-pane -n <name>
+  -P -F '#{window_id}'~ and disables ~automatic-rename~ on the broken-out
+  window, matching the pre-refactor tmux-only behaviour.
+- Improved numeric target UX across non-tmux backends: zellij spawned
+  floating panes and cmux spawned surfaces are renamed after creation to
+  include the numeric id (for example ~1: bb watch-echo~). ~createWindow~
+  returns the bare numeric id for zellij and cmux; zellij target matching
+  accepts either the bare index (~1~) or full id (~terminal_1~), and cmux
+  normalizes bare ids to ~surface:<id>~ for send/read/close/attach/detach.
+  Wezterm spawn now omits ~--new-window~ so the process starts as a new tab in
+  the current window, keeps the command as the tab title, records the stable
+  pane id internally, resolves user targets from WezTerm's displayed 1-based
+  tab order (current-window ~wezterm cli list --format json~ order), and
+  restores the command title after break. The title restore path now maps the
+  live displayed tab index back to the remembered stable pane id before join,
+  so `/t j 2` preserves the saved command title instead of losing it when the
+  joined pane is later broken out.
+- Upstream source: ~/home/cormacc/.pi/agent/git/github.com/HazAT/pi-interactive-subagents/pi-extension/subagents/cmux.ts~
+  (1334 LOC). Vendor only the subset listed under ** Scope.
+- Existing tmux behaviour in ~pi/extensions/tty/index.ts~ to preserve:
+  - ~spawnWindow~ uses ~tmux new-window -c <cwd> -n <windowName> -P -F …~
+    and then ~set-option -t <windowId> -w automatic-rename off~. Replicate
+    the rename-disable in the tmux branch of ~mux.createWindow~.
+  - ~joinPane~ uses ~join-pane -s <paneId> -t <currentPane> -v~; monitor is
+    join plus focus restore to the pi pane. Preserve self-join and multi-pane
+    target rejection.
+  - ~breakPane~ uses ~break-pane -s <paneId>~ and restores focus to pi.
+  - ~capturePaneText~ uses ~capture-pane -p -t <pane> -S -<lines>~ with an
+    optional ~-e~ for ANSI preservation. Preserve this as a tmux-only path:
+    when ~preserveEscapes=true~, bypass generic ~mux.readScreen~ and call the
+    tmux capture path; non-tmux backends document the flag as unsupported or
+    ignored.
+- Parallel review findings folded into the plan:
+  - cmux: ~move-surface --surface <target> --pane <caller.pane_ref> --focus
+    <bool>~ for join/monitor; ~split-off~ for break, with fallback if absent.
+  - wezterm: ~split-pane --pane-id $WEZTERM_PANE --bottom --top-level
+    --move-pane-id <target>~ for join/monitor after refusing same-tab moves,
+    then explicit ~activate-pane~; ~move-pane-to-new-tab~ for break, then
+    focus restore.
+  - zellij: create tty-managed processes as floating panes in the pi tab via
+    ~new-pane --floating --tab-id <pi-tab-id>~. Monitor/join dock by toggling
+    to embedded with ~toggle-pane-embed-or-floating --pane-id <target>~ and
+    then explicitly focusing pi or target with ~focus-pane-id~. Break toggles
+    back to floating and restores focus to pi. No arbitrary cross-tab
+    adoption is needed for this extension.
+- Honour project rule: confirm symbol names by re-reading upstream cmux.ts
+  before each vendoring task — line numbers in this record are pinned to
+  the snapshot read on 2026-05-28.
+
+* Validation
+- ~bash pi/extensions/tty/test.sh~: passed (helper tests plus new mux command-construction tests); rerun after zellij already-focused fix, tmux pre-spawn owner fix, tmux break-title restore fix, zellij bare-index targeting change, cmux numeric-title targeting change, wezterm spawn-tab fix, wezterm tab-id/title restore fix, and wezterm displayed-index title restore fix, still passed.
+- ~npx --yes tsx -e "import('./pi/extensions/tty/index.ts').then(()=>console.log('index import ok'))"~: passed; rerun after zellij already-focused fix, tmux pre-spawn owner fix, tmux break-title restore fix, zellij bare-index targeting change, cmux numeric-title targeting change, wezterm spawn-tab fix, wezterm tab-id/title restore fix, and wezterm displayed-index title restore fix, still passed.
+- ~ot doctor --format json~: passed with ~ok: true~, 0 errors, 0 warnings; rerun after zellij already-focused fix, tmux pre-spawn owner fix, tmux break-title restore fix, zellij bare-index targeting change, cmux numeric-title targeting change, wezterm spawn-tab fix, wezterm tab-id/title restore fix, and wezterm displayed-index title restore fix, still clean.
+- Verified local CLI flags with ~zellij action new-pane --help~,
+  ~zellij action toggle-pane-embed-or-floating --help~,
+  ~zellij action focus-pane-id --help~, and ~zellij action dump-screen --help~.
+- Attempted ad-hoc TypeScript check with ~npx --package typescript tsc ...~;
+  blocked by missing project type declarations for Node and
+  ~@mariozechner/pi-coding-agent~ rather than implementation-specific errors.
+- Manual tmux/zellij smoke not run in this non-interactive worker session;
+  follow the README/test.sh checklist in a live backend session.
+
+* Open questions
+** DECIDED Should ~tty_capture~'s ~preserveEscapes~ option be supported on non-tmux backends, or stay tmux-only?
+:PROPERTIES:
+:DECIDED: [2026-05-28 Thu]
+:END:
+Decision: keep ANSI-preserving capture tmux-only for v1. When
+~preserveEscapes=true~, bypass generic ~mux.readScreen~ and use the existing
+~tmux capture-pane -e~ path; non-tmux backends document the flag as
+unsupported or ignored.
+** DECIDED Is ~PI_TTY_MUX~ the right env name, or should we reuse ~PI_SUBAGENT_MUX~ for cross-extension consistency?
+:PROPERTIES:
+:DECIDED: [2026-05-28 Thu]
+:END:
+Decision: use ~PI_TTY_MUX~. The tty extension is not subagent-specific, and a
+separate override avoids coupling while still letting users set both env vars
+when they want a shared backend preference.
+** DECIDED Should zellij get a follow-up for plugin-backed cross-tab move/break support?
+:PROPERTIES:
+:DECIDED: [2026-05-28 Thu]
+:END:
+Decision: no follow-up for this task. The tty extension only needs to manage
+processes spawned from the current pi session, so zellij can use managed
+floating panes in the pi tab. Arbitrary cross-tab adoption remains out of
+scope.
