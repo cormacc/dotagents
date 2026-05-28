@@ -278,3 +278,62 @@ in place. Same node, same writer.
 :CUSTOM_ID: 0ed56048-9f53-44b4-8a5a-2dbc858e6f04
 :END:
 https://pi.dev/packages/@dreki-gg/pi-lsp
+
+** TODO Upstream pi: request runtime/config split for settings.json :project-convention:
+:PROPERTIES:
+:CUSTOM_ID: 12543944-2045-444a-8135-b7cfb47a6d3e
+:CREATED: [2026-05-29 Fri 00:20]
+:END:
+:LOGBOOK:
+- Created [2026-05-29 Fri 00:20]
+:END:
+Ask the pi maintainers to write runtime state (lastChangelogVersion, defaultProvider, defaultModel, and likely future siblings) to a separate file from declarative config (packages, theme, thinking settings). E.g. pi/state.json or $XDG_STATE_HOME/pi/, keeping settings.json purely declarative.
+
+Currently a `clean` filter strips these keys (see related task above); an upstream split would remove the need for any repo-local workaround and benefits every pi user who version-controls their settings.
+
+Maintainers unlikely to be Nix-aware, so frame the ask in terms of the general "version-controlling dotfiles / declarative-config" use case, not nix specifically.
+
+Action:
+- File issue (or PR) on the pi repo. Reference: pi runtime keys observed so far include lastChangelogVersion, defaultProvider, defaultModel.
+
+Origin:
+- session: this one
+- cwd: /Users/cormacc/dotfiles/agents
+- git: github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-05-28 Thu]
+- sender: agent
+
+** TODO pi/settings.json: auto-install git clean filter on activation :project-convention:
+:PROPERTIES:
+:CUSTOM_ID: a064abbd-0192-4ca2-8394-50d371c57651
+:CREATED: [2026-05-29 Fri 00:20]
+:END:
+:LOGBOOK:
+- Created [2026-05-29 Fri 00:20]
+:END:
+pi writes runtime state (lastChangelogVersion, defaultProvider, defaultModel) into pi/settings.json alongside durable config (packages, theme, thinking settings), producing dirty-tree noise every session.
+
+install-git-filter.sh already exists and solves this cleanly via a `clean` filter that strips the three volatile keys at stage time (smudge = cat). The remaining friction is that it requires a manual per-clone invocation, easy to forget on a fresh checkout — the clone used in this session evidently never had it run.
+
+Action:
+- Add a Home Manager activation hook in agents.nix that invokes install-git-filter.sh from the dotagents submodule when present and the filter isn't already configured (`git config --get filter.pi-settings.clean`).
+- Make the script idempotent re. already-installed state (it currently re-runs cleanly, but the activation hook should short-circuit when configured to avoid unnecessary work).
+- Document in agents/README.org and the dotagents AGENTS.md so manual invocation is also discoverable for non-Nix clones.
+- Optionally widen the strip list as pi adds more runtime keys (reactive; not part of initial scope).
+
+Explicitly not in scope:
+- pi/settings.template.json vendored + gitignore live file. Requires manual template updates after every package install or setting change; high drift risk.
+
+Follow-up: 12543944-2045-444a-8135-b7cfb47a6d3e — upstream request to pi maintainers for a runtime/config split, which would remove the need for this workaround entirely.
+
+Origin:
+- session: this one
+- cwd: /Users/cormacc/dotfiles/agents
+- git: github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-05-28 Thu]
+- sender: agent
+
+Evidence:
+- pi/settings.json HEAD: packages[], theme, hideThinkingBlock, defaultThinkingLevel.
+- Session dirty diff: lastChangelogVersion="0.76.0", defaultProvider="anthropic", defaultModel="claude-opus-4-7".
+- Filter wrapper exists at ./install-git-filter.sh; was not active on this clone.
