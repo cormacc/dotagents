@@ -1,0 +1,193 @@
+#+TITLE: Explore and adopt web search tooling
+#+DATE: 2026-05-28 Thu
+#+PARENT: [[task:c354bc27-af23-494c-a1ce-7abfa832d7cf][Explore and adopt web search tooling]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Intent
+
+Stand up one shared web-search stack on the =strix= NixOS host so every workstation — on LAN or over Tailscale — has consistent search-augmented chat (Open WebUI), a Perplexity-style human UI (Vane), and a raw search API for agents (SearXNG via MCP). No per-workstation instances, no Darwin support.
+
+* Summary
+
+*Level:* production · *Tests:* smoke · *Docs:* inline
+
+Single-node topology on =strix= (Framework Desktop, NixOS, =nix-amd-ai= + Lemonade). Search backbone is a local SearXNG with JSON output and Wolfram Alpha enabled. Two human consumers (Open WebUI for chat, Vane for Perplexity-style answers) both call SearXNG and Lemonade's OpenAI endpoint. Agents skip Vane and hit SearXNG directly via the =mcp-searxng= MCP server wired into this dotagents repo. Off-net access is via Tailscale MagicDNS; the home firewall is the trust boundary.
+
+** Scope
+*** In scope
+- =services.searxng= NixOS module on strix with JSON format + Wolfram + curated engines.
+- =services.open-webui= web-search settings pointed at the local SearXNG.
+- =virtualisation.oci-containers.containers.vane= on strix, wired to SearXNG + Lemonade.
+- =mcp-searxng= entry in this repo's =mcp.json= (source of truth for =~/.config/mcp/mcp.json=).
+- Tailscale/firewall reachability check for SearXNG, Open WebUI, Vane.
+- End-to-end smoke from one off-net workstation.
+
+*** Out of scope
+- Per-workstation Vane/SearXNG instances.
+- Darwin support (=strix= is Linux-only; no MacBook fallback).
+- Auth in front of any of the three services (LAN + tailnet are trusted).
+- Subscription-OAuth fallbacks (Anthropic banned them Feb 2026; off-net path is Tailscale).
+- Caddy / reverse proxy in front of these services (deferred; Phase-1 strix UIs are already raw-LAN).
+- Replacing Open WebUI's bundled search with Vane.
+
+** Decisions
+- *SearXNG, not standalone Wolfram or Brave API* :: single source of truth that all three consumers share; the report flagged Vane requires the SearXNG Wolfram engine specifically.
+- *Agents hit SearXNG directly, not Vane* :: pi tooling wants raw result lists, not LLM summaries. Avoids a double-hop through a second model and keeps token cost predictable. Vane stays human-only.
+- *Vane via =oci-containers=* :: upstream ships Docker only; researcher confirmed no native Nix package. =oci-containers= is the existing dotfiles idiom for Docker-only services.
+- *Tailscale MagicDNS hostnames in =mcp.json=* :: same string resolves on-LAN and off-net, so the MCP server config is portable across workstations without conditional logic.
+- Rejected:
+  - *Per-workstation Vane instances for off-net use* :: Tailscale already solves reachability; running N Vane copies multiplies state and config drift.
+  - *Standalone Perplexica/Morphic/Farfalle/LLocalSearch* :: Vane (Perplexica fork) is the active maintained path per the report.
+  - *MCP via Vane (=perplexica-mcp=)* :: forces every agent search through an LLM summary step we do not want.
+
+** Risks
+- *=services.searxng= vs =services.searx=* :: nixpkgs ships both; canonical module name to be confirmed in the SearXNG task. Mitigation: branch handled inside that task.
+- *Lemonade /v1 surface mismatch with Vane's expectations* :: Vane historically targets Ollama/LM Studio; OpenAI-compat Lemonade may need a base-URL/headers tweak. Accepted; covered by the verification task.
+- *uWSGI flakiness on the SearXNG nixpkgs module* :: nixpkgs#292652. Accepted; smoke task watches for it and we fall back to upstream-suggested workaround if hit.
+- *Open WebUI persists settings to its DB on first boot* :: declarative env changes may need an admin-UI nudge or a state reset, exactly as the existing module comment warns. Accepted.
+
+* Context
+
+The research phase produced a full report at [[file:../../.agents/tmp/web-search-tooling-research.html][web-search-tooling-research.html]] (source citations: Open WebUI SearXNG docs, Vane README, =nix-amd-ai=, mcp-searxng implementations, nixpkgs SearXNG issues). Read it before touching the SearXNG or Vane tasks. Two durable constraints worth surfacing here so future-us does not re-explore:
+
+- *Anthropic banned subscription-OAuth in third-party tools in Feb 2026.* That killed the per-workstation "use my Claude/OpenAI sub off-net" plan from the original parent task. The replacement is Tailscale into strix, which is why this record collapses to a single-instance topology.
+- *Two repos touched, single conversation.* SearXNG/Open WebUI/Vane modules live in =~/dotfiles= (NixOS host config for strix). The MCP wiring lives in this repo (=~/dotfiles/agents=) because =agents.nix= symlinks =~/.config/mcp/mcp.json= out of here. Each plan task names its repo.
+
+* Plan
+
+** DONE [#A] Add SearXNG service to strix host :nixos:strix:
+CLOSED: [2026-05-28 Thu 23:51]
+:PROPERTIES:
+:CUSTOM_ID: 10d30616-53cc-4c60-b774-463203834f39
+:CREATED: [2026-05-28 Thu 23:42]
+:STARTED: [2026-05-28 Thu 23:47]
+:END:
+:LOGBOOK:
+- Created [2026-05-28 Thu 23:42]
+- State "STARTED" from "TODO" [2026-05-28 Thu 23:47]
+- State "DONE" from "STARTED" [2026-05-28 Thu 23:51]
+:END:
+Acceptance criteria:
+- =hosts/strix/nixos-configuration.nix= enables the canonical SearXNG module (verify =services.searxng= vs =services.searx= against current nixpkgs unstable).
+- Settings include =server.bind_address = "0.0.0.0"= and a stable LAN port (default =8888=); =openFirewall = true=.
+- =search.formats= includes both =html= and =json=.
+- =engines= explicitly enables Wolfram Alpha (required by Vane downstream).
+- Default engine list covers DuckDuckGo, Brave, Mojeek, Google (curated, not the full upstream set).
+- =sudo nixos-rebuild switch --flake .#strix --impure= succeeds.
+- =curl 'http://strix:8888/search?q=test&format=json'= returns JSON on the LAN.
+- Must not: add =nix-amd-ai.inputs.nixpkgs.follows= or any flake-level pin change.
+- Must not: introduce per-user secrets in the module; the instance is unauthenticated by design.
+
+Repo: =~/dotfiles=. Existing nearby pattern: =/Users/cormacc/dotfiles/hosts/strix/nixos-configuration.nix:76= (=services.open-webui=). Watch for uWSGI bug [[https://github.com/NixOS/nixpkgs/issues/292652]] (researcher flag); if SearXNG fails to start, check the module-issue thread before patching locally. Reference: [[https://wiki.nixos.org/wiki/SearXNG]].
+
+** TODO [#A] Wire Open WebUI to local SearXNG :nixos:strix:
+:PROPERTIES:
+:CUSTOM_ID: 04eaa62a-699d-4771-a9d3-53c479043aba
+:CREATED: [2026-05-28 Thu 23:42]
+:END:
+:LOGBOOK:
+- Created [2026-05-28 Thu 23:42]
+:END:
+:BLOCKED-BY: 10d30616-53cc-4c60-b774-463203834f39
+Acceptance criteria:
+- =services.open-webui.environment= sets =ENABLE_RAG_WEB_SEARCH = "True"=.
+- Same block sets =RAG_WEB_SEARCH_ENGINE = "searxng"=.
+- Same block sets =SEARXNG_QUERY_URL = "http://127.0.0.1:8888/search?q=<query>"= (or whatever port the SearXNG task settled on).
+- =nixos-rebuild switch --flake .#strix --impure= succeeds with the new env.
+- Open WebUI admin → Web Search panel shows SearXNG selected; a chat query with web-search toggled returns cited results.
+- Must not: enable any other web-search backend (Brave/Tavily/etc) in the same block.
+- Must not: change the existing Lemonade =OPENAI_API_BASE_URL= or telemetry-off defaults.
+
+Repo: =~/dotfiles=. Edit alongside the existing =environment = { ... }= attrset at =/Users/cormacc/dotfiles/hosts/strix/nixos-configuration.nix:82=. Reference: [[https://docs.openwebui.com/features/chat-conversations/web-search/searxng/]]. Note Open WebUI persists these to its sqlite DB on first boot — if a previous value sticks, change it in the admin UI or wipe =/var/lib/open-webui/webui.db= (existing module comment already warns about this).
+
+** TODO [#A] Add Vane oci-container to strix host :nixos:strix:docker:
+:PROPERTIES:
+:CUSTOM_ID: 5312e420-0342-4b86-9bae-46101997b3fc
+:CREATED: [2026-05-28 Thu 23:42]
+:END:
+:LOGBOOK:
+- Created [2026-05-28 Thu 23:42]
+:END:
+:BLOCKED-BY: 10d30616-53cc-4c60-b774-463203834f39
+Acceptance criteria:
+- =virtualisation.oci-containers.backend = "podman"= (or =docker=, matching whatever strix already runs — verify; do not flip it).
+- =virtualisation.oci-containers.containers.vane= defined with the official image (=itzcrazykns1337/vane= or the README's current tag — verify at task time).
+- Container env points Vane's SearXNG URL at =http://host.containers.internal:8888= (podman) or the host-gateway equivalent.
+- Container env points Vane's OpenAI base URL at Lemonade (=http://host.containers.internal:13305/v1=) with =OPENAI_API_KEY=sk-local-lemonade=.
+- Vane's HTTP port is bound to =0.0.0.0= on a stable host port (suggest =3001=) and opened in =networking.firewall.allowedTCPPorts=.
+- Persistent state volume mounted under =/var/lib/vane= (or similar) so chat history survives restarts.
+- =nixos-rebuild switch --flake .#strix --impure= succeeds; =systemctl status podman-vane= (or docker-vane) is active.
+- Browser visit to =http://strix:3001= renders Vane UI; a query that exercises Wolfram (e.g. "integral of x^2") shows a Wolfram-sourced answer panel.
+- Must not: expose Vane to the public internet; rely on LAN + tailnet trust.
+- Must not: add auth/SSO in front of Vane in this task.
+
+Repo: =~/dotfiles=. Pattern for an =oci-containers= entry: search dotfiles for any existing =oci-containers.containers.= reference and mirror its style; if none exists, follow the upstream NixOS docs. Vane refs: [[https://github.com/ItzCrazyKns/Vane]], [[https://github.com/ItzCrazyKns/Vane/blob/master/README.md]]. Confirm Wolfram is enabled in SearXNG before merging — Vane will otherwise return empty answers for math-flavoured queries.
+
+** TODO [#A] Add mcp-searxng to dotagents mcp.json :pi:mcp:
+:PROPERTIES:
+:CUSTOM_ID: 1a1ce54a-8314-4acf-8f92-149a2731bf23
+:CREATED: [2026-05-28 Thu 23:42]
+:END:
+:LOGBOOK:
+- Created [2026-05-28 Thu 23:42]
+:END:
+:BLOCKED-BY: 10d30616-53cc-4c60-b774-463203834f39
+Acceptance criteria:
+- =mcp.json= gains a =searxng= server entry under =mcpServers=.
+- Server URL points at the strix Tailscale MagicDNS hostname (e.g. =http://strix:8888=) — same string must resolve on LAN and over tailnet.
+- Server package is one of =ihor-sokoliuk/mcp-searxng= or =SecretiveShell/MCP-searxng= — pick the one that is actively maintained at task time (researcher flagged both).
+- =/reload= in a pi session picks up the new server without restart.
+- =mcp({server: "searxng"})= lists tools; =mcp({tool: "search", args: ...})= returns JSON results.
+- Must not: route the MCP server through Vane (decision in =** Decisions=).
+- Must not: hand-edit =~/.config/mcp/mcp.json= directly — it is a symlink managed by =agents.nix=.
+
+Repo: =~/dotfiles/agents=. Existing pattern: =/Users/cormacc/dotfiles/agents/mcp.json= has three servers (=atlassian=, =context-mode=, =context7=) — mirror that structure. Sketch:
+
+#+begin_src json
+{
+  "mcpServers": {
+    "searxng": {
+      "command": "npx",
+      "args": ["-y", "mcp-searxng"],
+      "env": { "SEARXNG_URL": "http://strix:8888" }
+    }
+  }
+}
+#+end_src
+
+Adjust =command= / =args= to whatever the chosen package's README says.
+
+** TODO [#B] End-to-end verification + tailnet reachability :verify:
+:PROPERTIES:
+:CUSTOM_ID: f86582ce-d749-4c35-8d60-8f142553277b
+:CREATED: [2026-05-28 Thu 23:42]
+:END:
+:LOGBOOK:
+- Created [2026-05-28 Thu 23:42]
+:END:
+:BLOCKED-BY+: 04eaa62a-699d-4771-a9d3-53c479043aba
+:BLOCKED-BY+: 5312e420-0342-4b86-9bae-46101997b3fc
+:BLOCKED-BY+: 1a1ce54a-8314-4acf-8f92-149a2731bf23
+Acceptance criteria:
+- From an off-net workstation on tailnet: =curl http://strix:8888/search?q=test&format=json= returns JSON.
+- From off-net: browser visit to =http://strix:8080= loads Open WebUI; a chat with web-search toggled returns cited results.
+- From off-net: browser visit to =http://strix:3001= loads Vane; a query returns answers with citations.
+- From off-net: pi session can invoke the =searxng= MCP tool and gets results.
+- Lemonade port (=13305=) is confirmed in =hosts/strix/nixos-configuration.nix:4= and matches what Open WebUI + Vane are configured against — no port drift.
+- Validation notes appended to =* Validation= section of this record (commands run + outputs).
+- Must not: open any of these ports to the public internet; verify =tailscale serve= or LAN-only firewall, not =nixpkgs= =openFirewall= leaking through a public NIC.
+
+Repo: =~/dotfiles= (firewall/tailscale tweaks if needed) + this record (validation notes). If tailnet ACLs need adjusting, scope minimally — port-allow for =strix= only.
+
+* Implementation
+
+- Added SearXNG to =hosts/strix/nixos-configuration.nix= using the canonical current nixpkgs option name =services.searx=; the package/settings are SearXNG, but this flake's pinned nixpkgs has no =services.searxng= option.
+- Bound SearXNG to =0.0.0.0:8888= with =openFirewall = true= and =search.formats = [ "html" "json" ]=.
+- Curated default engines with =use_default_settings.engines.keep_only= for =duckduckgo=, =brave=, =mojeek=, =google=, =wikipedia=, =github=, and =wolframalpha=.
+- Enabled the =wolframalpha= engine via SearXNG's no-API engine to avoid introducing a per-user secret in Nix. If Vane requires the paid Wolfram API backend later, wire an =environmentFile= outside the store in a follow-up rather than committing a key.
+
+* Validation
+
+- =nix eval --impure --raw .#nixosConfigurations.strix.pkgs.path= -> pinned nixpkgs path; grep confirmed only =services.searx= is present in =nixos/modules/services/networking/searx.nix=.
+- =nix eval --impure .#nixosConfigurations.strix.config.services.searx.settings --json | jq '{server,search,use_default_settings,engines}'= -> server =0.0.0.0:8888=, formats include =html= and =json=, curated =keep_only= engine list, and explicit enabled =wolframalpha= engine.
+- =nix build .#nixosConfigurations.strix.config.system.build.toplevel --impure= evaluated the strix system and began realisation, then stopped because this session is =aarch64-darwin= and cannot build =x86_64-linux= derivations locally. No Nix option/type errors surfaced before the platform mismatch.
