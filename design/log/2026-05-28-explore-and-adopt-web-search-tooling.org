@@ -169,13 +169,15 @@ Repo: =~/dotfiles/agents=. Existing pattern: =/Users/cormacc/dotfiles/agents/mcp
 
 Adjust =command= / =args= to whatever the chosen package's README says.
 
-** TODO [#B] End-to-end verification + tailnet reachability :verify:
+** STARTED [#B] End-to-end verification + tailnet reachability :verify:
 :PROPERTIES:
 :CUSTOM_ID: f86582ce-d749-4c35-8d60-8f142553277b
 :CREATED: [2026-05-28 Thu 23:42]
+:STARTED: [2026-05-29 Fri 00:26]
 :END:
 :LOGBOOK:
 - Created [2026-05-28 Thu 23:42]
+- State "STARTED" from "TODO" [2026-05-29 Fri 00:26]
 :END:
 :BLOCKED-BY+: 04eaa62a-699d-4771-a9d3-53c479043aba
 :BLOCKED-BY+: 5312e420-0342-4b86-9bae-46101997b3fc
@@ -195,6 +197,7 @@ Repo: =~/dotfiles= (firewall/tailscale tweaks if needed) + this record (validati
 
 - Added SearXNG to =hosts/strix/nixos-configuration.nix= using the canonical current nixpkgs option name =services.searx=; the package/settings are SearXNG, but this flake's pinned nixpkgs has no =services.searxng= option.
 - Bound SearXNG to =0.0.0.0:8888= with =openFirewall = true= and =search.formats = [ "html" "json" ]=.
+- Fixed the post-switch SearXNG startup failure: SearXNG rejected the module default =server.secret_key= (=ultrasecretkey=). Added an activation-generated =/var/lib/searx/searx.env= and wired =services.searx.environmentFile= plus =server.secret_key = "$SEARX_SECRET_KEY"= so the secret stays out of git/the Nix store.
 - Curated default engines with =use_default_settings.engines.keep_only= for =duckduckgo=, =brave=, =mojeek=, =google=, =wikipedia=, =github=, and =wolframalpha=.
 - Enabled the =wolframalpha= engine via SearXNG's no-API engine to avoid introducing a per-user secret in Nix. If Vane requires the paid Wolfram API backend later, wire an =environmentFile= outside the store in a follow-up rather than committing a key.
 - Wired =services.open-webui.environment= to enable RAG web search using local SearXNG: =ENABLE_RAG_WEB_SEARCH = "True"=, =RAG_WEB_SEARCH_ENGINE = "searxng"=, and =SEARXNG_QUERY_URL = "http://127.0.0.1:8888/search?q=<query>"=.
@@ -224,4 +227,15 @@ Repo: =~/dotfiles= (firewall/tailscale tweaks if needed) + this record (validati
 - =npm view mcp-searxng time.modified version repository.url --json= -> version =1.0.5=, modified =2026-05-25T23:46:42.811Z=, confirming the chosen upstream is current at implementation time.
 - =npm view mcp-searxng readme= -> README config uses ="command": "npx"=, ="args": ["-y", "mcp-searxng"]=, and env =SEARXNG_URL=.
 - =jq . mcp.json= succeeded after adding =searxng=.
-- =curl -sS --max-time 5 'http://strix:8888/search?q=test&format=json'= timed out from this Darwin session; MCP search smoke is deferred to task #5 after =strix= is switched/running.
+- =curl -sS --max-time 5 'http://strix:8888/search?q=test&format=json'= timed out from this Darwin session before strix was switched/running.
+- SearXNG diagnostic chain after the user's switch: =systemctl status searx= showed failed with =server.secret_key is not changed. Please use something else instead of ultrasecretkey.=; =ss -tlnp | grep 8888= had no listener; local =curl http://127.0.0.1:8888/search?q=test&format=json= failed connection-refused.
+- =nix eval --impure .#nixosConfigurations.strix.config.system.build.toplevel.drvPath --raw= after the secret-key fix -> =/nix/store/zbqn1q4yb7blvmdl0q9l2c1kgcn0v1b2-nixos-system-strix-26.05.20260523.64c08a7.drv=.
+- After the user ran the rebuild manually, =systemctl status searx= on strix -> active/running; =ss -tlnp | grep 8888= -> =0.0.0.0:8888=; local strix =curl http://127.0.0.1:8888/search?q=test&format=json= -> HTTP 200 JSON.
+- Off-host =curl -sS --max-time 20 'http://strix:8888/search?q=test&format=json' | jq '{query, results_count:(.results|length), first:.results[0]}'= -> =query=test=, =results_count=18=, first result =Speedtest by Ookla= from Google/DuckDuckGo.
+- Off-host =curl -sS -o /dev/null -w 'openwebui %{http_code}\n' http://strix:8080/= -> =openwebui 200=; =curl http://strix:8080/api/config= -> Open WebUI 0.9.5, auth enabled, signup disabled. Chat-level web-search smoke is blocked without an existing login/admin session; declarative env still evaluates to SearXNG search enabled as noted above.
+- Off-host =curl -sS -o /dev/null -w 'vane %{http_code}\n' http://strix:3001/= -> =vane 200= and HTML title =Chat - Vane=.
+- Vane API smoke: =GET http://strix:3001/api/providers= listed =Lemonade= chat models and =Transformers= embeddings; =POST http://strix:3001/api/chat= with =sources=["web"]=, Lemonade =Qwen3-0.6B-GGUF=, and Transformers =Xenova/all-MiniLM-L6-v2= streamed source and text blocks. Result cited 16 web sources and answered "The capital of Ireland is Dublin" with numbered citations.
+- Vane Wolfram status: the SearXNG/Vane result set for =test= included =Wolfram|Alpha (test (English word))= from the =wolframalpha= engine, confirming the no-API Wolfram engine is participating.
+- MCP smoke via a minimal JSON-RPC stdio client for =npx -y mcp-searxng= with =SEARXNG_URL=http://strix:8888=: =initialize= returned server =ihor-sokoliuk/mcp-searxng= version =1.0.5=; =tools/list= returned =searxng_web_search= and =web_url_read=; =tools/call searxng_web_search {query:"test"}= returned SearXNG results including Speedtest, Wikipedia, Fast.com, and Wolfram|Alpha.
+- Lemonade port drift check: =hosts/strix/nixos-configuration.nix:4= defines =lemonadePort = 13305=; Open WebUI uses =http://127.0.0.1:${toString lemonadePort}/v1= and Vane uses =http://host.docker.internal:${toString lemonadePort}/v1=.
+- Reachability caveat: from this Darwin host, =strix= resolved to =192.168.1.164= (=strix.internal=) and strix reports =tailscaled= inactive/no =tailscale0=. The smoke proves off-host MagicDNS/LAN reachability for the services, but not tailnet ACL reachability. No =tailscale serve= public exposure was found because Tailscale is not active on strix in this runtime.
