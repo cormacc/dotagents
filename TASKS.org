@@ -40,10 +40,32 @@ The hazat one above looks interesting. Fairly mature, multiple contributors and 
 :END:
 
 
-** TODO [#D] Explore web search tooling :pi:search:
+** TODO [#B] Setup hermes instance as home network monitor
+:PROPERTIES:
+:CUSTOM_ID: cb8b91db-552c-4d3b-9668-2b420ed7d3ea
+:CREATED: [2026-05-28 Thu 23:54]
+:END:
+:LOGBOOK:
+- Created [2026-05-28 Thu 23:54]
+:END:
+Let hermes learn about my home network setup. It should be able to discover and monitor network infrastructure, and communicate with pi to make recommendations re. maintenance and improvements. I.e. hermes owns observability and operates relatively autonomously, pi owns ops admin and operates with my approval.
+
+** STARTED [#D] Explore and adopt web search tooling :pi:search:
 :PROPERTIES:
 :CUSTOM_ID: c354bc27-af23-494c-a1ce-7abfa832d7cf
+:STARTED: [2026-05-28 Thu 23:47]
 :END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-28 Thu 23:47]
+:END:
+#+IMPORT: [[plan:2026-05-28-explore-and-adopt-web-search-tooling.org]]
+Add consistent search tooling to my setup:
+- A principal instance to be shared on the home network on the strix server
+  - This should use an appropriate local model via lemonade OpenAI API
+  - Weigh up using searxng via open-webui, or via vane (formerly perplexica) -- see https://github.com/ItzCrazyKns/Vane
+- (Maybe) per-workstation instances to be hosted locally on my dev machines for use when off the home network
+  - Either using an appropriate small local model, or my openai or anthropic subs via oauth?
+  - This should probably use Vane, as these machines won't be running open-webui locally -- though consider other options
 
 
 ** TODO [#D] Check out rpiv-todo overlay for ideas :org:
@@ -83,6 +105,18 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 #+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
 
 * Improvements
+
+** TODO [#A] Tighten up org-tasks skill, to improve use of 'ot' CLI tool
+:PROPERTIES:
+:CUSTOM_ID: b3f15bdb-00a9-42f0-bf74-f9e1da39785c
+:CREATED: [2026-05-28 Thu 23:15]
+:END:
+:LOGBOOK:
+- Created [2026-05-28 Thu 23:15]
+:END:
+Currently requests relating to current task or plan are driving use of multiple bash tools etc. to parse file content. We should be using 'ot show selected' instead.
+We should also extend 'ot show ...' to include the task body text, and path to linked plan if it exists.
+Also review the skill to see if additional commands should be added to the 'ot' tool to streamline the workflow.
 
 ** `TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:
 :PROPERTIES:
