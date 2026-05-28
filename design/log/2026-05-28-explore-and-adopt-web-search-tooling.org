@@ -169,7 +169,7 @@ Repo: =~/dotfiles/agents=. Existing pattern: =/Users/cormacc/dotfiles/agents/mcp
 
 Adjust =command= / =args= to whatever the chosen package's README says.
 
-** WAITING [#B] End-to-end verification + tailnet reachability :verify:
+** STARTED [#B] End-to-end verification + tailnet reachability :verify:
 :PROPERTIES:
 :CUSTOM_ID: f86582ce-d749-4c35-8d60-8f142553277b
 :CREATED: [2026-05-28 Thu 23:42]
@@ -180,6 +180,7 @@ Adjust =command= / =args= to whatever the chosen package's README says.
 - Created [2026-05-28 Thu 23:42]
 - State "STARTED" from "TODO" [2026-05-29 Fri 00:26]
 - State "WAITING" from "STARTED" [2026-05-29 Fri 00:34]
+- State "STARTED" from "WAITING" [2026-05-29 Fri 00:34]
 :END:
 :BLOCKED-BY+: 04eaa62a-699d-4771-a9d3-53c479043aba
 :BLOCKED-BY+: 5312e420-0342-4b86-9bae-46101997b3fc
