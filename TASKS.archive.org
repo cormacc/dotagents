@@ -715,7 +715,6 @@ This applies to all Qwen models I've tried so far apart from 3.6-35B-A3B-MTP.
 
 The issue and workaround are documented here: https://github.com/earendil-works/pi/issues/4862
 Update the lemonade-pi-plugin extension to apply the configuration change dynamically for all models including 'qwen' in the name.
-
 ** DONE [#D] Add multi-backend support to tty extension by vendoring cmux primitives :pi:tty:
 CLOSED: [2026-05-28 Thu 15:57]
 :PROPERTIES:
