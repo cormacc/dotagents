@@ -169,13 +169,13 @@ Repo: =~/dotfiles/agents=. Existing pattern: =/Users/cormacc/dotfiles/agents/mcp
 
 Adjust =command= / =args= to whatever the chosen package's README says.
 
-** DONE [#B] End-to-end verification + tailnet reachability :verify:
+** DONE [#B] End-to-end verification (LAN) :verify:
 CLOSED: [2026-05-29 Fri 01:16]
 :PROPERTIES:
 :CUSTOM_ID: f86582ce-d749-4c35-8d60-8f142553277b
 :CREATED: [2026-05-28 Thu 23:42]
 :STARTED: [2026-05-29 Fri 00:26]
-:HANDOFF: SearXNG fixed and verified; Vane + MCP smoke pass. Remaining acceptance is blocked by runtime environment: Open WebUI has auth enabled with signup disabled, so chat-level web-search needs an existing login/admin session; strix currently has tailscaled inactive/no tailscale0, so tailnet ACL reachability cannot be proven from this host.
+:HANDOFF: LAN smoke complete: SearXNG, Open WebUI web-search (env+ExecStartPre fix), Vane (incl. searxngURL bootstrap), and pi MCP all verified end-to-end from a LAN client. Tailnet reachability acceptance criterion deferred to followup task ad910fe5-5794-4913-8da2-cfd2ce8006de (Enable Tailscale on strix for private off-LAN access to home services) — strix has no Tailscale daemon yet, so the off-net path is a separate host-config concern.
 :END:
 :LOGBOOK:
 - Created [2026-05-28 Thu 23:42]
