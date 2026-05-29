@@ -363,7 +363,48 @@
             r (parse-json-result out)]
         (is (zero? exit))
         (is (= "First" (get-in r [:task :summary])))
-        (is (= "A"     (get-in r [:task :priority])))))))
+        (is (= "A"     (get-in r [:task :priority])))
+        (is (not (contains? (:task r) :sourceContent)))
+        (is (not (contains? (:task r) :effectiveSourceContent)))
+        (is (= [] (:ancestors r)))
+        (is (nil? (:record r)))))))
+
+(deftest show-include-content-flag
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [{:keys [out exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "show" "11111111-2222-4333-8444-555555555551"
+                      "--include-content")
+            r (parse-json-result out)]
+        (is (zero? exit))
+        (is (contains? (:task r) :sourceContent))
+        (is (contains? (:task r) :effectiveSourceContent))))))
+
+(deftest show-linked-plan-record-and-ancestors
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (testing "linked parent record metadata"
+        (let [{:keys [out exit]}
+              (run-cli! "--root" root "--format" "json"
+                        "show" linked-plan-parent-id)
+              r (parse-json-result out)]
+          (is (zero? exit))
+          (is (= (str (fs/path root "design" "log" "linked-plan.org"))
+                 (get-in r [:record :path])))
+          (is (= ["Summary" "Plan"] (get-in r [:record :sections])))
+          (is (false? (get-in r [:record :hasContext])))
+          (is (false? (get-in r [:record :hasOpenQuestions])))
+          (is (not (contains? (:record r) :sourceContent)))))
+      (testing "imported child ancestors"
+        (let [{:keys [out exit]}
+              (run-cli! "--root" root "--format" "json"
+                        "show" linked-plan-child-id)
+              r (parse-json-result out)]
+          (is (zero? exit))
+          (is (= ["Parent with linked plan"] (mapv :summary (:ancestors r)))))))))
 
 (defn- bootstrap-prefix-graph! [root]
   (spit (str (fs/path root "TASKS.setup.org")) setup-org-preamble)

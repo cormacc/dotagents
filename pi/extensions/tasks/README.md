@@ -260,222 +260,15 @@ extensions like `jira` that contribute slash commands and use
 `getDrawerProperty` / `setDrawerProperty` / `getLinkedIssues` from this
 extension's parser to read and write the property.
 
-## Cross-extension tools
+## Cross-extension primitives and CLI replacements
 
-The extension also registers an LLM-callable tool that other extensions
-(and the agent itself) can use to insert tasks into TASKS-shaped files
-without hand-rolling org-mode strings.
+The extension no longer registers LLM-facing task/org tools. Agents should use the `ot` CLI directly:
 
-### `tasks_insert_task`
+- Create tasks: `ot create "Summary" --section Improvements --linked-issue ... --format json`.
+- Read change-record sections: `ot section design/log/foo.org Summary --format json`.
+- Scan prior work: `ot scan --scope all --max-body-chars 500 --format json`.
 
-Inserts a new TODO task into a project's `TASKS.org` (or sibling) under
-a named section. Performs deterministic org rendering (priority cookie,
-UUID, `:CREATED:` timestamp, `:LINKED_ISSUES:` drawer line, label
-tag suffix). Refuses with a structured `duplicate` error when any
-supplied `:LINKED_ISSUES:` token already appears in the scanned set.
-
-**Args** (TypeBox schema in `index.ts`):
-
-| Field                | Type      | Description                                                                                          |
-| -------------------- | --------- | ---------------------------------------------------------------------------------------------------- |
-| `file`               | string    | Absolute or cwd-relative path to the org file to insert into. Must resolve under the project root.    |
-| `section`            | string    | Level-1 heading text (e.g. `Improvements`). Tags on the heading line are tolerated.                  |
-| `summary`            | string    | Heading text. Required, non-empty.                                                                   |
-| `priorityName`       | string?   | `Highest`/`High`/`Medium`/`Low`/`Lowest`. Anything else → no priority cookie.                       |
-| `body`               | string?   | Body text rendered after the drawer.                                                                 |
-| `linkedIssues`       | string[]? | Tokens written into `:LINKED_ISSUES:` *and* checked for idempotency.                                 |
-| `labels`             | string[]? | Rendered as org tags `:l1:l2:`.                                                                      |
-| `parentId`           | string?   | When set, render as a level-3 subtask. The id itself is not embedded.                                |
-| `allowCreateSection` | bool?     | When true, missing sections are appended to the file. Default `false`.                               |
-| `alsoScan`           | string[]? | Additional in-project org files scanned for `:LINKED_ISSUES:` collisions. Imports walked recursively. |
-
-Cross-extension JS callers of `insertTaskIntoFile` should pass
-`projectRoot: ctx.cwd` so the in-project sandbox uses the extension's
-working directory rather than ambient `process.cwd()`.
-
-**Return shapes** (in `details`):
-
-```ts
-// success
-{ status: "inserted",          id, file, line }
-// idempotency refusal
-{ status: "duplicate",         existingId, existingFile, conflictingToken }
-// section missing without allowCreateSection
-{ status: "section_not_found", file, section }
-// caller mis-configured
-{ status: "error",             reason, message }
-```
-
-Duplicate / `section_not_found` / `error` results all carry
-`isError: true` so the agent surfaces them as recoverable refusals
-rather than fatal failures.
-
-The Jira `jira_clone_apply` tool delegates to this primitive (via a
-direct JS import of `insertTaskIntoFile` from `./insert.ts`) so all
-org-mode string assembly stays in one place. Future tracker
-integrations (github / linear / gitlab / `/jira create` reverse path)
-should use the same primitive. The helper rejects target and scan paths
-that resolve outside the project root after symlink resolution.
-
-### `org_read_section`
-
-Returns a single top-level section of an org file — the heading line
-plus the body up to (but not including) the next column-0 `* ` heading,
-with nested `**`/`***` subheadings preserved verbatim. Backs the
-layered resume read order the `org-tasks` skill declares "eagerly
-loaded" (`skills/org-tasks/SKILL.md` § *Resuming and agent memory*),
-so agents fetching `* Summary` / `* Context` / `* Open questions` from
-a change-record never have to pull the full `* Implementation` ledger
-into context.
-
-Namespaced `org_*` (not `tasks_*`) because the contract is generically
-org-file shaped: it carries no task semantics in its parameters or
-return shape. The default section value (`"Summary"`) is a convention
-from `org-plan` but is overridable. The helper currently lives in this
-extension for packaging convenience; it migrates to a dedicated
-`pi/extensions/org/` extension as part of the tree-sitter-backed
-org-tooling extraction (TASKS.org task
-`f361c429-45dd-4364-9fa3-1f77bd7c600a`). The tool name will not change
-across that move.
-
-**Args** (TypeBox schema in `index.ts`):
-
-| Field     | Type     | Description                                                                                                                                                                                                                                                       |
-| --------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `file`    | string   | Absolute or cwd-relative path to the org file. Sandboxed under the project root; out-of-root paths are rejected.                                                                                                                                                  |
-| `section` | string?  | Section name to extract. Matched case-insensitively and ignoring any trailing `:tags:` on the heading line. Operates on the literal file only — `#+IMPORT:` chains are not followed (the `tasks_resume_brief` composer resolves imports). Default: `"Summary"`. |
-
-**Return shapes** (in `details`):
-
-```ts
-// section matched — heading is verbatim, body is the slice between
-// the heading line (exclusive) and the next * heading (exclusive)
-// or EOF.
-{ kind: "section", file, section: { found: true,  heading, body } }
-
-// no section with the requested name was present in the file.
-// `section` echoes the user-requested casing.
-{ kind: "section", file, section: { found: false, section } }
-
-// path resolved outside the project root, or read failed.
-{ kind: "error", error: "out_of_root" | "unreadable", file, message }
-```
-
-The `not found` case is **not** an error — it returns the structured
-result so callers can fall back gracefully (e.g. the
-`tasks_scan_summaries` composer surfacing "this change-record lacks
-`* Summary`" just like the closure-time refresh path already does).
-
-The `content[].text` view of a found section renders heading + body
-verbatim so simple LLM consumers can ingest it without unpacking
-`details`. Behaviour details:
-
-- **Source-block aware** — `#+BEGIN_<kind>` / `#+END_<kind>` regions
-  (case-insensitive on the directive) are tracked so a literal `* `
-  inside an example or src block doesn't terminate the slice early.
-- **First match wins** — when a file contains multiple `* Summary`
-  sections, the first one is returned and its slice ends at the
-  second.
-- **Synchronous closure-time path bypasses this tool** — the
-  closure-time `evaluateSummaryRefresh` check in `summary.ts` still
-  uses a direct regex on file contents because it must decide
-  synchronously whether to close the overlay. Routing through this
-  tool would add latency to that hot path for no gain.
-
-### `tasks_scan_summaries`
-
-Walks every task in the project's `TASKS.org` + `TASKS.archive.org`
-(and their `#+IMPORT:` change-record chains) and returns a flat array
-of `ScanRow` objects capturing each task's heading metadata, the linked
-change-record's `* Summary` body, and a `hasContext` flag. Designed
-for the planning agent's prior-art discovery step: scan many tasks,
-relevance-filter the rows, then load specific change-records via
-`org_read_section`.
-
-Why not just `Read` change-records directly? Two reasons:
-
-1. **Token economy**. A 200-task archive sweep returns ~100KB of
-   structured data at the default 500-char body cap; reading the same
-   change-records in full would be ~10× that and largely irrelevant.
-2. **Cross-file composition**. Parent headings live in `TASKS.org` /
-   `TASKS.archive.org`; `* Summary` lives in `design/log/*.org`. The
-   scanner stitches them together and follows `#+IMPORT:` chains so
-   plan-task headings inside change-records surface as their own rows.
-
-The rejected `tasks_resume_brief` framing ("the cheap resume surface
-for an in-progress task") collapsed into this design: resuming an
-in-progress task wants the *whole* change-record (just `Read` it); the
-real consumer for a structured tool is *batch* prior-art scanning.
-Full rationale lives in `design/log/2026-05-12-tasks-scan-summaries.org`.
-
-**Args** (TypeBox schema in `index.ts`):
-
-| Field          | Type                                  | Description                                                                                                                                            |
-| -------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `scope`        | `"active" \| "archived" \| "all"`?     | Which top-level files contribute tasks. `active` walks `TASKS.org` (+ `TASKS.local.org` + file-level imports); `archived` walks `TASKS.archive.org`; `all` walks both. Default `all`. |
-| `tags`         | `string[]?`                            | OR-semantics whitelist. A row is included when its heading carries any listed tag. Empty / omitted disables tag filtering.                              |
-| `maxBodyChars` | `number?`                              | Cap on inlined `* Summary` body per row. Bodies longer than this are truncated with a trailing `…` sentinel. Default `500`.                          |
-
-**`ScanRow` shape** (in `details.rows`):
-
-```ts
-type ScanRow = {
-  id: string;                    // :CUSTOM_ID:
-  summary: string;               // task heading text
-  status: string;                // TODO / STARTED / WAITING / DONE / CANCELLED
-  priority: string | null;       // 'A' | 'B' | 'C' | 'D' | null
-  tags: string[];
-  sourcePath: string | null;     // absolute path of the defining file
-  importPath: string | null;     // #+IMPORT: value verbatim, or null
-  recordSummary:
-    | { found: true; body: string }    // body capped at maxBodyChars
-    | { found: false }                  // record unreadable / no * Summary
-    | null;                             // task has no #+IMPORT: at all
-  hasContext: boolean;           // record has a top-level * Context heading
-};
-```
-
-**Why `* Context` is not inlined.** The `org-plan` skill says `* Context`
-is promoted only when durable rationale exceeds what `* Summary` can
-carry — so when it exists it tends to be long. Bulk-inlining it would
-defeat the scanner's whole point (cheap surface, agent decides what to
-deepen). The `hasContext` boolean lets the agent decide whether to
-fetch the body via `org_read_section({ section: "Context" })` for
-relevant rows. The `* Open questions` section gets the same treatment
-by omission; if a follow-up reveals consumers want OPEN headings
-alongside, add an `openHeadings: string[]` field then.
-
-**Why no duplication into `TASKS.archive.org`.** Mirroring `* Summary`
-into archived task bodies at archive-time was considered and rejected:
-it would introduce drift (closure-time `* Summary` refresh updates the
-change-record, not the archive copy), bloat the archive without bound,
-and save zero tokens (the scanner returns the same chars to the agent
-regardless of which file the I/O happens against). Walking N small
-change-record files on demand is sub-second on a modern SSD.
-
-**Behaviour details:**
-
-- **Memoised reads.** Each change-record file is read at most once per
-  call even when multiple tasks share a record (e.g. a workstream root
-  and its plan-task children both pointing at the same file).
-- **Subtask walk.** The scanner descends into `task.children` *and*
-  `task.importChildren`, so plan-task headings inside change-records
-  emit their own rows with `sourcePath` pointing at the record file.
-- **Out-of-root / unreadable records.** Surface as `recordSummary: {
-  found: false }` rather than failing the whole scan (mirrors
-  `loadLinkedPlans`).
-- **Tasks without `:CUSTOM_ID:`** are skipped — without an id the
-  agent has no handle to fetch more context. The `/tasks doctor`
-  command surfaces them as a separate finding.
-- **Ordering.** Rows are emitted in walker order (depth-first,
-  file-position within each root; active roots before archived when
-  `scope: "all"`). Agents that want chronological / relevance ordering
-  re-sort post-hoc.
-
-The `content[].text` view renders one line per row
-(`[STATUS] id-prefix  [#P] summary :tags: … (+ctx)`) for ad-hoc
-inspection, capped at 60 rows so the chat view stays readable; the
-full row array always lives in `details.rows`.
+Cross-extension JS callers that need deterministic org insertion should import `insertTaskIntoFile` from `./insert.ts` directly. The helper still owns UUID/`:CREATED:` rendering, duplicate `:LINKED_ISSUES:` checks, and project-root sandboxing; `jira_clone_apply` uses that direct import path.
 
 ## Cross-extension events
 
@@ -562,12 +355,12 @@ regression suites:
 - `summary.test.ts` — closure-time `* Summary` refresh detection:
   missing-section trigger, stale-mtime trigger, and the no-op case
   where `* Summary` already exists and is recent.
-- `section.test.ts` — `org_read_section` primitive: present, absent,
+- `section.test.ts` — section-reading primitive: present, absent,
   final-section-runs-to-EOF, file-with-zero-headings, literal `* `
   inside `#+BEGIN_SRC` / `#+BEGIN_EXAMPLE`, case-insensitive matching
   with trailing `:tags:`, default-to-Summary, nested subheadings
   preserved, and duplicate-section first-match-wins.
-- `scan.test.ts` — `tasks_scan_summaries` primitive: rich record,
+- `scan.test.ts` — scan-summaries primitive: rich record,
   missing record content, record without `* Summary`, task with no
   `#+IMPORT:`, `hasContext` flag per record, `scope=active`/`archived`/`all`,
   tags OR-semantics, `maxBodyChars` truncation (with and without the

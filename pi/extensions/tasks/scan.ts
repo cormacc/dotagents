@@ -7,7 +7,7 @@
  * change-record's `* Summary` body (or "missing" / "no record" signal).
  *
  * Designed for agents drafting a plan: scan many tasks, relevance-filter
- * the rows, then load specific change-records via `org_read_section`.
+ * the rows, then load specific change-records via `ot section`.
  *
  * Pure helper. Path resolution and file I/O happen in `index.ts`; the
  * helper accepts a `readChangeRecord` callback so tests can run fs-free.
@@ -50,7 +50,7 @@ export interface ScanRow {
   /**
    * True when the linked change-record carries a top-level `* Context`
    * heading. The body is intentionally *not* inlined; the agent fetches
-   * it via `org_read_section` when relevance scoring says it's worth
+   * it via `ot section` when relevance scoring says it's worth
    * pulling further into context. False whenever `recordSummary` is
    * null (no record) or the record cannot be read.
    */

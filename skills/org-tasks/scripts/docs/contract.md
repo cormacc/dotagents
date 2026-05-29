@@ -111,10 +111,7 @@ Returned by `list` (`rows[]` and within `tree[]`), `show`, `create`,
 ```
 
 Tree form additionally carries `"children": [Task]` and an `"importChildren":
-[Task]` array populated when an `#+IMPORT:` change-record is resolvable. Commands
-that return a single task may include `sourceContent` and `effectiveSourceContent`
-directly on that task. `ot list` deduplicates those large strings into its
-`result.sources` map instead.
+[Task]` array populated when an `#+IMPORT:` change-record is resolvable. `ot show` / `ot selected` omit `sourceContent` and `effectiveSourceContent` by default; pass `ot show <id> --include-content` to include those raw strings on the returned task tree. `ot list` deduplicates large source strings into its `result.sources` map instead.
 
 ## Per-command results
 
@@ -174,18 +171,16 @@ characters. Ambiguous values fail with `ambiguous-id`.
 "result": {
   "task":            Task,
   "ancestors":       [Task],
-  "children":        [Task],
-  "importChildren":  [Task],
   "record": {
-    "path":          "/repo/design/log/foo.org | null",
-    "sections":      ["Summary", "Plan", "Implementation"],
+    "path":          "/repo/design/log/foo.org",
+    "sections":      ["Intent", "Summary", "Plan", "Implementation", "Validation"],
     "hasContext":    true,
     "hasOpenQuestions": false
   }
 }
 ```
 
-`ancestors` is ordered root → parent.
+`ancestors` is ordered root → parent. `record` is `null` when the task has no resolvable `#+IMPORT:` change-record. `task.children` and `task.importChildren` carry nested task trees. `sourceContent` and `effectiveSourceContent` are omitted unless `--include-content` is passed.
 
 ### `ot create`
 

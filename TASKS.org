@@ -88,18 +88,6 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 
 * Improvements
 
-** TODO [#A] Tighten up org-tasks skill, to improve use of 'ot' CLI tool
-:PROPERTIES:
-:CUSTOM_ID: b3f15bdb-00a9-42f0-bf74-f9e1da39785c
-:CREATED: [2026-05-28 Thu 23:15]
-:END:
-:LOGBOOK:
-- Created [2026-05-28 Thu 23:15]
-:END:
-Currently requests relating to current task or plan are driving use of multiple bash tools etc. to parse file content. We should be using 'ot show selected' instead.
-We should also extend 'ot show ...' to include the task body text, and path to linked plan if it exists.
-Also review the skill to see if additional commands should be added to the 'ot' tool to streamline the workflow.
-
 ** `TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:
 :PROPERTIES:
 :CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
@@ -125,23 +113,23 @@ Re-examine the self-improvement skill against the org-memory protocol (org-tasks
 :LOGBOOK:
 - Created [2026-05-12 Tue 10:18]
 :END:
-Once `org_read_section` ships in-place inside `pi/extensions/tasks/`, promote org-file primitives out into their own `pi/extensions/org/` extension so non-task consumers (jira, emacsclient, future doc tooling) can depend on org parsing without pulling in the tasks UI.
+Extract reusable org-file primitives into their own CLI-oriented org tooling so non-task consumers (jira, emacsclient, future doc tooling) can depend on org parsing without pulling in the tasks UI.
 
 Motivation:
-- The section-reader primitive (TASKS.org task 1b496799 / change-record `design/log/2026-05-12-tasks-read-section.org`) is registered under the `org_*` tool namespace specifically to anticipate this extraction — the contract stays stable across the move.
+- The previous in-pi-tool `org_read_section` seed was removed; future generic org tooling should expose a CLI contract rather than a persistent agent-facing pi tool registration.
 - `nvim-orgmode/tree-sitter-org` is an actively maintained tree-sitter grammar (MIT, weekly-touched, backs nvim-orgmode) whose `(section)` / `(headline)` / `(body)` node shapes map cleanly onto the slicing and parsing tasks we hand-roll today in `pi/extensions/tasks/parser.ts` and `section.ts`.
 - Pi today has no JS-side tree-sitter runtime; introducing one for a single ~50-line primitive was rejected as disproportionate. Doing it once, as part of an extension extraction that amortises across multiple consumers, is the right time.
 
 Acceptance criteria:
 - New extension at `pi/extensions/org/` with its own `package.json`, `index.ts`, `README.md`.
 - `web-tree-sitter` (or native bindings, decided during the work) wired up with `tree-sitter-org.wasm` bundled or fetched at install time; async grammar init handled lazily so cold-start cost only hits the first call.
-- `org_read_section` migrated from `pi/extensions/tasks/` to the new extension and reimplemented using a tree-sitter query against `(document (section (headline (item) @name)) @section)`. Tool contract (name, parameters, return shape) unchanged so existing callers keep working.
+- A generic section-reading CLI command is implemented using a tree-sitter query against `(document (section (headline (item) @name)) @section)`, with a migration path for any current `ot section` callers.
 - Decision documented in the new extension's README on whether to migrate `parser.ts`'s heading / property-drawer regexes to tree-sitter queries in the same change, or leave that as a follow-up.
 - Closure-time `evaluateSummaryRefresh` path in the tasks extension continues to work synchronously — either by keeping a thin regex-based `hasSummaryHeading` check in `summary.ts`, or by ensuring the tree-sitter init is eager enough that the sync read remains viable. Recorded as a Decision.
 - Unit tests for the migrated primitive cover the same five acceptance-criteria cases as the original (section present, absent, last, no headings, literal `* ` inside src block).
 - README cross-references the `org-tasks` resume read order and the future `tasks_resume_brief` consumer.
 
-Blocked by the in-place `org_read_section` primitive shipping first (TASKS.org task 1b496799) — no point doing both at once.
+No longer blocked by an in-place pi tool seed; coordinate with existing `ot section` behaviour before extracting a generic CLI.
 ** TODO [#C] pi tasks/jira: walk the #+SETUPFILE chain when loading config :pi:org:tasks:jira:followup:
 :PROPERTIES:
 :CUSTOM_ID: 17e2a3e4-09c0-4068-bb3a-371382fcff78

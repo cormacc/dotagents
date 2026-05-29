@@ -765,3 +765,21 @@ Upstream reference:
 equivalent installed location — confirm at start of work). Re-vendor when
 upstream materially changes the primitives we depend on; otherwise the
 local copy is stable.
+
+** DONE [#A] Tighten up org-tasks skill, to improve use of 'ot' CLI tool
+CLOSED: [2026-05-29 Fri 14:47]
+:PROPERTIES:
+:CUSTOM_ID: b3f15bdb-00a9-42f0-bf74-f9e1da39785c
+:CREATED: [2026-05-28 Thu 23:15]
+:STARTED: [2026-05-29 Fri 13:15]
+:ARCHIVED: [2026-05-29 Fri 14:47]
+:END:
+:LOGBOOK:
+- Created [2026-05-28 Thu 23:15]
+- State "STARTED" from "TODO" [2026-05-29 Fri 13:15]
+- State "DONE" from "STARTED" [2026-05-29 Fri 14:47]
+:END:
+#+IMPORT: [[plan:2026-05-29-tighten-up-org-tasks-skill-to-improve-us.org]]
+Currently requests relating to current task or plan are driving use of multiple bash tools etc. to parse file content. We should be using 'ot show selected' instead.
+We should also extend 'ot show ...' to include the task body text, and path to linked plan if it exists.
+Also review the skill to see if additional commands should be added to the 'ot' tool to streamline the workflow.

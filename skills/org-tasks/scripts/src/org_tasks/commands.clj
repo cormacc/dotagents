@@ -371,8 +371,39 @@
       (= raw "selected") selected-id
       (and raw (seq raw)) raw)))
 
+(defn- task-children* [task]
+  (concat (:children task []) (:import-children task [])))
+
+(defn- task-ancestors [tasks target-id]
+  (letfn [(walk [ancestors task]
+            (cond
+              (= target-id (parser/get-task-id task)) ancestors
+              :else (some #(walk (conj ancestors task) %) (task-children* task))))]
+    (or (some #(walk [] %) tasks) [])))
+
+(defn- resolve-record-path [project-root task]
+  (when-let [import-path (:import-path task)]
+    (let [src-path (or (:source-path task) project-root)
+          effective (or (:effective-source-content task)
+                        (:source-content task) "")
+          expanded (parser/expand-org-link-target import-path effective)
+          base-dir (if (:from-project-root expanded)
+                     project-root
+                     (str (fs/parent src-path)))]
+      (paths/resolve-project-path project-root base-dir (:target expanded)))))
+
+(defn- record-summary [project-root task]
+  (when-let [abs (resolve-record-path project-root task)]
+    (when (fs/exists? abs)
+      (let [content (slurp abs)
+            sections (section/list-sections content)]
+        {:path abs
+         :sections sections
+         :hasContext (boolean (some #(= "Context" %) sections))
+         :hasOpenQuestions (boolean (some #(= "Open questions" %) sections))}))))
+
 (defn show-cmd [{:keys [opts] :as result}]
-  (let [{:keys [tasks selected-id]} (load-context opts)
+  (let [{:keys [project-root tasks selected-id]} (load-context opts)
         id (resolve-id-arg opts result selected-id)]
     (cond
       (nil? id)
@@ -382,10 +413,19 @@
 
       :else
       (let [t (resolve-required-id tasks id opts)
-            wire (task/task->wire t)]
+            full-id (parser/get-task-id t)
+            include-content? (boolean (:include-content opts))
+            wire (task/task->wire t nil {:include-content? include-content?})
+            ancestor-tasks (task-ancestors tasks full-id)
+            ancestors (mapv #(task/task->wire % nil {:include-content? false})
+                            ancestor-tasks)
+            record-task (some #(when (:import-path %) %)
+                              (reverse (conj ancestor-tasks t)))]
         (out/emit-result
           opts
           {:task wire
+           :ancestors ancestors
+           :record (record-summary project-root record-task)
            :text/lines
            [(str (style/status opts (:status wire)) " "
                  (if (:priority wire) (str (style/priority opts (:priority wire)) " ") "")

@@ -39,6 +39,7 @@ Common commands:
 ```shell
 ot init
 ot list --format json
+ot show selected --format json
 ot show <id-or-selected>
 ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'
 ot status <id> STARTED   # also works for tasks inside linked plan files
@@ -116,18 +117,13 @@ Treat org files as durable memory and conversation as ephemeral. Load eagerly on
 
 Resume checklist:
 
-1. Identify the selected task via `#+SELECTED:`; otherwise use the first active `STARTED` task or ask the user.
-2. Read the selected task subtree, properties, body, and LOGBOOK.
-3. Open the linked change-record and read in order:
-   1. `* Summary` — always the cheap reconstruction surface.
-   2. `* Context` — only when present.
-   3. `:HANDOFF:` on the parent or any plan-subtask heading.
-   4. `:BLOCKED-BY:` and continuations.
-   5. `:LINKED_ISSUES:`; tracker-specific skills decide when to refetch upstream state.
-   6. Remaining `OPEN` items under `* Open questions`.
-   7. Actionable plan items: first `STARTED` plan task or first ready `TODO`.
-4. Surface handoff notes and open questions immediately.
+1. Run `ot show selected --format json`. If it returns `{"selected": null}`, use `ot list --status-filter STARTED --format json` to find active work or ask the user.
+2. Use the returned `task` + `ancestors` for subtree, properties, body, LOGBOOK, handoff, blockers, and linked issues.
+3. If `record.path` is present, read `ot section <path> Summary --format json`; read `Context` only when `record.hasContext` is true.
+4. Surface handoff notes and open questions immediately; use `record.hasOpenQuestions` as the cheap signal before reading that section.
 5. Defer full `* Implementation`, completed plan-task bodies, and off-path acceptance details until needed.
+
+Anti-pattern: do not hand-read `TASKS.org`, `TASKS.local.org`, or `TASKS.setup.org` to answer "what's selected"; use `ot show selected --format json`.
 
 When a record grows beyond cheap re-ingestion, split or archive completed history rather than omitting `* Summary` or truncating silently.
 

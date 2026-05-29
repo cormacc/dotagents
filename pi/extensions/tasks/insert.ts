@@ -194,9 +194,8 @@ export function buildTaskBlock(args: BuildTaskArgs): BuiltTaskBlock {
 // ─── File-side insertion + idempotency ──────────────────────────────
 //
 // `insertTaskIntoFile` is the cross-extension entry point consumed by
-// `jira_clone_apply` (today) and any future tracker integration. It is
-// also the executor body for the `tasks_insert_task` pi tool registered
-// in `index.ts`. Kept here (rather than in `index.ts`) so:
+// `jira_clone_apply` (today) and any future tracker integration. Kept
+// here (rather than in `index.ts`) so:
 //
 // 1. It has no `pi-tui` / `pi-coding-agent` dependency and can be
 //    unit-tested directly via `tsx`.

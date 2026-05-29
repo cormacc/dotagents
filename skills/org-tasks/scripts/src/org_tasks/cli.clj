@@ -115,6 +115,10 @@
 (def ^:private status-spec
   {})
 
+(def ^:private show-spec
+  {:include-content {:desc "Include raw sourceContent/effectiveSourceContent in JSON/EDN output"
+                     :coerce :boolean}})
+
 (def ^:private select-spec
   {:clear {:desc "Clear the current selection" :coerce :boolean}})
 
@@ -218,7 +222,8 @@
    {:cmds ["list"]               :fn commands/list-cmd
     :spec (merge-spec list-spec)}
    {:cmds ["show"]               :fn commands/show-cmd
-    :spec (merge-spec {}) :args->opts [:id]}
+    :spec (merge-spec show-spec) :args->opts [:id]}
+
    {:cmds ["create"]             :fn commands/create-cmd
     :spec (merge-spec create-spec) :args->opts [:summary]}
    {:cmds ["status"]             :fn commands/status-cmd
@@ -307,6 +312,7 @@
    :local          :boolean
    :allow-create-section :boolean
    :clear          :boolean
+   :include-content :boolean
    :help           :boolean
    :tag            []
    :status-filter  []

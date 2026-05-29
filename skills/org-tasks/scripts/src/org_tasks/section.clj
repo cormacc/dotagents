@@ -31,6 +31,13 @@
           (tm 1)
           raw)))))
 
+(defn list-sections
+  "Return top-level section names in `content` in source order."
+  [^String content]
+  (->> (str/split content #"\n" -1)
+       (keep parse-level-1-heading-text)
+       vec))
+
 (defn read-section
   "Extract a level-1 section from `content`.
 

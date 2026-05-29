@@ -1,0 +1,220 @@
+#+TITLE: Tighten up org-tasks skill, to improve use of 'ot' CLI tool
+#+DATE: 2026-05-29 Fri
+#+PARENT: [[archive:b3f15bdb-00a9-42f0-bf74-f9e1da39785c][Tighten up org-tasks skill, to improve use of 'ot' CLI tool]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Intent
+Make "what's the selected task / its plan?" answerable in one cheap `ot`
+call instead of multiple raw file reads, and stop the agent-facing surface
+(both `ot show` output and the extension's registered tools) from carrying
+context the agent never uses.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README + skill + contract
+
+** Scope
+*** In scope
+- Strip `sourceContent` / `effectiveSourceContent` from `ot show` / `ot selected` JSON.
+- Enrich `ot show` to the documented one-shot resume shape (ancestors + record metadata block).
+- Rewrite the `org-tasks` skill resume path to lead with `ot show selected --format json`.
+- Remove the three agent-facing pi tool registrations (`tasks_insert_task`, `org_read_section`, `tasks_scan_summaries`); keep the JS `insertTaskIntoFile` primitive.
+- Reconcile `scripts/docs/contract.md` `show`/`selected` schema with the shipped shape.
+*** Out of scope
+- Changing `ot list` (already content-deduped via `result.sources`) or the extension's overlay/widget data path.
+- Tracker-specific (`jira`) behaviour beyond confirming its JS import still resolves.
+- The tree-sitter org-extension extraction (`f361c429`) itself — only its claim on `org_read_section` is touched here.
+- Backfilling richer `ot show` data into `ot status` / `ot create` payloads.
+
+** Decisions
+- Drop embedded source content from `ot show` entirely rather than dedup into a `sources` map ::
+  `ot show` has no internal consumer (extension uses `otList`; `jira` imports the JS fn). Link
+  templates / linked issues are already pre-resolved into wire fields, so raw content is dead weight.
+  Rejected: mirror `ot list`'s `sources` map — adds a field no `show` caller needs.
+- Gate any raw-content escape hatch behind opt-in `--include-content` (default off) ::
+  preserves a path for a hypothetical future consumer without taxing the common case.
+- #4: eliminate all three registered tools; rely on `ot <cmd> --format json` via Bash, which the
+  skill already documents ::
+  biggest persistent-context win (~7KB of tool schema) with ~zero added skill bloat (commands
+  already in the quick reference). Single source of truth = the CLI.
+  Rejected:
+  - Consolidate into one `tasks` passthrough tool: still ships a shell-shaped schema and an
+    indirection layer that re-parses args the CLI already parses; net negative vs Bash+`ot`.
+  - Keep as-is: ~7KB persistent tool schema for wrappers the skill already covers.
+
+** Shipped
+- `ot show` / `ot selected` omit raw source strings by default, with `--include-content` as the explicit escape hatch.
+- `ot show` now returns `ancestors` plus `record` metadata (`path`, top-level sections, `hasContext`, `hasOpenQuestions`) for resolvable change-record imports.
+- `org-tasks` resume guidance now starts from `ot show selected --format json` and uses `ot section` for the linked record summary/context path.
+- The tasks extension no longer registers `tasks_insert_task`, `org_read_section`, or `tasks_scan_summaries`; README points agents to `ot create`, `ot section`, and `ot scan`.
+
+** Gotchas
+- `linkedIssues` still resolves without emitted raw content because `task->wire` computes it from internal `:effective-source-content` before applying the `include-content?` output gate.
+- `insertTaskIntoFile` remains the JS primitive for Jira/direct integrations; only the agent-facing tool registration was removed.
+- Existing selected work in an imported plan may not itself carry a `#+IMPORT:`; record metadata is guaranteed for tasks with an import-bearing ancestor in the loaded graph, and top-level roots with imports are the canonical resume path.
+
+** Follow-ups
+- None outstanding (f361c429 coordination decided — see `* Open questions`).
+
+* Plan
+** DONE Strip embedded source content from =ot show= / =ot selected=
+CLOSED: [2026-05-29 Fri 13:16]
+:PROPERTIES:
+:CUSTOM_ID: 510fc33e-e65a-493d-a016-086e9ce9a991
+:CREATED: [2026-05-29 Fri 12:19]
+:STARTED: [2026-05-29 Fri 13:15]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-29 Fri 13:15]
+- State "DONE" from "STARTED" [2026-05-29 Fri 13:16]
+:END:
+Acceptance criteria:
+- `ot show selected --format json` result `task` (and every descendant node) has no `sourceContent` key.
+- Same for `effectiveSourceContent`.
+- `ot show <multi-node-id> --format json` total payload drops to the no-content size (was ~94% content for a 4-node task).
+- `linkedIssues` on the returned task still resolve (url populated) — link-template resolution must not regress.
+- Must not: change `ot list` output shape.
+
+`commands.clj` `show-cmd` calls `task/task->wire` with the default
+`{:include-content? true}`; pass `{:include-content? false}` (see `task.clj`
+`task->wire` 3-arity + the `ot list` precedent in `list-cmd`).
+
+** DONE Add opt-in =--include-content= flag to =ot show=
+CLOSED: [2026-05-29 Fri 13:16]
+:PROPERTIES:
+:CUSTOM_ID: 8e3431ac-4ae4-455b-90b6-596fd6ee7664
+:CREATED: [2026-05-29 Fri 12:19]
+:STARTED: [2026-05-29 Fri 13:16]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-29 Fri 13:16]
+- State "DONE" from "STARTED" [2026-05-29 Fri 13:16]
+:END:
+Acceptance criteria:
+- `ot show <id> --include-content --format json` re-includes `sourceContent` + `effectiveSourceContent` on the task.
+- Flag defaults off; omitting it yields the stripped payload from the previous task.
+- Flag registered in `show`'s per-command spec and in `dispatch-coerce` (`:boolean`).
+
+** DONE Enrich =ot show= to the one-shot resume shape
+CLOSED: [2026-05-29 Fri 13:16]
+:PROPERTIES:
+:CUSTOM_ID: a0b82d65-8748-4e81-8325-33e0cc0307e1
+:CREATED: [2026-05-29 Fri 12:19]
+:BLOCKED-BY: task:510fc33e-e65a-493d-a016-086e9ce9a991
+:STARTED: [2026-05-29 Fri 13:16]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-29 Fri 13:16]
+- State "DONE" from "STARTED" [2026-05-29 Fri 13:16]
+:END:
+Acceptance criteria:
+- `ot show <id> --format json` result carries `ancestors` ordered root → parent.
+- Result carries a `record` block `{path, sections, hasContext, hasOpenQuestions}` when the task has a resolvable `#+IMPORT:`, else `record: null`.
+- `record.sections` lists the top-level `*` headings of the linked change-record.
+- Task body (`description`), `importPath`, and `importRaw` are present (verify; description already emitted).
+- Must not: re-introduce raw source content via the `record` block.
+
+Reuse `org-tasks.section` for heading enumeration / `hasContext` /
+`hasOpenQuestions`; resolve the record path the same way `record-path` /
+`scan` already expand `[[plan:...]]` (see `commands.clj` ~L705/L926).
+
+** DONE Reconcile contract.md =show= / =selected= schema
+CLOSED: [2026-05-29 Fri 13:16]
+:PROPERTIES:
+:CUSTOM_ID: d17b851f-0082-41ec-9693-f87bf848d7a2
+:CREATED: [2026-05-29 Fri 12:19]
+:BLOCKED-BY: task:a0b82d65-8748-4e81-8325-33e0cc0307e1
+:STARTED: [2026-05-29 Fri 13:16]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-29 Fri 13:16]
+- State "DONE" from "STARTED" [2026-05-29 Fri 13:16]
+:END:
+Acceptance criteria:
+- `scripts/docs/contract.md` `### ot show <id>` block matches the shipped payload (ancestors + record, no content by default, `--include-content` noted).
+- Common `Task` shape note clarifies that `show` omits `sourceContent`/`effectiveSourceContent` unless `--include-content`.
+- `### ot selected` cross-reference still accurate.
+
+** DONE Rewrite org-tasks skill resume path around =ot show selected=
+CLOSED: [2026-05-29 Fri 13:16]
+:PROPERTIES:
+:CUSTOM_ID: ea4c4492-57cd-487c-92e4-16b44c98c6af
+:CREATED: [2026-05-29 Fri 12:19]
+:BLOCKED-BY: task:a0b82d65-8748-4e81-8325-33e0cc0307e1
+:STARTED: [2026-05-29 Fri 13:16]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-29 Fri 13:16]
+- State "DONE" from "STARTED" [2026-05-29 Fri 13:16]
+:END:
+Acceptance criteria:
+- *Resuming and agent memory* checklist step 1 leads with `ot show selected --format json` (and the `{"selected": null}` fallback → `ot list --status-filter STARTED`).
+- Checklist tells the agent to use `record.path` + `ot section <path> Summary --format json`, fetching `Context` only when `hasContext`.
+- An explicit anti-pattern line forbids hand-reading TASKS.org / TASKS.local.org / TASKS.setup.org to answer "what's selected".
+- *Tooling quick reference* shows `ot show selected --format json` as the resume entrypoint.
+- Net skill length change is small (replace prose with the command; do not duplicate the contract).
+
+** DONE Remove the three agent-facing pi tool registrations
+CLOSED: [2026-05-29 Fri 13:17]
+:PROPERTIES:
+:CUSTOM_ID: 0bdac6dc-ec50-4dd4-87c4-1edcb8b9d74b
+:CREATED: [2026-05-29 Fri 12:19]
+:BLOCKED-BY: task:ea4c4492-57cd-487c-92e4-16b44c98c6af
+:STARTED: [2026-05-29 Fri 13:16]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-29 Fri 13:16]
+- State "DONE" from "STARTED" [2026-05-29 Fri 13:17]
+:END:
+Acceptance criteria:
+- `tasks_insert_task`, `org_read_section`, `tasks_scan_summaries` are no longer registered in `extensions/tasks/index.ts`.
+- The JS `insertTaskIntoFile` export in `insert.ts` is retained and `jira/index.ts` still imports it cleanly.
+- Extension still loads; overlay, compact widget, status/select/archive/publish all work (no dependency on the removed registrations).
+- README sections for the removed tools are deleted or redirected to the `ot` commands.
+- Skill quick reference documents `ot section ... --format json`, `ot scan ... --format json`, `ot create ...` as the replacements (verify they already appear; add if missing).
+- Must not: remove or weaken the duplicate-linked-issue / sandbox behaviour inside `insertTaskIntoFile`.
+
+All three are removed — including `org_read_section` (see resolved question below).
+
+** DONE Run the tasks-extension + ot test suites and smoke the resume flow
+CLOSED: [2026-05-29 Fri 13:19]
+:PROPERTIES:
+:CUSTOM_ID: 586113d0-86b1-4db4-b752-95b2d1ef1755
+:CREATED: [2026-05-29 Fri 12:19]
+:BLOCKED-BY: task:0bdac6dc-ec50-4dd4-87c4-1edcb8b9d74b
+:BLOCKED-BY+: task:d17b851f-0082-41ec-9693-f87bf848d7a2
+:STARTED: [2026-05-29 Fri 13:17]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-05-29 Fri 13:17]
+- State "DONE" from "STARTED" [2026-05-29 Fri 13:19]
+:END:
+Acceptance criteria:
+- `extensions/tasks/test.sh` passes (update/remove tests tied to the deleted tool registrations).
+- `ot` Clojure test suite passes (add coverage for stripped `show` + new `ancestors`/`record` fields + `--include-content`).
+- Manual: `ot show selected --format json` byte size is an order of magnitude smaller than before.
+- Manual: a cold resume answers "what's selected and what's its plan?" using only `ot show selected` + one `ot section`.
+
+* Implementation
+- Added `section/list-sections` and reused the same org-section parsing rules for `ot show` record metadata.
+- Added show helpers in `commands.clj` for ancestor discovery and plan-link resolution using the same `expand-org-link-target` + project-root sandbox path as scan/record flows.
+- Added `show-spec` / `--include-content` coercion in `cli.clj`; default show payloads pass `{:include-content? false}` to `task->wire`.
+- Removed the three `pi.registerTool` blocks and now-dead TypeBox/tool-adapter imports from `extensions/tasks/index.ts`; updated README, scan/insert comments, `TASKS.org` f361c429 framing, contract docs, and skill resume guidance.
+- Added Clojure coverage for stripped show payloads, `--include-content`, and linked-plan record/ancestor metadata.
+
+* Validation
+- `/home/cormacc/.pi/agent/extensions/tasks/test.sh` — pass (all TS extension/unit suites green).
+- `bb test` — pass: 152 tests, 529 assertions, 0 failures, 0 errors.
+- Smoke: `ot show selected --format json` 2,150 bytes vs `--include-content` 37,840 bytes (~17.6× smaller in the current checkout).
+- Smoke: `ot show b3f15bdb --format json` returns the change-record path and `ot section <record.path> Summary --format json` returns `found: true`.
+- `ot doctor --format json` — pass, counts `{error: 0, warn: 0}`.
+
+* Open questions
+** DECIDED Does removing =org_read_section= as a tool conflict with f361c429?
+:PROPERTIES:
+:DECIDED: [2026-05-29 Fri 13:04]
+:END:
+Decision: remove `org_read_section` along with the other two — full ~7KB
+context win. `f361c429` no longer justifies keeping a pi tool registration: if
+dedicated org-tooling is needed later, extract a new generic *CLI* tool
+(an `ot`-style command), not a pi tool. The `org_*` namespace claim is dropped;
+update f361c429's framing if it still references `org_read_section` as the seed.
