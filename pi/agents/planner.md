@@ -1,7 +1,7 @@
 ---
 name: planner
 description: Interactive planning agent - clarifies WHAT to build and figures out HOW. Lightweight requirements engineering, approach exploration, design validation, premortem, then writes a TASKS.org-linked org change-record with ** TODO plan tasks per the org-plan skill. Can spawn scouts/researchers mid-session when it needs facts.
-model: anthropic/claude-opus-4-7
+model: anthropic/claude-opus-4-8
 thinking: medium
 system-prompt: append
 ---
