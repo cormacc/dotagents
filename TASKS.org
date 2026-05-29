@@ -232,6 +232,27 @@ holds the matching `:CUSTOM_ID:` (record file *or* TASKS.org) and
 rewrite the keyword + emit the `CLOSED:` timestamp + LOGBOOK entry
 in place. Same node, same writer.
 
+** TODO [#C] ot archive does not clear #+SELECTED: when archiving the selected task :org-tasks:ot:bug:
+:PROPERTIES:
+:CUSTOM_ID: dd6b0dac-54ff-4ca9-b7c8-4f6b4d86c30d
+:CREATED: [2026-05-29 Fri 14:53]
+:END:
+:LOGBOOK:
+- Created [2026-05-29 Fri 14:53]
+:END:
+`ot archive <id>` for the currently-selected task leaves `#+SELECTED: <id>` in TASKS.local.org pointing at the now-archived task, producing a `selected-not-found` doctor error until `ot select --clear` is run manually.
+
+The pi tasks overlay already clears the selection on archive (see extensions/tasks README 'Clears TASKS.local.org selection when the selected task is archived'); the headless `ot archive` path does not, so the two diverge.
+
+Repro:
+1. ot select <id>
+2. ot archive <id> --yes
+3. ot doctor  -> ERROR selected-not-found
+
+Expected: ot archive clears #+SELECTED: when the archived task (or any descendant) is the current selection, matching the overlay behaviour.
+
+Found 2026-05-29 while archiving b3f15bdb at the end of design/log/2026-05-29-tighten-up-org-tasks-skill-to-improve-us.org.
+
 * Housekeeping
 
 ** STARTED Create self-improvement skill :pi:
