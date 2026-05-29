@@ -215,6 +215,9 @@ Repo: =~/dotfiles= (firewall/tailscale tweaks if needed) + this record (validati
 - Ordered =docker-vane.service= after/wanting =lemond.service= and =searx.service= to avoid a normal-boot race with its two local dependencies.
 - Added =searxng= to dotagents =mcp.json= using upstream =ihor-sokoliuk/mcp-searxng= via =npx -y mcp-searxng= and =SEARXNG_URL=http://strix:8888=.
 - Kept MCP pointed directly at SearXNG over Tailscale MagicDNS; no Vane hop, no API key, and no direct edits to =~/.config/mcp/mcp.json=.
+- Diagnosed Vane's persisted self-referential =search.searxngURL= value: the setup wizard wrote =http://strix.internal:3001= into =/var/lib/vane/config.json=, while Vane only consumes =SEARXNG_API_URL= during config initialization when the persisted field is falsy. A one-shot runtime correction restored Discover/search immediately.
+- Hardened the Vane fix declaratively in =hosts/strix/nixos-configuration.nix=: introduced =vaneSearxngApiUrl= as the single Nix source for the container env and systemd bootstrap, added a =docker-vane.service= =preStart= that no-ops on fresh installs, reads existing =/var/lib/vane/config.json= with =jq=, and rewrites only =search.searxngURL= when it differs from =$SEARXNG_API_URL=.
+- Added =pkgs.jq= to strix =environment.systemPackages= because the Vane bootstrap intentionally patches JSON with =jq= rather than text editing; all unrelated Vane config keys, including =modelProviders=, remain user-managed.
 
 * Validation
 
@@ -245,6 +248,9 @@ Repo: =~/dotfiles= (firewall/tailscale tweaks if needed) + this record (validati
 - Fixed config eval: =nix eval --impure .#nixosConfigurations.strix.config.services.open-webui.environment --json | jq '{ENABLE_WEB_SEARCH,WEB_SEARCH_ENGINE,SEARXNG_QUERY_URL,ENABLE_RAG_WEB_SEARCH,RAG_WEB_SEARCH_ENGINE}'= -> =ENABLE_WEB_SEARCH=True=, =WEB_SEARCH_ENGINE=searxng=, =SEARXNG_QUERY_URL=http://127.0.0.1:8888/search?q=<query>=, and stale RAG names absent.
 - Bootstrap eval: =nix eval --impure .#nixosConfigurations.strix.config.systemd.services.open-webui.serviceConfig.ExecStartPre --json= -> includes the module pre-start plus the generated =open-webui-web-search-bootstrap= script.
 - =nix build --impure .#nixosConfigurations.strix.config.system.build.toplevel --dry-run= evaluated the strix system successfully and reported planned fetch/build paths; no Nix option/type errors.
+- Vane bootstrap eval: =nix eval --impure .#nixosConfigurations.strix.config.systemd.services.docker-vane.preStart --raw= -> generated pre-start script path for =vane-searxng-bootstrap=, which no-ops when =/var/lib/vane/config.json= is absent, compares =.search.searxngURL= with =$SEARXNG_API_URL=, and updates only that JSON field via =jq=.
+- jq package eval: =nix eval --impure .#nixosConfigurations.strix.config.environment.systemPackages --json | jq -r '.[] | select(.name? | startswith("jq-")) | .name'= -> =jq-1.8.1=.
+- =nix build --impure .#nixosConfigurations.strix.config.system.build.toplevel --dry-run= after the Vane bootstrap change evaluated successfully and reported planned fetch/build paths; no Nix option/type errors.
 - Off-host =curl -sS -o /dev/null -w 'vane %{http_code}\n' http://strix:3001/= -> =vane 200= and HTML title =Chat - Vane=.
 - Vane API smoke: =GET http://strix:3001/api/providers= listed =Lemonade= chat models and =Transformers= embeddings; =POST http://strix:3001/api/chat= with =sources=["web"]=, Lemonade =Qwen3-0.6B-GGUF=, and Transformers =Xenova/all-MiniLM-L6-v2= streamed source and text blocks. Result cited 16 web sources and answered "The capital of Ireland is Dublin" with numbered citations.
 - Vane Wolfram status: the SearXNG/Vane result set for =test= included =Wolfram|Alpha (test (English word))= from the =wolframalpha= engine, confirming the no-API Wolfram engine is participating.
