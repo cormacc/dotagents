@@ -12,5 +12,6 @@
     "git:github.com/cormacc/lemonade-pi-plugin@qwen-thinking",
     "git:github.com/HazAT/pi-interactive-subagents"
   ],
-  "theme": "dark"
+  "theme": "dark",
+  "lastChangelogVersion": "0.76.0"
 }

@@ -50,13 +50,15 @@ The hazat one above looks interesting. Fairly mature, multiple contributors and 
 :END:
 Let hermes learn about my home network setup. It should be able to discover and monitor network infrastructure, and communicate with pi to make recommendations re. maintenance and improvements. I.e. hermes owns observability and operates relatively autonomously, pi owns ops admin and operates with my approval.
 
-** STARTED [#D] Explore and adopt web search tooling :pi:search:
+** DONE [#D] Explore and adopt web search tooling :pi:search:
+CLOSED: [2026-05-29 Fri 01:47]
 :PROPERTIES:
 :CUSTOM_ID: c354bc27-af23-494c-a1ce-7abfa832d7cf
 :STARTED: [2026-05-28 Thu 23:47]
 :END:
 :LOGBOOK:
 - State "STARTED" from "TODO" [2026-05-28 Thu 23:47]
+- State "DONE" from "STARTED" [2026-05-29 Fri 01:47]
 :END:
 #+IMPORT: [[plan:2026-05-28-explore-and-adopt-web-search-tooling.org]]
 Add consistent search tooling to my setup:

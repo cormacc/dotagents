@@ -40,11 +40,26 @@ Single-node topology on =strix= (Framework Desktop, NixOS, =nix-amd-ai= + Lemona
   - *Standalone Perplexica/Morphic/Farfalle/LLocalSearch* :: Vane (Perplexica fork) is the active maintained path per the report.
   - *MCP via Vane (=perplexica-mcp=)* :: forces every agent search through an LLM summary step we do not want.
 
-** Risks
-- *=services.searxng= vs =services.searx=* :: nixpkgs ships both; canonical module name to be confirmed in the SearXNG task. Mitigation: branch handled inside that task.
-- *Lemonade /v1 surface mismatch with Vane's expectations* :: Vane historically targets Ollama/LM Studio; OpenAI-compat Lemonade may need a base-URL/headers tweak. Accepted; covered by the verification task.
-- *uWSGI flakiness on the SearXNG nixpkgs module* :: nixpkgs#292652. Accepted; smoke task watches for it and we fall back to upstream-suggested workaround if hit.
-- *Open WebUI persists settings to its DB on first boot* :: declarative env changes may need an admin-UI nudge or a state reset, exactly as the existing module comment warns. Accepted.
+** Shipped
+- SearXNG on =strix:8888= via =services.searx= (JSON + Wolfram + curated engines, =secret_key= from out-of-store env file).
+- Open WebUI on =strix:8080= wired to local SearXNG + Lemonade, with an =ExecStartPre= bootstrap re-applying PersistentConfig web-search settings on every boot.
+- Vane on =strix:3001= via =oci-containers= (=itzcrazykns1337/vane:slim-v1.12.2=), with an =ExecStartPre= bootstrap that uses =jq= to keep =search.searxngURL= in =/var/lib/vane/config.json= aligned with =SEARXNG_API_URL=.
+- =mcp-searxng= registered in dotagents =mcp.json= pointing at =http://strix:8888= via Tailscale MagicDNS — same string resolves on LAN and (once Tailscale lands on strix) over tailnet.
+- LAN end-to-end verified: SearXNG curl, Vane =/api/chat= smoke (Lemonade chat + Transformers embeddings + Wolfram-engine result), pi MCP =searxng_web_search= call.
+
+** Gotchas
+- /Tools with =PersistentConfig=-style state need an idempotent =ExecStartPre= bootstrap./ Open WebUI and Vane both persist runtime state and prefer it over env vars after first boot. Declarative env-only configuration silently loses to admin-UI or setup-wizard state. Pair env with a re-apply step (Open WebUI: PATCH admin API; Vane: =jq= on =config.json=). Expect the same pattern for similarly-structured services.
+- /Open WebUI 0.9.5 renamed the web-search env vars./ Stale names =ENABLE_RAG_WEB_SEARCH= / =RAG_WEB_SEARCH_ENGINE= are silently ignored. Current names: =ENABLE_WEB_SEARCH=, =WEB_SEARCH_ENGINE=, =SEARXNG_QUERY_URL=. Verify against =config.py= in the deployed package version when wiring.
+- /Vane's setup wizard wrote a self-referential =searxngURL=./ The form pre-filled =http://strix.internal:3001= (Vane's own URL) into =/var/lib/vane/config.json=. Vane's =initializeFromEnv()= only seeds from =SEARXNG_API_URL= when the persisted value is falsy, so wizard fat-fingers win permanently. The =ExecStartPre= bootstrap above makes this idempotent.
+- /SearXNG rejects the module default =secret_key=./ =services.searx= defaults to =server.secret_key = "ultrasecretkey"=, which SearXNG refuses to start with. Generate a real secret at activation and pass via =services.searx.environmentFile= (out of Nix store), referenced as =$SEARX_SECRET_KEY= in settings.
+- /Pinned nixpkgs uses =services.searx=, not =services.searxng=./ They alias to the same package but the option path differs per channel. Verify with =nix eval= against the pinned commit before writing the host config.
+- /Lemonade port =13305= is single-sourced./ Defined as =lemonadePort= in =hosts/strix/nixos-configuration.nix= and consumed via =${toString lemonadePort}= by both Open WebUI and Vane. Don't hard-code the port downstream.
+
+** Follow-ups
+- =ad910fe5-5794-4913-8da2-cfd2ce8006de= :: Enable Tailscale on strix for private off-LAN access to home services. Acceptance criterion "off-net smoke" from this record is gated on it.
+- =0e5c627e-1297-4609-8d11-5081c6dae485= :: Caddy reverse proxy for =*.home.arpa= LAN hostnames (Phase 2 of the home-network roadmap).
+- =5f53ceac-06f0-4fc3-ae7f-ebbcc3712980= :: Expose Open WebUI to public internet via Caddy + UniFi (=:BLOCKED-BY:= the LAN Caddy task).
+- =a064abbd-0192-4ca2-8394-50d371c57651= :: Auto-install =install-git-filter.sh= on activation so =pi/settings.json= runtime noise stops dirtying the worktree across clones.
 
 * Context
 
@@ -78,8 +93,6 @@ Acceptance criteria:
 - Must not: add =nix-amd-ai.inputs.nixpkgs.follows= or any flake-level pin change.
 - Must not: introduce per-user secrets in the module; the instance is unauthenticated by design.
 
-Repo: =~/dotfiles=. Existing nearby pattern: =/Users/cormacc/dotfiles/hosts/strix/nixos-configuration.nix:76= (=services.open-webui=). Watch for uWSGI bug [[https://github.com/NixOS/nixpkgs/issues/292652]] (researcher flag); if SearXNG fails to start, check the module-issue thread before patching locally. Reference: [[https://wiki.nixos.org/wiki/SearXNG]].
-
 ** DONE [#A] Wire Open WebUI to local SearXNG :nixos:strix:
 CLOSED: [2026-05-28 Thu 23:57]
 :PROPERTIES:
@@ -101,8 +114,6 @@ Acceptance criteria:
 - Open WebUI admin → Web Search panel shows SearXNG selected; a chat query with web-search toggled returns cited results.
 - Must not: enable any other web-search backend (Brave/Tavily/etc) in the same block.
 - Must not: change the existing Lemonade =OPENAI_API_BASE_URL= or telemetry-off defaults.
-
-Repo: =~/dotfiles=. Edit alongside the existing =environment = { ... }= attrset at =/Users/cormacc/dotfiles/hosts/strix/nixos-configuration.nix:82=. Reference: [[https://docs.openwebui.com/features/chat-conversations/web-search/searxng/]]. Note Open WebUI persists these to its sqlite DB on first boot — if a previous value sticks, change it in the admin UI or wipe =/var/lib/open-webui/webui.db= (existing module comment already warns about this).
 
 ** DONE [#A] Add Vane oci-container to strix host :nixos:strix:docker:
 CLOSED: [2026-05-29 Fri 00:00]
@@ -129,8 +140,6 @@ Acceptance criteria:
 - Must not: expose Vane to the public internet; rely on LAN + tailnet trust.
 - Must not: add auth/SSO in front of Vane in this task.
 
-Repo: =~/dotfiles=. Pattern for an =oci-containers= entry: search dotfiles for any existing =oci-containers.containers.= reference and mirror its style; if none exists, follow the upstream NixOS docs. Vane refs: [[https://github.com/ItzCrazyKns/Vane]], [[https://github.com/ItzCrazyKns/Vane/blob/master/README.md]]. Confirm Wolfram is enabled in SearXNG before merging — Vane will otherwise return empty answers for math-flavoured queries.
-
 ** DONE [#A] Add mcp-searxng to dotagents mcp.json :pi:mcp:
 CLOSED: [2026-05-29 Fri 00:02]
 :PROPERTIES:
@@ -152,22 +161,6 @@ Acceptance criteria:
 - =mcp({server: "searxng"})= lists tools; =mcp({tool: "search", args: ...})= returns JSON results.
 - Must not: route the MCP server through Vane (decision in =** Decisions=).
 - Must not: hand-edit =~/.config/mcp/mcp.json= directly — it is a symlink managed by =agents.nix=.
-
-Repo: =~/dotfiles/agents=. Existing pattern: =/Users/cormacc/dotfiles/agents/mcp.json= has three servers (=atlassian=, =context-mode=, =context7=) — mirror that structure. Sketch:
-
-#+begin_src json
-{
-  "mcpServers": {
-    "searxng": {
-      "command": "npx",
-      "args": ["-y", "mcp-searxng"],
-      "env": { "SEARXNG_URL": "http://strix:8888" }
-    }
-  }
-}
-#+end_src
-
-Adjust =command= / =args= to whatever the chosen package's README says.
 
 ** DONE [#B] End-to-end verification (LAN) :verify:
 CLOSED: [2026-05-29 Fri 01:16]
@@ -195,8 +188,6 @@ Acceptance criteria:
 - Lemonade port (=13305=) is confirmed in =hosts/strix/nixos-configuration.nix:4= and matches what Open WebUI + Vane are configured against — no port drift.
 - Validation notes appended to =* Validation= section of this record (commands run + outputs).
 - Must not: open any of these ports to the public internet; verify =tailscale serve= or LAN-only firewall, not =nixpkgs= =openFirewall= leaking through a public NIC.
-
-Repo: =~/dotfiles= (firewall/tailscale tweaks if needed) + this record (validation notes). If tailnet ACLs need adjusting, scope minimally — port-allow for =strix= only.
 
 * Implementation
 
