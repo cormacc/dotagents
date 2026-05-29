@@ -3,7 +3,7 @@ name: researcher
 description: External-knowledge research - library capabilities, current best practices, API behaviors, tradeoffs between options. Reads docs, runs web searches, and synthesises findings with source links. Use when a planning or implementation decision depends on facts outside the codebase.
 tools: web_search, fetch_content, code_search, get_search_content, read, write, bash
 deny-tools: claude
-model: anthropic/claude-sonnet-4-6
+model: anthropic/claude-opus-4-8
 output: research.md
 spawning: false
 auto-exit: true

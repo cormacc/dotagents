@@ -87,6 +87,8 @@ Verified pi CLI flags:
 - `--append-system-prompt <text>` to append text or file contents.
 - trailing positional messages become the initial prompt.
 
+**Model selection — always qualify the provider.** A bare model name (`--model gpt-5.5`, or `model: "gpt-5.5"` on the `subagent` tool) resolves **first-match across the provider list** and can land on an unauthenticated provider (e.g. openrouter), which silently stalls. Always pass `provider/model` whose provider is authenticated — match `settings.json` `defaultProvider` (currently `openai-codex`), e.g. `openai-codex/gpt-5.5`. To use the subscription default, omit the model entirely and inherit the agent frontmatter / default.
+
 Use the `pi-intercom` skill/tooling to communicate with spawned pi instances. This skill only covers launching and observing tty-backed processes; `pi-intercom` owns transport semantics (`list`, `send`, `ask`, `reply`) and coordination protocol.
 
 ## Join/break guidance
