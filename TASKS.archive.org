@@ -782,7 +782,6 @@ CLOSED: [2026-05-29 Fri 14:47]
 Currently requests relating to current task or plan are driving use of multiple bash tools etc. to parse file content. We should be using 'ot show selected' instead.
 We should also extend 'ot show ...' to include the task body text, and path to linked plan if it exists.
 Also review the skill to see if additional commands should be added to the 'ot' tool to streamline the workflow.
-
 ** DONE [#C] ot archive does not clear #+SELECTED: when archiving the selected task :org-tasks:ot:bug:
 CLOSED: [2026-06-02 Tue 16:45]
 :PROPERTIES:
@@ -807,3 +806,76 @@ Repro:
 Expected: ot archive clears #+SELECTED: when the archived task (or any descendant) is the current selection, matching the overlay behaviour.
 
 Found 2026-05-29 while archiving b3f15bdb at the end of design/log/2026-05-29-tighten-up-org-tasks-skill-to-improve-us.org.
+
+** CANCELLED [#C] Fix `ot status` to operate on plan subtasks
+CLOSED: [2026-06-02 Tue 16:50]
+:PROPERTIES:
+:CUSTOM_ID: ff47f634-0e45-4734-b478-8a6646cfb8ae
+:CREATED: [2026-05-22 Fri 02:33]
+:ARCHIVED: [2026-06-02 Tue 16:50]
+:END:
+:LOGBOOK:
+- Created [2026-05-22 Fri 02:33]
+- State "CANCELLED" from "TODO" [2026-06-02 Tue 16:50]
+:END:
+`ot status <id> DONE` for a task whose `:CUSTOM_ID:` lives inside a
+change-record's `* Plan` (i.e. the subtask was migrated out of
+TASKS.org into a `#+IMPORT:`-linked plan file) reports
+`TODO → DONE` in stdout but does not actually rewrite the heading
+keyword in the record file. `ot list` then continues to show the
+subtask as `TODO`.
+
+Repro (encountered 2026-05-22 during the *Refactor flake* task):
+
+1. Create a top-level task, run `ot record create <id>` to scaffold
+   a change-record at `design/log/…org`.
+2. Hand-author `** TODO …` headings under `* Plan` with their own
+   `:CUSTOM_ID:` UUIDs.
+3. Run `ot status <subtask-uuid> STARTED` — prints success.
+4. Run `ot status <subtask-uuid> DONE` — prints success.
+5. Grep the record file: heading is still `** TODO`.
+6. `ot list --levels 3` shows the subtask as `TODO`.
+
+Workaround used: hand-edit the heading + add `CLOSED:` + `:LOGBOOK:`
+entries directly in the record file.
+
+Expected: `ot status` should locate the subtask in whichever file
+holds the matching `:CUSTOM_ID:` (record file *or* TASKS.org) and
+rewrite the keyword + emit the `CLOSED:` timestamp + LOGBOOK entry
+in place. Same node, same writer.
+
+Cancellation note: can't reproduce.
+
+* Improvements
+
+** CANCELLED [#D] Extract org-mode tooling to a dedicated pi extension with a tree-sitter foundation :pi:extension:org:refactor:
+CLOSED: [2026-06-02 Tue 16:55]
+:PROPERTIES:
+:CUSTOM_ID: f361c429-45dd-4364-9fa3-1f77bd7c600a
+:CREATED: [2026-05-12 Tue 10:18]
+:BLOCKED-BY: 1b496799-6198-46ca-8084-7a1fbed6f250
+:END:
+:LOGBOOK:
+- State "CANCELLED"  from "DONE"       [2026-06-02 Tue 16:55]
+- State "DONE"       from "WAITING"    [2026-06-02 Tue 16:55]
+- State "WAITING"    from "STARTED"    [2026-06-02 Tue 16:55]
+- State "STARTED"    from "TODO"       [2026-06-02 Tue 16:55]
+- Created [2026-05-12 Tue 10:18]
+:END:
+Extract reusable org-file primitives into their own CLI-oriented org tooling so non-task consumers (jira, emacsclient, future doc tooling) can depend on org parsing without pulling in the tasks UI.
+
+Motivation:
+- The previous in-pi-tool `org_read_section` seed was removed; future generic org tooling should expose a CLI contract rather than a persistent agent-facing pi tool registration.
+- `nvim-orgmode/tree-sitter-org` is an actively maintained tree-sitter grammar (MIT, weekly-touched, backs nvim-orgmode) whose `(section)` / `(headline)` / `(body)` node shapes map cleanly onto the slicing and parsing tasks we hand-roll today in `pi/extensions/tasks/parser.ts` and `section.ts`.
+- Pi today has no JS-side tree-sitter runtime; introducing one for a single ~50-line primitive was rejected as disproportionate. Doing it once, as part of an extension extraction that amortises across multiple consumers, is the right time.
+
+Acceptance criteria:
+- New extension at `pi/extensions/org/` with its own `package.json`, `index.ts`, `README.md`.
+- `web-tree-sitter` (or native bindings, decided during the work) wired up with `tree-sitter-org.wasm` bundled or fetched at install time; async grammar init handled lazily so cold-start cost only hits the first call.
+- A generic section-reading CLI command is implemented using a tree-sitter query against `(document (section (headline (item) @name)) @section)`, with a migration path for any current `ot section` callers.
+- Decision documented in the new extension's README on whether to migrate `parser.ts`'s heading / property-drawer regexes to tree-sitter queries in the same change, or leave that as a follow-up.
+- Closure-time `evaluateSummaryRefresh` path in the tasks extension continues to work synchronously — either by keeping a thin regex-based `hasSummaryHeading` check in `summary.ts`, or by ensuring the tree-sitter init is eager enough that the sync read remains viable. Recorded as a Decision.
+- Unit tests for the migrated primitive cover the same five acceptance-criteria cases as the original (section present, absent, last, no headings, literal `* ` inside src block).
+- README cross-references the `org-tasks` resume read order and the future `tasks_resume_brief` consumer.
+
+No longer blocked by an in-place pi tool seed; coordinate with existing `ot section` behaviour before extracting a generic CLI.
