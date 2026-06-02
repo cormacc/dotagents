@@ -841,6 +841,12 @@
 (defn- top-level-with-id [tasks id opts]
   (resolve-required-top-level-id tasks id opts))
 
+(defn- subtree-task-ids [root-task]
+  (letfn [(walk [t]
+            (cons (parser/get-task-id t)
+                  (mapcat walk (task-children* t))))]
+    (set (keep identity (walk root-task)))))
+
 (defn- save-file-block!
   "Re-emit `target-path` with `top-level-tasks` serialised under its
   existing content (preserving non-task material)."
@@ -980,7 +986,7 @@
                   (fs/move tmp abs {:replace-existing true}))))))))))
 
 (defn archive-cmd [{:keys [opts] :as result}]
-  (let [{:keys [project-root tasks files]} (load-context opts)
+  (let [{:keys [project-root tasks files selected-id]} (load-context opts)
         id (or (:id opts) (first (:args result)))]
     (cond
       (or (nil? id) (str/blank? id))
@@ -1029,19 +1035,25 @@
                 remaining-shared (->> tasks
                                       (remove :is-local)
                                       (remove #(= full-id (parser/get-task-id %)))
-                                      vec)]
+                                      vec)
+                selection-cleared? (boolean (and selected-id
+                                                 (contains? (subtree-task-ids target)
+                                                            selected-id)))]
             (when-not (:dry-run opts)
               (let [tmp (str archive-path ".tmp")]
                 (fs/create-dirs (fs/parent archive-path))
                 (spit tmp archive-content)
                 (fs/move tmp archive-path {:replace-existing true}))
               (save-file-block! (:tasks files) remaining-shared)
-              (rewrite-plan-parent-link! project-root target))
+              (rewrite-plan-parent-link! project-root target)
+              (when selection-cleared?
+                (loader/write-selected-id (:local files) nil)))
             (out/emit-result
               opts
               {:task (task/task->wire archive-copy)
                :archivePath archive-path
                :archivedAt stamp
+               :selectionCleared (and (not (:dry-run opts)) selection-cleared?)
                :planRewrite (when (:import-path target)
                               {:file (:import-path target)
                                :from (str "task:" full-id)

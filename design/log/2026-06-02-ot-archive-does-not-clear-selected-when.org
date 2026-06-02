@@ -1,0 +1,96 @@
+#+TITLE: ot archive does not clear #+SELECTED: when archiving the selected task :org-tasks:ot:bug:
+#+DATE: 2026-06-02 Tue
+#+PARENT: [[archive:dd6b0dac-54ff-4ca9-b7c8-4f6b4d86c30d][ot archive does not clear #+SELECTED: when archiving the selected task :org-tasks:ot:bug:]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+
+* Intent
+~ot archive~ must clear ~#+SELECTED:~ in TASKS.local.org when the archived task
+(or any descendant) is the current selection, so archiving never leaves a
+dangling selection that ~ot doctor~ flags as ~selected-not-found~.
+
+* Summary
+*Level:* MVP · *Tests:* smoke · *Docs:* inline
+
+~archive-cmd~ (skills/org-tasks/scripts/src/org_tasks/commands.clj) is the single
+writer for both the headless CLI and the pi overlay (the overlay routes through
+~ot archive~). It moved the task and rewrote the parent link but never touched
+~#+SELECTED:~, so archiving the selected task (or its parent) left the keyword
+pointing at the archived id until ~ot select --clear~ was run by hand.
+
+Fixed by clearing the selection in ~archive-cmd~ after a successful non-dry-run
+archive whenever ~selected-id~ is anywhere in the archived subtree.
+
+** Scope
+*** In scope
+- Clear ~#+SELECTED:~ in ~archive-cmd~ when the archived subtree contains the
+  current selection.
+- Surface the clear in the command result payload (~:selectionCleared~).
+- Clojure regression coverage.
+*** Out of scope
+- Overlay TypeScript changes — it already calls ~ot archive~ and inherits the fix.
+- Any change to ~ot select~, ~ot publish~, ~ot unpublish~, or doctor logic.
+
+** Decisions
+- Fix in ~archive-cmd~ (the single org-tasks writer) :: both CLI and overlay
+  paths converge there, so one change fixes both surfaces.
+  Rejected:
+  - Clear selection in the pi overlay archive handler: would diverge the
+    headless CLI path and duplicate logic README already attributes to archive.
+- Match the archived top-level id *and* descendants :: selecting a subtask then
+  archiving its parent must also clear; mirrors ~doctor~'s notion that the
+  selection points anywhere inside the archived tree.
+
+** Shipped
+- ~archive-cmd~ clears ~#+SELECTED:~ on successful non-dry-run archive when the
+  selection is in the archived subtree, and returns ~:selectionCleared~.
+
+** Gotchas
+- The selection clear must run only on a real write — it lives inside the
+  existing ~(when-not (:dry-run opts) ...)~ block so ~--dry-run~ never mutates
+  the selection.
+
+* Plan
+
+** DONE [#C] Clear #+SELECTED: in archive-cmd when archiving the selection :org-tasks:ot:
+CLOSED: [2026-06-02 Tue 16:37]
+:PROPERTIES:
+:CUSTOM_ID: caf91fb3-14c8-4f69-ba65-2ded02a6492a
+:CREATED: [2026-06-02 Tue 16:16]
+:END:
+:LOGBOOK:
+- Created [2026-06-02 Tue 16:16]
+- State "DONE" from "TODO" [2026-06-02 Tue 16:37]
+:END:
+Acceptance criteria:
+- Selection cleared iff ~selected-id~ is the archived top-level id or a
+  descendant; result payload gains ~:selectionCleared~.
+- Must not: clear on ~--dry-run~ or when the selection is outside the subtree.
+
+** DONE [#C] Regression test: archiving the selected task clears the selection :org-tasks:test:
+CLOSED: [2026-06-02 Tue 16:37]
+:PROPERTIES:
+:CUSTOM_ID: 5f60616b-ffa7-4542-ab39-e1225bdcf36a
+:CREATED: [2026-06-02 Tue 16:16]
+:BLOCKED-BY: caf91fb3-14c8-4f69-ba65-2ded02a6492a
+:END:
+:LOGBOOK:
+- Created [2026-06-02 Tue 16:16]
+- State "DONE" from "TODO" [2026-06-02 Tue 16:37]
+:END:
+Acceptance criteria:
+- Selected-root clear, selected-descendant clear, different-selection preserved,
+  and dry-run preservation are covered against the test fixture root.
+
+* Implementation
+- Added a local ~subtree-task-ids~ helper in ~commands.clj~ to collect ids from
+  the archive target without calling private vars in ~org-tasks.task~.
+- ~archive-cmd~ now loads ~selected-id~, clears ~#+SELECTED:~ after successful
+  non-dry-run archive writes when the selected id is in the archived subtree,
+  and returns ~:selectionCleared~.
+- Added archive regression coverage for selected root clearing, selected
+  descendant clearing, different selection preserved, and dry-run preservation.
+
+* Validation
+- ~bb test org-tasks.commands-test~ → 60 tests, 266 assertions, 0 failures,
+  0 errors.

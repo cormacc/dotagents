@@ -765,7 +765,6 @@ Upstream reference:
 equivalent installed location — confirm at start of work). Re-vendor when
 upstream materially changes the primitives we depend on; otherwise the
 local copy is stable.
-
 ** DONE [#A] Tighten up org-tasks skill, to improve use of 'ot' CLI tool
 CLOSED: [2026-05-29 Fri 14:47]
 :PROPERTIES:
@@ -783,3 +782,28 @@ CLOSED: [2026-05-29 Fri 14:47]
 Currently requests relating to current task or plan are driving use of multiple bash tools etc. to parse file content. We should be using 'ot show selected' instead.
 We should also extend 'ot show ...' to include the task body text, and path to linked plan if it exists.
 Also review the skill to see if additional commands should be added to the 'ot' tool to streamline the workflow.
+
+** DONE [#C] ot archive does not clear #+SELECTED: when archiving the selected task :org-tasks:ot:bug:
+CLOSED: [2026-06-02 Tue 16:45]
+:PROPERTIES:
+:CUSTOM_ID: dd6b0dac-54ff-4ca9-b7c8-4f6b4d86c30d
+:CREATED: [2026-05-29 Fri 14:53]
+:ARCHIVED: [2026-06-02 Tue 16:45]
+:END:
+:LOGBOOK:
+- Created [2026-05-29 Fri 14:53]
+- State "DONE" from "TODO" [2026-06-02 Tue 16:45]
+:END:
+#+IMPORT: [[plan:2026-06-02-ot-archive-does-not-clear-selected-when.org]]
+`ot archive <id>` for the currently-selected task leaves `#+SELECTED: <id>` in TASKS.local.org pointing at the now-archived task, producing a `selected-not-found` doctor error until `ot select --clear` is run manually.
+
+The pi tasks overlay already clears the selection on archive (see extensions/tasks README 'Clears TASKS.local.org selection when the selected task is archived'); the headless `ot archive` path does not, so the two diverge.
+
+Repro:
+1. ot select <id>
+2. ot archive <id> --yes
+3. ot doctor  -> ERROR selected-not-found
+
+Expected: ot archive clears #+SELECTED: when the archived task (or any descendant) is the current selection, matching the overlay behaviour.
+
+Found 2026-05-29 while archiving b3f15bdb at the end of design/log/2026-05-29-tighten-up-org-tasks-skill-to-improve-us.org.

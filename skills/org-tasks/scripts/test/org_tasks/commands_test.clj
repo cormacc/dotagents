@@ -976,6 +976,100 @@
           (is (str/includes? archive ":ARCHIVED:"))
           (is (= "2026-05-01 Fri 09:00" (:archivedAt r))))))))
 
+(deftest archive-clears-selected-archived-task
+  (with-temp-dir
+    (fn [root]
+      (let [id "closed-aaa-bbbb-cccc-dddddddddddd"
+            local-path (str (fs/path root "TASKS.local.org"))]
+        (spit (str (fs/path root "TASKS.org"))
+              (str "* Improvements\n"
+                   "** DONE Closed task\n"
+                   "CLOSED: [2026-05-01 Fri 09:00]\n"
+                   ":PROPERTIES:\n"
+                   ":CUSTOM_ID: " id "\n"
+                   ":END:\n"))
+        (spit local-path (str "#+SELECTED: " id "\n"))
+        (let [{:keys [out exit]}
+              (run-cli! "--root" root "--format" "json" "archive" id)
+              r (parse-json-result out)
+              local (slurp local-path)]
+          (is (zero? exit))
+          (is (true? (:selectionCleared r)))
+          (is (not (re-find #"(?im)^#\+SELECTED:" local))))))))
+
+(deftest archive-clears-selected-descendant
+  (with-temp-dir
+    (fn [root]
+      (let [parent-id "closed-aaa-bbbb-cccc-dddddddddddd"
+            child-id "child-aaaa-bbbb-cccc-dddddddddddd"
+            local-path (str (fs/path root "TASKS.local.org"))]
+        (spit (str (fs/path root "TASKS.org"))
+              (str "* Improvements\n"
+                   "** DONE Closed parent\n"
+                   "CLOSED: [2026-05-01 Fri 09:00]\n"
+                   ":PROPERTIES:\n"
+                   ":CUSTOM_ID: " parent-id "\n"
+                   ":END:\n"
+                   "*** TODO Child task\n"
+                   ":PROPERTIES:\n"
+                   ":CUSTOM_ID: " child-id "\n"
+                   ":END:\n"))
+        (spit local-path (str "#+SELECTED: " child-id "\n"))
+        (let [{:keys [out exit]}
+              (run-cli! "--root" root "--format" "json" "archive" parent-id)
+              r (parse-json-result out)
+              local (slurp local-path)]
+          (is (zero? exit))
+          (is (true? (:selectionCleared r)))
+          (is (not (re-find #"(?im)^#\+SELECTED:" local))))))))
+
+(deftest archive-leaves-different-selection-unchanged
+  (with-temp-dir
+    (fn [root]
+      (let [archived-id "closed-aaa-bbbb-cccc-dddddddddddd"
+            selected-id "other-aaaa-bbbb-cccc-dddddddddddd"
+            local-path (str (fs/path root "TASKS.local.org"))]
+        (spit (str (fs/path root "TASKS.org"))
+              (str "* Improvements\n"
+                   "** DONE Closed task\n"
+                   "CLOSED: [2026-05-01 Fri 09:00]\n"
+                   ":PROPERTIES:\n"
+                   ":CUSTOM_ID: " archived-id "\n"
+                   ":END:\n"
+                   "** TODO Other task\n"
+                   ":PROPERTIES:\n"
+                   ":CUSTOM_ID: " selected-id "\n"
+                   ":END:\n"))
+        (spit local-path (str "#+SELECTED: " selected-id "\n"))
+        (let [{:keys [out exit]}
+              (run-cli! "--root" root "--format" "json" "archive" archived-id)
+              r (parse-json-result out)
+              local (slurp local-path)]
+          (is (zero? exit))
+          (is (false? (:selectionCleared r)))
+          (is (str/includes? local (str "#+SELECTED: " selected-id))))))))
+
+(deftest archive-dry-run-does-not-clear-selection
+  (with-temp-dir
+    (fn [root]
+      (let [id "closed-aaa-bbbb-cccc-dddddddddddd"
+            local-path (str (fs/path root "TASKS.local.org"))]
+        (spit (str (fs/path root "TASKS.org"))
+              (str "* Improvements\n"
+                   "** DONE Closed task\n"
+                   "CLOSED: [2026-05-01 Fri 09:00]\n"
+                   ":PROPERTIES:\n"
+                   ":CUSTOM_ID: " id "\n"
+                   ":END:\n"))
+        (spit local-path (str "#+SELECTED: " id "\n"))
+        (let [{:keys [out exit]}
+              (run-cli! "--root" root "--format" "json" "--dry-run" "archive" id)
+              r (parse-json-result out)
+              local (slurp local-path)]
+          (is (zero? exit))
+          (is (false? (:selectionCleared r)))
+          (is (str/includes? local (str "#+SELECTED: " id))))))))
+
 (deftest archive-refuses-open-task
   (with-temp-dir
     (fn [root]
