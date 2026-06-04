@@ -23,9 +23,13 @@
     :missing-link-template
     :misordered-link-template
     :missing-local-setupfile
-    :misordered-setupfile"
+    :misordered-setupfile
+    :missing-record-section
+    :empty-validation-section
+    :spec-impact-untouched"
   (:require [clojure.string :as str]
-            [org-tasks.parser :as parser]))
+            [org-tasks.parser :as parser]
+            [org-tasks.section :as section]))
 
 (def ^:private closed-statuses #{"DONE" "CANCELLED"})
 (def ^:private active-child-statuses #{"STARTED" "WAITING"})
@@ -206,6 +210,73 @@
                          :location {:file path :line link-line}})))))))
     @out))
 
+;; ── Change-record spec-impact checks ───────────────────────────────
+
+(defn- truthy-keyword-value? [value]
+  (contains? #{"1" "t" "true" "yes" "y" "on"} (some-> value str/trim str/lower-case)))
+
+(defn- source-content-index
+  "Return one `{path content}` entry for each parsed source file."
+  [tasks]
+  (let [out (volatile! {})]
+    (doseq [task (walk-tasks tasks)
+            :let [src (:source-path task)
+                  content (:source-content task)]
+            :when (and src content)]
+      (vswap! out #(if (contains? % src) % (assoc % src content))))
+    @out))
+
+(def ^:private required-record-sections
+  ["Intent" "Summary" "Plan" "Implementation" "Validation"])
+
+(defn- spec-impact-aware-record? [content]
+  (or (seq (parser/get-file-keywords content "SPEC_IMPACT"))
+      (some truthy-keyword-value? (parser/get-file-keywords content "NO_SPEC_IMPACT"))))
+
+(defn- check-record-structure [tasks]
+  (let [out (volatile! [])]
+    (doseq [[src content] (source-content-index tasks)
+            :when (spec-impact-aware-record? content)]
+      (let [sections (set (section/list-sections content))]
+        (doseq [required required-record-sections
+                :when (not (contains? sections required))]
+          (vswap! out conj
+                  {:code :missing-record-section
+                   :severity :warn
+                   :message (str "Change-record is missing required * " required " section")
+                   :location {:file src}}))
+        (let [validation (section/read-section content "Validation")]
+          (when (and (:found validation)
+                     (str/blank? (:body validation)))
+            (vswap! out conj
+                    {:code :empty-validation-section
+                     :severity :warn
+                     :message "Change-record has an empty * Validation section"
+                     :location {:file src}})))))
+    @out))
+
+(defn- check-spec-impact [tasks changed-paths]
+  (when changed-paths
+    (let [changed (set changed-paths)
+          out (volatile! [])]
+      (doseq [[src content] (source-content-index tasks)]
+        (let [impacts (->> (parser/get-file-keywords content "SPEC_IMPACT")
+                           (map str/trim)
+                           (remove str/blank?)
+                           distinct)
+              opted-out? (some truthy-keyword-value?
+                               (parser/get-file-keywords content "NO_SPEC_IMPACT"))]
+          (when (and (seq impacts) (not opted-out?))
+            (doseq [impact impacts
+                    :when (not (contains? changed impact))]
+              (vswap! out conj
+                      {:code :spec-impact-untouched
+                       :severity :warn
+                       :message (str "#+SPEC_IMPACT declares " impact
+                                     " but that path is not touched in git status")
+                       :location {:file src}})))))
+      @out)))
+
 ;; ── Main entry ─────────────────────────────────────────────────────
 
 (defn run-doctor
@@ -215,11 +286,17 @@
     :selected-id           - UUID parsed from TASKS.local.org (or nil)
     :selected-source-path  - path to TASKS.local.org (optional)
     :protocol-files        - {:setup/:tasks/:archive {:path, :content}}
-                             for the link-template / setupfile checks"
-  [{:keys [tasks selected-id selected-source-path protocol-files]}]
+                             for the link-template / setupfile checks
+    :changed-paths         - optional set of repo-relative git status paths
+                             for SPEC_IMPACT checks"
+  [{:keys [tasks selected-id selected-source-path protocol-files changed-paths]}]
   (let [out      (volatile! [])
         link-findings (check-link-templates protocol-files)
+        record-findings (check-record-structure tasks)
+        spec-findings (check-spec-impact tasks changed-paths)
         _ (vswap! out into link-findings)
+        _ (vswap! out into record-findings)
+        _ (vswap! out into spec-findings)
         {:keys [by-id duplicates]} (build-id-index tasks)]
 
     ;; duplicate-id (one finding per occurrence)
@@ -374,7 +451,9 @@
    :waiting-without-blocker :closed-without-timestamp :stale-parent-status
    :non-uuid-v4-id :patterned-sibling-ids :import-child-not-saveable
    :missing-link-template :misordered-link-template
-   :missing-local-setupfile :misordered-setupfile])
+   :missing-local-setupfile :misordered-setupfile
+   :missing-record-section :empty-validation-section
+   :spec-impact-untouched])
 
 (defn format-findings-report [findings]
   (if (empty? findings)

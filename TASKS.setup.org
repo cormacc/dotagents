@@ -3,9 +3,14 @@
 #+LINK: jira https://your-org.atlassian.net/browse/%s
 #+JIRA_CLOUDID: 00000000-0000-4000-8000-000000000000
 #+JIRA_PROJECT:
-#+LINK: plan file:design/log/%s
-# Default task/archive link targets assume plan files live under design/log/.
-# TASKS.org and TASKS.archive.org declare local overrides before #+SETUPFILE:
-# so org-mode resolves task links correctly from the task files themselves.
+# Link targets here resolve from a change-record's own location
+# (design/log/) because records pull this file in via
+# #+SETUPFILE: ../../TASKS.setup.org. TASKS.org and TASKS.archive.org
+# declare repo-root-relative overrides *before* their #+SETUPFILE: lines,
+# so those win from the task files themselves (first declaration wins).
+# `plan` is only ever referenced from TASKS.org, so it is defined there
+# (repo-root), not here. `proj` is a generic repo-root path link usable
+# from anywhere: ./<path> from TASKS.org, ../../<path> from a record.
+#+LINK: proj file:../../%s
 #+LINK: task file:../../TASKS.org::#%s
 #+LINK: archive file:../../TASKS.archive.org::#%s

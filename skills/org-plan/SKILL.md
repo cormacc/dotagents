@@ -9,13 +9,15 @@ Use this skill when the user asks for a plan. A plan is the leading content of a
 
 This skill owns planning methodology and change-record section conventions. `org-tasks` (`../org-tasks/SKILL.md`) owns file format, task lifecycle, persistence rules, and the `ot` CLI. Prefer `ot record create <task-id>` to scaffold a change-record before filling the sections below; use `ot record create <task-id> --mode retrospective` after work has started or completed. If the generated scaffold predates the current section contract, add/reorder sections before filling them.
 
-Detailed skeletons, `#+STATUS:` values, and subtask-migration examples live in `references/change-record-format.md`.
+Detailed skeletons, `#+STATUS:` values, `#+SPEC_IMPACT:` / `#+NO_SPEC_IMPACT:` examples, and subtask-migration examples live in `references/change-record-format.md`.
 
 ## Planning principles
 
 - Prefer plans that can be executed and verified task-by-task. A plan task is useful only when its acceptance criteria are observable.
 - Keep `* Summary` (condensed final/current state), `* Implementation` (detailed tactical ledger), and `* Validation` (evidence of checks run) distinct; they serve different readers.
 - Capture durable design decisions in `* Summary` or a promoted `* Context` so later sessions do not reverse-engineer them from `git log`.
+- Keep the change-record `.org` file canonical. If durable supporting resources are too verbose or awkward for the record body (research reports, screenshots, transcripts, generated audits), put them in an optional same-stem folder beside the record (for `design/log/YYYY-slug.org`, use `design/log/YYYY-slug/`) and link/summarise them from the record.
+- For non-trivial work with durable behavioural/API/protocol/domain impact, identify the living contract docs up front and record them with `#+SPEC_IMPACT:` before implementation (see *Spec-impact planning*).
 - Stop planning once the plan is actionable. Endless planning is a failure mode.
 
 ## Voice and density
@@ -39,7 +41,7 @@ Plans are written for engineers with project context. Optimise for signal densit
 
 - `** Scope` (required) — `*** In scope` and `*** Out of scope` lists. Both lists. Out-of-scope items prevent feature creep and feed the premortem ("are we sure we don't need X?").
 - `** Decisions` — strategic durable design choices that constrain future work, not every tactical coding call. Captures the chosen approach plus rejected alternatives bulleted underneath.
-- `** Shipped` — user-visible / protocol / code outcomes, populated as work lands.
+- `** Shipped` — user-visible / protocol / code outcomes, populated as work lands. When a planned or discovered contract doc changes, prefix bullets with `ADDED`, `MODIFIED`, or `REMOVED` and name the contract doc; this is the post-hoc outcome, not the planning-time `#+SPEC_IMPACT:` declaration.
 - `** Gotchas` — project-side surprises future implementers should not rediscover. Library/API/protocol facts belong in the relevant skill/reference when one exists.
 - `** Risks` — drafted from premortem; durable risks considered and accepted. Distinct from `** Gotchas` (post-hoc surprise) and `* Open questions` (deferred-not-decided).
 - `** Follow-ups` — pointers to real TODO tasks rather than burying work in prose.
@@ -107,6 +109,22 @@ Single line at the head of `* Summary`:
 
 Pick one value per dimension. Calibrates ISC tightness, plan-task acceptance criteria detail, and the closure-prune bar.
 
+### Spec-impact planning
+
+For MVP / production / critical work that can change durable behaviour, public APIs, protocols, domain models, or agent/operator workflow, identify impacted living contracts before drafting the executable plan.
+
+1. Prefer a `scout` when the question is "which in-repo docs/specs/schemas does this codebase change touch?" Use a `researcher` when the trigger is external knowledge or a new external capability.
+2. Record expected contract impact as repeated repo-relative keywords near the top of the record:
+
+   ```org
+   #+SPEC_IMPACT: skills/org-plan/SKILL.md
+   #+SPEC_IMPACT: design/specs/data-model.org
+   ```
+
+3. Mirror the impact in human-readable `*** In scope` bullets so implementers work the checklist.
+4. Propose a new spec only when scope introduces a durable new domain with no existing contract home. If a canonical contract already exists in code or docs (for example a skill file, OpenAPI document, schema namespace, or migration set), couple to that artifact directly instead of creating a duplicate under `design/specs/`.
+5. Skip this step with `#+NO_SPEC_IMPACT: true` for prototype work, trivial/single-file fixes that do not alter a contract, or projects with no durable contract layer. Do not use the opt-out to avoid updating stale docs.
+
 ### Approach exploration
 
 Before drafting `* Plan` for non-trivial changes, list 2–3 plausible approaches with real tradeoffs. Pick one; record the chosen approach in `** Decisions` with rejected alternatives bulleted underneath:
@@ -143,6 +161,10 @@ When a fact is blocking a planning decision, decide deliberately:
 | The gap is not blocking a decision | Note it under `* Open questions`, move on. |
 
 Wait for any spawned subagent before continuing the section. Fold findings into `** Decisions` / `* Context` / `* Implementation` as appropriate.
+
+### Update vs new change
+
+Extend the current task/record when the original intent still holds and most of the new scope overlaps the current plan. Spawn a new task/record when the intent changes, scope explodes, the original work is independently completable, or the follow-on would force unrelated contract/spec impacts into one record. Rule of thumb: update for unchanged intent + majority overlap; new change for changed intent, separable delivery, or a new durable domain.
 
 ### YAGNI
 
@@ -217,10 +239,11 @@ Before transitioning a top-level task to `DONE`, walk the record end-to-end with
 
 Refresh:
 
-1. Refresh `* Summary` so the effort line, `** Scope`, `** Shipped`, and `** Gotchas` reflect what actually landed.
-2. Refresh `* Validation` so the verification record matches what actually ran.
-3. Ensure newly discovered follow-up work exists as TODO tasks rather than buried prose.
-4. If Summary is missing, generate it from promoted Context, completed plan tasks, and Implementation notes before closing.
+1. Refresh `* Summary` so the effort line, `** Scope`, `** Shipped`, and `** Gotchas` reflect what actually landed. Reconcile `#+SPEC_IMPACT:` against actual `ADDED` / `MODIFIED` / `REMOVED` shipped bullets; include any discovered contract impact that was missed during planning.
+2. Refresh `* Validation` so the verification record matches what actually ran. Explicitly verify each acceptance criterion and anti-criterion, not just generic test-suite status.
+3. Ensure every `#+SPEC_IMPACT:` path was reviewed and updated when needed, or explain why the planned impact did not materialise.
+4. Ensure newly discovered follow-up work exists as TODO tasks rather than buried prose.
+5. If Summary is missing, generate it from promoted Context, completed plan tasks, and Implementation notes before closing.
 
 Prune:
 

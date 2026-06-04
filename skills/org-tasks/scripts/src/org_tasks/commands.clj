@@ -81,7 +81,11 @@
   (str/join "\n"
             ["#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)"
              "#+STARTUP: logdone logdrawer"
-             "#+LINK: plan file:design/log/%s"
+             ;; Links here resolve from a change-record's location
+             ;; (design/log/) via #+SETUPFILE: ../../TASKS.setup.org.
+             ;; `plan` is TASKS.org-only (repo-root) and lives in the
+             ;; task-file local overrides, not here.
+             "#+LINK: proj file:../../%s"
              "#+LINK: task file:../../TASKS.org::#%s"
              "#+LINK: archive file:../../TASKS.archive.org::#%s"
              ""]))
@@ -89,8 +93,12 @@
 (def ^:private tasks-org-default
   (str/join "\n"
             ["#+TITLE: Project Tasks"
+             ;; Local overrides (repo-root relative); win over
+             ;; TASKS.setup.org because they are declared first.
              "#+LINK: task file:TASKS.org::#%s"
              "#+LINK: archive file:TASKS.archive.org::#%s"
+             "#+LINK: plan file:design/log/%s"
+             "#+LINK: proj file:%s"
              "#+SETUPFILE: ./TASKS.local.org"
              "#+SETUPFILE: ./TASKS.setup.org"
              "#+ARCHIVE: TASKS.archive.org::* From %s"
@@ -808,6 +816,32 @@
    :message (:message f)
    :location (or (:location f) {})})
 
+(defn- parse-git-status-paths [^String out]
+  (->> (str/split-lines (or out ""))
+       (mapcat
+         (fn [line]
+           (let [path (subs line (min 3 (count line)))]
+             (if-let [[_ old new] (re-matches #"(.+?) -> (.+)" path)]
+               [old new]
+               [path]))))
+       (map str/trim)
+       (remove str/blank?)
+       set))
+
+(defn- changed-git-paths
+  "Return repo-relative paths changed in the current working tree/index,
+  or nil when git is unavailable."
+  [project-root]
+  (try
+    (let [shell-fn (requiring-resolve 'babashka.process/shell)
+          {:keys [exit out]} (shell-fn {:out :string :err :string
+                                         :continue true :dir project-root}
+                                        "git" "status" "--porcelain=v1"
+                                        "--untracked-files=all")]
+      (when (zero? exit)
+        (parse-git-status-paths out)))
+    (catch Throwable _ nil)))
+
 (defn doctor-cmd [{:keys [opts]}]
   (let [{:keys [project-root tasks selected-id files]} (load-context opts)
         setup-path (str (fs/path project-root "TASKS.setup.org"))
@@ -818,7 +852,8 @@
                    {:tasks tasks
                     :selected-id selected-id
                     :selected-source-path (:local files)
-                    :protocol-files protocol-files})
+                    :protocol-files protocol-files
+                    :changed-paths (changed-git-paths project-root)})
         counts (doctor/count-by-severity findings)
         wire-findings (mapv finding->wire findings)
         report (doctor/format-findings-report findings)]
@@ -956,6 +991,8 @@
             ["#+TITLE: Archived Tasks"
              "#+LINK: task file:TASKS.org::#%s"
              "#+LINK: archive file:TASKS.archive.org::#%s"
+             "#+LINK: plan file:design/log/%s"
+             "#+LINK: proj file:%s"
              "#+SETUPFILE: ./TASKS.local.org"
              "#+SETUPFILE: ./TASKS.setup.org"
              ""

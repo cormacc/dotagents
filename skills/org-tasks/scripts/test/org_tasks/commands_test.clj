@@ -86,7 +86,12 @@
         (is (true? (fs/exists? (fs/path root "TASKS.org"))))
         (is (true? (fs/exists? (fs/path root "TASKS.local.org"))))
         (is (true? (fs/exists? (fs/path root "TASKS.setup.org"))))
-        (let [tasks-content (slurp (str (fs/path root "TASKS.org")))]
+        (let [tasks-content (slurp (str (fs/path root "TASKS.org")))
+              setup-content (slurp (str (fs/path root "TASKS.setup.org")))]
+          (is (str/includes? setup-content "#+LINK: proj file:../../%s"))
+          (is (not (str/includes? setup-content "#+LINK: plan")))
+          (is (str/includes? tasks-content "#+LINK: plan file:design/log/%s"))
+          (is (str/includes? tasks-content "#+LINK: proj file:%s"))
           (is (str/includes? tasks-content "#+SETUPFILE: ./TASKS.local.org"))
           (is (str/includes? tasks-content "#+SETUPFILE: ./TASKS.setup.org"))
           (is (str/includes? tasks-content "* Improvements")))))))
@@ -110,6 +115,8 @@
   (str "#+TITLE: Project Tasks\n"
        "#+LINK: task file:TASKS.org::#%s\n"
        "#+LINK: archive file:TASKS.archive.org::#%s\n"
+       "#+LINK: plan file:design/log/%s\n"
+       "#+LINK: proj file:%s\n"
        "#+SETUPFILE: ./TASKS.local.org\n"
        "#+SETUPFILE: ./TASKS.setup.org\n"
        "#+ARCHIVE: TASKS.archive.org::* From %s\n"
@@ -118,7 +125,7 @@
 (def ^:private setup-org-preamble
   (str "#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)\n"
        "#+STARTUP: logdone logdrawer\n"
-       "#+LINK: plan file:design/log/%s\n"
+       "#+LINK: proj file:../../%s\n"
        "#+LINK: task file:../../TASKS.org::#%s\n"
        "#+LINK: archive file:../../TASKS.archive.org::#%s\n"))
 

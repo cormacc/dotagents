@@ -9,10 +9,13 @@ Manual fallback, when `ot` is unavailable:
    ```org
    #+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)
    #+STARTUP: logdone logdrawer
-   #+LINK: plan file:design/log/%s
+   #+LINK: proj file:../../%s
    #+LINK: task file:../../TASKS.org::#%s
    #+LINK: archive file:../../TASKS.archive.org::#%s
    ```
+
+   These resolve from a change-record's location (`design/log/`). `plan`
+   is referenced only from `TASKS.org`, so it is defined there, not here.
 
 2. Create `TASKS.org`:
 
@@ -20,6 +23,8 @@ Manual fallback, when `ot` is unavailable:
    #+TITLE: Project Tasks
    #+LINK: task file:TASKS.org::#%s
    #+LINK: archive file:TASKS.archive.org::#%s
+   #+LINK: plan file:design/log/%s
+   #+LINK: proj file:%s
    #+SETUPFILE: ./TASKS.local.org
    #+SETUPFILE: ./TASKS.setup.org
    #+ARCHIVE: TASKS.archive.org::* From %s
@@ -36,3 +41,5 @@ Manual fallback, when `ot` is unavailable:
 4. Add the first actionable task under a semantic top-level section. Generate IDs with `ot uuid` if available; otherwise use a real UUID v4 from another trusted generator.
 
 5. Put detailed plan/checklist/history in a change-record under the `plan` link target rather than bloating `TASKS.org`.
+
+6. Reference repo files from records with `proj` (e.g. `[[proj:design/specs/data-model.org]]`). `design/specs/` is the default home for prose-only living contracts; declare expected contract impact with bare repo-relative `#+SPEC_IMPACT:` paths (see org-plan).

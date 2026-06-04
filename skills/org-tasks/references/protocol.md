@@ -11,16 +11,18 @@ Repositories declare shared options in `TASKS.setup.org` and reference it from t
 ```org
 #+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)
 #+STARTUP: logdone logdrawer
-#+LINK: plan file:design/log/%s
+#+LINK: proj file:../../%s
 #+LINK: task file:../../TASKS.org::#%s
 #+LINK: archive file:../../TASKS.archive.org::#%s
 ```
 
-`TASKS.org` and `TASKS.archive.org` declare local task/archive link overrides before setupfiles:
+Setup links resolve from a change-record's own location (`design/log/`), since records pull this file in via `#+SETUPFILE: ../../TASKS.setup.org`. `TASKS.org` and `TASKS.archive.org` declare repo-root-relative overrides before setupfiles (first declaration wins). `plan` is referenced only from the task files, so it lives there, not in setup; `proj` is a generic repo-root path link (`./` from the task file, `../../` from a record):
 
 ```org
 #+LINK: task file:TASKS.org::#%s
 #+LINK: archive file:TASKS.archive.org::#%s
+#+LINK: plan file:design/log/%s
+#+LINK: proj file:%s
 #+SETUPFILE: ./TASKS.local.org
 #+SETUPFILE: ./TASKS.setup.org
 ```
@@ -52,6 +54,7 @@ Optional description text.
 - `CLOSED:` is the current close timestamp for `DONE`/`CANCELLED`, on its own line between heading and `:PROPERTIES:`. It is cleared on reopen and rewritten on the next close.
 - `:LOGBOOK:` is append-only lifecycle history: one created entry plus one state entry per transition.
 - `#+IMPORT:` links a change-record/imported task file. Canonical plan imports use `[[plan:file.org]]`; file links remain valid for non-plan imports.
+- `design/specs/` is the default home for prose-only living contracts; there is no dedicated `spec` link type. Reference specs (and any repo file) from records with `proj` (`[[proj:design/specs/foo.org]]`), and declare expected impact with bare repo-relative `#+SPEC_IMPACT:` paths.
 
 ## Blockers, handoff, and linked issues
 
@@ -87,6 +90,6 @@ Do not hard-wrap prose in generated or edited org task files. Each paragraph is 
 
 ## Extension points and non-goals
 
-Unknown `#+` keywords and drawer properties round-trip untouched. Third-party metadata should use an `UPPERCASE_NAMESPACE_` prefix.
+Unknown `#+` keywords and drawer properties round-trip untouched. Protocol keywords used by change-record/spec coupling include repeated `#+SPEC_IMPACT: path/to/contract.org` declarations and `#+NO_SPEC_IMPACT: true` opt-outs; third-party metadata should use an `UPPERCASE_NAMESPACE_` prefix.
 
 The core protocol deliberately does not own vendor-specific workflow state, bidirectional external-tracker sync, transcript retention, human-readable aliases replacing UUIDs, or per-task attribution properties. Add those as companion layers when a project needs them.

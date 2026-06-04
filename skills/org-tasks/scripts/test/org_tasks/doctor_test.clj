@@ -297,6 +297,69 @@
                                            "#+SETUPFILE: ./TASKS.setup.org\n")}}})]
     (is (= 1 (count-of findings :missing-local-setupfile)))))
 
+(deftest spec-impact-aware-record-requires-core-sections
+  (let [content (str "#+NO_SPEC_IMPACT: true\n\n"
+                     "* Summary\n"
+                     "body\n"
+                     "* Plan\n"
+                     "** TODO Work\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n"
+                     "* Implementation\n"
+                     "* Validation\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/work.org"
+                                                     :source-content content})
+        findings (doctor/run-doctor {:tasks tasks :selected-id nil})]
+    (is (= 1 (count-of findings :missing-record-section)))
+    (is (= 1 (count-of findings :empty-validation-section)))))
+
+(deftest spec-impact-warns-when-declared-path-not-touched
+  (let [content (str "#+SPEC_IMPACT: docs/api.org\n\n"
+                     "* Plan\n"
+                     "** TODO Update API\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/api.org"
+                                                     :source-content content})
+        findings (doctor/run-doctor {:tasks tasks
+                                      :selected-id nil
+                                      :changed-paths #{"src/api.clj"}})
+        f (first (filter #(= :spec-impact-untouched (:code %)) findings))]
+    (is (= 1 (count-of findings :spec-impact-untouched)))
+    (is (= :warn (:severity f)))
+    (is (str/includes? (:message f) "docs/api.org"))))
+
+(deftest spec-impact-passes-when-declared-path-touched
+  (let [content (str "#+SPEC_IMPACT: docs/api.org\n\n"
+                     "* Plan\n"
+                     "** TODO Update API\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/api.org"
+                                                     :source-content content})]
+    (is (zero? (count-of (doctor/run-doctor {:tasks tasks
+                                             :selected-id nil
+                                             :changed-paths #{"docs/api.org"}})
+                         :spec-impact-untouched)))))
+
+(deftest no-spec-impact-opt-out-suppresses-spec-impact-warnings
+  (let [content (str "#+SPEC_IMPACT: docs/api.org\n"
+                     "#+NO_SPEC_IMPACT: true\n\n"
+                     "* Plan\n"
+                     "** TODO Spike\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/spike.org"
+                                                     :source-content content})]
+    (is (zero? (count-of (doctor/run-doctor {:tasks tasks
+                                             :selected-id nil
+                                             :changed-paths #{}})
+                         :spec-impact-untouched)))))
+
 (deftest format-finding-line
   (let [f {:code :duplicate-id
            :severity :error

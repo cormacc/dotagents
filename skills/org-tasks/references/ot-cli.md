@@ -49,7 +49,7 @@ ot select <id>        # or: ot select --clear
 ot archive <id> --yes
 ot publish <id>       # TASKS.local.org -> TASKS.org
 ot unpublish <id>     # TASKS.org -> TASKS.local.org
-ot doctor --format json
+ot doctor --format json # includes spec-impact warnings for records that declare #+SPEC_IMPACT:
 ot backfill            # add :CUSTOM_ID: / :CREATED: to hand-authored tasks missing IDs
 ot section design/log/foo.org Summary --format json
 ot scan --scope all --max-body-chars 500 --format json
@@ -70,3 +70,14 @@ ID-accepting commands accept full `:CUSTOM_ID:` values or any unique prefix of a
 `ot record create <id>` creates the plan file when missing, attaches `#+IMPORT:` to the parent task, and migrates existing child task trees from the parent into the new record's `* Plan` section. Existing record files are not modified for migration.
 
 `--mode retrospective` also computes the `git log` scope from `:STARTED:`/`CLOSED:` and returns it in the JSON result for the prompting layer to use.
+
+## Spec-impact checks
+
+Change-records may declare planning-time contract impact with repeated repo-relative keywords:
+
+```org
+#+SPEC_IMPACT: skills/org-plan/SKILL.md
+#+SPEC_IMPACT: design/specs/data-model.org
+```
+
+Use `#+NO_SPEC_IMPACT: true` when the project has no durable contract layer, the task is below the spec-impact threshold, or the contract is intentionally unaffected. `ot doctor` warns when a declared spec-impact path has not been touched in the current git working tree/index. The warning is a nudge, not a gate; it cannot infer omitted specs that were never declared.

@@ -1,0 +1,158 @@
+#+TITLE: Evaluate OpenSpec vs org-plan skill for alignment opportunities
+#+DATE: 2026-06-04 Thu
+#+PARENT: [[task:21a6962b-432e-4030-aa29-7557fe151c1b][Evaluate OpenSpec vs org-plan skill for alignment opportunities]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+SPEC_IMPACT: skills/org-plan/SKILL.md
+#+SPEC_IMPACT: skills/org-plan/references/change-record-format.md
+#+SPEC_IMPACT: skills/org-tasks/SKILL.md
+#+SPEC_IMPACT: skills/org-tasks/references/bootstrap.md
+#+SPEC_IMPACT: skills/org-tasks/references/ot-cli.md
+#+SPEC_IMPACT: skills/org-tasks/references/protocol.md
+
+* Intent
+Evaluate OpenSpec (https://github.com/Fission-AI/OpenSpec) against the org-plan skill to find conceptual overlap and concrete, well-fitting borrowings that improve org-plan, without compromising its org-mode / single-record-per-task / =ot=-driven model.
+
+* Summary
+*Level:* exploration · *Tests:* none · *Docs:* skill-only (no code)
+
+** Scope
+*** In scope
+- Map OpenSpec's data model (specs vs changes, delta specs, schema DAG, lifecycle, CLI, agent integration) onto org-plan's change-record contract.
+- Identify bidirectional gaps and prioritised, fit-assessed alignment recommendations.
+- Spawn follow-up TODO tasks for the recommendations worth acting on.
+*** Out of scope
+- Editing the org-plan skill in this task (recommendations are deferred to follow-up tasks).
+- Adopting OpenSpec tooling or its npm package.
+- Building any spec-corpus / delta-merge infrastructure.
+
+** Decisions
+- Adopt only the borrowings that fit org-plan's fixed single-record contract :: structural lint, delta-classified ~** Shipped~, explicit criterion-verify step, scope-reuse heuristic.
+  Rejected:
+  - OpenSpec's *merge engine* (mechanical delta-merge of ~changes/.../specs/~ into ~openspec/specs/~ on archive): replaced by a human/agent editing the prose contract directly. No engine.
+  - Per-project workflow schema (artefact DAG) and splitting one record into multiple files: fragments org-plan's fixed section contract for no payoff.
+  - Replicating per-artefact ~config.yaml~ rules: already covered by =AGENTS.md= + skill prose.
+- Spec coupling :: adopt a living contract layer with =design/specs/= as the documented *default* home for prose-only contracts — no dedicated link type; impact is declared as bare repo-relative ~#+SPEC_IMPACT:~ paths, and specs are referenced via the generic ~proj~ link — plus an org-plan identify/propose/verify behaviour gated by the effort line. The folder is cosmetic; the load-bearing part is plan-time, scout-seeded contract identification (a forward ~#+SPEC_IMPACT:~ declaration) + closure-time git-scope verify. Two data points (dotagents 33/45 records cite a contract; portal 0/13, visible drift) show the corpus rots without this nudge, and that its location is project-specific (=skills/= vs =design/=). Merges R1+R2+R4 into one feature.
+
+** Shipped
+- ADDED :: Research report at [[file:2026-06-04-evaluate-openspec-vs-org-plan-skill-for/openspec-vs-org-plan.md][support/openspec-vs-org-plan.md]] — OpenSpec model summary, 16-row similarity map, bidirectional gap analysis, 6 prioritised recommendations.
+- ADDED :: Follow-up TODO tasks under ~* Plan~ — R1+R2+R4 merged into one spec-coupling task, plus R3 and R5; R6 captured under ~** Follow-ups~.
+- MODIFIED :: `skills/org-plan/SKILL.md` — added spec-impact planning, `#+SPEC_IMPACT:` / `#+NO_SPEC_IMPACT:` semantics, criterion-verification closure step, update-vs-new-change heuristic, and the optional same-stem support-folder convention.
+- MODIFIED :: `skills/org-plan/references/change-record-format.md` — added spec-impact keywords to the skeleton/reference and clarified `** Shipped` as post-hoc outcome.
+- MODIFIED :: `skills/org-tasks/references/bootstrap.md` / `skills/org-tasks/references/protocol.md` / `skills/org-tasks/references/ot-cli.md` — documented the link model (`plan` local-only in TASKS.org/archive; generic dual-defined `proj`; no `spec` link type), spec-impact declarations, opt-outs, and doctor warnings.
+- MODIFIED :: `skills/org-tasks/SKILL.md` — surfaced spec-impact protocol in the quick protocol summary and command reference.
+- MODIFIED :: `skills/org-tasks/scripts/src/org_tasks/commands.clj` / `doctor.clj` — `ot init` scaffolds `plan` (local) + generic `proj` links (no `spec` link); `ot doctor` checks spec-impact-aware records for required sections, empty Validation, and declared specs not touched in git status.
+
+** Evidence — repo audits
+The living corpus already exists in both repos audited: skills + references (OpenSpec's =specs/=) over dated records (OpenSpec's =changes/=). Coupling tracks whether the contract layer *is the deliverable*: dotagents (skills = deliverable) — 33/45 records cite a contract, low drift; connect/portal (=design/*.org= docs = side-channel) — 0/13 cite, and =data-model.org= was left stale by the 2026-05-06 tx-log =sync_id= rename. So the gap is *linkage + enforcement*, not the corpus, and the nudge pays off most where natural coupling is lowest. Conditional: applies only where a durable prose-contract layer exists; opt-in (=#+NO_SPEC_IMPACT:=) elsewhere.
+
+** Gotchas
+- OpenSpec's exact built-in section-conformance ruleset is not enumerated in docs; mirroring it closely (R1) would need a validator source read.
+- Whether OpenSpec's ~verify~ action is LLM-judged or structural is unspecified.
+- Doc links target the actively-evolving =main= branch (confirmed 2026-06-04); re-confirm before acting.
+
+** Follow-ups
+- R6 (optional) — allow Given/When/Then for ~** Edge cases~; keep optional to avoid ceremony. Low priority; not spawned as a task.
+
+* Plan
+** DONE org-plan + ot: spec-coupling — design/specs default, identify/propose/verify, + record-structure lint (R1+R2+R4)
+CLOSED: [2026-06-04 Thu 01:15]
+:PROPERTIES:
+:CUSTOM_ID: c6ec8e9c-cab7-41cf-85dc-ddbd38e54436
+:STARTED: [2026-06-04 Thu 01:15]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-04 Thu 01:15]
+- State "DONE" from "STARTED" [2026-06-04 Thu 01:15]
+:END:
+Couple change-records to a project's living contract layer, with =design/specs/= as the scaffolded default home. Merges R1 (record-structure lint), R2 (delta-classified ~** Shipped~), and R4 (record↔contract-doc linkage + closure verify). See ~** Decisions~ (spec coupling) and ~* Open questions~.
+Acceptance criteria:
+- =ot init= scaffolds ~#+LINK: plan file:design/log/%s~ (local, repo-root) and a generic ~#+LINK: proj~ (dual: `./` local, `../../` in setup); =design/specs/= is the documented default dir for prose contracts, with no dedicated `spec` link type.
+- org-plan prefers an *existing* discoverable contract layer (=skills/=, =openapi.yaml=, schema ns) and couples to it directly; =design/specs/= is the fallback home only for prose contracts with no code home (OQ1).
+- org-plan adds a scope-gated planning step: a =scout= (or =researcher= when externally triggered) identifies impacted contract docs *before* implementation; propose a new spec only when scope introduces a durable new domain.
+- The expected impact is recorded as a forward declaration: a machine-readable ~#+SPEC_IMPACT:~ keyword (relative spec paths) plus human-readable ~*** In scope~ bullets (OQ2).
+- The planning step is skipped at prototype/fix effort levels.
+- ~** Shipped~ bullets carry ADDED / MODIFIED / REMOVED prefixes recording *actual* outcomes (post-hoc), reconciled against ~#+SPEC_IMPACT:~ at closure; discovered impact not predicted at planning is allowed.
+- =ot doctor=/=ot lint= warns on missing required record sections.
+- =ot doctor=/=ot lint= warns on stale/empty ~* Validation~ at DONE-transition.
+- =ot doctor=/=ot lint= warns when a ~#+SPEC_IMPACT:~-declared spec was not touched in the record's git scope.
+- All checks are warnings, never blocks.
+- Records can explicitly opt out with ~#+NO_SPEC_IMPACT: true~ when the project has no contract layer or the task is below the spec-impact threshold (prototype/trivial/code-is-spec).
+Must not: introduce a mechanical delta-merge engine.
+Must not: hardcode the spec-dir path.
+Must not: turn =design/specs/= into a duplicate of a deliverable that is itself the contract (e.g. dotagents =skills/=) — point org-plan at the real layer instead.
+Pointer: record-dir resolution precedent at =skills/org-tasks/scripts/src/org_tasks/commands.clj= (~default-plans-dir~, ~#+LINK: plan~).
+
+** DONE org-plan: explicit acceptance-criterion verification at closure (R3)
+CLOSED: [2026-06-04 Thu 01:15]
+:PROPERTIES:
+:CUSTOM_ID: 29b5557c-d686-4c12-80aa-c3f2de8f6c43
+:STARTED: [2026-06-04 Thu 01:15]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-04 Thu 01:15]
+- State "DONE" from "STARTED" [2026-06-04 Thu 01:15]
+:END:
+Mirror OpenSpec ~verify~: at closure, tick each acceptance criterion / anti-criterion and record the evidence in ~* Validation~, distinct from "ran the test suite".
+Acceptance criteria:
+- Closure-time refresh-and-prune section adds an explicit "verify each criterion, record evidence" step.
+- Guidance distinguishes criterion-verification from generic test-run notes.
+
+** DONE org-plan: "Update vs New change" scope heuristic (R5)
+CLOSED: [2026-06-04 Thu 01:15]
+:PROPERTIES:
+:CUSTOM_ID: 7aec5eb0-f7a9-4e72-a13b-7f330d45572f
+:STARTED: [2026-06-04 Thu 01:15]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-04 Thu 01:15]
+- State "DONE" from "STARTED" [2026-06-04 Thu 01:15]
+:END:
+Add guidance on extending the current record vs spawning a new task/record, borrowing OpenSpec's heuristic.
+Acceptance criteria:
+- SKILL.md states: update when intent unchanged & majority scope overlap; new task/record when intent changed, scope exploded, or the original is independently completable.
+
+* Implementation
+Per-file outcomes are in ~** Shipped~. Mechanism notes worth keeping: `ot doctor` derives changed paths from `git status --porcelain=v1 --untracked-files=all` (fails soft → checks skipped) and scopes record-structure lint to spec-impact-aware records only. Full research report in the same-stem support folder: [[file:2026-06-04-evaluate-openspec-vs-org-plan-skill-for/openspec-vs-org-plan.md][support/openspec-vs-org-plan.md]].
+
+** OpenSpec model (condensed)
+- MIT npm tool (=@fission-ai/openspec=). Current workflow =OPSX= (schema-driven); legacy hardcoded-template workflow deprecated.
+- Two areas under =openspec/=: =specs/<domain>/spec.md= (durable source-of-truth behaviour contracts) and =changes/<name>/= (self-contained proposal.md + design.md + tasks.md + delta-=specs/=).
+- Delta specs are the brownfield-first key concept: ~## ADDED / MODIFIED / REMOVED Requirements~, merged into =specs/= on archive.
+- Spec format: ~## Purpose~ → ~### Requirement:~ (RFC-2119 SHALL/MUST) → ~#### Scenario:~ (Given/When/Then).
+- A =schema.yaml= declares artefacts + ~requires:~ edges (enablers, not phase gates). Lifecycle is fluid "actions not phases": propose → create artefacts → apply → verify → archive. State (BLOCKED/READY/DONE) is filesystem+DAG-derived.
+- CLI: =init/update=, =list/view/show=, =validate [--strict|--json]= (structural lint + archive gate), =archive= (validate → merge deltas → dated archive), workflow =status/instructions --json=, =schema=, =config=, beta multi-repo =workspace/initiative=.
+- Agent loop: =openspec init --tools pi …= generates per-tool skill + slash commands; agent queries =status --json= and =instructions <artifact> --json=.
+
+** Similarity map (highlights)
+- Strong: change folder ↔ change-record; proposal.md ↔ ~* Intent~ + ~* Summary~; tasks.md ↔ ~* Plan~; =status/instructions --json= ↔ =ot=.
+- Partial: design.md ↔ ~* Implementation~/~** Decisions~ (pre-hoc vs post-hoc); requirements/scenarios ↔ ~* Behavior~ + acceptance criteria (org-plan informal but *stricter*); =validate= ↔ =ot doctor= (graph-only, no section lint); archive (merges deltas) ↔ org archive (merges nothing).
+- Absent in org-plan: living =specs/= corpus; delta classification.
+- Absent in OpenSpec: premortem, approach-exploration/rejected-alternatives, effort line, intent reverse-engineering, anti-criteria, closure-time prune, task-graph semantics (UUID, ~:BLOCKED-BY:~, parent propagation, LOGBOOK), ~* Open questions~, ~** Gotchas~/~** Risks~.
+
+** Net assessment
+OpenSpec is broader on tooling surface and uniquely maintains a living behavioural-contract corpus; org-plan is deeper on planning craft and task-dependency semantics. Best-fitting borrowings: the merged spec-coupling feature (R1 lint + R2 delta framing + R4 linkage/verify, with =design/specs/= as a config-driven default), R3 (verify), R5 (scope heuristic). The signature spec-corpus is *not* rebuilt: org-plan couples to whatever contract layer the project already has, nudged at plan/closure time — no merge engine.
+
+* Validation
+- Source-link spot-check: report cites OpenSpec README, docs/{concepts,opsx,cli,commands}.md and the org-plan SKILL.md; links target =main= as of 2026-06-04. Supporting report moved from `.agents/tmp` into the record's same-stem support folder.
+- Repo audits (manual) — see ~** Evidence~. Record-dir config precedent confirmed in =org_tasks/commands.clj= (~default-plans-dir~, ~#+LINK: plan~).
+- `bb -cp skills/org-tasks/scripts/src:skills/org-tasks/scripts/test -e "(require '[clojure.test :as t] '[org-tasks.doctor-test]) (System/exit (if (t/successful? (t/run-tests 'org-tasks.doctor-test)) 0 1))"` — PASS, 27 tests / 51 assertions.
+- `bb ot doctor --format json` — PASS, 0 errors / 0 warnings; confirms this record's `#+SPEC_IMPACT:` paths are all touched.
+- `bb ot --help` — PASS, CLI entrypoint loads.
+- Temp `bb ot --root "$tmp" init --format json` — PASS; setup generates `#+LINK: proj file:../../%s`, TASKS.org generates local `#+LINK: plan file:design/log/%s` + `#+LINK: proj file:%s`.
+- `bb ot doctor` on this repo after the link rework — PASS, 0/0; `ot show` still resolves the linked record via the local `plan` definition.
+- `bb test` — 160 tests / 552 assertions; only the 5 pre-existing macOS path-alias/path-normalisation failures (`/var/...` vs `/private/var/...`) remain — no new failures from the link rework.
+
+* Open questions
+** DECIDED design/specs/ contents: contracts-with-no-code-home vs index-to-real-contract?
+:PROPERTIES:
+:DECIDED: [2026-06-04 Thu]
+:END:
+Decision: one source of truth per contract — authoritative prose *only* for contracts with no code/skill home; never a per-contract duplicate of one that has a canonical artifact. For code/skill-homed contracts (a skill file, =openapi.yaml=, JSON schema, schema ns, migration set) org-plan couples directly to that artifact. An optional single =design/specs/index.org= lists where each contract lives only when the surface is scattered enough that discovery is a problem. Consequence: a project whose deliverable is already a discoverable contract corpus (dotagents =skills/=) needs no =design/specs/= — hence the folder is a *fallback* default, not mandatory.
+Rationale: the only failure mode worth engineering against is drift from duplicate sources of truth; portal proves even a single under-coupled doc rots, so two copies rot faster and disagree. "(a)+(b)+both" collapses under "single source of truth" to: authoritative when prose-only, pointer otherwise. Boundary test — =specs/= = normative, present-tense, current-state (rewritten in place); record ~* Implementation~ = past-tense per-change delta (append-only); =notes.org= = non-normative scratch.
+** DECIDED Spec-touched detection: explicit declaration vs path inference? (revised)
+:PROPERTIES:
+:DECIDED: [2026-06-04 Thu]
+:END:
+Decision: the spec declaration is authored at *planning* time, NOT derived from ~** Shipped~. A =scout= surveys the existing contract layer to identify the specs a change is expected to impact (a =researcher= instead when the trigger is an external/new capability not yet in the repo); the result is recorded as repeated, machine-readable forward declarations (~#+SPEC_IMPACT: path/to/spec.org~) plus human-readable ~*** In scope~ bullets. Implementation works that checklist. Closure lint warns on any ~#+SPEC_IMPACT:~ path not touched in the record's git scope. Records below the threshold or without a contract layer use ~#+NO_SPEC_IMPACT: true~ as an explicit opt-out. ~** Shipped~ remains the *post-hoc* actual outcome (ADDED/MODIFIED/REMOVED), reconciled at closure, and may include *discovered* impact the planning scout missed.
+Supersedes the earlier "declare via ~** Shipped~" decision, which was circular: ~** Shipped~ is LLM-authored after implementation, so a spec the agent forgot to touch is equally absent from Shipped — the check would be blind to the omission case that actually matters (cf. portal's silent =data-model.org= drift). Moving identification to planning (scout-seeded, forward-looking, prescriptive) mirrors OpenSpec's proposal→specs→implement ordering and is the only way the check catches "should have, didn't". This also rehabilitates a dedicated keyword: a pre-hoc, machine-checkable ~#+SPEC_IMPACT:~ is distinct from post-hoc prose Shipped, so the two no longer compete. Fits org-plan's existing Delegation table (scout=codebase, researcher=external) with no new machinery.
+Residual: a planning scout reduces but cannot eliminate omission risk (no complete code→spec mapping); accepted — warnings-only + human review raise the floor, not guarantee completeness.

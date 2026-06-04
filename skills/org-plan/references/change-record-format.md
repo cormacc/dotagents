@@ -16,6 +16,7 @@ Required: `* Intent`, `* Summary`, `* Plan`, `* Implementation`, `* Validation`.
 #+PARENT: [[task:01234567-89ab-4def-8123-456789abcdef][Descriptive parent task]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Draft
+#+SPEC_IMPACT: design/specs/example-domain.org
 
 * Intent
 One to three sentences. What we are building and why. Stable across the work.
@@ -28,7 +29,7 @@ One compact paragraph describing current/final state.
 ** Scope
 *** In scope
 - Concrete item 1.
-- Concrete item 2.
+- Contract impact: `design/specs/example-domain.org` is expected to change.
 *** Out of scope
 - Deferred item.
 
@@ -38,7 +39,7 @@ One compact paragraph describing current/final state.
   - Approach Y: brief reason it lost.
 
 ** Shipped
-- User-visible / protocol / code outcomes.
+- MODIFIED :: `design/specs/example-domain.org` — concise post-hoc outcome.
 
 ** Gotchas
 - Project-side surprises future implementers should not rediscover.
@@ -113,6 +114,17 @@ Include for feature work where the user-facing flow is load-bearing. Drafting-ti
 ### `* Context`
 
 Background, motivation, alternatives, constraints, trade-offs. **Default to omitting.** Promote only when durable rationale materially exceeds what `* Summary` can carry.
+
+## Spec-impact keywords
+
+Use repeated planning-time declarations when work is expected to change durable behaviour, public APIs, protocols, domain models, or agent/operator workflow:
+
+```org
+#+SPEC_IMPACT: design/specs/data-model.org
+#+SPEC_IMPACT: skills/org-plan/SKILL.md
+```
+
+Paths are repo-relative. Opt out with `#+NO_SPEC_IMPACT: true`. See org-plan SKILL.md *Spec-impact planning* for when to declare vs opt out, and org-tasks `ot-cli.md` for the `ot doctor` check.
 
 ## `#+STATUS:` lifecycle
 
