@@ -8,7 +8,7 @@
     "npm:@latentminds/pi-quotas",
     "npm:pi-tldr",
     "git:github.com/cormacc/lemonade-pi-plugin@qwen-thinking",
-    "git:github.com/edxeth/pi-subagents",
+    "git:github.com/cormacc/pi-subagents@feat/herdr-backend",
     "npm:@xl0/pi-lovely-dev-tools"
   ],
   "theme": "dark",
