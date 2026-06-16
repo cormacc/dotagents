@@ -20,6 +20,17 @@
 
 * Explorations
 
+** TODO Evaluate herdr extension suite
+:PROPERTIES:
+:CUSTOM_ID: 51426ef7-9d1f-4fa3-be74-fa75fd0a3f63
+:CREATED: [2026-06-16 Tue 23:20]
+:END:
+:LOGBOOK:
+- Created [2026-06-16 Tue 23:20]
+:END:
+https://github.com/ogulcancelik/pi-extensions
+Pi extensions by the author of herdr (cross-platform agent multiplexer)
+
 ** TODO Evaluate rpiv-pi workflow setup
 :PROPERTIES:
 :CUSTOM_ID: 95649700-252c-46d1-92fd-584f8b3b6237
