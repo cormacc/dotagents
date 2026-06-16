@@ -5,12 +5,11 @@
     "npm:@gotgenes/pi-anthropic-auth",
     "npm:pi-mcp-adapter",
     "npm:pi-web-access",
-    "npm:pi-intercom",
     "npm:@latentminds/pi-quotas",
     "npm:pi-tldr",
-    "npm:@ryan_nookpi/pi-extension-diff-review",
     "git:github.com/cormacc/lemonade-pi-plugin@qwen-thinking",
-    "git:github.com/HazAT/pi-interactive-subagents"
+    "git:github.com/edxeth/pi-subagents",
+    "npm:@xl0/pi-lovely-dev-tools"
   ],
   "theme": "dark"
 }

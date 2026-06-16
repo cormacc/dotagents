@@ -20,6 +20,18 @@
 
 * Explorations
 
+** TODO Evaluate rpiv-pi workflow setup
+An interesting-looking / opinionated workflow setup for pi.
+Likely to be some clashes with my own setup, but worth evaluating for (partial?) adoption.
+- https://github.com/juicesharp/rpiv-mono
+- https://rpiv-pi.com/
+
+** TODO [#D] Evaluate pi-lsp over home-rolled lsp :pi:
+:PROPERTIES:
+:CUSTOM_ID: 0ed56048-9f53-44b4-8a5a-2dbc858e6f04
+:END:
+https://pi.dev/packages/@dreki-gg/pi-lsp
+
 ** TODO [#B] Evaluate subagent workflow options
 :PROPERTIES:
 :CUSTOM_ID: 720b13c6-c46c-4ffd-9c87-5248c39f54ef
@@ -191,12 +203,6 @@ Code cleanups
 #+IMPORT: [[plan:2026-04-28-create-self-improvement-skill.org]]
 
 * Agent feedback
-
-** TODO [#D] Evaluate pi-lsp over home-rolled lsp :pi:
-:PROPERTIES:
-:CUSTOM_ID: 0ed56048-9f53-44b4-8a5a-2dbc858e6f04
-:END:
-https://pi.dev/packages/@dreki-gg/pi-lsp
 
 ** TODO Upstream pi: request runtime/config split for settings.json :project-convention:
 :PROPERTIES:
