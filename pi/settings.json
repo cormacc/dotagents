@@ -11,5 +11,6 @@
     "git:github.com/edxeth/pi-subagents",
     "npm:@xl0/pi-lovely-dev-tools"
   ],
-  "theme": "dark"
+  "theme": "dark",
+  "lastChangelogVersion": "0.79.5"
 }
