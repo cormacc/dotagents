@@ -21,6 +21,13 @@
 * Explorations
 
 ** TODO Evaluate rpiv-pi workflow setup
+:PROPERTIES:
+:CUSTOM_ID: 95649700-252c-46d1-92fd-584f8b3b6237
+:CREATED: [2026-06-16 Tue 21:03]
+:END:
+:LOGBOOK:
+- Created [2026-06-16 Tue 21:03]
+:END:
 An interesting-looking / opinionated workflow setup for pi.
 Likely to be some clashes with my own setup, but worth evaluating for (partial?) adoption.
 - https://github.com/juicesharp/rpiv-mono
@@ -99,21 +106,6 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 - Created [2026-05-21 Thu 16:01]
 :END:
 #+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
-
-** DONE Evaluate OpenSpec vs org-plan skill for alignment opportunities
-CLOSED: [2026-06-04 Thu 02:09]
-:PROPERTIES:
-:CUSTOM_ID: 21a6962b-432e-4030-aa29-7557fe151c1b
-:CREATED: [2026-06-04 Thu 00:14]
-:STARTED: [2026-06-04 Thu 00:19]
-:END:
-:LOGBOOK:
-- Created [2026-06-04 Thu 00:14]
-- State "STARTED" from "TODO" [2026-06-04 Thu 00:19]
-- State "DONE" from "STARTED" [2026-06-04 Thu 02:09]
-:END:
-#+IMPORT: [[plan:2026-06-04-evaluate-openspec-vs-org-plan-skill-for.org]]
-Evaluate OpenSpec (https://github.com/Fission-AI/OpenSpec) against the local org-plan skill. Identify conceptual similarities (spec/change-record-driven workflows, planning artefacts, lifecycle states) and concrete opportunities to improve or align org-plan. Researcher agent gathers OpenSpec's model, conventions, and CLI; synthesis maps them onto org-plan's change-record contract.
 
 * Improvements
 

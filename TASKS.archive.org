@@ -808,7 +808,6 @@ Repro:
 Expected: ot archive clears #+SELECTED: when the archived task (or any descendant) is the current selection, matching the overlay behaviour.
 
 Found 2026-05-29 while archiving b3f15bdb at the end of design/log/2026-05-29-tighten-up-org-tasks-skill-to-improve-us.org.
-
 ** CANCELLED [#C] Fix `ot status` to operate on plan subtasks
 CLOSED: [2026-06-02 Tue 16:50]
 :PROPERTIES:
@@ -881,3 +880,19 @@ Acceptance criteria:
 - README cross-references the `org-tasks` resume read order and the future `tasks_resume_brief` consumer.
 
 No longer blocked by an in-place pi tool seed; coordinate with existing `ot section` behaviour before extracting a generic CLI.
+
+** DONE Evaluate OpenSpec vs org-plan skill for alignment opportunities
+CLOSED: [2026-06-04 Thu 02:09]
+:PROPERTIES:
+:CUSTOM_ID: 21a6962b-432e-4030-aa29-7557fe151c1b
+:CREATED: [2026-06-04 Thu 00:14]
+:STARTED: [2026-06-04 Thu 00:19]
+:ARCHIVED: [2026-06-04 Thu 02:09]
+:END:
+:LOGBOOK:
+- Created [2026-06-04 Thu 00:14]
+- State "STARTED" from "TODO" [2026-06-04 Thu 00:19]
+- State "DONE" from "STARTED" [2026-06-04 Thu 02:09]
+:END:
+#+IMPORT: [[plan:2026-06-04-evaluate-openspec-vs-org-plan-skill-for.org]]
+Evaluate OpenSpec (https://github.com/Fission-AI/OpenSpec) against the local org-plan skill. Identify conceptual similarities (spec/change-record-driven workflows, planning artefacts, lifecycle states) and concrete opportunities to improve or align org-plan. Researcher agent gathers OpenSpec's model, conventions, and CLI; synthesis maps them onto org-plan's change-record contract.
