@@ -221,15 +221,14 @@ Draft a compact checklist of atomic, binary, testable criteria. Each item is a s
 - [ ] ISC-3: ...
 
 ### Anti-Criteria
-- [ ] ISC-A-1: No [thing that must NOT happen]
+- [ ] ISC-A-1: Must not: [side effect to prevent]
 ```
 
-**Splitting test** — before you present, scan each criterion:
-- Contains "and"/"with"/"including"? → Split it.
-- Can part A pass while part B fails? → Separate them.
-- Contains "all"/"every"/"complete"? → Enumerate what "all" means.
+**Splitting test** — apply `org-plan`'s canonical splitting test (`## Acceptance criteria`) to each criterion before presenting: split anything that joins two checks with "and"/"with"/"including", and enumerate "all"/"every"/"complete".
 
 **Keep it compact.** A production feature typically has 5-12 ISC items. If you have 25, you're over-speccing.
+
+Once the user confirms, this checklist is the ISC. It is persisted verbatim to `** Acceptance` under `* Summary` in Phase 8 (its durable home), then projected slice-by-slice into plan-task `Acceptance criteria:` in Phase 9.
 
 > Here's what "done" looks like. Each item is a yes/no check. Missing anything? Anything out of scope?
 >
@@ -356,6 +355,8 @@ ot record create <task-id>
 
 ### Fill the sections
 
+The user-confirmed ISC belongs in the durable **record layer** (`** Acceptance`), not only in transient plan-task bodies, so it survives closure pruning. See org-plan *Two layers in one record*.
+
 Map your phase-1-7 outputs onto the org-plan section contract. **Required sections** are filled now; **optional sections** are filled only when they apply.
 
 | Source | Target section |
@@ -365,8 +366,8 @@ Map your phase-1-7 outputs onto the org-plan section contract. **Required sectio
 | Phase 3 — happy-path walkthrough + edge cases | `* Behavior` (optional, feature work only) |
 | Phase 4a — effort level + tests + docs | Opening line of `* Summary` |
 | Phase 2 / Phase 3 — in / out of scope | `** Scope` under `* Summary` |
+| Phase 4b — ISC, including anti-criteria | `** Acceptance` under `* Summary` (consolidated, durable); projected per-task as `Acceptance criteria:` |
 | Phase 5 — chosen approach + rejected alternatives | `** Decisions` under `* Summary` |
-| Phase 4b — ISC, including anti-criteria | Plan-task acceptance criteria; optionally a compact Summary paragraph when criteria cut across multiple tasks |
 | Phase 7 — accepted risks | `** Risks` under `* Summary` |
 | Phase 7 — deferred assumptions / questions | `* Open questions` (`** OPEN ...`) |
 | (later) tactical decisions + outcomes | `* Implementation` (filled during execution) |
@@ -377,6 +378,8 @@ Default to **omitting** `* Context`; promote only when durable rationale materia
 ### Voice when writing the record
 
 The conversation can be exploratory and chatty. The *written artifact* follows org-plan's *Voice and density* rules: terse declarative bullets, no preamble, no marketing tone, no future-tense implementation narrative. Drop the "I'd lean toward A because..." voice once you're writing into the file — the chosen approach goes into `** Decisions`, the rejected ones bulleted underneath.
+
+Set `#+STATUS: Review` once the record is filled and you present it for sign-off (it scaffolds as `Draft`). `#+STATUS:` is advisory — see org-plan / change-record-format for the lifecycle.
 
 After filling:
 
@@ -420,15 +423,11 @@ Every plan task MUST include either:
 
 Workers that receive a plan task without examples report back for clarification — work stalls. If no existing reference fits, write a concrete sketch with exact imports, types, and structure. For new patterns, write a **more** detailed example — not less.
 
-### Acceptance criteria discipline (from org-plan)
+### Acceptance criteria discipline
 
-Apply the splitting test before committing each criterion:
+The *splitting test*, *anti-criteria*, and *body discipline* rules are the canonical contract in `org-plan` (`## Acceptance criteria`). Apply them by reference — do not restate them. In short: each criterion is one-second yes/no verifiable; split anything joining two checks with "and"/"with"/"including" or "all"/"every"/"complete"; capture easy-to-violate non-goals as `Must not:` anti-criteria.
 
-- Contains "and" / "with" / "including"? → split into two.
-- Can part A pass while part B fails? → separate them.
-- Contains "all" / "every" / "complete"? → enumerate what "all" means.
-
-Anti-criteria capture non-goals easy to violate by accident: *Must not: write to the production database. Must not: introduce a new top-level dependency. Must not: change the public API signature.*
+Project the relevant slice of the confirmed ISC into each task.
 
 ### Each plan task must be independently implementable
 
@@ -455,6 +454,8 @@ Your **FINAL message** includes:
 - Key technical decisions (from `** Decisions`).
 - Premortem outcomes — risks accepted (`** Risks`) vs mitigated (turned into plan tasks).
 - Any open questions parked under `* Open questions`.
+
+Set `#+STATUS: Accepted` once the user signs off the plan tasks, then summarise and exit.
 
 > Record and plan tasks are ready at `[path]`. Parent task `[task-id]`. Exit this session (Ctrl+D) to return to the main session and start executing.
 

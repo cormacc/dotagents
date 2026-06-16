@@ -11,6 +11,19 @@ This skill owns planning methodology and change-record section conventions. `org
 
 Detailed skeletons, `#+STATUS:` values, `#+SPEC_IMPACT:` / `#+NO_SPEC_IMPACT:` examples, and subtask-migration examples live in `references/change-record-format.md`.
 
+## Two layers in one record
+
+A change-record fuses two layers with different lifecycles in one file:
+
+- **Record layer** (`* Intent`, `* Summary`, `* Implementation`, `* Validation`) — durable memory. Accretes and survives past closure. Owned by this skill.
+- **Plan layer** (`* Plan` TODO tasks) — execution scaffolding. Churns through status/`:LOGBOOK:` writes and collapses at closure. Lifecycle owned by `org-tasks`.
+
+Keeping both in one file preserves a single `#+IMPORT:` resume surface. The cost is that status churn rewrites the file and plan-task bodies are transient — so the durable definition of done lives in the record layer (`** Acceptance`), never only in task bodies. At closure the plan layer collapses; see *Closure-time refresh and prune*.
+
+## Canonical rules
+
+The *splitting test*, *anti-criteria*, and *body discipline* blocks below are the canonical contract: downstream agents (for example the `planner`) reference them by name rather than restating them, so the rules cannot drift between files. The *effort line* and *intent reverse-engineering* blocks are also canonical here, but interactive agents may restate them as conversational prompts as long as this skill remains the source of truth.
+
 ## Planning principles
 
 - Prefer plans that can be executed and verified task-by-task. A plan task is useful only when its acceptance criteria are observable.
@@ -40,6 +53,7 @@ Plans are written for engineers with project context. Optimise for signal densit
 `* Summary` — condensed evolving memory layer. The cheap reconstruction surface resume tools and humans land on after Intent. Opens with the effort line (see *Drafting practices*). Subsections populated as content accrues:
 
 - `** Scope` (required) — `*** In scope` and `*** Out of scope` lists. Both lists. Out-of-scope items prevent feature creep and feed the premortem ("are we sure we don't need X?").
+- `** Acceptance` — the consolidated ISC (user-confirmed definition of done), grouped into `*** Core functionality`, `*** Edge cases`, `*** Anti-criteria`. See *Acceptance criteria*.
 - `** Decisions` — strategic durable design choices that constrain future work, not every tactical coding call. Captures the chosen approach plus rejected alternatives bulleted underneath.
 - `** Shipped` — user-visible / protocol / code outcomes, populated as work lands. When a planned or discovered contract doc changes, prefix bullets with `ADDED`, `MODIFIED`, or `REMOVED` and name the contract doc; this is the post-hoc outcome, not the planning-time `#+SPEC_IMPACT:` declaration.
 - `** Gotchas` — project-side surprises future implementers should not rediscover. Library/API/protocol facts belong in the relevant skill/reference when one exists.
@@ -81,7 +95,9 @@ Decision: retain `:BLOCKED-BY:`; no `:WAITS_FOR:` field.
 
 ### Section order
 
-`* Intent` → optional `* User story` → optional `* Behavior` → `* Summary` → optional `* Context` → `* Plan` → `* Implementation` → `* Validation` → optional `* Open questions`.
+`* Intent` → `* Summary` → optional `* User story` → optional `* Behavior` → optional `* Context` → `* Plan` → `* Implementation` → `* Validation` → optional `* Open questions`.
+
+Optional `* User story` / `* Behavior` follow `* Summary` so the Intent→Summary reconstruction surface stays adjacent for resume tools.
 
 ## Drafting practices
 
@@ -172,6 +188,12 @@ Stop planning once the plan is actionable. A 40-item ISC for a prototype is over
 
 ## Acceptance criteria
 
+### Ideal-state checklist (ISC) vs acceptance criteria
+
+The **ideal-state checklist (ISC)** is the consolidated, user-confirmed definition of done for the whole change: atomic, binary, one-second-verifiable criteria grouped into core functionality, edge cases, and anti-criteria. It is a planning artefact, drafted and signed off before the executable plan exists, and it lives in `** Acceptance` under `* Summary` so it survives closure-time pruning of task bodies.
+
+**Acceptance criteria** are the per-task projection of the ISC: each plan task carries the slice it satisfies, as the `Acceptance criteria:` list described below.
+
 For non-trivial plan tasks, put a short `Acceptance criteria:` bullet list at the top of the task body. Each bullet is a single concrete observable outcome ("X renders", "Y round-trips byte-identically") rather than an implementation step — yes/no verifiable in one second.
 
 ### Splitting test
@@ -240,20 +262,20 @@ Before transitioning a top-level task to `DONE`, walk the record end-to-end with
 Refresh:
 
 1. Refresh `* Summary` so the effort line, `** Scope`, `** Shipped`, and `** Gotchas` reflect what actually landed. Reconcile `#+SPEC_IMPACT:` against actual `ADDED` / `MODIFIED` / `REMOVED` shipped bullets; include any discovered contract impact that was missed during planning.
-2. Refresh `* Validation` so the verification record matches what actually ran. Explicitly verify each acceptance criterion and anti-criterion, not just generic test-suite status.
+2. Refresh `* Validation` so the verification record matches what actually ran. Verify each item in `** Acceptance` (the consolidated ISC) and every anti-criterion, not just generic test-suite status.
 3. Ensure every `#+SPEC_IMPACT:` path was reviewed and updated when needed, or explain why the planned impact did not materialise.
 4. Ensure newly discovered follow-up work exists as TODO tasks rather than buried prose.
 5. If Summary is missing, generate it from promoted Context, completed plan tasks, and Implementation notes before closing.
 
 Prune:
 
-5. Delete `* Context` unless it still carries durable rationale Summary does not subsume.
-6. Delete `* User story` unless the "so that" clause is still load-bearing (rare — most are subsumed by `** Shipped`).
-7. Delete `* Behavior` unless the happy path or edge-case list preserves something Implementation/Summary do not subsume (also rare).
-8. Condense `** Risks` — promote accepted-risks-that-paid-off into `** Decisions` or `** Gotchas`; delete the residue.
-9. Trim verbose prose from completed plan-task bodies. Preserve only compact acceptance/audit value; LOGBOOK preserves timing and Implementation captures outcomes.
-10. Remove planning-flavoured Implementation subsections and condense useful content into outcomes, `** Gotchas`, or `** Decisions`.
-11. Check that each Gotcha is a project-side surprise. Move library-level facts to the relevant skill/reference, or create follow-up work to do so.
+1. Delete `* Context` unless it still carries durable rationale Summary does not subsume.
+2. Delete `* User story` unless the "so that" clause is still load-bearing (rare — most are subsumed by `** Shipped`).
+3. Delete `* Behavior` unless the happy path or edge-case list preserves something Implementation/Summary do not subsume (also rare).
+4. Condense `** Risks` — promote accepted-risks-that-paid-off into `** Decisions` or `** Gotchas`; delete the residue.
+5. Collapse the plan layer. `* Plan` is execution scaffolding: once every task is `DONE`, trim completed plan-task bodies to compact acceptance/audit value (`:LOGBOOK:` preserves timing; `* Implementation` captures outcomes). Keep the durable definition of done in `** Acceptance` (see *Two layers in one record*).
+6. Remove planning-flavoured Implementation subsections and condense useful content into outcomes, `** Gotchas`, or `** Decisions`.
+7. Check that each Gotcha is a project-side surprise. Move library-level facts to the relevant skill/reference, or create follow-up work to do so.
 
 `* Intent` itself is not pruned — it stays as the durable record of what this work was *for*. If Intent and Summary's effort line both still apply, the record passes the closure bar.
 

@@ -4,9 +4,9 @@ A change-record is an org file linked from a task by `#+IMPORT:`. It starts as a
 
 ## Section order
 
-`* Intent` → optional `* User story` → optional `* Behavior` → `* Summary` → optional `* Context` → `* Plan` → `* Implementation` → `* Validation` → optional `* Open questions`.
+`* Intent` → `* Summary` → optional `* User story` → optional `* Behavior` → optional `* Context` → `* Plan` → `* Implementation` → `* Validation` → optional `* Open questions`.
 
-Required: `* Intent`, `* Summary`, `* Plan`, `* Implementation`, `* Validation`. Optional sections marked above.
+Required: `* Intent`, `* Summary`, `* Plan`, `* Implementation`, `* Validation`. Optional sections marked above. `* Summary` carries the durable record layer (including `** Acceptance`); `* Plan` is the transient plan layer (see org-plan *Two layers in one record*).
 
 ## Minimal skeleton
 
@@ -32,6 +32,15 @@ One compact paragraph describing current/final state.
 - Contract impact: `design/specs/example-domain.org` is expected to change.
 *** Out of scope
 - Deferred item.
+
+** Acceptance
+Consolidated ideal-state checklist (ISC) — the user-confirmed definition of done. Durable; `* Validation` is checked against it at closure.
+*** Core functionality
+- [ ] Atomic, one-second yes/no criterion.
+*** Edge cases
+- [ ] Edge criterion.
+*** Anti-criteria
+- [ ] Must not: side effect we want to prevent.
 
 ** Decisions
 - Chose Approach X :: Rationale that constrains future work.
@@ -128,7 +137,7 @@ Paths are repo-relative. Opt out with `#+NO_SPEC_IMPACT: true`. See org-plan SKI
 
 ## `#+STATUS:` lifecycle
 
-`#+STATUS:` is advisory only; task-level state remains owned by org-tasks.
+`#+STATUS:` is advisory only; task-level state remains owned by org-tasks. Advance it manually as the record matures — `Draft` while planning, `Review` when handing off for sign-off, `Accepted` once approved, `Active` during execution, `Complete` at closure. Nothing enforces these transitions; leaving it at `Draft` is acceptable for solo work.
 
 | Status | Meaning |
 |--------|---------|
