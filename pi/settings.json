@@ -4,13 +4,17 @@
   "packages": [
     "npm:@gotgenes/pi-anthropic-auth",
     "npm:pi-mcp-adapter",
-    "npm:pi-web-access",
-    "npm:@latentminds/pi-quotas",
     "npm:pi-tldr",
     "git:github.com/cormacc/lemonade-pi-plugin@qwen-thinking",
     "git:github.com/cormacc/pi-subagents@feat/herdr-backend",
-    "npm:@xl0/pi-lovely-dev-tools"
+    "npm:@xl0/pi-lovely-dev-tools",
+    "npm:@ogulcancelik/pi-herdr",
+    "npm:@ogulcancelik/pi-ghost",
+    "npm:@ogulcancelik/pi-minimal-footer",
+    "npm:@ogulcancelik/pi-sketch",
+    "npm:@ogulcancelik/pi-ssh-tools",
+    "npm:@ogulcancelik/pi-session-recall",
+    "npm:pi-web-access"
   ],
-  "theme": "dark",
-  "lastChangelogVersion": "0.79.5"
+  "theme": "dark"
 }
