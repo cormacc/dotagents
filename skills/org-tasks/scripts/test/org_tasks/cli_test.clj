@@ -12,6 +12,14 @@
             [org-tasks.cli :as cli]
             [org-tasks.output :as out]))
 
+(defn- with-user-dir [dir f]
+  (let [prev (System/getProperty "user.dir")]
+    (try
+      (System/setProperty "user.dir" (str dir))
+      (f)
+      (finally
+        (System/setProperty "user.dir" prev)))))
+
 (defn- capture
   "Run `body-fn` while capturing stdout, stderr, and the intended exit
   code. Returns `{:out, :err, :exit}`. The exit code defaults to 0 when
@@ -64,6 +72,45 @@
       ;; assertion.
       (is (zero? exit))
       (is (str/includes? out "Commands:")))))
+
+(deftest list-json-includes-resolved-root
+  (let [dir (str (fs/create-temp-dir {:prefix "ot-list-root"}))]
+    (try
+      (let [nested (fs/path dir "a" "b")]
+        (fs/create-dirs nested)
+        (spit (str (fs/path dir "TASKS.org")) "* TODO Root task\n:PROPERTIES:\n:CUSTOM_ID: 11111111-1111-4111-8111-111111111111\n:END:\n")
+        (let [{:keys [out exit]} (capture #(with-user-dir (str nested)
+                                             (fn [] (apply cli/-main ["--format" "json" "list"]))))
+              envelope (json/parse-string out true)]
+          (is (zero? exit))
+          (is (= (str (fs/absolutize dir)) (get-in envelope [:result :root])))
+          (is (= (str (fs/absolutize (fs/path dir "TASKS.org")))
+                 (get-in envelope [:result :files :tasks])))))
+      (finally (fs/delete-tree dir)))))
+
+(deftest root-command-prints-resolved-root
+  (let [dir (str (fs/create-temp-dir {:prefix "ot-root-cmd"}))]
+    (try
+      (let [nested (fs/path dir "a" "b")
+            fallback (fs/path dir "fallback")]
+        (fs/create-dirs nested)
+        (fs/create-dirs fallback)
+        (spit (str (fs/path dir "TASKS.org")) "* TODO Root task\n")
+        (let [{:keys [out exit]} (capture #(with-user-dir (str nested)
+                                             (fn [] (apply cli/-main ["root"]))))
+              explicit (capture #(apply cli/-main ["--root" (str nested) "root"]))]
+          (is (zero? exit))
+          (is (= (str (fs/absolutize dir)) (str/trim out)))
+          (is (= (str (fs/absolutize nested)) (str/trim (:out explicit)))))
+        (fs/delete (fs/path dir "TASKS.org"))
+        (let [{:keys [out exit]} (capture #(with-user-dir (str fallback)
+                                             (fn [] (apply cli/-main ["root"]))))
+              tasks-override (capture #(with-user-dir (str fallback)
+                                         (fn [] (apply cli/-main ["--tasks" (str (fs/path dir "elsewhere.org")) "root"]))))]
+          (is (zero? exit))
+          (is (= (str (fs/absolutize fallback)) (str/trim out)))
+          (is (= (str (fs/absolutize fallback)) (str/trim (:out tasks-override))))))
+      (finally (fs/delete-tree dir)))))
 
 (deftest contract-envelope-error-shape
   (testing "a structured failure renders the JSON contract envelope"

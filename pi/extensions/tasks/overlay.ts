@@ -104,6 +104,7 @@ export class TasksOverlay {
   constructor(
     private tasks: Task[],
     private cwd: string,
+    private tasksPath: string,
     private readonly tui: TUI,
     theme: Theme,
     done: (value: undefined) => void,
@@ -162,8 +163,9 @@ export class TasksOverlay {
    * rows, preserves the cursor on the same task by ID where possible, then
    * triggers a re-render.
    */
-  refreshTasks(newTasks: Task[], selectedId: string | null = this.selectedId): void {
+  refreshTasks(newTasks: Task[], selectedId: string | null = this.selectedId, tasksPath: string = this.tasksPath): void {
     this.selectedId = selectedId;
+    this.tasksPath = tasksPath;
     // Remember which task the cursor is on so we can restore position after
     // rebuilding (new task objects from disk won't share references).
     const cursorId = this.rows[this.cursor]
@@ -775,6 +777,9 @@ export class TasksOverlay {
     // ── Build left pane lines ──
     const leftLines: string[] = [];
 
+
+    leftLines.push(th.fg("borderMuted", ` ${this.tasksPath}`));
+    leftLines.push("");
 
     if (this.rows.length === 0) {
       leftLines.push(th.fg("dim", " No tasks found."));

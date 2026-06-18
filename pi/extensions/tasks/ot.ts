@@ -124,6 +124,8 @@ export type OtEnvelope<T = unknown> = OtSuccess<T> | OtFailure;
 export interface RunOtOptions {
   /** Project root override (becomes `--root`). */
   root?: string;
+  /** Working directory for CLI root traversal. */
+  cwd?: string;
   /** Pass through `--dry-run`. */
   dryRun?: boolean;
   /** Additional pre-command global flags, e.g. `--tasks <path>`. */
@@ -149,7 +151,7 @@ export async function runOt<T = unknown>(
   argv.push(...cmd);
 
   return await new Promise<OtEnvelope<T>>((resolve, reject) => {
-    const child = spawn(binary, argv, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(binary, argv, { cwd: opts.cwd, stdio: ["ignore", "pipe", "pipe"] });
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     const timeout = setTimeout(() => {
@@ -223,6 +225,7 @@ export interface OtListResult<TTask = unknown> {
   tree: TTask[];
   rows: unknown[];
   selectedId: string | null;
+  root: string;
   files: Record<string, string>;
   sources?: Record<string, OtSourceContent>;
 }

@@ -146,12 +146,12 @@ let watchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let activeCtx: ExtensionContext | null = null;
 
 /** Collect every path whose changes should trigger a compact-widget refresh. */
-function collectWatchPaths(tasks: Task[], cwd: string): Set<string> {
+function collectWatchPaths(tasks: Task[], files: Record<string, string>): Set<string> {
   const paths = new Set<string>();
-  paths.add(join(cwd, TASKS_FILE));
+  if (files.tasks) paths.add(files.tasks);
   // Always watch the local selection file so Emacs-originated selection
   // changes are reflected immediately without reopening the overlay.
-  paths.add(join(cwd, TASKS_LOCAL_FILE));
+  if (files.local) paths.add(files.local);
   const walk = (ts: Task[]) => {
     for (const t of ts) {
       if (t.sourcePath) paths.add(t.sourcePath);
@@ -169,8 +169,7 @@ function collectWatchPaths(tasks: Task[], cwd: string): Set<string> {
  * Read the selected task UUID from TASKS.local.org.
  * Returns null when the file is absent or has no #+SELECTED: keyword.
  */
-async function readSelectedId(cwd: string): Promise<string | null> {
-  const localPath = join(cwd, TASKS_LOCAL_FILE);
+async function readSelectedId(localPath: string): Promise<string | null> {
   try {
     const content = await readFile(localPath, "utf-8");
     return parseSelectedKeyword(content);
@@ -188,7 +187,7 @@ export async function writeSelectedId(
   cwd: string,
   id: string | null,
 ): Promise<void> {
-  await otSelectTask(id, { root: cwd });
+  await otSelectTask(id, { cwd });
 }
 
 /**
@@ -363,17 +362,23 @@ function assignSourceRoots(tasks: Task[]): void {
   for (const task of tasks) assign(task);
 }
 
-async function loadTasks(cwd: string): Promise<Task[]> {
+interface LoadedTasks {
+  tasks: Task[];
+  root: string;
+  files: Record<string, string>;
+}
+
+async function loadTasks(cwd: string): Promise<LoadedTasks> {
   try {
-    await otBackfill({ root: cwd });
+    await otBackfill({ cwd });
   } catch {
     // Keep the UI usable even if automatic metadata backfill cannot write.
   }
-  const result = await otList<OtWireTask>({ root: cwd });
+  const result = await otList<OtWireTask>({ cwd });
   const sources = result.sources ?? {};
   const tasks = result.tree.map((wire) => wireTaskToTask(wire, sources));
   assignSourceRoots(tasks);
-  return tasks;
+  return { tasks, root: result.root, files: result.files };
 }
 
 function taskChildren(task: Task): Task[] {
@@ -439,6 +444,7 @@ function formatPlanLabel(planPath: string): string {
 function buildCompactLines(
   tasks: Task[],
   selectedId: string | null,
+  tasksPath: string | null,
   theme: Theme,
   width: number,
 ): string[] | undefined {
@@ -448,15 +454,18 @@ function buildCompactLines(
 
   const hasLinkedPlan = !!selectionRoot.importPath &&
     (selectionRoot.importChildren?.length ?? 0) > 0;
-  const headerLines = [
-    border(width, theme),
+  const headerLines = [border(width, theme)];
+  if (tasksPath) {
+    headerLines.push(truncateToWidth(theme.fg("borderMuted", `  ${tasksPath}`), width));
+  }
+  headerLines.push(
     formatTaskLine(
       selectionRoot,
       "",
       selectionRoot === selected ? "★ " : "• ",
       width,
     ),
-  ];
+  );
   if (hasLinkedPlan) {
     headerLines.push(
       truncateToWidth(
@@ -533,16 +542,18 @@ class CompactTasksWidget implements Component {
   constructor(
     private tasks: Task[],
     private selectedId: string | null,
+    private tasksPath: string | null,
     private readonly theme: Theme,
   ) {}
 
-  setTasks(tasks: Task[], selectedId: string | null): void {
+  setTasks(tasks: Task[], selectedId: string | null, tasksPath: string | null): void {
     this.tasks = tasks;
     this.selectedId = selectedId;
+    this.tasksPath = tasksPath;
   }
 
   render(width: number): string[] {
-    const lines = buildCompactLines(this.tasks, this.selectedId, this.theme, width) ?? [];
+    const lines = buildCompactLines(this.tasks, this.selectedId, this.tasksPath, this.theme, width) ?? [];
     return lines.map((l) => truncateToWidth(l, width));
   }
 
@@ -559,6 +570,7 @@ function syncCompactWidget(
   ctx: ExtensionContext,
   tasks: Task[],
   selectedId: string | null,
+  tasksPath: string | null,
   hidden = false,
 ): void {
   if (!ctx.hasUI) return;
@@ -569,14 +581,14 @@ function syncCompactWidget(
   }
 
   if (compactWidgetComponent) {
-    compactWidgetComponent.setTasks(tasks, selectedId);
+    compactWidgetComponent.setTasks(tasks, selectedId, tasksPath);
     compactWidgetTui?.requestRender();
     return;
   }
 
   ctx.ui.setWidget(COMPACT_WIDGET_ID, (tui, theme) => {
     compactWidgetTui = tui;
-    compactWidgetComponent = new CompactTasksWidget(tasks, selectedId, theme);
+    compactWidgetComponent = new CompactTasksWidget(tasks, selectedId, tasksPath, theme);
     return compactWidgetComponent;
   });
 }
@@ -586,16 +598,17 @@ async function refreshTaskUi(
   cwd: string,
 ): Promise<Task[]> {
   activeCtx = ctx;
-  const tasks = await loadTasks(cwd);
-  const selectedId = await readSelectedId(cwd);
+  const loaded = await loadTasks(cwd);
+  const { tasks, files } = loaded;
+  const selectedId = await readSelectedId(files.local);
   if (isOverlayActive) {
     // Push fresh task data into the running overlay so external changes
     // (e.g. Emacs selection toggle) are reflected immediately.
-    activeOverlayInstance?.refreshTasks(tasks, selectedId);
+    activeOverlayInstance?.refreshTasks(tasks, selectedId, files.tasks);
   } else {
-    syncCompactWidget(ctx, tasks, selectedId);
+    syncCompactWidget(ctx, tasks, selectedId, files.tasks);
   }
-  updateFileWatchers(collectWatchPaths(tasks, cwd));
+  updateFileWatchers(collectWatchPaths(tasks, files));
   return tasks;
 }
 
@@ -717,8 +730,8 @@ export default function (pi: ExtensionAPI) {
 
       // `/tasks new` - create a new top-level task without opening the overlay.
       if (args?.trim() === "new") {
-        const tasks = await loadTasks(ctx.cwd);
-        const created = await createTask(ctx, tasks, ctx.cwd, null, null);
+        const loaded = await loadTasks(ctx.cwd);
+        const created = await createTask(ctx, loaded.tasks, ctx.cwd, null, null);
         if (created) {
           await refreshTaskUi(ctx, ctx.cwd);
         }
@@ -728,7 +741,7 @@ export default function (pi: ExtensionAPI) {
       // `/tasks doctor` - delegate protocol health checks to `ot doctor`.
       if (args?.trim() === "doctor") {
         try {
-          const result = await otDoctor<Finding>({ root: ctx.cwd });
+          const result = await otDoctor<Finding>({ cwd: ctx.cwd });
           const findings = result.findings;
           const report = formatFindingsReport(findings);
           if (findings.length === 0) {
@@ -754,8 +767,9 @@ export default function (pi: ExtensionAPI) {
         | { type: "unpublish"; task: Task };
 
       let reopen = true;
-      let tasks = await loadTasks(ctx.cwd);
-      let selectedId: string | null = await readSelectedId(ctx.cwd);
+      let loaded = await loadTasks(ctx.cwd);
+      let tasks = loaded.tasks;
+      let selectedId: string | null = await readSelectedId(loaded.files.local);
       while (reopen) {
         isOverlayActive = true;
         clearCompactWidget(ctx);
@@ -891,7 +905,7 @@ export default function (pi: ExtensionAPI) {
           if (!id) {
             throw new Error("Task has no :CUSTOM_ID:; cannot change status.");
           }
-          const result = await otSetStatus(id, nextStatus, { root: ctx.cwd });
+          const result = await otSetStatus(id, nextStatus, { cwd: ctx.cwd });
           pi.events.emit("tasks:status-changed", {
             id,
             status: result.status,
@@ -899,7 +913,7 @@ export default function (pi: ExtensionAPI) {
             summary: result.task.summary,
             closed: result.status === "DONE" || result.status === "CANCELLED",
           });
-          return await loadTasks(ctx.cwd);
+          return (await loadTasks(ctx.cwd)).tasks;
         };
 
         await ctx.ui.custom(
@@ -907,6 +921,7 @@ export default function (pi: ExtensionAPI) {
             const overlay = new TasksOverlay(
               tasks,
               ctx.cwd,
+              loaded.files.tasks,
               tui,
               theme,
               done,
@@ -960,7 +975,8 @@ export default function (pi: ExtensionAPI) {
           stale: Task,
           verb: string,
         ): Promise<Task | null> => {
-          tasks = await loadTasks(ctx.cwd);
+          loaded = await loadTasks(ctx.cwd);
+          tasks = loaded.tasks;
           const fresh = resolveStale(stale);
           if (!fresh) {
             ctx.ui.notify(
@@ -980,22 +996,26 @@ export default function (pi: ExtensionAPI) {
         } else if (request.type === "archive") {
           const fresh = await reloadAndResolve(request.task, "archive");
           if (fresh) await archiveTopLevel(ctx, tasks, fresh);
-          tasks = await loadTasks(ctx.cwd);
+          loaded = await loadTasks(ctx.cwd);
+          tasks = loaded.tasks;
           reopen = true;
         } else if (request.type === "publish") {
           const fresh = await reloadAndResolve(request.task, "publish");
           if (fresh) await publishTask(ctx, tasks, fresh);
-          tasks = await loadTasks(ctx.cwd);
+          loaded = await loadTasks(ctx.cwd);
+          tasks = loaded.tasks;
           reopen = true;
         } else if (request.type === "unpublish") {
           const fresh = await reloadAndResolve(request.task, "unpublish");
           if (fresh) await unpublishTask(ctx, tasks, fresh);
-          tasks = await loadTasks(ctx.cwd);
+          loaded = await loadTasks(ctx.cwd);
+          tasks = loaded.tasks;
           reopen = true;
         } else if (request.type === "changeRecord") {
           const fresh = await reloadAndResolve(request.task, "create change-record for");
           if (fresh) await handlePlanEdit(pi, ctx, fresh, "retrospective");
-          tasks = await loadTasks(ctx.cwd);
+          loaded = await loadTasks(ctx.cwd);
+          tasks = loaded.tasks;
           reopen = true;
         } else if (request.type === "summaryRefresh") {
           const fresh = await reloadAndResolve(request.task, "refresh summary for");
@@ -1017,14 +1037,16 @@ export default function (pi: ExtensionAPI) {
               { deliverAs: "followUp" },
             );
           }
-          tasks = await loadTasks(ctx.cwd);
+          loaded = await loadTasks(ctx.cwd);
+          tasks = loaded.tasks;
           reopen = false;
         } else if (request.type === "create") {
           // Reload first; then resolve parent/insertAfter against the fresh
           // tree. A stale parent/insertAfter ID that no longer resolves is a
           // soft failure: warn and fall back to a top-level append rather
           // than refuse the create outright.
-          tasks = await loadTasks(ctx.cwd);
+          loaded = await loadTasks(ctx.cwd);
+          tasks = loaded.tasks;
           const freshParent = resolveStale(request.parent);
           const freshInsertAfter = resolveStale(request.insertAfter);
           if (request.parent && !freshParent) {
@@ -1034,7 +1056,8 @@ export default function (pi: ExtensionAPI) {
             );
           }
           await createTask(ctx, tasks, ctx.cwd, freshParent, freshInsertAfter);
-          tasks = await loadTasks(ctx.cwd);
+          loaded = await loadTasks(ctx.cwd);
+          tasks = loaded.tasks;
           reopen = true;
         }
       }
@@ -1045,7 +1068,7 @@ export default function (pi: ExtensionAPI) {
       // Immediately sync the compact widget from the in-memory task state so
       // the widget reflects any selection changes made inside the overlay
       // without waiting for the async save to hit disk and the watcher to fire.
-      syncCompactWidget(ctx, tasks, selectedId);
+      syncCompactWidget(ctx, tasks, selectedId, loaded.files.tasks);
       // Also reload from disk to re-attach file watchers and converge with any
       // external edits that landed while the overlay was open.
       await refreshTaskUi(ctx, ctx.cwd);
@@ -1690,14 +1713,14 @@ async function createTask(
       afterId: afterId ?? undefined,
       section: !parentId && !afterId ? "Improvements" : undefined,
       sourcePath: !isLocal ? anchorSourcePath : undefined,
-    }, { root: cwd });
+    }, { cwd });
   } catch (err) {
     ctx.ui.notify(`Failed to save: ${(err as Error).message}`, "error");
     return null;
   }
 
   const fresh = await loadTasks(cwd);
-  const created = findTaskById(fresh, result.id);
+  const created = findTaskById(fresh.tasks, result.id);
   ctx.ui.notify(`Created: ${created?.summary ?? title.trim()}`, "info");
   return created;
 }
@@ -1752,7 +1775,7 @@ async function archiveTopLevel(
   }
 
   try {
-    await otArchiveTask(id, { root: ctx.cwd });
+    await otArchiveTask(id, { cwd: ctx.cwd });
   } catch (err) {
     ctx.ui.notify(`Archive failed: ${(err as Error).message}`, "error");
     return false;
@@ -1785,7 +1808,7 @@ async function publishTask(
     return;
   }
   try {
-    await otPublishTask(id, { root: ctx.cwd });
+    await otPublishTask(id, { cwd: ctx.cwd });
   } catch (err) {
     ctx.ui.notify(`Publish failed: ${(err as Error).message}`, "error");
     return;
@@ -1814,7 +1837,7 @@ async function unpublishTask(
     return;
   }
   try {
-    await otUnpublishTask(id, { root: ctx.cwd });
+    await otUnpublishTask(id, { cwd: ctx.cwd });
   } catch (err) {
     ctx.ui.notify(`Unpublish failed: ${(err as Error).message}`, "error");
     return;

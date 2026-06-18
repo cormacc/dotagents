@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
 /** Integration smoke tests for the tasks extension's `ot` CLI wrapper. */
 
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { clearOtBinaryCache, otList, resolveOtBinary, runOt } from "./ot.ts";
@@ -44,10 +45,31 @@ async function main(): Promise<void> {
   }
 
   const listed = await otList<{ sourcePath?: string; sourceContent?: string }>({ root: repoRoot });
+  ok(listed.root === repoRoot, "otList returns the resolved root", listed.root);
   ok(Array.isArray(listed.tree), "otList returns a task tree", listed);
   ok(!!listed.sources && Object.keys(listed.sources).length > 0, "otList returns shared source content", listed.sources);
   const firstWithSource = listed.tree.find((task) => task.sourcePath);
   ok(!firstWithSource?.sourceContent, "ot list omits duplicated per-task sourceContent", firstWithSource);
+
+  const temp = mkdtempSync(join(tmpdir(), "tasks-ext-ot-"));
+  try {
+    const higher = join(temp, "higher");
+    const inner = join(higher, "inner");
+    const nested = join(inner, "child");
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(join(higher, "TASKS.org"), "* TODO Higher\n:PROPERTIES:\n:CUSTOM_ID: 11111111-1111-4111-8111-111111111111\n:END:\n", "utf-8");
+    writeFileSync(join(inner, "TASKS.org"), "* TODO Inner\n:PROPERTIES:\n:CUSTOM_ID: 22222222-2222-4222-8222-222222222222\n:END:\n", "utf-8");
+    const nestedListed = await otList<{ summary: string }>({ cwd: nested });
+    ok(nestedListed.root === inner, "otList cwd traversal uses nearest ancestor TASKS.org", nestedListed.root);
+    ok(nestedListed.tree[0]?.summary === "Inner", "otList cwd traversal loads nearest ancestor tasks", nestedListed.tree);
+
+    const fallback = join(temp, "no-tasks", "child");
+    mkdirSync(fallback, { recursive: true });
+    const fallbackListed = await otList({ cwd: fallback });
+    ok(fallbackListed.root === fallback, "otList root falls back to cwd with no ancestor TASKS.org", fallbackListed.root);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
 
   console.log(`\n# ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

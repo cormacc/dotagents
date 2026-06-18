@@ -40,6 +40,7 @@ Field-level examples live in `scripts/docs/contract.md`.
 
 ```shell
 ot init
+ot root
 ot list --format json
 ot list --levels 0
 ot show <id-or-selected>
@@ -62,6 +63,27 @@ ot ready <id>
 ot handoff get|set|clear <id> [...]
 ot uuid --count 3
 ```
+
+## Root resolution
+
+`ot` resolves the project root from explicit `--root` first. Without `--root`, it starts at the process current working directory and walks parent directories to the nearest `TASKS.org`, falling back to the current directory when none exists. The walk continues to the filesystem root; the nearest ancestor may be outside `$HOME`.
+
+`ot root` prints the resolved absolute project root on one line. Only `--root` changes that value: `--tasks`, `--local`, and `--archive` override protocol file paths exposed by `ot list`, not project-root resolution.
+
+`ot list --format json` returns both the resolved `root` and absolute protocol `files`:
+
+```json
+{
+  "root": "/path/to/project",
+  "files": {
+    "tasks": "/path/to/project/TASKS.org",
+    "local": "/path/to/project/TASKS.local.org",
+    "archive": "/path/to/project/TASKS.archive.org"
+  }
+}
+```
+
+The pi tasks extension shares CLI root resolution by spawning `ot list` from the workspace cwd and using these returned `root` / `files` fields.
 
 ID-accepting commands accept full `:CUSTOM_ID:` values or any unique prefix of at least four characters. `ot list` and `ot scan` print the first 8 characters of each id as an `id` column; that prefix can be pasted back into any id-accepting command. Ambiguous values fail with `ambiguous-id` and include matching candidates.
 

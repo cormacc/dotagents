@@ -11,9 +11,9 @@ The durable protocol engine is the Babashka CLI `ot` under `skills/org-tasks/scr
 
 ## Locating task memory
 
-`TASKS.org` is anchored at the resolved project root. `ot` uses an explicit `--root` when provided; otherwise it checks the current working directory and then walks parent directories until it finds the nearest `TASKS.org`, falling back to the current directory when none exists. If the resolved root has no task memory, offer to bootstrap with `ot init`.
+`TASKS.org` is anchored at the resolved project root. `ot` uses an explicit `--root` when provided; otherwise it checks the current working directory and then walks parent directories until it finds the nearest `TASKS.org`, falling back to the current directory when none exists. The nearest ancestor can be outside `$HOME`; use a closer `TASKS.org` or explicit `--root` to override. If the resolved root has no task memory, offer to bootstrap with `ot init`.
 
-The same root rule applies to `TASKS.local.org`, `TASKS.archive.org`, `TASKS.setup.org`, and `#+IMPORT:` resolution. Tooling applies project-root sandboxing to prevent traversal/symlink escapes.
+The pi tasks extension shares this rule by spawning `ot list` from the workspace cwd and consuming the returned `root` / `files` fields. The same root rule applies to `TASKS.local.org`, `TASKS.archive.org`, `TASKS.setup.org`, and `#+IMPORT:` resolution. Tooling applies project-root sandboxing to prevent traversal/symlink escapes.
 
 `ot init` follows the same resolution. From a fresh directory with no ancestor `TASKS.org`, it scaffolds the protocol files in the current directory. From inside an existing project, it resolves to the ancestor and tops up any missing protocol files there rather than creating a nested second project. To start a sub-project's own task memory under an existing tree, pass `--root .` explicitly.
 
@@ -39,7 +39,8 @@ Common commands:
 
 ```shell
 ot init
-ot list --format json
+ot root
+ot list --format json  # result includes resolved root + files.{tasks,local,archive}
 ot show selected --format json
 ot show <id-or-selected>
 ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'

@@ -133,6 +133,14 @@
                       :count (count uuids)
                       :text/lines uuids})))
 
+(defn root-cmd
+  "Print the resolved project root."
+  [{:keys [opts]}]
+  (let [project-root (root/resolve-root opts)]
+    (out/emit-result opts
+                     {:root project-root
+                      :text/lines [project-root]})))
+
 ;; ── ot backfill ───────────────────────────────────────────────────
 
 (defn- task-missing-created? [task]
@@ -331,7 +339,7 @@
          prio (:summary row) tags)))
 
 (defn list-cmd [{:keys [opts]}]
-  (let [{:keys [tasks selected-id files]} (load-context opts)
+  (let [{:keys [project-root tasks selected-id files]} (load-context opts)
         sources    (task/collect-sources tasks)
         wire-tasks (mapv #(task/task->wire % nil {:include-content? false}) tasks)
         rows       (task/flatten-tree wire-tasks)
@@ -365,6 +373,7 @@
       {:tree wire-tasks
        :rows kept
        :selectedId selected-id
+       :root project-root
        :files files
        :sources sources
        :text/lines (cons "   STATUS    id        task"

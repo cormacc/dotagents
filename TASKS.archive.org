@@ -896,3 +896,23 @@ CLOSED: [2026-06-04 Thu 02:09]
 :END:
 #+IMPORT: [[plan:2026-06-04-evaluate-openspec-vs-org-plan-skill-for.org]]
 Evaluate OpenSpec (https://github.com/Fission-AI/OpenSpec) against the local org-plan skill. Identify conceptual similarities (spec/change-record-driven workflows, planning artefacts, lifecycle states) and concrete opportunities to improve or align org-plan. Researcher agent gathers OpenSpec's model, conventions, and CLI; synthesis maps them onto org-plan's change-record contract.
+
+** DONE Update org-tasks tooling to traverse above git root
+CLOSED: [2026-06-18 Thu 18:45]
+:PROPERTIES:
+:CUSTOM_ID: 49bc0c54-ae4a-4fa5-bda5-0cb93d5c07d7
+:CREATED: [2026-06-18 Thu 13:11]
+:STARTED: [2026-06-18 Thu 18:38]
+:ARCHIVED: [2026-06-18 Thu 18:45]
+:END:
+:LOGBOOK:
+- Created [2026-06-18 Thu 13:11]
+- State "STARTED" from "TODO" [2026-06-18 Thu 18:38]
+- State "DONE" from "STARTED" [2026-06-18 Thu 18:45]
+:END:
+#+IMPORT: [[plan:2026-06-18-update-org-tasks-tooling-to-traverse-abo.org]]
+When contributing to third-party projects - e.g. OSS PRs -- it would be nice to be able to track related tasks outside the repo without having to make additions to that repos gitignore etc.
+
+Update org-tasks skill and CLI tooling to traverse up the filesystem until it finds a TASKS.org root.
+
+Open question -- should we stop traversing at the user home folder or the filesystem root? Likely the former

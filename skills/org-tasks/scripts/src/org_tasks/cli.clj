@@ -156,6 +156,7 @@
   `ot help`. Entries are [name args description]; nested subcommands
   flatten with the dotted form used by the dispatch table."
   [["init"             ""                  "Bootstrap TASKS.{setup,local}.org + TASKS.org"]
+   ["root"             ""                  "Print the resolved project root"]
    ["list"             ""                  "List the task graph (--levels N caps depth, --format json|edn for machine output)"]
    ["show"             "<id|selected>"     "Show one task plus its plan summary"]
    ["create"           "<summary>"         "Create a new task under --section"]
@@ -218,6 +219,8 @@
 
 (def ^:private dispatch-table
   [{:cmds ["init"]               :fn commands/init-cmd
+    :spec (merge-spec {})}
+   {:cmds ["root"]               :fn commands/root-cmd
     :spec (merge-spec {})}
    {:cmds ["list"]               :fn commands/list-cmd
     :spec (merge-spec list-spec)}

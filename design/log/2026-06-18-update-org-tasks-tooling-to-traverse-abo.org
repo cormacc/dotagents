@@ -1,0 +1,328 @@
+#+TITLE: Update org-tasks tooling to traverse above git root
+#+DATE: 2026-06-18 Thu
+#+PARENT: [[archive:49bc0c54-ae4a-4fa5-bda5-0cb93d5c07d7][Update org-tasks tooling to traverse above git root]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Review
+#+SPEC_IMPACT: skills/org-tasks/SKILL.md
+#+SPEC_IMPACT: skills/org-tasks/references/ot-cli.md
+
+* Intent
+Let task memory be tracked from outside a third-party repo (e.g. OSS PRs) by
+resolving =TASKS.org= from any ancestor directory. The =ot= CLI already does
+this when spawned from the workspace cwd; the pi tasks extension currently
+forces =--root=cwd= and spawns =ot= without a workspace =cwd=. Bring the
+extension in line with the CLI by spawning =ot= from =ctx.cwd=, consuming the
+resolved =ot list= paths, and surfacing the resolved =TASKS.org= path in the UI.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* inline + SKILL/reference update
+
+The original task framing ("traverse above git root") is largely already
+satisfied in the CLI: =org_tasks/root.clj= walks =cwd= → ancestors to the
+nearest =TASKS.org=, with no git dependency, falling back to =cwd=. The real
+gaps are in the pi tasks extension: it uses =ctx.cwd= directly via
+=join(cwd, TASKS_FILE)=, forces =--root=cwd= on =ot= calls, and =runOt= spawns
+without =cwd= so CLI traversal would otherwise start from the pi process
+directory rather than the workspace.
+
+=ot list= JSON already emits =files= (absolute =tasks=/=local=/=archive= paths
+from =resolve-protocol-files=); we add explicit =root= and make extension code
+consume =root= / =files= instead of re-deriving paths from =cwd= or =root=.
+=ot root= is added as a convenience command, but the extension's hot path uses
+=ot list= so root + files are obtained in the existing round-trip.
+
+** Scope
+*** In scope
+- =ot list= JSON includes an explicit resolved =root= alongside existing
+  =files=.
+- Extension =RunOtOptions= gains =cwd=; =runOt= passes it to =spawn(..., {cwd})=.
+- Extension traversal-mode calls use =otList({cwd: ctx.cwd})= / related
+  ={cwd: ctx.cwd}= calls rather than ={root: ctx.cwd}=.
+- Extension threads =result.files= through direct file operations:
+  =readSelectedId= reads =files.local=; watchers include =files.tasks= and
+  =files.local=; UI prefers =files.tasks= for display.
+- =/tasks= overlay (=overlay.ts=) and compact status header (=index.ts=) show
+  the resolved =TASKS.org= path.
+- Standalone =ot root= command prints the resolved project root
+  (convenience/scripting); only =--root= overrides that root.
+- SKILL.md + =references/ot-cli.md= document shared resolution, the =ot list=
+  =root= field, =ot root=, and filesystem-root nearest-ancestor behaviour.
+- Tests: =ot list= =root= field; =runOt= =cwd= pass-through; extension nested-cwd
+  traversal; =ot root=.
+
+*** Out of scope
+- No traversal boundary (=$HOME= vs filesystem root): traversal continues to
+  filesystem root by operator decision.
+- No change to =ot init= resolution behaviour.
+- No git dependency in root resolution.
+- No TypeScript reimplementation of the ancestor walk.
+
+** Acceptance
+*** Core functionality
+- [ ] ISC-1: =ot list= runs from workspace =cwd= when called by the extension.
+- [ ] ISC-2: Extension uses =ot list= =root= / =files= as the resolved source of truth.
+- [ ] ISC-3: Extension falls back to =cwd= when no ancestor =TASKS.org= exists.
+- [ ] ISC-4: Extension traversal-mode calls do not pass =--root=<cwd>=.
+- [ ] ISC-5: =readSelectedId= reads the resolved =files.local= path.
+- [ ] ISC-6: Watchers include resolved =files.tasks=.
+- [ ] ISC-7: Watchers include resolved =files.local=.
+- [ ] ISC-12: =ot list= JSON output contains an explicit =root= field.
+- [ ] ISC-13: =ot root= prints the resolved absolute root for cwd.
+*** Edge cases
+- [ ] ISC-8: From a nested dir below =TASKS.org=, extension loads that ancestor's tasks.
+- [ ] ISC-9: Nearest =TASKS.org= wins over a higher ancestor's.
+- [ ] ISC-14: =ot root --root X= prints =X= absolutized.
+- [ ] ISC-15: =ot root --tasks X= does not change the resolved root.
+*** UI
+- [ ] ISC-10: =/tasks= overlay shows the resolved =TASKS.org= path.
+- [ ] ISC-11: Compact status header shows the resolved =TASKS.org= path.
+*** Docs
+- [ ] ISC-16: SKILL.md states extension and CLI share root resolution through =ot list=.
+- [ ] ISC-17: =references/ot-cli.md= documents =ot list= =root= / =files=.
+- [ ] ISC-18: =references/ot-cli.md= documents =ot root= override semantics.
+- [ ] ISC-19: Docs note nearest ancestor can be outside =$HOME=.
+*** Anti-criteria
+- [ ] ISC-A-1: Must not add a git dependency to root resolution.
+- [ ] ISC-A-2: Must not add a traversal boundary.
+- [ ] ISC-A-3: Must not change =ot init= resolution behaviour.
+- [ ] ISC-A-4: Must not re-implement the walk-up in TypeScript.
+- [ ] ISC-A-5: Must not reconstruct protocol paths with =join(root, ...)= when =files= has them.
+
+** Decisions
+- Chose Approach A (fold resolution into =ot list= output) :: the extension
+  calls =otList= every refresh and the result already carries absolute =files=.
+  Adding explicit =root= makes the list result self-contained; passing
+  ={cwd: ctx.cwd}= to =runOt= makes CLI traversal start from the workspace.
+  Rejected:
+  - Extension resolving via =ot root= per refresh: an extra spawn for data
+    =ot list= can carry inline.
+  - Re-implement walk-up in TypeScript: duplicates =root.clj=, risks drift.
+  - Drop =--root= without setting spawn cwd: traversal starts from the pi
+    process directory, not the workspace.
+- Add =ot root= as convenience only :: useful for humans/scripts; not used by
+  the extension hot path.
+- No traversal boundary :: filesystem-root traversal retained; a present
+  ancestor =TASKS.org= is intentional. Nearest ancestor wins even outside =$HOME=;
+  use a closer =TASKS.org= or explicit =--root= to override.
+
+** Risks
+- Wrong traversal start dir :: highest-risk implementation point. =runOt= must
+  accept =cwd= and pass it to =spawn=; extension calls must use ={cwd: ctx.cwd}=
+  instead of ={root: ctx.cwd}= for traversal-mode operations.
+- Watch breakage :: =collectWatchPaths= must watch =files.tasks= and
+  =files.local=, else live-reload dies when working from a nested dir.
+- Surprising ancestor capture :: nearest =TASKS.org= wins even outside =$HOME=.
+  This is accepted; docs should call out closer =TASKS.org= / explicit =--root=
+  as the override.
+
+* Plan
+** DONE [#A] Add resolved `root` to `ot list` JSON output :cli:
+CLOSED: [2026-06-18 Thu 18:44]
+:PROPERTIES:
+:CUSTOM_ID: 5daaf136-9c0d-4688-a0eb-42445bb8548a
+:CREATED: [2026-06-18 Thu 13:26]
+:STARTED: [2026-06-18 Thu 18:38]
+:END:
+:LOGBOOK:
+- Created [2026-06-18 Thu 13:26]
+- State "STARTED" from "TODO" [2026-06-18 Thu 18:38]
+- State "DONE" from "STARTED" [2026-06-18 Thu 18:44]
+:END:
+Acceptance criteria:
+- =ot list --format json= output includes an absolute =root= field (ISC-12).
+- =root= reflects ancestor traversal to nearest =TASKS.org=, else cwd (ISC-3).
+- Existing =files.tasks= remains absolute.
+- Existing =files.local= remains absolute.
+- Must not: add a git dependency (ISC-A-1).
+
+=load-context= returns =:project-root= and =:files=
+(=skills/org-tasks/scripts/src/org_tasks/commands.clj= L29-34). In =list-cmd=
+(L333+), destructure =project-root= and add =:root project-root= to the
+=out/emit-result= map next to existing =:files files=.
+
+** DONE [#A] Extension: spawn `ot` from the workspace cwd :extension:
+CLOSED: [2026-06-18 Thu 18:44]
+:PROPERTIES:
+:CUSTOM_ID: 21e33b89-c848-47cb-aab9-8908b7692201
+:CREATED: [2026-06-18 Thu 17:25]
+:END:
+:LOGBOOK:
+- Created [2026-06-18 Thu 17:25]
+- State "DONE" from "TODO" [2026-06-18 Thu 18:44]
+:END:
+Acceptance criteria:
+- =RunOtOptions= includes optional =cwd=.
+- =runOt= passes =opts.cwd= to =spawn(binary, argv, {cwd: opts.cwd, ...})= (ISC-1).
+- Traversal-mode =otList= calls use ={cwd: ctx.cwd}=.
+- Traversal-mode =otBackfill= calls use ={cwd: ctx.cwd}=.
+- Must not: replace ={root: ctx.cwd}= with no cwd.
+
+Verified source: =pi/extensions/tasks/ot.ts= L125-132 defines =RunOtOptions=;
+=runOt= L145 spawns with =stdio= only. =index.ts= L366-372 currently calls
+=otBackfill({root: cwd})= and =otList({root: cwd})=.
+
+** DONE [#A] Test `ot list` root field + traversal :cli:test:
+CLOSED: [2026-06-18 Thu 18:44]
+:PROPERTIES:
+:CUSTOM_ID: 909863b5-eb86-4e8d-a884-915934a78b23
+:CREATED: [2026-06-18 Thu 13:26]
+:END:
+:LOGBOOK:
+- Created [2026-06-18 Thu 13:26]
+- State "DONE" from "TODO" [2026-06-18 Thu 18:44]
+:END:
+:BLOCKED-BY: 5daaf136-9c0d-4688-a0eb-42445bb8548a
+Acceptance criteria:
+- =ot list= JSON =root= is the nearest-ancestor =TASKS.org= dir from a nested cwd (ISC-8).
+- Nearest =TASKS.org= wins over higher ancestor (ISC-9).
+- =root= falls back to cwd when no ancestor exists (ISC-3).
+
+Mirror temp-dir patterns in =skills/org-tasks/scripts/test/org_tasks/root_test.clj=
+(=with-temp-dir=, =nearest-tasks-org-wins-over-higher-ancestor=). Exercise
+=list-cmd= or command output so the assertion covers wired =:root=.
+
+** DONE [#A] Extension: consume resolved root/files from `ot list` :extension:
+CLOSED: [2026-06-18 Thu 18:44]
+:PROPERTIES:
+:CUSTOM_ID: f54c5b24-44b1-4efa-9c71-55f5a4e95443
+:CREATED: [2026-06-18 Thu 13:26]
+:END:
+:LOGBOOK:
+- Created [2026-06-18 Thu 13:26]
+- State "DONE" from "TODO" [2026-06-18 Thu 18:44]
+:END:
+:BLOCKED-BY: 5daaf136-9c0d-4688-a0eb-42445bb8548a
+:BLOCKED-BY+: 21e33b89-c848-47cb-aab9-8908b7692201
+Acceptance criteria:
+- Extension reads =result.root= from =otList= (ISC-2).
+- Extension reads =result.files.tasks= from =otList= (ISC-2).
+- Extension reads =result.files.local= from =otList= (ISC-5).
+- =readSelectedId= reads =files.local=, not =join(root, TASKS_LOCAL_FILE)= (ISC-5, ISC-A-5).
+- =collectWatchPaths= includes =files.tasks= (ISC-6).
+- =collectWatchPaths= includes =files.local= (ISC-7).
+- Traversal-mode calls do not pass ={root: cwd}= (ISC-4).
+- Must not: re-implement the walk-up in TypeScript (ISC-A-4).
+
+Add =root= to =OtListResult= (=pi/extensions/tasks/ot.ts= L222). =files= is
+already typed there. Widen =loadTasks= (=index.ts= L366) to return tasks plus
+=root= / =files=. Update =readSelectedId= (=index.ts= L172) to accept a local
+file path. Update =collectWatchPaths= (=index.ts= L149) to accept =files= (or
+=tasksPath= + =localPath=). Thread resolved values to =TasksOverlay= ctor
+(=overlay.ts= L106) and the =join(cwd, TASKS_FILE)= fallback at =index.ts= L1062.
+
+** DONE [#A] Add extension traversal tests :extension:test:
+CLOSED: [2026-06-18 Thu 18:44]
+:PROPERTIES:
+:CUSTOM_ID: 2c014319-7d71-4df8-bf4b-a2f12edddaa6
+:CREATED: [2026-06-18 Thu 17:25]
+:END:
+:LOGBOOK:
+- Created [2026-06-18 Thu 17:25]
+- State "DONE" from "TODO" [2026-06-18 Thu 18:44]
+:END:
+:BLOCKED-BY: f54c5b24-44b1-4efa-9c71-55f5a4e95443
+Acceptance criteria:
+- Nested workspace under ancestor =TASKS.org= loads ancestor tasks (ISC-8).
+- Test fails if =runOt= resolves from process cwd instead of =ctx.cwd= (ISC-1).
+- Traversal-mode calls do not include =--root <ctx.cwd>= in spawned argv (ISC-4).
+- Nearest =TASKS.org= wins over higher ancestor (ISC-9).
+
+Use extension test style in =pi/extensions/tasks/ot.test.ts= /
+=pi/extensions/tasks/index.ts= adjacent tests. Mock/spying target should observe
+=spawn= options =cwd= and argv separately so the regression catches both the P1
+failure mode and accidental =--root= reintroduction.
+
+** DONE [#B] Extension: show resolved TASKS.org path in UI :extension:ui:
+CLOSED: [2026-06-18 Thu 18:44]
+:PROPERTIES:
+:CUSTOM_ID: 0d535730-4356-4903-b4c6-50b100c112fc
+:CREATED: [2026-06-18 Thu 13:26]
+:END:
+:LOGBOOK:
+- Created [2026-06-18 Thu 13:26]
+- State "DONE" from "TODO" [2026-06-18 Thu 18:44]
+:END:
+:BLOCKED-BY: f54c5b24-44b1-4efa-9c71-55f5a4e95443
+Acceptance criteria:
+- =/tasks= overlay header shows =files.tasks= (ISC-10).
+- Compact status header shows =files.tasks= (ISC-11).
+- Must not: show raw cwd when it differs from =files.tasks=.
+
+Use =result.files.tasks= from task 4. Overlay: =overlay.ts= =render()= header
+region (L751-790; existing "Create TASKS.org in project root." at L781).
+Compact header: =index.ts= =headerLines= build (L451), dim/muted styling
+consistent with =formatPlanLabel= usage at L463.
+
+** DONE [#B] Docs: shared root resolution, files, and `ot root` :docs:
+CLOSED: [2026-06-18 Thu 18:44]
+:PROPERTIES:
+:CUSTOM_ID: 7fd04e06-9ec5-4b7f-8d06-c3ff9f7f7efe
+:CREATED: [2026-06-18 Thu 13:26]
+:END:
+:LOGBOOK:
+- Created [2026-06-18 Thu 13:26]
+- State "DONE" from "TODO" [2026-06-18 Thu 18:44]
+:END:
+:BLOCKED-BY: 5daaf136-9c0d-4688-a0eb-42445bb8548a
+:BLOCKED-BY+: aadfecde-e7d0-42b0-b7a1-fb296da758ea
+Acceptance criteria:
+- SKILL.md states extension and CLI share root resolution through =ot list= (ISC-16).
+- =references/ot-cli.md= documents =ot list= =root= (ISC-17).
+- =references/ot-cli.md= documents =ot list= =files= (ISC-17).
+- =references/ot-cli.md= documents =ot root= semantics (ISC-18).
+- Docs state nearest ancestor can be outside =$HOME= (ISC-19).
+- Must not: claim a traversal boundary exists (ISC-A-2).
+
+SKILL.md root-resolution paragraph is at =skills/org-tasks/SKILL.md= L14-18.
+Document the =root= / =files= fields in =skills/org-tasks/references/ot-cli.md=.
+For =ot root=, state only =--root= overrides the project root; =--tasks= /
+=--local= / =--archive= affect protocol file paths exposed by =ot list=, not
+project-root resolution.
+
+** DONE [#C] Add `ot root` convenience command :cli:
+CLOSED: [2026-06-18 Thu 18:44]
+:PROPERTIES:
+:CUSTOM_ID: aadfecde-e7d0-42b0-b7a1-fb296da758ea
+:CREATED: [2026-06-18 Thu 13:26]
+:END:
+:LOGBOOK:
+- Created [2026-06-18 Thu 13:26]
+- State "DONE" from "TODO" [2026-06-18 Thu 18:44]
+:END:
+Acceptance criteria:
+- =ot root= prints the resolved absolute root for cwd (ISC-13).
+- =ot root --root X= prints =X= absolutized (ISC-14).
+- =ot root --tasks X= does not change root resolution (ISC-15).
+- Falls back to cwd when no ancestor =TASKS.org= exists (ISC-3).
+- A test asserts nearest-ancestor behaviour.
+- A test asserts fallback behaviour.
+
+Thin =root-cmd= in =commands.clj= reusing =root/resolve-root= (verified:
+=org_tasks/root.clj= =resolve-root= only consults =:root= before ancestor walk).
+Register in =cli.clj= cmd table (~L233) + help entry (~L159). Print the plain
+absolute path on one line. Protocol file paths remain available via
+=ot list --format json= =files=.
+
+* Implementation
+- CLI: =ot list --format json= now includes =result.root=; =ot root= prints the resolved root and is registered in help/dispatch.
+- Extension: =runOt= accepts =cwd= and passes it to =spawn=; task loading/backfill/mutations use workspace =cwd= instead of forcing =--root= to the workspace.
+- Extension: =loadTasks= returns resolved =root= / =files= from =ot list=; selected-id reads and file watchers use =files.local= / =files.tasks=.
+- UI: compact widget and expanded overlay show the resolved =TASKS.org= path.
+- Tests: CLI coverage exercises =ot list= root, =ot root= traversal/fallback/override semantics; extension wrapper coverage exercises nested cwd traversal and fallback.
+- Docs: SKILL.md and =references/ot-cli.md= document shared root resolution, =ot list= =root= / =files=, =ot root=, and filesystem-root traversal.
+
+* Validation
+- =bb test= → 162 tests / 561 assertions, 0 failures.
+- =pi/extensions/tasks/test.sh= → all extension suites pass; =ot.test.ts= 11 passed / 0 failed.
+- =ot doctor --format json= completed successfully.
+- =ot list --format json= completed successfully.
+- =ot root= printed =/home/cormacc/dotfiles/agents=.
+
+* Open questions
+** DECIDED Stop traversal at $HOME or filesystem root?
+:PROPERTIES:
+:DECIDED: [2026-06-18 Thu 13:26]
+:END:
+Decision: filesystem root. A present ancestor =TASKS.org= is intentionally found,
+even outside =$HOME=. Use a closer =TASKS.org= or explicit =--root= to override;
+absence is harmless (falls back to cwd).
