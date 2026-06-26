@@ -15,7 +15,7 @@ Detailed skeletons, `#+STATUS:` values, `#+SPEC_IMPACT:` / `#+NO_SPEC_IMPACT:` e
 
 A change-record fuses two layers with different lifecycles in one file:
 
-- **Record layer** (`* Intent`, `* Summary`, `* Implementation`, `* Validation`) — durable memory. Accretes and survives past closure. Owned by this skill.
+- **Record layer** (`* Intent`, `* Summary`, `* Implementation`, optional `* Validation`) — durable memory. Accretes and survives past closure. Owned by this skill.
 - **Plan layer** (`* Plan` TODO tasks) — execution scaffolding. Churns through status/`:LOGBOOK:` writes and collapses at closure. Lifecycle owned by `org-tasks`.
 
 Keeping both in one file preserves a single `#+IMPORT:` resume surface. The cost is that status churn rewrites the file and plan-task bodies are transient — so the durable definition of done lives in the record layer (`** Acceptance`), never only in task bodies. At closure the plan layer collapses; see *Closure-time refresh and prune*.
@@ -27,7 +27,7 @@ The *splitting test*, *anti-criteria*, and *body discipline* blocks below are th
 ## Planning principles
 
 - Prefer plans that can be executed and verified task-by-task. A plan task is useful only when its acceptance criteria are observable.
-- Keep `* Summary` (condensed final/current state), `* Implementation` (detailed tactical ledger), and `* Validation` (evidence of checks run) distinct; they serve different readers.
+- Keep `* Summary` (condensed final/current state) and `* Implementation` (detailed tactical ledger) distinct; they serve different readers. Add `* Validation` only when there is non-obvious verification evidence to preserve (see its section).
 - Capture durable design decisions in `* Summary` or a promoted `* Context` so later sessions do not reverse-engineer them from `git log`.
 - Keep the change-record `.org` file canonical. If durable supporting resources are too verbose or awkward for the record body (research reports, screenshots, transcripts, generated audits), put them in an optional same-stem folder beside the record (for `design/log/YYYY-slug.org`, use `design/log/YYYY-slug/`) and link/summarise them from the record.
 - For non-trivial work with durable behavioural/API/protocol/domain impact, identify the living contract docs up front and record them with `#+SPEC_IMPACT:` before implementation (see *Spec-impact planning*).
@@ -64,7 +64,7 @@ Plans are written for engineers with project context. Optimise for signal densit
 
 `* Implementation` — tactical decisions, tricky details, maintenance context, and outcomes discovered while executing. If the canonical tactical record lives elsewhere (upstream PR, commit body, vendor doc, RFC), use a concise pointer instead of duplicating it.
 
-`* Validation` — commands run, test counts/outcomes, manual checks, smoke tests, or an explicit note that no automated checks were run.
+`* Validation` *(optional)* — non-obvious verification evidence worth preserving: manual/exploratory checks, smoke tests, a specific reproduction, performance numbers, or an explicit note that no automated checks were run (and why). Omit it when the only evidence would be that the standard automated suites pass — green unit/integration tests are an implicit pre-merge requirement, not record-worthy. Closure verifies `** Acceptance` and anti-criteria regardless of whether this section exists.
 
 ### Optional
 
@@ -95,7 +95,7 @@ Decision: retain `:BLOCKED-BY:`; no `:WAITS_FOR:` field.
 
 ### Section order
 
-`* Intent` → `* Summary` → optional `* User story` → optional `* Behavior` → optional `* Context` → `* Plan` → `* Implementation` → `* Validation` → optional `* Open questions`.
+`* Intent` → `* Summary` → optional `* User story` → optional `* Behavior` → optional `* Context` → `* Plan` → `* Implementation` → optional `* Validation` → optional `* Open questions`.
 
 Optional `* User story` / `* Behavior` follow `* Summary` so the Intent→Summary reconstruction surface stays adjacent for resume tools.
 
@@ -233,7 +233,7 @@ When drafting after work has started or completed:
 - Scaffold with `ot record create <id> --mode retrospective` so the tool returns the `git log` scope derived from `:STARTED:` and `CLOSED:`.
 - Mark already-completed work `DONE`, current work `STARTED`, and remaining follow-ups `TODO`.
 - Draft `* Summary` from the delivered/current state, not from wishful planning language.
-- Record key implementation outcomes in `* Implementation` and verification evidence in `* Validation`.
+- Record key implementation outcomes in `* Implementation`; add `* Validation` only for non-obvious verification evidence (not routine green suites).
 - Do not rewrite history to look planned in advance. Preserve LOGBOOK history emitted by tooling.
 
 ## Executing from a change-record
@@ -262,7 +262,7 @@ Before transitioning a top-level task to `DONE`, walk the record end-to-end with
 Refresh:
 
 1. Refresh `* Summary` so the effort line, `** Scope`, `** Shipped`, and `** Gotchas` reflect what actually landed. Reconcile `#+SPEC_IMPACT:` against actual `ADDED` / `MODIFIED` / `REMOVED` shipped bullets; include any discovered contract impact that was missed during planning.
-2. Refresh `* Validation` so the verification record matches what actually ran. Verify each item in `** Acceptance` (the consolidated ISC) and every anti-criterion, not just generic test-suite status.
+2. Verify each item in `** Acceptance` (the consolidated ISC) and every anti-criterion. If a `* Validation` section exists, refresh it to match what actually ran; drop it if it has decayed to just "the suites pass" (an implicit pre-merge requirement).
 3. Ensure every `#+SPEC_IMPACT:` path was reviewed and updated when needed, or explain why the planned impact did not materialise.
 4. Ensure newly discovered follow-up work exists as TODO tasks rather than buried prose.
 5. If Summary is missing, generate it from promoted Context, completed plan tasks, and Implementation notes before closing.

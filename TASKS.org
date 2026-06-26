@@ -265,3 +265,25 @@ Evidence:
 - pi/settings.json HEAD: packages[], theme, hideThinkingBlock, defaultThinkingLevel.
 - Session dirty diff: lastChangelogVersion="0.76.0", defaultProvider="anthropic", defaultModel="claude-opus-4-7".
 - Filter wrapper exists at ./install-git-filter.sh; was not active on this clone.
+
+** TODO ot doctor: make * Validation an optional change-record section :skill_org-tasks:skill_org-plan:
+:PROPERTIES:
+:CUSTOM_ID: 53704dac-1c28-47b7-b0b5-67af16a00814
+:CREATED: [2026-06-24 Wed 16:52]
+:END:
+:LOGBOOK:
+- Created [2026-06-24 Wed 16:52]
+:END:
+The org-plan skill now treats * Validation as optional: omit it when the only evidence would be that the standard automated suites pass (an implicit pre-merge requirement), and include it only for non-obvious verification evidence. The ot doctor validator still lists Validation as a required change-record section, so it now emits a missing-record-section warning against conformant records (observed closing the connect portal webserial change-record).
+
+Fix:
+- Drop "Validation" from required-record-sections in skills/org-tasks/scripts/src/org_tasks/doctor.clj:229-230 so the required set is ["Intent" "Summary" "Plan" "Implementation"].
+- Keep the :empty-validation-section check (doctor.clj:248-254) for when a Validation section IS present but blank.
+- Sweep docs/contract.md and skills/org-plan/references/change-record-format.md for any 'required: Validation' wording, and update any doctor tests asserting Validation is required.
+
+Origin:
+- session: connect-portal file-queue-refactor
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@git.nmd.ie:products/connect/portal @ file-queue-refactor
+- timestamp: [2026-06-24 Wed 16:51]
+- sender: human

@@ -4,9 +4,9 @@ A change-record is an org file linked from a task by `#+IMPORT:`. It starts as a
 
 ## Section order
 
-`* Intent` → `* Summary` → optional `* User story` → optional `* Behavior` → optional `* Context` → `* Plan` → `* Implementation` → `* Validation` → optional `* Open questions`.
+`* Intent` → `* Summary` → optional `* User story` → optional `* Behavior` → optional `* Context` → `* Plan` → `* Implementation` → optional `* Validation` → optional `* Open questions`.
 
-Required: `* Intent`, `* Summary`, `* Plan`, `* Implementation`, `* Validation`. Optional sections marked above. `* Summary` carries the durable record layer (including `** Acceptance`); `* Plan` is the transient plan layer (see org-plan *Two layers in one record*).
+Required: `* Intent`, `* Summary`, `* Plan`, `* Implementation`. Optional sections marked above. `* Summary` carries the durable record layer (including `** Acceptance`); `* Plan` is the transient plan layer (see org-plan *Two layers in one record*).
 
 ## Minimal skeleton
 
@@ -34,7 +34,7 @@ One compact paragraph describing current/final state.
 - Deferred item.
 
 ** Acceptance
-Consolidated ideal-state checklist (ISC) — the user-confirmed definition of done. Durable; `* Validation` is checked against it at closure.
+Consolidated ideal-state checklist (ISC) — the user-confirmed definition of done. Durable; verified item-by-item at closure (whether or not a `* Validation` section exists).
 *** Core functionality
 - [ ] Atomic, one-second yes/no criterion.
 *** Edge cases
@@ -78,9 +78,6 @@ See `src/services/AuthService.ts:15-40` for the existing pattern.
 * Implementation
 - Tactical outcomes, tricky details, and maintenance context discovered while executing.
 
-* Validation
-- Commands / tests / manual checks run, with outcomes.
-
 * Open questions
 ** OPEN Should we batch a follow-up review for related skills?
 ** DECIDED Should ready-task support add a new fan-in property?
@@ -91,6 +88,15 @@ Decision: retain `:BLOCKED-BY:`; no `:WAITS_FOR:` field.
 ```
 
 ## Optional sections — when to include
+
+### `* Validation`
+
+```org
+* Validation
+- Non-obvious verification evidence: manual/exploratory checks, smoke tests, a specific reproduction, performance numbers, or an explicit note that no automated checks were run (and why).
+```
+
+Include only when there is verification evidence worth preserving beyond the routine. Omit when the only thing to record is that the standard automated suites pass — green unit/integration tests are an implicit pre-merge requirement, not record-worthy. `** Acceptance` is verified at closure whether or not this section exists.
 
 ### `* User story`
 

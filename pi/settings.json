@@ -6,7 +6,7 @@
     "npm:pi-mcp-adapter",
     "npm:pi-tldr",
     "git:github.com/cormacc/lemonade-pi-plugin@qwen-thinking",
-    "git:github.com/cormacc/pi-subagents@feat/herdr-backend",
+    "git:github.com/edxeth/pi-subagents",
     "npm:@xl0/pi-lovely-dev-tools",
     "npm:@ogulcancelik/pi-herdr",
     "npm:@ogulcancelik/pi-ghost",
