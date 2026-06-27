@@ -11,6 +11,14 @@ This skill owns planning methodology and change-record section conventions. `org
 
 Detailed skeletons, `#+STATUS:` values, `#+SPEC_IMPACT:` / `#+NO_SPEC_IMPACT:` examples, and subtask-migration examples live in `references/change-record-format.md`.
 
+## Relationship to a harness "plan mode"
+
+This skill is the planning system; a harness plan mode (for example dirge's plan phase, `--prompt plan`, or loop mode) is at most optional scratch space. They are orthogonal — a harness plan mode never reads or writes `TASKS.org`, `design/log/`, `.org` records, or runs `ot` — so the only real hazard is confusing which "plan" is canonical. Rules:
+
+- The canonical plan is always the org change-record created via `ot record create <task-id>`, not a harness's in-session plan text or any `PLAN.md` / `LOOP_PLAN.md` file.
+- A harness plan mode produces ephemeral session text or a fixed-name Markdown file; its format and path are not configurable, so it cannot emit or maintain the change-record format. Do not try to fuse the two artifacts.
+- If a harness plan phase is used as a read-only exploration guardrail, transcribe its output into the `.org` change-record once editing is re-enabled, then discard any `PLAN.md` / `LOOP_PLAN.md` it left behind (these are gitignored).
+
 ## Two layers in one record
 
 A change-record fuses two layers with different lifecycles in one file:
@@ -129,7 +137,7 @@ Pick one value per dimension. Calibrates ISC tightness, plan-task acceptance cri
 
 For MVP / production / critical work that can change durable behaviour, public APIs, protocols, domain models, or agent/operator workflow, identify impacted living contracts before drafting the executable plan.
 
-1. Prefer a `scout` when the question is "which in-repo docs/specs/schemas does this codebase change touch?" Use a `researcher` when the trigger is external knowledge or a new external capability.
+1. Prefer a codebase-scout subagent when the question is "which in-repo docs/specs/schemas does this codebase change touch?" Use a research subagent when the trigger is external knowledge or a new external capability.
 2. Record expected contract impact as repeated repo-relative keywords near the top of the record:
 
    ```org

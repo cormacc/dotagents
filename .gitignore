@@ -25,6 +25,10 @@ Thumbs.db
 # Local agent state
 .agents/tmp/
 TASKS.local.org
+# Harness plan-mode scratch (canonical plans live in design/log/*.org)
+PLAN.md
+LOOP_PLAN.md
 .clj-kondo
 .lsp
 .cpcache
+.dirge
