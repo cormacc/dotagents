@@ -16,8 +16,5 @@
     "npm:@ogulcancelik/pi-session-recall",
     "npm:pi-web-access"
   ],
-  "theme": "dark",
-  "lastChangelogVersion": "0.80.2",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.5"
+  "theme": "dark"
 }
