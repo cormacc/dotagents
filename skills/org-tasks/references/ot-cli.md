@@ -1,24 +1,18 @@
 # `ot` CLI reference
 
-`ot` is the Babashka org-tasks protocol engine under `skills/org-tasks/scripts/`. It owns durable graph reads and writes: parsing, serialization, setupfile/link resolution, lifecycle writes, archive mechanics, selection, linked issues, blockers, handoff notes, section reads, summary scans, and change-record scaffolding.
+`ot` is the Babashka org-tasks protocol engine under `skills/org-tasks/scripts/`. It owns durable graph reads and writes: parsing, serialization, setupfile/link resolution, lifecycle writes, archive mechanics, selection, linked issues, blockers, handoff notes, section reads, summary scans, change-record scaffolding, and a standalone terminal task browser.
 
-The pi tasks extension is a UI/event wrapper around `ot`: overlay rendering, keybindings, prompts, confirmations, editor/browser opening, file watching, compact widgets, and agent follow-up prompts stay in pi; durable protocol mutations go through `ot`.
+Bare `ot` launches the standalone TUI when an interactive terminal is available. `ot --help`, `ot -h`, and `ot help` render the command index; `ot <command> --help` (or `ot help <command>`) renders that command's specific options plus the globals. Bare non-TTY `ot` and bare `ot --format json` emit the persisted selected-task JSON envelope without launching the TUI.
+
+The pi tasks extension remains a pi-specific UI/event wrapper around `ot`: overlay rendering, keybindings, prompts, confirmations, file watching, compact widgets, and agent follow-up prompts stay in pi; durable protocol mutations go through `ot`.
 
 ## Install
-
-Third-party harnesses:
 
 ```shell
 bbin install io.github.cormacc/dotagents --as ot --latest-sha
 ```
 
-In-tree development:
-
-```shell
-bbin install ./. --local/root . --as ot
-./skills/org-tasks/scripts/ot --help
-bb run ot --help
-```
+In-tree development options and testing: [`../scripts/README.md`](../scripts/README.md).
 
 ## Machine output
 
@@ -39,13 +33,22 @@ Field-level examples live in `scripts/docs/contract.md`.
 ## Common commands
 
 ```shell
+ot                    # TUI on TTY; selected JSON on non-TTY
+ot --format json     # selected-task envelope, non-interactive
 ot init
 ot root
 ot list --format json
 ot list --levels 0
 ot show <id-or-selected>
 ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'
+ot create "New sibling" --relative-to <id> --as sibling   # after <id>, same level
+ot create "New child"   --relative-to <id> --as child     # nested under <id>
+                                                          # (derives local/source from the anchor)
 ot status <id> STARTED
+ot status <id> --cycle forward   # or: --cycle back (order owned by ot)
+ot priority <id> B               # set the priority cookie (A|B|C|D)
+ot priority <id> --cycle forward # unset → A → B → C → D → unset; back reverses (unset → D)
+ot priority <id> --clear
 ot select <id>        # or: ot select --clear
 ot archive <id> --yes
 ot publish <id>       # TASKS.local.org -> TASKS.org
@@ -63,6 +66,35 @@ ot ready <id>
 ot handoff get|set|clear <id> [...]
 ot uuid --count 3
 ```
+
+## Interactive TUI
+
+Bare `ot` on an interactive terminal launches the standalone task browser. It is harness-agnostic: any human or agent with a TTY can use it — no pi extension required. The pi tasks extension is a pi-specific overlay with the same key map; both surfaces dispatch every mutation through the same `ot` commands (`status --cycle`, `priority --cycle`, `select`, `archive`, …), so semantics never diverge.
+
+Layout: task tree (status, id prefix, priority, summary) plus a details pane. The details pane renders beside the tree on landscape terminals and stacks below it when the terminal is narrow (< 80 columns) or portrait (width < height × 2, correcting for the ~1:2 cell aspect). Colours are shared with `ot list` via `styling/palette-256`.
+
+Key map:
+
+| Keys | Action |
+|------|--------|
+| `↑↓` / `j k` | move cursor |
+| `←→` / `h l` | cycle status back/forward |
+| `⇧←` `⇧→` | cycle priority (unset→A forward, unset→D back) |
+| `Enter` / `Space` / `Tab` | collapse/expand subtree |
+| `s` | select / deselect task |
+| `n` / `N` | new sibling / child task |
+| `e` / `p` | edit task / edit linked plan |
+| `A` | archive (closed top-level tasks) |
+| `P` / `U` | publish / unpublish |
+| `J` | open linked-issue URLs |
+| `Ctrl-d` / `Ctrl-u` | scroll details pane |
+| `Esc` / `Alt-t` | quit |
+
+`n`/`N` mirror the pi overlay: with a cursor they create a sibling/child of the current task (inheriting its file/`--local` routing); with an empty list they create a top-level task under the default section.
+
+Editor launches (`e`, and `p` on an existing plan) go through a configurable resolver: the `--editor` option, then `OT_EDITOR`, then `EDITOR`, defaulting to `emacsclient`. `emacsclient`/Vim use `+LINE file`; VS Code (`code`/`vscodium`/`cursor`) uses `--goto file:line`. For the Emacs editor the TUI ensures a server is reachable, starting `emacs --daemon` if needed (override binaries via `EMACSCLIENT_BINARY` / `EMACS_BINARY`).
+
+Exit contract: the TUI reserves stdout for a final org-tasks/v1 selected-task envelope, so scripts can run it interactively and still consume machine output afterwards. Exiting without pressing `s` returns the persisted selection, not the cursor row.
 
 ## Root resolution
 
@@ -89,7 +121,7 @@ ID-accepting commands accept full `:CUSTOM_ID:` values or any unique prefix of a
 
 ## Change-record scaffolding
 
-`ot record create <id>` creates the plan file when missing, attaches `#+IMPORT:` to the parent task, and migrates existing child task trees from the parent into the new record's `* Plan` section. Existing record files are not modified for migration.
+`ot record create <id>` creates the plan file when missing, attaches `#+IMPORT:` to the parent task, and migrates existing child task trees from the parent into the new record's `* Plan` section. Existing record files are not modified for migration. The scaffold emits the org-plan required sections (`* Intent`, `* Summary`, `* Plan`, `* Implementation`); optional sections such as `* Validation` are added by the author only when they earn their place. `ot doctor` checks spec-impact-aware records for the required four and warns on a present-but-empty `* Validation`.
 
 `--mode retrospective` also computes the `git log` scope from `:STARTED:`/`CLOSED:` and returns it in the JSON result for the prompting layer to use.
 

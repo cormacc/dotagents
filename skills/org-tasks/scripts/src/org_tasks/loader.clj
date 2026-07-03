@@ -8,18 +8,33 @@
   Public surface:
 
     load-graph             :: project-root files -> {:tasks, :selected-id, ..}
+    safe-slurp             :: path -> content-or-nil
+    atomic-write           :: path content -> nil
     save-source-roots      :: project-root tasks-by-source-path -> nil
     write-selected-id      :: project-root local-path id-or-nil -> nil"
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
             [org-tasks.effective :as effective]
+            [org-tasks.links :as links]
             [org-tasks.parser :as parser]
-            [org-tasks.paths :as paths]))
+            [org-tasks.tree :as tree]))
 
 ;; ── Reading ────────────────────────────────────────────────────────
 
-(defn- safe-slurp [path]
-  (try (slurp path) (catch Throwable _ nil)))
+(defn safe-slurp
+  "Read `path`, returning nil when it does not exist and throwing a
+  structured `unreadable` error on any other read failure (permissions,
+  I/O). Distinguishing \"missing\" from \"broken\" matters for callers
+  such as `ot archive` that must not treat an unreadable
+  `TASKS.archive.org` as an empty one and silently regenerate its
+  preamble."
+  [path]
+  (if-not (fs/exists? path)
+    nil
+    (try (slurp path)
+         (catch Throwable t
+           (throw (ex-info (str "Cannot read " path ": " (ex-message t))
+                            {:code :unreadable :file (str path)} t))))))
 
 (defn- load-org [project-root file-path]
   (when-let [content (safe-slurp file-path)]
@@ -40,12 +55,7 @@
   "Resolve a `#+IMPORT:` value into an absolute path under `project-root`,
   or nil when the target escapes."
   [project-root source-path effective-content raw]
-  (when (and raw (seq raw))
-    (let [expanded (parser/expand-org-link-target raw effective-content)
-          base-dir (if (:from-project-root expanded)
-                     project-root
-                     (str (fs/parent source-path)))]
-      (paths/resolve-project-path project-root base-dir (:target expanded)))))
+  (links/resolve-link-target project-root source-path effective-content raw))
 
 (defn- load-imports
   "Append tasks from file-level `#+IMPORT:` declarations onto `acc`."
@@ -74,11 +84,7 @@
                          #(attach-import-children project-root % visited))]
         (if-not (:import-path task)
           task
-          (let [src-path  (or (:source-path task) project-root)
-                effective (or (:effective-source-content task)
-                              (:source-content task) "")
-                abs       (resolve-import project-root src-path effective
-                                          (:import-path task))]
+          (let [abs (links/resolve-task-link-target project-root task (:import-path task))]
             (cond
               (nil? abs)
               (assoc task :import-error "Import path resolves outside project root")
@@ -148,10 +154,27 @@
 
 ;; ── Writing ────────────────────────────────────────────────────────
 
-(defn- atomic-write [^String path ^String content]
-  (let [tmp (str path ".tmp")]
+(defn atomic-write [^String path ^String content]
+  ;; Unique per-call temp name: two concurrent `ot` invocations writing
+  ;; the same target must not collide on a shared `path.tmp`.
+  (let [tmp (str path ".tmp-" (System/nanoTime))]
     (spit tmp content)
     (fs/move tmp path {:replace-existing true})))
+
+(defn conflict!
+  "Throw a structured `conflict` error: `path`'s on-disk content no
+  longer matches the snapshot a mutator loaded it from."
+  [path]
+  (throw (ex-info (str "File changed on disk since it was loaded: " path)
+                  {:code :conflict :file (str path)})))
+
+(defn assert-unchanged!
+  "Throw `conflict!` when `path`'s current on-disk content differs from
+  `baseline` (the content read at load time; nil means the file was
+  absent at load)."
+  [path baseline]
+  (when (not= (safe-slurp path) baseline)
+    (conflict! path)))
 
 (defn write-selected-id
   "Atomic write of `#+SELECTED:` to `local-path`. Pass nil to deselect;
@@ -183,19 +206,12 @@
   `:line-number` so `serialize-tasks-preserving-file` can match
   supplied roots against parsed originals."
   [tasks]
-  (let [out (volatile! {})]
-    (letfn [(walk [ts]
-              (doseq [t ts]
-                (when (and (:file-root? t) (:source-path t))
-                  (vswap! out update (:source-path t) (fnil conj []) t))
-                (walk (:children t))
-                (when (:import-children t)
-                  (walk (:import-children t)))))]
-      (walk tasks))
-    (into {}
-          (map (fn [[src roots]]
-                 [src (vec (sort-by #(or (:line-number %) 0) roots))]))
-          @out)))
+  (->> (tree/all-tasks tasks)
+       (filter #(and (:file-root? %) (:source-path %)))
+       (group-by :source-path)
+       (into {}
+             (map (fn [[src roots]]
+                    [src (vec (sort-by #(or (:line-number %) 0) roots))])))))
 
 (defn save-source-roots
   "Persist a mutated task graph back to disk.
@@ -211,13 +227,30 @@
   This is what makes mutations to tasks living inside
   `#+IMPORT:`-linked plan files (attached to the in-memory graph as
   `:import-children`) persist back to the plan file, not just to
-  TASKS.org."
-  [^String project-root tasks]
-  (let [by-file (collect-file-roots-by-source tasks)]
-    (doseq [[src roots] by-file]
-      (let [original (or (some :source-content roots)
-                         (safe-slurp src)
-                         "")
-            updated  (parser/serialize-tasks-preserving-file original roots)]
-        (when (not= updated original)
-          (atomic-write src updated))))))
+  TASKS.org.
+
+  Throws a `conflict` ex-info (see [[assert-unchanged!]]) when a
+  file's current on-disk bytes no longer match the load-time snapshot
+  it is about to be rewritten from. Optional `known-baselines` (path
+  -> load-time content-or-nil) supplies baselines for files that must
+  be visited even when they end up with zero current roots."
+  ([^String project-root tasks] (save-source-roots project-root tasks {}))
+  ([^String project-root tasks known-baselines]
+   ;; `known-baselines` (path -> load-time content-or-nil) forces a file
+   ;; to be visited even when it ends up with zero current roots —
+   ;; e.g. `ot archive`/`ot publish`/`ot unpublish` moving a file's only
+   ;; task elsewhere. Without this, a file whose last root task departs
+   ;; would have no entry in `by-file` and would never be rewritten to
+   ;; drop the stale heading.
+   (let [by-file (collect-file-roots-by-source tasks)
+         all-paths (into (set (keys by-file)) (keys known-baselines))]
+     (doseq [src all-paths]
+       (let [roots (get by-file src [])
+             baseline (if (contains? known-baselines src)
+                        (get known-baselines src)
+                        (some :source-content roots))
+             original (or baseline "")
+             updated  (parser/serialize-tasks-preserving-file original roots)]
+         (when (not= updated original)
+           (assert-unchanged! src baseline)
+           (atomic-write src updated)))))))

@@ -5,7 +5,15 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { clearOtBinaryCache, otList, resolveOtBinary, runOt } from "./ot.ts";
+import {
+  clearOtBinaryCache,
+  otCreateTask,
+  otCyclePriority,
+  otCycleStatus,
+  otList,
+  resolveOtBinary,
+  runOt,
+} from "./ot.ts";
 
 let passed = 0;
 let failed = 0;
@@ -69,6 +77,74 @@ async function main(): Promise<void> {
     ok(fallbackListed.root === fallback, "otList root falls back to cwd with no ancestor TASKS.org", fallbackListed.root);
   } finally {
     rmSync(temp, { recursive: true, force: true });
+  }
+
+  // ── status --cycle + create --relative-to wrappers ──────────────────
+  const cdir = mkdtempSync(join(tmpdir(), "tasks-ext-otc-"));
+  try {
+    const parentId = "33333333-3333-4333-8333-333333333333";
+    const childId = "44444444-4444-4444-8444-444444444444";
+    writeFileSync(
+      join(cdir, "TASKS.org"),
+      [
+        "#+TITLE: Tasks",
+        "",
+        "* Improvements",
+        "",
+        "** TODO Parent",
+        ":PROPERTIES:",
+        `:CUSTOM_ID: ${parentId}`,
+        ":END:",
+        "*** TODO Child",
+        ":PROPERTIES:",
+        `:CUSTOM_ID: ${childId}`,
+        ":END:",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+    writeFileSync(join(cdir, "TASKS.local.org"), "#+SELECTED:\n", "utf-8");
+
+    const cycled = await otCycleStatus(parentId, "forward", { cwd: cdir });
+    ok(cycled.prevStatus === "TODO" && cycled.status === "STARTED",
+       "otCycleStatus forward TODO -> STARTED", cycled);
+    const back = await otCycleStatus(parentId, "back", { cwd: cdir });
+    ok(back.status === "TODO", "otCycleStatus back STARTED -> TODO", back);
+
+    const prioFwd = await otCyclePriority(parentId, "forward", { cwd: cdir });
+    ok(prioFwd.prevPriority === null && prioFwd.priority === "A",
+       "otCyclePriority forward from unset -> A", prioFwd);
+    const prioBack = await otCyclePriority(parentId, "back", { cwd: cdir });
+    ok(prioBack.priority === null,
+       "otCyclePriority back A -> unset", prioBack);
+    const prioLow = await otCyclePriority(parentId, "back", { cwd: cdir });
+    ok(prioLow.priority === "D",
+       "otCyclePriority back from unset -> D (lowest)", prioLow);
+
+    const sib = await otCreateTask(
+      { summary: "Rel sibling", relativeTo: childId, as: "sibling" },
+      { cwd: cdir },
+    );
+    ok(!!sib.id, "otCreateTask --relative-to sibling returns an id", sib);
+    const kid = await otCreateTask(
+      { summary: "Rel child", relativeTo: parentId, as: "child" },
+      { cwd: cdir },
+    );
+    const tree = await otList<{ summary: string; level: number }>({ cwd: cdir });
+    const rows: Array<{ summary: string; level: number }> = [];
+    const walk = (ts: Array<{ summary: string; level: number; children?: unknown[] }>) => {
+      for (const t of ts) {
+        rows.push({ summary: t.summary, level: t.level });
+        if (Array.isArray(t.children)) walk(t.children as typeof ts);
+      }
+    };
+    walk(tree.tree as Array<{ summary: string; level: number; children?: unknown[] }>);
+    const sibRow = rows.find((r) => r.summary === "Rel sibling");
+    const kidRow = rows.find((r) => r.summary === "Rel child");
+    ok(sibRow?.level === 3, "sibling lands at the anchor's level (3)", sibRow);
+    ok(kidRow?.level === 3 && !!kid.id, "child nests under the parent (level 3)", kidRow);
+  } finally {
+    rmSync(cdir, { recursive: true, force: true });
   }
 
   console.log(`\n# ${passed} passed, ${failed} failed`);

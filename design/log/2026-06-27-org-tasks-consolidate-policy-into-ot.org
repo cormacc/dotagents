@@ -1,0 +1,63 @@
+#+TITLE: Consolidate status-cycle, create-placement, and linked-issue resolution into ot
+#+DATE: 2026-06-27 Sat
+#+PARENT: [[archive:5606c9a0-af2a-4e0c-84bd-e961b5c1738d][Add org-tasks TUI]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC_IMPACT: skills/org-tasks/scripts/docs/boundary.md
+#+SPEC_IMPACT: skills/org-tasks/scripts/README.md
+#+SPEC_IMPACT: skills/org-tasks/references/ot-cli.md
+
+* Intent
+Remove policy logic duplicated between the pi tasks overlay (TypeScript) and the
+standalone TUI (Clojure) by making ~ot~ the sole owner. Both UIs become thin
+clients that send intent (direction / anchor+relation) and render the result.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* boundary + README + ot-cli
+
+** Scope
+*** In scope
+- (1) Status cycle order: add ~ot status --cycle forward|back~; remove the order
+  constant from both UIs.
+- (2) Create placement: add ~ot create --relative-to <id> --as sibling|child~;
+  ~ot~ derives parent/after/local/source from the anchor. Remove the placement
+  maths from both UIs.
+- (3) Linked-issue URL resolution: overlay consumes ~ot list~'s resolved
+  ~linkedIssues~ (rawToken/label/url) instead of re-resolving via the TS
+  ~getLinkedIssues~.
+
+*** Out of scope
+- New keybindings; the key map is unchanged.
+- Consolidating editor/Emacs launch (different runtimes; left as-is).
+- Browser/URL opening (OS launch, not domain logic).
+
+** Acceptance
+- [ ] ISC-1: ~ot status <id> --cycle forward|back~ returns the resolved transition; order lives in ~lifecycle/status-cycle~.
+- [ ] ISC-2: ~ot create --relative-to <id> --as sibling~ inserts after the anchor at its level; ~--as child~ nests under it; both inherit local/source.
+- [ ] ISC-3: ~ot create --relative-to~ with no ~--as~ defaults to sibling.
+- [ ] ISC-4: The TUI and pi overlay no longer encode the status cycle order or create-placement maths.
+- [ ] ISC-5: The pi overlay renders/open linked issues from ~ot list~'s wire data, not the TS resolver.
+- [ ] ISC-6: Boundary, README, and ot-cli docs reflect the new ownership.
+- [ ] ISC-A-1: Must not: change the selected-task JSON schema or add new keybindings.
+
+** Decisions
+- Chose to put the cycle order in ~lifecycle/status-cycle~ (not ~commands~) :: It sits beside the rest of the lifecycle semantics and is reused by ~ot status --cycle~.
+- Chose ~--relative-to/--as~ over passing resolved parent/after from the UIs :: Anchor + relation is the real intent; ~ot~ already parses the anchor, so it can derive placement (and the local/source routing) in one place.
+- Chose to pass only ~--after~ for siblings (not ~--parent~ + ~--after~) :: ~insert-task-into-file~ treats a set ~parent-id~ as "make it a child" (level = inc parent level); a sibling must derive its level from the anchor via ~--after~ alone. This also fixes a latent bug in the prior TUI ~create-opts~ that set both for nested siblings.
+- Chose to delete the overlay's in-process status fallback (~applyStatusTransition~ + ~persistChange~/~save~) :: It duplicated lifecycle + serialization that ~ot~ owns and was dead in the live pi path.
+
+** Shipped
+- ~ot~: ~lifecycle/status-cycle~ + ~cycle-status~; ~status-cmd~ ~--cycle~; ~create-cmd~ ~--relative-to~/~--as~ with anchor-derived placement; CLI specs.
+- TUI: removed ~statuses~/~cycle-status-value~ and the ~create-opts~ placement maths; ~:task/cycle-status~ sends ~:cycle~, ~create-opts~ sends ~:relative-to~/~:as~.
+- pi extension: ~otCycleStatus~ + ~otCreateTask~ ~relativeTo~/~as~ wrappers; overlay ~cycleStatus~/~createNewTask~ send direction/anchor+relation; ~onStatusChanged~ \u2192 ~onCycleStatus~; removed ~STATUS_CYCLE~ and the in-process write path; ~linkedIssuesFor~ + compact widget consume ~ot~'s ~linkedIssues~.
+
+* Implementation
+- ~lifecycle.clj~: ~status-cycle~ vector + ~cycle-status~; ~commands.clj~: ~status-cmd~ resolves the target first then cycles, ~apply-status-cmd~ helper; ~create-cmd~ derives parent/after/local/file from ~--relative-to~.
+- ~tui.clj~: ~:task/cycle-status~ \u2192 ~{:cycle :forward|:back}~; ~create-opts~ \u2192 ~{:relative-to id :as ...}~.
+- ~ot.ts~: ~otCycleStatus~; ~OtCreateTaskArgs.relativeTo/as~ + argv. ~overlay.ts~: ~onCycleStatus~ callback, simplified ~cycleStatus~/~createNewTask~, ~linkedIssuesFor~ uses ~task.linkedIssues~, removed ~STATUS_CYCLE~/~persistChange~/~save~. ~index.ts~: ~onCycleStatus~ via ~otCycleStatus~, ~createTask(anchor, relation)~ via ~--relative-to/--as~, compact widget uses ~t.linkedIssues~.
+
+* Validation
+- ~bb run test~ => 184 tests, 645 assertions; only 5 pre-existing unrelated failures (linked-plan source-root resolution).
+- New Clojure tests: ~status-cycle-moves-through-canonical-order~, ~status-requires-status-or-cycle~, ~create-relative-to-sibling-inserts-at-anchor-level~, ~create-relative-to-child-nests-under-anchor~; updated TUI tests for the delegated cycle/placement.
+- ~pi/extensions/tasks/test.sh~ (tsx): added ~ot.test.ts~ smoke tests for ~otCycleStatus~ forward/back and ~otCreateTask --relative-to~ sibling/child (level checks). 2 pre-existing cwd-traversal failures remain, unrelated.
+- ~esbuild~ syntax check on ot.ts/overlay.ts/index.ts passes.

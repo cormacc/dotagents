@@ -45,7 +45,7 @@ Optional description text.
 ```
 
 - States: `TODO`, `STARTED`, `WAITING`, `DONE`, `CANCELLED`.
-- Priorities: `[#A]` critical, `[#B]` high, `[#C]` medium, `[#D]` low.
+- Priorities: `[#A]` critical, `[#B]` high, `[#C]` medium, `[#D]` low. `ot priority` is the canonical writer (explicit set, `--cycle forward|back` through unset→A→B→C→D→unset, `--clear`); priority changes do not write LOGBOOK entries.
 - Tags are semantic categories; there are no reserved operational tags.
 - Sibling task subtrees are separated by one blank line for readability.
 - `:CUSTOM_ID:` is a UUID v4 and required on every task/subtask. Use `ot create` or `ot uuid`; never invent sequential/shared-prefix IDs.

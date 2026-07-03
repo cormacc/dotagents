@@ -16,6 +16,9 @@ namespace under `skills/org-tasks/scripts/test/`. Golden fixtures live under
 | `section.test.ts`                | `org-tasks.section-test`                       | `ot section`: source-block shielding, case-insensitive heading match.       |
 | `scan.test.ts`                   | `org-tasks.scan-test`                          | `ot scan`: scope, tags, body cap, `hasContext`, plan-task descent.          |
 | `insert.test.ts`                 | `org-tasks.insert-test`                        | `ot create`: priority, tags, drawer ordering, idempotency, splice.          |
+| expanded overlay model tests     | `org-tasks.tui-test`                           | Standalone TUI: selected-path expansion, movement, collapse, detail scroll, status cycle, row/detail affordances. Covers `org-tasks.tui` plus the extracted `org-tasks.tui.tasks` (state model/bridge) and `org-tasks.tui.dispatch` (nexus actions/effects) namespaces. |
+| CLI dispatch smoke               | `org-tasks.cli-test`                           | Help preservation (top-level and per-command `ot <cmd> --help` option rendering), existing subcommand dispatch through command-family namespaces, bare non-TTY selected JSON, bare `--format json` selected JSON. |
+| command integration families      | `org-tasks.commands.{archive-publish,create,links,list-show,maintenance,record,status}-test` | Focused `ot` command-family integration tests split to mirror `src/org_tasks/commands/*`; shared temp-project fixtures live in `org-tasks.commands.test-util`. |
 
 ## Golden round-trip fixtures
 
@@ -44,6 +47,9 @@ is an org file the Clojure parser must read and re-emit byte-identically.
 - Where the TS test directly constructs a `Task` via TS object literal, the
   Clojure equivalent constructs a `task` map from the same data and asserts
   serializer output.
+- TUI tests avoid brittle full-ANSI snapshots. Pure state/layout functions are
+  tested directly; CLI tests assert stdout remains machine JSON for non-TTY
+  default invocations.
 
 ## Cutover gate
 

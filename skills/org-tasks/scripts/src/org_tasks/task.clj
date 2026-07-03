@@ -18,30 +18,46 @@
     find-top-level-root    :: tasks task -> task | nil"
 
   (:require [clojure.string :as str]
-            [org-tasks.parser :as parser]))
+            [org-tasks.parser :as parser]
+            [org-tasks.tree :as tree]))
 
-(defn- task-children
-  "Walk both `:children` and `:import-children`."
-  [task]
-  (concat (:children task []) (:import-children task [])))
+(def ^:private max-link-template-cache-entries 128)
+(def ^:private link-template-cache (atom {}))
+
+(defn- remember-link-templates! [k templates]
+  (swap! link-template-cache
+         (fn [cache]
+           (let [cache (if (>= (count cache) max-link-template-cache-entries)
+                         (empty cache)
+                         cache)]
+             (assoc cache k templates))))
+  templates)
+
+(defn- link-templates-for-task [task]
+  (when-let [src (:effective-source-content task)]
+    (let [k [(:source-path task) src]]
+      (if (contains? @link-template-cache k)
+        (get @link-template-cache k)
+        (remember-link-templates! k (parser/parse-link-templates src))))))
 
 (defn find-by-id
   "Depth-first lookup by `:CUSTOM_ID:`. Walks `:children` and
   `:import-children` alike. Returns nil when absent."
   [tasks id]
-  (when id
-    (some (fn [t]
-            (if (= id (parser/get-task-id t))
-              t
-              (find-by-id (task-children t) id)))
-          tasks)))
+  (tree/find-by-id tasks id))
 
 (def ^:private min-id-prefix-length 4)
 
-(defn- all-tasks
-  "Return every task reachable from `tasks` in depth-first order."
-  [tasks]
-  (mapcat (fn [t] (cons t (all-tasks (task-children t)))) tasks))
+(defn id-prefix
+  "First 8 characters of `id`, or `--------` when no id is present.
+  Pasteable into id-accepting commands because it satisfies the
+  ≥ 4-char prefix minimum. Shared by the `ot list`/`ot scan` text
+  renderers and the standalone TUI."
+  [id]
+  (if (and id (>= (count id) 8))
+    (subs id 0 8)
+    "--------"))
+
 
 (defn- id-prefix-match? [raw-id task]
   (when-let [id (parser/get-task-id task)]
@@ -85,7 +101,7 @@
   four characters. Returns `{:match task}`, `{:ambiguous [task ...]}`,
   or `{:none true}`."
   [tasks raw-id]
-  (resolve-id-candidate (all-tasks tasks) raw-id))
+  (resolve-id-candidate (tree/all-tasks tasks) raw-id))
 
 (defn find-top-level-by-id-or-prefix
   "Resolve `raw-id` only against the top-level task roots.
@@ -101,7 +117,7 @@
   [tasks target]
   (letfn [(contains-target? [t]
             (or (identical? t target)
-                (some contains-target? (task-children t))))]
+                (some contains-target? (tree/children t))))]
     (some #(when (contains-target? %) %) tasks)))
 
 (defn task->wire
@@ -115,8 +131,7 @@
   ([task parent-id] (task->wire task parent-id {}))
   ([task parent-id {:keys [include-content?] :or {include-content? true} :as opts}]
    (let [id        (parser/get-task-id task)
-         link-tpls (when-let [src (:effective-source-content task)]
-                     (parser/parse-link-templates src))
+         link-tpls (link-templates-for-task task)
          issues    (when link-tpls
                      (parser/get-linked-issues task link-tpls))
          children  (mapv #(task->wire % id opts) (:children task []))
@@ -159,21 +174,19 @@
   wire task while still giving UI clients enough context to resolve
   link templates and rewrite imported plan files."
   [tasks]
-  (let [sources (volatile! {})]
-    (letfn [(walk [task]
-              (when-let [path (:source-path task)]
-                (vswap! sources update path
-                        (fn [existing]
-                          (cond-> (or existing {})
-                            (:source-content task)
-                            (assoc :sourceContent (:source-content task))
-                            (:effective-source-content task)
-                            (assoc :effectiveSourceContent (:effective-source-content task))))))
-              (doseq [child (task-children task)]
-                (walk child)))]
-      (doseq [task tasks]
-        (walk task))
-      @sources)))
+  (reduce
+    (fn [sources task]
+      (if-let [path (:source-path task)]
+        (update sources path
+                (fn [existing]
+                  (cond-> (or existing {})
+                    (:source-content task)
+                    (assoc :sourceContent (:source-content task))
+                    (:effective-source-content task)
+                    (assoc :effectiveSourceContent (:effective-source-content task)))))
+        sources))
+    {}
+    (tree/all-tasks tasks)))
 
 (defn flatten-tree
   "Flatten a wire-task tree (output of `task->wire`) to a vector of
@@ -181,14 +194,12 @@
   `children` / `importChildren` in the emitted rows but preserves all
   scalar fields."
   [wire-tasks]
-  (let [out (volatile! [])
-        walk (fn walk [tasks parent-id]
-               (doseq [t tasks]
-                 (vswap! out conj
-                         (-> t
-                             (dissoc :children :importChildren)
-                             (assoc :parentId parent-id)))
-                 (walk (:children t) (:id t))
-                 (walk (:importChildren t) (:id t))))]
-    (walk wire-tasks nil)
-    @out))
+  (letfn [(walk [tasks parent-id]
+            (mapcat (fn [t]
+                      (cons (-> t
+                                (dissoc :children :importChildren)
+                                (assoc :parentId parent-id))
+                            (concat (walk (:children t) (:id t))
+                                    (walk (:importChildren t) (:id t)))))
+                    tasks))]
+    (vec (walk wire-tasks nil))))

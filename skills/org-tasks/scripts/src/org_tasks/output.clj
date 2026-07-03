@@ -26,8 +26,13 @@
 
 (def ^:dynamic *exit-fn*
   "Indirection so tests can inspect intended exit codes without
-  terminating the JVM."
-  (fn [code] (System/exit code)))
+  terminating the JVM.
+
+  Called as `(*exit-fn* code)` or, from [[emit-error]], as
+  `(*exit-fn* code envelope)` so in-process callers (the TUI bridge)
+  can consume the error envelope as data. Bindings should therefore
+  accept variadic args: `(fn [code & _] ...)`."
+  (fn [code & _envelope] (System/exit code)))
 
 (defn- fmt [opts]
   (or (:format opts) :text))
@@ -92,18 +97,24 @@
 
 (defn emit-result
   "Emit a success envelope. `result` is the per-command payload.
-  Optional `:warnings` is a sequence of warning maps."
+  Optional `:warnings` is a sequence of warning maps.
+
+  Returns the public (internal-keys-stripped) envelope so in-process
+  callers such as the TUI bridge can consume command results as data
+  without re-parsing printed JSON."
   ([opts result]
    (emit-result opts result nil))
   ([opts result warnings]
-   (let [envelope (success-envelope result warnings)]
+   (let [envelope (success-envelope result warnings)
+         public   (strip-internal-keys envelope)]
      (case (fmt opts)
-       :json (println (pp-json (strip-internal-keys envelope)))
-       :edn  (println (str/trim-newline (pp-edn (strip-internal-keys envelope))))
+       :json (println (pp-json public))
+       :edn  (println (str/trim-newline (pp-edn public)))
        :text (do (println (render-text-result result))
                  (doseq [w warnings]
                    (binding [*out* *err*]
-                     (println "warning:" (:message w)))))))))
+                     (println "warning:" (:message w))))))
+     public)))
 
 (defn emit-error
   "Emit a failure envelope and exit with `:exit` (default 1).
@@ -113,9 +124,11 @@
   ([opts error]
    (emit-error opts error 1))
   ([opts error exit-code]
-   (let [envelope (error-envelope error)]
+   (let [envelope (error-envelope error)
+         public   (strip-internal-keys envelope)]
      (case (fmt opts)
-       :json (binding [*out* *err*] (println (pp-json (strip-internal-keys envelope))))
-       :edn  (binding [*out* *err*] (println (str/trim-newline (pp-edn (strip-internal-keys envelope)))))
+       :json (binding [*out* *err*] (println (pp-json public)))
+       :edn  (binding [*out* *err*] (println (str/trim-newline (pp-edn public))))
        :text (binding [*out* *err*] (println (render-text-error error))))
-     (*exit-fn* exit-code))))
+     (*exit-fn* exit-code public)
+     public)))

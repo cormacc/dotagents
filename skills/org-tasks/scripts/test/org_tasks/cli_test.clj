@@ -32,7 +32,7 @@
   (let [exit (atom nil)
         out  (java.io.StringWriter.)
         err  (java.io.StringWriter.)]
-    (binding [out/*exit-fn* (fn [code]
+    (binding [out/*exit-fn* (fn [code & _]
                               (reset! exit code)
                               (throw (ex-info "ot-exit" {:tag :ot/exit
                                                           :code code})))
@@ -56,11 +56,75 @@
       (is (str/includes? out "list"))
       (is (str/includes? out "doctor")))))
 
-(deftest no-args-shows-summary
-  (testing "ot (no args) prints the command summary"
-    (let [{:keys [out exit]} (capture #(apply cli/-main []))]
+(deftest command-help-shows-command-options
+  (testing "ot list --help prints list-specific options plus globals"
+    (let [{:keys [out exit]} (capture #(apply cli/-main ["list" "--help"]))]
       (is (zero? exit))
-      (is (str/includes? out "Commands:")))))
+      (is (str/includes? out "ot list"))
+      (is (str/includes? out "--status-filter"))
+      (is (str/includes? out "--levels"))
+      (is (str/includes? out "--format"))))
+  (testing "ot record create --help prints subcommand options"
+    (let [{:keys [out exit]} (capture #(apply cli/-main ["record" "create" "--help"]))]
+      (is (zero? exit))
+      (is (str/includes? out "ot record create"))
+      (is (str/includes? out "--mode"))
+      (is (str/includes? out "--path"))))
+  (testing "ot help list routes to command help too"
+    (let [{:keys [out exit]} (capture #(apply cli/-main ["help" "list"]))]
+      (is (zero? exit))
+      (is (str/includes? out "--levels"))))
+  (testing "commands without options still show globals"
+    (let [{:keys [out exit]} (capture #(apply cli/-main ["doctor" "--help"]))]
+      (is (zero? exit))
+      (is (str/includes? out "ot doctor"))
+      (is (not (str/includes? out "Commands:")))
+      (is (str/includes? out "Global options:")))))
+
+(deftest bare-non-tty-emits-selected-json
+  (testing "ot (no args) emits selected-task JSON when no interactive terminal is available"
+    ;; The bare path takes no --root, so it resolves task memory from the
+    ;; working directory. Run against a scaffolded temp root so the result
+    ;; cannot depend on the enclosing repo's (gitignored, developer-local)
+    ;; selection state. The envelope is a discriminated shape: `:selected nil`
+    ;; without a selection, a `:task` map with one.
+    (let [dir (str (fs/create-temp-dir {:prefix "ot-bare"}))
+          uuid "11111111-1111-4111-8111-111111111111"]
+      (try
+        (spit (str (fs/path dir "TASKS.org"))
+              (str "* TODO Root task\n:PROPERTIES:\n:CUSTOM_ID: " uuid "\n:END:\n"))
+        (testing "no selection emits {:selected nil}"
+          (let [{:keys [out exit]} (capture #(with-user-dir dir
+                                               (fn [] (apply cli/-main []))))
+                envelope (json/parse-string out true)]
+            (is (zero? exit))
+            (is (= true (:ok envelope)))
+            (is (= "org-tasks/v1" (:schema envelope)))
+            (is (contains? (:result envelope) :selected))
+            (is (nil? (get-in envelope [:result :selected])))))
+        (testing "a selection emits the selected-task envelope"
+          (spit (str (fs/path dir "TASKS.local.org"))
+                (str "#+SELECTED: " uuid "\n"))
+          (let [{:keys [out exit]} (capture #(with-user-dir dir
+                                               (fn [] (apply cli/-main []))))
+                envelope (json/parse-string out true)]
+            (is (zero? exit))
+            (is (= true (:ok envelope)))
+            (is (= uuid (get-in envelope [:result :task :id])))))
+        (finally (fs/delete-tree dir))))))
+
+(deftest bare-format-json-emits-selected-json
+  (testing "ot --format json emits selected-task JSON without launching the TUI"
+    (let [dir (str (fs/create-temp-dir {:prefix "ot-bare-json"}))]
+      (try
+        (spit (str (fs/path dir "TASKS.org")) "* TODO Root task\n")
+        (let [{:keys [out exit]} (capture #(with-user-dir dir
+                                             (fn [] (apply cli/-main ["--format" "json"]))))
+              envelope (json/parse-string out true)]
+          (is (zero? exit))
+          (is (= true (:ok envelope)))
+          (is (= "org-tasks/v1" (:schema envelope))))
+        (finally (fs/delete-tree dir))))))
 
 (deftest unknown-command-falls-through-to-help
   (testing "an unrecognised command lands on the catch-all help row"

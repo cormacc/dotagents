@@ -1,0 +1,233 @@
+#+TITLE: Add org-tasks TUI
+#+DATE: 2026-06-27 Sat
+#+PARENT: [[archive:5606c9a0-af2a-4e0c-84bd-e961b5c1738d][Add org-tasks TUI]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC_IMPACT: skills/org-tasks/references/ot-cli.md
+#+SPEC_IMPACT: skills/org-tasks/scripts/docs/contract.md
+#+SPEC_IMPACT: skills/org-tasks/scripts/docs/boundary.md
+#+SPEC_IMPACT: skills/org-tasks/scripts/docs/test-map.md
+#+SPEC_IMPACT: skills/org-tasks/scripts/README.md
+
+* Intent
+Build a standalone Babashka TUI for org-tasks so operators can browse, mutate, and select tasks outside the pi overlay. Bare ~ot~ becomes the interactive entry point on TTY while preserving existing help and machine-output contracts for harness interop.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+** Scope
+*** In scope
+- Add a charm.clj-based TUI launched by bare ~ot~ on TTY.
+- Verify charm.clj and nexus dependency coordinates under Babashka before relying on them.
+- Use nexus for TUI state, actions, effects, and testable dataflow if the smoke-load confirms it is viable.
+- Render a task tree and task-detail view with functional parity to the pi expanded tasks UI documented in ~pi/extensions/tasks/README.md~.
+- Preserve clean machine interop by reserving stdout for the final selected-task envelope and rendering interactive control sequences through a terminal device/stream that harnesses do not capture as JSON.
+- Persist selection through the existing selected-task mechanism; exiting without pressing ~s~ returns the previously persisted selection, not the cursor row.
+- Emit the existing ~ot selected --format json~ shape when the TUI exits successfully.
+- Make bare non-TTY ~ot~ and bare ~ot --format json~ emit selected-task JSON without interactive control sequences.
+- Preserve ~ot --help~, ~ot -h~, ~ot help~, and every existing subcommand invocation.
+- Support the overlay key map in v1: ~↑↓/jk~ navigation, ~←→/hl~ status cycle, ~Ctrl-d/u~ detail scroll, ~Enter/Space/Tab~ collapse, ~s~ select, ~e~ edit, ~p~ plan, ~n/N~ create sibling/child, ~A~ archive, ~P~ publish, ~U~ unpublish, ~J~ open linked issues, and ~Esc/Alt-t~ close.
+- Update CLI/reference/boundary/test docs that describe invocation, machine output, UI ownership, and test coverage.
+
+*** Out of scope
+- Modify the pi tasks extension in v1 beyond documentation references needed to keep contracts consistent.
+- Change the ~org-tasks/v1~ selected-task JSON schema.
+- Require JVM Clojure for normal ~ot~ use.
+- Reproduce the overlay pixel-for-pixel.
+- Replace pi's overlay or compact widget with the TUI in v1.
+
+** Acceptance
+*** Core functionality
+- [ ] ISC-1: Bare ~ot~ launches the interactive task TUI when an interactive terminal is available.
+- [ ] ISC-2: Bare non-TTY ~ot~ emits the selected-task JSON envelope and exits without blocking.
+- [ ] ISC-3: Bare ~ot --format json~ emits the selected-task JSON envelope and exits without launching the TUI.
+- [ ] ISC-4: ~ot --help~, ~ot -h~, and ~ot help~ still render CLI help.
+- [ ] ISC-5: Existing subcommands keep their current behavior and output contracts.
+- [ ] ISC-6: TUI renders task tree and cursor-task details panes with responsive side-by-side/stacked layouts.
+- [ ] ISC-7: TUI represents selected task, selected subtree focus, collapsed branches, local drafts, priorities, statuses, linked plans, and linked issues with stable visual affordances.
+- [ ] ISC-8: TUI supports overlay-parity navigation, collapse, close, and detail-scroll keys.
+- [ ] ISC-9: TUI supports overlay-parity selection, status cycle, archive, publish, and unpublish keys.
+- [ ] ISC-10: TUI supports overlay-parity edit, plan, sibling-create, child-create, and linked-issue-open keys.
+- [ ] ISC-11: TUI persists selection via the existing selected-task mechanism.
+- [ ] ISC-12: TUI exit emits the same JSON shape as ~ot selected --format json~.
+
+*** Edge cases
+- [ ] ISC-13: Captured stdout from an interactive TUI session contains only the final selected-task envelope.
+- [ ] ISC-14: Interactive control sequences never appear in captured stdout for JSON/EDN machine-output flows.
+- [ ] ISC-15: Empty task sets render a usable empty-state screen and allow clean exit.
+- [ ] ISC-16: Cancel/escape exits without changing persisted selection unless the user explicitly selected a task during the session.
+- [ ] ISC-17: Mutating actions surface errors in the TUI and preserve org files on failure.
+- [ ] ISC-18: Archive refuses ineligible targets using existing org-tasks rules.
+- [ ] ISC-19: Publish/unpublish enforce existing local/shared/top-level constraints.
+- [ ] ISC-20: Missing editor/browser/terminal integrations fail visibly without corrupting task state.
+
+*** Tests / Docs
+- [ ] ISC-21: Thorough tests cover help, TTY dispatch, non-TTY dispatch, and bare ~--format json~ dispatch.
+- [ ] ISC-22: Thorough tests cover TUI state transitions separately from terminal rendering.
+- [ ] ISC-23: Temp-root mutation tests cover selection, status, archive, publish, unpublish, create sibling/child, and failure rollback/error paths.
+- [ ] ISC-24: README and contract docs document invocation, key map, stdout/TTY JSON contract, and selection-vs-cursor semantics.
+- [ ] ISC-25: All declared ~#+SPEC_IMPACT~ paths are reviewed and updated or explicitly justified during closure.
+
+*** Anti-criteria
+- [ ] ISC-A-1: Must not: change ~ot selected --format json~ schema.
+- [ ] ISC-A-2: Must not: remove existing CLI subcommand behavior.
+- [ ] ISC-A-3: Must not: require JVM Clojure for normal ~ot~ use.
+- [ ] ISC-A-4: Must not: modify pi overlay behavior in v1.
+- [ ] ISC-A-5: Must not: emit ANSI/control sequences on stdout when stdout is used for machine-readable JSON.
+
+** Decisions
+- Chose in-process charm.clj TUI over existing org-tasks Clojure functions :: Keeps one durable mutation source of truth and preserves Babashka deployment.
+  Rejected:
+  - Shelling out to ~ot~ subcommands from the TUI: slower, recursive-risky after bare ~ot~ changes, and harder to handle errors cleanly.
+  - Extracting a shared TypeScript/Clojure UI model before implementation: better long-term consolidation, but it touches the pi extension and expands v1 scope.
+- Chose dependency smoke-load before finalizing charm.clj/nexus architecture :: Coordinates were pinned only after verifying Babashka compatibility; the smoke-load confirmed both libraries load, so the planned nexus architecture was adopted rather than the thinner-dispatcher fallback.
+- Chose nexus (single explicit ~nexus.core~ map, not the global registry) for v1 state/action/effect dispatch :: Pure action handlers receive a state snapshot and return effect data; effects perform side-effects against a per-event store atom bridged into charm's update loop. Avoiding the registry keeps dispatch free of global mutable state and unit-testable in isolation.
+  Rejected:
+  - ~nexus.registry~ convenience API: introduces process-global registration that complicates testing and load order for a single in-process TUI.
+  - Requiring ~[nexus.core]~ purely as a dead smoke-load while hand-rolling dispatch: carries the dependency cost with none of the testability benefit and contradicts the stated decision.
+- Chose functional overlay parity in v1 :: The standalone TUI should implement the documented expanded overlay key map; parity means same user-visible operations and constraints, not identical rendering internals.
+- Chose persisted selection as the exit contract :: The TUI emits the same envelope as ~ot selected --format json~; cursor position is not an interop signal unless the user first persists it with ~s~.
+- Chose stdout-reserved JSON for harness interop :: Interactive rendering must target a controlling terminal or another non-stdout stream so captured stdout contains only the final envelope.
+- Chose non-interactive selected JSON for bare non-TTY and bare ~--format json~ :: Harnesses can shell out to bare ~ot~ without interactive blocking or ANSI output.
+- Chose responsive stacked layout for narrow terminals :: Details render below the task tree when the terminal is too narrow for side-by-side panes.
+- Keep pi overlay unchanged in v1 :: Consolidation is evaluated after the standalone TUI establishes behavior and contracts.
+
+** Shipped
+- Pinned ~io.github.TimoKramer/charm.clj~ at tag ~v0.2.71~ / sha ~38e6823dc85ec932eefe2ad9c1f204307674c24f~ and ~io.github.cormacc/nexus~ at sha ~6e9bd241fd0750541104d77bfc7441d6657e4cb4~ under Babashka. Both are now load-bearing (charm owns the program loop; nexus owns event dispatch).
+- Added ~org-tasks.tui~ with a standalone split/stacked terminal browser, overlay-parity key handling, durable mutations delegated through existing ~org-tasks.commands~ handlers, and stdout-reserved selected-task JSON on exit.
+- Built event dispatch on a single explicit ~nexus.core~ map: pure ~:nexus/actions~ map charm key/window messages (via ~msg->actions~) to effect data; ~:nexus/effects~ apply state and run durable commands against a per-event store atom; ~update-fn~ bridges the result (and a quit command) back to charm.
+- Surfaced human-readable command failures in the TUI: ~error-message~ extracts ~[:error :message]~ from the forced-JSON error envelope instead of rendering raw JSON to the status line.
+- Refactored bare ~ot~ dispatch: help remains explicit; bare non-TTY and bare ~--format json~ emit selected-task JSON; bare TTY launches the TUI.
+- Updated the declared spec-impact docs for CLI invocation, machine output, boundary ownership, and test coverage.
+
+** Gotchas
+- charm.clj's ~program/run~ creates a system terminal; the TUI temporarily routes ~System/out~ to ~System/err~ while Charm owns the screen so raw-mode rendering stays interactive without polluting stdout. Keep non-interactive JSON checks in place when changing this boundary.
+
+** Follow-ups
+- Review opportunities to consolidate duplicated semantics between the pi overlay and the Clojure TUI after v1 lands.
+- ISC-21 gap: add a test that exercises the bare-TTY launch branch by rebinding ~*interactive-terminal?*~ to true; current CLI tests only cover the non-TTY and ~--format json~ dispatch paths.
+- ISC-13/14 gap: stdout-cleanliness is validated only on the non-interactive path. Add a test (or documented manual check) that captures an actual Charm session and asserts no control sequences leak onto stdout.
+
+* Plan
+** DONE Verify TUI dependencies under Babashka
+CLOSED: [2026-06-27 Sat 11:50]
+:PROPERTIES:
+:CUSTOM_ID: e02e0611-1f28-454c-9f5c-38c837c16d59
+:CREATED: [2026-06-27 Sat 11:38]
+:STARTED: [2026-06-27 Sat 11:47]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-27 Sat 11:47]
+- State "DONE" from "STARTED" [2026-06-27 Sat 11:50]
+:END:
+
+** DONE Refactor bare ot dispatch
+CLOSED: [2026-06-27 Sat 11:50]
+:PROPERTIES:
+:CUSTOM_ID: ed4ffe39-73ba-492e-910d-7ace03e7d241
+:CREATED: [2026-06-27 Sat 11:38]
+:STARTED: [2026-06-27 Sat 11:47]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-27 Sat 11:47]
+- State "DONE" from "STARTED" [2026-06-27 Sat 11:50]
+:END:
+
+** DONE Define clean TTY/stdout exit contract
+CLOSED: [2026-06-27 Sat 11:50]
+:PROPERTIES:
+:CUSTOM_ID: d79e9566-742c-4b04-8a54-7a81626c94d1
+:CREATED: [2026-06-27 Sat 11:38]
+:STARTED: [2026-06-27 Sat 11:47]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-27 Sat 11:47]
+- State "DONE" from "STARTED" [2026-06-27 Sat 11:50]
+:END:
+
+** DONE Build testable TUI model/actions/effects
+CLOSED: [2026-06-27 Sat 11:50]
+:PROPERTIES:
+:CUSTOM_ID: f3c97641-7fe5-4878-8ae0-45597a7832aa
+:CREATED: [2026-06-27 Sat 11:38]
+:STARTED: [2026-06-27 Sat 11:47]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-27 Sat 11:47]
+- State "DONE" from "STARTED" [2026-06-27 Sat 11:50]
+:END:
+
+** DONE Implement overlay-parity rendering
+CLOSED: [2026-06-27 Sat 11:50]
+:PROPERTIES:
+:CUSTOM_ID: 2bb832cd-97c7-4656-ad8c-b65c36e794a0
+:CREATED: [2026-06-27 Sat 11:38]
+:STARTED: [2026-06-27 Sat 11:47]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-27 Sat 11:47]
+- State "DONE" from "STARTED" [2026-06-27 Sat 11:50]
+:END:
+
+** DONE Implement full overlay key map
+CLOSED: [2026-06-27 Sat 11:50]
+:PROPERTIES:
+:CUSTOM_ID: 23f9a8d3-73cb-43aa-a370-de5a5c5ca988
+:CREATED: [2026-06-27 Sat 11:38]
+:STARTED: [2026-06-27 Sat 11:47]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-27 Sat 11:47]
+- State "DONE" from "STARTED" [2026-06-27 Sat 11:50]
+:END:
+
+** DONE Preserve durable mutation semantics
+CLOSED: [2026-06-27 Sat 11:50]
+:PROPERTIES:
+:CUSTOM_ID: 2b1f8396-455a-48ce-b9be-c61734eba327
+:CREATED: [2026-06-27 Sat 11:38]
+:STARTED: [2026-06-27 Sat 11:47]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-27 Sat 11:47]
+- State "DONE" from "STARTED" [2026-06-27 Sat 11:50]
+:END:
+
+** DONE Update docs and contracts
+CLOSED: [2026-06-27 Sat 11:50]
+:PROPERTIES:
+:CUSTOM_ID: c3a22034-0730-4fba-93cf-88fc170d097a
+:CREATED: [2026-06-27 Sat 11:38]
+:STARTED: [2026-06-27 Sat 11:47]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-27 Sat 11:47]
+- State "DONE" from "STARTED" [2026-06-27 Sat 11:50]
+:END:
+
+** DONE Add thorough CLI, state, and temp-root tests
+CLOSED: [2026-06-27 Sat 11:50]
+:PROPERTIES:
+:CUSTOM_ID: bda7ff6f-f41c-4b75-b7af-ec11fe89898b
+:CREATED: [2026-06-27 Sat 11:38]
+:STARTED: [2026-06-27 Sat 11:47]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-06-27 Sat 11:47]
+- State "DONE" from "STARTED" [2026-06-27 Sat 11:50]
+:END:
+
+* Implementation
+- Added dependencies in ~bb.edn~, ~deps.edn~, and the standalone ~scripts/ot~ fallback shim.
+- Added ~skills/org-tasks/scripts/src/org_tasks/tui.clj~ for TUI state, rendering, nexus-based dispatch (actions/effects + ~msg->actions~ + ~update-fn~ charm bridge), command-effect reuse, and final selected JSON emission.
+- Replaced the ad-hoc ~System/in~ key loop with ~charm.program/run~ so Charm/JLine owns raw mode, key decoding, window-size updates, alternate-screen rendering, cursor cleanup, and terminal restoration; Charm's system output is temporarily routed to stderr during the TUI so stdout remains reserved for the final JSON envelope.
+- Pane layout: terminal-height viewports, ANSI/display-width-aware padding/cropping/wrapping with a conservative right margin (avoids terminal auto-wrap), aligned side-by-side separators, cursor-follow scroll, and embedded-newline splitting so multiline descriptions stay in the right pane.
+- Updated ~skills/org-tasks/scripts/src/org_tasks/cli.clj~ so explicit help remains help while bare default invocation routes to TUI/selected JSON based on terminal availability.
+- Added ~org-tasks.tui-test~ (now also covering ~error-message~ extraction, ~msg->actions~ key/prompt mapping, nexus-dispatched navigation/quit, and a temp-root ~:task/select~ effect) and updated ~org-tasks.cli-test~ for the new default invocation contract.
+- Updated ~skills/org-tasks/references/ot-cli.md~, ~skills/org-tasks/scripts/docs/contract.md~, ~skills/org-tasks/scripts/docs/boundary.md~, ~skills/org-tasks/scripts/docs/test-map.md~, and ~skills/org-tasks/scripts/README.md~.
+
+* Validation
+- charm.clj + nexus smoke-loaded under Babashka at the pinned coordinates before committing to the architecture.
+- ~bb run test org-tasks.cli-test org-tasks.tui-test~ => 21 tests, 83 assertions, 0 failures, 0 errors.
+- ~./skills/org-tasks/scripts/ot --format json > .agents/tmp/ot-json.out 2> .agents/tmp/ot-json.err~ plus JSON/ANSI check => valid JSON, 0 stderr bytes, no ANSI/control bytes in stdout.
+- ~ot doctor --format json~ => 0 findings.

@@ -12,17 +12,13 @@ import {
 } from "@mariozechner/pi-tui";
 import type { LinkedIssue, Task } from "./parser.ts";
 import {
-  formatOrgTimestamp,
-  getLinkedIssues,
   parseLinkTemplates,
   getTaskBlockers,
   getTaskHandoff,
   getTaskId,
   isTaskReady,
-  serializeTasksPreservingFile,
   type TaskBlocker,
 } from "./parser.ts";
-import { applyStatusTransition } from "./lifecycle.ts";
 import {
   colorIssues,
   colorLocal,
@@ -30,7 +26,6 @@ import {
   colorStatus,
   colorTags,
 } from "./status-colors.ts";
-import { readFile, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -56,13 +51,6 @@ function loadKeybindingsDebugFlag(): boolean {
   }
 }
 
-const STATUS_CYCLE = [
-  "TODO",
-  "STARTED",
-  "WAITING",
-  "DONE",
-  "CANCELLED",
-] as const;
 /** A flattened row for display & navigation. */
 interface FlatRow {
   task: Task;
@@ -115,8 +103,8 @@ export class TasksOverlay {
     private onArchive?: (task: Task) => void,
     /** Request task creation after the expanded overlay closes so input is visible. */
     private onNewTask?: (
-      parent: Task | null,
-      insertAfter: Task | null,
+      anchor: Task | null,
+      relation: "sibling" | "child",
     ) => void,
     /** Request publish (local → shared) after overlay closes. */
     private onPublish?: (task: Task) => void,
@@ -138,14 +126,22 @@ export class TasksOverlay {
     private onOpenUrls?: (urls: string[]) => Promise<void>,
     /** Display a one-shot notification (status footer / toast). */
     private onNotify?: (message: string, kind?: "info" | "warn" | "error") => void,
-    /** Called when a task's status is cycled (via →/← / l/h).
-        Returns a freshly loaded task tree when the caller persisted the
-        transition outside this overlay (the `ot status` path). */
-    private onStatusChanged?: (
+    /** Called when a task's status is cycled (via →/← / l/h). The canonical
+        cycle order lives in `ot` (`ot status --cycle`); the overlay passes
+        only a direction and receives the resolved status plus a fresh tree. */
+    private onCycleStatus?: (
       task: Task,
-      prevStatus: string,
-      nextStatus: string,
-    ) => void | Promise<Task[] | void>,
+      direction: "forward" | "back",
+    ) => Promise<{ tasks: Task[]; prevStatus: string; status: string } | null>,
+    /** Called when a task's priority is cycled (via shift+→/←). The
+        canonical cycle order (including the unset slot) lives in `ot`
+        (`ot priority --cycle`): forward from unset is A, back from unset
+        is D. The overlay passes only a direction and receives a fresh
+        tree. */
+    private onCyclePriority?: (
+      task: Task,
+      direction: "forward" | "back",
+    ) => Promise<{ tasks: Task[] } | null>,
   ) {
     this.theme = theme;
     this.done = done;
@@ -256,8 +252,9 @@ export class TasksOverlay {
 
   /** Resolve `:LINKED_ISSUES:` for a task using cached `#+LINK:` templates. */
   private linkedIssuesFor(task: Task): LinkedIssue[] {
-    if (task.linkedIssues) return task.linkedIssues;
-    return getLinkedIssues(task, this.linkTemplatesFor(task));
+    // `ot list` already resolves :LINKED_ISSUES: via #+LINK: templates and
+    // ships them on the wire, so the overlay just consumes them.
+    return task.linkedIssues ?? [];
   }
 
   /**
@@ -343,6 +340,17 @@ export class TasksOverlay {
         return "cursor-down";
       }
       return "cursor-down (at bottom)";
+    }
+
+    // Cycle priority (shift+arrows). Checked before the bare arrow
+    // matches so "right" cannot swallow "shift+right".
+    if (matchesKey(data, "shift+right")) {
+      void this.cyclePriority(1);
+      return "priority-cycle-fwd";
+    }
+    if (matchesKey(data, "shift+left")) {
+      void this.cyclePriority(-1);
+      return "priority-cycle-back";
     }
 
     // Cycle status forward
@@ -466,61 +474,58 @@ export class TasksOverlay {
       return;
     }
     const row = this.rows[this.cursor];
-    if (!row) return;
-    const currentStatus = row.task.status as (typeof STATUS_CYCLE)[number];
-    const idx = STATUS_CYCLE.indexOf(currentStatus);
-    if (idx === -1) return;
-    const next = (idx + direction + STATUS_CYCLE.length) % STATUS_CYCLE.length;
-    const nextStatus = STATUS_CYCLE[next];
+    if (!row || !this.onCycleStatus) return;
     const wasClosed = row.task.status === "DONE" || row.task.status === "CANCELLED";
-
-    if (this.onStatusChanged) {
-      this.statusUpdateInFlight = true;
-      try {
-        const id = getTaskId(row.task);
-        const freshTasks = await this.onStatusChanged(row.task, currentStatus, nextStatus);
-        let updated = row.task;
-        if (freshTasks) {
-          this.refreshTasks(freshTasks, this.selectedId);
-          updated = this.findTaskById(this.tasks, id) ?? row.task;
-        }
-        this.invalidate();
-        if (nextStatus === "DONE" && !wasClosed) {
-          if (!updated.importPath && this.onCreateChangeRecord) {
-            const accepted = this.onCreateChangeRecord(updated);
-            if (accepted) this.done(undefined);
-          } else if (updated.importPath && this.onRefreshSummary) {
-            const accepted = this.onRefreshSummary(updated);
-            if (accepted) this.done(undefined);
-          }
-        }
-      } catch (err) {
-        this.onNotify?.(`Status update failed: ${(err as Error).message}`, "error");
-      } finally {
-        this.statusUpdateInFlight = false;
+    this.statusUpdateInFlight = true;
+    try {
+      // `ot status --cycle` owns the cycle order and the transition; we only
+      // pass the direction and apply the resolved result.
+      const id = getTaskId(row.task);
+      const result = await this.onCycleStatus(row.task, direction === 1 ? "forward" : "back");
+      let updated = row.task;
+      if (result) {
+        this.refreshTasks(result.tasks, this.selectedId);
+        updated = this.findTaskById(this.tasks, id) ?? row.task;
       }
+      this.invalidate();
+      if (result?.status === "DONE" && !wasClosed) {
+        if (!updated.importPath && this.onCreateChangeRecord) {
+          const accepted = this.onCreateChangeRecord(updated);
+          if (accepted) this.done(undefined);
+        } else if (updated.importPath && this.onRefreshSummary) {
+          const accepted = this.onRefreshSummary(updated);
+          if (accepted) this.done(undefined);
+        }
+      }
+    } catch (err) {
+      this.onNotify?.(`Status update failed: ${(err as Error).message}`, "error");
+    } finally {
+      this.statusUpdateInFlight = false;
+    }
+  }
+
+  /** Cycle the cursor task's priority via `ot priority --cycle`. Shares the
+   *  status in-flight guard so only one graph mutation runs at a time. */
+  private async cyclePriority(direction: 1 | -1): Promise<void> {
+    if (this.statusUpdateInFlight) {
+      this.onNotify?.("Update already in progress; wait for it to finish.", "warn");
       return;
     }
-
-    // Legacy in-process fallback, kept for isolated tests / non-pi consumers.
-    const timestamp = formatOrgTimestamp();
-    const { wasClosed: legacyWasClosed, isClosed } = applyStatusTransition(row.task, nextStatus, timestamp);
-    if (nextStatus === "STARTED") {
-      const root = this.findTopLevelRoot(row.task);
-      if (root && root !== row.task && root.status === "TODO") {
-        applyStatusTransition(root, "STARTED", timestamp);
+    const row = this.rows[this.cursor];
+    if (!row || !this.onCyclePriority) return;
+    this.statusUpdateInFlight = true;
+    try {
+      // `ot priority --cycle` owns the cycle order (unset → A forward,
+      // unset → D back); we only pass the direction and apply the result.
+      const result = await this.onCyclePriority(row.task, direction === 1 ? "forward" : "back");
+      if (result) {
+        this.refreshTasks(result.tasks, this.selectedId);
       }
-    }
-    this.persistChange();
-    this.invalidate();
-    if (isClosed && !legacyWasClosed && nextStatus === "DONE") {
-      if (!row.task.importPath && this.onCreateChangeRecord) {
-        const accepted = this.onCreateChangeRecord(row.task);
-        if (accepted) this.done(undefined);
-      } else if (row.task.importPath && this.onRefreshSummary) {
-        const accepted = this.onRefreshSummary(row.task);
-        if (accepted) this.done(undefined);
-      }
+      this.invalidate();
+    } catch (err) {
+      this.onNotify?.(`Priority update failed: ${(err as Error).message}`, "error");
+    } finally {
+      this.statusUpdateInFlight = false;
     }
   }
 
@@ -544,19 +549,11 @@ export class TasksOverlay {
 
   private createNewTask(asChild: boolean): void {
     if (!this.onNewTask) return;
+    // Placement policy lives in `ot create --relative-to <id> --as ...`. We
+    // pass the cursor task as the anchor (or null for a top-level create) and
+    // the relation; `ot` derives parent/after/local/source.
     const row = this.rows[this.cursor];
-    let parent: Task | null;
-    let insertAfter: Task | null;
-    if (asChild) {
-      // Child: nest under the current task.
-      parent = row?.task ?? null;
-      insertAfter = null;
-    } else {
-      // Sibling: same parent, insert immediately after current task.
-      parent = row?.parent ?? null;
-      insertAfter = row?.task ?? null;
-    }
-    this.onNewTask(parent, insertAfter);
+    this.onNewTask(row?.task ?? null, asChild ? "child" : "sibling");
     this.done(undefined);
   }
 
@@ -712,40 +709,6 @@ export class TasksOverlay {
       }
     };
     walk(this.tasks);
-  }
-
-  private persistChange(): void {
-    void this.save();
-    this.onTasksChanged?.(this.tasks);
-  }
-
-  private async save(): Promise<void> {
-    try {
-      const roots = new Map<string, Task[]>();
-      roots.set(join(this.cwd, "TASKS.org"), this.tasks);
-
-      const collect = (tasks: Task[]) => {
-        for (const task of tasks) {
-          if (task.sourcePath && task.sourceRoot) {
-            roots.set(task.sourcePath, task.sourceRoot);
-          }
-          collect(task.children);
-          if (task.importChildren) collect(task.importChildren);
-        }
-      };
-      collect(this.tasks);
-
-      await Promise.all(
-        [...roots.entries()].map(async ([path, tasks]) => {
-          const cachedOriginal = tasks.find((t) => t.sourceContent)?.sourceContent;
-          const original = cachedOriginal ?? await readFile(path, "utf-8");
-          const content = serializeTasksPreservingFile(original, tasks);
-          await writeFile(path, content, "utf-8");
-        }),
-      );
-    } catch {
-      // Best-effort save; overlay stays usable
-    }
   }
 
   // ── Render ──────────────────────────────────────────────────────────
@@ -1070,7 +1033,7 @@ export class TasksOverlay {
     lines.push(th.fg("borderMuted", hBar(width)));
     const helpText = th.fg(
       "dim",
-      " ↑↓/jk nav • ←→/hl status • Enter toggle • s select • e edit • p plan • n new • N subtask • A archive • P publish • U unpublish • Ctrl-d/u scroll • Esc/Alt-t close",
+      " ↑↓/jk nav • ←→/hl status • ⇧←→ priority • Enter toggle • s select • e edit • p plan • n new • N subtask • A archive • P publish • U unpublish • Ctrl-d/u scroll • Esc/Alt-t close",
     );
     lines.push(truncateToWidth(pad(helpText, width), width));
     lines.push(th.fg("border", hBar(width)));

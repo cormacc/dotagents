@@ -12,6 +12,41 @@
 
 (def closed-statuses #{"DONE" "CANCELLED"})
 
+(def status-cycle
+  "Canonical status order used when cycling forward/back. Single source of
+  truth for the standalone TUI and the pi overlay (both dispatch through
+  `ot status --cycle`)."
+  ["TODO" "STARTED" "WAITING" "DONE" "CANCELLED"])
+
+(defn cycle-status
+  "Return the status `delta` steps from `current` in `status-cycle`, wrapping
+  around. `delta` is typically +1 (forward) or -1 (back); an unknown `current`
+  starts from the first entry."
+  [current delta]
+  (let [n (count status-cycle)
+        i (.indexOf status-cycle current)
+        base (if (neg? i) 0 i)]
+    (nth status-cycle (mod (+ base delta) n))))
+
+(def priority-cycle
+  "Canonical priority order used when cycling forward/back, including the
+  unset slot (nil). Forward from unset lands on the highest priority (A);
+  back from unset lands on the lowest (D). Single source of truth for the
+  standalone TUI and the pi overlay (both dispatch through
+  `ot priority --cycle`)."
+  [nil "A" "B" "C" "D"])
+
+(defn cycle-priority
+  "Return the priority `delta` steps from `current` in `priority-cycle`,
+  wrapping around (so A cycles back to unset, D cycles forward to unset).
+  `current` is a priority letter or nil; an unknown value starts from the
+  unset slot."
+  [current delta]
+  (let [n (count priority-cycle)
+        i (.indexOf priority-cycle current)
+        base (if (neg? i) 0 i)]
+    (nth priority-cycle (mod (+ base delta) n))))
+
 (defn apply-status-transition
   "Apply the org-memory lifecycle semantics for a single status change.
 

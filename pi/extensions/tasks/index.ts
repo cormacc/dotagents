@@ -51,13 +51,13 @@ import {
   otList,
   otPublishTask,
   otSelectTask,
-  otSetStatus,
+  otCyclePriority,
+  otCycleStatus,
   otUnpublishTask,
   type OtSourceContent,
 } from "./ot.ts";
 import {
   expandOrgLinkTarget,
-  getLinkedIssues,
   getTaskId,
   getTaskStarted,
   parseLinkTemplates,
@@ -413,7 +413,7 @@ function formatTaskLine(
   const visibleTags = t.tags;
   const tags = colorTags(visibleTags);
   const issues = colorIssues(
-    getLinkedIssues(t, t.effectiveSourceContent ?? t.sourceContent ?? "").map((i) => i.label),
+    (t.linkedIssues ?? []).map((i) => i.label),
   );
   const left = `${indent}${marker}${colorStatus(t.status)} ${priority ? `${priority} ` : ""}${t.summary}`;
   // Suffix = issues + tags (right-aligned). Issues come first so tags
@@ -759,7 +759,7 @@ export default function (pi: ExtensionAPI) {
       type WorkflowRequest =
         | { type: "archive"; task: Task }
         | { type: "changeRecord"; task: Task }
-        | { type: "create"; parent: Task | null; insertAfter: Task | null }
+        | { type: "create"; anchor: Task | null; relation: "sibling" | "child" }
         | { type: "edit"; task: Task }
         | { type: "plan"; task: Task }
         | { type: "publish"; task: Task }
@@ -791,8 +791,8 @@ export default function (pi: ExtensionAPI) {
           workflow.request = { type: "archive", task: topLevel };
         };
 
-        const onNewTask = (parent: Task | null, insertAfter: Task | null) => {
-          workflow.request = { type: "create", parent, insertAfter };
+        const onNewTask = (anchor: Task | null, relation: "sibling" | "child") => {
+          workflow.request = { type: "create", anchor, relation };
         };
 
         const onPublish = (task: Task) => {
@@ -896,24 +896,42 @@ export default function (pi: ExtensionAPI) {
         // Generic event emit so other extensions can react to status
         // cycles (e.g. `jira` for auto-transition). Stays generic — no
         // tracker-specific knowledge in `tasks`.
-        const onStatusChanged = async (
+        const onCycleStatus = async (
           task: Task,
-          prevStatus: string,
-          nextStatus: string,
-        ): Promise<Task[]> => {
+          direction: "forward" | "back",
+        ): Promise<{ tasks: Task[]; prevStatus: string; status: string } | null> => {
           const id = getTaskId(task);
           if (!id) {
             throw new Error("Task has no :CUSTOM_ID:; cannot change status.");
           }
-          const result = await otSetStatus(id, nextStatus, { cwd: ctx.cwd });
+          // `ot status --cycle` owns the canonical order and the transition.
+          const result = await otCycleStatus(id, direction, { cwd: ctx.cwd });
           pi.events.emit("tasks:status-changed", {
             id,
             status: result.status,
-            prevStatus: result.prevStatus ?? prevStatus,
+            prevStatus: result.prevStatus,
             summary: result.task.summary,
             closed: result.status === "DONE" || result.status === "CANCELLED",
           });
-          return (await loadTasks(ctx.cwd)).tasks;
+          return {
+            tasks: (await loadTasks(ctx.cwd)).tasks,
+            prevStatus: result.prevStatus,
+            status: result.status,
+          };
+        };
+
+        const onCyclePriority = async (
+          task: Task,
+          direction: "forward" | "back",
+        ): Promise<{ tasks: Task[] } | null> => {
+          const id = getTaskId(task);
+          if (!id) {
+            throw new Error("Task has no :CUSTOM_ID:; cannot change priority.");
+          }
+          // `ot priority --cycle` owns the canonical order (unset → A
+          // forward, unset → D back) and the write.
+          await otCyclePriority(id, direction, { cwd: ctx.cwd });
+          return { tasks: (await loadTasks(ctx.cwd)).tasks };
         };
 
         await ctx.ui.custom(
@@ -938,7 +956,8 @@ export default function (pi: ExtensionAPI) {
               onSelectionChange,
               onOpenUrls,
               onNotify,
-              onStatusChanged,
+              onCycleStatus,
+              onCyclePriority,
             );
             activeOverlayInstance = overlay;
             return overlay;
@@ -1047,15 +1066,14 @@ export default function (pi: ExtensionAPI) {
           // than refuse the create outright.
           loaded = await loadTasks(ctx.cwd);
           tasks = loaded.tasks;
-          const freshParent = resolveStale(request.parent);
-          const freshInsertAfter = resolveStale(request.insertAfter);
-          if (request.parent && !freshParent) {
+          const freshAnchor = resolveStale(request.anchor);
+          if (request.anchor && !freshAnchor) {
             ctx.ui.notify(
-              "Parent task no longer exists; appending at top level.",
+              "Anchor task no longer exists; appending at top level.",
               "warning",
             );
           }
-          await createTask(ctx, tasks, ctx.cwd, freshParent, freshInsertAfter);
+          await createTask(ctx, tasks, ctx.cwd, freshAnchor, request.relation);
           loaded = await loadTasks(ctx.cwd);
           tasks = loaded.tasks;
           reopen = true;
@@ -1676,43 +1694,39 @@ async function handlePlanEdit(
 // ── Create task flow ─────────────────────────────────────────────────────
 
 /**
- * Prompt for a title and insert a new task into the live tree, then save.
+ * Prompt for a title and create a new task via `ot`.
  *
- * @param parentTask  null → insert at the top level of `tasks`.
- * @param insertAfterTask  null → append; otherwise insert immediately after
- *                         this task within its container (parent's children
- *                         or the top-level array).
+ * Placement is delegated to `ot create --relative-to <anchor> --as ...`, which
+ * derives parent/after/local/source from the anchor task. A null anchor creates
+ * a top-level task under the default section.
+ *
+ * @param anchor    cursor task to place relative to, or null for top-level.
+ * @param relation  "sibling" (after the anchor, same level) or "child".
  */
 async function createTask(
   ctx: ExtensionContext,
-  tasks: Task[],
+  _tasks: Task[],
   cwd: string,
-  parentTask: Task | null,
-  insertAfterTask: Task | null,
+  anchor: Task | null,
+  relation: "sibling" | "child",
 ): Promise<Task | null> {
-  const prompt = parentTask
-    ? `Subtask of "${parentTask.summary}"`
+  const prompt = anchor
+    ? (relation === "child"
+        ? `Subtask of "${anchor.summary}"`
+        : `Sibling of "${anchor.summary}"`)
     : "New task title";
   const title = await ctx.ui.input(prompt, "");
   if (!title?.trim()) return null;
 
-  // Route to the cursor's source file. Default TASKS.local.org uses
-  // `--local`; imported/change-record files use `--tasks <sourcePath>`.
-  const anchor = parentTask ?? insertAfterTask;
-  const anchorSourcePath = anchor?.sourcePath;
-  const isLocal = !!(parentTask?.isLocal ?? insertAfterTask?.isLocal);
-  const parentId = parentTask ? getTaskId(parentTask) : null;
-  const afterId = insertAfterTask ? getTaskId(insertAfterTask) : null;
+  const anchorId = anchor ? getTaskId(anchor) : null;
 
   let result: { id: string; file: string; line: number };
   try {
     result = await otCreateTask({
       summary: title.trim(),
-      local: isLocal,
-      parentId: parentId ?? undefined,
-      afterId: afterId ?? undefined,
-      section: !parentId && !afterId ? "Improvements" : undefined,
-      sourcePath: !isLocal ? anchorSourcePath : undefined,
+      relativeTo: anchorId ?? undefined,
+      as: anchorId ? relation : undefined,
+      section: anchorId ? undefined : "Improvements",
     }, { cwd });
   } catch (err) {
     ctx.ui.notify(`Failed to save: ${(err as Error).message}`, "error");

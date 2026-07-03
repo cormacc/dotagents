@@ -12,6 +12,12 @@
     (testing (str k)
       (is (string? (bling [k "sample"]))))))
 
+(deftest palette-256-matches-bling
+  (doseq [[k code] (dissoc styling/palette-256 :cyan)]
+    (testing (str k)
+      (is (clojure.string/includes? (bling [k "x"]) (str "38;5;" code "m"))
+          (str k " should render as ANSI-256 code " code)))))
+
 (deftest styling-can-emit-and-suppress-ansi
   (is (ansi? (styling/status {:color? true} "TODO")))
   (is (not (ansi? (styling/status {:color? false} "TODO"))))

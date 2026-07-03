@@ -246,6 +246,14 @@ export interface OtCreateTaskArgs {
   alsoScan?: string[];
   /** Override the CLI's `--tasks` file, used for imported/change-record sources. */
   sourcePath?: string;
+  /**
+   * Anchor task to place the new task relative to. When set, `ot` derives
+   * parent/after/local/source itself, so `parentId`/`afterId`/`local`/
+   * `sourcePath` should be left unset.
+   */
+  relativeTo?: string;
+  /** Placement relative to {@link relativeTo}. Defaults to sibling in `ot`. */
+  as?: "sibling" | "child";
 }
 
 export interface OtCreateResult {
@@ -259,6 +267,12 @@ export interface OtStatusResult {
   prevStatus: string;
   status: string;
   closed: string | null;
+}
+
+export interface OtPriorityResult {
+  task: { id: string; summary: string };
+  prevPriority: string | null;
+  priority: string | null;
 }
 
 export interface OtDoctorResult<TFinding = unknown> {
@@ -276,6 +290,33 @@ export function otSelectTask(id: string | null, opts: RunOtOptions = {}): Promis
 
 export function otSetStatus(id: string, status: string, opts: RunOtOptions = {}): Promise<OtStatusResult> {
   return runOtResult<OtStatusResult>(["status", id, status], opts);
+}
+
+/**
+ * Cycle a task's status forward/back. The canonical order lives in `ot`
+ * (`lifecycle/status-cycle`); callers pass only a direction. Returns the same
+ * envelope as {@link otSetStatus}, including the resolved `status`/`prevStatus`.
+ */
+export function otCycleStatus(
+  id: string,
+  direction: "forward" | "back",
+  opts: RunOtOptions = {},
+): Promise<OtStatusResult> {
+  return runOtResult<OtStatusResult>(["status", id, "--cycle", direction], opts);
+}
+
+/**
+ * Cycle a task's priority forward/back. The canonical order (including the
+ * unset slot) lives in `ot` (`lifecycle/priority-cycle`): forward from unset
+ * is A (highest), back from unset is D (lowest). Callers pass only a
+ * direction and receive the resolved `priority`/`prevPriority`.
+ */
+export function otCyclePriority(
+  id: string,
+  direction: "forward" | "back",
+  opts: RunOtOptions = {},
+): Promise<OtPriorityResult> {
+  return runOtResult<OtPriorityResult>(["priority", id, "--cycle", direction], opts);
 }
 
 export function otArchiveTask(id: string, opts: RunOtOptions = {}): Promise<unknown> {
@@ -319,8 +360,13 @@ export function otCreateTask(
   if (args.section) cmd.push("--section", args.section);
   if (args.priorityName) cmd.push("--priority", args.priorityName);
   if (args.body) cmd.push("--body", args.body);
-  if (args.parentId) cmd.push("--parent", args.parentId);
-  if (args.afterId) cmd.push("--after", args.afterId);
+  if (args.relativeTo) {
+    cmd.push("--relative-to", args.relativeTo);
+    if (args.as) cmd.push("--as", args.as);
+  } else {
+    if (args.parentId) cmd.push("--parent", args.parentId);
+    if (args.afterId) cmd.push("--after", args.afterId);
+  }
   if (args.local) cmd.push("--local");
   if (args.allowCreateSection) cmd.push("--allow-create-section");
   if (args.id) cmd.push("--id", args.id);

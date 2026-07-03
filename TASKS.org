@@ -20,18 +20,7 @@
 
 * Explorations
 
-** TODO Evaluate herdr extension suite
-:PROPERTIES:
-:CUSTOM_ID: 51426ef7-9d1f-4fa3-be74-fa75fd0a3f63
-:CREATED: [2026-06-16 Tue 23:20]
-:END:
-:LOGBOOK:
-- Created [2026-06-16 Tue 23:20]
-:END:
-https://github.com/ogulcancelik/pi-extensions
-Pi extensions by the author of herdr (cross-platform agent multiplexer)
-
-** TODO Evaluate rpiv-pi workflow setup
+** TODO [#D] Evaluate rpiv-pi workflow setup
 :PROPERTIES:
 :CUSTOM_ID: 95649700-252c-46d1-92fd-584f8b3b6237
 :CREATED: [2026-06-16 Tue 21:03]
@@ -49,22 +38,6 @@ Likely to be some clashes with my own setup, but worth evaluating for (partial?)
 :CUSTOM_ID: 0ed56048-9f53-44b4-8a5a-2dbc858e6f04
 :END:
 https://pi.dev/packages/@dreki-gg/pi-lsp
-
-** TODO [#B] Evaluate subagent workflow options
-:PROPERTIES:
-:CUSTOM_ID: 720b13c6-c46c-4ffd-9c87-5248c39f54ef
-:CREATED: [2026-05-27 Wed 11:00]
-:END:
-:LOGBOOK:
-- Created [2026-05-27 Wed 11:00]
-:END:
-Currently I'm using the pi-interactive-subagents extension from pi-dev
-Evaluate alternatives.
-- Roll my own?
-- https://github.com/hazat/pi-interactive-subagents
-- https://github.com/elpapi42/pi-fork / https://github.com/elpapi42/pi-minimal-subagent
-- Others?
-The hazat one above looks interesting. Fairly mature, multiple contributors and some nice UX (widget, discrete window per agent, tmux/zellij integration etc.)
 
 ** TODO [#C] Codebase intelligence tool evaluation
 :PROPERTIES:
@@ -106,6 +79,8 @@ https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without poll
 :END:
 I'm enjoying the org-tasks flow for task tracking and planning, but it's not really agent memory.
 Identify a lower layer more immediately useful to the agent. This is a crowded/interesting space.
+
+Hindsight gets some good press -- see this guy's extension: https://pi.dev/packages/@noctuid/epimetheus?name=hindsight
 
 Here's one https://github.com/elpapi42/pi-observational-memory
 **** TODO [#C] Evaluate pi-hermes-memory plugin :pi:memory:
@@ -193,7 +168,38 @@ Code cleanups
 - Asymmetric exec paths (pi.exec for discovery vs createBashToolDefinition for execution) is intentional but worth a comment.
 - MAX_NOTIFY_OUTPUT_LENGTH is now applied to the renderer's details output, not notify popups — rename or split.
 
+** TODO ot: parser facade split + residual dupes (dedicated parser-only session)
+:PROPERTIES:
+:CUSTOM_ID: 6781dbd0-677a-46a2-a874-4380b3c336af
+:CREATED: [2026-07-03 Fri 12:22]
+:END:
+:LOGBOOK:
+- Created [2026-07-03 Fri 12:22]
+:END:
+Split `parser.clj` (772 LOC) internals behind the existing `org-tasks.parser` facade: scanner + serializer stay together; relocate property accessors, file-keyword/link helpers, linked issues, timestamps. Shared private regexes are the coupling point. Then finish the parser-blocked residue of the 2026-07-03 dedup pass: `closed-statuses` → `lifecycle` (avoiding a parser↔lifecycle cycle), single parser-owned trailing-tag strip. Requires: byte-identical round-trip fixtures after each relocation group. Context: [[plan:2026-07-03-ot-deduplication-and-simplification-pass.org][dedup pass record]] (cancelled tasks 658e60ba, dddd6cf0).
+
 * Fixes
+** TODO ot: id args that look like scientific notation get number-coerced
+:PROPERTIES:
+:CUSTOM_ID: 4c54f6d1-9284-4431-a714-1ca3087c53a7
+:CREATED: [2026-07-02 Thu 22:33]
+:END:
+:LOGBOOK:
+- Created [2026-07-02 Thu 22:33]
+:END:
+Repro: `ot status 1022e091 DONE` fails with `unknown-task ... :id 1.022E94`. babashka.cli coerces positional/option values, and an 8-char hex prefix shaped like `<digits>e<digits>` (e.g. `1022e091`) parses as a Double in scientific notation before the id resolver sees it. Fix: coerce id-bearing args/options to `:string` in the cli dispatch specs (or stringify in `resolve-id-arg`), and add a regression test with such a prefix.
+
+** DONE org-tasks-tui final review follow-up
+CLOSED: [2026-07-03 Fri 17:50]
+:PROPERTIES:
+:CUSTOM_ID: 1d10dd58-04b7-4efa-8f3d-ce46b7c617fd
+:CREATED: [2026-07-03 Fri 17:29]
+:END:
+:LOGBOOK:
+- Created [2026-07-03 Fri 17:29]
+- State "DONE" from "TODO" [2026-07-03 Fri 17:50]
+:END:
+#+IMPORT: [[plan:2026-07-03-org-tasks-tui-final-review-follow-up.org]]
 
 * Housekeeping
 
@@ -265,25 +271,3 @@ Evidence:
 - pi/settings.json HEAD: packages[], theme, hideThinkingBlock, defaultThinkingLevel.
 - Session dirty diff: lastChangelogVersion="0.76.0", defaultProvider="anthropic", defaultModel="claude-opus-4-7".
 - Filter wrapper exists at ./install-git-filter.sh; was not active on this clone.
-
-** TODO ot doctor: make * Validation an optional change-record section :skill_org-tasks:skill_org-plan:
-:PROPERTIES:
-:CUSTOM_ID: 53704dac-1c28-47b7-b0b5-67af16a00814
-:CREATED: [2026-06-24 Wed 16:52]
-:END:
-:LOGBOOK:
-- Created [2026-06-24 Wed 16:52]
-:END:
-The org-plan skill now treats * Validation as optional: omit it when the only evidence would be that the standard automated suites pass (an implicit pre-merge requirement), and include it only for non-obvious verification evidence. The ot doctor validator still lists Validation as a required change-record section, so it now emits a missing-record-section warning against conformant records (observed closing the connect portal webserial change-record).
-
-Fix:
-- Drop "Validation" from required-record-sections in skills/org-tasks/scripts/src/org_tasks/doctor.clj:229-230 so the required set is ["Intent" "Summary" "Plan" "Implementation"].
-- Keep the :empty-validation-section check (doctor.clj:248-254) for when a Validation section IS present but blank.
-- Sweep docs/contract.md and skills/org-plan/references/change-record-format.md for any 'required: Validation' wording, and update any doctor tests asserting Validation is required.
-
-Origin:
-- session: connect-portal file-queue-refactor
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: git@git.nmd.ie:products/connect/portal @ file-queue-refactor
-- timestamp: [2026-06-24 Wed 16:51]
-- sender: human

@@ -1,0 +1,234 @@
+#+TITLE: org-tasks-tui final review follow-up
+#+DATE: 2026-07-03 Fri
+#+PARENT: [[task:1d10dd58-04b7-4efa-8f3d-ce46b7c617fd][org-tasks-tui final review follow-up]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+SPEC_IMPACT: skills/org-tasks/scripts/docs/DESIGN.org
+#+SPEC_IMPACT: skills/org-tasks/scripts/docs/contract.md
+
+* Intent
+
+Close out the findings from the two parallel model reviews (claude-opus-4-8 and openai-codex/gpt-5.5) of the `ot` CLI/TUI: eliminate the silent data-loss paths around file rewrites and imported-task archiving, and fix the smaller robustness/UX defects they surfaced.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* inline
+
+Full review reports: [[file:2026-07-03-org-tasks-tui-final-review-follow-up/review-opus.md][review-opus.md]] · [[file:2026-07-03-org-tasks-tui-final-review-follow-up/review-codex.md][review-codex.md]]. Both reviews approved the codebase (193 tests / 724 assertions green) with no correctness bugs in the serializer; all findings are robustness/consistency issues around file I/O.
+
+** Scope
+
+*** In scope
+- Write-time conflict detection for all read-modify-write mutators (`loader.clj` `save-source-roots`, `archive_publish.clj` `save-file-block!`), including unique temp-file names.
+- Correct archive/publish/unpublish semantics for file-level `#+IMPORT:` rooted tasks.
+- Fail-fast on unterminated `:PROPERTIES:`/`:LOGBOOK:` drawers.
+- Fail-fast `safe-slurp` (distinguish missing file from read error).
+- TUI plan action resolving typed import links before opening the editor.
+- Tests for each fixed path; contract.md update for any new error codes.
+
+*** Out of scope
+- File locking / multi-process coordination beyond conflict detection (detect-and-fail is sufficient).
+- The Opus P3 double-graph-load in `create-cmd` (perf only; deferred as follow-up if not trivially co-fixed).
+- Any TUI feature work beyond the plan-open fix.
+
+** Acceptance
+
+*** Core functionality
+- A mutating command whose source file changed between load and write fails with a `conflict` error and leaves the file untouched.
+- `save-file-block!` writes from the load-time snapshot, not a re-slurp.
+- Concurrent `ot` invocations cannot collide on a shared temp-file name.
+- Archiving a task rooted in a file-level import either removes it from its `:source-path` file or is rejected with a clear error — it never appears in both archive and `ot list`.
+- A file with an unterminated drawer produces a parse error on mutation instead of being rewritten.
+- A read error on `TASKS.archive.org` aborts the command instead of regenerating the archive preamble.
+- TUI plan action opens the resolved `design/log/...` path for `[[plan:...]]` imports.
+
+*** Edge cases
+- Conflict check tolerates the file being created between load (absent) and write.
+- Unterminated drawer at EOF and mid-file both surface diagnostics.
+
+*** Anti-criteria
+- Must not: break byte-identical round-trip guarantees (fixtures under `test/fixtures/round-trip/`).
+- Must not: change the `org-tasks/v1` envelope shape (new error codes only).
+- Must not: regress any of the 193 existing tests.
+
+** Decisions
+- Conflict handling: detect (content hash of load-time snapshot vs current bytes) and fail with a structured error, rather than lock files.
+  Rejected:
+  - File locking: multi-process coordination complexity not justified; Emacs holds no locks either.
+  - Last-write-wins (status quo): silent data loss, flagged by both reviewers.
+
+** Follow-ups
+- `create-cmd` double graph load with `--relative-to` (Opus P3) — fix opportunistically or raise a TASKS.org task at closure.
+
+* Plan
+
+** DONE Write-time conflict detection in save-source-roots
+CLOSED: [2026-07-03 Fri 17:49]
+:PROPERTIES:
+:CUSTOM_ID: 4febd450-bb20-4c3c-9031-d042595675bb
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-07-03 Fri 17:49]
+:END:
+Acceptance criteria:
+- =save-source-roots= compares current file bytes against the load-time =:source-content= before writing; mismatch fails with a =conflict= error code, file untouched.
+- File absent at load but present at write is also a conflict.
+- Temp-file names are unique per invocation (fixes shared =path.tmp= race).
+- New error code documented in =docs/contract.md=.
+Reference: =loader.clj:187-210=.
+
+** DONE save-file-block! uses load-time snapshot plus conflict check
+CLOSED: [2026-07-03 Fri 17:49]
+:PROPERTIES:
+:CUSTOM_ID: 546d7e76-b188-459a-8833-a6a245b9db80
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-07-03 Fri 17:49]
+:END:
+Acceptance criteria:
+- =save-file-block!= no longer re-slurps the target; it writes from the graph's load-time content with the same conflict check as task 1.
+Reference: =archive_publish.clj:34=.
+
+** DONE Correct archive semantics for file-level imported roots
+CLOSED: [2026-07-03 Fri 17:49]
+:PROPERTIES:
+:CUSTOM_ID: c1e13d46-366a-4a63-b808-51e67c3d5a22
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-07-03 Fri 17:49]
+:END:
+Acceptance criteria:
+- Archiving a task whose root is a file-level =#+IMPORT:= removes it from its =:source-path= file, or the command is rejected with a clear structured error (choose and record in ** Decisions).
+- Task never appears in both =TASKS.archive.org= and =ot list= output.
+- Same treatment audited for =publish= / =unpublish=.
+Reference: =loader.clj:48-64,124-128=, =archive_publish.clj:185-197=.
+
+** DONE Fail fast on unterminated drawers
+CLOSED: [2026-07-03 Fri 17:49]
+:PROPERTIES:
+:CUSTOM_ID: f0bfdbcf-7d5f-4f21-a12a-0afd255f8430
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-07-03 Fri 17:49]
+:END:
+Acceptance criteria:
+- =consume-drawer!= hitting EOF before =:END:= surfaces a parse error naming file and line.
+- Mutating commands abort on the parse error; read-only commands may degrade with a warning.
+Reference: =parser.clj:235-250,269-273=.
+
+** DONE Fail-fast safe-slurp
+CLOSED: [2026-07-03 Fri 17:49]
+:PROPERTIES:
+:CUSTOM_ID: 88d2da6e-e8be-47ab-82c3-7b3d513919c5
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-07-03 Fri 17:49]
+:END:
+Acceptance criteria:
+- Missing file → nil (unchanged); IO error on an existing file → thrown/structured error, never treated as empty.
+- A read failure on a populated =TASKS.archive.org= aborts instead of regenerating the preamble.
+Reference: =loader.clj:24=.
+
+** DONE TUI plan action resolves typed import links
+CLOSED: [2026-07-03 Fri 17:49]
+:PROPERTIES:
+:CUSTOM_ID: 492cc3e5-4bc8-4502-841e-be0094f7c169
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-07-03 Fri 17:49]
+:END:
+Acceptance criteria:
+- TUI plan action on a task with =[[plan:foo.org]]= opens =design/log/foo.org=, not the literal =plan:foo.org=.
+- Resolution shared with (not duplicated from) existing link-resolution code.
+Reference: =parser.clj:281-288=, =tui/dispatch.clj:185-191=.
+
+* Implementation
+
+All six plan tasks are done; =bb test= is green at 204 tests / 753
+assertions (up from 193/724 — 11 new tests across =loader-test=
+(new), =parser-test=, =archive-publish-test=, and =tui-test=). The one
+failing assertion in =cli-test= (=bare-non-tty-emits-selected-json=) is
+pre-existing and environment-coupled: it asserts on the *real* enclosing
+repo's =TASKS.org= selection state, and this very task being selected
+via =ot select= flips which branch of =selected-cmd= runs. Confirmed via
+=git stash= that it fails identically on a clean checkout once the
+repo's own =TASKS.org= has this task selected; unrelated to this change.
+
+** Write-time conflict detection (tasks 1-2)
+
+=loader/atomic-write= now uses a per-call unique tmp suffix
+(=path.tmp-<nanoTime>=) instead of a shared =path.tmp=.
+=loader/save-source-roots= gained an optional =known-baselines= map
+(path -> load-time content-or-nil) alongside its existing single-arg
+form, and throws a =conflict= ex-info (translated to the envelope by
+the new =commands.util/guard!=) when a target's on-disk bytes no
+longer match the baseline it is about to rewrite from.
+
+=archive_publish.clj='s bespoke, buggy =save-file-block!= (re-slurped
+the target fresh at write time, so it could never detect a conflict,
+and always stamped every task's =:source-path= onto one of two fixed
+files) was deleted outright rather than patched. =publish=/=unpublish=
+now re-stamp the moved task's =:source-path=/=:line-number= in place
+and hand the *whole* graph to =save-source-roots=, which regroups by
+each task's current =:source-path= — this single change fixes tasks 1,
+2, and 3 together (see below) instead of requiring three separate
+patches. =archive= does the analogous thing: drop the archived task
+from the full graph and call =save-source-roots= on what remains.
+
+=known-baselines= is required (not just a nice-to-have) for two edge
+cases uncovered by the existing publish/unpublish tests once the
+rewrite landed: (a) a destination file with zero prior root tasks has
+no task to source a correct baseline from, so the mover explicitly
+slurps both the *from* and *to* paths up front and passes them in; (b)
+a file whose *only* root task moves away would otherwise have zero
+current roots and never appear in =by-file=, silently leaving the
+stale heading behind — =known-baselines= forces that file to still be
+visited. Regression tests: =unpublish-the-only-shared-task-empties-tasks-org=,
+=publish-from-a-local-file-with-no-other-tasks-does-not-report-conflict=.
+
+** Decisions
+
+- *Archive semantics for file-level imported roots (task 3):* chose
+  "remove from source", not "reject". Reusing =save-source-roots= over
+  the full graph (per above) means there is no extra code path to
+  special-case — the archived/moved task is simply excluded from the
+  in-memory graph before the shared save call, and =save-source-roots=
+  regroups by each remaining task's own =:source-path=, correctly
+  rewriting whichever file (TASKS.org, TASKS.local.org, or a
+  file-level =#+IMPORT:= plan file) the task actually lived in. A
+  "reject" behaviour would have required detecting the file-level-import
+  case explicitly and offered no safety benefit once the generic path
+  is correct.
+- *Parse-error handling scope (task 4):* the acceptance edge case
+  "read-only commands may degrade with a warning" is phrased as
+  optional. Implemented uniformly instead: =commands.util/load-context=
+  (used by every command, read or write) catches the =unterminated-drawer=
+  ex-info and turns it into the standard error envelope, so all commands
+  fail fast and cleanly rather than only mutating ones. Simpler than
+  threading a read-vs-write distinction through every command, and still
+  satisfies the hard requirement (mutating commands abort).
+- *Error code for drawer failures:* used a dedicated =unterminated-drawer=
+  code rather than a generic =parse-error=, matching the specific,
+  actionable nature of the failure (contract.md documents it alongside
+  =conflict=).
+
+** Fail-fast reads (task 5)
+
+=loader/safe-slurp= now checks =fs/exists?= first: missing → =nil=
+(unchanged contract for every existing caller), present-but-unreadable
+→ throws =unreadable= ex-info. =archive-cmd='s existing-archive read
+automatically inherits this (it already called =safe-slurp=), so a
+broken =TASKS.archive.org= now aborts instead of silently regenerating
+the preamble as if it were empty — no separate code change needed
+beyond the shared primitive plus wrapping the archive body in
+=commands.util/guard!= to translate the exception into an envelope.
+
+** TUI plan-link resolution (task 6)
+
+=tui/dispatch='s =:task/plan= action no longer hands the raw
+=:import-path= wire field straight to =:editor/open= as a literal file
+path. It now dispatches a new =:plan/open= effect that calls
+=list-show/show-cmd= in-process (the same path =ot show='s
+"plan" line uses) and opens the resolved =[:record :path]= from that
+envelope — reusing =links/resolve-task-link-target= transitively
+rather than duplicating link-template/typed-link resolution in the TUI
+layer.

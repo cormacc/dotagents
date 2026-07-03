@@ -3,7 +3,13 @@
 
   This namespace is the only place command renderers should touch
   `bling.core`. Helpers accept the command opts map (or any map carrying
-  `:color?`) and return plain strings when colour is disabled."
+  `:color?`) and return plain strings when colour is disabled.
+
+  Boundary note: the standalone TUI (`org-tasks.tui`) renders through
+  charm's styling instead; the two stacks are intentionally separate
+  (bling for one-shot CLI text, charm for the interactive screen), but
+  they share one set of colour definitions: `palette-256` below is the
+  canonical palette, and the TUI builds charm `ansi256` colours from it."
   (:require [bling.core :refer [bling]]
             [clojure.string :as str]
             [org-tasks.output :as out]))
@@ -20,6 +26,23 @@
    "B" :orange
    "C" :yellow
    "D" :blue})
+
+(def palette-256
+  "Canonical ANSI-256 colour codes for the semantic palette. bling renders
+  each palette keyword used by this namespace to exactly this code
+  (pinned by `styling-test/palette-256-matches-bling`); the TUI builds its
+  charm colours from the same map so both stacks stay visually aligned.
+  `:cyan` is the TUI-only accent (cursor/titles) — bling has no cyan
+  keyword, so it is not covered by the pin test."
+  {:yellow  178
+   :blue    39
+   :orange  172
+   :green   40
+   :gray    247
+   :red     196
+   :magenta 201
+   :purple  141
+   :cyan    6})
 
 (def palette-keywords
   "Every bling keyword intentionally used by this namespace. Tests assert

@@ -240,7 +240,13 @@
                   collected []]
              (cond
                (>= j line-count)
-               j
+               (throw (ex-info
+                        (str "Unterminated drawer"
+                             (when source-path (str " in " source-path))
+                             " starting at line " start-idx)
+                        {:code :unterminated-drawer
+                         :file source-path
+                         :line start-idx}))
 
                (re-matches drawer-end-re (nth lines j))
                (do (update-current! update field (fnil into []) collected)
@@ -433,7 +439,7 @@
 
 ;; ── File-level keyword + #+LINK helpers ────────────────────────────
 
-(defn- escape-regex [^String s]
+(defn escape-regex [^String s]
   (str/replace s #"[.*+?^${}()|\[\]\\]" "\\\\$0"))
 
 (defn get-file-keywords

@@ -1,0 +1,58 @@
+#+TITLE: org-tasks TUI v2 — task-creation parity and configurable editor
+#+DATE: 2026-06-27 Sat
+#+PARENT: [[archive:5606c9a0-af2a-4e0c-84bd-e961b5c1738d][Add org-tasks TUI]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC_IMPACT: skills/org-tasks/scripts/README.md
+
+* Intent
+Close the remaining gap between the standalone ~ot~ TUI and the pi tasks overlay
+for the keybindings related to *task creation* and *opening in Emacs*, and
+abstract editor selection so the launcher can be made configurable (Vim, VS
+Code, …) later.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+** Scope
+*** In scope
+- Bring ~n~/~N~ to full overlay parity: create a top-level task when there is no
+  cursor row (empty list), and route ~--parent~/~--after~/~--local~/~--tasks~
+  from the cursor anchor exactly as the overlay does.
+- Add an ~org-tasks.editor~ abstraction that resolves the editor binary and
+  builds per-editor argv, with Emacs daemon-ensure parity.
+- Update README key-map/editor documentation.
+
+*** Out of scope
+- New keybindings beyond the overlay set (no new letters).
+- Changing the pi overlay or the selected-task JSON schema.
+- A dedicated config file; selection is opt/env-driven for now.
+
+** Acceptance
+- [ ] ISC-1: ~n~/~N~ create a top-level task when no task is under the cursor.
+- [ ] ISC-2: ~n~ creates a sibling (same parent, inserted after) and ~N~ a child of the cursor task, inheriting local/source-file routing.
+- [ ] ISC-3: Editor resolution honours ~--editor~ → ~OT_EDITOR~ → ~EDITOR~ → ~emacsclient~.
+- [ ] ISC-4: argv matches each editor's convention (emacsclient ~-n +LINE file~; VS Code ~--goto file:line~; Vim/generic ~+LINE file~).
+- [ ] ISC-5: Opening in the Emacs editor ensures a reachable server, starting ~emacs --daemon~ when needed.
+- [ ] ISC-6: README documents creation parity and editor configurability.
+- [ ] ISC-A-1: Must not: add new TUI keys or change the selected-task JSON schema.
+
+** Decisions
+- Chose a dedicated ~org-tasks.editor~ namespace over inlining in ~tui.clj~ :: Isolates the configurable launch policy behind ~resolve-editor~/~argv~/~open!~ so future editors are a data change, and makes resolution unit-testable via a rebindable ~*getenv*~.
+- Chose to classify editors by binary name (~detect-kind~) :: Lets a single ~EDITOR~/~OT_EDITOR~ value drive the right argv convention without a separate "editor type" option.
+- Chose ~emacsclient -n~ with daemon-ensure as the default :: Matches the pi tasks extension; ~-n~ keeps the TUI responsive instead of blocking on buffer close.
+- Chose to drop the ~(:id (cursor-row state))~ guard on ~n~/~N~ :: The overlay treats a missing anchor as a top-level create; the guard made the TUI unable to create the first task from an empty list.
+
+** Shipped
+- Added ~skills/org-tasks/scripts/src/org_tasks/editor.clj~ (~resolve-editor~, ~detect-kind~, ~argv~, ~ensure-emacs-server!~, ~open!~).
+- Reworked ~tui.clj~ creation: ~create-opts~/~anchor-create-opts~ mirror overlay placement; ~:prompt/start~ no longer requires a cursor row; ~:fx/edit~ routes through ~editor/open!~.
+- Documented creation parity and editor configurability in the scripts README.
+
+* Implementation
+- ~org-tasks.editor~ owns editor resolution and launching; ~tui.clj~ requires it and removed its bespoke ~open-path!~.
+- ~create-opts~ produces ~ot create~ options: no row → top-level (default section); ~:child~ → ~:parent~ = cursor id; ~:sibling~ → cursor's ~:parentId~ (when nested) + ~:after~ = cursor id; both inherit ~:local~ or ~:tasks <sourcePath>~ from the anchor.
+- Added ~org-tasks.editor-test~ and creation/empty-state tests in ~org-tasks.tui-test~.
+
+* Validation
+- ~bb run test org-tasks.cli-test org-tasks.tui-test org-tasks.editor-test~ => 28 tests, 110 assertions, 0 failures, 0 errors.
+- Manual REPL: empty-list ~n~ + typed summary + Enter creates a single top-level task with no ~:parentId~; ~N~ on a parent nests the child under it.

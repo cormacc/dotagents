@@ -64,6 +64,24 @@
            (:logbook-lines t)))
     (is (= "Body text." (:description t)))))
 
+(deftest unterminated-properties-drawer-throws-at-eof
+  (testing "a :PROPERTIES: drawer never closed before end-of-file surfaces a parse error"
+    (let [input "* TODO A\n:PROPERTIES:\n:CUSTOM_ID: x\n"
+          e (try (p/parse-tasks input {:source-path "/repo/TASKS.org"}) nil
+                 (catch clojure.lang.ExceptionInfo e e))]
+      (is (some? e))
+      (is (= :unterminated-drawer (:code (ex-data e))))
+      (is (= "/repo/TASKS.org" (:file (ex-data e)))))))
+
+(deftest unterminated-logbook-drawer-mid-file-throws
+  (testing "a :LOGBOOK: drawer left open with more content after it also surfaces"
+    (let [input (str "* TODO A\n:LOGBOOK:\n- Created [2026-04-28 Tue 10:49]\n"
+                     "* TODO B\nNo drawer here.\n")
+          e (try (p/parse-tasks input) nil
+                 (catch clojure.lang.ExceptionInfo e e))]
+      (is (some? e))
+      (is (= :unterminated-drawer (:code (ex-data e)))))))
+
 ;; ── #+IMPORT keyword forms ────────────────────────────────────────
 
 (deftest import-link-forms

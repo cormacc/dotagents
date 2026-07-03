@@ -1,0 +1,307 @@
+#+TITLE: ot: deduplication and simplification pass from parallel reviews
+#+DATE: 2026-07-03 Fri
+#+PARENT: [[archive:2a4b1e7a-d574-466e-9aef-87ac7986c83d][ot: deduplication and simplification pass from parallel reviews]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+SPEC_IMPACT: skills/org-tasks/scripts/README.md
+#+SPEC_IMPACT: skills/org-tasks/scripts/docs/test-map.md
+
+* Intent
+
+Eliminate the duplication and boilerplate identified by two parallel architecture reviews (claude-fable-5, gpt-5.5) of the `ot` CLI, shrinking the codebase by roughly 400–550 LOC and removing drift hazards — without changing any org-tasks/v1 contract behaviour, CLI text output, or TUI interaction. The registry-driven dispatch, CLI/TUI separation, and round-trip-preserving parser core are keepers; this pass consolidates the copy-pasted idioms around them.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* inline
+
+** Scope
+
+*** In scope
+- Sync `scripts/ot` bash-wrapper fallback deps with `bb.edn` (already drifted: charm.clj artifact + nexus pin differ).
+- Single shared import/link/path-resolution helper replacing the 5 copies (`loader`, `list_show`, `maintenance`, `archive_publish`, `insert` ×2) of the expand-link → base-dir → sandbox idiom.
+- Unified tree walk (children + import-children) replacing the 7–8 reimplementations across `task`, `scan`, `doctor`, `commands/util`, `status`, `loader`, `insert`, `list_show`.
+- `commands/util` positional-arg helper replacing ~15 copies of `(or (:id opts) (first (:args result)))` and the duplicated missing-arg error blocks (verify the `:args` fallback is dead under registry `:args->opts` first).
+- Data-driven property commands in `links.clj` (handoff/blocker/issue triples); merge `publish`/`unpublish` into one parameterised mover.
+- Registry cleanup: derive `dispatch-coerce` from the specs; `enum-opt` helper for the 6 hand-rolled enum validators; delete empty `section-spec`.
+- Dead-option removal or implementation: no-op `--scope` on `ot list`; unused `--selected` (`registry.clj:102`).
+- Publicise `loader/atomic-write`; replace the 3 inline tmp+move copies in `archive_publish`; decide whether `insert`/`record` writes become atomic.
+- Consolidate small dupes: `closed-statuses` (×4 → `lifecycle`), `escape-regex` (×2), `random-uuid-str` (×2, bb has `random-uuid`), trailing-tag-strip regex (×3), `#+LINK:` preamble strings (×2), `requiring-resolve` where no cycle exists (`record`, `doctor`, `maintenance`), misleading `ot status` comment in `create.clj:12`.
+- Split `commands_test.clj` (1,300+ lines) by command family with a shared `test_util`; update `docs/test-map.md`.
+- Doctor: restructure `run-doctor`'s 200-line volatile body into a vector of pure `input -> [findings]` check fns; replace gratuitous `volatile!` walkers elsewhere (`task`, `loader`, `insert`, `status`) with reduces.
+- Perf: memoize `parse-link-templates` by `:source-path` in `task->wire`; reuse the single-pass depth computation from `tui/tasks` in `list-cmd` (currently O(n²)).
+- Update `README.md` project layout for any new/renamed namespaces; note that `bb test` runs from repo root.
+
+*** Out of scope
+- Parser facade split and the parser-blocked dupes residue (`closed-statuses` → `lifecycle`, parser-owned trailing-tag strip) — dropped mid-pass by user decision after two risk-based deferrals; follow-up task [[task:6781dbd0-677a-46a2-a874-4380b3c336af][ot: parser facade split + residual dupes]].
+- Any change to the org-tasks/v1 JSON/EDN contract (`docs/contract.md`), CLI text output, or exit-code semantics.
+- TUI key map, rendering, or interaction changes.
+- Rewriting `parser/parse-tasks`' stateful line scanner (facade split moves code, does not rewrite the scanner).
+- Unifying the bling (CLI) and charm (TUI) styling stacks — documented intentional boundary.
+- Changes to `paths.clj` sandboxing logic itself (callers centralise onto it; it does not change).
+- The registry ↔ dispatch ↔ TUI derivation design and the `output.clj` envelope / `*exit-fn*` bridge.
+- New features or new CLI options.
+
+** Acceptance
+
+*** Core functionality
+- `bb test` (from repo root) passes with assertion count ≥ baseline (185 tests / 648 assertions).
+- `scripts/ot` fallback `-Sdeps` names the same artifacts and versions as `bb.edn`.
+- Exactly one implementation of import/link target resolution exists; `loader`, `list_show`, `maintenance`, `archive_publish`, and `insert` all call it.
+- Exactly one children+import-children walk/find/update implementation exists; `commands/util/task-children*`, `insert/find-task-by-id`, `scan/walk-tasks`, and `doctor/walk-tasks` are deleted.
+- `dispatch-coerce` is derived from command specs, not hand-maintained.
+- `--scope` on `ot list` either filters archived tasks or is no longer accepted; `--selected` is either read by production code or removed from the spec.
+- All file writes that were tmp+move remain atomic through one shared public helper.
+- `status.clj` `valid-statuses` derives from `lifecycle/status-cycle`; non-parser callers use `lifecycle/closed-statuses`. (Full single-definition consolidation moved to the parser follow-up task.)
+- Each `commands/*` production namespace has a corresponding focused test namespace; `commands_test.clj` no longer exists as a monolith.
+- `doctor` checks are pure fns; `run-doctor` composes them without a `volatile!` accumulator.
+- Total `src/` LOC is reduced versus the pre-pass baseline (5,549). Outcome: −177 (5,372); the original ≥300 target assumed the parser split, which was descoped.
+
+*** Edge cases
+- Standalone-skill install path (wrapper fallback classpath, no repo `bb.edn`) still launches `ot` successfully.
+- Round-trip fixtures (`test/fixtures/round-trip/`) remain byte-identical through parse→serialize.
+- `ot doctor` finding order and wording are unchanged.
+- TUI command bridge (`tui/tasks` `call-command`) behaviour is unchanged for both success and error envelopes.
+
+*** Anti-criteria
+- Must not: change any key, field, or value in org-tasks/v1 machine output (`--format json|edn`).
+- Must not: change CLI human-text output except where an accepted-but-ignored option is removed.
+- Must not: add new top-level dependencies or JVM-only libraries.
+- Must not: modify `paths.clj` resolution/sandbox semantics.
+- Must not: rewrite `parser/parse-tasks` internals beyond mechanical relocation.
+
+** Decisions
+- Chose incremental dedup within the existing architecture :: both reviews independently rated the registry/dispatch/TUI design as earning its keep; consolidation beats restructuring.
+  Rejected:
+  - Structural rewrite (merge command namespaces, replace registry): no payoff against ISC; both reviews explicitly said leave the architecture alone.
+  - Cherry-picking only quick wins: leaves the two P1 duplication clusters (path resolution, tree walk) — the security-relevant and highest-divergence-risk items — unaddressed.
+- Parser split is facade-preserving :: `org-tasks.parser` remains the public namespace re-exporting from internal splits, so no caller churn and no round-trip risk.
+- `links.clj` command generators keep named fns :: registry entries and TUI `tui-command-fns` reference vars by name; the data-driven table produces named defs so the registry is untouched.
+
+** Shipped
+- MODIFIED `skills/org-tasks/scripts/README.md`: notes `bb test` runs from the repo root; project layout reflects new namespaces.
+- MODIFIED `skills/org-tasks/scripts/docs/test-map.md`: reflects the command-family test split.
+- `scripts/ot` fallback `-Sdeps` synced with `bb.edn` (was shipping different charm.clj/nexus artifacts on standalone installs).
+- New `org-tasks.links` (shared expand-link → base-dir → sandbox resolution; 5 former copies) and `org-tasks.tree` (shared traversal; ~7 former copies; insert keeps `{:imports? false}`).
+- `links.clj` property commands generated from a data map (262 → 178 LOC); publish/unpublish merged into `move-locality-cmd`.
+- Registry: `dispatch-coerce` derived from specs; `enum-opt` helper; no-op `ot list --scope`/`--selected` options removed (the only intentional CLI-surface change).
+- Shared public `atomic-write`/`safe-slurp`; `insert`/`record` writes now atomic.
+- Doctor: `run-doctor` composes ordered pure check fns; gratuitous `volatile!` walkers replaced by pure folds across `task`/`loader`/`status`.
+- Perf: `task->wire` link-template memoization (bounded cache); single-pass `ot list` depth computation (was O(n²)).
+- New regression coverage: JSON envelope assertions for all mutation commands; golden `ot doctor --format json` finding-order test.
+- Net: 5,549 → 5,372 src LOC; tests 185/648 → 187/664.
+
+** Gotchas
+- Mutation-command machine envelopes (`issue add/remove` etc.) had zero test coverage — a data-driven refactor silently changed `:tokens` from raw strings to wired maps and only an independent review caught it. Envelope regression tests now exist; keep them when touching `links.clj`.
+- The `(first (:args result))` positional fallback is NOT dead: command fns are invoked directly by tests and the TUI bridge, bypassing registry `:args->opts`. Centralised in `commands.util/positional-arg`, not deleted.
+- Moving parser-owned `closed-statuses` to `lifecycle` creates a `parser` → `lifecycle` → `parser` cycle; needs the parser split (or a constants extraction) first.
+
+** Follow-ups
+- [[task:6781dbd0-677a-46a2-a874-4380b3c336af][ot: parser facade split + residual dupes (dedicated parser-only session)]] — carries the two cancelled plan tasks (658e60ba, dddd6cf0 residue).
+- [[task:4c54f6d1-9284-4431-a714-1ca3087c53a7][ot: id args that look like scientific notation get number-coerced]] — pre-existing TASKS.org item, adjacent but separate.
+
+* Plan
+
+** DONE Sync scripts/ot wrapper fallback deps with bb.edn
+CLOSED: [2026-07-03 Fri 11:03]
+:PROPERTIES:
+:CUSTOM_ID: 98105e5a-1f19-44c9-979f-b3c03a0a6846
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:03]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:03]
+- State "DONE" from "STARTED" [2026-07-03 Fri 11:03]
+:END:
+Fallback deps synced; `bb.edn` noted as source of truth.
+
+** DONE Add positional-arg helper and remove opts/args fallback copies
+CLOSED: [2026-07-03 Fri 11:05]
+:PROPERTIES:
+:CUSTOM_ID: 70b3f330-65ae-4196-8667-dcd5f323da86
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:04]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:04]
+- State "DONE" from "STARTED" [2026-07-03 Fri 11:05]
+:END:
+Fallback audited (reachable via TUI/tests); centralised in `commands.util/positional-arg`.
+
+** DONE Derive dispatch-coerce and add enum-opt registry helper
+CLOSED: [2026-07-03 Fri 11:08]
+:PROPERTIES:
+:CUSTOM_ID: 1767a419-ac15-48c4-ab40-7ea68800eb7e
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:06]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:06]
+- State "DONE" from "STARTED" [2026-07-03 Fri 11:08]
+:END:
+`dispatch-coerce` derived from specs; `enum-opt` helper; empty `section-spec` removed.
+
+** DONE Remove or implement dead options: list --scope and --selected
+CLOSED: [2026-07-03 Fri 11:09]
+:PROPERTIES:
+:CUSTOM_ID: bb568a38-eddd-4346-a9a3-375115e8c404
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:08]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:08]
+- State "DONE" from "STARTED" [2026-07-03 Fri 11:09]
+:END:
+Chose removal over implementation for both options; `scan --scope` untouched.
+
+** DONE Publicise atomic-write and consolidate file-write discipline
+CLOSED: [2026-07-03 Fri 11:11]
+:PROPERTIES:
+:CUSTOM_ID: a7d1e241-5442-4909-9c9e-2983d1e326b0
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:09]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:09]
+- State "DONE" from "STARTED" [2026-07-03 Fri 11:11]
+:END:
+Public `atomic-write`/`safe-slurp`; `insert`/`record` writes made atomic.
+
+** CANCELLED Consolidate small duplications and vestigial code
+CLOSED: [2026-07-03 Fri 12:22]
+:PROPERTIES:
+:CUSTOM_ID: dddd6cf0-edca-4bac-859e-080839b38c04
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:11]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:11]
+- State "TODO" from "STARTED" [2026-07-03 Fri 11:12]
+- State "STARTED" from "TODO" [2026-07-03 Fri 12:03]
+- State "TODO" from "STARTED" [2026-07-03 Fri 12:07]
+- State "CANCELLED" from "TODO" [2026-07-03 Fri 12:22]
+:END:
+Safe subset shipped (see Implementation); parser-blocked residue carried by follow-up task 6781dbd0.
+
+** DONE Extract shared import/link path-resolution helper
+CLOSED: [2026-07-03 Fri 11:17]
+:PROPERTIES:
+:CUSTOM_ID: bf26346a-6891-4d84-bc07-115709646d79
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:13]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:13]
+- State "DONE" from "STARTED" [2026-07-03 Fri 11:17]
+:END:
+`org-tasks.links` helper; all 5 sites rewired; sandbox-escape unit coverage added.
+
+** DONE Unify tree traversal into one namespace
+CLOSED: [2026-07-03 Fri 11:22]
+:PROPERTIES:
+:CUSTOM_ID: dfb826a7-c5ba-4eb9-9722-d9d34ac948db
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:17]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:17]
+- State "DONE" from "STARTED" [2026-07-03 Fri 11:22]
+:END:
+`org-tasks.tree` shared traversal; duplicated walkers deleted; insert keeps `{:imports? false}`.
+
+** DONE Data-driven property commands and publish/unpublish merge
+CLOSED: [2026-07-03 Fri 11:25]
+:PROPERTIES:
+:CUSTOM_ID: 18a51246-a517-4784-b632-55ee87970d75
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:22]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:22]
+- State "DONE" from "STARTED" [2026-07-03 Fri 11:25]
+:END:
+Data-driven property commands (262 → 178 LOC); publish/unpublish merged. An envelope regression slipped through and was fixed post-review; envelope tests now guard this.
+
+** CANCELLED Split parser.clj internals behind the existing facade
+CLOSED: [2026-07-03 Fri 12:22]
+:PROPERTIES:
+:CUSTOM_ID: 658e60ba-fab5-44f1-9e6d-38095e637033
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:26]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:26]
+- State "TODO" from "STARTED" [2026-07-03 Fri 11:26]
+- State "STARTED" from "TODO" [2026-07-03 Fri 12:03]
+- State "TODO" from "STARTED" [2026-07-03 Fri 12:03]
+- State "CANCELLED" from "TODO" [2026-07-03 Fri 12:22]
+:END:
+Dropped from this pass after two risk-based deferrals; carried by follow-up task 6781dbd0.
+
+** DONE Split commands_test.clj by command family
+CLOSED: [2026-07-03 Fri 12:03]
+:PROPERTIES:
+:CUSTOM_ID: 925d651a-4f16-45db-8485-1a878da4f8fa
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:26]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:26]
+- State "TODO" from "STARTED" [2026-07-03 Fri 11:26]
+- State "STARTED" from "TODO" [2026-07-03 Fri 12:00]
+- State "DONE" from "STARTED" [2026-07-03 Fri 12:03]
+:END:
+Monolith split into command-family test namespaces + shared `test-util`; `docs/test-map.md` updated.
+
+** DONE Restructure doctor into pure check fns
+CLOSED: [2026-07-03 Fri 12:20]
+:PROPERTIES:
+:CUSTOM_ID: 918784e8-5b9a-4be8-97c3-4e584e25b943
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:26]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:26]
+- State "TODO" from "STARTED" [2026-07-03 Fri 11:26]
+- State "STARTED" from "TODO" [2026-07-03 Fri 12:07]
+- State "TODO" from "STARTED" [2026-07-03 Fri 12:08]
+- State "STARTED" from "TODO" [2026-07-03 Fri 12:15]
+- State "DONE" from "STARTED" [2026-07-03 Fri 12:20]
+:END:
+Pure ordered `doctor-checks` + `mapcat`; golden finding-order test green; volatile walkers replaced by pure folds.
+
+** DONE Perf: memoize link templates and share depth computation
+CLOSED: [2026-07-03 Fri 11:28]
+:PROPERTIES:
+:CUSTOM_ID: 5a66723d-60c8-426e-aff3-9a6d8f0765aa
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:27]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:27]
+- State "DONE" from "STARTED" [2026-07-03 Fri 11:28]
+:END:
+Link-template memoization (bounded) + single-pass list depths; output unchanged.
+
+* Implementation
+
+Review provenance: two parallel reviewer subagents (claude-fable-5, openai-codex/gpt-5.5) reviewed `skills/org-tasks/scripts/` at baseline 185 tests / 648 assertions, 5,549 src LOC. Consolidated findings and reviewer-unique items are reflected in Scope; consensus leave-alone list (registry design, styling split, parser scanner, paths sandboxing, output envelope bridge) is captured under Out of scope.
+
+- 98105e5a :: Synced `scripts/ot` fallback deps to `bb.edn` (`de.timokramer/charm.clj` 0.2.71, `no.cjohansen/nexus` 2026.06.4) and added an inline source-of-truth comment. Verified with `bb test` (185/648).
+- 70b3f330 :: Audited positional fallback reachability: CLI dispatch maps positional args through each registry entry's `:args->opts`, but command fns are also invoked directly from tests and the TUI command bridge, so the raw `:args` fallback is still reachable outside top-level CLI parsing. Centralised it in `commands.util/positional-arg` and replaced command-local `(or (:x opts) (nth (:args result) ...))` copies. Verified with `bb test` (185/648).
+- 1767a419 :: Added `registry/enum-opt` for keyword enum options (`format`, `as`, `scope`, `cycle`, `mode`), collapsed list/scan scope specs through `scope-spec`, removed the empty `section-spec`, and derived `dispatch-coerce` from `global-spec` plus command specs. Verified with `bb test` (185/648).
+- bb568a38 :: Chose removal over implementation for `ot list --scope` and `--selected`: both were accepted but ignored, and archived/selected filtering would add behaviour beyond the simplification pass. Removed both options from `list-spec` and deleted the always-true scope branch in `list_show`. `scan --scope` remains implemented separately. Verified with `bb test` (185/648).
+- a7d1e241 :: Publicised `loader/safe-slurp` and `loader/atomic-write`; rewired archive/publish tmp+move writes and duplicated nil-on-error slurps through the shared helpers. Chose to make `insert` writes and new `record` file creation atomic because existing comments already promised atomic insertion and tests do not observe partial writes. Verified with `bb test` (185/648).
+- dddd6cf0 :: Deferred after audit rather than mixing risky dependency changes into the small-dupes task. In particular, moving parser-owned `closed-statuses` directly to `lifecycle` would introduce a `parser` → `lifecycle` → `parser` cycle unless the closed-status predicate is separated or parser logic is split first. Leave this for a later pass after the parser split/tree work.
+- bf26346a :: Added `org-tasks.links/resolve-link-target` and `resolve-task-link-target` for expand-link → base-dir → sandbox resolution. Rewired loader, list/show record summaries, scan record reader, archive plan-parent rewrite, and insert duplicate-scan import walking through the helper without changing `paths.clj` semantics. Added unit coverage for project-root templates, file-relative links, and sandbox escape rejection. Verified with `bb test` (186/651).
+- dfb826a7 :: Added `org-tasks.tree` as the shared children/all-tasks/find/path/update home. Rewired `task`, `scan`, `doctor`, `list_show`, `archive_publish`, `status`, `record`, `links`, and `insert` callers; deleted the duplicated `commands.util/task-children*`, `commands.util/update-task-in-tree`, `scan/walk-tasks`, `doctor/walk-tasks`, `list_show/task-ancestors`, and `insert/find-task-by-id`. Preserved insert's parsed-file-only lookup with `{:imports? false}`. Verified with `bb test` (186/651).
+- 18a51246 :: Converted handoff/blocker/issue list/add/remove handlers to shared property helpers driven by `property-commands`, while keeping the existing named vars for registry/TUI references. Merged publish/unpublish into `move-locality-cmd`; output shape and tests stayed green. `links.clj` is down to 178 LOC (from 262), not the aspirational ~150, but the duplication target is met without contorting readability. Verified with `bb test` (186/651).
+- 658e60ba :: Deferred. The parser facade split is a broad mechanical relocation of the scanner/serializer/property/link/time helpers and is the highest round-trip-risk item in this pass. With the current session already touching dispatch, traversal, path resolution, and file writes, I stopped rather than risk byte-identical fixture regressions without enough focused review time.
+- 925d651a :: Deferred. Splitting the 1,300-line commands test monolith is low behavioural payoff but high merge/conflict cost while production refactors are still in flight; leave until command-shape changes settle.
+- 918784e8 :: Deferred. The tree traversal extraction removed the duplicated doctor walk already, but a pure-check rewrite of `run-doctor` is a larger ordering-sensitive change; leave for a focused doctor-only pass so finding order/wording can be fixture-diffed.
+- 5a66723d :: Memoized `task->wire` link-template parsing by `[source-path effective-content]` and replaced `ot list --levels` parent-chain recomputation with a single-pass depth vector over flattened rows. Verified `ot list` behaviour through existing command/TUI tests and `bb test` (186/651).
+- Review follow-up :: Read `design/log/2026-07-03-ot-dedup-review.md` and fixed the P1/P2 property-handler contract regressions from `f19a556`: `issue add/remove` mutation envelopes again emit raw string `:tokens`, and `blocker remove` again matches/prints the raw argument rather than normalising it. Added JSON envelope regression assertions for handoff set/clear, blocker add/remove, issue add/remove, plus a stable `ot doctor --format json` finding-order test before the deferred doctor rewrite. Bounded the link-template memo cache to 128 entries (clearing when full) to avoid unbounded TUI growth. Verified with `bb test` (187/664).
+- 925d651a :: Split the former `org-tasks.commands-test` monolith into focused `org-tasks.commands.{archive-publish,create,links,list-show,maintenance,record,status}-test` namespaces with shared fixtures/helpers in `org-tasks.commands.test-util`. `test_runner` already discovers nested `*_test.clj` namespaces, so no code change was needed there. Updated `docs/test-map.md`. Verified with `bb test` (187/664).
+- 658e60ba :: Deferred again after starting the task. The requested parser split remains a broad mechanical relocation of a round-trip-preserving scanner/serializer facade. Given the large just-landed test split and the requirement to preserve byte-identical fixtures after each move, this is riskier than its payoff in the current pass without a dedicated parser-only review window. No parser files were changed.
+- dddd6cf0 :: Completed the safe subset and left the task TODO because parser/lifecycle closed-status consolidation and parser-owned trailing-tag extraction remain blocked by the deferred parser split. Landed: `status.clj` valid statuses now derive from `lifecycle/status-cycle`; archive uses `lifecycle/closed-statuses`; `parser/escape-regex` is public and doctor uses it; UUID generation uses bb `random-uuid`; cycle-free `requiring-resolve` calls in record/maintenance became plain requires; the misleading create comment is fixed; README says `bb test` runs from repo root; insert scan-path resolution no longer puns vector vs error map. Verified with `bb test` (187/664).
+- 918784e8 :: Completed the safe gratuitous-volatile subset and left the task TODO because the full `run-doctor` pure-check rewrite is still an ordering-sensitive restructuring best done in a doctor-only pass. Landed pure folds for `task/collect-sources`, `task/flatten-tree`, `loader/collect-file-roots-by-source`, and the status promotion accumulator. The doctor finding-order golden test stayed green. Verified with `bb test` (187/664).
+- 918784e8 final :: Rewrote `run-doctor` around ordered pure `input -> [findings]` check fns (`doctor-checks` + `mapcat`) and removed doctor-local `volatile!` accumulation. Finding order/wording stayed unchanged under the golden `ot doctor --format json` order test and existing doctor tests. `parser.clj` was not changed. Verified with `bb test` (187/664).
+- Pass closure :: User dropped `658e60ba` (parser facade split) and the parser-blocked residue of `dddd6cf0` from this pass; both remain TODO as follow-up candidates requiring a dedicated parser-only session.

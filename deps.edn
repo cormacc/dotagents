@@ -9,6 +9,9 @@
 ;; bbin install <repo-root> --local/root <repo-root> --as ot # local dev
 {:paths ["skills/org-tasks/scripts/src"]
  :deps  {org.babashka/cli {:mvn/version "0.8.67"}
-         io.github.paintparty/bling {:mvn/version "0.10.0"}}
+         io.github.paintparty/bling {:mvn/version "0.10.0"}
+         io.github.TimoKramer/charm.clj {:git/tag "v0.2.71"
+                                         :git/sha "38e6823dc85ec932eefe2ad9c1f204307674c24f"}
+         io.github.cormacc/nexus {:git/sha "6e9bd241fd0750541104d77bfc7441d6657e4cb4"}}
  :aliases
  {:test {:extra-paths ["skills/org-tasks/scripts/test"]}}}

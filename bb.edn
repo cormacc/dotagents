@@ -8,8 +8,10 @@
 ;; - :tasks keeps the pre-existing dotagents bb tasks alongside the
 ;;   new `ot` and `test` entries.
 {:paths    ["skills/org-tasks/scripts/src"]
- :deps     {org.babashka/cli {:mvn/version "0.8.67"}
-            io.github.paintparty/bling {:mvn/version "0.10.0"}}
+ :deps     {org.babashka/cli {:mvn/version "0.12.75"}
+            io.github.paintparty/bling {:mvn/version "0.10.0"}
+            de.timokramer/charm.clj {:mvn/version "0.2.71"}
+            no.cjohansen/nexus {:mvn/version "2026.06.4"}}
  :bbin/bin {ot {:main-opts ["-m" "org-tasks.cli"]}}
  :tasks
  {:requires [[clojure.string :as str]

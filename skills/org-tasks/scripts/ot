@@ -33,6 +33,7 @@ if [ -f "$repo_root/bb.edn" ]; then
           -m org-tasks.cli -- "$@"
 else
   cd "$script_dir"
-  exec bb -Sdeps '{:paths ["src"] :deps {io.github.paintparty/bling {:mvn/version "0.10.0"}}}' \
+  # Keep fallback deps in sync with ../../../bb.edn, the source of truth.
+  exec bb -Sdeps '{:paths ["src"] :deps {io.github.paintparty/bling {:mvn/version "0.10.0"} de.timokramer/charm.clj {:mvn/version "0.2.71"} no.cjohansen/nexus {:mvn/version "2026.06.4"}}}' \
           -m org-tasks.cli -- "$@"
 fi

@@ -1,0 +1,173 @@
+#+TITLE: Simplify ot internals: TUI namespace split and data-level command API
+#+DATE: 2026-07-02 Thu
+#+PARENT: [[archive:a54b01b0-8741-4b52-831e-0ac574dc1ed3][Simplify ot internals: TUI namespace split and data-level command API]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+SPEC_IMPACT: skills/org-tasks/scripts/README.md
+#+SPEC_IMPACT: skills/org-tasks/scripts/docs/test-map.md
+
+* Intent
+
+Reduce incidental complexity in the `ot` codebase after the TUI landed: split the 5-concern `tui.clj` into focused namespaces (dispatch, task model/bridge), make all cursor state manipulation flow through nexus actions instead of parallel helper fns, and replace the in-process print-JSON-then-reparse command bridge with a data-level API. Behaviour, key map, and the org-tasks/v1 machine contract are unchanged.
+
+* Summary
+
+*Level:* MVP · *Tests:* thorough · *Docs:* inline
+
+** Scope
+
+*** In scope
+- Single source of truth for cursor clamping/scrolling: `:tree/clamp-cursor` / `:tree/scroll-to-cursor` actions; delete the `clamp-cursor` and `ensure-cursor-visible` helper fns and refactor `:tree/move-cursor` to chain actions.
+- Dead-code cleanup in `tui.clj`: stray `dispatch` binding in `:state/reload`, unused `:state/dissoc-in` effect, `id-prefix` duplication, stale `reload-state` docstring, `run!` shadowing warning, styling-stack boundary docstrings.
+- New `org-tasks.tui.tasks` namespace: command bridge + task tree/state model extracted from `tui.clj`.
+- New `org-tasks.tui.dispatch` namespace: nexus actions/effects/`nexus` map, charm-free.
+- Data-level command API: `output/emit-result` / `emit-error` return the envelope map; TUI bridge consumes return values instead of capturing and re-parsing printed JSON.
+- Update `README.md` project layout and `docs/test-map.md` if test namespaces move.
+- Split `commands.clj` into command-family namespaces under `org-tasks.commands.*` (promoted from follow-up to in-scope; executed as the final plan task).
+
+*** Out of scope
+- Any change to the org-tasks/v1 JSON/EDN contract (`docs/contract.md`) or CLI text output.
+- Key map, rendering, or interaction changes in the TUI.
+- Unifying the bling (`styling.clj`) and charm (TUI) styling stacks beyond documentation.
+- The pi tasks extension (`pi/extensions/tasks/`).
+
+** Acceptance
+
+*** Core functionality
+- `bb test` passes with the same assertion count or better (baseline: 185 tests / 648 assertions, 1 pre-existing failure in `bare-non-tty-emits-selected-json`).
+- `tui.clj` contains no `clamp-cursor` / `ensure-cursor-visible` helper fns; cursor clamp/scroll logic exists only inside the `:tree/clamp-cursor` and `:tree/scroll-to-cursor` actions.
+- `org-tasks.tui.dispatch` requires no charm namespaces.
+- `org-tasks.tui.tasks` owns `load-tasks`, the command bridge, and the tree model fns (`visible-tasks`, `task-depths`, `ancestor-ids`, `cursor-task`, `initial-state`, `reload-state`).
+- The TUI bridge (`call-command`, née `capture-command`) no longer re-parses printed JSON; command results reach the TUI as data returned from `emit-result` / handed to `*exit-fn*` by `emit-error`.
+- Bare `ot` (non-tty) still emits the selected-task JSON envelope on stdout only.
+
+*** Edge cases
+- Quit still works: the quit marker keyword survives the effects move (test asserts `:org-tasks.tui.dispatch/quit` never leaks into returned state).
+- Command failure inside the TUI still surfaces the envelope's `error.message` in the status line.
+- Empty task list: TUI opens, `n` creates a top-level task (existing test).
+
+*** Anti-criteria
+- Must not: change any key in the org-tasks/v1 envelope or the exit-code contract.
+- Must not: change TUI key bindings or visible layout.
+- Must not: introduce new third-party dependencies.
+
+** Decisions
+- Nest TUI namespaces under `org-tasks.tui.*` rather than a top-level `org-tasks.tasks` :: avoids confusion with the existing `org-tasks.task` (internal kebab-case tree) since the TUI operates on wire camelCase rows.
+  Rejected:
+  - Top-level `org-tasks.tasks`: name collision hazard with `org-tasks.task`.
+  - Merging TUI row helpers into `org-tasks.task`: different data shape (wire rows vs internal tree) would blur the boundary.
+- Data-level API via emit fns returning their envelope :: smallest change that removes the JSON round-trip; printing behaviour untouched so the CLI contract cannot drift.
+  Rejected:
+  - Dynamic "silent mode" var in `output`: more moving parts, same result.
+  - Separate data-returning command variants: duplicates the command surface.
+- Cursor invariants live in actions, not helpers :: nexus refreshes the state snapshot after each effect, so chained `[:tree/clamp-cursor]` / `[:tree/scroll-to-cursor]` actions see fresh state; helpers were a parallel mechanism inviting drift (the `:tree/clamp-cursor` action had already re-implemented `clamp-cursor`).
+
+** Shipped
+- MODIFIED `skills/org-tasks/scripts/README.md`: project layout gains `tui/tasks.clj` + `tui/dispatch.clj`.
+- MODIFIED `skills/org-tasks/scripts/docs/test-map.md`: `org-tasks.tui-test` row notes coverage of the extracted namespaces (test namespaces themselves did not move).
+- `tui.clj` 678 → 301 lines (charm view/glue only); new `org-tasks.tui.tasks` (183) and `org-tasks.tui.dispatch` (227).
+- `output/emit-result` / `emit-error` return the public envelope; `*exit-fn*` is now called as `(code envelope)` from `emit-error` (bindings must be variadic).
+- `id-prefix` single-sourced in `org-tasks.task`; cursor clamp/scroll single-sourced in `:tree/clamp-cursor` / `:tree/scroll-to-cursor` actions.
+- `commands.clj` (1568 lines) removed; command handlers now live in `org-tasks.commands.{list-show,create,status,archive-publish,record,links,maintenance}` with shared helpers in `org-tasks.commands.util`.
+
+** Gotchas
+- babashka.cli number-coerces id prefixes shaped like scientific notation (`1022e091` → `1.022E94`), breaking prefix resolution. Filed as task `4c54f6d1` under Fixes.
+- Every TUI-facing command handler must keep `out/emit-result` in tail position — `call-command` captures the handler's return value as the success envelope. `status-cmd`/`create-cmd` end in dispatching helpers/`case` whose success branches all terminate in `emit-result`; the invariant was verified through the `commands.*` split and must hold for new commands.
+
+** Follow-ups
+- Task `4c54f6d1` (Fixes): coerce id-bearing CLI args/options to `:string` so scientific-notation-shaped prefixes resolve.
+
+* Plan
+
+** DONE Route all cursor clamp/scroll through nexus actions
+CLOSED: [2026-07-02 Thu 22:20]
+:PROPERTIES:
+:CUSTOM_ID: a1facfd3-0cf0-49a9-a76b-e22d16949c9e
+:CREATED: [2026-07-02 Thu 22:20]
+:STARTED: [2026-07-02 Thu 22:19]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-02 Thu 22:19]
+- State "DONE" from "STARTED" [2026-07-02 Thu 22:20]
+:END:
+Helpers deleted; clamp/scroll live only in the `:tree/*` actions.
+
+** DONE Dead-code and docstring cleanup in tui.clj
+CLOSED: [2026-07-02 Thu 22:22]
+:PROPERTIES:
+:CUSTOM_ID: 28918b2d-901d-42da-ab48-3ada435d637a
+:CREATED: [2026-07-02 Thu 22:20]
+:STARTED: [2026-07-02 Thu 22:20]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-02 Thu 22:20]
+- State "DONE" from "STARTED" [2026-07-02 Thu 22:22]
+:END:
+Dead code removed; `id-prefix` single-sourced in `org-tasks.task`; styling boundary documented.
+
+** DONE Extract org-tasks.tui.tasks (bridge + tree model)
+CLOSED: [2026-07-02 Thu 22:25]
+:PROPERTIES:
+:CUSTOM_ID: 155c52a1-d758-41e1-ae8f-5dcd7c685324
+:CREATED: [2026-07-02 Thu 22:20]
+:STARTED: [2026-07-02 Thu 22:22]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-02 Thu 22:22]
+- State "DONE" from "STARTED" [2026-07-02 Thu 22:25]
+:END:
+Model + bridge extracted to `org-tasks.tui.tasks`; consumers/tests rewired.
+
+** DONE Extract org-tasks.tui.dispatch (nexus actions/effects)
+CLOSED: [2026-07-02 Thu 22:28]
+:PROPERTIES:
+:CUSTOM_ID: f609de47-0e9a-459f-85ba-98fd6c21f7a8
+:CREATED: [2026-07-02 Thu 22:20]
+:STARTED: [2026-07-02 Thu 22:25]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-02 Thu 22:25]
+- State "DONE" from "STARTED" [2026-07-02 Thu 22:28]
+:END:
+Actions/effects extracted to charm-free `org-tasks.tui.dispatch`; shared `quit-marker`.
+
+** DONE Data-level command API (drop the JSON round-trip)
+CLOSED: [2026-07-02 Thu 22:33]
+:PROPERTIES:
+:CUSTOM_ID: 1022e091-4edb-4cbf-bc37-d375fcb07562
+:CREATED: [2026-07-02 Thu 22:20]
+:STARTED: [2026-07-02 Thu 22:28]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-02 Thu 22:28]
+- State "DONE" from "STARTED" [2026-07-02 Thu 22:33]
+:END:
+Emit fns return envelopes; TUI JSON re-parsing removed; CLI output verified byte-identical.
+
+** DONE Split commands.clj into command-family namespaces
+CLOSED: [2026-07-02 Thu 22:49]
+:PROPERTIES:
+:CUSTOM_ID: 3aa89924-4f90-405b-aa2e-439caa91c828
+:CREATED: [2026-07-02 Thu 22:20]
+:STARTED: [2026-07-02 Thu 22:37]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-02 Thu 22:37]
+- State "DONE" from "STARTED" [2026-07-02 Thu 22:49]
+:END:
+Seven family namespaces + `commands.util`; façade deleted after review (zero consumers); reviewer verified 87/87 defs identical.
+
+* Implementation
+
+- Cursor invariants: deleted `clamp-cursor` / `ensure-cursor-visible`; `:tree/move-cursor` chains `[:state/assoc ...] [:tree/clamp-cursor] [:tree/scroll-to-cursor]`, relying on nexus (2026.06.4) refreshing the state snapshot after each effect. `viewport-height` moved to `tui.tasks` so scroll math and rendering share pane geometry.
+- Namespace split: `org-tasks.tui.tasks` owns the wire-row model + bridge; `org-tasks.tui.dispatch` owns actions/effects/`nexus` and the `quit-marker` keyword; `org-tasks.tui` retains key tables, rendering, `update-fn`, `run!`. `cli.clj` calls `tui-tasks/selected-json!` directly for the non-tty bare-`ot` path.
+- Data-level API: bridge renamed `capture-command` → `call-command`, returning `{:exit :envelope}`; success envelope from the handler's return value, error envelope via the second argument `emit-error` now passes to `*exit-fn*`. `error-message` takes an envelope map; `capture-json-result` → `call-result`. Test `*exit-fn*` stubs updated to `(fn [code & _] ...)`.
+- Dropped `cheshire` and `clojure.string` requires from the TUI bridge; stdout/stderr are still rebound during `call-command` purely to suppress printing.
+- Command-family split: `cli.clj` and TUI dispatch require family namespaces directly, and shared context/id/tree helpers moved to `org-tasks.commands.util`. TUI-facing command success branches still terminate in `out/emit-result` so `call-command` receives the success envelope.
+- Post-review cleanup: pruned each family ns's requires to actual usage (74 clj-kondo warnings → 0), gave each family ns a docstring naming its commands, and deleted the zero-consumer `commands.clj` façade (allowed by the split task's acceptance criteria).
+
+* Validation
+
+- CLI byte-parity smoke: `ot list --format json` and an `unknown-task` error case produced byte-identical output before/after the `output.clj` change (fixture root, HEAD vs worktree).
+- `bb test`: 185 tests / 648 assertions green at every plan-task boundary (baseline had 1 failing cli test already fixed upstream of this work).
+- Interactive TUI not exercised under a real tty this session; behaviour covered by the existing charm-message-driven tests.
+- Commands split reviewed by a separate reviewer session: form-level comparison of all 87 top-level defs old vs new (identical), clj-kondo lint (0 warnings after cleanup), circular-require and façade-consumer checks.

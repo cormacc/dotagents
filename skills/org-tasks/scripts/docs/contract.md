@@ -52,11 +52,45 @@ harnesses, CI scripts, future Emacs companions). Bump rules are in
 - `code` is a stable kebab-case identifier (`section-not-found`,
   `unknown-task`, `ambiguous-id`, `path-outside-project`,
   `duplicate-linked-issue`, `validation`, `invalid-status`, `out-of-root`,
-  `unreadable`, `git-unavailable`, `empty-summary`).
+  `unreadable`, `git-unavailable`, `empty-summary`, `conflict`,
+  `unterminated-drawer`).
 - `message` is a single-line human-readable summary.
 - `file` and `line` are populated when locatable; otherwise `null`.
 - `details` may carry command-specific extra context.
 - The process exit code is `0` on success and `1` on failure.
+
+#### `conflict`
+
+Write-time optimistic-concurrency check: a mutator (`status`, `priority`,
+`archive`, `publish`, `unpublish`, `create`, `record create`, `issue`/
+`blocker`/`handoff` mutations, `backfill`) detects that a target file's
+on-disk bytes no longer match the snapshot it loaded at the start of the
+command — e.g. another `ot` process or an editor wrote to it in between.
+The command aborts without writing:
+
+```json
+{
+  "code": "conflict",
+  "message": "File changed on disk since it was loaded: /repo/TASKS.org",
+  "file": "/repo/TASKS.org"
+}
+```
+
+#### `unterminated-drawer`
+
+A `:PROPERTIES:` or `:LOGBOOK:` drawer that never reaches a matching
+`:END:` before end-of-file. Every command that loads the graph
+(read-only or mutating) fails fast with this code rather than silently
+treating the rest of the file as drawer content or rewriting it:
+
+```json
+{
+  "code": "unterminated-drawer",
+  "message": "Unterminated drawer in /repo/TASKS.org starting at line 42",
+  "file": "/repo/TASKS.org",
+  "line": 42
+}
+```
 
 #### `ambiguous-id`
 
@@ -112,6 +146,20 @@ Returned by `list` (`rows[]` and within `tree[]`), `show`, `create`,
 
 Tree form additionally carries `"children": [Task]` and an `"importChildren":
 [Task]` array populated when an `#+IMPORT:` change-record is resolvable. `ot show` / `ot selected` omit `sourceContent` and `effectiveSourceContent` by default; pass `ot show <id> --include-content` to include those raw strings on the returned task tree. `ot list` deduplicates large source strings into its `result.sources` map instead.
+
+## Default invocation and TUI stdout contract
+
+- Bare `ot` on an interactive terminal runs the standalone task TUI.
+- Bare `ot` without an interactive terminal emits the same success envelope as
+  `ot selected --format json` and exits without blocking.
+- Bare `ot --format json` also emits the selected-task envelope and never starts
+  interactive rendering.
+- During an interactive session, terminal rendering/control sequences are written
+  to stderr or the controlling terminal. Stdout is reserved for exactly one final
+  `org-tasks/v1` selected-task envelope after the TUI exits.
+- The final envelope reflects the persisted `#+SELECTED:` value. Moving the
+  cursor is not selection; press `s` to persist a new selected task, or `s` again
+  on the selected row to clear it.
 
 ## Per-command results
 
@@ -215,6 +263,18 @@ sibling after the anchor task. Errors: `section-not-found`, `duplicate-linked-is
 
 `promoted` lists ancestor auto-promotions performed by the same call. ID-accepting mutators resolve targets across the full loaded graph, including tasks in `TASKS.org`, `TASKS.local.org`, and `#+IMPORT:`-linked plan/change-record files. For linked plan targets, writes persist to the task's own `sourcePath`; ancestor auto-promotion may also update the importing TASKS file. Errors:
 `unknown-task`, `invalid-status`, `validation`.
+
+### `ot priority <id> [<level>]`
+
+```json
+"result": {
+  "task":         Task,
+  "prevPriority": "A | B | C | D | null",
+  "priority":     "A | B | C | D | null"
+}
+```
+
+Sets the priority cookie explicitly (`<level>`, case-insensitive), cycles it with `--cycle forward|back`, or removes it with `--clear`. The cycle order includes the unset slot: forward from unset lands on `A` (highest), back from unset lands on `D` (lowest); `A` back and `D` forward return to unset. Priority changes do not write LOGBOOK entries. Errors: `unknown-task`, `invalid-priority`, `argument-error`.
 
 ### `ot select [<id>]`
 

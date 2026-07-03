@@ -15,11 +15,11 @@
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
             [org-tasks.effective :as effective]
+            [org-tasks.links :as links]
+            [org-tasks.loader :as loader]
             [org-tasks.parser :as parser]
-            [org-tasks.paths :as paths]))
-
-(defn- random-uuid-str []
-  (str (java.util.UUID/randomUUID)))
+            [org-tasks.paths :as paths]
+            [org-tasks.tree :as tree]))
 
 ;; ── Priority mapping ───────────────────────────────────────────────
 
@@ -69,7 +69,7 @@
   (let [summary (str/trimr (or summary ""))]
     (when (empty? summary)
       (throw (ex-info "build-task-block: summary is required" {})))
-    (let [id          (or id (random-uuid-str))
+    (let [id          (or id (str (random-uuid)))
           created-at  (or created-at (parser/format-org-timestamp))
           level       (if parent-id 3 2)
           stars       (apply str (repeat level "*"))
@@ -168,7 +168,7 @@
 ;; ── Idempotency scan ───────────────────────────────────────────────
 
 (defn- safe-slurp [path]
-  (try (slurp path) (catch Throwable _ nil)))
+  (loader/safe-slurp path))
 
 (defn- walk-tasks-with-imports
   "Return `[{:task, :file}]` for every task reachable from `paths` via
@@ -184,27 +184,18 @@
                                            project-root abs-path content)
                         {:keys [tasks file-imports]}
                         (parser/parse-tasks content {:source-path abs-path
-                                                     :effective-source-content effective-content})
-                        dir (str (fs/parent abs-path))]
-                    (recurse-tasks tasks abs-path dir)
+                                                     :effective-source-content effective-content})]
+                    (recurse-tasks tasks abs-path)
                     (doseq [imp file-imports]
-                      (let [expanded (parser/expand-org-link-target imp effective-content)
-                            base-dir (if (:from-project-root expanded) project-root dir)]
-                        (when-let [abs (paths/resolve-project-path
-                                         project-root base-dir (:target expanded))]
-                          (walk-file abs))))))))
-            (recurse-tasks [ts file dir]
+                      (when-let [abs (links/resolve-link-target
+                                       project-root abs-path effective-content imp)]
+                        (walk-file abs)))))))
+            (recurse-tasks [ts file]
               (doseq [t ts]
                 (vswap! out conj {:task t :file file})
-                (recurse-tasks (:children t) file dir)
-                (when (:import-path t)
-                  (let [expanded (parser/expand-org-link-target
-                                   (:import-path t)
-                                   (:effective-source-content t))
-                        base-dir (if (:from-project-root expanded) project-root dir)]
-                    (when-let [abs (paths/resolve-project-path
-                                     project-root base-dir (:target expanded))]
-                      (walk-file abs))))))]
+                (recurse-tasks (:children t) file)
+                (when-let [abs (links/resolve-task-link-target project-root t (:import-path t))]
+                  (walk-file abs))))]
       (doseq [p paths] (walk-file p)))
     @out))
 
@@ -227,13 +218,6 @@
         collected))))
 
 ;; ── Source-line insertion (parent / after) ────────────────────────
-
-(defn- find-task-by-id [tasks id]
-  (when id
-    (some (fn [t]
-            (or (when (= id (parser/get-task-id t)) t)
-                (find-task-by-id (:children t) id)))
-          tasks)))
 
 (defn- relevel-block [block level]
   (str/replace-first block #"^\*+" (apply str (repeat level "*"))))
@@ -291,21 +275,20 @@
          :message (str "Target file resolves outside project root: " file)}
 
         :else
-        (let [scan-paths
-              (loop [acc [target-abs] remaining (or also-scan [])]
-                (if (empty? remaining)
-                  acc
-                  (let [sandboxed (paths/resolve-project-path
-                                    project-root project-root (first remaining))]
-                    (if-not sandboxed
-                      ;; Bail out — every scan path must be in-project.
-                      {:status :error :reason :path-outside-project
-                       :message (str "Scan file resolves outside project root: "
-                                     (first remaining))}
-                      (recur (conj acc sandboxed) (rest remaining))))))]
-          (if (map? scan-paths)
-            scan-paths
-            (let [tokens (filterv #(and % (seq %)) (or linked-issues []))
+        (let [scan-paths-or-error
+              (reduce (fn [acc candidate]
+                        (if-let [sandboxed (paths/resolve-project-path
+                                             project-root project-root candidate)]
+                          (conj acc sandboxed)
+                          (reduced {:status :error :reason :path-outside-project
+                                    :message (str "Scan file resolves outside project root: "
+                                                  candidate)})))
+                      [target-abs]
+                      (or also-scan []))]
+          (if (= :error (:status scan-paths-or-error))
+            scan-paths-or-error
+            (let [scan-paths scan-paths-or-error
+                  tokens (filterv #(and % (seq %)) (or linked-issues []))
                   duplicate (when (seq tokens)
                               (let [collected (walk-tasks-with-imports
                                                 project-root scan-paths)]
@@ -325,8 +308,8 @@
                                     existing
                                     {:source-path target-abs
                                      :effective-source-content effective-content})
-                            parent (find-task-by-id (:tasks parsed) parent-id)
-                            after  (find-task-by-id (:tasks parsed) after-id)]
+                            parent (tree/find-by-id (:tasks parsed) parent-id {:imports? false})
+                            after  (tree/find-by-id (:tasks parsed) after-id {:imports? false})]
                         (cond
                           (and parent-id (nil? parent))
                           {:status :unknown-task
@@ -346,7 +329,7 @@
                                 block  (relevel-block (:block built) level)
                                 spliced (insert-block-before-line
                                          existing (:end-line anchor) block)]
-                            (spit target-abs (:content spliced))
+                            (loader/atomic-write target-abs (:content spliced))
                             {:status :inserted
                              :id (:id built)
                              :file target-abs
@@ -361,7 +344,7 @@
                          :section section}
 
                         :else
-                        (do (spit target-abs (:content spliced))
+                        (do (loader/atomic-write target-abs (:content spliced))
                             {:status :inserted
                              :id (:id built)
                              :file target-abs

@@ -1,6 +1,6 @@
 ---
 name: org-tasks
-description: "Org-mode task memory for TASKS.org and the `ot` CLI — owns task file format and lifecycle (planning belongs to `org-plan`). Use for adding/editing/resuming/archiving tasks, TASKS*.org, #+IMPORT:, #+SELECTED:, :CUSTOM_ID:, :BLOCKED-BY:, :HANDOFF:, linked issues, or `ot`."
+description: "Org-mode task memory for TASKS.org and the `ot` CLI/TUI — owns task file format and lifecycle (planning belongs to `org-plan`). Use for adding/editing/resuming/archiving tasks, TASKS*.org, #+IMPORT:, #+SELECTED:, :CUSTOM_ID:, :BLOCKED-BY:, :HANDOFF:, linked issues, `ot`, or the ot task-browser TUI."
 ---
 
 # Org-mode task management and memory protocol
@@ -22,14 +22,14 @@ The pi tasks extension shares this rule by spawning `ot list` from the workspace
 The field-level contract lives in `references/protocol.md`; load it when repairing org by hand or answering protocol-specific questions. The short version:
 
 - Files share TODO/logging/link settings through root `TASKS.setup.org`; `TASKS.org` and `TASKS.archive.org` include `TASKS.local.org` first for gitignored keyword overrides, then `TASKS.setup.org`.
-- Task states are `TODO`, `STARTED`, `WAITING`, `DONE`, `CANCELLED`. Priorities are `[#A]` through `[#D]`.
+- Task states are `TODO`, `STARTED`, `WAITING`, `DONE`, `CANCELLED`. Priorities are `[#A]` through `[#D]`, managed via `ot priority` (set, `--cycle`, `--clear`).
 - Every task/subtask needs a UUID v4 `:CUSTOM_ID:`. Use `ot create` or `ot uuid`; never invent IDs.
 - `:CREATED:`, `:STARTED:`, `CLOSED:`, and `:LOGBOOK:` are lifecycle artefacts. `ot` and native org-mode are aligned so status writes converge on the same file shape.
 - `#+IMPORT:` links change-records/imported task files. Canonical plan imports use `[[plan:file.org]]` via the `#+LINK: plan` template, which is defined locally in `TASKS.org`/`TASKS.archive.org` (repo-root), not in `TASKS.setup.org`. `#+LINK: proj` (dual-defined: `./` from the task file, `../../` from a record via setup) is a generic repo-root path link for referencing specs/source from records.
 - `#+SELECTED:` in gitignored `TASKS.local.org` stores the local active task. Empty or absent means no selection.
 - `:BLOCKED-BY:` / `:BLOCKED-BY+:`, `:HANDOFF:`, and `:LINKED_ISSUES:` are protocol fields managed by `ot blocker`, `ot ready`, `ot handoff`, and `ot issue`.
 - Change-records can declare expected contract impact with repeated `#+SPEC_IMPACT: path/to/contract.org` keywords, or explicitly opt out with `#+NO_SPEC_IMPACT: true`; `ot doctor` warns when declared paths were not touched in the current git working tree/index.
-- Do not hard-wrap prose in org task files. Keep each paragraph as a single logical line; preserve natural line breaks in blocks, tables, drawers, keywords, and one-list-item-per-line lists.
+- Do not hard-wrap. In every org file this protocol manages (`TASKS*.org` and `#+IMPORT:`-linked change-records), keep each paragraph and each list item as a single logical line (soft-wrap); preserve real line breaks only in headings, drawers, keywords, tables, and src/example blocks. Never reflow to a fixed column such as 80.
 
 Unknown `#+` keywords and drawer properties round-trip untouched; third-party metadata should use an `UPPERCASE_NAMESPACE_` prefix.
 
@@ -45,6 +45,7 @@ ot show selected --format json
 ot show <id-or-selected>
 ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'
 ot status <id> STARTED   # also works for tasks inside linked plan files
+ot priority <id> B       # set/cycle/clear the priority cookie (--cycle forward|back, --clear)
 ot select <id>        # or: ot select --clear
 ot archive <id> --yes
 ot publish <id>       # TASKS.local.org -> TASKS.org
@@ -67,19 +68,7 @@ Use `--format json` for machine callers. JSON/EDN commands use schema `org-tasks
 
 ID-accepting commands accept full UUIDs or any unique `:CUSTOM_ID:` prefix of at least four characters (the 8-char prefix shown in `ot list` / `ot scan` is pasteable directly). Mutators such as `status`, `handoff`, `blocker`, `issue`, and `ready` also target tasks inside `#+IMPORT:`-linked plan files and persist to the owning file. Ambiguous values fail with `ambiguous-id` and list candidates.
 
-Install for third-party harnesses:
-
-```shell
-bbin install io.github.cormacc/dotagents --as ot --latest-sha
-```
-
-Local development:
-
-```shell
-bbin install ./. --local/root . --as ot
-./skills/org-tasks/scripts/ot --help
-bb run ot --help
-```
+Install and local development: `scripts/README.md`.
 
 ## Creating, selecting, and updating tasks
 
@@ -91,6 +80,12 @@ bb run ot --help
 - Local drafts may live in `TASKS.local.org`; publish with `ot publish` when they should become shared.
 
 Bootstrap new projects with `ot init`. If `ot` is unavailable, use `references/bootstrap.md` as the manual fallback.
+
+## Interactive TUI
+
+Bare `ot` on an interactive terminal opens a standalone task-browser TUI: task tree with status/priority colouring, a details pane (beside the tree, or stacked below it on narrow/portrait terminals), and keybindings for all the common mutations. On exit it prints the selected-task envelope to stdout. Full key map and behaviour: `references/ot-cli.md` § Interactive TUI.
+
+The TUI needs no harness integration — it is the interactive surface for humans and for agents/harnesses without a dedicated extension. The pi tasks extension is a pi-specific overlay with the same key map and semantics; both dispatch mutations through the same `ot` commands, so either surface can be used interchangeably.
 
 ## Status discipline
 

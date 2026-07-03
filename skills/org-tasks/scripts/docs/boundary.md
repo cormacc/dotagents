@@ -1,8 +1,6 @@
 # Tasks extension boundary
 
-The protocol engine (`ot`, in Babashka) owns durable org-tasks behaviour. The
-pi `tasks` extension owns harness-specific UI and event glue. This table is
-the contract for the refactor in `design/log/2026-05-18-tasks-extension-ot-cli.org`.
+The protocol engine (`ot`, in Babashka) owns durable org-tasks behaviour and the standalone terminal task browser launched by bare `ot`. The pi `tasks` extension owns pi-specific overlay/compact UI and event glue. This table is the contract for the refactor in `design/log/2026-05-18-tasks-extension-ot-cli.org` and the standalone TUI added in `design/log/2026-06-27-add-org-tasks-tui.org`.
 
 ## Ownership table
 
@@ -15,6 +13,8 @@ the contract for the refactor in `design/log/2026-05-18-tasks-extension-ot-cli.o
 | Sandbox project-root path resolution           | ✅   |              | Symlink-realpath, traversal rejection, nearest-existing-parent.                                                |
 | Auto-assign `:CUSTOM_ID:` on missing tasks      | ✅   |              | Runs lazily on read; writes back via the existing source-root.                                                 |
 | Lifecycle (`TODO`/`STARTED`/`WAITING`/`DONE`/`CANCELLED`) | ✅   |              | LOGBOOK append, `:STARTED:` once-only, `CLOSED:` write/clear, parent auto-promote.                             |
+| Status **cycle order** (forward/back)            | ✅   |              | `ot status --cycle forward\|back`. Canonical order in `lifecycle/status-cycle`; both UIs pass only a direction. |
+| Task-creation **placement policy** (sibling/child/top-level) | ✅   |              | `ot create --relative-to <id> --as sibling\|child` derives parent/after/local/source from the anchor.          |
 | Archive top-level closed tasks                  | ✅   |              | `:ARCHIVED:` stamp, archive ordering by closed/archived time, parent-link rewrite `task:` → `archive:`.        |
 | Publish / unpublish (local ↔ shared)             | ✅   |              | Top-level-only for unpublish; local task constraints preserved.                                                |
 | `#+SELECTED:` read/write (atomic)               | ✅   |              | Write-then-rename; preserves any local task headings or `#+IMPORT:` keywords.                                  |
@@ -29,9 +29,10 @@ the contract for the refactor in `design/log/2026-05-18-tasks-extension-ot-cli.o
 | `:LINKED_ISSUES:` get/set/list/remove           | ✅   |              | Tracker-agnostic. Resolves URLs via `#+LINK:` for `urls`.                                                      |
 | `:BLOCKED-BY:` / `:BLOCKED-BY+:` get/set/list   | ✅   |              | Plus ready-task computation against the loaded graph.                                                          |
 | `:HANDOFF:` get/set/clear                        | ✅   |              |                                                                                                                |
-| Overlay rendering (split pane, highlighting)    |      | ✅           |                                                                                                                |
+| Standalone terminal task browser (`ot`)          | ✅   |              | Renders to stderr/terminal streams; stdout emits final selected-task JSON.                                      |
+| Overlay rendering (split pane, highlighting)    |      | ✅           | Pi-owned expanded overlay; behaviour mirrors the standalone TUI where practical.                               |
 | Compact selected-task widget                     |      | ✅           | Layout, truncation rules, side-bar markers.                                                                    |
-| Keybindings (`s`, `e`, `p`, `n`, `N`, `A`, `P`, `U`, `J`, scroll, status cycle) |      | ✅           | All visual interaction stays in pi.                                                                            |
+| Pi overlay keybindings (`s`, `e`, `p`, `n`, `N`, `A`, `P`, `U`, `J`, scroll, status cycle) |      | ✅           | Standalone TUI has its own Clojure key loop; pi event wiring stays in TypeScript. Status-cycle and create-placement *policy* now live in `ot` (both UIs only send direction / anchor+relation). |
 | File watchers (`TASKS.org`, `TASKS.local.org`, plan files) |      | ✅           | Debounced 150 ms; calls `ot list --format json` on fire.                                                       |
 | Confirmation / input prompts                     |      | ✅           |                                                                                                                |
 | Emacs open at task / plan                        |      | ✅           |                                                                                                                |
@@ -41,6 +42,21 @@ the contract for the refactor in `design/log/2026-05-18-tasks-extension-ot-cli.o
 | `tasks_insert_task` LLM tool registration       |      | ✅           | Handler now shells `ot create`.                                                                                |
 | `org_read_section` LLM tool registration        |      | ✅           | Handler now shells `ot section`.                                                                               |
 | `tasks_scan_summaries` LLM tool registration    |      | ✅           | Handler now shells `ot scan`.                                                                                  |
+
+## Consolidated into `ot` (2026-06-27, TUI v3)
+
+Three policies that were previously encoded in both the pi overlay (TypeScript)
+and the standalone TUI (Clojure) now live solely in `ot`:
+
+- **Status cycle order** — `ot status --cycle forward|back`. The overlay's
+  `STATUS_CYCLE` constant and the TUI's `cycle-status-value` were removed; both
+  send only a direction.
+- **Create placement** — `ot create --relative-to <id> --as sibling|child`.
+  The overlay's `createNewTask`/`createTask` placement maths and the TUI's
+  `create-opts` were reduced to passing the anchor + relation.
+- **Linked-issue URL resolution** — already emitted by `ot list`
+  (`linkedIssues[].url/label`); the overlay now consumes that wire field and no
+  longer re-resolves via the TypeScript `getLinkedIssues`.
 
 ## Behaviours that stay in TypeScript (cross-extension)
 

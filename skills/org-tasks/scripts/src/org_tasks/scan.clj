@@ -9,7 +9,8 @@
   command via a `read-change-record` callback so the scanner stays
   fs-free for tests."
   (:require [org-tasks.parser :as parser]
-            [org-tasks.section :as section]))
+            [org-tasks.section :as section]
+            [org-tasks.tree :as tree]))
 
 (def default-max-body-chars 500)
 (def ^:private truncation-sentinel "\u2026")
@@ -24,18 +25,6 @@
   (or (empty? tag-filter)
       (let [want (set tag-filter)]
         (some #(contains? want %) (:tags task)))))
-
-(defn- walk-tasks
-  "Depth-first walk yielding every task in `tasks` (recurses into both
-  `:children` and `:import-children`)."
-  [tasks]
-  (mapcat
-    (fn [t]
-      (cons t
-            (concat (walk-tasks (:children t))
-                    (when (:import-children t)
-                      (walk-tasks (:import-children t))))))
-    tasks))
 
 (defn- build-row [task id read-change-record max-body-chars]
   (let [import-path  (:import-path task)
@@ -85,7 +74,7 @@
          tag-filter      (:tags options)
          max-body-chars  (or (:max-body-chars options) default-max-body-chars)
          emit (fn [roots]
-                (->> (walk-tasks roots)
+                (->> (tree/all-tasks roots)
                      (keep
                        (fn [t]
                          (when-let [id (parser/get-task-id t)]

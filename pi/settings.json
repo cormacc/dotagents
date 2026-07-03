@@ -1,5 +1,5 @@
 {
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "defaultThinkingLevel": "high",
   "packages": [
     "npm:@gotgenes/pi-anthropic-auth",

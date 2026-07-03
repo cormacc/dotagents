@@ -916,3 +916,174 @@ When contributing to third-party projects - e.g. OSS PRs -- it would be nice to 
 Update org-tasks skill and CLI tooling to traverse up the filesystem until it finds a TASKS.org root.
 
 Open question -- should we stop traversing at the user home folder or the filesystem root? Likely the former
+
+** DONE Add org-tasks TUI
+CLOSED: [2026-06-27 Sat 22:22]
+:PROPERTIES:
+:CUSTOM_ID: 5606c9a0-af2a-4e0c-84bd-e961b5c1738d
+:CREATED: [2026-06-27 Sat 10:42]
+:STARTED: [2026-06-27 Sat 11:47]
+:ARCHIVED: [2026-06-27 Sat 22:22]
+:END:
+:LOGBOOK:
+- Created [2026-06-27 Sat 10:42]
+- State "STARTED" from "TODO" [2026-06-27 Sat 11:47]
+- State "DONE" from "STARTED" [2026-06-27 Sat 11:51]
+- State "CANCELLED" from "DONE" [2026-06-27 Sat 12:42]
+- State "DONE" from "CANCELLED" [2026-06-27 Sat 12:42]
+- State "WAITING" from "DONE" [2026-06-27 Sat 12:42]
+- State "STARTED" from "WAITING" [2026-06-27 Sat 12:42]
+- State "WAITING" from "STARTED" [2026-06-27 Sat 22:14]
+- State "DONE" from "WAITING" [2026-06-27 Sat 22:14]
+- State "WAITING" from "DONE" [2026-06-27 Sat 22:15]
+- State "STARTED" from "WAITING" [2026-06-27 Sat 22:15]
+- State "TODO" from "STARTED" [2026-06-27 Sat 22:15]
+- State "STARTED" from "TODO" [2026-06-27 Sat 22:15]
+- State "WAITING" from "STARTED" [2026-06-27 Sat 22:22]
+- State "DONE" from "WAITING" [2026-06-27 Sat 22:22]
+:END:
+#+IMPORT: [[plan:2026-06-27-add-org-tasks-tui.org]]
+This should essentially replicate the functions, layout and keybindings of the task selection overlay but in a standalone tui.
+It should probably use charm.clj: https://github.com/TimoKramer/charm.clj
+On exit, it should return json for the currently selected task (for easy interop with harnesses -- i.e. shell out to the TUI, user browses/archives/selects tasks, then current selection returned on exit to be added to context / displayed in harness status overlay or whatever.
+
+Currently running 'ot' shows the help. After this, ot should launch the tui ('ot --help' still available for help)
+
+** DONE Simplify ot internals: TUI namespace split and data-level command API
+CLOSED: [2026-07-03 Fri 10:21]
+:PROPERTIES:
+:CUSTOM_ID: a54b01b0-8741-4b52-831e-0ac574dc1ed3
+:CREATED: [2026-07-02 Thu 22:17]
+:STARTED: [2026-07-02 Thu 22:19]
+:ARCHIVED: [2026-07-03 Fri 10:21]
+:END:
+:LOGBOOK:
+- Created [2026-07-02 Thu 22:17]
+- State "STARTED" from "TODO" [2026-07-02 Thu 22:19]
+- State "DONE" from "STARTED" [2026-07-03 Fri 10:21]
+:END:
+#+IMPORT: [[plan:2026-07-02-simplify-ot-internals-tui-namespace-spli.org]]
+
+** DONE ot: single command registry shared by cli dispatch table and TUI command-fns
+CLOSED: [2026-07-03 Fri 10:34]
+:PROPERTIES:
+:CUSTOM_ID: 1304a243-e735-4a15-b7ec-af3e04ef1c6a
+:CREATED: [2026-07-03 Fri 10:30]
+:STARTED: [2026-07-03 Fri 10:31]
+:ARCHIVED: [2026-07-03 Fri 10:34]
+:END:
+:LOGBOOK:
+- Created [2026-07-03 Fri 10:30]
+- State "STARTED" from "TODO" [2026-07-03 Fri 10:31]
+- State "DONE" from "STARTED" [2026-07-03 Fri 10:34]
+:END:
+
+** DONE ot: deduplication and simplification pass from parallel reviews
+CLOSED: [2026-07-03 Fri 12:25]
+:PROPERTIES:
+:CUSTOM_ID: 2a4b1e7a-d574-466e-9aef-87ac7986c83d
+:CREATED: [2026-07-03 Fri 10:58]
+:STARTED: [2026-07-03 Fri 11:00]
+:ARCHIVED: [2026-07-03 Fri 12:25]
+:END:
+:LOGBOOK:
+- Created [2026-07-03 Fri 10:58]
+- State "STARTED" from "TODO" [2026-07-03 Fri 11:00]
+- State "DONE" from "STARTED" [2026-07-03 Fri 12:25]
+:END:
+#+IMPORT: [[plan:2026-07-03-ot-deduplication-and-simplification-pass.org]]
+
+** DONE ot doctor: make * Validation an optional change-record section :skill_org-tasks:skill_org-plan:
+CLOSED: [2026-07-03 Fri 16:49]
+:PROPERTIES:
+:CUSTOM_ID: 53704dac-1c28-47b7-b0b5-67af16a00814
+:CREATED: [2026-06-24 Wed 16:52]
+:STARTED: [2026-07-03 Fri 16:49]
+:ARCHIVED: [2026-07-03 Fri 16:49]
+:END:
+:LOGBOOK:
+- Created [2026-06-24 Wed 16:52]
+- State "STARTED" from "TODO" [2026-07-03 Fri 16:49]
+- State "WAITING" from "STARTED" [2026-07-03 Fri 16:49]
+- State "DONE" from "WAITING" [2026-07-03 Fri 16:49]
+:END:
+The org-plan skill now treats * Validation as optional: omit it when the only evidence would be that the standard automated suites pass (an implicit pre-merge requirement), and include it only for non-obvious verification evidence. The ot doctor validator still lists Validation as a required change-record section, so it now emits a missing-record-section warning against conformant records (observed closing the connect portal webserial change-record).
+
+Fix:
+- Drop "Validation" from required-record-sections in skills/org-tasks/scripts/src/org_tasks/doctor.clj:229-230 so the required set is ["Intent" "Summary" "Plan" "Implementation"].
+- Keep the :empty-validation-section check (doctor.clj:248-254) for when a Validation section IS present but blank.
+- Sweep docs/contract.md and skills/org-plan/references/change-record-format.md for any 'required: Validation' wording, and update any doctor tests asserting Validation is required.
+
+Origin:
+- session: connect-portal file-queue-refactor
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@git.nmd.ie:products/connect/portal @ file-queue-refactor
+- timestamp: [2026-06-24 Wed 16:51]
+- sender: human
+
+** DONE Add org-tasks TUI
+CLOSED: [2026-07-03 Fri 16:49]
+:PROPERTIES:
+:CUSTOM_ID: 5606c9a0-af2a-4e0c-84bd-e961b5c1738d
+:CREATED: [2026-06-27 Sat 10:42]
+:STARTED: [2026-06-27 Sat 11:47]
+:ARCHIVED: [2026-07-03 Fri 16:49]
+:END:
+:LOGBOOK:
+- Created [2026-06-27 Sat 10:42]
+- State "STARTED" from "TODO" [2026-06-27 Sat 11:47]
+- State "DONE" from "STARTED" [2026-06-27 Sat 11:51]
+- State "CANCELLED" from "DONE" [2026-06-27 Sat 12:42]
+- State "DONE" from "CANCELLED" [2026-06-27 Sat 12:42]
+- State "WAITING" from "DONE" [2026-06-27 Sat 12:42]
+- State "STARTED" from "WAITING" [2026-06-27 Sat 12:42]
+- State "WAITING" from "STARTED" [2026-07-03 Fri 16:49]
+- State "DONE" from "WAITING" [2026-07-03 Fri 16:49]
+- State "CANCELLED" from "DONE" [2026-07-03 Fri 16:49]
+- State "DONE" from "CANCELLED" [2026-07-03 Fri 16:49]
+:END:
+#+IMPORT: [[plan:2026-06-27-add-org-tasks-tui.org]]
+This should essentially replicate the functions, layout and keybindings of the task selection overlay but in a standalone tui.
+It should probably use charm.clj: https://github.com/TimoKramer/charm.clj
+On exit, it should return json for the currently selected task (for easy interop with harnesses -- i.e. shell out to the TUI, user browses/archives/selects tasks, then current selection returned on exit to be added to context / displayed in harness status overlay or whatever.
+
+Currently running 'ot' shows the help. After this, ot should launch the tui ('ot --help' still available for help)
+
+* Explorations
+** DONE Evaluate herdr extension suite
+CLOSED: [2026-07-03 Fri 17:25]
+:PROPERTIES:
+:CUSTOM_ID: 51426ef7-9d1f-4fa3-be74-fa75fd0a3f63
+:CREATED: [2026-06-16 Tue 23:20]
+:END:
+:LOGBOOK:
+- State "DONE"       from "WAITING"    [2026-07-03 Fri 17:25]
+- State "WAITING"    from "STARTED"    [2026-07-03 Fri 17:25]
+- State "STARTED"    from "TODO"       [2026-07-03 Fri 17:25]
+- Created [2026-06-16 Tue 23:20]
+:END:
+https://github.com/ogulcancelik/pi-extensions
+Pi extensions by the author of herdr (cross-platform agent multiplexer)
+
+
+
+** DONE [#B] Evaluate subagent workflow options
+CLOSED: [2026-07-03 Fri 16:53]
+:PROPERTIES:
+:CUSTOM_ID: 720b13c6-c46c-4ffd-9c87-5248c39f54ef
+:CREATED: [2026-05-27 Wed 11:00]
+:END:
+:LOGBOOK:
+- State "DONE"       from "WAITING"    [2026-07-03 Fri 16:53]
+- State "WAITING"    from "STARTED"    [2026-07-03 Fri 16:53]
+- State "STARTED"    from "TODO"       [2026-07-03 Fri 16:53]
+- Created [2026-05-27 Wed 11:00]
+:END:
+Currently I'm using the pi-interactive-subagents extension from pi-dev
+Evaluate alternatives.
+- Roll my own?
+- https://github.com/hazat/pi-interactive-subagents
+- https://github.com/elpapi42/pi-fork / https://github.com/elpapi42/pi-minimal-subagent
+- Others?
+The hazat one above looks interesting. Fairly mature, multiple contributors and some nice UX (widget, discrete window per agent, tmux/zellij integration etc.)
+DECISION: Settled on this for now: https://github.com/edxeth/pi-subagents/

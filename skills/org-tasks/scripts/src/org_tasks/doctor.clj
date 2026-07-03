@@ -29,7 +29,8 @@
     :spec-impact-untouched"
   (:require [clojure.string :as str]
             [org-tasks.parser :as parser]
-            [org-tasks.section :as section]))
+            [org-tasks.section :as section]
+            [org-tasks.tree :as tree]))
 
 (def ^:private closed-statuses #{"DONE" "CANCELLED"})
 (def ^:private active-child-statuses #{"STARTED" "WAITING"})
@@ -45,29 +46,8 @@
 
 ;; ── Task walk ──────────────────────────────────────────────────────
 
-(defn- walk-tasks
-  "Depth-first pre-order over `:children` + `:import-children`."
-  [tasks]
-  (mapcat
-    (fn [t]
-      (cons t
-            (concat (walk-tasks (:children t))
-                    (when (:import-children t)
-                      (walk-tasks (:import-children t))))))
-    tasks))
-
 (defn- child-status-set [task]
-  (let [seen (volatile! #{})]
-    (letfn [(visit [ts]
-              (doseq [t ts]
-                (vswap! seen conj (:status t))
-                (visit (:children t))
-                (when (:import-children t)
-                  (visit (:import-children t)))))]
-      (visit (:children task))
-      (when (:import-children task)
-        (visit (:import-children task))))
-    @seen))
+  (set (map :status (tree/all-tasks (tree/children task)))))
 
 (defn- location-for [task]
   (cond-> {}
@@ -80,7 +60,7 @@
   the first occurrence and `:duplicates` is `{id -> [tasks]}` for
   collisions."
   [tasks]
-  (loop [todo (walk-tasks tasks)
+  (loop [todo (tree/all-tasks tasks)
          by-id {}
          dups {}]
     (if (empty? todo)
@@ -99,24 +79,24 @@
   "Return `{source-path first-import-child}` for every source file that
   is reachable through `:import-children`."
   [tasks]
-  (let [out (volatile! {})]
-    (letfn [(visit-task [task]
-              (doseq [child (:children task)]
-                (visit-task child))
-              (doseq [child (:import-children task)]
-                (when-let [src (:source-path child)]
-                  (vswap! out #(if (contains? % src) % (assoc % src child))))
-                (visit-task child)))]
-      (doseq [task tasks]
-        (visit-task task)))
-    @out))
+  (letfn [(visit-task [task]
+            (concat (map (fn [child]
+                           (when-let [src (:source-path child)]
+                             [src child]))
+                         (:import-children task))
+                    (mapcat visit-task (:children task))
+                    (mapcat visit-task (:import-children task))))]
+    (reduce (fn [m [src child]]
+              (if (contains? m src) m (assoc m src child)))
+            {}
+            (keep identity (mapcat visit-task tasks)))))
 
 (defn- saveable-source-paths
   "Return the set of source files that have at least one parsed file root.
   `loader/save-source-roots` relies on these `:file-root?` tasks as the
   serialization roots for each mutated source file."
   [tasks]
-  (->> (walk-tasks tasks)
+  (->> (tree/all-tasks tasks)
        (filter :file-root?)
        (keep :source-path)
        set))
@@ -138,77 +118,73 @@
        (keep-indexed (fn [i line] (when (re-find re line) (inc i))))
        first))
 
-(defn- escape-regex [^String s]
-  (str/replace s #"[.*+?^${}()|\[\]\\]" "\\\\$0"))
-
 (defn- check-link-templates [protocol-files]
-  (let [out (volatile! [])]
-    (when-let [{:keys [path content]} (:setup protocol-files)]
-      (let [templates (parser/parse-link-templates content)]
-        (doseq [[prefix expected] required-setup-links]
-          (when-not (= (get templates prefix) expected)
-            (vswap! out conj
-                    {:code :missing-link-template
-                     :severity :warn
-                     :message (str "TASKS.setup.org should declare #+LINK: "
-                                   prefix " " expected)
-                     :location {:file path}})))))
-    (doseq [k [:tasks :archive]
-            :let [entry (get protocol-files k)]
-            :when entry]
-      (let [{:keys [path content]} entry
-            templates (parser/parse-link-templates content)
-            shared-setup-line (line-number-of
-                                content
-                                #"(?i)^[\t ]*#\+SETUPFILE[\t ]*:[\t ]*\.?/?TASKS\.setup\.org\s*$")
-            local-setup-line  (line-number-of
-                                content
-                                #"(?i)^[\t ]*#\+SETUPFILE[\t ]*:[\t ]*\.?/?TASKS\.local\.org\s*$")]
-        (when (nil? shared-setup-line)
-          (vswap! out conj
-                  {:code :missing-link-template
-                   :severity :warn
-                   :message (str path " should declare #+SETUPFILE: ./TASKS.setup.org")
-                   :location {:file path}}))
-        (cond
-          (nil? local-setup-line)
-          (vswap! out conj
-                  {:code :missing-local-setupfile
-                   :severity :warn
-                   :message (str path " should declare #+SETUPFILE: ./TASKS.local.org "
-                                 "so gitignored overrides flow through")
-                   :location {:file path}})
+  (let [setup-findings
+        (when-let [{:keys [path content]} (:setup protocol-files)]
+          (let [templates (parser/parse-link-templates content)]
+            (for [[prefix expected] required-setup-links
+                  :when (not= (get templates prefix) expected)]
+              {:code :missing-link-template
+               :severity :warn
+               :message (str "TASKS.setup.org should declare #+LINK: "
+                             prefix " " expected)
+               :location {:file path}})))
+        protocol-findings
+        (mapcat
+          (fn [k]
+            (when-let [{:keys [path content]} (get protocol-files k)]
+              (let [templates (parser/parse-link-templates content)
+                    shared-setup-line (line-number-of
+                                        content
+                                        #"(?i)^[\t ]*#\+SETUPFILE[\t ]*:[\t ]*\.?/?TASKS\.setup\.org\s*$")
+                    local-setup-line  (line-number-of
+                                        content
+                                        #"(?i)^[\t ]*#\+SETUPFILE[\t ]*:[\t ]*\.?/?TASKS\.local\.org\s*$")
+                    first-setup-line (some->> [shared-setup-line local-setup-line]
+                                               (filter some?) seq sort first)
+                    setup-checks (concat
+                                   (when (nil? shared-setup-line)
+                                     [{:code :missing-link-template
+                                       :severity :warn
+                                       :message (str path " should declare #+SETUPFILE: ./TASKS.setup.org")
+                                       :location {:file path}}])
+                                   (cond
+                                     (nil? local-setup-line)
+                                     [{:code :missing-local-setupfile
+                                       :severity :warn
+                                       :message (str path " should declare #+SETUPFILE: ./TASKS.local.org "
+                                                     "so gitignored overrides flow through")
+                                       :location {:file path}}]
 
-          (and shared-setup-line (> local-setup-line shared-setup-line))
-          (vswap! out conj
-                  {:code :misordered-setupfile
-                   :severity :warn
-                   :message "#+SETUPFILE: ./TASKS.local.org must appear before ./TASKS.setup.org so local keywords win"
-                   :location {:file path :line local-setup-line}}))
-        (let [first-setup-line (or (some->> [shared-setup-line local-setup-line]
-                                            (filter some?) seq sort first))]
-          (doseq [[prefix expected] required-local-links]
-            (let [link-re (re-pattern
-                            (str "(?i)^[\\t ]*#\\+LINK[\\t ]*:[\\t ]*"
-                                 prefix "[\\t ]+"
-                                 (escape-regex expected)
-                                 "[\\t ]*$"))
-                  link-line (line-number-of content link-re)]
-              (cond
-                (or (not= (get templates prefix) expected) (nil? link-line))
-                (vswap! out conj
-                        {:code :missing-link-template
-                         :severity :warn
-                         :message (str path " should declare #+LINK: " prefix " " expected)
-                         :location {:file path}})
+                                     (and shared-setup-line (> local-setup-line shared-setup-line))
+                                     [{:code :misordered-setupfile
+                                       :severity :warn
+                                       :message "#+SETUPFILE: ./TASKS.local.org must appear before ./TASKS.setup.org so local keywords win"
+                                       :location {:file path :line local-setup-line}}]))
+                    link-checks
+                    (for [[prefix expected] required-local-links
+                          :let [link-re (re-pattern
+                                          (str "(?i)^[\\t ]*#\\+LINK[\\t ]*:[\\t ]*"
+                                               prefix "[\\t ]+"
+                                               (parser/escape-regex expected)
+                                               "[\\t ]*$"))
+                                link-line (line-number-of content link-re)]
+                          finding (cond
+                                    (or (not= (get templates prefix) expected) (nil? link-line))
+                                    [{:code :missing-link-template
+                                      :severity :warn
+                                      :message (str path " should declare #+LINK: " prefix " " expected)
+                                      :location {:file path}}]
 
-                (and first-setup-line (> link-line first-setup-line))
-                (vswap! out conj
-                        {:code :misordered-link-template
-                         :severity :warn
-                         :message (str "Local #+LINK: " prefix " override must appear before #+SETUPFILE")
-                         :location {:file path :line link-line}})))))))
-    @out))
+                                    (and first-setup-line (> link-line first-setup-line))
+                                    [{:code :misordered-link-template
+                                      :severity :warn
+                                      :message (str "Local #+LINK: " prefix " override must appear before #+SETUPFILE")
+                                      :location {:file path :line link-line}}])]
+                      finding)]
+                (concat setup-checks link-checks))))
+          [:tasks :archive])]
+    (vec (concat setup-findings protocol-findings))))
 
 ;; ── Change-record spec-impact checks ───────────────────────────────
 
@@ -218,66 +194,206 @@
 (defn- source-content-index
   "Return one `{path content}` entry for each parsed source file."
   [tasks]
-  (let [out (volatile! {})]
-    (doseq [task (walk-tasks tasks)
-            :let [src (:source-path task)
+  (reduce (fn [m task]
+            (let [src (:source-path task)
                   content (:source-content task)]
-            :when (and src content)]
-      (vswap! out #(if (contains? % src) % (assoc % src content))))
-    @out))
+              (if (and src content (not (contains? m src)))
+                (assoc m src content)
+                m)))
+          {}
+          (tree/all-tasks tasks)))
 
 (def ^:private required-record-sections
-  ["Intent" "Summary" "Plan" "Implementation" "Validation"])
+  ;; `* Validation` is optional per org-plan's section contract (omit unless
+  ;; there is non-obvious verification evidence); it is only checked for
+  ;; emptiness when present.
+  ["Intent" "Summary" "Plan" "Implementation"])
 
 (defn- spec-impact-aware-record? [content]
   (or (seq (parser/get-file-keywords content "SPEC_IMPACT"))
       (some truthy-keyword-value? (parser/get-file-keywords content "NO_SPEC_IMPACT"))))
 
 (defn- check-record-structure [tasks]
-  (let [out (volatile! [])]
-    (doseq [[src content] (source-content-index tasks)
-            :when (spec-impact-aware-record? content)]
-      (let [sections (set (section/list-sections content))]
-        (doseq [required required-record-sections
-                :when (not (contains? sections required))]
-          (vswap! out conj
-                  {:code :missing-record-section
-                   :severity :warn
-                   :message (str "Change-record is missing required * " required " section")
-                   :location {:file src}}))
-        (let [validation (section/read-section content "Validation")]
-          (when (and (:found validation)
-                     (str/blank? (:body validation)))
-            (vswap! out conj
-                    {:code :empty-validation-section
-                     :severity :warn
-                     :message "Change-record has an empty * Validation section"
-                     :location {:file src}})))))
-    @out))
+  (vec
+    (mapcat
+      (fn [[src content]]
+        (when (spec-impact-aware-record? content)
+          (let [sections (set (section/list-sections content))
+                validation (section/read-section content "Validation")]
+            (concat
+              (for [required required-record-sections
+                    :when (not (contains? sections required))]
+                {:code :missing-record-section
+                 :severity :warn
+                 :message (str "Change-record is missing required * " required " section")
+                 :location {:file src}})
+              (when (and (:found validation)
+                         (str/blank? (:body validation)))
+                [{:code :empty-validation-section
+                  :severity :warn
+                  :message "Change-record has an empty * Validation section"
+                  :location {:file src}}])))))
+      (source-content-index tasks))))
 
 (defn- check-spec-impact [tasks changed-paths]
   (when changed-paths
-    (let [changed (set changed-paths)
-          out (volatile! [])]
-      (doseq [[src content] (source-content-index tasks)]
-        (let [impacts (->> (parser/get-file-keywords content "SPEC_IMPACT")
-                           (map str/trim)
-                           (remove str/blank?)
-                           distinct)
-              opted-out? (some truthy-keyword-value?
-                               (parser/get-file-keywords content "NO_SPEC_IMPACT"))]
-          (when (and (seq impacts) (not opted-out?))
-            (doseq [impact impacts
-                    :when (not (contains? changed impact))]
-              (vswap! out conj
-                      {:code :spec-impact-untouched
-                       :severity :warn
-                       :message (str "#+SPEC_IMPACT declares " impact
-                                     " but that path is not touched in git status")
-                       :location {:file src}})))))
-      @out)))
+    (let [changed (set changed-paths)]
+      (vec
+        (mapcat
+          (fn [[src content]]
+            (let [impacts (->> (parser/get-file-keywords content "SPEC_IMPACT")
+                               (map str/trim)
+                               (remove str/blank?)
+                               distinct)
+                  opted-out? (some truthy-keyword-value?
+                                   (parser/get-file-keywords content "NO_SPEC_IMPACT"))]
+              (when (and (seq impacts) (not opted-out?))
+                (for [impact impacts
+                      :when (not (contains? changed impact))]
+                  {:code :spec-impact-untouched
+                   :severity :warn
+                   :message (str "#+SPEC_IMPACT declares " impact
+                                 " but that path is not touched in git status")
+                   :location {:file src}}))))
+          (source-content-index tasks))))))
 
-;; ── Main entry ─────────────────────────────────────────────────────
+;; ── Main checks ───────────────────────────────────────────────────
+
+(defn- check-link-templates-input [{:keys [protocol-files]}]
+  (check-link-templates protocol-files))
+
+(defn- check-record-structure-input [{:keys [tasks]}]
+  (check-record-structure tasks))
+
+(defn- check-spec-impact-input [{:keys [tasks changed-paths]}]
+  (or (check-spec-impact tasks changed-paths) []))
+
+(defn- check-duplicate-ids [{:keys [id-index]}]
+  (vec
+    (mapcat (fn [[id occurrences]]
+              (for [occ occurrences]
+                {:code :duplicate-id
+                 :severity :error
+                 :message (str "Duplicate :CUSTOM_ID: " id
+                               " (" (count occurrences) " occurrences)")
+                 :location (location-for occ)}))
+            (:duplicates id-index))))
+
+(defn- check-selected-id [{:keys [selected-id selected-source-path id-index]}]
+  (when (and selected-id (not (contains? (:by-id id-index) selected-id)))
+    [{:code :selected-not-found
+      :severity :error
+      :message (str "TASKS.local.org #+SELECTED: " selected-id
+                    " does not match any :CUSTOM_ID: in the loaded task graph")
+      :location (cond-> {} selected-source-path (assoc :file selected-source-path))}]))
+
+(defn- check-task [by-id task]
+  (vec
+    (concat
+      (when (:import-error task)
+        [{:code :broken-import
+          :severity :error
+          :message (str "#+IMPORT: failed to load: " (:import-error task))
+          :location (location-for task)}])
+      (when (and (= "WAITING" (:status task))
+                 (empty? (parser/get-task-blockers task)))
+        [{:code :waiting-without-blocker
+          :severity :warn
+          :message "WAITING task has no :BLOCKED-BY: entry — add one or move it back to TODO"
+          :location (location-for task)}])
+      (when (and (contains? closed-statuses (:status task))
+                 (nil? (:closed task)))
+        [{:code :closed-without-timestamp
+          :severity :warn
+          :message (str (:status task)
+                        " task has no CLOSED: timestamp cache. The next "
+                        "tooling-driven status change will repair it.")
+          :location (location-for task)}])
+      (when (= "TODO" (:status task))
+        (let [statuses (child-status-set task)
+              relevant (filter #(or (contains? active-child-statuses %)
+                                    (contains? closed-statuses %))
+                               statuses)]
+          (when (seq relevant)
+            [{:code :stale-parent-status
+              :severity :warn
+              :message (str "Parent is TODO but has descendants in ["
+                            (str/join ", " (sort statuses))
+                            "] — promote to STARTED")
+              :location (location-for task)}])))
+      (for [blocker (parser/get-task-blockers task)
+            :when (and (= :task (:kind blocker))
+                       (not (contains? by-id (:ref blocker))))]
+        {:code :invalid-task-blocker
+         :severity :error
+         :message (str ":BLOCKED-BY: references task:" (:ref blocker)
+                       " which is not in the loaded task graph")
+         :location (location-for task)})
+      (when-let [id (parser/get-task-id task)]
+        (when-not (re-matches uuid-v4-re (str/lower-case id))
+          [{:code :non-uuid-v4-id
+            :severity :warn
+            :message (str ":CUSTOM_ID: " id
+                          " is not a UUIDv4. Generate IDs with `ot uuid`"
+                          " or `ot create` rather than authoring them by hand.")
+            :location (location-for task)}])))))
+
+(defn- check-all-tasks [{:keys [tasks id-index]}]
+  (vec (mapcat #(check-task (:by-id id-index) %) (tree/all-tasks tasks))))
+
+(defn- check-import-children-saveable [{:keys [tasks]}]
+  (let [saveable (saveable-source-paths tasks)]
+    (vec
+      (for [[src task] (import-child-source-index tasks)
+            :when (not (contains? saveable src))]
+        {:code :import-child-not-saveable
+         :severity :warn
+         :message (str "Tasks from #+IMPORT:-linked file " src
+                       " are reachable, but that file has no parsed"
+                       " :file-root? serialization roots. Mutations to"
+                       " those imported tasks may not persist.")
+         :location (location-for task)}))))
+
+(defn- sibling-groups [siblings]
+  (cons siblings
+        (mapcat sibling-groups
+                (mapcat #(concat (:children %) (:import-children %)) siblings))))
+
+(defn- check-patterned-sibling-group [siblings]
+  (let [with-ids (filterv parser/get-task-id siblings)]
+    (when (>= (count with-ids) 2)
+      (vec
+        (mapcat
+          (fn [[prefix members]]
+            (when (and prefix (>= (count members) 2))
+              (for [sib members]
+                {:code :patterned-sibling-ids
+                 :severity :warn
+                 :message (str "Sibling tasks share a "
+                               patterned-prefix-threshold
+                               "-character :CUSTOM_ID: prefix '"
+                               prefix
+                               "…'. Use `ot create` or `ot uuid` to"
+                               " generate fresh UUIDv4 values per task.")
+                 :location (location-for sib)})))
+          (group-by #(let [id (parser/get-task-id %)]
+                       (when (>= (count id) patterned-prefix-threshold)
+                         (subs id 0 patterned-prefix-threshold)))
+                    with-ids))))))
+
+(defn- check-patterned-sibling-ids [{:keys [tasks]}]
+  (vec (mapcat #(or (check-patterned-sibling-group %) [])
+               (sibling-groups tasks))))
+
+(def ^:private doctor-checks
+  [check-link-templates-input
+   check-record-structure-input
+   check-spec-impact-input
+   check-duplicate-ids
+   check-selected-id
+   check-all-tasks
+   check-import-children-saveable
+   check-patterned-sibling-ids])
 
 (defn run-doctor
   "Top-level doctor entry point. `input` keys:
@@ -289,151 +405,9 @@
                              for the link-template / setupfile checks
     :changed-paths         - optional set of repo-relative git status paths
                              for SPEC_IMPACT checks"
-  [{:keys [tasks selected-id selected-source-path protocol-files changed-paths]}]
-  (let [out      (volatile! [])
-        link-findings (check-link-templates protocol-files)
-        record-findings (check-record-structure tasks)
-        spec-findings (check-spec-impact tasks changed-paths)
-        _ (vswap! out into link-findings)
-        _ (vswap! out into record-findings)
-        _ (vswap! out into spec-findings)
-        {:keys [by-id duplicates]} (build-id-index tasks)]
-
-    ;; duplicate-id (one finding per occurrence)
-    (doseq [[id occurrences] duplicates]
-      (doseq [occ occurrences]
-        (vswap! out conj
-                {:code :duplicate-id
-                 :severity :error
-                 :message (str "Duplicate :CUSTOM_ID: " id
-                               " (" (count occurrences) " occurrences)")
-                 :location (location-for occ)})))
-
-    ;; selected-not-found
-    (when (and selected-id (not (contains? by-id selected-id)))
-      (vswap! out conj
-              {:code :selected-not-found
-               :severity :error
-               :message (str "TASKS.local.org #+SELECTED: " selected-id
-                             " does not match any :CUSTOM_ID: in the loaded task graph")
-               :location (cond-> {} selected-source-path (assoc :file selected-source-path))}))
-
-    ;; per-task checks
-    (doseq [task (walk-tasks tasks)]
-      ;; broken-import
-      (when (:import-error task)
-        (vswap! out conj
-                {:code :broken-import
-                 :severity :error
-                 :message (str "#+IMPORT: failed to load: " (:import-error task))
-                 :location (location-for task)}))
-
-      ;; waiting-without-blocker
-      (when (and (= "WAITING" (:status task))
-                 (empty? (parser/get-task-blockers task)))
-        (vswap! out conj
-                {:code :waiting-without-blocker
-                 :severity :warn
-                 :message "WAITING task has no :BLOCKED-BY: entry — add one or move it back to TODO"
-                 :location (location-for task)}))
-
-      ;; closed-without-timestamp
-      (when (and (contains? closed-statuses (:status task))
-                 (nil? (:closed task)))
-        (vswap! out conj
-                {:code :closed-without-timestamp
-                 :severity :warn
-                 :message (str (:status task)
-                               " task has no CLOSED: timestamp cache. The next "
-                               "tooling-driven status change will repair it.")
-                 :location (location-for task)}))
-
-      ;; stale-parent-status
-      (when (= "TODO" (:status task))
-        (let [statuses (child-status-set task)
-              relevant (filter #(or (contains? active-child-statuses %)
-                                    (contains? closed-statuses %))
-                               statuses)]
-          (when (seq relevant)
-            (vswap! out conj
-                    {:code :stale-parent-status
-                     :severity :warn
-                     :message (str "Parent is TODO but has descendants in ["
-                                   (str/join ", " (sort statuses))
-                                   "] — promote to STARTED")
-                     :location (location-for task)}))))
-
-      ;; invalid-task-blocker
-      (doseq [blocker (parser/get-task-blockers task)]
-        (when (and (= :task (:kind blocker))
-                   (not (contains? by-id (:ref blocker))))
-          (vswap! out conj
-                  {:code :invalid-task-blocker
-                   :severity :error
-                   :message (str ":BLOCKED-BY: references task:" (:ref blocker)
-                                 " which is not in the loaded task graph")
-                   :location (location-for task)})))
-
-      ;; non-uuid-v4-id
-      (when-let [id (parser/get-task-id task)]
-        (when-not (re-matches uuid-v4-re (str/lower-case id))
-          (vswap! out conj
-                  {:code :non-uuid-v4-id
-                   :severity :warn
-                   :message (str ":CUSTOM_ID: " id
-                                 " is not a UUIDv4. Generate IDs with `ot uuid`"
-                                 " or `ot create` rather than authoring them by hand.")
-                   :location (location-for task)}))))
-
-    ;; import-child-not-saveable — every imported source file must have
-    ;; at least one parsed file root. Otherwise `save-source-roots` would
-    ;; have no serialization root for that file and mutations to its
-    ;; import children would be silently lost if the loader regressed.
-    (let [saveable (saveable-source-paths tasks)]
-      (doseq [[src task] (import-child-source-index tasks)
-              :when (not (contains? saveable src))]
-        (vswap! out conj
-                {:code :import-child-not-saveable
-                 :severity :warn
-                 :message (str "Tasks from #+IMPORT:-linked file " src
-                               " are reachable, but that file has no parsed"
-                               " :file-root? serialization roots. Mutations to"
-                               " those imported tasks may not persist.")
-                 :location (location-for task)})))
-
-    ;; patterned-sibling-ids — group siblings by their leading `N`
-    ;; characters and flag any cluster of ≥ 2 sharing that prefix. This
-    ;; catches hand-numbered sequences (e.g. `…d0001`/`…d0002`) without
-    ;; demanding that *every* sibling share the prefix.
-    (letfn [(check-siblings [siblings]
-              (let [with-ids (filterv parser/get-task-id siblings)]
-                (when (>= (count with-ids) 2)
-                  (doseq [[prefix members]
-                          (group-by #(let [id (parser/get-task-id %)]
-                                       (when (>= (count id) patterned-prefix-threshold)
-                                         (subs id 0 patterned-prefix-threshold)))
-                                    with-ids)
-                          :when (and prefix (>= (count members) 2))]
-                    (doseq [sib members]
-                      (vswap! out conj
-                              {:code :patterned-sibling-ids
-                               :severity :warn
-                               :message (str "Sibling tasks share a "
-                                             patterned-prefix-threshold
-                                             "-character :CUSTOM_ID: prefix '"
-                                             prefix
-                                             "…'. Use `ot create` or `ot uuid` to"
-                                             " generate fresh UUIDv4 values per task.")
-                               :location (location-for sib)}))))))
-            (walk-siblings [siblings]
-              (check-siblings siblings)
-              (doseq [s siblings]
-                (walk-siblings (:children s))
-                (when (:import-children s)
-                  (walk-siblings (:import-children s)))))]
-      (walk-siblings tasks))
-
-    @out))
+  [{:keys [tasks] :as input}]
+  (let [input (assoc input :id-index (build-id-index tasks))]
+    (vec (mapcat #(% input) doctor-checks))))
 
 ;; ── Formatting ────────────────────────────────────────────────────
 
