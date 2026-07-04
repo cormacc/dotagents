@@ -54,6 +54,7 @@ ot archive <id> --yes
 ot publish <id>       # TASKS.local.org -> TASKS.org
 ot unpublish <id>     # TASKS.org -> TASKS.local.org
 ot doctor --format json # includes spec warnings for #+SPEC: declarations and records that declare #+SPEC:
+ot spec list --format json   # report-only: discovered spec set + root provenance (alias: spec discover)
 ot backfill            # add :CUSTOM_ID: / :CREATED: to hand-authored tasks missing IDs
 ot section design/log/foo.org Summary --format json
 ot scan --scope all --max-body-chars 500 --format json
@@ -139,8 +140,14 @@ ID-accepting commands accept full `:CUSTOM_ID:` values or any unique prefix of a
 
 Use `#+NO_SPEC: true` when the project has no durable contract layer, the task is below the spec threshold, or the contract is intentionally unaffected. Any truthy value (`true`/`t`/`yes`/`y`/`on`/`1`) is accepted. `#+NO_SPEC:` suppresses only the `spec-untouched` nudge — a malformed `#+SPEC:` value in the same record is still reported.
 
-`ot doctor` emits three spec findings:
+## `ot spec list`
+
+`ot spec list` (alias `ot spec discover`) is a read-only report of the org-plan discovery traversal (see org-plan SKILL.md § Spec discovery): `#+SPEC:` roots declared in TASKS.org, or the default root `./design/SPEC.org` when none are declared; implicit specs (root `README.*`, `AGENTS.md`, the skills directory); folder roots expanded recursively; org `[[file:...]]`/`[[proj:...]]` links, Markdown `[text](path)` links, and org `#+INCLUDE:` directives all followed transitively with a visited-set cycle guard (external `http`/`https` targets are never followed). Prints the discovered path set with root provenance (e.g. `#+SPEC: ...`, `default root: ...`, `implicit: ...`, `link from ...`). Report-only — no findings, no doctor coupling, always exits 0.
+
+`ot doctor` emits these spec findings:
 
 - `spec-untouched` — a `#+SPEC:` path declared in a record has not been touched in the current git working tree/index. A nudge, not a gate; it cannot infer omitted specs that were never declared.
 - `spec-value-malformed` — a `#+SPEC:` value is not a bare `[[proj:PATH]]` link: a plain path, the labelled `[[proj:PATH][label]]` form, or a path that is absolute, escapes the repo root (`..`), or is whitespace-padded.
 - `spec-path-dangling` — a `#+SPEC:` link in TASKS.org points at a path that does not resolve on disk (file or folder).
+- `spec-citation-untested` — an `** Acceptance` criterion cites `spec:` (see org-plan SKILL.md § Spec/test citation on acceptance criteria) but no `test:` evidence, and is not under `*** Anti-criteria` (which is its own evidence). A nudge only; a criterion with no citation at all produces no finding.
+- `spec-stale` ("declared-but-stale") — a `#+SPEC:` path declared in a record is unchanged in the current git working tree/index while code it transitively links to (per the `ot spec list` traversal) did change. A lightweight local echo of SOTA drift gates — still advisory, never blocking; does not fire when the spec itself also changed, or when nothing it links to changed.

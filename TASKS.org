@@ -178,18 +178,6 @@ Code cleanups
 :END:
 Split `parser.clj` (772 LOC) internals behind the existing `org-tasks.parser` facade: scanner + serializer stay together; relocate property accessors, file-keyword/link helpers, linked issues, timestamps. Shared private regexes are the coupling point. Then finish the parser-blocked residue of the 2026-07-03 dedup pass: `closed-statuses` → `lifecycle` (avoiding a parser↔lifecycle cycle), single parser-owned trailing-tag strip. Requires: byte-identical round-trip fixtures after each relocation group. Context: [[plan:2026-07-03-ot-deduplication-and-simplification-pass.org][dedup pass record]] (cancelled tasks 658e60ba, dddd6cf0).
 
-** STARTED [#B] Extend org-plan skill to include optional spec input and output
-:PROPERTIES:
-:CUSTOM_ID: 8d82d979-be9c-4d06-9f8a-62abaa857a27
-:CREATED: [2026-07-04 Sat 17:12]
-:STARTED: [2026-07-04 Sat 18:03]
-:END:
-:LOGBOOK:
-- Created [2026-07-04 Sat 17:12]
-- State "STARTED" from "TODO" [2026-07-04 Sat 18:03]
-:END:
-#+IMPORT: [[plan:2026-07-04-extend-org-plan-skill-to-include-optiona.org]]
-
 * Fixes
 ** TODO ot: id args that look like scientific notation get number-coerced
 :PROPERTIES:
@@ -200,18 +188,6 @@ Split `parser.clj` (772 LOC) internals behind the existing `org-tasks.parser` fa
 - Created [2026-07-02 Thu 22:33]
 :END:
 Repro: `ot status 1022e091 DONE` fails with `unknown-task ... :id 1.022E94`. babashka.cli coerces positional/option values, and an 8-char hex prefix shaped like `<digits>e<digits>` (e.g. `1022e091`) parses as a Double in scientific notation before the id resolver sees it. Fix: coerce id-bearing args/options to `:string` in the cli dispatch specs (or stringify in `resolve-id-arg`), and add a regression test with such a prefix.
-
-** DONE org-tasks-tui final review follow-up
-CLOSED: [2026-07-03 Fri 17:50]
-:PROPERTIES:
-:CUSTOM_ID: 1d10dd58-04b7-4efa-8f3d-ce46b7c617fd
-:CREATED: [2026-07-03 Fri 17:29]
-:END:
-:LOGBOOK:
-- Created [2026-07-03 Fri 17:29]
-- State "DONE" from "TODO" [2026-07-03 Fri 17:50]
-:END:
-#+IMPORT: [[plan:2026-07-03-org-tasks-tui-final-review-follow-up.org]]
 
 * Housekeeping
 

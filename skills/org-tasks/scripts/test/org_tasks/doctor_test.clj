@@ -460,6 +460,119 @@
     (is (= 1 (count-of findings :spec-value-malformed)))
     (is (str/includes? (:message f) "design/SPEC.org"))))
 
+(deftest spec-citation-untested-fires-when-spec-cited-without-test
+  (let [content (str "* Summary\n"
+                     "** Acceptance\n"
+                     "*** Core functionality\n"
+                     "- [ ] Widget renders → spec:[[proj:design/specs/theming.org]]\n"
+                     "* Plan\n"
+                     "** TODO Work\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/work.org"
+                                                     :source-content content})
+        findings (doctor/run-doctor {:tasks tasks :selected-id nil})
+        f (first (filter #(= :spec-citation-untested (:code %)) findings))]
+    (is (= 1 (count-of findings :spec-citation-untested)))
+    (is (= :warn (:severity f)))
+    (is (str/includes? (:message f) "Widget renders"))))
+
+(deftest spec-citation-untested-does-not-fire-when-test-cited
+  (let [content (str "* Summary\n"
+                     "** Acceptance\n"
+                     "*** Core functionality\n"
+                     "- [ ] Widget renders → spec:[[proj:design/specs/theming.org]] test:`test/widget_test.clj:1`\n"
+                     "* Plan\n"
+                     "** TODO Work\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/work.org"
+                                                     :source-content content})]
+    (is (zero? (count-of (doctor/run-doctor {:tasks tasks :selected-id nil})
+                         :spec-citation-untested)))))
+
+(deftest spec-citation-untested-does-not-fire-for-anti-criteria
+  (let [content (str "* Summary\n"
+                     "** Acceptance\n"
+                     "*** Anti-criteria\n"
+                     "- [ ] Must not: regress → spec:[[proj:design/specs/theming.org]]\n"
+                     "* Plan\n"
+                     "** TODO Work\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/work.org"
+                                                     :source-content content})]
+    (is (zero? (count-of (doctor/run-doctor {:tasks tasks :selected-id nil})
+                         :spec-citation-untested)))))
+
+(deftest spec-citation-untested-no-finding-when-uncited
+  (let [content (str "* Summary\n"
+                     "** Acceptance\n"
+                     "*** Core functionality\n"
+                     "- [ ] Widget renders\n"
+                     "* Plan\n"
+                     "** TODO Work\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/work.org"
+                                                     :source-content content})]
+    (is (zero? (count-of (doctor/run-doctor {:tasks tasks :selected-id nil})
+                         :spec-citation-untested)))))
+
+(deftest spec-stale-fires-when-linked-code-changed-but-spec-did-not
+  (let [content (str "#+SPEC: [[proj:design/SPEC.org]]\n\n"
+                     "* Plan\n"
+                     "** TODO Update\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/work.org"
+                                                     :source-content content})
+        findings (doctor/run-doctor {:tasks tasks
+                                     :selected-id nil
+                                     :changed-paths #{"src/api.clj"}
+                                     :spec-linked-paths {"design/SPEC.org" #{"src/api.clj"}}})
+        f (first (filter #(= :spec-stale (:code %)) findings))]
+    (is (= 1 (count-of findings :spec-stale)))
+    (is (= :warn (:severity f)))
+    (is (str/includes? (:message f) "src/api.clj"))))
+
+(deftest spec-stale-does-not-fire-when-spec-itself-changed
+  (let [content (str "#+SPEC: [[proj:design/SPEC.org]]\n\n"
+                     "* Plan\n"
+                     "** TODO Update\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/work.org"
+                                                     :source-content content})]
+    (is (zero? (count-of (doctor/run-doctor
+                          {:tasks tasks
+                           :selected-id nil
+                           :changed-paths #{"src/api.clj" "design/SPEC.org"}
+                           :spec-linked-paths {"design/SPEC.org" #{"src/api.clj"}}})
+                         :spec-stale)))))
+
+(deftest spec-stale-does-not-fire-when-nothing-linked-changed
+  (let [content (str "#+SPEC: [[proj:design/SPEC.org]]\n\n"
+                     "* Plan\n"
+                     "** TODO Update\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/work.org"
+                                                     :source-content content})]
+    (is (zero? (count-of (doctor/run-doctor
+                          {:tasks tasks
+                           :selected-id nil
+                           :changed-paths #{"unrelated.clj"}
+                           :spec-linked-paths {"design/SPEC.org" #{"src/api.clj"}}})
+                         :spec-stale)))))
+
 (deftest spec-malformed-reported-even-when-opted-out
   ;; `#+NO_SPEC:` suppresses the untouched reconciliation, but a
   ;; malformed value must still be flagged so nothing silently un-migrates.

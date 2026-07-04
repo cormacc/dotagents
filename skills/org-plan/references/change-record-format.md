@@ -126,9 +126,25 @@ Skip for refactors, infra, dev-tooling, observability work.
 
 Include for feature work where the user-facing flow is load-bearing. Drafting-time aid — at closure, the happy path is in Implementation and edge cases are anti-criteria or `** Gotchas`; prune unless the walkthrough still carries unique value.
 
+Optional Given/When/Then form for an edge case where scenario rigour pays for itself (see org-plan SKILL.md § `* Behavior`):
+
+```org
+** Edge cases
+- Given a WAITING task with no :BLOCKED-BY:, when `ot doctor` runs, then it emits `waiting-without-blocker`.
+```
+
 ### `* Context`
 
 Background, motivation, alternatives, constraints, trade-offs. **Default to omitting.** Promote only when durable rationale materially exceeds what `* Summary` can carry.
+
+### Acceptance criteria citation
+
+Optional: cite the spec clause and/or test a criterion depends on with a `→` suffix (`spec:[[proj:PATH]]` and/or `test:REF`); see org-plan SKILL.md § Spec/test citation on acceptance criteria.
+
+```org
+*** Core functionality
+- [ ] Widget renders in dark mode → spec:[[proj:design/specs/theming.org]] test:`test/widget_test.clj:42`
+```
 
 ## Spec keyword
 

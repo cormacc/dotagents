@@ -1,0 +1,220 @@
+#+TITLE: Agentic spec SOTA review follow-up
+#+DATE: 2026-07-04 Sat
+#+PARENT: [[archive:6e5f7cb6-92b9-47f0-912b-4b2e47629ff1][Agentic spec SOTA review follow-up]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Review
+#+SPEC: [[proj:skills/org-plan/SKILL.md]]
+#+SPEC: [[proj:skills/org-plan/references/change-record-format.md]]
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+#+SPEC: [[proj:skills/org-tasks/references/ot-cli.md]]
+
+* Intent
+Selectively adopt the two highest-value, philosophy-compatible ideas from the mid-2026 spec-driven SOTA review — spec↔acceptance/test linkage and an AGENTS.md-as-constitution planning check — plus smaller tooling/convention enhancements, while keeping the nudge-not-gate, contract-first, git-native core of org-plan/org-tasks intact.
+
+* Summary
+*Level:* production · *Tests:* thorough (for `ot` changes; doc-only tasks none) · *Docs:* inline (the skills are the docs)
+
+Follow-up work programme from the SOTA review preserved at [[file:2026-07-04-agentic-spec-sota-review-follow-up-org-p/research-spec-driven-sota.md][research-spec-driven-sota.md]] (same-stem support folder). The review found the local model ahead of SOTA on git-nativeness, tool-agnosticism, planning craft, and the don't-duplicate-the-contract philosophy, and behind on spec→test coupling, drift enforcement, constitution/steering, and tooling-verified discovery. This record plans the selective borrowings, tiered HIGH → MEDIUM → LOW, and records what we explicitly decline to adopt.
+
+** Scope
+*** In scope
+- HIGH: optional spec/test citation on `** Acceptance` criteria + `ot doctor` closure advisory (77c2cfff).
+- HIGH: name AGENTS.md + skills as the "project constitution" checked during org-plan premortem/Decisions (5de78ed1).
+- MEDIUM: read-only `ot spec list` / `spec discover` implementing the documented rooted/transitive traversal (advisory report, not a gate).
+- MEDIUM: `ot doctor` "declared-but-stale" advisory — declared spec's linked code changed within the record's git scope but the spec file did not.
+- LOW: optional Given/When/Then scenario form for `* Behavior` / `** Edge cases`.
+- LOW: broaden `#+SPEC:` transitive discovery to Markdown links and `#+INCLUDE:`.
+- Relevant contracts: `skills/org-plan/SKILL.md`, `skills/org-plan/references/change-record-format.md`, `skills/org-tasks/SKILL.md`, `skills/org-tasks/references/ot-cli.md`, and for the `ot` work `doctor.clj` + `commands/maintenance.clj`.
+*** Out of scope
+- A generative `specs/` corpus + delta-merge engine (Spec Kit / OpenSpec core model).
+- Hard CI merge gates on spec drift; any blocking enforcement.
+- Spec-first "code serves spec" inversion.
+- IDE-locked steering (Kiro model) or any new always-in-context governance file duplicating AGENTS.md.
+- Making `ot` a workflow engine (phases, gates, model calls).
+
+** Acceptance
+Consolidated ISC; per-task slices live in the plan-task bodies.
+*** Core functionality
+- [X] org-plan documents an optional spec/test citation syntax for `** Acceptance` criteria.
+- [X] `ot doctor` emits an advisory when a spec-citing criterion lacks test/anti-criterion evidence at closure.
+- [X] org-plan names AGENTS.md + skills as the project constitution.
+- [X] The premortem and `** Decisions` drafting practices reference an explicit constitution check.
+- [X] `ot spec list` prints the discovered spec set for the project with root provenance.
+- [X] `ot spec list` enumerates `#+SPEC:` roots and the default `./design/SPEC.org` root.
+- [X] `ot spec list` includes the implicit specs (root `README.*`, `AGENTS.md`, skills dir).
+- [X] `ot spec list` expands folder roots recursively and follows org `[[file:]]`/`[[proj:]]` links transitively.
+- [X] `ot doctor` can flag a declared spec whose linked code changed while the spec file did not (advisory).
+- [X] org-plan documents an optional Given/When/Then form for `* Behavior` / `** Edge cases`.
+- [X] Discovery traversal recognises Markdown links.
+- [X] Discovery traversal recognises org `#+INCLUDE:`.
+*** Edge cases
+- [X] A criterion without any spec/test citation produces no doctor finding.
+- [X] `ot spec list` on a project with no `#+SPEC:` and no default root reports the implicit specs only.
+- [X] Link cycles terminate in both the documented convention and the `ot spec` implementation.
+*** Anti-criteria
+- [X] Must not: introduce any blocking gate — every new check is a warning/advisory.
+- [X] Must not: create a new spec corpus or constitution file; reuse AGENTS.md/skills.
+- [X] Must not: make spec/test citations or GWT scenarios mandatory ceremony.
+
+** Decisions
+- Selective borrowing, tiered HIGH → MEDIUM → LOW per the review's prioritisation :: constitution check is cheap/doc-only; spec↔test linkage is the biggest-value gap-closer; tooling (spec list, stale advisory) follows; GWT and link-syntax broadening are deferred polish.
+- The 2026-06-04 OpenSpec evaluation's conclusions still hold ([[file:2026-06-04-evaluate-openspec-vs-org-plan-skill-for.org][record]]): no merge engine, couple to existing contracts, warnings-only enforcement. SOTA has added polish and enforcement rhetoric since, not reasons to reverse.
+- NOT adopting a generative `specs/` corpus + delta-merge engine (Spec Kit/OpenSpec core) :: rebuilding a parallel spec corpus that must be regenerated/merged manufactures a new drift surface that the "couple to existing contracts" philosophy specifically avoids; in this repo the skills *are* the specs.
+- NOT adopting hard CI merge gates on spec drift :: contradicts the deliberate nudge-not-gate stance and the solo/small-team context; the advisory `ot doctor` path is the ceiling. Reassess only for a high-assurance contract layer.
+- NOT adopting the spec-first "code serves spec" inversion (Spec Kit's central claim) :: for a repo whose deliverable is the contract (skills), the inversion is redundant — contract and code are one artifact.
+- NOT adopting IDE-locked steering (Kiro) :: violates tool-agnosticism. The constitution role goes to the already-implicit AGENTS.md + skills instead of a new file.
+
+** Shipped
+- MODIFIED :: `skills/org-plan/SKILL.md` — constitution check (premortem + Decisions), spec/test acceptance-criterion citation syntax, optional GWT form for Behavior/Edge cases, `ot spec list` mention in Spec discovery, MVP-boundary text broadened to Markdown/`#+INCLUDE:`.
+- MODIFIED :: `skills/org-plan/references/change-record-format.md` — acceptance-criterion citation example, GWT edge-case example.
+- MODIFIED :: `skills/org-tasks/references/ot-cli.md` — `ot spec list` documented; `spec-citation-untested` and `spec-stale` findings documented alongside the existing three.
+- ADDED :: `skills/org-tasks/scripts/src/org_tasks/spec.clj` — pure rooted/transitive spec-discovery traversal engine (org/Markdown/`#+INCLUDE:` links, folder expansion, cycle guard).
+- ADDED :: `skills/org-tasks/scripts/src/org_tasks/commands/spec.clj` — `ot spec list` / `spec discover` CLI handler with real-fs adapter.
+- MODIFIED :: `skills/org-tasks/scripts/src/org_tasks/doctor.clj` — new `spec-citation-untested` and `spec-stale` findings, added to `finding-order`.
+- MODIFIED :: `skills/org-tasks/scripts/src/org_tasks/commands/maintenance.clj` — wires `spec-linked-paths` into `ot doctor` via `org-tasks.spec/linked-paths-from`.
+- MODIFIED :: `skills/org-tasks/scripts/src/org_tasks/commands/registry.clj` — registers `spec list` / `spec discover`.
+
+** Risks
+- Advisory fatigue: each new `ot doctor` warning class risks being ignored like lint noise; accepted — keep findings few, precise, and closure-scoped.
+- "Declared-but-stale" heuristics (git-scope diff of code vs spec) may false-positive on incidental co-location; accepted for an advisory, tune on evidence.
+- Constitution check could decay into a checkbox ritual; mitigated by wording it as a named drafting practice with concrete questions, not a template section.
+
+** Follow-ups
+- None yet; discovered work lands as new `* Plan` tasks or TASKS.org entries.
+
+* Plan
+** DONE [#B] Promote AGENTS.md/skills to a named constitution planning check in org-plan   :org-plan:spec:
+CLOSED: [2026-07-04 Sat 19:44]
+:PROPERTIES:
+:CUSTOM_ID: 5de78ed1-b89d-4153-9f48-14b5044df64b
+:CREATED: [2026-07-04 Sat 19:18]
+:STARTED: [2026-07-04 Sat 19:44]
+:END:
+:LOGBOOK:
+- Created [2026-07-04 Sat 19:18]
+- State "STARTED" from "TODO" [2026-07-04 Sat 19:44]
+- State "DONE" from "STARTED" [2026-07-04 Sat 19:44]
+:END:
+HIGH rec from the spec-driven SOTA review ([[file:2026-07-04-agentic-spec-sota-review-follow-up-org-p/research-spec-driven-sota.md][report]]). SOTA's one near-universal idea we lack: a first-class constitution/steering doc (Spec Kit constitution.md, Kiro steering). Rather than invent a new file, promote the already-implicit repo `AGENTS.md` (+ skills) to a named "project constitution" that org-plan's premortem and `** Decisions` are explicitly checked against. Honours single-source-of-truth / don't-duplicate. Doc-only change to `skills/org-plan/SKILL.md` (Drafting practices) and, if needed, `references/change-record-format.md`.
+
+Acceptance criteria:
+- org-plan names AGENTS.md + skills as the project constitution.
+- The premortem practice includes an explicit constitution-conformance question.
+- `** Decisions` guidance says decisions conflicting with the constitution must record the conflict.
+- Must not: introduce a new constitution file or template section.
+- Must not: turn the check into a gate — it is a drafting practice.
+
+** DONE [#B] Add spec<->acceptance/test linkage to org-plan (close SOTA drift gap)   :org-plan:spec:
+CLOSED: [2026-07-04 Sat 19:47]
+:PROPERTIES:
+:CUSTOM_ID: 77c2cfff-778b-4d12-9cf4-fc3562423ce1
+:CREATED: [2026-07-04 Sat 19:18]
+:STARTED: [2026-07-04 Sat 19:47]
+:END:
+:LOGBOOK:
+- Created [2026-07-04 Sat 19:18]
+- State "STARTED" from "TODO" [2026-07-04 Sat 19:47]
+- State "DONE" from "STARTED" [2026-07-04 Sat 19:47]
+:END:
+HIGH rec from the spec-driven SOTA review ([[file:2026-07-04-agentic-spec-sota-review-follow-up-org-p/research-spec-driven-sota.md][report]]). Biggest gap vs SOTA: no spec->test coupling ("if no test asserts the spec it drifts"). Let a `** Acceptance` criterion optionally cite the spec clause it satisfies and/or the test that asserts it (e.g. inline `-> spec:[[proj:...]]` / `-> test:` pointers), with an `ot doctor` advisory when a spec-citing criterion has no test/anti-criterion evidence at closure. Keep nudge-not-gate. Follows on from the `#+SPEC:` feature (8d82d979). Touches `skills/org-plan/SKILL.md` § Acceptance criteria, `references/change-record-format.md`, and `ot doctor` (`doctor.clj`; follow the existing `spec-untouched` finding pattern for naming/severity).
+
+Acceptance criteria:
+- org-plan documents the optional citation syntax with an example criterion.
+- change-record-format.md skeleton shows one cited criterion.
+- `ot doctor` emits an advisory for a spec-citing criterion with no test/anti-criterion evidence at closure.
+- The new advisory finding has a stable name documented in `ot-cli.md` alongside the existing spec findings.
+- A criterion with no citation produces no finding.
+- Regression tests cover the new doctor finding (positive + negative).
+- Must not: make citations mandatory or block closure.
+
+** DONE [#C] ot: add read-only `ot spec list` implementing documented discovery traversal :ot:spec:
+CLOSED: [2026-07-04 Sat 19:50]
+:PROPERTIES:
+:CUSTOM_ID: 24b95233-ad45-4ae8-b3cd-f1f5c10a55c8
+:CREATED: [2026-07-04 Sat 19:22]
+:STARTED: [2026-07-04 Sat 19:50]
+:END:
+:LOGBOOK:
+- Created [2026-07-04 Sat 19:22]
+- State "STARTED" from "TODO" [2026-07-04 Sat 19:50]
+- State "DONE" from "STARTED" [2026-07-04 Sat 19:50]
+:END:
+MEDIUM rec. Turn the fallible agent discovery convention into a verifiable command: `ot spec list` (alias `spec discover`) performs the rooted/transitive traversal documented in org-plan § Spec discovery — `#+SPEC:` roots from TASKS.org, default root `./design/SPEC.org`, implicit specs (root `README.*`, `AGENTS.md`, skills dir), recursive folder inclusion, transitive org `[[file:]]`/`[[proj:]]` link-following with a visited-set cycle guard. Report only; no gating, no doctor coupling. Implement alongside existing spec parsing (see `doctor.clj` spec checks for `#+SPEC:` value parsing) and register the subcommand in `commands/maintenance.clj` / cli dispatch following the `record`/`issue` subcommand pattern.
+
+Acceptance criteria:
+- `ot spec list` prints the discovered spec set with root provenance.
+- `#+SPEC:` roots declared in TASKS.org are enumerated.
+- The default root `./design/SPEC.org` is included when present and no `#+SPEC:` is declared.
+- Implicit specs (root `README.*`, `AGENTS.md`, skills dir) are included.
+- A `#+SPEC:` folder value is expanded recursively.
+- Org `[[file:]]`/`[[proj:]]` links in a root are followed transitively.
+- Link cycles terminate (regression test with A↔B cycle fixture).
+- `--format json` output supported like other commands.
+- No `#+SPEC:` + no default root → implicit specs only, exit 0.
+- Must not: emit warnings/errors that gate any workflow.
+- Must not: traverse Markdown links or `#+INCLUDE:` (MVP boundary; separate task 8470d347).
+
+** DONE [#C] ot doctor: "declared-but-stale" spec drift advisory :ot:spec:
+CLOSED: [2026-07-04 Sat 19:53]
+:PROPERTIES:
+:CUSTOM_ID: 0d2e4a7c-0e3a-47a9-9cdd-e22b7e6713aa
+:CREATED: [2026-07-04 Sat 19:22]
+:BLOCKED-BY: 24b95233-ad45-4ae8-b3cd-f1f5c10a55c8
+:STARTED: [2026-07-04 Sat 19:53]
+:END:
+:LOGBOOK:
+- Created [2026-07-04 Sat 19:22]
+- State "STARTED" from "TODO" [2026-07-04 Sat 19:53]
+- State "DONE" from "STARTED" [2026-07-04 Sat 19:53]
+:END:
+MEDIUM rec. Extend drift detection beyond `spec-untouched` (spec path unchanged in git): flag a declared spec whose *linked code changed but the spec file did not* within the record's git scope (`:STARTED:`..`CLOSED:` derived log, as used by `ot record create --mode retrospective`). A lightweight local echo of the SOTA drift gate — still a warning, never blocking. Blocked by 24b95233: reuses its traversal/link-resolution machinery to know what a spec "links to". Extend `doctor.clj` following the existing `spec-untouched` finding shape; wire any shared helpers via `commands/maintenance.clj`.
+
+Acceptance criteria:
+- New advisory finding (e.g. `spec-stale`) with its own documented name in ot-cli.md § doctor findings.
+- Fires when spec-linked code changed in the record's git scope and the spec did not.
+- Does not fire when the spec also changed, or nothing it links to changed.
+- Regression tests cover fire/no-fire cases.
+- Must not: escalate to error or block closure/merge.
+
+** DONE [#D] org-plan: optional Given/When/Then form for Behavior/Edge cases :org-plan:
+CLOSED: [2026-07-04 Sat 19:54]
+:PROPERTIES:
+:CUSTOM_ID: 58319db0-e9c2-4247-adac-b5318e9daa92
+:CREATED: [2026-07-04 Sat 19:22]
+:STARTED: [2026-07-04 Sat 19:54]
+:END:
+:LOGBOOK:
+- Created [2026-07-04 Sat 19:22]
+- State "STARTED" from "TODO" [2026-07-04 Sat 19:54]
+- State "DONE" from "STARTED" [2026-07-04 Sat 19:54]
+:END:
+LOW rec (also R6 in the 2026-06-04 OpenSpec eval). Document an optional Given/When/Then scenario form for `* Behavior` / `** Edge cases` where behavioural contracts benefit from scenario rigour. Doc-only: `skills/org-plan/SKILL.md` (`* Behavior` section) + `references/change-record-format.md` example. Keep optional to avoid ceremony.
+
+Acceptance criteria:
+- org-plan documents the GWT form as optional with a when-to-use sentence.
+- change-record-format.md shows one GWT example edge case.
+- Must not: make GWT the default or required form.
+
+** DONE [#D] Broaden #+SPEC: link discovery to Markdown links and #+INCLUDE: :org-plan:ot:spec:
+CLOSED: [2026-07-04 Sat 19:55]
+:PROPERTIES:
+:CUSTOM_ID: 8470d347-f4c8-47fd-a031-218fbf5b7791
+:CREATED: [2026-07-04 Sat 19:22]
+:BLOCKED-BY: 24b95233-ad45-4ae8-b3cd-f1f5c10a55c8
+:STARTED: [2026-07-04 Sat 19:54]
+:END:
+:LOGBOOK:
+- Created [2026-07-04 Sat 19:22]
+- State "STARTED" from "TODO" [2026-07-04 Sat 19:54]
+- State "DONE" from "STARTED" [2026-07-04 Sat 19:55]
+:END:
+LOW rec. The documented MVP boundary limits transitive discovery to org `[[file:]]`/`[[proj:]]` links; extend to Markdown `[text](path)` links and org `#+INCLUDE:` so Markdown specs (AGENTS.md, skills) contribute sub-specs. Update the convention in `skills/org-plan/SKILL.md` § Spec discovery and the `ot spec list` traversal (hence blocked by 24b95233 — extend one implementation, not two conventions). Revisit priority only if manual discovery proves error-prone.
+
+Acceptance criteria:
+- Documented traversal syntaxes include Markdown links and `#+INCLUDE:`.
+- `ot spec list` follows both new syntaxes (regression tests with fixtures).
+- Relative resolution stays relative to the linking document.
+- Cycle guard still terminates across mixed org/Markdown cycles.
+- Must not: follow external (http/https) links.
+
+* Implementation

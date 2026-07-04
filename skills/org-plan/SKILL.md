@@ -63,7 +63,7 @@ Plans are written for engineers with project context. Optimise for signal densit
 
 - `** Scope` (required) — `*** In scope` and `*** Out of scope` lists. Both lists. Out-of-scope items prevent feature creep and feed the premortem ("are we sure we don't need X?").
 - `** Acceptance` — the consolidated ISC (user-confirmed definition of done), grouped into `*** Core functionality`, `*** Edge cases`, `*** Anti-criteria`. See *Acceptance criteria*.
-- `** Decisions` — strategic durable design choices that constrain future work, not every tactical coding call. Captures the chosen approach plus rejected alternatives bulleted underneath.
+- `** Decisions` — strategic durable design choices that constrain future work, not every tactical coding call. Captures the chosen approach plus rejected alternatives bulleted underneath. When a decision knowingly conflicts with the project constitution (AGENTS.md + skills — see *The project constitution*), record the conflict and rationale explicitly rather than silently diverging.
 - `** Shipped` — user-visible / protocol / code outcomes, populated as work lands. When a planned or discovered contract doc changes, prefix bullets with `ADDED`, `MODIFIED`, or `REMOVED` and name the contract doc; this is the post-hoc outcome, not the planning-time `#+SPEC:` declaration.
 - `** Gotchas` — project-side surprises future implementers should not rediscover. Library/API/protocol facts belong in the relevant skill/reference when one exists.
 - `** Risks` — drafted from premortem; durable risks considered and accepted. Distinct from `** Gotchas` (post-hoc surprise) and `* Open questions` (deferred-not-decided).
@@ -85,6 +85,15 @@ Plans are written for engineers with project context. Optimise for signal densit
 - `** Edge cases` — bullets of `[case]: [expected behavior]`.
 
 Drafting-time aid: the happy path becomes the implementation; edge cases become anti-criteria or `** Gotchas`. Closure-prune unless the walkthrough preserves something Implementation/Summary do not subsume.
+
+Optionally, when scenario rigour pays for itself (concurrent/stateful edge cases, protocol handshakes, anything where the trigger and outcome are easy to conflate), write a `** Happy path` step or `** Edge cases` bullet in Given/When/Then form instead of the terser default:
+
+```org
+** Edge cases
+- Given a WAITING task with no :BLOCKED-BY:, when `ot doctor` runs, then it emits `waiting-without-blocker`.
+```
+
+This is optional polish, not the default or required form — do not impose GWT ceremony on straightforward edge cases.
 
 `* Context` — background, motivation, alternatives, constraints, and trade-offs. **Default to omitting.** Promote only when durable rationale materially exceeds what `* Summary` can carry. At closure, delete Context unless it still earns its place.
 
@@ -143,8 +152,8 @@ Pick one value per dimension. Calibrates ISC tightness, plan-task acceptance cri
 - `#+SPEC:` is declared in `TASKS.org`. The discovery *convention* an agent performs may additionally honour a local `#+SPEC:` in gitignored `TASKS.local.org`, but `ot doctor` validates (malformed / dangling-path) only the `TASKS.org` declarations.
 - **Implicit specs** are always considered without needing a `#+SPEC:` entry: repository-root `README.*` (any extension), `AGENTS.md`, and a project-local skills directory (`.agents/skills` when present; in this repo the skills live at `skills/`).
 - **Rooted/transitive discovery**: each `#+SPEC:` entry, each file inside a declared folder, and each implicit spec is a discovery *root*. Links found in a root's content are followed to pull in sub-specs automatically — a sub-spec needs no `#+SPEC:` entry of its own. Link resolution is relative to the linking document. A visited-set guard prevents infinite loops on cycles (A links B links A terminates once B is revisited).
-- Recognised link syntaxes for traversal in this MVP: org `[[file:...]]` and `[[proj:...]]` links. Markdown links (`[text](path)`) and org `#+INCLUDE:` are not traversed in MVP — treat them as a documented boundary, not a bug, until a follow-up extends discovery.
-- Discovery (including transitive link-following) is a convention the planning/implementing agent performs by reading files and reasoning about links — `ot` does not crawl spec links. The only automated guard is `ot doctor` warning when a declared `#+SPEC:` path does not resolve on disk.
+- Recognised link syntaxes for traversal: org `[[file:...]]` and `[[proj:...]]` links, Markdown `[text](path)` links, and org `#+INCLUDE:` directives. Relative resolution is always relative to the linking document (`[[proj:...]]` stays repo-root relative). External (`http`/`https`) targets are never followed. The visited-set cycle guard applies uniformly across mixed org/Markdown link chains.
+- Discovery (including transitive link-following) is primarily a convention the planning/implementing agent performs by reading files and reasoning about links; `ot spec list` (alias `spec discover`) can also verify the traversal mechanically as a read-only report (no gating, no doctor coupling — see `../org-tasks/references/ot-cli.md` § `ot spec list`). The only automated guard in `ot doctor` is the warning when a declared `#+SPEC:` path does not resolve on disk.
 
 ### Spec planning
 
@@ -176,12 +185,17 @@ Before drafting `* Plan` for non-trivial changes, list 2–3 plausible approache
 
 This preserves the rejected paths when re-litigation happens later.
 
+### The project constitution
+
+This repo has no separate constitution/steering file (Spec Kit's `constitution.md`, Kiro's steering docs) — that role belongs to the already-canonical `AGENTS.md` plus the skills under `skills/` (or `.agents/skills`). They are the durable, agent-and-human-readable rules the project already holds itself to; naming them "the constitution" is a label for premortem/decision checks, not a new artifact. Do not create a constitution file or template section — reuse these.
+
 ### Premortem
 
 Before drafting `* Plan`, assume the plan has failed. Work backwards:
 
 1. *Riskiest assumptions* — 2–5 untested + load-bearing + implicit assumptions. For each: what happens if it is wrong?
 2. *Failure modes* — 2–5 realistic ways this fails (built the wrong thing; works locally, breaks in prod; blocked by dependency).
+3. *Constitution conformance* — does the plan conflict with anything in AGENTS.md or the relevant skills (the project constitution)? If so, treat it as a failure mode: resolve it or record the conflict explicitly.
 
 Triage: mitigate the high-impact ones (turn into plan tasks); accept the rest and capture under `** Risks`. Skip the premortem for trivial changes (single file, easy rollback, pure exploration).
 
@@ -216,6 +230,16 @@ The **ideal-state checklist (ISC)** is the consolidated, user-confirmed definiti
 **Acceptance criteria** are the per-task projection of the ISC: each plan task carries the slice it satisfies, as the `Acceptance criteria:` list described below.
 
 For non-trivial plan tasks, put a short `Acceptance criteria:` bullet list at the top of the task body. Each bullet is a single concrete observable outcome ("X renders", "Y round-trips byte-identically") rather than an implementation step — yes/no verifiable in one second.
+
+### Spec/test citation on acceptance criteria
+
+An `** Acceptance` criterion may optionally cite the spec clause it satisfies and/or the test that asserts it, appended after the criterion text with a `→` separator: `spec:[[proj:PATH]]` and/or `test:` followed by a bare reference (file:line, test name, or code span). Both tokens are optional and independent; citing a spec without a test is fine for `*** Anti-criteria` (the anti-criterion itself is the evidence) but for `*** Core functionality` / `*** Edge cases` a spec-citing criterion should also cite a `test:` — `ot doctor` nudges (never blocks) when one is missing. Citations are opt-in: an uncited criterion produces no finding.
+
+```org
+- [ ] Widget renders in dark mode → spec:[[proj:design/specs/theming.org]] test:`test/widget_test.clj:42`
+```
+
+See `references/change-record-format.md` § Acceptance criteria citation for a worked example, and `../org-tasks/references/ot-cli.md` § Spec keyword and checks for the `ot doctor` finding this feeds.
 
 ### Splitting test
 

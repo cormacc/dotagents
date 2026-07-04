@@ -13,8 +13,11 @@
             [org-tasks.root :as root]
             [org-tasks.scan :as scan]
             [org-tasks.section :as section]
+            [org-tasks.commands.spec :as cspec]
+            [org-tasks.spec :as spec]
             [org-tasks.styling :as style]
             [org-tasks.task :as task]
+            [org-tasks.tree :as tree]
             [org-tasks.commands.util :refer [positional-arg load-context resolve-context
                                              coerce-seq]]))
 
@@ -289,6 +292,30 @@
         (parse-git-status-paths out)))
     (catch Throwable _ nil)))
 
+(defn- declared-spec-paths-across-graph
+  "Distinct `#+SPEC:` paths declared anywhere in the loaded task graph
+  (TASKS.org plus every #+IMPORT:-linked change-record), used to scope
+  the `spec-stale` link-closure computation to specs actually declared."
+  [tasks]
+  (->> (tree/all-tasks tasks)
+       (keep :source-content)
+       distinct
+       (mapcat #(parser/get-file-keywords % "SPEC"))
+       (map str/trim)
+       (remove str/blank?)
+       (keep doctor/extract-proj-link-path)
+       distinct))
+
+(defn- spec-linked-paths-map
+  "`{spec-path -> #{linked-paths}}` for every declared spec path in the
+  graph, computed via `org-tasks.spec/linked-paths-from` over real disk
+  access. Backs the `ot doctor` spec-stale advisory."
+  [project-root tasks]
+  (let [fs (cspec/real-fs project-root)]
+    (into {}
+          (map (fn [p] [p (spec/linked-paths-from fs p)]))
+          (declared-spec-paths-across-graph tasks))))
+
 (defn- spec-path-exists-map
   "Resolve declared `#+SPEC:` paths from TASKS.org content against
   disk; `{repo-relative-path -> bool}`. Malformed values are skipped
@@ -323,7 +350,8 @@
                     :record-exclude-paths record-exclude-paths
                     :spec-path-exists (spec-path-exists-map
                                         project-root
-                                        (:content (:tasks protocol-files)))})
+                                        (:content (:tasks protocol-files)))
+                    :spec-linked-paths (spec-linked-paths-map project-root tasks)})
         counts (doctor/count-by-severity findings)
         wire-findings (mapv finding->wire findings)
         report (doctor/format-findings-report findings)]

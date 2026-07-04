@@ -21,6 +21,7 @@
             [org-tasks.commands.list-show :as list-show]
             [org-tasks.commands.maintenance :as maintenance]
             [org-tasks.commands.record :as record]
+            [org-tasks.commands.spec :as spec]
             [org-tasks.commands.status :as status]))
 
 ;; ── Option specs ───────────────────────────────────────────────────
@@ -268,7 +269,13 @@
     :summary ["<id>" "Clear the :HANDOFF: note"]}
    {:cmds ["uuid"]               :fn maintenance/uuid-cmd
     :spec uuid-spec
-    :summary ["[--count N]" "Generate one or more UUIDv4 values for new task IDs"]}])
+    :summary ["[--count N]" "Generate one or more UUIDv4 values for new task IDs"]}
+   {:cmds ["spec" "list"]        :fn spec/spec-list-cmd
+    :spec {}
+    :summary ["" "Report the discovered spec set with root provenance (read-only)"]}
+   {:cmds ["spec" "discover"]    :fn spec/spec-list-cmd
+    :spec {}
+    :summary ["" "Alias of 'spec list'"]}])
 
 (def dispatch-coerce
   "Top-level :coerce passed to `babashka.cli/dispatch`, derived from

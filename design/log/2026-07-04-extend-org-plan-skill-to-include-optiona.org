@@ -1,6 +1,6 @@
 #+TITLE: Extend org-plan skill to include optional spec input and output
 #+DATE: 2026-07-04 Sat
-#+PARENT: [[task:8d82d979-be9c-4d06-9f8a-62abaa857a27][Extend org-plan skill to include optional spec input and output]]
+#+PARENT: [[archive:8d82d979-be9c-4d06-9f8a-62abaa857a27][Extend org-plan skill to include optional spec input and output]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Review
 #+SPEC: [[proj:skills/org-plan/SKILL.md]]
@@ -275,10 +275,16 @@ Do after task 79d2ad9f so `ot doctor` can verify the result. Bulk edit: ~11 reco
 - Post-implementation dual review (claude-fable-5 + gpt-5.5, both accept-with-fixes) surfaced five fixes, all applied: (1) `protocol.md` had two stale plain-path `#+SPEC:` references (lines 57, 93) — converted to `[[proj:PATH]]`; (2) `#+NO_SPEC:` was suppressing `spec-value-malformed` — `check-spec` now always reports malformed values and opts out only of the untouched reconciliation; (3) `extract-proj-link-path` accepted absolute (`[[proj:/etc/passwd]]`), `..`-escaping, and whitespace-padded paths — now rejected as malformed via `repo-relative-path?`; (4) `TASKS.local.org` doc/record/code mismatch reconciled (see DECIDED open question); (5) added a maintenance-layer CLI test resolving a real spec file/empty-folder/missing path, plus doctor-layer unit tests for the tightened extractor and opted-out-still-malformed. `bb test`: 214 tests / 792 assertions, same 7 pre-existing `/var`-symlink failures, 0 new.
 
 * Open questions
-** OPEN Should markdown links and org `#+INCLUDE:` count as spec-link syntaxes in MVP, or only `[[file:]]`/`[[proj:]]`?
-Decide during plan task 1f14680f; default lean is org link syntaxes in MVP, markdown deferred.
-** OPEN Should `ot doctor` eventually validate spec *links* transitively (not just the top-level `#+SPEC:` path)?
-Deferred from MVP; revisit if manual discovery proves error-prone.
+** DECIDED Should markdown links and org `#+INCLUDE:` count as spec-link syntaxes in MVP, or only `[[file:]]`/`[[proj:]]`?
+:PROPERTIES:
+:DECIDED: [2026-07-04 Sat 19:58]
+:END:
+Decision: org link syntaxes shipped first in MVP; Markdown `[text](path)` links and `#+INCLUDE:` were added in the follow-up [[file:2026-07-04-agentic-spec-sota-review-follow-up-org-p.org][SOTA review follow-up]] (plan task 8470d347), once `ot spec list` existed to extend a single implementation rather than two conventions.
+** DECIDED Should `ot doctor` eventually validate spec *links* transitively (not just the top-level `#+SPEC:` path)?
+:PROPERTIES:
+:DECIDED: [2026-07-04 Sat 19:58]
+:END:
+Decision: `ot spec list` (read-only report) and the `spec-stale` advisory ship in the same follow-up record, both reusing the transitive traversal; still advisory-only, never blocking.
 ** DECIDED Should `#+SPEC:` be honoured from gitignored `TASKS.local.org` too, or TASKS.org only?
 :PROPERTIES:
 :DECIDED: [2026-07-04 Sat 18:20]

@@ -28,7 +28,9 @@
     :empty-validation-section
     :spec-untouched
     :spec-value-malformed
-    :spec-path-dangling"
+    :spec-path-dangling
+    :spec-citation-untested
+    :spec-stale"
   (:require [clojure.string :as str]
             [org-tasks.parser :as parser]
             [org-tasks.section :as section]
@@ -304,6 +306,99 @@
              raw-specs))))
       (record-content-index tasks record-exclude-paths)))))
 
+;; ── Acceptance-criterion spec/test citation check ───────────────────
+
+(def ^:private acceptance-heading-re #"(?i)^\*\* Acceptance\b")
+(def ^:private summary-level-heading-re #"^\*\*?\s")
+(def ^:private acceptance-subheading-re #"(?i)^\*\*\*\s+(.+?)\s*$")
+(def ^:private acceptance-bullet-re #"^-\s*\[.\]\s*(.*)$")
+(def ^:private spec-citation-re #"(?i)(?:^|\s)spec:")
+(def ^:private test-citation-re #"(?i)(?:^|\s)test:")
+(def ^:private anti-criteria-heading-re #"(?i)anti-criteria")
+
+(defn- acceptance-section-lines
+  "Return the lines within the `** Acceptance` sub-section of `content`
+  (under `* Summary`), or nil when no such sub-section exists. Ends at
+  the next `**`/`*` heading."
+  [^String content]
+  (let [lines (str/split content #"\n" -1)
+        start (first (keep-indexed (fn [i l] (when (re-find acceptance-heading-re l) i)) lines))]
+    (when start
+      (let [rest-lines (subvec (vec lines) (inc start))
+            end (or (first (keep-indexed (fn [i l] (when (re-find summary-level-heading-re l) i)) rest-lines))
+                    (count rest-lines))]
+        (subvec (vec rest-lines) 0 end)))))
+
+(defn- uncited-test-criteria
+  "Return acceptance-criterion bullet texts that cite `spec:` but not
+  `test:` and are not under an `*** Anti-criteria` sub-heading (an
+  anti-criterion is its own evidence)."
+  [^String content]
+  (when-let [lines (acceptance-section-lines content)]
+    (loop [lines lines
+           anti-criteria? false
+           out []]
+      (if (empty? lines)
+        out
+        (let [line (first lines)]
+          (if-let [[_ heading] (re-matches acceptance-subheading-re line)]
+            (recur (rest lines) (boolean (re-find anti-criteria-heading-re heading)) out)
+            (if-let [[_ text] (re-matches acceptance-bullet-re line)]
+              (recur (rest lines)
+                     anti-criteria?
+                     (if (and (re-find spec-citation-re text)
+                              (not (re-find test-citation-re text))
+                              (not anti-criteria?))
+                       (conj out text)
+                       out))
+              (recur (rest lines) anti-criteria? out))))))))
+
+(defn- check-spec-stale
+  "'Declared-but-stale' advisory: a declared `#+SPEC:` path is
+  unchanged in `changed-paths` while at least one path it transitively
+  links to (per `spec-linked-paths`, a `{spec-path -> #{linked-paths}}`
+  map computed by the CLI layer via `org-tasks.spec/linked-paths-from`)
+  did change. Skipped for `#+NO_SPEC:`-opted-out records, or when
+  `changed-paths`/`spec-linked-paths` is nil (git or link data
+  unavailable)."
+  [tasks changed-paths record-exclude-paths spec-linked-paths]
+  (let [changed (when changed-paths (set changed-paths))]
+    (when (and changed spec-linked-paths)
+      (vec
+       (mapcat
+        (fn [[src content]]
+          (let [raw-specs (->> (parser/get-file-keywords content "SPEC")
+                               (map str/trim)
+                               (remove str/blank?)
+                               distinct)
+                opted-out? (some truthy-keyword-value?
+                                 (parser/get-file-keywords content "NO_SPEC"))]
+            (when (and (seq raw-specs) (not opted-out?))
+              (mapcat
+               (fn [raw]
+                 (let [path (extract-proj-link-path raw)
+                       linked (get spec-linked-paths path)
+                       stale-linked (when (seq linked) (filter changed linked))]
+                   (when (and path (seq stale-linked) (not (contains? changed path)))
+                     [{:code :spec-stale
+                       :severity :warn
+                       :message (str "Spec " path " declared but unchanged, while linked "
+                                     "code changed: " (str/join ", " (sort stale-linked)))
+                       :location {:file src}}])))
+               raw-specs))))
+        (record-content-index tasks record-exclude-paths))))))
+
+(defn- check-spec-citations [tasks record-exclude-paths]
+  (vec
+   (mapcat
+    (fn [[src content]]
+      (for [text (uncited-test-criteria content)]
+        {:code :spec-citation-untested
+         :severity :warn
+         :message (str "Acceptance criterion cites spec: but no test: evidence — " text)
+         :location {:file src}}))
+    (record-content-index tasks record-exclude-paths))))
+
 (defn- check-spec-declarations
   "`#+SPEC:` checks over TASKS.org content: malformed values always;
   dangling (non-resolving) paths only when `spec-path-exists` (a
@@ -349,6 +444,12 @@
 
 (defn- check-spec-declarations-input [{:keys [protocol-files spec-path-exists]}]
   (or (check-spec-declarations protocol-files spec-path-exists) []))
+
+(defn- check-spec-citations-input [{:keys [tasks record-exclude-paths]}]
+  (check-spec-citations tasks record-exclude-paths))
+
+(defn- check-spec-stale-input [{:keys [tasks changed-paths record-exclude-paths spec-linked-paths]}]
+  (or (check-spec-stale tasks changed-paths record-exclude-paths spec-linked-paths) []))
 
 (defn- check-duplicate-ids [{:keys [id-index]}]
   (vec
@@ -472,6 +573,8 @@
    check-record-structure-input
    check-spec-input
    check-spec-declarations-input
+   check-spec-citations-input
+   check-spec-stale-input
    check-duplicate-ids
    check-selected-id
    check-all-tasks
@@ -492,7 +595,11 @@
                              exclude from change-record checks
     :spec-path-exists      - optional {repo-relative-path -> bool} map,
                              computed by the CLI layer via disk stat, for
-                             the #+SPEC: dangling-path check"
+                             the #+SPEC: dangling-path check
+    :spec-linked-paths     - optional {spec-path -> #{linked-paths}} map,
+                             computed by the CLI layer via
+                             org-tasks.spec/linked-paths-from, for the
+                             spec-stale declared-but-stale advisory"
   [{:keys [tasks] :as input}]
   (let [input (assoc input :id-index (build-id-index tasks))]
     (vec (mapcat #(% input) doctor-checks))))
@@ -515,7 +622,8 @@
    :missing-link-template :misordered-link-template
    :missing-local-setupfile :misordered-setupfile
    :missing-record-section :empty-validation-section
-   :spec-untouched :spec-value-malformed :spec-path-dangling])
+   :spec-untouched :spec-value-malformed :spec-path-dangling
+   :spec-citation-untested :spec-stale])
 
 (defn format-findings-report [findings]
   (if (empty? findings)

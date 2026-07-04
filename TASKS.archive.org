@@ -1087,3 +1087,49 @@ Evaluate alternatives.
 - Others?
 The hazat one above looks interesting. Fairly mature, multiple contributors and some nice UX (widget, discrete window per agent, tmux/zellij integration etc.)
 DECISION: Settled on this for now: https://github.com/edxeth/pi-subagents/
+
+** DONE [#B] Extend org-plan skill to include optional spec input and output
+CLOSED: [2026-07-04 Sat 19:59]
+:PROPERTIES:
+:CUSTOM_ID: 8d82d979-be9c-4d06-9f8a-62abaa857a27
+:CREATED: [2026-07-04 Sat 17:12]
+:STARTED: [2026-07-04 Sat 18:03]
+:ARCHIVED: [2026-07-04 Sat 19:59]
+:END:
+:LOGBOOK:
+- Created [2026-07-04 Sat 17:12]
+- State "STARTED" from "TODO" [2026-07-04 Sat 18:03]
+- State "WAITING" from "STARTED" [2026-07-04 Sat 19:59]
+- State "DONE" from "WAITING" [2026-07-04 Sat 19:59]
+:END:
+#+IMPORT: [[plan:2026-07-04-extend-org-plan-skill-to-include-optiona.org]]
+
+** DONE [#B] Agentic spec SOTA review follow-up :org-plan:spec:
+CLOSED: [2026-07-04 Sat 19:59]
+:PROPERTIES:
+:CUSTOM_ID: 6e5f7cb6-92b9-47f0-912b-4b2e47629ff1
+:CREATED: [2026-07-04 Sat 19:22]
+:STARTED: [2026-07-04 Sat 19:44]
+:ARCHIVED: [2026-07-04 Sat 19:59]
+:END:
+:LOGBOOK:
+- Created [2026-07-04 Sat 19:22]
+- State "STARTED" from "TODO" [2026-07-04 Sat 19:44]
+- State "WAITING" from "STARTED" [2026-07-04 Sat 19:59]
+- State "DONE" from "WAITING" [2026-07-04 Sat 19:59]
+:END:
+#+IMPORT: [[plan:2026-07-04-agentic-spec-sota-review-follow-up-org-p.org]]
+Selectively adopt the philosophy-compatible recommendations from the mid-2026 spec-driven agentic development SOTA review. Follows on from the `#+SPEC:` feature (8d82d979).
+
+** DONE org-tasks-tui final review follow-up
+CLOSED: [2026-07-03 Fri 17:50]
+:PROPERTIES:
+:CUSTOM_ID: 1d10dd58-04b7-4efa-8f3d-ce46b7c617fd
+:CREATED: [2026-07-03 Fri 17:29]
+:ARCHIVED: [2026-07-03 Fri 17:50]
+:END:
+:LOGBOOK:
+- Created [2026-07-03 Fri 17:29]
+- State "DONE" from "TODO" [2026-07-03 Fri 17:50]
+:END:
+#+IMPORT: [[plan:2026-07-03-org-tasks-tui-final-review-follow-up.org]]
