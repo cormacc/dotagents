@@ -2,8 +2,8 @@
 #+DATE: 2026-07-03 Fri
 #+PARENT: [[task:1d10dd58-04b7-4efa-8f3d-ce46b7c617fd][org-tasks-tui final review follow-up]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+SPEC_IMPACT: skills/org-tasks/scripts/docs/DESIGN.org
-#+SPEC_IMPACT: skills/org-tasks/scripts/docs/contract.md
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/DESIGN.org]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/contract.md]]
 
 * Intent
 

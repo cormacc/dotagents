@@ -3,7 +3,7 @@
 #+PARENT: [[archive:5606c9a0-af2a-4e0c-84bd-e961b5c1738d][Add org-tasks TUI]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
-#+SPEC_IMPACT: skills/org-tasks/scripts/README.md
+#+SPEC: [[proj:skills/org-tasks/scripts/README.md]]
 
 * Intent
 Close the remaining gap between the standalone ~ot~ TUI and the pi tasks overlay

@@ -42,4 +42,4 @@ Manual fallback, when `ot` is unavailable:
 
 5. Put detailed plan/checklist/history in a change-record under the `plan` link target rather than bloating `TASKS.org`.
 
-6. Reference repo files from records with `proj` (e.g. `[[proj:design/specs/data-model.org]]`). `design/specs/` is the default home for prose-only living contracts; declare expected contract impact with bare repo-relative `#+SPEC_IMPACT:` paths (see org-plan).
+6. Reference repo files from records with `proj` (e.g. `[[proj:design/specs/data-model.org]]`). `design/specs/` is a conventional home for prose-only living contracts; list task-relevant specs with bare `#+SPEC: [[proj:PATH]]` links in change-records (see org-plan). To make a `design/specs/` folder discoverable, declare it in `TASKS.org` with `#+SPEC: [[proj:design/specs/]]` — the discovery default root is the file `./design/SPEC.org`.

@@ -3,8 +3,8 @@
 #+PARENT: [[archive:49bc0c54-ae4a-4fa5-bda5-0cb93d5c07d7][Update org-tasks tooling to traverse above git root]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Review
-#+SPEC_IMPACT: skills/org-tasks/SKILL.md
-#+SPEC_IMPACT: skills/org-tasks/references/ot-cli.md
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+#+SPEC: [[proj:skills/org-tasks/references/ot-cli.md]]
 
 * Intent
 Let task memory be tracked from outside a third-party repo (e.g. OSS PRs) by

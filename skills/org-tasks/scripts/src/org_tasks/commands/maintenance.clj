@@ -289,18 +289,41 @@
         (parse-git-status-paths out)))
     (catch Throwable _ nil)))
 
+(defn- spec-path-exists-map
+  "Resolve declared `#+SPEC:` paths from TASKS.org content against
+  disk; `{repo-relative-path -> bool}`. Malformed values are skipped
+  here — `check-spec-declarations` reports those independently."
+  [project-root tasks-content]
+  (when tasks-content
+    (let [raw-values (->> (parser/get-file-keywords tasks-content "SPEC")
+                          (map str/trim)
+                          (remove str/blank?)
+                          distinct)]
+      (into {}
+            (keep (fn [raw]
+                    (when-let [p (doctor/extract-proj-link-path raw)]
+                      [p (fs/exists? (fs/path project-root p))])))
+            raw-values))))
+
 (defn doctor-cmd [{:keys [opts]}]
   (let [{:keys [project-root tasks selected-id files]} (load-context opts)
         setup-path (str (fs/path project-root "TASKS.setup.org"))
         protocol-files {:setup   (read-protocol-file setup-path)
                         :tasks   (read-protocol-file (:tasks files))
                         :archive (read-protocol-file (:archive files))}
+        record-exclude-paths (->> [setup-path (:tasks files) (:local files) (:archive files)]
+                                  (remove nil?)
+                                  set)
         findings (doctor/run-doctor
                    {:tasks tasks
                     :selected-id selected-id
                     :selected-source-path (:local files)
                     :protocol-files protocol-files
-                    :changed-paths (changed-git-paths project-root)})
+                    :changed-paths (changed-git-paths project-root)
+                    :record-exclude-paths record-exclude-paths
+                    :spec-path-exists (spec-path-exists-map
+                                        project-root
+                                        (:content (:tasks protocol-files)))})
         counts (doctor/count-by-severity findings)
         wire-findings (mapv finding->wire findings)
         report (doctor/format-findings-report findings)]

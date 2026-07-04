@@ -59,5 +59,5 @@ map: [`docs/DESIGN.org`](docs/DESIGN.org). Doc ownership:
 - **Skill docs**: user-visible CLI/TUI changes must update
   [`../references/ot-cli.md`](../references/ot-cli.md) (and
   [`../SKILL.md`](../SKILL.md) when workflows change) in the same
-  change — `ot doctor`'s spec-impact check only warns when a record
+  change — `ot doctor`'s spec check only warns when a record
   declares the path.

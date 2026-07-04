@@ -2,12 +2,12 @@
 #+DATE: 2026-06-04 Thu
 #+PARENT: [[archive:21a6962b-432e-4030-aa29-7557fe151c1b][Evaluate OpenSpec vs org-plan skill for alignment opportunities]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+SPEC_IMPACT: skills/org-plan/SKILL.md
-#+SPEC_IMPACT: skills/org-plan/references/change-record-format.md
-#+SPEC_IMPACT: skills/org-tasks/SKILL.md
-#+SPEC_IMPACT: skills/org-tasks/references/bootstrap.md
-#+SPEC_IMPACT: skills/org-tasks/references/ot-cli.md
-#+SPEC_IMPACT: skills/org-tasks/references/protocol.md
+#+SPEC: [[proj:skills/org-plan/SKILL.md]]
+#+SPEC: [[proj:skills/org-plan/references/change-record-format.md]]
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+#+SPEC: [[proj:skills/org-tasks/references/bootstrap.md]]
+#+SPEC: [[proj:skills/org-tasks/references/ot-cli.md]]
+#+SPEC: [[proj:skills/org-tasks/references/protocol.md]]
 
 * Intent
 Evaluate OpenSpec (https://github.com/Fission-AI/OpenSpec) against the org-plan skill to find conceptual overlap and concrete, well-fitting borrowings that improve org-plan, without compromising its org-mode / single-record-per-task / =ot=-driven model.

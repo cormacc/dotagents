@@ -9,7 +9,7 @@ Use this skill when the user asks for a plan. A plan is the leading content of a
 
 This skill owns planning methodology and change-record section conventions. `org-tasks` (`../org-tasks/SKILL.md`) owns file format, task lifecycle, persistence rules, and the `ot` CLI. Prefer `ot record create <task-id>` to scaffold a change-record before filling the sections below; use `ot record create <task-id> --mode retrospective` after work has started or completed. If the generated scaffold predates the current section contract, add/reorder sections before filling them.
 
-Detailed skeletons, `#+STATUS:` values, `#+SPEC_IMPACT:` / `#+NO_SPEC_IMPACT:` examples, and subtask-migration examples live in `references/change-record-format.md`.
+Detailed skeletons, `#+STATUS:` values, `#+SPEC:` / `#+NO_SPEC:` examples, and subtask-migration examples live in `references/change-record-format.md`.
 
 ## Relationship to a harness "plan mode"
 
@@ -38,7 +38,7 @@ The *splitting test*, *anti-criteria*, and *body discipline* blocks below are th
 - Keep `* Summary` (condensed final/current state) and `* Implementation` (detailed tactical ledger) distinct; they serve different readers. Add `* Validation` only when there is non-obvious verification evidence to preserve (see its section).
 - Capture durable design decisions in `* Summary` or a promoted `* Context` so later sessions do not reverse-engineer them from `git log`.
 - Keep the change-record `.org` file canonical. If durable supporting resources are too verbose or awkward for the record body (research reports, screenshots, transcripts, generated audits), put them in an optional same-stem folder beside the record (for `design/log/YYYY-slug.org`, use `design/log/YYYY-slug/`) and link/summarise them from the record.
-- For non-trivial work with durable behavioural/API/protocol/domain impact, identify the living contract docs up front and record them with `#+SPEC_IMPACT:` before implementation (see *Spec-impact planning*).
+- For non-trivial work with durable behavioural/API/protocol/domain impact, identify the living contract docs up front and record them with `#+SPEC:` before implementation (see *Spec planning*).
 - Stop planning once the plan is actionable. Endless planning is a failure mode.
 
 ## Voice and density
@@ -64,7 +64,7 @@ Plans are written for engineers with project context. Optimise for signal densit
 - `** Scope` (required) — `*** In scope` and `*** Out of scope` lists. Both lists. Out-of-scope items prevent feature creep and feed the premortem ("are we sure we don't need X?").
 - `** Acceptance` — the consolidated ISC (user-confirmed definition of done), grouped into `*** Core functionality`, `*** Edge cases`, `*** Anti-criteria`. See *Acceptance criteria*.
 - `** Decisions` — strategic durable design choices that constrain future work, not every tactical coding call. Captures the chosen approach plus rejected alternatives bulleted underneath.
-- `** Shipped` — user-visible / protocol / code outcomes, populated as work lands. When a planned or discovered contract doc changes, prefix bullets with `ADDED`, `MODIFIED`, or `REMOVED` and name the contract doc; this is the post-hoc outcome, not the planning-time `#+SPEC_IMPACT:` declaration.
+- `** Shipped` — user-visible / protocol / code outcomes, populated as work lands. When a planned or discovered contract doc changes, prefix bullets with `ADDED`, `MODIFIED`, or `REMOVED` and name the contract doc; this is the post-hoc outcome, not the planning-time `#+SPEC:` declaration.
 - `** Gotchas` — project-side surprises future implementers should not rediscover. Library/API/protocol facts belong in the relevant skill/reference when one exists.
 - `** Risks` — drafted from premortem; durable risks considered and accepted. Distinct from `** Gotchas` (post-hoc surprise) and `* Open questions` (deferred-not-decided).
 - `** Follow-ups` — pointers to real TODO tasks rather than burying work in prose.
@@ -134,21 +134,33 @@ Single line at the head of `* Summary`:
 
 Pick one value per dimension. Calibrates ISC tightness, plan-task acceptance criteria detail, and the closure-prune bar.
 
-### Spec-impact planning
+### Spec discovery (`#+SPEC:`)
+
+`#+SPEC:` is an optional, repeatable keyword naming relevant specification documents. The same keyword is used in two contexts, disambiguated by the file it appears in: in `TASKS.org` it declares where a project's living specs live (repo-wide discovery roots); in a change-record it lists the specs relevant to that one task. In records, cite **individual sub-specs** rather than broad roots or folders — leave recursive/transitive aggregation to the TASKS.org discovery layer. Whether a relevant spec was actually *impacted* is a closeout determination recorded in `** Shipped` (ADDED/MODIFIED/REMOVED); `ot doctor`'s `spec-untouched` warning is only an advisory nudge.
+
+- Each `#+SPEC:` value is a bare `[[proj:PATH]]` org link (see `references/change-record-format.md` § Spec keyword) pointing at a spec **file or folder**; a folder is included recursively. The labelled `[[proj:PATH][label]]` form, bare non-link paths, and paths that are absolute or escape the repo root are rejected as malformed by `ot doctor`.
+- `#+SPEC:` is optional. When absent and `./design/SPEC.org` exists, that file is the default root. When neither is present, spec support is inert — no warnings, no required behaviour change.
+- `#+SPEC:` is declared in `TASKS.org`. The discovery *convention* an agent performs may additionally honour a local `#+SPEC:` in gitignored `TASKS.local.org`, but `ot doctor` validates (malformed / dangling-path) only the `TASKS.org` declarations.
+- **Implicit specs** are always considered without needing a `#+SPEC:` entry: repository-root `README.*` (any extension), `AGENTS.md`, and a project-local skills directory (`.agents/skills` when present; in this repo the skills live at `skills/`).
+- **Rooted/transitive discovery**: each `#+SPEC:` entry, each file inside a declared folder, and each implicit spec is a discovery *root*. Links found in a root's content are followed to pull in sub-specs automatically — a sub-spec needs no `#+SPEC:` entry of its own. Link resolution is relative to the linking document. A visited-set guard prevents infinite loops on cycles (A links B links A terminates once B is revisited).
+- Recognised link syntaxes for traversal in this MVP: org `[[file:...]]` and `[[proj:...]]` links. Markdown links (`[text](path)`) and org `#+INCLUDE:` are not traversed in MVP — treat them as a documented boundary, not a bug, until a follow-up extends discovery.
+- Discovery (including transitive link-following) is a convention the planning/implementing agent performs by reading files and reasoning about links — `ot` does not crawl spec links. The only automated guard is `ot doctor` warning when a declared `#+SPEC:` path does not resolve on disk.
+
+### Spec planning
 
 For MVP / production / critical work that can change durable behaviour, public APIs, protocols, domain models, or agent/operator workflow, identify impacted living contracts before drafting the executable plan.
 
 1. Prefer a codebase-scout subagent when the question is "which in-repo docs/specs/schemas does this codebase change touch?" Use a research subagent when the trigger is external knowledge or a new external capability.
-2. Record expected contract impact as repeated repo-relative keywords near the top of the record:
+2. Identify relevant individual specs from the set discovered per *Spec discovery* above (declared `#+SPEC:` roots, their recursive/transitive closure, and the implicit specs), then record task-relevant specs as repeated `[[proj:PATH]]` keywords near the top of the record:
 
    ```org
-   #+SPEC_IMPACT: skills/org-plan/SKILL.md
-   #+SPEC_IMPACT: design/specs/data-model.org
+   #+SPEC: [[proj:skills/org-plan/SKILL.md]]
+   #+SPEC: [[proj:design/specs/data-model.org]]
    ```
 
-3. Mirror the impact in human-readable `*** In scope` bullets so implementers work the checklist.
+3. Mirror the relevance in human-readable `*** In scope` bullets so implementers work the checklist.
 4. Propose a new spec only when scope introduces a durable new domain with no existing contract home. If a canonical contract already exists in code or docs (for example a skill file, OpenAPI document, schema namespace, or migration set), couple to that artifact directly instead of creating a duplicate under `design/specs/`.
-5. Skip this step with `#+NO_SPEC_IMPACT: true` for prototype work, trivial/single-file fixes that do not alter a contract, or projects with no durable contract layer. Do not use the opt-out to avoid updating stale docs.
+5. Skip this step with `#+NO_SPEC: true` for prototype work, trivial/single-file fixes that do not alter a contract, or projects with no durable contract layer. Do not use the opt-out to avoid updating stale docs.
 
 ### Approach exploration
 
@@ -270,9 +282,9 @@ Before transitioning a top-level task to `DONE`, walk the record end-to-end with
 
 Refresh:
 
-1. Refresh `* Summary` so the effort line, `** Scope`, `** Shipped`, and `** Gotchas` reflect what actually landed. Reconcile `#+SPEC_IMPACT:` against actual `ADDED` / `MODIFIED` / `REMOVED` shipped bullets; include any discovered contract impact that was missed during planning.
+1. Refresh `* Summary` so the effort line, `** Scope`, `** Shipped`, and `** Gotchas` reflect what actually landed. Compare `#+SPEC:` with actual `ADDED` / `MODIFIED` / `REMOVED` shipped bullets; include any discovered contract impact that was missed during planning.
 2. Verify each item in `** Acceptance` (the consolidated ISC) and every anti-criterion. If a `* Validation` section exists, refresh it to match what actually ran; drop it if it has decayed to just "the suites pass" (an implicit pre-merge requirement).
-3. Ensure every `#+SPEC_IMPACT:` path was reviewed and updated when needed, or explain why the planned impact did not materialise.
+3. Ensure every `#+SPEC:` path was reviewed and updated when needed, or explain why the spec was relevant but unchanged — update the impacted spec files themselves (not just the declaration) to reflect the change scope before marking `DONE`.
 4. Ensure newly discovered follow-up work exists as TODO tasks rather than buried prose.
 5. If Summary is missing, generate it from promoted Context, completed plan tasks, and Implementation notes before closing.
 

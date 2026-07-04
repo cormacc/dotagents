@@ -15,16 +15,16 @@
 (deftest clean-graph-no-findings
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* TODO Healthy\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: 11111111-2222-4333-8444-555555555555\n"
-               ":END:\n"
-               "\n"
-               "* DONE Closed\n"
-               "CLOSED: [2026-04-25 Sat 12:00]\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: 22222222-2222-4333-8444-555555555555\n"
-               ":END:\n"))]
+         (str "* TODO Healthy\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: 11111111-2222-4333-8444-555555555555\n"
+              ":END:\n"
+              "\n"
+              "* DONE Closed\n"
+              "CLOSED: [2026-04-25 Sat 12:00]\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: 22222222-2222-4333-8444-555555555555\n"
+              ":END:\n"))]
     (let [findings (doctor/run-doctor {:tasks tasks :selected-id nil})]
       (is (= [] findings))
       (is (str/includes? (doctor/format-findings-report findings)
@@ -33,15 +33,15 @@
 (deftest duplicate-id
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* TODO First\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: dupe-aaaa-bbbb-cccc-dddddddddddd\n"
-               ":END:\n"
-               "\n"
-               "* TODO Second\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: dupe-aaaa-bbbb-cccc-dddddddddddd\n"
-               ":END:\n"))
+         (str "* TODO First\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: dupe-aaaa-bbbb-cccc-dddddddddddd\n"
+              ":END:\n"
+              "\n"
+              "* TODO Second\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: dupe-aaaa-bbbb-cccc-dddddddddddd\n"
+              ":END:\n"))
         findings (doctor/run-doctor {:tasks tasks :selected-id nil})]
     (is (= 2 (count-of findings :duplicate-id)))
     (is (every? #(= :error (:severity %))
@@ -121,14 +121,14 @@
 (deftest selected-not-found-reported
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* TODO Solo\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: aaaa1111-2222-4333-8444-555555555555\n"
-               ":END:\n"))
+         (str "* TODO Solo\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: aaaa1111-2222-4333-8444-555555555555\n"
+              ":END:\n"))
         findings (doctor/run-doctor
-                   {:tasks tasks
-                    :selected-id "ghost-aaaa-bbbb-cccc-dddddddddddd"
-                    :selected-source-path "/tmp/TASKS.local.org"})
+                  {:tasks tasks
+                   :selected-id "ghost-aaaa-bbbb-cccc-dddddddddddd"
+                   :selected-source-path "/tmp/TASKS.local.org"})
         f (first (filter #(= :selected-not-found (:code %)) findings))]
     (is (= 1 (count-of findings :selected-not-found)))
     (is (= "/tmp/TASKS.local.org" (get-in f [:location :file])))))
@@ -136,28 +136,28 @@
 (deftest selected-found-no-finding
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* TODO Solo\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: bbbb1111-2222-4333-8444-555555555555\n"
-               ":END:\n"))
+         (str "* TODO Solo\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: bbbb1111-2222-4333-8444-555555555555\n"
+              ":END:\n"))
         findings (doctor/run-doctor
-                   {:tasks tasks
-                    :selected-id "bbbb1111-2222-4333-8444-555555555555"})]
+                  {:tasks tasks
+                   :selected-id "bbbb1111-2222-4333-8444-555555555555"})]
     (is (zero? (count-of findings :selected-not-found)))))
 
 (deftest waiting-without-blocker
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* WAITING Bare wait\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: cccc1111-2222-4333-8444-555555555555\n"
-               ":END:\n"
-               "\n"
-               "* WAITING With blocker\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: dddd1111-2222-4333-8444-555555555555\n"
-               ":BLOCKED-BY: url:https://example.com\n"
-               ":END:\n"))
+         (str "* WAITING Bare wait\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: cccc1111-2222-4333-8444-555555555555\n"
+              ":END:\n"
+              "\n"
+              "* WAITING With blocker\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: dddd1111-2222-4333-8444-555555555555\n"
+              ":BLOCKED-BY: url:https://example.com\n"
+              ":END:\n"))
         findings (doctor/run-doctor {:tasks tasks :selected-id nil})
         f (first (filter #(= :waiting-without-blocker (:code %)) findings))]
     (is (= 1 (count-of findings :waiting-without-blocker)))
@@ -180,51 +180,51 @@
 (deftest cancelled-with-closed-no-finding
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* CANCELLED Done\n"
-               "CLOSED: [2026-04-25 Sat 12:00]\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: aaa11111-2222-4333-8444-555555555555\n"
-               ":END:\n"))]
+         (str "* CANCELLED Done\n"
+              "CLOSED: [2026-04-25 Sat 12:00]\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: aaa11111-2222-4333-8444-555555555555\n"
+              ":END:\n"))]
     (is (zero? (count-of (doctor/run-doctor {:tasks tasks :selected-id nil})
                          :closed-without-timestamp)))))
 
 (deftest stale-parent-status
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* TODO Parent\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: parent11-2222-4333-8444-555555555555\n"
-               ":END:\n"
-               "** STARTED Child\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: childaa1-2222-4333-8444-555555555555\n"
-               ":END:\n"))
+         (str "* TODO Parent\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: parent11-2222-4333-8444-555555555555\n"
+              ":END:\n"
+              "** STARTED Child\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: childaa1-2222-4333-8444-555555555555\n"
+              ":END:\n"))
         findings (doctor/run-doctor {:tasks tasks :selected-id nil})]
     (is (= 1 (count-of findings :stale-parent-status)))))
 
 (deftest parent-todo-children-todo-no-finding
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* TODO Parent\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: parent22-2222-4333-8444-555555555555\n"
-               ":END:\n"
-               "** TODO Child\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: childbb1-2222-4333-8444-555555555555\n"
-               ":END:\n"))]
+         (str "* TODO Parent\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: parent22-2222-4333-8444-555555555555\n"
+              ":END:\n"
+              "** TODO Child\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: childbb1-2222-4333-8444-555555555555\n"
+              ":END:\n"))]
     (is (zero? (count-of (doctor/run-doctor {:tasks tasks :selected-id nil})
                          :stale-parent-status)))))
 
 (deftest invalid-task-blocker
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* TODO Refers to ghost\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: ghost001-2222-4333-8444-555555555555\n"
-               ":BLOCKED-BY: task:does-not-exist-anywhere\n"
-               ":BLOCKED-BY+: url:https://example.com\n"
-               ":END:\n"))
+         (str "* TODO Refers to ghost\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: ghost001-2222-4333-8444-555555555555\n"
+              ":BLOCKED-BY: task:does-not-exist-anywhere\n"
+              ":BLOCKED-BY+: url:https://example.com\n"
+              ":END:\n"))
         findings (doctor/run-doctor {:tasks tasks :selected-id nil})
         f (first (filter #(= :invalid-task-blocker (:code %)) findings))]
     (is (= 1 (count-of findings :invalid-task-blocker)))
@@ -233,34 +233,34 @@
 (deftest valid-task-blocker-no-finding
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* DONE Real dep\n"
-               "CLOSED: [2026-05-01 Fri 09:00]\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: realdep1-2222-4333-8444-555555555555\n"
-               ":END:\n"
-               "* TODO Gated\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: gated001-2222-4333-8444-555555555555\n"
-               ":BLOCKED-BY: task:realdep1-2222-4333-8444-555555555555\n"
-               ":END:\n"))]
+         (str "* DONE Real dep\n"
+              "CLOSED: [2026-05-01 Fri 09:00]\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: realdep1-2222-4333-8444-555555555555\n"
+              ":END:\n"
+              "* TODO Gated\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: gated001-2222-4333-8444-555555555555\n"
+              ":BLOCKED-BY: task:realdep1-2222-4333-8444-555555555555\n"
+              ":END:\n"))]
     (is (zero? (count-of (doctor/run-doctor {:tasks tasks :selected-id nil})
                          :invalid-task-blocker)))))
 
 (deftest valid-protocol-files-no-findings
   (let [findings (doctor/run-doctor
-                   {:tasks []
-                    :selected-id nil
-                    :protocol-files
-                    {:setup {:path "/tmp/TASKS.setup.org"
-                             :content (str "#+LINK: plan file:design/log/%s\n"
-                                           "#+LINK: task file:../../TASKS.org::#%s\n"
-                                           "#+LINK: archive file:../../TASKS.archive.org::#%s\n")}
-                     :tasks {:path "/tmp/TASKS.org"
-                             :content (str "#+TITLE: Project Tasks\n"
-                                           "#+LINK: task file:TASKS.org::#%s\n"
-                                           "#+LINK: archive file:TASKS.archive.org::#%s\n"
-                                           "#+SETUPFILE: ./TASKS.local.org\n"
-                                           "#+SETUPFILE: ./TASKS.setup.org\n")}}})]
+                  {:tasks []
+                   :selected-id nil
+                   :protocol-files
+                   {:setup {:path "/tmp/TASKS.setup.org"
+                            :content (str "#+LINK: plan file:design/log/%s\n"
+                                          "#+LINK: task file:../../TASKS.org::#%s\n"
+                                          "#+LINK: archive file:../../TASKS.archive.org::#%s\n")}
+                    :tasks {:path "/tmp/TASKS.org"
+                            :content (str "#+TITLE: Project Tasks\n"
+                                          "#+LINK: task file:TASKS.org::#%s\n"
+                                          "#+LINK: archive file:TASKS.archive.org::#%s\n"
+                                          "#+SETUPFILE: ./TASKS.local.org\n"
+                                          "#+SETUPFILE: ./TASKS.setup.org\n")}}})]
     (is (zero? (count-of findings :missing-link-template)))
     (is (zero? (count-of findings :missing-local-setupfile)))
     (is (zero? (count-of findings :misordered-setupfile)))
@@ -268,37 +268,37 @@
 
 (deftest misordered-setupfile-reported
   (let [findings (doctor/run-doctor
-                   {:tasks []
-                    :selected-id nil
-                    :protocol-files
-                    {:setup {:path "/tmp/TASKS.setup.org"
-                             :content (str "#+LINK: task file:../../TASKS.org::#%s\n"
-                                           "#+LINK: archive file:../../TASKS.archive.org::#%s\n")}
-                     :tasks {:path "/tmp/TASKS.org"
-                             :content (str "#+TITLE: Project Tasks\n"
-                                           "#+LINK: task file:TASKS.org::#%s\n"
-                                           "#+LINK: archive file:TASKS.archive.org::#%s\n"
-                                           "#+SETUPFILE: ./TASKS.setup.org\n"
-                                           "#+SETUPFILE: ./TASKS.local.org\n")}}})]
+                  {:tasks []
+                   :selected-id nil
+                   :protocol-files
+                   {:setup {:path "/tmp/TASKS.setup.org"
+                            :content (str "#+LINK: task file:../../TASKS.org::#%s\n"
+                                          "#+LINK: archive file:../../TASKS.archive.org::#%s\n")}
+                    :tasks {:path "/tmp/TASKS.org"
+                            :content (str "#+TITLE: Project Tasks\n"
+                                          "#+LINK: task file:TASKS.org::#%s\n"
+                                          "#+LINK: archive file:TASKS.archive.org::#%s\n"
+                                          "#+SETUPFILE: ./TASKS.setup.org\n"
+                                          "#+SETUPFILE: ./TASKS.local.org\n")}}})]
     (is (= 1 (count-of findings :misordered-setupfile)))))
 
 (deftest missing-local-setupfile
   (let [findings (doctor/run-doctor
-                   {:tasks []
-                    :selected-id nil
-                    :protocol-files
-                    {:setup {:path "/tmp/TASKS.setup.org"
-                             :content (str "#+LINK: task file:../../TASKS.org::#%s\n"
-                                           "#+LINK: archive file:../../TASKS.archive.org::#%s\n")}
-                     :tasks {:path "/tmp/TASKS.org"
-                             :content (str "#+TITLE: Project Tasks\n"
-                                           "#+LINK: task file:TASKS.org::#%s\n"
-                                           "#+LINK: archive file:TASKS.archive.org::#%s\n"
-                                           "#+SETUPFILE: ./TASKS.setup.org\n")}}})]
+                  {:tasks []
+                   :selected-id nil
+                   :protocol-files
+                   {:setup {:path "/tmp/TASKS.setup.org"
+                            :content (str "#+LINK: task file:../../TASKS.org::#%s\n"
+                                          "#+LINK: archive file:../../TASKS.archive.org::#%s\n")}
+                    :tasks {:path "/tmp/TASKS.org"
+                            :content (str "#+TITLE: Project Tasks\n"
+                                          "#+LINK: task file:TASKS.org::#%s\n"
+                                          "#+LINK: archive file:TASKS.archive.org::#%s\n"
+                                          "#+SETUPFILE: ./TASKS.setup.org\n")}}})]
     (is (= 1 (count-of findings :missing-local-setupfile)))))
 
-(deftest spec-impact-aware-record-requires-core-sections
-  (let [content (str "#+NO_SPEC_IMPACT: true\n\n"
+(deftest spec-aware-record-requires-core-sections
+  (let [content (str "#+NO_SPEC: true\n\n"
                      "* Summary\n"
                      "body\n"
                      "* Plan\n"
@@ -314,8 +314,8 @@
     (is (= 1 (count-of findings :missing-record-section)))
     (is (= 1 (count-of findings :empty-validation-section)))))
 
-(deftest spec-impact-warns-when-declared-path-not-touched
-  (let [content (str "#+SPEC_IMPACT: docs/api.org\n\n"
+(deftest spec-warns-when-declared-path-not-touched
+  (let [content (str "#+SPEC: [[proj:docs/api.org]]\n\n"
                      "* Plan\n"
                      "** TODO Update API\n"
                      ":PROPERTIES:\n"
@@ -324,15 +324,15 @@
         {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/api.org"
                                                      :source-content content})
         findings (doctor/run-doctor {:tasks tasks
-                                      :selected-id nil
-                                      :changed-paths #{"src/api.clj"}})
-        f (first (filter #(= :spec-impact-untouched (:code %)) findings))]
-    (is (= 1 (count-of findings :spec-impact-untouched)))
+                                     :selected-id nil
+                                     :changed-paths #{"src/api.clj"}})
+        f (first (filter #(= :spec-untouched (:code %)) findings))]
+    (is (= 1 (count-of findings :spec-untouched)))
     (is (= :warn (:severity f)))
     (is (str/includes? (:message f) "docs/api.org"))))
 
-(deftest spec-impact-passes-when-declared-path-touched
-  (let [content (str "#+SPEC_IMPACT: docs/api.org\n\n"
+(deftest spec-passes-when-declared-path-touched
+  (let [content (str "#+SPEC: [[proj:docs/api.org]]\n\n"
                      "* Plan\n"
                      "** TODO Update API\n"
                      ":PROPERTIES:\n"
@@ -343,11 +343,11 @@
     (is (zero? (count-of (doctor/run-doctor {:tasks tasks
                                              :selected-id nil
                                              :changed-paths #{"docs/api.org"}})
-                         :spec-impact-untouched)))))
+                         :spec-untouched)))))
 
-(deftest no-spec-impact-opt-out-suppresses-spec-impact-warnings
-  (let [content (str "#+SPEC_IMPACT: docs/api.org\n"
-                     "#+NO_SPEC_IMPACT: true\n\n"
+(deftest no-spec-opt-out-suppresses-untouched-warnings
+  (let [content (str "#+SPEC: [[proj:docs/api.org]]\n"
+                     "#+NO_SPEC: true\n\n"
                      "* Plan\n"
                      "** TODO Spike\n"
                      ":PROPERTIES:\n"
@@ -358,7 +358,152 @@
     (is (zero? (count-of (doctor/run-doctor {:tasks tasks
                                              :selected-id nil
                                              :changed-paths #{}})
-                         :spec-impact-untouched)))))
+                         :spec-untouched)))))
+
+(deftest spec-bare-path-is-malformed
+  (let [content (str "#+SPEC: docs/api.org\n\n"
+                     "* Plan\n"
+                     "** TODO Update API\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/api.org"
+                                                     :source-content content})
+        findings (doctor/run-doctor {:tasks tasks
+                                     :selected-id nil
+                                     :changed-paths #{"src/api.clj"}})
+        f (first (filter #(= :spec-value-malformed (:code %)) findings))]
+    (is (= 1 (count-of findings :spec-value-malformed)))
+    (is (zero? (count-of findings :spec-untouched)))
+    (is (str/includes? (:message f) "docs/api.org"))))
+
+(deftest spec-labelled-link-is-malformed
+  (let [content (str "#+SPEC: [[proj:docs/api.org][API docs]]\n\n"
+                     "* Plan\n"
+                     "** TODO Update API\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/api.org"
+                                                     :source-content content})
+        findings (doctor/run-doctor {:tasks tasks :selected-id nil})]
+    (is (= 1 (count-of findings :spec-value-malformed)))))
+
+(deftest protocol-spec-is-excluded-from-record-oriented-checks
+  (let [tasks-content (str "#+SPEC: [[proj:design/SPEC.org]]\n\n"
+                           "* Tasks\n"
+                           "** TODO Work\n"
+                           ":PROPERTIES:\n"
+                           ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                           ":END:\n")
+        record-content (str "#+SPEC: [[proj:design/SPEC.org]]\n\n"
+                            "* Intent\n"
+                            "* Summary\n"
+                            "* Plan\n"
+                            "** TODO Work\n"
+                            ":PROPERTIES:\n"
+                            ":CUSTOM_ID: 44444444-2222-4333-8444-555555555555\n"
+                            ":END:\n"
+                            "* Implementation\n")
+        parsed-tasks (parser/parse-tasks tasks-content {:source-path "/repo/TASKS.org"
+                                                        :source-content tasks-content})
+        parsed-record (parser/parse-tasks record-content {:source-path "/repo/design/log/work.org"
+                                                          :source-content record-content})
+        findings (doctor/run-doctor {:tasks (concat (:tasks parsed-tasks) (:tasks parsed-record))
+                                     :selected-id nil
+                                     :changed-paths #{"src/code.clj"}
+                                     :record-exclude-paths #{"/repo/TASKS.org"}})]
+    (is (= 1 (count-of findings :spec-untouched)))
+    (is (= "/repo/design/log/work.org" (get-in (first (filter #(= :spec-untouched (:code %)) findings))
+                                               [:location :file])))
+    (is (zero? (count-of (filter #(= "/repo/TASKS.org" (get-in % [:location :file])) findings)
+                         :missing-record-section)))
+    (is (zero? (count-of (filter #(= "/repo/TASKS.org" (get-in % [:location :file])) findings)
+                         :spec-untouched)))))
+
+(deftest spec-declaration-warns-on-dangling-path
+  (let [tasks-content "#+SPEC: [[proj:design/SPEC.org]]\n"
+        findings (doctor/run-doctor
+                  {:tasks []
+                   :selected-id nil
+                   :protocol-files {:tasks {:path "/repo/TASKS.org" :content tasks-content}}
+                   :spec-path-exists {"design/SPEC.org" false}})
+        f (first (filter #(= :spec-path-dangling (:code %)) findings))]
+    (is (= 1 (count-of findings :spec-path-dangling)))
+    (is (= :warn (:severity f)))
+    (is (str/includes? (:message f) "design/SPEC.org"))))
+
+(deftest spec-declaration-no-finding-when-path-resolves
+  (let [tasks-content "#+SPEC: [[proj:design/SPEC.org]]\n"
+        findings (doctor/run-doctor
+                  {:tasks []
+                   :selected-id nil
+                   :protocol-files {:tasks {:path "/repo/TASKS.org" :content tasks-content}}
+                   :spec-path-exists {"design/SPEC.org" true}})]
+    (is (zero? (count-of findings :spec-path-dangling)))))
+
+(deftest spec-declaration-no-finding-when-absent
+  (let [findings (doctor/run-doctor
+                  {:tasks []
+                   :selected-id nil
+                   :protocol-files {:tasks {:path "/repo/TASKS.org" :content "#+TITLE: x\n"}}})]
+    (is (zero? (count-of findings :spec-path-dangling)))
+    (is (zero? (count-of findings :spec-value-malformed)))))
+
+(deftest spec-declaration-malformed-bare-path
+  (let [tasks-content "#+SPEC: design/SPEC.org\n"
+        findings (doctor/run-doctor
+                  {:tasks []
+                   :selected-id nil
+                   :protocol-files {:tasks {:path "/repo/TASKS.org" :content tasks-content}}})
+        f (first (filter #(= :spec-value-malformed (:code %)) findings))]
+    (is (= 1 (count-of findings :spec-value-malformed)))
+    (is (str/includes? (:message f) "design/SPEC.org"))))
+
+(deftest spec-malformed-reported-even-when-opted-out
+  ;; `#+NO_SPEC:` suppresses the untouched reconciliation, but a
+  ;; malformed value must still be flagged so nothing silently un-migrates.
+  (let [content (str "#+SPEC: docs/api.org\n"
+                     "#+NO_SPEC: true\n\n"
+                     "* Plan\n"
+                     "** TODO Update API\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/api.org"
+                                                     :source-content content})
+        findings (doctor/run-doctor {:tasks tasks
+                                     :selected-id nil
+                                     :changed-paths #{"src/api.clj"}})]
+    (is (= 1 (count-of findings :spec-value-malformed)))
+    (is (zero? (count-of findings :spec-untouched)))))
+
+(deftest spec-declaration-rejects-absolute-and-traversal-paths
+  ;; proj: links must stay inside the repo root.
+  (doseq [bad ["[[proj:/etc/passwd]]" "[[proj:../outside/x.org]]" "[[proj: design/SPEC.org]]"]]
+    (let [tasks-content (str "#+SPEC: " bad "\n")
+          findings (doctor/run-doctor
+                    {:tasks []
+                     :selected-id nil
+                     :protocol-files {:tasks {:path "/repo/TASKS.org" :content tasks-content}}
+                      ;; even if some caller claimed the path exists, a malformed
+                      ;; value must never reach the dangling check.
+                     :spec-path-exists {"/etc/passwd" true "../outside/x.org" true}})]
+      (is (= 1 (count-of findings :spec-value-malformed)) (str bad " should be malformed"))
+      (is (zero? (count-of findings :spec-path-dangling)) (str bad " must not reach dangling check")))))
+
+(deftest extract-proj-link-path-accepts-only-safe-bare-links
+  (is (= "skills/org-plan/SKILL.md" (doctor/extract-proj-link-path "[[proj:skills/org-plan/SKILL.md]]")))
+  (is (= "design/specs/" (doctor/extract-proj-link-path "[[proj:design/specs/]]")))
+  (doseq [bad ["design/SPEC.org"                    ; bare path
+               "[[proj:design/SPEC.org][label]]"    ; labelled
+               "[[file:design/SPEC.org]]"           ; wrong link type
+               "[[proj:/abs/path]]"                 ; absolute
+               "[[proj:../escape]]"                 ; traversal
+               "[[proj: leading-space]]"            ; inner whitespace
+               "[[proj:]]"                           ; empty
+               nil ""]]
+    (is (nil? (doctor/extract-proj-link-path bad)) (str (pr-str bad) " should not extract"))))
 
 (deftest format-finding-line
   (let [f {:code :duplicate-id
@@ -375,10 +520,10 @@
 (deftest non-uuid-v4-id-flags-hand-authored-ids
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* TODO Bad ID\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: parent-id\n"
-               ":END:\n"))
+         (str "* TODO Bad ID\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: parent-id\n"
+              ":END:\n"))
         findings (doctor/run-doctor {:tasks tasks :selected-id nil})
         f (first (filter #(= :non-uuid-v4-id (:code %)) findings))]
     (is (= 1 (count-of findings :non-uuid-v4-id)))
@@ -388,25 +533,25 @@
 (deftest non-uuid-v4-id-passes-valid-v4
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* TODO Good\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: 6593c6fc-d284-4f9e-b6b5-4c159345cd20\n"
-               ":END:\n"))]
+         (str "* TODO Good\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: 6593c6fc-d284-4f9e-b6b5-4c159345cd20\n"
+              ":END:\n"))]
     (is (zero? (count-of (doctor/run-doctor {:tasks tasks :selected-id nil})
                          :non-uuid-v4-id)))))
 
 (deftest patterned-sibling-ids-detected
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* TODO Plan A\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0001\n"
-               ":END:\n"
-               "\n"
-               "* TODO Plan B\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0002\n"
-               ":END:\n"))
+         (str "* TODO Plan A\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0001\n"
+              ":END:\n"
+              "\n"
+              "* TODO Plan B\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0002\n"
+              ":END:\n"))
         findings (doctor/run-doctor {:tasks tasks :selected-id nil})
         f (first (filter #(= :patterned-sibling-ids (:code %)) findings))]
     (is (= 2 (count-of findings :patterned-sibling-ids)))
@@ -416,15 +561,15 @@
 (deftest patterned-sibling-ids-allows-random-v4
   (let [{:keys [tasks]}
         (parser/parse-tasks
-          (str "* TODO Random A\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: 6593c6fc-d284-4f9e-b6b5-4c159345cd20\n"
-               ":END:\n"
-               "\n"
-               "* TODO Random B\n"
-               ":PROPERTIES:\n"
-               ":CUSTOM_ID: 9e2b9765-dd9d-4748-aed3-c3e3af0ea5e4\n"
-               ":END:\n"))]
+         (str "* TODO Random A\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: 6593c6fc-d284-4f9e-b6b5-4c159345cd20\n"
+              ":END:\n"
+              "\n"
+              "* TODO Random B\n"
+              ":PROPERTIES:\n"
+              ":CUSTOM_ID: 9e2b9765-dd9d-4748-aed3-c3e3af0ea5e4\n"
+              ":END:\n"))]
     (is (zero? (count-of (doctor/run-doctor {:tasks tasks :selected-id nil})
                          :patterned-sibling-ids)))))
 

@@ -152,6 +152,35 @@
                 "non-uuid-v4-id" "non-uuid-v4-id"]
                (mapv :code (:findings r))))))))
 
+(deftest doctor-spec-path-resolution-through-cli
+  ;; Exercises the CLI/maintenance layer that stats #+SPEC: paths on disk
+  ;; (spec-path-exists-map + fs/exists?), covering resolvable file,
+  ;; resolvable (empty) folder, and a missing path.
+  (with-temp-dir
+    (fn [root]
+      (spit (str (fs/path root "TASKS.setup.org")) setup-org-preamble)
+      (fs/create-dirs (fs/path root "design"))
+      (spit (str (fs/path root "design" "SPEC.org")) "#+TITLE: spec\n")
+      (fs/create-dirs (fs/path root "design" "specs"))       ; existing empty folder
+      (spit (str (fs/path root "TASKS.org"))
+            (str tasks-org-preamble
+                 "#+SPEC: [[proj:design/SPEC.org]]\n"          ; resolvable file
+                 "#+SPEC: [[proj:design/specs]]\n"            ; resolvable folder
+                 "#+SPEC: [[proj:design/missing.org]]\n"      ; dangling
+                 "* Improvements\n"
+                 "** TODO Task\n"
+                 ":PROPERTIES:\n"
+                 ":CUSTOM_ID: 11111111-2222-4333-8444-555555555551\n"
+                 ":END:\n"))
+      (spit (str (fs/path root "TASKS.local.org")) "#+SELECTED:\n")
+      (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "doctor")
+            r (parse-json-result out)
+            dangling (filter #(= "spec-path-dangling" (:code %)) (:findings r))]
+        (is (zero? exit))
+        (is (zero? (count (filter #(= "spec-value-malformed" (:code %)) (:findings r)))))
+        (is (= 1 (count dangling)) "only the missing path dangles")
+        (is (str/includes? (:message (first dangling)) "design/missing.org"))))))
+
 ;; ── section ───────────────────────────────────────────
 
 (deftest section-returns-found-body

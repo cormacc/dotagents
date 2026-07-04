@@ -16,7 +16,7 @@ Required: `* Intent`, `* Summary`, `* Plan`, `* Implementation`. Optional sectio
 #+PARENT: [[task:01234567-89ab-4def-8123-456789abcdef][Descriptive parent task]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Draft
-#+SPEC_IMPACT: design/specs/example-domain.org
+#+SPEC: [[proj:design/specs/example-domain.org]]
 
 * Intent
 One to three sentences. What we are building and why. Stable across the work.
@@ -29,7 +29,7 @@ One compact paragraph describing current/final state.
 ** Scope
 *** In scope
 - Concrete item 1.
-- Contract impact: `design/specs/example-domain.org` is expected to change.
+- Relevant contract: `design/specs/example-domain.org` should be reviewed for this change.
 *** Out of scope
 - Deferred item.
 
@@ -130,16 +130,21 @@ Include for feature work where the user-facing flow is load-bearing. Drafting-ti
 
 Background, motivation, alternatives, constraints, trade-offs. **Default to omitting.** Promote only when durable rationale materially exceeds what `* Summary` can carry.
 
-## Spec-impact keywords
+## Spec keyword
 
-Use repeated planning-time declarations when work is expected to change durable behaviour, public APIs, protocols, domain models, or agent/operator workflow:
+One keyword, `#+SPEC:`, used in two contexts (disambiguated by the file it appears in), always carrying a bare `[[proj:PATH]]` org link (repo-root relative, navigable in Emacs from both TASKS.org and records; the labelled `[[proj:PATH][label]]` form, bare non-link paths, and absolute/`..`-escaping paths are malformed):
+
+- In `TASKS.org` — *discovery input*: zero or more repeatable declarations of where a project's living specs live (a spec file or a folder, recursive). Project-wide, not per-record. See org-plan SKILL.md § Spec discovery (`#+SPEC:`) for the default root, implicit specs, and rooted/transitive discovery rules.
+- In a change-record — *planning-time relevance declaration*: which individual specs from the discovered set are relevant to this particular change; `ot doctor` may nudge at closure if a listed spec is unchanged in git.
+
+Use repeated `#+SPEC:` declarations when work is expected to change durable behaviour, public APIs, protocols, domain models, or agent/operator workflow:
 
 ```org
-#+SPEC_IMPACT: design/specs/data-model.org
-#+SPEC_IMPACT: skills/org-plan/SKILL.md
+#+SPEC: [[proj:design/specs/data-model.org]]
+#+SPEC: [[proj:skills/org-plan/SKILL.md]]
 ```
 
-Paths are repo-relative. Opt out with `#+NO_SPEC_IMPACT: true`. See org-plan SKILL.md *Spec-impact planning* for when to declare vs opt out, and org-tasks `ot-cli.md` for the `ot doctor` check.
+Opt out with `#+NO_SPEC: true`. See org-plan SKILL.md § Spec planning for when to declare vs opt out, and org-tasks `ot-cli.md` § Spec keyword and checks for the canonical `ot doctor` findings (`spec-untouched`, `spec-value-malformed`, `spec-path-dangling`).
 
 ## `#+STATUS:` lifecycle
 

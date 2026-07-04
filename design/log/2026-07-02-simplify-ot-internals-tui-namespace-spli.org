@@ -2,8 +2,8 @@
 #+DATE: 2026-07-02 Thu
 #+PARENT: [[archive:a54b01b0-8741-4b52-831e-0ac574dc1ed3][Simplify ot internals: TUI namespace split and data-level command API]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+SPEC_IMPACT: skills/org-tasks/scripts/README.md
-#+SPEC_IMPACT: skills/org-tasks/scripts/docs/test-map.md
+#+SPEC: [[proj:skills/org-tasks/scripts/README.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/test-map.md]]
 
 * Intent
 

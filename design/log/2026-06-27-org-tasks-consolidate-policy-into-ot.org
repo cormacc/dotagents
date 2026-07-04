@@ -3,9 +3,9 @@
 #+PARENT: [[archive:5606c9a0-af2a-4e0c-84bd-e961b5c1738d][Add org-tasks TUI]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
-#+SPEC_IMPACT: skills/org-tasks/scripts/docs/boundary.md
-#+SPEC_IMPACT: skills/org-tasks/scripts/README.md
-#+SPEC_IMPACT: skills/org-tasks/references/ot-cli.md
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/boundary.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/README.md]]
+#+SPEC: [[proj:skills/org-tasks/references/ot-cli.md]]
 
 * Intent
 Remove policy logic duplicated between the pi tasks overlay (TypeScript) and the

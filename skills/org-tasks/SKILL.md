@@ -28,7 +28,7 @@ The field-level contract lives in `references/protocol.md`; load it when repairi
 - `#+IMPORT:` links change-records/imported task files. Canonical plan imports use `[[plan:file.org]]` via the `#+LINK: plan` template, which is defined locally in `TASKS.org`/`TASKS.archive.org` (repo-root), not in `TASKS.setup.org`. `#+LINK: proj` (dual-defined: `./` from the task file, `../../` from a record via setup) is a generic repo-root path link for referencing specs/source from records.
 - `#+SELECTED:` in gitignored `TASKS.local.org` stores the local active task. Empty or absent means no selection.
 - `:BLOCKED-BY:` / `:BLOCKED-BY+:`, `:HANDOFF:`, and `:LINKED_ISSUES:` are protocol fields managed by `ot blocker`, `ot ready`, `ot handoff`, and `ot issue`.
-- Change-records can declare expected contract impact with repeated `#+SPEC_IMPACT: path/to/contract.org` keywords, or explicitly opt out with `#+NO_SPEC_IMPACT: true`; `ot doctor` warns when declared paths were not touched in the current git working tree/index.
+- `#+SPEC:` is a single optional keyword naming relevant specification docs as bare `[[proj:PATH]]` links: in `TASKS.org` it declares repo-wide discovery roots, in change-records it lists task-relevant specs (opt out with `#+NO_SPEC: true`). The discovery model is owned by `../org-plan/SKILL.md` § Spec discovery (`#+SPEC:`); the `ot doctor` findings (`spec-untouched`, `spec-value-malformed`, `spec-path-dangling`) and `TASKS.org`-only validation are documented in `references/ot-cli.md` § Spec keyword and checks.
 - Do not hard-wrap. In every org file this protocol manages (`TASKS*.org` and `#+IMPORT:`-linked change-records), keep each paragraph and each list item as a single logical line (soft-wrap); preserve real line breaks only in headings, drawers, keywords, tables, and src/example blocks. Never reflow to a fixed column such as 80.
 
 Unknown `#+` keywords and drawer properties round-trip untouched; third-party metadata should use an `UPPERCASE_NAMESPACE_` prefix.
@@ -50,7 +50,7 @@ ot select <id>        # or: ot select --clear
 ot archive <id> --yes
 ot publish <id>       # TASKS.local.org -> TASKS.org
 ot unpublish <id>     # TASKS.org -> TASKS.local.org
-ot doctor --format json       # health checks + spec-impact warnings
+ot doctor --format json       # health checks + spec warnings
 ot backfill            # add :CUSTOM_ID: / :CREATED: to hand-authored tasks missing IDs
 ot section design/log/foo.org Summary --format json
 ot scan --scope all --max-body-chars 500 --format json
@@ -106,7 +106,7 @@ A change-record is a separate org file linked from a task via `#+IMPORT:`. Two f
 
 `ot record create` scaffolds required headings, attaches `#+IMPORT:`, and when creating a new record migrates existing child task trees from the parent into the record's `* Plan` section. The parent then keeps only the import link, so each UUID has one canonical writable node. Existing record files are not modified for migration; repair duplicates manually and run `ot doctor`.
 
-Section contract, spec-impact planning, planning methodology, acceptance criteria, closure-time pruning, and subtask authoring conventions are owned by `org-plan`.
+Section contract, spec planning, planning methodology, acceptance criteria, closure-time pruning, and subtask authoring conventions are owned by `org-plan`.
 
 ## Resuming and agent memory
 

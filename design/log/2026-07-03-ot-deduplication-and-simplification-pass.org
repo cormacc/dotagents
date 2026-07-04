@@ -2,8 +2,8 @@
 #+DATE: 2026-07-03 Fri
 #+PARENT: [[archive:2a4b1e7a-d574-466e-9aef-87ac7986c83d][ot: deduplication and simplification pass from parallel reviews]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+SPEC_IMPACT: skills/org-tasks/scripts/README.md
-#+SPEC_IMPACT: skills/org-tasks/scripts/docs/test-map.md
+#+SPEC: [[proj:skills/org-tasks/scripts/README.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/test-map.md]]
 
 * Intent
 
