@@ -5,7 +5,9 @@
 
 (deftest resolve-link-target-respects-base-and-sandbox
   (fs/with-temp-dir [dir {}]
-    (let [root (str dir)
+    ;; realpath so the expected root matches the CLI's symlink-resolved output
+    ;; (macOS /var -> /private/var).
+    (let [root (str (fs/real-path dir))
           source (str (fs/path root "design" "log" "record.org"))
           content "#+LINK: plan file:design/log/%s\n#+LINK: rel file:%s\n"]
       (fs/create-dirs (fs/parent source))

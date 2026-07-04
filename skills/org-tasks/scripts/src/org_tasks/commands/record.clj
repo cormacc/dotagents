@@ -156,7 +156,14 @@
 
           :else
           (let [target-dir  (str (fs/parent abs))
-                setup-path  (str (fs/path project-root "TASKS.setup.org"))
+                ;; Canonicalise the setup path the same way `abs` was
+                ;; (resolve-project-path realpaths its result), so the
+                ;; relativize operands share a base even when the project
+                ;; root is under a symlink (e.g. macOS /var -> /private/var).
+                ;; Mixing a realpath'd dir with a raw one produced a broken
+                ;; climbing `#+SETUPFILE:` link.
+                setup-path  (or (paths/resolve-project-path project-root project-root "TASKS.setup.org")
+                                (str (fs/path project-root "TASKS.setup.org")))
                 setup-file-rel (str (fs/relativize target-dir setup-path))
                 content     (scaffold-plan-content target setup-file-rel)
                 existed?    (fs/exists? abs)

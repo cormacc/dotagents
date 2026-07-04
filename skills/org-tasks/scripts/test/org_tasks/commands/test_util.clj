@@ -9,7 +9,12 @@
 
 
 (defn with-temp-dir [f]
-  (let [dir (str (fs/create-temp-dir {:prefix "ot-cmd-"}))]
+  ;; Canonicalise the temp root so tests compare against the same realpath
+  ;; the CLI emits. On macOS `fs/create-temp-dir` lives under /var, which is a
+  ;; symlink to /private/var; the path layer realpaths its output, so a raw
+  ;; root would never string-match the emitted paths.
+  (let [raw (fs/create-temp-dir {:prefix "ot-cmd-"})
+        dir (str (fs/real-path raw))]
     (try (f dir)
          (finally (fs/delete-tree dir)))))
 
