@@ -16,5 +16,6 @@
     "npm:@ogulcancelik/pi-session-recall",
     "npm:pi-web-access"
   ],
-  "theme": "dark"
+  "theme": "dark",
+  "lastChangelogVersion": "0.80.6"
 }
