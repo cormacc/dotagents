@@ -36,23 +36,21 @@ round-trips through the model):
 
 - **`jira_clone_apply`** — takes structured Jira fields
   (`key`, `summary`, `priorityName?`, `body?`, `labels?`, `file?`,
-  `section?`, `allowCreateSection?`) and delegates the org write to
-  the `tasks` extension's `tasks_insert_task` primitive (see
-  `pi/extensions/tasks/README.md#cross-extension-tools`). All
-  org-mode string assembly (drawer, UUID, `:CREATED:`, priority
-  cookie, tag suffix, `:LINKED_ISSUES:`) happens inside
-  `tasks_insert_task` — not in this extension and not in the model.
+  `section?`, `allowCreateSection?`) and delegates the org write to the
+  tasks extension's deterministic `insertTaskIntoFile()` helper, which
+  invokes the guaranteed `ot create` protocol engine. Drawer, UUID,
+  `:CREATED:`, priority cookie, tags, and `:LINKED_ISSUES:` assembly stay
+  out of the model.
 
 The `/jira clone` slash command instructs the agent in a *two-step
 dispatch*: call `atlassian_getJiraIssue` (with the existing field
 filter), then `jira_clone_apply` with the parsed fields. The agent
 never assembles drawer text via the `edit` tool.
 
-All workflows are *agent-driven*: the slash command drafts a structured
-prompt (using the conventions in the `org-jira` skill) and dispatches
-it via `pi.sendUserMessage`. The agent then performs the actual MCP
-calls and TASKS-file edits. The extension itself stays I/O-free for
-write paths.
+Network workflows are *agent-driven*: slash commands draft structured prompts
+(using the conventions in the `org-jira` skill) and dispatch them via
+`pi.sendUserMessage`; the agent performs MCP calls. `jira_clone_apply` is the
+intentional deterministic local-write exception and delegates directly to `ot`.
 
 ## Connection model
 

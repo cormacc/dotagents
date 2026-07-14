@@ -122,8 +122,8 @@ export function resolveKey(
  *      never re-appear in any `edit` tool argument.
  *
  * Org-mode string assembly (drawer, UUID, :CREATED:, priority cookie,
- * tag suffix) lives in `tasks_insert_task` via the `tasks` extension's
- * `buildTaskBlock` helper. The model never re-emits the rendered body.
+ * tag suffix) lives in the tasks extension's `insertTaskIntoFile()` helper,
+ * which delegates to `ot create`. The model never re-emits the rendered body.
  *
  * Pure function — exported so tests can snapshot the prompt shape.
  */
