@@ -27,7 +27,7 @@ dotagents/
     ├── extensions/           # active pi extensions
     │   ├── tasks, jira, emacsclient
     │   ├── chromium, dataspex, pi-clojure, lsp
-    │   ├── ext-dev.ts, herdr-agent-state.ts, question.ts, systemprompt.ts
+    │   ├── ext-dev/, herdr-agent-state.ts, question.ts, systemprompt.ts
     │   └── lib/              # shared code, not an extension entry point
     └── archive/              # inactive historical extensions/skills
 ```

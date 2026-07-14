@@ -8,7 +8,7 @@ import {
   buildContext,
   parseExtArgs,
   readExtensionSource,
-} from "./ext-dev.ts";
+} from "./index.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);

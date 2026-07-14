@@ -9,5 +9,5 @@ for runner in pi/extensions/*/test.sh; do
   bash "$runner"
 done
 
-printf '\n==> pi/extensions/ext-dev.test.ts\n'
-./node_modules/.bin/tsx pi/extensions/ext-dev.test.ts
+printf '\n==> pi/extensions/ext-dev/index.test.ts\n'
+./node_modules/.bin/tsx pi/extensions/ext-dev/index.test.ts

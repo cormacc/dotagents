@@ -58,7 +58,7 @@ Each path needs a regression test asserting thrown failure and useful diagnostic
 
 ### Context and schemas
 
-- `pi/extensions/ext-dev.ts:70-94,207-230` recursively loads every non-lock text file and injects it without an aggregate limit. The `tasks` tree contributes roughly 353 KB. Default to production source, support explicit selection, enforce per-file/aggregate ceilings, and report omissions.
+- `pi/extensions/ext-dev/index.ts:70-94,207-230` recursively loads every non-lock text file and injects it without an aggregate limit. The `tasks` tree contributes roughly 353 KB. Default to production source, support explicit selection, enforce per-file/aggregate ceilings, and report omissions.
 - `pi/extensions/dataspex/index.ts:312` uses `Type.Union(Type.Literal(...))` for `op`; pi's cross-provider convention uses `StringEnum`, already used by other active extensions.
 
 ### Tests and reproducibility
