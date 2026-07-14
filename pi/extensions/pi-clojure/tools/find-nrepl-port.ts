@@ -48,7 +48,18 @@ async function validatePort(host: string, port: number): Promise<boolean> {
   }
 }
 
-export const findNreplPortTool = defineTool({
+interface FindNreplPortDependencies {
+  cwd?: () => string;
+  validate?: (host: string, port: number) => Promise<boolean>;
+  defaultPorts?: readonly number[];
+}
+
+export function createFindNreplPortTool(deps: FindNreplPortDependencies = {}) {
+  const getCwd = deps.cwd ?? (() => process.cwd());
+  const checkPort = deps.validate ?? validatePort;
+  const defaultPorts = deps.defaultPorts ?? DEFAULT_PORTS;
+
+  return defineTool({
   name: "clojure_find_nrepl_port",
   label: "Clojure Find nREPL Port",
   description:
@@ -57,13 +68,13 @@ export const findNreplPortTool = defineTool({
   parameters: Type.Object({}),
 
   async execute(_toolCallId, _params, _signal, _onUpdate, _ctx) {
-    const cwd = process.cwd();
+    const cwd = getCwd();
     const host = "localhost";
 
     // 1. Try to find port file in current directory
     const portFromFile = await findPortInDirectory(cwd);
     if (portFromFile !== null) {
-      const isValid = await validatePort(host, portFromFile);
+      const isValid = await checkPort(host, portFromFile);
       if (isValid) {
         return {
           content: [
@@ -78,8 +89,8 @@ export const findNreplPortTool = defineTool({
     }
 
     // 2. Try default ports sequentially
-    for (const port of DEFAULT_PORTS) {
-      const isValid = await validatePort(host, port);
+    for (const port of defaultPorts) {
+      const isValid = await checkPort(host, port);
       if (isValid) {
         return {
           content: [
@@ -94,17 +105,13 @@ export const findNreplPortTool = defineTool({
     }
 
     // 3. No valid port found
-    return {
-      content: [
-        {
-          type: "text",
-          text: "No nREPL port found. Start nREPL and try again.",
-        },
-      ],
-      details: { host, port: null, source: null },
-      isError: true,
-    };
+    throw new Error(
+      `Clojure nREPL discovery failed in ${cwd}: no reachable port found; start nREPL and try again.`,
+    );
   },
-});
+  });
+}
+
+export const findNreplPortTool = createFindNreplPortTool();
 
 

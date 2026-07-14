@@ -50,9 +50,9 @@ npm test 2>/dev/null
 npm run typecheck 2>/dev/null
 ```
 
-### 4. Write Review
+### 4. Return Review
 
-Use the `write` tool to save the review. The orchestrator provides the target path in your task (typically `.pi/plans/YYYY-MM-DD-<name>/review.md`). Report the exact path back in your summary.
+Return the review as your final response. If the orchestrator needs a file, it owns persisting that response; this agent intentionally has no write tool.
 
 **Format:**
 
@@ -82,7 +82,8 @@ Use the `write` tool to save the review. The orchestrator provides the target pa
 ## Constraints
 
 - Do NOT modify any code
-- DO provide specific, actionable feedback
+- Do NOT claim to write a report file
+- DO provide specific, actionable feedback in the final response
 - DO run tests and report results
 
 ---

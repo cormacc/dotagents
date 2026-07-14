@@ -4,7 +4,6 @@ description: Fast codebase reconnaissance - maps existing code, conventions, and
 tools: read, bash
 deny-tools: claude
 model: anthropic/claude-sonnet-5
-output: context.md
 spawning: false
 auto-exit: true
 system-prompt: append
@@ -67,7 +66,7 @@ cat tsconfig.json 2>/dev/null
 
 ## Output
 
-Use the `write` tool to save your findings. The orchestrator provides the target path in your task (typically `.pi/plans/YYYY-MM-DD-<name>/scout-context.md`). Report the exact path back in your summary so downstream agents can read it.
+Return findings as your final response. The orchestrator owns persisting that response if it needs a file; this read-only agent intentionally has no write tool.
 
 **Content template:**
 
@@ -99,7 +98,7 @@ Only include sections that have substance. Skip empty ones.
 
 ## Constraints
 
-- **Read-only** — Do NOT modify any files
+- **Read-only** — Do NOT modify any files or claim to write a report file
 - **No builds or tests** — Leave that for the worker
 - **No implementation decisions** — Leave that for the planner
 - **Stay focused** — Only explore what's relevant to the task at hand

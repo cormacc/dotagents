@@ -1,48 +1,24 @@
 ---
 name: glab-milestone
-description: Manage project milestones including create, list, update, view, and close operations. Use when planning releases, tracking milestone progress, or organizing issues/MRs by milestone. Triggers on milestone, release planning, milestone progress, version milestone.
+description: Manage GitLab milestones through glab api when explicit GitLab/glab milestone work is requested. The installed glab build has no milestone command group.
 ---
 
-# glab milestone
+# GitLab milestones through glab api
 
-## Overview
-
-```
-
-  Manage group or project milestones.
-  USAGE
-    glab milestone <command> [command] [--flags]
-  COMMANDS
-    create [--flags]  Create a group or project milestone.
-    delete [--flags]  Delete a group or project milestone.
-    edit [--flags]    Edit a group or project milestone.
-    get [--flags]     Get a milestones via an ID for a project or group.
-    list [--flags]    Get a list of milestones for a project or group.
-  FLAGS
-    -h --help         Show help for this command.
-    -R --repo         Select another repository. Can use either `OWNER/REPO` or `GROUP/NAMESPACE/REPO` format. Also accepts full URL or Git URL.
-```
-
-## Quick start
+Verify first:
 
 ```bash
-glab milestone --help
+glab version
+glab milestone --help  # expected to fail when the group is unavailable
 ```
 
-## Structured output
-
-`glab milestone list` and `glab milestone get` support `--output json` / `-F json` for structured output, which is useful for agent automation.
+For the verified installed build, use the GitLab REST API through `glab api`:
 
 ```bash
-# List milestones with JSON output
-glab milestone list --output json
-glab milestone list -F json
-
-# Get a specific milestone with JSON output
-glab milestone get --output json
-glab milestone get -F json
+glab api projects/:id/milestones
+glab api projects/:id/milestones/<milestone-id>
+glab api --method POST projects/:id/milestones --field title='Release 1.0'
+glab api --method PUT projects/:id/milestones/<milestone-id> --field state_event=close
 ```
 
-## Subcommands
-
-See [references/commands.md](references/commands.md) for full `--help` output.
+Load [`../glab-api/SKILL.md`](../glab-api/SKILL.md) before mutations. Do not claim `glab milestone create`, list, edit, get, view, update, or close unless `glab milestone --help` on the active installation actually exposes them.

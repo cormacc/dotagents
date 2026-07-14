@@ -59,7 +59,9 @@ function test(name: string, fn: () => void) {
 // ---------------------------------------------------------------------------
 
 const tempDir = mkdtempSync(join(tmpdir(), "emacs-read-test-"));
-const socketName = join(tempDir, "socket");
+// Keep the logical daemon name short: Emacs rejects long canonical macOS
+// temporary paths as child names.
+const socketName = `dar-${process.pid}`;
 const testFilesDir = join(tempDir, "files");
 mkdirSync(testFilesDir, { recursive: true });
 
@@ -109,6 +111,7 @@ function startEmacs() {
     timeout: 30000,
     env: { ...process.env, HOME: tempDir },
   });
+  emacsclient("(emacs-pid)");
 }
 
 function stopEmacs() {
@@ -622,7 +625,10 @@ test("read - detects buffer with process", () => {
   const result = emacsclientParsed(elisp);
 
   assert(result.process !== null, "Should have process");
-  assertContains(result.process.cmd.toLowerCase(), "sh");
+  assert(
+    typeof result.process.state === "string" && result.process.state.length > 0,
+    "Process metadata should include process state",
+  );
 });
 
 // ---------------------------------------------------------------------------

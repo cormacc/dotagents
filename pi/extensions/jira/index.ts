@@ -226,15 +226,9 @@ function registerCloneApplyTool(pi: ExtensionAPI): void {
     parameters: CloneApplyParams,
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       if (!JIRA_KEY_RE.test(params.key)) {
-        return {
-          content: [{
-            type: "text" as const,
-            text:
-              `Invalid Jira key \`${params.key}\`. Expected PROJ-NNN (e.g. SAND-42).`,
-          }],
-          details: { error: "invalid_key", key: params.key },
-          isError: true,
-        };
+        throw new Error(
+          `Jira clone failed: invalid key \`${params.key}\`; expected PROJ-NNN (e.g. SAND-42).`,
+        );
       }
 
       // Resolve target file/section against ctx.cwd. The default file is
@@ -270,34 +264,15 @@ function registerCloneApplyTool(pi: ExtensionAPI): void {
             details: { ...result, key: params.key },
           };
         case "duplicate":
-          return {
-            content: [{
-              type: "text" as const,
-              text:
-                `${params.key} is already linked from existing task ${result.existingId ?? "(no :CUSTOM_ID:)"} in ${result.existingFile}. Refusing to clone again.`,
-            }],
-            details: { ...result, key: params.key },
-            isError: true,
-          };
+          throw new Error(
+            `Jira clone failed: ${params.key} is already linked from task ${result.existingId ?? "(no :CUSTOM_ID:)"} in ${result.existingFile}.`,
+          );
         case "section_not_found":
-          return {
-            content: [{
-              type: "text" as const,
-              text:
-                `Section '${result.section}' not found in ${result.file}. Pass allowCreateSection: true to scaffold it, or correct the section name.`,
-            }],
-            details: { ...result, key: params.key },
-            isError: true,
-          };
+          throw new Error(
+            `Jira clone failed: section '${result.section}' was not found in ${result.file}; pass allowCreateSection: true or correct the section name.`,
+          );
         case "error":
-          return {
-            content: [{
-              type: "text" as const,
-              text: `Error cloning ${params.key}: ${result.message}`,
-            }],
-            details: { ...result, key: params.key },
-            isError: true,
-          };
+          throw new Error(`Jira clone failed for ${params.key}: ${result.message}`);
       }
     },
   });

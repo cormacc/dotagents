@@ -32,11 +32,19 @@ if command -v npx >/dev/null 2>&1; then
   fi
 fi
 
+run_tsx() {
+  if command -v tsx >/dev/null 2>&1; then
+    tsx "$@"
+  elif [ -x "../../../node_modules/.bin/tsx" ]; then
+    ../../../node_modules/.bin/tsx "$@"
+  else
+    npx --yes tsx "$@"
+  fi
+}
+
 CODE=0
 echo "# Running unit tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./jira.test.ts || CODE=1
-else
-  npx --yes tsx ./jira.test.ts || CODE=1
-fi
+run_tsx ./jira.test.ts || CODE=1
+echo "# Running failure-semantics tests..."
+run_tsx ./failure.test.ts || CODE=1
 exit "$CODE"

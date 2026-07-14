@@ -93,62 +93,34 @@ If a comment or reply was posted under the wrong identity:
 
 If the wrong-identity write changed state beyond a comment or reply, do not treat the comment cleanup steps as sufficient. Re-auth as above, then use the matching GitLab reversal for that write under the correct actor and host, such as unapproving an MR or sending the compensating `glab api --hostname "$GITLAB_HOST"` mutation for the exact resource that was changed.
 
-## Skill organization
+## Routing to command groups
 
-This skill routes to specialized sub-skills by GitLab domain:
+Only this parent is globally discovered. When a request names a GitLab/`glab` domain, read exactly the matching relative skill below; do not load every child. If a requested group is absent from `glab --help`, verify `glab <group> --help` and use [`glab-api/SKILL.md`](glab-api/SKILL.md) rather than inventing a command.
 
-**Core Workflows:**
-- `glab-mr` - Merge requests: create, review, approve, merge
-- `glab-issue` - Issues: create, list, update, close, comment
-- `glab-ci` - CI/CD: pipelines, jobs, logs, artifacts
-- `glab-repo` - Repositories: clone, create, fork, manage
+Selection rules:
 
-**Project Management:**
-- `glab-milestone` - Release planning and milestone tracking
-- `glab-iteration` - Sprint/iteration management
-- `glab-label` - Label management and organization
-- `glab-release` - Software releases and versioning
+- Authentication or CLI setup → [`glab-auth/SKILL.md`](glab-auth/SKILL.md), [`glab-config/SKILL.md`](glab-config/SKILL.md), [`glab-ssh-key/SKILL.md`](glab-ssh-key/SKILL.md), [`glab-gpg-key/SKILL.md`](glab-gpg-key/SKILL.md), [`glab-token/SKILL.md`](glab-token/SKILL.md).
+- Merge requests, issues, work items, incidents, or quick actions → [`glab-mr/SKILL.md`](glab-mr/SKILL.md), [`glab-issue/SKILL.md`](glab-issue/SKILL.md), [`glab-workitems/SKILL.md`](glab-workitems/SKILL.md), [`glab-incident/SKILL.md`](glab-incident/SKILL.md), [`glab-quick-actions/SKILL.md`](glab-quick-actions/SKILL.md).
+- Pipelines or jobs → start with [`glab-ci/SKILL.md`](glab-ci/SKILL.md); load [`glab-job/SKILL.md`](glab-job/SKILL.md) only for artifact download or the CI-owned job operations it routes to.
+- CI configuration or infrastructure → [`glab-schedule/SKILL.md`](glab-schedule/SKILL.md), [`glab-variable/SKILL.md`](glab-variable/SKILL.md), [`glab-securefile/SKILL.md`](glab-securefile/SKILL.md), [`glab-runner/SKILL.md`](glab-runner/SKILL.md), [`glab-runner-controller/SKILL.md`](glab-runner-controller/SKILL.md), [`glab-cluster/SKILL.md`](glab-cluster/SKILL.md), [`glab-opentofu/SKILL.md`](glab-opentofu/SKILL.md).
+- Repository/project operations → [`glab-repo/SKILL.md`](glab-repo/SKILL.md), [`glab-deploy-key/SKILL.md`](glab-deploy-key/SKILL.md), [`glab-label/SKILL.md`](glab-label/SKILL.md), [`glab-milestone/SKILL.md`](glab-milestone/SKILL.md), [`glab-iteration/SKILL.md`](glab-iteration/SKILL.md).
+- Releases and project history → [`glab-release/SKILL.md`](glab-release/SKILL.md), [`glab-changelog/SKILL.md`](glab-changelog/SKILL.md), [`glab-attestation/SKILL.md`](glab-attestation/SKILL.md).
+- User collaboration → [`glab-user/SKILL.md`](glab-user/SKILL.md), [`glab-snippet/SKILL.md`](glab-snippet/SKILL.md), [`glab-todo/SKILL.md`](glab-todo/SKILL.md).
+- Advanced MR structure → [`glab-stack/SKILL.md`](glab-stack/SKILL.md).
+- Direct/custom API operation → [`glab-api/SKILL.md`](glab-api/SKILL.md).
+- CLI customization → [`glab-alias/SKILL.md`](glab-alias/SKILL.md), [`glab-completion/SKILL.md`](glab-completion/SKILL.md).
+- GitLab AI integrations → [`glab-duo/SKILL.md`](glab-duo/SKILL.md), [`glab-mcp/SKILL.md`](glab-mcp/SKILL.md).
 
-**Authentication & Config:**
-- `glab-auth` - Login, logout, Docker registry auth
-- `glab-config` - CLI configuration and defaults
-- `glab-ssh-key` - SSH key management
-- `glab-gpg-key` - GPG keys for commit signing
-- `glab-token` - Personal and project access tokens
-- `glab-todo` - Personal GitLab to-do triage and completion
+Parent-owned diagnostics replace the former trivial help/version/update skills:
 
-**CI/CD Management:**
-- `glab-job` - Individual job operations
-- `glab-schedule` - Scheduled pipelines and cron jobs
-- `glab-variable` - CI/CD variables and secrets
-- `glab-securefile` - Secure files for pipelines
-- `glab-runner` - Runner management: list, assign/unassign, inspect jobs/managers, pause/unpause, delete
-- `glab-runner-controller` - Runner controller, scope, and token management (EXPERIMENTAL, admin-only)
+```bash
+glab --help                    # command groups
+glab <command> --help          # installed syntax and subcommands
+glab version                   # installed build
+glab check-update              # release update check
+```
 
-**Collaboration:**
-- `glab-user` - User profiles and information
-- `glab-snippet` - Code snippets (GitLab gists)
-- `glab-incident` - Incident management
-- `glab-workitems` - Work items: tasks, OKRs, key results, next-gen epics
-
-**Advanced:**
-- `glab-api` - Direct REST API calls
-- `glab-cluster` - Kubernetes cluster integration
-- `glab-deploy-key` - Deploy keys for automation
-- `glab-quick-actions` - GitLab slash command quick actions for batching state changes
-- `glab-stack` - Stacked/dependent merge requests
-- `glab-opentofu` - Terraform/OpenTofu state management
-
-**Utilities:**
-- `glab-alias` - Custom command aliases
-- `glab-completion` - Shell autocompletion
-- `glab-help` - Command help and documentation
-- `glab-version` - Version information
-- `glab-check-update` - Update checker
-- `glab-changelog` - Changelog generation
-- `glab-attestation` - Software supply chain security
-- `glab-duo` - GitLab Duo AI assistant
-- `glab-mcp` - Model Context Protocol server for AI assistant integration (EXPERIMENTAL)
+Treat the installed `glab` help as authoritative when captured child references differ. These nested descriptions are routing metadata, not independently enabled global triggers; do not enable full-depth discovery.
 
 ## When to use glab vs web UI
 
@@ -256,7 +228,7 @@ What do you need?
 
 **Quick reference:**
 - Pipeline-level: `glab ci status`, `glab ci view`, `glab ci run`
-- Job-level: `glab ci trace`, `glab job retry`, `glab job view`
+- Job-level: `glab ci trace`, `glab ci retry`, `glab ci cancel job`, `glab job artifact`
 - Artifacts: `glab ci artifact` (by pipeline) or job artifacts via `glab job`
 
 ### "Clone or fork?"

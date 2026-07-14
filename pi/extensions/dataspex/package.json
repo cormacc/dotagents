@@ -1,6 +1,7 @@
 {
   "name": "pi-dataspex",
   "private": true,
+  "type": "module",
   "pi": {
     "extensions": [
       "./index.ts"

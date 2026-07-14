@@ -10,7 +10,7 @@ description: Develop/debug pi extensions. Use for creating or modifying extensio
 1. **Read the documentation** before writing any code — do not guess APIs.
    Load the docs listed below with the `read` tool.
 2. **Load extension source** with `/ext <name>` (autocompletes extension names).
-   Use `/ext` with no arguments to list available extensions.
+   Use `/ext` with no arguments to list available extensions. The default load is production-focused and bounded to 32 KiB per file / 96 KiB total. Use `/ext <name> --include-tests` to opt into test files, or `/ext <name> --files path[,path]` for an explicit bounded selection.
 3. **Read relevant examples** from the examples directory. Read `README.md`
    there first, then inspect specific examples as needed.
 

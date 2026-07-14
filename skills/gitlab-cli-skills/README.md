@@ -1,100 +1,23 @@
-```
-   ____ _ _   _          _        ____ _     ___   ____  _    _ _ _     
-  / ___(_) |_| |    __ _| |__    / ___| |   |_ _| / ___|| | _(_) | |___ 
- | |  _| | __| |   / _` | '_ \  | |   | |    | |  \___ \| |/ / | | / __|
- | |_| | | |_| |__| (_| | |_) | | |___| |___ | |   ___) |   <| | | \__ \
-  \____|_|\__|_____\__,_|_.__/   \____|_____|___| |____/|_|\_\_|_|_|___/
-                                                                        
-```
+# GitLab CLI skill router
 
-# GitLab CLI Skills
+This directory contains the top-level `gitlab-cli-skills` router plus nested GitLab/`glab` command-group references.
 
-A collection of skills for AI coding agents following the Agent Skills format. These skills enable AI agents to use the GitLab CLI (`glab`) effectively.
+Only [`SKILL.md`](SKILL.md) is intended for global discovery. It names every retained child path and loads only the group relevant to an explicit GitLab/`glab` request; nested skills are not enabled as independent broad triggers.
 
-## Available Skills
-
-### Available Skills
-
-- [`glab-auth`](./glab-auth)
-- [`glab-alias`](./glab-alias)
-- [`glab-api`](./glab-api)
-- [`glab-attestation`](./glab-attestation)
-- [`glab-changelog`](./glab-changelog)
-- [`glab-check-update`](./glab-check-update)
-- [`glab-ci`](./glab-ci)
-- [`glab-cluster`](./glab-cluster)
-- [`glab-completion`](./glab-completion)
-- [`glab-config`](./glab-config)
-- [`glab-deploy-key`](./glab-deploy-key)
-- [`glab-duo`](./glab-duo)
-- [`glab-gpg-key`](./glab-gpg-key)
-- [`glab-help`](./glab-help)
-- [`glab-incident`](./glab-incident)
-- [`glab-issue`](./glab-issue)
-- [`glab-iteration`](./glab-iteration)
-- [`glab-job`](./glab-job)
-- [`glab-label`](./glab-label)
-- [`glab-mcp`](./glab-mcp)
-- [`glab-milestone`](./glab-milestone)
-- [`glab-mr`](./glab-mr)
-- [`glab-opentofu`](./glab-opentofu)
-- [`glab-release`](./glab-release)
-- [`glab-repo`](./glab-repo)
-- [`glab-schedule`](./glab-schedule)
-- [`glab-securefile`](./glab-securefile)
-- [`glab-snippet`](./glab-snippet)
-- [`glab-ssh-key`](./glab-ssh-key)
-- [`glab-stack`](./glab-stack)
-- [`glab-token`](./glab-token)
-- [`glab-todo`](./glab-todo)
-- [`glab-user`](./glab-user)
-- [`glab-variable`](./glab-variable)
-- [`glab-version`](./glab-version)
-
-## Installation
-
-### OpenClaw / Agent Skills
+The parent also owns basic diagnostics:
 
 ```bash
-npx skills add vince-winkintel/gitlab-cli-skills
+glab --help
+glab <command> --help
+glab version
+glab check-update
 ```
 
-### Claude.ai (Organization Skills)
+The installed command help is authoritative. Some nested references describe API-backed or version-dependent GitLab domains; verify the active `glab` surface before use and route missing groups through [`glab-api/SKILL.md`](glab-api/SKILL.md).
 
-Claude.ai requires a zip containing exactly one `SKILL.md`. Download the pre-built `claude-skill.zip` from the [latest release](https://github.com/vince-winkintel/gitlab-cli-skills/releases/latest) and upload it in your organization's **Settings → Custom Skills**.
+## Requirements
 
-The zip contains a single merged `SKILL.md` combining all 37+ sub-skills into one comprehensive glab reference.
+- GitLab CLI (`glab`)
+- Authentication from `glab auth login` or an explicitly selected token environment
 
-**Build it yourself:**
-
-```bash
-bash scripts/build-claude-skill.sh
-# Output: ./claude-skill.zip
-```
-
-## Usage
-
-Skills are automatically activated when relevant tasks are detected. Example prompts:
-
-- "Log into GitLab CLI"
-- "Check glab auth status"
-- "Configure GitLab Docker auth"
-
-## Prerequisites
-
-- GitLab CLI installed (`glab`)
-- GitLab access token or browser auth
-
-## Install glab (Homebrew)
-
-```bash
-brew install glab
-```
-
-## License
-
-MIT
-
-## Download History
-
-[![Download History](https://skill-history.com/chart/vince-winkintel/gitlab-cli-skills.svg)](https://skill-history.com/vince-winkintel/gitlab-cli-skills)
+See the parent skill for identity pre-flight and write-safety requirements.

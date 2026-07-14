@@ -390,8 +390,10 @@ process.exit(1);
 
         const resultText =
           toolEnd.result?.content?.find((c: any) => c.type === "text")?.text ?? "";
-        if (!resultText.toLowerCase().includes("error"))
-          return `Expected error in result, got: ${resultText}`;
+        if (toolEnd.isError !== true)
+          return `Expected isError=true, got: ${JSON.stringify(toolEnd)}`;
+        if (!resultText.includes("emacs_eval failed") || !resultText.includes("can't find socket"))
+          return `Expected useful thrown diagnostic, got: ${resultText}`;
 
         return true;
       } finally {

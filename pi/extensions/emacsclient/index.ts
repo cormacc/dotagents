@@ -25,6 +25,10 @@ import { emacsEval, ensureEmacsServer } from "./emacsclient.ts";
 import type { EmacsclientOptions } from "./emacsclient.ts";
 import { focusWindow } from "../lib/wm.ts";
 
+function failTool(tool: string, error: string | undefined): never {
+  throw new Error(`${tool} failed: ${error || "unknown Emacs error"}`);
+}
+
 export default function (pi: ExtensionAPI) {
   // ------------------------------------------------------------------
   // Event: emacs:open — open a file in Emacs at a specific position
@@ -161,13 +165,7 @@ export default function (pi: ExtensionAPI) {
       const elisp = buildEvalElisp(params.expression);
       const result = await emacsEval(elisp, getOptions(signal));
 
-      if (!result.success) {
-        return {
-          content: [{ type: "text", text: `Error: ${result.error}` }],
-          details: { error: result.error },
-          isError: true,
-        };
-      }
+      if (!result.success) failTool("emacs_eval", result.error);
 
       const text =
         typeof result.data === "string"
@@ -223,13 +221,7 @@ export default function (pi: ExtensionAPI) {
       );
       const result = await emacsEval(elisp, getOptions(signal));
 
-      if (!result.success) {
-        return {
-          content: [{ type: "text", text: `Error: ${result.error}` }],
-          details: { error: result.error },
-          isError: true,
-        };
-      }
+      if (!result.success) failTool("emacs_ts_query", result.error);
 
       const results = result.data as string[];
       const text = JSON.stringify({ results, count: results.length }, null, 2);
@@ -338,13 +330,7 @@ export default function (pi: ExtensionAPI) {
       );
       const result = await emacsEval(elisp, getOptions(signal));
 
-      if (!result.success) {
-        return {
-          content: [{ type: "text", text: `Error: ${result.error}` }],
-          details: { error: result.error },
-          isError: true,
-        };
-      }
+      if (!result.success) failTool("emacs_read", result.error);
 
       const fullData = result.data as Record<string, unknown>;
 
@@ -480,13 +466,7 @@ export default function (pi: ExtensionAPI) {
       );
       const result = await emacsEval(elisp, getOptions(signal));
 
-      if (!result.success) {
-        return {
-          content: [{ type: "text", text: `Error: ${result.error}` }],
-          details: { error: result.error },
-          isError: true,
-        };
-      }
+      if (!result.success) failTool("emacs_write", result.error);
 
       const fullData = result.data as Record<string, unknown>;
 

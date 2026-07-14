@@ -26,31 +26,6 @@ import {
   colorStatus,
   colorTags,
 } from "./status-colors.ts";
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-
-/**
- * [DEBUG] Read the shared `leader-menu.json` `debug` flag so this
- * overlay can be toggled in lock-step with the modal editor's
- * per-keypress logger. The flag lives with leader-menu because it's
- * about *key dispatch* (not modal editing); both vim-mode and this
- * overlay are co-consumers. Failures are silently treated as "off".
- * (Pre-refactor this file lived at `keybindings-ext.json`, then
- * briefly at `vim-mode.json`; the `leader-menu` extension migrates
- * legacy files on first run.)
- */
-function loadKeybindingsDebugFlag(): boolean {
-  try {
-    const path = join(homedir(), ".pi", "agent", "leader-menu.json");
-    if (!existsSync(path)) return false;
-    const parsed = JSON.parse(readFileSync(path, "utf-8"));
-    return !!parsed?.debug;
-  } catch {
-    return false;
-  }
-}
-
 /** A flattened row for display & navigation. */
 interface FlatRow {
   task: Task;
@@ -78,10 +53,6 @@ export class TasksOverlay {
   private statusUpdateInFlight = false;
 
   private collapsedSet = new WeakSet<Task>();
-
-  /** [DEBUG] Mirrors keybindings extension's `debugEnabled` — see
-   *  loadKeybindingsDebugFlag above. Read once at construction time. */
-  private debugEnabled: boolean = loadKeybindingsDebugFlag();
 
   /** Cache of `#+LINK:` declarations per source-file content. Reset on `refreshTasks`. */
   private linkTemplateCache = new Map<string, ReturnType<typeof parseLinkTemplates>>();
@@ -276,44 +247,11 @@ export class TasksOverlay {
 
   // ── Input ───────────────────────────────────────────────────────────
 
-  /** [DEBUG] Render a key-press as "raw" + hex + length (+ matched action)
-   *  and notify. Mirrors keybindings/index.ts `debugLogKey`, prefixed so the
-   *  two streams are easy to tell apart. `action` is the label returned by
-   *  `dispatchInput` — "unhandled" when no branch consumed the key. */
-  private debugLogKey(data: string, action: string): void {
-    if (!this.debugEnabled) return;
-    const escaped = data
-      .split("")
-      .map((ch) => {
-        const code = ch.charCodeAt(0);
-        if (ch === "\x1b") return "\\e";
-        if (ch === "\r") return "\\r";
-        if (ch === "\n") return "\\n";
-        if (ch === "\t") return "\\t";
-        if (ch === "\\") return "\\\\";
-        if (code < 0x20 || code === 0x7f)
-          return `\\x${code.toString(16).padStart(2, "0")}`;
-        return ch;
-      })
-      .join("");
-    const hex = Array.from(data)
-      .map((ch) => ch.charCodeAt(0).toString(16).padStart(2, "0"))
-      .join(" ");
-    this.onNotify?.(
-      `tasks-overlay: "${escaped}" [${hex}] len=${data.length} → ${action}`,
-      "info",
-    );
-  }
-
   handleInput(data: string): void {
-    const action = this.dispatchInput(data);
-    this.debugLogKey(data, action);
+    this.dispatchInput(data);
   }
 
-  /** Dispatch a key press to the appropriate handler. Returns a short label
-   *  describing the action consumed (or "unhandled"). The label exists
-   *  purely for the debug logger — callers other than `handleInput` should
-   *  not depend on its exact wording. */
+  /** Dispatch a key press to the appropriate handler. */
   private dispatchInput(data: string): string {
     // Close on Escape, or on the same shortcut that opened the overlay
     // (`alt+t`) so the activation key acts as a toggle.

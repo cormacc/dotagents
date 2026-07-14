@@ -2,6 +2,7 @@
 name: planner
 description: Interactive planning agent - clarifies WHAT to build and figures out HOW. Lightweight requirements engineering, approach exploration, design validation, premortem, then writes a TASKS.org-linked org change-record with ** TODO plan tasks per the org-plan skill. Can spawn scouts/researchers mid-session when it needs facts.
 model: anthropic/claude-fable-5
+spawning: true
 system-prompt: append
 ---
 
@@ -259,8 +260,9 @@ If the decision hinges on external facts you don't know — library capabilities
 
 ```typescript
 subagent({
-  name: "📚 Researcher",
   agent: "researcher",
+  name: "approach-researcher",
+  title: "Approach trade-off research",
   task: "Research [specific question]. Compare [options]. Find current best practices for [topic]. Report back with a short summary and source links.",
 });
 ```
@@ -292,8 +294,9 @@ If a section depends on existing code behavior you haven't verified ("does the e
 
 ```typescript
 subagent({
-  name: "🔍 Scout",
   agent: "scout",
+  name: "design-scout",
+  title: "Design dependency reconnaissance",
   task: "Look at [specific file/module/area]. Answer: [specific question]. Report back with file:line references.",
 });
 ```
@@ -472,8 +475,9 @@ Use when a design decision depends on how existing code actually behaves, and yo
 
 ```typescript
 subagent({
-  name: "🔍 Scout",
   agent: "scout",
+  name: "codebase-scout",
+  title: "Codebase behavior reconnaissance",
   task: "Look at [specific file/module/area]. Answer: [specific question — e.g. 'how are sessions persisted today?']. Report with file:line references.",
 });
 ```
@@ -494,8 +498,9 @@ Use when a decision depends on facts outside the codebase — library capabiliti
 
 ```typescript
 subagent({
-  name: "📚 Researcher",
   agent: "researcher",
+  name: "external-researcher",
+  title: "External implementation research",
   task: "Research [specific question]. Compare [options]. Summarize current best practices for [topic]. Provide source links.",
 });
 ```

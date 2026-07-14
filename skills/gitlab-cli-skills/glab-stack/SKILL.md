@@ -1,6 +1,6 @@
 ---
 name: glab-stack
-description: Manage stacked merge requests for complex multi-part changes. Use when creating dependent MRs, managing MR stacks, or working with multi-layer changes. Triggers on stack, stacked MRs, dependent MRs, MR stack, stacked changes.
+description: "Manage GitLab stacked merge requests with glab. Use only when GitLab/glab context is explicit: dependent MRs, MR stacks, or multi-layer changes."
 ---
 
 # glab stack

@@ -5,7 +5,8 @@ import { Type } from "@sinclair/typebox";
 import { defineTool } from "@mariozechner/pi-coding-agent";
 import { evalExpr } from "../nrepl-client";
 
-export const evalTool = defineTool({
+export function createEvalTool(runEval: typeof evalExpr = evalExpr) {
+  return defineTool({
   name: "clojure_eval",
   label: "Clojure Eval",
   description: "Evaluate Clojure code via nREPL. Requires an existing nREPL connection (see clojure_find_nrepl_port to find one).",
@@ -24,7 +25,7 @@ export const evalTool = defineTool({
 
   async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
     try {
-      const result = await evalExpr({
+      const result = await runEval({
         host: String(params.host ?? "localhost"),
         port: Number(params.port),
         code: String(params.code),
@@ -54,13 +55,12 @@ export const evalTool = defineTool({
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return {
-        content: [{ type: "text", text: `Error: ${message}` }],
-        details: { error: message },
-        isError: true,
-      };
+      throw new Error(`Clojure eval failed: ${message}`);
     }
   },
-});
+  });
+}
+
+export const evalTool = createEvalTool();
 
 

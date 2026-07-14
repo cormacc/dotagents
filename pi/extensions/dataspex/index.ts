@@ -1,3 +1,4 @@
+import { StringEnum } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -141,14 +142,6 @@ function success(text: string, target: DataspexTarget, extra: Record<string, unk
   return {
     content: [{ type: "text" as const, text }],
     details: { ...extra, host: target.host, port: target.port, buildId: target.buildId, bytes: byteLength(text) },
-  };
-}
-
-function errorResult(message: string, extra: Record<string, unknown> = {}) {
-  return {
-    content: [{ type: "text" as const, text: `Error: ${message}` }],
-    details: { ...extra, error: message },
-    isError: true,
   };
 }
 
@@ -309,7 +302,7 @@ const targetParams = {
   host: Type.Optional(Type.String({ description: "nREPL host", default: "localhost" })),
 };
 
-const opSchema = Type.Union(OP_VALUES.map((op) => Type.Literal(op)));
+const opSchema = StringEnum(OP_VALUES);
 
 export default function (pi: ExtensionAPI) {
   pi.registerTool(defineTool({
@@ -390,7 +383,8 @@ export default function (pi: ExtensionAPI) {
         const target = await resolveTarget(params, ctx.cwd);
         return await run(target);
       } catch (e) {
-        return errorResult(e instanceof Error ? e.message : String(e));
+        const message = e instanceof Error ? e.message : String(e);
+        throw new Error(`Dataspex failed: ${message}`);
       }
     },
   }));

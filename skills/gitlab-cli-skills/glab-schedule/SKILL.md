@@ -1,6 +1,6 @@
 ---
 name: glab-schedule
-description: Manage CI/CD pipeline schedules including create, list, update, delete, and run scheduled pipelines. Use when automating pipelines, setting up cron jobs, or managing scheduled builds. Triggers on schedule, scheduled pipeline, cron, pipeline schedule, automated build.
+description: "Manage GitLab CI/CD pipeline schedules with glab. Use only when GitLab/glab context is explicit: create, list, update, delete, or run scheduled pipelines."
 ---
 
 # glab schedule

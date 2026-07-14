@@ -8,9 +8,7 @@
       "command": "context-mode"
     },
     "context7": {
-      "type": "remote",
-      "url": "https://mcp.context7.com/mcp/oauth",
-      "enabled": true
+      "url": "https://mcp.context7.com/mcp/oauth"
     },
     "searxng": {
       "command": "npx",

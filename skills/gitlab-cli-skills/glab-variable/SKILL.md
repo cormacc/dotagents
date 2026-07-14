@@ -1,6 +1,6 @@
 ---
 name: glab-variable
-description: Manage CI/CD variables at project and group level including create, update, list, and delete operations. Use when setting environment variables for pipelines, managing secrets, or configuring CI/CD variables. Triggers on variable, CI variable, environment variable, secrets, CI/CD config.
+description: "Manage GitLab CI/CD variables with glab at project or group scope. Use only when GitLab/glab context is explicit: create, update, list, or delete pipeline variables."
 ---
 
 # glab variable

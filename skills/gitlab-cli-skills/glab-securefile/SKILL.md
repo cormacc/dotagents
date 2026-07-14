@@ -1,6 +1,6 @@
 ---
 name: glab-securefile
-description: Manage secure files for CI/CD including upload, download, list, and delete operations. Use when storing sensitive files for pipelines, managing certificates, or handling secure configuration files. Triggers on secure file, CI secrets, certificates, secure config.
+description: "Manage GitLab CI/CD secure files with glab. Use only when GitLab/glab context is explicit: upload, download, list, or delete pipeline secure files."
 ---
 
 # glab securefile
