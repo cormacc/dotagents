@@ -223,7 +223,6 @@ export function buildContext(extName: string, ext: ExtSourceResult): string {
   const marker = "\n[Extension context truncated at aggregate input ceiling]\n";
   return truncateUtf8(content, AGGREGATE_LIMIT_BYTES - Buffer.byteLength(marker, "utf8")) + marker;
 }
-}
 
 export default function (pi: ExtensionAPI) {
   const agentDir = getAgentDir();
