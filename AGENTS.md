@@ -14,5 +14,6 @@
 - Use `rg` for file and content searches.
 
 # Temporary files
-Use `$PROJECT_ROOT/.agents/tmp/` for scripts, data or temporary files for experiments,
-exploration, testing, answering questions, or other ad-hoc tasks.
+Resolve the repository root with `git rev-parse --show-toplevel`, then use
+`<repository-root>/.agents/tmp/` for scripts, data, experiments, testing, and other
+ad-hoc work. Do not assume `$PROJECT_ROOT` is defined.

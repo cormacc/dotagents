@@ -7,7 +7,7 @@ description: "Org-mode task memory for TASKS.org and the `ot` CLI/TUI — owns t
 
 Use this skill when the user asks to work from, update, resume, diagnose, or review project tasks. The canonical project memory index is `TASKS.org` in the project root. A task may link to a change-record via `#+IMPORT:`; the change-record section contract belongs to `org-plan` (`../org-plan/SKILL.md`).
 
-The durable protocol engine is the Babashka CLI `ot` under `skills/org-tasks/scripts/`. Prefer `ot` (or pi tools that wrap it, such as `tasks_insert_task`, `org_read_section`, and `tasks_scan_summaries`) over hand-editing whenever you create, inspect, select, transition, archive, publish/unpublish, scan, diagnose, manage blockers/handoffs/linked issues, or scaffold change-records. Read `references/ot-cli.md` for CLI details and `scripts/docs/contract.md` for machine-output schemas.
+The durable, harness-independent protocol engine is the Babashka CLI `ot` under `skills/org-tasks/scripts/`. Use `ot` over hand-editing whenever you create, inspect, select, transition, archive, publish/unpublish, scan, diagnose, manage blockers/handoffs/linked issues, or scaffold change-records. A harness may expose optional wrappers around these operations; use one only when it appears in the current tool list, and never make the workflow depend on it. Read `references/ot-cli.md` for CLI details and `scripts/docs/contract.md` for machine-output schemas.
 
 ## Locating task memory
 
@@ -73,7 +73,7 @@ Install and local development: `scripts/README.md`.
 ## Creating, selecting, and updating tasks
 
 - Use the smallest useful task granularity: each task should describe a concrete outcome that can become `DONE`.
-- Prefer `ot create` / `tasks_insert_task` for new top-level tasks so IDs, timestamps, drawers, linked-issue duplicate checks, and section insertion stay deterministic.
+- Prefer guaranteed `ot create` for new top-level tasks so IDs, timestamps, drawers, linked-issue duplicate checks, and section insertion stay deterministic. An available harness wrapper may delegate to the same command but is optional.
 - Keep `TASKS.org` high-level. Put detailed checklists, implementation history, and acceptance criteria in linked change-records.
 - Add discovered work as new `TODO` tasks rather than burying it in prose.
 - Select local active work with `ot select <id>` or clear with `ot select --clear`.

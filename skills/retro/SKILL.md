@@ -3,128 +3,86 @@ name: retro
 description: End-of-session retrospective. Reviews the conversation for corrections, friction, and wasted effort, then proposes durable improvements to skills and rules. Use at end of sessions or when user says "retro", "what did we learn", "session retro", "end of session". PROACTIVE - if the conversation has repeated corrections or mounting friction, suggest running /retro and restarting the session.
 ---
 
-# Session Retrospective
+# Session retrospective
 
-Review the full conversation to find moments where the user corrected or redirected the AI. Turn correction signals into durable system improvements.
+Review the session for repeatable correction signals and turn them into durable improvements in the current AGENTS/skills/task-memory hierarchy.
 
-The goal: **make AI collaboration compound over time**. Every retro should leave the system better for the next session. We are not just building software — we are building the machine that builds the software.
+## Threshold
 
-## Threshold Check
+If the session had fewer than roughly five substantive exchanges, say that it is unlikely to contain durable lessons and skip unless the user insists.
 
-Before starting, assess the session. If it was a quick task (under ~5 substantive exchanges), say so and skip the retro unless the user insists. Not every session has lessons worth extracting.
+## 1. Detect signals
 
-## Phase 1: Detect Correction Signals
+Prioritize:
 
-Read the entire conversation. Look for these signal types, ordered by value:
+1. **Explicit correction** — “that is wrong”, repeated instructions, reverted work, “use X not Y”.
+2. **Tool/API failure** — wrong command, flag, schema, field, path, or operation order. Record both the failed and verified invocation.
+3. **Repeated friction** — avoidable back-and-forth, manual workaround, or undocumented convention.
+4. **Validated approach** — an explicitly approved pattern that contradicts or fills a gap in current guidance.
 
-**HIGH confidence** — explicit corrections:
-- "No", "that's wrong", "I said...", "don't do that", "not like that"
-- User repeating an instruction the AI missed or ignored
-- User undoing or reverting something the AI did
-- "Use X not Y", "always do X", "never do Y"
+Skip typos, one-off misunderstandings, taste, and behavior already covered by an effective rule.
 
-**MEDIUM confidence** — approved approaches:
-- "Perfect", "exactly", "that's right", "yes, like that"
-- Approaches the user explicitly validated (worth noting if they contradict a current rule or reveal an undocumented preference)
+## 2. Classify
 
-**LOW confidence** — observed patterns:
-- Workarounds (user doing something manually the AI should have done)
-- Wasted effort (AI went down a wrong path before being corrected)
-- Friction points (things that took more back-and-forth than necessary)
+| Category | Treatment |
+|---|---|
+| Behavioral | Candidate instruction change |
+| Guardrail | Candidate hard rule with verified replacement |
+| Tech debt | TODO/backlog, not an immediate rule |
+| Backlog | TODO/backlog, not an immediate rule |
 
-**TOOL ERRORS** — failed tool calls:
-- CLI commands with wrong subcommands, flags, or argument names
-- API/MCP tool calls with wrong parameter names or shapes
-- Tools called in the wrong order (missing required predecessor)
-- Repeated failures where the AI retried the same broken call instead of fixing it
-- For each error: note the wrong invocation AND the correct one
+Tool/API failures are normally guardrails. Only behavioral and guardrail findings are candidates for direct instruction edits.
 
-Skip one-off misunderstandings, simple typos, and things that are already documented in existing rules.
+## 3. Choose the narrowest owner
 
-## Phase 2: Classify Improvements
+Resolve symlinks and inspect the current hierarchy before proposing a destination:
 
-For each signal worth capturing, determine the category (from Robert Sahlin's AI Retrospective framework):
+| Scope | Destination |
+|---|---|
+| One skill workflow | That skill's `SKILL.md` or its reference file |
+| One project | Project-root `AGENTS.md` |
+| Agent behavior shared by this dotagents setup | dotagents `AGENTS.md` or the owning skill |
+| Executable/non-trivial change | `TASKS.org` under `* Agent feedback` via `ot` |
+| Cross-project installation/Nix behavior | Owning dotfiles repository task memory |
 
-| Category | Description | Example |
-|----------|-------------|---------|
-| **Behavioural** | How the AI should work differently | "Ask one question at a time, don't batch" |
-| **Guardrail** | Hard rule to prevent a specific failure | "Never use `gog drive list` — the command is `ls`" |
-| **Tech debt** | Shortcut taken that should be fixed later | "Hardcoded path needs extracting to config" |
-| **Backlog** | Good idea that emerged but wasn't the current task | "Could automate X workflow as a skill" |
+Do not invent Claude-specific `/rules`, `/skill`, `.claude/rules`, or `CLAUDE.md` destinations unless the current repository actually declares them as canonical. Read the target `AGENTS.md` and relevant skill before proposing edits.
 
-Tool errors are almost always **Guardrail** items — they produce a concrete "use X not Y" rule. Only Behavioural and Guardrail items get written to rules/skills. Tech debt and Backlog items are reported for the user to action separately.
+Use [`self-improvement`](../self-improvement/SKILL.md) for tier routing and persistence. Its tight-loop exception applies only to an obvious, user-approved, current-repository documentation clarification; all executable, cross-project, uncertain, or multi-file work becomes a TODO through the guaranteed `ot` CLI.
 
-## Phase 3: Map to Destinations
+## 4. Present findings
 
-For each Behavioural or Guardrail item, determine where it belongs. Load `/rules` for the full memory hierarchy. Summary:
+Present one review table:
 
-| Pattern | Destination |
-|---------|-------------|
-| Applies to a specific skill | That skill's SKILL.md (load `/skill` for format reference) |
-| Applies to certain file types only | `.claude/rules/*.md` with `paths:` frontmatter |
-| Applies to one project | Project CLAUDE.md |
-| Applies universally | Global `~/.claude/CLAUDE.md` |
-| Personal override for shared project | `CLAUDE.local.md` |
+| # | Signal | Category | Proposed reusable rule/outcome | Destination |
+|---|---|---|---|---|
 
-**Specificity rule**: always store in the most specific location that applies. A lesson about the capture skill goes in `capture/SKILL.md`, not in global CLAUDE.md.
+Synthesize; never store user input verbatim. State the underlying reusable construct, not merely the surface phrase. Include only findings worth keeping.
 
-## Phase 4: Present Findings
+Wait for user approval before editing or filing tasks. The user may reject, rewrite, or reclassify each item.
 
-Present all findings in a single table for review:
-
-| # | Signal | Category | Proposed rule | Destination |
-|---|--------|----------|--------------|-------------|
-| 1 | AI used `list` instead of `ls` for gog drive | Guardrail | `gog drive` subcommand is `ls` not `list` | Global CLAUDE.md |
-| 2 | Capture skill added unwanted analysis | Behavioural | Don't expand on ideas unless explicitly asked | capture/SKILL.md |
-| 3 | Should extract auth helper to shared util | Tech debt | _(report only)_ | — |
-
-**Golden rule: NEVER store user input verbatim. ALWAYS synthesise into an actionable, reusable rule.** Write the instruction the AI needs to follow, not a narrative of what happened.
-
-**Depth rule: describe the underlying construct, not just surface examples.** Surface-level examples (e.g. "don't write 'Not X, but Y'") are easy to pattern-match around with minor rephrasing. Name the deeper grammatical or structural construct (e.g. "appositive negation: defining something by what it is not before stating what it is"). This makes the rule robust against novel phrasings of the same anti-pattern.
-
-Bad: "User said to use gpt-5.1 for reasoning"
-Good: "For reasoning tasks, use gpt-5.1 model"
-
-Bad: "Chris got frustrated when I batched questions"
-Good: "Ask questions ONE AT A TIME — wait for each response before asking the next"
-
-Bad: "Don't write 'Not a curated demo, but the full picture'"
-Good: "Avoid appositive negation — defining something by what it is not before stating what it is. Just state what it IS."
-
-Wait for user approval before proceeding. The user may reject, modify, or re-categorise items.
-
-## Phase 5: Apply Approved Changes
+## 5. Apply approved changes
 
 For each approved item:
 
-1. Read the target file
-2. Check the proposed rule doesn't already exist (in this file or a higher-priority location)
-3. Find the right section or create one
-4. Write the rule — concise, imperative, no narrative
-5. Check file size: CLAUDE.md under 300 lines (500 ceiling), skills under 500 lines
-6. If a file would exceed limits, flag it and suggest reorganisation (extract to rules/, split to skill, etc.)
+1. Read the target and parent instructions.
+2. Check for duplication or contradiction.
+3. For an eligible tight-loop documentation fix, make the smallest approved edit.
+4. Otherwise create or deduplicate an `Agent feedback` task using `self-improvement` and `ot`.
+5. Keep `AGENTS.md` concise and skill bodies under roughly 500 lines; move detailed material to references when needed.
 
-## Phase 6: Verify
+Do not commit unless the user requested a commit or the active task protocol explicitly includes it.
 
-After all changes:
-- Read each modified file to confirm no duplication or contradiction was introduced
-- Report a summary of what was updated and where
+## 6. Verify
 
-## What NOT to Capture
+- Re-read each modified instruction file.
+- Run `ot show <id>` for each created task.
+- Confirm no duplicate or contradictory guidance was introduced.
+- Report changed paths, task UUIDs, and intentionally deferred tech debt/backlog.
 
-- Things that already worked (no rule needed for correct behaviour)
-- Session-specific facts ("user was working on newsletter today")
-- Speculative improvements not backed by actual friction in THIS conversation
-- Anything that duplicates existing instructions
-- One-time fixes or typo corrections
-- Generic best practices the AI should already know
+## What not to capture
 
-## Integration
-
-This skill references:
-- **`/rules`** — for the memory hierarchy, size guidelines, audit process, and anti-patterns
-- **`/skill`** — for skill file format, frontmatter fields, and editing conventions
-- **`self-improvement`** — sibling skill for *mid-session* capture of
-  durable friction into TODO work items. Use `retro` at end of session
-  for synthesis into rule changes; use `self-improvement` when something
-  comes up and the user wants to keep moving.
+- Correct behavior that needs no rule.
+- Session-specific facts.
+- Speculative improvements unsupported by observed friction.
+- Generic best practices.
+- One-time fixes.

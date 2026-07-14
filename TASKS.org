@@ -191,13 +191,15 @@ Repro: `ot status 1022e091 DONE` fails with `unknown-task ... :id 1.022E94`. bab
 
 * Housekeeping
 
-** TODO [#A] Housekeeping - 2026-07-14
+** STARTED [#A] Housekeeping - 2026-07-14
 :PROPERTIES:
 :CUSTOM_ID: 592be2f8-c646-416a-8b39-74266bef675a
 :CREATED: [2026-07-14 Tue 23:37]
+:STARTED: [2026-07-14 Tue 23:58]
 :END:
 :LOGBOOK:
 - Created [2026-07-14 Tue 23:37]
+- State "STARTED" from "TODO" [2026-07-14 Tue 23:58]
 :END:
 #+IMPORT: [[plan:2026-07-14-housekeeping.org]]
 Resolve the repository review findings across documentation, agent definitions, extensions, skills, configuration, dependency reproducibility, and validation.

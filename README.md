@@ -1,201 +1,139 @@
 # dotagents
 
-Agent skills and pi extensions for [pi-coding-agent][pi], Claude Code,
-OpenAI Codex, and any other tool that honours the [Agent Skills][skills]
-specification. The repo is a monorepo: it ships generic
-harness-agnostic skills, pi-specific skills and extensions, prompt
-templates, and Nix/pi packaging metadata, all editable in place.
+Agent skills, pi extensions, prompts, custom subagents, and packaging metadata used by multiple coding harnesses. The repository is both an editable source tree and the source of the narrower **`@cormacc/agent-org-memory`** pi package.
 
-The flagship bundle is **`@cormacc/agent-org-memory`** — the org-mode
-task-memory protocol (`org-tasks`, `org-plan`, `org-jira`) plus the pi
-extensions that implement it (`tasks`, `jira`, `emacsclient`).
-Future bundles (e.g. a Clojure-development skill family) will be added
-alongside it as separate manifests.
+The package bundle contains the org-mode task-memory protocol (`org-tasks`, `org-plan`, `org-jira`) and its pi implementations (`tasks`, `jira`, `emacsclient`). Everything else remains available through the source/submodule routes described below, not through that package slice.
 
 ## Repository layout
 
-```
+```text
 dotagents/
-├── README.md            # this file
-├── AGENTS.md            # pi-side agent instructions (lands at ~/.pi/agent/AGENTS.md)
-├── LICENSE              # MIT
-├── package.json         # @cormacc/agent-org-memory pi-package manifest
-├── agent-org-memory.nix # Nix derivation for the org-memory slice
-├── flake.nix            # exposes packages.<system>.agent-org-memory
-├── prompts/             # prompt templates (init.md, system/*.md)
-├── emacs/               # lightweight Emacs companions for protocol skills (e.g. tasks-org)
-├── skills/              # generic harness-agnostic skills (Vercel-Labs-skills compatible)
-│   ├── org-tasks/       # task-memory protocol
-│   ├── org-plan/        # change-record structure
-│   ├── org-jira/        # Jira-on-org-tasks layer
-│   └── …                # other generic skills (clojure, review, self-improvement, …)
+├── AGENTS.md                 # pi-side operating instructions
+├── README.md
+├── TASKS*.org                # repository task memory
+├── package.json              # agent-org-memory manifest + root checks
+├── package-lock.json         # root validation dependencies
+├── bb.edn / deps.edn         # ot Babashka/tools.deps policy
+├── skills/                   # generic cross-agent skills; ot lives under org-tasks/scripts
+├── prompts/init.md           # tracked prompt template
+├── emacs/                    # native org-mode protocol companion
+├── design/log/               # durable change-records
+├── mcp.json                  # tracked generic MCP server configuration
+├── dirge/                    # Dirge config and prompt set
 └── pi/
-    ├── skills/          # pi-specific skills (depend on pi extensions; install under ~/.pi/agent/skills)
-    └── extensions/      # loadable pi extensions
-        ├── tasks/       # org-memory packaged
-        ├── jira/        # org-memory packaged
-        ├── emacsclient/ # org-memory packaged
-        ├── lib/         # shared helpers (pi-utils.ts, editor.ts, wm.ts) — not a loadable extension
-        ├── disabled/    # retired / experimental extensions; excluded from all package outputs
-        └── …            # other active extensions (lsp, term, chromium, pi-clojure, …)
+    ├── agents/               # custom pi-subagents definitions
+    ├── settings.json         # owner-local editable-route pi settings
+    ├── skills/               # pi-only chromium and ext-dev skills
+    ├── extensions/           # active pi extensions
+    │   ├── tasks, jira, emacsclient
+    │   ├── chromium, dataspex, pi-clojure, lsp
+    │   ├── ext-dev.ts, herdr-agent-state.ts, question.ts, systemprompt.ts
+    │   └── lib/              # shared code, not an extension entry point
+    └── archive/              # inactive historical extensions/skills
 ```
 
-Two install destinations are deliberately preserved:
+`pi/archive/` is deliberately retained history. Pi does not discover it from the editable `~/.pi/agent/extensions`/`skills` links, and package manifests do not include it.
 
-- `~/.agents/skills/` — the cross-agent location defined by the
-  Agent Skills specification. Anything under `skills/` lands here.
-- `~/.pi/agent/{extensions,skills,prompts,AGENTS.md}` — pi's own
-  discovery locations. Pi-specific behaviour stays scoped here so
-  other agents do not accidentally try to load TypeScript modules
-  they cannot execute.
+## Installation routes
 
-## Install
+### Generic skills
 
-### As a pi package
-
-Pi loads the slice declared in `package.json`'s `pi` field — exactly
-the three extensions and three skills listed under
-`pi.extensions` / `pi.skills`. Other entries in this repo are
-*source*, not part of the pi package.
+Top-level directories under `skills/` follow the Agent Skills format and can be installed by a compatible loader, including the Vercel Labs CLI:
 
 ```bash
-# Directly from this repo
-pi install git:github.com/cormacc/dotagents
-
-# From a local checkout
-pi install /path/to/dotagents
-
-# From a published npm release (N.B. we have no such thing as yet)
-pi install npm:@cormacc/agent-org-memory
-```
-
-`pi install` writes the entry to `~/.pi/agent/settings.json` (or
-`.pi/settings.json` with `-l`) so missing packages reinstall on
-startup.
-
-The org-memory file protocol intentionally aligns with native org-mode features: lifecycle hints use `#+TODO:` bang/at markers plus `#+STARTUP: logdone logdrawer`, archives use `#+ARCHIVE:`, external issues and plan paths use org-native `#+LINK:` abbreviations, and task/change-record files share root preamble through `TASKS.setup.org`. The pi extension remains the standalone implementation for headless/TUI writes; Emacs produces the same shapes when used as an editor.
-
-### Via the flake
-
-The flake exposes `packages.<system>.agent-org-memory` for the four
-common systems (`x86_64-linux`, `aarch64-linux`, `x86_64-darwin`,
-`aarch64-darwin`):
-
-```nix
-{
-  inputs.dotagents = {
-    url = "github:cormacc/dotagents";
-    inputs.nixpkgs.follows = "nixpkgs";
-  };
-
-  outputs = { nixpkgs, dotagents, ... }:
-    let pkg = dotagents.packages.x86_64-linux.agent-org-memory;
-    in {
-      # …reference `pkg` from your Home Manager / NixOS / nix-darwin config.
-    };
-}
-```
-
-`nix flake check` builds the package on every supported system.
-
-### As an editable git submodule (recommended for the bundle author)
-
-Pi extensions and skills are designed to be edited and reloaded in
-place. Consume the repo as a submodule of your dotfiles checkout and
-point Home Manager symlinks at the submodule working tree:
-
-```bash
-cd ~/dotfiles
-git submodule add git@github.com:cormacc/dotagents agents
-git submodule update --init --recursive
-```
-
-Then in your Home Manager module:
-
-```nix
-"${piConfig}/extensions".source =
-  config.lib.file.mkOutOfStoreSymlink "${dotRoot}/agents/pi/extensions";
-"${agentsConfig}/skills".source =
-  config.lib.file.mkOutOfStoreSymlink "${dotRoot}/agents/skills";
-# …etc.
-```
-
-`mkOutOfStoreSymlink` resolves to the live submodule path rather than
-an immutable Nix store copy, so edits hot-reload (`/reload`) without a
-`home-manager switch`.
-
-### Generic skills via the Vercel Labs `skills` installer
-
-The harness-agnostic skills under `skills/` follow the
-[Agent Skills][skills] specification — each one is a directory with a
-`SKILL.md` whose YAML frontmatter declares a `name` and
-`description`. They are discoverable by the
-[Vercel Labs `skills` CLI][vercel-labs-skills]:
-
-```bash
-# List skills in this repo
 npx skills add cormacc/dotagents --list
-
-# Install all skills to your default agent
 npx skills add cormacc/dotagents
-
-# Install a specific skill into a specific agent
 npx skills add cormacc/dotagents --skill org-tasks --agent claude-code
-
-# Install everything globally
-npx skills add cormacc/dotagents --all -g
 ```
 
-Pi-specific skills under `pi/skills/` are intentionally *not* exposed
-through this installer — they assume pi extensions are present and
-should be installed via the pi-package or submodule routes above.
+`~/.agents/skills/` is a cross-agent convention used by this setup. Pi also discovers it. Pi-specific skills under `pi/skills/` assume matching pi extensions and are not part of the generic skill route.
 
-## What this repo deliberately does *not* ship
+### Org-memory pi package
 
-- **User settings.** `settings.json`, per-extension override files
-  (`tasks-ext.json`, `jira-ext.json`), prompt overrides, themes —
-  compose those in your own pi configuration.
-- **Disabled / experimental extensions.**
-  `pi/extensions/disabled/` is preserved as source/history for
-  retired experiments, but its contents are excluded from
-  `package.json`'s `pi.extensions` and `files`, the Nix package's
-  `lib.fileset` slice, and all flake outputs.
-- **Tests.** Co-located `*.test.ts` and `test.sh` files exist in the
-  source tree but are excluded from the package output.
+The root `package.json` exposes exactly three pi extensions and three skills:
 
-## Releasing
+- `pi/extensions/{tasks,jira,emacsclient}`
+- `skills/{org-tasks,org-plan,org-jira}`
 
-This repo is consumed both by `pi install` and by Nix flakes / git
-submodules. The release surfaces are tied to a single git tag:
+Install from git or a checkout:
 
 ```bash
-# From a clean working tree on `main`
-git tag -a v0.2.0 -m "agent-org-memory + foo extension"
-git push origin v0.2.0
+pi install git:github.com/cormacc/dotagents
+pi install /absolute/path/to/dotagents
 ```
 
-- **Pi consumers** pinned to `git:github.com/cormacc/dotagents` follow
-  `main` automatically; tags only matter when a consumer pins a
-  specific ref via `pi install git:github.com/cormacc/dotagents#v0.2.0`.
-- **Flake input consumers** that pin `inputs.dotagents.url =
-  "github:cormacc/dotagents/v0.2.0"` get a stable revision.
-- **Submodule consumers** (e.g. the upstream `cormacc/dotfiles` repo)
-  bump their submodule pointer with `git submodule update --remote`
-  and commit the new SHA. Tags help them choose a target commit but
-  aren't strictly required.
+The npm name is reserved but not currently published. The package route does **not** install custom agents, prompts, `pi/skills`, `pi/settings.json`, `mcp.json`, Dirge files, `ot` as a shell command, or unrelated extensions. Package-only users who need the CLI must install `ot` separately (for example through `bbin`) and must install any omitted extension/runtime explicitly.
 
-If you bump the manifest version (`package.json` `version`), keep the
-git tag and the manifest version aligned.
+The npm `files` allowlist includes the selected source directories. Pi loads only manifest-declared entry points. The Nix derivation applies an additional package-slice filter that removes co-located `*.test.ts`, `test.sh`, and `default.nix`; do not generalize that test-exclusion claim to every install route or every test asset.
+
+Pi records package installs in settings. Existing unpinned git checkouts advance when `pi update --extensions` or `pi update --all` runs; startup only reinstalls missing packages. A configured tag/commit remains pinned until the install spec is changed.
+
+### Nix package
+
+The flake exposes `packages.<system>.agent-org-memory` and matching checks for four declared systems. Build the package for the current system:
+
+```bash
+nix build .#agent-org-memory
+```
+
+Evaluate the current/native-system package check with project conventions:
+
+```bash
+nix flake check --impure --no-build
+```
+
+That command does not prove cross-system builds. Use an appropriate builder and explicit system selection for broader coverage.
+
+### Editable git submodule and Home Manager
+
+The owner's dotfiles checkout keeps this repository at `~/dotfiles/agents` and uses `mkOutOfStoreSymlink`, so edits remain live:
+
+```bash
+git -C ~/dotfiles submodule update --init --recursive
+```
+
+The consuming `agents.nix` links:
+
+- `skills/` → `~/.agents/skills`
+- `skills/org-tasks/scripts/ot` → `~/.local/bin/ot`
+- `AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, `pi/agents/`, and `pi/settings.json` → `~/.pi/agent/...`
+- `mcp.json` → `~/.config/mcp/mcp.json`
+
+Activation fails early when the submodule is uninitialized. It installs local npm dependencies for chromium, pi-clojure, and dataspex when their manifests change. Chromium and pi-clojure now carry exact direct versions plus tracked lockfiles; the root check exercises those locks with `npm ci`.
+
+This editable route intentionally preserves owner-local settings ownership: tracked `pi/settings.json` is live-linked and may be edited in the submodule. A clone-local clean filter installed by `install-git-filter.sh` removes configured volatile fields before commit. The package route, by contrast, ships no settings.
+
+Changes in out-of-store links take effect after pi `/reload`; no Home Manager switch is required unless the wiring itself changes.
 
 ## Runtime requirements
 
-- **pi-coding-agent** for the pi extensions. Declared as a peer
-  dependency; pi bundles the core packages itself.
-- **Emacs** with a running server (`M-x server-start`) for the
-  `emacsclient` extension's Elisp bridge. Used by `tasks` for
-  in-place edits to org files.
-- **Node 20+** (provided by pi's environment).
+- **Node.js >= 22.19.0**, matching the installed pi-compatible runtime floor.
+- **pi-coding-agent** for pi extensions and package management.
+- **Babashka (`bb`)** for `ot`; copying the scripts does not provide the runtime.
+- **Emacs/emacsclient** for Emacs-backed tools and task edit actions. Edit/open actions probe the server and can start `emacs --daemon`; direct eval/read/write tools still report connection/startup failures.
+- **Atlassian MCP** configured in `mcp.json` (or equivalent pi MCP configuration) for Jira network workflows.
+- Extension-local npm dependencies for chromium, pi-clojure, and dataspex on the editable route.
 
-[pi]: https://github.com/mariozechner/pi-coding-agent
-[skills]: https://agentskills.io/specification
-[vercel-labs-skills]: https://github.com/vercel-labs/skills
+## Validation
+
+Install declared validation dependencies and run the single root check:
+
+```bash
+npm run check
+```
+
+The command uses the tracked locks (`npm ci`), runs every active extension test runner, the Babashka task suite, installed-parser agent validation, skill metadata/inventory and GitLab routing checks, active relative-link and command/tool collision checks, clean skill-creator validation/packaging, and `nix flake check --impure --no-build` for the native system.
+
+It requires Node/npm, `bb`, Python 3 with venv support, Nix, Emacs, pi on `PATH`, network access for clean npm/Python dependency installs, and the installed `git:github.com/edxeth/pi-subagents` parser. Override parser source with `PI_SUBAGENTS_SOURCE=/path/to/src/agents/definitions.ts` when needed.
+
+For task-memory health after repository changes:
+
+```bash
+ot doctor --format json
+```
+
+## Releases
+
+Keep the manifest version and annotated git tag aligned. Git/package and flake consumers choose their own refs; editable submodule consumers update and commit the parent repository's submodule pointer. Do not push tags or submodule updates implicitly.
+
+[pi]: https://github.com/earendil-works/pi-mono

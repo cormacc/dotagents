@@ -1,17 +1,10 @@
-;; tools.deps project root for the dotagents Babashka projects.
-;;
-;; Today this exposes the `ot` (org-tasks) CLI living under
-;; skills/org-tasks/scripts/. New Babashka tools should add their
-;; src/ root to :paths so a single `deps.edn` and `bb.edn` cover
-;; the whole repo.
-;;
-;; bbin install io.github.cormacc/dotagents --as ot          # third parties
-;; bbin install <repo-root> --local/root <repo-root> --as ot # local dev
+;; tools.deps view of the same Babashka dependency policy as bb.edn.
+;; Keep coordinates and versions byte-for-byte aligned across both files;
+;; Maven releases are the single source policy (no duplicate git pins).
 {:paths ["skills/org-tasks/scripts/src"]
- :deps  {org.babashka/cli {:mvn/version "0.8.67"}
+ :deps  {org.babashka/cli {:mvn/version "0.12.75"}
          io.github.paintparty/bling {:mvn/version "0.10.0"}
-         io.github.TimoKramer/charm.clj {:git/tag "v0.2.71"
-                                         :git/sha "38e6823dc85ec932eefe2ad9c1f204307674c24f"}
-         io.github.cormacc/nexus {:git/sha "6e9bd241fd0750541104d77bfc7441d6657e4cb4"}}
+         de.timokramer/charm.clj {:mvn/version "0.2.71"}
+         no.cjohansen/nexus {:mvn/version "2026.06.4"}}
  :aliases
  {:test {:extra-paths ["skills/org-tasks/scripts/test"]}}}

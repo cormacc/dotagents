@@ -1,6 +1,8 @@
 ;; Babashka project config for the dotagents repository.
 ;;
 ;; - :paths / :deps drive both `bb` task execution and `bbin install`.
+;; - Maven coordinates/versions are intentionally identical to deps.edn; keep
+;;   both files aligned and do not introduce duplicate git pins.
 ;; - :bbin/bin advertises `ot` as the installable entry point. Third
 ;;   parties install via:
 ;;       bbin install io.github.cormacc/dotagents --as ot --latest-sha

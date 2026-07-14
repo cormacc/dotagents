@@ -1,6 +1,7 @@
 {
   "name": "@cormacc/agent-org-memory",
   "version": "0.1.0",
+  "type": "module",
   "description": "Org-memory task protocol skills (org-tasks, org-plan, org-jira) plus the pi extensions that implement them (tasks, jira, emacsclient).",
   "keywords": ["pi-package", "org-mode", "task-management", "agent-skills"],
   "license": "MIT",
@@ -25,10 +26,21 @@
       "./skills/org-jira"
     ]
   },
+  "scripts": {
+    "check": "bash scripts/check.sh",
+    "check:extensions": "bash scripts/check-extensions.sh",
+    "check:metadata": "tsx scripts/check-metadata.ts",
+    "check:links": "tsx scripts/check-links.ts",
+    "check:nix": "nix flake check --impure --no-build"
+  },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*",
     "@sinclair/typebox": "*"
+  },
+  "devDependencies": {
+    "tsx": "4.23.1",
+    "yaml": "2.9.0"
   },
   "files": [
     "pi/extensions/tasks",

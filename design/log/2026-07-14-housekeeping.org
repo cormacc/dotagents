@@ -122,10 +122,16 @@ The work converts the 2026-07-14 repository audit into a correctness-first clean
 
 * Plan
 
-** TODO [#A] Establish a reproducible validation baseline
+** DONE [#A] Establish a reproducible validation baseline
+CLOSED: [2026-07-15 Wed 00:30]
 :PROPERTIES:
 :CUSTOM_ID: b8df7b9f-30c5-4322-97ae-6b96b14de09c
 :CREATED: [2026-07-14 Tue 23:38]
+:STARTED: [2026-07-14 Tue 23:58]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-14 Tue 23:58]
+- State "DONE" from "STARTED" [2026-07-15 Wed 00:30]
 :END:
 Acceptance criteria:
 - A single documented root command runs active extension tests, Babashka tests, agent/skill metadata checks, relative-link checks, and native-system Nix evaluation.
@@ -135,10 +141,16 @@ Acceptance criteria:
 
 Use =package.json=, =bb.edn=, and current per-extension test runners as the integration surface.
 
-** TODO [#A] Repair custom subagent definitions
+** DONE [#A] Repair custom subagent definitions
+CLOSED: [2026-07-15 Wed 00:28]
 :PROPERTIES:
 :CUSTOM_ID: 271bf002-5a43-46de-9d32-f5600ec436b2
 :CREATED: [2026-07-14 Tue 23:38]
+:STARTED: [2026-07-15 Wed 00:01]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-15 Wed 00:01]
+- State "DONE" from "STARTED" [2026-07-15 Wed 00:28]
 :END:
 Acceptance criteria:
 - Planner enables spawning and every spawn example supplies valid =agent=, lower-kebab =name=, human =title=, and =task= fields.
@@ -149,10 +161,16 @@ Acceptance criteria:
 
 Verify fields against the installed pi-subagents parser before editing =pi/agents/*.md=.
 
-** TODO [#A] Correct extension failure and schema semantics
+** DONE [#A] Correct extension failure and schema semantics
+CLOSED: [2026-07-15 Wed 00:28]
 :PROPERTIES:
 :CUSTOM_ID: d825199b-89b0-4765-a62a-21b6890fce92
 :CREATED: [2026-07-14 Tue 23:38]
+:STARTED: [2026-07-15 Wed 00:02]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-15 Wed 00:02]
+- State "DONE" from "STARTED" [2026-07-15 Wed 00:28]
 :END:
 Acceptance criteria:
 - Dataspex, Jira, emacsclient, and pi-clojure throw on failed operations so pi records =isError: true=.
@@ -162,10 +180,16 @@ Acceptance criteria:
 
 Affected implementations are listed in the 2026-07-14 audit and should be checked against current pi extension documentation before modification.
 
-** TODO [#A] Bound extension-development context loading
+** DONE [#A] Bound extension-development context loading
+CLOSED: [2026-07-15 Wed 00:28]
 :PROPERTIES:
 :CUSTOM_ID: 5e5a88c9-9db3-4051-987c-1b5b0deac3c5
 :CREATED: [2026-07-14 Tue 23:38]
+:STARTED: [2026-07-15 Wed 00:06]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-15 Wed 00:06]
+- State "DONE" from "STARTED" [2026-07-15 Wed 00:28]
 :END:
 Acceptance criteria:
 - =/ext= defaults to production-relevant files and excludes tests/generated/vendor content unless explicitly requested.
@@ -175,10 +199,16 @@ Acceptance criteria:
 
 Preserve an explicit opt-in route for loading tests during extension debugging.
 
-** TODO [#A] Repair task-memory and improvement skills
+** DONE [#A] Repair task-memory and improvement skills
+CLOSED: [2026-07-15 Wed 00:28]
 :PROPERTIES:
 :CUSTOM_ID: 753317ec-d414-4d83-a545-7197b4fe077d
 :CREATED: [2026-07-14 Tue 23:38]
+:STARTED: [2026-07-15 Wed 00:07]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-15 Wed 00:07]
+- State "DONE" from "STARTED" [2026-07-15 Wed 00:28]
 :END:
 Acceptance criteria:
 - Self-improvement's direct-edit exception and TODO-first contract no longer contradict one another.
@@ -189,10 +219,16 @@ Acceptance criteria:
 
 Keep org-plan/org-tasks/org-jira layering intact; this task updates executable assumptions rather than merging those skills.
 
-** TODO [#B] Consolidate and correct the skill catalogue
+** DONE [#B] Consolidate and correct the skill catalogue
+CLOSED: [2026-07-15 Wed 00:28]
 :PROPERTIES:
 :CUSTOM_ID: bfd9953b-b10e-461b-be30-e5c740d88920
 :CREATED: [2026-07-14 Tue 23:38]
+:STARTED: [2026-07-15 Wed 00:10]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-15 Wed 00:10]
+- State "DONE" from "STARTED" [2026-07-15 Wed 00:28]
 :END:
 Acceptance criteria:
 - The GitLab parent names concrete relative paths and selection rules for every retained command group.
@@ -204,10 +240,16 @@ Acceptance criteria:
 
 Do not enable full-depth skill discovery as part of this task.
 
-** TODO [#B] Remove stale active surfaces and pin dependencies
+** DONE [#B] Remove stale active surfaces and pin dependencies
+CLOSED: [2026-07-15 Wed 00:28]
 :PROPERTIES:
 :CUSTOM_ID: 5cb1a073-9571-45c4-8d8d-911b8651fd9c
 :CREATED: [2026-07-14 Tue 23:38]
+:STARTED: [2026-07-15 Wed 00:13]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-15 Wed 00:13]
+- State "DONE" from "STARTED" [2026-07-15 Wed 00:28]
 :END:
 Acceptance criteria:
 - Removed quota configuration and unsupported MCP fields have no remaining active consumers.
@@ -219,7 +261,8 @@ Acceptance criteria:
 
 Run repository-wide reference checks before deleting source-controlled helpers.
 
-** TODO [#B] Refresh repository documentation from implemented behavior
+** DONE [#B] Refresh repository documentation from implemented behavior
+CLOSED: [2026-07-15 Wed 00:28]
 :PROPERTIES:
 :CUSTOM_ID: 24e3698e-c232-40b6-b41b-d59183153ef0
 :CREATED: [2026-07-14 Tue 23:38]
@@ -230,6 +273,11 @@ Run repository-wide reference checks before deleting source-controlled helpers.
 :BLOCKED-BY+: task:753317ec-d414-4d83-a545-7197b4fe077d
 :BLOCKED-BY+: task:bfd9953b-b10e-461b-be30-e5c740d88920
 :BLOCKED-BY+: task:5cb1a073-9571-45c4-8d8d-911b8651fd9c
+:STARTED: [2026-07-15 Wed 00:21]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-15 Wed 00:21]
+- State "DONE" from "STARTED" [2026-07-15 Wed 00:28]
 :END:
 Acceptance criteria:
 - README layout lists current prompts, agents, active extensions, archives, settings, MCP, Dirge, and =ot= surfaces without nonexistent paths.
@@ -242,7 +290,7 @@ Acceptance criteria:
 
 Treat source manifests, =agents.nix=, and current pi package documentation as evidence; do not preserve claims solely for compatibility with old prose.
 
-** TODO [#A] Run final audit and closeout validation
+** STARTED [#A] Run final audit and closeout validation
 :PROPERTIES:
 :CUSTOM_ID: ec3e7ca9-e2d6-48af-b52a-bb9ef482f60a
 :CREATED: [2026-07-14 Tue 23:38]
@@ -254,6 +302,10 @@ Treat source manifests, =agents.nix=, and current pi package documentation as ev
 :BLOCKED-BY+: task:bfd9953b-b10e-461b-be30-e5c740d88920
 :BLOCKED-BY+: task:5cb1a073-9571-45c4-8d8d-911b8651fd9c
 :BLOCKED-BY+: task:24e3698e-c232-40b6-b41b-d59183153ef0
+:STARTED: [2026-07-15 Wed 00:30]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-15 Wed 00:30]
 :END:
 Acceptance criteria:
 - Every item in =** Acceptance= and every anti-criterion is checked explicitly.

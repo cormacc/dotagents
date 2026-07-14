@@ -1,6 +1,7 @@
 ---
 name: skill-creator
 description: Create, edit, review, audit, or benchmark skills, including SKILL.md frontmatter/description tuning and diagnosing why a skill isn't triggering. Use for 'create a skill', 'review this skill', 'audit the SKILL.md', 'why isn't my skill loading', 'tune the description'.
+compatibility: Requires Python 3 and PyYAML 6.0.2 for bundled validation and packaging scripts.
 ---
 
 # Skill Creator
@@ -195,15 +196,34 @@ in [`references/description-optimiser.md`](references/description-optimiser.md).
   (e.g. `/tmp/<skill-name>/`) before editing; package from the copy.
   Preserve the original directory name and `name` frontmatter unchanged.
 
-## Packaging
+## Validation and packaging
 
-If the `present_files` tool is available:
+Resolve this skill's directory from the loaded `SKILL.md`; do not assume the current working directory. From a clean checkout, create an isolated environment and install the exact declared dependency:
 
 ```bash
-python -m scripts.package_skill <path/to/skill-folder>
+SKILL_CREATOR_DIR=/absolute/path/to/skills/skill-creator
+SKILL_CREATOR_VENV="${TMPDIR:-/tmp}/skill-creator-venv"
+python3 -m venv "$SKILL_CREATOR_VENV"
+"$SKILL_CREATOR_VENV/bin/python" -m pip install -r "$SKILL_CREATOR_DIR/requirements.txt"
 ```
 
-Direct the user to the resulting `.skill` file path so they can install it.
+Validate any skill with the script path, not a working-directory-sensitive module invocation:
+
+```bash
+"$SKILL_CREATOR_VENV/bin/python" \
+  "$SKILL_CREATOR_DIR/scripts/quick_validate.py" \
+  <path/to/skill-folder>
+```
+
+Package it the same way (the optional second argument selects an output directory):
+
+```bash
+"$SKILL_CREATOR_VENV/bin/python" \
+  "$SKILL_CREATOR_DIR/scripts/package_skill.py" \
+  <path/to/skill-folder> [output-directory]
+```
+
+The packager validates first and emits `<skill-name>.skill`. If `present_files` is available, present that artifact; otherwise report its path.
 
 ---
 

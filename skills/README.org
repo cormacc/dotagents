@@ -1,61 +1,27 @@
 #+TITLE: General-purpose agent skills
 
-These skills are symlinked into =~/.agents/skills/= by the consuming
-project's Home Manager module (or the Vercel Labs ~skills~ installer,
-or any Agent Skills compatible loader). They are available to every
-coding agent that honours that location (=pi=, =claude-code=, =codex=).
-For pi-only skills that depend on specific extensions, see
-[[file:../pi/skills/][../pi/skills/]].
+These top-level skills are symlinked into =~/.agents/skills/= by the editable Home Manager route, or installed by an Agent Skills-compatible loader. They are harness-agnostic unless their own compatibility field says otherwise. Pi-only skills that require pi extensions live under [[file:../pi/skills/][../pi/skills/]].
 
-The =org-tasks=, =org-plan=, and =org-jira= skills below are also
-shipped as part of the =agent-org-memory= pi package alongside the
-=tasks=, =jira=, and =emacsclient= extensions. See
-[[file:../README.md][../README.md]] for the package boundary, install routes (npm/git/Nix),
-and the editable-vs-packaged Home Manager modes.
+The =org-tasks=, =org-plan=, and =org-jira= skills are also the generic-skill slice shipped by the =@cormacc/agent-org-memory= pi package alongside the =tasks=, =jira=, and =emacsclient= extensions. See [[file:../README.md][../README.md]] for exact package boundaries and install routes.
+
+This inventory is mechanically checked by =npm run check:metadata=: every top-level =skills/*/SKILL.md= frontmatter name must appear exactly once below, and every listed file must exist.
 
 * Skills
 
 ** First-party
-I.e. self authored skills.
+- [[file:code-review/SKILL.md][code-review]] :: High-confidence diff/branch review protocol with severity, security, verification, and false-positive standards.
+- [[file:dataspex/SKILL.md][dataspex]] :: Runtime inspection of ClojureScript Dataspex state, audit history, actions, and Datascript data.
+- [[file:dirge/SKILL.md][dirge]] :: Dirge agent plugin, configuration, harness API, and pi/Claude extension-porting guidance.
+- [[file:git-commit/SKILL.md][git-commit]] :: Conventional commit drafting from repository changes and staged diffs.
+- [[file:nix/SKILL.md][nix]] :: Nix flakes, NixOS, Home Manager, nix-darwin, package, and devShell workflow.
+- [[file:org-jira/SKILL.md][org-jira]] :: Jira semantics layered on the =org-tasks= protocol.
+- [[file:org-plan/SKILL.md][org-plan]] :: TASKS-linked change-record planning, execution, and closure-time pruning.
+- [[file:org-tasks/SKILL.md][org-tasks]] :: =TASKS.org= protocol and guaranteed Babashka =ot= CLI/TUI workflow.
+- [[file:retro/SKILL.md][retro]] :: End-of-session synthesis into the current AGENTS/skills/task-memory hierarchy.
+- [[file:self-improvement/SKILL.md][self-improvement]] :: TODO-first routing of durable agent friction to project-local, dotagents, or dotfiles task memory.
 
-*** Mature
-The following have gone through some cycles of refinement and are in regular use:
-- [[file:org-jira/SKILL.md][org-jira]] :: Jira-specific authoring conventions on top of
-  =org-tasks= — =:LINKED_ISSUES:= drawer key, =#+JIRA_*= keywords,
-  agent prompts that drive the atlassian MCP.
-- [[file:org-plan/SKILL.md][org-plan]] :: Drafting, reviewing, and executing implementation
-  plans as change-record files linked from =TASKS.org=. Owns
-  change-record section conventions, closure-time summary refresh,
-  and TASKS.org subtask migration into plans.
-- [[file:org-tasks/SKILL.md][org-tasks]] :: The =TASKS.org= task-memory protocol — TODO
-  states, IDs, =#+IMPORT:= links, status discipline, archiving,
-  and the resume read order that loads =* Summary= first.
-
-*** Neglected / undernourished
-The following are in-development, or in some cases just vague statements of intent:
-- [[file:code-review/SKILL.md][code-review]] :: Very bare bones code-review skill. Needs development.
-- [[file:self-improvement/SKILL.md][self-improvement]] :: Capture friction with agent / pi
-  configuration (AGENTS.md, skills, prompts, extensions, project
-  conventions) at the moment it arises and route it as actionable
-  TODO work. Project-local fixes land in the current project's
-  =TASKS.org=; global fixes are handed off to a session in this
-  dotfiles repo via pi-intercom (auto-spawned if none is alive).
-
-** 3rd-party
-I.e. skills adopted/adapted from other sources (primarily via `npx skills find`).
-In most cases there's been some modification / drift from the source.
-
-- [[file:clojure/SKILL.md][clojure]] :: REPL-driven Clojure development for writing,
-  editing, and debugging code. Triggers on =.clj=, =.cljs=, =.cljc=,
-  =.edn=, namespaces, and Clojure tooling.
-- [[file:find-skills/SKILL.md][find-skills]] :: Discover and install agent skills from the
-  open skills ecosystem via the Skills CLI. Triggers when users ask how to do
-  something that might have an existing skill, ask to find a skill, or want to
-  extend agent capabilities.
-- [[file:gitlab-cli-skills/SKILL.md][gitlab-cli-skills]] :: Comprehensive GitLab
-  CLI (=glab=) command reference and workflows. Covers GitLab auth, repos,
-  issues, merge requests, CI/CD, releases, and related automation.
-- [[file:skill-creator/SKILL.md][skill-creator]] :: Create, modify, and improve
-  agent skills. Supports drafting new skills, running evals, benchmarking,
-  iterating on behavior, and optimizing skill descriptions for triggering.
-- [[./retro/SKILL.md][retro]] :: Session retrospective and self-improvement skill
+** Adopted or adapted
+- [[file:clojure/SKILL.md][clojure]] :: REPL-driven Clojure/ClojureScript/EDN/Babashka development.
+- [[file:find-skills/SKILL.md][find-skills]] :: Discovery and installation of skills from the open skill ecosystem.
+- [[file:gitlab-cli-skills/SKILL.md][gitlab-cli-skills]] :: Explicit GitLab/=glab= router to nested command-group references without global nested-trigger discovery.
+- [[file:skill-creator/SKILL.md][skill-creator]] :: Skill creation, audit, eval, description optimization, validation, and packaging.
