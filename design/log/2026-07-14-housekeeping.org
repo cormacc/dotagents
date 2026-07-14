@@ -1,0 +1,267 @@
+#+TITLE: Housekeeping - 2026-07-14
+#+DATE: 2026-07-14 Tue
+#+PARENT: [[task:592be2f8-c646-416a-8b39-74266bef675a][Housekeeping - 2026-07-14]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Review
+#+SPEC: [[proj:README.md]]
+#+SPEC: [[proj:AGENTS.md]]
+#+SPEC: [[proj:skills/README.org]]
+#+SPEC: [[proj:pi/agents/planner.md]]
+#+SPEC: [[proj:pi/agents/reviewer.md]]
+#+SPEC: [[proj:pi/agents/scout.md]]
+#+SPEC: [[proj:pi/agents/visual-tester.md]]
+#+SPEC: [[proj:skills/gitlab-cli-skills/SKILL.md]]
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+#+SPEC: [[proj:skills/self-improvement/SKILL.md]]
+#+SPEC: [[proj:skills/retro/SKILL.md]]
+#+SPEC: [[proj:skills/skill-creator/SKILL.md]]
+#+SPEC: [[proj:skills/code-review/SKILL.md]]
+
+* Intent
+Restore confidence that the repository's documented installation model, custom agents, extensions, and skills match their real runtime behavior. Remove or consolidate stale surfaces, make failures observable, and provide one reproducible validation path so future drift is caught early.
+
+Audit evidence: [[file:2026-07-14-housekeeping/audit.md][repository audit — 2026-07-14]].
+
+* Summary
+*Level:* production · *Tests:* comprehensive · *Docs:* full
+
+The work converts the 2026-07-14 repository audit into a correctness-first cleanup: repair broken active behavior, simplify skill/plugin surfaces, then refresh the living documentation from the verified implementation.
+
+** Scope
+*** In scope
+- Repair custom subagent definitions against the installed pi-subagents schema and available tools/skills.
+- Correct extension error signaling, cross-provider schemas, and unbounded context injection.
+- Make active extension tests portable and add a single root validation entry point.
+- Replace unavailable task/improvement workflows with verified =ot= behavior and align related skills.
+- Redesign GitLab guidance as an explicit parent router, consolidate trivial utility skills, and correct command claims/triggers.
+- Resolve the bare =code-review= skill and make skill-creator validation reproducible.
+- Remove stale active configuration and dead helpers; make extension dependency resolution reproducible.
+- Update =README.md=, =AGENTS.md=, and the skill inventory to describe the source tree, packaging routes, dependencies, and update behavior accurately.
+- Review all task-relevant specs listed above as part of implementation and closeout.
+*** Out of scope
+- New end-user features unrelated to the audit.
+- Redesigning the =org-tasks= file protocol or task lifecycle.
+- Replacing pi, the MCP adapter, or the current package/submodule installation architecture.
+- Deleting the entire =pi/archive= tree; curated historical source remains unless a separately justified cleanup is created.
+- Fixing defects in external tools or providers beyond adapting this repository to their verified interfaces.
+
+** Acceptance
+*** Core functionality
+- [ ] Planner validates against the installed subagent schema and can spawn helpers using documented examples.
+- [ ] Reviewer validates against the installed subagent schema and can produce its documented report using only allowed tools.
+- [ ] Scout validates against the installed subagent schema and can produce its documented report using only allowed tools.
+- [ ] Visual tester validates against the installed subagent schema and uses only installed skills and browser tools.
+- [ ] Dataspex failures are surfaced by pi as failed tool calls.
+- [ ] Jira failures are surfaced by pi as failed tool calls.
+- [ ] Emacsclient failures are surfaced by pi as failed tool calls.
+- [ ] Pi-clojure failures are surfaced by pi as failed tool calls.
+- [ ] Regression tests cover every corrected extension failure path.
+- [ ] =/ext= enforces per-file and aggregate input ceilings.
+- [ ] =/ext= defaults to relevant production source.
+- [ ] =/ext= reports omitted and truncated content.
+- [ ] Dataspex uses a provider-compatible enum schema.
+- [ ] GitLab command-group guidance is discoverable through the parent skill without full-depth trigger pollution.
+- [ ] GitLab descriptions and workflows match the installed/pinned =glab= command surface.
+- [ ] Self-improvement and org-tasks use the guaranteed =ot= interface without requiring unavailable runtime tools.
+- [ ] Retro routes durable changes through the current AGENTS/skills/task-memory hierarchy.
+- [ ] Skill-creator validation and packaging have declared, reproducible dependencies and invocations.
+- [ ] Code-review supplies a substantive, executable review protocol.
+- [ ] Active stale configuration identified by the audit is removed.
+- [ ] Dead helper code identified by the audit is removed or reduced to verified consumers.
+- [ ] Extension npm installs are reproducible.
+- [ ] Babashka/Clojure dependency declarations follow one intentional source/version policy.
+- [ ] =README.md= accurately describes the repository layout and installation routes.
+- [ ] =README.md= accurately describes runtime requirements, settings ownership, update behavior, and check scope.
+- [ ] =README.md= accurately scopes package exclusions and editable-submodule behavior.
+- [ ] =AGENTS.md= resolves the temporary-file location without assuming =$PROJECT_ROOT=.
+- [ ] One documented root command validates active extensions, task tooling, skill/agent metadata, links, and native-system Nix packaging.
+*** Edge cases
+- [ ] Task tests compare canonical temporary paths correctly on macOS and Linux.
+- [ ] Emacsclient tests run without requiring a globally installed =tsx=.
+- [ ] GitLab routing remains useful when nested skills are not independently discovered.
+- [ ] =/ext= handles a large extension such as =tasks= without overflowing the model context.
+- [ ] Package-only users receive explicit guidance for capabilities and dependencies omitted from the package slice.
+*** Anti-criteria
+- [ ] Must not: expose all nested GitLab descriptions as broad global triggers.
+- [ ] Must not: rename active extension commands or tool names without a compatibility decision recorded here.
+- [ ] Must not: silently remove owner-local settings or editable-submodule behavior.
+- [ ] Must not: make cross-system Nix claims that exceed what the documented command actually checks.
+- [ ] Must not: delete archived source solely because a current installed replacement exists.
+
+** Decisions
+- Use one phased change-record under the requested top-level task :: the findings share one repository-confidence outcome and can be validated together.
+  Rejected:
+  - One top-level task per finding: fragments the audit and duplicates closeout/documentation work.
+  - A documentation-only pass: leaves confirmed runtime defects behind accurate prose.
+- Repair active correctness before consolidation and documentation :: README claims should be regenerated from the resulting behavior, not today's broken state.
+  Rejected:
+  - Update docs first: guarantees another rewrite and risks documenting behavior that is about to change.
+- Keep GitLab command groups behind an explicit thin router and merge trivial diagnostics into the parent :: preserves detailed guidance without injecting 39 conflicting descriptions globally.
+  Rejected:
+  - Full-depth discovery: broad trigger conflicts with org-tasks, org-jira, and code-review.
+  - One monolithic SKILL.md: makes routine GitLab requests load thousands of irrelevant lines.
+- Develop =code-review= into a real review protocol rather than remove the capability :: review is a distinct workflow, but the current four generic bullets do not justify a skill.
+  Rejected:
+  - Keep unchanged: retains prompt overhead without useful behavior.
+  - Remove permanently: loses a useful home for severity, diff-selection, verification, and false-positive standards.
+- Preserve =pi/archive= as an explicitly historical surface for this pass :: remove stale active references/configuration, not curated history.
+  Rejected:
+  - Delete all replaced archives: unnecessary scope and risks losing migration rationale not yet promoted elsewhere.
+
+** Shipped
+
+** Gotchas
+
+** Risks
+- GitLab routing can become undiscoverable in the opposite direction if the parent does not name concrete relative paths; add a routing test or metadata check.
+- Converting returned error objects to thrown failures can expose callers that accidentally depended on success-shaped results; test each tool's failure path before broad refactoring.
+- Leader-menu remnants have partial coupling in the active tasks overlay; verify consumers before deleting shared helpers or configuration reads.
+- Reproducible npm installs may change activation assumptions in the parent dotfiles module; validate the editable Home Manager path as well as local installs.
+
+** Follow-ups
+
+* Plan
+
+** TODO [#A] Establish a reproducible validation baseline
+:PROPERTIES:
+:CUSTOM_ID: b8df7b9f-30c5-4322-97ae-6b96b14de09c
+:CREATED: [2026-07-14 Tue 23:38]
+:END:
+Acceptance criteria:
+- A single documented root command runs active extension tests, Babashka tests, agent/skill metadata checks, relative-link checks, and native-system Nix evaluation.
+- Task tests canonicalize temporary paths and pass on macOS.
+- Emacsclient tests use a repository-provided or =npx= =tsx= path rather than a global executable.
+- Existing Jira and Babashka suites remain green.
+
+Use =package.json=, =bb.edn=, and current per-extension test runners as the integration surface.
+
+** TODO [#A] Repair custom subagent definitions
+:PROPERTIES:
+:CUSTOM_ID: 271bf002-5a43-46de-9d32-f5600ec436b2
+:CREATED: [2026-07-14 Tue 23:38]
+:END:
+Acceptance criteria:
+- Planner enables spawning and every spawn example supplies valid =agent=, lower-kebab =name=, human =title=, and =task= fields.
+- Reviewer and scout either allow every required output tool or return reports through their supported final-output channel.
+- Unsupported scout metadata is removed.
+- Visual tester uses supported =skills=/=inject-skills= metadata, the existing =chromium= skill, and actual browser tools.
+- Agent-definition validation is included in the root check.
+
+Verify fields against the installed pi-subagents parser before editing =pi/agents/*.md=.
+
+** TODO [#A] Correct extension failure and schema semantics
+:PROPERTIES:
+:CUSTOM_ID: d825199b-89b0-4765-a62a-21b6890fce92
+:CREATED: [2026-07-14 Tue 23:38]
+:END:
+Acceptance criteria:
+- Dataspex, Jira, emacsclient, and pi-clojure throw on failed operations so pi records =isError: true=.
+- Shared failure conversion is used where it reduces duplication without obscuring domain-specific messages.
+- Regression tests assert both the thrown failure and useful user-facing diagnostics for each affected tool.
+- Dataspex's =op= field uses pi's verified =StringEnum= helper and retains all current operation values.
+
+Affected implementations are listed in the 2026-07-14 audit and should be checked against current pi extension documentation before modification.
+
+** TODO [#A] Bound extension-development context loading
+:PROPERTIES:
+:CUSTOM_ID: 5e5a88c9-9db3-4051-987c-1b5b0deac3c5
+:CREATED: [2026-07-14 Tue 23:38]
+:END:
+Acceptance criteria:
+- =/ext= defaults to production-relevant files and excludes tests/generated/vendor content unless explicitly requested.
+- Per-file and aggregate limits prevent the =tasks= extension from injecting hundreds of kilobytes in one turn.
+- The injected message reports skipped files and truncation deterministically.
+- Tests cover a small extension, the large =tasks= tree, and an explicit file-selection path.
+
+Preserve an explicit opt-in route for loading tests during extension debugging.
+
+** TODO [#A] Repair task-memory and improvement skills
+:PROPERTIES:
+:CUSTOM_ID: 753317ec-d414-4d83-a545-7197b4fe077d
+:CREATED: [2026-07-14 Tue 23:38]
+:END:
+Acceptance criteria:
+- Self-improvement's direct-edit exception and TODO-first contract no longer contradict one another.
+- Cross-project routing uses verified =ot= behavior or fails fast with an actionable fallback; no workflow requires absent =pi-intercom= or task tools.
+- Org-tasks distinguishes the guaranteed =ot= interface from optional harness wrappers.
+- Retro uses the current =AGENTS.md=/skills/task-memory hierarchy instead of Claude-specific commands and destinations.
+- Skill-creator validation and packaging run from a clean checkout with declared dependencies and a skill-relative invocation.
+
+Keep org-plan/org-tasks/org-jira layering intact; this task updates executable assumptions rather than merging those skills.
+
+** TODO [#B] Consolidate and correct the skill catalogue
+:PROPERTIES:
+:CUSTOM_ID: bfd9953b-b10e-461b-be30-e5c740d88920
+:CREATED: [2026-07-14 Tue 23:38]
+:END:
+Acceptance criteria:
+- The GitLab parent names concrete relative paths and selection rules for every retained command group.
+- =glab-help=, =glab-version=, and =glab-check-update= are merged into parent diagnostics and removed as standalone sub-skills.
+- GitLab descriptions require explicit GitLab/=glab= context and do not claim unsupported commands.
+- Iteration, user, snippet, job, and milestone guidance matches the verified =glab= surface.
+- =code-review= defines diff selection, severity levels, correctness/security checks, test expectations, and a false-positive bar.
+- =skills/README.org= is complete and generated or mechanically checked against top-level frontmatter.
+
+Do not enable full-depth skill discovery as part of this task.
+
+** TODO [#B] Remove stale active surfaces and pin dependencies
+:PROPERTIES:
+:CUSTOM_ID: 5cb1a073-9571-45c4-8d8d-911b8651fd9c
+:CREATED: [2026-07-14 Tue 23:38]
+:END:
+Acceptance criteria:
+- Removed quota configuration and unsupported MCP fields have no remaining active consumers.
+- =pi/extensions/lib/editor.ts= and leader-menu helpers are removed or reduced to code with verified active consumers.
+- Any retained leader-menu configuration read in the tasks overlay is documented as intentional.
+- Chromium and pi-clojure dependency installs use tracked lockfiles or exact pins.
+- =bb.edn= and =deps.edn= share one intentional dependency source/version policy.
+- Archived replacements remain under =pi/archive= and are clearly identified as inactive history.
+
+Run repository-wide reference checks before deleting source-controlled helpers.
+
+** TODO [#B] Refresh repository documentation from implemented behavior
+:PROPERTIES:
+:CUSTOM_ID: 24e3698e-c232-40b6-b41b-d59183153ef0
+:CREATED: [2026-07-14 Tue 23:38]
+:BLOCKED-BY: task:b8df7b9f-30c5-4322-97ae-6b96b14de09c
+:BLOCKED-BY+: task:271bf002-5a43-46de-9d32-f5600ec436b2
+:BLOCKED-BY+: task:d825199b-89b0-4765-a62a-21b6890fce92
+:BLOCKED-BY+: task:5e5a88c9-9db3-4051-987c-1b5b0deac3c5
+:BLOCKED-BY+: task:753317ec-d414-4d83-a545-7197b4fe077d
+:BLOCKED-BY+: task:bfd9953b-b10e-461b-be30-e5c740d88920
+:BLOCKED-BY+: task:5cb1a073-9571-45c4-8d8d-911b8651fd9c
+:END:
+Acceptance criteria:
+- README layout lists current prompts, agents, active extensions, archives, settings, MCP, Dirge, and =ot= surfaces without nonexistent paths.
+- Installation sections distinguish generic skill discovery, pi-specific skills, the package slice, and the editable submodule/Home Manager route.
+- Runtime requirements include Babashka, the installed pi-compatible Node floor, Emacs auto-start behavior, and Atlassian MCP requirements.
+- Settings and test-exclusion wording is scoped to the package route where true.
+- Git update and Nix check commands describe their actual update/system behavior.
+- AGENTS temporary-file guidance resolves the repository root without assuming =$PROJECT_ROOT=.
+- README commands are exercised or checked by the root validation command where practical.
+
+Treat source manifests, =agents.nix=, and current pi package documentation as evidence; do not preserve claims solely for compatibility with old prose.
+
+** TODO [#A] Run final audit and closeout validation
+:PROPERTIES:
+:CUSTOM_ID: ec3e7ca9-e2d6-48af-b52a-bb9ef482f60a
+:CREATED: [2026-07-14 Tue 23:38]
+:BLOCKED-BY: task:b8df7b9f-30c5-4322-97ae-6b96b14de09c
+:BLOCKED-BY+: task:271bf002-5a43-46de-9d32-f5600ec436b2
+:BLOCKED-BY+: task:d825199b-89b0-4765-a62a-21b6890fce92
+:BLOCKED-BY+: task:5e5a88c9-9db3-4051-987c-1b5b0deac3c5
+:BLOCKED-BY+: task:753317ec-d414-4d83-a545-7197b4fe077d
+:BLOCKED-BY+: task:bfd9953b-b10e-461b-be30-e5c740d88920
+:BLOCKED-BY+: task:5cb1a073-9571-45c4-8d8d-911b8651fd9c
+:BLOCKED-BY+: task:24e3698e-c232-40b6-b41b-d59183153ef0
+:END:
+Acceptance criteria:
+- Every item in =** Acceptance= and every anti-criterion is checked explicitly.
+- The root validation command passes from a clean checkout with documented prerequisites.
+- =ot doctor --format json= reports no new task/spec/link defects.
+- Active tool and command names remain collision-free.
+- =** Shipped=, =** Gotchas=, and =* Implementation= are refreshed from the delivered state before the parent task is closed.
+
+Re-run the repository inventory rather than relying on the original audit snapshot.
+
+* Implementation
