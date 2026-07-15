@@ -1,6 +1,6 @@
 #+TITLE: Housekeeping - 2026-07-14
 #+DATE: 2026-07-14 Tue
-#+PARENT: [[task:592be2f8-c646-416a-8b39-74266bef675a][Housekeeping - 2026-07-14]]
+#+PARENT: [[archive:592be2f8-c646-416a-8b39-74266bef675a][Housekeeping - 2026-07-14]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:README.md]]

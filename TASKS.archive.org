@@ -1133,3 +1133,19 @@ CLOSED: [2026-07-03 Fri 17:50]
 - State "DONE" from "TODO" [2026-07-03 Fri 17:50]
 :END:
 #+IMPORT: [[plan:2026-07-03-org-tasks-tui-final-review-follow-up.org]]
+
+** DONE [#A] Housekeeping - 2026-07-14
+CLOSED: [2026-07-15 Wed 00:38]
+:PROPERTIES:
+:CUSTOM_ID: 592be2f8-c646-416a-8b39-74266bef675a
+:CREATED: [2026-07-14 Tue 23:37]
+:STARTED: [2026-07-14 Tue 23:58]
+:ARCHIVED: [2026-07-15 Wed 00:38]
+:END:
+:LOGBOOK:
+- Created [2026-07-14 Tue 23:37]
+- State "STARTED" from "TODO" [2026-07-14 Tue 23:58]
+- State "DONE" from "STARTED" [2026-07-15 Wed 00:38]
+:END:
+#+IMPORT: [[plan:2026-07-14-housekeeping.org]]
+Resolve the repository review findings across documentation, agent definitions, extensions, skills, configuration, dependency reproducibility, and validation.
