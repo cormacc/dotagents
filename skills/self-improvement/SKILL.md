@@ -9,7 +9,7 @@ description: |
 
 # Self-improvement
 
-Turn repeatable agent friction into durable work. The default is **TODO first**: file an `Agent feedback` task through the guaranteed `ot` CLI, then optionally promote it through [`org-plan`](../org-plan/SKILL.md). Do not require harness-specific task tools or session-to-session messaging.
+Turn repeatable agent friction into durable work. This skill is the canonical contract for durable-friction eligibility, ownership routing, deduplication, and persistence. The default is **TODO first**: file an `Agent feedback` task through the guaranteed `ot` CLI, then optionally promote it through [`org-plan`](../org-plan/SKILL.md). Do not require harness-specific task tools or session-to-session messaging.
 
 ## Trigger gate
 
@@ -20,7 +20,7 @@ Use this skill when:
 - a workflow had to be improvised because no current contract covered it;
 - existing configuration should have answered a question but did not.
 
-Skip one-off mistakes, taste disagreements, ordinary direction changes, and duplicates of existing guidance.
+Skip one-off mistakes, taste disagreements, ordinary direction changes, correct behavior that needs no rule, session-specific facts, speculative or generic best practices, and duplicates of existing guidance.
 
 ## Two loops
 
@@ -72,6 +72,8 @@ Conceptual split:
 - installation wiring, Nix/Home Manager integration, shell environment → dotfiles;
 - project-only conventions → project-local.
 
+Within that tier, choose the narrowest canonical owner: a skill workflow belongs in that skill or its reference; a project convention belongs in the project `AGENTS.md`; executable or non-trivial work belongs in an `Agent feedback` TODO. Read the target instructions before proposing changes, and do not invent harness-specific destinations that the repository does not declare.
+
 Ask once when ownership is ambiguous. If unresolved, use the current project and tag `tier-unknown`.
 
 Cross-project routing is a direct `ot --root <target> ...` operation. It does not depend on a live target agent session, `pi-intercom`, or optional pi task tools.
@@ -104,8 +106,13 @@ Evidence:
 
 When a matching open task exists, do not create a parallel item. Use `ot show <id>` to inspect it, then update it through the supported task workflow or report the duplicate for manual consolidation if no mutation command fits.
 
+## Verification
+
+Re-read any modified instruction file and run `ot show <id>` for each created or reused task. Confirm that no duplicate or contradictory guidance was introduced, then report changed paths, task UUIDs, and deferred work.
+
 ## Relationship to other skills
 
 - [`org-tasks`](../org-tasks/SKILL.md) owns the task protocol and guaranteed `ot` commands.
 - [`org-plan`](../org-plan/SKILL.md) owns promotion into a change-record.
-- [`retro`](../retro/SKILL.md) synthesizes end-of-session lessons; use this skill's routing rules to persist non-trivial follow-up work.
+- [`retro`](../retro/SKILL.md) scans and synthesizes end-of-session lessons, then delegates eligibility, routing, deduplication, and persistence here.
+- A retrospective change-record in `org-plan` documents project work after the fact; it is not a `retro` session-learning workflow. Task or record closure alone does not trigger retro.

@@ -124,6 +124,10 @@ Anti-pattern: do not hand-read `TASKS.org`, `TASKS.local.org`, or `TASKS.setup.o
 
 When a record grows beyond cheap re-ingestion, split or archive completed history rather than omitting `* Summary` or truncating silently.
 
+### Session closeout
+
+Persist accurate task status and handoff information before any session-learning follow-up. When a substantive session is actually ending and has the correction or friction signals defined by [`retro`](../retro/SKILL.md), offer one retro after persistence. Never invoke or recommend retro merely because a task becomes `DONE` or `CANCELLED`.
+
 ## Archiving
 
 Only top-level `DONE`/`CANCELLED` tasks are archived. Use `ot archive <id> --yes`. The archive move preserves the subtree, `:CUSTOM_ID:`, content, LOGBOOK, and import link; adds `:ARCHIVED:`; writes to project-root `TASKS.archive.org`; and rewrites linked change-record parent links from `task:` to `archive:` when possible.

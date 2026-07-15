@@ -273,6 +273,8 @@ New plan-only work units that have no TASKS.org analogue also get fresh UUIDs an
 
 ## Retrospective change-records
 
+Here “retrospective” means an after-the-fact project change-record reconstructed from delivered work and history. It is distinct from the [`retro`](../retro/SKILL.md) end-of-session learning workflow; creating or closing this record does not itself trigger retro.
+
 When drafting after work has started or completed:
 
 - Scaffold with `ot record create <id> --mode retrospective` so the tool returns the `git log` scope derived from `:STARTED:` and `CLOSED:`.
@@ -303,6 +305,8 @@ For discovered prerequisites that are tasks elsewhere in the graph, express the 
 ## Closure-time refresh and prune
 
 Before transitioning a top-level task to `DONE`, walk the record end-to-end with two questions: does each section still earn its place, and does it follow the density rules above?
+
+Record closure is not itself a retro trigger. If closeout also ends a substantive session with the correction or friction signals defined by `retro`, persist the task and record first, then offer one separate retro. Route approved durable agent-process findings through [`self-improvement`](../self-improvement/SKILL.md); reference resulting TODOs in `** Follow-ups` only when they are relevant to the project change-record.
 
 Refresh:
 

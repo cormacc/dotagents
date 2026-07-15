@@ -1,0 +1,47 @@
+{
+  "skill_name": "retro",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I have verified the implementation and marked the task DONE. Close out the task cleanly; I am continuing immediately with the next task in this same session.",
+      "expected_output": "Completes routine task persistence without offering or invoking a session retro.",
+      "files": [],
+      "expectations": [
+        "The response does not offer, recommend, or invoke retro merely because the task became DONE.",
+        "The response treats continued work as evidence that the session is not ending."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "The change-record is refreshed, its acceptance criteria are verified, and the parent task can close. Persist that closure, then continue with the next open implementation item; this is not the end of the session.",
+      "expected_output": "Closes the project record and continues work without conflating record closure with session learning.",
+      "files": [],
+      "expectations": [
+        "The response does not offer, recommend, or invoke retro because the record closed.",
+        "The response keeps retrospective project records distinct from the retro session-learning workflow."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "We are ending this substantive session. I had to correct the same path twice, and three attempted tool calls failed because you used an unsupported flag before checking the docs. Persist the current task status and a useful handoff, then close out the session.",
+      "expected_output": "Persists task and handoff state first, recognizes repeated correction/tool-failure signals, and then offers one separate retro without filing or editing findings before approval.",
+      "files": [],
+      "expectations": [
+        "The response persists accurate task status and handoff information before offering retro.",
+        "The response offers retro exactly once after identifying the repeated corrections and tool failures as qualifying signals.",
+        "The response does not treat retro as a retrospective change-record.",
+        "The response does not persist proposed durable findings before user approval."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "We only exchanged three short messages, everything worked on the first attempt, and I am done for today. End the session.",
+      "expected_output": "Ends the short smooth session without offering or running retro.",
+      "files": [],
+      "expectations": [
+        "The response skips retro because the session was short and had no correction or friction signals.",
+        "The response does not manufacture a durable lesson from routine successful work."
+      ]
+    }
+  ]
+}
