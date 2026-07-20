@@ -83,6 +83,7 @@ Adopt the extension-facing capabilities and lifecycle guarantees added from pi 0
 
 ** Shipped
 - MODIFIED =pi/extensions/emacsclient= and =pi/extensions/jira= to release shared event-bus subscriptions on =session_shutdown=; a regression test covers reload, replacement, and idempotent cleanup.
+- MODIFIED =pi/extensions/systemprompt.ts= so TUI display uses a persisted custom entry, RPC uses UI notification output, and JSON/print remain side-effect free; the prompt no longer enters model context.
 
 ** Gotchas
 
@@ -138,10 +139,16 @@ Acceptance criteria:
 
 Follow the established cleanup pattern at =pi/extensions/tasks/index.ts:636-660=.
 
-** TODO [#A] Separate human transcript entries from model context
+** DONE [#A] Separate human transcript entries from model context
+CLOSED: [2026-07-20 Mon 16:35]
 :PROPERTIES:
 :CUSTOM_ID: 8bdd367c-16aa-4261-810f-256a8dca01b5
 :CREATED: [2026-07-20 Mon 14:20]
+:STARTED: [2026-07-20 Mon 16:20]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-20 Mon 16:20]
+- State "DONE" from "STARTED" [2026-07-20 Mon 16:35]
 :END:
 Acceptance criteria:
 - TUI =/systemprompt= appends a persisted custom entry rendered through =registerEntryRenderer=.
@@ -234,3 +241,4 @@ Acceptance criteria:
 
 * Implementation
 - Interactive boundaries: =question= is sequential and TUI-only; bare =/tasks= is TUI-only while =/tasks new= and =/tasks doctor= remain RPC-capable. Unit, component-smoke, and RPC integration coverage enforce the distinction.
+- Human-only prompt display: =/systemprompt= uses =appendEntry=/=registerEntryRenderer= in TUI and =ctx.ui.notify= in RPC. Its RPC harness isolates the agent directory and resolves the installed pi 0.80.10 binary rather than the stale project-local pi binary.
