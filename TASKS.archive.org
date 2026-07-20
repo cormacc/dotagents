@@ -1149,3 +1149,21 @@ CLOSED: [2026-07-15 Wed 00:38]
 :END:
 #+IMPORT: [[plan:2026-07-14-housekeeping.org]]
 Resolve the repository review findings across documentation, agent definitions, extensions, skills, configuration, dependency reproducibility, and validation.
+
+** DONE [#B] Modernize pi extensions for pi 0.80 APIs :pi:extensions:
+CLOSED: [2026-07-20 Mon 17:49]
+:PROPERTIES:
+:CUSTOM_ID: a763d8fc-0dfb-4207-b957-1573b05a04b9
+:CREATED: [2026-07-20 Mon 14:15]
+:STARTED: [2026-07-20 Mon 15:25]
+:ARCHIVED: [2026-07-20 Mon 17:49]
+:END:
+:LOGBOOK:
+- Created [2026-07-20 Mon 14:15]
+- State "STARTED" from "TODO" [2026-07-20 Mon 15:25]
+- State "DONE" from "STARTED" [2026-07-20 Mon 17:43]
+- State "STARTED" from "DONE" [2026-07-20 Mon 17:49]
+- State "DONE" from "STARTED" [2026-07-20 Mon 17:49]
+:END:
+#+IMPORT: [[plan:2026-07-20-modernize-pi-extensions-for-pi-0-80-apis.org]]
+Apply the extension-development improvements identified in the pi 0.80.10 changelog review, prioritising correctness, lifecycle cleanup, context efficiency, and current public APIs.

@@ -1,6 +1,6 @@
 #+TITLE: Modernize pi extensions for pi 0.80 APIs
 #+DATE: 2026-07-20 Mon
-#+PARENT: [[task:a763d8fc-0dfb-4207-b957-1573b05a04b9][Modernize pi extensions for pi 0.80 APIs]]
+#+PARENT: [[archive:a763d8fc-0dfb-4207-b957-1573b05a04b9][Modernize pi extensions for pi 0.80 APIs]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:pi/skills/ext-dev/SKILL.md]]
