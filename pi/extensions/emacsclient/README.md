@@ -234,7 +234,9 @@ emacs_ts_query({
 ## Events
 
 The extension listens for events on `pi.events`, allowing other extensions to
-interact with Emacs without importing emacsclient internals.
+interact with Emacs without importing emacsclient internals. Its listener is
+session-scoped and is released on `session_shutdown`, so `/reload` and session
+replacement do not duplicate file-open requests.
 
 ### `emacs:open`
 

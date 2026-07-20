@@ -82,6 +82,7 @@ Adopt the extension-facing capabilities and lifecycle guarantees added from pi 0
 - Maintained scope is every extension under =pi/extensions/= except the Herdr-managed =herdr-agent-state.ts= :: =pi-clojure= began as a copied upstream project but has been materially modified and is now owned here, so behavioral simplification, transport hardening, tests, and documentation are in scope while original license and authorship attribution remain intact.
 
 ** Shipped
+- MODIFIED =pi/extensions/emacsclient= and =pi/extensions/jira= to release shared event-bus subscriptions on =session_shutdown=; a regression test covers reload, replacement, and idempotent cleanup.
 
 ** Gotchas
 
@@ -116,10 +117,20 @@ Acceptance criteria:
 
 Use the installed =examples/extensions/question.ts= behavior as the question-tool reference; preserve local free-text rendering and result details. Current false-cancellation path: =pi/extensions/question.ts:65= guards only =ctx.hasUI=, so RPC =custom()= returning =undefined= reports cancellation at =:235-239=.
 
-** TODO [#A] Make shared event subscriptions session-scoped
+** DONE [#A] Make shared event subscriptions session-scoped
+CLOSED: [2026-07-20 Mon 16:19]
 :PROPERTIES:
 :CUSTOM_ID: 34c60f15-f3a1-4673-a312-5d5e8f2ccd30
 :CREATED: [2026-07-20 Mon 14:20]
+:STARTED: [2026-07-20 Mon 15:56]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-20 Mon 15:56]
+- State "WAITING" from "STARTED" [2026-07-20 Mon 15:57]
+- State "STARTED" from "WAITING" [2026-07-20 Mon 16:03]
+- State "DONE" from "STARTED" [2026-07-20 Mon 16:08]
+- State "STARTED" from "DONE" [2026-07-20 Mon 16:09]
+- State "DONE" from "STARTED" [2026-07-20 Mon 16:19]
 :END:
 Acceptance criteria:
 - Emacsclient and Jira retain and invoke every =pi.events.on()= unsubscriber during =session_shutdown=.

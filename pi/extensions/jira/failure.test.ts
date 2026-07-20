@@ -8,6 +8,7 @@ let tool: any;
 registerJira({
   registerTool(value: unknown) { tool = value; },
   registerCommand() {},
+  on() {},
   getAllTools() { return []; },
   events: { on() { return () => {}; } },
 } as any);

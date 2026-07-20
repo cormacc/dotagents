@@ -30,13 +30,27 @@ function failTool(tool: string, error: string | undefined): never {
 }
 
 export default function (pi: ExtensionAPI) {
+  // `pi.events` outlives extension instances across /reload and session
+  // replacement, unlike pi.on registrations. Retain its unsubscriber.
+  const eventUnsubs: Array<() => void> = [];
+
+  pi.on("session_shutdown", async () => {
+    while (eventUnsubs.length > 0) {
+      try {
+        eventUnsubs.pop()?.();
+      } catch {
+        // Best-effort cleanup: one listener must not strand the rest.
+      }
+    }
+  });
+
   // ------------------------------------------------------------------
   // Event: emacs:open — open a file in Emacs at a specific position
   // ------------------------------------------------------------------
   // Other extensions can emit this to open a file in Emacs:
   //   pi.events.emit("emacs:open", { file: "/path/to/file", line: 42 })
   // If no Emacs server is reachable, bootstrap one first.
-  pi.events.on(
+  eventUnsubs.push(pi.events.on(
     "emacs:open",
     async (data: { file: string; line?: number; col?: number }) => {
       const opts = getOptions();
@@ -62,7 +76,7 @@ export default function (pi: ExtensionAPI) {
       // focus on Wayland, so we ask the compositor directly.
       await focusWindow("emacs", opts.exec);
     },
-  );
+  ));
 
   // Cache for buffer metadata to reduce token usage
   // Key: buffer name or path, Value: last known metadata

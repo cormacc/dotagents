@@ -281,6 +281,19 @@ function registerCloneApplyTool(pi: ExtensionAPI): void {
 export default function (pi: ExtensionAPI) {
   registerCloneApplyTool(pi);
 
+  // `pi.events` is shared between extension instances, so subscriptions must
+  // be released when this instance's session is shut down or replaced.
+  const eventUnsubs: Array<() => void> = [];
+  pi.on("session_shutdown", async () => {
+    while (eventUnsubs.length > 0) {
+      try {
+        eventUnsubs.pop()?.();
+      } catch {
+        // Best-effort cleanup: one listener must not strand the rest.
+      }
+    }
+  });
+
   pi.registerCommand("jira", {
     description:
       "Jira integration via the Atlassian MCP server (status, clone, get, claim, comment, create)",
@@ -532,7 +545,7 @@ export default function (pi: ExtensionAPI) {
   // Disabled by default — set `{ "autoTransition": true }` in
   // ~/.pi/agent/jira-ext.json to enable.
 
-  pi.events.on(
+  eventUnsubs.push(pi.events.on(
     "tasks:status-changed",
     async (payload: {
       id: string | null;
@@ -576,7 +589,7 @@ export default function (pi: ExtensionAPI) {
       );
       pi.sendUserMessage(prompt);
     },
-  );
+  ));
 
   // Hook for follow-up tasks: the keybindings extension can be advised
   // here that this extension exists, but no menu entries are contributed

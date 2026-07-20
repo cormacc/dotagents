@@ -250,7 +250,14 @@ function startPi(extensions: string[], cwd: string, env: Record<string, string>)
   return spawn("pi", args, {
     stdio: ["pipe", "pipe", "pipe"],
     cwd,
-    env: { ...process.env, ...env, HOME: cwd },
+    env: {
+      ...process.env,
+      ...env,
+      HOME: cwd,
+      // Avoid loading the user's global extensions (including unrelated test
+      // files) into this isolated RPC harness.
+      PI_CODING_AGENT_DIR: join(cwd, ".pi-agent"),
+    },
   });
 }
 

@@ -13,7 +13,8 @@ comment / create). Optional `autoTransition` on live local status-change events 
 implemented as an event listener on `tasks:status-changed`; off by
 default, opt in via `~/.pi/agent/jira-ext.json`. Durable task LOGBOOK
 history is audit evidence and is not replayed as a queue of Jira
-transitions.
+transitions. The shared-event listener is released on `session_shutdown`, so
+reloads and session replacement cannot multiply a single status transition.
 
 ## Commands
 
