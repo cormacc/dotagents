@@ -542,7 +542,7 @@ export default function (pi: ExtensionAPI) {
   // mirrors the change on every Jira-shaped issue linked from the task.
   //
   // Disabled by default — set `{ "autoTransition": true }` in
-  // ~/.pi/agent/jira-ext.json to enable.
+  // The configured agent directory's jira-ext.json to enable.
 
   eventUnsubs.push(pi.events.on(
     "tasks:status-changed",

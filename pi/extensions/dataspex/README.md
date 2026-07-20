@@ -33,3 +33,11 @@ The extension reuses the local `pi-clojure` nREPL client and evaluates `(shadow.
 Agent-registered audit labels always use the `<label>-audit` suffix. Do not re-call `dataspex.core/inspect` on an existing application label; that would overwrite the user's devtools panel state.
 
 See `skills/dataspex/SKILL.md` and `design/log/2026-05-13-dataspex-agent-integration.org` for the portable fallback workflow and spike history.
+
+## Commands, mode, and dependencies
+
+There are no slash commands, custom Pi TUI components, or default keybindings.
+The tools communicate with the browser runtime through nREPL, so they are not
+TUI-only; they still require the preconditions above. Runtime dependencies are
+provided by the local `pi-clojure` extension and Pi-hosted
+`@earendil-works/pi-coding-agent` and TypeBox 1.x (`typebox`) APIs.

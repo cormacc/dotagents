@@ -59,9 +59,10 @@ clojure_eval { port: PORT, code: "(str/upper-case \"hello\")" }
 clojure_eval { port: PORT, ns: "project.core", code: "(my-fn 42)" }
 ```
 
-Pi cancellation aborts pending connection/evaluation work and closes the socket.
-Eval output and tool details are bounded to pi's standard 2000 lines or 50KB;
-read source or use a narrower expression when more data is needed.
+Pi cancellation aborts pending connection/evaluation work, closes the socket,
+and settles the operation once. Eval output and tool details are bounded to pi's
+standard 2000 lines or 50KB; read source or use a narrower expression when more
+data is needed.
 
 ### Discovery commands
 

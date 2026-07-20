@@ -36,7 +36,7 @@ let cachedOtBinary: string | null | undefined;
  * Locate the `ot` binary. Tries:
  *
  *   1. The literal name `ot` on PATH (handled by spawn).
- *   2. `~/.pi/agent/skills/org-tasks/scripts/ot`.
+ *   2. `<configured agent directory>/skills/org-tasks/scripts/ot`.
  *   3. `~/.agents/skills/org-tasks/scripts/ot`.
  *   4. The repo-local `skills/org-tasks/scripts/ot` (dev/test fallback).
  *

@@ -14,7 +14,7 @@ function walk(dir: string, predicate: (path: string) => boolean): string[] {
   const found: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) found.push(...walk(path, predicate));
+    if (entry.isDirectory() && entry.name !== "node_modules") found.push(...walk(path, predicate));
     else if (predicate(path)) found.push(path);
   }
   return found;

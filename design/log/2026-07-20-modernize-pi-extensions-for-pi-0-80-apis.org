@@ -2,7 +2,7 @@
 #+DATE: 2026-07-20 Mon
 #+PARENT: [[task:a763d8fc-0dfb-4207-b957-1573b05a04b9][Modernize pi extensions for pi 0.80 APIs]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Review
+#+STATUS: Complete
 #+SPEC: [[proj:pi/skills/ext-dev/SKILL.md]]
 #+SPEC: [[proj:skills/clojure/SKILL.md]]
 #+SPEC: [[proj:skills/clojure/references/tool-guide.md]]
@@ -34,38 +34,34 @@ Adopt the extension-facing capabilities and lifecycle guarantees added from pi 0
 
 ** Acceptance
 *** Core functionality
-- [ ] Multiple =question= calls in one assistant turn execute one at a time.
-- [ ] =question= reports unsupported mode outside TUI instead of reporting a false user cancellation.
-- [ ] The =/tasks= overlay opens only in TUI mode.
-- [ ] RPC-capable =/tasks new= and =/tasks doctor= behavior remains available.
-- [ ] Reloading or replacing a session does not accumulate =emacs:open= or =tasks:status-changed= listeners.
-- [ ] =herdr:blocked= listener cleanup ships through the canonical integration when that source can be changed in scope; otherwise the linked upstream follow-up owns it.
-- [ ] TUI =/systemprompt= remains human-visible without adding the prompt to later model context.
-- [ ] RPC =/systemprompt= returns the prompt through supported RPC UI output without creating a context message.
-- [ ] JSON and print mode =/systemprompt= exit without appending a session entry or context message, and their unsupported behavior is documented.
-- [ ] LSP rename results contain standard before/after diffs for every modified file.
-- [ ] LSP location previews reflect file contents after extension-driven mutations and session replacement.
-- [ ] Jira and tasks global settings and the =~/.pi/agent= org-tasks fallback resolve beneath =getAgentDir()=.
-- [ ] Maintained extension imports use the current =@earendil-works/*= package scope.
-- [ ] Maintained extension imports use =typebox= instead of the legacy-aliased =@sinclair/typebox= root.
-- [ ] =pi-clojure= uses current pi/typebox declarations without locally redeclaring the coding-agent API.
-- [ ] =clojure_eval= can be cancelled and its timeout covers both connection establishment and response processing.
-- [ ] =pi-clojure= tool results are bounded before entering model context or session details.
-- [ ] Herdr reports working until pi reaches =agent_settled= when its canonical source can be changed in scope; otherwise a linked upstream follow-up owns that behavior and the generated local file remains untouched.
-- [ ] Modified extension documentation, =pi/skills/ext-dev/SKILL.md=, =skills/clojure/SKILL.md=, and the Clojure tool guide describe the resulting mode, lifecycle, context-visibility, and nREPL contracts.
+- [X] Multiple =question= calls in one assistant turn execute one at a time.
+- [X] =question= reports unsupported mode outside TUI instead of reporting a false user cancellation.
+- [X] The =/tasks= overlay opens only in TUI mode.
+- [X] RPC-capable =/tasks new= and =/tasks doctor= behavior remains available.
+- [X] Reloading or replacing a session does not accumulate =emacs:open= or =tasks:status-changed= listeners.
+- [X] TUI =/systemprompt= remains human-visible without adding the prompt to later model context.
+- [X] RPC =/systemprompt= returns the prompt through supported RPC UI output without creating a context message.
+- [X] JSON and print mode =/systemprompt= exit without appending a session entry or context message, and their unsupported behavior is documented.
+- [X] LSP rename results contain bounded standard before/after diffs for every modified file.
+- [X] LSP location previews reflect file contents after extension-driven mutations and session replacement.
+- [X] Jira and tasks global settings and the pi-side org-tasks fallback resolve beneath =getAgentDir()=.
+- [X] Maintained extension imports use the current =@earendil-works/*= package scope and =typebox= 1.x root.
+- [X] =pi-clojure= uses current pi/typebox declarations without locally redeclaring the coding-agent API.
+- [X] =clojure_eval= can be cancelled and its timeout covers connection establishment and response processing.
+- [X] =pi-clojure= tool results are bounded before entering model context or session details.
+- [X] The external Herdr canonical source and required =agent_settled=/listener-cleanup changes are owned by linked follow-up [[task:a6be7668-26a2-4b12-b2b9-c40d07af55dc][a6be7668]]; generated local output remains untouched.
+- [X] Modified extension documentation and all three declared specs describe the resulting mode, lifecycle, context-visibility, and nREPL contracts.
 *** Edge cases
-- [ ] A terminal provider error is retained as a blocked Herdr state after settlement when the canonical integration is updated by this task.
-- [ ] A retry, overflow compaction, or queued follow-up does not produce an intermediate idle Herdr state when the canonical integration is updated by this task.
-- [ ] Unsubscribing listeners is idempotent during reload, session switch, and process shutdown.
-- [ ] A cancelled or timed-out nREPL operation settles once, closes its socket, and cannot later emit a second result.
-- [ ] Chunked and nested bencode responses remain decodable after transport cleanup changes.
-- [ ] Multi-file LSP renames keep file-mutation queue ordering and bounded tool output.
+- [X] Unsubscribing listeners is idempotent during reload, session switch, and process shutdown.
+- [X] A cancelled or timed-out nREPL operation settles once, closes its socket, and cannot later emit a second result.
+- [X] Chunked and nested bencode responses remain decodable after transport cleanup changes.
+- [X] Multi-file LSP renames keep file-mutation queue ordering and bounded tool output.
 *** Anti-criteria
-- [ ] Must not: edit =pi/extensions/herdr-agent-state.ts= as the canonical source when Herdr will overwrite it.
-- [ ] Must not: remove source content from the model context produced by =/ext=.
-- [ ] Must not: disable task creation or doctor reporting merely because the caller is RPC rather than TUI.
-- [ ] Must not: add a new runtime dependency for these migrations.
-- [ ] Must not: activate speculative dynamic-tool loading or Jira autocomplete as part of this task.
+- [X] Must not: edit =pi/extensions/herdr-agent-state.ts= as the canonical source when Herdr will overwrite it.
+- [X] Must not: remove source content from the model context produced by =/ext=.
+- [X] Must not: disable task creation or doctor reporting merely because the caller is RPC rather than TUI.
+- [X] Must not: add a new runtime dependency for these migrations.
+- [X] Must not: activate speculative dynamic-tool loading or Jira autocomplete as part of this task.
 
 ** Decisions
 - Chose targeted API adoption with regression tests per affected extension :: it captures the concrete pi 0.69.0–0.80.10 wins without coupling unrelated extensions into a framework rewrite.
@@ -89,16 +85,15 @@ Adopt the extension-facing capabilities and lifecycle guarantees added from pi 0
 - MODIFIED the owned =pi-clojure= extension with cancellable, single-settlement nREPL transport, bounded discovery/results, validated schemas, comprehensive transport/tool tests, and ownership-accurate documentation.
 - MODIFIED =skills/clojure/SKILL.md= and =skills/clojure/references/tool-guide.md= for the native tools' timeout, cancellation, discovery-budget, and output-bound contracts.
 - REMOVED the vendoring-oriented =pi/extensions/pi-clojure/FORK-CHANGES.md= name in favor of =HISTORY.md= while preserving import and license attribution.
+- MODIFIED =pi/skills/ext-dev/SKILL.md= with current import, mode, settled-event, event-cleanup, and transcript-visibility contracts.
+- ADDED/UPDATED per-extension READMEs for the modified extension surfaces and hardened metadata discovery against nested =node_modules= trees.
 
 ** Gotchas
+- A stale project-local =node_modules/.bin/pi= can shadow installed pi 0.80.10 when RPC tests run through =npx=; integration harnesses isolate the agent directory and resolve the installed binary deliberately.
+- Development dependencies under an extension can contain example extensions; metadata discovery must skip =node_modules= at every traversal depth.
 
 ** Risks
-- Entry renderers are interactive-only; the implementation must deliberately preserve or redefine =/systemprompt= behavior for RPC callers.
-- =agent_settled= carries no message payload; Herdr must retain the last terminal error observed at =agent_end= until settlement.
-- Standard LSP diffs may be substantially larger than the current range summary; rendering and model-visible content need independent truncation decisions.
-- The Herdr source of truth may live outside this repository, turning that work unit into a separately tracked upstream dependency; creating and linking that follow-up satisfies this record's Herdr scope but does not claim the new runtime behavior shipped locally.
-- TypeBox 1.x migration can expose assumptions hidden by the legacy declaration shim; package manifests, lockfiles, and typechecks must move together.
-- nREPL cancellation and truncation touch transport/result boundaries; tests must preserve namespace routing, nested/chunked bencode handling, and useful failure diagnostics.
+- Herdr runtime behavior is unchanged locally until follow-up [[task:a6be7668-26a2-4b12-b2b9-c40d07af55dc][a6be7668]] lands in the external canonical generator.
 
 ** Follow-ups
 - [[task:a6be7668-26a2-4b12-b2b9-c40d07af55dc][Upstream Herdr settled-state Pi integration]] owns the external canonical generator change; the Herdr-managed local output remains untouched.
@@ -116,13 +111,6 @@ CLOSED: [2026-07-20 Mon 15:55]
 - State "STARTED" from "TODO" [2026-07-20 Mon 15:25]
 - State "DONE" from "STARTED" [2026-07-20 Mon 15:55]
 :END:
-Acceptance criteria:
-- =question= declares sequential execution and rejects every non-TUI mode before opening custom UI.
-- =/tasks new= and =/tasks doctor= succeed under the RPC harness; bare =/tasks= reports unsupported mode outside TUI.
-- A unit registration test asserts =question.executionMode= is ="sequential"=; RPC integration tests (following =pi/extensions/emacsclient/pi-integration.test.ts=) cover non-TUI question rejection and RPC task subcommands.
-- TUI-only question and tasks behavior is asserted through mode gating plus one focused interactive smoke test when the harness can drive custom UI; RPC is not used as evidence of sequential TUI rendering.
-
-Use the installed =examples/extensions/question.ts= behavior as the question-tool reference; preserve local free-text rendering and result details. Current false-cancellation path: =pi/extensions/question.ts:65= guards only =ctx.hasUI=, so RPC =custom()= returning =undefined= reports cancellation at =:235-239=.
 
 ** DONE [#A] Make shared event subscriptions session-scoped
 CLOSED: [2026-07-20 Mon 16:19]
@@ -139,11 +127,6 @@ CLOSED: [2026-07-20 Mon 16:19]
 - State "STARTED" from "DONE" [2026-07-20 Mon 16:09]
 - State "DONE" from "STARTED" [2026-07-20 Mon 16:19]
 :END:
-Acceptance criteria:
-- Emacsclient and Jira retain and invoke every =pi.events.on()= unsubscriber during =session_shutdown=.
-- Reload/session-replacement tests prove one event produces one action after repeated extension initialization.
-
-Follow the established cleanup pattern at =pi/extensions/tasks/index.ts:636-660=.
 
 ** DONE [#A] Separate human transcript entries from model context
 CLOSED: [2026-07-20 Mon 16:35]
@@ -156,15 +139,6 @@ CLOSED: [2026-07-20 Mon 16:35]
 - State "STARTED" from "TODO" [2026-07-20 Mon 16:20]
 - State "DONE" from "STARTED" [2026-07-20 Mon 16:35]
 :END:
-Acceptance criteria:
-- TUI =/systemprompt= appends a persisted custom entry rendered through =registerEntryRenderer=.
-- The entry displays the complete prompt on request without becoming a context message.
-- RPC mode emits the complete prompt through supported RPC UI output without calling =pi.sendMessage=.
-- JSON and print modes return without appending a session entry or context message; the command documentation states that transcript rendering is unavailable there.
-- Mode behavior is covered by focused unit/RPC-harness tests.
-- =ext-dev-source= remains a model-visible custom message.
-
-Current model-visible call: =pi/extensions/systemprompt.ts:9-13= (=pi.sendMessage= with =display: true=); target pattern: installed =examples/extensions/entry-renderer.ts=.
 
 ** DONE [#A] Adopt standard rename diffs and coherent LSP cache invalidation
 CLOSED: [2026-07-20 Mon 16:48]
@@ -177,13 +151,6 @@ CLOSED: [2026-07-20 Mon 16:48]
 - State "STARTED" from "TODO" [2026-07-20 Mon 16:36]
 - State "DONE" from "STARTED" [2026-07-20 Mon 16:48]
 :END:
-Acceptance criteria:
-- =applyWorkspaceEdit()= captures old/new content and returns =generateDiffString()= or =generateUnifiedPatch()= output for each modified file.
-- Rename rendering shows a bounded compact summary and expandable standard diff details.
-- File preview cache entries are invalidated after writes and on session shutdown, or replaced by mtime-aware reads.
-- Tests cover single-file, multi-file, stale-cache, and truncation cases via a stubbed =LspClient= (no live language server) without weakening =withFileMutationQueue()= ordering.
-
-Stale cache: module-level =fileLinesCache= at =pi/extensions/lsp/formatters.ts:139=; rename writes and document refresh at =pi/extensions/lsp/index.ts:446-468=; shutdown handler at =:615= stops servers only.
 
 ** DONE [#B] Normalize public imports and agent-directory paths
 CLOSED: [2026-07-20 Mon 17:12]
@@ -196,15 +163,6 @@ CLOSED: [2026-07-20 Mon 17:12]
 - State "STARTED" from "TODO" [2026-07-20 Mon 16:49]
 - State "DONE" from "STARTED" [2026-07-20 Mon 17:12]
 :END:
-Acceptance criteria:
-- Maintained extension source imports =@earendil-works/pi-coding-agent=, =@earendil-works/pi-tui=, and =@earendil-works/pi-ai= instead of their old scopes.
-- Maintained extension source imports =typebox= instead of the legacy-aliased =@sinclair/typebox= root, with typecheck confirming the 1.x API surface (import rename, not blind rename).
-- =pi/extensions/pi-clojure/package.json= and =package-lock.json= replace the 0.34.x development dependency with the compatible TypeBox 1.x package/version used for local typechecking.
-- Jira settings, tasks settings, and the =~/.pi/agent= org-tasks fallback derive from =getAgentDir()=; the =~/.agents/skills= fallback stays literal.
-- Tests cover a non-default agent-directory override.
-- No local import is moved to =@earendil-works/pi-ai/compat= unless it actually uses the legacy global model API.
-
-Maintained scope: every extension under =pi/extensions/= except =herdr-agent-state.ts=, whose canonical source must be located first; =pi-clojure= receives import normalization in this task and behavioral hardening in the dedicated following task. Hardcoded paths: =pi/extensions/tasks/index.ts:95=, =pi/extensions/jira/index.ts:44=, =pi/extensions/tasks/ot.ts:31-32= (only the =~/.pi/agent= entry migrates).
 
 ** DONE [#A] Harden and simplify the owned pi-clojure extension
 CLOSED: [2026-07-20 Mon 17:25]
@@ -217,18 +175,6 @@ CLOSED: [2026-07-20 Mon 17:25]
 - State "STARTED" from "TODO" [2026-07-20 Mon 17:12]
 - State "DONE" from "STARTED" [2026-07-20 Mon 17:25]
 :END:
-Acceptance criteria:
-- Real =@earendil-works/pi-coding-agent= and TypeBox 1.x types replace the obsolete ambient coding-agent declarations in =types.d.ts=; only dependency declarations still lacking published types remain local.
-- =EvalOptions= accepts the tool =AbortSignal=, starts its timeout before connecting, and funnels success, error, timeout, abort, and close through one idempotent cleanup/settlement path.
-- =clojure_find_nrepl_port= stops probing when cancelled and does not allow one unresponsive connection attempt to exceed its validation budget.
-- =clojure_eval= and =clojure_paren_repair= apply pi's standard output bounds; full unbounded values are not copied into =details=.
-- Port and timeout schemas use bounded integer validation appropriate to Node sockets and timers.
-- Tests cover namespace forwarding, connection failure, connect timeout, response timeout, abort, nested/chunked bencode responses, output truncation, quoted-form paren repair, and unchanged balanced input.
-- =README.md= describes this repository as the maintained source, preserves original license/authorship credit, and removes stale npm-install/zero-dependency claims.
-- =FORK-CHANGES.md= is moved with =git mv= to an ownership-accurate changelog/history name and reframed as import history plus locally shipped changes rather than an upstream-sync ledger.
-- =skills/clojure/SKILL.md= and =skills/clojure/references/tool-guide.md= remain aligned with any parameter, cancellation, truncation, or troubleshooting behavior changed here.
-
-Current gaps: =nrepl-client.ts= starts its timer only after =connect= and does not mark failures settled; tool signals are ignored; eval/repair output and details are unbounded; =types.d.ts= redeclares the old coding-agent API; =README.md= and =FORK-CHANGES.md= still describe a vendored/upstream-owned package.
 
 ** DONE [#B] Move Herdr state reporting to settled-agent semantics
 CLOSED: [2026-07-20 Mon 17:30]
@@ -241,15 +187,9 @@ CLOSED: [2026-07-20 Mon 17:30]
 - State "STARTED" from "TODO" [2026-07-20 Mon 17:26]
 - State "DONE" from "STARTED" [2026-07-20 Mon 17:30]
 :END:
-Acceptance criteria:
-- The Herdr integration's canonical source or generator is identified before editing generated output.
-- When the canonical source can be changed in scope, working state persists from =agent_start= through retries, compaction, and queued follow-ups until =agent_settled=.
-- When the canonical source can be changed in scope, final errors become blocked after settlement without a retryable-error regex or retry grace timer and the =herdr:blocked= subscription is released on =session_shutdown=.
-- If the canonical source is external, a concrete linked top-level/upstream follow-up records the target repository, requested behavior, listener cleanup, and local generated-file constraint; this task then closes as delegation, without claiming the Herdr runtime behavior shipped locally.
 
-Heuristic to replace: retry grace timer and retryable-error regex at =pi/extensions/herdr-agent-state.ts:52-54,260-271=; leaked subscription at =:274=.
-
-** TODO [#B] Refresh extension contracts and run the complete validation matrix
+** DONE [#B] Refresh extension contracts and run the complete validation matrix
+CLOSED: [2026-07-20 Mon 17:42]
 :PROPERTIES:
 :CUSTOM_ID: c1c56136-e239-46ab-8fb5-6bc2f43866b7
 :CREATED: [2026-07-20 Mon 14:20]
@@ -260,14 +200,12 @@ Heuristic to replace: retry grace timer and retryable-error regex at =pi/extensi
 :BLOCKED-BY+: task:31955d91-f107-48d0-b6e1-8af3817b9554
 :BLOCKED-BY+: task:dcb32da7-a212-4c7e-ba0f-0c175d8c55f5
 :BLOCKED-BY+: task:ee397aba-290d-4b94-bc30-be2c3ff60ccc
+:STARTED: [2026-07-20 Mon 17:30]
 :END:
-Acceptance criteria:
-- =pi/skills/ext-dev/SKILL.md= documents =ctx.mode= for component UI, =agent_settled= for true-idle integrations, event-bus unsubscription, custom-entry versus custom-message selection, and the TypeBox 1.x import contract.
-- =skills/clojure/SKILL.md= and =skills/clojure/references/tool-guide.md= document any changed =pi-clojure= cancellation, bounds, parameters, and troubleshooting behavior.
-- Every modified extension has its README or single-file extension documentation created or updated with commands, tools, dependencies, mode constraints, and suggested keybindings where applicable.
-- All affected extension test scripts pass under the supported Node runtime.
-- =ot doctor= reports no structural findings caused by this task or record.
-- A final source scan finds no unintended legacy package-scope imports or hardcoded global =~/.pi/agent= paths in maintained extensions.
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-20 Mon 17:30]
+- State "DONE" from "STARTED" [2026-07-20 Mon 17:42]
+:END:
 
 * Implementation
 - Interactive boundaries: =question= is sequential and TUI-only; bare =/tasks= is TUI-only while =/tasks new= and =/tasks doctor= remain RPC-capable. Unit, component-smoke, and RPC integration coverage enforce the distinction.
@@ -276,3 +214,4 @@ Acceptance criteria:
 - Imports and paths: maintained extensions now use current package roots and =typebox= 1.1.38. A shared =getAgentPath()= derives global paths from =getAgentDir()= while the independent =~/.agents/skills= fallback remains literal; RPC harnesses isolate their agent directories.
 - Owned Clojure tooling: nREPL timeout starts before connect, tool cancellation destroys the socket, all transport outcomes settle once, and each discovery probe has its own budget. Eval/repair content and details use pi's standard bounds; the production-only install was verified outside the repository with host-provided pi/TypeBox peers and local =bencode=/=parinfer= runtime dependencies.
 - Herdr ownership: the canonical asset is external at =ogulcancelik/herdr:src/integration/assets/pi/herdr-agent-state.ts=, embedded by =src/integration/mod.rs=. Upstream integration v6 still carries the retry heuristic and listener leak, so local task [[task:a6be7668-26a2-4b12-b2b9-c40d07af55dc][a6be7668]] owns delivery; the generated local file was not edited.
+- Final validation: the complete extension matrix, metadata/link checks, package-scope/path scans, and =ot doctor= pass. Metadata discovery now ignores nested dependency trees, so full =pi-clojure= development installs do not create false extension collisions.

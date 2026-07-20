@@ -37,6 +37,14 @@ Paths are in the system prompt under "Additional docs" and "Examples".
   - Include :: purpose, slash commands, dependencies, suggested keybindings.
   - Always update the readme after modifying an extension.
 
+## Current API contracts
+
+- **Imports** :: use `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`, and `@earendil-works/pi-ai`; import `Type` from `typebox` (TypeBox 1.x), not `@sinclair/typebox` or the retired `@mariozechner/*` scopes.
+- **UI mode** :: use `ctx.mode === "tui"` before opening a custom component with `ctx.ui.custom()` or using terminal-only TUI APIs. `ctx.hasUI` is also true in RPC mode and is appropriate only for UI methods RPC supports, such as `notify`, `input`, and `select`.
+- **True idle** :: integrations that report completion must wait for `agent_settled`, not `agent_end`: retries, compaction recovery, and queued follow-ups may continue after `agent_end`.
+- **Event subscriptions** :: retain every unsubscribe function returned by `pi.events.on()` and call it from an idempotent `session_shutdown` handler. Do not let listeners survive `/reload` or session replacement.
+- **Transcript visibility** :: use `pi.appendEntry()` plus `pi.registerEntryRenderer()` for durable human-facing TUI transcript data that must not enter model context. Use `pi.sendMessage()` only when the model must receive the content; custom messages are model-visible even when `display: true`.
+
 ## Events, Commands & Keybindings
 
 Extensions should expose reusable actions via **events on `pi.events`** under a common prefix (e.g. `term:toggle`, `term:prev`). Slash commands, shortcuts, tools, and other extensions should dispatch those same events instead of duplicating action logic.
@@ -111,5 +119,6 @@ export default function (pi: ExtensionAPI) {
 
 - Prefer slash commands and documented suggested keybindings for most extension actions; reserve `pi.registerShortcut` for high-value global shortcuts.
 - Keep implementation behind `pi.events` so slash commands, shortcuts, tools, and other extensions share one action path.
+- Release every `pi.events.on()` subscription during `session_shutdown`; cleanup must tolerate repeated shutdown paths.
 - Read `keybindings.md` before choosing a default shortcut, and avoid collisions with built-in bindings.
 - Do not recommend new leader-menu integrations. The old `leader-menu` extension is retired/disabled and should be treated as legacy compatibility code only.

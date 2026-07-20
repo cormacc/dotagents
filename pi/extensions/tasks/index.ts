@@ -617,7 +617,7 @@ export default function (pi: ExtensionAPI) {
   // `Alt+T` is mnemonic ("T" for tasks) and free of pi's built-in
   // keybindings. macOS users may need their terminal configured to send
   // Alt as Meta (e.g. iTerm2: "Use Option as Meta"; kitty: `macos_option_as_alt`).
-  // Override via `~/.pi/agent/keybindings.json` for a different chord.
+  // Override in the configured agent directory's keybindings.json for a different chord.
 
   pi.registerShortcut("alt+t", {
     description: "Show tasks (TASKS.org)",
