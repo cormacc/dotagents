@@ -756,6 +756,15 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
+      // Bare `/tasks` opens the full overlay via `ctx.ui.custom`, which only
+      // TUI implements; RPC's `custom()` resolves to `undefined` immediately
+      // (no dialog is shown), which would otherwise look like the user closed
+      // an overlay they never saw. Report the unsupported mode instead.
+      if (ctx.mode !== "tui") {
+        ctx.ui.notify("/tasks requires TUI mode; use /tasks new or /tasks doctor", "error");
+        return;
+      }
+
       type WorkflowRequest =
         | { type: "archive"; task: Task }
         | { type: "changeRecord"; task: Task }

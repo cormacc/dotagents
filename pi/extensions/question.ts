@@ -58,11 +58,17 @@ export default function question(pi: ExtensionAPI) {
 			"Ask the user a question and let them pick from pre-defined options or type a free-form answer. " +
 			"Use this whenever you need user input to proceed (e.g. choosing between alternatives, confirming a decision, or requesting clarification).",
 		parameters: QuestionParams,
+		// Custom UI blocks on user input; run one question at a time instead of
+		// racing multiple overlays for the same terminal.
+		executionMode: "sequential",
 
 		/* ---- execute ------------------------------------------------- */
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			// Non-interactive fallback
-			if (!ctx.hasUI) {
+			// `ctx.hasUI` is also true in RPC mode, but RPC's `ctx.ui.custom()`
+			// resolves to `undefined` immediately instead of showing a dialog,
+			// which would otherwise be reported as a false user cancellation.
+			// Custom components are TUI-only, so gate on `ctx.mode` directly.
+			if (ctx.mode !== "tui") {
 				return {
 					content: [{ type: "text", text: "Error: UI not available (running in non-interactive mode)" }],
 					details: {

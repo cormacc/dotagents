@@ -35,6 +35,20 @@ If no candidate is found, the extension surfaces one actionable error:
 Subcommand auto-completion is exposed via `getArgumentCompletions`, so typing
 `/tasks ` shows `new` and `doctor` with descriptions in the prompt.
 
+#### Mode contract
+
+Bare `/tasks` opens the full overlay via `ctx.ui.custom()`, which only the
+TUI implements; RPC's `custom()` resolves to `undefined` immediately with no
+dialog shown. `runTasksCommand` therefore gates the overlay open on
+`ctx.mode === "tui"` and reports `/tasks requires TUI mode; use /tasks new
+or /tasks doctor` via `ctx.ui.notify(..., "error")` for every other mode,
+rather than silently no-oping.
+
+`/tasks new` and `/tasks doctor` only use `ctx.ui.input`/`ctx.ui.notify`
+(no custom component), which RPC does implement, so both remain
+RPC-capable — gated on `ctx.hasUI` (true in TUI and RPC, false in `json`
+and `print`) rather than `ctx.mode`.
+
 ### Keybindings
 
 | Chord   | Action              | Event        |

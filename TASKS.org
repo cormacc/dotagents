@@ -178,6 +178,19 @@ Code cleanups
 :END:
 Split `parser.clj` (772 LOC) internals behind the existing `org-tasks.parser` facade: scanner + serializer stay together; relocate property accessors, file-keyword/link helpers, linked issues, timestamps. Shared private regexes are the coupling point. Then finish the parser-blocked residue of the 2026-07-03 dedup pass: `closed-statuses` → `lifecycle` (avoiding a parser↔lifecycle cycle), single parser-owned trailing-tag strip. Requires: byte-identical round-trip fixtures after each relocation group. Context: [[plan:2026-07-03-ot-deduplication-and-simplification-pass.org][dedup pass record]] (cancelled tasks 658e60ba, dddd6cf0).
 
+** STARTED [#B] Modernize pi extensions for pi 0.80 APIs :pi:extensions:
+:PROPERTIES:
+:CUSTOM_ID: a763d8fc-0dfb-4207-b957-1573b05a04b9
+:CREATED: [2026-07-20 Mon 14:15]
+:STARTED: [2026-07-20 Mon 15:25]
+:END:
+:LOGBOOK:
+- Created [2026-07-20 Mon 14:15]
+- State "STARTED" from "TODO" [2026-07-20 Mon 15:25]
+:END:
+#+IMPORT: [[plan:2026-07-20-modernize-pi-extensions-for-pi-0-80-apis.org]]
+Apply the extension-development improvements identified in the pi 0.80.10 changelog review, prioritising correctness, lifecycle cleanup, context efficiency, and current public APIs.
+
 * Fixes
 ** TODO ot: id args that look like scientific notation get number-coerced
 :PROPERTIES:

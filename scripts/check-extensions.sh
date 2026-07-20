@@ -11,3 +11,9 @@ done
 
 printf '\n==> pi/extensions/ext-dev/index.test.ts\n'
 ./node_modules/.bin/tsx pi/extensions/ext-dev/index.test.ts
+
+printf '\n==> pi/extensions/question.test.ts\n'
+./node_modules/.bin/tsx pi/extensions/question.test.ts
+
+printf '\n==> pi/extensions/question.pi-integration.test.ts\n'
+./node_modules/.bin/tsx pi/extensions/question.pi-integration.test.ts

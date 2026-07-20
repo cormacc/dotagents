@@ -106,4 +106,11 @@ if command -v tsx >/dev/null 2>&1; then
 else
   npx --yes tsx ./ot.test.ts || CODE=1
 fi
+
+echo "# Running /tasks mode-boundary RPC integration tests..."
+if command -v tsx >/dev/null 2>&1; then
+  tsx ./pi-integration.test.ts || CODE=1
+else
+  npx --yes tsx ./pi-integration.test.ts || CODE=1
+fi
 exit "$CODE"
