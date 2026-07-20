@@ -66,6 +66,10 @@ debugging the form.
 
 Detect availability by tool list (`clojure_eval` appears when pi-clojure is
 loaded) and `which clj-nrepl-eval` / `which clj-paren-repair` for the CLI.
+`clojure_eval` accepts an optional namespace and 1–2147483647 ms timeout that
+covers connection and response processing; cancellation closes its socket.
+Native eval and string-repair results are bounded to pi's standard 2000 lines
+or 50KB. See the tool guide for discovery probe limits and troubleshooting.
 
 **Use `clj-paren-repair` for file repair even when pi-clojure is loaded** — it
 uses a real Clojure reader (edamame), parinfer-rust, and cljfmt, so the output

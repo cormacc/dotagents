@@ -23,7 +23,9 @@ Port files checked (in order):
 
 Default ports tried: 7888, 1666, 50505, 58885, 63333, 7889
 
-Validates by evaluating `(+ 1 1)` on the discovered port.
+Validates by evaluating `(+ 1 1)` on the discovered port. Discovery stops when
+cancelled; every candidate has a five-second validation budget, including TCP
+connection setup.
 
 ### Parameters for clojure_eval
 
@@ -33,7 +35,7 @@ Validates by evaluating `(+ 1 1)` on the discovered port.
 | `code` | string | Clojure expression to evaluate |
 | `host` | string | nREPL host (default: `"localhost"`) |
 | `ns` | string | Namespace to evaluate in (optional) |
-| `timeout` | number | Timeout in ms (default: 30000) |
+| `timeout` | integer | 1–2147483647 ms; covers connection setup and response processing (default: 30000) |
 
 ### Examples
 
@@ -56,6 +58,10 @@ clojure_eval { port: PORT, code: "(str/upper-case \"hello\")" }
 # Evaluate in a specific namespace
 clojure_eval { port: PORT, ns: "project.core", code: "(my-fn 42)" }
 ```
+
+Pi cancellation aborts pending connection/evaluation work and closes the socket.
+Eval output and tool details are bounded to pi's standard 2000 lines or 50KB;
+read source or use a narrower expression when more data is needed.
 
 ### Discovery commands
 
@@ -194,7 +200,8 @@ Supported: `.clj`, `.cljs`, `.cljc`, `.bb`, `.edn`, `.lpy`
 
 Native pi tool. Uses JS parinfer. Operates on code strings, not files.
 Use when `clj-paren-repair` is unavailable, or when repairing a string before
-writing a new file.
+writing a new file. Repair output is bounded to pi's standard 2000 lines or
+50KB.
 
 ```
 # Fix unbalanced delimiters

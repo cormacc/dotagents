@@ -86,6 +86,9 @@ Adopt the extension-facing capabilities and lifecycle guarantees added from pi 0
 - MODIFIED =pi/extensions/systemprompt.ts= so TUI display uses a persisted custom entry, RPC uses UI notification output, and JSON/print remain side-effect free; the prompt no longer enters model context.
 - MODIFIED =pi/extensions/lsp= rename handling to return bounded standard before/after diffs and invalidate location-preview cache entries after mutations and session shutdown.
 - MODIFIED maintained extension dependencies/imports to current =@earendil-works/*= and TypeBox 1.x packages; Jira/tasks settings and the pi-side org-tasks fallback now honor the configured agent directory.
+- MODIFIED the owned =pi-clojure= extension with cancellable, single-settlement nREPL transport, bounded discovery/results, validated schemas, comprehensive transport/tool tests, and ownership-accurate documentation.
+- MODIFIED =skills/clojure/SKILL.md= and =skills/clojure/references/tool-guide.md= for the native tools' timeout, cancellation, discovery-budget, and output-bound contracts.
+- REMOVED the vendoring-oriented =pi/extensions/pi-clojure/FORK-CHANGES.md= name in favor of =HISTORY.md= while preserving import and license attribution.
 
 ** Gotchas
 
@@ -202,10 +205,16 @@ Acceptance criteria:
 
 Maintained scope: every extension under =pi/extensions/= except =herdr-agent-state.ts=, whose canonical source must be located first; =pi-clojure= receives import normalization in this task and behavioral hardening in the dedicated following task. Hardcoded paths: =pi/extensions/tasks/index.ts:95=, =pi/extensions/jira/index.ts:44=, =pi/extensions/tasks/ot.ts:31-32= (only the =~/.pi/agent= entry migrates).
 
-** TODO [#A] Harden and simplify the owned pi-clojure extension
+** DONE [#A] Harden and simplify the owned pi-clojure extension
+CLOSED: [2026-07-20 Mon 17:25]
 :PROPERTIES:
 :CUSTOM_ID: dcb32da7-a212-4c7e-ba0f-0c175d8c55f5
 :CREATED: [2026-07-20 Mon 15:25]
+:STARTED: [2026-07-20 Mon 17:12]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-20 Mon 17:12]
+- State "DONE" from "STARTED" [2026-07-20 Mon 17:25]
 :END:
 Acceptance criteria:
 - Real =@earendil-works/pi-coding-agent= and TypeBox 1.x types replace the obsolete ambient coding-agent declarations in =types.d.ts=; only dependency declarations still lacking published types remain local.
@@ -258,3 +267,4 @@ Acceptance criteria:
 - Human-only prompt display: =/systemprompt= uses =appendEntry=/=registerEntryRenderer= in TUI and =ctx.ui.notify= in RPC. Its RPC harness isolates the agent directory and resolves the installed pi 0.80.10 binary rather than the stale project-local pi binary.
 - LSP rename diffs: workspace edits capture before/after content under the existing per-file mutation queues, invalidate previews before document refresh, and bound both model content and expandable details. The pi 0.80.10 development dependency was pulled forward as the narrow prerequisite for the public diff helper; full scope normalization followed in the next task.
 - Imports and paths: maintained extensions now use current package roots and =typebox= 1.1.38. A shared =getAgentPath()= derives global paths from =getAgentDir()= while the independent =~/.agents/skills= fallback remains literal; RPC harnesses isolate their agent directories.
+- Owned Clojure tooling: nREPL timeout starts before connect, tool cancellation destroys the socket, all transport outcomes settle once, and each discovery probe has its own budget. Eval/repair content and details use pi's standard bounds; the production-only install was verified outside the repository with host-provided pi/TypeBox peers and local =bencode=/=parinfer= runtime dependencies.

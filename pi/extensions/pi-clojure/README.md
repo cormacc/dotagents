@@ -1,155 +1,66 @@
 # pi-clojure
 
-A set of Clojure development tools implemented in pure JavaScript for the [pi-coding-agent](https://github.com/badlogic/pi-mono).
-
-## Why this project?
-
-Existing solutions for Clojure evaluation in AI coding agents (e.g., [clojure-mcp](https://github.com/bhauman/clojure-mcp), [clojure-mcp-light](https://github.com/bhauman/clojure-mcp-light)) either:
-- Introduce the overhead of MCP (Model Context Protocol) as an additional communication layer
-- Rely on CLI tools for execution, which adds process spawn overhead
-
-These approaches can create performance bottlenecks, especially on resource-constrained systems. Additionally, MCP introduces complexity in setup and maintenance.
-
-This project takes a different approach: implementing Clojure evaluation as native pi tools that communicate directly with nREPL via TCP sockets. This eliminates any middleware layer, providing:
-
-- **Zero overhead**: Direct tool invocation without MCP protocol translation
-- **Direct execution**: Code evaluated directly via nREPL without CLI process spawning overhead
-- **Simpler architecture**: No external dependencies or protocol adapters
-
-## Installation
-
-```bash
-pi install npm:pi-clojure
-```
+`pi-clojure` is the maintained native Clojure extension in this repository. It
+connects directly to an existing nREPL over TCP and also provides string-level
+paren repair. It is loaded from the dotagents/pi extension configuration; this
+repository, not an npm package, is the maintained source.
 
 ## Tools
 
 | Tool | Description |
-|------|-------------|
-| `clojure_eval` | Evaluates Clojure code via nREPL |
-| `clojure_find_nrepl_port` | Finds nREPL port by checking port files or trying default ports |
-| `clojure_paren_repair` | Fixes unbalanced delimiters in Clojure/ClojureScript/Babashka code. Standalone — no nREPL required. |
+| --- | --- |
+| `clojure_find_nrepl_port` | Finds an nREPL port from project port files or common defaults. Each probe has a five-second budget. |
+| `clojure_eval` | Evaluates Clojure code through an existing nREPL connection. |
+| `clojure_paren_repair` | Checks or repairs delimiters in a Clojure-family source string with parinfer. |
 
-### clojure_eval
+There are no slash commands or default keybindings.
 
-Evaluates Clojure code via nREPL.
+### `clojure_eval`
 
+Requires a running nREPL. Use `clojure_find_nrepl_port` first, or start one
+manually (for example, `bb nrepl`, `lein repl :headless`, or `clj -M:repl`).
 
-**Note:** Requires an existing nREPL connection. Use `clojure_find_nrepl_port` to find a running nREPL, or start one manually.
+| Parameter | Description |
+| --- | --- |
+| `code` | Clojure expression to evaluate. |
+| `port` | TCP port from 1 through 65535. |
+| `host` | nREPL host (default: `localhost`). |
+| `ns` | Optional namespace forwarded on the nREPL `eval` request. |
+| `timeout` | Optional 1–2147483647 ms budget (default: 30000), covering connection and response processing. |
 
+Pi cancellation aborts the pending connection or evaluation and closes its
+socket. Results are limited to pi's standard 2000 lines or 50KB before they
+enter model context or result details.
 
-#### Features
+### `clojure_find_nrepl_port`
 
-- Evaluates Clojure code via nREPL protocol
-- Discovers nREPL endpoints on common ports
-- Supports custom namespaces
-- Handles stdout/stderr output
+Searches `.nrepl-port`, `nrepl-port`, `.shadow-cljs/nrepl.port`, and
+`.cider-nrepl.port`, then probes 7888, 1666, 50505, 58885, 63333, and 7889.
+Discovery stops on cancellation. An unresponsive candidate cannot consume more
+than the five-second validation budget.
 
-#### Configuration
+### `clojure_paren_repair`
 
-##### Default nREPL Ports
+Accepts `code` and an optional `check` flag. It repairs strings only; use the
+`clj-paren-repair` CLI for in-place file repair. Repaired output uses the same
+2000-line/50KB bounds as evaluation output.
 
-The extension auto-detects nREPL on these ports:
-- 7888, 1666, 50505, 58885, 63333, 7889
-
-##### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `code` | string | Clojure code to evaluate |
-| `port` | number | nREPL port (required) |
-| `host` | string | nREPL host (default: localhost) |
-| `ns` | string | Target namespace |
-
-#### Usage
-
-Start nREPL in your Clojure project:
+## Development
 
 ```bash
-clj -M:nrepl
+cd pi/extensions/pi-clojure
+./test.sh
 ```
 
-Then use the `clojure_eval` tool in pi-coding-agent to evaluate code.
+Runtime dependencies are `bencode` and `parinfer`. Pi's coding-agent API and
+TypeBox are host-bundled peer dependencies (with exact development copies for
+typechecking), so the Home Manager production install (`npm install --omit=dev`)
+does not bundle a second pi runtime. This was verified with isolated pi 0.80.10:
+all three tools registered after a production-only install.
 
-### clojure_find_nrepl_port
+## History and license
 
-Finds the nREPL port by checking for port files in the current directory or trying common default ports. Validates the connection by evaluating `(+ 1 1)`.
-
-#### Features
-
-- Checks for common nREPL port files:
-  - `.nrepl-port`
-  - `nrepl-port`
-  - `.shadow-cljs/nrepl.port`
-  - `.cider-nrepl.port`
-- Falls back to default ports: 7888, 1666, 50505, 58885, 63333, 7889
-- Validates by connecting and evaluating `(+ 1 1)`
-
-#### Parameters
-
-None.
-
-#### Usage
-
-```clojure
-;; Find the nREPL port
-(clojure_find_nrepl_port {})
-;; Returns: Found nREPL port 7888 at localhost:7888
-```
-
-### clojure_paren_repair
-
-Fixes unbalanced delimiters in Clojure, ClojureScript, and Babashka code using [parinfer](https://www.npmjs.com/package/parinfer). **Standalone tool — does not require nREPL or any running process.**
-
-Works with all Clojure-type source files: .clj, .cljs, .cljc, .bb
-
-#### Features
-
-- Works with Clojure, ClojureScript, and Babashka
-- Detects unbalanced `(`, `[`, `{`, `)`, `]`, `}`
-- Auto-inserts missing closing delimiters
-- Handles strings, comments, and escape sequences
-- Pure JavaScript implementation (no native deps)
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `code` | string | Clojure code with potentially unbalanced delimiters |
-| `check` | boolean | (optional) Only check if balanced, don't fix |
-
-#### Usage
-
-```clojure
-;; Fix unbalanced delimiters
-(clojure_paren_repair { code: "(defn foo [x]" })
-;; Returns: Fixed delimiters:
-;; ```clojure
-;; (defn foo [x])
-;; ```
-
-;; Check if balanced (without fixing)
-(clojure_paren_repair { code: "(defn foo [x])", check: true })
-;; Returns: Code has balanced delimiters
-```
-
-#### Examples
-
-| Input | Output |
-|-------|--------|
-| `(defn foo [x]` | `(defn foo [x])` |
-| `((foo [bar] [baz]` | `((foo [bar] [baz]))` |
-| `(defn foo [x y] x)` | `(defn foo [x y] x)` (no change) |
-
-## License
-
-EPL-2.0
-
-Copyright © 2026-present Marko Kocic <marko@euptera.com>
-
-
-## Source
-
-https://github.com/markokocic/pi-clojure
-
-See [./FORK-CHANGES.md](local changelog) for changes w.r.t. upstream.
+The extension was originally imported from
+[`markokocic/pi-clojure`](https://github.com/markokocic/pi-clojure). Original
+authorship and the EPL-2.0 license are preserved in [LICENSE](LICENSE).
+[HISTORY.md](HISTORY.md) records that import and locally shipped changes.

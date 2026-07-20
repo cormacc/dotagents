@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: EPL-2.0
 // Copyright © 2026-present Marko Kocic <marko@euptera.com>
 
+import {
+  DEFAULT_MAX_BYTES,
+  DEFAULT_MAX_LINES,
+  defineTool,
+  truncateHead,
+} from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { defineTool } from "@earendil-works/pi-coding-agent";
-import { indentMode } from "parinfer";
+import parinfer from "parinfer";
 
 function detectImbalance(code: string): boolean {
   let depth = 0;
@@ -11,29 +16,21 @@ function detectImbalance(code: string): boolean {
 
   for (let i = 0; i < code.length; i++) {
     const ch = code[i];
-
-    // Handle escape sequences inside strings
     if (inString && ch === "\\" && i + 1 < code.length) {
       i++;
       continue;
     }
-
     if (ch === '"') {
       inString = !inString;
       continue;
     }
-
     if (inString) continue;
-
-    // Skip line comments (';' is not a delimiter in Clojure)
     if (ch === ";") {
       while (i < code.length && code[i] !== "\n") i++;
       continue;
     }
-
     if (ch === "(" || ch === "[" || ch === "{") depth++;
     if (ch === ")" || ch === "]" || ch === "}") depth--;
-
     if (depth < 0) return true;
   }
 
@@ -41,36 +38,36 @@ function detectImbalance(code: string): boolean {
 }
 
 function fixDelimiters(code: string): string {
-  const result = indentMode(code, { forceBalance: true });
+  const result = parinfer.indentMode(code, { forceBalance: true });
   return result.text ?? code;
+}
+
+function boundOutput(text: string) {
+  return truncateHead(text, {
+    maxLines: DEFAULT_MAX_LINES,
+    maxBytes: DEFAULT_MAX_BYTES,
+  });
 }
 
 export const parenRepairTool = defineTool({
   name: "clojure_paren_repair",
   label: "Clojure Paren Repair",
-  description: "Fix unbalanced delimiters in Clojure, ClojureScript, and Babashka code using parinfer. Works with all Clojure-type source files (.clj, .cljs, .cljc, .bb). Standalone tool — does not require nREPL or any running process.",
+  description: "Fix unbalanced delimiters in Clojure, ClojureScript, and Babashka code using parinfer. Output is limited to pi's standard 2000 lines or 50KB.",
   promptSnippet: "Fix unbalanced delimiters in Clojure code",
   parameters: Type.Object({
     code: Type.String({ description: "Clojure code with potentially unbalanced delimiters" }),
     check: Type.Optional(
-      Type.Boolean({ description: "Only check if delimiters are balanced, don't fix" })
+      Type.Boolean({ description: "Only check if delimiters are balanced, don't fix" }),
     ),
   }),
 
   async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-    const code = String(params.code);
-    const check = params.check === true;
-
+    const code = params.code;
     const isImbalanced = detectImbalance(code);
 
-    if (check) {
+    if (params.check) {
       return {
-        content: [
-          {
-            type: "text",
-            text: isImbalanced ? "Code has unbalanced delimiters" : "Code has balanced delimiters",
-          },
-        ],
+        content: [{ type: "text", text: isImbalanced ? "Code has unbalanced delimiters" : "Code has balanced delimiters" }],
         details: { balanced: !isImbalanced },
       };
     }
@@ -84,18 +81,14 @@ export const parenRepairTool = defineTool({
 
     const repaired = fixDelimiters(code);
     const changed = code !== repaired;
+    const output = changed
+      ? `Fixed delimiters:\n\`\`\`clojure\n${repaired}\n\`\`\``
+      : "Could not repair delimiters";
+    const truncation = boundOutput(output);
 
     return {
-      content: [
-        {
-          type: "text",
-          text: changed
-            ? `Fixed delimiters:\n\`\`\`clojure\n${repaired}\n\`\`\``
-            : "Could not repair delimiters",
-        },
-      ],
-      details: { changed, balanced: !detectImbalance(repaired) },
+      content: [{ type: "text", text: truncation.content }],
+      details: { changed, balanced: !detectImbalance(repaired), truncation },
     };
   },
 });
-

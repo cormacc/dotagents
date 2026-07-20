@@ -13,16 +13,25 @@
   "keywords": [
     "pi-package",
     "clojure",
-    "pi", "pi-coding-agent",
-    "pi-extension", "extension",
-    "pi-tool","tools"
+    "pi",
+    "pi-coding-agent",
+    "pi-extension",
+    "extension",
+    "pi-tool",
+    "tools"
   ],
   "dependencies": {
     "bencode": "4.0.0",
     "parinfer": "3.13.1"
   },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.80.10",
+    "@types/node": "25.6.0",
     "typebox": "1.1.38",
-    "@types/node": "25.6.0"
+    "typescript": "5.9.3"
   }
 }
