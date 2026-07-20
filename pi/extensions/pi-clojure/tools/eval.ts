@@ -58,7 +58,7 @@ export function createEvalTool(runEval: typeof evalExpr = evalExpr) {
 
         return {
           content: [{ type: "text", text: truncation.content }],
-          details: { output: truncation.content, truncation },
+          details: { truncation },
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

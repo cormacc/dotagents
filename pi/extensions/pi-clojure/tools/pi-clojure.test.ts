@@ -155,7 +155,13 @@ async function main() {
   assert(evalText.split("\n").length <= DEFAULT_MAX_LINES);
   assert(Buffer.byteLength(evalText) <= DEFAULT_MAX_BYTES);
   assert(evalResult.details && !("vals" in (evalResult.details as object)), "details must not retain unbounded values");
-  console.log("ok - bounds eval content and details");
+  assert.deepEqual(Object.keys(evalResult.details as object), ["truncation"], "details must not duplicate bounded output");
+  assert.equal(
+    (evalResult.details as { truncation: { content: string } }).truncation.content,
+    evalText,
+    "truncation metadata must retain the rendered output",
+  );
+  console.log("ok - bounds eval content and avoids duplicate details output");
 
   const repaired = await parenRepairTool.execute("test", { code: "'(foo bar" }, undefined, undefined, {} as never);
   assert.match((repaired.content[0] as { text: string }).text, /Fixed delimiters/);
