@@ -39,6 +39,7 @@
     "@sinclair/typebox": "*"
   },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.80.10",
     "tsx": "4.23.1",
     "yaml": "2.9.0"
   },

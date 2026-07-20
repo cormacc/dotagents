@@ -84,6 +84,7 @@ Adopt the extension-facing capabilities and lifecycle guarantees added from pi 0
 ** Shipped
 - MODIFIED =pi/extensions/emacsclient= and =pi/extensions/jira= to release shared event-bus subscriptions on =session_shutdown=; a regression test covers reload, replacement, and idempotent cleanup.
 - MODIFIED =pi/extensions/systemprompt.ts= so TUI display uses a persisted custom entry, RPC uses UI notification output, and JSON/print remain side-effect free; the prompt no longer enters model context.
+- MODIFIED =pi/extensions/lsp= rename handling to return bounded standard before/after diffs and invalidate location-preview cache entries after mutations and session shutdown.
 
 ** Gotchas
 
@@ -160,10 +161,16 @@ Acceptance criteria:
 
 Current model-visible call: =pi/extensions/systemprompt.ts:9-13= (=pi.sendMessage= with =display: true=); target pattern: installed =examples/extensions/entry-renderer.ts=.
 
-** TODO [#A] Adopt standard rename diffs and coherent LSP cache invalidation
+** DONE [#A] Adopt standard rename diffs and coherent LSP cache invalidation
+CLOSED: [2026-07-20 Mon 16:48]
 :PROPERTIES:
 :CUSTOM_ID: 24e85559-64ba-42a1-9966-9829425f74ef
 :CREATED: [2026-07-20 Mon 14:20]
+:STARTED: [2026-07-20 Mon 16:36]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-20 Mon 16:36]
+- State "DONE" from "STARTED" [2026-07-20 Mon 16:48]
 :END:
 Acceptance criteria:
 - =applyWorkspaceEdit()= captures old/new content and returns =generateDiffString()= or =generateUnifiedPatch()= output for each modified file.
@@ -242,3 +249,4 @@ Acceptance criteria:
 * Implementation
 - Interactive boundaries: =question= is sequential and TUI-only; bare =/tasks= is TUI-only while =/tasks new= and =/tasks doctor= remain RPC-capable. Unit, component-smoke, and RPC integration coverage enforce the distinction.
 - Human-only prompt display: =/systemprompt= uses =appendEntry=/=registerEntryRenderer= in TUI and =ctx.ui.notify= in RPC. Its RPC harness isolates the agent directory and resolves the installed pi 0.80.10 binary rather than the stale project-local pi binary.
+- LSP rename diffs: workspace edits capture before/after content under the existing per-file mutation queues, invalidate previews before document refresh, and bound both model content and expandable details. The pi 0.80.10 development dependency was pulled forward as the narrow prerequisite for the public diff helper; full scope normalization remains in the following task.

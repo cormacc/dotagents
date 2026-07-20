@@ -1,4 +1,5 @@
 import { StringEnum } from "@mariozechner/pi-ai";
+import { generateDiffString } from "@earendil-works/pi-coding-agent";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -22,7 +23,7 @@ import {
 } from "./languages";
 import {
   formatReferences,
-  formatRename,
+  invalidateFilePreview,
   formatDocumentSymbols,
   formatWorkspaceSymbol,
   formatCompletion,
@@ -443,30 +444,117 @@ async function withFileMutationQueues<T>(
   return run(0);
 }
 
-async function applyWorkspaceEdit(
+export interface WorkspaceEditDiff {
+  path: string;
+  editCount: number;
+  diff: string;
+}
+
+export interface AppliedWorkspaceEdit {
+  summary: string;
+  diff: string;
+  files: WorkspaceEditDiff[];
+}
+
+export function buildLspToolResult(
+  resultText: string,
+  language: string,
+  action: Action,
+  summary: string,
+) {
+  const truncation = truncateHead(resultText, {
+    maxLines: DEFAULT_MAX_LINES,
+    maxBytes: DEFAULT_MAX_BYTES,
+  });
+
+  return {
+    content: [{ type: "text" as const, text: truncation.content }],
+    details: {
+      language,
+      action,
+      summary,
+      ...(action === "rename" ? { diff: truncation.content } : {}),
+    },
+  };
+}
+
+interface DocumentRefresher {
+  refreshDocument(path: string): Promise<unknown>;
+}
+
+export async function applyWorkspaceEdit(
   edit: WorkspaceEdit,
-  client: LspClient,
-): Promise<void> {
+  client: DocumentRefresher,
+): Promise<AppliedWorkspaceEdit> {
   const fileEdits = collectWorkspaceEditChanges(edit);
   const paths = [...fileEdits.keys()];
-  if (paths.length === 0) return;
+  if (paths.length === 0) {
+    return {
+      summary: "No rename changes generated.",
+      diff: "No rename changes generated.",
+      files: [],
+    };
+  }
 
-  await withFileMutationQueues(paths, async () => {
-    const nextContents = new Map<string, string>();
+  return withFileMutationQueues(paths, async () => {
+    const nextContents = new Map<
+      string,
+      { oldContent: string; newContent: string; editCount: number }
+    >();
 
     for (const path of paths) {
-      const content = readFileSync(path, "utf8");
-      const next = applyTextEdits(content, fileEdits.get(path) ?? [], path);
-      nextContents.set(path, next);
+      const oldContent = readFileSync(path, "utf8");
+      const newContent = applyTextEdits(
+        oldContent,
+        fileEdits.get(path) ?? [],
+        path,
+      );
+      nextContents.set(path, {
+        oldContent,
+        newContent,
+        editCount: fileEdits.get(path)?.length ?? 0,
+      });
     }
 
-    for (const path of paths) {
-      writeFileSync(path, nextContents.get(path) ?? "", "utf8");
+    const changed = paths.filter((path) => {
+      const contents = nextContents.get(path);
+      return contents?.oldContent !== contents?.newContent;
+    });
+    const files = changed.map((path) => {
+      const contents = nextContents.get(path)!;
+      return {
+        path,
+        editCount: contents.editCount,
+        diff: generateDiffString(contents.oldContent, contents.newContent).diff,
+      };
+    });
+
+    for (const path of changed) {
+      writeFileSync(path, nextContents.get(path)!.newContent, "utf8");
+      invalidateFilePreview(path);
     }
 
-    for (const path of paths) {
+    for (const path of changed) {
       await client.refreshDocument(path);
     }
+
+    if (files.length === 0) {
+      return {
+        summary: "No rename changes generated.",
+        diff: "No rename changes generated.",
+        files,
+      };
+    }
+
+    const editCount = files.reduce((total, file) => total + file.editCount, 0);
+    const summary = `Applied ${editCount} edit(s) in ${files.length} file(s).`;
+    return {
+      summary,
+      diff: `${summary}\n\n${files
+        .map((file) => `${file.path}:\n${file.diff}`)
+        .join("\n\n")}`,
+      files,
+    };
   });
 }
 
@@ -617,6 +705,7 @@ export default function (pi: ExtensionAPI) {
       await client.stop().catch(() => {});
     }
     servers.clear();
+    invalidateFilePreview();
   });
 
   pi.registerTool({
@@ -690,6 +779,7 @@ export default function (pi: ExtensionAPI) {
       });
 
       let resultText: string;
+      let renameSummary: string | undefined;
 
       switch (action as Action) {
         case "definition": {
@@ -773,13 +863,14 @@ export default function (pi: ExtensionAPI) {
             break;
           }
           try {
-            await applyWorkspaceEdit(result, client);
+            const applied = await applyWorkspaceEdit(result, client);
+            resultText = applied.diff;
+            renameSummary = applied.summary;
           } catch (error) {
             throw new Error(
               `Failed to apply rename edits: ${error instanceof Error ? error.message : String(error)}`,
             );
           }
-          resultText = formatRename(result);
           break;
         }
 
@@ -825,11 +916,6 @@ export default function (pi: ExtensionAPI) {
           );
       }
 
-      const truncation = truncateHead(resultText, {
-        maxLines: DEFAULT_MAX_LINES,
-        maxBytes: DEFAULT_MAX_BYTES,
-      });
-
       const lines = resultText.split("\n");
       const headerLine = lines[0] ?? "";
       let inCodeBlock = false;
@@ -853,14 +939,12 @@ export default function (pi: ExtensionAPI) {
           break;
       }
       const summary =
-        sigLines.length > 0
+        renameSummary ??
+        (sigLines.length > 0
           ? headerLine + "\n" + sigLines.join("\n")
-          : headerLine;
+          : headerLine);
 
-      return {
-        content: [{ type: "text", text: truncation.content }],
-        details: { language, action, summary },
-      };
+      return buildLspToolResult(resultText, language, action, summary);
     },
 
     renderResult(result, options, theme) {
@@ -869,15 +953,17 @@ export default function (pi: ExtensionAPI) {
         .map((c) => c.text)
         .join("");
 
+      const details = result.details as { summary?: string; diff?: string };
       if (!options.expanded) {
-        const summary =
-          (result.details as { summary?: string }).summary ??
-          textContent.split("\n")[0] ??
-          "";
+        const summary = details.summary ?? textContent.split("\n")[0] ?? "";
         return new Text(theme.fg("toolOutput", summary), 0, 0);
       }
 
-      return new Text(theme.fg("toolOutput", textContent), 0, 0);
+      return new Text(
+        theme.fg("toolOutput", details.diff ?? textContent),
+        0,
+        0,
+      );
     },
   });
 

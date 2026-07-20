@@ -38,19 +38,6 @@ interface SymbolInfo {
   detail?: string;
 }
 
-interface TextEdit {
-  range: Range;
-  newText: string;
-}
-
-interface WorkspaceEdit {
-  changes?: Record<string, TextEdit[]>;
-  documentChanges?: (
-    | { textDocument: { uri: string; version?: number }; edits: TextEdit[] }
-    | { kind: string; uri: string; newUri?: string }
-  )[];
-}
-
 interface CompletionItem {
   label: string;
   kind?: number;
@@ -137,6 +124,15 @@ const SEVERITY_LABELS: Record<number, string> = {
 };
 
 const fileLinesCache = new Map<string, string[]>();
+
+/** Forget previews after an extension mutation or when its session ends. */
+export function invalidateFilePreview(path?: string): void {
+  if (path) {
+    fileLinesCache.delete(path);
+  } else {
+    fileLinesCache.clear();
+  }
+}
 
 function uriToPath(uri: string): string {
   try {
@@ -245,45 +241,6 @@ export function formatReferences(result: unknown): string {
     }
   }
   return lines.join("\n");
-}
-
-export function formatRename(result: unknown): string {
-  if (!result) return "Rename not supported or no changes.";
-
-  const edit = result as WorkspaceEdit;
-  const lines: string[] = [];
-
-  if (edit.changes) {
-    let totalEdits = 0;
-    for (const [uri, edits] of Object.entries(edit.changes)) {
-      lines.push(`\n  ${uriToPath(uri)}: ${edits.length} edit(s)`);
-      for (const e of edits) {
-        lines.push(`    ${e.range.start.line + 1}: "${e.newText}"`);
-      }
-      totalEdits += edits.length;
-    }
-    lines.unshift(
-      `Applied ${totalEdits} edit(s) in ${Object.keys(edit.changes).length} file(s):`,
-    );
-  } else if (edit.documentChanges) {
-    let totalEdits = 0;
-    let fileCount = 0;
-    for (const change of edit.documentChanges) {
-      if ("edits" in change) {
-        fileCount++;
-        lines.push(
-          `\n  ${uriToPath(change.textDocument.uri)}: ${change.edits.length} edit(s)`,
-        );
-        for (const e of change.edits) {
-          lines.push(`    ${e.range.start.line + 1}: "${e.newText}"`);
-        }
-        totalEdits += change.edits.length;
-      }
-    }
-    lines.unshift(`Applied ${totalEdits} edit(s) in ${fileCount} file(s):`);
-  }
-
-  return lines.length > 0 ? lines.join("\n") : "No rename changes generated.";
 }
 
 function formatSymbolTree(symbols: SymbolInfo[], indent = ""): string[] {
