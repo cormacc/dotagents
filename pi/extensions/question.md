@@ -27,9 +27,7 @@ something…" entry.
 
 ## Dependencies
 
-`@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `@sinclair/typebox`
-(legacy package scopes; not yet migrated — see the "Normalize public imports"
-plan task).
+`@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`, and `typebox`.
 
 ## Tests
 

@@ -21,7 +21,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
   Theme,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import {
   Input,
   truncateToWidth,
@@ -29,7 +29,7 @@ import {
   type Component,
   type Focusable,
   type TUI,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import {
   existsSync,
   readFileSync,
@@ -40,7 +40,6 @@ import {
 } from "node:fs";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
-import { homedir } from "node:os";
 import { ensureEmacsServer } from "../emacsclient/emacsclient.ts";
 import { TasksOverlay } from "./overlay.ts";
 import {
@@ -76,6 +75,7 @@ import {
 } from "./summary.ts";
 import { colorIssues, colorPriority, colorStatus, colorTags } from "./status-colors.ts";
 import { readEffectiveOrgContent } from "./effective.ts";
+import { getAgentPath } from "../lib/agent-paths.ts";
 
 const TASKS_FILE = "TASKS.org";
 /** Gitignored local file that stores per-contributor selection state. */
@@ -92,8 +92,6 @@ const COMPACT_WIDGET_ID = "tasks:selected";
 
 // ── Tasks-extension user settings ───────────────────────────────────
 
-const TASKS_SETTINGS_PATH = join(homedir(), ".pi", "agent", "tasks-ext.json");
-
 interface TasksSettings {
   /** Default true. When false, status cycle to DONE behaves as it did
       pre-feature — no retrospective change-record path prompt. */
@@ -106,8 +104,9 @@ interface TasksSettings {
 /** Read user settings on demand (cheap; avoids a stale snapshot). */
 function loadTasksSettings(): TasksSettings {
   try {
-    if (existsSync(TASKS_SETTINGS_PATH)) {
-      const parsed = JSON.parse(readFileSync(TASKS_SETTINGS_PATH, "utf-8"));
+    const settingsPath = getAgentPath("tasks-ext.json");
+    if (existsSync(settingsPath)) {
+      const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
       return {
         changeRecordOnDone: parsed?.changeRecordOnDone !== false,
         summaryOnDone: parsed?.summaryOnDone !== false,

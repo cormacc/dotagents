@@ -22,17 +22,12 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getAgentPath } from "../lib/agent-paths.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_LOCAL_OT = join(HERE, "..", "..", "..", "skills", "org-tasks", "scripts", "ot");
 
 /** Default skill-relative fallback paths, in resolution order. */
-const SKILL_PATH_CANDIDATES = [
-  join(homedir(), ".pi", "agent", "skills", "org-tasks", "scripts", "ot"),
-  join(homedir(), ".agents", "skills", "org-tasks", "scripts", "ot"),
-  // Dev/test fallback for running this extension directly from a dotagents checkout.
-  REPO_LOCAL_OT,
-];
 
 /** Cached resolved binary path. Reset by `clearOtBinaryCache` (testing). */
 let cachedOtBinary: string | null | undefined;
@@ -73,7 +68,13 @@ export function resolveOtBinary(): string {
       return candidate;
     }
   }
-  for (const candidate of SKILL_PATH_CANDIDATES) {
+  const skillPathCandidates = [
+    getAgentPath("skills", "org-tasks", "scripts", "ot"),
+    join(homedir(), ".agents", "skills", "org-tasks", "scripts", "ot"),
+    // Dev/test fallback for running this extension directly from a dotagents checkout.
+    REPO_LOCAL_OT,
+  ];
+  for (const candidate of skillPathCandidates) {
     if (existsSync(candidate)) {
       cachedOtBinary = candidate;
       return candidate;

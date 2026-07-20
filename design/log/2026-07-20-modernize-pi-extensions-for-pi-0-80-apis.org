@@ -85,6 +85,7 @@ Adopt the extension-facing capabilities and lifecycle guarantees added from pi 0
 - MODIFIED =pi/extensions/emacsclient= and =pi/extensions/jira= to release shared event-bus subscriptions on =session_shutdown=; a regression test covers reload, replacement, and idempotent cleanup.
 - MODIFIED =pi/extensions/systemprompt.ts= so TUI display uses a persisted custom entry, RPC uses UI notification output, and JSON/print remain side-effect free; the prompt no longer enters model context.
 - MODIFIED =pi/extensions/lsp= rename handling to return bounded standard before/after diffs and invalidate location-preview cache entries after mutations and session shutdown.
+- MODIFIED maintained extension dependencies/imports to current =@earendil-works/*= and TypeBox 1.x packages; Jira/tasks settings and the pi-side org-tasks fallback now honor the configured agent directory.
 
 ** Gotchas
 
@@ -180,10 +181,16 @@ Acceptance criteria:
 
 Stale cache: module-level =fileLinesCache= at =pi/extensions/lsp/formatters.ts:139=; rename writes and document refresh at =pi/extensions/lsp/index.ts:446-468=; shutdown handler at =:615= stops servers only.
 
-** TODO [#B] Normalize public imports and agent-directory paths
+** DONE [#B] Normalize public imports and agent-directory paths
+CLOSED: [2026-07-20 Mon 17:12]
 :PROPERTIES:
 :CUSTOM_ID: 31955d91-f107-48d0-b6e1-8af3817b9554
 :CREATED: [2026-07-20 Mon 14:20]
+:STARTED: [2026-07-20 Mon 16:49]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-20 Mon 16:49]
+- State "DONE" from "STARTED" [2026-07-20 Mon 17:12]
 :END:
 Acceptance criteria:
 - Maintained extension source imports =@earendil-works/pi-coding-agent=, =@earendil-works/pi-tui=, and =@earendil-works/pi-ai= instead of their old scopes.
@@ -249,4 +256,5 @@ Acceptance criteria:
 * Implementation
 - Interactive boundaries: =question= is sequential and TUI-only; bare =/tasks= is TUI-only while =/tasks new= and =/tasks doctor= remain RPC-capable. Unit, component-smoke, and RPC integration coverage enforce the distinction.
 - Human-only prompt display: =/systemprompt= uses =appendEntry=/=registerEntryRenderer= in TUI and =ctx.ui.notify= in RPC. Its RPC harness isolates the agent directory and resolves the installed pi 0.80.10 binary rather than the stale project-local pi binary.
-- LSP rename diffs: workspace edits capture before/after content under the existing per-file mutation queues, invalidate previews before document refresh, and bound both model content and expandable details. The pi 0.80.10 development dependency was pulled forward as the narrow prerequisite for the public diff helper; full scope normalization remains in the following task.
+- LSP rename diffs: workspace edits capture before/after content under the existing per-file mutation queues, invalidate previews before document refresh, and bound both model content and expandable details. The pi 0.80.10 development dependency was pulled forward as the narrow prerequisite for the public diff helper; full scope normalization followed in the next task.
+- Imports and paths: maintained extensions now use current package roots and =typebox= 1.1.38. A shared =getAgentPath()= derives global paths from =getAgentDir()= while the independent =~/.agents/skills= fallback remains literal; RPC harnesses isolate their agent directories.

@@ -17,7 +17,7 @@ not affect overlay or tool-call behaviour.
 `ot` discovery order is:
 
 1. `$PATH` (bbin installs typically land in `~/.local/bin`, Home Manager may expose the in-tree script directly),
-2. `~/.pi/agent/skills/org-tasks/scripts/ot`,
+2. `<configured agent directory>/skills/org-tasks/scripts/ot` (default: `~/.pi/agent/skills/org-tasks/scripts/ot`),
 3. `~/.agents/skills/org-tasks/scripts/ot`,
 4. the repo-local `skills/org-tasks/scripts/ot` fallback used by extension tests.
 
@@ -63,9 +63,9 @@ the same events.
 
 On macOS, the terminal must be configured to send Alt as Meta (e.g.
 iTerm2: "Use Option as Meta"; kitty: `macos_option_as_alt yes`). Users
-can rebind via `~/.pi/agent/keybindings.json` once pi exposes the
-extension's shortcut id; in the meantime the binding is fixed in
-`index.ts`.
+can rebind via `<configured agent directory>/keybindings.json` (default:
+`~/.pi/agent/keybindings.json`) once pi exposes the extension's shortcut id;
+in the meantime the binding is fixed in `index.ts`.
 
 ### Compact selected-task widget
 
@@ -197,7 +197,8 @@ The file linked from a task via `#+IMPORT:` is called a *change-record*. The fil
 
 **Closure-time `* Summary` refresh** — cycling a task with an existing `#+IMPORT:` to `DONE` triggers a parallel check: the extension reads the linked change-record and, when the file either lacks `* Summary` or has not been touched since the parent task's `:STARTED:` timestamp, sends the agent a prompt to author or refresh `* Summary` per the `org-plan` skill's *Closure-time summary refresh* section. The check is sandboxed to the project root and silently skips when the change-record cannot be read.
 
-**Setting:** `~/.pi/agent/tasks-ext.json`
+**Setting:** `<configured agent directory>/tasks-ext.json` (default:
+`~/.pi/agent/tasks-ext.json`)
 
 ```json
 {
@@ -388,4 +389,5 @@ Requires `tsx` on `$PATH` (e.g. via `npx tsx` or a global install).
 
 ## Dependencies
 
-None beyond `@mariozechner/pi-coding-agent` and `@mariozechner/pi-tui`.
+None beyond `@earendil-works/pi-coding-agent` and
+`@earendil-works/pi-tui`.

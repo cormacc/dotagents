@@ -2,7 +2,7 @@
 /** Regression tests for shared pi.events subscription cleanup. */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import registerEmacsclient from "./emacsclient/index.ts";
 
@@ -105,13 +105,12 @@ await assertSessionScoped({
   }),
 });
 
-const originalHome = process.env.HOME;
-const jiraHome = mkdtempSync(join(tmpdir(), "pi-jira-events-"));
+const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
+const jiraAgentDir = mkdtempSync(join(tmpdir(), "pi-jira-events-"));
 try {
-  process.env.HOME = jiraHome;
-  mkdirSync(join(homedir(), ".pi", "agent"), { recursive: true });
+  process.env.PI_CODING_AGENT_DIR = jiraAgentDir;
   writeFileSync(
-    join(homedir(), ".pi", "agent", "jira-ext.json"),
+    join(jiraAgentDir, "jira-ext.json"),
     JSON.stringify({ autoTransition: true }),
   );
 
@@ -133,9 +132,9 @@ try {
     }),
   });
 } finally {
-  if (originalHome === undefined) delete process.env.HOME;
-  else process.env.HOME = originalHome;
-  rmSync(jiraHome, { recursive: true, force: true });
+  if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
+  rmSync(jiraAgentDir, { recursive: true, force: true });
 }
 
 if (failures > 0) process.exit(1);

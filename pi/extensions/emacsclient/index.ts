@@ -12,8 +12,8 @@
  * Set EMACS_SOCKET_NAME to specify a non-default socket.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import {
   buildTsQueryElisp,
   buildEvalElisp,

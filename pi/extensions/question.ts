@@ -8,9 +8,9 @@
  * Based on the upstream pi example: examples/extensions/question.ts
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Editor, type EditorTheme, Key, matchesKey, Text, wrapTextWithAnsi } from "@mariozechner/pi-tui";
-import { Type } from "@sinclair/typebox";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Editor, type EditorTheme, Key, matchesKey, Text, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { Type } from "typebox";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */

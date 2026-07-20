@@ -2,14 +2,14 @@
  * Tasks overlay component — split-pane: task tree (left) + description (right).
  */
 
-import type { Theme } from "@mariozechner/pi-coding-agent";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   matchesKey,
   truncateToWidth,
   visibleWidth,
   wrapTextWithAnsi,
   type TUI,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import type { LinkedIssue, Task } from "./parser.ts";
 import {
   parseLinkTemplates,

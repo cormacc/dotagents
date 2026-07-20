@@ -117,7 +117,7 @@ function createDummyLLM(dir: string, toolCalls: Record<string, any>): string {
   writeFileSync(
     llmPath,
     `
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   type AssistantMessage,
   type AssistantMessageEventStream,
@@ -125,7 +125,7 @@ import {
   type Model,
   type SimpleStreamOptions,
   createAssistantMessageEventStream,
-} from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-ai";
 
 const toolCalls: Record<string, any> = ${callsJson};
 

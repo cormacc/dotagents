@@ -15,12 +15,12 @@
  * MCP tools and TASKS-file edits.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
+import { getAgentPath } from "../lib/agent-paths.ts";
 import { getExtensionName } from "../lib/pi-utils.ts";
 import { insertTaskIntoFile } from "../tasks/insert.ts";
 import {
@@ -41,8 +41,6 @@ import {
 export { getFileKeyword, resolveKey } from "./utils.ts";
 
 /** User-overridable settings file. */
-const USER_SETTINGS_PATH = join(homedir(), ".pi", "agent", "jira-ext.json");
-
 interface UserSettings {
   /** Mirror local TODO→STARTED→DONE on linked Jira issues. Default: false. */
   autoTransition: boolean;
@@ -51,8 +49,9 @@ interface UserSettings {
 function loadUserSettings(): UserSettings {
   const defaults: UserSettings = { autoTransition: false };
   try {
-    if (!existsSync(USER_SETTINGS_PATH)) return defaults;
-    const raw = readFileSync(USER_SETTINGS_PATH, "utf-8");
+    const settingsPath = getAgentPath("jira-ext.json");
+    if (!existsSync(settingsPath)) return defaults;
+    const raw = readFileSync(settingsPath, "utf-8");
     const parsed = JSON.parse(raw) as Partial<UserSettings>;
     return {
       autoTransition:

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: EPL-2.0
 // Copyright © 2026-present Marko Kocic <marko@euptera.com>
 
-import { Type } from "@sinclair/typebox";
-import { defineTool } from "@mariozechner/pi-coding-agent";
+import { Type } from "typebox";
+import { defineTool } from "@earendil-works/pi-coding-agent";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { evalExpr } from "../nrepl-client";

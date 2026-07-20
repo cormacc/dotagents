@@ -22,7 +22,7 @@
     "parinfer": "3.13.1"
   },
   "devDependencies": {
-    "@sinclair/typebox": "0.34.49",
+    "typebox": "1.1.38",
     "@types/node": "25.6.0"
   }
 }

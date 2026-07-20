@@ -1,5 +1,5 @@
-import { StringEnum } from "@mariozechner/pi-ai";
-import { Type } from "@sinclair/typebox";
+import { StringEnum } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { evalExpr } from "../pi-clojure/nrepl-client";

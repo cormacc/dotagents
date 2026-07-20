@@ -3,9 +3,9 @@
  * slice of one extension; tests are opt-in via --include-tests or --files.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { formatSize, getAgentDir } from "@mariozechner/pi-coding-agent";
-import { type AutocompleteItem, Box, Text } from "@mariozechner/pi-tui";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { formatSize, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { type AutocompleteItem, Box, Text } from "@earendil-works/pi-tui";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
