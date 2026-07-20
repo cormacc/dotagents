@@ -208,10 +208,11 @@ When a fact is blocking a planning decision, decide deliberately:
 | User-preference question (scope, effort, UX) | Ask the user. |
 | Codebase fact you have not verified | Spawn a `scout`-style subagent. |
 | External knowledge you do not have | Spawn a `researcher`-style subagent. |
+| Draft change-record needs review | Spawn a read-only `reviewer`; the orchestrator applies only approved findings. |
 | You can answer from context in 30 seconds | Just answer. |
 | The gap is not blocking a decision | Note it under `* Open questions`, move on. |
 
-Wait for any spawned subagent before continuing the section. Fold findings into `** Decisions` / `* Context` / `* Implementation` as appropriate.
+Wait for any spawned subagent before continuing the section. Fold findings into `** Decisions` / `* Context` / `* Implementation` as appropriate. Do not assign review-only change-record work to a write-enabled worker.
 
 ### Update vs new change
 
