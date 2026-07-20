@@ -191,6 +191,16 @@ Split `parser.clj` (772 LOC) internals behind the existing `org-tasks.parser` fa
 #+IMPORT: [[plan:2026-07-20-modernize-pi-extensions-for-pi-0-80-apis.org]]
 Apply the extension-development improvements identified in the pi 0.80.10 changelog review, prioritising correctness, lifecycle cleanup, context efficiency, and current public APIs.
 
+** TODO [#B] Upstream Herdr settled-state Pi integration
+:PROPERTIES:
+:CUSTOM_ID: a6be7668-26a2-4b12-b2b9-c40d07af55dc
+:CREATED: [2026-07-20 Mon 17:30]
+:END:
+:LOGBOOK:
+- Created [2026-07-20 Mon 17:30]
+:END:
+Target: https://github.com/ogulcancelik/herdr, canonical source src/integration/assets/pi/herdr-agent-state.ts (embedded by src/integration/mod.rs). Replace retryGraceMs/retryableErrorPattern and agent_end completion guesses with working state through agent_settled; retain the terminal agent_end error until settlement, then report blocked or idle; retain and idempotently invoke the herdr:blocked event unsubscriber on session_shutdown, including reload/session replacement coverage. Do not edit dotagents pi/extensions/herdr-agent-state.ts directly because Herdr regenerates it.
+
 * Fixes
 ** TODO ot: id args that look like scientific notation get number-coerced
 :PROPERTIES:

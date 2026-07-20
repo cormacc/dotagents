@@ -101,6 +101,7 @@ Adopt the extension-facing capabilities and lifecycle guarantees added from pi 0
 - nREPL cancellation and truncation touch transport/result boundaries; tests must preserve namespace routing, nested/chunked bencode handling, and useful failure diagnostics.
 
 ** Follow-ups
+- [[task:a6be7668-26a2-4b12-b2b9-c40d07af55dc][Upstream Herdr settled-state Pi integration]] owns the external canonical generator change; the Herdr-managed local output remains untouched.
 
 * Plan
 
@@ -229,10 +230,16 @@ Acceptance criteria:
 
 Current gaps: =nrepl-client.ts= starts its timer only after =connect= and does not mark failures settled; tool signals are ignored; eval/repair output and details are unbounded; =types.d.ts= redeclares the old coding-agent API; =README.md= and =FORK-CHANGES.md= still describe a vendored/upstream-owned package.
 
-** TODO [#B] Move Herdr state reporting to settled-agent semantics
+** DONE [#B] Move Herdr state reporting to settled-agent semantics
+CLOSED: [2026-07-20 Mon 17:30]
 :PROPERTIES:
 :CUSTOM_ID: ee397aba-290d-4b94-bc30-be2c3ff60ccc
 :CREATED: [2026-07-20 Mon 14:20]
+:STARTED: [2026-07-20 Mon 17:26]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-20 Mon 17:26]
+- State "DONE" from "STARTED" [2026-07-20 Mon 17:30]
 :END:
 Acceptance criteria:
 - The Herdr integration's canonical source or generator is identified before editing generated output.
@@ -268,3 +275,4 @@ Acceptance criteria:
 - LSP rename diffs: workspace edits capture before/after content under the existing per-file mutation queues, invalidate previews before document refresh, and bound both model content and expandable details. The pi 0.80.10 development dependency was pulled forward as the narrow prerequisite for the public diff helper; full scope normalization followed in the next task.
 - Imports and paths: maintained extensions now use current package roots and =typebox= 1.1.38. A shared =getAgentPath()= derives global paths from =getAgentDir()= while the independent =~/.agents/skills= fallback remains literal; RPC harnesses isolate their agent directories.
 - Owned Clojure tooling: nREPL timeout starts before connect, tool cancellation destroys the socket, all transport outcomes settle once, and each discovery probe has its own budget. Eval/repair content and details use pi's standard bounds; the production-only install was verified outside the repository with host-provided pi/TypeBox peers and local =bencode=/=parinfer= runtime dependencies.
+- Herdr ownership: the canonical asset is external at =ogulcancelik/herdr:src/integration/assets/pi/herdr-agent-state.ts=, embedded by =src/integration/mod.rs=. Upstream integration v6 still carries the retry heuristic and listener leak, so local task [[task:a6be7668-26a2-4b12-b2b9-c40d07af55dc][a6be7668]] owns delivery; the generated local file was not edited.
