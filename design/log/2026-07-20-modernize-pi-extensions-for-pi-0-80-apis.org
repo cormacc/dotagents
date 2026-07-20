@@ -51,6 +51,7 @@ Adopt the extension-facing capabilities and lifecycle guarantees added from pi 0
 - [X] =pi-clojure= tool results are bounded before entering model context or session details.
 - [X] The external Herdr canonical source and required =agent_settled=/listener-cleanup changes are owned by linked follow-up [[task:a6be7668-26a2-4b12-b2b9-c40d07af55dc][a6be7668]]; generated local output remains untouched.
 - [X] Modified extension documentation and all three declared specs describe the resulting mode, lifecycle, context-visibility, and nREPL contracts.
+- [X] Test modules are nested outside the extension auto-discovery root, and validation rejects future root-level test modules.
 *** Edge cases
 - [X] Unsubscribing listeners is idempotent during reload, session switch, and process shutdown.
 - [X] A cancelled or timed-out nREPL operation settles once, closes its socket, and cannot later emit a second result.
@@ -87,8 +88,10 @@ Adopt the extension-facing capabilities and lifecycle guarantees added from pi 0
 - REMOVED the vendoring-oriented =pi/extensions/pi-clojure/FORK-CHANGES.md= name in favor of =HISTORY.md= while preserving import and license attribution.
 - MODIFIED =pi/skills/ext-dev/SKILL.md= with current import, mode, settled-event, event-cleanup, and transcript-visibility contracts.
 - ADDED/UPDATED per-extension READMEs for the modified extension surfaces and hardened metadata discovery against nested =node_modules= trees.
+- MOVED cross-extension and single-file extension tests from =pi/extensions/*.test.ts= to =pi/extensions/test/= so Pi does not auto-load them as extension factories; metadata validation and the ext-dev contract enforce the placement.
 
 ** Gotchas
+- Pi auto-discovers every direct =~/.pi/agent/extensions/*.ts= or =.pi/extensions/*.ts= file as an extension factory; tests and support modules must be nested below the root and must not be named =index.ts= unless they are extension entry points.
 - A stale project-local =node_modules/.bin/pi= can shadow installed pi 0.80.10 when RPC tests run through =npx=; integration harnesses isolate the agent directory and resolve the installed binary deliberately.
 - Development dependencies under an extension can contain example extensions; metadata discovery must skip =node_modules= at every traversal depth.
 
@@ -207,6 +210,19 @@ CLOSED: [2026-07-20 Mon 17:42]
 - State "DONE" from "STARTED" [2026-07-20 Mon 17:42]
 :END:
 
+** DONE [#A] Keep test modules out of extension auto-discovery roots
+CLOSED: [2026-07-20 Mon 17:49]
+:PROPERTIES:
+:CUSTOM_ID: 120580a4-6e72-44e7-b9e5-278d66823cf3
+:CREATED: [2026-07-20 Mon 17:49]
+:STARTED: [2026-07-20 Mon 17:49]
+:END:
+:LOGBOOK:
+- Created [2026-07-20 Mon 17:49]
+- State "STARTED" from "TODO" [2026-07-20 Mon 17:49]
+- State "DONE" from "STARTED" [2026-07-20 Mon 17:49]
+:END:
+
 * Implementation
 - Interactive boundaries: =question= is sequential and TUI-only; bare =/tasks= is TUI-only while =/tasks new= and =/tasks doctor= remain RPC-capable. Unit, component-smoke, and RPC integration coverage enforce the distinction.
 - Human-only prompt display: =/systemprompt= uses =appendEntry=/=registerEntryRenderer= in TUI and =ctx.ui.notify= in RPC. Its RPC harness isolates the agent directory and resolves the installed pi 0.80.10 binary rather than the stale project-local pi binary.
@@ -215,3 +231,4 @@ CLOSED: [2026-07-20 Mon 17:42]
 - Owned Clojure tooling: nREPL timeout starts before connect, tool cancellation destroys the socket, all transport outcomes settle once, and each discovery probe has its own budget. Eval/repair content and details use pi's standard bounds; the production-only install was verified outside the repository with host-provided pi/TypeBox peers and local =bencode=/=parinfer= runtime dependencies.
 - Herdr ownership: the canonical asset is external at =ogulcancelik/herdr:src/integration/assets/pi/herdr-agent-state.ts=, embedded by =src/integration/mod.rs=. Upstream integration v6 still carries the retry heuristic and listener leak, so local task [[task:a6be7668-26a2-4b12-b2b9-c40d07af55dc][a6be7668]] owns delivery; the generated local file was not edited.
 - Final validation: the complete extension matrix, metadata/link checks, package-scope/path scans, and =ot doctor= pass. Metadata discovery now ignores nested dependency trees, so full =pi-clojure= development installs do not create false extension collisions.
+- Test placement regression: root-level test modules were moved under =pi/extensions/test/=, runners and docs follow the new paths, metadata validation rejects recurrence, and a real pi 0.80.10 RPC startup completes without factory-load errors.

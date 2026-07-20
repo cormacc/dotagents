@@ -221,7 +221,7 @@ async function runTest(name: string, testFn: (tempDir: string) => Promise<boolea
 (async function () {
   await runTest("question tool under RPC reports unsupported mode, not cancellation", async (tempDir) => {
     const llm = createDummyLLM(tempDir);
-    const ext = join(__dirname, "question.ts");
+    const ext = join(__dirname, "..", "question.ts");
     const pi = startPi([llm, ext], tempDir);
 
     const events: any[] = [];

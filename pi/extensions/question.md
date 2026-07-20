@@ -31,12 +31,12 @@ something…" entry.
 
 ## Tests
 
-- `question.test.ts` — unit tests: `executionMode` registration, mode
+- `test/question.test.ts` — unit tests: `executionMode` registration, mode
   gating for every non-TUI mode (asserting `ctx.ui.custom()` is never
   called), and interactive smoke tests that drive the actual
   `render`/`handleInput` component returned to `ctx.ui.custom()` (option
   selection, free-text entry, escape-to-cancel) without a real terminal.
-- `question.pi-integration.test.ts` — RPC harness test proving the tool
+- `test/question.pi-integration.test.ts` — RPC harness test proving the tool
   reports the unsupported-mode error rather than a false cancellation when
   run under real `pi --mode rpc`. RPC is intentionally not used to assert
   anything about TUI rendering.

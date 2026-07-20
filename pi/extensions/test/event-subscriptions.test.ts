@@ -4,7 +4,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import registerEmacsclient from "./emacsclient/index.ts";
+import registerEmacsclient from "../emacsclient/index.ts";
 
 type Listener = (...args: any[]) => unknown;
 
@@ -114,7 +114,7 @@ try {
     JSON.stringify({ autoTransition: true }),
   );
 
-  const { default: registerJira } = await import("./jira/index.ts");
+  const { default: registerJira } = await import("../jira/index.ts");
   await assertSessionScoped({
     name: "jira",
     topic: "tasks:status-changed",

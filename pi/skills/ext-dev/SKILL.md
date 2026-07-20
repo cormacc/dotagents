@@ -31,6 +31,7 @@ Paths are in the system prompt under "Additional docs" and "Examples".
 
 - **Shared utilities** :: check `extensions/lib/*.ts` for reusable helpers
   (e.g. `getExtensionName`) before writing new code.
+- **Test placement** :: never put test or support `.ts` files directly under an auto-discovery root such as `~/.pi/agent/extensions/` or `.pi/extensions/`. Pi loads every root `*.ts` file as an extension factory, so a root `foo.test.ts` breaks startup. Put tests for single-file/cross-extension code under `extensions/test/`; keep multi-file extension tests inside their extension subdirectory, where only `index.ts` is auto-discovered.
 - **Documentation** :: Create a short README.md per extension.
   - Multi-file extensions :: `extensions/foo/README.md`
   - Single-file extensions :: `extensions/foo.md`

@@ -126,7 +126,13 @@ if (!existsSync(parserSource)) {
   }
 }
 
-const extensionFiles = walk(join(root, "pi", "extensions"), (path) => path.endsWith(".ts") && !path.endsWith(".test.ts") && !path.includes(`${join("pi", "archive")}`));
+const extensionRoot = join(root, "pi", "extensions");
+for (const entry of readdirSync(extensionRoot, { withFileTypes: true })) {
+  if (entry.isFile() && /\.(?:test|spec)\.ts$/.test(entry.name)) {
+    fail(`pi/extensions/${entry.name}: tests at the auto-discovery root are loaded as extension factories; move under pi/extensions/test/`);
+  }
+}
+const extensionFiles = walk(extensionRoot, (path) => path.endsWith(".ts") && !path.endsWith(".test.ts") && !path.includes(`${join("pi", "archive")}`));
 const commands = new Map<string, string>();
 const tools = new Map<string, string>();
 for (const path of extensionFiles) {

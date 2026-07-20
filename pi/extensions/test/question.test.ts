@@ -15,7 +15,7 @@
  * Run directly with `tsx` (registered as part of pi/scripts/check-extensions.sh).
  */
 
-import question from "./question.ts";
+import question from "../question.ts";
 
 let passed = 0;
 let failed = 0;

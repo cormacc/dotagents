@@ -53,5 +53,5 @@ run_tsx ./read-tool-integration.test.ts || CODE=1
 echo "# Running Pi integration tests..."
 run_tsx ./pi-integration.test.ts || CODE=1
 echo "# Running shared event subscription cleanup tests..."
-run_tsx ../event-subscriptions.test.ts || CODE=1
+run_tsx ../test/event-subscriptions.test.ts || CODE=1
 exit "$CODE"
