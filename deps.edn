@@ -1,10 +1,12 @@
 ;; tools.deps view of the same Babashka dependency policy as bb.edn.
 ;; Keep coordinates and versions byte-for-byte aligned across both files;
 ;; Maven releases are the single source policy (no duplicate git pins).
-{:paths ["skills/org-tasks/scripts/src"]
+{:paths ["skills/org-tasks/scripts/src"
+         "skills/herdr-subagents/scripts/src"]
  :deps  {org.babashka/cli {:mvn/version "0.12.75"}
          io.github.paintparty/bling {:mvn/version "0.10.0"}
          de.timokramer/charm.clj {:mvn/version "0.2.71"}
          no.cjohansen/nexus {:mvn/version "2026.06.4"}}
  :aliases
- {:test {:extra-paths ["skills/org-tasks/scripts/test"]}}}
+ {:test {:extra-paths ["skills/org-tasks/scripts/test"
+                       "skills/herdr-subagents/scripts/test"]}}}

@@ -20,8 +20,8 @@ dotagents/
 ├── design/log/               # durable change-records
 ├── mcp.json                  # tracked generic MCP server configuration
 ├── dirge/                    # Dirge config and prompt set
+├── subagents/                # reusable subagent personas (herdr-subagents roster)
 └── pi/
-    ├── agents/               # custom pi-subagents definitions
     ├── settings.json         # owner-local editable-route pi settings
     ├── skills/               # pi-only chromium and ext-dev skills
     ├── extensions/           # active pi extensions
@@ -95,8 +95,9 @@ git -C ~/dotfiles submodule update --init --recursive
 The consuming `agents.nix` links:
 
 - `skills/` → `~/.agents/skills`
+- `subagents/` → `~/.agents/subagents` (global roster for the `herdr-subagents` skill)
 - `skills/org-tasks/scripts/ot` → `~/.local/bin/ot`
-- `AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, `pi/agents/`, and `pi/settings.json` → `~/.pi/agent/...`
+- `AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, and `pi/settings.json` → `~/.pi/agent/...`
 - `mcp.json` → `~/.config/mcp/mcp.json`
 
 Activation fails early when the submodule is uninitialized. It installs local npm dependencies for chromium, pi-clojure, and dataspex when their manifests change. Chromium and pi-clojure now carry exact direct versions plus tracked lockfiles; the root check exercises those locks with `npm ci`.
@@ -122,9 +123,9 @@ Install declared validation dependencies and run the single root check:
 npm run check
 ```
 
-The command uses the tracked locks (`npm ci`), runs every active extension test runner, the Babashka task suite, installed-parser agent validation, skill metadata/inventory and GitLab routing checks, active relative-link and command/tool collision checks, clean skill-creator validation/packaging, and `nix flake check --impure --no-build` for the native system.
+The command uses the tracked locks (`npm ci`), runs every active extension test runner, the Babashka task suite, subagent-definition frontmatter validation, skill metadata/inventory and GitLab routing checks, active relative-link and command/tool collision checks, clean skill-creator validation/packaging, and `nix flake check --impure --no-build` for the native system.
 
-It requires Node/npm, `bb`, Python 3 with venv support, Nix, Emacs, pi on `PATH`, network access for clean npm/Python dependency installs, and the installed `git:github.com/edxeth/pi-subagents` parser. Override parser source with `PI_SUBAGENTS_SOURCE=/path/to/src/agents/definitions.ts` when needed.
+It requires Node/npm, `bb`, Python 3 with venv support, Nix, Emacs, pi on `PATH`, and network access for clean npm/Python dependency installs.
 
 For task-memory health after repository changes:
 

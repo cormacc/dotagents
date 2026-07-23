@@ -1,8 +1,6 @@
 #!/usr/bin/env tsx
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { parse } from "yaml";
 
 async function main() {
@@ -72,57 +70,48 @@ for (const removed of ["glab-help", "glab-version", "glab-check-update"]) {
   if (existsSync(join(root, "skills", "gitlab-cli-skills", removed))) fail(`trivial GitLab child still exists: ${removed}`);
 }
 
-const parserSource = process.env.PI_SUBAGENTS_SOURCE ?? join(homedir(), ".pi", "agent", "git", "github.com", "edxeth", "pi-subagents", "src", "agents", "definitions.ts");
-if (!existsSync(parserSource)) {
-  fail(`installed pi-subagents parser not found at ${parserSource}; set PI_SUBAGENTS_SOURCE`);
-} else {
-  const tmpRoot = join(root, ".agents", "tmp");
-  mkdirSync(tmpRoot, { recursive: true });
-  const configDir = mkdtempSync(join(tmpRoot, "agent-metadata-"));
-  try {
-    cpSync(join(root, "pi", "agents"), join(configDir, "agents"), { recursive: true });
-    process.env.PI_CODING_AGENT_DIR = configDir;
-    const parser = await import(`${pathToFileURL(parserSource).href}?check=${Date.now()}`) as {
-      getEffectiveAgentDefinitions(cwd?: string): Array<Record<string, any>>;
-    };
-    const definitions = parser.getEffectiveAgentDefinitions(root);
-    const byName = new Map(definitions.map((definition) => [definition.name, definition]));
-    for (const file of readdirSync(join(root, "pi", "agents")).filter((name) => name.endsWith(".md"))) {
-      const expected = basename(file, ".md");
-      const fm = frontmatter(join(root, "pi", "agents", file));
-      const name = String(fm.name ?? expected);
-      if (!byName.has(name)) fail(`installed parser did not load pi/agents/${file} as '${name}'`);
-    }
+const subagentDir = join(root, "subagents");
+const subagentFiles = readdirSync(subagentDir).filter((name) => name.endsWith(".md")).sort();
+if (subagentFiles.length === 0) fail("subagents/ contains no definitions");
+const allowedSubagentKeys = new Set(["name", "description", "kind", "model"]);
 
-    const planner = byName.get("planner");
-    if (planner?.spawning !== true) fail("planner must parse with spawning: true");
-    const plannerBody = readFileSync(join(root, "pi", "agents", "planner.md"), "utf8");
-    const examples = [...plannerBody.matchAll(/subagent\(\{([\s\S]*?)\}\);/g)].map((match) => match[1]!);
-    if (examples.length === 0) fail("planner has no subagent examples");
-    for (const [index, example] of examples.entries()) {
-      const field = (name: string) => new RegExp(`${name}:\\s*"([^"]+)"`).exec(example)?.[1];
-      const name = field("name");
-      for (const required of ["agent", "name", "title", "task"]) if (!field(required)) fail(`planner spawn example ${index + 1} lacks ${required}`);
-      if (name && !/^[a-z0-9]+(?:-[a-z0-9]+){1,3}$/.test(name)) fail(`planner spawn example ${index + 1} has invalid name '${name}'`);
-    }
+function routingMetadataErrors(fm: Record<string, unknown>): string[] {
+  const errors: string[] = [];
+  const isNonEmptyString = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+  if ("kind" in fm && !isNonEmptyString(fm.kind)) errors.push("kind must be a non-empty string");
+  if ("model" in fm && !isNonEmptyString(fm.model)) errors.push("model must be a non-empty string");
+  if ("model" in fm && !isNonEmptyString(fm.kind)) errors.push("model requires a paired non-empty string kind (model strings are kind-dialect specific)");
+  return errors;
+}
 
-    const reviewer = byName.get("reviewer");
-    if (reviewer?.tools !== "read, bash") fail("reviewer tool allowlist did not parse as read,bash");
-    if (/Use the `write` tool|save the review/.test(readFileSync(join(root, "pi", "agents", "reviewer.md"), "utf8"))) fail("reviewer still instructs unavailable write output");
+const invalidRoutingMetadataFixtures = [
+  ["kind array", "kind: [pi]"],
+  ["kind object", "kind: {name: pi}"],
+  ["kind null", "kind: null"],
+  ["kind empty", 'kind: ""'],
+  ["model array", "kind: pi\nmodel: [sonnet]"],
+  ["model object", "kind: pi\nmodel: {name: sonnet}"],
+  ["model null", "kind: pi\nmodel: null"],
+  ["model empty", 'kind: pi\nmodel: ""'],
+] as const;
+for (const [label, source] of invalidRoutingMetadataFixtures) {
+  const errors = routingMetadataErrors(parse(source) as Record<string, unknown>);
+  if (errors.length === 0) fail(`subagent routing-metadata fixture '${label}' unexpectedly passed`);
+}
 
-    const scout = byName.get("scout");
-    if (scout?.tools !== "read, bash") fail("scout tool allowlist did not parse as read,bash");
-    if (/^output:/m.test(readFileSync(join(root, "pi", "agents", "scout.md"), "utf8"))) fail("scout retains unsupported output frontmatter");
-
-    const visual = byName.get("visual-tester");
-    if (visual?.skills !== "chromium" || visual?.injectSkills !== "chromium") fail("visual-tester chromium skills/inject-skills did not parse");
-    for (const tool of ["browser_nav", "browser_eval", "browser_tabs", "browser_screenshot", "browser_inspect", "browser_cookies", "browser_pick"]) {
-      if (!String(visual?.tools ?? "").split(/\s*,\s*/).includes(tool)) fail(`visual-tester lacks ${tool}`);
-    }
-  } catch (error) {
-    fail(`installed agent parser validation failed: ${(error as Error).stack ?? error}`);
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
+for (const file of subagentFiles) {
+  const path = join(subagentDir, file);
+  const fm = frontmatter(path);
+  const stem = basename(file, ".md");
+  if (fm.name !== stem) fail(`subagents/${file}: frontmatter name '${String(fm.name ?? "")}' does not match filename stem '${stem}'`);
+  if (typeof fm.description !== "string" || !fm.description.trim()) fail(`subagents/${file}: description missing or empty`);
+  for (const key of Object.keys(fm)) {
+    if (!allowedSubagentKeys.has(key)) fail(`subagents/${file}: unsupported frontmatter key '${key}' (allowed: name, description, kind, model)`);
+  }
+  for (const error of routingMetadataErrors(fm)) fail(`subagents/${file}: ${error}`);
+  const body = readFileSync(path, "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---/, "");
+  for (const legacy of ["subagent(", "subagent_kill", "subagent_resume"]) {
+    if (body.includes(legacy)) fail(`subagents/${file}: persona body retains legacy subagent-tool reference '${legacy}'`);
   }
 }
 
@@ -155,7 +144,7 @@ if (failures.length > 0) {
 }
 console.log(`ok - ${skillFiles.length} skill definitions and ${topSkillFiles.length} inventory entries`);
 console.log("ok - GitLab parent routes every retained nested command group");
-console.log("ok - custom agents validate through the installed pi-subagents parser");
+console.log(`ok - ${subagentFiles.length} subagent definitions carry valid advisory frontmatter`);
 console.log(`ok - active extension names are collision-free (${commands.size} commands, ${tools.size} tools scanned)`);
 }
 

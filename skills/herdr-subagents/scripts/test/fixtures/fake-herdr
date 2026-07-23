@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\037' "$@" >>"${FAKE_HERDR_LOG:?}"
+printf '\n' >>"$FAKE_HERDR_LOG"
+help() {
+  local command="herdr $1 $2" flags=""
+  case "$1 $2" in
+    'pane layout') flags='--pane' ;;
+    'pane split') flags='--pane --direction --cwd --env KEY=VALUE --no-focus' ;;
+    'agent start') flags='--kind --pane' ;;
+    'agent wait') flags='--timeout' ;;
+    'notification show') flags='--body' ;;
+  esac
+  if [ "${FAKE_MISSING_CAPABILITY:-}" = "$1-$2" ]; then flags='' ; fi
+  printf '%s %s\n' "$command" "$flags"
+}
+publish_result() {
+  [ -n "${FAKE_HERDR_ENV_FILE:-}" ] || return 0
+  local result child task
+  result="$(grep '^HERDR_SUBAGENT_RESULT=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2-)"
+  child="$(grep '^HERDR_SUBAGENT_CHILD=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2-)"
+  task="$(grep '^HERDR_SUBAGENT_TASK=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2-)"
+  [ "${FAKE_BAD_ENVELOPE:-}" = 1 ] && task=wrong
+  mkdir -p "$(dirname "$result")"
+  cat >"$result" <<EOF
+--- HERDR RESULT v1 ---
+CHILD: $child
+TASK: $task
+RESULT: $result
+STATUS: ${FAKE_PUBLISH_STATUS:-COMPLETE}
+SUMMARY: fake completed
+ARTIFACTS:
+- ${FAKE_PUBLISH_ARTIFACT:-none}
+FINDINGS:
+- none
+NEXT: none
+--- END HERDR RESULT ---
+EOF
+}
+case "${1:-}" in
+  --version) echo "herdr ${FAKE_HERDR_VERSION:-0.7.5}" ;;
+  pane)
+    if [ "${3:-}" = --help ]; then help pane "$2"; exit 0; fi
+    case "$2" in
+      layout) echo '{"result":{"layout":{"area":{"width":113,"height":110},"focused_pane_id":"other","panes":[{"pane_id":"w:other","rect":{"width":200,"height":50}},{"pane_id":"w:p","rect":{"width":113,"height":55}}]}}}' ;;
+      get) echo '{"result":{"pane":{"pane_id":"w:p","label":"planner-1-model"}}}' ;;
+      split) : >"${FAKE_HERDR_ENV_FILE:?}"; shift 2; while [ "$#" -gt 0 ]; do [ "$1" = --env ] && echo "$2" >>"$FAKE_HERDR_ENV_FILE"; shift; done; echo '{"result":{"pane":{"pane_id":"w:child"}}}' ;;
+      rename) printf '{"result":{"pane":{"pane_id":"w:child","label":"%s"}}}\n' "${4:-}" ;;
+      close)
+        if [ "${FAKE_FAIL_CLOSE:-}" = 1 ]; then echo '{"error":"close"}' >&2; exit 1; fi
+        echo '{"result":{}}' ;;
+    esac ;;
+  agent)
+    if [ "${3:-}" = --help ]; then help agent "$2"; exit 0; fi
+    case "$2" in
+      get)
+        if [ -n "${FAKE_FAIL_AGENT_GET:-}" ] && [ "${3:-}" = "$FAKE_FAIL_AGENT_GET" ]; then echo '{"error":"agent get"}' >&2; exit 1; fi
+        if [ "${3:-}" = w:p ]; then echo '{"result":{"agent":{"agent":"pi","pane_id":"w:p","agent_session":{"value":"session"},"agent_status":"idle"}}}'; else echo "{\"result\":{\"agent\":{\"agent_status\":\"${FAKE_AGENT_STATUS:-idle}\"}}}"; fi ;;
+      list) echo '{"result":{"agents":[]}}' ;;
+      start) [ "${FAKE_FAIL_START:-}" = 1 ] && { echo '{"error":"start"}' >&2; exit 1; }; echo '{"result":{"agent":{"name":"child"}}}' ;;
+      prompt) printf '%s' "${4:-}" >"${FAKE_HERDR_PROMPT_FILE:?}"; echo '{"result":{"agent":{"agent_status":"working"}}}' ;;
+      wait) case "${FAKE_WAIT:-publish}" in
+        publish) publish_result; echo '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+        timeout-publish) publish_result; echo '{"error":"timeout"}' >&2; exit 1 ;;
+        blocked) echo '{"result":{"agent":{"agent_status":"blocked"}}}' ;;
+        idle-then-publish)
+          counter_file="${FAKE_WAIT_COUNTER_FILE:-${FAKE_HERDR_LOG}.wait-count}"
+          count=0
+          [ -f "$counter_file" ] && count="$(cat "$counter_file")"
+          count=$((count + 1))
+          echo "$count" >"$counter_file"
+          if [ "$count" -gt "${FAKE_WAIT_PUBLISH_AFTER:-3}" ]; then
+            publish_result
+          fi
+          echo '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+        *) echo '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+      esac ;;
+    esac ;;
+  notification) if [ "${3:-}" = --help ]; then help notification "$2"; else [ "${FAKE_NOTIFY_FAIL:-}" = 1 ] && { echo '{"error":"notify"}' >&2; exit 1; }; echo '{"result":{}}'; fi ;;
+esac

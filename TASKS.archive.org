@@ -1167,3 +1167,74 @@ CLOSED: [2026-07-20 Mon 17:49]
 :END:
 #+IMPORT: [[plan:2026-07-20-modernize-pi-extensions-for-pi-0-80-apis.org]]
 Apply the extension-development improvements identified in the pi 0.80.10 changelog review, prioritising correctness, lifecycle cleanup, context efficiency, and current public APIs.
+
+** DONE [#B] Adopt harness-agnostic subagents
+CLOSED: [2026-07-23 Thu 12:23]
+:PROPERTIES:
+:CUSTOM_ID: d02c815b-ff3b-49c9-9741-cdae84c4536a
+:CREATED: [2026-07-22 Wed 16:00]
+:STARTED: [2026-07-22 Wed 19:27]
+:ARCHIVED: [2026-07-23 Thu 12:23]
+:END:
+:LOGBOOK:
+- Created [2026-07-22 Wed 16:00]
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:27]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:50]
+- State "STARTED" from "DONE" [2026-07-22 Wed 22:43]
+- State "DONE" from "STARTED" [2026-07-23 Thu 12:23]
+:END:
+#+IMPORT: [[plan:2026-07-22-harness-agnostic-subagents.org]]
+Currently I'm using a pi-specific extension for subagents:
+https://github.com/edxeth/pi-subagents
+This extension is herdr aware, but does things we don't care about particularly.
+
+I'm using pi exclusively within herdr. The herdr dev has provided a harness-agnostic skill instructing harnesses on launching and communicating with one another within herdr that looks to cover my use case pretty well, and is simple and portable.
+
+Currently I have a couple of subagent definitions at [[./pi/agents/]] I'd like to retain if moving to a new system. This can probably be done by just converting them to prompts or personas (it's the guidance I care about rather than the skill and tool restrictions really).
+- Evaluate the viability, and pros and cons.
+- If this sounds like a runner after evaluation, plan and implement the migration.
+
+** DONE Add hierarchical pane labels to Herdr subagent spawning
+CLOSED: [2026-07-24 Fri 11:00]
+:PROPERTIES:
+:CUSTOM_ID: dcabf1d1-f0ec-4239-bdc7-78f0032da407
+:CREATED: [2026-07-23 Thu 16:35]
+:STARTED: [2026-07-24 Fri 10:15]
+:ARCHIVED: [2026-07-24 Fri 11:00]
+:END:
+:LOGBOOK:
+- Created [2026-07-23 Thu 16:35]
+- State "STARTED" from "TODO" [2026-07-24 Fri 10:15]
+- State "DONE" from "STARTED" [2026-07-24 Fri 10:27]
+- State "STARTED" from "DONE" [2026-07-24 Fri 10:30]
+- State "DONE" from "STARTED" [2026-07-24 Fri 11:00]
+:END:
+#+IMPORT: [[plan:2026-07-23-add-hierarchical-pane-labels-to-herdr-su.org]]
+Rename every newly created subagent pane immediately after splitting it.
+
+Acceptance criteria:
+- Root subagent panes use =<subagent-type>-<index>-<model>=.
+- Subagents spawned by another subagent use =<parent-subagent-type>-<parent-subagent-index>/<subagent-type>-<index>-<model>=; for =planner-1-claude-sonnet-5= the parent prefix is =planner-1=.
+- Workspace names are not included.
+- Use the verified Herdr =pane rename <pane-id> <label>= capability; expose pane renaming through the =herdr_layout= tool if required by the tool-driven spawn flow.
+- Update the Herdr subagent skill/docs and add coverage for root and nested naming.
+
+** DONE herdr-subagent skill scripts
+CLOSED: [2026-07-27 Mon 13:27]
+:PROPERTIES:
+:CUSTOM_ID: d6690050-b0c8-4ba7-8c06-afff4fa2f761
+:CREATED: [2026-07-24 Fri 11:23]
+:STARTED: [2026-07-24 Fri 11:30]
+:ARCHIVED: [2026-07-27 Mon 13:27]
+:END:
+:LOGBOOK:
+- Created [2026-07-24 Fri 11:23]
+- State "STARTED" from "TODO" [2026-07-24 Fri 11:30]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:44]
+- State "STARTED" from "DONE" [2026-07-24 Fri 17:14]
+- State "DONE" from "STARTED" [2026-07-24 Fri 17:35]
+- State "STARTED" from "DONE" [2026-07-27 Mon 11:06]
+- State "DONE" from "STARTED" [2026-07-27 Mon 13:27]
+:END:
+#+IMPORT: [[plan:2026-07-24-herdr-subagent-skill-scripts.org]]
+Consider adding scripts for subagents and herdr pane management, to streamline operation and reduce the context required by the agent to use the skill.

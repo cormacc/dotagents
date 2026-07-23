@@ -37,10 +37,11 @@
   [& args]
   (let [explicit (seq (map symbol args))
         nses    (or explicit (discover-test-namespaces))]
-    (when (empty? nses)
-      (binding [*out* *err*]
-        (println "test-runner: no test namespaces found")))
-    (doseq [n nses] (require n))
-    (let [{:keys [fail error]} (apply t/run-tests nses)
-          exit (+ (or fail 0) (or error 0))]
-      (System/exit (if (pos? exit) 1 0)))))
+    (if (empty? nses)
+      (do (binding [*out* *err*]
+            (println "test-runner: no test namespaces found"))
+          (System/exit 1))
+      (do (doseq [n nses] (require n))
+          (let [{:keys [fail error]} (apply t/run-tests nses)
+                exit (+ (or fail 0) (or error 0))]
+            (System/exit (if (pos? exit) 1 0)))))))

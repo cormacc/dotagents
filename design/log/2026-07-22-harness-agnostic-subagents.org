@@ -1,0 +1,395 @@
+#+TITLE: Adopt harness-agnostic subagents
+#+DATE: 2026-07-22 Wed
+#+PARENT: [[archive:d02c815b-ff3b-49c9-9741-cdae84c4536a][Adopt harness-agnostic subagents]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+SPEC: [[proj:README.md]]
+#+SPEC: [[proj:AGENTS.md]]
+#+SPEC: [[proj:skills/README.org]]
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/skill-creator/SKILL.md]]
+#+SPEC: [[proj:subagents/claude-code.md]]
+#+SPEC: [[proj:subagents/planner.md]]
+#+SPEC: [[proj:subagents/researcher.md]]
+#+SPEC: [[proj:subagents/reviewer.md]]
+#+SPEC: [[proj:subagents/scout.md]]
+#+SPEC: [[proj:subagents/visual-tester.md]]
+#+SPEC: [[proj:subagents/worker.md]]
+#+STATUS: Complete
+
+* Intent
+
+Replace the pi-specific =edxeth/pi-subagents= extension used by Pi inside Herdr with a Herdr-based delegation convention — a pristine vendored =herdr= skill, a thin =herdr-subagents= companion skill, and portable subagent definitions under =subagents/= — preserving the current personas while reducing Pi-specific machinery and leaving artifacts reusable by other Herdr-hosted harnesses.
+
+* Summary
+
+*Level:* production · *Tests:* smoke (live spawn inside Herdr) · *Docs:* README + skill docs
+
+** Scope
+
+*** In scope
+
+- Replace the Pi-specific =edxeth/pi-subagents= extension with a pristine vendored =herdr= skill and a thin =herdr-subagents= companion.
+- Move the seven reusable personas to a harness-neutral =subagents/= roster with advisory =name=, =description=, =kind=, and =model= metadata.
+- Keep persona definitions concise by referring to canonical skills for shared workflows while retaining role-specific constraints and output guidance.
+- Expose the roster through =~/.agents/subagents/= and document project-over-global lookup.
+- Define kind/model resolution, persona injection, pane geometry, lifecycle, and cleanup across Herdr-hosted harnesses.
+- Support blocking and non-blocking assignments, one-child and wave-based fan-out, and ephemeral or opt-in resident children.
+- Use a durable per-assignment result inbox as the only completion signal.
+- Permit the planner to spawn one blocking ephemeral =scout= or =researcher= for a factual gap; those children cannot delegate further.
+- Remove the legacy compatibility paths and Pi-specific package after live validation.
+- Validate subagent metadata without the pi-subagents parser.
+
+*** Out of scope
+
+- Removing or replacing the retained =@ogulcancelik/pi-herdr= extension.
+- Headless children, unrestricted hierarchical orchestration, autonomous pipelines, and enforced tool/model policies.
+- A spawn helper or scheduler; the markdown workflow remains intentional until operational friction justifies code.
+- Wiring every harness-specific global context file to the shared =AGENTS.md=.
+
+** Acceptance
+
+*** Core functionality
+
+- [X] =skills/herdr/SKILL.md= preserves the upstream body byte-identically beneath a provenance comment.
+- [X] =skills/herdr-subagents/SKILL.md= owns roster lookup, routing, invocation, result transport, and pane lifecycle.
+- [X] Project roster lookup precedes =~/.agents/subagents/= and wins on filename collision.
+- [X] =~/.agents/subagents/= resolves to this repository's seven definitions.
+- [X] All seven definitions use advisory frontmatter accepted by =scripts/check-metadata.ts=.
+- [X] A definition =model= is accepted only with its paired =kind=.
+- [X] Empty or non-string =kind= and =model= values fail metadata validation.
+- [X] Persona bodies contain no pi-subagents tool or roster semantics.
+- [X] Shared workflow detail is referenced from canonical skills instead of duplicated in planner, reviewer, or worker definitions.
+- [X] The planner may delegate blocking factual gaps only to =scout= or =researcher=.
+- [X] Scout and researcher children spawned by a planner are prohibited from further delegation.
+- [X] Other child personas prohibit further subagent spawning.
+- [X] Spawn-time kind and model override compatible definition metadata.
+- [X] Parent-harness routing is used when no definition or spawn-time kind is supplied.
+- [X] Every assignment uses parent-generated =TASK= and nonce-bearing =RESULT= values.
+- [X] Children publish exactly one bounded =HERDR RESULT v1= envelope through an atomic rename.
+- [X] Completion requires a complete result file whose =CHILD=, =TASK=, and =RESULT= fields match the parent ledger.
+- [X] Blocking collection uses bounded lifecycle waits plus exact result-path checks.
+- [X] Non-blocking invocation returns after turn start and leaves collection to the durable inbox.
+- [X] Fan-out starts each wave before collecting it and synthesizes only after every assignment is terminal.
+- [X] Fresh ephemeral children remain the default.
+- [X] Resident reuse requires matching name, pane, persona, settled state, and captured prior results.
+- [X] The Pi integration reports Herdr protocol v6 or newer.
+- [X] The legacy =pi-subagents= package and compatibility roster paths are absent after cutover.
+
+*** Edge cases
+
+- [X] Delegation fails clearly outside =HERDR_ENV=.
+- [X] Overriding a definition's kind drops an incompatible definition model unless the spawn supplies a replacement.
+- [X] Live agent-name collisions require a fresh unique name.
+- [X] Pane splitting uses =right= only when =columns >= 80= and =columns >= 2 × rows=; every other shape uses =down=.
+- [X] =BLOCKED= retains its pane; =COMPLETE= or =FAILED= permits cleanup only after result and artifact capture.
+- [X] Failed atomic publication leaves no complete-looking result.
+- [X] Malformed, stale, or mismatched result files cannot drive orchestration.
+- [X] A blocked or failed child does not abort sibling collection.
+- [X] Default fan-out concurrency is at most two children per wave.
+- [X] Missing, mismatched, or busy residents are not reused.
+
+*** Anti-criteria
+
+- [X] Must not: modify the vendored Herdr skill body.
+- [X] Must not: remove the =@ogulcancelik/pi-herdr= package.
+- [X] Must not: duplicate the result-envelope schema across persona definitions.
+- [X] Must not: inject result text or Enter into the orchestrator PTY.
+- [X] Must not: treat terminal transcripts as completion evidence.
+- [X] Must not: make residency the default.
+- [X] Must not: permit general child-to-child fan-out or delegation below a planner's scout/researcher child.
+- [X] Must not: reintroduce legacy pi-subagents or task-tool APIs in persona definitions.
+
+** Decisions
+
+- Use a markdown-only =herdr-subagents= companion over a spawn helper :: preserves portability and avoids rebuilding a smaller pi-subagents extension.
+- Vendor upstream =skills/herdr/SKILL.md= unchanged and keep proactive delegation language in the companion :: makes upstream refreshes diff-free.
+- Use =subagents/= with project-over-global lookup :: separates reusable personas from Pi prompt templates while allowing project overrides.
+- Treat =kind= / =model= as paired advisory routing metadata :: model dialects are harness-specific; incompatible inherited values are dropped.
+- Use read-then-act persona injection by default and native appended system prompts for long-lived Pi/Claude sessions :: keeps the baseline harness-neutral.
+- Use a parent-addressed atomic result inbox as the sole completion channel :: avoids PTY injection and false completion from echoed prompts or terminal history.
+- Keep waiting policy, cardinality, and lifecycle orthogonal :: supports blocking context calls, non-blocking work, bounded fan-out, and explicit residents without a scheduler.
+- Bound normal fan-out to direct orchestrator children in waves of two :: keeps context and terminal geometry manageable.
+- Permit one narrow planner exception for blocking =scout= / =researcher= fact-finding :: lets an interactive planner resolve evidence without enabling deeper delegation; those children remain leaves.
+- Keep persona files role-specific and defer shared mechanics to canonical skills :: removes prompt drift and stale duplicated APIs.
+
+** Shipped
+
+- ADDED =skills/herdr/SKILL.md= — pristine upstream skill body with provenance at upstream =c234f221=.
+- ADDED =skills/herdr-subagents/SKILL.md= — harness-neutral roster, routing, invocation, atomic result inbox, fan-out, geometry, resident lifecycle, and the planner's bounded scout/researcher exception.
+- ADDED =subagents/= — seven reusable persona definitions with advisory routing metadata.
+- MODIFIED =subagents/planner.md= — compact interactive flow backed by =org-plan= / =org-tasks=; may delegate only blocking factual gaps to leaf scouts or researchers.
+- MODIFIED =subagents/reviewer.md= — role-specific wrapper around the canonical =code-review= skill.
+- MODIFIED =subagents/worker.md= — scoped implementation workflow using current =ot= lifecycle semantics and explicit-only commits.
+- MODIFIED =subagents/scout.md= and =subagents/researcher.md= — repository-native discovery, valid research tools, and project-local temporary artifacts.
+- MODIFIED =scripts/check-metadata.ts= — self-contained subagent frontmatter/body validation with strict scalar routing metadata fixtures.
+- MODIFIED =README.md=, =AGENTS.md=, and =skills/README.org= — roster, symlink, inventory, and validation documentation.
+- MODIFIED =pi/extensions/herdr-agent-state.ts= — Herdr integration protocol v2 to v6.
+- REMOVED =pi/agents= compatibility path, =~/.pi/agent/agents= Home Manager slot, and =git:github.com/edxeth/pi-subagents= from Pi settings.
+- Parent dotfiles repo: =agents.nix= exposes =~/.agents/subagents/=; related documentation and legacy-slot removal landed in commits =9a548ae= and =0e5b475=.
+
+** Gotchas
+
+- =herdr agent read= contains submitted prompts as well as responses, and =agent prompt --wait= can settle at an intermediate idle. Only the validated result file proves completion.
+- Terminal pane dimensions are columns × rows with non-square cells. A visually portrait =113×110= pane must split =down= under the portable 80-column and 2:1 rule.
+- Bare Pi model patterns may resolve through an unintended provider; provider-qualified refs such as =openai-codex/gpt-5.6-sol= are deterministic.
+- =herdr notification show= is best-effort and may return =reason: disabled=. The ledger, result file, and visible Herdr lifecycle remain authoritative.
+
+** Risks
+
+- Persona restrictions are cooperative rather than tool-enforced; keep assignments scoped and review artifacts before accepting them.
+- Cross-harness model inheritance remains best-effort because model names are dialect-specific; omit the model when compatibility is unknown.
+- Skill-triggered delegation depends on ambient context discovering the roster pointer; add harness-specific context wiring only where observed use justifies it.
+- Resident sessions may accumulate stale context; residency remains explicit and is guarded by identity, capture, and release checks.
+- Wave-based fan-out is intentionally bounded rather than scheduled; large batches trade throughput for simple, visible orchestration.
+
+** Follow-ups
+
+- Task =ed915fe1= — make spec discovery skip binary and dependency-tree files so =ot doctor= can complete in dependency-heavy repositories.
+
+* Plan
+
+** DONE [#B] Refresh Herdr pi integration to current version :herdr:
+CLOSED: [2026-07-22 Wed 19:28]
+:PROPERTIES:
+:CUSTOM_ID: 34d1c6f8-ca92-444a-ba9a-1963d125a0d3
+:CREATED: [2026-07-22 Wed 18:34]
+:STARTED: [2026-07-22 Wed 19:27]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:27]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:28]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#B] Vendor upstream herdr skill into skills/herdr/ :skills:
+CLOSED: [2026-07-22 Wed 19:28]
+:PROPERTIES:
+:CUSTOM_ID: 4ea9128f-7761-4b47-b821-db2b398c5f94
+:CREATED: [2026-07-22 Wed 18:34]
+:STARTED: [2026-07-22 Wed 19:28]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:28]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:28]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#A] Create herdr-subagents companion skill :skills:
+CLOSED: [2026-07-22 Wed 19:30]
+:PROPERTIES:
+:CUSTOM_ID: 5c7bdcec-f686-4636-a323-dec065c22cc4
+:CREATED: [2026-07-22 Wed 18:34]
+:BLOCKED-BY: 4ea9128f-7761-4b47-b821-db2b398c5f94
+:STARTED: [2026-07-22 Wed 19:28]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:28]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:30]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#A] Move definitions to subagents/ with advisory frontmatter :subagents:
+CLOSED: [2026-07-22 Wed 19:31]
+:PROPERTIES:
+:CUSTOM_ID: c7ab0eb5-5d19-4022-9687-9441cc38fa9b
+:CREATED: [2026-07-22 Wed 18:34]
+:STARTED: [2026-07-22 Wed 19:30]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:30]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:31]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#A] Reword persona bodies to herdr-subagents semantics :subagents:
+CLOSED: [2026-07-22 Wed 19:33]
+:PROPERTIES:
+:CUSTOM_ID: fca3007b-d46c-49e8-a626-274df9567d2a
+:CREATED: [2026-07-22 Wed 18:34]
+:BLOCKED-BY: c7ab0eb5-5d19-4022-9687-9441cc38fa9b
+:BLOCKED-BY+: 5c7bdcec-f686-4636-a323-dec065c22cc4
+:STARTED: [2026-07-22 Wed 19:31]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:31]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:33]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#B] dotfiles: add global subagents roster alongside legacy slot :nix:
+CLOSED: [2026-07-22 Wed 19:35]
+:PROPERTIES:
+:CUSTOM_ID: 50e4f537-6f71-483c-a7fd-22dcb1e3c20f
+:CREATED: [2026-07-22 Wed 18:34]
+:BLOCKED-BY: c7ab0eb5-5d19-4022-9687-9441cc38fa9b
+:STARTED: [2026-07-22 Wed 19:33]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:33]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:35]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#B] Add subagents roster pointer to repo-root AGENTS.md :docs:
+CLOSED: [2026-07-22 Wed 19:35]
+:PROPERTIES:
+:CUSTOM_ID: c4c2742d-82dd-41ed-9ea4-dbcecc7a8c3a
+:CREATED: [2026-07-22 Wed 18:34]
+:BLOCKED-BY: 5c7bdcec-f686-4636-a323-dec065c22cc4
+:STARTED: [2026-07-22 Wed 19:35]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:35]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:35]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#B] Rework check-metadata.ts for subagents/ validation :tooling:
+CLOSED: [2026-07-22 Wed 19:39]
+:PROPERTIES:
+:CUSTOM_ID: 40e42107-8001-4a45-abef-aa339f7a9c84
+:CREATED: [2026-07-22 Wed 18:34]
+:BLOCKED-BY: c7ab0eb5-5d19-4022-9687-9441cc38fa9b
+:STARTED: [2026-07-22 Wed 19:35]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:35]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:39]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#A] Live smoke test: spawn scout via herdr-subagents :validation:
+CLOSED: [2026-07-22 Wed 19:42]
+:PROPERTIES:
+:CUSTOM_ID: 1a6c720d-dd23-41c2-85e2-036156e8ad66
+:CREATED: [2026-07-22 Wed 18:34]
+:BLOCKED-BY: 34d1c6f8-ca92-444a-ba9a-1963d125a0d3
+:BLOCKED-BY+: fca3007b-d46c-49e8-a626-274df9567d2a
+:BLOCKED-BY+: 50e4f537-6f71-483c-a7fd-22dcb1e3c20f
+:STARTED: [2026-07-22 Wed 19:39]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:39]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:42]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#A] Cut over from pi-subagents and remove compatibility paths :pi:nix:
+CLOSED: [2026-07-22 Wed 19:44]
+:PROPERTIES:
+:CUSTOM_ID: b9ed3060-42ce-4960-a028-407b83500135
+:CREATED: [2026-07-22 Wed 18:34]
+:BLOCKED-BY: 1a6c720d-dd23-41c2-85e2-036156e8ad66
+:STARTED: [2026-07-22 Wed 19:42]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:42]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:44]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#B] Sweep stale pi-subagents references :docs:
+CLOSED: [2026-07-22 Wed 19:48]
+:PROPERTIES:
+:CUSTOM_ID: 35990366-9e13-415a-a7d9-2f49118ed4ac
+:CREATED: [2026-07-22 Wed 18:34]
+:BLOCKED-BY: b9ed3060-42ce-4960-a028-407b83500135
+:STARTED: [2026-07-22 Wed 19:44]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-22 Wed 19:44]
+- State "DONE" from "STARTED" [2026-07-22 Wed 19:48]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#A] Define invocation modes and durable result inbox :skills:herdr:
+CLOSED: [2026-07-23 Thu 12:03]
+:PROPERTIES:
+:CUSTOM_ID: 53364e0d-6b85-465e-91ee-76c304b71498
+:CREATED: [2026-07-22 Wed 22:43]
+:STARTED: [2026-07-23 Thu 11:59]
+:END:
+:LOGBOOK:
+- Created [2026-07-22 Wed 22:43]
+- State "STARTED" from "TODO" [2026-07-23 Thu 11:59]
+- State "DONE" from "STARTED" [2026-07-23 Thu 12:03]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#B] Support opt-in resident subagents across correlated assignments :skills:herdr:resident:
+CLOSED: [2026-07-23 Thu 12:07]
+:PROPERTIES:
+:CUSTOM_ID: afb4f91b-de5a-40d0-9fff-3e737d0aac42
+:CREATED: [2026-07-23 Thu 11:32]
+:BLOCKED-BY: 53364e0d-6b85-465e-91ee-76c304b71498
+:STARTED: [2026-07-23 Thu 12:03]
+:END:
+:LOGBOOK:
+- Created [2026-07-23 Thu 11:32]
+- State "STARTED" from "TODO" [2026-07-23 Thu 12:03]
+- State "DONE" from "STARTED" [2026-07-23 Thu 12:07]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#A] Clarify Herdr pane split geometry for portrait terminals :skill_herdr:skill_herdr-subagents:
+CLOSED: [2026-07-23 Thu 12:03]
+:PROPERTIES:
+:CUSTOM_ID: bde7cf59-3b6e-4977-b5df-0e61ab0e3f62
+:CREATED: [2026-07-22 Wed 22:41]
+:STARTED: [2026-07-23 Thu 12:03]
+:END:
+:LOGBOOK:
+- Created [2026-07-22 Wed 22:41]
+- State "STARTED" from "TODO" [2026-07-23 Thu 12:03]
+- State "DONE" from "STARTED" [2026-07-23 Thu 12:03]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+** DONE [#B] Reject unusable subagent kind and model metadata :tooling:subagents:
+CLOSED: [2026-07-23 Thu 12:03]
+:PROPERTIES:
+:CUSTOM_ID: 9b2c74df-9036-4b3c-8d97-cfa3bab76831
+:CREATED: [2026-07-22 Wed 22:43]
+:STARTED: [2026-07-23 Thu 12:03]
+:END:
+:LOGBOOK:
+- Created [2026-07-22 Wed 22:43]
+- State "STARTED" from "TODO" [2026-07-23 Thu 12:03]
+- State "DONE" from "STARTED" [2026-07-23 Thu 12:03]
+:END:
+Result: Completed and verified; durable acceptance and outcomes are recorded in =* Summary=, =* Implementation=, and =* Validation=.
+
+* Implementation
+
+** Migration and cutover [2026-07-22 Wed]
+
+- Refreshed the Pi Herdr integration to protocol v6 and vendored the upstream Herdr skill with a byte-identical body.
+- Moved the seven personas from =pi/agents/= to =subagents/=, added project/global roster discovery, and exposed the global roster through Home Manager.
+- Added the thin =herdr-subagents= companion for routing, persona injection, and pane lifecycle.
+- Kept compatibility links until a live scout adopted its persona, returned file/line evidence, survived duplicate-name handling, and left no stray pane; then removed the Pi-specific extension and legacy roster slots.
+
+** Invocation hardening [2026-07-23 Thu]
+
+- Replaced transcript markers and PTY callbacks with the parent-owned =HERDR RESULT v1= inbox: nonce-bearing assignment paths, sibling-temp atomic publication, strict ledger matching, bounded summaries, and artifact paths.
+- Made waiting policy, cardinality, and lifecycle independent; added two-child waves, portable pane geometry, safe ephemeral cleanup, and opt-in resident identity/reuse/release gates.
+- Added strict parsed-YAML fixtures for unusable =kind= and =model= values.
+
+** Persona closeout [2026-07-23 Thu]
+
+- Audited all seven definitions for duplication. Planner, reviewer, and worker now defer shared workflow detail to =org-plan= / =org-tasks=, =code-review=, and current repository skills instead of embedding copies.
+- Removed stale worker =todo(...)= calls and automatic commit behavior; task lifecycle and commits are assignment-controlled.
+- Replaced generic scout command recipes with repository-native discovery and removed the researcher's unavailable =code_search= guidance.
+- Allowed the planner one blocking ephemeral scout/researcher child for a factual gap. The planner acts as that assignment's orchestrator, and the spawned specialist remains a leaf.
+
+* Validation
+
+- =herdr integration status= reported =pi: current (v6)=.
+- Stripping the provenance comment from =skills/herdr/SKILL.md= produced a byte-identical diff against upstream.
+- A live scout adopted =subagents/scout.md=, returned cited codebase findings, respected read-only constraints, handled an intentional name collision through a fresh name, and left no surviving test pane.
+- Two concurrent non-blocking Terra children published parent-assigned result files while the orchestrator continued working; a valid =COMPLETE= envelope was accepted and a lowercase =STATUS: success= envelope was rejected as malformed despite matching markers.
+- One resident completed two sequential assignments under blocking and non-blocking collection only after prior capture. An unwritable inbox left no partial result, and a closed resident fell back to a fresh ephemeral child.
+- The failed-publication smoke test confirmed =herdr notification show= may return =reason: disabled=; durable inbox and lifecycle state remained available.
+- A fresh Pi process exposed =herdr_layout=, =herdr_pane=, and =herdr_agent=, exposed no =subagent*= tools, and retained =@ogulcancelik/pi-herdr=.
+- Two impure Home Manager switches applied the roster addition and legacy-slot removal; =~/.agents/subagents/= resolved all seven definitions afterward.
+- Final =./scripts/check.sh= and =git diff --check= passed after persona simplification, record rename, and closeout edits.
+- =ot doctor --format json= still aborts on a binary path under =node_modules=; existing TODO =ed915fe1= tracks the unrelated spec-discovery fix.

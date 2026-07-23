@@ -1,0 +1,121 @@
+#+TITLE: Add hierarchical pane labels to Herdr subagent spawning
+#+DATE: 2026-07-23 Thu
+#+PARENT: [[archive:dcabf1d1-f0ec-4239-bdc7-78f0032da407][Add hierarchical pane labels to Herdr subagent spawning]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+
+* Intent
+
+Label every Herdr subagent pane at spawn time with a deterministic hierarchical identity — persona type, per-parent index, and model — so operators can tell at a glance which delegation occupies each pane and who spawned it.
+
+* Summary
+
+*Level:* MVP · *Tests:* smoke · *Docs:* inline
+
+The parent orchestrator renames each freshly split child pane with =herdr pane rename <pane-id> <label>= before =agent start=. Root children are =<subagent-type>-<index>-<model>= (e.g. =scout-1-claude-fable-5=); a child spawned by a subagent (currently only the planner→scout/researcher exception) is prefixed with the =<subagent-type>-<index>= head of the parent pane label, e.g. parent =planner-1-claude-sonnet-5= produces child =planner-1/scout-1-claude-sonnet-5=. No Herdr or pi-herdr code changes are needed: the contract lands entirely in =skills/herdr-subagents/SKILL.md= plus live smoke validation.
+
+** Scope
+*** In scope
+- =skills/herdr-subagents/SKILL.md= — pane-label scheme, ledger index tracking, spawn-flow rename step, nested-prefix derivation, resident note. Contract doc; see =#+SPEC:=.
+- Live smoke tests for root and nested labeling.
+*** Out of scope
+- Changes to Herdr itself or =@ogulcancelik/pi-herdr= (no new =herdr_layout= action; see Decisions).
+- Edits to vendored =skills/herdr/SKILL.md= (byte-identical to upstream by contract).
+- Labeling the top-level orchestrator's own pane or operator-launched panes retroactively.
+- Machine-parseable label consumption; the assignment ledger remains the authoritative record.
+
+** Acceptance
+*** Core functionality
+- [X] Skill spawn flow renames the child pane immediately after split, before =agent start=, via =herdr pane rename= and verifies =.result.pane.label=.
+- [X] Root subagent pane label is =<subagent-type>-<index>-<model>=.
+- [X] Subagent-spawned child pane label is =<parent-subagent-type>-<parent-index>/<subagent-type>-<index>-<model>=, using the parent pane label's type/index head and excluding its model.
+- [X] Ledger entry shape carries the per-type spawn counter and the applied label.
+- [X] Second child of the same type from one parent gets index 2.
+*** Edge cases
+- [X] Model resolution rung 4 (no known model) omits the trailing =-<model>= segment.
+- [X] Parent pane label =planner-1-claude-sonnet-5= produces nested prefix =planner-1=, not the parent model or Herdr pane ID.
+*** Anti-criteria
+- [X] Must not: include the workspace name in any pane label.
+- [X] Must not: edit vendored =skills/herdr/SKILL.md= or =@ogulcancelik/pi-herdr= sources.
+- [X] Must not: replace or weaken the live agent-name uniqueness contract; labels are display identity only and need not be unique.
+
+** Decisions
+- Rename via =herdr pane rename= CLI in the skill's spawn flow; no new =herdr_layout= tool action :: pi-herdr is an upstream-owned npm package (=@ogulcancelik/pi-herdr=; Herdr also regenerates its pi assets), so it is not patchable from dotagents, and every supported parent harness already has shell access inside its Herdr pane. Verified on herdr 0.7.5: =pane rename <PANE_ID> [LABEL]...= round-trips through =pane get .result.pane.label=, accepts =/=, and pi-herdr's =pane_list= already renders =label || pane_id=, so labels surface in tool output without changes.
+  Rejected:
+  - New =pane_rename= action or =pane_split= label param in pi-herdr: upstream contribution with release latency; =herdr_layout='s =label= param applies only to workspace/tab create, and =pane split= has no inline label option in 0.7.5.
+  - =herdr_agent rename=: renames the live agent name, not the pane label.
+- Model segment = final =/=-segment of the resolved model ref (per the skill's model-resolution ladder), e.g. =anthropic/claude-fable-5= → =claude-fable-5= :: keeps =/= unambiguous as the hierarchy separator. When resolution falls through to the harness default (no known model), omit the segment rather than guess.
+- Index = 1-based per-(parent, type) counter in the assignment ledger :: monotonic within the parent session, never reset when panes close; cheap, deterministic, and already colocated with the ledger the parent must keep.
+- Nested prefix = the =<subagent-type>-<index>= head of the spawner's own pane label :: the spawning subagent reads its label with =herdr pane get "$HERDR_PANE_ID"=, matches its known roster/persona name followed by the numeric index, and excludes the model suffix. Parent =planner-1-claude-sonnet-5= therefore yields =planner-1=.
+  Rejected:
+  - Full =$HERDR_PANE_ID=: opaque topology identity rather than the requested human parent name.
+  - Blind hyphen splitting: both roster names and model basenames may contain hyphens; anchor extraction to the known parent persona name plus numeric index.
+
+** Shipped
+- MODIFIED :: =skills/herdr-subagents/SKILL.md= — root labels, per-parent/type counters, model basename handling, rename-before-start verification, and assignment/resident ledger fields are implemented; the nested prefix is documented as the anchored =<subagent-type>-<index>= head of the parent's own pane label (read via =herdr pane get "$HERDR_PANE_ID"=), not the raw pane ID. Replacement nested smoke re-verified this after the Herdr/Pi restart.
+
+** Gotchas
+- Parent-prefix extraction must anchor to the known roster/persona name and following numeric index; generic hyphen splitting is ambiguous.
+- Labels are human display identity, not machine-parseable or unique; the assignment ledger remains authoritative.
+
+* Plan
+
+** DONE Specify hierarchical pane labels in herdr-subagents SKILL.md
+CLOSED: [2026-07-24 Fri 10:55]
+:PROPERTIES:
+:CUSTOM_ID: 32b41281-ef82-47e0-a31a-32a2a7dfbe4d
+:CREATED: [2026-07-23 Thu 17:15]
+:STARTED: [2026-07-24 Fri 10:15]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 10:15]
+- State "DONE" from "STARTED" [2026-07-24 Fri 10:18]
+- State "TODO" from "DONE" [2026-07-24 Fri 10:30]
+- State "STARTED" from "TODO" [2026-07-24 Fri 10:55]
+- State "DONE" from "STARTED" [2026-07-24 Fri 10:55]
+:END:
+Outcome: documented root and nested label formats, monotonic counters, model basename handling, rename-before-start verification, ledger fields, and anchored parent-prefix extraction without changing vendored Herdr or pi-herdr sources.
+
+** DONE Live smoke test: root subagent pane label
+CLOSED: [2026-07-24 Fri 10:21]
+:PROPERTIES:
+:CUSTOM_ID: d4b55cbe-38d3-4928-a91c-6de312a801ab
+:CREATED: [2026-07-23 Thu 17:15]
+:STARTED: [2026-07-24 Fri 10:19]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 10:19]
+- State "DONE" from "STARTED" [2026-07-24 Fri 10:21]
+:END:
+Outcome: two same-parent scouts round-tripped =scout-1-claude-sonnet-5= and =scout-2-claude-sonnet-5=; labels excluded the workspace name and remained distinct from live agent names.
+
+** DONE Live smoke test: parent-name-prefixed planner→scout label
+CLOSED: [2026-07-24 Fri 10:59]
+:PROPERTIES:
+:CUSTOM_ID: fafc4a3b-5cad-4684-bef1-ddafce0f9f80
+:CREATED: [2026-07-23 Thu 17:15]
+:STARTED: [2026-07-24 Fri 10:21]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 10:21]
+- State "DONE" from "STARTED" [2026-07-24 Fri 10:26]
+- State "TODO" from "DONE" [2026-07-24 Fri 10:30]
+- State "STARTED" from "TODO" [2026-07-24 Fri 10:56]
+- State "DONE" from "STARTED" [2026-07-24 Fri 10:59]
+:END:
+Outcome: =planner-1-claude-sonnet-5= delegated a leaf scout labeled =planner-1/scout-1-claude-sonnet-5=; the scout independently verified its label and published a valid inbox envelope.
+
+* Implementation
+
+The initial implementation assigned a monotonic 1-based index per =(parent, subagent-type)=, derived the model suffix from the resolved model basename, recorded the label/index in assignment and resident ledgers, and required =herdr pane rename= plus returned-label verification between split and =agent start=. Root behavior remains accepted.
+
+The initial nested implementation used the planner's =$HERDR_PANE_ID= as the child prefix. The user corrected that decision: nested delegation must use the parent pane label's human =<subagent-type>-<index>= head, excluding both the model suffix and Herdr pane ID. =skills/herdr-subagents/SKILL.md= now specifies in both the planner-exception paragraph and the Pane labels nested-format bullet that the spawning subagent reads its own pane label via =herdr pane get "$HERDR_PANE_ID"= (=.result.pane.label=), then extracts the prefix by matching its known roster/persona name plus numeric index — never a blind hyphen split. The post-restart nested smoke verified the corrected behavior.
+
+No Herdr, pi-herdr, or vendored =skills/herdr/SKILL.md= changes are required. Herdr 0.7.5 already accepts slash-bearing labels and returns them through =pane get=; =herdr_agent rename= remains unrelated because it changes the live agent name.
+
+* Validation
+
+- Root smoke: two Pi scouts using =anthropic/claude-sonnet-5= produced =scout-1-claude-sonnet-5= and =scout-2-claude-sonnet-5=; both independently verified =pane.label= and distinct live agent names, with no workspace name in either label.
+- Superseded nested smoke: planner pane =w3:p2H= spawned leaf scout pane =w3:p2J= as =w3:p2H/scout-1-claude-sonnet-5=. This proved the now-reverted pane-ID decision only and is not acceptance evidence for the corrected parent-name format.
+- Replacement nested smoke (task fafc4a3b, post-restart): planner pane =w3:p2N= labeled =planner-1-claude-sonnet-5= read its own label via =herdr pane get "$HERDR_PANE_ID"=, extracted anchored prefix =planner-1=, split+renamed child pane =w3:p2P= to =planner-1/scout-1-claude-sonnet-5= before =agent start=, and confirmed the returned label matched. The scout independently ran =herdr pane get "$HERDR_PANE_ID"= and confirmed the identical label in its own =STATUS: COMPLETE= result envelope (=CHILD=, =TASK=, =RESULT= all matched the parent ledger); it stayed a leaf and spawned nothing further. The eligible ephemeral scout pane was closed after capture. This supersedes the earlier pane-ID-prefixed smoke as acceptance evidence.

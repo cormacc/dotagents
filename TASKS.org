@@ -94,8 +94,18 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 #+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
 
 * Improvements
+** TODO [#C] Update clojure skill to spawn babashka nrepl
+:PROPERTIES:
+:CUSTOM_ID: 488b11d8-8874-456d-a872-3b1858fc403a
+:CREATED: [2026-07-24 Fri 15:01]
+:END:
+:LOGBOOK:
+- Created [2026-07-24 Fri 15:01]
+:END:
+When developing a babashka script, the clojure skill should be able to spawn an nrepl-server in a new herdr tab within the current workspace.
+The command is `bb nrepl-server`.
 
-** `TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:
+** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:
 :PROPERTIES:
 :CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
 :CREATED: [2026-05-02 Sat 12:22]
@@ -188,6 +198,28 @@ Split `parser.clj` (772 LOC) internals behind the existing `org-tasks.parser` fa
 :END:
 Target: https://github.com/ogulcancelik/herdr, canonical source src/integration/assets/pi/herdr-agent-state.ts (embedded by src/integration/mod.rs). Replace retryGraceMs/retryableErrorPattern and agent_end completion guesses with working state through agent_settled; retain the terminal agent_end error until settlement, then report blocked or idle; retain and idempotently invoke the herdr:blocked event unsubscriber on session_shutdown, including reload/session replacement coverage. Do not edit dotagents pi/extensions/herdr-agent-state.ts directly because Herdr regenerates it.
 
+** TODO Integrate retrospective skill in subagent lifecycle :skill_herdr-subagents:
+:PROPERTIES:
+:CUSTOM_ID: 57a1cf23-78b2-4066-b415-1b5847c4c012
+:CREATED: [2026-07-27 Mon 13:22]
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 13:22]
+:END:
+A child's session is a substantive ending session, but nothing ever retros it. The envelope carries work output (status, summary, findings, artifacts); process learning - tool misuse, missing contracts, avoidable friction - dies with the pane. Only what a child volunteers into a report artifact survives, by luck rather than protocol.
+
+Two hard constraints found while scoping:
+- The ledger records `parent-session` but not the child's session path. `herdr agent get <child>` returns it as `agent_session.value`, but only while the agent is alive - `run`/`collect` close the pane after capture, so it must be recorded at spawn or before closure or it is unrecoverable.
+- `retro` as written assumes an interactive operator: it offers a retro, presents a table, and waits for approval before filing anything. A child has no user, so the skill cannot be applied unmodified inside one without either blocking on unobtainable approval or filing unapproved tasks.
+
+Open questions for planning:
+- Who runs it - the child before publishing, or the parent post-hoc over the recorded child session (the `session_query` route)? Parent-side keeps `retro`'s approval gate intact and costs nothing when there is nothing to learn.
+- Does the envelope need a channel for process findings distinct from work `FINDINGS`, and is that a v2 schema change?
+- How is noise controlled across a fan-out - N children producing near-duplicate findings, against `self-improvement`'s per-invocation dedup?
+- Opt-in or default? Retro on every delegation is a real token cost on cheap scouts.
+
+Evidence: in the 2026-07-27 remediation the worker surfaced durable caveats (reverting the launcher writes to the live ledger; fake-Herdr wall-time floor of ~0.73 s per test) that survived only because it happened to write a long report artifact. Its misdiagnosis of the `ot ready` defect also reached this repo's task memory before being caught, which is the same channel viewed from the other side. Related: [[plan:2026-07-24-herdr-subagent-skill-scripts.org]]; skills/herdr-subagents/SKILL.md section "Trusting a result".
+
 * Fixes
 ** TODO ot: id args that look like scientific notation get number-coerced
 :PROPERTIES:
@@ -198,6 +230,28 @@ Target: https://github.com/ogulcancelik/herdr, canonical source src/integration/
 - Created [2026-07-02 Thu 22:33]
 :END:
 Repro: `ot status 1022e091 DONE` fails with `unknown-task ... :id 1.022E94`. babashka.cli coerces positional/option values, and an 8-char hex prefix shaped like `<digits>e<digits>` (e.g. `1022e091`) parses as a Double in scientific notation before the id resolver sees it. Fix: coerce id-bearing args/options to `:string` in the cli dispatch specs (or stringify in `resolve-id-arg`), and add a regression test with such a prefix.
+
+** TODO [#C] ot: bare-UUID :BLOCKED-BY: entries never resolve :skill_org-tasks:
+:PROPERTIES:
+:CUSTOM_ID: 080fee08-1857-4cac-bd14-e5aae6a9f32a
+:CREATED: [2026-07-27 Mon 13:11]
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 13:11]
+:END:
+Only the `task:<uuid>` form is resolved by readiness checks. A bare UUID parses as `:kind :other` (parser.clj:390-398) and `is-task-ready` (parser.clj:413-431) reports it `[opaque]` forever, so a satisfied dependency never clears. Worse, `ot blocker add <id> <bare-uuid>` silently rewrites the argument to `human: <uuid>`, so the tool itself emits blockers it can never resolve.
+
+Verified: `task:` blockers resolve correctly and *do* traverse `#+IMPORT:`-linked plan files (ready/unresolved-task both observed); a bare UUID stays `[opaque]` even when the dependency is DONE, and reproduces in a plain `ot init` project with no plan file. This is a blocker-token classification bug, not a plan-traversal bug.
+
+Acceptance criteria:
+- A bare `:BLOCKED-BY:` UUID resolves like `task:<uuid>` (`unresolved-task` when open, clears when DONE/CANCELLED).
+- `ot blocker add <id> <bare-uuid>` no longer coerces the argument to `human:`.
+- A non-UUID bare token (e.g. `waiting on Bob`) still classifies as opaque/human, not as a dangling task reference.
+- `ot doctor` surfaces a `:BLOCKED-BY:` entry that looks like a UUID but resolves to no task.
+- The `[#B] Upstream Herdr settled-state` style records in `design/log/` re-report correct readiness without editing their existing bare-UUID blockers.
+- Must not: change the on-disk token format or rewrite existing `:BLOCKED-BY:` values as a migration.
+
+Found while executing the herdr-subagents remediation plan, where all six blockers of a plan task showed `[opaque]` despite being DONE. Context: [[plan:2026-07-24-herdr-subagent-skill-scripts.org]] (** Known gaps in skills/herdr-subagents/README.org).
 
 * Housekeeping
 
@@ -269,3 +323,64 @@ Evidence:
 - pi/settings.json HEAD: packages[], theme, hideThinkingBlock, defaultThinkingLevel.
 - Session dirty diff: lastChangelogVersion="0.76.0", defaultProvider="anthropic", defaultModel="claude-opus-4-7".
 - Filter wrapper exists at ./install-git-filter.sh; was not active on this clone.
+
+** TODO Make spec discovery skip binary and dependency-tree files :skill_org-tasks:
+:PROPERTIES:
+:CUSTOM_ID: ed915fe1-00bb-4246-90e6-9bcf8c4ef123
+:CREATED: [2026-07-22 Wed 19:02]
+:END:
+:LOGBOOK:
+- Created [2026-07-22 Wed 19:02]
+:END:
+The `ot spec list` and `ot doctor` transitive spec traversal can follow a linked skills directory into `node_modules`, slurp an esbuild binary, parse arbitrary bytes as a link target, and abort with `java.nio.file.InvalidPathException: Nul character not allowed`. Discovery should skip dependency/build directories and non-text/binary files, and malformed extracted targets should become diagnostics rather than crashing the command. Add regression fixtures covering a linked spec directory containing `node_modules` and a binary with NUL bytes.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-07-22 Wed 19:02]
+- sender: agent
+
+Evidence:
+Both `ot spec list --format json` and `ot doctor --format json` failed in `org-tasks.commands.spec` at `fs/path` while processing `node_modules/@esbuild/linux-x64/bin/` during validation of the Herdr subagent migration plan. Other task parsing and metadata/link checks succeeded.
+
+** TODO subagent: composed child prompt never mentions BLOCKED/FAILED :skill_herdr-subagents:
+:PROPERTIES:
+:CUSTOM_ID: 0365cc41-17f1-4ea6-8919-4dedb1ae4f3a
+:CREATED: [2026-07-27 Mon 13:20]
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 13:20]
+:END:
+The invariant prompt composed by `prompt-text` (skills/herdr-subagents/scripts/src/herdr_subagents/cli.clj) hard-codes `publish --status COMPLETE` and says nothing about `BLOCKED` or `FAILED`. A child that cannot finish therefore has no instruction to report partial work, and the documented failure mode is silence: the parent blocks for the full budget and reports `pending`/`timeout` for an assignment that actually progressed.
+
+Desired outcome: the composed prompt states that on unrecoverable failure or a blocking dependency the child must publish `BLOCKED`/`FAILED` with an accurate partial account rather than stopping, while keeping publication exactly-once and the result file the sole completion signal.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-07-27 Mon 13:19]
+- sender: agent
+
+Evidence:
+A claude-opus-5 worker hit an Anthropic `overloaded_error` (retry failed after 3 attempts) mid-assignment, stopped, and published nothing; Herdr reported it `done`. The parent`s blocking collect ran to its 40-minute budget and returned `pending`/`timeout` even though three of six plan tasks were complete on disk. Recovery required diagnosing via `agent read`, verifying the working tree by hand, and re-prompting with an explicit instruction to publish BLOCKED on a repeat failure - guidance the CLI should have supplied.
+
+** TODO ot: add unarchive as the inverse of ot archive :skill_org-tasks:
+:PROPERTIES:
+:CUSTOM_ID: 9e9cdd26-1188-4031-b25d-a76ac6e97c9d
+:CREATED: [2026-07-27 Mon 13:20]
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 13:20]
+:END:
+Reopening an archived task has no supported command, so it is done by hand: move the subtree from TASKS.archive.org back to its original section in TASKS.org, delete the `:ARCHIVED:` property, and rewrite the linked change-record`s `#+PARENT:` link from `archive:` back to `task:`. Each step is a silent-corruption opportunity, and the correct destination section is only recoverable from git history.
+
+Desired outcome: `ot unarchive <id>` mirrors `ot archive` - moves the subtree back, drops `:ARCHIVED:`, rewrites the record parent link, and leaves status transitions to `ot status` (which already clears CLOSED: and preserves LOGBOOK on reopen). Refuse cleanly when the id is not in the archive.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-07-27 Mon 13:19]
+- sender: agent
+
+Evidence:
+Unarchiving d6690050 during the herdr-subagents remediation required four manual edits across three files. The hand-edit introduced a trailing blank line at TASKS.archive.org EOF, which `ot doctor` did not flag and which surfaced only when a reviewer subagent ran `git diff --check`. `ot status` and `ot doctor` handled the rest correctly, so the gap is specifically the archive-to-active move.

@@ -5,6 +5,9 @@
 - When asked a question, just answer the question -- don't start coding.
   Use tools and write scripts only to obtain additional required information.
 
+# Subagents
+- Reusable subagent definitions live in `~/.agents/subagents/` (global) and `<git-root>/.agents/subagents/` (project). To delegate work inside Herdr, use the `herdr-subagents` skill.
+
 # Git operations
 - When moving files controlled by git, ALWAYS use `git mv` rather than `mv` -- this preserves history.
 - When reverting file changes you made, use git instead of editing the file again.

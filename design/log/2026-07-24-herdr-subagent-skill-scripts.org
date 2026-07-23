@@ -1,0 +1,518 @@
+#+TITLE: herdr-subagent skill scripts
+#+DATE: 2026-07-24 Fri
+#+PARENT: [[archive:d6690050-b0c8-4ba7-8c06-afff4fa2f761][herdr-subagent skill scripts]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+
+* Intent
+
+Mechanize the herdr-subagents delegation contract as an in-skill CLI (`subagent`: tiny Bash launcher + Babashka implementation, mirroring `ot`) so a parent spawns/collects a subagent in 1–2 tool calls instead of ~10–15, the child publishes its result with one command instead of hand-transcribing an envelope, and SKILL.md shrinks to decision guidance plus safety semantics.
+
+* Summary
+
+*Level:* MVP · *Tests:* thorough · *Docs:* inline + scripts README
+
+** Scope
+*** In scope
+- New `skills/herdr-subagents/scripts/` tree: `subagent` Bash launcher, `src/herdr_subagents/`, `test/`, wired into root `bb.edn` / `deps.edn` (contract doc impact: [[proj:skills/herdr-subagents/SKILL.md]], see =#+SPEC:=).
+- Parent commands: blocking `run`, non-blocking `start` + `collect`, `status`/`list` assignment inspection.
+- Child command: `publish` — atomic, no-overwrite, exactly-once result publication reading identity from injected env.
+- Automation inside those commands: pre-mutation Herdr capability checks, roster discovery, kind/model resolution, caller-rect split geometry, index/label allocation, ledger entry, `pane split --env` assignment/policy injection, rename+verify, `agent start`/`prompt`/wait loop, envelope validation, non-blocking success notification, and eligible-pane cleanup.
+- Tests: pure-logic units, fake-`herdr` integration (PATH shim), root + nested live smoke.
+- SKILL.md rewrite delegating mechanics to the CLI while keeping safety semantics normative.
+*** Out of scope
+- Resident lifecycle commands and `many` fan-out waves (ledger schema leaves room; commands deferred to follow-ups).
+- General pane management wrapping (`subagent` is not a `herdr pane` porcelain; parents keep using `herdr` directly for non-delegation work).
+- Changes to Herdr, the vendored `skills/herdr/SKILL.md` (byte-identical to upstream by contract), or `@ogulcancelik/pi-herdr`.
+- Harness-specific integration (pi extension/tool); the CLI must work from any harness with shell access.
+- Publishing a second `bbin` entry point; in-tree launcher path only for MVP.
+
+** Acceptance
+*** Core functionality
+- [X] `subagent run <persona> --task <text>` performs the full blocking flow (discover→resolve→ledger→split→rename→start→prompt→bounded wait→validate→capture→eligible close) and emits one JSON envelope `{ok, schema "herdr-subagents/v1", result|error}`.
+- [X] `--task`, `--task-file`, or stdin supplies opaque assignment text inside a CLI-composed invariant prompt wrapper; `--prompt-extra` adds constraints and `--print-prompt` previews the composition, with no raw-prompt mode in the MVP.
+- [X] `subagent start` returns an assignment descriptor (task id, pane id, label, result path) without waiting; `subagent collect <task>` validates and captures the result later, while successful non-blocking publication notifies the operator with child, task, and result path.
+- [X] `subagent publish --status ... --summary ...` run by the child writes a sibling temp file and publishes atomically without overwriting an existing `RESULT`, exactly once.
+- [X] Assignment identity (`CHILD`/`TASK`/`RESULT`), launcher path, and waiting policy (`blocking` or `non-blocking`) reach the child via `pane split --env` variables; the child never re-types them → test:skills/herdr-subagents/scripts/test/herdr_subagents/cli_test.clj
+- [X] Envelope validation accepts a result only when markers, `CHILD`, `TASK`, and `RESULT` exactly match the ledger; artifact paths are existence-checked.
+- [X] Pane labels and per-(parent, type) indices match the SKILL.md contract, including the nested `planner-1/scout-1-<model>` format → spec:[[proj:skills/herdr-subagents/SKILL.md]] test:skills/herdr-subagents/scripts/test/herdr_subagents/core_test.clj
+- [X] Split direction follows the documented geometry rule (`right` iff columns ≥ 80 and columns ≥ 2×rows) using `.result.layout.panes[*].rect` for the entry whose `pane_id` exactly equals `$HERDR_PANE_ID`; tab-wide `area` and `focused_pane_id` are never used as caller geometry.
+- [X] All `herdr` invocations pass argv as vectors (`babashka.process`, no shell string splicing); prompt/task text can contain quotes, newlines, `$`, and backticks safely.
+- [X] Root and nested live smoke succeed against real Herdr through an explicit guarded `bb smoke-subagent` task requiring `HERDR_ENV=1`, `SUBAGENT_LIVE_SMOKE=1`, and an explicit model; it is never part of ordinary tests or CI, and evidence is recorded in `* Validation`.
+- [X] SKILL.md rewritten: mechanics delegated to `subagent --help`/contract doc; retained sections cover preconditions, invocation dimensions, delegation guidance, safety semantics, planner exception, resident/fan-out rules, and a compressed manual-envelope fallback.
+- [X] `skills/herdr-subagents/scripts/test/herdr_subagents/test_runner.clj` is deleted (dead regexes, cwd-relative walk, unreachable invocation).
+- [X] The `bb.edn` `test` task invokes exactly one test runner, with no code after a call that exits the process.
+- [X] The shared test runner exits nonzero when it discovers zero test namespaces → test:skills/org-tasks/scripts/test/org_tasks (any suite asserting the empty-discovery path or a direct `bb -e` probe recorded in `* Validation`).
+- [X] `bb test` output names `herdr-subagents.cli-test` and `herdr-subagents.core-test` among executed namespaces.
+- [X] No test source contains an absolute checkout path; `cli_test.clj` derives the repo root at load time → test:skills/herdr-subagents/scripts/test/herdr_subagents/cli_test.clj
+- [X] `wait-and-capture!` sleeps a configurable interval before re-entering the loop after a wait outcome that is settled but has no valid result file.
+- [X] A deterministic fake-Herdr test proves the `agent wait` call count stays within an interval-derived bound when the child idles without publishing → test:skills/herdr-subagents/scripts/test/herdr_subagents/cli_test.clj
+- [X] A deterministic fake-Herdr test proves a result published after several idle-without-result iterations is still captured as `COMPLETE` → test:skills/herdr-subagents/scripts/test/herdr_subagents/cli_test.clj
+*** Edge cases
+- [X] `RESULT` already exists at publish time → `publish` fails cleanly, removes its temp file, leaves no complete-looking file, and emits `herdr notification show` naming child/pane/task/error.
+- [X] `run` applies a 10-minute total wait budget by default (`--timeout` overrides it); expiry or a `blocked` child returns a non-final status with pane retained, and nothing is auto-killed or auto-closed.
+- [X] `collect <task>` polls once by default; `collect --wait --timeout ...` optionally performs the same bounded wait behavior.
+- [X] Intermediate `idle` with no valid result file is not treated as completion; `run` and waiting `collect` check the exact result path immediately before and after every bounded lifecycle wait outcome, including settled, blocked, timeout, and structured Herdr errors.
+- [X] Concurrent spawns from the same parent session never allocate the same per-type index or corrupt the ledger; different parent sessions maintain independent counters and may each begin at index 1.
+- [X] Model-resolution rung 4 (harness default) omits the `-<model>` label segment.
+- [X] Running outside Herdr (`HERDR_ENV` ≠ 1) or with an incompatible `herdr` CLI fails fast with an actionable JSON error before ledger allocation or pane mutation; compatibility requires the supported minimum version and non-mutating verification of every required command/flag shape.
+- [X] Launcher works from the symlinked deployment (`~/.agents/skills/herdr-subagents/scripts/subagent`) and from a bare skill-subtree install (fallback `-Sdeps`, bb built-ins only). Closed by the 2026-07-27 launcher fix: `cd -P` canonicalises the directory symlink and the fallback `cd` is gone → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] The deployed launcher path selects the repository `bb.edn` branch → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] The bare skill-subtree install (no reachable `bb.edn`) launches successfully when the caller's cwd contains its own `bb.edn` → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] The CLI's working directory equals the caller's working directory for the repo-relative invocation form → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] The CLI's working directory equals the caller's working directory for the repo-absolute invocation form → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] The CLI's working directory equals the caller's working directory for the deployed directory-symlink invocation form → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] The CLI's working directory equals the caller's working directory for the bare skill-subtree invocation form → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] `--cwd` passed to `pane split` equals the caller's cwd when spawning from a project other than dotagents → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] `assignment-root` (ledger, index markers, result path) resolves inside the caller's project when spawning from a project other than dotagents → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] A project-local `<caller-root>/.agents/subagents/` roster entry wins over the global one when spawning from that project → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] `HERDR_SUBAGENT_BIN` is absolute for every invocation form, including a repo-relative `./skills/.../subagent` call → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] A test asserts the exact `--cwd` value passed to `pane split` through a *directory-symlinked* launcher path, so reintroducing the fallback `cd` fails `bb test` → test:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj
+- [X] `collect` refuses to close a pane whose ledger entry records a different `:parent-session` than the caller, capturing the envelope and retaining the pane instead. → test:skills/herdr-subagents/scripts/test/herdr_subagents/cli_test.clj
+- [X] A caller whose identity cannot be determined (no agent in the caller pane, unset `HERDR_PANE_ID`, failed `agent get`) is treated as non-owning: capture still proceeds, the pane is retained, and no exception escapes. → test:skills/herdr-subagents/scripts/test/herdr_subagents/cli_test.clj
+- [X] `ledger/assignment-root` honours a `SUBAGENT_ASSIGNMENT_ROOT` override ahead of the `git rev-parse` probe.
+- [X] A relative, blank, or nonexistent `SUBAGENT_ASSIGNMENT_ROOT` is rejected or absolutised, so `RESULT` is always an absolute path. → test:skills/herdr-subagents/scripts/test/herdr_subagents/core_test.clj
+- [X] `cli_test.clj` sets `SUBAGENT_ASSIGNMENT_ROOT` to the per-test temp dir.
+- [X] A full `bb test` run adds zero files to `<git-root>/.agents/tmp/herdr-subagents/`.
+- [X] The suite passes with no `~/.agents/subagents/` present: `cli_test.clj` symlinks `<test-root>/.agents/subagents` to the repo's tracked `subagents/`, so personas resolve through the project branch.
+- [X] Integration tests exercise the project-roster-wins branch end-to-end: `cli_test.clj` symlinks the project roster and points `HOME` at an empty directory, so every integration spawn must resolve through the project branch → test:skills/herdr-subagents/scripts/test/herdr_subagents/cli_test.clj
+- [X] `subagent list` on the purged tree completes in under 1 s.
+- [X] `poll-interval-ms` returns the 1000 ms default for `0`.
+- [X] `poll-interval-ms` returns the 1000 ms default for a negative value, and no `IllegalArgumentException` escapes `wait-and-capture!`.
+- [X] `poll-interval-ms` returns the 1000 ms default for unset, blank, and unparseable input, and the parsed value for positives.
+- [X] A `herdr pane close` failure cannot turn a captured `COMPLETE`/`FAILED` into a nonzero-exit command.
+- [X] An envelope that fails validation yields a non-final `invalid` outcome with the reason recorded on the ledger and the pane retained.
+- [X] An envelope naming a nonexistent artifact yields the same non-final `invalid` outcome rather than an exception.
+- [X] A second `collect` of an `invalid` assignment returns the same outcome rather than throwing, so the assignment never becomes permanently uncollectable.
+- [X] `validate-envelope` rejects a `FINDINGS` list longer than the five items contract.md specifies, or the limit is removed from contract.md as guidance → test:boundary cases at five and six findings.
+- [X] `bounded-poll-timeout-without-result` fails when the `wait-and-capture!` sleep is removed, with the asserted bound at most half the measured no-sleep call count. Verified by deleting the sleep: 46 `agent wait` calls versus 7 with it; the asserted bound is 14.
+- [X] `subagent --help` and `subagent help` print human-readable usage text and exit 0.
+- [X] `subagent run --help` prints usage and exits 0 instead of returning `option requires a value`.
+- [X] contract.md scopes its "exactly one JSON object" sentence to non-help commands.
+- [X] contract.md documents `HERDR_SUBAGENT_PERSONA` in the injected-environment list alongside its role in nested planner labelling.
+- [X] contract.md states that `status` (no task) and `list` return a JSON array under `result`.
+- [X] Coverage exists for `--task-file`, stdin assignment input, and `--prompt-extra`.
+- [X] Coverage exists for a `BLOCKED` envelope and a `FAILED` envelope end-to-end through the fixture.
+- [X] Coverage exists for the default 600000 ms budget and for `publish --from-file`.
+- [X] Coverage exists for the nested `planner-<n>/...` label end-to-end, not only as a pure `child-label` call.
+- [X] The poll sleep is capped by the remaining total budget, so timeout expiry is never overshot by a full interval.
+- [X] Backoff covers `collect --wait` as well as `run` (both dispatch through `wait-and-capture!`).
+- [X] The herdr-subagents suite passes when the repository is copied to a different absolute path.
+*** Anti-criteria
+- [X] Must not: treat `agent read`, terminal history, or any transcript text as completion; the validated `RESULT` file remains the only completion signal.
+- [X] Must not: close panes the parent did not create, close `BLOCKED` panes, or close before envelope + artifacts are captured and the child lifecycle is settled. Closed by the 2026-07-27 ownership guard: `maybe-close!` is gated on the caller's `:parent-session` and an unresolvable identity is treated as non-owning.
+- [X] Must not: let `bb test` write to, read from, or grow the live `<git-root>/.agents/tmp/herdr-subagents/` ledger, index-marker, or result tree.
+- [X] Must not: change completion semantics while fixing the launcher and scoping defects — the validated `RESULT` file stays the sole completion signal and the envelope/identity rules are untouched.
+- [X] Must not: scope ledger *reads* by session — `status` and `list` continue to show every entry; only pane closure is ownership-gated, while `capture!` still writes truthful status to a foreign entry.
+- [X] Must not: prescribe an absolute `:paths` value to `bb -Sdeps` — it throws `is not a relative path` whenever the caller's cwd contains a `bb.edn`.
+- [X] Must not: modify vendored `skills/herdr/SKILL.md` or `@ogulcancelik/pi-herdr`.
+- [X] Must not: add Maven dependencies for the new namespaces (bb built-ins only: `babashka.process`, `babashka.fs`, `cheshire`), so the standalone `-Sdeps` fallback stays trivial.
+- [X] Must not: weaken the live agent-name uniqueness contract or embed workspace names in pane labels.
+- [X] Must not: implement resident reuse or fan-out waves in this change.
+- [X] Must not: change completion/lifecycle semantics while fixing the wait loop — the validated `RESULT` file stays the sole completion signal, and blocked/timeout still retain the pane.
+- [X] Must not: make the backoff tests depend on real-time races or add sleeps that materially slow `bb test` (added wall time under ~2 s).
+- [X] Must not: re-run the billable live smoke for the 2026-07-24 test-wiring and backoff remediation; no Herdr command composition changed in that pass. (Superseded for the 2026-07-27 launcher work, which does change the execution path and requires one billable deployed-path smoke.)
+
+** Decisions
+- Command name = `subagent` :: explicit and readable in prompts and shell commands; no existing PATH collision at planning time.
+- Chose Babashka implementation behind a tiny Bash launcher (the `ot` pattern) :: proven in-repo layout (`bb.edn` paths, `src`/`test`, launcher resolving repo root with `-Sdeps` fallback); safe ProcessBuilder-style argv via `babashka.process`; pure functions are unit-testable; JSON in/out via bundled cheshire.
+  Rejected:
+  - Pure Bash scripts: ledger/JSON/atomic-publish logic in Bash is fragile, untestable, and reintroduces string-splicing injection risk for prompt text.
+  - pi extension / pi-herdr change: harness-specific, and pi-herdr is upstream-owned npm (established in [[proj:design/log/2026-07-23-add-hierarchical-pane-labels-to-herdr-su.org]]); the skill must stay harness-agnostic.
+  - Folding commands into `ot`: wrong domain — `ot` is the org-tasks protocol engine; coupling delegation mechanics to task memory helps neither.
+- Assignment injection via `herdr pane split --env` :: verified live on herdr 0.7.5 — repeated `--env KEY=VALUE` flags propagate into the child pane shell and are inherited by `agent start`. Child `subagent publish` reads `HERDR_SUBAGENT_CHILD`/`_TASK`/`_RESULT`, `_BIN` with the launcher's absolute path, and `_WAITING_POLICY=blocking|non-blocking`; prompts shrink, transcription errors disappear, and successful non-blocking publication can emit the required operator notification. Prompt text still states task + persona path; the result contract collapses to "run `$HERDR_SUBAGENT_BIN publish ...`".
+- Atomic no-overwrite publish via hard-link-then-unlink :: POSIX `rename(2)` silently overwrites, so `Files/move` + `ATOMIC_MOVE` cannot guarantee no-overwrite. `publish` writes the sibling temp, then `Files/createLink(result, temp)` (fails `FileAlreadyExistsException` when `RESULT` exists), then unlinks the temp. Same-directory link keeps it one filesystem.
+- File-based ledger under `<assignment-root>/.agents/tmp/herdr-subagents/ledger/` :: one JSON file per assignment keyed by `TASK`; per-(parent-agent-session, type) index allocated by atomically creating marker files (`O_CREAT|O_EXCL` loop) — lock-free, concurrency-safe, and honours the existing gitignored tmp convention. Parent identity comes from `herdr agent get "$HERDR_PANE_ID"` session metadata so a moved pane preserves its counter while a restarted parent begins a new session; the pane ID remains recorded as topology context.
+- MVP is one ephemeral child :: `run`/`start`/`collect` cover blocking and non-blocking single delegation; residents and wave fan-out stay documentation-only until demand exists (ledger fields don't preclude them).
+- CLI-composed invariant prompt with opaque assignment input :: `--task`, `--task-file`, or stdin supplies the parent-owned task body unchanged; the CLI adds persona, leaf/delegation, identity, publication, and lifecycle instructions. `--prompt-extra` handles exceptional constraints and `--print-prompt` makes composition inspectable; a raw-prompt mode is excluded from the MVP because it would reintroduce protocol omission and transcription risk.
+- Ten-minute total default budget for blocking waits :: `run --timeout` overrides it; timeout is non-final and retains the pane. `collect` is an immediate poll unless `--wait` is supplied with a bounded timeout. The result file is checked immediately before and after every bounded lifecycle wait regardless of outcome, with each wait bounded by the remaining total budget.
+- Caller geometry comes only from its matching layout pane rect :: select `.result.layout.panes[*]` where `pane_id == $HERDR_PANE_ID` and apply the geometry rule to that entry's `rect.width`/`rect.height`; tab `area` and focus are unrelated when the caller is an unfocused split.
+- Preflight capabilities before mutation :: require `HERDR_ENV=1`, parse a supported minimum Herdr version, and non-mutatingly inspect help for every required command/flag (`pane layout/split --env/rename/get/close`, `agent start/prompt/wait/get`, `notification show`) before ledger allocation or pane creation. Missing shapes return an actionable JSON error.
+- Guarded live-smoke task :: `bb smoke-subagent` requires Herdr, explicit `SUBAGENT_LIVE_SMOKE=1`, and an explicit model because it launches billable agents; it exercises root and nested flows but never joins `bb test` or CI.
+- `subagent` emits concise structured JSON (`{ok, schema, result|error}`, schema `herdr-subagents/v1`) :: mirrors the `ot` machine contract so agents parse uniformly; human-readable text only via `--format text` if trivially cheap, else JSON-only for MVP.
+- Single test-discovery path with fail-loud empty set :: delete the dedicated `herdr-subagents.test-runner` (its regex literals `#"_test\\.clj$"` match nothing, its file walk is cwd-relative, and its `bb.edn` invocation is unreachable behind `org-tasks.test-runner/run`'s unconditional `System/exit`); the org-tasks runner's classpath-wide `**/*_test.clj` glob is already generic and proven to execute the herdr suite. Harden it to exit nonzero on zero discovered namespaces so silent discovery breakage cannot recur.
+  Rejected:
+  - Fixing the dedicated runner's regexes: keeps two runners plus permanently dead code after `System/exit`.
+  - Reordering the `bb.edn` invocations: the same namespaces would run twice with divergent exit semantics.
+- Fixed-interval budget-capped poll for settled-without-result :: sleep `SUBAGENT_POLL_INTERVAL_MS` (default 1000 ms), capped by the remaining total budget, between wait iterations when the child is settled without a valid result. The injectable interval keeps fake-Herdr tests fast and lets them assert an interval-derived call-count bound deterministically.
+  Rejected:
+  - Exponential backoff: extra state for no material win — 1 Hz polling is ≤ ~600 subprocesses over the worst-case 10-minute budget versus 100+/s today.
+  - `herdr agent wait --until` with narrower states: changes live wait semantics validated in the guarded smoke; the defect is only the missing sleep.
+- `--help` stays human-readable text; JSON is the machine contract for everything else :: nothing consumes `subagent --help` programmatically — SKILL.md never references it, README.md cites it as a human command, and `herdr.clj`'s `command-help` parses *Herdr's* help, not the CLI's. So contract.md's "exactly one JSON object" sentence is narrowed to non-help commands rather than wrapping usage text in an envelope, and `run --help` is fixed to print usage instead of an error envelope. No `--help --format json` / `--info` discovery variant until a machine consumer actually exists (YAGNI).
+- One `SUBAGENT_ASSIGNMENT_ROOT` knob covers ledger *and* roster, and tests point it at the repo's own tracked personas :: `roster` (`cli.clj:40`) already derives its project root from `ledger/assignment-root`, so overriding that single function relocates ledger, index markers, result paths, and project-roster lookup together — coherent, because all four are per-project notions. `cli_test.clj` therefore symlinks `<test-root>/.agents/subagents` to the repo's tracked `subagents/` instead of inventing fixture personas: the suite stops depending on a deployed home, tests run against the personas that actually ship (no fixture drift), and the project-roster-wins branch gains its first end-to-end coverage.
+  Rejected:
+  - A separate `SUBAGENT_ROSTER_DIR`: a second knob for the same "which project" question (YAGNI).
+  - Hand-written fixture personas under the temp root: extra surface that silently drifts from the real roster and never exercises real frontmatter.
+  - Relying on the `~/.agents/subagents` → repo symlink as-is: it works on this host, but makes `bb test` fail on a bare checkout or CI runner with no Home Manager activation.
+- Launcher fallback uses `--deps-root "$script_dir" -Sdeps '{:paths ["src"]}'` :: an absolute `:paths` value throws `IllegalArgumentException: ... is not a relative path` whenever the caller's cwd contains a `bb.edn`, which is exactly the state created by dropping the fallback `cd`. Verified: absolute `:paths` succeeds from a cwd with no `bb.edn` or with only a `deps.edn`, and fails from any cwd with a `bb.edn`; the `--deps-root` form succeeds in all cases while preserving `user.dir`.
+  Rejected:
+  - Absolute `-Sdeps :paths` (the 2026-07-27 implementation review's sketch): silently correct only until the fallback is exercised from a Babashka project — the likeliest real caller.
+  - `bb --classpath "$script_dir/src"`: works, but abandons the `-Sdeps` shape the record already contracts for.
+- SKILL.md keeps safety semantics normative and moves mechanics to the CLI :: the skill remains the constitution (completion-signal rule, pane lifecycle, planner exception, invocation dimensions, resident/fan-out contracts); step-by-step command mechanics, label math, geometry arithmetic, and envelope assembly live in `subagent` + `scripts/docs/contract.md`. A compressed manual-envelope fallback stays in the skill for environments without the scripts.
+
+** Shipped
+- ADDED `skills/herdr-subagents/scripts/` :: `subagent` Bash launcher + Babashka CLI (`core`/`herdr`/`ledger`/`cli`/`smoke`), `README.md`, `docs/contract.md`, fake-Herdr fixture, unit/integration/launcher suites, and the guarded live smoke.
+- ADDED `skills/herdr-subagents/README.org` :: design rationale (cross-harness portability, why a CLI rather than prose), the measured tool-call and context overhead reduction, architecture map, non-regressable invariants, and maintenance notes; `skills/README.org` inventory updated to match.
+- ADDED `design/log/2026-07-24-herdr-subagent-skill-scripts/` :: the 2026-07-27 implementation-review report.
+- MODIFIED `skills/herdr-subagents/SKILL.md` :: mechanics delegate to the CLI while completion, pane safety, planner exception, resident, and fan-out policy stay normative; nesting is noted as depending on the injected `HERDR_SUBAGENT_PERSONA`; pane closure is owning-session-scoped; new `Trusting a result` section separates identity validation from correctness.
+- MODIFIED `skills/herdr-subagents/scripts/subagent` :: `cd -P` canonicalises the deployed *directory* symlink so it still selects the repository `bb.edn`; `script_path` absolutised after the symlink loop so `HERDR_SUBAGENT_BIN` is always absolute; the fallback `cd` removed (it had rebound the child's `--cwd` and the assignment/roster root to the skill's own scripts directory); fallback anchored with `bb --deps-root "$script_dir" -Sdeps '{:paths ["src"]}'`.
+- MODIFIED `.../src/herdr_subagents/cli.clj` :: budget-capped poll sleep in `wait-and-capture!`; `parse-poll-interval` `pos?` guard; `capture!` converts validation/artifact failures into the non-final, repeatable `invalid` status instead of throwing out of the loop; `caller-owns?`/`owned?` scope pane closure to `:parent-session` and treat unresolvable identity as non-owning; `herdr/close!` guarded so a close failure cannot demote a captured result; `help-request?` gives usage + exit 0 for every command.
+- MODIFIED `.../src/herdr_subagents/ledger.clj` :: `resolve-override` reads `SUBAGENT_ASSIGNMENT_ROOT` ahead of the `git rev-parse` probe (blanks ignored, relatives absolutised, non-directories rejected), relocating ledger, index markers, results, *and* project-roster lookup with one knob.
+- MODIFIED `.../src/herdr_subagents/core.clj` :: `findings-limit!` enforces contract.md's five-item `FINDINGS` cap on both publication and validation.
+- MODIFIED `.../docs/contract.md` and `.../README.md` :: help documented as the sole non-JSON exception; `status`/`list` return arrays; `invalid` defined as non-final and manual-intervention-only; Environment table for `SUBAGENT_ASSIGNMENT_ROOT` (incl. roster relocation and child inheritance), `SUBAGENT_POLL_INTERVAL_MS`, and `HERDR_SUBAGENT_PERSONA`; `FINDINGS` cap and ownership-scoped closure stated; launcher `cd -P`/no-`cd` contract and per-test temporary roots recorded.
+- MODIFIED `.../test/` :: `cli_test.clj` runs entirely inside a temp assignment root with empty `HOME` and a project-roster symlink to the repo's tracked `subagents/`; bounded-poll bound retuned to be genuinely regression-detecting; coverage added for `--task-file`, stdin, `--prompt-extra`, `publish --from-file`, nested labels, BLOCKED/FAILED envelopes, default budget, close failure, missing artifact, repeated `invalid` collect, foreign-session and identity-failure collect, negative poll interval, and `--help`. `core_test.clj` covers `parse-poll-interval`, the `FINDINGS` boundary, and `resolve-override`. `fake-herdr` gains `idle-then-publish`, `FAKE_PUBLISH_STATUS`, `FAKE_PUBLISH_ARTIFACT`, `FAKE_FAIL_CLOSE`, and `FAKE_FAIL_AGENT_GET`.
+- ADDED `.../test/herdr_subagents/launcher_test.clj` :: four-form launcher matrix (repo-relative, repo-absolute, deployed directory-symlink, bare subtree from a `bb.edn`-owning cwd) plus a foreign-project spawn, asserting selected Babashka branch, exact `pane split --cwd`, injected `HERDR_SUBAGENT_BIN`, and git-probed assignment root via a `bb`-argv PATH shim.
+- MODIFIED `bb.edn` / `deps.edn` :: shared source/test paths, `subagent` and opt-in smoke tasks; the unreachable second test-runner invocation removed, leaving `org-tasks.test-runner/run` as the sole runner.
+- REMOVED `.../test/herdr_subagents/test_runner.clj` :: dead dedicated runner (non-matching regexes, cwd-relative walk, unreachable wiring).
+- MODIFIED `skills/org-tasks/scripts/test/org_tasks/test_runner.clj` :: exits nonzero when zero test namespaces are discovered, so silent discovery breakage cannot recur.
+- REMOVED (gitignored state) :: 262 fake ledger entries (`pane-id: "w:child"`), the 144 result files they referenced, and two index-marker session directories; `subagent list` drops from 2.35 s / 240 KB to 0.195 s / 33 KB.
+
+** Gotchas
+Launcher, roster, and caller-identity traps that outlived this change are maintained in [[proj:skills/herdr-subagents/README.org]] (deployment symlinks and `cd -P`, the `-Sdeps`/`bb.edn` coupling, `parent-identity` failure modes, roster location). Record-specific surprises:
+- `herdr pane layout --current` followed the UI-focused pane rather than the inherited caller in live validation; delegation passes explicit `--pane "$HERDR_PANE_ID"` for layout and split.
+- Planner prompts must retain the sole planner→scout/researcher exception; applying the generic leaf instruction to planners prevents nested delegation.
+- Pi accepts the persona file path for `--append-system-prompt`; Claude requires the persona body text.
+- `*file*` under `babashka.classpath/add-classpath` is absolute, but the walk to the repo root needs five `..` segments from the test file's parent, not the four a naive count suggests — verify empirically.
+- `(or 0 default)` returns `0` in Clojure because zero is truthy, so an env-var knob parsed with `parse-long` needs an explicit `pos?` guard or its "disabled" value silently becomes a busy-wait.
+- `clj`/`deps.edn` tooling can generate an untracked `.clojure/` directory that `.gitignore` does not cover; remove it if it appears mid-session.
+
+** Risks
+- Herdr help text is an upstream interface: the capability preflight parses it, and the fake fixture pins the shapes consumed. An upstream help-format change surfaces as a test failure rather than a runtime surprise, but the coupling is real and permanent. Accepted.
+- Live smoke exercises billable agents and cannot run in CI, so launcher/argv changes rely on an operator remembering to run it. Mitigated by the deployed-path smoke procedure recorded in `* Validation` and the README.
+
+** Follow-ups
+- `subagent`: composed child prompt never mentions BLOCKED/FAILED — task `0365cc41`.
+- Integrate the retrospective skill into the subagent lifecycle — task `57a1cf23`.
+- `ot unarchive` as the inverse of `ot archive` — task `9e9cdd26`.
+- `ot`: bare-UUID `:BLOCKED-BY:` entries never resolve — task `080fee08`.
+- Resident lifecycle commands and `many` wave fan-out remain deliberately unbuilt; create tasks when first needed.
+
+* Plan
+
+** DONE Scaffold scripts tree, launcher, and bb wiring
+CLOSED: [2026-07-24 Fri 15:02]
+:PROPERTIES:
+:CUSTOM_ID: 92fe09de-2bb5-4f4a-8370-0b0dac6ca41e
+:CREATED: [2026-07-24 Fri 11:35]
+:STARTED: [2026-07-24 Fri 14:58]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 14:58]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:02]
+:END:
+Outcome: added the launcher/source/test/docs tree, aligned `bb.edn` and `deps.edn`, preserved the `ot` bbin entry, and verified repo, symlink, and bare-subtree launch paths without new dependencies.
+
+** DONE Pure logic: resolution, geometry, labels, envelope
+CLOSED: [2026-07-24 Fri 15:23]
+:PROPERTIES:
+:CUSTOM_ID: 1ce8d60b-517f-4aeb-af80-5399b73393dc
+:BLOCKED-BY: 92fe09de-2bb5-4f4a-8370-0b0dac6ca41e
+:CREATED: [2026-07-24 Fri 11:35]
+:STARTED: [2026-07-24 Fri 15:02]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:02]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:05]
+- State "TODO" from "DONE" [2026-07-24 Fri 15:11]
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:13]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:23]
+:END:
+Outcome: pure helpers and tests cover roster/routing/model ladders, prompt dialects, geometry, root/nested labels, frontmatter, envelope identity, and annotated artifact paths.
+
+** DONE Ledger and concurrency-safe index allocation
+CLOSED: [2026-07-24 Fri 15:23]
+:PROPERTIES:
+:CUSTOM_ID: 7cd25976-8512-413e-b097-39f6a00d226f
+:BLOCKED-BY: 92fe09de-2bb5-4f4a-8370-0b0dac6ca41e
+:CREATED: [2026-07-24 Fri 11:35]
+:STARTED: [2026-07-24 Fri 15:02]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:02]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:05]
+- State "TODO" from "DONE" [2026-07-24 Fri 15:11]
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:23]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:23]
+:END:
+Outcome: assignment ledgers persist atomically before pane mutation; collision-resistant parent-session/persona markers allocate monotonic concurrent indices and nonce-bearing result paths.
+
+** DONE Herdr CLI adapter with safe argv
+CLOSED: [2026-07-24 Fri 15:23]
+:PROPERTIES:
+:CUSTOM_ID: 741bdda1-cbe5-40da-80e9-a7c7f861b25e
+:BLOCKED-BY: 92fe09de-2bb5-4f4a-8370-0b0dac6ca41e
+:CREATED: [2026-07-24 Fri 11:35]
+:STARTED: [2026-07-24 Fri 15:02]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:02]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:05]
+- State "TODO" from "DONE" [2026-07-24 Fri 15:11]
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:23]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:23]
+:END:
+Outcome: vector-argv adapter parses Herdr JSON/errors, preflights every required 0.7.5 command shape before mutation, and uses the explicit caller pane rect; fake coverage proves capability, geometry, and quoting behavior.
+
+** DONE Child-side `subagent publish`
+CLOSED: [2026-07-24 Fri 15:23]
+:PROPERTIES:
+:CUSTOM_ID: ca65c9bc-74fd-49b3-845e-5bee0b018fbf
+:CREATED: [2026-07-24 Fri 11:35]
+:BLOCKED-BY: 1ce8d60b-517f-4aeb-af80-5399b73393dc
+:BLOCKED-BY+: task:741bdda1-cbe5-40da-80e9-a7c7f861b25e
+:STARTED: [2026-07-24 Fri 15:05]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:05]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:09]
+- State "TODO" from "DONE" [2026-07-24 Fri 15:11]
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:23]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:23]
+:END:
+Outcome: `publish` renders and hard-link-publishes the v1 envelope exactly once, validates assignment policy, and separates committed publication from success/failure notification outcomes.
+
+** DONE Blocking `subagent run`
+CLOSED: [2026-07-24 Fri 15:23]
+:PROPERTIES:
+:CUSTOM_ID: 3c34a179-230f-48c0-8975-1b60b1748e09
+:BLOCKED-BY: 7cd25976-8512-413e-b097-39f6a00d226f
+:BLOCKED-BY+: 741bdda1-cbe5-40da-80e9-a7c7f861b25e
+:BLOCKED-BY+: ca65c9bc-74fd-49b3-845e-5bee0b018fbf
+:CREATED: [2026-07-24 Fri 11:35]
+:STARTED: [2026-07-24 Fri 15:09]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:09]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:09]
+- State "TODO" from "DONE" [2026-07-24 Fri 15:11]
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:23]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:23]
+:END:
+Outcome: `run` composes the full blocking spawn lifecycle with side-effect-free preview, bounded result-first waits, partial-failure recovery, artifact capture, and eligible-pane cleanup while emitting only structured JSON.
+
+** DONE Non-blocking `subagent start` / `collect` / `status`
+CLOSED: [2026-07-24 Fri 15:23]
+:PROPERTIES:
+:CUSTOM_ID: fc93a804-ee84-48da-96b0-539c6848d318
+:BLOCKED-BY: 3c34a179-230f-48c0-8975-1b60b1748e09
+:CREATED: [2026-07-24 Fri 11:35]
+:STARTED: [2026-07-24 Fri 15:09]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:09]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:09]
+- State "TODO" from "DONE" [2026-07-24 Fri 15:11]
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:23]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:23]
+:END:
+Outcome: `start`, `collect`, `status`, and `list` share the spawn/capture flow, distinguish pending from failure, support bounded collection, and expose ledger plus live-agent state.
+
+** DONE Fake-herdr integration suite
+CLOSED: [2026-07-24 Fri 15:23]
+:PROPERTIES:
+:CUSTOM_ID: 0ed35091-a725-4dd0-9a6c-99882d15acb0
+:BLOCKED-BY: fc93a804-ee84-48da-96b0-539c6848d318
+:CREATED: [2026-07-24 Fri 11:35]
+:STARTED: [2026-07-24 Fri 15:09]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:09]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:09]
+- State "TODO" from "DONE" [2026-07-24 Fri 15:11]
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:23]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:23]
+:END:
+Outcome: PATH-shimmed fake-Herdr tests cover run/start/collect, blocked/timeout/stale results, notifications, capabilities, geometry, quoting, prompt dialects, partial cleanup, and exact mutating/non-mutating argv.
+
+** DONE Live smoke: root and nested spawn
+CLOSED: [2026-07-24 Fri 15:40]
+:PROPERTIES:
+:CUSTOM_ID: 150841b9-7416-49e8-a5df-ad5ad436d4f0
+:BLOCKED-BY: 0ed35091-a725-4dd0-9a6c-99882d15acb0
+:CREATED: [2026-07-24 Fri 11:35]
+:STARTED: [2026-07-24 Fri 15:30]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:30]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:40]
+:END:
+Outcome: guarded real-Herdr smoke completed a root scout and planner→scout delegation with validated COMPLETE envelopes, expected labels, injected identity, and no residual child panes.
+
+** DONE Rewrite SKILL.md and scripts docs
+CLOSED: [2026-07-24 Fri 15:40]
+:PROPERTIES:
+:CUSTOM_ID: d4db6055-ba6f-4120-b8ae-401c8de44d3b
+:BLOCKED-BY: 150841b9-7416-49e8-a5df-ad5ad436d4f0
+:CREATED: [2026-07-24 Fri 11:35]
+:STARTED: [2026-07-24 Fri 15:40]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 15:40]
+- State "DONE" from "STARTED" [2026-07-24 Fri 15:40]
+:END:
+Outcome: SKILL.md retains normative delegation/safety semantics and points mechanical detail to the validated CLI, README, and contract; quick validation and deployment-path checks pass.
+
+** DONE Single-path fail-loud test discovery, portable test roots
+CLOSED: [2026-07-24 Fri 17:27]
+:PROPERTIES:
+:CUSTOM_ID: 8f2a4594-8b10-4e15-a5c3-00e35f08d3c4
+:CREATED: [2026-07-24 Fri 17:17]
+:STARTED: [2026-07-24 Fri 17:24]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 17:24]
+- State "DONE" from "STARTED" [2026-07-24 Fri 17:27]
+:END:
+Outcome: deleted the dead `herdr-subagents.test-runner` and its unreachable `bb.edn` invocation, leaving `org-tasks.test-runner/run` as the sole runner and hardening it to exit nonzero on zero discovered namespaces; `cli_test.clj` now derives its repo root from `*file*` with a `git rev-parse --show-toplevel` fallback. `bb test` names both herdr-subagents namespaces; `rg` finds no hardcoded checkout path.
+
+** DONE Bounded budget-capped poll in wait-and-capture!
+CLOSED: [2026-07-24 Fri 17:30]
+:PROPERTIES:
+:CUSTOM_ID: 68585a83-408b-4119-bf7f-7a4081a00208
+:CREATED: [2026-07-24 Fri 17:17]
+:STARTED: [2026-07-24 Fri 17:27]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 17:27]
+- State "DONE" from "STARTED" [2026-07-24 Fri 17:30]
+:END:
+Outcome: `wait-and-capture!`'s settled-without-result branch now sleeps `min(SUBAGENT_POLL_INTERVAL_MS, remaining-budget)` (default 1000 ms) before recurring, shared identically by `run` and `collect --wait`; blocked/timeout shapes, pane retention, and result-first ordering are unchanged. Verified with fake-Herdr tests (eventual publication, timeout, `collect --wait` parity) and nREPL `with-redefs` simulation of call counts and budget-capping.
+
+** DONE Remediation validation and record reconciliation
+CLOSED: [2026-07-24 Fri 17:34]
+:PROPERTIES:
+:CUSTOM_ID: 81d24b10-9c28-4b86-bc67-d6bcabd0d6a5
+:CREATED: [2026-07-24 Fri 17:17]
+:BLOCKED-BY: 8f2a4594-8b10-4e15-a5c3-00e35f08d3c4
+:BLOCKED-BY+: 68585a83-408b-4119-bf7f-7a4081a00208
+:STARTED: [2026-07-24 Fri 17:31]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-24 Fri 17:31]
+- State "DONE" from "STARTED" [2026-07-24 Fri 17:34]
+:END:
+Outcome: `bb test` passes at the repo root (248/913, both herdr-subagents namespaces listed) and identically from a portability copy at a different absolute path under `.agents/tmp/`; all remediation acceptance boxes verified and checked; `* Validation` refreshed; `#+STATUS:` moved to `Complete` with the no-re-smoke justification recorded.
+
+** DONE [#A] Launcher: canonicalise the deployed path and stop rebinding cwd
+CLOSED: [2026-07-27 Mon 12:47]
+:PROPERTIES:
+:CUSTOM_ID: 34b0f520-bd87-49cf-9f47-5675d683a467
+:CREATED: [2026-07-27 Mon 11:07]
+:STARTED: [2026-07-27 Mon 12:02]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 12:02]
+- State "DONE" from "STARTED" [2026-07-27 Mon 12:47]
+:END:
+Outcome: `cd -P` canonicalises the deployed directory symlink, `script_path` is absolutised after the symlink loop, the fallback `cd` is gone, and the bare-subtree branch anchors with `--deps-root` plus a relative `:paths`. A four-form launcher matrix asserts branch and cwd; reinstating the old launcher fails six assertions.
+
+** DONE [#A] Scope pane close to the owning parent session
+CLOSED: [2026-07-27 Mon 12:47]
+:PROPERTIES:
+:CUSTOM_ID: 1bbde816-adad-42e9-a3f3-fd6aaaf52149
+:BLOCKED-BY: b482b179-ac0b-4786-b71f-93ce9e825a84
+:CREATED: [2026-07-27 Mon 11:07]
+:STARTED: [2026-07-27 Mon 12:41]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 12:41]
+- State "DONE" from "STARTED" [2026-07-27 Mon 12:47]
+:END:
+Outcome: `caller-owns?` scopes pane closure to the entry's `:parent-session`, threaded through `wait-and-capture!`/`maybe-close!` as an `owned?` argument. Unresolvable caller identity counts as non-owning, so `collect` from a plain shell pane still captures. Ledger reads stay unfiltered.
+
+** DONE [#A] Isolate the test suite from the live ledger
+CLOSED: [2026-07-27 Mon 12:47]
+:PROPERTIES:
+:CUSTOM_ID: b482b179-ac0b-4786-b71f-93ce9e825a84
+:CREATED: [2026-07-27 Mon 11:07]
+:STARTED: [2026-07-27 Mon 12:02]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 12:02]
+- State "DONE" from "STARTED" [2026-07-27 Mon 12:47]
+:END:
+Outcome: `SUBAGENT_ASSIGNMENT_ROOT` (validated absolute) relocates ledger, index markers, results, and project-roster lookup in one knob; tests point it at a temp root, empty `HOME`, and a symlink to the repo's tracked `subagents/`. `bb test` now adds zero files to the live tree, gains project-roster-branch coverage, and 262 fake entries were purged.
+
+** DONE [#B] Harden the CLI failure edges
+CLOSED: [2026-07-27 Mon 12:47]
+:PROPERTIES:
+:CUSTOM_ID: 567a1c12-67e5-44ca-855b-a4d6aeb1d8fb
+:BLOCKED-BY: b482b179-ac0b-4786-b71f-93ce9e825a84
+:CREATED: [2026-07-27 Mon 11:07]
+:STARTED: [2026-07-27 Mon 12:41]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 12:41]
+- State "DONE" from "STARTED" [2026-07-27 Mon 12:47]
+:END:
+Outcome: `parse-poll-interval` guards `pos?`; `close!` is guarded so a close failure cannot demote a captured result; validation and artifact failures become the non-final, repeatable `invalid` status instead of throwing out of the wait loop; `findings-limit!` enforces the five-item `FINDINGS` cap on both publish and validate.
+
+** DONE [#B] Make the bounded-poll tests regression-detecting and close coverage gaps
+CLOSED: [2026-07-27 Mon 12:47]
+:PROPERTIES:
+:CUSTOM_ID: d89453b8-dbd8-466e-846e-897c05225e50
+:BLOCKED-BY: b482b179-ac0b-4786-b71f-93ce9e825a84
+:CREATED: [2026-07-27 Mon 11:07]
+:STARTED: [2026-07-27 Mon 12:41]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 12:41]
+- State "DONE" from "STARTED" [2026-07-27 Mon 12:47]
+:END:
+Outcome: the timeout bound is interval-derived and genuinely regression-detecting (14 asserted, 46 measured with the sleep deleted); unreachable ceilings dropped; `--cwd` asserted through a directory-symlinked path; coverage added for `--task-file`, stdin, `--prompt-extra`, `--from-file`, nested labels, BLOCKED/FAILED envelopes, and the default budget.
+
+** DONE [#C] Reconcile docs with actual CLI behaviour
+CLOSED: [2026-07-27 Mon 12:47]
+:PROPERTIES:
+:CUSTOM_ID: 7f279fa9-79da-494d-be38-ca3116e5529a
+:CREATED: [2026-07-27 Mon 11:07]
+:STARTED: [2026-07-27 Mon 12:02]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 12:02]
+- State "DONE" from "STARTED" [2026-07-27 Mon 12:47]
+:END:
+Outcome: help is the documented non-JSON exception — `--help`/`help`/`<command> --help` print usage and exit 0 — and contract.md gained the Environment table, array-returning commands, the `FINDINGS` cap, and ownership-scoped closure.
+
+** DONE [#B] Re-validate and reconcile the record
+CLOSED: [2026-07-27 Mon 12:56]
+:PROPERTIES:
+:CUSTOM_ID: 6aa21c96-0b9f-4696-be5e-bb3bec6756eb
+:BLOCKED-BY: 34b0f520-bd87-49cf-9f47-5675d683a467
+:BLOCKED-BY+: 1bbde816-adad-42e9-a3f3-fd6aaaf52149
+:BLOCKED-BY+: b482b179-ac0b-4786-b71f-93ce9e825a84
+:BLOCKED-BY+: 567a1c12-67e5-44ca-855b-a4d6aeb1d8fb
+:BLOCKED-BY+: d89453b8-dbd8-466e-846e-897c05225e50
+:BLOCKED-BY+: 7f279fa9-79da-494d-be38-ca3116e5529a
+:CREATED: [2026-07-27 Mon 11:07]
+:STARTED: [2026-07-27 Mon 12:55]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 12:55]
+- State "DONE" from "STARTED" [2026-07-27 Mon 12:56]
+:END:
+Outcome: `bb test` green in place and from a relocated copy; both fixes mutation-tested; one billable deployed-path smoke from a scratch project confirmed the child's cwd, ledger, and result land in the caller's project with zero leakage into dotagents.
+
+* Implementation
+
+The CLI separates pure protocol helpers, a vector-argv Herdr adapter, atomic ledger/index state, command orchestration, and a guarded live smoke. Assignment state persists before pane mutation; the validated result file is the sole completion signal; capture checks identity and artifact paths before any eligible cleanup.
+
+Three review rounds shaped the result, and the pattern across them is the durable lesson: the protocol core was sound each time, and every real defect sat at an edge the tests did not reach. A plan review before implementation added result checks around every wait outcome, caller-rect geometry, and pre-mutation capability probes. A first implementation review found a dead test runner, a hardcoded checkout path, and a `wait-and-capture!` loop that hot-spun when a child settled without publishing. A second implementation review ([[file:2026-07-24-herdr-subagent-skill-scripts/2026-07-27-implementation-review.md][report]]) found the Bash launcher mis-resolving the deployed *directory* symlink and `cd`-ing away from the caller's project — so every child spawned the documented way received the wrong `--cwd`, ledger root, and roster — plus unscoped pane closure and tests that wrote to the live ledger.
+
+Two parallel plan reviews then checked the remediation plan before execution and directly contradicted each other on the `-Sdeps` fix; local probing settled it, and the losing prescription would have fixed the deployed path while breaking the bare-subtree fallback. Two further review claims proved wrong on inspection (an overstated test-discovery impact, and a miscount of the reviewer's own findings). Reviewer output is testimony, not evidence — a rule now recorded in [[proj:skills/herdr-subagents/SKILL.md]].
+
+The tests earned the most attention at the end. An earlier pass shipped bounded-poll tests that passed whether or not the sleep existed, which is precisely how the busy-wait regressed unnoticed; both the launcher fix and the poll sleep are now mutation-tested, and reverting either fails a named assertion.
+
+* Validation
+
+Superseded intermediate evidence (the 245/903 and 248/913 baselines, nREPL wait-loop simulation, the empty-discovery probe) has been pruned; what follows is the state at closure.
+
+- `bb test`: *259 tests / 1003 assertions*, 0 failures/errors, naming `herdr-subagents.cli-test`, `core-test`, and `launcher-test`. Identical from a copy of the tree at a different absolute path.
+- Ledger isolation: file count under the live `.agents/tmp/herdr-subagents/` is unchanged across consecutive `bb test` runs (delta 0), where each run previously added ~28 files. The purge took the tree from 276 entries / 240 KB to 14 real entries / 33 KB, and `subagent list` from 2.35 s to 0.195 s.
+- *Mutation-tested regression detection* — the criterion the earlier pass failed. Reverting the launcher fails `launcher-matrix-selects-branch-and-preserves-cwd`; replacing the `wait-and-capture!` sleep with `nil` fails `bounded-poll-timeout-without-result` with `(not (<= 46 14))`. Both reverts restored byte-identically and re-verified green, independently by parent and implementing worker.
+- Ownership guard does not regress identity-less collection: `collect` with `HERDR_PANE_ID` unset, and with a bogus pane whose `agent get` fails, both return `ok:true` and capture normally.
+- *Live deployed-path smoke* (billable, one `claude-haiku-4-5` scout) from `/tmp/smoke-proj`, a scratch `git init` project outside dotagents, invoking `~/.agents/skills/herdr-subagents/scripts/subagent` directly — `bb smoke-subagent` cannot serve, as it calls `cli/execute` in-process and never enters the launcher. Asked only to report its own `pwd`, the child returned `/tmp/smoke-proj`, proving the P1 fix live (pre-fix: the skill's own scripts directory, as both reviewer and worker experienced). Ledger entry, index marker (`scout/1`, a fresh per-project counter), and `RESULT` all landed under that project; label `scout-1-claude-haiku-4-5`; `publish` succeeded from the foreign project, exercising the injected absolute `HERDR_SUBAGENT_BIN`; pane closed; dotagents live tree unchanged, confirming zero cross-project leakage.
+- The nested planner flow was deliberately not re-smoked: nested behaviour did not change and the billable cost is unjustified. Nested labelling is covered end-to-end by fake-Herdr tests.
+- `ot doctor` reports 0 findings; `git diff --check` clean (untracked additions via `git add -N`); `npm run check:metadata` and `check-links` pass.
+- Caveat for future work: reverting the launcher for an experiment writes to the live ledger, because the assignment-root test deliberately unsets the override and the pre-fix launcher `cd`s into dotagents. Set `SUBAGENT_ASSIGNMENT_ROOT` for such experiments, or re-check the live tree afterwards.

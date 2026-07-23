@@ -8,8 +8,9 @@
 ;;       bbin install io.github.cormacc/dotagents --as ot --latest-sha
 ;;   In-tree dev runs via `bb run ot …` or skills/org-tasks/scripts/ot.
 ;; - :tasks keeps the pre-existing dotagents bb tasks alongside the
-;;   new `ot` and `test` entries.
-{:paths    ["skills/org-tasks/scripts/src"]
+;;   `ot`, `subagent`, and test entries.
+{:paths    ["skills/org-tasks/scripts/src"
+            "skills/herdr-subagents/scripts/src"]
  :deps     {org.babashka/cli {:mvn/version "0.12.75"}
             io.github.paintparty/bling {:mvn/version "0.10.0"}
             de.timokramer/charm.clj {:mvn/version "0.2.71"}
@@ -24,12 +25,21 @@
         :task (apply (requiring-resolve 'org-tasks.cli/-main)
                      *command-line-args*)}
 
-  test {:doc  "Run the ot test suite (clojure.test under scripts/test)"
+  subagent {:doc "Run the in-tree subagent CLI (herdr-subagents.cli/-main)"
+            :task (apply (requiring-resolve 'herdr-subagents.cli/-main)
+                         *command-line-args*)}
+
+  test {:doc  "Run the org-tasks and herdr-subagents test suites"
         :task (do (require 'babashka.classpath)
-                  ((requiring-resolve 'babashka.classpath/add-classpath)
-                   "skills/org-tasks/scripts/test")
+                  (doseq [path ["skills/org-tasks/scripts/test"
+                                "skills/herdr-subagents/scripts/test"]]
+                    ((requiring-resolve 'babashka.classpath/add-classpath) path))
                   (apply (requiring-resolve 'org-tasks.test-runner/run)
                          *command-line-args*))}
+
+  smoke-subagent {:doc "Run explicitly guarded live Herdr subagent smoke"
+                  :task (apply (requiring-resolve 'herdr-subagents.smoke/-main)
+                               *command-line-args*)}
 
   ;; ── existing dotagents tasks ────────────────────────────────────
   hello    {:doc  "Print a greeting"
