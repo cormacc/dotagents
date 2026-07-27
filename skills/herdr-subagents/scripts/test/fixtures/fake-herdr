@@ -14,6 +14,16 @@ help() {
   if [ "${FAKE_MISSING_CAPABILITY:-}" = "$1-$2" ]; then flags='' ; fi
   printf '%s %s\n' "$command" "$flags"
 }
+# FAKE_SESSION_FROM names the single hook that reports `agent_session`
+# (start|get|wait|late-get|none); `late-get` withholds it from the first child
+# `agent get` so a later hook has to backfill it.
+session_json() {
+  printf ',"agent_session":{"agent":"pi","kind":"path","source":"pi","value":"%s"}' "${FAKE_SESSION_VALUE:-/tmp/fake-child-session.jsonl}"
+}
+session_fragment() {
+  [ "${FAKE_SESSION_FROM:-start}" = "$1" ] && session_json
+  return 0
+}
 publish_result() {
   [ -n "${FAKE_HERDR_ENV_FILE:-}" ] || return 0
   local result child task
@@ -21,6 +31,12 @@ publish_result() {
   child="$(grep '^HERDR_SUBAGENT_CHILD=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2-)"
   task="$(grep '^HERDR_SUBAGENT_TASK=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2-)"
   [ "${FAKE_BAD_ENVELOPE:-}" = 1 ] && task=wrong
+  local process_section=""
+  if [ -n "${FAKE_PUBLISH_PROCESS:-}" ]; then
+    process_section="PROCESS:
+- $FAKE_PUBLISH_PROCESS
+"
+  fi
   mkdir -p "$(dirname "$result")"
   cat >"$result" <<EOF
 --- HERDR RESULT v1 ---
@@ -34,7 +50,7 @@ ARTIFACTS:
 FINDINGS:
 - none
 NEXT: none
---- END HERDR RESULT ---
+${process_section}--- END HERDR RESULT ---
 EOF
 }
 case "${1:-}" in
@@ -55,14 +71,23 @@ case "${1:-}" in
     case "$2" in
       get)
         if [ -n "${FAKE_FAIL_AGENT_GET:-}" ] && [ "${3:-}" = "$FAKE_FAIL_AGENT_GET" ]; then echo '{"error":"agent get"}' >&2; exit 1; fi
-        if [ "${3:-}" = w:p ]; then echo '{"result":{"agent":{"agent":"pi","pane_id":"w:p","agent_session":{"value":"session"},"agent_status":"idle"}}}'; else echo "{\"result\":{\"agent\":{\"agent_status\":\"${FAKE_AGENT_STATUS:-idle}\"}}}"; fi ;;
+        if [ "${3:-}" = w:p ]; then echo '{"result":{"agent":{"agent":"pi","pane_id":"w:p","agent_session":{"value":"session"},"agent_status":"idle"}}}'; else
+          fragment="$(session_fragment get)"
+          if [ "${FAKE_SESSION_FROM:-}" = late-get ]; then
+            counter="${FAKE_HERDR_LOG}.child-get"
+            n=0; [ -f "$counter" ] && n="$(cat "$counter")"
+            n=$((n + 1)); echo "$n" >"$counter"
+            if [ "$n" -gt 1 ]; then fragment="$(session_json)"; fi
+          fi
+          printf '{"result":{"agent":{"agent_status":"%s"%s}}}\n' "${FAKE_AGENT_STATUS:-idle}" "$fragment"
+        fi ;;
       list) echo '{"result":{"agents":[]}}' ;;
-      start) [ "${FAKE_FAIL_START:-}" = 1 ] && { echo '{"error":"start"}' >&2; exit 1; }; echo '{"result":{"agent":{"name":"child"}}}' ;;
+      start) [ "${FAKE_FAIL_START:-}" = 1 ] && { echo '{"error":"start"}' >&2; exit 1; }; printf '{"result":{"agent":{"name":"child"%s}}}\n' "$(session_fragment start)" ;;
       prompt) printf '%s' "${4:-}" >"${FAKE_HERDR_PROMPT_FILE:?}"; echo '{"result":{"agent":{"agent_status":"working"}}}' ;;
       wait) case "${FAKE_WAIT:-publish}" in
-        publish) publish_result; echo '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+        publish) publish_result; printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
         timeout-publish) publish_result; echo '{"error":"timeout"}' >&2; exit 1 ;;
-        blocked) echo '{"result":{"agent":{"agent_status":"blocked"}}}' ;;
+        blocked) printf '{"result":{"agent":{"agent_status":"blocked"%s}}}\n' "$(session_fragment wait)" ;;
         idle-then-publish)
           counter_file="${FAKE_WAIT_COUNTER_FILE:-${FAKE_HERDR_LOG}.wait-count}"
           count=0
@@ -72,8 +97,8 @@ case "${1:-}" in
           if [ "$count" -gt "${FAKE_WAIT_PUBLISH_AFTER:-3}" ]; then
             publish_result
           fi
-          echo '{"result":{"agent":{"agent_status":"idle"}}}' ;;
-        *) echo '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+          printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
+        *) printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
       esac ;;
     esac ;;
   notification) if [ "${3:-}" = --help ]; then help notification "$2"; else [ "${FAKE_NOTIFY_FAIL:-}" = 1 ] && { echo '{"error":"notify"}' >&2; exit 1; }; echo '{"result":{}}'; fi ;;

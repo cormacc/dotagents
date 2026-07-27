@@ -11,7 +11,11 @@ Review the session for repeatable correction signals and synthesize candidate ag
 
 Proactively offer one retro only when a substantive session is ending and the scan below finds repeated corrections or mounting friction. Task completion and change-record closure are not signals by themselves. If the session had fewer than roughly five substantive exchanges, say that it is unlikely to contain durable lessons and skip unless the user insists.
 
+**Non-interactive equivalent.** A delegated or otherwise non-interactive session receives one assignment prompt, so exchange count does not measure it: a session is substantive when it performed multi-step tool work that had to be diagnosed or corrected, or when it hit any signal in § 1 at all. Below that, emit nothing — silence is the correct outcome, not a failed retro.
+
 ## 1. Detect signals
+
+When the session delegated work through [`herdr-subagents`](../herdr-subagents/SKILL.md), fold in the children's own candidates as scan input alongside your own signals: each captured result envelope may carry a `PROCESS:` list of `signal → category → proposed rule` items, persisted on the ledger entry under `:envelope`, and each entry's `:child-session` records where the child's transcript lives for a manual read when the candidates are thin. A child performs steps 1–2 only; you still own steps 3–6, so route, dedup, and persist its candidates yourself. Candidates are testimony from an agent scanning itself: verify each one against source before it reaches the table below, and let near-duplicates from a fan-out collapse into single rows.
 
 Prioritize:
 

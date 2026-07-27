@@ -1238,3 +1238,31 @@ CLOSED: [2026-07-27 Mon 13:27]
 :END:
 #+IMPORT: [[plan:2026-07-24-herdr-subagent-skill-scripts.org]]
 Consider adding scripts for subagents and herdr pane management, to streamline operation and reduce the context required by the agent to use the skill.
+
+** DONE Integrate retrospective skill in subagent lifecycle :skill_herdr-subagents:
+CLOSED: [2026-07-27 Mon 16:56]
+:PROPERTIES:
+:CUSTOM_ID: 57a1cf23-78b2-4066-b415-1b5847c4c012
+:CREATED: [2026-07-27 Mon 13:22]
+:STARTED: [2026-07-27 Mon 15:39]
+:ARCHIVED: [2026-07-27 Mon 16:56]
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 13:22]
+- State "STARTED" from "TODO" [2026-07-27 Mon 15:39]
+- State "DONE" from "STARTED" [2026-07-27 Mon 16:56]
+:END:
+#+IMPORT: [[plan:2026-07-27-subagent-retrospectives.org]]
+A child's session is a substantive ending session, but nothing ever retros it. The envelope carries work output (status, summary, findings, artifacts); process learning - tool misuse, missing contracts, avoidable friction - dies with the pane. Only what a child volunteers into a report artifact survives, by luck rather than protocol.
+
+Two hard constraints found while scoping:
+- The ledger records `parent-session` but not the child's session path. `herdr agent get <child>` returns it as `agent_session.value`, but only while the agent is alive - `run`/`collect` close the pane after capture, so it must be recorded at spawn or before closure or it is unrecoverable.
+- `retro` as written assumes an interactive operator: it offers a retro, presents a table, and waits for approval before filing anything. A child has no user, so the skill cannot be applied unmodified inside one without either blocking on unobtainable approval or filing unapproved tasks.
+
+Open questions for planning:
+- Who runs it - the child before publishing, or the parent post-hoc over the recorded child session (the `session_query` route)? Parent-side keeps `retro`'s approval gate intact and costs nothing when there is nothing to learn.
+- Does the envelope need a channel for process findings distinct from work `FINDINGS`, and is that a v2 schema change?
+- How is noise controlled across a fan-out - N children producing near-duplicate findings, against `self-improvement`'s per-invocation dedup?
+- Opt-in or default? Retro on every delegation is a real token cost on cheap scouts.
+
+Evidence: in the 2026-07-27 remediation the worker surfaced durable caveats (reverting the launcher writes to the live ledger; fake-Herdr wall-time floor of ~0.73 s per test) that survived only because it happened to write a long report artifact. Its misdiagnosis of the `ot ready` defect also reached this repo's task memory before being caught, which is the same channel viewed from the other side. Related: [[plan:2026-07-24-herdr-subagent-skill-scripts.org]]; skills/herdr-subagents/SKILL.md section "Trusting a result".

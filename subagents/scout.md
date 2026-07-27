@@ -3,6 +3,7 @@ name: scout
 description: Fast codebase reconnaissance - maps existing code, conventions, and patterns for a task
 kind: pi
 model: anthropic/claude-sonnet-5
+retro: false
 ---
 
 # Scout Agent

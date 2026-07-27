@@ -3,6 +3,7 @@ name: researcher
 description: External-knowledge research - library capabilities, current best practices, API behaviors, tradeoffs between options. Reads docs, runs web searches, and synthesises findings with source links. Use when a planning or implementation decision depends on facts outside the codebase.
 kind: pi
 model: anthropic/claude-fable-5
+retro: false
 ---
 
 # Researcher Agent

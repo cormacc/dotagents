@@ -8,7 +8,8 @@
   (:import [java.nio.file Files FileAlreadyExistsException Paths]
            [java.util UUID]))
 
-(def usage "subagent run|start <persona> --task TEXT [options]\nsubagent collect <task> [--wait --timeout MS]\nsubagent status [task] | list | publish --status STATUS --summary TEXT\n\nOpaque assignment input is --task, --task-file, or stdin. Run `subagent --help` for contract details.")
+(def usage "subagent run|start <persona> --task TEXT [options]\nsubagent collect <task> [--wait --timeout MS]\nsubagent status [task] | list
+subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]*\n\nOpaque assignment input is --task, --task-file, or stdin. Run `subagent --help` for contract details.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -17,10 +18,14 @@
   (let [n (some-> raw str/trim not-empty parse-long)]
     (if (and n (pos? n)) n 1000)))
 (defn poll-interval-ms [] (parse-poll-interval (System/getenv "SUBAGENT_POLL_INTERVAL_MS")))
+;; Single source of truth for value-less flags. `option-map` and `help-request?` both
+;; consume argv and must agree: a flag known to only one of them silently swallows the
+;; following element (e.g. `run worker --retro --task 'X'` losing its assignment).
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro"})
 (defn option-map [args]
   (loop [xs args out {}]
     (if-let [x (first xs)]
-      (cond (#{"--wait" "--print-prompt"} x) (recur (next xs) (assoc out (keyword (subs x 2)) true))
+      (cond (boolean-flags x) (recur (next xs) (assoc out (keyword (subs x 2)) true))
             (str/starts-with? x "--") (let [key (keyword (subs x 2)) value (second xs)]
                                           (when-not value (fail "option requires a value" {:option x}))
                                           (recur (nnext xs) (update out key (fnil conj []) value)))
@@ -57,19 +62,37 @@
   (if (= persona "planner")
     "You may spawn at most one blocking ephemeral scout or researcher only when a factual gap blocks planning; that child must remain a leaf."
     "You are a leaf: do not spawn subagents."))
-(defn prompt-text [{:keys [persona persona-path task result waiting-policy assignment prompt-extra]}]
+(defn retro-instruction [retro-skill]
+  (when retro-skill
+    (str "\nBefore publishing, apply steps 1-2 of " retro-skill " to your own session, using that skill's own threshold and signal categories."
+         "\nEmit each surviving candidate as one `--process` item shaped `signal → category → proposed rule` (at most five)."
+         "\nEmit nothing when the session does not meet that threshold; an absent PROCESS section is a valid outcome, not a failure."
+         "\nDo not choose a destination, load `self-improvement`, run `ot`, or edit any instruction file: the parent owns approval and persistence.")))
+(defn prompt-text [{:keys [persona persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
   (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
        (delegation-guidance persona) " Herdr assigned TASK=" task " and RESULT=" result ". "
        "When finished, publish exactly once with `$HERDR_SUBAGENT_BIN publish --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
        "The waiting policy is " waiting-policy "."
+       (retro-instruction retro-skill)
        (when prompt-extra (str "\nAdditional constraints: " prompt-extra))))
+(defn retro-flag [opts]
+  (let [on (boolean (one opts :retro)) off (boolean (one opts :no-retro))]
+    (when (and on off) (fail "--retro and --no-retro are mutually exclusive" {}))
+    (cond on true off false :else nil)))
+(defn retro-skill-path []
+  (core/skill-path #(fs/exists? %) (ledger/assignment-root) (System/getProperty "user.home") "retro"))
+(defn retro-policy [persona opts frontmatter]
+  (let [skill (retro-skill-path)
+        resolved (core/resolve-retro {:persona persona :flag (retro-flag opts) :frontmatter frontmatter :retro-skill skill})]
+    (assoc resolved :retro-skill (when (:retro resolved) skill))))
 (defn preview! [persona opts waiting-policy]
   (herdr/preflight!)
   (let [path (roster persona) frontmatter (core/parse-frontmatter (slurp (str path))) ident (parent-identity)
         kind (core/resolve-kind {:requested (one opts :kind) :frontmatter frontmatter :parent-kind (:parent-kind ident)})
-        model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})]
-    {:preview (prompt-text {:persona persona :persona-path path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra)})
-     :persona-path (str path) :kind kind :model model}))
+        model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
+        retro (retro-policy persona opts frontmatter)]
+    {:preview (prompt-text {:persona persona :persona-path path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
+     :persona-path (str path) :kind kind :model model :retro (:retro retro) :retro-source (:retro-source retro)}))
 ;; A published result is immutable, so a result that fails validation can never become
 ;; valid. Record it as the non-final `invalid` status (pane retained, needs manual
 ;; intervention) instead of throwing out of the wait loop and making the assignment
@@ -82,12 +105,24 @@
           (doseq [artifact artifacts]
             (let [path (core/artifact-path artifact)]
               (when-not (fs/exists? path) (fail "result artifact does not exist" {:artifact artifact :path path}))))
-          (ledger/update! (:task entry) assoc :status (:status parsed) :captured-at (now) :envelope parsed :artifacts artifacts)
+          ;; An over-length PROCESS section is degraded, not fatal: record the fact on the
+          ;; entry and keep the envelope's own status.
+          (ledger/update! (:task entry) #(cond-> (assoc % :status (:status parsed) :captured-at (now) :envelope parsed :artifacts artifacts)
+                                           (:process-overflow parsed) (assoc :process-overflow true)))
           parsed)
         (catch Exception e
           (ledger/update! (:task entry) assoc :status "invalid" :captured-at (now) :invalid-reason (.getMessage e) :invalid-data (ex-data e))
           {:status "invalid" :task (:task entry) :pane-id (:pane-id entry) :result result
            :reason (.getMessage e) :detail (ex-data e) :pane-retained true})))))
+;; The child's transcript reference is only reachable while Herdr still knows the agent,
+;; so it is recorded opportunistically at every point the CLI already holds an
+;; `AgentInfo`. The whole `agent_session` map is stored because its `value` is
+;; discriminated by `kind` (a path or an opaque id). Every hook is best-effort: it never
+;; fails a spawn, demotes a captured result, or overwrites an earlier observation.
+(defn record-session! [task session]
+  (when (and task (map? session) (seq session))
+    (try (ledger/update! task #(if (:child-session %) % (assoc % :child-session session)))
+         (catch Exception _ nil))))
 (defn caller-owns? [entry]
   (boolean (when-let [recorded (:parent-session entry)]
              (= recorded (try (:parent-session (parent-identity)) (catch Exception _ nil))))))
@@ -96,19 +131,25 @@
 (defn maybe-close! [entry parsed owned?]
   (if-not owned?
     (assoc parsed :pane-retained true :ownership "foreign-parent-session")
-    (do (when (#{"COMPLETE" "FAILED"} (:status parsed))
-          (let [agent (try (herdr/agent! (:child entry)) (catch Exception _ nil))]
-            (when (and (:pane-id entry) agent (#{"idle" "done"} (:agent_status agent)))
-              ;; A close failure must never demote a captured result to a failed command.
-              (try (herdr/close! (:pane-id entry)) (catch Exception _ nil)))))
-        parsed)))
+    ;; The refresh is hoisted out of the COMPLETE/FAILED branch: a BLOCKED entry keeps its
+    ;; pane but still needs its session reference recorded.
+    (let [agent (try (herdr/agent! (:child entry)) (catch Exception _ nil))]
+      (when-not (:child-session entry) (record-session! (:task entry) (:agent_session agent)))
+      (when (#{"COMPLETE" "FAILED"} (:status parsed))
+        (when (and (:pane-id entry) agent (#{"idle" "done"} (:agent_status agent)))
+          ;; A close failure must never demote a captured result to a failed command.
+          (try (herdr/close! (:pane-id entry)) (catch Exception _ nil))))
+      parsed)))
 (defn wait-and-capture! [entry timeout owned?]
   (let [deadline (+ (System/currentTimeMillis) timeout)]
     (loop []
       (if-let [parsed (capture! entry)] (maybe-close! entry parsed owned?)
           (let [remaining (- deadline (System/currentTimeMillis))]
             (if (<= remaining 0) {:status "pending" :reason "timeout" :task (:task entry) :pane-id (:pane-id entry)}
-                (let [outcome (herdr/wait! (:child entry) remaining) current (capture! entry)]
+                (let [outcome (herdr/wait! (:child entry) remaining)
+                      ;; The wait outcome already carries the AgentInfo: no extra Herdr call.
+                      _ (record-session! (:task entry) (get-in outcome [:value :result :agent :agent_session]))
+                      current (capture! entry)]
                   (if current (maybe-close! entry current owned?)
                       (if (and (:ok outcome) (= "blocked" (get-in outcome [:value :result :agent :agent_status])))
                         {:status "blocked" :task (:task entry) :pane-id (:pane-id entry)}
@@ -128,6 +169,7 @@
             ident (parent-identity)
             kind (core/resolve-kind {:requested (one opts :kind) :frontmatter frontmatter :parent-kind (:parent-kind ident)})
             model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
+            retro (retro-policy persona opts frontmatter)
             task (ledger/fresh-task)
             result (ledger/fresh-result task)
             index (ledger/allocate-index! (:parent-session ident) persona)
@@ -136,7 +178,7 @@
             assignment (task-text opts)
             bin (launcher-bin)
             name (child-name persona task)
-            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :waiting-policy waiting-policy :status "allocating" :created-at (now)}]
+            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :status "allocating" :created-at (now)}]
         ;; Persist before the first pane mutation, so every partial failure is recoverable.
         (ledger/write! entry)
         (try
@@ -154,11 +196,16 @@
                                      (when (#{"pi" "claude"} kind)
                                        ["--append-system-prompt"
                                         (core/persona-system-prompt kind (str path) (slurp (str path)))]))]
-                  (herdr/start! name kind (:pane-id persisted) native)
-                  (let [prompt (prompt-text {:persona persona :persona-path path :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra)})]
+                  (record-session! task (:agent_session (herdr/start! name kind (:pane-id persisted) native)))
+                  (let [prompt (prompt-text {:persona persona :persona-path path :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})]
                     (ledger/update! task assoc :status "started" :started-at (now))
                     (herdr/prompt! name prompt)
-                    (ledger/update! task assoc :status "prompted" :prompted-at (now)))))
+                    (let [prompted (ledger/update! task assoc :status "prompted" :prompted-at (now))]
+                      ;; A child reports its session asynchronously, so a read at `start` often
+                      ;; observes nothing; re-read once the prompt has landed.
+                      (or (when-not (:child-session prompted)
+                            (record-session! task (:agent_session (try (herdr/agent! name) (catch Exception _ nil)))))
+                          prompted)))))
               (catch Exception e
                 (safe-cleanup! (ledger/read! task) :start)
                 (throw e))))
@@ -169,8 +216,8 @@
 (defn publication-body [opts]
   (if-let [path (one opts :from-file)]
     (let [body (json/parse-string (slurp path) true)]
-      {:status (:status body) :summary (:summary body) :artifacts (vec (:artifacts body)) :findings (vec (:findings body)) :next (:next body)})
-    {:status (one opts :status) :summary (one opts :summary) :artifacts (all opts :artifact) :findings (all opts :finding) :next (one opts :next)}))
+      {:status (:status body) :summary (:summary body) :artifacts (vec (:artifacts body)) :findings (vec (:findings body)) :next (:next body) :process (vec (:process body))})
+    {:status (one opts :status) :summary (one opts :summary) :artifacts (all opts :artifact) :findings (all opts :finding) :next (one opts :next) :process (all opts :process)}))
 (defn publish! [opts]
   (let [env #(System/getenv %) child (or (env "HERDR_SUBAGENT_CHILD") (fail "missing HERDR_SUBAGENT_CHILD" {})) task (or (env "HERDR_SUBAGENT_TASK") (fail "missing HERDR_SUBAGENT_TASK" {})) result (or (env "HERDR_SUBAGENT_RESULT") (fail "missing HERDR_SUBAGENT_RESULT" {})) policy (or (env "HERDR_SUBAGENT_WAITING_POLICY") (fail "missing HERDR_SUBAGENT_WAITING_POLICY" {}))
         body (publication-body opts) text (core/envelope (merge {:child child :task task :result result} body)) target (fs/path result) temp (fs/path (str result "." (UUID/randomUUID) ".tmp"))]
@@ -190,7 +237,10 @@
   (let [entry (ledger/read! task) owned? (caller-owns? entry)]
     (if (:wait opts) (wait-and-capture! entry (Long/parseLong (or (one opts :timeout) "600000")) owned?)
         (if-let [parsed (capture! entry)] (maybe-close! entry parsed owned?) {:status "pending" :task task :pane-id (:pane-id entry)}))))
-(defn live [entry] (assoc entry :live-agent (try (herdr/agent! (:child entry)) (catch Exception _ nil))))
+(defn live [entry]
+  (let [agent (try (herdr/agent! (:child entry)) (catch Exception _ nil))
+        entry (or (when-not (:child-session entry) (record-session! (:task entry) (:agent_session agent))) entry)]
+    (assoc entry :live-agent agent)))
 ;; `--help` is the documented non-JSON exception: it prints usage and exits 0 for any
 ;; command, so `subagent run --help` never returns "option requires a value".
 (defn help-request? [command args]
@@ -200,7 +250,7 @@
                (loop [xs args]
                  (when-let [x (first xs)]
                    (cond (#{"--help" "-h"} x) true
-                         (#{"--wait" "--print-prompt"} x) (recur (next xs))
+                         (boolean-flags x) (recur (next xs))
                          (str/starts-with? x "--") (recur (nnext xs))
                          :else (recur (next xs))))))))
 (defn execute [argv]

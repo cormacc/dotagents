@@ -1,0 +1,156 @@
+#+TITLE: Integrate retrospective skill in subagent lifecycle
+#+DATE: 2026-07-27 Mon
+#+PARENT: [[archive:57a1cf23-78b2-4066-b415-1b5847c4c012][Integrate retrospective skill in subagent lifecycle :skill_herdr-subagents:]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-subagents/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/retro/SKILL.md]]
+
+* Intent
+
+Make subagent process learning survive the pane: a delegated child applies the `retro` skill's scan to its own session before publishing and emits candidate findings through the result envelope, with the child's session reference recorded on the ledger as a durable fallback. Persona policy decides whether the scan runs; `retro`'s threshold decides whether anything is emitted; persistence remains parent-owned and approval-gated.
+
+* Summary
+
+*Level:* MVP · *Tests:* thorough · *Docs:* SKILL/README/contract
+
+** Scope
+*** In scope
+- Optional trailing `PROCESS:` result annotation and publish support.
+- Spawn-time retro gating: CLI override, persona frontmatter, enabled default, and optional-skill degradation.
+- Best-effort whole-map `:child-session` ledger recording.
+- Parent/child retro guidance, maintainer/runtime/contract documentation, fake-Herdr coverage, and guarded live smoke.
+*** Out of scope
+- Automatic transcript scanning or process-finding persistence.
+- Parent fan-out aggregation, resident lifecycle changes, envelope v2, Herdr changes, or changes to `self-improvement` routing.
+
+** Acceptance
+*** Core functionality
+- [X] `PROCESS:` round-trips through render, parse, publish, capture, and validation without changing envelopes that contain no candidates or breaking a legacy v1 reader.
+- [X] The section is trailing, optional, one-line, and limited to five; publish rejects overflow while capture truncates it without demoting the result.
+- [X] Repeatable `publish --process` and `--from-file` `process` arrays are supported.
+- [X] Retro policy resolves CLI flag > string-coerced persona frontmatter > enabled default and records `:retro` plus `:retro-source`.
+- [X] `worker` is enabled by default; `scout` and `researcher` opt out; `--retro` and `--no-retro` override one spawn without consuming following argv.
+- [X] Project-local then global `retro` skill lookup injects the owning skill's steps 1–2 only; no installed skill degrades default/frontmatter enablement to `skill-missing`, while explicit `--retro` fails fast.
+- [X] `:child-session` records the whole Herdr `agent_session` map and survives pane closure.
+- [X] Child candidates remain testimony for the parent's retro; children receive no routing or persistence authority.
+- [X] `retro/SKILL.md`, `herdr-subagents/SKILL.md`, maintainer README, scripts README, and contract describe their respective policy, rationale, entry-point, and mechanical concerns.
+- [X] The guarded live smoke produced a non-empty plausible candidate from a real unannounced failure; its excerpt is retained under Validation.
+*** Edge cases
+- [X] A gated-in clean/short session may omit `PROCESS`, and a gated-out child that publishes it is still accepted.
+- [X] `BLOCKED` and `FAILED` results may carry process candidates; malformed non-item lines do not invalidate capture.
+- [X] Contradictory retro flags and invalid frontmatter fail fast; `--no-retro` remains valid when the skill is absent.
+- [X] Session capture is nil-safe and backfills from start, post-prompt get, existing wait outcomes, live status/list, and pre-close refresh, including blocked and unpublished children.
+*** Anti-criteria
+- [X] Must not: auto-file findings, run `ot`/`self-improvement` in a child, or edit instructions without parent approval.
+- [X] Must not: let process annotations gate completion, pane closure, or result status.
+- [X] Must not: duplicate `retro`'s substantiveness threshold, require `PROCESS`, bump envelope markers, add a pi-specific session reader, modify the vendored Herdr skill, or run the live smoke in tests/CI.
+
+** Decisions
+- Child-side scan plus ledger session fallback :: the child already holds its context; parent-side transcript ingestion would bloat the orchestrator and couple the CLI to a harness-specific reader.
+- Optional trailing v1 annotation :: placing `PROCESS:` after `NEXT:` preserves legacy readers, while omission preserves byte-identical old envelopes. The validated envelope already has durable ledger storage, so a separate retro artifact is unnecessary.
+- Discardable annotations cannot invalidate results :: publish enforces the five-item cap; validate truncates and records `:process-overflow` so a sixth candidate cannot turn `COMPLETE` into `invalid`.
+- Children perform `retro` steps 1–2 only :: the parent retains verification, routing, deduplication, approval, and persistence.
+- Gating and substance remain separate :: spawn policy resolves flag > frontmatter > enabled default; runtime emission remains governed solely by `retro`'s delegated-session threshold.
+- The retro skill is optional equipment :: default/frontmatter enablement degrades silently when absent, but explicit `--retro` fails because operator intent must not become a no-op.
+- Store the complete `agent_session` map on first observation :: `value` is interpreted by `kind`; opportunistic hooks are best-effort and never demote a spawn or result.
+
+** Gotchas
+- Persona frontmatter values are strings; uncoerced `"false"` is truthy in Clojure.
+- Value-less flags must share one parser set across normal option handling and help detection or the following option is swallowed.
+- An announced smoke-test trap is correctly rejected as a known one-off; the child must encounter the invalid command without being told it is manufactured.
+- CLI help is behavioral input to agents: omitting `--process` from usage caused a live child to hide its candidate in `SUMMARY` rather than invoke an undocumented flag.
+- Third-party installations may omit `retro`; default/frontmatter gating, explicit flags, docs, and the smoke must preserve that supported configuration.
+
+* Plan
+
+** DONE Envelope: optional PROCESS section and publish support
+CLOSED: [2026-07-27 Mon 15:43]
+:PROPERTIES:
+:CUSTOM_ID: 8c5a0481-4312-43b2-bae7-5672b306cfed
+:CREATED: [2026-07-27 Mon 14:10]
+:STARTED: [2026-07-27 Mon 15:39]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 15:39]
+- State "DONE" from "STARTED" [2026-07-27 Mon 15:43]
+:END:
+Result: optional trailing render/parse/publish/capture support with hard publish and degraded validation limits.
+
+** DONE Retro gating: flag registration, policy resolution, prompt instruction, roster frontmatter
+CLOSED: [2026-07-27 Mon 15:49]
+:PROPERTIES:
+:CUSTOM_ID: 7c5a97a2-efab-483e-9438-9085fcd8e756
+:BLOCKED-BY: 8c5a0481-4312-43b2-bae7-5672b306cfed
+:CREATED: [2026-07-27 Mon 14:10]
+:STARTED: [2026-07-27 Mon 15:43]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 15:43]
+- State "DONE" from "STARTED" [2026-07-27 Mon 15:49]
+:END:
+Result: shared boolean-flag parsing, explicit frontmatter coercion, optional skill resolution, and scoped prompt injection.
+
+** DONE Record :child-session on the ledger
+CLOSED: [2026-07-27 Mon 15:54]
+:PROPERTIES:
+:CUSTOM_ID: 3badcf3c-daf3-4acf-836a-42dc3140f008
+:CREATED: [2026-07-27 Mon 14:10]
+:STARTED: [2026-07-27 Mon 15:49]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 15:49]
+- State "DONE" from "STARTED" [2026-07-27 Mon 15:54]
+:END:
+Result: first-observation-wins whole-map session capture at every existing `AgentInfo` hook.
+
+** DONE Documentation: retro SKILL.md, herdr-subagents SKILL.md, contract, README
+CLOSED: [2026-07-27 Mon 15:56]
+:PROPERTIES:
+:CUSTOM_ID: 06606de4-9c95-4ec0-b03d-fa4377ee6fde
+:BLOCKED-BY: 8c5a0481-4312-43b2-bae7-5672b306cfed
+:BLOCKED-BY+: 7c5a97a2-efab-483e-9438-9085fcd8e756
+:BLOCKED-BY+: 3badcf3c-daf3-4acf-836a-42dc3140f008
+:CREATED: [2026-07-27 Mon 14:10]
+:STARTED: [2026-07-27 Mon 15:54]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 15:54]
+- State "DONE" from "STARTED" [2026-07-27 Mon 15:56]
+:END:
+Result: runtime policy, maintainer rationale, CLI entry points, and mechanical contract have distinct canonical homes.
+
+** DONE Guarded live smoke and record reconciliation
+CLOSED: [2026-07-27 Mon 16:01]
+:PROPERTIES:
+:CUSTOM_ID: 90ddad51-93b2-4919-941f-e47a36e0c2cf
+:BLOCKED-BY: 8c5a0481-4312-43b2-bae7-5672b306cfed
+:BLOCKED-BY+: 7c5a97a2-efab-483e-9438-9085fcd8e756
+:BLOCKED-BY+: 3badcf3c-daf3-4acf-836a-42dc3140f008
+:CREATED: [2026-07-27 Mon 14:10]
+:STARTED: [2026-07-27 Mon 15:56]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-27 Mon 15:56]
+- State "DONE" from "STARTED" [2026-07-27 Mon 16:01]
+:END:
+Result: guarded three-leg smoke with strict process/session assertions; live run completed after two feedback-driven fixes.
+
+* Implementation
+
+- `core.clj` owns optional process rendering/parsing, asymmetric limits, skill resolution, frontmatter coercion, and retro policy; `cli.clj` owns flag parsing, prompt composition, publication/capture, ledger policy fields, and session hooks. Mechanical details are canonical in [[file:../../skills/herdr-subagents/scripts/docs/contract.md][contract.md]].
+- `retro/SKILL.md` defines delegated-session substance and consumes child candidates as parent scan input. `herdr-subagents/SKILL.md` is runtime policy; its README holds rationale and maintenance context.
+- Fake Herdr can expose `agent_session` at one selected lifecycle hook and can publish process candidates/overflow, keeping coverage deterministic.
+- Third-party hardening made the missing-retro configuration explicit: default/frontmatter sources degrade, `--retro` fails fast, and the smoke reports a skipped retro leg.
+
+* Validation
+
+The guarded smoke was run live on [2026-07-27 Mon] with `SUBAGENT_LIVE_SMOKE_MODEL=anthropic/claude-sonnet-5`: `ok:true`, `retro-source "flag"`, and all four `:child-session` paths recorded and resolving. Do not rerun it as routine validation.
+
+#+begin_example
+PROCESS:
+- subagent CLI 'show' verb does not exist and fails with unknown-command → Guardrail → Use 'subagent status <task>' (not 'show') to check herdr-subagents assignment status; verify unfamiliar subagent CLI verbs via --help before scripting them elsewhere.
+#+end_example
+
+Two failed live runs exposed durable defects: announcing the manufactured failure caused the child to reject it under `retro`'s one-off filter, so the final smoke presents the invalid command as genuine; incomplete `publish` help omitted `--process`, so the child put its candidate in the summary, and the usage text was expanded to the actual option set. A final review then added missing-skill degradation for third-party installations, explicit-flag fail-fast behavior, and a skipped-smoke notice.

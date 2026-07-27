@@ -5,7 +5,7 @@ description: "Delegate work to subagents inside Herdr: use when asked to spawn, 
 
 # Herdr subagents
 
-Use the [Herdr](../herdr/SKILL.md) safety rules and verify `HERDR_ENV=1` before delegation. The installed `herdr` CLI is authoritative. For ordinary one-child delegation use `scripts/subagent`; its exact command, JSON, ledger, envelope, label, geometry, and capability contracts live in [`scripts/README.md`](scripts/README.md) and [`scripts/docs/contract.md`](scripts/docs/contract.md).
+Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/SKILL.md) safety rules and verify `HERDR_ENV=1` before delegation. For ordinary one-child delegation use `scripts/subagent`; the canonical mechanical CLI, ledger, envelope, and exit-code contract is [`scripts/docs/contract.md`](scripts/docs/contract.md), with invocation and test entry points in [`scripts/README.md`](scripts/README.md).
 
 ```sh
 SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
@@ -14,7 +14,7 @@ SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
 "$SUBAGENT" collect <task-id> --wait --timeout 600000
 ```
 
-The CLI composes the invariant persona/leaf/publication prompt around opaque `--task`, `--task-file`, or stdin text. Use `--prompt-extra` for exceptional constraints and `--print-prompt` to inspect it; do not reconstruct a raw prompt or envelope in normal operation. It preflights Herdr 0.7.5 capabilities before mutation, uses vector argv, owns a per-assignment ledger, injects child identity through `pane split --env`, and closes only eligible panes it created.
+The CLI wraps opaque `--task`, `--task-file`, or stdin text with the persona, leaf, identity, publication, and optional retro instructions. Use `--prompt-extra` for exceptional constraints and `--print-prompt` to inspect the result; do not reconstruct a raw prompt or result envelope during normal operation.
 
 ## Roster and routing
 
@@ -22,53 +22,40 @@ Definitions are `<name>.md` files in `<git-root>/.agents/subagents/` then `~/.ag
 
 A direct child is a leaf. The only exception is a `planner`, which may spawn one blocking ephemeral `scout` or `researcher` when a factual gap blocks planning. The specialist is still a leaf.
 
-## Invocation dimensions
+## Invocation policy
 
 Choose explicitly:
 
-- **Waiting:** `run` is blocking; `start` plus later `collect` is non-blocking.
-- **Cardinality:** MVP CLI supports one child. For many, direct parent fan-out in waves of at most two; never child-to-child work.
+- **Waiting:** `run` is blocking; `start` plus later `collect` is non-blocking. Give review and implementation work an explicit `--timeout` rather than relying on the ten-minute default.
+- **Cardinality:** the CLI handles one child. For many, direct parent fan-out in waves of at most two; never child-to-child work.
 - **Lifecycle:** ephemeral by default. Residents are explicit opt-in only for correlated work and retain their spawn identity, pane, label, persona, and one active task.
 
-For a resident reuse only after its live name **and pane ID** match the ledger, it is `idle`/`done`, and the previous result was validated and captured. `working`, `blocked`, `unknown`, missing, or mismatched residents are not reusable. Never change persona, accept concurrent work, or close an active resident.
+Reuse a resident only after its live name **and pane ID** match the ledger, it is `idle`/`done`, and its previous result was validated and captured. `working`, `blocked`, `unknown`, missing, or mismatched residents are not reusable. Never change persona, accept concurrent work, or close an active resident.
+
+## Process retrospectives
+
+Use `--retro` or `--no-retro` only when overriding the persona policy for this spawn. Otherwise the CLI resolves persona frontmatter `retro:` and then its enabled default. `scout` and `researcher` currently opt out. If no `retro` skill is installed, default/frontmatter enablement degrades to disabled; an explicit `--retro` fails fast.
+
+A gated-in child applies steps 1–2 of [`retro`](../retro/SKILL.md), using that skill's threshold. Surviving one-line candidates arrive in the result's optional `PROCESS:` section and the ledger `:envelope`; no candidates is a valid result. The ledger's best-effort `:child-session` is the transcript reference for any manual follow-up after pane closure. Exact precedence, fields, limits, and section grammar belong to the [mechanical contract](scripts/docs/contract.md).
+
+Treat process candidates as testimony and scan input for your own retro. The child must not choose a destination, load `self-improvement`, run `ot`, or edit instruction files; the parent owns verification, deduplication, approval, and persistence.
 
 ## Completion and pane safety
 
-The validated parent-chosen `RESULT` file is the only completion signal. Never treat `agent read`, terminal history, prompt text, or a visible final summary as completion. The child publishes exactly once with:
+The validated parent-chosen `RESULT` file is the only completion signal. Never treat `agent read`, terminal history, prompt text, or a visible final summary as completion. The child publishes exactly once with the injected launcher:
 
 ```sh
 "$HERDR_SUBAGENT_BIN" publish --status COMPLETE --summary 'Concise result.'
 ```
 
-`publish` atomically creates the exact result path and notifications name the child/task/result for non-blocking success or publish failure. A parent validates markers, identity fields, and artifact existence before capture. `BLOCKED` retains its pane. `COMPLETE`/`FAILED` permit closing only a pane this parent created, after all required artifacts are captured and Herdr reports the child settled. Never close user/other-agent panes, kill a parent, or stop the Herdr server.
+`BLOCKED` retains its pane. `COMPLETE`/`FAILED` permit closing only a pane this parent created, after required artifacts are captured and Herdr reports the child settled. Never close user/other-agent panes, kill a parent, or stop the Herdr server. A different parent session may collect and validate an assignment but must retain its pane.
 
-Use `--no-focus`, caller context or explicit IDs, and response IDs—not focused UI state. Root labels are `<persona>-<index>[-<model>]`; the planner exception nests `planner-<n>/...`. Nesting is driven by the spawning agent's injected `HERDR_SUBAGENT_PERSONA`, so a planner started by hand rather than through `subagent` silently produces root labels — set that variable, or accept flat labels. Labels never contain a workspace name and never replace unique agent names.
-
-A parent closes only panes its own session created. `collect` run by a different session, or from a pane whose identity cannot be resolved, still captures and validates the result but retains the pane.
+Use caller context or explicit IDs, `--no-focus`, and response IDs—not focused UI state. Labels never contain a workspace name and never replace unique agent names. Nested planner labels depend on the spawning agent's injected `HERDR_SUBAGENT_PERSONA`; a planner started outside `subagent` has no nested-label identity unless that variable is set.
 
 ## Trusting a result
 
-Validation proves *identity*, not correctness: a `COMPLETE` envelope means the right child answered the right assignment, never that its content is true. Treat findings, counts, diagnoses, and "verified" claims as testimony. Before persisting a child's claim to durable memory—a change-record, task, spec, or commit message—or acting destructively on it, confirm it against the source yourself. Cheap checks are usually enough: re-count what a report summarises, re-run a command it quotes, read the file it cites.
-
-When children disagree, settle it with a local probe rather than adjudicating by confidence or seniority; both may assert verification and one still be wrong, or both be right under conditions neither stated.
+Validation proves identity, not correctness: a `COMPLETE` envelope means the right child answered the right assignment, never that its content is true. Before persisting a child's claim to a change-record, task, spec, or commit message—or acting destructively on it—confirm it against source. Re-count reported totals, re-run quoted commands, and inspect cited files. Resolve disagreement with a local probe rather than confidence or seniority.
 
 ## Manual fallback
 
-When the script is unavailable, follow the vendored Herdr skill mechanically, create a parent ledger/result path before prompting, and inject `CHILD`, `TASK`, and `RESULT`. The child writes this exact envelope to a sibling temporary file and atomically publishes it without replacing an existing target:
-
-```text
---- HERDR RESULT v1 ---
-CHILD: <unique live agent name>
-TASK: <parent-assigned id>
-RESULT: <parent-assigned absolute path>
-STATUS: COMPLETE | BLOCKED | FAILED
-SUMMARY: <one to three concise sentences>
-ARTIFACTS:
-- <absolute path — purpose, or none>
-FINDINGS:
-- <at most five actionable one-line items, or none>
-NEXT: <one required parent/user action, or none>
---- END HERDR RESULT ---
-```
-
-Retain blocked panes for follow-up. For completion/failed work, capture and validate the file before closing only the ephemeral pane you created.
+If the script is unavailable, follow the [upstream Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/SKILL.md) mechanically. Before prompting, create a parent ledger and absolute result path and inject `CHILD`, `TASK`, and `RESULT`. Have the child atomically publish the exact [v1 result envelope](scripts/docs/contract.md#ledger-and-completion), then validate and capture it before closing only the ephemeral pane you created. Retain blocked panes.

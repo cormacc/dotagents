@@ -24,12 +24,15 @@
 ;; roster symlinked to the repo's own tracked `subagents/`.
 (defn fake-env [overrides]
   (let [dir (fs/create-temp-dir {:prefix "fake-herdr-"}) log (str (fs/path dir "calls")) env-file (str (fs/path dir "env")) prompt-file (str (fs/path dir "prompt"))
-        home (fs/path dir "home") roster (fs/path dir ".agents" "subagents")]
+        home (fs/path dir "home") roster (fs/path dir ".agents" "subagents") skills (fs/path dir "skills")]
     (fs/create-sym-link (fs/path dir "herdr") fake)
     (fs/create-dirs home)
     (fs/create-dirs (fs/parent roster))
     (fs/create-sym-link roster (fs/path root "subagents"))
-    {:dir dir :log log :env-file env-file :prompt-file prompt-file :roster (str roster)
+    ;; `<root>/skills/` is the second skill probe and the shape this repository uses, so
+    ;; the retro skill resolves in-fixture without an installed `~/.agents/skills`.
+    (fs/create-sym-link skills (fs/path root "skills"))
+    {:dir dir :log log :env-file env-file :prompt-file prompt-file :roster (str roster) :skills (str skills)
      :env (merge {"PATH" (str dir ":" (System/getenv "PATH")) "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p" "HERDR_SUBAGENT_BIN" bin "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file "FAKE_HERDR_PROMPT_FILE" prompt-file
                   "HOME" (str home) "SUBAGENT_ASSIGNMENT_ROOT" (str dir)} overrides)}))
 (defn call! [env & argv] @(process/process (into [bin] argv) {:out :string :err :string :env env}))
@@ -135,6 +138,187 @@
   (let [{:keys [env dir]} (fake-env {"FAKE_NOTIFY_FAIL" "1"}) target (str (fs/path dir "notify.result"))
         proc (call! (merge env {"HERDR_SUBAGENT_CHILD" "child" "HERDR_SUBAGENT_TASK" "task" "HERDR_SUBAGENT_RESULT" target "HERDR_SUBAGENT_WAITING_POLICY" "non-blocking"}) "publish" "--status" "COMPLETE" "--summary" "done")]
     (is (zero? (:exit proc))) (is (fs/exists? target))))
+
+;; Behavioural gate, not a file-content assertion: frontmatter values are strings, so a
+;; `retro: false` that was never coerced would still gate the persona *in* and only a
+;; prompt-level check catches it.
+(deftest retro-gating-is-resolved-and-recorded
+  (let [{:keys [env dir]} (fake-env {})
+        prompt-of (fn [& argv] (:out (apply call! env "run" argv)))]
+    (testing "default-enabled personas carry the instruction, opted-out personas do not"
+      (let [worker (prompt-of "worker" "--task" "x" "--print-prompt")]
+        (is (str/includes? worker (str dir "/skills/retro/SKILL.md")))
+        (is (str/includes? worker "apply steps 1-2 of"))
+        (is (str/includes? worker "signal → category → proposed rule"))
+        (is (str/includes? worker "an absent PROCESS section is a valid outcome"))
+        ;; The child performs retro steps 1-2 only; routing and persistence stay parent-side.
+        (is (str/includes? worker "Do not choose a destination, load `self-improvement`, run `ot`, or edit any instruction file")))
+      (doseq [persona ["scout" "researcher"]]
+        (let [out (prompt-of persona "--task" "x" "--print-prompt")]
+          (is (not (str/includes? out "--process")) persona)
+          (is (not (str/includes? out "retro/SKILL.md")) persona))))
+    (testing "the flag outranks frontmatter in both directions"
+      (is (str/includes? (prompt-of "scout" "--task" "x" "--retro" "--print-prompt") "retro/SKILL.md"))
+      (is (not (str/includes? (prompt-of "worker" "--task" "x" "--no-retro" "--print-prompt") "retro/SKILL.md"))))
+    (testing "boolean flags never consume the following argv element"
+      ;; Registered in only one of option-map/help-request? this swallows --task and
+      ;; fails with "provide exactly one of --task, --task-file, or stdin".
+      (let [proc (call! env "run" "worker" "--retro" "--task" "resolved assignment" "--print-prompt")]
+        (is (zero? (:exit proc)) (:err proc))
+        (is (str/includes? (:out proc) "resolved assignment")))
+      (let [proc (call! env "run" "worker" "--retro" "--help")]
+        (is (zero? (:exit proc)) (:err proc))
+        (is (str/starts-with? (:out proc) "subagent run|start"))))
+    (testing "contradictory flags fail fast"
+      (let [proc (call! env "run" "worker" "--task" "x" "--retro" "--no-retro" "--print-prompt")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"mutually exclusive" (:out proc)))))
+    (testing "an uncoercible frontmatter value fails fast, naming persona and value"
+      (let [solo (fs/create-temp-dir {:prefix "fake-herdr-roster-"})]
+        (fs/create-dirs (fs/path solo ".agents" "subagents"))
+        (spit (str (fs/path solo ".agents" "subagents" "broken.md")) "---\nname: broken\nkind: pi\nretro: sometimes\n---\nbody")
+        (let [proc (call! (merge env {"SUBAGENT_ASSIGNMENT_ROOT" (str solo)}) "run" "broken" "--task" "x" "--print-prompt")]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"must be true or false" (:out proc)))
+          (is (re-find #"broken" (:out proc)))
+          (is (re-find #"sometimes" (:out proc))))))
+    ;; The absent-skill branch (`:retro-source "skill-missing"`) is covered in core-test:
+    ;; `user.home` in Babashka comes from the OS user database rather than `$HOME`, so the
+    ;; third probe cannot be neutralised from a subprocess fixture. The assertion above
+    ;; that the prompt names `<assignment-root>/skills/retro/SKILL.md` already proves the
+    ;; project probes outrank the home probe end to end.
+    )
+  ;; Recording is independent of the policy branch, which is covered above and in core-test.
+  (let [{:keys [env]} (fake-env {})
+        proc (call! env "start" "worker" "--task" "ledger policy")
+        entry (result proc)]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (true? (get-in entry [:result :retro])))
+    (is (= "default" (get-in entry [:result :retro-source]))))
+  ;; Gating shapes the prompt only: a gated-out child that publishes PROCESS anyway is
+  ;; still captured normally.
+  (let [{:keys [env dir]} (fake-env {"FAKE_PUBLISH_PROCESS" "unsolicited → behavioral → still accepted"})
+        proc (call! env "run" "scout" "--task" "gated out but publishes" "--timeout" "200")
+        task (get-in (result proc) [:result :task])
+        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true)]
+    (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+    (is (false? (:retro entry)))
+    (is (= ["unsolicited → behavioral → still accepted"] (get-in entry [:envelope :process])))))
+
+;; PROCESS candidates travel with the result: emitted by `publish`, persisted onto the
+;; ledger entry's `:envelope` at capture, and never gating capture or pane closure.
+(deftest process-candidates-publish-and-persist
+  (let [{:keys [env dir]} (fake-env {}) target (str (fs/path dir "process.result"))
+        base (merge env {"HERDR_SUBAGENT_CHILD" "child" "HERDR_SUBAGENT_TASK" "task" "HERDR_SUBAGENT_WAITING_POLICY" "blocking"})
+        proc (call! (merge base {"HERDR_SUBAGENT_RESULT" target}) "publish" "--status" "COMPLETE" "--summary" "done"
+                    "--process" "wrong flag → guardrail → verify flags first"
+                    "--process" "repeated probe → behavioral → cache the probe")]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= ["NEXT: none" "PROCESS:" "- wrong flag → guardrail → verify flags first" "- repeated probe → behavioral → cache the probe" "--- END HERDR RESULT ---"]
+           (vec (drop 10 (str/split-lines (slurp target))))))
+    ;; Six candidates are rejected at publish; the result file is never created.
+    (let [over (str (fs/path dir "over.result"))
+          rejected (apply call! (merge base {"HERDR_SUBAGENT_RESULT" over}) "publish" "--status" "COMPLETE" "--summary" "done"
+                          (mapcat (fn [n] ["--process" (str "s" n " → c → r" n)]) (range 6)))]
+      (is (= 1 (:exit rejected)))
+      (is (re-find #"PROCESS exceeds" (:out rejected)))
+      (is (not (fs/exists? over))))
+    ;; `--from-file` carries the same list.
+    (let [from-file (str (fs/path dir "from-file-process.result")) body (str (fs/path dir "process-body.json"))]
+      (spit body (json/generate-string {:status "BLOCKED" :summary "blocked but instructive" :artifacts [] :findings [] :next nil
+                                        :process ["missing env → guardrail → preflight the env"]}))
+      (let [proc (call! (merge base {"HERDR_SUBAGENT_RESULT" from-file}) "publish" "--from-file" body)]
+        (is (zero? (:exit proc)) (:err proc))
+        (is (str/includes? (slurp from-file) "PROCESS:\n- missing env → guardrail → preflight the env\n--- END HERDR RESULT ---")))))
+  ;; End to end: a published section survives capture onto the ledger entry.
+  (let [{:keys [env dir]} (fake-env {"FAKE_PUBLISH_PROCESS" "stale doc → guardrail → read the contract first"})
+        proc (call! env "run" "worker" "--task" "process capture" "--timeout" "200")
+        task (get-in (result proc) [:result :task])
+        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true)]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+    (is (= ["stale doc → guardrail → read the contract first"] (get-in entry [:envelope :process])))
+    (is (nil? (:process-overflow entry))))
+  ;; A hand-assembled six-item section degrades to five at capture: the result stays
+  ;; COMPLETE and the pane still closes, because PROCESS never gates capture.
+  (let [{:keys [env log dir]} (fake-env {"FAKE_PUBLISH_PROCESS" (str/join "\n- " (map #(str "s" % " → c → r" %) (range 6)))})
+        proc (call! env "run" "worker" "--task" "process overflow" "--timeout" "200")
+        task (get-in (result proc) [:result :task])
+        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true)]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+    (is (= "COMPLETE" (:status entry)))
+    (is (true? (:process-overflow entry)))
+    (is (= 5 (count (get-in entry [:envelope :process]))))
+    (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
+
+(defn- ledger-entry [dir task]
+  (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true))
+(defn- child-get-count [log]
+  (count (filter #(and (= ["agent" "get"] (vec (take 2 %))) (not= "w:p" (nth % 2 nil)) (not (some #{"--help"} %))) (calls log))))
+
+;; The child's session reference must survive pane close, and no single hook is reliable:
+;; Herdr reports `agent_session` asynchronously, so each fixture mode below exercises one
+;; hook in isolation by making it the only one that offers the session.
+(deftest child-session-is-recorded-by-every-hook
+  (testing "the herdr/start! return is used when it already carries the session"
+    (let [{:keys [env dir log]} (fake-env {"FAKE_SESSION_FROM" "start"})
+          proc (call! env "run" "worker" "--task" "session at start" "--timeout" "200")
+          entry (ledger-entry dir (get-in (result proc) [:result :task]))]
+      (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+      ;; The whole map, not `value` alone: `value` is meaningless without `kind`.
+      (is (= {:agent "pi" :kind "path" :source "pi" :value "/tmp/fake-child-session.jsonl"} (:child-session entry)))
+      ;; The entry is read back after capture *and* pane close, so the reference outlives
+      ;; the pane it came from.
+      (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
+  (testing "a session absent at start is backfilled by the post-prompt agent get"
+    (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "get"})
+          proc (call! env "start" "worker" "--task" "session after prompt")
+          entry (ledger-entry dir (get-in (result proc) [:result :task]))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "path" (get-in entry [:child-session :kind])))
+      (is (= "/tmp/fake-child-session.jsonl" (get-in entry [:child-session :value])))))
+  (testing "a wait outcome backfills without adding a Herdr call to the loop"
+    (let [{:keys [env dir log]} (fake-env {"FAKE_SESSION_FROM" "wait" "FAKE_WAIT" "idle-then-publish" "FAKE_WAIT_PUBLISH_AFTER" "3" "SUBAGENT_POLL_INTERVAL_MS" "20"})
+          proc (call! env "run" "worker" "--task" "session from wait" "--timeout" "5000")
+          entry (ledger-entry dir (get-in (result proc) [:result :task]))]
+      (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+      (is (= "/tmp/fake-child-session.jsonl" (get-in entry [:child-session :value])))
+      ;; Four wait iterations, but only the post-prompt probe and the maybe-close! refresh
+      ;; may issue `agent get`; the loop itself adds none.
+      (is (<= (child-get-count log) 2))))
+  (testing "live (status/list) backfills while the child is alive"
+    (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "late-get"})
+          start (call! env "start" "worker" "--task" "session via status")
+          task (get-in (result start) [:result :task])]
+      (is (nil? (:child-session (ledger-entry dir task))))
+      (is (zero? (:exit (call! env "status" task))))
+      (is (= "/tmp/fake-child-session.jsonl" (get-in (ledger-entry dir task) [:child-session :value])))))
+  (testing "maybe-close! refreshes a BLOCKED owned entry, whose pane is still retained"
+    (let [{:keys [env env-file dir log]} (fake-env {"FAKE_SESSION_FROM" "late-get"})
+          start (call! env "start" "worker" "--task" "blocked session")
+          task (get-in (result start) [:result :task])
+          values (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
+      (is (nil? (:child-session (ledger-entry dir task))))
+      (spit (values "HERDR_SUBAGENT_RESULT")
+            (core/envelope {:child (values "HERDR_SUBAGENT_CHILD") :task task :result (values "HERDR_SUBAGENT_RESULT")
+                            :status "BLOCKED" :summary "blocked" :artifacts [] :findings [] :next nil}))
+      (is (= "BLOCKED" (get-in (result (call! env "collect" task)) [:result :status])))
+      (is (= "/tmp/fake-child-session.jsonl" (get-in (ledger-entry dir task) [:child-session :value])))
+      (is (not-any? #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
+  (testing "a child that never publishes still carries its session"
+    (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "start" "FAKE_WAIT" "idle-forever" "SUBAGENT_POLL_INTERVAL_MS" "50"})
+          proc (call! env "run" "worker" "--task" "never publishes" "--timeout" "200")
+          entry (ledger-entry dir (get-in (result proc) [:result :task]))]
+      (is (= "pending" (get-in (result proc) [:result :status])))
+      (is (= "/tmp/fake-child-session.jsonl" (get-in entry [:child-session :value])))))
+  (testing "a session-less AgentInfo raises nothing and the spawn still succeeds"
+    (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "none"})
+          proc (call! env "run" "worker" "--task" "no session anywhere" "--timeout" "200")
+          entry (ledger-entry dir (get-in (result proc) [:result :task]))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+      (is (nil? (:child-session entry))))))
 
 (deftest partial-start-failure-is-tracked-and-cleaned
   (let [{:keys [env log]} (fake-env {"FAKE_FAIL_START" "1"}) proc (call! env "start" "worker" "--task" "fail")]

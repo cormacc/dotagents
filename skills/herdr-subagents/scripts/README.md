@@ -16,6 +16,8 @@ The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/sk
 
 `run` and `start` take opaque assignment text from exactly one of `--task`, `--task-file`, or stdin. `--prompt-extra` appends exceptional constraints; `--print-prompt` previews the invariant wrapper. The CLI never offers raw prompt mode.
 
+The value-less flags `--retro` and `--no-retro` override process-retro gating for one spawn. See [docs/contract.md](docs/contract.md) § Retro gating for precedence, optional-skill behavior, ledger fields, and the `PROCESS:` envelope grammar.
+
 ```sh
 SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
 "$SUBAGENT" run scout --task 'Find the relevant source files.' --timeout 600000
@@ -27,9 +29,12 @@ SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
 A child calls the injected absolute launcher path:
 
 ```sh
-"$HERDR_SUBAGENT_BIN" publish --status COMPLETE --summary 'Implemented and tested.'
+"$HERDR_SUBAGENT_BIN" publish --status COMPLETE --summary 'Implemented and tested.' \
+  --process 'documented flag rejected → guardrail → verify flags against source before use'
 ```
+
+`--process` is repeatable, and `--from-file` accepts the same list as a `"process"` array.
 
 ## Tests and smoke
 
-`bb test` runs unit and fake-process coverage without launching an agent, entirely inside per-test temporary directories (`SUBAGENT_ASSIGNMENT_ROOT`); it never reads or writes the live `<git-root>/.agents/tmp/herdr-subagents/` tree. The separate `bb smoke-subagent` is intentionally guarded and requires `HERDR_ENV=1`, `SUBAGENT_LIVE_SMOKE=1`, and `SUBAGENT_LIVE_SMOKE_MODEL`; it is never CI work. See [docs/contract.md](docs/contract.md) for output and file contracts.
+`bb test` runs unit and fake-process coverage without launching an agent, entirely inside per-test temporary directories (`SUBAGENT_ASSIGNMENT_ROOT`); it must not touch the live `<git-root>/.agents/tmp/herdr-subagents/` tree. The separate `bb smoke-subagent` is intentionally guarded and requires `HERDR_ENV=1`, `SUBAGENT_LIVE_SMOKE=1`, and `SUBAGENT_LIVE_SMOKE_MODEL`; it is never CI work. Maintainer rationale and smoke coverage notes live in [../README.org](../README.org); output and file contracts live in [docs/contract.md](docs/contract.md).

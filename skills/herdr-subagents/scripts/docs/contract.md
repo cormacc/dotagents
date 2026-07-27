@@ -29,6 +29,7 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 | Variable | Read by | Meaning |
 |---|---|---|
 | `SUBAGENT_ASSIGNMENT_ROOT` | parent | Overrides the `git rev-parse --show-toplevel` probe behind the assignment root. It relocates the ledger, index markers, and `RESULT` paths **and** project-roster lookup (`<root>/.agents/subagents/`) together, because all four are per-project notions. A blank value is ignored, a relative value is absolutised so `RESULT` stays absolute, and a value that is not an existing directory is rejected. When set, it is injected into the child pane so nested delegation stays in the same root. |
+| `SUBAGENT_LIVE_SMOKE`, `SUBAGENT_LIVE_SMOKE_MODEL` | `bb smoke-subagent` | Guards the live smoke, which also needs `HERDR_ENV=1`. Never CI work. |
 | `SUBAGENT_POLL_INTERVAL_MS` | parent | Sleep between settled-without-result wait iterations. Unset, blank, unparseable, zero, and negative values all fall back to 1000 ms. |
 | `HERDR_SUBAGENT_CHILD` | child | Live agent name recorded on the ledger. |
 | `HERDR_SUBAGENT_TASK` | child | Assignment id. |
@@ -55,12 +56,26 @@ ARTIFACTS:
 FINDINGS:
 - <at most five one-line items, or none>
 NEXT: <one parent/user action, or none>
+PROCESS:
+- <at most five `signal → category → proposed rule` items>
 --- END HERDR RESULT ---
 ```
 
 The marker lines and `CHILD`, `TASK`, and `RESULT` must exactly match the ledger, and `FINDINGS` holds at most five items. Transcript output, `agent read`, and terminal history are never collection inputs. A `COMPLETE`/`FAILED` result closes only a child-owned pane after capture and a settled child; `BLOCKED` never closes its pane.
 
+`PROCESS:` is optional retro annotation and carries no version bump. It renders **after** the `NEXT:` line and immediately before the end marker, because a v1 reader ends `FINDINGS` at the literal `NEXT:` line and ignores everything after it; placed anywhere earlier it corrupts `FINDINGS`. An empty list omits the whole section (never `- none`), so an envelope without candidates is byte-identical to a pre-`PROCESS` one. The cap is five and is enforced asymmetrically: `publish` rejects a sixth item outright, while validation truncates to five and sets `:process-overflow` on the ledger entry, because a discardable annotation must never turn a valid result into the terminal status `invalid`. Non `- `-prefixed lines inside the section are ignored. Emit items with repeatable `--process`, or a `"process"` array in `--from-file`.
+
+Two further ledger fields sit outside the envelope. `:child-session` holds the child's whole Herdr `agent_session` map (`value` is meaningless without its `kind` discriminator: a transcript path or an opaque session id), giving a durable transcript reference after the pane is gone. It is best-effort and backfilled at every point the CLI already holds an `AgentInfo` — the `agent start` return, one `agent get` after the prompt lands, each wait-loop outcome (no extra Herdr call), `status`/`list`, and the pre-close refresh, which covers `BLOCKED` entries too. Failing to observe a session never fails a spawn or demotes a result. `:process-overflow` is `true` when validation truncated an over-length `PROCESS` section; the entry keeps the envelope's own status.
+
 The ledger directory is shared by every parent in the project, so pane closure is scoped to the owning session: `collect` on an entry whose `:parent-session` differs from the caller's (or whose caller identity cannot be resolved) still captures and validates the envelope, but retains the pane and reports `"pane-retained": true`. Ledger *reads* are never scoped — `status` and `list` show every entry.
+
+## Retro gating
+
+`run` and `start` decide whether the composed prompt asks the child to apply steps 1–2 of the `retro` skill to its own session. Precedence is `--retro` / `--no-retro` (value-less flags; supplying both fails fast) > persona frontmatter `retro:` > the built-in default, which is **enabled**. Frontmatter values are always strings, so `retro:` is coerced by an explicit `true`/`false` table; any other value fails fast at spawn, naming the persona and the value.
+
+"Enabled" means the child *evaluates* the `retro` threshold, never that a retro is forced: that skill owns the threshold, including its non-interactive equivalent, and a gated-in child that finds nothing correctly publishes no `PROCESS` section. `--no-retro` and `retro: false` skip the step entirely — no prompt paragraph and no token cost. `scout` and `researcher` ship with `retro: false`.
+
+The retro skill path resolves `<assignment-root>/.agents/skills/retro/SKILL.md`, then `<assignment-root>/skills/retro/SKILL.md`, then `~/.agents/skills/retro/SKILL.md`. When none exists the frontmatter and default sources degrade silently — the instruction is omitted and `:retro-source` is `"skill-missing"` — because the retro step is optional equipment and an installation without that skill is a supported configuration. An explicit `--retro` is an operator request and fails fast at spawn instead of becoming a silent no-op; `--no-retro` is always honoured. The resolved policy is recorded on the ledger entry as `:retro` and `:retro-source` (`flag`, `frontmatter`, `default`, or `skill-missing`), and `--print-prompt` reports both alongside the composed prompt. Gating shapes the prompt only: a `PROCESS` section published by a gated-out child is still accepted.
 
 ## Labels and geometry
 

@@ -1,197 +1,96 @@
 #+TITLE: herdr-subagents — design rationale and maintenance notes
 
-Supplements [[file:SKILL.md][SKILL.md]] (the normative delegation contract) with the *why* behind the design, a measured evaluation of what the =subagent= CLI buys over driving =herdr= directly, and the context a maintainer needs before changing anything. It is documentation for humans and for agents doing maintenance work on the skill itself — it is not loaded as part of ordinary delegation.
+Supplements [[file:SKILL.md][SKILL.md]] with the rationale and maintenance context for the =subagent= CLI. Ordinary delegation should not load this file.
 
-Division of labour across the four documents:
+Division of labour:
 
-| Document | Owns | Read when |
-|---+---+---|
-| [[file:SKILL.md][SKILL.md]] | Normative policy: completion signal, pane safety, planner exception, invocation dimensions, resident/fan-out rules | Every delegation |
-| [[file:scripts/README.md][scripts/README.md]] | How to run the CLI, tests, and smoke | Using or testing the CLI |
-| [[file:scripts/docs/contract.md][scripts/docs/contract.md]] | Machine contract: JSON schema, env vars, ledger layout, envelope grammar, exit codes | Debugging, or writing a machine consumer |
-| This file | Design rationale, overhead evaluation, maintenance invariants | Changing the skill or the CLI |
+| Document | Canonical content |
+|---+---|
+| [[file:SKILL.md][SKILL.md]] | Agent-runtime delegation, trust, and pane-safety policy |
+| [[file:scripts/README.md][scripts/README.md]] | CLI invocation, tests, and smoke entry points |
+| [[file:scripts/docs/contract.md][scripts/docs/contract.md]] | Mechanical CLI, JSON, environment, ledger, envelope, label, and geometry contract |
+| This file | Rationale, architecture, review notes, and history |
 
 * Why this skill exists
 
-Herdr gives an agent panes, tabs, and a lifecycle API. It does not give it a *delegation protocol*: which persona to spawn, how to name and label the pane, how the child reports back, how the parent knows the child is genuinely finished, and when a pane may be destroyed. Those are policy questions, and getting them wrong is expensive in a way ordinary tool misuse is not — a parent that mistakes a transcript for a result silently acts on nothing, and a parent that closes the wrong pane destroys somebody else's work.
+Herdr supplies panes, tabs, and agent lifecycle operations, but not a delegation protocol: persona selection, naming, parent/child identity, durable completion, or safe pane disposal. Those mistakes are costly. A parent can mistake transcript text for completion or destroy work by closing a pane before capturing its result.
 
-This skill supplies that protocol. The [[file:../herdr/SKILL.md][vendored herdr skill]] remains the authority on pane/agent mechanics and is kept byte-identical to upstream, so the two can be updated independently.
+The skill therefore separates policy from mechanics. [[file:SKILL.md][SKILL.md]] carries the small runtime policy an agent needs, while the Babashka CLI makes identity, publication, validation, and ownership checks repeatable. The upstream [[https://github.com/ogulcancelik/herdr/blob/master/SKILL.md][Herdr skill]] remains the authority for direct pane and agent operations; this repository vendors a copy at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]], but the CLI path needs only the =herdr= binary and =HERDR_ENV=1=, so standalone installs of this skill work without it.
 
 * Design rationale
 
-** Cross-harness portability drove the implementation choice
+** Harness-neutral roster and CLI
 
-The roster under [[file:../../subagents/][subagents/]] is deliberately harness-neutral: a persona is a Markdown file with =name=/=description=/=kind=/=model= frontmatter, and =kind= selects the CLI to launch. A parent running under pi can spawn a Claude Code child, and vice versa. That property is the whole point — it is what lets the roster be a single source of truth rather than one definition per harness.
+The roster under [[file:../../subagents/][subagents/]] uses Markdown plus =name=/=description=/=kind=/=model= frontmatter. The resolved =kind= selects the child harness, so a parent is not restricted to its own harness. Keeping orchestration in a pi extension would have broken that property.
 
-A harness-specific implementation would have destroyed it. Three options were considered and are recorded in the [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24 change-record]]:
+The [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24 change-record]] records the implementation choice: Babashka behind a thin launcher was preferred to a harness-specific extension or pure Bash. It provides vector argv, JSON handling, testable protocol logic, and atomic filesystem operations without adding Maven dependencies. Folding delegation into =ot= was rejected because task memory and terminal delegation are separate domains.
 
-- *A pi extension or a change to =@ogulcancelik/pi-herdr=* — rejected. It would work only under pi, and =pi-herdr= is upstream-owned npm. The skill must work from any harness with shell access, including bare shell.
-- *Pure Bash* — rejected. The ledger, JSON handling, atomic publication, and envelope validation are fragile and effectively untestable in Bash, and string interpolation of prompt text reintroduces an injection surface.
-- *Babashka behind a thin Bash launcher* — chosen. It mirrors the proven =ot= pattern already in this repo, gives safe vector argv via =babashka.process=, makes the protocol logic unit-testable, and ships JSON via bundled cheshire with no Maven dependencies. The only runtime requirement beyond Herdr is =bb=.
+** Why mechanics belong in a CLI
 
-Folding the commands into =ot= was also rejected: =ot= is the org-tasks protocol engine, and coupling delegation mechanics to task memory helps neither.
+The earlier prose-only protocol required the parent to perform label calculation, geometry selection, split/start/prompt operations, bounded waiting, envelope parsing, artifact checks, and pane closure by hand. Besides repeated model round-trips, partial compliance failed silently: identities could be mistyped, visible summaries substituted for result files, and panes closed before capture.
 
-** Why a CLI rather than prose instructions
+The CLI absorbs those operations behind one spawn/collect interface and returns the validated envelope inline. Capability probes add subprocess work before mutation, but convert unsupported-Herdr states into an actionable error before a pane or ledger assignment is partially created. Exact invocation counts are intentionally not frozen here because lifecycle hooks change; use the fake-Herdr log when evaluating current overhead.
 
-Before the scripts existed, [[file:SKILL.md][SKILL.md]] described the mechanics as a numbered procedure the agent executed by hand: compute the label, read the caller geometry, split, rename, verify, start, prompt with a hand-transcribed identity block, poll, hand-parse the envelope, close. Three costs followed, in increasing order of seriousness.
+** Optional process retrospectives
 
-*** Tool-call overhead
+The [[file:../../design/log/2026-07-27-subagent-retrospectives.org][2026-07-27 change-record]] added child-side process learning without giving children persistence authority. A gated child scans context it already holds and can attach compact =signal → category → proposed rule= candidates to the durable result. The parent still verifies, deduplicates, routes, and seeks approval, so self-retro remains testimony rather than an automated write path.
 
-Each mechanical step was a separate tool call, and therefore a separate model round-trip. See the measured comparison below.
+=PROCESS:= was added as an optional trailing v1 annotation instead of a separate retro artifact or envelope v2. The position preserves existing v1 readers, omission preserves old output when there are no candidates, and the ledger already persists validated envelopes. =:child-session= complements this with a best-effort transcript reference for thin candidates or crash investigation. The exact grammar and degradation rules live only in [[file:scripts/docs/contract.md][contract.md]].
 
-*** Context overhead
-
-The mechanics had to be *resident in the prompt* for the agent to execute them correctly, which is why the file was 310 lines. Every delegation paid for label arithmetic, geometry rules, and envelope grammar whether or not it needed them.
-
-*** Protocol omission — the real motivation
-
-The other two are efficiency arguments; this one is a correctness argument. A hand-composed protocol can be *partially* followed, and partial compliance fails silently. Observed failure modes that motivated mechanisation: identity strings mistyped into the child prompt so the returned envelope could never validate; the result-file check skipped in favour of the child's visible summary; a pane closed before artifacts were captured. Encoding the protocol in a CLI makes these unrepresentable rather than merely discouraged — the child no longer transcribes its identity at all, because it arrives through =pane split --env=.
-
-* Measured overhead reduction
-
-** Method
-
-Two independent sources:
-
-- *Per-command invocation counts* — a full blocking delegation run against the repository's fake-Herdr fixture ([[file:scripts/test/fixtures/fake-herdr][test/fixtures/fake-herdr]]) with a counting shim in =PATH= that logs one line per =herdr= invocation before delegating to the fixture. Capability probes (=--help=) are counted separately from operational commands because a human or agent driving Herdr by hand would not perform them. Reproduce with the shim described in *Maintenance* below.
-- *Lifecycle durations* — the 13 completed assignments in this repository's own delegation ledger, spanning scouts, planners, reviewers, and workers across several models.
-
-** Results
-
-| Path | Agent tool calls | =herdr= invocations absorbed |
-|---+---+---|
-| =subagent run= (blocking) | *1* | 22 = 11 capability probes + 11 operational |
-| =subagent start= (non-blocking) | *1* | 19 = 11 probes + 8 operational |
-| =subagent collect= | *1* | validation + optional bounded wait |
-
-The 11 operational commands =run= performs are: =--version=, =agent get= (parent identity), =pane get= (parent label), =pane layout= (caller geometry), =pane split=, =pane rename=, =agent start=, =agent prompt=, =agent wait=, =agent get= (settled check), =pane close=.
-
-Driving Herdr directly, each of those is at minimum one agent tool call, and the parent additionally must read the persona file, check the result path, and read/validate the envelope — none of which are =herdr= commands. The lifecycle breakdown below turns that into an end-to-end figure.
-
-*** Full delegation lifecycle
-
-The per-command table understates the gap, because it counts a single spawn rather than the *lifecycle* an operator actually pays for: spawn the child, wait for it to conclude, then read what it produced. Counting agent tool calls end to end:
-
-| Phase | =subagent= | Direct =herdr= |
-|---+---+---|
-| Spawn: read persona, parent label, caller geometry, split, rename, verify, start, prompt | *1* (=start=) | ≥8 |
-| Create assignment identity (=TASK=/=RESULT=, ledger entry) | 0 (internal) | 1 |
-| Wait to conclusion | *0* (absorbed) | 2–20+ (see below) |
-| Validate envelope, check artifacts, confirm settled, close pane | *1* (=collect=) | ≥4 |
-| Read the returned status, summary, findings, artifact paths | *0* (inline in the =collect= JSON) | — |
-| Read a long artifact report, when one exists | 1 | 1 |
-| *Total* | *3* | *≈16–34* |
-
-A blocking =subagent run= collapses the first four rows into one call, giving *2 tool calls* for the whole lifecycle. The right-hand column is an estimate built from the enumerated steps; the left-hand column is what this session actually used per delegation.
-
-The decisive asymmetry is the result payload. =collect= returns the validated envelope inline — status, summary, findings, artifact paths — so the common case of "spawn, wait, read the answer" needs *no additional read at all*. Driven by hand, the parent must locate the result path, read the file, and parse the envelope itself before it can trust any of it.
-
-*** Wait-phase cost, and why the default budget is often wrong
-
-Durations of the 13 completed assignments in this repository's ledger:
-
-| Cohort | Median | Range |
-|---+---+---|
-| Scouts and planners | 0.5 min | 0.4–4.9 min |
-| Reviewers and workers | 11.9 min | 5.2–54.4 min |
-| All | 4.9 min | 0.4–54.4 min |
-
-Two consequences.
-
-First, the wait phase is where manual driving degrades worst, and *not* because of elapsed time. =herdr agent wait= returns as soon as the child settles, and a coding agent settles repeatedly before it publishes — each such return is an unpublished settle that costs one tool call and one model round-trip to discover and re-issue. The manual count is therefore driven by the number of intermediate settles, which no choice of =--timeout= avoids: a long timeout does not stop the wait returning early. The CLI absorbs each one for the price of a subprocess.
-
-Second, the ten-minute default budget is calibrated for scouts, not for reviewers and workers. Over half the reviewer/worker cohort exceeds it, and the longest real assignment (54.4 min) exceeds it more than fivefold. Pass an explicit =--timeout= for review- or implementation-sized work. Timeout is non-final and retains the pane, so an expired budget costs one further =collect= rather than the assignment — but budgeting correctly up front saves that round-trip.
-
-Internally the CLI handles unpublished settles in a loop that sleeps =min(SUBAGENT_POLL_INTERVAL_MS, remaining-budget)= between iterations. Against the default ten-minute budget at 1 Hz that is up to ~600 =agent wait= calls plus ~600 result-path checks, *all invisible to the parent's context* — the pathological case is bounded subprocess cost rather than unbounded context growth. Without that sleep the same loop spins at roughly 200 waits per second, which is how the busy-wait regression was originally introduced and why it is now guarded by a mutation-tested bound.
-
-*** Context cost
-
-| Artifact | Before | After |
-|---+---+---|
-| =herdr-subagents/SKILL.md= | 310 lines / 15.5 KB | *68 lines / 5.2 KB* |
-| Mechanics also required in context | [[file:../herdr/SKILL.md][herdr/SKILL.md]], 197 lines / 10.5 KB | loaded only for direct pane work |
-| Machine detail | inline in SKILL.md | [[file:scripts/docs/contract.md][contract.md]], loaded on demand |
-
-A 67% reduction in the skill file itself, and the mechanical detail that remains is now loaded only when something needs debugging. Implementation cost: ~460 lines of Clojure across five namespaces.
-
-** Honest accounting
-
-The CLI is not free. It adds ~100 ms of =bb= startup per invocation (negligible against agent turn times), a Babashka dependency, and a capability-preflight round of 11 =herdr --help= probes before any mutation. The probes are a deliberate trade: they cost ~11 subprocesses to convert an unsupported-Herdr failure from a half-created pane into an actionable JSON error before any state is mutated.
-
-The comparison above is *tool calls*, not tokens or wall-clock. Tool calls are the right unit here because each one is a model round-trip carrying the full conversation, so they dominate both latency and cost — but a hand-driven delegation by an expert operator who skips verification steps could be cheaper than 13 calls, at the cost of the guarantees the protocol exists to provide.
+The =retro= skill is optional by design. Project/global skill resolution lets integrated installations enable it by default, while third-party installations without it continue delegating with no injected instruction. Only explicit =--retro= fails when the capability is absent because an operator request must not silently become a no-op. The live smoke follows the same rule and reports a skipped retro leg when the skill is unavailable.
 
 * Architecture
 
 | Namespace | Responsibility |
 |---+---|
-| [[file:scripts/src/herdr_subagents/core.clj][core.clj]] | Pure protocol logic: roster path resolution, kind/model ladders, split geometry, label composition, envelope render/validate. No I/O — the bulk of the unit tests live here. |
-| [[file:scripts/src/herdr_subagents/herdr.clj][herdr.clj]] | The only namespace that shells out to =herdr=. Vector argv exclusively; parses JSON/errors; owns the capability preflight. |
-| [[file:scripts/src/herdr_subagents/ledger.clj][ledger.clj]] | Assignment state: assignment root resolution, per-assignment JSON entries, lock-free exclusive-create (=O_EXCL=) index allocation, atomic hard-link publication. |
-| [[file:scripts/src/herdr_subagents/cli.clj][cli.clj]] | Command orchestration: =run=, =start=, =collect=, =status=, =list=, =publish=, and the bounded wait loop. |
-| [[file:scripts/src/herdr_subagents/smoke.clj][smoke.clj]] | Guarded live smoke. Never part of =bb test=. |
-| [[file:scripts/subagent][subagent]] | Bash launcher: resolves the real script directory, selects the repo =bb.edn= or a standalone =-Sdeps= classpath, exports the absolute launcher path. |
+| [[file:scripts/src/herdr_subagents/core.clj][core.clj]] | Pure protocol logic: roster/skill resolution, kind/model policy, retro policy, geometry, labels, and envelope render/parse/validation. |
+| [[file:scripts/src/herdr_subagents/herdr.clj][herdr.clj]] | Vector-argv Herdr adapter, JSON/error decoding, minimum-version check, and non-mutating capability preflight. |
+| [[file:scripts/src/herdr_subagents/ledger.clj][ledger.clj]] | Assignment-root resolution, atomic ledger writes, result-path allocation, and exclusive-create monotonic index allocation. |
+| [[file:scripts/src/herdr_subagents/cli.clj][cli.clj]] | Command orchestration, prompt composition, publication, capture, session backfill, ownership-scoped closure, and bounded waiting. |
+| [[file:scripts/src/herdr_subagents/smoke.clj][smoke.clj]] | Explicitly guarded billable integration smoke; never loaded by =bb test=. |
+| [[file:scripts/subagent][subagent]] | Bash launcher selecting repository =bb.edn= or the standalone =-Sdeps= path while preserving caller cwd. |
 
-* Invariants that must not regress
+* Review and maintenance notes
 
-Each of these was a real defect found in review. Changing the code without preserving them reintroduces a known failure.
+** Known regression boundaries
 
-- *The validated =RESULT= file is the only completion signal.* Not =agent read=, not terminal history, not a visible summary, not =agent_status=. An =idle= child with no valid result file has not finished.
-- *Check the result path immediately before and after every bounded wait*, for every outcome — settled, blocked, timeout, and structured Herdr error alike.
-- *The wait loop must sleep.* Without it, a settled-but-unpublished child spins at ~200 waits/second. The sleep is budget-capped so timeout is never overshot by a full interval.
-- *Pane closure is ownership-scoped.* Only =COMPLETE=/=FAILED=, only after capture, only when Herdr reports the child settled, and only when the ledger entry's =:parent-session= matches the caller. Identity that cannot be resolved counts as non-owning — capture proceeds and the pane is retained.
-- *Never =cd= in the launcher.* The CLI's own cwd is the caller's project: it becomes the child pane's =--cwd= and the =git rev-parse= probe behind the assignment root and project roster. A =cd= silently relocates all three.
-- *All =herdr= invocations pass argv as vectors.* No shell string interpolation anywhere in =src/= — task and prompt text is attacker-shaped by definition.
-- *No Maven dependencies.* Built-ins only (=babashka.process=, =babashka.fs=, =cheshire=) so the standalone =-Sdeps= fallback stays trivial.
+The regression suite names the important boundaries; preserve the tests rather than duplicating their mechanics here:
 
-* Maintenance
+- =bounded-poll-timeout-without-result= must fail if the wait-loop sleep is removed.
+- =launcher-matrix-selects-branch-and-preserves-cwd= must fail if launcher path canonicalisation or caller cwd preservation regresses.
+- result capture must precede ownership-scoped pane closure, and foreign/unresolvable parent identity must retain the pane.
+- retro tests must remain behavioural at prompt/CLI boundaries: frontmatter values are strings, value-less flags participate in two argv consumers, and optional annotations must not demote a valid result.
+- live-smoke helper assertions are unit-tested because the billable smoke is never part of the standard suite.
 
-** Herdr version coupling
+All =herdr= calls in =src/= must remain vector argv. Keep the standalone launcher dependency-free beyond Babashka built-ins. When Herdr changes, review =required-capabilities= and the fake fixture's help output together.
 
-=herdr.clj= preflights a minimum Herdr version *and* non-mutatingly inspects =--help= for every command and flag shape it depends on, before any state is created. Help text is therefore an upstream interface: the fake fixture pins the shapes consumed, so an upstream help-format change surfaces as a test failure rather than a runtime surprise. When Herdr changes, update =required-capabilities= and the fixture's =help()= together.
+** Test isolation caveat
 
-** Testing
+=SUBAGENT_ASSIGNMENT_ROOT= relocates project roster lookup and all assignment state into each fixture. The CLI tests symlink both the tracked roster and project =skills/= tree into that root. They also set =$HOME=, but Babashka's =System/getProperty("user.home")= comes from the JVM/OS property rather than the subprocess environment, so =$HOME= alone cannot hide the global roster or skill probes. Tests of the no-global-skill branch therefore belong at the pure =core= policy boundary unless the process property itself is controlled.
 
-=bb test= runs the whole suite with no agent launches. Three properties matter:
+A full =bb test= should create no entries under the repository's live =.agents/tmp/herdr-subagents/= tree. When mutation-testing assignment-root or launcher behavior, set an override and inspect that tree afterwards.
 
-- *Isolation.* =SUBAGENT_ASSIGNMENT_ROOT= redirects ledger, index markers, result paths, and project-roster lookup into a per-test temp directory. A full =bb test= must add *zero* files to the live =<git-root>/.agents/tmp/herdr-subagents/= tree — verify by counting before and after. Tests also point =HOME= at an empty directory and symlink the per-test project roster to the repo's tracked [[file:../../subagents/][subagents/]], so the suite works on a bare checkout with no Home Manager activation, exercises the real personas, and covers the project-roster-wins branch.
-- *Regression detection.* A test that cannot fail is worse than no test: an earlier pass shipped bounded-poll tests that passed whether or not the sleep existed, which is how the busy-wait regressed unnoticed. When adding a test for a fix, *revert the fix and confirm the test fails*. Known-good mutations: removing the =Thread/sleep= in =wait-and-capture!= fails =bounded-poll-timeout-without-result=; restoring the pre-fix launcher fails =launcher-matrix-selects-branch-and-preserves-cwd=.
-- *Launcher coverage.* =launcher_test.clj= uses a =PATH= shim that logs the real =bb= argv, so branch selection is asserted rather than inferred. Assertions must go through a *directory-symlinked* path — the in-repo path was always correct, so a repo-path assertion has no discriminating power against the class of defect this guards.
+** Reflexive changes
 
-Caveat: reverting the launcher for an experiment writes to the *live* ledger, because the assignment-root test deliberately unsets the override and the pre-fix launcher =cd=s into this repo. Set =SUBAGENT_ASSIGNMENT_ROOT= for such experiments, or re-check the live tree afterwards.
+A child editing =scripts/= is modifying the same launcher used by its own =publish= and the parent's =collect=. Before delegating such work, copy a known-good scripts tree outside this repository and give the child its launcher as a fallback. Put the snapshot where the launcher's repository-root walk cannot rediscover this checkout's =bb.edn=; otherwise the supposed snapshot loads working-tree source.
 
-To reproduce the overhead measurement, place a shim earlier in =PATH= that appends =$1 $2= to a tally file and then =exec=s the fixture, and run =subagent run= with =SUBAGENT_ASSIGNMENT_ROOT= pointed at a temp directory.
+Publication identity comes from injected =HERDR_SUBAGENT_*= variables rather than the ledger, so an isolated snapshot can publish the assigned result. Verify the fallback before relying on it.
 
-** Delegating changes to this CLI
+** Deployment and live smoke
 
-Work on the =subagent= CLI is reflexive: a child editing =scripts/= is editing the tool its own =publish= depends on, and the tool the parent's =collect= depends on. A half-applied edit can therefore strand a child that has finished its work — the parent blocks to timeout because the result file, the only completion signal, was never written.
+=agents.nix= deploys =~/.agents/skills= as a directory symlink. Launcher canonicalisation must therefore use physical paths when locating the repository configuration while retaining the absolute deployed launcher path injected into the child. Do not add a duplicate =.agents/subagents/= roster to this repository merely to make self-resolution look project-local; deployment already exposes the tracked roster globally.
 
-Before delegating such work, copy the known-good tree to an isolated path outside the repository and tell the child to fall back to it if =$HERDR_SUBAGENT_BIN publish= fails. =publish= takes its identity entirely from the injected =HERDR_SUBAGENT_*= environment variables and never consults the ledger, so a snapshot publishes correctly regardless of working-tree state. The parent can =collect= through the snapshot for the same reason.
+=bb smoke-subagent= is billable and guarded by =HERDR_ENV=1=, =SUBAGENT_LIVE_SMOKE=1=, and =SUBAGENT_LIVE_SMOKE_MODEL=. It calls =cli/execute= in-process and therefore cannot validate the Bash launcher. Launcher changes need a separate deployed-path smoke from a scratch project. The retrospective leg deliberately lets the child encounter an unannounced invalid command: announcing the trap turns it into a known one-off that the =retro= eligibility gate correctly rejects.
 
-Place the snapshot where the launcher's three-level repo-root walk will *not* find this repository's =bb.edn= — =/tmp/<name>/scripts/subagent= works, =<repo>/.agents/tmp/...= does not. From inside the repo the launcher selects the =bb.edn= branch and loads =skills/herdr-subagents/scripts/src=, so the "snapshot" silently runs working-tree code and guards nothing. Verify isolation by mutating the snapshot and confirming only the snapshot changes behaviour.
+* Known gaps
 
-Also brief the child to identify live ledger state by real pane id before any purge: its own assignment lives in the tree it may be asked to clean.
-
-** Live smoke
-
-=bb smoke-subagent= requires =HERDR_ENV=1=, =SUBAGENT_LIVE_SMOKE=1=, and an explicit model because it launches billable agents. It is never part of =bb test= or CI.
-
-It calls =cli/execute= in-process, so *it cannot validate the Bash launcher*. Any change to launcher path resolution, cwd handling, or branch selection needs a smoke that invokes the deployed launcher directly from a scratch git project outside this repo, asserting that the child's cwd, ledger, and =RESULT= all land in that project. One cheap child is sufficient.
-
-** Deployment
-
-=agents.nix= symlinks =~/.agents/skills= as a *directory* symlink into this repo, so the deployed launcher path is not physically canonical. Two consequences bite repeatedly:
-
-- A symlink loop that tests only the final path component never fires, and Bash's logical =pwd= preserves the un-canonicalised prefix. Any repo-root walk must use =cd -P=.
-- This repo keeps its roster at [[file:../../subagents/][subagents/]], *not* =.agents/subagents/=, so it presents no project roster to itself and resolves its own personas through the home symlink. Do not "fix" this by adding a second copy.
-
-** Known gaps
-
-- The MVP CLI handles one ephemeral child. Residents and =many= wave fan-out remain documentation-only policy in [[file:SKILL.md][SKILL.md]]; the ledger schema leaves room for them.
-- =HERDR_SUBAGENT_BIN= carries the *deployed* path rather than the canonicalised repo path. This is intentional (stable and absolute) but is asserted only in the launcher matrix.
-- =ot ready= cannot resolve blockers inside =#+IMPORT:=-linked plan files, so plan-internal dependencies report =[opaque]=. Pre-existing in org-tasks, unrelated to this skill, but it affects anyone executing the change-records referenced below.
+- The CLI implements one child per invocation. Resident lifecycle and fan-out waves remain parent policy in [[file:SKILL.md][SKILL.md]], not dedicated CLI commands.
+- =HERDR_SUBAGENT_BIN= intentionally carries the deployed absolute path rather than a canonical repository path; launcher-matrix coverage is its guard.
+- =ot ready= cannot resolve blockers inside =#+IMPORT:=-linked plan files, so plan-internal dependencies report =[opaque]=. This is an org-tasks limitation, not a delegation issue.
 
 * History
 
-- [[file:../../design/log/2026-07-22-harness-agnostic-subagents.org][2026-07-22]] — harness-agnostic roster and the =kind=/=model= resolution ladder.
+- [[file:../../design/log/2026-07-22-harness-agnostic-subagents.org][2026-07-22]] — harness-neutral roster and kind/model resolution.
 - [[file:../../design/log/2026-07-23-add-hierarchical-pane-labels-to-herdr-su.org][2026-07-23]] — hierarchical pane labels.
-- [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24]] — the =subagent= CLI, plus two remediation passes driven by implementation review. Its =** Decisions= and =** Gotchas= sections are the fullest record of *why* the code looks the way it does, including fixes that look plausible but are wrong.
+- [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24]] — delegation CLI and implementation-review remediations.
+- [[file:../../design/log/2026-07-27-subagent-retrospectives.org][2026-07-27]] — optional child retrospectives, process annotations, and child-session recording.
