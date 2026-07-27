@@ -321,27 +321,6 @@ Origin:
 Evidence:
 Both `ot spec list --format json` and `ot doctor --format json` failed in `org-tasks.commands.spec` at `fs/path` while processing `node_modules/@esbuild/linux-x64/bin/` during validation of the Herdr subagent migration plan. Other task parsing and metadata/link checks succeeded.
 
-** TODO subagent: composed child prompt never mentions BLOCKED/FAILED :skill_herdr-subagents:
-:PROPERTIES:
-:CUSTOM_ID: 0365cc41-17f1-4ea6-8919-4dedb1ae4f3a
-:CREATED: [2026-07-27 Mon 13:20]
-:END:
-:LOGBOOK:
-- Created [2026-07-27 Mon 13:20]
-:END:
-The invariant prompt composed by `prompt-text` (skills/herdr-subagents/scripts/src/herdr_subagents/cli.clj) hard-codes `publish --status COMPLETE` and says nothing about `BLOCKED` or `FAILED`. A child that cannot finish therefore has no instruction to report partial work, and the documented failure mode is silence: the parent blocks for the full budget and reports `pending`/`timeout` for an assignment that actually progressed.
-
-Desired outcome: the composed prompt states that on unrecoverable failure or a blocking dependency the child must publish `BLOCKED`/`FAILED` with an accurate partial account rather than stopping, while keeping publication exactly-once and the result file the sole completion signal.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-07-27 Mon 13:19]
-- sender: agent
-
-Evidence:
-A claude-opus-5 worker hit an Anthropic `overloaded_error` (retry failed after 3 attempts) mid-assignment, stopped, and published nothing; Herdr reported it `done`. The parent`s blocking collect ran to its 40-minute budget and returned `pending`/`timeout` even though three of six plan tasks were complete on disk. Recovery required diagnosing via `agent read`, verifying the working tree by hand, and re-prompting with an explicit instruction to publish BLOCKED on a repeat failure - guidance the CLI should have supplied.
-
 ** TODO ot: add unarchive as the inverse of ot archive :skill_org-tasks:
 :PROPERTIES:
 :CUSTOM_ID: 9e9cdd26-1188-4031-b25d-a76ac6e97c9d

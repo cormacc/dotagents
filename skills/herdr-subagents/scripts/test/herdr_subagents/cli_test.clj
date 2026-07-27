@@ -139,6 +139,21 @@
         proc (call! (merge env {"HERDR_SUBAGENT_CHILD" "child" "HERDR_SUBAGENT_TASK" "task" "HERDR_SUBAGENT_RESULT" target "HERDR_SUBAGENT_WAITING_POLICY" "non-blocking"}) "publish" "--status" "COMPLETE" "--summary" "done")]
     (is (zero? (:exit proc))) (is (fs/exists? target))))
 
+;; The failure-publication instruction is invariant across personas: without it a child
+;; that cannot finish stops silently and the parent blocks to its full budget
+;; (task 0365cc41). It must name both non-COMPLETE statuses, carry the unrecoverable/
+;; blocking-dependency bar, and forbid silence and re-publication after recovery.
+(deftest failure-publication-instruction-is-invariant
+  (let [{:keys [env]} (fake-env {})
+        prompt-of (fn [persona] (:out (call! env "run" persona "--task" "x" "--print-prompt")))]
+    (doseq [persona ["worker" "scout" "researcher" "planner"]]
+      (let [out (prompt-of persona)]
+        (is (str/includes? out "`--status BLOCKED` (dependency)") persona)
+        (is (str/includes? out "`--status FAILED` (unrecoverable)") persona)
+        (is (str/includes? out "unrecoverable failure after reasonable retries") persona)
+        (is (str/includes? out "summarising work completed vs remaining") persona)
+        (is (str/includes? out "never stop silently or publish a second envelope after recovering") persona)))))
+
 ;; Behavioural gate, not a file-content assertion: frontmatter values are strings, so a
 ;; `retro: false` that was never coerced would still gate the persona *in* and only a
 ;; prompt-level check catches it.

@@ -1266,3 +1266,36 @@ Open questions for planning:
 - Opt-in or default? Retro on every delegation is a real token cost on cheap scouts.
 
 Evidence: in the 2026-07-27 remediation the worker surfaced durable caveats (reverting the launcher writes to the live ledger; fake-Herdr wall-time floor of ~0.73 s per test) that survived only because it happened to write a long report artifact. Its misdiagnosis of the `ot ready` defect also reached this repo's task memory before being caught, which is the same channel viewed from the other side. Related: [[plan:2026-07-24-herdr-subagent-skill-scripts.org]]; skills/herdr-subagents/SKILL.md section "Trusting a result".
+
+** DONE subagent: composed child prompt never mentions BLOCKED/FAILED :skill_herdr-subagents:
+CLOSED: [2026-07-27 Mon 17:18]
+:PROPERTIES:
+:CUSTOM_ID: 0365cc41-17f1-4ea6-8919-4dedb1ae4f3a
+:CREATED: [2026-07-27 Mon 13:20]
+:STARTED: [2026-07-27 Mon 17:15]
+:ARCHIVED: [2026-07-27 Mon 17:18]
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 13:20]
+- State "STARTED" from "TODO" [2026-07-27 Mon 17:15]
+- State "DONE" from "STARTED" [2026-07-27 Mon 17:18]
+:END:
+The invariant prompt composed by `prompt-text` (skills/herdr-subagents/scripts/src/herdr_subagents/cli.clj) hard-codes `publish --status COMPLETE` and says nothing about `BLOCKED` or `FAILED`. A child that cannot finish therefore has no instruction to report partial work, and the documented failure mode is silence: the parent blocks for the full budget and reports `pending`/`timeout` for an assignment that actually progressed.
+
+Desired outcome: the composed prompt states that on unrecoverable failure or a blocking dependency the child must publish `BLOCKED`/`FAILED` with an accurate partial account rather than stopping, while keeping publication exactly-once and the result file the sole completion signal.
+
+Agreed plan (compressed session, documented inline per user request — no separate change-record):
+- Approach: append one sentence to the publish instruction in `prompt-text` (`skills/herdr-subagents/scripts/src/herdr_subagents/cli.clj`) — on unrecoverable failure after reasonable retries or a genuine blocking dependency, publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising completed vs remaining work; never stop silently or publish a second envelope after recovering. Rejected: separate per-status paragraph (prompt-bloat tax per spawn); parent-side-docs-only fix (does not reach the child).
+- Acceptance: composed prompt for all personas names `BLOCKED` and `FAILED` with the unrecoverable/blocking-dependency bar; states partial-account and no-re-publish-after-recovery; added prompt text ≤2 lines; fake-env `--print-prompt` unit assertions pass (`cli_test.clj`, same pattern as `retro-gating-is-resolved-and-recorded`); `scripts/docs/contract.md` and `SKILL.md` gain one sentence each defining BLOCKED (dependency, pane retained, resumable) vs FAILED (unrecoverable, closable) semantics so parents expect partial accounts.
+- Anti-criteria: no change to envelope grammar, publish mechanics, wait/capture behaviour, or the live smoke.
+
+Shipped: one invariant sentence appended to the publish instruction in `prompt-text` (cli.clj); `failure-publication-instruction-is-invariant` in cli_test.clj asserts BLOCKED/FAILED naming, the unrecoverable-after-retries bar, partial-account, and no-re-publish across worker/scout/researcher/planner via fake-env `--print-prompt`; MODIFIED `scripts/docs/contract.md` (§ Ledger and completion) and `SKILL.md` (§ Completion and pane safety) with matching BLOCKED-vs-FAILED semantics. `bb test`: 267 tests, 1129 assertions, 0 failures. All anti-criteria held — src diff touches `prompt-text` only.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-07-27 Mon 13:19]
+- sender: agent
+
+Evidence:
+A claude-opus-5 worker hit an Anthropic `overloaded_error` (retry failed after 3 attempts) mid-assignment, stopped, and published nothing; Herdr reported it `done`. The parent`s blocking collect ran to its 40-minute budget and returned `pending`/`timeout` even though three of six plan tasks were complete on disk. Recovery required diagnosing via `agent read`, verifying the working tree by hand, and re-prompting with an explicit instruction to publish BLOCKED on a repeat failure - guidance the CLI should have supplied.

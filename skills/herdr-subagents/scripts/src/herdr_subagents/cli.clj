@@ -72,6 +72,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
   (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
        (delegation-guidance persona) " Herdr assigned TASK=" task " and RESULT=" result ". "
        "When finished, publish exactly once with `$HERDR_SUBAGENT_BIN publish --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
+       "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
        "The waiting policy is " waiting-policy "."
        (retro-instruction retro-skill)
        (when prompt-extra (str "\nAdditional constraints: " prompt-extra))))

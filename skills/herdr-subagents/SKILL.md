@@ -48,6 +48,8 @@ The validated parent-chosen `RESULT` file is the only completion signal. Never t
 "$HERDR_SUBAGENT_BIN" publish --status COMPLETE --summary 'Concise result.'
 ```
 
+A child that cannot finish is instructed to publish once with `BLOCKED` (genuine blocking dependency, resumable) or `FAILED` (unrecoverable after reasonable retries) carrying a partial account of completed vs remaining work — read that summary before re-prompting or respawning.
+
 `BLOCKED` retains its pane. `COMPLETE`/`FAILED` permit closing only a pane this parent created, after required artifacts are captured and Herdr reports the child settled. Never close user/other-agent panes, kill a parent, or stop the Herdr server. A different parent session may collect and validate an assignment but must retain its pane.
 
 Use caller context or explicit IDs, `--no-focus`, and response IDs—not focused UI state. Labels never contain a workspace name and never replace unique agent names. Nested planner labels depend on the spawning agent's injected `HERDR_SUBAGENT_PERSONA`; a planner started outside `subagent` has no nested-label identity unless that variable is set.
