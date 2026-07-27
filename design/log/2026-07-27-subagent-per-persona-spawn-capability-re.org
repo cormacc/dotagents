@@ -1,0 +1,178 @@
+#+TITLE: subagent: per-persona spawn capability replacing the planner-only exception :skill_herdr-subagents:
+#+DATE: 2026-07-27 Mon
+#+PARENT: [[task:a9d156ff-6f12-433c-9bef-3ec571e36c42][subagent: per-persona spawn capability replacing the planner-only exception :skill_herdr-subagents:]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-subagents/scripts/docs/contract.md]]
+#+SPEC: [[proj:subagents/planner.md]]
+#+SPEC: [[proj:subagents/worker.md]]
+
+* Intent
+
+Replace the hard-coded planner-only delegation exception with declared per-persona spawn capability: a `spawns:` frontmatter allow-list resolved at spawn time (flag > frontmatter > default deny), injected into the child, and enforced mechanically by the CLI. One nesting level absolutely — anything spawned below the root is a leaf — and below-root spawns stay blocking and one-at-a-time.
+
+* Summary
+
+*Level:* MVP · *Tests:* thorough · *Docs:* SKILL/contract/README
+
+** Scope
+*** In scope
+- `spawns:` persona frontmatter parsing, validation, and precedence resolution (`--spawns` flag > frontmatter > default deny).
+- Mechanical capability and depth-bound enforcement at `run`/`start` via injected `HERDR_SUBAGENT_SPAWNS`.
+- Generalised `delegation-guidance` prompt composition and nested pane labels for any spawning persona.
+- Ledger `:spawns` / `:spawns-source` fields and `--print-prompt` reporting.
+- Roster grants for `planner` and `worker`; SKILL.md leaf-rule rewrite; contract.md spawn-gating section; CLI usage text.
+*** Out of scope
+- Below-root parallel fan-out, waves-of-two below root, or any cardinality relaxation (root privilege unchanged).
+- A `review-lead` / synthesising-reviewer persona (parked follow-up).
+- Mechanical enforcement of below-root one-at-a-time cardinality (stays prompt/doctrine strength).
+- Envelope format, retro gating semantics, resident lifecycle, Herdr changes, or the vendored upstream Herdr skill.
+- New live smoke legs.
+
+** Acceptance
+*** Core functionality
+- [ ] A persona frontmatter `spawns:` line resolves to a spawn allow-list; absent or blank means leaf (today's default).
+- [ ] Spawn policy resolves with precedence `--spawns` flag > frontmatter > default deny.
+- [ ] The resolved policy and its source are recorded on the ledger entry as `:spawns` and `:spawns-source` (`flag` / `frontmatter` / `default` / `depth`).
+- [ ] `--spawns` is value-bearing and excluded from the `boolean-flags` set; `--spawns none` forces leaf.
+- [ ] An unresolvable persona name in an explicit `--spawns` fails fast at spawn.
+- [ ] An unresolvable persona name in frontmatter `spawns:` fails fast at spawn of the declaring persona.
+- [ ] `delegation-guidance` composes from the resolved policy: spawning personas get the allowed-persona sentence, empty policy gets the leaf sentence.
+- [ ] The planner's composed guidance remains byte-identical to today's text (existing pinned test stays green unmodified).
+- [ ] The resolved policy is injected into the child pane as `HERDR_SUBAGENT_SPAWNS`.
+- [ ] Below root (own `HERDR_SUBAGENT_PERSONA` set), `run`/`start` refuses a target persona absent from its own `HERDR_SUBAGENT_SPAWNS` with a policy-shaped error.
+- [ ] Any spawn performed below root injects an empty `HERDR_SUBAGENT_SPAWNS` and composes leaf guidance regardless of the grandchild persona's frontmatter.
+- [ ] A below-root spawn passing explicit `--spawns` with any value other than `none` fails fast.
+- [ ] Nested labels compose for any spawning persona (`worker-2/scout-1[-model]`), gated on the spawner's `HERDR_SUBAGENT_PERSONA`.
+- [ ] `planner.md` and `worker.md` declare `spawns: scout researcher`; `reviewer`, `scout`, `researcher` declare nothing.
+- [ ] `--print-prompt` reports the resolved `:spawns` and `:spawns-source` alongside the composed prompt.
+- [ ] SKILL.md states the capability-based leaf rule, the absolute depth bound, and the below-root blocking/one-at-a-time/ephemeral discipline.
+- [ ] contract.md gains a "Spawn gating" section, a `HERDR_SUBAGENT_SPAWNS` environment-table row, and a persona-generic labels section.
+- [ ] CLI usage/`--help` names `--spawns` and its `none` literal.
+*** Edge cases
+- [ ] Blank and missing `HERDR_SUBAGENT_SPAWNS` both deny below root; the empty-string/unset distinction is never load-bearing.
+- [ ] A present-but-blank frontmatter `spawns:` value means leaf, not an error.
+- [ ] List parsing accepts whitespace and/or comma separation and dedupes.
+- [ ] A refused below-root spawn writes no ledger entry and performs no pane mutation.
+- [ ] A root CLI (no `HERDR_SUBAGENT_PERSONA`) remains unrestricted in what it may spawn.
+*** Anti-criteria
+- [ ] Must not: permit more than one nesting level under any flag/frontmatter combination.
+- [ ] Must not: relax below-root cardinality or grant waves-of-two below the root.
+- [ ] Must not: make pane labels load-bearing for capability or depth enforcement.
+- [ ] Must not: change envelope markers/format, retro gating behaviour, or the vendored upstream Herdr skill.
+- [ ] Must not: add a live smoke leg or make `bb test` billable.
+
+** Decisions
+- Resolve-then-inject, mirroring retro gating :: the parent resolves policy once at spawn (flag > frontmatter > default deny), records it, and injects it; the child CLI enforces from its own env at `run`/`start`, before preflight, ledger allocation, and pane mutation.
+  Rejected:
+  - Prompt-only enforcement (current planner strength): spawn failure modes are billable and pane-creating; a mechanical check is one env read.
+  - Child self-resolution from the roster at invocation: cannot carry a per-spawn flag override, and mid-flight roster edits would change a live child's capability.
+- Default deny :: capability is declared per persona in the roster, visible and auditable.
+  Rejected:
+  - Default-allow: billable/pane-creating failure modes, and grandchild findings reach the root through two layers of testimony (SKILL.md § Trusting a result).
+- Depth bound via forced-empty injection :: any below-root spawn injects `HERDR_SUBAGENT_SPAWNS=""` and leaf guidance; no depth counter.
+  Rejected:
+  - A depth-counter env var: more state for the same one-level result.
+  - Label-slash inference (a child reading its own pane label): labels are operator-mutable display metadata, manual starts under-report nesting, and the label never carries information the injected env lacks. `nested-prefix`'s anchored-regex throw remains an undesigned backstop only.
+- Single value-bearing `--spawns` with literal `none` :: one flag covers grant and deny overrides.
+  Rejected:
+  - A `--no-spawn` boolean: couples into the shared `boolean-flags`/`help-request?` set for no expressiveness gain.
+  - Frontmatter-only (no flag): the motivating cases are one-off grants (a worker needing a scout this time) that should not require roster edits.
+- Fail fast on unresolvable persona names in both flag and frontmatter :: mirrors the `retro:` invalid-value precedent; a typo silently degrading to leaf surfaces as a confusing refusal deep in a delegation.
+- Roster grants: `planner` and `worker`; `reviewer` stays a leaf :: worker factual gaps are the strongest motivating case; a reviewer needing a repro scout is a one-off `--spawns scout` until it recurs.
+  Rejected:
+  - `spawns: reviewer` for a synthesising lead reviewer: requires below-root parallel fan-out (a separate constitution change), adds a lossy trust hop on exactly the findings the root must verify against source, strands grandchild panes owned by a dead lead, and a self-referential grant changes every ordinary reviewer's composed guidance. Parked as follow-up.
+
+** Gotchas
+- `ot doctor` / `ot spec list` currently crash repo-wide (`InvalidPathException`, NUL in extracted link path): the spec link-closure traversal reads binary `node_modules` content reachable from spec roots. Pre-existing `ot` defect, exposed here because this record's `[[proj:skills/herdr-subagents/SKILL.md]]` SPEC line plus non-empty `* Plan` pulls the crashing subtree into doctor's declared-spec closure. Fix task already filed; do not run `ot doctor` for validation until it lands. All four SPEC declarations are kept — they are correct; the tool is at fault.
+
+** Risks
+- Roster edits gain blast radius: a `spawns:` typo fails every spawn of that persona, not just delegation. Accepted — loud beats silent-leaf, consistent with `retro:` fail-fast.
+- Below-root one-at-a-time remains prompt-strength; a rogue child could run two sequential-capability children concurrently. Accepted — same strength as today's planner rule; the ledger records everything.
+- Worker sessions gain a new cost/latency path (delegation). Intended — this is the motivation; guidance wording stays conditional on a blocking factual gap.
+- Legacy ledger entries lack `:spawns` fields. Accepted — readers already nil-tolerate (retro fields shipped identically).
+
+** Follow-ups
+- Parallel review below root via a dedicated `review-lead` persona (`spawns: reviewer`) plus an explicit below-root cardinality relaxation — only if demand materialises; see rejected decision above.
+
+* Plan
+
+** TODO core.clj: spawn-policy parsing and resolution
+:PROPERTIES:
+:CUSTOM_ID: 73e8553f-c505-4386-85c9-45ba3b139a28
+:CREATED: [2026-07-27 Mon 18:05]
+:END:
+Acceptance criteria:
+- A `spawns:` frontmatter value splits on `[,\s]+`, dedupes, and preserves declaration order.
+- Absent key and present-but-blank value both resolve to the empty (leaf) policy without error.
+- `resolve-spawns` applies precedence flag > frontmatter > default deny and returns `{:spawns [...] :spawns-source "flag"|"frontmatter"|"default"}`.
+- The literal flag value `none` resolves to the empty policy with source `flag`.
+- An unresolvable persona name (roster lookup fn returns nil) fails fast naming the persona, the offending name, and the source.
+- All of the above covered by pure-fn tests in `core_test.clj`.
+
+Model on `resolve-retro` / `frontmatter-boolean` in `skills/herdr-subagents/scripts/src/herdr_subagents/core.clj` — take the roster-resolution capability as an injected fn (like `roster-path`'s `exists?`) so the fn stays pure.
+
+** TODO cli.clj: mechanical enforcement, env injection, flag and ledger plumbing
+:PROPERTIES:
+:CUSTOM_ID: d95e74e8-acde-4d32-a819-4d2c3cc65145
+:BLOCKED-BY: task:73e8553f-c505-4386-85c9-45ba3b139a28
+:CREATED: [2026-07-27 Mon 18:05]
+:END:
+Acceptance criteria:
+- `run`/`start` invoked with own `HERDR_SUBAGENT_PERSONA` set refuse a target persona absent from own `HERDR_SUBAGENT_SPAWNS`, before `herdr/preflight!`, ledger allocation, and any pane mutation.
+- Blank and missing `HERDR_SUBAGENT_SPAWNS` both deny below root.
+- A below-root spawn passing explicit `--spawns` with any value other than `none` fails fast.
+- The child env map includes `HERDR_SUBAGENT_SPAWNS` holding the space-joined resolved policy; below root the injected value is always empty regardless of the child persona's frontmatter.
+- `--spawns` is value-bearing and not added to `boolean-flags` (`help-request?` consumption stays in sync automatically).
+- The ledger entry records `:spawns` and `:spawns-source`, with source `depth` for a below-root forced-empty policy.
+- `--print-prompt` reports `:spawns` and `:spawns-source` alongside the composed prompt.
+- Usage string and `--help` name `--spawns` and the `none` literal.
+
+Refusal check goes at the top of `spawn!` (`skills/herdr-subagents/scripts/src/herdr_subagents/cli.clj`), mirroring where `retro-policy` threads through `preview!`/`spawn!` and onto the entry map.
+
+** TODO Generalise delegation-guidance and nested labels
+:PROPERTIES:
+:CUSTOM_ID: 71bb8ebf-018b-45dc-97e5-f5e0b83ea79b
+:BLOCKED-BY: task:73e8553f-c505-4386-85c9-45ba3b139a28
+:CREATED: [2026-07-27 Mon 18:05]
+:END:
+Acceptance criteria:
+- `delegation-guidance` takes the resolved policy: non-empty renders the allowed-persona sentence (list joined with " or ", capability conditional on a blocking factual gap), empty renders the leaf sentence.
+- The planner guidance assertion at `scripts/test/herdr_subagents/core_test.clj:67-72` passes unmodified (byte-identical text).
+- `spawn!` passes the parent label to `core/child-label` whenever its own `HERDR_SUBAGENT_PERSONA` is set, with `:parent-persona` taken from that env value (no `"planner"` literals remain in the label path).
+- A worker-spawned scout composes label `worker-<n>/scout-<m>[-model]` (unit test).
+- `nested-prefix` itself is unchanged; a test pins that a nested parent label (`planner-1/scout-2-…`) still throws, documenting it as backstop, not enforcement.
+
+** TODO Roster and documentation: SKILL.md, contract.md, planner.md, worker.md, READMEs
+:PROPERTIES:
+:CUSTOM_ID: 50b1934a-13e5-48e0-a623-5bd2755df7d4
+:BLOCKED-BY: task:d95e74e8-acde-4d32-a819-4d2c3cc65145
+:BLOCKED-BY+: task:71bb8ebf-018b-45dc-97e5-f5e0b83ea79b
+:CREATED: [2026-07-27 Mon 18:05]
+:END:
+Acceptance criteria:
+- `subagents/planner.md` and `subagents/worker.md` declare `spawns: scout researcher`; no other roster file gains the key.
+- `worker.md` body gains a delegation paragraph consistent with its new capability (blocking, one-at-a-time, ephemeral, leaf child); `planner.md`'s existing delegation section stays consistent with its frontmatter.
+- `skills/herdr-subagents/SKILL.md` replaces the planner-only exception with the capability-based leaf rule, the absolute one-level depth bound, and the below-root blocking/one-at-a-time/ephemeral discipline; waves-of-two remain root-only.
+- `scripts/docs/contract.md` gains a "Spawn gating" section mirroring "Retro gating" (precedence, fail-fast cases, ledger fields, depth rule), a `HERDR_SUBAGENT_SPAWNS` row in the environment table, and a persona-generic labels section.
+- `HERDR_SUBAGENT_PERSONA`'s environment-table row drops its planner-specific labelling claim.
+- `scripts/README.md` and `skills/herdr-subagents/README.org` reflect the new policy surface where they currently describe the planner exception or retro-only gating.
+
+** TODO Fake-Herdr integration coverage and smoke audit
+:PROPERTIES:
+:CUSTOM_ID: 909f79f9-c107-452d-bcdf-f7d3447063b0
+:BLOCKED-BY: task:d95e74e8-acde-4d32-a819-4d2c3cc65145
+:BLOCKED-BY+: task:71bb8ebf-018b-45dc-97e5-f5e0b83ea79b
+:CREATED: [2026-07-27 Mon 18:05]
+:END:
+Acceptance criteria:
+- Fake-env test: a below-root spawn of a disallowed persona returns the policy error, writes no ledger entry, and issues no Herdr process calls.
+- Fake-env test: a permitted below-root spawn (worker→scout) injects empty grandchild `HERDR_SUBAGENT_SPAWNS`, composes leaf guidance, and applies the `worker-<n>/scout-<m>` label.
+- Fake-env test: root spawn of worker records `:spawns ["scout" "researcher"] :spawns-source "frontmatter"` on the ledger and injects the joined value.
+- Fake-env test: `--spawns none` at root yields leaf guidance and empty injection for a persona whose frontmatter grants capability.
+- `smoke.clj` audited for planner-only guidance/label assumptions; assertions updated only where the worker's new composed guidance changes pinned text. No new live smoke leg; `bb test` passes.
+
+Follow the fake-process patterns in `scripts/test/herdr_subagents/cli_test.clj` (see the nested planner label test at cli_test.clj:69-79).
+
+* Implementation
