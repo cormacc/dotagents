@@ -218,6 +218,10 @@ Wait for any spawned subagent before continuing the section. Fold findings into 
 
 Extend the current task/record when the original intent still holds and most of the new scope overlaps the current plan. Spawn a new task/record when the intent changes, scope explodes, the original work is independently completable, or the follow-on would force unrelated contract/spec impacts into one record. Rule of thumb: update for unchanged intent + majority overlap; new change for changed intent, separable delivery, or a new durable domain.
 
+### Trivial changes: inline plan
+
+For a trivial single-task change — one or two files, a one-sentence design, easy rollback — the user may opt out of a change-record: document the agreed approach, acceptance bullets, and anti-criteria inline in the TASKS.org task body and implement directly. This is a deliberate, scoped exception to keeping TASKS.org high-level; a few bullets only. Create a record as usual whenever decisions, validation evidence, or multiple plan tasks need a durable home.
+
 ### YAGNI
 
 Stop planning once the plan is actionable. A 40-item ISC for a prototype is over-spec; a `** Decisions` list that pre-commits to extension points no one has asked for is gold-plating. Trim ruthlessly.

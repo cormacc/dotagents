@@ -77,6 +77,11 @@ uses a real Clojure reader (edamame), parinfer-rust, and cljfmt, so the output
 is also formatted. `clojure_paren_repair` (JS parinfer) is for string repair
 before writing a new file. Never hand-fix delimiter errors.
 
+After structural edits that move or delete forms, run a balance check
+(`clj-paren-repair` on the file, or `clojure_paren_repair` with `check`)
+*before* running the test suite — a dropped delimiter otherwise surfaces as a
+confusing whole-suite parse failure.
+
 See [references/tool-guide.md](references/tool-guide.md) for parameters,
 session persistence, the `clj-nrepl-eval --connected-ports` listing, and
 troubleshooting.
@@ -93,6 +98,9 @@ short list:
 - Docstrings on public functions describing args, return, and at least one
   example.
 - `(set! *warn-on-reflection* true)` in JVM namespaces that interop with Java.
+- Babashka resolves `user.home` from the OS user database, not `$HOME`: in bb
+  subprocess tests, never rely on a `$HOME` override to isolate
+  home-directory probes — inject an explicit root/path override instead.
 
 See [references/idioms.md](references/idioms.md) for threading-macro,
 control-flow, data-structure, error-handling, testing, and anti-pattern

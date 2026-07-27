@@ -4,7 +4,7 @@
 
 ## Run
 
-From this checkout:
+From the repository root (the repo `bb.edn` provides the `test` task; `bb test` fails from `scripts/`):
 
 ```sh
 ./skills/herdr-subagents/scripts/subagent --help

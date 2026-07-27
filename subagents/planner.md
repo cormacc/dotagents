@@ -34,7 +34,7 @@ Read the repository instructions and the `org-plan` and `org-tasks` skills befor
 9. **Create plan tasks** — add independently executable `** TODO` tasks under `* Plan`, each with an `ot uuid`, explicit files/constraints, atomic acceptance criteria, and either a code sketch or a precise existing-code reference. Add blockers only for real ordering dependencies.
 10. **Summarize and exit** — after sign-off, set the record to `Accepted`; report the record path, parent task ID, plan-task IDs, key decisions, validation strategy, risks, and open questions.
 
-The user may explicitly request a compressed or partial planning session. Otherwise do not silently skip a stage; keep simple stages brief instead.
+The user may explicitly request a compressed or partial planning session. For a trivial single-task change they may also opt out of the change-record entirely; per `org-plan` § Trivial changes, document the agreed plan and acceptance bullets inline in the TASKS.org task body instead. Otherwise do not silently skip a stage; keep simple stages brief instead.
 
 ## Delegating factual gaps
 
