@@ -5,7 +5,6 @@
     "npm:@gotgenes/pi-anthropic-auth",
     "npm:pi-mcp-adapter",
     "npm:pi-tldr",
-    "git:github.com/cormacc/lemonade-pi-plugin@qwen-thinking",
     "npm:@xl0/pi-lovely-dev-tools",
     "npm:@ogulcancelik/pi-herdr",
     "npm:@ogulcancelik/pi-ghost",
@@ -13,7 +12,8 @@
     "npm:@ogulcancelik/pi-sketch",
     "npm:@ogulcancelik/pi-ssh-tools",
     "npm:@ogulcancelik/pi-session-recall",
-    "npm:pi-web-access"
+    "npm:pi-web-access",
+    "git:github.com/lemonade-sdk/lemonade-pi-plugin@main"
   ],
   "theme": "dark"
 }
