@@ -4,6 +4,8 @@
   documentation.
 - When asked a question, just answer the question -- don't start coding.
   Use tools and write scripts only to obtain additional required information.
+- When a matched skill owns a domain, read it before issuing exploratory
+  commands in that domain -- don't parallelise the skill load with domain probes.
 
 # Subagents
 - Reusable subagent definitions live in `~/.agents/subagents/` (global) and `<git-root>/.agents/subagents/` (project). To delegate work inside Herdr, use the `herdr-subagents` skill.

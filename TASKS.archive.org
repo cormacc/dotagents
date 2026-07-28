@@ -1388,3 +1388,28 @@ Unlike typical clojure / clojurescript projects with a build watch / persistent 
 When developing a babashka script, the clojure skill should be able to spawn an nrepl-server in a new herdr tab within the current workspace for code evaluation.
 The command is `bb nrepl-server`.
 Update the clojure skill accordingly. Consider whether babashka specifics should be included as a resource for gradual discovery rather than in the top-level skill. We tend to use babashka tasks in most clojure/clojurescript projects, so factor that in to the decision.
+
+** DONE ot: add safe move/reparent for existing task subtrees :skill_org-tasks:
+CLOSED: [2026-07-28 Tue 17:50]
+:PROPERTIES:
+:CUSTOM_ID: 2a2f5aed-068f-4ce1-ac20-1395ebb64986
+:CREATED: [2026-07-28 Tue 11:46]
+:STARTED: [2026-07-28 Tue 17:19]
+:ARCHIVED: [2026-07-28 Tue 17:50]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-07-28 Tue 11:46]
+- State "STARTED" from "TODO" [2026-07-28 Tue 17:19]
+- State "DONE" from "STARTED" [2026-07-28 Tue 17:50]
+:END:
+Add a first-class command for moving an existing task subtree under a different parent or back to a top-level section while preserving :CUSTOM_ID:, lifecycle metadata, descendants, body content, source locality, and change-record graph integrity. The command should preflight ambiguous IDs and invalid destinations, avoid duplicate writable nodes, support dry-run, and provide round-trip regression coverage.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-07-28 Tue 11:46]
+- sender: agent
+
+Evidence:
+Grouping five existing org-tasks items under a new housekeeping parent required a custom structural script because ot create can place new tasks but the CLI has no move/reparent operation. A newline-preservation bug in that workaround joined headings to property drawers and triggered metadata repair; the changes had to be reverted through Git and repeated.

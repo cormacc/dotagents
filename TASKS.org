@@ -190,6 +190,29 @@ Desired outcome: per-harness lookup tables in the herdr-subagents skill mapping 
 
 Origin: mid-implementation discovery that 10c7990 (kindless roster) made every roster `model:` line inert — kind-inheriting spawns resolved model nil and children silently ran on the harness default.
 
+** TODO subagent: implement the advisor strategy  :skill_herdr-subagents:
+:PROPERTIES:
+:CUSTOM_ID: 2ad05ea8-cf75-4d0c-82c8-d23b890a3985
+:CREATED: [2026-07-28 Tue 17:32]
+:END:
+:LOGBOOK:
+- Created [2026-07-28 Tue 17:32]
+:END:
+Anthropic recommend using a cheap model to execute, but consult with a frontier model advisor to retain quality at lower cost.
+Update the subagent skill and/or personas as appropriate to accomodate this.
+Evaluate the use of persistent vs ephemeral advisor subagents, and whether a persistent advisor should be owned by the orchestrator / provided by reference to subagents at spawn time, or whether subagents should own their advisors.
+
+Anthropic implement it as an API feature, however we want to implement it on the harness side as a skill (or extension to the existing herdr-subagents skill)
+
+
+Write-ups
+- https://osher.com.au/blog/the-advisor-strategy-frontier-model-reasoning-at-a-fraction-of-the-cost/
+- https://fireworks.ai/blog/frontier-open-source-worker-with-closed-source-advisor
+- https://decodethefuture.org/en/anthropic-advisor-strategy-explained/
+
+Prior art / implementations
+- https://github.com/aivsomkar/advisor-strategy-skill
+
 ** TODO ot move: TUI/pi-overlay exposure and --before/--after ordering
 :PROPERTIES:
 :CUSTOM_ID: da7350ac-60c6-4336-9b7e-e0cbce51658c
@@ -328,29 +351,6 @@ Origin:
 
 Evidence:
 A single ot status --format json transition on the org-tasks housekeeping change-record emitted roughly 50KB because sourceContent and effectiveSourceContent both contained the full record; the same friction was independently reported by the planner and worker subagents.
-
-** DONE ot: add safe move/reparent for existing task subtrees :skill_org-tasks:
-CLOSED: [2026-07-28 Tue 17:50]
-:PROPERTIES:
-:CUSTOM_ID: 2a2f5aed-068f-4ce1-ac20-1395ebb64986
-:CREATED: [2026-07-28 Tue 11:46]
-:STARTED: [2026-07-28 Tue 17:19]
-:END:
-:LOGBOOK:
-- Created [2026-07-28 Tue 11:46]
-- State "STARTED" from "TODO" [2026-07-28 Tue 17:19]
-- State "DONE" from "STARTED" [2026-07-28 Tue 17:50]
-:END:
-Add a first-class command for moving an existing task subtree under a different parent or back to a top-level section while preserving :CUSTOM_ID:, lifecycle metadata, descendants, body content, source locality, and change-record graph integrity. The command should preflight ambiguous IDs and invalid destinations, avoid duplicate writable nodes, support dry-run, and provide round-trip regression coverage.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-07-28 Tue 11:46]
-- sender: agent
-
-Evidence:
-Grouping five existing org-tasks items under a new housekeeping parent required a custom structural script because ot create can place new tasks but the CLI has no move/reparent operation. A newline-preservation bug in that workaround joined headings to property drawers and triggered metadata repair; the changes had to be reverted through Git and repeated.
 
 ** TODO org-plan: prefer symbol-name + quoted anchor over bare file:line in change-record test citations :skill_org-plan:
 :PROPERTIES:

@@ -15,6 +15,17 @@ map: [`docs/DESIGN.org`](docs/DESIGN.org). Doc ownership:
   envelopes are now golden-tested).
 - **Round-trip fidelity.** `test/fixtures/round-trip/` must survive
   parse→serialize byte-identically. Do not "clean up" serializer output.
+- **`serialize-tasks-preserving-file` normalises supplied roots.** It
+  re-emits every supplied root task in serialized form, normalising
+  intra-subtree blank lines — which is why `nested-subtree.org` is
+  excluded from the `fixture-round-trip` byte-identity set. Changes that
+  relocate or rewrite org structure must be validated against a
+  canonical-spacing fixture (blank separators between siblings *and*
+  between top-level tasks), never a compact one. When validating an
+  append-semantics operation round-trips, derive the witness from
+  current file state (the actual last child / last task in the section)
+  and state the append semantics in the assertion, so a failure can only
+  mean a regression.
 - **`ot doctor` output is order-stable.** Finding order and wording are
   golden-tested; new checks append to the ordered check vector in
   `doctor.clj`.
@@ -32,8 +43,10 @@ map: [`docs/DESIGN.org`](docs/DESIGN.org). Doc ownership:
 
 ## Workflows
 
-- **Run tests from the repo root**: `cd <dotagents-root> && bb test`
-  (there is no `bb.edn` under `scripts/`).
+- **Run every `bb` task from the repo root** (`bb test`, `bb run ot`,
+  …): the only `bb.edn` lives at `<dotagents-root>`; there is none under
+  `scripts/`. To exercise `ot` against a scratch project, prefer
+  `ot --root <dir>` over `cd`-ing into it.
 - **Adding a command**: handler in the right `commands/*` family
   namespace → entry in `commands/registry.clj` (spec, `:args->opts`,
   `:summary`, optional `:tui-key`) → contract section in
