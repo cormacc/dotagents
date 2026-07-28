@@ -73,6 +73,29 @@
       {:retro false :retro-source "skill-missing"}
       :else {:retro enabled :retro-source source})))
 
+;; A `spawns:` frontmatter value is a whitespace- and/or comma-separated allow-list.
+;; Blank (or absent, arriving as nil) means leaf; `distinct` dedupes while preserving
+;; declaration order.
+(defn parse-spawns [value]
+  (->> (str/split (str value) #"[,\s]+")
+       (remove str/blank?)
+       distinct
+       vec))
+;; Spawn-policy precedence: `--spawns` flag > frontmatter `spawns:` > default deny.
+;; The literal flag value `none` forces the empty (leaf) policy without consulting the
+;; roster. `resolve-persona` is the injected roster lookup (name → path or nil, like
+;; `roster-path`'s `exists?`): an unresolvable name fails fast — mirroring the `retro:`
+;; invalid-value precedent — rather than silently degrading to leaf.
+(defn resolve-spawns [{:keys [persona flag frontmatter resolve-persona]}]
+  (let [[names source] (cond (some? flag) [(when-not (= "none" flag) (parse-spawns flag)) "flag"]
+                             (some? (:spawns frontmatter)) [(parse-spawns (:spawns frontmatter)) "frontmatter"]
+                             :else [nil "default"])]
+    (doseq [n names]
+      (when (nil? (resolve-persona n))
+        (throw (ex-info (str "spawns policy for persona `" persona "` names unresolvable persona `" n "` (source: " source ")")
+                        {:persona persona :spawn n :source source}))))
+    {:spawns (vec names) :spawns-source source}))
+
 (defn direction [{:keys [width height]}]
   (if (and (>= width 80) (>= width (* 2 height))) "right" "down"))
 (defn model-basename [model] (some-> model (str/split #"/") last))
@@ -81,7 +104,9 @@
       (throw (ex-info "could not resolve agent kind" {}))))
 (defn resolve-model [{:keys [requested resolved-kind frontmatter parent-kind parent-model]}]
   (cond requested requested
-        (and (:model frontmatter) (= resolved-kind (:kind frontmatter))) (:model frontmatter)
+        (and (:model frontmatter)
+             (or (= resolved-kind (:kind frontmatter))
+                 (and (= "pi" resolved-kind) (nil? (:kind frontmatter))))) (:model frontmatter)
         (= resolved-kind parent-kind) parent-model
         :else nil))
 (defn model-args [kind model]

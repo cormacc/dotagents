@@ -36,11 +36,12 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 | `HERDR_SUBAGENT_RESULT` | child | Exact absolute result path to publish. |
 | `HERDR_SUBAGENT_BIN` | child | Absolute launcher path for `publish`. |
 | `HERDR_SUBAGENT_WAITING_POLICY` | child | `blocking` or `non-blocking`; the latter makes a successful publish emit an operator notification. |
-| `HERDR_SUBAGENT_PERSONA` | child | The child's own persona. It gates nested labelling: a spawn is labelled `planner-<n>/<persona>-<index>[-<model>]` only when the *spawning* agent's `HERDR_SUBAGENT_PERSONA` is `planner`, so a manually started planner loses nested labels. |
+| `HERDR_SUBAGENT_PERSONA` | child | The child's own persona. When set it marks the CLI's own spawns as below-root: nested labels compose from it and spawn enforcement reads `HERDR_SUBAGENT_SPAWNS` (see § Spawn gating). An agent started outside `subagent` has neither unless the variable is set. |
+| `HERDR_SUBAGENT_SPAWNS` | child | Space-joined spawn allow-list resolved by the parent (see § Spawn gating). Blank and unset both mean leaf; a below-root spawn always injects an empty value. |
 
 ## Ledger and completion
 
-The CLI stores one JSON ledger entry per task under `<assignment-root>/.agents/tmp/herdr-subagents/ledger/`; index marker files provide lock-free, parent-session/per-persona monotonic allocation. The child receives `HERDR_SUBAGENT_CHILD`, `_TASK`, `_RESULT`, `_BIN`, `_WAITING_POLICY`, and `_PERSONA` (plus `SUBAGENT_ASSIGNMENT_ROOT` when overridden) through repeatable `--env` flags on the placement command (`pane split`, or `tab create` under `--tab`).
+The CLI stores one JSON ledger entry per task under `<assignment-root>/.agents/tmp/herdr-subagents/ledger/`; index marker files provide lock-free, parent-session/per-persona monotonic allocation. The child receives `HERDR_SUBAGENT_CHILD`, `_TASK`, `_RESULT`, `_BIN`, `_WAITING_POLICY`, `_PERSONA`, and `_SPAWNS` (plus `SUBAGENT_ASSIGNMENT_ROOT` when overridden) through repeatable `--env` flags on the placement command (`pane split`, or `tab create` under `--tab`).
 
 The exact `RESULT` file is the only completion signal. It must be atomically published once from a sibling temporary file using `Files.createLink(result, temp)` then unlinking `temp`; a pre-existing result is an error and is never overwritten. Artifacts named by the result must exist before collection captures it.
 
@@ -77,9 +78,17 @@ The ledger directory is shared by every parent in the project, so pane closure i
 
 The retro skill path resolves `<assignment-root>/.agents/skills/retro/SKILL.md`, then `<assignment-root>/skills/retro/SKILL.md`, then `~/.agents/skills/retro/SKILL.md`. When none exists the frontmatter and default sources degrade silently — the instruction is omitted and `:retro-source` is `"skill-missing"` — because the retro step is optional equipment and an installation without that skill is a supported configuration. An explicit `--retro` is an operator request and fails fast at spawn instead of becoming a silent no-op; `--no-retro` is always honoured. The resolved policy is recorded on the ledger entry as `:retro` and `:retro-source` (`flag`, `frontmatter`, `default`, or `skill-missing`), and `--print-prompt` reports both alongside the composed prompt. Gating shapes the prompt only: a `PROCESS` section published by a gated-out child is still accepted.
 
+## Spawn gating
+
+`run` and `start` resolve the child's spawn allow-list — the personas it may itself spawn — with precedence `--spawns` (value-bearing; whitespace- and/or comma-separated, deduplicated) > persona frontmatter `spawns:` > the built-in default, which is **deny** (the empty list). The literal flag value `none` forces the empty policy without consulting the roster. An absent key and a present-but-blank frontmatter value both mean leaf, not an error. An unresolvable persona name in either the flag or the frontmatter fails fast at spawn, naming the declaring persona, the offending name, and the source.
+
+The resolved policy is recorded on the ledger entry as `:spawns` and `:spawns-source` (`flag`, `frontmatter`, `default`, or `depth`), reported by `--print-prompt` alongside the composed prompt, injected into the child as the space-joined `HERDR_SUBAGENT_SPAWNS`, and composed into the prompt's delegation guidance: a non-empty policy renders the may-spawn sentence, an empty one the leaf sentence.
+
+Depth is bounded to one nesting level absolutely, with no depth counter: a CLI whose own `HERDR_SUBAGENT_PERSONA` is set is below root. Below root, a target persona absent from the caller's own `HERDR_SUBAGENT_SPAWNS` is refused before preflight, ledger allocation, and any pane mutation — a refused spawn writes no ledger entry and creates nothing billable. Blank and unset `HERDR_SUBAGENT_SPAWNS` both deny; the empty-string/unset distinction is never load-bearing. An explicit below-root `--spawns` with any value other than `none` fails fast, and a permitted below-root spawn always injects an empty grandchild `HERDR_SUBAGENT_SPAWNS` with source `depth`, regardless of the grandchild persona's frontmatter. A root CLI (no `HERDR_SUBAGENT_PERSONA`) is unrestricted in what it may spawn.
+
 ## Labels and geometry
 
-Labels are `<persona>-<index>[-<model-basename>]`; a planner child is `planner-<n>/<persona>-<index>[-<model-basename>]`. Workspace names are excluded. Direction is `right` only when the caller's own matching layout pane rect has `width >= 80 && width >= 2 * height`, otherwise `down`; tab area and focus are irrelevant.
+Labels are `<persona>-<index>[-<model-basename>]`; a below-root child is `<parent-persona>-<n>/<persona>-<index>[-<model-basename>]`, prefixed from the spawning agent's injected `HERDR_SUBAGENT_PERSONA`. Workspace names are excluded. Labels are display metadata only: capability and depth are enforced by § Spawn gating, never by label parsing. Direction is `right` only when the caller's own matching layout pane rect has `width >= 80 && width >= 2 * height`, otherwise `down`; tab area and focus are irrelevant.
 
 ## Placement
 

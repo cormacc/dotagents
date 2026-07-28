@@ -39,14 +39,18 @@ The [[file:../../design/log/2026-07-27-subagent-retrospectives.org][2026-07-27 c
 
 The =retro= skill is optional by design. Project/global skill resolution lets integrated installations enable it by default, while third-party installations without it continue delegating with no injected instruction. Only explicit =--retro= fails when the capability is absent because an operator request must not silently become a no-op. The live smoke follows the same rule and reports a skipped retro leg when the skill is unavailable.
 
+** Per-persona spawn capability
+
+The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27 spawn-capability change-record]] replaced the prose-only planner exception with declared roster capability: a frontmatter =spawns:= allow-list resolved once at spawn (flag > frontmatter > default deny), recorded on the ledger as =:spawns=/=:spawns-source=, injected as =HERDR_SUBAGENT_SPAWNS=, and enforced mechanically by the child CLI before preflight, ledger allocation, or pane mutation. Prompt-only enforcement was rejected because its failure modes are billable and pane-creating; child self-resolution from the roster was rejected because it cannot carry a per-spawn flag override and mid-flight roster edits would change a live child's capability. Any below-root spawn injects an empty grandchild policy with source =depth= — one nesting level absolutely, no depth counter — so labels stay display-only metadata. Below-root one-at-a-time cardinality deliberately remains prompt-strength doctrine.
+
 * Architecture
 
 | Namespace | Responsibility |
 |---+---|
-| [[file:scripts/src/herdr_subagents/core.clj][core.clj]] | Pure protocol logic: roster/skill resolution, kind/model policy, retro policy, geometry, labels, and envelope render/parse/validation. |
+| [[file:scripts/src/herdr_subagents/core.clj][core.clj]] | Pure protocol logic: roster/skill resolution, kind/model policy, retro and spawn policy, geometry, labels, and envelope render/parse/validation. |
 | [[file:scripts/src/herdr_subagents/herdr.clj][herdr.clj]] | Vector-argv Herdr adapter, JSON/error decoding, minimum-version check, and non-mutating capability preflight. |
 | [[file:scripts/src/herdr_subagents/ledger.clj][ledger.clj]] | Assignment-root resolution, atomic ledger writes, result-path allocation, and exclusive-create monotonic index allocation. |
-| [[file:scripts/src/herdr_subagents/cli.clj][cli.clj]] | Command orchestration, prompt composition, publication, capture, session backfill, ownership-scoped closure, and bounded waiting. |
+| [[file:scripts/src/herdr_subagents/cli.clj][cli.clj]] | Command orchestration, prompt composition, spawn-policy enforcement, publication, capture, session backfill, ownership-scoped closure, and bounded waiting. |
 | [[file:scripts/src/herdr_subagents/smoke.clj][smoke.clj]] | Explicitly guarded billable integration smoke; never loaded by =bb test=. |
 | [[file:scripts/subagent][subagent]] | Bash launcher selecting repository =bb.edn= or the standalone =-Sdeps= path while preserving caller cwd. |
 
@@ -94,3 +98,4 @@ Publication identity comes from injected =HERDR_SUBAGENT_*= variables rather tha
 - [[file:../../design/log/2026-07-23-add-hierarchical-pane-labels-to-herdr-su.org][2026-07-23]] — hierarchical pane labels.
 - [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24]] — delegation CLI and implementation-review remediations.
 - [[file:../../design/log/2026-07-27-subagent-retrospectives.org][2026-07-27]] — optional child retrospectives, process annotations, and child-session recording.
+- [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27]] — per-persona spawn capability replacing the planner-only exception.

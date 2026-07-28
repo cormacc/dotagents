@@ -8,8 +8,8 @@
   (:import [java.nio.file Files FileAlreadyExistsException Paths]
            [java.util UUID]))
 
-(def usage "subagent run|start <persona> --task TEXT [options]\nsubagent collect <task> [--wait --timeout MS]\nsubagent status [task] | list
-subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]*\n\nOpaque assignment input is --task, --task-file, or stdin. Run `subagent --help` for contract details.")
+(def usage "subagent run|start <persona> --task TEXT [--tab] [--spawns NAMES|none] [options]\nsubagent collect <task> [--wait --timeout MS]\nsubagent status [task] | list
+subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]*\n\n--tab places the child in a new unfocused tab of the caller's workspace instead of a split.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nOpaque assignment input is --task, --task-file, or stdin. Run `subagent --help` for contract details.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -58,9 +58,14 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
 (defn parent-identity []
   (let [agent (herdr/agent! (System/getenv "HERDR_PANE_ID"))]
     {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent)) :parent-kind (:agent agent) :parent-pane (:pane_id agent)}))
-(defn delegation-guidance [persona]
-  (if (= persona "planner")
-    "You may spawn at most one blocking ephemeral scout or researcher only when a factual gap blocks planning; that child must remain a leaf."
+;; Composed from the resolved spawn policy, not the persona name: any persona whose
+;; policy is non-empty gets the delegation sentence, everyone else the leaf sentence.
+;; The rendered text for policy ["scout" "researcher"] is byte-identical to the
+;; pre-capability planner-only sentence (pinned in core_test.clj).
+(defn delegation-guidance [spawns]
+  (if (seq spawns)
+    (str "You may spawn at most one blocking ephemeral " (str/join " or " spawns)
+         " only when a factual gap blocks planning; that child must remain a leaf.")
     "You are a leaf: do not spawn subagents."))
 (defn retro-instruction [retro-skill]
   (when retro-skill
@@ -68,9 +73,9 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
          "\nEmit each surviving candidate as one `--process` item shaped `signal → category → proposed rule` (at most five)."
          "\nEmit nothing when the session does not meet that threshold; an absent PROCESS section is a valid outcome, not a failure."
          "\nDo not choose a destination, load `self-improvement`, run `ot`, or edit any instruction file: the parent owns approval and persistence.")))
-(defn prompt-text [{:keys [persona persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
+(defn prompt-text [{:keys [spawns persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
   (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
-       (delegation-guidance persona) " Herdr assigned TASK=" task " and RESULT=" result ". "
+       (delegation-guidance spawns) " Herdr assigned TASK=" task " and RESULT=" result ". "
        "When finished, publish exactly once with `$HERDR_SUBAGENT_BIN publish --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
        "The waiting policy is " waiting-policy "."
@@ -86,14 +91,42 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
   (let [skill (retro-skill-path)
         resolved (core/resolve-retro {:persona persona :flag (retro-flag opts) :frontmatter frontmatter :retro-skill skill})]
     (assoc resolved :retro-skill (when (:retro resolved) skill))))
+;; Depth and capability gate: below root (own HERDR_SUBAGENT_PERSONA set) a run/start is
+;; refused before herdr/preflight!, ledger allocation, and any pane mutation, so a denied
+;; spawn creates nothing billable. Blank and unset HERDR_SUBAGENT_SPAWNS both parse to
+;; the empty allow-list — the empty-string/unset distinction is never load-bearing.
+(defn enforce-spawns! [persona opts]
+  (when-let [own (System/getenv "HERDR_SUBAGENT_PERSONA")]
+    (let [flag (one opts :spawns)]
+      (when (and flag (not= "none" flag))
+        (fail "below-root spawns cannot grant capability: only `--spawns none` is permitted"
+              {:own-persona own :target persona :spawns flag})))
+    (let [allowed (core/parse-spawns (System/getenv "HERDR_SUBAGENT_SPAWNS"))]
+      (when-not (some #{persona} allowed)
+        (fail "spawn refused: target persona is not in this agent's HERDR_SUBAGENT_SPAWNS allow-list"
+              {:own-persona own :target persona :allowed allowed})))))
+;; Mirrors retro-policy: resolved once at spawn (flag > frontmatter > default deny),
+;; recorded on the entry, and injected into the child. Resolution always runs so an
+;; unresolvable frontmatter `spawns:` name fails fast at any depth (roster typos stay
+;; loud); below root the validated result is then discarded and the policy forced empty
+;; with source "depth" regardless of the child persona's frontmatter: one nesting level
+;; absolutely, no depth counter needed.
+(defn spawns-policy [persona opts frontmatter]
+  (let [resolved (core/resolve-spawns {:persona persona :flag (one opts :spawns) :frontmatter frontmatter
+                                       :resolve-persona #(core/roster-path (fn [p] (fs/exists? p)) (ledger/assignment-root) (System/getProperty "user.home") %)})]
+    (if (System/getenv "HERDR_SUBAGENT_PERSONA")
+      {:spawns [] :spawns-source "depth"}
+      resolved)))
 (defn preview! [persona opts waiting-policy]
   (herdr/preflight!)
   (let [path (roster persona) frontmatter (core/parse-frontmatter (slurp (str path))) ident (parent-identity)
         kind (core/resolve-kind {:requested (one opts :kind) :frontmatter frontmatter :parent-kind (:parent-kind ident)})
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
-        retro (retro-policy persona opts frontmatter)]
-    {:preview (prompt-text {:persona persona :persona-path path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
-     :persona-path (str path) :kind kind :model model :retro (:retro retro) :retro-source (:retro-source retro)}))
+        retro (retro-policy persona opts frontmatter)
+        spawns (spawns-policy persona opts frontmatter)]
+    {:preview (prompt-text {:spawns (:spawns spawns) :persona-path path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
+     :persona-path (str path) :kind kind :model model :retro (:retro retro) :retro-source (:retro-source retro)
+     :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)}))
 ;; A published result is immutable, so a result that fails validation can never become
 ;; valid. Record it as the non-final `invalid` status (pane retained, needs manual
 ;; intervention) instead of throwing out of the wait loop and making the assignment
@@ -161,6 +194,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
   (ledger/update! (:task entry) assoc :status "failed" :failed-at (now) :failure-phase (name phase))
   (when (and (:pane-id entry) (#{"split" "rename" "start"} (name phase))) (try (herdr/close! (:pane-id entry)) (catch Exception _))) )
 (defn spawn! [persona opts waiting-policy]
+  (enforce-spawns! persona opts)
   (if (one opts :print-prompt)
     (preview! persona opts waiting-policy)
     (do
@@ -171,20 +205,25 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
             kind (core/resolve-kind {:requested (one opts :kind) :frontmatter frontmatter :parent-kind (:parent-kind ident)})
             model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
             retro (retro-policy persona opts frontmatter)
+            spawns (spawns-policy persona opts frontmatter)
             tab? (boolean (one opts :tab))
             task (ledger/fresh-task)
             result (ledger/fresh-result task)
             index (ledger/allocate-index! (:parent-session ident) persona)
+            ;; Nested labels compose for any spawning persona, gated on the spawner's
+            ;; own injected HERDR_SUBAGENT_PERSONA (display metadata only — depth is
+            ;; enforced by enforce-spawns!, never by label parsing).
+            own-persona (System/getenv "HERDR_SUBAGENT_PERSONA")
             parent-label (:label (herdr/pane! (:parent-pane ident)))
-            label (core/child-label {:parent-label (when (= "planner" (System/getenv "HERDR_SUBAGENT_PERSONA")) parent-label) :parent-persona "planner" :persona persona :index index :model model})
+            label (core/child-label {:parent-label (when own-persona parent-label) :parent-persona own-persona :persona persona :index index :model model})
             assignment (task-text opts)
             bin (launcher-bin)
             name (child-name persona task)
-            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :placement (if tab? "tab" "split") :status "allocating" :created-at (now)}]
+            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :placement (if tab? "tab" "split") :status "allocating" :created-at (now)}]
         ;; Persist before the first pane mutation, so every partial failure is recoverable.
         (ledger/write! entry)
         (try
-          (let [env (cond-> {"HERDR_SUBAGENT_CHILD" name "HERDR_SUBAGENT_TASK" task "HERDR_SUBAGENT_RESULT" result "HERDR_SUBAGENT_BIN" bin "HERDR_SUBAGENT_WAITING_POLICY" waiting-policy "HERDR_SUBAGENT_PERSONA" persona}
+          (let [env (cond-> {"HERDR_SUBAGENT_CHILD" name "HERDR_SUBAGENT_TASK" task "HERDR_SUBAGENT_RESULT" result "HERDR_SUBAGENT_BIN" bin "HERDR_SUBAGENT_WAITING_POLICY" waiting-policy "HERDR_SUBAGENT_PERSONA" persona "HERDR_SUBAGENT_SPAWNS" (str/join " " (:spawns spawns))}
                       ;; Keep a relocated assignment root in force for any nested delegation.
                       (System/getenv "SUBAGENT_ASSIGNMENT_ROOT") (assoc "SUBAGENT_ASSIGNMENT_ROOT" (ledger/assignment-root)))
                 ;; `--tab` skips caller-rect!/direction entirely: a tab needs neither. No
@@ -203,7 +242,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
                                        ["--append-system-prompt"
                                         (core/persona-system-prompt kind (str path) (slurp (str path)))]))]
                   (record-session! task (:agent_session (herdr/start! name kind (:pane-id persisted) native)))
-                  (let [prompt (prompt-text {:persona persona :persona-path path :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})]
+                  (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path path :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})]
                     (ledger/update! task assoc :status "started" :started-at (now))
                     (herdr/prompt! name prompt)
                     (let [prompted (ledger/update! task assoc :status "prompted" :prompted-at (now))]

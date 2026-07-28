@@ -1352,3 +1352,22 @@ Acceptance:
 - ~bb test~ passes with coverage of both placements.
 
 Anti-criteria: no workspace-level placement; no persisted/config default; no inheritance mechanism or new child env var; no focus change.
+
+** DONE subagent: per-persona spawn capability replacing the planner-only exception :skill_herdr-subagents:
+CLOSED: [2026-07-28 Tue 16:53]
+:PROPERTIES:
+:CUSTOM_ID: a9d156ff-6f12-433c-9bef-3ec571e36c42
+:CREATED: [2026-07-27 Mon 17:42]
+:ARCHIVED: [2026-07-28 Tue 16:53]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 17:42]
+- State "DONE" from "TODO" [2026-07-28 Tue 16:53]
+:END:
+#+IMPORT: [[plan:2026-07-27-subagent-per-persona-spawn-capability-re.org]]
+Generalise the no-child-to-child rule into declared per-persona capability. A `spawns:` frontmatter allow-list of personas (absent/empty = leaf, today's default-deny) replaces the hard-coded planner exception; anything spawned by a child is a leaf regardless of its own frontmatter (one nesting level, no recursion); below the root spawns stay blocking and one-at-a-time, with waves-of-two remaining a root privilege. Invocation override mirrors retro gating precedence (flag > frontmatter > default deny, fail-fast on an explicit flag naming an unknown persona). Generalise nested-prefix labels from planner-only to any spawning persona.
+
+Motivation: a worker blocked on a factual gap currently burns its own context or publishes BLOCKED to bounce the question via the user; reviewers wanting a repro scout are the same shape as the existing planner exception. Default-allow was considered and rejected: spawn failure modes are billable and pane-creating, and grandchild findings reach the root through two layers of testimony (see SKILL.md Trusting a result), so capability must be declared per persona in the roster, not ambient.
+
+Touch-points: core.clj (frontmatter parse/policy resolve; string-coercion lessons from retro: apply), cli.clj (delegation-guidance, option handling - `--spawns` is value-bearing, unlike the boolean-flags set), nested-prefix, subagents/planner.md (declare spawns: scout researcher), SKILL.md constitution leaf-rule rewrite, contract.md, tests, likely a smoke leg.

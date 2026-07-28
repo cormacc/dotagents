@@ -18,6 +18,8 @@ The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/sk
 
 The value-less flags `--retro` and `--no-retro` override process-retro gating for one spawn. See [docs/contract.md](docs/contract.md) § Retro gating for precedence, optional-skill behavior, ledger fields, and the `PROCESS:` envelope grammar.
 
+The value-bearing `--spawns` flag overrides the persona's frontmatter `spawns:` allow-list for one spawn (whitespace/comma separated); the literal `none` forces a leaf, and below the root only `--spawns none` is accepted. See [docs/contract.md](docs/contract.md) § Spawn gating for precedence, fail-fast cases, depth enforcement, and ledger fields.
+
 The value-less flag `--tab` places the child in a new unfocused tab of the caller's workspace instead of a split. Every other spawn contract (env, label, ledger, collect, closure) is unchanged, and there is no inheritance: a tab-placed child's own spawns still split by default. See [docs/contract.md](docs/contract.md) § Placement.
 
 ```sh

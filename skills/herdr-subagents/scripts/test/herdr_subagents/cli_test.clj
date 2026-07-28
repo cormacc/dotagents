@@ -55,6 +55,79 @@
 
 (defn- ledger-entry* [dir task]
   (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true))
+(defn- injected-env [env-file key]
+  (get (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file)))) key))
+
+;; The below-root policy check precedes preflight, ledger allocation, and all Herdr calls.
+(deftest below-root-disallowed-spawn-is-side-effect-free
+  (let [{:keys [env log dir]} (fake-env {"HERDR_SUBAGENT_PERSONA" "worker" "HERDR_SUBAGENT_SPAWNS" "scout researcher"})
+        proc (call! env "start" "worker" "--task" "disallowed nested worker")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"spawn refused: target persona is not in this agent's HERDR_SUBAGENT_SPAWNS allow-list" (:out proc)))
+    (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))
+    (is (empty? (calls log)))))
+
+(deftest below-root-worker-scout-is-a-leaf
+  (let [{:keys [env log env-file dir prompt-file]} (fake-env {"HERDR_SUBAGENT_PERSONA" "worker"
+                                                               "HERDR_SUBAGENT_SPAWNS" "scout researcher"
+                                                               "FAKE_PARENT_LABEL" "worker-1-claude-opus-5"})
+        proc (call! env "start" "scout" "--task" "permitted nested scout")
+        task (get-in (result proc) [:result :task])
+        entry (ledger-entry* dir task)
+        rename (first (filter #(and (= ["pane" "rename"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))
+    (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))
+    (is (= "worker-1/scout-1-claude-sonnet-5" (:label entry)))
+    (is (= ["pane" "rename" "w:child" "worker-1/scout-1-claude-sonnet-5"] (vec rename)))
+    (is (= {:spawns [] :spawns-source "depth"} (select-keys entry [:spawns :spawns-source])))))
+
+(deftest root-worker-spawn-records-and-injects-frontmatter-policy
+  (let [{:keys [env env-file dir]} (fake-env {})
+        proc (call! env "start" "worker" "--task" "root worker policy")
+        task (get-in (result proc) [:result :task])
+        entry (ledger-entry* dir task)]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= {:spawns ["scout" "researcher"] :spawns-source "frontmatter"}
+           (select-keys entry [:spawns :spawns-source])))
+    (is (= "scout researcher" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))))
+
+(deftest root-spawns-none-forces-a-leaf
+  (let [{:keys [env env-file dir prompt-file]} (fake-env {})
+        proc (call! env "start" "worker" "--spawns" "none" "--task" "forced leaf")
+        task (get-in (result proc) [:result :task])
+        entry (ledger-entry* dir task)]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))
+    (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))
+    (is (= {:spawns [] :spawns-source "flag"} (select-keys entry [:spawns :spawns-source])))))
+
+;; A permitted below-root spawn still fail-fasts on the target persona's own broken
+;; frontmatter `spawns:` declaration: depth forces the injected policy empty, but the
+;; roster defect must surface loudly instead of silently degrading to a leaf.
+(deftest below-root-spawn-validates-target-frontmatter
+  (let [{:keys [env log dir roster]} (fake-env {"HERDR_SUBAGENT_PERSONA" "worker"
+                                                "HERDR_SUBAGENT_SPAWNS" "broken"})]
+    (fs/delete (fs/path roster)) ;; replace the live-roster symlink with a broken fixture persona
+    (fs/create-dirs roster)
+    (spit (str (fs/path roster "broken.md"))
+          "---\nname: broken\ndescription: fixture persona with a misspelled grant\nspawns: does-not-exist\n---\nFixture persona.\n")
+    (let [proc (call! env "start" "broken" "--task" "broken nested frontmatter")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"unresolvable persona `does-not-exist`" (:out proc)))
+      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))
+      (is (not-any? mutating? (calls log))))))
+
+(deftest spawns-env-is-identical-for-tab-and-split-placement
+  (let [{split-env :env split-env-file :env-file} (fake-env {})
+        {tab-env :env tab-env-file :env-file} (fake-env {})
+        split (call! split-env "start" "worker" "--task" "split policy env")
+        tab (call! tab-env "start" "worker" "--tab" "--task" "tab policy env")]
+    (is (zero? (:exit split)) (:err split))
+    (is (zero? (:exit tab)) (:err tab))
+    (is (= "scout researcher" (injected-env split-env-file "HERDR_SUBAGENT_SPAWNS")))
+    (is (= (injected-env split-env-file "HERDR_SUBAGENT_SPAWNS")
+           (injected-env tab-env-file "HERDR_SUBAGENT_SPAWNS")))))
 
 ;; `--tab` places the child in a new unfocused tab of the caller's workspace instead of
 ;; a split, but every other contract (env, label, ledger, collect, closure) is identical.
@@ -144,7 +217,8 @@
     (is (str/includes? (slurp prompt-file) "assignment from a file"))
     (is (str/includes? (slurp prompt-file) "Additional constraints: stay read-only")))
   ;; Also covers the nested planner label end-to-end: the injected persona gates it.
-  (let [{:keys [env log]} (fake-env {"HERDR_SUBAGENT_PERSONA" "planner"})
+  ;; Below root the spawn gate requires the target in the injected allow-list.
+  (let [{:keys [env log]} (fake-env {"HERDR_SUBAGENT_PERSONA" "planner" "HERDR_SUBAGENT_SPAWNS" "worker"})
         claude-proc (call! env "start" "worker" "--kind" "claude" "--model" "sonnet" "--task" "claude persona")
         claude-start (first (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))
         rename (first (filter #(and (= ["pane" "rename"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))]

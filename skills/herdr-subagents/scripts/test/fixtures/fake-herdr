@@ -60,7 +60,7 @@ case "${1:-}" in
     if [ "${3:-}" = --help ]; then help pane "$2"; exit 0; fi
     case "$2" in
       layout) echo '{"result":{"layout":{"area":{"width":113,"height":110},"focused_pane_id":"other","panes":[{"pane_id":"w:other","rect":{"width":200,"height":50}},{"pane_id":"w:p","rect":{"width":113,"height":55}}]}}}' ;;
-      get) echo '{"result":{"pane":{"pane_id":"w:p","label":"planner-1-model"}}}' ;;
+      get) printf '{"result":{"pane":{"pane_id":"w:p","label":"%s"}}}\n' "${FAKE_PARENT_LABEL:-planner-1-model}" ;;
       split) : >"${FAKE_HERDR_ENV_FILE:?}"; shift 2; while [ "$#" -gt 0 ]; do [ "$1" = --env ] && echo "$2" >>"$FAKE_HERDR_ENV_FILE"; shift; done; echo '{"result":{"pane":{"pane_id":"w:child"}}}' ;;
       rename) printf '{"result":{"pane":{"pane_id":"w:child","label":"%s"}}}\n' "${4:-}" ;;
       close)
