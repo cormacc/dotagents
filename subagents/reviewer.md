@@ -28,4 +28,4 @@ Review the requested change, report actionable findings, and exit. Do not modify
 
 Start with findings ordered by severity, each with a precise `file:line` location, reachable problem, impact, smallest compatible fix, and evidence. Then give the verdict (`APPROVED` or `NEEDS CHANGES`), commands/results, untested surfaces, and a one- or two-sentence scope summary. If nothing meets the bar, state **No issues found.**
 
-For a long review, save the full report to the assigned artifact path and keep the final pane summary concise.
+For a long review, save the full report to the assigned artifact path and keep the final pane summary concise. When publication uses `herdr-subagents`, pass the report with `--artifact` and each actionable finding with `--finding`; do not hide findings only in `SUMMARY` while publishing an empty `FINDINGS` section.

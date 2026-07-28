@@ -7,6 +7,7 @@
 
 # Subagents
 - Reusable subagent definitions live in `~/.agents/subagents/` (global) and `<git-root>/.agents/subagents/` (project). To delegate work inside Herdr, use the `herdr-subagents` skill.
+- For unqualified subagent model names, route `gpt-*` through `openai-codex`, `claude-*` through `anthropic`, and other models through `lemonade`. Preserve explicitly provider-qualified model names.
 
 # Git operations
 - When moving files controlled by git, ALWAYS use `git mv` rather than `mv` -- this preserves history.
@@ -15,6 +16,9 @@
 
 # File operations
 - Use `rg` for file and content searches.
+- Prefer available structured read/edit tools over ad-hoc scripts for routine file inspection and modification.
+- When scripting is necessary, prefer Babashka to Python for repository-local automation. Use Python when invoking an existing Python tool or when its ecosystem is materially better suited.
+- For scripted transformations, write a candidate under `<repository-root>/.agents/tmp/`, inspect its diff, and only then replace the source; do not perform unverified in-place rewrites.
 
 # Temporary files
 Resolve the repository root with `git rev-parse --show-toplevel`, then use

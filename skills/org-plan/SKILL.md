@@ -303,6 +303,8 @@ For each plan task:
 
 ## Updating change-records after discoveries
 
+When an update combines `ot` lifecycle mutations with direct record edits, run all `ot` mutations first, then re-read the owning file before composing edits. Lifecycle writes rewrite the record and invalidate earlier exact-text snapshots.
+
 Update the record when implementation reveals durable work or rationale: prerequisites, decisions, validation gaps, refactors, blockers, or deferred questions. Keep additions concise and task-shaped.
 
 For discovered prerequisites that are tasks elsewhere in the graph, express the dependency via `:BLOCKED-BY:` / `:BLOCKED-BY+:`; see `org-tasks` for ready-task semantics.
