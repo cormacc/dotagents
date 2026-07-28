@@ -30,8 +30,15 @@ gather-context → take-action → verify-output loop:
    **Reuse an existing nREPL — never spawn a second.** A discovered port file
    (`.nrepl-port`, `.shadow-cljs/nrepl.port`, `.cider-nrepl.port`) means a
    server is up.
-   If no nREPL is reachable, ask the user to start one
-   (`bb nrepl`, `lein repl :headless`, `clj -M:repl`, etc.).
+   If no nREPL is reachable and the project is Babashka (`bb.edn`, or a bare
+   bb script), start one yourself: `bb nrepl-server` (writes `.nrepl-port`)
+   in a background terminal — under Herdr (`HERDR_ENV=1`), a new tab in the
+   current workspace (`herdr_layout` `tab_create`, then `herdr_pane` `run`).
+   Ephemeral bb scripts have no persistent build watch, so spawning the
+   server is the normal bb workflow, not an exception — the never-spawn-a-second
+   rule still applies once it is up. For JVM/ClojureScript projects, ask the
+   user to start one (`lein repl :headless`, `clj -M:repl`, shadow-cljs
+   watch, etc.) — their build/watch setup is session-owned.
 3. **Explore unfamiliar code in the REPL.** `(clojure.repl/doc x)`,
    `(clojure.repl/source x)`, `(clojure.repl/dir ns)`.
 4. **Define and validate in the REPL before saving** — happy path, nil, empty

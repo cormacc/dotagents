@@ -95,19 +95,6 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 
 * Improvements
 
-** TODO [#C] Update clojure skill to spawn babashka nrepl
-:PROPERTIES:
-:CUSTOM_ID: 488b11d8-8874-456d-a872-3b1858fc403a
-:CREATED: [2026-07-24 Fri 15:01]
-:END:
-:LOGBOOK:
-- Created [2026-07-24 Fri 15:01]
-:END:
-Unlike typical clojure / clojurescript projects with a build watch / persistent repl, babashka scripts are ephemeral.
-When developing a babashka script, the clojure skill should be able to spawn an nrepl-server in a new herdr tab within the current workspace for code evaluation.
-The command is `bb nrepl-server`.
-Update the clojure skill accordingly. Consider whether babashka specifics should be included as a resource for gradual discovery rather than in the top-level skill. We tend to use babashka tasks in most clojure/clojurescript projects, so factor that in to the decision.
-
 ** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:
 :PROPERTIES:
 :CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52

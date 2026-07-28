@@ -290,7 +290,7 @@ When drafting after work has started or completed:
 
 ## Executing from a change-record
 
-Before starting, ask whether questions should be batched in `* Open questions` for final review or raised immediately. Then resume via `org-tasks` § Resuming and agent memory.
+Before starting, ask whether questions should be batched in `* Open questions` for final review or raised immediately. Then resume via `org-tasks` § Resuming and agent memory. If commits touching the plan's target surface landed after the record was accepted, re-verify its pinned references and load-bearing assumptions against HEAD (or delegate a plan review) before implementing — stale pins and drifted contracts are cheaper to catch before code exists.
 
 For each plan task:
 

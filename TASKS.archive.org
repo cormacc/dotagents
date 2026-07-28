@@ -1371,3 +1371,20 @@ Generalise the no-child-to-child rule into declared per-persona capability. A `s
 Motivation: a worker blocked on a factual gap currently burns its own context or publishes BLOCKED to bounce the question via the user; reviewers wanting a repro scout are the same shape as the existing planner exception. Default-allow was considered and rejected: spawn failure modes are billable and pane-creating, and grandchild findings reach the root through two layers of testimony (see SKILL.md Trusting a result), so capability must be declared per persona in the roster, not ambient.
 
 Touch-points: core.clj (frontmatter parse/policy resolve; string-coercion lessons from retro: apply), cli.clj (delegation-guidance, option handling - `--spawns` is value-bearing, unlike the boolean-flags set), nested-prefix, subagents/planner.md (declare spawns: scout researcher), SKILL.md constitution leaf-rule rewrite, contract.md, tests, likely a smoke leg.
+
+** DONE [#C] Update clojure skill to spawn babashka nrepl
+CLOSED: [2026-07-28 Tue 17:10]
+:PROPERTIES:
+:CUSTOM_ID: 488b11d8-8874-456d-a872-3b1858fc403a
+:CREATED: [2026-07-24 Fri 15:01]
+:ARCHIVED: [2026-07-28 Tue 17:10]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-24 Fri 15:01]
+- State "DONE" from "TODO" [2026-07-28 Tue 17:10]
+:END:
+Unlike typical clojure / clojurescript projects with a build watch / persistent repl, babashka scripts are ephemeral.
+When developing a babashka script, the clojure skill should be able to spawn an nrepl-server in a new herdr tab within the current workspace for code evaluation.
+The command is `bb nrepl-server`.
+Update the clojure skill accordingly. Consider whether babashka specifics should be included as a resource for gradual discovery rather than in the top-level skill. We tend to use babashka tasks in most clojure/clojurescript projects, so factor that in to the decision.
