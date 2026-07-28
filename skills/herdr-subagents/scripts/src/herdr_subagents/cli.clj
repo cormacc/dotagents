@@ -21,7 +21,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
 ;; Single source of truth for value-less flags. `option-map` and `help-request?` both
 ;; consume argv and must agree: a flag known to only one of them silently swallows the
 ;; following element (e.g. `run worker --retro --task 'X'` losing its assignment).
-(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro"})
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab"})
 (defn option-map [args]
   (loop [xs args out {}]
     (if-let [x (first xs)]
@@ -171,6 +171,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
             kind (core/resolve-kind {:requested (one opts :kind) :frontmatter frontmatter :parent-kind (:parent-kind ident)})
             model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
             retro (retro-policy persona opts frontmatter)
+            tab? (boolean (one opts :tab))
             task (ledger/fresh-task)
             result (ledger/fresh-result task)
             index (ledger/allocate-index! (:parent-session ident) persona)
@@ -179,16 +180,20 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
             assignment (task-text opts)
             bin (launcher-bin)
             name (child-name persona task)
-            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :status "allocating" :created-at (now)}]
+            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :placement (if tab? "tab" "split") :status "allocating" :created-at (now)}]
         ;; Persist before the first pane mutation, so every partial failure is recoverable.
         (ledger/write! entry)
         (try
-          (let [rect (herdr/caller-rect!)
-                env (cond-> {"HERDR_SUBAGENT_CHILD" name "HERDR_SUBAGENT_TASK" task "HERDR_SUBAGENT_RESULT" result "HERDR_SUBAGENT_BIN" bin "HERDR_SUBAGENT_WAITING_POLICY" waiting-policy "HERDR_SUBAGENT_PERSONA" persona}
+          (let [env (cond-> {"HERDR_SUBAGENT_CHILD" name "HERDR_SUBAGENT_TASK" task "HERDR_SUBAGENT_RESULT" result "HERDR_SUBAGENT_BIN" bin "HERDR_SUBAGENT_WAITING_POLICY" waiting-policy "HERDR_SUBAGENT_PERSONA" persona}
                       ;; Keep a relocated assignment root in force for any nested delegation.
                       (System/getenv "SUBAGENT_ASSIGNMENT_ROOT") (assoc "SUBAGENT_ASSIGNMENT_ROOT" (ledger/assignment-root)))
-                split (herdr/split! {:direction (core/direction rect) :cwd (System/getProperty "user.dir") :env env})
-                persisted (ledger/update! task assoc :pane-id (:pane_id split) :status "split")]
+                ;; `--tab` skips caller-rect!/direction entirely: a tab needs neither. No
+                ;; inheritance: placement is spawn argv only, never carried in `env`, so a
+                ;; tab-placed child's own spawns still split by default.
+                placement (if tab?
+                            (herdr/tab-create! {:cwd (System/getProperty "user.dir") :label label :env env})
+                            (herdr/split! {:direction (core/direction (herdr/caller-rect!)) :cwd (System/getProperty "user.dir") :env env}))
+                persisted (ledger/update! task assoc :pane-id (:pane_id placement) :tab-id (:tab-id placement) :status "split")]
             (try
               (let [renamed (herdr/rename! (:pane-id persisted) label)]
                 (when-not (= label (:label renamed)) (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))

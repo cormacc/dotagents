@@ -18,6 +18,8 @@ The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/sk
 
 The value-less flags `--retro` and `--no-retro` override process-retro gating for one spawn. See [docs/contract.md](docs/contract.md) § Retro gating for precedence, optional-skill behavior, ledger fields, and the `PROCESS:` envelope grammar.
 
+The value-less flag `--tab` places the child in a new unfocused tab of the caller's workspace instead of a split. Every other spawn contract (env, label, ledger, collect, closure) is unchanged, and there is no inheritance: a tab-placed child's own spawns still split by default. See [docs/contract.md](docs/contract.md) § Placement.
+
 ```sh
 SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
 "$SUBAGENT" run scout --task 'Find the relevant source files.' --timeout 600000

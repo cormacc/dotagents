@@ -8,6 +8,7 @@
 (def required-capabilities
   [[ ["pane" "layout"] ["--pane"]]
    [ ["pane" "split"] ["--pane" "--direction" "--cwd" "--env" "--no-focus"]]
+   [ ["tab" "create"] ["--workspace" "--cwd" "--label" "--env" "--no-focus"]]
    [ ["pane" "rename"] []] [["pane" "get"] []] [["pane" "close"] []]
    [ ["agent" "start"] ["--kind" "--pane"]] [["agent" "prompt"] []]
    [ ["agent" "wait"] ["--timeout"]] [["agent" "get"] []] [["agent" "list"] []]
@@ -45,6 +46,14 @@
   (let [pane (System/getenv "HERDR_PANE_ID")]
     (get-in (value! (into ["pane" "split" "--pane" pane "--direction" direction "--cwd" cwd "--no-focus"]
                            (mapcat (fn [[k v]] ["--env" (str k "=" v)]) env))) [:result :pane])))
+;; The child pane is `.result.root_pane`, not `.result.pane` (tab creation also returns
+;; `.result.tab`); `--label` here sets the *tab's* label, distinct from the pane label
+;; the existing rename! flow applies afterward.
+(defn tab-create! [{:keys [cwd label env]}]
+  (let [result (get-in (value! (into ["tab" "create" "--workspace" (System/getenv "HERDR_WORKSPACE_ID") "--cwd" cwd "--label" label "--no-focus"]
+                                      (mapcat (fn [[k v]] ["--env" (str k "=" v)]) env)))
+                        [:result])]
+    (assoc (:root_pane result) :tab-id (get-in result [:tab :tab_id]))))
 (defn rename! [pane label] (get-in (value! ["pane" "rename" pane label]) [:result :pane]))
 (defn pane! [pane] (get-in (value! ["pane" "get" pane]) [:result :pane]))
 (defn close! [pane] (value! ["pane" "close" pane]))

@@ -7,6 +7,7 @@ help() {
   case "$1 $2" in
     'pane layout') flags='--pane' ;;
     'pane split') flags='--pane --direction --cwd --env KEY=VALUE --no-focus' ;;
+    'tab create') flags='--workspace --cwd --label --env KEY=VALUE --no-focus' ;;
     'agent start') flags='--kind --pane' ;;
     'agent wait') flags='--timeout' ;;
     'notification show') flags='--body' ;;
@@ -65,6 +66,11 @@ case "${1:-}" in
       close)
         if [ "${FAKE_FAIL_CLOSE:-}" = 1 ]; then echo '{"error":"close"}' >&2; exit 1; fi
         echo '{"result":{}}' ;;
+    esac ;;
+  tab)
+    if [ "${3:-}" = --help ]; then help tab "$2"; exit 0; fi
+    case "$2" in
+      create) : >"${FAKE_HERDR_ENV_FILE:?}"; shift 2; while [ "$#" -gt 0 ]; do [ "$1" = --env ] && echo "$2" >>"$FAKE_HERDR_ENV_FILE"; shift; done; echo '{"result":{"root_pane":{"pane_id":"w:child"},"tab":{"tab_id":"w:tab"}}}' ;;
     esac ;;
   agent)
     if [ "${3:-}" = --help ]; then help agent "$2"; exit 0; fi

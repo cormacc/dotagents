@@ -2,7 +2,7 @@
 
 ## Preconditions
 
-All spawn operations require `HERDR_ENV=1`, Herdr >= 0.7.5, and installed non-mutating help shapes for `pane layout/split/rename/get/close`, `agent start/prompt/wait/get`, and `notification show`. Preflight precedes ledger allocation and pane mutation.
+All spawn operations require `HERDR_ENV=1`, Herdr >= 0.7.5, and installed non-mutating help shapes for `pane layout/split/rename/get/close`, `tab create`, `agent start/prompt/wait/get`, and `notification show`. Preflight precedes ledger allocation and pane mutation. `tab create` is probed unconditionally, whether or not the spawn uses `--tab`.
 
 ## JSON output
 
@@ -40,7 +40,7 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 
 ## Ledger and completion
 
-The CLI stores one JSON ledger entry per task under `<assignment-root>/.agents/tmp/herdr-subagents/ledger/`; index marker files provide lock-free, parent-session/per-persona monotonic allocation. The child receives `HERDR_SUBAGENT_CHILD`, `_TASK`, `_RESULT`, `_BIN`, `_WAITING_POLICY`, and `_PERSONA` (plus `SUBAGENT_ASSIGNMENT_ROOT` when overridden) through repeatable `pane split --env` flags.
+The CLI stores one JSON ledger entry per task under `<assignment-root>/.agents/tmp/herdr-subagents/ledger/`; index marker files provide lock-free, parent-session/per-persona monotonic allocation. The child receives `HERDR_SUBAGENT_CHILD`, `_TASK`, `_RESULT`, `_BIN`, `_WAITING_POLICY`, and `_PERSONA` (plus `SUBAGENT_ASSIGNMENT_ROOT` when overridden) through repeatable `--env` flags on the placement command (`pane split`, or `tab create` under `--tab`).
 
 The exact `RESULT` file is the only completion signal. It must be atomically published once from a sibling temporary file using `Files.createLink(result, temp)` then unlinking `temp`; a pre-existing result is an error and is never overwritten. Artifacts named by the result must exist before collection captures it.
 
@@ -80,3 +80,9 @@ The retro skill path resolves `<assignment-root>/.agents/skills/retro/SKILL.md`,
 ## Labels and geometry
 
 Labels are `<persona>-<index>[-<model-basename>]`; a planner child is `planner-<n>/<persona>-<index>[-<model-basename>]`. Workspace names are excluded. Direction is `right` only when the caller's own matching layout pane rect has `width >= 80 && width >= 2 * height`, otherwise `down`; tab area and focus are irrelevant.
+
+## Placement
+
+Default spawn creates the child with `pane split` in the caller's pane, choosing `--direction` as above. The value-less `--tab` flag instead creates the child with `tab create --workspace $HERDR_WORKSPACE_ID --cwd ... --label ... --no-focus --env ...` in a new, unfocused tab of the caller's Herdr workspace; the child pane is `.result.root_pane`, distinct from `.result.tab` (whose `tab_id` is recorded but never focused or otherwise acted on). `--tab` skips the `caller-rect!`/direction computation entirely — it needs neither. Every other step (env injection, `pane rename` onto the child pane, `agent start`/`prompt`, wait/collect, and pane-close-on-completion, which also closes a tab's last pane) is identical between the two placements.
+
+Placement is spawn argv only: it is never persisted as a default, never inherited, and never carried through a new child environment variable, so a tab-placed child's own spawns split by default exactly as an unplaced one would. The ledger entry records `:placement` (`"split"` or `"tab"`) and `:tab-id` (the created tab's id, `nil` for a split placement).

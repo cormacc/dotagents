@@ -17,7 +17,7 @@
 (def bin (str root "/skills/herdr-subagents/scripts/subagent"))
 (def fake (str root "/skills/herdr-subagents/scripts/test/fixtures/fake-herdr"))
 (defn calls [log] (if (fs/exists? log) (mapv #(str/split % #"\037") (str/split-lines (slurp log))) []))
-(defn mutating? [argv] (and (not (some #{"--help"} argv)) (contains? #{["pane" "split"] ["pane" "rename"] ["pane" "close"] ["agent" "start"] ["agent" "prompt"]} (vec (take 2 argv)))))
+(defn mutating? [argv] (and (not (some #{"--help"} argv)) (contains? #{["pane" "split"] ["tab" "create"] ["pane" "rename"] ["pane" "close"] ["agent" "start"] ["agent" "prompt"]} (vec (take 2 argv)))))
 ;; `SUBAGENT_ASSIGNMENT_ROOT` keeps the ledger, index markers, result files, and roster
 ;; lookup inside the per-test temp dir: `bb test` must never touch the live tree.
 ;; `HOME` points at an empty directory so personas can only resolve through the project
@@ -50,8 +50,85 @@
     (is (= ["pane" "split" "--pane" "w:p" "--direction" "right"] (subvec (vec (first (filter #(and (= ["pane" "split"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))) 0 6)))
     (is (some #(= ["pane" "close"] (vec (take 2 %))) argv))
     (is (re-find #"(?s)\$\(unsafe\).*`unsafe`" (slurp prompt-file)))
-    (is (= #{["pane" "layout"] ["pane" "split"] ["pane" "rename"] ["pane" "get"] ["pane" "close"] ["agent" "start"] ["agent" "prompt"] ["agent" "wait"] ["agent" "get"] ["agent" "list"] ["notification" "show"]}
+    (is (= #{["pane" "layout"] ["pane" "split"] ["tab" "create"] ["pane" "rename"] ["pane" "get"] ["pane" "close"] ["agent" "start"] ["agent" "prompt"] ["agent" "wait"] ["agent" "get"] ["agent" "list"] ["notification" "show"]}
            (set (map #(vec (take 2 %)) (filter #(= "--help" (nth % 2 nil)) argv)))))))
+
+(defn- ledger-entry* [dir task]
+  (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true))
+
+;; `--tab` places the child in a new unfocused tab of the caller's workspace instead of
+;; a split, but every other contract (env, label, ledger, collect, closure) is identical.
+(deftest tab-placement-contract
+  (let [{:keys [env log env-file dir]} (fake-env {}) proc (call! env "run" "worker" "--tab" "--task" "tab placement" "--timeout" "20")
+        argv (calls log)
+        tab-create (first (filter #(and (= ["tab" "create"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))
+        task (get-in (result proc) [:result :task])
+        entry (ledger-entry* dir task)
+        injected (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+    (is (some? tab-create))
+    (is (= ["tab" "create" "--workspace"] (subvec (vec tab-create) 0 3)))
+    (is (some #{"--no-focus"} tab-create))
+    (is (some #{"--label"} tab-create))
+    ;; No split command at all for a tab-placed spawn.
+    (is (not-any? #(and (= ["pane" "split"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))
+    ;; The rename→start→prompt flow and closure are unchanged, against the tab's root pane.
+    (is (some #(= ["pane" "rename" "w:child"] (vec (take 3 %))) argv))
+    (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))
+    ;; Env injection is identical to a split spawn.
+    (is (str/starts-with? (injected "HERDR_SUBAGENT_CHILD") "worker-"))
+    (is (= "blocking" (injected "HERDR_SUBAGENT_WAITING_POLICY")))
+    (is (= "tab" (:placement entry)))
+    (is (= "w:tab" (:tab-id entry)))
+    (is (= "w:child" (:pane-id entry)))))
+
+;; Regression guard: a default spawn (no `--tab`) never issues a mutating `tab create`.
+(deftest default-placement-emits-no-tab-commands
+  (let [{:keys [env log dir]} (fake-env {}) proc (call! env "run" "worker" "--task" "default placement" "--timeout" "20")
+        task (get-in (result proc) [:result :task]) entry (ledger-entry* dir task)]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+    (is (not-any? #(and (= ["tab" "create"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))
+    (is (= "split" (:placement entry)))
+    (is (nil? (:tab-id entry)))))
+
+;; `--tab` under non-blocking `start` follows the same contract: the ledger records the
+;; tab placement immediately and a later `collect --wait` captures and closes as usual.
+(deftest tab-placement-start-collect
+  (let [{:keys [env log dir]} (fake-env {})
+        start (call! env "start" "worker" "--tab" "--task" "tab start")
+        task (get-in (result start) [:result :task])
+        entry (ledger-entry* dir task)
+        proc (call! env "collect" task "--wait" "--timeout" "5000")]
+    (is (zero? (:exit start)) (:err start))
+    (is (= "tab" (:placement entry)))
+    (is (= "w:tab" (:tab-id entry)))
+    (is (= "w:child" (:pane-id entry)))
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+    ;; Closure is identical to a split spawn: collect closes the tab's root pane (Herdr
+    ;; closes a tab whose last pane closes).
+    (is (some #(= ["pane" "close" "w:child"] (vec (take 3 %))) (calls log)))))
+
+;; Partial failure after `tab create`: the pane is recorded before the failing step, so
+;; cleanup closes the tab's root pane and the ledger lands in a failed state.
+(deftest tab-placement-partial-start-failure-is-tracked-and-cleaned
+  (let [{:keys [env log dir]} (fake-env {"FAKE_FAIL_START" "1"})
+        proc (call! env "start" "worker" "--tab" "--task" "tab fail")
+        argv (calls log)
+        ;; The failed `start` exits non-zero without printing the task id, so recover the
+        ;; single entry file from the ledger directory (skipping the `indices/` subdir).
+        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))
+                           :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
+                       (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))]
+    (is (= 1 (:exit proc)))
+    (is (some #(and (= ["tab" "create"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))
+    (is (some #(= ["pane" "close" "w:child"] (vec (take 3 %))) argv))
+    (is (= "failed" (:status entry)))
+    (is (= "start" (:failure-phase entry)))
+    (is (= "tab" (:placement entry)))
+    (is (= "w:tab" (:tab-id entry)))))
 
 (deftest persona-system-prompt-dialect
   ;; Also covers --task-file and --prompt-extra assignment input.

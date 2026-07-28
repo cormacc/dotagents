@@ -27,6 +27,7 @@ A direct child is a leaf. The only exception is a `planner`, which may spawn one
 Choose explicitly:
 
 - **Waiting:** `run` is blocking; `start` plus later `collect` is non-blocking. Give review and implementation work an explicit `--timeout` rather than relying on the ten-minute default.
+- **Placement:** default spawn splits the caller's pane. `--tab` instead creates the child in a new unfocused tab of the caller's workspace; every other contract (env, label, ledger, collect, closure) is identical. There is no inheritance: a tab-placed child's own spawns still split by default.
 - **Cardinality:** the CLI handles one child. For many, direct parent fan-out in waves of at most two; never child-to-child work.
 - **Lifecycle:** ephemeral by default. Residents are explicit opt-in only for correlated work and retain their spawn identity, pane, label, persona, and one active task.
 

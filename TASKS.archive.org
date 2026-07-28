@@ -1319,3 +1319,36 @@ CLOSED: [2026-07-28 Tue 11:16]
 - State "DONE" from "STARTED" [2026-07-28 Tue 11:16]
 :END:
 #+IMPORT: [[plan:2026-07-27-org-tasks-housekeeping-skill-org-tasks.org]]
+
+** DONE subagents: spawn in tab  :skill_herdr-subagents:
+CLOSED: [2026-07-28 Tue 12:21]
+:PROPERTIES:
+:CUSTOM_ID: 41c9729f-5928-45cc-ac7a-c613778b36c2
+:CREATED: [2026-07-28 Tue 11:13]
+:STARTED: [2026-07-28 Tue 12:10]
+:ARCHIVED: [2026-07-28 Tue 12:21]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-28 Tue 11:13]
+- State "STARTED" from "TODO" [2026-07-28 Tue 12:10]
+- State "DONE" from "STARTED" [2026-07-28 Tue 12:21]
+:END:
+Subagents spawn in a new split within the current pane by default.
+Update the skill and supporting scripts to allow this to be overridden at spawn time, to create a new tab within the current herdr workspace instead.
+When a subagent is spawned in a new tab, any subagents it spawns should create a new split in that tab -- i.e. the default behaviour is retained for children / no inheritance of the override is necessary.
+
+Plan (inline, no change-record):
+- Add value-less ~--tab~ flag to ~subagent run|start~ (register in ~boolean-flags~ in =cli.clj=); default split behaviour untouched. Alternative considered: valued ~--placement tab|split~ — deferred as over-general for a single alternative.
+- =herdr.clj=: new ~tab-create!~ wrapping ~herdr tab create --workspace $HERDR_WORKSPACE_ID --cwd … --label … --no-focus --env …~ (child pane id from ~.result.root_pane~); add ~tab create~ to ~required-capabilities~ (safe: min version 0.7.5 already ships it).
+- =cli.clj= ~spawn!~: on ~--tab~ skip ~caller-rect!~/~direction~ and create the tab, then continue the existing rename→start→prompt flow against the tab's root pane; record ~:placement~/~:tab-id~ on the ledger entry.
+- Closure/cleanup unchanged: closing a tab's last pane closes the tab (verified live on herdr 0.7.5).
+- No inheritance by construction: placement is spawn argv only, never injected env; a tab-spawned child's own spawns split within its tab.
+- Update fake-herdr fixture (+ ~tab create~ help/case), =cli_test.clj=, SKILL.md, =scripts/docs/contract.md=, =scripts/README.md=.
+
+Acceptance:
+- ~run/start --tab~ creates the child in a new unfocused tab of the caller's workspace with env, label, ledger, collect, and closure semantics identical to split spawns.
+- Default spawn emits no ~tab~ commands (regression-tested).
+- ~bb test~ passes with coverage of both placements.
+
+Anti-criteria: no workspace-level placement; no persisted/config default; no inheritance mechanism or new child env var; no focus change.
