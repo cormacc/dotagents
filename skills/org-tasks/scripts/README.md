@@ -2,7 +2,7 @@
 
 `ot` is the Babashka-powered protocol engine for the
 [`org-tasks`](../SKILL.md) memory protocol. It owns parsing,
-serialization, status lifecycle and priority writes, archive mechanics,
+serialization, status lifecycle and priority writes, archive/unarchive mechanics,
 selection, doctor checks, section reads, summary scans, change-record
 scaffolding, and a standalone terminal task browser. Other coding
 agents (pi, Emacs companions, CI scripts) shell out to `ot` rather than

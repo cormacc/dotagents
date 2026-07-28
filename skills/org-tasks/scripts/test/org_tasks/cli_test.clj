@@ -10,6 +10,7 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [org-tasks.cli :as cli]
+            [org-tasks.commands.registry :as registry]
             [org-tasks.output :as out]))
 
 (defn- with-user-dir [dir f]
@@ -175,6 +176,28 @@
           (is (= (str (fs/absolutize fallback)) (str/trim out)))
           (is (= (str (fs/absolutize fallback)) (str/trim (:out tasks-override))))))
       (finally (fs/delete-tree dir)))))
+
+(deftest id-arguments-remain-strings-at-dispatch
+  (testing "the registry supplies string coercion for every ID-valued input"
+    (is (= :string (:id registry/dispatch-coerce)))
+    (doseq [entry registry/commands
+            :when (some #{:id} (:args->opts entry))]
+      (is (= :string (:id registry/dispatch-coerce)) (str (:cmds entry))))
+    (let [create (some #(when (= ["create"] (:cmds %)) %) registry/commands)]
+      (doseq [k [:id :parent :after :relative-to]]
+        (is (= :string (get-in create [:spec k :coerce])) (name k)))))
+  (testing "a scientific-notation-shaped prefix is not number-coerced"
+    (let [dir (str (fs/create-temp-dir {:prefix "ot-id-string"}))
+          id "1022e091-2222-4333-8444-555555555551"]
+      (try
+        (spit (str (fs/path dir "TASKS.org"))
+              (str "* Improvements\n** TODO Target\n:PROPERTIES:\n:CUSTOM_ID: " id "\n:END:\n"))
+        (spit (str (fs/path dir "TASKS.local.org")) "#+SELECTED:\n")
+        (let [{:keys [out exit]} (capture #(apply cli/-main ["--root" dir "--format" "json" "status" "1022e091" "DONE"]))
+              envelope (json/parse-string out true)]
+          (is (zero? exit))
+          (is (= id (get-in envelope [:result :task :id]))))
+        (finally (fs/delete-tree dir))))))
 
 (deftest contract-envelope-error-shape
   (testing "a structured failure renders the JSON contract envelope"

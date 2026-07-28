@@ -53,6 +53,7 @@ Optional description text.
 - `:STARTED:` caches the first STARTED transition; source of truth is the first matching LOGBOOK state entry.
 - `CLOSED:` is the current close timestamp for `DONE`/`CANCELLED`, on its own line between heading and `:PROPERTIES:`. It is cleared on reopen and rewritten on the next close.
 - `:LOGBOOK:` is append-only lifecycle history: one created entry plus one state entry per transition.
+- `:ARCHIVED:` is written by `ot archive`; `:ARCHIVE_OLPATH:` records the source level-1 section so `ot unarchive` can restore without guessing. It is stamped only for roots archived from shared `TASKS.org`, whose level-1 headings are real restore destinations; roots archived from a file-level `#+IMPORT:` record are left without it and need an explicit `--section` on restore. Unarchive removes both archive properties while preserving lifecycle state/history.
 - `#+IMPORT:` links a change-record/imported task file. Canonical plan imports use `[[plan:file.org]]`; file links remain valid for non-plan imports.
 - `design/specs/` is a conventional home for prose-only living contracts; there is no dedicated `spec` link type. Reference specs (and any repo file) from records with `proj` (`[[proj:design/specs/foo.org]]`), and list task-relevant specs with `#+SPEC:` values in the same bare `[[proj:PATH]]` link form (e.g. `[[proj:design/specs/foo.org]]`). For discovery to reach a `design/specs/` folder automatically, declare it in `TASKS.org` (`#+SPEC: [[proj:design/specs/]]`) or link its files from `design/SPEC.org` — the discovery default root is the file `./design/SPEC.org`, not the folder.
 
@@ -68,7 +69,7 @@ Blockers live in drawer properties:
 :BLOCKED-BY+: human: waiting on Alice's review
 ```
 
-Ready-task checks treat `task:<UUID>` blockers as resolved only when the referenced task is `DONE` or `CANCELLED`; all non-task blockers are opaque until removed.
+Ready-task checks treat `task:<UUID>` blockers as resolved only when the referenced task is `DONE` or `CANCELLED`; all non-task blockers are opaque until removed. A bare full UUID is accepted as a legacy task-reference spelling and is preserved byte-for-byte when read or written; new blockers should use explicit `task:<UUID>`. Other bare text remains opaque.
 
 `:HANDOFF:` is a short free-form next-session note. It is valid on top-level tasks and plan subtasks and is surfaced during resume.
 

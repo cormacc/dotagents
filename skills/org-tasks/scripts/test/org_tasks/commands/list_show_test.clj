@@ -156,6 +156,23 @@
         (is (contains? (:task r) :sourceContent))
         (is (contains? (:task r) :effectiveSourceContent))))))
 
+(deftest show-text-renders-non-empty-description-only
+  (with-temp-dir
+    (fn [root]
+      (spit (str (fs/path root "TASKS.org"))
+            (str "* Improvements\n** TODO With body\n:PROPERTIES:\n:CUSTOM_ID: 11111111-2222-4333-8444-555555555551\n:END:\nFirst paragraph.\n\n- list item\n** TODO Empty\n:PROPERTIES:\n:CUSTOM_ID: 22222222-2222-4333-8444-555555555552\n:END:\n"))
+      (spit (str (fs/path root "TASKS.local.org")) "#+SELECTED: 11111111-2222-4333-8444-555555555551\n")
+      (let [{:keys [out exit]} (run-cli! "--root" root "--no-color" "show" "11111111")]
+        (is (zero? exit))
+        (is (str/includes? out "source    "))
+        (is (str/includes? out "\n\nFirst paragraph.\n\n- list item")))
+      (let [{:keys [out exit]} (run-cli! "--root" root "--no-color" "selected")]
+        (is (zero? exit))
+        (is (str/includes? out "First paragraph.")))
+      (let [{:keys [out exit]} (run-cli! "--root" root "--no-color" "show" "22222222")]
+        (is (zero? exit))
+        (is (not (str/ends-with? out "\n\n")))))))
+
 (deftest show-linked-plan-record-and-ancestors
   (with-temp-dir
     (fn [root]

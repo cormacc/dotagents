@@ -165,6 +165,13 @@
         {:content (str (str/replace (str/join "\n" new-lines) #"\n*$" "") "\n")
          :line    (inc heading-line-offset)}))))
 
+(defn insert-subtree-into-section
+  "Purely splice an already-rendered task subtree below a level-1 section.
+  Returns `{:content :line}` or nil when the section does not exist; unlike
+  create, restoration never silently creates a destination section."
+  [content section subtree]
+  (splice-into-section content section subtree false))
+
 ;; ── Idempotency scan ───────────────────────────────────────────────
 
 (defn- safe-slurp [path]

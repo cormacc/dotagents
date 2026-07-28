@@ -39,7 +39,8 @@ ot init
 ot root
 ot list --format json
 ot list --levels 0
-ot show <id-or-selected>
+ot show <id-or-selected>  # text mode appends a non-empty task body after metadata
+                        # JSON/EDN retain the Task.description payload
 ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'
 ot create "New sibling" --relative-to <id> --as sibling   # after <id>, same level
 ot create "New child"   --relative-to <id> --as child     # nested under <id>
@@ -51,6 +52,7 @@ ot priority <id> --cycle forward # unset → A → B → C → D → unset; back
 ot priority <id> --clear
 ot select <id>        # or: ot select --clear
 ot archive <id> --yes
+ot unarchive <id> [--section <name>]
 ot publish <id>       # TASKS.local.org -> TASKS.org
 ot unpublish <id>     # TASKS.org -> TASKS.local.org
 ot doctor --format json # includes spec warnings for #+SPEC: declarations and records that declare #+SPEC:
@@ -91,6 +93,8 @@ Key map:
 | `Ctrl-d` / `Ctrl-u` | scroll details pane |
 | `Esc` / `Alt-t` | quit |
 
+`ot unarchive <id>` resolves exact IDs and unique prefixes from `TASKS.archive.org` only. It restores the archived subtree into an existing shared `TASKS.org` level-1 section, preferring explicit `--section` over the `:ARCHIVE_OLPATH:` stamped by `ot archive`; legacy entries and roots archived from a file-level `#+IMPORT:` record carry no `:ARCHIVE_OLPATH:`, so they require `--section` rather than being guessed. It removes `:ARCHIVED:` / `:ARCHIVE_OLPATH:`, reverses a matching linked record parent from `archive:` to `task:`, and does not change status, `CLOSED:`, or LOGBOOK. `--dry-run` reports the source, destination, section, and proposed parent rewrite without writing.
+
 `n`/`N` mirror the pi overlay: with a cursor they create a sibling/child of the current task (inheriting its file/`--local` routing); with an empty list they create a top-level task under the default section.
 
 Editor launches (`e`, and `p` on an existing plan) go through a configurable resolver: the `--editor` option, then `OT_EDITOR`, then `EDITOR`, defaulting to `emacsclient`. `emacsclient`/Vim use `+LINE file`; VS Code (`code`/`vscodium`/`cursor`) uses `--goto file:line`. For the Emacs editor the TUI ensures a server is reachable, starting `emacs --daemon` if needed (override binaries via `EMACSCLIENT_BINARY` / `EMACS_BINARY`).
@@ -118,7 +122,7 @@ Exit contract: the TUI reserves stdout for a final org-tasks/v1 selected-task en
 
 The pi tasks extension shares CLI root resolution by spawning `ot list` from the workspace cwd and using these returned `root` / `files` fields.
 
-ID-accepting commands accept full `:CUSTOM_ID:` values or any unique prefix of at least four characters. `ot list` and `ot scan` print the first 8 characters of each id as an `id` column; that prefix can be pasted back into any id-accepting command. Ambiguous values fail with `ambiguous-id` and include matching candidates.
+ID-accepting commands accept full `:CUSTOM_ID:` values or any unique prefix of at least four characters. `ot list` and `ot scan` print the first 8 characters of each id as an `id` column; that prefix can be pasted back into any id-accepting command. Ambiguous values fail with `ambiguous-id` and include matching candidates. For blockers, write `task:<UUID>`; existing bare full-UUID tokens also resolve as task dependencies without being rewritten, while all other bare text remains opaque.
 
 ## Change-record scaffolding
 
@@ -142,7 +146,7 @@ Use `#+NO_SPEC: true` when the project has no durable contract layer, the task i
 
 ## `ot spec list`
 
-`ot spec list` (alias `ot spec discover`) is a read-only report of the org-plan discovery traversal (see org-plan SKILL.md § Spec discovery): `#+SPEC:` roots declared in TASKS.org, or the default root `./design/SPEC.org` when none are declared; implicit specs (root `README.*`, `AGENTS.md`, the skills directory); folder roots expanded recursively; org `[[file:...]]`/`[[proj:...]]` links, Markdown `[text](path)` links, and org `#+INCLUDE:` directives all followed transitively with a visited-set cycle guard (external `http`/`https` targets are never followed). Prints the discovered path set with root provenance (e.g. `#+SPEC: ...`, `default root: ...`, `implicit: ...`, `link from ...`). Report-only — no findings, no doctor coupling, always exits 0.
+`ot spec list` (alias `ot spec discover`) is a read-only report of the org-plan discovery traversal (see org-plan SKILL.md § Spec discovery): `#+SPEC:` roots declared in TASKS.org, or the default root `./design/SPEC.org` when none are declared; implicit specs (root `README.*`, `AGENTS.md`, the skills directory); folder roots expanded recursively; org `[[file:...]]`/`[[proj:...]]` links, Markdown `[text](path)` links, and org `#+INCLUDE:` directives all followed transitively with a visited-set cycle guard (external `http`/`https` targets are never followed). Complete segments `.git`, `.direnv`, `.devenv`, `.cache`, `node_modules`, `target`, `build`, `dist`, and `.next` are excluded; candidates with a NUL byte are omitted. Invalid control-data targets yield non-fatal `spec-link-invalid` warnings with source and raw target, and `ot doctor` emits the same ordered warning finding. Prints the discovered path set with root provenance (e.g. `#+SPEC: ...`, `default root: ...`, `implicit: ...`, `link from ...`).
 
 `ot doctor` emits these spec findings:
 

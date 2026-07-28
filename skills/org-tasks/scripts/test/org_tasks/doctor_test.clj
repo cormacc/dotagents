@@ -230,6 +230,15 @@
     (is (= 1 (count-of findings :invalid-task-blocker)))
     (is (= :error (:severity f)))))
 
+(deftest invalid-bare-uuid-blocker-names-raw-token
+  (let [missing "aaaaaaaa-2222-4333-8444-555555555555"
+        {:keys [tasks]} (parser/parse-tasks
+                          (str "* TODO Gated\n:PROPERTIES:\n:CUSTOM_ID: gated001-2222-4333-8444-555555555555\n:BLOCKED-BY: " missing "\n:END:\n"))
+        f (first (filter #(= :invalid-task-blocker (:code %))
+                         (doctor/run-doctor {:tasks tasks :selected-id nil})))]
+    (is (= :error (:severity f)))
+    (is (str/includes? (:message f) missing))))
+
 (deftest valid-task-blocker-no-finding
   (let [{:keys [tasks]}
         (parser/parse-tasks

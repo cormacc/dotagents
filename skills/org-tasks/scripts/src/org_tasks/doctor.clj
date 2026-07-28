@@ -509,7 +509,7 @@
                      (not (contains? by-id (:ref blocker))))]
       {:code :invalid-task-blocker
        :severity :error
-       :message (str ":BLOCKED-BY: references task:" (:ref blocker)
+       :message (str ":BLOCKED-BY: references " (:raw blocker)
                      " which is not in the loaded task graph")
        :location (location-for task)})
     (when-let [id (parser/get-task-id task)]
@@ -568,11 +568,17 @@
   (vec (mapcat #(or (check-patterned-sibling-group %) [])
                (sibling-groups tasks))))
 
+(defn- check-spec-link-invalid [{:keys [spec-link-warnings]}]
+  (mapv (fn [{:keys [message location]}]
+          {:code :spec-link-invalid :severity :warn :message message :location location})
+        spec-link-warnings))
+
 (def ^:private doctor-checks
   [check-link-templates-input
    check-record-structure-input
    check-spec-input
    check-spec-declarations-input
+   check-spec-link-invalid
    check-spec-citations-input
    check-spec-stale-input
    check-duplicate-ids
@@ -599,7 +605,9 @@
     :spec-linked-paths     - optional {spec-path -> #{linked-paths}} map,
                              computed by the CLI layer via
                              org-tasks.spec/linked-paths-from, for the
-                             spec-stale declared-but-stale advisory"
+                             spec-stale declared-but-stale advisory
+    :spec-link-warnings    - malformed transitive link diagnostics from the
+                             safe spec traversal"
   [{:keys [tasks] :as input}]
   (let [input (assoc input :id-index (build-id-index tasks))]
     (vec (mapcat #(% input) doctor-checks))))
@@ -622,7 +630,7 @@
    :missing-link-template :misordered-link-template
    :missing-local-setupfile :misordered-setupfile
    :missing-record-section :empty-validation-section
-   :spec-untouched :spec-value-malformed :spec-path-dangling
+   :spec-untouched :spec-value-malformed :spec-path-dangling :spec-link-invalid
    :spec-citation-untested :spec-stale])
 
 (defn format-findings-report [findings]

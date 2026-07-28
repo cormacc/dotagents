@@ -1299,3 +1299,23 @@ Origin:
 
 Evidence:
 A claude-opus-5 worker hit an Anthropic `overloaded_error` (retry failed after 3 attempts) mid-assignment, stopped, and published nothing; Herdr reported it `done`. The parent`s blocking collect ran to its 40-minute budget and returned `pending`/`timeout` even though three of six plan tasks were complete on disk. Recovery required diagnosing via `agent read`, verifying the working tree by hand, and re-prompting with an explicit instruction to publish BLOCKED on a repeat failure - guidance the CLI should have supplied.
+
+** DONE org-tasks housekeeping :skill_org-tasks:
+CLOSED: [2026-07-28 Tue 11:16]
+:PROPERTIES:
+:CUSTOM_ID: af21bb9e-14c8-4061-bce4-ddba234f8b6c
+:CREATED: [2026-07-27 Mon 18:23]
+:STARTED: [2026-07-27 Mon 18:43]
+:ARCHIVED: [2026-07-28 Tue 11:16]
+:ARCHIVE_OLPATH: Housekeeping
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 18:23]
+- State "STARTED" from "TODO" [2026-07-27 Mon 18:43]
+- State "DONE" from "STARTED" [2026-07-27 Mon 18:59]
+- State "STARTED" from "DONE" [2026-07-28 Tue 10:38]
+- State "DONE" from "STARTED" [2026-07-28 Tue 10:44]
+- State "STARTED" from "DONE" [2026-07-28 Tue 11:02]
+- State "DONE" from "STARTED" [2026-07-28 Tue 11:16]
+:END:
+#+IMPORT: [[plan:2026-07-27-org-tasks-housekeeping-skill-org-tasks.org]]

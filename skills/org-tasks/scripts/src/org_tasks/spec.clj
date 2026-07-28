@@ -65,15 +65,20 @@
             (= s "..") (recur (rest segs) (if (seq out) (pop out) out))
             :else (recur (rest segs) (conj out s))))))))
 
+(defn invalid-link-target?
+  "True when a transitive target contains control data unsafe for a
+  filesystem path. External links are valid-but-not-followed."
+  [{:keys [target]}]
+  (boolean (and target (re-find #"[\x00-\x1f]" target))))
+
 (defn resolve-link-target
   "Resolve a `{:kind :file|:proj :target}` link found in `linking-path`
-  (a repo-relative path) to a repo-relative path. `proj:` links are
-  always repo-root relative; `file:` links are relative to the
-  linking document's directory (or repo-root when the target is
-  already repo-root anchored with no `../` prefix ambiguity). Returns
-  nil for external (http/https) targets."
-  [linking-path {:keys [kind target]}]
-  (when (and target (not (re-find #"(?i)^https?://" target)))
+  (a repo-relative path) to a repo-relative path. Returns nil for external
+  links and malformed control-data targets."
+  [linking-path {:keys [kind target] :as link}]
+  (when (and target
+             (not (invalid-link-target? link))
+             (not (re-find #"(?i)^https?://" target)))
     (if (= kind :proj)
       (normalize-repo-path target)
       (let [dir (if (str/includes? linking-path "/")
@@ -110,14 +115,15 @@
      [{:path dir :provenance (str "implicit: skills (" dir ")")}])))
 
 (defn- expand-root
-  "Expand one discovery root path into its constituent file paths.
-  A folder root expands recursively via `list-files`; a file root is
-  itself. Non-existent roots expand to nothing."
-  [{:keys [exists? dir? list-files]} path]
-  (cond
-    (dir? path) (vec (list-files path))
-    (exists? path) [path]
-    :else []))
+  "Expand one discovery root path into eligible constituent file paths.
+  `eligible?` keeps disk policy at the adapter boundary while preserving this
+  namespace's no-filesystem pure-core contract."
+  [{:keys [exists? dir? list-files eligible?] :as fs} path]
+  (let [eligible? (or eligible? (constantly true))]
+    (cond
+      (dir? path) (vec (filter eligible? (list-files path)))
+      (and (exists? path) (eligible? path)) [path]
+      :else [])))
 
 (defn linked-paths-from
   "BFS from a single `root-path` (typically a declared `#+SPEC:` path),
@@ -144,24 +150,9 @@
                               (mapcat #(expand-root fs %)))]
             (recur (into rest-queue new-paths) visited')))))))
 
-(defn discover
-  "Run the full rooted/transitive discovery traversal.
-
-  `fs` supplies:
-    :exists?    (fn [repo-rel-path]) -> bool
-    :dir?       (fn [repo-rel-path]) -> bool
-    :list-files (fn [repo-rel-dir]) -> seq of repo-relative file paths
-                nested recursively under `repo-rel-dir` (dir `\"\"` means
-                repo root, non-recursive — used only for README globbing)
-    :read       (fn [repo-rel-path]) -> file content string or nil
-
-  `tasks-content` is the parsed TASKS.org content (or nil).
-  `skills-dir-candidates` is an ordered seq of candidate skills-dir
-  paths, first existing directory wins (e.g. `[\"skills\" \".agents/skills\"]`).
-
-  Returns a vector of `{:path :provenance}` maps in discovery order,
-  one entry per distinct discovered file (dedup by `:path`, first
-  provenance wins)."
+(defn discover-report
+  "Run full traversal and return `{:entries [...], :warnings [...]}`. Invalid
+  extracted targets are diagnostics, not filesystem inputs."
   [fs tasks-content skills-dir-candidates]
   (let [declared (declared-spec-paths tasks-content)
         roots (if (seq declared)
@@ -175,23 +166,38 @@
                                      (expand-root fs path)))
                               seed-roots))
            visited {}
-           order []]
+           order []
+           warnings []]
       (if (empty? queue)
-        (mapv (fn [p] {:path p :provenance (get visited p)}) order)
+        {:entries (mapv (fn [p] {:path p :provenance (get visited p)}) order)
+         :warnings warnings}
         (let [{:keys [path provenance]} (first queue)
               rest-queue (rest queue)]
           (if (contains? visited path)
-            (recur rest-queue visited order)
+            (recur rest-queue visited order warnings)
             (let [visited' (assoc visited path provenance)
                   order' (conj order path)
                   content ((:read fs) path)
-                  links (when content (extract-transitive-links content))
+                  links (or (when content (extract-transitive-links content)) [])
+                  invalid (filter invalid-link-target? links)
+                  warnings' (into warnings
+                                  (map #(hash-map :code "spec-link-invalid"
+                                                  :message "Spec link target contains control data"
+                                                  :location {:file path :target (:target %)})
+                                       invalid))
                   new-roots (->> links
-                                (keep (fn [link]
-                                        (when-let [target (resolve-link-target path link)]
-                                          target)))
-                                (remove #(contains? visited' %))
-                                (mapcat (fn [target]
-                                          (map (fn [p] {:path p :provenance (str "link from " path)})
-                                               (expand-root fs target)))))]
-              (recur (into rest-queue new-roots) visited' order'))))))))
+                                 (remove invalid-link-target?)
+                                 (keep (fn [link] (resolve-link-target path link)))
+                                 (remove #(contains? visited' %))
+                                 (mapcat (fn [target]
+                                           (map (fn [p] {:path p :provenance (str "link from " path)})
+                                                (expand-root fs target)))))]
+              (recur (into rest-queue new-roots) visited' order' warnings'))))))))
+
+(defn discover
+  "Run the full rooted/transitive discovery traversal.
+
+  Returns only discovery entries for compatibility; [[discover-report]] also
+  exposes non-fatal malformed-target diagnostics."
+  [fs tasks-content skills-dir-candidates]
+  (:entries (discover-report fs tasks-content skills-dir-candidates)))

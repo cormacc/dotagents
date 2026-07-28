@@ -341,6 +341,9 @@
         record-exclude-paths (->> [setup-path (:tasks files) (:local files) (:archive files)]
                                   (remove nil?)
                                   set)
+        spec-report (spec/discover-report (cspec/real-fs project-root)
+                                          (:content (:tasks protocol-files))
+                                          cspec/skills-dir-candidates)
         findings (doctor/run-doctor
                    {:tasks tasks
                     :selected-id selected-id
@@ -351,7 +354,8 @@
                     :spec-path-exists (spec-path-exists-map
                                         project-root
                                         (:content (:tasks protocol-files)))
-                    :spec-linked-paths (spec-linked-paths-map project-root tasks)})
+                    :spec-linked-paths (spec-linked-paths-map project-root tasks)
+                    :spec-link-warnings (:warnings spec-report)})
         counts (doctor/count-by-severity findings)
         wire-findings (mapv finding->wire findings)
         report (doctor/format-findings-report findings)]

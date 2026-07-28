@@ -197,7 +197,9 @@
             (when (seq (:blockedBy wire))
               (str "  blockers  " (str/join ", " (:blockedBy wire))))
             (when (:handoff wire)
-              (str "  handoff   " (:handoff wire)))]})))))
+              (str "  handoff   " (:handoff wire)))
+            (when (seq (:description wire)) "")
+            (when (seq (:description wire)) (:description wire))]})))))
 
 ;; ── ot select / ot selected ────────────────────────────────────────
 

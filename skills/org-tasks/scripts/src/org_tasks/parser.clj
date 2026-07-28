@@ -387,15 +387,22 @@
 
 ;; ── Blockers / handoff / linked issues ────────────────────────────
 
+(def ^:private full-uuid-re
+  #"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
 (defn parse-blocker
-  "Parse a single `:BLOCKED-BY:` token into a structured form."
+  "Parse a single `:BLOCKED-BY:` token into a structured form.
+  Bare full UUIDs are legacy task references; all other bare values stay
+  opaque so free-form human blockers never become graph lookups."
   [^String raw]
   (let [trimmed (str/trim raw)]
     (if-let [m (re-matches #"(?i)^(task|url|human|jira):(.*)$" trimmed)]
       {:raw trimmed
        :kind (keyword (str/lower-case (m 1)))
        :ref (str/trim (m 2))}
-      {:raw trimmed :kind :other :ref trimmed})))
+      {:raw trimmed
+       :kind (if (re-matches full-uuid-re trimmed) :task :other)
+       :ref trimmed})))
 
 (defn get-task-blockers [task]
   (mapv parse-blocker (get-drawer-property-values task "BLOCKED-BY")))

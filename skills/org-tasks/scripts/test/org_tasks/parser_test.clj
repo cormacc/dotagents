@@ -248,6 +248,21 @@
     (is (= :url   (-> blockers (nth 1) :kind)))
     (is (= :human (-> blockers (nth 2) :kind)))))
 
+(deftest bare-uuid-blocker-is-a-legacy-task-reference
+  (let [id "11111111-2222-4333-8444-555555555555"
+        blocker (p/parse-blocker id)]
+    (is (= {:raw id :kind :task :ref id} blocker))
+    (is (= :other (:kind (p/parse-blocker "11111111"))))
+    (is (= :other (:kind (p/parse-blocker "waiting on a human"))))
+    (let [task {:property-lines [(str ":BLOCKED-BY: " id)]}
+          open {:status "STARTED"}
+          done {:status "DONE"}
+          cancelled {:status "CANCELLED"}]
+      (is (false? (:ready (p/is-task-ready task (constantly open)))))
+      (is (true? (:ready (p/is-task-ready task (constantly done)))))
+      (is (true? (:ready (p/is-task-ready task (constantly cancelled)))))
+      (is (= :missing-task (get-in (p/is-task-ready task (constantly nil)) [:gating 0 :reason]))))))
+
 (deftest task-handoff
   (let [t (first (:tasks (p/parse-tasks
                            (str "* TODO With handoff\n"

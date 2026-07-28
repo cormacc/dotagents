@@ -3,6 +3,7 @@
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
             [org-tasks.lifecycle :as lifecycle]
+            [org-tasks.insert :as insert]
             [org-tasks.links :as links]
             [org-tasks.loader :as loader]
             [org-tasks.output :as out]
@@ -124,6 +125,18 @@
              ""
              ""]))
 
+(defn- source-section
+  "Return the nearest preceding level-1 heading for a parsed task.
+
+  Only meaningful for roots living in shared `TASKS.org`; see
+  `archive-cmd`'s `:ARCHIVE_OLPATH:` guard."
+  [content task]
+  (let [before (take (dec (:line-number task)) (str/split-lines content))]
+    (some->> before
+             (keep #(second (re-matches #"^\*\s+(.+?)\s*$" %)))
+             last
+             str/trim)))
+
 (defn- rewrite-plan-parent-link!
   "Best-effort: rewrite the linked plan's #+PARENT: kind from `task:`
   to `archive:`. Silently skips when the file is out-of-root or
@@ -167,13 +180,23 @@
             (fn []
               (let [archive-path (:archive files)
                     stamp (or (:closed target) (parser/format-org-timestamp))
-                    archive-copy (-> target
-                                     (update :property-lines (fnil conj [])
-                                             (str ":ARCHIVED: [" stamp "]"))
-                                     (assoc :import-children nil
-                                            :line-number 0
-                                            :end-line 0
-                                            :source-path archive-path))
+                    source-content (loader/safe-slurp (:source-path target))
+                    ;; `:ARCHIVE_OLPATH:` records a restore destination, and
+                    ;; `ot unarchive` only ever restores into a shared
+                    ;; `TASKS.org` section. A root living in a file-level
+                    ;; `#+IMPORT:` record sits under a record-internal level-1
+                    ;; heading (`* Plan`, `* Implementation`, …) that is never a
+                    ;; valid destination, so leave the property absent and let
+                    ;; restoration take the explicit `--section` path.
+                    archive-section (when (= (:source-path target) (:tasks files))
+                                      (source-section source-content target))
+                    archive-copy (cond-> (-> target
+                                              (parser/set-drawer-property "ARCHIVED" (str "[" stamp "]"))
+                                              (assoc :import-children nil
+                                                     :line-number 0
+                                                     :end-line 0
+                                                     :source-path archive-path))
+                                   archive-section (parser/set-drawer-property "ARCHIVE_OLPATH" archive-section))
                     ;; `safe-slurp` throws `unreadable` on a read failure
                     ;; (as opposed to a missing file) so a broken
                     ;; TASKS.archive.org aborts here instead of silently
@@ -200,7 +223,7 @@
                     ;; visited even when it ends up with zero remaining
                     ;; roots (e.g. it was the file's only task).
                     source-path (:source-path target)
-                    known-baselines {source-path (loader/safe-slurp source-path)}
+                    known-baselines {source-path source-content}
                     selection-cleared? (boolean (and selected-id
                                                      (contains? (subtree-task-ids target)
                                                                 selected-id)))]
@@ -224,3 +247,93 @@
                                    :to (str "archive:" full-id)})
                    :text/lines [(str "Archived " (:summary target)
                                      " → " archive-path)]})))))))))
+
+(defn- archive-roots [archive-path content]
+  (if (str/blank? content)
+    []
+    (:tasks (parser/parse-tasks content {:source-path archive-path
+                                         :source-content content}))))
+
+(defn- restore-copy [archived tasks-path]
+  (-> archived
+      (parser/set-drawer-property "ARCHIVED" nil)
+      (parser/set-drawer-property "ARCHIVE_OLPATH" nil)
+      (assoc :line-number 0 :end-line 0 :source-path tasks-path)))
+
+(defn unarchive-cmd [{:keys [opts] :as result}]
+  (let [{:keys [project-root tasks files]} (load-context opts)
+        id (positional-arg result :id)]
+    (cond
+      (or (nil? id) (str/blank? id))
+      (out/emit-error opts {:code "argument-error" :message "ot unarchive requires a task id."})
+
+      :else
+      (util/guard! opts
+        (fn []
+          (let [archive-path (:archive files)
+                archive-content (loader/safe-slurp archive-path)
+                archived-tasks (archive-roots archive-path archive-content)
+                target (util/resolve-required-id archived-tasks id opts task/find-top-level-by-id-or-prefix)
+                full-id (parser/get-task-id target)
+                active-match (task/find-by-id tasks full-id)
+                explicit-section (:section opts)
+                recorded-section (parser/get-drawer-property target "ARCHIVE_OLPATH")
+                section (or explicit-section recorded-section)
+                section-source (if explicit-section "--section" ":ARCHIVE_OLPATH:")
+                tasks-path (:tasks files)
+                tasks-content (or (loader/safe-slurp tasks-path) "")
+                restored (restore-copy target tasks-path)
+                subtree (parser/serialize-tasks [restored])
+                destination (when section (insert/insert-subtree-into-section tasks-content section subtree))
+                import-path (:import-path target)
+                record-path (when import-path
+                              (links/resolve-task-link-target project-root target import-path))
+                record-content (when record-path (loader/safe-slurp record-path))
+                record-updated (when record-content
+                                 (parser/rewrite-parent-link-kind record-content full-id :task))]
+            (cond
+              active-match
+              (out/emit-error opts {:code "validation"
+                                   :message (str "Cannot unarchive: :CUSTOM_ID: " full-id " already exists in active tasks.")})
+
+              (nil? section)
+              (out/emit-error opts {:code "validation"
+                                   :message "Archived task has no :ARCHIVE_OLPATH:; pass --section <name>."})
+
+              (nil? destination)
+              (out/emit-error opts {:code "validation"
+                                   :message (str "Destination section not found in TASKS.org: " section)})
+
+              (and import-path (nil? record-path))
+              (out/emit-error opts {:code "path-outside-project"
+                                   :message "Linked change-record resolves outside project root."})
+
+              :else
+              (let [remaining (vec (remove #(= full-id (parser/get-task-id %)) archived-tasks))
+                    archive-updated (parser/serialize-tasks-preserving-file archive-content remaining)
+                    rewrote-plan? (and record-content (not= record-content record-updated))]
+                (when-not (:dry-run opts)
+                  ;; Validate every baseline before the first write so a failed
+                  ;; preflight never leaves a partially-restored subtree.
+                  (loader/assert-unchanged! archive-path archive-content)
+                  (loader/assert-unchanged! tasks-path tasks-content)
+                  (when record-path (loader/assert-unchanged! record-path record-content))
+                  ;; Restore the active copy first. Subsequent write failures
+                  ;; then retain either the archive copy or a recoverable
+                  ;; duplicate; removing the archive copy is always last.
+                  (loader/atomic-write tasks-path (:content destination))
+                  (when rewrote-plan?
+                    (loader/atomic-write record-path record-updated))
+                  (loader/atomic-write archive-path archive-updated))
+                (out/emit-result
+                 opts
+                 {:task (task/task->wire restored)
+                  :from archive-path
+                  :to tasks-path
+                  :section section
+                  :sectionSource section-source
+                  :planRewrite (when import-path
+                                 {:file import-path
+                                  :from (str "archive:" full-id)
+                                  :to (str "task:" full-id)})
+                  :text/lines [(str "Unarchived " (:summary target) " → " tasks-path " :: " section)]})))))))))

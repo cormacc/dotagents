@@ -96,6 +96,18 @@
             (is (= [{:raw "human: plain human" :kind "human" :ref "plain human"}]
                    (:blockers r)))))))))
 
+(deftest blocker-add-preserves-bare-full-uuid
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [target "11111111-2222-4333-8444-555555555551"
+            dep "22229999-2222-4333-8444-555555555552"
+            {:keys [out exit]} (run-cli! "--root" root "--format" "json" "blocker" "add" target dep)
+            r (parse-json-result out)]
+        (is (zero? exit))
+        (is (= [{:raw dep :kind "task" :ref dep}] (:blockers r)))
+        (is (str/includes? (slurp (str (fs/path root "TASKS.org"))) (str ":BLOCKED-BY: " dep)))))))
+
 ;; ── issue ──────────────────────────────────────────────
 
 (deftest issue-add-list-remove-urls

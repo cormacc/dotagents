@@ -19,12 +19,24 @@
                            paths))]
     {:exists? (fn [p] (contains? paths p))
      :dir?    (fn [p] (contains? dirs p))
+     :eligible? (fn [p]
+                  (and (not (some #{".git" ".direnv" ".devenv" ".cache" "node_modules" "target" "build" "dist" ".next"}
+                                  (str/split p #"/")))
+                       (not (str/includes? (get files p "") "\u0000"))))
      :read    (fn [p] (get files p))
      :list-files
      (fn [dir]
        (if (= dir "")
          (vec (filter #(not (str/includes? % "/")) paths))
          (vec (filter #(str/starts-with? % (str dir "/")) paths))))}))
+
+(defn- permissive-fs
+  "An `fs` stub with no eligibility guard at all — no excluded-segment,
+  `safe-relative-path?`, or NUL check. Regression coverage for the pure
+  core's own malformed-target defence must not be able to pass because an
+  adapter filtered the input first."
+  [files]
+  (dissoc (fixture-fs files) :eligible?))
 
 (def ^:private skills-candidates ["skills" ".agents/skills"])
 
@@ -68,6 +80,29 @@
     (is (contains? paths "design/specs/a.org"))
     (is (contains? paths "design/specs/nested/b.org"))))
 
+(deftest excluded-and-binary-candidates-are-omitted
+  (let [fs (fixture-fs {"design/SPEC.org" "[[file:node_modules/esbuild]] [[file:binary.org]] [[file:good.org]]"
+                        "design/node_modules/esbuild" "\u0000binary"
+                        "design/binary.org" "\u0000binary"
+                        "design/good.org" "text"
+                        "design/dist/also.org" "text"})
+        report (spec/discover-report fs nil skills-candidates)
+        paths (set (map :path (:entries report)))]
+    (is (contains? paths "design/good.org"))
+    (is (not (contains? paths "design/node_modules/esbuild")))
+    (is (not (contains? paths "design/binary.org")))
+    (is (not (contains? paths "design/dist/also.org")))))
+
+(deftest malformed-link-is-a-non-fatal-warning
+  (let [fs (assoc (fixture-fs {"design/SPEC.org" "[[file:bad\u0000target.org]] [[file:good.org]]"
+                               "design/good.org" "text"})
+                  :eligible? (constantly true))
+        report (spec/discover-report fs nil skills-candidates)]
+    (is (= ["spec-link-invalid"] (mapv :code (:warnings report))))
+    (is (= "design/SPEC.org" (get-in report [:warnings 0 :location :file])))
+    (is (= "bad\u0000target.org" (get-in report [:warnings 0 :location :target])))
+    (is (some #(= "design/good.org" (:path %)) (:entries report)))))
+
 (deftest transitive-org-links-are-followed
   (let [fs (fixture-fs {"design/SPEC.org" "See [[file:sub.org]] and [[proj:docs/other.org]]."
                         "design/sub.org" "sub content"
@@ -93,6 +128,21 @@
                         "design/b.org" "leaf"})]
     (is (= #{"design/a.org" "design/b.org"}
            (spec/linked-paths-from fs "design/SPEC.org")))))
+
+(deftest resolve-link-target-rejects-malformed-control-data-targets
+  (testing "the pure core is the second defence layer: malformed targets never resolve"
+    (is (nil? (spec/resolve-link-target "design/SPEC.org"
+                                       {:kind :file :target "bad\u0000target.org"})))
+    (is (nil? (spec/resolve-link-target "design/SPEC.org"
+                                       {:kind :proj :target "docs/bad\u0001target.org"})))
+    (is (= "design/good.org"
+           (spec/resolve-link-target "design/SPEC.org" {:kind :file :target "good.org"})))))
+
+(deftest linked-paths-from-excludes-malformed-targets-without-adapter-guards
+  (let [fs (permissive-fs {"design/SPEC.org" "[[file:bad\u0000target.org]] [[file:good.org]]"
+                           "design/bad\u0000target.org" "text"
+                           "design/good.org" "text"})]
+    (is (= #{"design/good.org"} (spec/linked-paths-from fs "design/SPEC.org")))))
 
 (deftest markdown-links-are-traversed
   (let [fs (fixture-fs {"design/SPEC.org" "See [markdown](md-target.org)."

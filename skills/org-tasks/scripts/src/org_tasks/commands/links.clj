@@ -23,7 +23,8 @@
     (:error i) (assoc :error (:error i))))
 (defn- normalise-blocker-token [^String raw]
   (let [trimmed (str/trim raw)]
-    (if (re-find #"(?i)^(task|url|human|jira):" trimmed)
+    (if (or (re-find #"(?i)^(task|url|human|jira):" trimmed)
+            (= :task (:kind (parser/parse-blocker trimmed))))
       trimmed
       (str "human: " trimmed))))
 (defn- task-link-templates [task]

@@ -1,0 +1,289 @@
+#+TITLE: org-tasks housekeeping :skill_org-tasks:
+#+DATE: 2026-07-27 Mon
+#+PARENT: [[archive:af21bb9e-14c8-4061-bce4-ddba234f8b6c][org-tasks housekeeping :skill_org-tasks:]]
+#+STATUS: Complete
+#+SPEC: [[proj:skills/org-plan/SKILL.md]]
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+#+SPEC: [[proj:skills/org-tasks/references/ot-cli.md]]
+#+SPEC: [[proj:skills/org-tasks/references/protocol.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/DESIGN.org]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Intent
+
+Remove five recurring sources of manual repair and misleading `ot` output without broadening the org-task protocol: preserve identifier strings at the CLI boundary, recognise legacy bare-UUID blockers, make spec traversal safe over real repositories, add a guarded archive inverse, and show task bodies in human-readable output. Keep machine output, round-trip fidelity, lifecycle semantics, and existing on-disk blocker values compatible.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+Five independent fixes stay within the existing parser, command-family, registry, loader, and documentation boundaries. The only new command is `ot unarchive`; the other four changes repair existing semantics or human-readable output without changing existing machine payloads. Unarchive preflights all baselines, writes the active subtree, then any linked-record reversal, and removes the archive copy last so a post-preflight failure leaves a recoverable copy.
+
+** Scope
+*** In scope
+- String coercion for every task-ID positional argument and every task-ID-valued create option in the shared command registry.
+- Bare full-UUID blocker classification, writer preservation, readiness resolution, and missing-reference diagnostics.
+- Spec-discovery filtering for generated/dependency trees and NUL-bearing binary files.
+- Non-fatal diagnostics for malformed transitive spec-link targets in `ot spec list` and `ot doctor`.
+- Core-layer (`org-tasks.spec`) malformed-target guarding in `resolve-link-target`, effective independently of fs-adapter path guards, with direct regression coverage.
+- `ot unarchive`, archive-origin section metadata, active/archive file mutation, and change-record parent-link reversal.
+- Restricting `:ARCHIVE_OLPATH:` stamping to roots archived from shared `TASKS.org`, with focused archive/unarchive coverage for roots living in file-level `#+IMPORT:` records.
+- Default task-body rendering in text-mode `ot show` / `ot selected`.
+- Contract, protocol, CLI, architecture, and skill documentation touched by these behaviours.
+*** Out of scope
+- The parser-facade split and unrelated org-tasks backlog items.
+- Rewriting existing bare-UUID blockers or changing their on-disk spelling.
+- MIME detection, arbitrary binary-format classification, or a configurable spec-ignore language.
+- Restoring legacy archived tasks to a guessed section when neither `:ARCHIVE_OLPATH:` nor `--section` supplies one.
+- Reopening status as part of unarchive; callers continue to use `ot status`.
+- Archived-task browsing or unarchive actions in the TUI / pi overlay.
+- Changes to imported-root archive restoration; `ot unarchive` restores into shared `TASKS.org` only.
+- Restoration or replacement of the intentionally deleted `TASKS.org` task `04602946` (bb-tasks extension improvements); the deletion is deliberate, not remediation scope.
+
+** Acceptance
+*** Core functionality
+- [X] Every registry command whose positional mapping contains `:id` receives the original CLI token as a string.
+- [X] `ot create --id` receives its value as a string.
+- [X] `ot create --parent` receives its value as a string.
+- [X] `ot create --after` receives its value as a string.
+- [X] `ot create --relative-to` receives its value as a string.
+- [X] `ot status 1022e091 DONE` resolves the task whose UUID starts with `1022e091` instead of looking up `1.022E94`.
+- [X] A bare full UUID in `:BLOCKED-BY:` is projected as blocker kind `task`.
+- [X] A bare full UUID in `:BLOCKED-BY:` retains its raw token.
+- [X] A bare full-UUID dependency gates while its task is open.
+- [X] A bare full-UUID dependency clears when its task is `DONE`.
+- [X] A bare full-UUID dependency clears when its task is `CANCELLED`.
+- [X] `ot blocker add <id> <bare-uuid>` persists the bare UUID without a `human:` prefix.
+- [X] `ot doctor` emits `invalid-task-blocker` for a bare full UUID absent from the loaded graph.
+- [X] Spec discovery omits files below the documented excluded-segment set: `.git`, `.direnv`, `.devenv`, `.cache`, `node_modules`, `target`, `build`, `dist`, `.next`.
+- [X] Spec discovery omits files whose content contains a NUL byte.
+- [X] `ot spec list` reports an invalid extracted link target as a non-fatal envelope warning.
+- [X] `ot doctor` reports an invalid extracted link target as an ordered warning finding.
+- [X] `ot spec list --format json` exits successfully in this repository while `skills/**/node_modules` trees are present.
+- [X] `ot doctor --format json` exits successfully in this repository while `skills/**/node_modules` trees are present.
+- [X] `ot archive` stamps the archived task with the Org-standard `:ARCHIVE_OLPATH:` section when its source section is known.
+- [X] `resolve-link-target` returns nil for a file-kind link whose target contains a NUL byte.
+- [X] `resolve-link-target` returns nil for a proj-kind link whose target contains a control character.
+- [X] `linked-paths-from` excludes a malformed control-data target linked from a traversed root.
+- [X] `ot archive` stamps `:ARCHIVE_OLPATH:` only when the archived root's source file is shared `TASKS.org`.
+- [X] Archiving a top-level root that lives in a file-level `#+IMPORT:` record produces an archive copy without `:ARCHIVE_OLPATH:`.
+- [X] `ot unarchive <id>` resolves full UUIDs against `TASKS.archive.org` only.
+- [X] `ot unarchive <id>` resolves unique prefixes against `TASKS.archive.org` only.
+- [X] `ot unarchive <id>` removes the selected subtree from `TASKS.archive.org`.
+- [X] `ot unarchive <id>` inserts the selected subtree under its resolved level-1 section in shared `TASKS.org`.
+- [X] `ot unarchive <id>` removes `:ARCHIVED:` from the restored root.
+- [X] `ot unarchive <id>` removes `:ARCHIVE_OLPATH:` from the restored root.
+- [X] `ot unarchive <id>` preserves task status.
+- [X] `ot unarchive <id>` preserves `CLOSED:`.
+- [X] `ot unarchive <id>` preserves `:CUSTOM_ID:`.
+- [X] `ot unarchive <id>` preserves the task body.
+- [X] `ot unarchive <id>` preserves descendants.
+- [X] `ot unarchive <id>` preserves `:LOGBOOK:`.
+- [X] `ot unarchive <id>` rewrites the linked record's matching `#+PARENT:` target from `archive:` to `task:`.
+- [X] Registry-derived dispatch recognises `ot unarchive`.
+- [X] Top-level help lists `ot unarchive`.
+- [X] Command help documents `ot unarchive` options.
+- [X] The `org-tasks/v1` contract documents the additive unarchive result fields.
+- [X] The `org-tasks/v1` contract documents stable unarchive errors.
+- [X] Text-mode `ot show <id>` appends a non-empty task description after the metadata block.
+- [X] Text-mode `ot selected` uses the same task-description rendering.
+- [X] JSON/EDN `ot show` payloads remain unchanged.
+*** Edge cases
+- [X] A non-UUID bare blocker still normalises to `human:` when added through `ot blocker add`.
+- [X] Explicit prefixed blocker tokens retain their existing classification.
+- [X] A UUID-like prefix shorter than a full UUID remains opaque when used as a bare blocker.
+- [X] A malformed spec link containing NUL/control data cannot reach `babashka.fs/path` uncaught.
+- [X] Excluded directories are matched by complete path segment rather than substring.
+- [X] Folder expansion omits a NUL-bearing file.
+- [X] A direct link to a NUL-bearing file is omitted.
+- [X] `ot unarchive` refuses an ID absent from `TASKS.archive.org` with a structured `unknown-task` error.
+- [X] `ot unarchive` refuses a task whose UUID already exists in the active graph.
+- [X] `ot unarchive` uses explicit `--section` ahead of `:ARCHIVE_OLPATH:`.
+- [X] A legacy archive entry lacking destination-section context fails with an actionable validation error.
+- [X] `ot unarchive` refuses a missing destination section instead of creating it silently.
+- [X] `ot unarchive --dry-run` leaves both protocol files unchanged.
+- [X] `ot unarchive --dry-run` leaves the linked record unchanged.
+- [X] A failed unarchive preflight leaves both protocol files unchanged.
+- [X] A failed unarchive preflight leaves the linked record unchanged.
+- [X] Destination, linked-record, and archive-removal write failures leave the task in active or archive storage; archive removal is last.
+- [X] Unarchive output leaves each org file with exactly one trailing newline.
+- [X] Unarchive output passes `git diff --check`.
+- [X] Text-mode `ot show` emits no extra blank body separator when the description is empty.
+- [X] Task description text is emitted byte-for-byte after the metadata separator.
+- [X] The malformed-target regression tests exercise `org-tasks.spec` directly through an fs stub carrying no `safe-relative-path?` or NUL guard.
+- [X] `ot unarchive` of a root archived from a file-level `#+IMPORT:` record fails without `--section` with the actionable missing-destination-context validation error.
+- [X] `ot unarchive --section` restores a root archived from a file-level `#+IMPORT:` record under the explicit section in shared `TASKS.org`.
+*** Anti-criteria
+- [X] Must not: change the machine `Task.description` field.
+- [X] Must not: change the `org-tasks/v1` envelope shape for existing commands.
+- [X] Must not: number-coerce task IDs at any command boundary.
+- [X] Must not: treat arbitrary bare text as a task reference.
+- [X] Must not: migrate existing blocker properties.
+- [X] Must not: rewrite existing blocker properties.
+- [X] Must not: follow excluded dependency/build trees during spec discovery.
+- [X] Must not: turn malformed spec-link data into an uncaught filesystem exception.
+- [X] Must not: clear `CLOSED:` during unarchive.
+- [X] Must not: append a lifecycle state transition during unarchive.
+- [X] Must not: guess a legacy archived task's destination section.
+- [X] Must not: weaken project-root path sandboxing.
+- [X] Must not: weaken optimistic-concurrency checks.
+- [X] Must not: implement the deferred parser facade split.
+- [X] Must not: implement TUI archive browsing.
+- [X] Must not: implement unrelated housekeeping.
+- [X] Must not: infer a `TASKS.org` destination section for roots archived from imported records.
+- [X] Must not: restore or recreate deleted task `04602946`.
+
+** Decisions
+- Keep the five fixes as independent command/core changes under the existing namespace boundaries :: each migrated task is independently implementable and verifiable; only shared documentation and the full suite couple them.
+  Rejected:
+  - Fold them into the deferred parser-facade refactor: unrelated risk and no acceptance payoff.
+  - Add command-local stringification shims: easy to miss future ID-bearing handlers and too late to preserve the original token reliably.
+- Coerce IDs in registry-derived dispatch at the CLI parse boundary :: create's `:id`, `:parent`, `:after`, and `:relative-to` specs use `:coerce :string`; the existing aggregate `dispatch-coerce` then applies `:id` string coercion to every positional command without advertising a synthetic `--id` option in each command's help. A structural test prevents partial coverage.
+  Rejected:
+  - Add an `:id` option spec to every positional command: fixes coercion but pollutes command help with an option that is documented as positional.
+  - Stringify only in `resolve-id-arg`: fixes `show` but leaves status, links, archive, record, and create placement inconsistent.
+  - Stringify numerics after coercion: scientific notation has already destroyed the original hexadecimal spelling.
+- Recognise only bare full UUIDs as implicit task blockers :: preserve their raw spelling while projecting `kind=task`; explicit `task:` remains the documented preferred writer form.
+  Rejected:
+  - Treat every bare token as a task ID: turns human blockers into dangling references.
+  - Rewrite old values to `task:`: unnecessary migration churn and violates round-trip expectations.
+- Filter spec inputs before traversal and degrade malformed targets to diagnostics :: path-segment exclusions cover conventional generated/dependency trees; NUL is the deterministic binary heuristic; malformed-target details flow to `warnings` for `spec list` and an ordered doctor finding.
+  Rejected:
+  - Extension allow-list: drops extensionless and uncommon but valid living specs.
+  - Catch only `InvalidPathException`: avoids the crash but still slurps dependency binaries and silently hides the source.
+  - Full MIME detection: dependency and portability cost is disproportionate.
+- Preserve archive destination context with Org-standard `:ARCHIVE_OLPATH:` :: new archives restore without guesswork; `--section` is an explicit override and the required compatibility path for legacy entries without context.
+  Rejected:
+  - Always restore under `Improvements`: silent semantic corruption for tasks archived from other sections.
+  - Recover placement from git history: unavailable outside git, sensitive to rewrites, and unnecessary once archive metadata exists.
+  - Invent a project-specific archive property: duplicates an established Org context field.
+- Unarchive preserves lifecycle state :: it reverses file placement and parent-link kind only; `ot status <id> TODO` remains the single lifecycle writer that clears `CLOSED:` and logs the transition.
+- Fix the malformed-target second defence in the pure core and prove it adapter-independently :: review 2026-07-28 found the `resolve-link-target` guard inert (`:as` written inside the `:keys` vector binds `link` to nil, so `invalid-link-target?` never fires); correct the destructuring and add regression tests that call `org-tasks.spec` directly through a permissive fs stub so no adapter guard can mask a regression.
+  Rejected:
+  - Rely solely on the fs-adapter `safe-relative-path?`/NUL guards: leaves the documented second defence layer dead code and reintroduces the original crash for any adapter without those guards.
+- Stamp `:ARCHIVE_OLPATH:` only for roots archived from shared `TASKS.org` :: record-internal level-1 headings (`* Plan`, `* Implementation`, …) are never valid restore destinations, so stamping them is misleading at archive time and breaks default unarchive; leaving the property absent routes imported-record roots to the existing actionable `--section` legacy path.
+  Rejected:
+  - Map a record-internal heading back to the parent task's `TASKS.org` section: cross-file inference for marginal benefit while imported-root restoration stays out of scope.
+- Deletion of `TASKS.org` task `04602946` (bb-tasks extension improvements) is intentional :: review flagged it as unexplained task-memory loss; confirmed deliberate, with no restoration, archive-lifecycle, or replacement work planned.
+- Render the body by default in text `show` :: explicit `show` is the human inspection command; machine callers keep consuming the unchanged `description` field.
+  Rejected:
+  - Add `--body`: perpetuates the surprising omission and requires callers to know a second inspection mode.
+
+** Shipped
+- MODIFIED CLI dispatch :: preserve task-ID tokens as strings for positional commands and create placement options, including scientific-notation-shaped UUID prefixes.
+- MODIFIED blocker semantics :: resolve bare full UUIDs as task dependencies without rewriting stored values; retain human handling for other bare text and diagnose missing task references.
+- MODIFIED spec discovery :: exclude generated/dependency trees and NUL-bearing files, reject malformed control-data targets in both core and filesystem layers, and surface non-fatal diagnostics through `ot spec list` and `ot doctor`.
+- ADDED `ot unarchive` :: guarded archive-only restoration with source-section metadata, explicit legacy/imported-root section selection, dry-run, parent-link reversal, lifecycle preservation, and active → linked-record → archive-removal write ordering that prefers a recoverable duplicate to task loss.
+- MODIFIED text-mode `ot show` / `ot selected` :: render non-empty task bodies while preserving existing JSON/EDN payloads.
+- MODIFIED `skills/org-tasks/SKILL.md`, `skills/org-plan/SKILL.md`, `references/protocol.md`, `references/ot-cli.md`, `scripts/docs/contract.md`, and architecture/readme material :: align durable workflow and command contracts with the shipped behavior.
+
+** Risks
+- The directory exclusion set can hide a deliberately-authored spec under a conventionally generated folder. Accepted and documented; explicit repository organisation should keep living contracts outside generated/dependency trees.
+- NUL detection does not identify every binary encoding. Accepted; it prevents the reproduced crash without inventing MIME policy.
+- `ot archive` and `ot unarchive` remain sequential multi-file writes rather than a filesystem transaction. For unarchive, loading and preflighting every baseline precede an active-subtree write, then linked-record rewrite, then archive removal last; atomic per-file replacement plus that order prefers a recoverable duplicate over task loss after a write failure. A failure can therefore leave duplicate active/archive copies or a temporarily stale record link, requiring recovery rather than automatic rollback.
+- Legacy archive entries need an explicit `--section`; this is intentional rather than silently guessing from current repository layout.
+- Plain `ot show` output becomes longer for large bodies. Intended; JSON/EDN and `ot list` remain the bounded automation surfaces.
+- Roots archived from imported records carry no `:ARCHIVE_OLPATH:` and always require an explicit `--section` on unarchive. Accepted; explicit intent beats a wrong record-internal heading.
+
+* Plan
+
+** DONE Preserve task-ID strings at CLI dispatch
+CLOSED: [2026-07-27 Mon 18:57]
+:PROPERTIES:
+:CUSTOM_ID: 4c54f6d1-9284-4431-a714-1ca3087c53a7
+:CREATED: [2026-07-02 Thu 22:33]
+:STARTED: [2026-07-27 Mon 18:43]
+:END:
+:LOGBOOK:
+- Created [2026-07-02 Thu 22:33]
+- State "STARTED" from "TODO" [2026-07-27 Mon 18:43]
+- State "DONE" from "STARTED" [2026-07-27 Mon 18:57]
+:END:
+Completed; durable acceptance and outcomes are recorded in * Summary and * Implementation.
+
+** DONE [#C] Resolve bare-UUID blockers without rewriting them :skill_org-tasks:
+CLOSED: [2026-07-27 Mon 18:57]
+:PROPERTIES:
+:CUSTOM_ID: 080fee08-1857-4cac-bd14-e5aae6a9f32a
+:CREATED: [2026-07-27 Mon 13:11]
+:STARTED: [2026-07-27 Mon 18:57]
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 13:11]
+- State "STARTED" from "TODO" [2026-07-27 Mon 18:57]
+- State "DONE" from "STARTED" [2026-07-27 Mon 18:57]
+:END:
+Completed; durable acceptance and outcomes are recorded in * Summary and * Implementation.
+
+** DONE Make spec traversal text-safe and diagnostic :skill_org-tasks:
+CLOSED: [2026-07-28 Tue 11:11]
+:PROPERTIES:
+:CUSTOM_ID: ed915fe1-00bb-4246-90e6-9bcf8c4ef123
+:CREATED: [2026-07-22 Wed 19:02]
+:STARTED: [2026-07-27 Mon 18:57]
+:END:
+:LOGBOOK:
+- Created [2026-07-22 Wed 19:02]
+- State "STARTED" from "TODO" [2026-07-27 Mon 18:57]
+- State "DONE" from "STARTED" [2026-07-27 Mon 18:57]
+- State "STARTED" from "DONE" [2026-07-28 Tue 10:38]
+- State "DONE" from "STARTED" [2026-07-28 Tue 10:44]
+- State "TODO" from "DONE" [2026-07-28 Tue 11:05]
+- State "STARTED" from "TODO" [2026-07-28 Tue 11:10]
+- State "DONE" from "STARTED" [2026-07-28 Tue 11:11]
+:END:
+Completed; durable acceptance and outcomes are recorded in * Summary and * Implementation.
+
+** DONE Add guarded `ot unarchive` inverse :skill_org-tasks:
+CLOSED: [2026-07-28 Tue 11:14]
+:PROPERTIES:
+:CUSTOM_ID: 9e9cdd26-1188-4031-b25d-a76ac6e97c9d
+:CREATED: [2026-07-27 Mon 13:20]
+:STARTED: [2026-07-27 Mon 18:57]
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 13:20]
+- State "STARTED" from "TODO" [2026-07-27 Mon 18:57]
+- State "DONE" from "STARTED" [2026-07-27 Mon 18:57]
+- State "STARTED" from "DONE" [2026-07-28 Tue 10:38]
+- State "DONE" from "STARTED" [2026-07-28 Tue 10:44]
+- State "TODO" from "DONE" [2026-07-28 Tue 11:05]
+- State "STARTED" from "TODO" [2026-07-28 Tue 11:11]
+- State "DONE" from "STARTED" [2026-07-28 Tue 11:14]
+:END:
+Completed; durable acceptance and outcomes are recorded in * Summary and * Implementation.
+
+** DONE Render task descriptions in plain `ot show` :skill_org-tasks:
+CLOSED: [2026-07-27 Mon 18:57]
+:PROPERTIES:
+:CUSTOM_ID: 11fe5d94-09c2-4ffc-8c24-3f7b58e0665a
+:CREATED: [2026-07-27 Mon 17:26]
+:STARTED: [2026-07-27 Mon 18:57]
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 17:26]
+- State "STARTED" from "TODO" [2026-07-27 Mon 18:57]
+- State "DONE" from "STARTED" [2026-07-27 Mon 18:57]
+:END:
+Completed; durable acceptance and outcomes are recorded in * Summary and * Implementation.
+
+* Implementation
+
+- Registry-derived `:id` string coercion preserves positional tokens without adding synthetic positional options to help; create's ID-valued placement options are explicitly string-coerced.
+- Bare full UUID blockers are task-kind compatibility tokens only; writers preserve them while other bare input stays `human:`.
+- Discovery filters excluded path segments and NUL-bearing candidates before filesystem reads; malformed control-data targets become `spec-link-invalid` diagnostics for `spec list` and doctor; obsolete migration-only `old-discover` code was removed.
+- `resolve-link-target` destructures `{:keys [kind target] :as link}`, so its malformed-target guard actually fires and `linked-paths-from` drops control-data targets independently of any fs adapter; spec-test regression coverage runs through an `:eligible?`-free stub.
+- Archive writes source-section metadata only when the root's `:source-path` is shared `TASKS.org`, so imported-record roots archive without a misleading record-internal `:ARCHIVE_OLPATH:` and restore via explicit `--section`; unarchive preflights active/archive/record baselines, restores only into an existing shared section, writes active then linked-record reversal then archive removal, and leaves status/CLOSED/LOGBOOK intact.
+- Text show/selected append only non-empty descriptions; machine Task payloads are untouched.
+
+* Validation
+
+- Final review on 2026-07-28 reproduced the inert `resolve-link-target` guard via `bb -cp` (a NUL-bearing target resolved while `invalid-link-target?` returned true) and traced `:ARCHIVE_OLPATH:` mis-stamping for imported-record roots. Both defects are remediated; the unrelated deleted task `04602946` is a confirmed intentional deletion.
+- Both remediations were confirmed as genuine regressions by reverting each fix in place: the old `:as`-inside-`:keys` destructuring fails all three new spec assertions, and the unguarded stamp reproduces `Destination section not found in TASKS.org: Plan` exactly as the review predicted.
+- `bb test org-tasks.spec-test` — 16 tests, 34 assertions, 0 failures/errors; adds direct `resolve-link-target` malformed-target coverage plus a `linked-paths-from` case over an fs stub with no `:eligible?` guard at all.
+- `bb test org-tasks.commands.archive-publish-test` — 20 tests, 91 assertions, 0 failures/errors; adds an imported-record archive/unarchive case (no `:ARCHIVE_OLPATH:` stamped, default unarchive refused with the `ARCHIVE_OLPATH` validation error and no writes, `--section Improvements` restores into shared `TASKS.org`).
+- `bb test` (repository root) — 284 tests, 1,239 assertions, 0 failures/errors.
+- `ot spec list --format json` from this repository — exit 0; 244 text specs, no warnings despite `skills/**/node_modules`.
+- `ot doctor --format json` from this repository — exit 0; 0 errors and 5 existing advisory warnings (4 `spec-untouched`, 1 `spec-stale`) for unrelated herdr-subagents record specs.
+- `git diff --check` — clean.

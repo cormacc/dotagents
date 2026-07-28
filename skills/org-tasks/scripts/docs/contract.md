@@ -228,7 +228,7 @@ characters. Ambiguous values fail with `ambiguous-id`.
 }
 ```
 
-`ancestors` is ordered root → parent. `record` is `null` when the task has no resolvable `#+IMPORT:` change-record. `task.children` and `task.importChildren` carry nested task trees. `sourceContent` and `effectiveSourceContent` are omitted unless `--include-content` is passed.
+`ancestors` is ordered root → parent. `record` is `null` when the task has no resolvable `#+IMPORT:` change-record. `task.children` and `task.importChildren` carry nested task trees. `sourceContent` and `effectiveSourceContent` are omitted unless `--include-content` is passed. Text-mode `show` and `selected` append a non-empty `Task.description` after one blank separator line; the JSON/EDN payload and its `description` field are unchanged.
 
 ### `ot create`
 
@@ -309,6 +309,21 @@ is selected).
 ```
 
 Errors: `unknown-task`, `validation` (e.g. not closed), `path-outside-project`.
+
+### `ot unarchive <id> [--section <name>]`
+
+```json
+"result": {
+  "task": Task,
+  "from": "/repo/TASKS.archive.org",
+  "to": "/repo/TASKS.org",
+  "section": "Improvements",
+  "sectionSource": "--section | :ARCHIVE_OLPATH:",
+  "planRewrite": { "file": "plan:foo.org", "from": "archive:uuid", "to": "task:uuid" }
+}
+```
+
+Restores only an archive-resolved exact UUID or unique prefix. It refuses unknown/ambiguous archive IDs through the standard `unknown-task`/`ambiguous-id` errors, active duplicate UUIDs, missing archive section metadata (unless `--section` is supplied), missing destination sections, sandboxed record paths, unreadable files, and write conflicts. Result fields are additive in `org-tasks/v1`; `--dry-run` has the same proposed fields and performs no writes.
 
 ### `ot publish <id>` / `ot unpublish <id>`
 
@@ -427,6 +442,7 @@ or lacking `* Summary`) or `null` (task has no `#+IMPORT:` at all).
   "taskId":  "uuid",
   "blockers": [
     { "raw": "task:uuid", "kind": "task", "ref": "uuid" },
+    { "raw": "legacy-full-uuid", "kind": "task", "ref": "legacy-full-uuid" },
     { "raw": "url:https://...", "kind": "url", "ref": "https://..." }
   ]
 }

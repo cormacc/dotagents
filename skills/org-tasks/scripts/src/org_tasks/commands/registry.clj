@@ -71,12 +71,12 @@
   {:section  {:desc "Section heading to insert under (default: Improvements)"
               :ref  "<name>"
               :default "Improvements"}
-   :parent   {:desc "Parent task :CUSTOM_ID:" :ref "<uuid>"}
+   :parent   {:desc "Parent task :CUSTOM_ID:" :ref "<uuid>" :coerce :string}
    :after    {:desc "Insert immediately after this task :CUSTOM_ID:"
-              :ref  "<uuid>"}
+              :ref  "<uuid>" :coerce :string}
    :relative-to {:desc (str "Anchor task :CUSTOM_ID: to place the new task relative "
                             "to; derives parent/after/local/source (overrides those)")
-                 :ref  "<uuid>"}
+                 :ref  "<uuid>" :coerce :string}
    :as       (merge {:desc "Placement relative to --relative-to: sibling (default) | child"
                      :ref  "<rel>"}
                     (enum-opt "as" [:sibling :child]))
@@ -94,7 +94,7 @@
                :ref "<path>"
                :coerce []}
    :id {:desc "Override generated :CUSTOM_ID: (mostly for tests / shims)"
-        :ref "<uuid>"}
+        :ref "<uuid>" :coerce :string}
    :created-at {:desc "Override :CREATED: timestamp body, without brackets"
                 :ref "<timestamp>"}
    :allow-create-section {:desc "Create the target section if missing"
@@ -140,6 +140,10 @@
 (def ^:private show-spec
   {:include-content {:desc "Include raw sourceContent/effectiveSourceContent in JSON/EDN output"
                      :coerce :boolean}})
+
+(def ^:private unarchive-spec
+  {:section {:desc "Restore under this existing level-1 section (overrides :ARCHIVE_OLPATH:)"
+             :ref "<name>"}})
 
 (def ^:private select-spec
   {:clear {:desc "Clear the current selection" :coerce :boolean}})
@@ -206,6 +210,9 @@
     :spec {} :args->opts [:id]
     :tui-key :archive
     :summary ["<id>" "Archive a closed top-level task"]}
+   {:cmds ["unarchive"]          :fn archive-publish/unarchive-cmd
+    :spec unarchive-spec :args->opts [:id]
+    :summary ["<id>" "Restore an archived task under --section or :ARCHIVE_OLPATH:"]}
    {:cmds ["publish"]            :fn archive-publish/publish-cmd
     :spec {} :args->opts [:id]
     :tui-key :publish
@@ -280,12 +287,17 @@
 (def dispatch-coerce
   "Top-level :coerce passed to `babashka.cli/dispatch`, derived from
   `global-spec` plus every command spec. Per-spec `:coerce` is honoured by
-  `parse-opts` but ignored by `dispatch`, so expose the same coercions here."
-  (into {}
-        (keep (fn [[k spec]]
-                (when (contains? spec :coerce)
-                  [k (:coerce spec)])))
-        (apply merge global-spec (map :spec commands))))
+  `parse-opts` but ignored by `dispatch`, so expose the same coercions here.
+  Positional id mappings use this aggregate entry without adding a synthetic
+  `--id` option to their per-command help."
+  (let [spec-coerce (into {}
+                          (keep (fn [[k spec]]
+                                  (when (contains? spec :coerce)
+                                    [k (:coerce spec)])))
+                          (apply merge global-spec (map :spec commands)))
+        positional-id? (some #(some #{:id} (:args->opts %)) commands)]
+    (cond-> spec-coerce
+      positional-id? (assoc :id :string))))
 
 (def tui-command-fns
   "Keyword → handler map for TUI-exposed commands (entries with a

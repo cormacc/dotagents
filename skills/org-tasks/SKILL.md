@@ -27,7 +27,7 @@ The field-level contract lives in `references/protocol.md`; load it when repairi
 - `:CREATED:`, `:STARTED:`, `CLOSED:`, and `:LOGBOOK:` are lifecycle artefacts. `ot` and native org-mode are aligned so status writes converge on the same file shape.
 - `#+IMPORT:` links change-records/imported task files. Canonical plan imports use `[[plan:file.org]]` via the `#+LINK: plan` template, which is defined locally in `TASKS.org`/`TASKS.archive.org` (repo-root), not in `TASKS.setup.org`. `#+LINK: proj` (dual-defined: `./` from the task file, `../../` from a record via setup) is a generic repo-root path link for referencing specs/source from records.
 - `#+SELECTED:` in gitignored `TASKS.local.org` stores the local active task. Empty or absent means no selection.
-- `:BLOCKED-BY:` / `:BLOCKED-BY+:`, `:HANDOFF:`, and `:LINKED_ISSUES:` are protocol fields managed by `ot blocker`, `ot ready`, `ot handoff`, and `ot issue`.
+- `:BLOCKED-BY:` / `:BLOCKED-BY+:`, `:HANDOFF:`, and `:LINKED_ISSUES:` are protocol fields managed by `ot blocker`, `ot ready`, `ot handoff`, and `ot issue`; write task blockers as explicit `task:<UUID>` (bare full UUIDs remain compatible legacy task references).
 - `#+SPEC:` is a single optional keyword naming relevant specification docs as bare `[[proj:PATH]]` links: in `TASKS.org` it declares repo-wide discovery roots, in change-records it lists task-relevant specs (opt out with `#+NO_SPEC: true`). The discovery model is owned by `../org-plan/SKILL.md` § Spec discovery (`#+SPEC:`); the `ot doctor` findings (`spec-untouched`, `spec-value-malformed`, `spec-path-dangling`) and `TASKS.org`-only validation are documented in `references/ot-cli.md` § Spec keyword and checks.
 - Do not hard-wrap. In every org file this protocol manages (`TASKS*.org` and `#+IMPORT:`-linked change-records), keep each paragraph and each list item as a single logical line (soft-wrap); preserve real line breaks only in headings, drawers, keywords, tables, and src/example blocks. Never reflow to a fixed column such as 80.
 
@@ -42,12 +42,13 @@ ot init
 ot root
 ot list --format json  # result includes resolved root + files.{tasks,local,archive}
 ot show selected --format json
-ot show <id-or-selected>
+ot show <id-or-selected>  # text output includes the task body; JSON/EDN retain Task.description
 ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'
 ot status <id> STARTED   # also works for tasks inside linked plan files
 ot priority <id> B       # set/cycle/clear the priority cookie (--cycle forward|back, --clear)
 ot select <id>        # or: ot select --clear
 ot archive <id> --yes
+ot unarchive <id> --section Improvements  # restores an archived subtree; does not reopen its status
 ot publish <id>       # TASKS.local.org -> TASKS.org
 ot unpublish <id>     # TASKS.org -> TASKS.local.org
 ot doctor --format json       # health checks + spec warnings
@@ -130,6 +131,6 @@ Persist accurate task status and handoff information before any session-learning
 
 ## Archiving
 
-Only top-level `DONE`/`CANCELLED` tasks are archived. Use `ot archive <id> --yes`. The archive move preserves the subtree, `:CUSTOM_ID:`, content, LOGBOOK, and import link; adds `:ARCHIVED:`; writes to project-root `TASKS.archive.org`; and rewrites linked change-record parent links from `task:` to `archive:` when possible.
+Only top-level `DONE`/`CANCELLED` tasks are archived. Use `ot archive <id> --yes`. The archive move preserves the subtree, `:CUSTOM_ID:`, content, LOGBOOK, and import link; adds `:ARCHIVED:`, plus the source section in `:ARCHIVE_OLPATH:` for roots archived from shared `TASKS.org` (roots archived from a file-level `#+IMPORT:` record get no `:ARCHIVE_OLPATH:` and need an explicit `--section` to restore); writes to project-root `TASKS.archive.org`; and rewrites linked change-record parent links from `task:` to `archive:` when possible. `ot unarchive <id>` resolves only against `TASKS.archive.org`, restores it under `--section` or `:ARCHIVE_OLPATH:`, removes those archive properties, reverses the parent link, and deliberately preserves status/CLOSED/LOGBOOK; use `ot status` to reopen afterward.
 
 Native Emacs `org-archive-subtree` remains compatible because `#+ARCHIVE:` and TODO/logging settings match the protocol, but `ot archive` is the headless/agent path.
