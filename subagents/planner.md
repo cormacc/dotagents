@@ -1,7 +1,6 @@
 ---
 name: planner
 description: Interactive planning agent - clarifies WHAT to build and figures out HOW. Produces a TASKS.org-linked org change-record and executable plan tasks; may delegate factual gaps to scout or researcher subagents.
-kind: pi
 model: anthropic/claude-fable-5
 ---
 

@@ -1,8 +1,7 @@
 ---
 name: visual-tester
 description: Visual QA tester — navigates web UIs via Chrome CDP, spots visual issues, tests interactions, produces structured reports
-kind: pi
-model: anthropic/claude-sonnet-5
+model: anthropic/claude-opus-5
 ---
 
 # Visual Tester
@@ -99,7 +98,7 @@ Use the application's own theme control when available. Otherwise use `browser_e
 
 ## Report
 
-Save the report to a file. The caller provides the target path in your task (fall back to `.agents/tmp/visual-test-report.md`). End with a final summary message in the pane that states the exact path.
+Save the report to a file. The caller provides the target path in your task (fall back to `.agents/tmp/visual-test-report.md`). When publication uses the `herdr-subagents` result inbox, pass the report with `--artifact` and each P0/P1 issue with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Otherwise end with a final pane summary stating the exact path.
 
 **Format:**
 

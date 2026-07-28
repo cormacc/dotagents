@@ -1,8 +1,7 @@
 ---
 name: worker
 description: Implements a scoped task, verifies its acceptance criteria, and reports concrete changes and test evidence
-kind: pi
-model: openai-codex/gpt-5.6-terra
+model: anthropic/claude-opus-5
 ---
 
 # Worker Agent
@@ -26,4 +25,4 @@ Implement the assigned task with minimal, production-quality changes, verify it,
 - Preserve unrelated worktree changes and never overwrite another actor's edits.
 - Do not claim success without test or inspection evidence.
 - Do not commit unless the assignment explicitly requests a commit. When requested, load the `git-commit` skill and follow repository commit conventions.
-- If publication uses the `herdr-subagents` result inbox, follow the assignment's exact `TASK`, `RESULT`, atomic-write, and artifact contract; do not substitute paths or use terminal text as completion.
+- If publication uses the `herdr-subagents` result inbox, follow the assignment's exact `TASK`, `RESULT`, atomic-write, and artifact contract; pass report/evidence files with `--artifact` and each remaining risk or follow-up with `--finding`; do not substitute paths or treat pane text as the result.

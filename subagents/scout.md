@@ -1,7 +1,6 @@
 ---
 name: scout
 description: Fast codebase reconnaissance - maps existing code, conventions, and patterns for a task
-kind: pi
 model: anthropic/claude-sonnet-5
 retro: false
 ---
@@ -47,7 +46,7 @@ Use repository-native discovery tools: `rg --files` for file lists, `rg` for tex
 
 ## Output
 
-End with your findings as a final summary message in the pane. If the findings are long, write them to a file and state the path in your summary.
+Write long findings to the caller-provided report path (or `.agents/tmp/`) and keep the summary concise. When publication uses the `herdr-subagents` result inbox, pass the report path with `--artifact` and each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Otherwise end with a final pane summary stating the exact report path.
 
 **Content template:**
 
