@@ -62,7 +62,7 @@ harnesses, CI scripts, future Emacs companions). Bump rules are in
 #### `conflict`
 
 Write-time optimistic-concurrency check: a mutator (`status`, `priority`,
-`archive`, `publish`, `unpublish`, `create`, `record create`, `issue`/
+`move`, `archive`, `publish`, `unpublish`, `create`, `record create`, `issue`/
 `blocker`/`handoff` mutations, `backfill`) detects that a target file's
 on-disk bytes no longer match the snapshot it loaded at the start of the
 command — e.g. another `ot` process or an editor wrote to it in between.
@@ -247,6 +247,49 @@ Options include `--section`, `--parent`, `--after`, `--priority`, repeated
 `--created-at`. `--parent` inserts a child under that task; `--after` inserts a
 sibling after the anchor task. Errors: `section-not-found`, `duplicate-linked-issue`,
 `path-outside-project`, `empty-summary`.
+
+### `ot move <id> (--parent <id> | --section <name>)`
+
+```json
+"result": {
+  "task":             Task,
+  "file":             "/repo/TASKS.org",
+  "parentId":         "uuid | null",
+  "section":          "Improvements | null",
+  "previousParentId": "uuid | null",
+  "fromLevel":        3,
+  "toLevel":          2,
+  "movedCount":       2,
+  "dryRun":           false
+}
+```
+
+Relocates an *existing* task subtree **within its own file**. Exactly one
+destination is required: `--parent <id>` appends the subtree as that task's last
+child (heading depth re-normalised for the whole subtree), `--section <name>`
+returns it to a level-2 heading at the end of that level-1 section — the depth
+`ot create` gives a top-level task. `parentId` is `null` for a `--section` move
+and `section` is `null` for a `--parent` move. `previousParentId` is `null` when
+the task was already a root of its file. `movedCount` counts the moved root plus
+its descendants; `fromLevel`/`toLevel` are the subtree root's heading depth
+before and after. `task` reflects the post-move `level` and `line`.
+
+The subtree's source lines are relocated verbatim apart from heading stars, so
+`:CUSTOM_ID:`, `:CREATED:` / `:STARTED:`, `CLOSED:`, `:LOGBOOK:`, `#+IMPORT:`,
+unknown drawer properties, bodies, descendant order, and intra-subtree blank
+lines are byte-preserved, and every region of the file outside the move is left
+untouched. Because `:CUSTOM_ID:` never changes, `#+IMPORT:` links and a
+change-record's `#+PARENT: [[task:<uuid>]]` keep resolving across a move.
+
+Cross-file moves are refused: locality changes belong to `publish` /
+`unpublish`, and the archive to `archive` / `unarchive`. Errors:
+`argument-error` (no id, or both / neither of `--parent` and `--section`),
+`unknown-task` and `ambiguous-id` (either id), `section-not-found` (no such
+level-1 section in the owning file), `validation` (archived source, destination
+is the source itself or one of its descendants, destination lives in another
+file), plus `conflict`, `unreadable`, and `unterminated-drawer`. `--dry-run`
+runs every preflight and reports the same fields with `dryRun: true`, writing
+nothing.
 
 ### `ot status <id> <new-status>`
 

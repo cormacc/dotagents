@@ -44,6 +44,7 @@ ot list --format json  # result includes resolved root + files.{tasks,local,arch
 ot show selected --format json
 ot show <id-or-selected>  # text output includes the task body; JSON/EDN retain Task.description
 ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'
+ot move <id> --parent <dest-id>   # reparent an existing subtree in place (--section <name> lifts it back to top level)
 ot status <id> STARTED   # also works for tasks inside linked plan files
 ot priority <id> B       # set/cycle/clear the priority cookie (--cycle forward|back, --clear)
 ot select <id>        # or: ot select --clear
@@ -75,6 +76,7 @@ Install and local development: `scripts/README.md`.
 
 - Use the smallest useful task granularity: each task should describe a concrete outcome that can become `DONE`.
 - Prefer guaranteed `ot create` for new top-level tasks so IDs, timestamps, drawers, linked-issue duplicate checks, and section insertion stay deterministic. An available harness wrapper may delegate to the same command but is optional.
+- Regroup existing tasks with `ot move <id> --parent <dest-id>` / `--section <name>` rather than hand-editing or scripting org surgery; it preserves IDs, lifecycle metadata, descendants, and file locality. Moves are in-file only — use `ot publish`/`ot unpublish` to change locality and `ot unarchive` before moving an archived task.
 - Keep `TASKS.org` high-level. Put detailed checklists, implementation history, and acceptance criteria in linked change-records.
 - Add discovered work as new `TODO` tasks rather than burying it in prose.
 - Select local active work with `ot select <id>` or clear with `ot select --clear`.

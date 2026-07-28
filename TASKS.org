@@ -190,6 +190,16 @@ Desired outcome: per-harness lookup tables in the herdr-subagents skill mapping 
 
 Origin: mid-implementation discovery that 10c7990 (kindless roster) made every roster `model:` line inert — kind-inheriting spawns resolved model nil and children silently ran on the harness default.
 
+** TODO ot move: TUI/pi-overlay exposure and --before/--after ordering
+:PROPERTIES:
+:CUSTOM_ID: da7350ac-60c6-4336-9b7e-e0cbce51658c
+:CREATED: [2026-07-28 Tue 17:50]
+:END:
+:LOGBOOK:
+- Created [2026-07-28 Tue 17:50]
+:END:
+Follow-ups from the initial `ot move` implementation (task 2a2f5aed): expose move in the ot TUI and pi tasks overlay (boundary.md notes the pending parity — needs a key map entry plus a destination picker), and add `--before`/`--after` ordering control so a move is not restricted to append-as-last-child / last-in-section semantics.
+
 * Fixes
 * Housekeeping
 
@@ -319,13 +329,17 @@ Origin:
 Evidence:
 A single ot status --format json transition on the org-tasks housekeeping change-record emitted roughly 50KB because sourceContent and effectiveSourceContent both contained the full record; the same friction was independently reported by the planner and worker subagents.
 
-** TODO ot: add safe move/reparent for existing task subtrees :skill_org-tasks:
+** DONE ot: add safe move/reparent for existing task subtrees :skill_org-tasks:
+CLOSED: [2026-07-28 Tue 17:50]
 :PROPERTIES:
 :CUSTOM_ID: 2a2f5aed-068f-4ce1-ac20-1395ebb64986
 :CREATED: [2026-07-28 Tue 11:46]
+:STARTED: [2026-07-28 Tue 17:19]
 :END:
 :LOGBOOK:
 - Created [2026-07-28 Tue 11:46]
+- State "STARTED" from "TODO" [2026-07-28 Tue 17:19]
+- State "DONE" from "STARTED" [2026-07-28 Tue 17:50]
 :END:
 Add a first-class command for moving an existing task subtree under a different parent or back to a top-level section while preserving :CUSTOM_ID:, lifecycle metadata, descendants, body content, source locality, and change-record graph integrity. The command should preflight ambiguous IDs and invalid destinations, avoid duplicate writable nodes, support dry-run, and provide round-trip regression coverage.
 

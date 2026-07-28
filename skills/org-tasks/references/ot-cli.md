@@ -45,6 +45,8 @@ ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'
 ot create "New sibling" --relative-to <id> --as sibling   # after <id>, same level
 ot create "New child"   --relative-to <id> --as child     # nested under <id>
                                                           # (derives local/source from the anchor)
+ot move <id> --parent <dest-id>            # reparent an existing subtree (last child)
+ot move <id> --section Improvements        # lift an existing subtree back to top level
 ot status <id> STARTED
 ot status <id> --cycle forward   # or: --cycle back (order owned by ot)
 ot priority <id> B               # set the priority cookie (A|B|C|D)
@@ -69,6 +71,17 @@ ot ready <id>
 ot handoff get|set|clear <id> [...]
 ot uuid --count 3
 ```
+
+## Moving existing tasks
+
+`ot move <id>` relocates an existing task subtree **inside its own file** and takes exactly one destination:
+
+- `--parent <dest-id>` reparents the subtree as the destination task's last child, re-normalising heading depth for the whole subtree.
+- `--section <name>` returns it to a level-2 heading at the end of that level-1 section (the depth `ot create` gives a top-level task).
+
+The subtree's source lines move verbatim apart from heading stars, so `:CUSTOM_ID:`, `:CREATED:` / `:STARTED:`, `CLOSED:`, `:LOGBOOK:`, `#+IMPORT:`, unknown drawer properties, bodies, descendant order, and intra-subtree blank lines all survive byte-for-byte, and the rest of the file is left untouched. `:CUSTOM_ID:` never changes, so `#+IMPORT:` links and a change-record's `#+PARENT: [[task:<uuid>]]` keep resolving. Use it to group existing tasks under a new parent instead of hand-editing org.
+
+`move` is in-file only. Locality changes belong to `ot publish` / `ot unpublish` and the archive to `ot archive` / `ot unarchive`, so a destination in another file is refused rather than silently creating a second writable node for a UUID. It also refuses an archived source, a destination that is the task itself or one of its descendants, an unknown `--section`, and supplying both or neither destination. `--dry-run` runs every preflight and reports the proposed move without writing.
 
 ## Interactive TUI
 

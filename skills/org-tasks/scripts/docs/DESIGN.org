@@ -17,7 +17,7 @@ flowchart TD
     end
     subgraph Commands
         REG["commands/registry.clj\nspecs + handlers + summaries"]
-        FAM["commands/{list_show,create,status,\narchive_publish,record,links,maintenance}.clj"]
+        FAM["commands/{list_show,create,move,status,\narchive_publish,record,links,maintenance}.clj"]
         UTIL["commands/util.clj\ncontext + id resolution"]
     end
     subgraph Core
@@ -111,6 +111,8 @@ sequenceDiagram
 
 #+RESULTS:
 [[file:design-mutation.png]]
+
+=move= is the one structural mutator that bypasses the serializer: relocating a subtree changes nothing but heading depth, so =commands/move.clj= cuts the subtree's exact source lines, restars its headings, and splices them at the destination (reusing =insert/insert-subtree-into-section= for a =--section= target). That keeps drawers, LOGBOOK, bodies, descendant order, *and* intra-subtree blank lines byte-identical, and leaves every unrelated region of the file untouched rather than putting it through =serialize-tasks-preserving-file='s blank-line normalisation. It is in-file only by construction — source and destination must share one =:source-path= — so no UUID can gain a second writable node; locality and archive transitions stay with =publish=/=unpublish= and =archive=/=unarchive=.
 
 The same shape applies to =priority=, =select=, =archive=, =publish=, and the property commands (=handoff= / =blocker= / =issue=, generated from a per-property data map in =commands/links.clj=). Cycle orders (status, priority incl. the unset slot) live in =lifecycle.clj=; both UIs pass only a direction.
 

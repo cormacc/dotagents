@@ -20,6 +20,7 @@
             [org-tasks.commands.links :as links]
             [org-tasks.commands.list-show :as list-show]
             [org-tasks.commands.maintenance :as maintenance]
+            [org-tasks.commands.move :as move]
             [org-tasks.commands.record :as record]
             [org-tasks.commands.spec :as spec]
             [org-tasks.commands.status :as status]))
@@ -99,6 +100,13 @@
                 :ref "<timestamp>"}
    :allow-create-section {:desc "Create the target section if missing"
                           :coerce :boolean}})
+
+(def ^:private move-spec
+  {:parent  {:desc "Destination parent task :CUSTOM_ID: (append as last child)"
+             :ref  "<uuid>" :coerce :string}
+   :section {:desc (str "Destination level-1 section in the task's own file "
+                       "(move back to top level)")
+             :ref  "<name>"}})
 
 (def ^:private list-spec
   {:status-filter {:desc "Filter by status (repeatable)" :coerce []
@@ -191,6 +199,10 @@
     :spec create-spec :args->opts [:summary]
     :tui-key :create
     :summary ["<summary>" "Create a new task under --section"]}
+   {:cmds ["move"]               :fn move/move-cmd
+    :spec move-spec :args->opts [:id]
+    :summary ["<id> (--parent <id> | --section <name>)"
+              "Move an existing task subtree under another task or back to a section"]}
    {:cmds ["status"]             :fn status/status-cmd
     :spec status-spec :args->opts [:id :new-status]
     :tui-key :status

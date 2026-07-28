@@ -18,7 +18,8 @@ namespace under `skills/org-tasks/scripts/test/`. Golden fixtures live under
 | `insert.test.ts`                 | `org-tasks.insert-test`                        | `ot create`: priority, tags, drawer ordering, idempotency, splice.          |
 | expanded overlay model tests     | `org-tasks.tui-test`                           | Standalone TUI: selected-path expansion, movement, collapse, detail scroll, status cycle, row/detail affordances. Covers `org-tasks.tui` plus the extracted `org-tasks.tui.tasks` (state model/bridge) and `org-tasks.tui.dispatch` (nexus actions/effects) namespaces. |
 | CLI dispatch smoke               | `org-tasks.cli-test`                           | Help preservation (top-level and per-command `ot <cmd> --help` option rendering), existing subcommand dispatch through command-family namespaces, bare non-TTY selected JSON, bare `--format json` selected JSON. |
-| command integration families      | `org-tasks.commands.{archive-publish,create,links,list-show,maintenance,record,status}-test` | Focused `ot` command-family integration tests split to mirror `src/org_tasks/commands/*`; shared temp-project fixtures live in `org-tasks.commands.test-util`. |
+| command integration families      | `org-tasks.commands.{archive-publish,create,links,list-show,maintenance,move,record,status}-test` | Focused `ot` command-family integration tests split to mirror `src/org_tasks/commands/*`; shared temp-project fixtures live in `org-tasks.commands.test-util`. |
+| n/a (new in `ot`)                | `org-tasks.commands.move-test`                  | `ot move`: reparent, section lift, level re-normalisation, dry-run, every preflight refusal, write conflict, change-record link integrity, byte-identical relocation and move → move-back round trip. |
 
 ## Golden round-trip fixtures
 

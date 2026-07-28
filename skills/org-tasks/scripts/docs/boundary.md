@@ -17,6 +17,7 @@ The protocol engine (`ot`, in Babashka) owns durable org-tasks behaviour and the
 | Task-creation **placement policy** (sibling/child/top-level) | ✅   |              | `ot create --relative-to <id> --as sibling\|child` derives parent/after/local/source from the anchor.          |
 | Archive top-level closed tasks                  | ✅   |              | `:ARCHIVED:` stamp, archive ordering by closed/archived time, parent-link rewrite `task:` → `archive:`.        |
 | Publish / unpublish (local ↔ shared)             | ✅   |              | Top-level-only for unpublish; local task constraints preserved.                                                |
+| Move / reparent an existing subtree              | ✅   |              | `ot move <id> --parent <id>\|--section <name>`. In-file line splice (byte-preserving); cross-file moves refused. No TUI/overlay key yet.        |
 | `#+SELECTED:` read/write (atomic)               | ✅   |              | Write-then-rename; preserves any local task headings or `#+IMPORT:` keywords.                                  |
 | Insert task into named section                   | ✅   |              | Replaces TypeScript `insertTaskIntoFile`. `insert.ts` survives only as a shim into `ot create --linked-issue`. |
 | Idempotency check across `:LINKED_ISSUES:`       | ✅   |              | Walks `alsoScan` recursively through imports.                                                                  |
