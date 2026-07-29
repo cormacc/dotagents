@@ -1,7 +1,7 @@
 ---
 name: advisor
 description: Focused mid-task advisor - assesses a caller-provided decision point and returns actionable guidance
-model: claude-opus
+model: middle
 retro: false
 ---
 

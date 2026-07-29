@@ -38,30 +38,39 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
     (let [v (first choices)] (cond (= v "-") (slurp *in*) (and (one opts :task-file) (= v (one opts :task-file))) (slurp v) :else v))))
 (defn persona-names [dir]
   (if (fs/directory? dir)
-    (mapv #(str (fs/strip-ext (fs/file-name %))) (fs/glob dir "*.md"))
+    (mapv #(str (fs/strip-ext (fs/file-name %))) (fs/glob dir "*.md" {:follow-links true}))
     []))
+(defn home-directory [] (System/getProperty "user.home"))
+(declare launcher-bin)
+(defn skill-directory []
+  (fs/parent (fs/parent (fs/path (launcher-bin)))))
+;; Shipped personas and the roster table are siblings of `scripts/`, so both derive from
+;; the resolved launcher path rather than the assignment root or current working directory.
+(defn packaged-personas-directory []
+  (str (fs/path (skill-directory) "subagents")))
+(defn persona-directories []
+  (core/persona-directories (ledger/assignment-root) (home-directory) (packaged-personas-directory)))
 (defn available-personas []
-  (let [root (ledger/assignment-root) home (System/getProperty "user.home")]
-    (->> (concat (persona-names (fs/path root ".agents" "subagents"))
-                 (persona-names (fs/path home ".agents" "subagents")))
-         distinct sort vec)))
+  (let [directories (persona-directories)]
+    (->> directories
+         (mapcat persona-names)
+         distinct
+         ;; Resolve each name through the same ordered lookup used by direct lookup and
+         ;; spawn-policy validation; the predicate also ignores a vanished file safely.
+         (filter #(core/resolve-persona (fn [path] (fs/exists? path)) directories %))
+         sort vec)))
 (defn roster [persona]
-  (let [path (core/roster-path #(fs/exists? %) (ledger/assignment-root) (System/getProperty "user.home") persona)]
+  (let [path (core/resolve-persona (fn [path] (fs/exists? path)) (persona-directories) persona)]
     (or (some-> path fs/path)
-        (fail "persona not found in project or global roster" {:persona persona :available (available-personas)}))))
+        (fail "persona not found in project, home, or packaged roster" {:persona persona :available (available-personas)}))))
 (defn child-name [persona task] (str persona "-" (subs task 0 8)))
 (defn launcher-bin []
   (or (System/getenv "HERDR_SUBAGENT_BIN")
       (let [candidate (fs/path (ledger/assignment-root) "skills" "herdr-subagents" "scripts" "subagent")]
         (when (fs/exists? candidate) (str (fs/absolutize candidate))))
       (fail "could not resolve subagent launcher" {})))
-;; The default roster table ships in the skill's `subagents/` data directory, not the
-;; `scripts/` subdirectory the launcher lives in:
-;; `skills/herdr-subagents/subagents/roster.edn`, a sibling tree of `.../scripts/`.
-;; Deriving it from the launcher path (never cwd/git) keeps a bare-subtree install and a
-;; relocated `SUBAGENT_ASSIGNMENT_ROOT` both able to find their own shipped default.
 (defn default-roster-path []
-  (str (fs/path (fs/parent (fs/parent (fs/path (launcher-bin)))) "subagents" "roster.edn")))
+  (str (packaged-personas-directory) "/roster.edn"))
 (defn roster-file [path]
   (when (fs/exists? path) (core/parse-roster (str path) (slurp (str path)))))
 ;; Loader precedence: shipped default ← home override ← project override (project
@@ -70,13 +79,13 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
 ;; `user.home`) so callers/tests can inject it directly instead of relying on `$HOME`,
 ;; which Babashka's `user.home` property does not observe.
 (defn roster-config
-  ([] (roster-config (System/getProperty "user.home")))
+  ([] (roster-config (home-directory)))
   ([home]
    (let [default-path (default-roster-path)
          home-path (fs/path home ".agents" "subagents" "roster.edn")
          project-path (fs/path (ledger/assignment-root) ".agents" "subagents" "roster.edn")]
      (core/merge-roster
-      (or (roster-file default-path) (fail "missing shipped default roster table" {:path (str default-path)}))
+      (or (roster-file default-path) (fail "missing shipped default roster table" {:path default-path}))
       (or (roster-file home-path) {})
       (or (roster-file project-path) {})))))
 (defn parent-identity []
@@ -108,7 +117,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
     (when (and on off) (fail "--retro and --no-retro are mutually exclusive" {}))
     (cond on true off false :else nil)))
 (defn retro-skill-path []
-  (core/skill-path #(fs/exists? %) (ledger/assignment-root) (System/getProperty "user.home") "retro"))
+  (core/skill-path #(fs/exists? %) (ledger/assignment-root) (home-directory) "retro"))
 (defn retro-policy [persona opts frontmatter]
   (let [skill (retro-skill-path)
         resolved (core/resolve-retro {:persona persona :flag (retro-flag opts) :frontmatter frontmatter :retro-skill skill})]
@@ -134,8 +143,9 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
 ;; with source "depth" regardless of the child persona's frontmatter: one nesting level
 ;; absolutely, no depth counter needed.
 (defn spawns-policy [persona opts frontmatter]
-  (let [resolved (core/resolve-spawns {:persona persona :flag (one opts :spawns) :frontmatter frontmatter
-                                       :resolve-persona #(core/roster-path (fn [p] (fs/exists? p)) (ledger/assignment-root) (System/getProperty "user.home") %)})]
+  (let [directories (persona-directories)
+        resolved (core/resolve-spawns {:persona persona :flag (one opts :spawns) :frontmatter frontmatter
+                                       :resolve-persona #(core/resolve-persona (fn [path] (fs/exists? path)) directories %)})]
     (if (System/getenv "HERDR_SUBAGENT_PERSONA")
       {:spawns [] :spawns-source "depth"}
       resolved)))

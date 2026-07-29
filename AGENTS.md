@@ -8,8 +8,8 @@
   commands in that domain -- don't parallelise the skill load with domain probes.
 
 # Subagents
-- Reusable subagent definitions live in `~/.agents/subagents/` (global) and `<git-root>/.agents/subagents/` (project). To delegate work inside Herdr, use the `herdr-subagents` skill.
-- Resolve a subagent's kind independently from its model: explicit kind request, then persona definition, then parent kind. Do not select a harness from an unqualified model prefix. Translate the resolved model through that kind's roster column; Pi receives the configured provider-qualified `:pi` model.
+- Reusable Herdr subagent definitions resolve `<git-root>/.agents/subagents/` (project override) > `~/.agents/subagents/` (home override) > `skills/herdr-subagents/subagents/` (packaged default). The home path is unmanaged and reserved for genuine overrides. To delegate work inside Herdr, use the `herdr-subagents` skill.
+- Resolve a subagent's kind independently from its model: explicit kind request, then persona definition, then parent kind. Do not select a harness from a model ID or weight alias. The separate `roster.edn` chain replaces complete same-ID rows package < home < project; it never deep-merges or selects kind. Translate the resolved model through that kind's roster column; Pi receives the configured provider-qualified `:pi` model. Weight mappings: `heavy` = Pi `anthropic/claude-fable-5`, Claude `fable`, Codex `gpt-5.6-sol`; `middle` = Pi `anthropic/claude-opus-5`, Claude `opus`, Codex `gpt-5.6-sol`; `light` = Pi `anthropic/claude-sonnet-5`, Claude `sonnet`, Codex `gpt-5.6-terra`; `feather` = Pi `anthropic/claude-haiku-4-5`, Claude `haiku`, Codex `gpt-5.6-luna`.
 
 # Git operations
 - When moving files controlled by git, ALWAYS use `git mv` rather than `mv` -- this preserves history.

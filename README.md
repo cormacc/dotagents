@@ -15,12 +15,12 @@ dotagents/
 ├── package-lock.json         # root validation dependencies
 ├── bb.edn / deps.edn         # ot Babashka/tools.deps policy
 ├── skills/                   # generic cross-agent skills; ot lives under org-tasks/scripts
+│   └── herdr-subagents/subagents/ # packaged Herdr persona defaults
 ├── prompts/init.md           # tracked prompt template
 ├── emacs/                    # native org-mode protocol companion
 ├── design/log/               # durable change-records
 ├── mcp.json                  # tracked generic MCP server configuration
 ├── dirge/                    # Dirge config and prompt set
-├── subagents/                # reusable subagent personas (herdr-subagents roster)
 └── pi/
     ├── settings.json         # owner-local editable-route pi settings
     ├── skills/               # pi-only chromium and ext-dev skills
@@ -94,11 +94,12 @@ git -C ~/dotfiles submodule update --init --recursive
 
 The consuming `agents.nix` links:
 
-- `skills/` → `~/.agents/skills`
-- `subagents/` → `~/.agents/subagents` (global roster for the `herdr-subagents` skill)
+- `skills/` → `~/.agents/skills` (including `skills/herdr-subagents/subagents/` packaged persona defaults)
 - `skills/org-tasks/scripts/ot` → `~/.local/bin/ot`
 - `AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, and `pi/settings.json` → `~/.pi/agent/...`
 - `mcp.json` → `~/.config/mcp/mcp.json`
+
+Herdr persona definitions resolve project (`<git-root>/.agents/subagents/`) > home (`~/.agents/subagents/`) > packaged (`skills/herdr-subagents/subagents/`). Home Manager deliberately does not manage `~/.agents/subagents/`: it is reserved for genuine home overrides. The parallel `roster.edn` chain replaces complete model-ID rows in the same precedence order and never uses a model or weight alias to select kind. The packaged weights are `heavy` (Pi `anthropic/claude-fable-5`, Claude `fable`, Codex `gpt-5.6-sol`), `middle` (Pi `anthropic/claude-opus-5`, Claude `opus`, Codex `gpt-5.6-sol`), `light` (Pi `anthropic/claude-sonnet-5`, Claude `sonnet`, Codex `gpt-5.6-terra`), and `feather` (Pi `anthropic/claude-haiku-4-5`, Claude `haiku`, Codex `gpt-5.6-luna`).
 
 Activation fails early when the submodule is uninitialized. It installs local npm dependencies for chromium, pi-clojure, and dataspex when their manifests change. Chromium and pi-clojure now carry exact direct versions plus tracked lockfiles; the root check exercises those locks with `npm ci`.
 

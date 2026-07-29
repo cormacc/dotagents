@@ -39,13 +39,19 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 | `HERDR_SUBAGENT_PERSONA` | child | The child's own persona. When set it marks the CLI's own spawns as below-root: nested labels compose from it and spawn enforcement reads `HERDR_SUBAGENT_SPAWNS` (see § Spawn gating). An agent started outside `subagent` has neither unless the variable is set. |
 | `HERDR_SUBAGENT_SPAWNS` | child | Space-joined spawn allow-list resolved by the parent (see § Spawn gating). Blank and unset both mean leaf; a below-root spawn always injects an empty value. |
 
+## Persona discovery
+
+Persona definitions are `<name>.md` files resolved in descending precedence: project `<git-root>/.agents/subagents/` > home `~/.agents/subagents/` > packaged `<skill-dir>/subagents/`, where `<skill-dir>` is derived from the installed launcher. This atomic name shadowing is distinct from the roster-table replacement in § Model resolution. The packaged directory is a skill default, not a Home Manager projection into the home override path.
+
 ## Model resolution
 
 `resolve-model` precedence is requested > frontmatter model > same-kind parent inheritance > nil. The resolved value is translated at the `model-args` boundary, the single choke point for frontmatter models, explicit `--model` flags, and same-kind parent inheritance alike.
 
 The canonical model-ID table is external EDN: `{:harnesses {:<kind> {:model-flag "…"} …} :models {"<canonical-id>" {:<kind> "…" …} …}}`. `:harnesses` keeps the kind set open — a resolved kind absent from it yields no model args, and herdr alone validates which kinds exist. A model never selects a kind; `:models` is consulted only after kind resolution. Rows are sparse, and a configured column may deliberately remap across providers. In the shipped table, `:pi` supplies the explicit provider-qualified model Pi runs, while tier-equivalent cross-provider mappings are confined to `:claude` and `:codex` (for example, `claude-sonnet-5` → codex `gpt-5.6-terra`). A model ID absent from the table passes through to the resolved kind unchanged.
 
-File chain, project wins: skill default `skills/herdr-subagents/subagents/roster.edn` (resolved as `subagents/roster.edn` under the launcher's skill directory) ← `~/.agents/subagents/roster.edn` ← `<git-root>/.agents/subagents/roster.edn`. Unversioned canonical IDs (`claude-opus`, `gpt-sol`, …) are floating aliases resolving to the latest version of the tier; versioned IDs pin a release. Merge is row-level replacement, per model ID and per harness ID, never a deep merge — an override row fully owns that ID.
+File chain, project wins: skill default `skills/herdr-subagents/subagents/roster.edn` (resolved as `subagents/roster.edn` under the launcher's skill directory) ← `~/.agents/subagents/roster.edn` ← `<git-root>/.agents/subagents/roster.edn`. These roster files are model-table overrides, not persona-definition sources: an override replaces a complete row by model ID (including a weight row) and never deep-merges its harness columns. Thus a home or project `"heavy"` row replaces the shipped `"heavy"` row; it neither shadows a persona definition nor chooses the harness.
+
+The shipped weight rows translate only after kind resolution: `heavy` → Pi `anthropic/claude-fable-5`, Claude `fable`, Codex `gpt-5.6-sol`; `middle` → Pi `anthropic/claude-opus-5`, Claude `opus`, Codex `gpt-5.6-sol`; `light` → Pi `anthropic/claude-sonnet-5`, Claude `sonnet`, Codex `gpt-5.6-terra`; `feather` → Pi `anthropic/claude-haiku-4-5`, Claude `haiku`, Codex `gpt-5.6-luna`. A weight alias is model data and never selects or changes kind. Unversioned canonical IDs (`claude-opus`, `gpt-sol`, …) are floating aliases resolving to the latest version of the tier; versioned IDs pin a release.
 
 Config is loaded and schema-validated (parse errors and shape/type errors alike) before any ledger allocation or pane mutation; a validation failure carries the offending path. A missing override file is ignored; a missing shipped default is fatal.
 

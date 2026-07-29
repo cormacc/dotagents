@@ -70,17 +70,17 @@ for (const removed of ["glab-help", "glab-version", "glab-check-update"]) {
   if (existsSync(join(root, "skills", "gitlab-cli-skills", removed))) fail(`trivial GitLab child still exists: ${removed}`);
 }
 
-const subagentDir = join(root, "subagents");
+const subagentDir = join(root, "skills", "herdr-subagents", "subagents");
+const subagentPath = "skills/herdr-subagents/subagents";
 const subagentFiles = readdirSync(subagentDir).filter((name) => name.endsWith(".md")).sort();
-if (subagentFiles.length === 0) fail("subagents/ contains no definitions");
-const allowedSubagentKeys = new Set(["name", "description", "kind", "model"]);
+if (subagentFiles.length === 0) fail(`${subagentPath}/ contains no definitions`);
+const allowedSubagentKeys = new Set(["name", "description", "kind", "model", "retro", "spawns"]);
 
 function routingMetadataErrors(fm: Record<string, unknown>): string[] {
   const errors: string[] = [];
   const isNonEmptyString = (value: unknown) => typeof value === "string" && value.trim().length > 0;
   if ("kind" in fm && !isNonEmptyString(fm.kind)) errors.push("kind must be a non-empty string");
   if ("model" in fm && !isNonEmptyString(fm.model)) errors.push("model must be a non-empty string");
-  if ("model" in fm && !isNonEmptyString(fm.kind)) errors.push("model requires a paired non-empty string kind (model strings are kind-dialect specific)");
   return errors;
 }
 
@@ -103,15 +103,15 @@ for (const file of subagentFiles) {
   const path = join(subagentDir, file);
   const fm = frontmatter(path);
   const stem = basename(file, ".md");
-  if (fm.name !== stem) fail(`subagents/${file}: frontmatter name '${String(fm.name ?? "")}' does not match filename stem '${stem}'`);
-  if (typeof fm.description !== "string" || !fm.description.trim()) fail(`subagents/${file}: description missing or empty`);
+  if (fm.name !== stem) fail(`${subagentPath}/${file}: frontmatter name '${String(fm.name ?? "")}' does not match filename stem '${stem}'`);
+  if (typeof fm.description !== "string" || !fm.description.trim()) fail(`${subagentPath}/${file}: description missing or empty`);
   for (const key of Object.keys(fm)) {
-    if (!allowedSubagentKeys.has(key)) fail(`subagents/${file}: unsupported frontmatter key '${key}' (allowed: name, description, kind, model)`);
+    if (!allowedSubagentKeys.has(key)) fail(`${subagentPath}/${file}: unsupported frontmatter key '${key}'`);
   }
-  for (const error of routingMetadataErrors(fm)) fail(`subagents/${file}: ${error}`);
+  for (const error of routingMetadataErrors(fm)) fail(`${subagentPath}/${file}: ${error}`);
   const body = readFileSync(path, "utf8").replace(/^---\r?\n[\s\S]*?\r?\n---/, "");
   for (const legacy of ["subagent(", "subagent_kill", "subagent_resume"]) {
-    if (body.includes(legacy)) fail(`subagents/${file}: persona body retains legacy subagent-tool reference '${legacy}'`);
+    if (body.includes(legacy)) fail(`${subagentPath}/${file}: persona body retains legacy subagent-tool reference '${legacy}'`);
   }
 }
 
@@ -144,7 +144,7 @@ if (failures.length > 0) {
 }
 console.log(`ok - ${skillFiles.length} skill definitions and ${topSkillFiles.length} inventory entries`);
 console.log("ok - GitLab parent routes every retained nested command group");
-console.log(`ok - ${subagentFiles.length} subagent definitions carry valid advisory frontmatter`);
+console.log(`ok - ${subagentFiles.length} packaged subagent definitions carry valid advisory frontmatter`);
 console.log(`ok - active extension names are collision-free (${commands.size} commands, ${tools.size} tools scanned)`);
 }
 

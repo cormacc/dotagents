@@ -1,7 +1,7 @@
 ---
 name: scout
 description: Fast codebase reconnaissance - maps existing code, conventions, and patterns for a task
-model: claude-sonnet
+model: light
 retro: false
 ---
 

@@ -41,9 +41,7 @@
     (fs/create-sym-link (fs/path shim "herdr") fake)
     (spit (str bb-shim) "#!/usr/bin/env bash\nprintf '%s\\037' \"$@\" >>\"$BB_ARGV_LOG\"\nprintf '\\n' >>\"$BB_ARGV_LOG\"\nexec \"$REAL_BB\" \"$@\"\n")
     (fs/set-posix-file-permissions bb-shim "rwxr-xr-x")
-    (fs/create-dirs (fs/path dir ".agents"))
     (fs/create-dirs (fs/path dir "empty-home"))
-    (fs/create-sym-link (fs/path dir ".agents" "subagents") (fs/path root "subagents"))
     (let [log (str (fs/path dir "calls")) env-file (str (fs/path dir "env")) bb-log (str (fs/path dir "bb-argv"))]
       {:dir dir :caller (str caller) :log log :env-file env-file :bb-log bb-log
        :env {"PATH" (str shim ":" (System/getenv "PATH"))
@@ -67,10 +65,9 @@
 (deftest assignment-root-follows-the-caller-project
   (let [h (harness)
         project (str (fs/path (:dir h) "project"))
-        _ (fs/create-dirs (fs/path project ".agents"))
-        _ (fs/create-sym-link (fs/path project ".agents" "subagents") (fs/path root "subagents"))
         _ @(process/process ["git" "init" "-q" project] {:out :string :err :string})
-        ;; Empty HOME: the persona can only resolve through the caller project's roster.
+        ;; Empty HOME and no project persona directory: the shipped definition must
+        ;; resolve from the deployed launcher's skill subtree.
         env (-> (:env h) (dissoc "SUBAGENT_ASSIGNMENT_ROOT") (assoc "HOME" (str (fs/path (:dir h) "empty-home"))))
         ;; Through the *deployed* directory-symlinked path — the documented invocation,
         ;; and the one the pre-fix launcher resolved into its own scripts directory.
@@ -120,13 +117,11 @@
           bare (str (fs/path (:dir h) "bare" "x" "y" "scripts"))
           _ (fs/create-dirs (fs/parent bare))
           _ (fs/copy-tree scripts-dir bare)
-          ;; A bare-subtree install ships the whole skill directory, subagents/roster.edn
-          ;; included (it is a first-class skill artifact, not a `scripts/`-only concern)
-          ;; — copy it into a `subagents/` sibling of `scripts`, exactly where the
-          ;; default-roster resolution (derived from the launcher path, never cwd/git)
-          ;; expects to find it.
-          _ (fs/create-dirs (fs/path (fs/parent bare) "subagents"))
-          _ (fs/copy (fs/path root "skills" "herdr-subagents" "subagents" "roster.edn") (fs/path (fs/parent bare) "subagents" "roster.edn"))
+          ;; A bare-subtree install ships the complete sibling `subagents/` tree. This
+          ;; fixture deliberately has no project or home persona directory, so both the
+          ;; worker definition and roster.edn must resolve from beside the launcher.
+          _ (fs/copy-tree (fs/path root "skills" "herdr-subagents" "subagents")
+                          (fs/path (fs/parent bare) "subagents"))
           bin (str bare "/subagent")
           proc (launch! h bin (:caller h))
           argv (bb-argv h)]

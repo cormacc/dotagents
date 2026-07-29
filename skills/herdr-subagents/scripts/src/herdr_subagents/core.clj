@@ -35,10 +35,17 @@
                        [(keyword k) (str/replace v #"^['\"]|['\"]$" "")]))
                    (str/split-lines yaml)))))
 
-(defn roster-path [exists? project-root home persona]
-  (let [project (str project-root "/.agents/subagents/" persona ".md")
-        global (str home "/.agents/subagents/" persona ".md")]
-    (cond (exists? project) project (exists? global) global :else nil)))
+;; Persona definitions resolve project > home > packaged. `packaged-dir` is supplied by
+;; the launcher-relative CLI boundary, never inferred from the assignment root or cwd.
+(defn persona-directories [project-root home packaged-dir]
+  [(str project-root "/.agents/subagents")
+   (str home "/.agents/subagents")
+   (str packaged-dir)])
+(defn resolve-persona [exists? directories persona]
+  (some (fn [directory]
+          (let [path (str directory "/" persona ".md")]
+            (when (exists? path) path)))
+        directories))
 ;; Skills resolve like the roster, plus a bare `<root>/skills/` probe because a skill
 ;; repository holds its own skills there rather than under `.agents/skills/`.
 (defn skill-path [exists? project-root home skill]
@@ -84,8 +91,8 @@
        vec))
 ;; Spawn-policy precedence: `--spawns` flag > frontmatter `spawns:` > default deny.
 ;; The literal flag value `none` forces the empty (leaf) policy without consulting the
-;; roster. `resolve-persona` is the injected roster lookup (name → path or nil, like
-;; `roster-path`'s `exists?`): an unresolvable name fails fast — mirroring the `retro:`
+;; roster. `resolve-persona` is the injected roster lookup (name → path or nil): an
+;; unresolvable name fails fast — mirroring the `retro:`
 ;; invalid-value precedent — rather than silently degrading to leaf.
 (defn resolve-spawns [{:keys [persona flag frontmatter resolve-persona]}]
   (let [[names source] (cond (some? flag) [(when-not (= "none" flag) (parse-spawns flag)) "flag"]

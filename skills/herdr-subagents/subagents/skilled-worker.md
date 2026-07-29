@@ -1,7 +1,7 @@
 ---
 name: skilled-worker
 description: Frontier-model worker - implements a scoped task without advisor consultation, verifies its acceptance criteria, and reports concrete changes and test evidence
-model: claude-opus
+model: middle
 spawns: scout researcher
 ---
 

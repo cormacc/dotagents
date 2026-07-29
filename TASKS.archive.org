@@ -1505,3 +1505,34 @@ The set of model-ids is not closed -- any model-id in a subagent definition that
 | gpt-5.6-luna     | anthropic/claude-haiku-4-5 | haiku  | gpt-5.6-luna  |
 
 After implementation, existing subagents should be updated to use the new canonical model IDs.
+
+** DONE subagent: package default / example subagents  :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 15:41]
+:PROPERTIES:
+:CUSTOM_ID: 4bc362e3-e23f-4c32-bf36-0261ea439077
+:CREATED: [2026-07-29 Wed 11:15]
+:STARTED: [2026-07-29 Wed 14:41]
+:ARCHIVED: [2026-07-29 Wed 15:41]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 11:15]
+- State "STARTED" from "TODO" [2026-07-29 Wed 14:41]
+- State "DONE" from "STARTED" [2026-07-29 Wed 15:41]
+:END:
+#+IMPORT: [[plan:2026-07-29-subagent-package-default-example-subagen.org]]
+Currently the subagent skill doesn't include any defaults / examples. We should do the following...
+- Move the subagents in this repo from =./subagents= to =./skills/herdr-subagents/subagents=
+- Update subagent discovery to pickup definitions in this folder (i.e. =<skill-folder>/subagents=) in addition to =~/.agents/subagents= and =<PROJECT>/.agents/subagents=
+- In the event of duplicate definitions, precedence is the usual: =<project>/.agents/subagents=  > =~/.agents/.subagents= > =<skill-folder>/subagents=
+
+We want to rework the default subagents to use harness-agnostic aliases, which can be overridden via roster.edn
+Default mapping:
+| model-id | pi                         | claude | codex         |
+|----------+----------------------------+--------+---------------|
+| heavy    | anthropic/claude-fable-5   | fable  | gpt-5.6-sol   |
+| middle   | anthropic/claude-opus-5    | opus   | gpt-5.6-sol   |
+| light    | anthropic/claude-sonnet-5  | sonnet | gpt-5.6-terra |
+| feather  | anthropic/claude-haiku-4-5 | haiku  | gpt-5.6-luna  |
+
+The default roster should be updated to include these new weight aliases, and the subagents updated to use them.

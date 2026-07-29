@@ -12,8 +12,9 @@
 ;;
 ;; Verified against the actual CLIs (task 1 of that record, decision gate
 ;; PASSED): claude accepts `fable`/`opus`/`sonnet` plus full model names;
-;; `haiku` is an undocumented alias, so `claude-haiku-4-5` uses the full name
-;; instead. codex `gpt-5.6-{sol,terra,luna}` verified live via `codex exec -m`.
+;; `haiku` is an undocumented alias, so canonical `claude-haiku-4-5` uses the full
+;; name instead; the requested `feather` row deliberately uses `haiku`. codex
+;; `gpt-5.6-{sol,terra,luna}` verified live via `codex exec -m`.
 ;;
 ;; Override chain (project wins): this file (default) ← ~/.agents/subagents/roster.edn
 ;; ← <assignment-root>/.agents/subagents/roster.edn — merged row-level (per model
@@ -21,7 +22,11 @@
 {:harnesses {:pi     {:model-flag "--model"}
              :claude {:model-flag "--model"}
              :codex  {:model-flag "--model"}}
- :models {"claude-fable"     {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
+ :models {"heavy"            {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
+          "middle"           {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
+          "light"            {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
+          "feather"          {:pi "anthropic/claude-haiku-4-5" :claude "haiku"            :codex "gpt-5.6-luna"}
+          "claude-fable"     {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
           "claude-opus"      {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
           "claude-sonnet"    {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
           "claude-haiku"     {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}

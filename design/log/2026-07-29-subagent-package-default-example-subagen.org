@@ -1,0 +1,196 @@
+#+TITLE: Package default and example Herdr subagents
+#+DATE: 2026-07-29 Wed
+#+PARENT: [[archive:4bc362e3-e23f-4c32-bf36-0261ea439077][subagent: package default / example subagents  :skill_herdr-subagents:]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-subagents/scripts/docs/contract.md]]
+
+* Intent
+Ship the repository's reusable Herdr persona definitions as part of the =herdr-subagents= skill and make them the lowest-precedence discovery source. Express packaged persona model choices through harness-agnostic weight aliases so projects and users retain deterministic definition and model-routing overrides without copying the defaults.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+Persona discovery resolves Markdown definitions from project, home, and installed skill directories in descending precedence. Packaged definitions select =heavy=, =middle=, or =light=; the independently merged =roster.edn= chain translates those aliases for the already-resolved Pi, Claude, or Codex kind, with =feather= available as the unassigned fourth tier.
+
+** Scope
+*** In scope
+- Move =advisor.md=, =planner.md=, =researcher.md=, =reviewer.md=, =scout.md=, =skilled-worker.md=, =visual-tester.md=, and =worker.md= from =subagents/= to =skills/herdr-subagents/subagents/= with =git mv=.
+- Extend direct persona lookup, spawn-capability validation, and available-persona listing to include the installed skill's =subagents/= directory.
+- Preserve definition precedence: =<project>/.agents/subagents=, then =~/.agents/subagents=, then =<skill-folder>/subagents=.
+- Preserve skill-root-relative resolution for repository, symlinked, relocated assignment-root, and bare skill-subtree deployments.
+- Add =heavy=, =middle=, =light=, and =feather= rows to the shipped =roster.edn= with the requested Pi, Claude, and Codex mappings.
+- Migrate packaged persona =model:= values and packaged in-body model selectors from provider-family canonical IDs to weight aliases while preserving their current tier intent.
+- Preserve the existing canonical/versioned roster rows and the default ← home ← project row-replacement override chain.
+- Update the metadata checker, Herdr subagent contracts, repository layout documentation, and owner Home Manager wiring for the skill-local package.
+- Add unit, CLI, launcher/deployment, metadata, and model-translation regression coverage.
+- Relevant contracts: =skills/herdr-subagents/SKILL.md= and =skills/herdr-subagents/scripts/docs/contract.md=.
+*** Out of scope
+- Change persona names, role instructions other than model-selector spellings, kind selection, spawn capability, or retro policy.
+- Change the row-level =roster.edn= merge semantics or its default ← home ← project override order.
+- Remove or reinterpret existing =claude-*= / =gpt-*= canonical model IDs.
+- Add recursive discovery, arbitrary search paths, new CLI flags, environment variables, or harness kinds.
+- Install definitions into a user's home or project override directory.
+- Perform billable live model probes.
+
+** Acceptance
+*** Core functionality
+- [X] =advisor.md= exists under =skills/herdr-subagents/subagents/=.
+- [X] =planner.md= exists under =skills/herdr-subagents/subagents/=.
+- [X] =researcher.md= exists under =skills/herdr-subagents/subagents/=.
+- [X] =reviewer.md= exists under =skills/herdr-subagents/subagents/=.
+- [X] =scout.md= exists under =skills/herdr-subagents/subagents/=.
+- [X] =skilled-worker.md= exists under =skills/herdr-subagents/subagents/=.
+- [X] =visual-tester.md= exists under =skills/herdr-subagents/subagents/=.
+- [X] =worker.md= exists under =skills/herdr-subagents/subagents/=.
+- [X] No tracked Markdown persona definition remains under repository-root =subagents/=.
+- [X] A persona present only under the installed skill's =subagents/= directory resolves successfully.
+- [X] A home definition with the same persona name shadows the packaged definition.
+- [X] A project definition with the same persona name shadows the home definition.
+- [X] A project definition with the same persona name shadows the packaged definition.
+- [X] Available-persona output contains the distinct sorted union of project, home, and packaged Markdown definitions.
+- [X] Packaged definition discovery follows the actual installed launcher/skill location rather than the current working directory or assignment root.
+- [X] =heavy= translates to Pi =anthropic/claude-fable-5=, Claude =fable=, and Codex =gpt-5.6-sol=.
+- [X] =middle= translates to Pi =anthropic/claude-opus-5=, Claude =opus=, and Codex =gpt-5.6-sol=.
+- [X] =light= translates to Pi =anthropic/claude-sonnet-5=, Claude =sonnet=, and Codex =gpt-5.6-terra=.
+- [X] =feather= translates to Pi =anthropic/claude-haiku-4-5=, Claude =haiku=, and Codex =gpt-5.6-luna=.
+- [X] =planner= declares =model: heavy=.
+- [X] =advisor= declares =model: middle=.
+- [X] =reviewer= declares =model: middle=.
+- [X] =skilled-worker= declares =model: middle=.
+- [X] =visual-tester= declares =model: middle=.
+- [X] =researcher= declares =model: light=.
+- [X] =scout= declares =model: light=.
+- [X] =worker= declares =model: light=.
+- [X] The worker's explicit advisor-escalation selector uses =--model heavy=.
+- [X] Home and project =roster.edn= files can replace a weight-alias row through the existing precedence chain.
+- [X] The documented discovery contract names the three definition sources and their exact precedence.
+- [X] The documented model contract names the four weight aliases and their exact harness mappings.
+*** Edge cases
+- [X] An unknown persona still fails with an available-persona list that includes packaged defaults.
+- [X] A bare skill-subtree deployment resolves a packaged persona without a project or home definition directory.
+- [X] A bare skill-subtree deployment resolves its packaged =roster.edn=.
+- [X] A relocated assignment root uses that root's project definition override while falling back to definitions beside the installed skill.
+- [X] A relocated assignment root uses that root's weight-row override while loading the default table beside the installed skill.
+- [X] Duplicate names appear once in available-persona output while resolving from the highest-precedence source.
+- [X] =roster.edn= does not appear in available-persona output.
+*** Anti-criteria
+- [X] Must not: let a packaged definition override a home definition.
+- [X] Must not: let a packaged definition override a project definition.
+- [X] Must not: infer or change the harness kind from =heavy=, =middle=, =light=, or =feather=.
+- [X] Must not: alter =roster.edn= merge granularity or override order.
+- [X] Must not: remove existing canonical model rows.
+- [X] Must not: change packaged persona bodies except model-selector spellings and path-dependent documentation links.
+- [X] Must not: require a Git checkout or repository-root =bb.edn= for packaged fallback discovery.
+- [X] Must not: maintain a generated or Home Manager-projected copy of the packaged definitions under =~/.agents/subagents=.
+
+** Decisions
+- Chose one ordered persona-path resolver shared by direct lookup, spawn-capability validation, and available-persona discovery :: a single source of precedence prevents direct spawn and nested =spawns:= validation from disagreeing.
+  Rejected:
+  - Copy defaults into =~/.agents/subagents= during installation: mutates user state and turns packaged updates into stale user overrides.
+  - Search every discovered skill directory: broadens the namespace and makes duplicate ownership ambiguous; this CLI owns one packaged default directory beside its launcher.
+- Derive the packaged definition directory from the resolved launcher path, matching =default-roster-path= :: preserves symlinked and bare-subtree deployment behavior without coupling defaults to the caller's repository layout.
+  Rejected:
+  - Derive defaults from =ledger/assignment-root=: fails when the CLI is installed globally and invoked from an unrelated project.
+  - Hard-code =skills/herdr-subagents/subagents=: fails for relocated and bare-subtree installations.
+- Add weight aliases as roster data rather than code branches :: keeps aliases overrideable and routes them through the existing kind-independent =resolve-model= → =model-args= flow.
+  Rejected:
+  - Interpret weight names in Clojure: duplicates data policy in code and bypasses roster overrides.
+  - Encode per-harness values in persona frontmatter: couples packaged personas to harness dialects.
+- Preserve the existing persona tier assignments while renaming selectors: =claude-fable= → =heavy=, =claude-opus= → =middle=, and =claude-sonnet= → =light=. =feather= ships as an available tier without assigning an existing packaged persona to it.
+- Use the requested Claude =haiku= spelling for =feather= despite the previous table's conservative full-name spelling :: this record specifies emitted arguments, not a billable live compatibility claim.
+- Keep existing canonical/versioned model rows alongside the four weight rows :: local callers and explicit =--model= requests remain compatible while packaged personas become provider-neutral.
+- Keep =roster.edn= configuration loading separate from Markdown definition discovery :: both share directory names and precedence, but roster rows replace by ID while persona definitions shadow atomically by name.
+- Remove the owner Home Manager projection of packaged definitions at =~/.agents/subagents= instead of repointing it :: packaged fallback makes the projection redundant and leaves the home path available for genuine overrides.
+- Treat the task's =~/.agents/.subagents= spelling as a typo and retain the established =~/.agents/subagents= override path :: the task description, source, tests, and skill contract otherwise consistently use the latter.
+
+** Shipped
+- ADDED [[proj:skills/herdr-subagents/subagents/]] — eight packaged persona definitions plus =roster.edn= weight rows; root =subagents/= no longer exists.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/src/herdr_subagents/core.clj]] and [[proj:skills/herdr-subagents/scripts/src/herdr_subagents/cli.clj]] — one project > home > launcher-relative packaged resolver now drives lookup, listing, and spawn validation.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/test/herdr_subagents/cli_test.clj]], [[proj:skills/herdr-subagents/scripts/test/herdr_subagents/core_test.clj]], and [[proj:skills/herdr-subagents/scripts/test/herdr_subagents/launcher_test.clj]] — precedence, symlink, bare-subtree, relocation, alias, and override coverage.
+- MODIFIED [[proj:scripts/check-metadata.ts]] and Herdr skill documentation — packaged definitions, weight mappings, and separate atomic-definition/row-replacement contracts.
+- MODIFIED parent-dotfiles =agents.nix=, =AGENTS.md=, and =README.org= — Home Manager no longer projects packaged definitions into =~/.agents/subagents=; that directory is an unmanaged home override.
+
+** Gotchas
+- =System/getProperty "user.home"=, not the process =HOME= environment variable, supplies the current home lookup; tests inject it explicitly.
+- =launcher-bin= may be supplied by =HERDR_SUBAGENT_BIN=; both packaged personas and the table must derive from its parent skill layout rather than Git state.
+- =fs/glob= requires ={:follow-links true}= to list a Home Manager directory symlink.
+
+** Risks
+- The requested =feather= Claude =haiku= selector remains undocumented/unverified; tests prove emitted argv, not provider acceptance.
+- Existing local =~/.agents/subagents= state is no longer managed; a future Home Manager activation is required to remove the old managed link.
+- Home/project definitions and rows intentionally shadow packaged updates indefinitely.
+
+** Follow-ups
+- task:c98bbfe1-a4d8-4402-b0da-46f78b777b1a — document Babashka glob symlink traversal.
+- task:6c23aa9b-6345-4397-97a3-5a8006959d62 — validate parent-flake Nix edits from their root.
+
+* Plan
+
+** DONE [#A] Centralize three-source persona discovery :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 15:03]
+:PROPERTIES:
+:CUSTOM_ID: 998e4758-3cfe-4322-be7e-c920005e7e6c
+:CREATED: [2026-07-29 Wed 14:10]
+:STARTED: [2026-07-29 Wed 14:41]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 14:41]
+- State "DONE" from "STARTED" [2026-07-29 Wed 15:03]
+:END:
+Outcome: shared project > home > launcher-relative resolver with precedence and symlink coverage.
+
+** DONE [#A] Add overrideable weight aliases and migrate persona selectors :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 15:18]
+:PROPERTIES:
+:CUSTOM_ID: a1a50cbf-0d29-4f40-8fc7-bb24f8c54f7e
+:CREATED: [2026-07-29 Wed 14:37]
+:STARTED: [2026-07-29 Wed 15:03]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 15:03]
+- State "DONE" from "STARTED" [2026-07-29 Wed 15:18]
+:END:
+Outcome: exact weight rows, selector migration, and row-replacement coverage.
+
+** DONE [#A] Package the default persona definitions with the skill :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 15:28]
+:PROPERTIES:
+:CUSTOM_ID: 22580be1-6816-4932-9f89-eda8afe915ec
+:CREATED: [2026-07-29 Wed 14:10]
+:BLOCKED-BY: task:998e4758-3cfe-4322-be7e-c920005e7e6c
+:BLOCKED-BY+: task:a1a50cbf-0d29-4f40-8fc7-bb24f8c54f7e
+:STARTED: [2026-07-29 Wed 15:18]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 15:18]
+- State "DONE" from "STARTED" [2026-07-29 Wed 15:28]
+:END:
+Outcome: eight definitions moved with metadata and bare-subtree coverage.
+
+** DONE [#B] Align packaging, override, and deployment contracts and run regression validation :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 15:39]
+:PROPERTIES:
+:CUSTOM_ID: 9cd3a625-e134-4eb6-9c4f-8e715135cb3d
+:CREATED: [2026-07-29 Wed 14:10]
+:BLOCKED-BY: task:998e4758-3cfe-4322-be7e-c920005e7e6c
+:BLOCKED-BY+: task:22580be1-6816-4932-9f89-eda8afe915ec
+:STARTED: [2026-07-29 Wed 15:28]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 15:28]
+- State "DONE" from "STARTED" [2026-07-29 Wed 15:39]
+:END:
+Outcome: docs, deployment wiring, and validation aligned.
+
+* Implementation
+- Centralized persona discovery before relocating definitions so direct lookup, available-persona diagnostics, and nested spawn validation share one resolver.
+- Added weight aliases and migrated the eight selectors before =git mv= relocation; the packaged tree is self-contained for bare-subtree installation.
+- Removed the Home Manager global-persona projection after the launcher-relative fallback existed; no activation was run.
+
+* Validation
+- =bb test=: 327 repository tests / 1628 assertions; all green.
+- =npm run check:metadata= and =npm run check:links=: green (eight packaged definitions; 146 active documentation files).
+- =ot doctor --format json=: 0 errors, 0 warnings.
+- =nix eval --impure .#homeConfigurations.default.activationPackage.drvPath --raw= from parent dotfiles: evaluates successfully; existing SSH/TeX deprecation warnings remain.

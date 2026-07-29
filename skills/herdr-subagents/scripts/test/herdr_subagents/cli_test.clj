@@ -20,10 +20,10 @@
 (def fake (str root "/skills/herdr-subagents/scripts/test/fixtures/fake-herdr"))
 (defn calls [log] (if (fs/exists? log) (mapv #(str/split % #"\037") (str/split-lines (slurp log))) []))
 (defn mutating? [argv] (and (not (some #{"--help"} argv)) (contains? #{["pane" "split"] ["tab" "create"] ["pane" "rename"] ["pane" "close"] ["agent" "start"] ["agent" "prompt"]} (vec (take 2 argv)))))
-;; `SUBAGENT_ASSIGNMENT_ROOT` keeps the ledger, index markers, result files, and roster
-;; lookup inside the per-test temp dir: `bb test` must never touch the live tree.
-;; `HOME` points at an empty directory so personas can only resolve through the project
-;; roster. Tests may supply an isolated roster instead of the tracked default roster.
+;; `SUBAGENT_ASSIGNMENT_ROOT` keeps the ledger, index markers, result files, and project
+;; override lookup inside the per-test temp dir: `bb test` must never touch the live tree.
+;; `HOME` points at an empty directory, so default personas and roster data resolve from
+;; the launcher's packaged skill subtree. Tests may supply isolated project definitions.
 (defn fake-env
   ([overrides] (fake-env overrides nil))
   ([overrides personas]
@@ -32,12 +32,10 @@
      (fs/create-sym-link (fs/path dir "herdr") fake)
      (fs/create-dirs home)
      (fs/create-dirs (fs/parent roster))
-     (if personas
-       (do
-         (fs/create-dirs roster)
-         (doseq [[name body] personas]
-           (spit (str (fs/path roster (str name ".md"))) body)))
-       (fs/create-sym-link roster (fs/path root "subagents")))
+     (when personas
+       (fs/create-dirs roster)
+       (doseq [[name body] personas]
+         (spit (str (fs/path roster (str name ".md"))) body)))
      ;; `<root>/skills/` is the second skill probe and the shape this repository uses, so
      ;; the retro skill resolves in-fixture without an installed `~/.agents/skills`.
      (fs/create-sym-link skills (fs/path root "skills"))
@@ -52,6 +50,73 @@
    "researcher" "---\nname: researcher\ndescription: fixture researcher\nkind: pi\nmodel: anthropic/claude-sonnet-5\nretro: false\n---\nFixture researcher.\n"})
 (defn call! [env & argv] @(process/process (into [bin] argv) {:out :string :err :string :env env}))
 (defn result [proc] (json/parse-string (:out proc) true))
+
+(deftest three-source-persona-discovery-contract
+  (let [dir (fs/create-temp-dir {:prefix "persona-discovery-"})
+        project (str (fs/path dir "project"))
+        home (str (fs/path dir "home"))
+        packaged (str (fs/path dir "installed" "herdr-subagents" "subagents"))
+        write-persona! (fn [directory name]
+                         (fs/create-dirs directory)
+                         (spit (str (fs/path directory (str name ".md")))
+                               (str "---\nname: " name "\n---\nFixture persona.\n")))
+        project-dir (str (fs/path project ".agents" "subagents"))
+        home-dir (str (fs/path home ".agents" "subagents"))]
+    ;; Each overlap proves a distinct precedence boundary, while one package-only
+    ;; definition drives the fallback and spawn-policy validation paths.
+    (doseq [[directory name] [[project-dir "project-only"]
+                              [project-dir "project-wins"]
+                              [home-dir "home-only"]
+                              [home-dir "home-wins"]
+                              [home-dir "project-wins"]
+                              [packaged "packaged-only"]
+                              [packaged "home-wins"]
+                              [packaged "project-wins"]]]
+      (write-persona! directory name))
+    (with-redefs [ledger/assignment-root (constantly project)
+                  cli/home-directory (constantly home)
+                  cli/packaged-personas-directory (constantly packaged)]
+      (is (= (str (fs/path project-dir "project-wins.md"))
+             (str (cli/roster "project-wins"))))
+      (is (= (str (fs/path home-dir "home-wins.md"))
+             (str (cli/roster "home-wins"))))
+      (is (= (str (fs/path packaged "packaged-only.md"))
+             (str (cli/roster "packaged-only"))))
+      ;; Names overlapping across directories appear only once in the sorted union.
+      (is (= ["home-only" "home-wins" "packaged-only" "project-only" "project-wins"]
+             (cli/available-personas)))
+      ;; The real spawn-policy path accepts a packaged-only target. Its returned policy
+      ;; varies with nesting depth, so only acceptance is asserted here.
+      (is (map? (cli/spawns-policy "worker" {} {:spawns "packaged-only"})))
+      (is (try (cli/spawns-policy "worker" {} {:spawns "unknown"}) false
+               (catch clojure.lang.ExceptionInfo e
+                 (and (re-find #"unresolvable persona `unknown`" (.getMessage e))
+                      (= {:persona "worker" :spawn "unknown" :source "frontmatter"}
+                         (ex-data e))))))
+      (is (try (cli/roster "unknown") false
+               (catch clojure.lang.ExceptionInfo e
+                 (and (re-find #"project, home, or packaged" (.getMessage e))
+                      (= ["home-only" "home-wins" "packaged-only" "project-only" "project-wins"]
+                         (:available (ex-data e))))))))
+  ;; This must follow the resolved launcher location, not the assignment root or cwd.
+  (with-redefs [cli/launcher-bin (constantly "/opt/installed/herdr-subagents/scripts/subagent")]
+    (is (= "/opt/installed/herdr-subagents/subagents" (cli/packaged-personas-directory))))))
+
+(deftest available-personas-follows-home-roster-symlink
+  (let [dir (fs/create-temp-dir {:prefix "persona-list-symlink-"})
+        project (str (fs/path dir "project"))
+        home (str (fs/path dir "home"))
+        stored (fs/path dir "home-manager-store" "subagents")
+        home-roster (fs/path home ".agents" "subagents")]
+    (fs/create-dirs project)
+    (fs/create-dirs stored)
+    (spit (str (fs/path stored "home-only.md")) "---\nname: home-only\n---\nFixture persona.\n")
+    (fs/create-dirs (fs/parent home-roster))
+    (fs/create-sym-link home-roster stored)
+    (with-redefs [ledger/assignment-root (constantly project)
+                  cli/home-directory (constantly home)
+                  cli/packaged-personas-directory (constantly (str (fs/path dir "packaged")))]
+      (is (= ["home-only"] (cli/available-personas))))))
 
 (deftest preflight-and-vector-argv-contract
   (let [{:keys [env log prompt-file dir env-file]} (fake-env {}) proc (call! env "run" "worker" "--task" "quotes ' newline\n $(unsafe) `unsafe`" "--timeout" "20")
@@ -93,9 +158,9 @@
     (is (zero? (:exit proc)) (:err proc))
     (is (= "" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))
     (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))
-    ;; The live roster's scout declares the unversioned canonical `claude-sonnet`.
-    (is (= "worker-1/scout-1-claude-sonnet" (:label entry)))
-    (is (= ["pane" "rename" "w:child" "worker-1/scout-1-claude-sonnet"] (vec rename)))
+    ;; The live roster's scout declares the provider-neutral `light` alias.
+    (is (= "worker-1/scout-1-light" (:label entry)))
+    (is (= ["pane" "rename" "w:child" "worker-1/scout-1-light"] (vec rename)))
     (is (= {:spawns [] :spawns-source "depth"} (select-keys entry [:spawns :spawns-source])))))
 
 (deftest root-worker-spawn-records-and-injects-frontmatter-policy
@@ -162,7 +227,6 @@
 (deftest below-root-spawn-validates-target-frontmatter
   (let [{:keys [env log dir roster]} (fake-env {"HERDR_SUBAGENT_PERSONA" "worker"
                                                 "HERDR_SUBAGENT_SPAWNS" "broken"})]
-    (fs/delete (fs/path roster)) ;; replace the live-roster symlink with a broken fixture persona
     (fs/create-dirs roster)
     (spit (str (fs/path roster "broken.md"))
           "---\nname: broken\ndescription: fixture persona with a misspelled grant\nspawns: does-not-exist\n---\nFixture persona.\n")
@@ -171,6 +235,17 @@
       (is (re-find #"unresolvable persona `does-not-exist`" (:out proc)))
       (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))
       (is (not-any? mutating? (calls log))))))
+
+(deftest relocated-assignment-root-persona-shadows-packaged-default
+  (let [{:keys [env log roster]} (fake-env {}
+                                           {"worker" "---\nname: worker\ndescription: relocated project worker\nmodel: light\n---\nProject override.\n"})
+        proc (call! env "start" "worker" "--task" "project persona shadows package")
+        start (first (filter #(and (= ["agent" "start"] (vec (take 2 %)))
+                                  (not (some #{"--help"} %)))
+                             (calls log)))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (some #(= (str roster "/worker.md") %) start))
+    (is (not-any? #(= (str root "/skills/herdr-subagents/subagents/worker.md") %) start))))
 
 (deftest spawns-env-is-identical-for-tab-and-split-placement
   (let [{split-env :env split-env-file :env-file} (fake-env {})
@@ -265,9 +340,9 @@
         pi-start (first (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))]
     (is (zero? (:exit pi-proc)))
     (is (some #(str/ends-with? % "/worker.md") pi-start))
-    ;; Project roster wins end-to-end: the persona resolves under the assignment root,
-    ;; not under $HOME/.agents/subagents (which does not exist in this fixture).
-    (is (some #(= (str roster "/worker.md") %) pi-start))
+    ;; With no project or home definition, the persona resolves from the launcher-local
+    ;; package rather than requiring a repository-root `subagents/` directory.
+    (is (some #(= (str root "/skills/herdr-subagents/subagents/worker.md") %) pi-start))
     (is (str/includes? (slurp prompt-file) "assignment from a file"))
     (is (str/includes? (slurp prompt-file) "Additional constraints: stay read-only")))
   ;; Also covers the nested planner label end-to-end: the injected persona gates it.
@@ -649,10 +724,21 @@
 ;; Ties the shipped default table to the record's verified rows, independent of the
 ;; loader/translation machinery under test elsewhere in this namespace.
 (deftest default-roster-table-content-contract
-  (let [config (core/parse-roster "roster.edn" (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "roster.edn"))))]
+  (let [config (core/parse-roster "roster.edn" (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "roster.edn"))))
+        weight-rows {"heavy" {:pi "anthropic/claude-fable-5" :claude "fable" :codex "gpt-5.6-sol"}
+                     "middle" {:pi "anthropic/claude-opus-5" :claude "opus" :codex "gpt-5.6-sol"}
+                     "light" {:pi "anthropic/claude-sonnet-5" :claude "sonnet" :codex "gpt-5.6-terra"}
+                     "feather" {:pi "anthropic/claude-haiku-4-5" :claude "haiku" :codex "gpt-5.6-luna"}}]
     (is (= "--model" (get-in config [:harnesses :pi :model-flag])))
     (is (= "--model" (get-in config [:harnesses :claude :model-flag])))
     (is (= "--model" (get-in config [:harnesses :codex :model-flag])))
+    (testing "all twelve weight-alias translations"
+      (doseq [[alias row] weight-rows
+              [kind native-model] row]
+        (is (= native-model (get-in config [:models alias kind]))
+            (str alias " " (name kind) " row"))
+        (is (= ["--model" native-model] (core/model-args config (name kind) alias))
+            (str alias " translates for " (name kind)))))
     ;; Pi receives the configured OpenAI model for `gpt-*`; only the claude/codex
     ;; columns use tier-equivalent cross-provider mappings.
     (is (= {:pi "openai-codex/gpt-5.6-terra" :claude "sonnet" :codex "gpt-5.6-terra"} (get-in config [:models "gpt-5.6-terra"])))
@@ -660,7 +746,8 @@
     (is (= {:pi "openai-codex/gpt-5.6-luna" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"} (get-in config [:models "gpt-5.6-luna"])))
     (is (= ["--model" "openai-codex/gpt-5.6-sol"] (core/model-args config "pi" "gpt-5.6-sol")))
     (is (= ["--model" "opus"] (core/model-args config "claude" "gpt-5.6-sol")))
-    ;; The undocumented `haiku` alias is deliberately not used for the claude column.
+    ;; The canonical `claude-haiku*` rows retain the full name despite `feather` using
+    ;; the requested undocumented `haiku` alias.
     (is (= "claude-haiku-4-5" (get-in config [:models "claude-haiku-4-5" :claude])))
     ;; Unversioned canonical IDs are floating aliases for the latest version of the tier.
     (doseq [[unversioned latest] [["claude-fable" "claude-fable-5"] ["claude-opus" "claude-opus-5"]
@@ -669,6 +756,20 @@
       (is (= (get-in config [:models latest]) (get-in config [:models unversioned]))
           (str unversioned " resolves to the same row as " latest)))
     (is (= ["--model" "gpt-5.6-terra"] (core/model-args config "codex" "claude-sonnet-5")))))
+
+(deftest packaged-persona-weight-selector-contract
+  (let [expected {"planner" "heavy"
+                  "advisor" "middle"
+                  "reviewer" "middle"
+                  "skilled-worker" "middle"
+                  "visual-tester" "middle"
+                  "researcher" "light"
+                  "scout" "light"
+                  "worker" "light"}]
+    (doseq [[persona weight] expected]
+      (is (= weight (:model (core/parse-frontmatter (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" (str persona ".md")))))))
+          (str persona " declares " weight)))
+    (is (str/includes? (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "worker.md"))) "--model heavy"))))
 
 ;; Loader precedence, row-level replacement, missing/malformed/invalid-shape handling,
 ;; and bare-subtree/relocated-root path derivation, exercised directly against
@@ -693,23 +794,30 @@
     (with-redefs [cli/launcher-bin (constantly launcher) ledger/assignment-root (constantly project-root)]
       (testing "default only"
         (let [config (cli/roster-config home-dir)]
-          (is (= "opus" (get-in config [:models "claude-opus-5" :claude])))
+          (is (= "opus" (get-in config [:models "middle" :claude])))
           (is (= "--model" (get-in config [:harnesses :codex :model-flag])))))
-      (testing "home override replaces a row"
+      (testing "home override replaces a weight-alias row"
         (fs/create-dirs (fs/parent home-roster))
-        (spit (str home-roster) "{:models {\"claude-opus-5\" {:claude \"opus-home\"}}}")
-        (is (= "opus-home" (get-in (cli/roster-config home-dir) [:models "claude-opus-5" :claude]))))
-      (testing "project beats home for the same ID; row-level replacement drops untouched columns"
+        (spit (str home-roster) "{:models {\"middle\" {:claude \"middle-home\"}}}")
+        (is (= "middle-home" (get-in (cli/roster-config home-dir) [:models "middle" :claude]))))
+      (testing "project beats home for the same weight alias; row-level replacement drops untouched columns"
         (fs/create-dirs (fs/parent project-roster))
+        (spit (str project-roster) "{:models {\"middle\" {:claude \"middle-project\"}}}")
+        (let [config (cli/roster-config home-dir)]
+          (is (= "middle-project" (get-in config [:models "middle" :claude])))
+          ;; The overridden row replaces the whole default row: :pi/:codex are gone, not
+          ;; deep-merged alongside the new :claude value.
+          (is (nil? (get-in config [:models "middle" :pi])))))
+      (testing "canonical rows retain home/project replacement precedence"
+        (spit (str home-roster) "{:models {\"claude-opus-5\" {:claude \"opus-home\"}}}")
+        (is (= "opus-home" (get-in (cli/roster-config home-dir) [:models "claude-opus-5" :claude])))
         (spit (str project-roster) "{:models {\"claude-opus-5\" {:claude \"opus-project\"}}}")
         (let [config (cli/roster-config home-dir)]
           (is (= "opus-project" (get-in config [:models "claude-opus-5" :claude])))
-          ;; The overridden row replaces the whole default row: :pi/:codex are gone, not
-          ;; deep-merged alongside the new :claude value.
           (is (nil? (get-in config [:models "claude-opus-5" :pi])))))
       (testing "missing override files are silently ignored"
         (fs/delete home-roster) (fs/delete project-roster)
-        (is (= "opus" (get-in (cli/roster-config home-dir) [:models "claude-opus-5" :claude]))))
+        (is (= "opus" (get-in (cli/roster-config home-dir) [:models "middle" :claude]))))
       (testing "malformed EDN in an override throws naming its path"
         (spit (str project-roster) "{:models")
         (is (try (cli/roster-config home-dir) false

@@ -1,7 +1,7 @@
 ---
 name: worker
 description: Default worker - implements a scoped task with focused frontier-advisor consultation, verifies acceptance criteria, and reports concrete changes and test evidence
-model: claude-sonnet
+model: light
 spawns: scout researcher advisor
 ---
 
@@ -24,7 +24,7 @@ Implement the assigned task with minimal, production-quality changes, consult an
 
 - The pre-publish review in step 7 is mandatory and counts toward a soft cap of 3 advisor consults per assignment.
 - Escalate with an additional consult only for a debug dead-end after 2+ failed attempts or a high-stakes ambiguous decision.
-- If the advisor states uncertainty or its checks still fail after one remediation round, re-consult `advisor` once with `--model claude-fable`; this tier escalation is within the same cap.
+- If the advisor states uncertainty or its checks still fail after one remediation round, re-consult `advisor` once with `--model heavy`; this tier escalation is within the same cap.
 - Use a blocking, focused consult. The advisor is read-only and returns a verdict, recommended approach, and concrete pass/fail checks; the caller owns implementation and verification.
 
 ## Delegating factual gaps

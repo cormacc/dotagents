@@ -21,7 +21,9 @@ The skill therefore separates policy from mechanics. [[file:SKILL.md][SKILL.md]]
 
 ** Harness-neutral roster and CLI
 
-The roster under [[file:../../subagents/][subagents/]] uses Markdown plus =name=/=description=/=kind=/=model= frontmatter. The resolved =kind= selects the child harness, so a parent is not restricted to its own harness. Keeping orchestration in a pi extension would have broken that property.
+The packaged roster under [[file:subagents/][subagents/]] uses Markdown plus =name=/=description=/=kind=/=model= frontmatter. Persona definitions resolve project override (=<git-root>/.agents/subagents/=), then home override (=~/.agents/subagents/=), then this packaged directory; definitions shadow atomically by name. The resolved =kind= selects the child harness, so a parent is not restricted to its own harness. Keeping orchestration in a pi extension would have broken that property.
+
+The separate =roster.edn= chain has the same default ← home ← project order but a different merge rule: a home or project row replaces the full row with that model ID, including =heavy=, =middle=, =light=, or =feather=; it does not deep-merge or select a kind. Those aliases map only after kind selection: =heavy= → Pi =anthropic/claude-fable-5=, Claude =fable=, Codex =gpt-5.6-sol=; =middle= → Pi =anthropic/claude-opus-5=, Claude =opus=, Codex =gpt-5.6-sol=; =light= → Pi =anthropic/claude-sonnet-5=, Claude =sonnet=, Codex =gpt-5.6-terra=; =feather= → Pi =anthropic/claude-haiku-4-5=, Claude =haiku=, Codex =gpt-5.6-luna=.
 
 The [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24 change-record]] records the implementation choice: Babashka behind a thin launcher was preferred to a harness-specific extension or pure Bash. It provides vector argv, JSON handling, testable protocol logic, and atomic filesystem operations without adding Maven dependencies. Folding delegation into =ot= was rejected because task memory and terminal delegation are separate domains.
 
@@ -82,7 +84,7 @@ Publication identity comes from injected =HERDR_SUBAGENT_*= variables rather tha
 
 ** Deployment and live smoke
 
-=agents.nix= deploys =~/.agents/skills= as a directory symlink. Launcher canonicalisation must therefore use physical paths when locating the repository configuration while retaining the absolute deployed launcher path injected into the child. Do not add a duplicate =.agents/subagents/= roster to this repository merely to make self-resolution look project-local; deployment already exposes the tracked roster globally.
+=agents.nix= deploys =~/.agents/skills= as a directory symlink, which includes this skill's packaged =subagents/= directory. Launcher canonicalisation must therefore use physical paths when locating the repository configuration while retaining the absolute deployed launcher path injected into the child. Do not project packaged definitions into =~/.agents/subagents/=: that path is deliberately unmanaged and reserved for genuine home overrides; project overrides remain =<git-root>/.agents/subagents/=.
 
 =bb smoke-subagent= is billable and guarded by =HERDR_ENV=1=, =SUBAGENT_LIVE_SMOKE=1=, and =SUBAGENT_LIVE_SMOKE_MODEL=. It calls =cli/execute= in-process and therefore cannot validate the Bash launcher. Launcher changes need a separate deployed-path smoke from a scratch project. The retrospective leg deliberately lets the child encounter an unannounced invalid command: announcing the trap turns it into a known one-off that the =retro= eligibility gate correctly rejects.
 

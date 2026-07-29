@@ -8,9 +8,24 @@
             [herdr-subagents.smoke :as smoke]))
 
 (deftest resolution-and-label-contract
-  (is (= "/project/.agents/subagents/scout.md" (core/roster-path #{"/project/.agents/subagents/scout.md" "/home/u/.agents/subagents/scout.md"} "/project" "/home/u" "scout")))
-  (is (= "/home/u/.agents/subagents/scout.md" (core/roster-path #{"/home/u/.agents/subagents/scout.md"} "/project" "/home/u" "scout")))
-  (is (nil? (core/roster-path #{} "/project" "/home/u" "unknown")))
+  (let [directories (core/persona-directories "/project" "/home/u" "/installed/herdr-subagents/subagents")]
+    (is (= ["/project/.agents/subagents" "/home/u/.agents/subagents" "/installed/herdr-subagents/subagents"] directories))
+    (testing "project shadows home and packaged definitions"
+      (is (= "/project/.agents/subagents/scout.md"
+             (core/resolve-persona #{"/project/.agents/subagents/scout.md"
+                                     "/home/u/.agents/subagents/scout.md"
+                                     "/installed/herdr-subagents/subagents/scout.md"}
+                                   directories "scout"))))
+    (testing "home shadows packaged definitions"
+      (is (= "/home/u/.agents/subagents/scout.md"
+             (core/resolve-persona #{"/home/u/.agents/subagents/scout.md"
+                                     "/installed/herdr-subagents/subagents/scout.md"}
+                                   directories "scout"))))
+    (testing "packaged definitions are the fallback"
+      (is (= "/installed/herdr-subagents/subagents/scout.md"
+             (core/resolve-persona #{"/installed/herdr-subagents/subagents/scout.md"}
+                                   directories "scout"))))
+    (is (nil? (core/resolve-persona #{} directories "unknown"))))
   (is (= "right" (core/direction {:width 160 :height 80})))
   (is (= "down" (core/direction {:width 113 :height 110})))
   (is (= "pi" (core/resolve-kind {:requested nil :frontmatter {:kind "pi"} :parent-kind "claude"})))

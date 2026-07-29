@@ -211,19 +211,6 @@ Follow-ups from the initial `ot move` implementation (task 2a2f5aed): expose mov
 :END:
 Exploratory payoff for the advisor strategy (see [[plan:2026-07-29-subagent-implement-the-advisor-strategy.org]]): run the same scoped implementation task through `worker` (opus-5) and `advised-worker` (sonnet-5 + opus-5 advisor), compare output quality, advisor consult count, and token cost. Also try one run with the advisor tier-escalated to anthropic/claude-fable-5 via --model.
 
-** TODO subagent: package default / example subagents  :skill_herdr-subagents:
-:PROPERTIES:
-:CUSTOM_ID: 4bc362e3-e23f-4c32-bf36-0261ea439077
-:CREATED: [2026-07-29 Wed 11:15]
-:END:
-:LOGBOOK:
-- Created [2026-07-29 Wed 11:15]
-:END:
-Currently the subagent skill doesn't include any defaults / examples. We should do the following...
-- Move the subagents in this repo from =./subagents= to =./skills/herdr-subagents/subagents=
-- Update subagent discovery to pickup definitions in this folder (i.e. =<skill-folder>/subagents=) in addition to =~/.agents/subagents= and =<PROJECT>/.agents/subagents=
-- In the event of duplicate definitions, precedence is the usual: =<project>/.agents/subagents=  > =~/.agents/.subagents= > =<skill-folder>/subagents=
-
 ** TODO subagent: notify a non-blocking parent when a child publishes its result :skill_herdr-subagents:
 :PROPERTIES:
 :CUSTOM_ID: 6a4101d1-2612-4a5b-bda1-97cccece98cb
@@ -448,3 +435,41 @@ Origin:
 
 Evidence:
 Session task ac6a09be (docs advised-worker, model-resolution change): collect returned status 'invalid', reason 'artifact path must be absolute' for 'skills/herdr-subagents/SKILL.md'; re-prompting the child could not repair it because publish is immutable; parent validated the envelope manually and closed the pane by hand.
+
+** TODO Document Babashka glob symlink traversal :skill_clojure:
+:PROPERTIES:
+:CUSTOM_ID: c98bbfe1-a4d8-4402-b0da-46f78b777b1a
+:CREATED: [2026-07-29 Wed 15:45]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 15:45]
+:END:
+Document that babashka.fs/glob requires {:follow-links true} when enumerating a Home Manager-managed directory symlink, and add the expected test pattern.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: dotagents @ main
+- timestamp: [2026-07-29 Wed]
+- sender: agent
+
+Evidence:
+- Packaged-persona discovery initially omitted the Home Manager symlinked home roster until fs/glob was invoked with {:follow-links true} and covered by a symlink fixture.
+
+** TODO Validate parent-flake Nix edits from their root :skill_nix:
+:PROPERTIES:
+:CUSTOM_ID: 6c23aa9b-6345-4397-97a3-5a8006959d62
+:CREATED: [2026-07-29 Wed 15:45]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 15:45]
+:END:
+Clarify that validation for a Nix target outside the current repository must run from the target flake root before selecting an output.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: dotagents @ main
+- timestamp: [2026-07-29 Wed]
+- sender: agent
+
+Evidence:
+- A worker editing parent dotfiles agents.nix initially evaluated the agents submodule; cd /home/cormacc/dotfiles && nix eval --impure .#homeConfigurations.default.activationPackage.drvPath --raw was the verified replacement.
