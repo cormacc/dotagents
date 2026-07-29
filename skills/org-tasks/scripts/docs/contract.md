@@ -272,7 +272,12 @@ returns it to a level-2 heading at the end of that level-1 section — the depth
 and `section` is `null` for a `--parent` move. `previousParentId` is `null` when
 the task was already a root of its file. `movedCount` counts the moved root plus
 its descendants; `fromLevel`/`toLevel` are the subtree root's heading depth
-before and after. `task` reflects the post-move `level` and `line`.
+before and after. `task` reflects the post-move `level` and `line`. Like every
+mutator that returns `Task` (`status`, `priority`, `move`, `archive`,
+`unarchive`, `publish`, and `unpublish`), its default JSON/EDN projection omits
+`sourceContent` and `effectiveSourceContent` across the complete task tree.
+Pass `--include-content` to any of those commands to include both fields;
+text output is unchanged. This applies equally to `--dry-run` envelopes.
 
 The subtree's source lines are relocated verbatim apart from heading stars, so
 `:CUSTOM_ID:`, `:CREATED:` / `:STARTED:`, `CLOSED:`, `:LOGBOOK:`, `#+IMPORT:`,
@@ -491,6 +496,24 @@ or lacking `* Summary`) or `null` (task has no `#+IMPORT:` at all).
 }
 ```
 
+### `ot tag add|remove <id> <tag>`
+
+```json
+"result": {
+  "taskId": "uuid",
+  "tags":   ["backend", "security"]
+}
+```
+
+Mutates only the target task's trailing heading tags and returns the resulting
+ordered tag vector. Tags use `[A-Za-z0-9_]+`; surrounding whitespace and one
+`:tag:` wrapper are normalised, while whitespace within a tag, colons, and
+other characters fail with `invalid-tag`. `add` does not duplicate a tag and
+`remove` is a no-op when it is absent. Both commands accept `--dry-run` and
+then return the same envelope without writing. The normal graph saver writes
+the owning `TASKS.org`, `TASKS.local.org`, or imported plan file atomically;
+a changed source fails with `conflict` and remains untouched.
+
 ### `ot ready <id>`
 
 ```json
@@ -500,7 +523,7 @@ or lacking `* Summary`) or `null` (task has no `#+IMPORT:` at all).
   "gating":  [
     {
       "blocker": { "raw": "task:other", "kind": "task", "ref": "other" },
-      "reason":  "unresolved-task | missing-task | opaque"
+      "reason":  "<open status, e.g. TODO | STARTED | WAITING> | missing-task | opaque"
     }
   ]
 }

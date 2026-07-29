@@ -69,7 +69,8 @@
                 #(loader/save-source-roots project-root tree-new known-baselines)))
             (out/emit-result
               opts
-              {:task (task/task->wire moved)
+              {:task (task/task->wire moved nil
+                                      {:include-content? (boolean (:include-content opts))})
                :from from-path
                :to to-path
                :text/lines [(str verb " " (:summary target) " → " to-path)]})))))))
@@ -237,7 +238,8 @@
                     (loader/write-selected-id (:local files) nil)))
                 (out/emit-result
                   opts
-                  {:task (task/task->wire archive-copy)
+                  {:task (task/task->wire archive-copy nil
+                                          {:include-content? (boolean (:include-content opts))})
                    :archivePath archive-path
                    :archivedAt stamp
                    :selectionCleared (and (not (:dry-run opts)) selection-cleared?)
@@ -327,7 +329,8 @@
                   (loader/atomic-write archive-path archive-updated))
                 (out/emit-result
                  opts
-                 {:task (task/task->wire restored)
+                 {:task (task/task->wire restored nil
+                                         {:include-content? (boolean (:include-content opts))})
                   :from archive-path
                   :to tasks-path
                   :section section

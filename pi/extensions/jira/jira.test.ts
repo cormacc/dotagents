@@ -141,39 +141,27 @@ assertEqual(
 );
 
 assertEqual(
-  resolveJiraConfig({
-    setup: [
-      "#+LINK: jira https://setup.atlassian.net/browse/%s",
-      "#+JIRA_CLOUDID: setup-cloud",
-      "#+JIRA_PROJECT: SETUP",
-    ].join("\n"),
-    shared: "",
-    local: "",
-  }),
+  resolveJiraConfig([
+    "#+LINK: jira https://setup.atlassian.net/browse/%s",
+    "#+JIRA_CLOUDID: setup-cloud",
+    "#+JIRA_PROJECT: SETUP",
+  ].join("\n")),
   { cloudId: "setup-cloud", project: "SETUP", baseUrl: "https://setup.atlassian.net" },
   "resolveJiraConfig: reads defaults from TASKS.setup.org content",
 );
 
 assertEqual(
-  resolveJiraConfig({
-    setup: [
-      "#+LINK: jira https://setup.atlassian.net/browse/%s",
-      "#+JIRA_CLOUDID: setup-cloud",
-      "#+JIRA_PROJECT: SETUP",
-    ].join("\n"),
-    shared: [
-      "#+LINK: jira https://shared.atlassian.net/browse/%s",
-      "#+JIRA_CLOUDID: shared-cloud",
-      "#+JIRA_PROJECT: SHARED",
-    ].join("\n"),
-    local: [
-      "#+LINK: jira https://local.atlassian.net/browse/%s",
-      "#+JIRA_CLOUDID: local-cloud",
-      "#+JIRA_PROJECT: LOCAL",
-    ].join("\n"),
-  }),
-  { cloudId: "local-cloud", project: "LOCAL", baseUrl: "https://local.atlassian.net" },
-  "resolveJiraConfig: local overrides shared and setup",
+  resolveJiraConfig([
+    "#+JIRA_PROJECT:",
+    "#+LINK: jira https://first.atlassian.net/browse/%s",
+    "#+JIRA_CLOUDID: first-cloud",
+    "#+JIRA_PROJECT: FIRST",
+    "#+LINK: jira https://later.atlassian.net/browse/%s",
+    "#+JIRA_CLOUDID: later-cloud",
+    "#+JIRA_PROJECT: LATER",
+  ].join("\n")),
+  { cloudId: "first-cloud", project: "FIRST", baseUrl: "https://first.atlassian.net" },
+  "resolveJiraConfig: selects the first non-empty declaration in effective Org order",
 );
 
 // ── buildClonePrompt: structural sanity ───────────────────────────

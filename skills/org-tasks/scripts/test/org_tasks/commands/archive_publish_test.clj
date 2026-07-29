@@ -73,6 +73,22 @@
             (is (not (str/includes? shared (str ":CUSTOM_ID: " id))))
             (is (str/includes? local (str ":CUSTOM_ID: " id)))))))))
 
+(deftest locality-mutator-content-projection-is-compact-by-default-and-opt-in
+  (with-temp-dir
+    (fn [root]
+      (let [id "local-aaaa-bbbb-cccc-dddddddddddd"]
+        (bootstrap-local! root id "Draft task")
+        (let [compact (parse-json-result
+                       (:out (run-cli! "--root" root "--format" "json" "--dry-run"
+                                       "publish" id)))
+              expanded (parse-json-result
+                        (:out (run-cli! "--root" root "--format" "json" "--dry-run"
+                                        "publish" id "--include-content")))]
+          (is (not (contains? (:task compact) :sourceContent)))
+          (is (not (contains? (:task compact) :effectiveSourceContent)))
+          (is (contains? (:task expanded) :sourceContent))
+          (is (contains? (:task expanded) :effectiveSourceContent)))))))
+
 ;; ── archive ──────────────────────────────────────────
 
 (deftest archive-moves-closed-top-level-task
@@ -97,6 +113,46 @@
           (is (str/includes? archive (str ":CUSTOM_ID: " id)))
           (is (str/includes? archive ":ARCHIVED:"))
           (is (= "2026-05-01 Fri 09:00" (:archivedAt r))))))))
+
+(deftest archive-mutator-content-projection-is-compact-by-default-and-opt-in
+  (with-temp-dir
+    (fn [root]
+      (let [id "closed-aaa-bbbb-cccc-dddddddddddd"]
+        (spit (str (fs/path root "TASKS.org"))
+              (str "* Improvements\n** DONE Closed task\nCLOSED: [2026-05-01 Fri 09:00]\n"
+                   ":PROPERTIES:\n:CUSTOM_ID: " id "\n:END:\n"))
+        (spit (str (fs/path root "TASKS.local.org")) "#+SELECTED:\n")
+        (let [compact (parse-json-result
+                       (:out (run-cli! "--root" root "--format" "json" "--dry-run"
+                                       "archive" id)))
+              expanded (parse-json-result
+                        (:out (run-cli! "--root" root "--format" "json" "--dry-run"
+                                        "archive" id "--include-content")))]
+          (is (not (contains? (:task compact) :sourceContent)))
+          (is (not (contains? (:task compact) :effectiveSourceContent)))
+          (is (contains? (:task expanded) :sourceContent))
+          (is (contains? (:task expanded) :effectiveSourceContent)))))))
+
+(deftest unarchive-mutator-content-projection-is-compact-by-default-and-opt-in
+  (with-temp-dir
+    (fn [root]
+      (let [id "closed-aaa-bbbb-cccc-dddddddddddd"
+            archive-path (str (fs/path root "TASKS.archive.org"))]
+        (spit (str (fs/path root "TASKS.org")) "* Improvements\n")
+        (spit (str (fs/path root "TASKS.local.org")) "#+SELECTED:\n")
+        (spit archive-path
+              (str "* DONE Closed task\n:PROPERTIES:\n:CUSTOM_ID: " id
+                   "\n:ARCHIVE_OLPATH: Improvements\n:END:\n"))
+        (let [compact (parse-json-result
+                       (:out (run-cli! "--root" root "--format" "json" "--dry-run"
+                                       "unarchive" id)))
+              expanded (parse-json-result
+                        (:out (run-cli! "--root" root "--format" "json" "--dry-run"
+                                        "unarchive" id "--include-content")))]
+          (is (not (contains? (:task compact) :sourceContent)))
+          (is (not (contains? (:task compact) :effectiveSourceContent)))
+          (is (contains? (:task expanded) :sourceContent))
+          (is (contains? (:task expanded) :effectiveSourceContent)))))))
 
 (deftest archive-records-source-section
   (with-temp-dir

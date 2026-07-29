@@ -3,6 +3,7 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [org-tasks.commands.test-util :refer :all]
+            [org-tasks.loader :as loader]
             [org-tasks.parser :as parser]
             [org-tasks.styling :as styling]))
 
@@ -69,7 +70,7 @@
                 r (parse-json-result out)]
             (is (false? (:ready r)))
             (is (= 1 (count (:gating r))))
-            (is (= "unresolved-task" (get-in r [:gating 0 :reason])))))
+            (is (= "STARTED" (get-in r [:gating 0 :reason])))))
         (testing "list shows the blocker"
           (let [{:keys [out]} (run-cli! "--root" root "--format" "json"
                                         "blocker" "list" target)
@@ -158,3 +159,76 @@
                                         "issue" "list" id)
                 r (parse-json-result out)]
             (is (= [] (:issues r)))))))))
+
+;; ── heading tags ───────────────────────────────────────
+
+(deftest tag-add-remove-root-and-local
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [root-id "11111111-2222-4333-8444-555555555551"
+            local-id "33333333-2222-4333-8444-555555555553"
+            root-file (str (fs/path root "TASKS.org"))
+            local-file (str (fs/path root "TASKS.local.org"))]
+        (testing "add normalises, preserves order, and does not duplicate"
+          (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json"
+                                             "tag" "add" root-id " :ops: ")
+                r (parse-json-result out)]
+            (is (zero? exit))
+            (is (= {:taskId root-id :tags ["backend" "ops"]} r))
+            (is (str/includes? (slurp root-file)
+                               "** TODO [#A] First :backend:ops:")))
+          (let [{:keys [out]} (run-cli! "--root" root "--format" "json"
+                                        "tag" "add" root-id "ops")]
+            (is (= ["backend" "ops"] (:tags (parse-json-result out))))))
+        (testing "remove is idempotent and leaves no trailing colon"
+          (run-cli! "--root" root "--format" "json" "tag" "remove" root-id "backend")
+          (let [{:keys [out]} (run-cli! "--root" root "--format" "json"
+                                        "tag" "remove" root-id "ops")]
+            (is (= [] (:tags (parse-json-result out)))))
+          (let [content (slurp root-file)]
+            (is (str/includes? content "** TODO [#A] First\n"))
+            (is (not (str/includes? content "First :")))))
+        (testing "local owner and dry-run use the same result shape"
+          (spit local-file
+                (str "#+SELECTED: " local-id "\n\n* Drafts\n** STARTED Second\n"
+                     ":PROPERTIES:\n:CUSTOM_ID: " local-id "\n:END:\n"))
+          (let [{:keys [out]} (run-cli! "--root" root "--format" "json"
+                                        "--dry-run" "tag" "add" local-id "local")]
+            (is (= {:taskId local-id :tags ["local"]} (parse-json-result out)))
+            (is (not (str/includes? (slurp local-file) ":local:"))))
+          (run-cli! "--root" root "--format" "json" "tag" "add" local-id "local")
+          (is (str/includes? (slurp local-file) "** STARTED Second :local:")))
+        (testing "invalid grammar returns a compact domain error"
+          (let [{:keys [err exit]} (run-cli! "--root" root "--format" "json"
+                                             "tag" "add" root-id "two words")]
+            (is (= 1 exit))
+            (is (= "invalid-tag" (:code (parse-json-error err))))))))))
+
+(deftest tag-mutations-persist-to-imported-owner-and-detect-conflicts
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (let [id linked-plan-child-id
+            plan-file (str (fs/path root "design" "log" "linked-plan.org"))
+            before (slurp plan-file)]
+        (testing "only the imported task heading changes"
+          (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json"
+                                             "tag" "add" id "plan")]
+            (is (zero? exit))
+            (is (= {:taskId id :tags ["plan"]} (parse-json-result out)))
+            (is (= (str/replace before "** TODO Plan child\n"
+                                "** TODO Plan child :plan:\n")
+                   (slurp plan-file)))))
+        (testing "a changed imported owner fails with conflict and remains untouched"
+          (let [original-save loader/save-source-roots
+                changed (str (slurp plan-file) "# external edit\n")]
+            (with-redefs [loader/save-source-roots
+                          (fn [project-root tasks & args]
+                            (spit plan-file changed)
+                            (apply original-save project-root tasks args))]
+              (let [{:keys [err exit]} (run-cli! "--root" root "--format" "json"
+                                                  "tag" "add" id "conflict")]
+                (is (= 1 exit))
+                (is (= "conflict" (:code (parse-json-error err))))
+                (is (= changed (slurp plan-file)))))))))))

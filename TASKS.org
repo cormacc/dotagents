@@ -126,20 +126,6 @@ Re-examine the self-improvement skill against the org-memory protocol (org-tasks
 - whether anything in the dev-agent-backlog HTML summary (design/log/2026-05-01-dev-agent-backlog-review-summary.html) should be borrowed for the self-improvement skill specifically
 
 
-** TODO [#C] pi tasks/jira: walk the #+SETUPFILE chain when loading config :pi:org:tasks:jira:followup:
-:PROPERTIES:
-:CUSTOM_ID: 17e2a3e4-09c0-4068-bb3a-371382fcff78
-:CREATED: [2026-05-14 Thu 14:33]
-:END:
-:LOGBOOK:
-- Created [2026-05-14 Thu 14:33]
-:END:
-Follow-up to 2026-05-14-jira-config-setupfile: the pi-side `loadJiraConfig` and `readEffectiveOrgContent` currently follow only one `#+SETUPFILE:` level and reapply local-over-shared precedence in code. Org-mode itself merges multiple `#+SETUPFILE:` declarations with first-declared-wins semantics, so the new local-first chain (`#+SETUPFILE: ./TASKS.local.org` before `#+SETUPFILE: ./TASKS.setup.org`) gives the correct override behaviour natively. Extend pi to walk the chain (with a depth/cycle guard) and drop the bespoke precedence layer so pi and Emacs converge.
-
-Acceptance:
-- `readEffectiveOrgContent` (or its successor) accepts any number of `#+SETUPFILE:` declarations in declaration order, with a small cycle/depth guard.
-- `loadJiraConfig` / equivalent task-extension lookups delegate precedence to the org-mode merge order rather than reapplying local-over-shared in code.
-- Unit coverage for chained setupfiles and for the cycle guard.
 ** TODO [#D] Implement vulpea tasks UI for emacs :org:emacs:ui:
 :PROPERTIES:
 :CUSTOM_ID: 92d3a8d9-a01f-4f93-bc3a-90f24d12a4e5
@@ -257,15 +243,6 @@ CLOSED: [2026-07-29 Wed 13:36]
 Inline change (no record): renamed subagents/worker.md -> skilled-worker.md (frontier executor, claude-opus, spawns scout researcher) and subagents/advised-worker.md -> worker.md (default executor with mandatory advisor consult, claude-sonnet, spawns scout researcher advisor) via git mv. All eight roster definitions now declare unversioned canonical model aliases (claude-fable/claude-opus/claude-sonnet; scout/researcher/worker on claude-sonnet). SKILL.md updated: frontmatter persona list, spawn-grant sentence, § Advisor strategy retitled 'default worker' with a rename note for the 2026-07-29 advisor-strategy record. Three live-roster-coupled deftests in cli_test.clj updated (advisor grant + unversioned label suffix); bb test green (323/1576). Verified via --print-prompt probes for both personas.
 
 * Fixes
-** TODO ot ready reports unresolved-task for blockers resolvable inside #+IMPORT:-linked plan files :org-tasks:ot:bug:
-:PROPERTIES:
-:CUSTOM_ID: 89e9808a-03f9-4f1e-b965-904181235f80
-:CREATED: [2026-07-29 Wed 11:45]
-:END:
-:LOGBOOK:
-- Created [2026-07-29 Wed 11:45]
-:END:
-With `:BLOCKED-BY: task:<uuid>` where both the blocked task and the blocker live in the same #+IMPORT:-linked plan file (observed: design/log/2026-07-29-subagent-implement-the-advisor-strategy.org, blocked 5fa8df39 -> blocker fb878a68), `ot ready <id>` returns gating reason `unresolved-task` although `ot show <blocker-id>` resolves the same UUID. Expected: ready resolves task blockers across plan files like other ID-accepting commands and reports open/closed status instead. Also observed: text-mode `ot blocker list` printed "(no blockers)" immediately after a successful `ot blocker add` while `--format json` showed the blocker — likely a related resolution/rendering issue. Narrowing observation: once the blocker task transitioned to DONE, `ot ready` resolved the same reference correctly (`ready: true`) — the `unresolved-task` misreport occurs only while the plan-file blocker is still open.
 
 * Housekeeping
 
@@ -357,25 +334,6 @@ Origin:
 Evidence:
 bb smoke-subagent run 2 of 3 on 2026-07-27 failed at the root scout leg with exit 1 and the herdr error above; rerunning ~3s later passed all legs. cli.clj spawn! currently issues agent start once with no retry.
 
-** TODO ot mutators: omit whole-file content from JSON envelopes by default :skill_org-tasks:
-:PROPERTIES:
-:CUSTOM_ID: 2571a235-78c7-4178-8082-256875c8fa77
-:CREATED: [2026-07-28 Tue 11:20]
-:END:
-:LOGBOOK:
-- Created [2026-07-28 Tue 11:20]
-:END:
-Machine-mode lifecycle mutations such as ot status/select/priority embed both sourceContent and effectiveSourceContent for the entire owning file, unlike ot show's default content omission and ot list's source deduplication. Make mutator payloads omit or deduplicate whole-file content by default while retaining an explicit include-content escape hatch, and document the machine-caller behavior.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-07-28 Tue 11:20]
-- sender: agent
-
-Evidence:
-A single ot status --format json transition on the org-tasks housekeeping change-record emitted roughly 50KB because sourceContent and effectiveSourceContent both contained the full record; the same friction was independently reported by the planner and worker subagents.
-
 ** TODO org-plan: prefer symbol-name + quoted anchor over bare file:line in change-record test citations :skill_org-plan:
 :PROPERTIES:
 :CUSTOM_ID: 354f14c2-b7e0-4d1e-b8a3-b3cdfec6ac0e
@@ -397,25 +355,6 @@ Origin:
 Evidence:
 - design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org (amended citations show the target form)
 - Reviewer/planner PROCESS testimony from tasks 14cb1872, 5ea6892a, bba20351 (herdr-subagents ledger)
-
-** TODO ot: add a tag mutator for existing tasks :skill_org-tasks:
-:PROPERTIES:
-:CUSTOM_ID: df9f0e03-f75a-4981-9e6e-de7218619917
-:CREATED: [2026-07-29 Wed 12:25]
-:END:
-:LOGBOOK:
-- Created [2026-07-29 Wed 12:25]
-:END:
-No `ot` command adds or removes tags on an existing task, so tag changes require hand-editing the org heading — unlike every other protocol field (status, priority, blockers, issues, handoff). Desired outcome: an `ot tag add|remove <id> <tag>` mutator (mirroring `ot issue`/`ot blocker` shape) that works for tasks in TASKS*.org and #+IMPORT:-linked plan files.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: cormacc/dotagents @ main
-- timestamp: [2026-07-29 Wed 12:35]
-- sender: agent
-
-Evidence:
-Session retro: created a shared task with `ot create` (initially without --tag), then had to hand-edit the heading to append :skill_herdr-subagents: because no post-hoc tag mutation command exists.
 
 ** TODO subagent: validate artifact paths at publish time (relative paths currently fail only at collect) :skill_herdr-subagents:
 :PROPERTIES:

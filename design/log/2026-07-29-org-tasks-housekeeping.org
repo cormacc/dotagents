@@ -1,0 +1,183 @@
+#+TITLE: org-tasks housekeeping
+#+DATE: 2026-07-29 Wed
+#+STATUS: Accepted
+#+PARENT: [[archive:a8d4ff97-1779-428e-9581-3a9dc42638c2][org-tasks housekeeping]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+#+SPEC: [[proj:skills/org-tasks/references/ot-cli.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/contract.md]]
+#+SPEC: [[proj:pi/extensions/tasks/README.md]]
+#+SPEC: [[proj:pi/extensions/jira/README.md]]
+
+* Intent
+Make org-task configuration and task-graph mutations consistent across Emacs, pi, and =ot=, while keeping machine envelopes compact and eliminating the remaining need to hand-edit existing task tags. Preserve one canonical writable task node across root, local, archive, and imported plan files, and document/test the machine output produced by this repository.
+
+* Summary
+*Level:* production · *Tests:* comprehensive · *Docs:* full
+
+** Scope
+*** In scope
+- Recursively expand every in-project =#+SETUPFILE:= declaration for pi task/Jira configuration in declaration order, with bounded depth, cycle protection, sandboxed path resolution, and Org first-declared-wins lookup semantics.
+- Remove Jira's bespoke =local > shared > setup= merge and consume the same effective Org content/order as the tasks extension.
+- Resolve =task:<UUID>= blockers against the complete loaded graph, including open blocker tasks owned by =#+IMPORT:=-linked plan files, and keep blocker list text/JSON views consistent.
+- Make JSON/EDN mutator task projections omit whole-file =sourceContent= and =effectiveSourceContent= by default; expose an explicit =--include-content= opt-in and retain source data wherever a command's documented contract genuinely requires it.
+- Add idempotent =ot tag add|remove <id> <tag>= mutations for tasks in root/local task files and imported plan files, preserving heading structure, unrelated tags, and source locality.
+- Update the living CLI, machine-contract, task-extension, and Jira-extension documentation named by =#+SPEC:=.
+- Sequence execution as follows: first perform a serial contract/foundation check covering graph traversal, =task->wire= projection defaults, registry option plumbing, tag grammar, and current dirty-worktree overlap; then assign the four outcome tasks to parallel workers because SETUPFILE/Jira, blocker resolution, envelope projection, and tag mutation have separable primary files; finally run the integration task serially after all four workers land, reconcile shared registry/docs/test fixtures, and execute focused suites before the complete =bb test= and pi extension test scripts.
+
+*** Out of scope
+- Changing Org's native keyword precedence, supporting remote/out-of-project setupfiles, or replacing the existing project-root sandbox.
+- Redesigning blocker syntax, readiness policy, task import ownership, or archive/publish semantics.
+- Removing task bodies/descriptions or other task-level fields from machine output; only duplicated whole-file content is suppressed by default.
+- Creating, renaming, filtering, or editing tags through the TUI/pi overlay beyond any minimal parity wiring required by the established mutation-surface contract.
+- Bulk-normalising existing headings/tags, changing tag inheritance, or adding tag taxonomy policy.
+- Refactoring the parser, loader, or command families beyond the seams required by these outcomes.
+
+** Acceptance
+*** Core functionality
+- [ ] Pi expands multiple and nested =#+SETUPFILE:= declarations recursively in declaration order, and Jira config selects the first non-empty effective declaration without a separate local/shared/setup priority table. → spec:[[proj:pi/extensions/tasks/README.md]] test:=pi/extensions/tasks/effective.test.ts= test:=pi/extensions/jira/jira.test.ts=
+- [ ] Recursive setup expansion terminates on cycles and at the documented maximum depth, ignores missing/unreadable/out-of-root targets according to the existing best-effort contract, and never reads outside the project root. → spec:[[proj:pi/extensions/tasks/README.md]] test:=pi/extensions/tasks/effective.test.ts=
+- [ ] =ot ready <id>= resolves an open =task:<UUID>= blocker in an imported plan file and returns =ready: false= with the blocker status reason rather than =unresolved-task=; the same reference becomes ready only when readiness policy says it is closed. → spec:[[proj:skills/org-tasks/references/ot-cli.md]] test:=skills/org-tasks/scripts/test/org_tasks/commands/status_test.clj=
+- [ ] =ot blocker list= text and JSON report the same just-added blocker for tasks owned by imported plan files. → spec:[[proj:skills/org-tasks/scripts/docs/contract.md]] test:=skills/org-tasks/scripts/test/org_tasks/commands/status_test.clj=
+- [ ] Every JSON/EDN mutator that returns a Task omits =sourceContent= and =effectiveSourceContent= by default, and =--include-content= restores both fields explicitly without changing text output. → spec:[[proj:skills/org-tasks/scripts/docs/contract.md]] test:=skills/org-tasks/scripts/test/org_tasks/commands/status_test.clj= test:=skills/org-tasks/scripts/test/org_tasks/commands/list_show_test.clj=
+- [ ] Repeated task projections do not duplicate identical whole-file content by default; commands that intentionally expose a deduplicated =sources= map retain that documented shape. → spec:[[proj:skills/org-tasks/scripts/docs/contract.md]] test:=skills/org-tasks/scripts/test/org_tasks/commands/list_show_test.clj=
+- [ ] =ot tag add <id> <tag>= appends one normalised tag, refuses or normalises invalid input per the documented grammar, and does not duplicate an existing tag; =ot tag remove= removes the requested tag and is idempotent when absent. → spec:[[proj:skills/org-tasks/references/ot-cli.md]] test:=skills/org-tasks/scripts/test/org_tasks/commands/links_test.clj=
+- [ ] Tag add/remove persists to the owning TASKS.org, TASKS.local.org, or imported plan file while preserving UUID, status, priority, body, drawers, sibling order, and all unrelated tags. → spec:[[proj:skills/org-tasks/SKILL.md]] test:=skills/org-tasks/scripts/test/org_tasks/commands/status_test.clj= test:=skills/org-tasks/scripts/test/org_tasks/commands/links_test.clj=
+- [ ] CLI help/registry dispatch and the machine contract document =tag add|remove= and =--include-content= on applicable mutators, with golden envelope coverage for the chosen output shape. → spec:[[proj:skills/org-tasks/scripts/docs/contract.md]] test:=skills/org-tasks/scripts/test/org_tasks/cli_test.clj=
+
+*** Edge cases
+- [ ] A setupfile diamond or cycle is expanded at most once per canonical resolved path and produces deterministic first-declared-wins lookup results.
+- [ ] Duplicate UUID prefixes still fail as ambiguous; blocker resolution uses the blocker's full UUID semantics and does not silently bind to an unrelated prefix.
+- [ ] Imported-plan mutations keep optimistic-concurrency checks and atomic writes; a changed-on-disk owner file fails with =conflict= and remains untouched.
+- [ ] Removing the final tag emits a heading without a dangling colon suffix; tags containing whitespace, colons, or Org-invalid characters cannot corrupt the heading.
+- [ ] =--dry-run= returns the same compact/opt-in envelope shape as a real mutation and performs no write.
+
+*** Anti-criteria
+- Must not silently remove task descriptions or make content opt-in unavailable to machine callers.
+- Must not read a setupfile outside the resolved project root or weaken =paths.clj= sandboxing.
+- Must not resolve blockers from TASKS.org alone when the graph includes imported tasks, and must not duplicate a plan task into a root file to make it resolvable.
+- Must not rewrite unrelated org content, reorder tags, or normalise task subtrees beyond the existing serializer guarantees.
+- Must not add a new runtime dependency or use JVM-only APIs; =ot= remains Babashka-compatible.
+
+** Decisions
+- Maintain backward compatibility for reading and updating existing TASKS.org and imported org files. The skill, =ot= CLI, pi integrations, and their JSON/EDN envelopes are a closed-loop, repository-internal surface that may evolve together when the implementation, documentation, and tests are updated in the same change. Rejected: treating =org-tasks/v1= as an external compatibility promise.
+- Use one effective-content model for pi tasks and Jira: recursive setup expansion provides an ordered content stream, and keyword/link lookup takes the first declaration. Rejected: retaining Jira's three-bucket merge, because it duplicates Org precedence and cannot represent arbitrary chains.
+- Reuse the existing =resolveProjectPath= boundary and an explicit visited set plus =MAX_SETUPFILE_DEPTH=; canonical resolved paths are the cycle identity. Rejected: raw-target cycle detection, because aliases can name the same file.
+- Resolve readiness dependencies through the same complete graph traversal used by ID-accepting commands. Rejected: special-casing DONE imported blockers or loading plan files on demand inside =ready=, because both create state-dependent resolution semantics.
+- Change =task->wire= call-site/default policy so mutators explicitly opt into raw content through the registry's existing =include-content= option; retain =ot list='s path-keyed =sources= contract. Rejected: post-serialization key stripping, because nested tasks can still leak duplicates and command contracts become implicit.
+- Implement tags as a property-command-style command family mutation backed by a parser-owned task-heading/tag setter and the normal graph save path. Rejected: direct line regex replacement in the command handler, because it bypasses parser invariants and imported-file concurrency handling.
+- Preserve the four migrated UUIDs as the outcome work units. Add one blocked integration task rather than forcing ordering among independent implementations.
+
+** Shipped
+- MODIFIED [[proj:pi/extensions/tasks/README.md]] and [[proj:pi/extensions/jira/README.md]] :: recursive declaration-order setupfile expansion is shared by tasks and Jira configuration; cycle, depth, repeated-path, and sandbox cases are covered.
+- MODIFIED [[proj:skills/org-tasks/references/ot-cli.md]] and [[proj:skills/org-tasks/scripts/docs/contract.md]] :: imported blocker readiness/rendering, compact mutator envelopes with =--include-content=, and =ot tag add|remove= are documented and tested.
+- MODIFIED [[proj:skills/org-tasks/SKILL.md]] :: existing TASKS.org/imported-org files remain backwards-compatible, while the repository-internal CLI/interface evolves in lockstep with its consumers, docs, and tests.
+- ADDED parser-owned, idempotent tag mutations across root, local, and imported owners; all Task-returning mutators now default to compact JSON/EDN projections.
+- MODIFIED review follow-up :: tasks-side =#+LINK= parsing now matches first-declared-wins setupfile semantics; the =ot ready= reason contract and =task->wire= documentation match the implementation.
+
+** Gotchas
+- =pi/extensions/tasks/effective.ts= already walks multiple setupfiles recursively with =MAX_SETUPFILE_DEPTH = 8= and a visited set; the missing work is test completeness, precise first-declaration semantics, and Jira convergence, not a second recursion implementation.
+- =task/task->wire= currently defaults =include-content?= to true; =show= already opts out by default and =list= already uses a deduplicated =sources= map, while status/priority embed the full owning file.
+- =commands/links.clj= already centralises blocker/issue property mutation and saves imported sources through =loader/save-source-roots=; tag mutation should reuse that path without pretending tags are drawer properties.
+
+** Follow-ups
+
+* Plan
+** DONE [#C] Converge pi SETUPFILE and Jira config loading :pi:org:tasks:jira:followup:
+CLOSED: [2026-07-29 Wed 16:22]
+:PROPERTIES:
+:CUSTOM_ID: 17e2a3e4-09c0-4068-bb3a-371382fcff78
+:CREATED: [2026-05-14 Thu 14:33]
+:STARTED: [2026-07-29 Wed 16:12]
+:END:
+:LOGBOOK:
+- Created [2026-05-14 Thu 14:33]
+- State "STARTED" from "TODO" [2026-07-29 Wed 16:12]
+- State "DONE" from "STARTED" [2026-07-29 Wed 16:22]
+:END:
+- [ ] Audit =pi/extensions/tasks/effective.ts= and =pi/extensions/jira/index.ts=/=utils.ts= against Org first-declared-wins semantics; expose/reuse one effective-content lookup instead of =JiraConfigContent= buckets.
+- [ ] Add conflicting sibling, nested-chain, repeated-path/cycle, maximum-depth, missing-file, and out-of-root tests; update the tasks/Jira READMEs.
+- [ ] Existing import/link expansion and Jira commands remain green.
+Constraint: preserve best-effort reads and route every target through =resolveProjectPath=; start from =pi/extensions/tasks/effective.ts:16= and =pi/extensions/jira/index.ts:129=.
+
+** DONE Fix ready/blocker resolution across imported plan files :org_tasks:ot:bug:
+CLOSED: [2026-07-29 Wed 16:22]
+:PROPERTIES:
+:CUSTOM_ID: 89e9808a-03f9-4f1e-b965-904181235f80
+:CREATED: [2026-07-29 Wed 11:45]
+:STARTED: [2026-07-29 Wed 16:12]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 11:45]
+- State "STARTED" from "TODO" [2026-07-29 Wed 16:12]
+- State "DONE" from "STARTED" [2026-07-29 Wed 16:22]
+:END:
+- [ ] Reproduce an open =task:<UUID>= blocker where target and dependency are tasks in the same imported plan; identify why =parser/is-task-ready= receives an unresolved lookup despite =ot show= resolution.
+- [ ] Make ready use complete-graph exact UUID resolution and keep text/JSON blocker-list rendering aligned immediately after add/remove.
+- [ ] Cover open, DONE/CANCELLED, unknown, ambiguous-looking, root-to-import, and import-to-import blockers without changing readiness policy.
+Pointer: =skills/org-tasks/scripts/src/org_tasks/commands/links.clj:145= currently passes =#(task/find-by-id tasks %)= into =parser/is-task-ready=.
+
+** DONE Compact mutator machine envelopes with explicit content opt-in :skill_org_tasks:
+CLOSED: [2026-07-29 Wed 16:35]
+:PROPERTIES:
+:CUSTOM_ID: 2571a235-78c7-4178-8082-256875c8fa77
+:CREATED: [2026-07-28 Tue 11:20]
+:STARTED: [2026-07-29 Wed 16:12]
+:END:
+:LOGBOOK:
+- Created [2026-07-28 Tue 11:20]
+- State "STARTED" from "TODO" [2026-07-29 Wed 16:12]
+- State "DONE" from "STARTED" [2026-07-29 Wed 16:35]
+:END:
+- [ ] Inventory every command and in-process caller that emits =task/task->wire=; classify raw content as omitted, explicitly included, or deduplicated in =sources=.
+- [ ] Apply =--include-content= consistently to mutators returning Task trees, including nested projections and dry-run paths, without changing non-Task payloads.
+- [ ] Update golden JSON/EDN contract tests and =docs/contract.md=; assert default payloads omit both whole-file fields and opt-in payloads restore them.
+Constraint: change projection construction rather than stripping serialized envelopes; start from =skills/org-tasks/scripts/src/org_tasks/task.clj:123= and registry =include-content= at =commands/registry.clj:149=.
+
+** DONE Add existing-task tag mutations across root and imported files :skill_org_tasks:
+CLOSED: [2026-07-29 Wed 16:39]
+:PROPERTIES:
+:CUSTOM_ID: df9f0e03-f75a-4981-9e6e-de7218619917
+:CREATED: [2026-07-29 Wed 12:25]
+:STARTED: [2026-07-29 Wed 16:12]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 12:25]
+- State "STARTED" from "TODO" [2026-07-29 Wed 16:12]
+- State "DONE" from "STARTED" [2026-07-29 Wed 16:39]
+:END:
+- [ ] Define and document the accepted tag token grammar from the existing parser/create path; implement parser-owned add/remove semantics that deduplicate and preserve unrelated tag order.
+- [ ] Register =tag add|remove <id> <tag>= with dry-run, prefix resolution, compact machine output, and normal =loader/save-source-roots= persistence.
+- [ ] Test root, local, and imported-plan owners; duplicate add, absent remove, final-tag removal, invalid input, conflicts, and byte preservation outside the heading.
+Pointer: mirror the command/registry/save shape in =skills/org-tasks/scripts/src/org_tasks/commands/links.clj=, but keep heading-tag mutation in the parser/task layer rather than a drawer-property setter.
+
+** DONE Integrate contracts, surfaces, and complete validation
+CLOSED: [2026-07-29 Wed 17:51]
+:PROPERTIES:
+:CUSTOM_ID: e12a29e1-2ce5-43de-a453-9627fd0f1beb
+:CREATED: [2026-07-29 Wed 16:30]
+:BLOCKED-BY: task:17e2a3e4-09c0-4068-bb3a-371382fcff78
+:BLOCKED-BY+: task:89e9808a-03f9-4f1e-b965-904181235f80
+:BLOCKED-BY+: task:2571a235-78c7-4178-8082-256875c8fa77
+:BLOCKED-BY+: task:df9f0e03-f75a-4981-9e6e-de7218619917
+:STARTED: [2026-07-29 Wed 16:39]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 16:39]
+- State "DONE" from "STARTED" [2026-07-29 Wed 16:50]
+- State "STARTED" from "DONE" [2026-07-29 Wed 17:49]
+- State "DONE" from "STARTED" [2026-07-29 Wed 17:51]
+:END:
+- [ ] Reconcile shared registry/help, parser helpers, golden envelopes, and the five declared specs after the four outcome branches/workers land; add the closed-loop API / backwards-compatible org-file maintenance policy to =skills/org-tasks/SKILL.md=; resolve contract conflicts without weakening acceptance.
+- [ ] Run focused Clojure command/parser/loader suites, all relevant pi tasks/Jira scripts, then repository-root =bb test=; record only non-obvious evidence under =* Validation= during execution.
+- [ ] Run =ot doctor --format json=, inspect the final diff for unrelated org rewrites/content leakage, and verify every acceptance and anti-criterion before parent closure.
+Constraint: this task is serial and starts only after all four outcome tasks are complete; no production implementation belongs here except integration conflict resolution.
+
+* Implementation
+- Four independently scoped outcomes landed through a serial integration pass. Review follow-up aligned tasks-side =#+LINK= precedence with the effective-content model and corrected the ready-reason contract.
+
+* Validation
+- =pi/extensions/tasks/test.sh=, =pi/extensions/jira/test.sh=, and focused org-tasks command/parser coverage pass.
+- Repository-root =bb test= passes: 336 tests, 1,690 assertions, zero failures/errors.
+- =git diff --check= and =ot doctor --format json= pass with no findings.
+- A post-implementation reviewer found and the integration pass corrected two contract/precedence regressions plus one documentation defect.

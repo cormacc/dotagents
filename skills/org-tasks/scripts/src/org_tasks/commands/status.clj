@@ -67,7 +67,8 @@
                                 tree-final))
     (out/emit-result
       opts
-      {:task (task/task->wire (task/find-by-id tree-final full-id))
+      {:task (task/task->wire (task/find-by-id tree-final full-id) nil
+                              {:include-content? (boolean (:include-content opts))})
        :prevStatus prev-status
        :status status
        :closed (:closed updated)
@@ -129,7 +130,8 @@
                                     tree-final))
         (out/emit-result
           opts
-          {:task (task/task->wire (task/find-by-id tree-final full-id))
+          {:task (task/task->wire (task/find-by-id tree-final full-id) nil
+                                  {:include-content? (boolean (:include-content opts))})
            :prevPriority prev
            :priority new-prio
            :text/lines

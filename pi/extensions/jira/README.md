@@ -86,7 +86,7 @@ Jira keys live in the generic `:LINKED_ISSUES:` drawer property defined by the `
 
 ## Configuration
 
-One `tasks`-owned link abbreviation plus two optional Jira keywords live in `TASKS.setup.org` (or override in `TASKS.local.org`):
+One `tasks`-owned link abbreviation plus two optional Jira keywords live in the effective `TASKS.org` configuration stream (usually `TASKS.setup.org`):
 
 ```org
 #+LINK: jira https://your-org.atlassian.net/browse/%s
@@ -102,8 +102,7 @@ One `tasks`-owned link abbreviation plus two optional Jira keywords live in `TAS
 
 When `#+JIRA_CLOUDID` is absent, the agent calls
 `atlassian_getAccessibleAtlassianResources` and picks the resource whose
-URL matches the base URL derived from `#+LINK: jira .../browse/%s`. Values from `TASKS.local.org` override
-shared configuration for the current checkout only.
+URL matches the base URL derived from `#+LINK: jira .../browse/%s`. Jira uses the same recursively expanded, declaration-ordered `#+SETUPFILE:` stream as tasks: for each setting, the first non-empty effective declaration wins. Put a checkout-local declaration before its `#+SETUPFILE:` line when it must override shared configuration.
 
 ## Skill
 

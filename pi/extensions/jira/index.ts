@@ -23,6 +23,7 @@ import { isAbsolute, join, resolve } from "node:path";
 import { getAgentPath } from "../lib/agent-paths.ts";
 import { getExtensionName } from "../lib/pi-utils.ts";
 import { insertTaskIntoFile } from "../tasks/insert.ts";
+import { readEffectiveOrgContent } from "../tasks/effective.ts";
 import {
   buildClaimPrompt,
   buildClonePrompt,
@@ -105,42 +106,18 @@ function getAtlassianAvailability(pi: ExtensionAPI): {
   }
 }
 
-function extractOrgLinkTarget(value: string): string | null {
-  const match = /^\[\[(?:file:)?([^\]]+?)\](?:\[[^\]]*\])?\]$/.exec(value.trim());
-  return match?.[1]?.trim() || null;
-}
-
-async function readSetupContent(cwd: string, shared: string): Promise<string> {
-  const raw = getFileKeyword(shared, "SETUPFILE");
-  if (!raw) return "";
-  const target = extractOrgLinkTarget(raw) ?? raw.trim().replace(/^file:/, "");
-  if (!target) return "";
-  try {
-    return await readFile(join(cwd, target), "utf-8");
-  } catch {
-    return "";
-  }
-}
-
 /**
- * Read Jira config from TASKS.setup.org/TASKS.org/TASKS.local.org.
- * Precedence mirrors selection overrides: local > shared task file > setupfile.
+ * Read Jira config from the same effective Org content/order as tasks.
  */
 async function loadJiraConfig(cwd: string): Promise<JiraConfig> {
-  let shared = "";
-  let local = "";
+  const tasksPath = join(cwd, TASKS_FILE);
   try {
-    shared = await readFile(join(cwd, TASKS_FILE), "utf-8");
+    const content = await readFile(tasksPath, "utf-8");
+    return resolveJiraConfig(await readEffectiveOrgContent(cwd, tasksPath, content));
   } catch {
-    /* TASKS.org may not exist; fall through with empty config. */
+    /* TASKS.org may not exist or effective setup expansion may fail. */
+    return resolveJiraConfig("");
   }
-  try {
-    local = await readFile(join(cwd, TASKS_LOCAL_FILE), "utf-8");
-  } catch {
-    /* TASKS.local.org is optional. */
-  }
-  const setup = await readSetupContent(cwd, shared);
-  return resolveJiraConfig({ setup, shared, local });
 }
 
 // `resolveKey`, `buildClonePrompt`, `getFileKeyword`, and the

@@ -145,7 +145,7 @@
                  (enum-opt "cycle" [:forward :back]))
    :clear {:desc "Clear the priority cookie" :coerce :boolean}})
 
-(def ^:private show-spec
+(def ^:private include-content-spec
   {:include-content {:desc "Include raw sourceContent/effectiveSourceContent in JSON/EDN output"
                      :coerce :boolean}})
 
@@ -193,22 +193,22 @@
     :spec list-spec
     :summary ["" "List the task graph (--levels N caps depth, --format json|edn for machine output)"]}
    {:cmds ["show"]               :fn list-show/show-cmd
-    :spec show-spec :args->opts [:id]
+    :spec include-content-spec :args->opts [:id]
     :summary ["<id|selected>" "Show one task plus its plan summary"]}
    {:cmds ["create"]             :fn create/create-cmd
     :spec create-spec :args->opts [:summary]
     :tui-key :create
     :summary ["<summary>" "Create a new task under --section"]}
    {:cmds ["move"]               :fn move/move-cmd
-    :spec move-spec :args->opts [:id]
+    :spec (merge move-spec include-content-spec) :args->opts [:id]
     :summary ["<id> (--parent <id> | --section <name>)"
               "Move an existing task subtree under another task or back to a section"]}
    {:cmds ["status"]             :fn status/status-cmd
-    :spec status-spec :args->opts [:id :new-status]
+    :spec (merge status-spec include-content-spec) :args->opts [:id :new-status]
     :tui-key :status
     :summary ["<id> <new-status>" "Cycle a task to STARTED / WAITING / DONE / CANCELLED / TODO"]}
    {:cmds ["priority"]           :fn status/priority-cmd
-    :spec priority-spec :args->opts [:id :level]
+    :spec (merge priority-spec include-content-spec) :args->opts [:id :level]
     :summary ["<id> [<level>]" "Set, cycle (--cycle forward|back), or --clear the priority cookie"]
     :tui-key :priority}
    {:cmds ["select"]             :fn list-show/select-cmd
@@ -216,21 +216,21 @@
     :tui-key :select
     :summary ["<id>" "Mark a task selected (or pass --clear to deselect)"]}
    {:cmds ["selected"]           :fn list-show/selected-cmd
-    :spec {}
+    :spec include-content-spec
     :summary ["" "Show the currently-selected task"]}
    {:cmds ["archive"]            :fn archive-publish/archive-cmd
-    :spec {} :args->opts [:id]
+    :spec include-content-spec :args->opts [:id]
     :tui-key :archive
     :summary ["<id>" "Archive a closed top-level task"]}
    {:cmds ["unarchive"]          :fn archive-publish/unarchive-cmd
-    :spec unarchive-spec :args->opts [:id]
+    :spec (merge unarchive-spec include-content-spec) :args->opts [:id]
     :summary ["<id>" "Restore an archived task under --section or :ARCHIVE_OLPATH:"]}
    {:cmds ["publish"]            :fn archive-publish/publish-cmd
-    :spec {} :args->opts [:id]
+    :spec include-content-spec :args->opts [:id]
     :tui-key :publish
     :summary ["<id>" "Move a local task to TASKS.org"]}
    {:cmds ["unpublish"]          :fn archive-publish/unpublish-cmd
-    :spec {} :args->opts [:id]
+    :spec include-content-spec :args->opts [:id]
     :tui-key :unpublish
     :summary ["<id>" "Move a top-level shared task to TASKS.local.org"]}
    {:cmds ["doctor"]             :fn maintenance/doctor-cmd
@@ -261,6 +261,12 @@
    {:cmds ["issue" "remove"]     :fn links/issue-remove-cmd
     :spec {} :args->opts [:id :token]
     :summary ["<id> <token>" "Remove a token from :LINKED_ISSUES:"]}
+   {:cmds ["tag" "add"]          :fn links/tag-add-cmd
+    :spec {} :args->opts [:id :tag-token]
+    :summary ["<id> <tag>" "Append a trailing heading tag"]}
+   {:cmds ["tag" "remove"]       :fn links/tag-remove-cmd
+    :spec {} :args->opts [:id :tag-token]
+    :summary ["<id> <tag>" "Remove a trailing heading tag"]}
    {:cmds ["issue" "urls"]       :fn links/issue-urls-cmd
     :spec {} :args->opts [:id]
     :tui-key :issue-urls

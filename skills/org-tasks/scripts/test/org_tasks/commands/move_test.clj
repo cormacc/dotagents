@@ -548,3 +548,19 @@
                (set (keys r)))
             "ot move result keys are contract (docs/contract.md § ot move)")
         (is (= (tasks-org root) (:file r)))))))
+
+(deftest move-mutator-content-projection-is-compact-by-default-and-opt-in
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-move-graph! root)
+      (let [compact (parse-json-result
+                     (:out (run-cli! "--root" root "--format" "json" "--dry-run"
+                                     "move" child-a1 "--parent" parent-b)))
+            expanded (parse-json-result
+                      (:out (run-cli! "--root" root "--format" "json" "--dry-run"
+                                      "move" child-a1 "--parent" parent-b
+                                      "--include-content")))]
+        (is (not (contains? (:task compact) :sourceContent)))
+        (is (not (contains? (:task compact) :effectiveSourceContent)))
+        (is (contains? (:task expanded) :sourceContent))
+        (is (contains? (:task expanded) :effectiveSourceContent))))))

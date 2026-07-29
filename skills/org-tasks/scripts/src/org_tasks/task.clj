@@ -124,9 +124,12 @@
   "Convert an internal task map to the JSON contract shape (camelCase).
 
   Optional `parent-id` is set on the wire output's `:parentId` field
-  for flat-row consumers; nested children are unaffected. Pass
-  `{:include-content? false}` when a command emits shared source-file
-  content separately (for example `ot list`)."
+  for flat-row consumers; nested children are unaffected.
+  The default includes raw source content for in-process callers. Commands
+  emitting machine envelopes must explicitly choose their contract:
+  `{:include-content? false}` for compact task projections (including all
+  mutators), or true for the `--include-content` opt-in. `ot list` also uses
+  false because it emits shared source-file content separately."
   ([task] (task->wire task nil {}))
   ([task parent-id] (task->wire task parent-id {}))
   ([task parent-id {:keys [include-content?] :or {include-content? true} :as opts}]

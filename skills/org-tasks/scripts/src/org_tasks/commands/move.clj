@@ -221,7 +221,8 @@
               (loader/atomic-write path updated))
             (out/emit-result
               opts
-              {:task (task/task->wire (or after src-node))
+              {:task (task/task->wire (or after src-node) nil
+                                      {:include-content? (boolean (:include-content opts))})
                :file path
                :parentId dest-id
                :section (when-not dest-id section)

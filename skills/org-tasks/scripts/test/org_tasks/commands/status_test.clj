@@ -96,6 +96,40 @@
                   "--dry-run" "status" id "DONE")
         (is (= before (slurp (str (fs/path root "TASKS.org")))))))))
 
+(deftest status-mutator-content-projection-is-compact-by-default-and-opt-in
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [id "11111111-2222-4333-8444-555555555551"
+            compact (parse-json-result
+                      (:out (run-cli! "--root" root "--format" "json"
+                                      "--dry-run" "status" id "DONE")))
+            expanded (parse-json-result
+                       (:out (run-cli! "--root" root "--format" "json"
+                                       "--dry-run" "status" id "DONE"
+                                       "--include-content")))]
+        (is (not (contains? (:task compact) :sourceContent)))
+        (is (not (contains? (:task compact) :effectiveSourceContent)))
+        (is (contains? (:task expanded) :sourceContent))
+        (is (contains? (:task expanded) :effectiveSourceContent))))))
+
+(deftest priority-mutator-content-projection-is-compact-by-default-and-opt-in
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [id "11111111-2222-4333-8444-555555555551"
+            compact (parse-json-result
+                      (:out (run-cli! "--root" root "--format" "json"
+                                      "--dry-run" "priority" id "B")))
+            expanded (parse-json-result
+                       (:out (run-cli! "--root" root "--format" "json"
+                                       "--dry-run" "priority" id "B"
+                                       "--include-content")))]
+        (is (not (contains? (:task compact) :sourceContent)))
+        (is (not (contains? (:task compact) :effectiveSourceContent)))
+        (is (contains? (:task expanded) :sourceContent))
+        (is (contains? (:task expanded) :effectiveSourceContent))))))
+
 (deftest status-invalid-status-errors
   (with-temp-dir
     (fn [root]
@@ -207,6 +241,61 @@
                           "issue" "remove" linked-plan-child-id "[[jira:OT-1]]")]
             (is (zero? exit))
             (is (not (str/includes? (slurp plan-path) ":LINKED_ISSUES:")))))))))
+
+(deftest ready-resolves-imported-plan-blockers-across-the-full-graph
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (let [root-id linked-plan-parent-id
+            plan-path (str (fs/path root "design" "log" "linked-plan.org"))
+            task-blocker (str "task:" linked-plan-second-child-id)
+            ready! #(parse-json-result
+                     (:out (run-cli! "--root" root "--format" "json" "ready" %)))]
+        (testing "an imported task sees its open imported blocker and reports its status"
+          (let [added-response (run-cli! "--root" root "--format" "json"
+                                         "blocker" "add" linked-plan-child-id task-blocker)
+                added (parse-json-result (:out added-response))
+                listed-response (run-cli! "--root" root "--format" "json"
+                                          "blocker" "list" linked-plan-child-id)
+                listed (parse-json-result (:out listed-response))
+                text-response (run-cli! "--root" root "blocker" "list" linked-plan-child-id)]
+            (is (zero? (:exit added-response)))
+            (is (zero? (:exit listed-response)))
+            (is (= [{:raw task-blocker
+                     :kind "task"
+                     :ref linked-plan-second-child-id}]
+                   (:blockers added)))
+            (is (= (:blockers added) (:blockers listed)))
+            (is (= [task-blocker] (str/split-lines (:out text-response))))
+            (is (str/includes? (slurp plan-path) (str ":BLOCKED-BY: " task-blocker))))
+          (let [r (ready! linked-plan-child-id)]
+            (is (false? (:ready r)))
+            (is (= "TODO" (get-in r [:gating 0 :reason])))))
+
+          (testing "closed imported blockers follow the existing readiness policy"
+            (run-cli! "--root" root "--format" "json"
+                      "status" linked-plan-second-child-id "DONE")
+            (is (true? (:ready (ready! linked-plan-child-id))))
+            (run-cli! "--root" root "--format" "json"
+                      "status" linked-plan-second-child-id "CANCELLED")
+            (is (true? (:ready (ready! linked-plan-child-id)))))
+
+          (testing "root tasks resolve imported dependencies by exact UUID only"
+            (run-cli! "--root" root "--format" "json"
+                      "status" linked-plan-second-child-id "TODO")
+            (run-cli! "--root" root "--format" "json"
+                      "blocker" "add" root-id task-blocker)
+            (is (= "TODO" (get-in (ready! root-id) [:gating 0 :reason])))
+            (run-cli! "--root" root "--format" "json"
+                      "blocker" "remove" root-id task-blocker)
+            (run-cli! "--root" root "--format" "json"
+                      "blocker" "add" root-id "task:cccccccc")
+            (is (= "missing-task" (get-in (ready! root-id) [:gating 0 :reason])))
+            (run-cli! "--root" root "--format" "json"
+                      "blocker" "remove" root-id "task:cccccccc")
+            (run-cli! "--root" root "--format" "json"
+                      "blocker" "add" root-id "task:dddddddd-4444-4444-8444-dddddddddddd")
+            (is (= "missing-task" (get-in (ready! root-id) [:gating 0 :reason]))))))))
 (deftest status-cycle-moves-through-canonical-order
   (with-temp-dir
     (fn [root]

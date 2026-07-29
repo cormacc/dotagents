@@ -400,6 +400,14 @@ function assertContains(haystack: string, needle: string, message: string): void
     "parseLinkTemplates: parses jira template");
   assertEqual(links.get("gh"), "https://github.com/%s",
     "parseLinkTemplates: parses second template");
+
+  const firstWins = parseLinkTemplates([
+    "#+LINK: plan file:local-plans/%s",
+    "#+LINK: plan file:shared-plans/%s",
+    "",
+  ].join("\n"));
+  assertEqual(firstWins.get("plan"), "file:local-plans/%s",
+    "parseLinkTemplates: preserves the first declaration for a repeated prefix");
 }
 
 // ── expandOrgLinkTarget helper ───────────────────────────────────────

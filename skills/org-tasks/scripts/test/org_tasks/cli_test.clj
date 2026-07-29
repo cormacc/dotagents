@@ -55,7 +55,8 @@
       (is (str/includes? out "Usage: ot"))
       (is (str/includes? out "Commands:"))
       (is (str/includes? out "list"))
-      (is (str/includes? out "doctor")))))
+      (is (str/includes? out "doctor"))
+      (is (str/includes? out "tag add")))))
 
 (deftest command-help-shows-command-options
   (testing "ot list --help prints list-specific options plus globals"
@@ -71,6 +72,14 @@
       (is (str/includes? out "ot record create"))
       (is (str/includes? out "--mode"))
       (is (str/includes? out "--path"))))
+  (testing "Task-returning mutators advertise the content opt-in"
+    (let [{:keys [out exit]} (capture #(apply cli/-main ["status" "--help"]))]
+      (is (zero? exit))
+      (is (str/includes? out "--include-content"))))
+  (testing "ot tag add --help is registered as a command family"
+    (let [{:keys [out exit]} (capture #(apply cli/-main ["tag" "add" "--help"]))]
+      (is (zero? exit))
+      (is (str/includes? out "ot tag add"))))
   (testing "ot help list routes to command help too"
     (let [{:keys [out exit]} (capture #(apply cli/-main ["help" "list"]))]
       (is (zero? exit))

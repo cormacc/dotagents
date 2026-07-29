@@ -1536,3 +1536,21 @@ Default mapping:
 | feather  | anthropic/claude-haiku-4-5 | haiku  | gpt-5.6-luna  |
 
 The default roster should be updated to include these new weight aliases, and the subagents updated to use them.
+
+** DONE org-tasks housekeeping
+CLOSED: [2026-07-29 Wed 17:51]
+:PROPERTIES:
+:CUSTOM_ID: a8d4ff97-1779-428e-9581-3a9dc42638c2
+:CREATED: [2026-07-29 Wed 15:54]
+:STARTED: [2026-07-29 Wed 16:11]
+:ARCHIVED: [2026-07-29 Wed 17:51]
+:ARCHIVE_OLPATH: Housekeeping
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 15:54]
+- State "STARTED" from "TODO" [2026-07-29 Wed 16:11]
+- State "DONE" from "STARTED" [2026-07-29 Wed 16:51]
+- State "STARTED" from "DONE" [2026-07-29 Wed 17:49]
+- State "DONE" from "STARTED" [2026-07-29 Wed 17:51]
+:END:
+#+IMPORT: [[plan:2026-07-29-org-tasks-housekeeping.org]]

@@ -39,6 +39,8 @@
   #"^\s*CLOSED:\s*\[([^\]]+)\]\s*$")
 (def ^:private trailing-tags-re
   #"\s+:([\w:]+):\s*$")
+(def ^:private tag-token-re
+  #"^[A-Za-z0-9_]+$")
 (def ^:private selected-keyword-re
   #"(?im)^#\+SELECTED:\s*(\S+)\s*$")
 (def ^:private property-line-re
@@ -123,6 +125,47 @@
           tags      (filterv seq (str/split tag-str #":"))]
       [(str/trimr base) tags])
     [(str/trimr text) []]))
+
+(defn normalise-task-tag
+  "Return a canonical Org tag token, or nil when `tag` cannot safely be
+  represented in this parser's trailing-heading tag syntax.
+
+  The accepted grammar is ASCII letters, digits, and underscores. Leading and
+  trailing whitespace is ignored; a single surrounding `:tag:` pair is
+  accepted as the conventional Org spelling and normalised to `tag`."
+  [tag]
+  (when (string? tag)
+    (let [trimmed (str/trim tag)
+          token (if-let [[_ inner] (re-matches #"^:([^:]+):$" trimmed)]
+                  inner
+                  trimmed)]
+      (when (re-matches tag-token-re token)
+        token))))
+
+(defn add-task-tag
+  "Add `tag` to task trailing tags once, preserving existing tag order.
+  Throws `:invalid-tag` when the tag does not match [[normalise-task-tag]]."
+  [task tag]
+  (if-let [token (normalise-task-tag tag)]
+    (update task :tags
+            (fn [tags]
+              (let [tags (vec (or tags []))]
+                (if (some #{token} tags) tags (conj tags token)))))
+    (throw (ex-info (str "Invalid tag " (pr-str tag)
+                         "; expected letters, digits, and underscores")
+                    {:code :invalid-tag :tag tag}))))
+
+(defn remove-task-tag
+  "Remove `tag` from task trailing tags. Absent tags are a no-op.
+  Throws `:invalid-tag` when the tag does not match [[normalise-task-tag]]."
+  [task tag]
+  (if-let [token (normalise-task-tag tag)]
+    (update task :tags
+            (fn [tags]
+              (filterv #(not= token %) (or tags []))))
+    (throw (ex-info (str "Invalid tag " (pr-str tag)
+                         "; expected letters, digits, and underscores")
+                    {:code :invalid-tag :tag tag}))))
 
 (defn- parse-heading
   "Parse a task heading line. Returns nil for non-task headings."
@@ -429,7 +472,10 @@
                 (cond
                   (nil? dep) (conj acc {:blocker blocker :reason :missing-task})
                   (not (closed-statuses (:status dep)))
-                  (conj acc {:blocker blocker :reason :unresolved-task})
+                  ;; The dependency was resolved; surface its actual open
+                  ;; status so callers can distinguish an open imported task
+                  ;; from a missing task reference.
+                  (conj acc {:blocker blocker :reason (:status dep)})
                   :else acc))
               ;; default: opaque
               (conj acc {:blocker blocker :reason :opaque})))

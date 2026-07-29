@@ -8,7 +8,7 @@
             [org-tasks.task :as task]
             [org-tasks.tree :as tree]
             [org-tasks.commands.util :refer [positional-arg load-context
-                                             resolve-required-id]]))
+                                             resolve-required-id guard-write!]]))
 (defn- mutate-task-and-save [{:keys [project-root tasks dry-run?]} id f]
   (when-let [target (task/find-by-id tasks id)]
     (let [updated (f target)
@@ -47,9 +47,10 @@
              :clear-line "Cleared handoff."}
    :blocker {:list-key :blockers
              :list-fn #(mapv blocker->wire (parser/get-task-blockers %))
-             :list-lines (fn [t]
-                           (let [bs (parser/get-task-blockers t)]
-                             (if (empty? bs) ["(no blockers)"] (mapv :raw bs))))
+             :list-lines (fn [blockers]
+                           (if (empty? blockers)
+                             ["(no blockers)"]
+                             (mapv :raw blockers)))
              :tokens-fn #(mapv :raw (parser/get-task-blockers %))
              :set-fn parser/set-task-blockers
              :normalise normalise-blocker-token
@@ -142,6 +143,39 @@
 (defn issue-list-cmd [result] (list-property-cmd :issue result))
 (defn issue-add-cmd [result] (add-remove-property-cmd :issue :add result))
 (defn issue-remove-cmd [result] (add-remove-property-cmd :issue :remove result))
+(defn- tag-mutate-cmd [op {:keys [opts] :as result}]
+  (let [ctx (load-context opts)
+        id (positional-arg result :id)
+        ;; `:tag` is a repeatable create option, so the registry's aggregate
+        ;; dispatch coercion turns that positional name into a vector. Keep
+        ;; this command's positional token distinct from the option key.
+        raw-tag (positional-arg result :tag-token 1)]
+    (if (or (nil? id) (nil? raw-tag))
+      (out/emit-error opts {:code "argument-error"
+                            :message (str "ot tag " (name op)
+                                          " requires <id> <tag>.")})
+      (if-let [tag (parser/normalise-task-tag raw-tag)]
+        (let [target (resolve-required-id (:tasks ctx) id opts)
+              full-id (parser/get-task-id target)
+              [updated _] (guard-write!
+                           opts
+                           #(mutate-task-and-save
+                             (assoc ctx :dry-run? (:dry-run opts))
+                             full-id
+                             (if (= op :add)
+                               (fn [t] (parser/add-task-tag t tag))
+                               (fn [t] (parser/remove-task-tag t tag)))))]
+          (out/emit-result opts
+                           {:taskId full-id
+                            :tags (:tags updated)
+                            :text/lines [(str (if (= op :add) "Added" "Removed")
+                                              " tag: " tag)]}))
+        (out/emit-error opts
+                        {:code "invalid-tag"
+                         :message (str "Invalid tag " (pr-str raw-tag)
+                                       "; expected letters, digits, and underscores")})))))
+(defn tag-add-cmd [result] (tag-mutate-cmd :add result))
+(defn tag-remove-cmd [result] (tag-mutate-cmd :remove result))
 (defn ready-cmd [{:keys [opts] :as result}]
   (let [{:keys [tasks]} (load-context opts)
         id (positional-arg result :id)

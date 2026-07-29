@@ -634,7 +634,7 @@ export function parseLinkTemplates(content: string): LinkTemplateMap {
   while ((match = re.exec(content)) !== null) {
     const prefix = match[1]?.trim();
     const template = match[2]?.trim();
-    if (prefix && template) templates.set(prefix, template);
+    if (prefix && template && !templates.has(prefix)) templates.set(prefix, template);
   }
   return templates;
 }

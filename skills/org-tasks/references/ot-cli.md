@@ -67,10 +67,28 @@ ot record create <id>
 ot record create <id> --mode retrospective
 ot issue list|add|remove|urls <id> [...]
 ot blocker list|add|remove <id> [...]
+ot tag add|remove <id> <tag>
 ot ready <id>
 ot handoff get|set|clear <id> [...]
 ot uuid --count 3
 ```
+
+## Editing existing task tags
+
+`ot tag add <id> <tag>` and `ot tag remove <id> <tag>` mutate the trailing
+Org heading tags of an existing task. IDs accept the standard full UUID or
+unique prefix, and the task is written back to its owning `TASKS.org`,
+`TASKS.local.org`, or imported plan file. `--dry-run` returns the proposed
+tag list without writing.
+
+Tags are ASCII letters, digits, and underscores (`[A-Za-z0-9_]+`). Surrounding
+whitespace and one conventional `:tag:` wrapper are normalised; whitespace
+inside a tag, colons, and other characters are rejected. Add is idempotent and
+preserves existing tag order; remove is idempotent, and removing the final tag
+leaves no dangling colon suffix. These commands alter only the owning heading;
+the task UUID, status, priority, drawers, body, sibling order, and unrelated
+file content are preserved. Imported owners use the normal atomic
+optimistic-concurrency write and fail with `conflict` if changed on disk.
 
 ## Moving existing tasks
 

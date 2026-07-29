@@ -16,12 +16,6 @@ export interface JiraConfig {
   baseUrl: string | null;
 }
 
-export interface JiraConfigContent {
-  setup?: string;
-  shared?: string;
-  local?: string;
-}
-
 /**
  * Match a `#+KEYWORD:` line in raw org content.
  * Horizontal-whitespace only around the value so an empty line doesn't
@@ -40,6 +34,19 @@ export function getFileKeyword(
   );
   const m = re.exec(content);
   return m?.[1] ?? null;
+}
+
+function getFirstNonEmptyFileKeyword(content: string, name: string): string | null {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(
+    `^[\\t ]*#\\+${escaped}[\\t ]*:[\\t ]*(.*?)[\\t ]*$`,
+    "gim",
+  );
+  for (const match of content.matchAll(re)) {
+    const value = match[1] ?? "";
+    if (value !== "") return value;
+  }
+  return null;
 }
 
 export function parseLinkTemplates(content: string): Map<string, string> {
@@ -62,24 +69,11 @@ export function deriveJiraBaseUrl(template: string | null | undefined): string |
   return trimmed.slice(0, -"/browse/%s".length);
 }
 
-export function resolveJiraConfig(content: JiraConfigContent): JiraConfig {
-  const setup = content.setup ?? "";
-  const shared = content.shared ?? "";
-  const local = content.local ?? "";
-  const pickKeyword = (name: string): string | null => {
-    for (const source of [local, shared, setup]) {
-      const value = getFileKeyword(source, name);
-      if (value !== null && value !== "") return value;
-    }
-    return null;
-  };
-  const pickLinkTemplate = (prefix: string): string | null => {
-    for (const source of [local, shared, setup]) {
-      const value = parseLinkTemplates(source).get(prefix);
-      if (value) return value;
-    }
-    return null;
-  };
+export function resolveJiraConfig(content: string): JiraConfig {
+  const pickKeyword = (name: string): string | null =>
+    getFirstNonEmptyFileKeyword(content, name);
+  const pickLinkTemplate = (prefix: string): string | null =>
+    parseLinkTemplates(content).get(prefix) ?? null;
   return {
     cloudId: pickKeyword("JIRA_CLOUDID"),
     project: pickKeyword("JIRA_PROJECT"),
