@@ -1413,3 +1413,28 @@ Origin:
 
 Evidence:
 Grouping five existing org-tasks items under a new housekeeping parent required a custom structural script because ot create can place new tasks but the CLI has no move/reparent operation. A newline-preservation bug in that workaround joined headings to property drawers and triggered metadata repair; the changes had to be reverted through Git and repeated.
+
+** DONE [#D] subagent: envelope section parsing is content-dependent :skill_herdr-subagents:
+CLOSED: [2026-07-28 Tue 18:40]
+:PROPERTIES:
+:CUSTOM_ID: 9f1fa3f5-fcd7-4476-9f0d-b13d6b20ac4a
+:CREATED: [2026-07-27 Mon 17:27]
+:STARTED: [2026-07-28 Tue 18:33]
+:ARCHIVED: [2026-07-28 Tue 18:40]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 17:27]
+- State "STARTED" from "TODO" [2026-07-28 Tue 18:33]
+- State "DONE" from "STARTED" [2026-07-28 Tue 18:40]
+:END:
+The v1 result-envelope reader delimits FINDINGS by the literal `NEXT: <value>` line, so section boundaries depend on field content; the optional PROCESS section had to be placed trailing (after NEXT) to avoid corrupting FINDINGS. Replace with tolerant section parsing so future optional sections do not inherit the placement constraint. Low priority: the constraint is documented in scripts/docs/contract.md and currently harmless.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-07-27 Sun 17:45]
+- sender: agent
+
+Evidence:
+Surfaced as a PROCESS candidate by the implementation worker for design/log/2026-07-27-subagent-retrospectives.org, and earlier as a review P2: a PROCESS section placed before NEXT is absorbed into FINDINGS and can breach the five-item validation cap (core.clj section-lines/parse).

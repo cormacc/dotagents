@@ -173,36 +173,13 @@
     ;; A hand-written six-item envelope is rejected at validation too, not only at publish.
     (is (thrown? Exception (core/validate-envelope ledger (str/replace (mk 5) "- finding 0" "- finding x\n- finding 0"))))))
 
-;; Frozen copy of the pre-change (v1) parser. It exists to substantiate the
-;; "no version bump" claim: an unmodified v1 reader must still accept an envelope that
-;; carries the trailing PROCESS section. Do not refactor it to call `core`.
-(defn- legacy-field! [lines label]
-  (let [matches (filter #(str/starts-with? % (str label ": ")) lines)]
-    (when-not (= 1 (count matches)) (throw (ex-info "result envelope field is missing or repeated" {:field label})))
-    (core/single-line! label (subs (first matches) (+ 2 (count label))))))
-(defn- legacy-section-lines [lines start end]
-  (let [a (.indexOf lines start) b (.indexOf lines end)]
-    (when-not (and (<= 0 a) (< a b)) (throw (ex-info "result envelope section is malformed" {:section start})))
-    (let [items (subvec (vec lines) (inc a) b)]
-      (when-not (every? #(str/starts-with? % "- ") items) (throw (ex-info "result envelope list item is malformed" {:section start})))
-      (let [values (mapv #(subs % 2) items)] (if (= ["none"] values) [] values)))))
-(defn- legacy-parse-envelope [text]
-  (let [lines (str/split-lines text)]
-    (when-not (and (= "--- HERDR RESULT v1 ---" (first lines)) (= "--- END HERDR RESULT ---" (last lines)))
-      (throw (ex-info "invalid result envelope markers" {})))
-    {:child (legacy-field! lines "CHILD") :task (legacy-field! lines "TASK") :result (legacy-field! lines "RESULT")
-     :status (legacy-field! lines "STATUS") :summary (legacy-field! lines "SUMMARY")
-     :artifacts (legacy-section-lines lines "ARTIFACTS:" "FINDINGS:")
-     :findings (legacy-section-lines lines "FINDINGS:" (str "NEXT: " (legacy-field! lines "NEXT")))
-     :next (legacy-field! lines "NEXT") :text text}))
-
 (def ^:private process-ledger {:child "child" :task "task" :result "/tmp/result"})
 (defn- process-envelope [n & {:keys [status findings] :or {status "COMPLETE" findings []}}]
   (core/envelope (assoc process-ledger :status status :summary "s" :artifacts [] :findings findings :next nil
                         :process (mapv #(str "signal " % " → guardrail → rule " %) (range n)))))
 
 (deftest process-section-position-and-optionality
-  ;; Omitted when empty: today's envelope is byte-identical to the pre-change golden.
+  ;; Omitted when empty: an envelope without candidates carries no PROCESS section at all.
   (is (= (str "--- HERDR RESULT v1 ---\nCHILD: child\nTASK: task\nRESULT: /tmp/result\nSTATUS: COMPLETE\n"
               "SUMMARY: s\nARTIFACTS:\n- none\nFINDINGS:\n- none\nNEXT: none\n--- END HERDR RESULT ---\n")
          (process-envelope 0)))
@@ -210,10 +187,7 @@
     ;; Trailing: after NEXT:, before the END marker.
     (is (< (.indexOf lines "NEXT: none") (.indexOf lines "PROCESS:") (.indexOf lines "--- END HERDR RESULT ---")))
     (is (= ["signal 0 → guardrail → rule 0" "signal 1 → guardrail → rule 1"] (:process (core/parse-envelope text))))
-    (is (= ["signal 0 → guardrail → rule 0" "signal 1 → guardrail → rule 1"] (:process (core/validate-envelope process-ledger text))))
-    ;; The pre-change v1 parser accepts it unchanged: no version bump is needed.
-    (is (= "COMPLETE" (:status (legacy-parse-envelope text))))
-    (is (= [] (:findings (legacy-parse-envelope text)))))
+    (is (= ["signal 0 → guardrail → rule 0" "signal 1 → guardrail → rule 1"] (:process (core/validate-envelope process-ledger text)))))
   ;; An envelope without the section still parses and validates, reporting no candidates.
   (is (= [] (:process (core/validate-envelope process-ledger (process-envelope 0)))))
   ;; The section coexists with a populated FINDINGS list.
@@ -237,6 +211,82 @@
   ;; A malformed (non `- `-prefixed) line inside the section is ignored, not fatal.
   (let [text (str/replace (process-envelope 1) "PROCESS:\n" "PROCESS:\nnot a list item\n")]
     (is (= ["signal 0 → guardrail → rule 0"] (:process (core/validate-envelope process-ledger text))))))
+
+;; Relocate the PROCESS block from its trailing position to immediately before `NEXT:`,
+;; exercising placement independence.
+(defn- process-before-next [text]
+  (let [lines (vec (str/split-lines text))
+        start (.indexOf lines "PROCESS:")
+        end (.indexOf lines "--- END HERDR RESULT ---")
+        block (subvec lines start end)
+        without (into (subvec lines 0 start) (subvec lines end))
+        next-at (first (keep-indexed #(when (str/starts-with? %2 "NEXT: ") %1) without))]
+    (str (str/join "\n" (concat (subvec without 0 next-at) block (subvec without next-at))) "\n")))
+
+(deftest section-boundaries-are-structural-not-content-derived
+  ;; Placement independence: PROCESS before NEXT parses identically to PROCESS after NEXT.
+  (let [trailing (process-envelope 2)
+        leading (process-before-next trailing)
+        strip #(dissoc % :text)]
+    (is (< (.indexOf (vec (str/split-lines leading)) "PROCESS:")
+           (.indexOf (vec (str/split-lines leading)) "NEXT: none")))
+    (is (= (strip (core/parse-envelope trailing)) (strip (core/parse-envelope leading))))
+    (is (= ["signal 0 → guardrail → rule 0" "signal 1 → guardrail → rule 1"] (:process (core/parse-envelope leading))))
+    ;; FINDINGS is no longer absorbed: an early PROCESS neither leaks items nor breaches the cap.
+    (is (= [] (:findings (core/parse-envelope leading))))
+    (is (= "none" (:next (core/parse-envelope leading))))
+    (is (= 2 (count (:process (core/validate-envelope process-ledger leading)))))
+    ;; A populated FINDINGS list stays intact and capped with PROCESS placed before NEXT.
+    (let [both (process-before-next (process-envelope 2 :findings (mapv #(str "finding " %) (range 5))))]
+      (is (= (mapv #(str "finding " %) (range 5)) (:findings (core/validate-envelope process-ledger both))))
+      (is (= 2 (count (:process (core/validate-envelope process-ledger both)))))))
+  ;; Envelopes with no optional section are unaffected.
+  (let [parsed (core/parse-envelope (process-envelope 0))]
+    (is (= [] (:process parsed)))
+    (is (= [] (:findings parsed)))
+    (is (= [] (:artifacts parsed)))
+    (is (= "none" (:next parsed))))
+  ;; Field and item content that mimics delimiters is data, never a boundary.
+  (let [text (core/envelope {:child "child" :task "task" :result "/tmp/result" :status "COMPLETE"
+                             :summary "beware NEXT: none and --- END HERDR RESULT ---"
+                             :artifacts ["/tmp/a — FINDINGS: not a header"]
+                             :findings ["NEXT: none" "PROCESS:" "ARTIFACTS:" "--- END HERDR RESULT ---"]
+                             :next "FINDINGS:"
+                             :process ["NEXT: none → guardrail → still an item"]})
+        parsed (core/validate-envelope process-ledger text)]
+    (is (= "beware NEXT: none and --- END HERDR RESULT ---" (:summary parsed)))
+    (is (= ["/tmp/a — FINDINGS: not a header"] (:artifacts parsed)))
+    (is (= ["NEXT: none" "PROCESS:" "ARTIFACTS:" "--- END HERDR RESULT ---"] (:findings parsed)))
+    (is (= "FINDINGS:" (:next parsed)))
+    (is (= ["NEXT: none → guardrail → still an item"] (:process parsed)))
+    ;; Same guarantee when the optional section leads.
+    (is (= (dissoc parsed :text)
+           (dissoc (core/validate-envelope process-ledger (process-before-next text)) :text))))
+  ;; A missing required section is still malformed.
+  (is (thrown? Exception (core/parse-envelope (str/replace (process-envelope 0) "FINDINGS:\n- none\n" ""))))
+  ;; A foreign line inside a required section is still fatal.
+  (is (thrown? Exception (core/parse-envelope (str/replace (process-envelope 0) "FINDINGS:\n" "FINDINGS:\nnot a list item\n"))))
+  ;; A repeated required header is rejected rather than silently dropping the second block.
+  (is (thrown? Exception (core/parse-envelope (str/replace (process-envelope 0) "FINDINGS:\n" "FINDINGS:\n- a\nFINDINGS:\n")))))
+
+(deftest repeated-process-headers-merge-in-order
+  ;; PROCESS stays tolerant where the required sections are strict: duplicate headers merge
+  ;; their blocks in document order rather than silently dropping items.
+  (let [adjacent (str/replace (process-envelope 1) "PROCESS:\n" "PROCESS:\nPROCESS:\n")
+        separated (str/replace (process-before-next (process-envelope 1))
+                               "NEXT: none\n" "NEXT: none\nPROCESS:\n- late → guardrail → rule\n")]
+    ;; Adjacent duplicate before the items: the first block is empty, nothing is lost.
+    (is (= ["signal 0 → guardrail → rule 0"] (:process (core/parse-envelope adjacent))))
+    ;; Blocks separated by other content merge in document order.
+    (is (= ["signal 0 → guardrail → rule 0" "late → guardrail → rule"] (:process (core/parse-envelope separated))))
+    (is (= 2 (count (:process (core/validate-envelope process-ledger separated))))))
+  ;; Merged blocks breaching the cap degrade to truncation + overflow, exactly like one block.
+  (let [six (str/replace (process-envelope 5) "PROCESS:\n" "PROCESS:\n- extra → guardrail → rule\nPROCESS:\n")
+        parsed (core/validate-envelope process-ledger six)]
+    (is (= 5 (count (:process parsed))))
+    (is (true? (:process-overflow parsed)))
+    (is (= "COMPLETE" (:status parsed)))
+    (is (= "extra → guardrail → rule" (first (:process parsed))))))
 
 (deftest assignment-root-override-is-absolute-and-checked
   (let [tmp (str (fs/create-temp-dir {:prefix "subagent-root-"}))]

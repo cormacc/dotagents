@@ -133,9 +133,8 @@
        "ARTIFACTS:\n" (if (seq artifacts) (str/join "\n" (map #(str "- " %) artifacts)) "- none") "\n"
        "FINDINGS:\n" (if (seq findings) (str/join "\n" (map #(str "- " %) findings)) "- none") "\n"
        "NEXT: " (or next "none") "\n"
-       ;; Trailing and omitted-when-empty: an unmodified v1 reader ends FINDINGS at the
-       ;; literal `NEXT:` line and ignores anything after it, so no version bump is
-       ;; needed and envelopes without PROCESS stay byte-identical to v1 output.
+       ;; Omitted when empty; trailing is simply the canonical serialization order. The
+       ;; reader delimits sections structurally and accepts PROCESS in any position.
        (when (seq process) (str "PROCESS:\n" (str/join "\n" (map #(str "- " %) process)) "\n"))
        "--- END HERDR RESULT ---\n"))
 
@@ -143,31 +142,48 @@
   (let [matches (filter #(str/starts-with? % (str label ": ")) lines)]
     (when-not (= 1 (count matches)) (throw (ex-info "result envelope field is missing or repeated" {:field label})))
     (single-line! label (subs (first matches) (+ 2 (count label))))))
-(defn- section-lines [lines start end]
-  (let [a (.indexOf lines start) b (.indexOf lines end)]
-    (when-not (and (<= 0 a) (< a b)) (throw (ex-info "result envelope section is malformed" {:section start})))
-    (let [items (subvec (vec lines) (inc a) b)]
-      (when-not (every? #(str/starts-with? % "- ") items) (throw (ex-info "result envelope list item is malformed" {:section start})))
-      (let [values (mapv #(subs % 2) items)] (if (= ["none"] values) [] values)))))
-;; `section-lines` needs a known end marker and rejects foreign lines; the trailing
-;; PROCESS section is bounded only by the END marker, so it is parsed tolerantly:
-;; non `- ` lines are ignored rather than invalidating the publication.
+(def ^:private end-marker "--- END HERDR RESULT ---")
+(def ^:private field-labels ["CHILD" "TASK" "RESULT" "STATUS" "SUMMARY" "NEXT"])
+(def ^:private section-headers ["ARTIFACTS:" "FINDINGS:" "PROCESS:"])
+;; Sections are delimited structurally — by the next section header, scalar field line, or
+;; the END marker — never by a value the child chose. Every list item carries a `- `
+;; prefix, so no item line can be mistaken for a boundary, and optional sections may be
+;; placed anywhere between the markers without corrupting a neighbour.
+(defn- boundary? [line]
+  (boolean (or (= end-marker line)
+               (some #(= % line) section-headers)
+               (some #(str/starts-with? line (str % ": ")) field-labels))))
+(defn- section-body [lines header]
+  (let [v (vec lines) a (.indexOf v header)]
+    (when (neg? a) (throw (ex-info "result envelope section is malformed" {:section header})))
+    (let [tail (subvec v (inc a))]
+      (subvec tail 0 (count (take-while (complement boundary?) tail))))))
+(defn- section-lines [lines header]
+  ;; Required sections keep `field!`'s strictness: a repeated header would silently drop
+  ;; the duplicate block now that a header is itself a boundary, so reject it outright.
+  (when-not (= 1 (count (filter #(= header %) lines)))
+    (throw (ex-info "result envelope section is missing or repeated" {:section header})))
+  (let [items (section-body lines header)]
+    (when-not (every? #(str/starts-with? % "- ") items) (throw (ex-info "result envelope list item is malformed" {:section header})))
+    (let [values (mapv #(subs % 2) items)] (if (= ["none"] values) [] values))))
+;; PROCESS is a discardable annotation, so unlike the required sections it is absent-safe
+;; and parsed tolerantly: non `- ` lines are ignored rather than invalidating the result,
+;; and repeated headers merge their blocks in document order instead of dropping items.
 (defn- process-items [lines]
-  (let [start (.indexOf lines "PROCESS:")
-        end (.indexOf lines "--- END HERDR RESULT ---")]
-    (if (or (neg? start) (< end start)) []
-        (let [values (->> (subvec (vec lines) (inc start) end)
-                          (filter #(str/starts-with? % "- "))
-                          (mapv #(subs % 2)))]
-          (if (= ["none"] values) [] values)))))
+  (let [v (vec lines)
+        values (->> (keep-indexed (fn [i line] (when (= "PROCESS:" line) (inc i))) v)
+                    (mapcat #(take-while (complement boundary?) (subvec v %)))
+                    (filter (fn [line] (str/starts-with? line "- ")))
+                    (mapv #(subs % 2)))]
+    (if (= ["none"] values) [] values)))
 (defn parse-envelope [text]
   (let [lines (str/split-lines text)]
-    (when-not (and (= "--- HERDR RESULT v1 ---" (first lines)) (= "--- END HERDR RESULT ---" (last lines)))
+    (when-not (and (= "--- HERDR RESULT v1 ---" (first lines)) (= end-marker (last lines)))
       (throw (ex-info "invalid result envelope markers" {})))
     {:child (field! lines "CHILD") :task (field! lines "TASK") :result (field! lines "RESULT")
      :status (field! lines "STATUS") :summary (field! lines "SUMMARY")
-     :artifacts (section-lines lines "ARTIFACTS:" "FINDINGS:")
-     :findings (section-lines lines "FINDINGS:" (str "NEXT: " (field! lines "NEXT")))
+     :artifacts (section-lines lines "ARTIFACTS:")
+     :findings (section-lines lines "FINDINGS:")
      :next (field! lines "NEXT") :process (process-items lines) :text text}))
 
 (defn artifact-path [line]
