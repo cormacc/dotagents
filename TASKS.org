@@ -190,29 +190,6 @@ Desired outcome: per-harness lookup tables in the herdr-subagents skill mapping 
 
 Origin: mid-implementation discovery that 10c7990 (kindless roster) made every roster `model:` line inert — kind-inheriting spawns resolved model nil and children silently ran on the harness default.
 
-** TODO subagent: implement the advisor strategy  :skill_herdr-subagents:
-:PROPERTIES:
-:CUSTOM_ID: 2ad05ea8-cf75-4d0c-82c8-d23b890a3985
-:CREATED: [2026-07-28 Tue 17:32]
-:END:
-:LOGBOOK:
-- Created [2026-07-28 Tue 17:32]
-:END:
-Anthropic recommend using a cheap model to execute, but consult with a frontier model advisor to retain quality at lower cost.
-Update the subagent skill and/or personas as appropriate to accomodate this.
-Evaluate the use of persistent vs ephemeral advisor subagents, and whether a persistent advisor should be owned by the orchestrator / provided by reference to subagents at spawn time, or whether subagents should own their advisors.
-
-Anthropic implement it as an API feature, however we want to implement it on the harness side as a skill (or extension to the existing herdr-subagents skill)
-
-
-Write-ups
-- https://osher.com.au/blog/the-advisor-strategy-frontier-model-reasoning-at-a-fraction-of-the-cost/
-- https://fireworks.ai/blog/frontier-open-source-worker-with-closed-source-advisor
-- https://decodethefuture.org/en/anthropic-advisor-strategy-explained/
-
-Prior art / implementations
-- https://github.com/aivsomkar/advisor-strategy-skill
-
 ** TODO ot move: TUI/pi-overlay exposure and --before/--after ordering
 :PROPERTIES:
 :CUSTOM_ID: da7350ac-60c6-4336-9b7e-e0cbce51658c
@@ -223,7 +200,50 @@ Prior art / implementations
 :END:
 Follow-ups from the initial `ot move` implementation (task 2a2f5aed): expose move in the ot TUI and pi tasks overlay (boundary.md notes the pending parity — needs a key map entry plus a destination picker), and add `--before`/`--after` ordering control so a move is not restricted to append-as-last-child / last-in-section semantics.
 
+** TODO subagent: paired comparison of worker vs advised-worker   :skill_herdr-subagents:
+:PROPERTIES:
+:CUSTOM_ID: 1a2fdaa6-860d-4210-8d2d-67d4c807a6f3
+:CREATED: [2026-07-29 Wed 11:14]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 11:14]
+:END:
+Exploratory payoff for the advisor strategy (see [[plan:2026-07-29-subagent-implement-the-advisor-strategy.org]]): run the same scoped implementation task through `worker` (opus-5) and `advised-worker` (sonnet-5 + opus-5 advisor), compare output quality, advisor consult count, and token cost. Also try one run with the advisor tier-escalated to anthropic/claude-fable-5 via --model.
+
+** TODO subagent: package default / example subagents  :skill_herdr-subagents:
+:PROPERTIES:
+:CUSTOM_ID: 4bc362e3-e23f-4c32-bf36-0261ea439077
+:CREATED: [2026-07-29 Wed 11:15]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 11:15]
+:END:
+Currently the subagent skill doesn't include any defaults / examples. We should do the following...
+- Move the subagents in this repo from =./subagents= to =./skills/herdr-subagents/subagents=
+- Update subagent discovery to pickup definitions in this folder (i.e. =<skill-folder>/subagents=) in addition to =~/.agents/subagents= and =<PROJECT>/.agents/subagents=
+- In the event of duplicate definitions, precedence is the usual: =<project>/.agents/subagents=  > =~/.agents/.subagents= > =<skill-folder>/subagents=
+
+** TODO subagent: notify a non-blocking parent when a child publishes its result :skill_herdr-subagents:
+:PROPERTIES:
+:CUSTOM_ID: 6a4101d1-2612-4a5b-bda1-97cccece98cb
+:CREATED: [2026-07-29 Wed 11:30]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 11:30]
+:END:
+Under `start` (non-blocking waiting policy), `subagent publish` currently emits only a Herdr operator notification (`notification show`) -- the orchestrating parent agent gets no signal and must poll via `collect`. Extend `publish` so a non-blocking parent is also notified that the result is ready for collection, e.g. by delivering a message to the parent pane/session recorded in the ledger (`:parent-session`). Preserve the contract invariant that the validated RESULT file remains the only *completion* signal -- the notification is advisory, prompting the parent to run `collect`. Update `scripts/docs/contract.md` (waiting-policy row, § Ledger and completion) and the herdr-subagents SKILL.md invocation-policy wording accordingly. Motivating session: interactive planner run where the parent only learned of publication from the human operator.
+
 * Fixes
+** TODO ot ready reports unresolved-task for blockers resolvable inside #+IMPORT:-linked plan files :org-tasks:ot:bug:
+:PROPERTIES:
+:CUSTOM_ID: 89e9808a-03f9-4f1e-b965-904181235f80
+:CREATED: [2026-07-29 Wed 11:45]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 11:45]
+:END:
+With `:BLOCKED-BY: task:<uuid>` where both the blocked task and the blocker live in the same #+IMPORT:-linked plan file (observed: design/log/2026-07-29-subagent-implement-the-advisor-strategy.org, blocked 5fa8df39 -> blocker fb878a68), `ot ready <id>` returns gating reason `unresolved-task` although `ot show <blocker-id>` resolves the same UUID. Expected: ready resolves task blockers across plan files like other ID-accepting commands and reports open/closed status instead. Also observed: text-mode `ot blocker list` printed "(no blockers)" immediately after a successful `ot blocker add` while `--format json` showed the blocker — likely a related resolution/rendering issue.
+
 * Housekeeping
 
 ** STARTED Create self-improvement skill :pi:

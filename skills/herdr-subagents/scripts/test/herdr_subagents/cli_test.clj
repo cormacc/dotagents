@@ -21,20 +21,33 @@
 ;; `SUBAGENT_ASSIGNMENT_ROOT` keeps the ledger, index markers, result files, and roster
 ;; lookup inside the per-test temp dir: `bb test` must never touch the live tree.
 ;; `HOME` points at an empty directory so personas can only resolve through the project
-;; roster symlinked to the repo's own tracked `subagents/`.
-(defn fake-env [overrides]
-  (let [dir (fs/create-temp-dir {:prefix "fake-herdr-"}) log (str (fs/path dir "calls")) env-file (str (fs/path dir "env")) prompt-file (str (fs/path dir "prompt"))
-        home (fs/path dir "home") roster (fs/path dir ".agents" "subagents") skills (fs/path dir "skills")]
-    (fs/create-sym-link (fs/path dir "herdr") fake)
-    (fs/create-dirs home)
-    (fs/create-dirs (fs/parent roster))
-    (fs/create-sym-link roster (fs/path root "subagents"))
-    ;; `<root>/skills/` is the second skill probe and the shape this repository uses, so
-    ;; the retro skill resolves in-fixture without an installed `~/.agents/skills`.
-    (fs/create-sym-link skills (fs/path root "skills"))
-    {:dir dir :log log :env-file env-file :prompt-file prompt-file :roster (str roster) :skills (str skills)
-     :env (merge {"PATH" (str dir ":" (System/getenv "PATH")) "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p" "HERDR_SUBAGENT_BIN" bin "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file "FAKE_HERDR_PROMPT_FILE" prompt-file
-                  "HOME" (str home) "SUBAGENT_ASSIGNMENT_ROOT" (str dir)} overrides)}))
+;; roster. Tests may supply an isolated roster instead of the tracked default roster.
+(defn fake-env
+  ([overrides] (fake-env overrides nil))
+  ([overrides personas]
+   (let [dir (fs/create-temp-dir {:prefix "fake-herdr-"}) log (str (fs/path dir "calls")) env-file (str (fs/path dir "env")) prompt-file (str (fs/path dir "prompt"))
+         home (fs/path dir "home") roster (fs/path dir ".agents" "subagents") skills (fs/path dir "skills")]
+     (fs/create-sym-link (fs/path dir "herdr") fake)
+     (fs/create-dirs home)
+     (fs/create-dirs (fs/parent roster))
+     (if personas
+       (do
+         (fs/create-dirs roster)
+         (doseq [[name body] personas]
+           (spit (str (fs/path roster (str name ".md"))) body)))
+       (fs/create-sym-link roster (fs/path root "subagents")))
+     ;; `<root>/skills/` is the second skill probe and the shape this repository uses, so
+     ;; the retro skill resolves in-fixture without an installed `~/.agents/skills`.
+     (fs/create-sym-link skills (fs/path root "skills"))
+     {:dir dir :log log :env-file env-file :prompt-file prompt-file :roster (str roster) :skills (str skills)
+      :env (merge {"PATH" (str dir ":" (System/getenv "PATH")) "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p" "HERDR_SUBAGENT_BIN" bin "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file "FAKE_HERDR_PROMPT_FILE" prompt-file
+                   "HOME" (str home) "SUBAGENT_ASSIGNMENT_ROOT" (str dir)} overrides)})))
+
+(def advisor-strategy-roster
+  {"advised-worker" "---\nname: advised-worker\ndescription: fixture executor\nkind: pi\nmodel: anthropic/claude-sonnet-5\nspawns: scout researcher advisor\n---\nFixture executor.\n"
+   "advisor" "---\nname: advisor\ndescription: fixture advisor\nkind: pi\nmodel: anthropic/claude-opus-5\nretro: false\n---\nFixture advisor.\n"
+   "scout" "---\nname: scout\ndescription: fixture scout\nkind: pi\nmodel: anthropic/claude-sonnet-5\nretro: false\n---\nFixture scout.\n"
+   "researcher" "---\nname: researcher\ndescription: fixture researcher\nkind: pi\nmodel: anthropic/claude-sonnet-5\nretro: false\n---\nFixture researcher.\n"})
 (defn call! [env & argv] @(process/process (into [bin] argv) {:out :string :err :string :env env}))
 (defn result [proc] (json/parse-string (:out proc) true))
 
@@ -91,6 +104,43 @@
     (is (= {:spawns ["scout" "researcher"] :spawns-source "frontmatter"}
            (select-keys entry [:spawns :spawns-source])))
     (is (= "scout researcher" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))))
+
+(deftest advisor-strategy-spawn-contract
+  (testing "the root advised-worker resolves its fixture allow-list"
+    (let [{:keys [env env-file dir]} (fake-env {} advisor-strategy-roster)
+          proc (call! env "start" "advised-worker" "--task" "root advised-worker policy")
+          task (get-in (result proc) [:result :task])
+          entry (ledger-entry* dir task)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= {:spawns ["scout" "researcher" "advisor"] :spawns-source "frontmatter"}
+             (select-keys entry [:spawns :spawns-source])))
+      (is (= "scout researcher advisor" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))))
+  (testing "a permitted nested advisor is forced to a leaf and carries the model override"
+    (let [{:keys [env env-file dir prompt-file]} (fake-env {"HERDR_SUBAGENT_PERSONA" "advised-worker"
+                                                              "HERDR_SUBAGENT_SPAWNS" "advisor"
+                                                              "FAKE_PARENT_LABEL" "advised-worker-1-claude-sonnet-5"}
+                                                             advisor-strategy-roster)
+          proc (call! env "start" "advisor" "--model" "anthropic/claude-fable-5" "--task" "nested advisor consult")
+          task (get-in (result proc) [:result :task])
+          entry (ledger-entry* dir task)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))
+      (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))
+      (is (= {:spawns [] :spawns-source "depth"} (select-keys entry [:spawns :spawns-source])))
+      (is (= "advised-worker-1/advisor-1-claude-fable-5" (:label entry)))
+      (is (false? (:retro entry)))
+      (is (= "frontmatter" (:retro-source entry)))))
+  (testing "the root may spawn an advisor directly without a parent grant"
+    (let [{:keys [env dir prompt-file]} (fake-env {} advisor-strategy-roster)
+          proc (call! env "start" "advisor" "--task" "direct root advisor consult")
+          task (get-in (result proc) [:result :task])
+          entry (ledger-entry* dir task)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "advisor-1-claude-opus-5" (:label entry)))
+      (is (= {:spawns [] :spawns-source "default"} (select-keys entry [:spawns :spawns-source])))
+      (is (false? (:retro entry)))
+      (is (= "frontmatter" (:retro-source entry)))
+      (is (not (str/includes? (slurp prompt-file) "apply steps 1-2 of"))))))
 
 (deftest root-spawns-none-forces-a-leaf
   (let [{:keys [env env-file dir prompt-file]} (fake-env {})

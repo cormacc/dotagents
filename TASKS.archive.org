@@ -1438,3 +1438,33 @@ Origin:
 
 Evidence:
 Surfaced as a PROCESS candidate by the implementation worker for design/log/2026-07-27-subagent-retrospectives.org, and earlier as a review P2: a PROCESS section placed before NEXT is absorbed into FINDINGS and can breach the five-item validation cap (core.clj section-lines/parse).
+
+** DONE subagent: implement the advisor strategy  :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 12:17]
+:PROPERTIES:
+:CUSTOM_ID: 2ad05ea8-cf75-4d0c-82c8-d23b890a3985
+:CREATED: [2026-07-28 Tue 17:32]
+:STARTED: [2026-07-29 Wed 11:48]
+:ARCHIVED: [2026-07-29 Wed 12:17]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-28 Tue 17:32]
+- State "STARTED" from "TODO" [2026-07-29 Wed 11:48]
+- State "DONE" from "STARTED" [2026-07-29 Wed 12:17]
+:END:
+#+IMPORT: [[plan:2026-07-29-subagent-implement-the-advisor-strategy.org]]
+Anthropic recommend using a cheap model to execute, but consult with a frontier model advisor to retain quality at lower cost.
+Update the subagent skill and/or personas as appropriate to accomodate this.
+Evaluate the use of persistent vs ephemeral advisor subagents, and whether a persistent advisor should be owned by the orchestrator / provided by reference to subagents at spawn time, or whether subagents should own their advisors.
+
+Anthropic implement it as an API feature, however we want to implement it on the harness side as a skill (or extension to the existing herdr-subagents skill)
+
+
+Write-ups
+- https://osher.com.au/blog/the-advisor-strategy-frontier-model-reasoning-at-a-fraction-of-the-cost/
+- https://fireworks.ai/blog/frontier-open-source-worker-with-closed-source-advisor
+- https://decodethefuture.org/en/anthropic-advisor-strategy-explained/
+
+Prior art / implementations
+- https://github.com/aivsomkar/advisor-strategy-skill

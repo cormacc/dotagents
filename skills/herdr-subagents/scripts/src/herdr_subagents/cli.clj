@@ -60,12 +60,10 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
     {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent)) :parent-kind (:agent agent) :parent-pane (:pane_id agent)}))
 ;; Composed from the resolved spawn policy, not the persona name: any persona whose
 ;; policy is non-empty gets the delegation sentence, everyone else the leaf sentence.
-;; The rendered text for policy ["scout" "researcher"] is byte-identical to the
-;; pre-capability planner-only sentence (pinned in core_test.clj).
 (defn delegation-guidance [spawns]
   (if (seq spawns)
     (str "You may spawn at most one blocking ephemeral " (str/join " or " spawns)
-         " only when a factual gap blocks planning; that child must remain a leaf.")
+         " only when a factual gap or material judgment blocks progress; that child must remain a leaf.")
     "You are a leaf: do not spawn subagents."))
 (defn retro-instruction [retro-skill]
   (when retro-skill

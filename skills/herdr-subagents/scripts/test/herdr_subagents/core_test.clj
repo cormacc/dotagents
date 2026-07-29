@@ -121,12 +121,12 @@
 
 (deftest delegation-guidance-and-smoke-success-contract
   (is (.endsWith (cli/launcher-bin) "/skills/herdr-subagents/scripts/subagent"))
-  ;; Byte-identical to the pre-capability planner-only sentence: the planner's policy
-  ;; resolves to ["scout" "researcher"] and must render exactly today's text.
-  (is (= "You may spawn at most one blocking ephemeral scout or researcher only when a factual gap blocks planning; that child must remain a leaf."
+  ;; The prompt text is intentionally pinned: the trigger applies to factual research
+  ;; and judgment consults alike, while preserving the blocking, one-child leaf bound.
+  (is (= "You may spawn at most one blocking ephemeral scout or researcher only when a factual gap or material judgment blocks progress; that child must remain a leaf."
          (cli/delegation-guidance ["scout" "researcher"])))
-  (is (= "You may spawn at most one blocking ephemeral scout only when a factual gap blocks planning; that child must remain a leaf."
-         (cli/delegation-guidance ["scout"])))
+  (is (= "You may spawn at most one blocking ephemeral scout or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."
+         (cli/delegation-guidance ["scout" "advisor"])))
   ;; Leaf guidance remains the default for an empty resolved policy; the live roster
   ;; grants planner and worker, while scout and researcher remain leaves.
   (is (= "You are a leaf: do not spawn subagents." (cli/delegation-guidance [])))

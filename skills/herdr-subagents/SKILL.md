@@ -1,6 +1,6 @@
 ---
 name: herdr-subagents
-description: "Delegate work to subagents inside Herdr: use when asked to spawn, delegate, fan out, or run a scout/researcher/planner/reviewer/worker. Requires HERDR_ENV=1; use the in-skill subagent CLI for single-child delegation and the Herdr skill for pane mechanics."
+description: "Delegate work to subagents inside Herdr: use when asked to spawn, delegate, fan out, or run a scout/researcher/planner/reviewer/worker/advised-worker/advisor. Requires HERDR_ENV=1; use the in-skill subagent CLI for single-child delegation and the Herdr skill for pane mechanics."
 ---
 
 # Herdr subagents
@@ -20,7 +20,11 @@ The CLI wraps opaque `--task`, `--task-file`, or stdin text with the persona, de
 
 Definitions are `<name>.md` files in `<git-root>/.agents/subagents/` then `~/.agents/subagents/`; the project copy wins. Read the selected definition. Its frontmatter `kind` and paired `model` guide routing: spawn request overrides definition, definition overrides parent kind; a definition model is dropped when its paired kind is overridden. A kindless `model` uses pi's `provider/model` syntax and is honoured only when the resolved kind is `pi`. Unknown personas require listing the roster and asking, not improvising.
 
-Delegation capability is declared, not assumed: a persona may spawn only what its frontmatter `spawns:` allow-list grants (`planner` and `worker` grant `scout researcher`; every other persona is a leaf), and the value-bearing `--spawns` flag overrides the list for one spawn — the literal `none` forces a leaf. Nesting is one level absolutely: anything spawned below the root is a leaf regardless of its frontmatter, and a below-root spawn stays blocking, one-at-a-time, and ephemeral. The CLI enforces the allow-list and the depth bound mechanically before any ledger or pane mutation.
+Delegation capability is declared, not assumed: a persona may spawn only what its frontmatter `spawns:` allow-list grants (`planner` and `worker` grant `scout researcher`; `advised-worker` grants `scout researcher advisor`; every other persona is a leaf), and the value-bearing `--spawns` flag overrides the list for one spawn — the literal `none` forces a leaf. Nesting is one level absolutely: anything spawned below the root is a leaf regardless of its frontmatter, and a below-root spawn stays blocking, one-at-a-time, and ephemeral. The CLI enforces the allow-list and the depth bound mechanically before any ledger or pane mutation.
+
+## Advisor strategy (opt-in)
+
+Use `advised-worker` as the cheap-executor alternative to frontier `worker`; its `advisor` is a consult-only frontier grandchild. It takes one mandatory focused pre-publish review consult, with optional escalation consults for judgment calls or debugging dead ends; soft cap: three consults. The caller selects an advisor tier with `--model` (for example, `--model anthropic/claude-fable-5`); tier escalation is caller-driven—an advisor never spawns an advisor. See the [change record](../../design/log/2026-07-29-subagent-implement-the-advisor-strategy.org) for rationale.
 
 ## Invocation policy
 
@@ -35,7 +39,7 @@ Reuse a resident only after its live name **and pane ID** match the ledger, it i
 
 ## Process retrospectives
 
-Use `--retro` or `--no-retro` only when overriding the persona policy for this spawn. Otherwise the CLI resolves persona frontmatter `retro:` and then its enabled default. `scout` and `researcher` currently opt out. If no `retro` skill is installed, default/frontmatter enablement degrades to disabled; an explicit `--retro` fails fast.
+Use `--retro` or `--no-retro` only when overriding the persona policy for this spawn. Otherwise the CLI resolves persona frontmatter `retro:` and then its enabled default. `scout`, `researcher`, and `advisor` currently opt out. If no `retro` skill is installed, default/frontmatter enablement degrades to disabled; an explicit `--retro` fails fast.
 
 A gated-in child applies steps 1–2 of [`retro`](../retro/SKILL.md), using that skill's threshold. Surviving one-line candidates arrive in the result's optional `PROCESS:` section and the ledger `:envelope`; no candidates is a valid result. The ledger's best-effort `:child-session` is the transcript reference for any manual follow-up after pane closure. Exact precedence, fields, limits, and section grammar belong to the [mechanical contract](scripts/docs/contract.md).
 

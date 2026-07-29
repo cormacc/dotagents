@@ -1,0 +1,149 @@
+#+TITLE: subagent: implement the advisor strategy  :skill_herdr-subagents:
+#+DATE: 2026-07-29 Wed
+#+PARENT: [[archive:2ad05ea8-cf75-4d0c-82c8-d23b890a3985][subagent: implement the advisor strategy  :skill_herdr-subagents:]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-subagents/scripts/docs/contract.md]]
+
+* Intent
+
+Make Anthropic's advisor strategy (cheap executor consulting a frontier advisor at judgment moments) available as an opt-in, comparable alternative to the existing frontier `worker` — implemented harness-side via two new personas and skill guidance, with zero changes to the subagent contract, envelope, or spawn-gating semantics.
+
+* Summary
+
+*Level:* MVP · *Tests:* smoke · *Docs:* inline
+
+** Scope
+
+*** In scope
+
+- New global-roster persona =subagents/advisor.md=: frontier consult-only advisor (opus-5, leaf, =retro: false=).
+- New global-roster persona =subagents/advised-worker.md=: cheap executor (sonnet-5) with `spawns: scout researcher advisor` and a defined consultation policy.
+- =cli.clj= `delegation-guidance` wording generalised so a spawns list containing `advisor` reads correctly; pinned prompt test in =core_test.clj= updated.
+- =skills/herdr-subagents/SKILL.md=: opt-in advisor-strategy section, including advisor tier selection via `--model` override.
+
+*** Out of scope
+
+- Changes to `worker`, `planner`, `reviewer`, `scout`, `researcher` personas.
+- Persistent/resident advisor machinery, CLI re-tasking, multiple results per pane.
+- Anthropic API `advisor_20260301` usage; Herdr core changes.
+- Multi-domain advisor roster (architecture/security/…).
+- A separate `sage.md` fable-5 persona — tier is a `--model` routing parameter.
+- The paired comparison run itself (tracked as follow-up task:1a2fdaa6-860d-4210-8d2d-67d4c807a6f3).
+
+** Acceptance
+
+*** Core functionality
+
+- [X] =subagents/advisor.md= exists with frontmatter `model: anthropic/claude-opus-5`, `retro: false`, no `spawns:` (leaf)
+- [X] Advisor persona is consult-only: no file edits, no implementation; guidance is a structured assessment (verdict, recommended approach, concrete pass/fail checks)
+- [X] Advisor delivers guidance via the existing envelope: `SUMMARY` is a single line `<PROCEED|REVISE|STOP> — <recommended approach>`, each pass/fail check is a `--finding` (≤5), and an `--artifact` report is required whenever the recommendation cannot fit that one-line summary
+- [X] =subagents/advised-worker.md= exists with frontmatter `model: anthropic/claude-sonnet-5`, `spawns: scout researcher advisor`
+- [X] Advised-worker performs one mandatory pre-publish advisor review consult with focused context (problem statement, working diff, failed approaches, constraints) — never a transcript dump
+- [X] Advised-worker addresses advisor pass/fail checks before publishing
+- [X] Advised-worker may escalate mid-task on debug dead-end (2+ failed attempts) or high-stakes ambiguous decision; soft cap 3 consults total
+- [X] Advised-worker policy defines the tier-escalation trigger: advisor uncertainty or repeated check failure → one fable-5 re-consult via `--model`, within the cap
+- [X] `delegation-guidance` in =cli.clj= reads correctly for a spawns list containing `advisor`
+- [X] Pinned prompt-text expectation in =core_test.clj= updated; `bb test` green from the repository root
+- [X] =cli_test.clj= covers the advised-worker→advisor route: root advised-worker spawn-policy resolution; a permitted below-root advisor spawn (empty injected `HERDR_SUBAGENT_SPAWNS`, `spawns-source: depth`, leaf prompt); advisor `retro: false` resolution; and a `--model` tier override reflected in the model-bearing nested label
+- [X] =SKILL.md= documents the advisor strategy as opt-in, the worker-vs-advised-worker comparison intent, and `--model` tier override; the existing frontmatter trigger description, roster allow-list sentence, and retro opt-out sentence are updated for the new personas
+
+*** Edge cases
+
+- [X] Below-root advised-worker can spawn `advisor` under existing gating (via injected `HERDR_SUBAGENT_SPAWNS`); grandchild advisor forced leaf with source `depth`
+- [X] Root caller can spawn `advisor` directly with no persona changes (root is unrestricted)
+
+*** Anti-criteria
+
+- Must not: modify =worker.md=, =planner.md=, =reviewer.md=, =scout.md=, =researcher.md=
+- Must not: change the result envelope, ledger schema, or spawn-gating semantics
+- Must not: add resident/re-tasking CLI machinery
+
+** Decisions
+
+- Ephemeral, subagent-owned advisor consults :: each consultation is a fresh blocking below-root spawn granted via the advised-worker's `spawns:` list. Harness-side there is no shared context to preserve (a focused-context handoff must be composed either way), evidence supports ~1 consult/task, and the existing depth/publish/pane contract handles it with zero CLI mechanics changes.
+  Rejected:
+  - Persistent orchestrator-owned advisor provided by reference: requires re-tasking residents (publish is exactly-once per task; no `ask` command) and child-to-orchestrator's-advisor communication violates the no-child-to-child rule.
+  - Subagent-owned resident advisor: no re-tasking mechanism; persistence buys nothing without shared context.
+- Review-weighted consultation policy :: mandatory pre-publish review consult (advisor reads trajectory summary + working diff, returns pass/fail checks) plus optional escalation consults (debug dead-end after 2+ failures; high-stakes ambiguous decision), soft cap 3. Fireworks ablation: review-only ≥ plan+review in 5/6 cells at half the consults; a mandatory planning consult does not pay for itself.
+- Advisor tier via `--model` override, not a separate persona :: model resolution precedence (flag > frontmatter) already works below root, and spawn gating restricts persona names, never models; labels embed the model basename so runs stay distinguishable. A `sage.md` would duplicate an identical body to change one line.
+- Tier escalation is caller-driven :: an advisor never spawns an advisor. The depth bound makes it mechanically impossible below root, and the advisor must stay "pure brain, no hands". The advised-worker re-consults once at fable-5 tier on a defined trigger instead.
+- New `advised-worker` persona rather than changing `worker` :: exploratory/opt-in; keeps a stable frontier baseline for the paired comparison.
+
+** Shipped
+
+- ADDED =subagents/advisor.md= — consult-only frontier advisor persona (opus-5, leaf, `retro: false`); serializes short consults as `SUMMARY: <PROCEED|REVISE|STOP> — <recommended approach>`, checks as `--finding`, artifact fallback for longer reviews.
+- ADDED =subagents/advised-worker.md= — sonnet-5 executor, `spawns: scout researcher advisor`; mandatory token-budgeted pre-publish consult, two escalation triggers, soft cap 3, caller-driven one-time fable-5 tier re-consult.
+- MODIFIED =skills/herdr-subagents/SKILL.md= — opt-in "Advisor strategy" section; frontmatter trigger description, roster allow-list sentence, and retro opt-out sentence updated for the new personas.
+- MODIFIED =skills/herdr-subagents/scripts/src/herdr_subagents/cli.clj= — `delegation-guidance` trigger generalised to "a factual gap or material judgment blocks progress" (applies to every spawning persona's composed prompt).
+- MODIFIED =core_test.clj= (pins rewritten deliberately, advisor-bearing list added) and =cli_test.clj= (`fake-env` isolated fixture rosters + `advisor-strategy-spawn-contract` integration coverage).
+- =skills/herdr-subagents/scripts/docs/contract.md= relevant but deliberately unchanged — zero contract/envelope/gating change is an anti-criterion of this work.
+
+** Risks
+
+- A sonnet-5 executor may skip the mandatory consult or dump transcripts; mitigated by a numbered workflow step and a concrete consult-context template with token budgets. The paired comparison (task:1a2fdaa6) is the compliance check.
+- Per-consult cost exceeds the API version's 400–700 tokens (fresh opus spawn re-orients from scratch); accepted for exploratory work, bounded by blocking one-at-a-time consults and the cap of 3.
+
+** Follow-ups
+
+- task:1a2fdaa6-860d-4210-8d2d-67d4c807a6f3 — paired comparison of `worker` vs `advised-worker` (quality, consult count, token cost; one fable-5-advised run).
+- task:e6229f7b-8018-46c2-9947-9bcbe22b4d56 — harness-agnostic model resolution; until it lands, the new personas' declared models are honoured only for spawns resolving to kind `pi`.
+
+* Plan
+
+** DONE Create =subagents/advisor.md= persona
+CLOSED: [2026-07-29 Wed 11:57]
+:PROPERTIES:
+:CUSTOM_ID: fb878a68-052b-4ca9-a8fc-d15ee1518105
+:CREATED: [2026-07-29 Wed 11:21]
+:STARTED: [2026-07-29 Wed 11:48]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 11:48]
+- State "DONE" from "STARTED" [2026-07-29 Wed 11:57]
+:END:
+
+** DONE Create =subagents/advised-worker.md= persona
+CLOSED: [2026-07-29 Wed 12:00]
+:PROPERTIES:
+:CUSTOM_ID: 5fa8df39-83a6-434b-a7ea-04c153623bbf
+:CREATED: [2026-07-29 Wed 11:21]
+:BLOCKED-BY: task:fb878a68-052b-4ca9-a8fc-d15ee1518105
+:STARTED: [2026-07-29 Wed 11:57]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 11:57]
+- State "DONE" from "STARTED" [2026-07-29 Wed 12:00]
+:END:
+
+** DONE Generalise `delegation-guidance` wording in =cli.clj= and update the pinned test
+CLOSED: [2026-07-29 Wed 11:57]
+:PROPERTIES:
+:CUSTOM_ID: 94bd67a8-6ead-4251-b20c-990ed113f18d
+:CREATED: [2026-07-29 Wed 11:21]
+:STARTED: [2026-07-29 Wed 11:48]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 11:48]
+- State "DONE" from "STARTED" [2026-07-29 Wed 11:57]
+:END:
+
+** DONE Document the advisor strategy in =skills/herdr-subagents/SKILL.md=
+CLOSED: [2026-07-29 Wed 12:00]
+:PROPERTIES:
+:CUSTOM_ID: 488c323d-5b26-423a-b3c8-aa96c74c8415
+:CREATED: [2026-07-29 Wed 11:21]
+:STARTED: [2026-07-29 Wed 11:57]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 11:57]
+- State "DONE" from "STARTED" [2026-07-29 Wed 12:00]
+:END:
+
+* Implementation
+
+- Executed as two waves of two parallel gpt-5.6-terra workers (advisor persona ∥ cli.clj+tests, then advised-worker persona ∥ SKILL.md docs), each wave verified against repo-root `bb test` (314 tests / 1511 assertions green throughout).
+- =cli_test.clj= `fake-env` gained an optional isolated persona-roster parameter, so roster-shape tests no longer depend on the tracked =subagents/= tree — reusable for future persona work.
+- Plan and implementation were each independently reviewed by a gpt-5.6-sol reviewer: the plan review returned five findings (kind-pinning deferred to task:e6229f7b; the other four applied as acceptance amendments and the advised-worker→advisor blocker); the implementation review was APPROVED with no findings, including frontmatter/policy probes via `core/parse-frontmatter` and `resolve-spawns`.
+- Runtime persona compliance by live sonnet/opus/fable agents is deliberately unverified here; it is the subject of the paired-comparison follow-up (task:1a2fdaa6).
