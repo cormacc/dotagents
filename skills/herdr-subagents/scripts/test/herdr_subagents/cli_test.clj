@@ -93,8 +93,9 @@
     (is (zero? (:exit proc)) (:err proc))
     (is (= "" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))
     (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))
-    (is (= "worker-1/scout-1-claude-sonnet-5" (:label entry)))
-    (is (= ["pane" "rename" "w:child" "worker-1/scout-1-claude-sonnet-5"] (vec rename)))
+    ;; The live roster's scout declares the unversioned canonical `claude-sonnet`.
+    (is (= "worker-1/scout-1-claude-sonnet" (:label entry)))
+    (is (= ["pane" "rename" "w:child" "worker-1/scout-1-claude-sonnet"] (vec rename)))
     (is (= {:spawns [] :spawns-source "depth"} (select-keys entry [:spawns :spawns-source])))))
 
 (deftest root-worker-spawn-records-and-injects-frontmatter-policy
@@ -103,9 +104,10 @@
         task (get-in (result proc) [:result :task])
         entry (ledger-entry* dir task)]
     (is (zero? (:exit proc)) (:err proc))
-    (is (= {:spawns ["scout" "researcher"] :spawns-source "frontmatter"}
+    ;; The default `worker` (formerly advised-worker) grants the advisor consult too.
+    (is (= {:spawns ["scout" "researcher" "advisor"] :spawns-source "frontmatter"}
            (select-keys entry [:spawns :spawns-source])))
-    (is (= "scout researcher" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))))
+    (is (= "scout researcher advisor" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))))
 
 (deftest advisor-strategy-spawn-contract
   (testing "the root advised-worker resolves its fixture allow-list"
@@ -177,7 +179,7 @@
         tab (call! tab-env "start" "worker" "--tab" "--task" "tab policy env")]
     (is (zero? (:exit split)) (:err split))
     (is (zero? (:exit tab)) (:err tab))
-    (is (= "scout researcher" (injected-env split-env-file "HERDR_SUBAGENT_SPAWNS")))
+    (is (= "scout researcher advisor" (injected-env split-env-file "HERDR_SUBAGENT_SPAWNS")))
     (is (= (injected-env split-env-file "HERDR_SUBAGENT_SPAWNS")
            (injected-env tab-env-file "HERDR_SUBAGENT_SPAWNS")))))
 
