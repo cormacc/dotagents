@@ -34,6 +34,9 @@ gather-context → take-action → verify-output loop:
    bb script), start one yourself: `bb nrepl-server` (writes `.nrepl-port`)
    in a background terminal — under Herdr (`HERDR_ENV=1`), a new tab in the
    current workspace (`herdr_layout` `tab_create`, then `herdr_pane` `run`).
+   If `bb nrepl-server` fails with address-in-use, an nREPL is already
+   listening on the default port without a discoverable port file — probe
+   that port with an eval and reuse it instead of retrying startup.
    Ephemeral bb scripts have no persistent build watch, so spawning the
    server is the normal bb workflow, not an exception — the never-spawn-a-second
    rule still applies once it is up. For JVM/ClojureScript projects, ask the

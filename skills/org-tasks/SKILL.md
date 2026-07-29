@@ -43,7 +43,7 @@ ot root
 ot list --format json  # result includes resolved root + files.{tasks,local,archive}
 ot show selected --format json
 ot show <id-or-selected>  # text output includes the task body; JSON/EDN retain Task.description
-ot create "New task" --section Improvements --body 'Description text' --linked-issue '[[jira:ABC-1]]'
+ot create "New task" --section Improvements --body 'Description text' --tag mytag --linked-issue '[[jira:ABC-1]]'
 ot move <id> --parent <dest-id>   # reparent an existing subtree in place (--section <name> lifts it back to top level)
 ot status <id> STARTED   # also works for tasks inside linked plan files
 ot priority <id> B       # set/cycle/clear the priority cookie (--cycle forward|back, --clear)

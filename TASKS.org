@@ -190,6 +190,20 @@ Desired outcome: per-harness lookup tables in the herdr-subagents skill mapping 
 
 Origin: mid-implementation discovery that 10c7990 (kindless roster) made every roster `model:` line inert — kind-inheriting spawns resolved model nil and children silently ran on the harness default.
 
+The proposed mappings are tabulated below. Note -- the entries in the claude and codex columns are extrapolated from the ui - they should be verified during planning / execution.
+
+The set of model-ids is not closed -- any model-id in a subagent definition that is not listed in the lookup table should be assumed to be a valid model ID for the user's harness of choice.
+
+| model-id         | pi                         | claude | codex         |
+|------------------+----------------------------+--------+---------------|
+| claude-fable-5   | anthropic/claude-fable-5   | fable  | gpt-5.6-sol   |
+| claude-opus-5    | anthropic/claude-opus-5    | opus   | gpt-5.6-sol   |
+| claude-sonnet-5  | anthropic/claude-sonnet-5  | sonnet | gpt-5.6-terra |
+| claude-haiku-4-5 | anthropic/claude-haiku-4-5 | haiku  | gpt-5.6-luna  |
+| gpt-5.6-sol      | anthropic/claude-opus-5    | opus   | gpt-5.6-sol   |
+| gpt-5.6-terra    | anthropic/claude-sonnet-5  | sonnet | gpt-5.6-terra |
+| gpt-5.6-luna     | anthropic/claude-haiku-4-5 | haiku  | gpt-5.6-luna  |
+
 ** TODO ot move: TUI/pi-overlay exposure and --before/--after ordering
 :PROPERTIES:
 :CUSTOM_ID: da7350ac-60c6-4336-9b7e-e0cbce51658c
@@ -242,7 +256,7 @@ Under `start` (non-blocking waiting policy), `subagent publish` currently emits 
 :LOGBOOK:
 - Created [2026-07-29 Wed 11:45]
 :END:
-With `:BLOCKED-BY: task:<uuid>` where both the blocked task and the blocker live in the same #+IMPORT:-linked plan file (observed: design/log/2026-07-29-subagent-implement-the-advisor-strategy.org, blocked 5fa8df39 -> blocker fb878a68), `ot ready <id>` returns gating reason `unresolved-task` although `ot show <blocker-id>` resolves the same UUID. Expected: ready resolves task blockers across plan files like other ID-accepting commands and reports open/closed status instead. Also observed: text-mode `ot blocker list` printed "(no blockers)" immediately after a successful `ot blocker add` while `--format json` showed the blocker — likely a related resolution/rendering issue.
+With `:BLOCKED-BY: task:<uuid>` where both the blocked task and the blocker live in the same #+IMPORT:-linked plan file (observed: design/log/2026-07-29-subagent-implement-the-advisor-strategy.org, blocked 5fa8df39 -> blocker fb878a68), `ot ready <id>` returns gating reason `unresolved-task` although `ot show <blocker-id>` resolves the same UUID. Expected: ready resolves task blockers across plan files like other ID-accepting commands and reports open/closed status instead. Also observed: text-mode `ot blocker list` printed "(no blockers)" immediately after a successful `ot blocker add` while `--format json` showed the blocker — likely a related resolution/rendering issue. Narrowing observation: once the blocker task transitioned to DONE, `ot ready` resolved the same reference correctly (`ready: true`) — the `unresolved-task` misreport occurs only while the plan-file blocker is still open.
 
 * Housekeeping
 
@@ -374,3 +388,22 @@ Origin:
 Evidence:
 - design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org (amended citations show the target form)
 - Reviewer/planner PROCESS testimony from tasks 14cb1872, 5ea6892a, bba20351 (herdr-subagents ledger)
+
+** TODO ot: add a tag mutator for existing tasks :skill_org-tasks:
+:PROPERTIES:
+:CUSTOM_ID: df9f0e03-f75a-4981-9e6e-de7218619917
+:CREATED: [2026-07-29 Wed 12:25]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 12:25]
+:END:
+No `ot` command adds or removes tags on an existing task, so tag changes require hand-editing the org heading — unlike every other protocol field (status, priority, blockers, issues, handoff). Desired outcome: an `ot tag add|remove <id> <tag>` mutator (mirroring `ot issue`/`ot blocker` shape) that works for tasks in TASKS*.org and #+IMPORT:-linked plan files.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: cormacc/dotagents @ main
+- timestamp: [2026-07-29 Wed 12:35]
+- sender: agent
+
+Evidence:
+Session retro: created a shared task with `ot create` (initially without --tag), then had to hand-edit the heading to append :skill_herdr-subagents: because no post-hoc tag mutation command exists.
