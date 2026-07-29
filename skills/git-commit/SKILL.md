@@ -20,6 +20,11 @@ notes below are the project-specific bits worth restating.
    `git diff HEAD` does *not* include untracked files; check `git status` for
    them.
 
+   If a requested standalone commit depends on other uncommitted work,
+   surface the dependency and propose dependency-ordered commits instead;
+   verify each intermediate tree (e.g. run the test suite) before
+   committing it.
+
 2. Pick the type:
    - `feat` — new functionality
    - `fix` — bug fix

@@ -429,3 +429,22 @@ Origin:
 
 Evidence:
 Session retro: created a shared task with `ot create` (initially without --tag), then had to hand-edit the heading to append :skill_herdr-subagents: because no post-hoc tag mutation command exists.
+
+** TODO subagent: validate artifact paths at publish time (relative paths currently fail only at collect) :skill_herdr-subagents:
+:PROPERTIES:
+:CUSTOM_ID: 7a06633b-41b4-42a2-b072-a98213a3d30a
+:CREATED: [2026-07-29 Wed 14:01]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 14:01]
+:END:
+Result publication is once-only, but ARTIFACTS paths are only validated at collect: a child that publishes relative artifact paths produces a COMPLETE-but-invalid envelope ('artifact path must be absolute') that cannot be republished, forcing the parent to validate identity manually against the ledger and capture artifacts by hand. Move the check into `subagent publish` -- reject (or absolutize against the assignment root) relative ARTIFACTS entries before the RESULT file is written, so the child can correct and retry within the same session. Keep collect-side validation as the backstop. Update scripts/docs/contract.md (envelope/§ Ledger and completion) to state publish-time validation.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-07-29 Wed 14:00]
+- sender: agent
+
+Evidence:
+Session task ac6a09be (docs advised-worker, model-resolution change): collect returned status 'invalid', reason 'artifact path must be absolute' for 'skills/herdr-subagents/SKILL.md'; re-prompting the child could not repair it because publish is immutable; parent validated the envelope manually and closed the pane by hand.

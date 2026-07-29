@@ -18,6 +18,7 @@
 
 # File operations
 - Use `rg` for file and content searches.
+- Single-quote shell search patterns containing backticks or `$` (common with markdown-derived text); double quotes invite command substitution.
 - Prefer available structured read/edit tools over ad-hoc scripts for routine file inspection and modification.
 - When scripting is necessary, prefer Babashka to Python for repository-local automation. Use Python when invoking an existing Python tool or when its ecosystem is materially better suited.
 - For scripted transformations, write a candidate under `<repository-root>/.agents/tmp/`, inspect its diff, and only then replace the source; do not perform unverified in-place rewrites.
