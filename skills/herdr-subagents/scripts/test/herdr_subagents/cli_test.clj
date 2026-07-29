@@ -653,11 +653,13 @@
     (is (= "--model" (get-in config [:harnesses :pi :model-flag])))
     (is (= "--model" (get-in config [:harnesses :claude :model-flag])))
     (is (= "--model" (get-in config [:harnesses :codex :model-flag])))
-    ;; `gpt-*` canonical IDs are deliberate tier-equivalence remaps onto the anthropic
-    ;; pi/claude columns, not identity claims; a codex spawn runs the gpt-* ID itself.
-    (is (= {:pi "anthropic/claude-sonnet-5" :claude "sonnet" :codex "gpt-5.6-terra"} (get-in config [:models "gpt-5.6-terra"])))
-    (is (= {:pi "anthropic/claude-opus-5" :claude "opus" :codex "gpt-5.6-sol"} (get-in config [:models "gpt-5.6-sol"])))
-    (is (= {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"} (get-in config [:models "gpt-5.6-luna"])))
+    ;; Pi receives the configured OpenAI model for `gpt-*`; only the claude/codex
+    ;; columns use tier-equivalent cross-provider mappings.
+    (is (= {:pi "openai-codex/gpt-5.6-terra" :claude "sonnet" :codex "gpt-5.6-terra"} (get-in config [:models "gpt-5.6-terra"])))
+    (is (= {:pi "openai-codex/gpt-5.6-sol" :claude "opus" :codex "gpt-5.6-sol"} (get-in config [:models "gpt-5.6-sol"])))
+    (is (= {:pi "openai-codex/gpt-5.6-luna" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"} (get-in config [:models "gpt-5.6-luna"])))
+    (is (= ["--model" "openai-codex/gpt-5.6-sol"] (core/model-args config "pi" "gpt-5.6-sol")))
+    (is (= ["--model" "opus"] (core/model-args config "claude" "gpt-5.6-sol")))
     ;; The undocumented `haiku` alias is deliberately not used for the claude column.
     (is (= "claude-haiku-4-5" (get-in config [:models "claude-haiku-4-5" :claude])))
     ;; Unversioned canonical IDs are floating aliases for the latest version of the tier.

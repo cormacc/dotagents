@@ -9,7 +9,7 @@
 
 # Subagents
 - Reusable subagent definitions live in `~/.agents/subagents/` (global) and `<git-root>/.agents/subagents/` (project). To delegate work inside Herdr, use the `herdr-subagents` skill.
-- For unqualified subagent model names, route `gpt-*` through `openai-codex`, `claude-*` through `anthropic`, and other models through `lemonade`. Preserve explicitly provider-qualified model names.
+- Resolve a subagent's kind independently from its model: explicit kind request, then persona definition, then parent kind. Do not select a harness from an unqualified model prefix. Translate the resolved model through that kind's roster column; Pi receives the configured provider-qualified `:pi` model.
 
 # Git operations
 - When moving files controlled by git, ALWAYS use `git mv` rather than `mv` -- this preserves history.
