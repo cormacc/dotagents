@@ -1,0 +1,44 @@
+#+TITLE: subagents: workflow specifications :skill_herdr-subagents:
+#+DATE: 2026-07-29 Wed
+#+PARENT: [[archive:5f0a07e4-27c2-466b-8643-94800fcad0a6][subagents: workflow specifications :skill_herdr-subagents:]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Intent
+
+Evaluate how reusable Herdr/subagent choreography should be packaged without weakening the existing persona, result-envelope, and pane-ownership contracts.
+
+* Summary
+
+*Level:* exploration · *Tests:* none · *Docs:* inline
+
+** Scope
+
+*** In scope
+
+- Whether multi-agent and pane/job workflows belong in skills or a declarative registry.
+- Global versus project-local placement and the treatment of persistent agents and build/watch jobs.
+
+*** Out of scope
+
+- Implementing a workflow runner, schema, or new workflow definitions.
+- Changing the Herdr or herdr-subagents contracts.
+
+** Decisions
+
+- Skills first; no workflow-definition format yet :: reusable, judgment-heavy choreography should be an individual skill which loads and composes =herdr= and =herdr-subagents=. Project-specific repeated choreography may be a project-local skill; ordinary development commands remain documented project commands.
+  Rejected:
+  - A dedicated workflow registry now: it would be unvalidated prose until it has a runner with typed parameters, dependency/wait semantics, result handling, ownership-scoped cleanup, and failure recovery.
+  - Extending =.agents/subagents/=: that namespace is already exclusively the atomically shadowed persona and roster-override surface.
+- Keep long-running jobs outside the subagent protocol :: build/CI/dev watchers run in direct, session-owned Herdr panes. They do not have the single-assignment result-envelope lifecycle required of a delegated subagent.
+- Treat residents as exceptional session resources :: the current contract permits validated reuse only after completion and offers no generic re-task lifecycle. Do not make persistence a declarative primitive until that lifecycle is implemented.
+- Reserve a separate workflow namespace only if repetition proves a declarative graph :: a future =herdr-workflows= capability may own a separate =.agents/workflows/= resolver and runner; it must not be folded into the subagent roster.
+
+** Shipped
+
+- Documented the evaluation conclusion: skill-based composition is the current implementation path; a declarative workflow system is deferred pending a validated execution contract.
+
+* Plan
+
+* Implementation
+
+- Reviewed =skills/herdr/SKILL.md=, =skills/herdr-subagents/SKILL.md=, its CLI contract and maintenance notes, and the existing persona/roster conventions. The CLI intentionally supports one child per invocation; fan-out and resident lifecycle remain parent policy.

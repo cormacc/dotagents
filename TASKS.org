@@ -164,19 +164,6 @@ Split `parser.clj` (772 LOC) internals behind the existing `org-tasks.parser` fa
 :END:
 Target: https://github.com/ogulcancelik/herdr, canonical source src/integration/assets/pi/herdr-agent-state.ts (embedded by src/integration/mod.rs). Replace retryGraceMs/retryableErrorPattern and agent_end completion guesses with working state through agent_settled; retain the terminal agent_end error until settlement, then report blocked or idle; retain and idempotently invoke the herdr:blocked event unsubscriber on session_shutdown, including reload/session replacement coverage. Do not edit dotagents pi/extensions/herdr-agent-state.ts directly because Herdr regenerates it.
 
-** TODO subagents: workflow specifications :skill_herdr-subagents:
-:PROPERTIES:
-:CUSTOM_ID: 5f0a07e4-27c2-466b-8643-94800fcad0a6
-:CREATED: [2026-07-28 Tue 11:13]
-:END:
-:LOGBOOK:
-- Created [2026-07-28 Tue 11:13]
-:END:
-It can be useful to define a workflow involving one or more subagents and/or herdr splits/panes running project tasks (e.g. a build or CI watch task).
-These may be defined globally or project-locally.
-Workflows may specify delegation to ephemeral and/or persistent subagents.
-Consider whether individual workflows should be defined as skills leveraging the herdr-subagents skill, or in a dedicated subfolder of .agents referenced by the herdr-subagents skill.
-
 ** TODO ot move: TUI/pi-overlay exposure and --before/--after ordering
 :PROPERTIES:
 :CUSTOM_ID: da7350ac-60c6-4336-9b7e-e0cbce51658c

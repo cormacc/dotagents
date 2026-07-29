@@ -1554,3 +1554,21 @@ CLOSED: [2026-07-29 Wed 17:51]
 - State "DONE" from "STARTED" [2026-07-29 Wed 17:51]
 :END:
 #+IMPORT: [[plan:2026-07-29-org-tasks-housekeeping.org]]
+
+** DONE subagents: workflow specifications :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 18:03]
+:PROPERTIES:
+:CUSTOM_ID: 5f0a07e4-27c2-466b-8643-94800fcad0a6
+:CREATED: [2026-07-28 Tue 11:13]
+:ARCHIVED: [2026-07-29 Wed 18:03]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-28 Tue 11:13]
+- State "DONE" from "TODO" [2026-07-29 Wed 18:03]
+:END:
+#+IMPORT: [[plan:2026-07-29-subagents-workflow-specifications-skill.org]]
+It can be useful to define a workflow involving one or more subagents and/or herdr splits/panes running project tasks (e.g. a build or CI watch task).
+These may be defined globally or project-locally.
+Workflows may specify delegation to ephemeral and/or persistent subagents.
+Consider whether individual workflows should be defined as skills leveraging the herdr-subagents skill, or in a dedicated subfolder of .agents referenced by the herdr-subagents skill.
