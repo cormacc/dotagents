@@ -1,7 +1,7 @@
 ---
 name: worker
 description: Implements a scoped task, verifies its acceptance criteria, and reports concrete changes and test evidence
-model: anthropic/claude-opus-5
+model: claude-opus-5
 spawns: scout researcher
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: advised-worker
 description: Implements a scoped task with focused frontier-advisor consultation, verifies acceptance criteria, and reports concrete changes and test evidence
-model: anthropic/claude-sonnet-5
+model: claude-sonnet-5
 spawns: scout researcher advisor
 ---
 

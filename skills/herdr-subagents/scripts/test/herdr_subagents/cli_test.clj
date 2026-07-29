@@ -4,8 +4,10 @@
             [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [herdr-subagents.cli :as cli]
             [herdr-subagents.core :as core]
-            [herdr-subagents.herdr :as herdr]))
+            [herdr-subagents.herdr :as herdr]
+            [herdr-subagents.ledger :as ledger]))
 
 (defn- git-toplevel []
   (let [proc @(process/process ["git" "rev-parse" "--show-toplevel"] {:out :string :err :string})]
@@ -641,3 +643,144 @@
         (is (zero? (:exit proc)) (str argv " -> " (:err proc)))
         (is (str/starts-with? (:out proc) "subagent run|start"))
         (is (not (str/includes? (:out proc) "\"ok\"")))))))
+
+;; Ties the shipped default table to the record's verified rows, independent of the
+;; loader/translation machinery under test elsewhere in this namespace.
+(deftest default-roster-table-content-contract
+  (let [config (core/parse-roster "roster.edn" (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "roster.edn"))))]
+    (is (= "--model" (get-in config [:harnesses :pi :model-flag])))
+    (is (= "--model" (get-in config [:harnesses :claude :model-flag])))
+    (is (= "--model" (get-in config [:harnesses :codex :model-flag])))
+    ;; `gpt-*` canonical IDs are deliberate tier-equivalence remaps onto the anthropic
+    ;; pi/claude columns, not identity claims; a codex spawn runs the gpt-* ID itself.
+    (is (= {:pi "anthropic/claude-sonnet-5" :claude "sonnet" :codex "gpt-5.6-terra"} (get-in config [:models "gpt-5.6-terra"])))
+    (is (= {:pi "anthropic/claude-opus-5" :claude "opus" :codex "gpt-5.6-sol"} (get-in config [:models "gpt-5.6-sol"])))
+    (is (= {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"} (get-in config [:models "gpt-5.6-luna"])))
+    ;; The undocumented `haiku` alias is deliberately not used for the claude column.
+    (is (= "claude-haiku-4-5" (get-in config [:models "claude-haiku-4-5" :claude])))
+    ;; Unversioned canonical IDs are floating aliases for the latest version of the tier.
+    (doseq [[unversioned latest] [["claude-fable" "claude-fable-5"] ["claude-opus" "claude-opus-5"]
+                                  ["claude-sonnet" "claude-sonnet-5"] ["claude-haiku" "claude-haiku-4-5"]
+                                  ["gpt-sol" "gpt-5.6-sol"] ["gpt-terra" "gpt-5.6-terra"] ["gpt-luna" "gpt-5.6-luna"]]]
+      (is (= (get-in config [:models latest]) (get-in config [:models unversioned]))
+          (str unversioned " resolves to the same row as " latest)))
+    (is (= ["--model" "gpt-5.6-terra"] (core/model-args config "codex" "claude-sonnet-5")))))
+
+;; Loader precedence, row-level replacement, missing/malformed/invalid-shape handling,
+;; and bare-subtree/relocated-root path derivation, exercised directly against
+;; `cli/roster-config` (no subprocess needed) so `user.home` never enters the picture
+;; — `home` is an explicit injected argument, and `launcher-bin`/`assignment-root` are
+;; stubbed via `with-redefs` rather than relying on `$HOME`, which Babashka's
+;; `user.home` property does not observe (see cli_test.clj fake-env docstring).
+(deftest roster-config-loader-precedence-and-deployment-modes
+  (let [tmp (str (fs/create-temp-dir {:prefix "roster-loader-"}))
+        ;; A bare-subtree install: only `scripts/` + a sibling `roster.edn`, nested under
+        ;; arbitrary ancestor names with no `bb.edn` anywhere — proving derivation is from
+        ;; the launcher path alone, never cwd/git.
+        launcher (str (fs/path tmp "install" "a" "b" "skills" "herdr-subagents" "scripts" "subagent"))
+        default-roster (fs/path tmp "install" "a" "b" "skills" "herdr-subagents" "subagents" "roster.edn")
+        home-dir (str (fs/path tmp "home"))
+        project-root (str (fs/path tmp "project"))
+        project-roster (fs/path project-root ".agents" "subagents" "roster.edn")
+        home-roster (fs/path home-dir ".agents" "subagents" "roster.edn")]
+    (fs/create-dirs (fs/parent default-roster))
+    (fs/create-dirs project-root) (fs/create-dirs home-dir)
+    (spit (str default-roster) (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "roster.edn"))))
+    (with-redefs [cli/launcher-bin (constantly launcher) ledger/assignment-root (constantly project-root)]
+      (testing "default only"
+        (let [config (cli/roster-config home-dir)]
+          (is (= "opus" (get-in config [:models "claude-opus-5" :claude])))
+          (is (= "--model" (get-in config [:harnesses :codex :model-flag])))))
+      (testing "home override replaces a row"
+        (fs/create-dirs (fs/parent home-roster))
+        (spit (str home-roster) "{:models {\"claude-opus-5\" {:claude \"opus-home\"}}}")
+        (is (= "opus-home" (get-in (cli/roster-config home-dir) [:models "claude-opus-5" :claude]))))
+      (testing "project beats home for the same ID; row-level replacement drops untouched columns"
+        (fs/create-dirs (fs/parent project-roster))
+        (spit (str project-roster) "{:models {\"claude-opus-5\" {:claude \"opus-project\"}}}")
+        (let [config (cli/roster-config home-dir)]
+          (is (= "opus-project" (get-in config [:models "claude-opus-5" :claude])))
+          ;; The overridden row replaces the whole default row: :pi/:codex are gone, not
+          ;; deep-merged alongside the new :claude value.
+          (is (nil? (get-in config [:models "claude-opus-5" :pi])))))
+      (testing "missing override files are silently ignored"
+        (fs/delete home-roster) (fs/delete project-roster)
+        (is (= "opus" (get-in (cli/roster-config home-dir) [:models "claude-opus-5" :claude]))))
+      (testing "malformed EDN in an override throws naming its path"
+        (spit (str project-roster) "{:models")
+        (is (try (cli/roster-config home-dir) false
+                 (catch clojure.lang.ExceptionInfo e (= (str project-roster) (:path (ex-data e))))))
+        (fs/delete project-roster))
+      (testing "a structurally invalid override throws naming its path"
+        (spit (str project-roster) "{:harnesses {:pi {:model-flag \"\"}}}")
+        (is (try (cli/roster-config home-dir) false
+                 (catch clojure.lang.ExceptionInfo e (= (str project-roster) (:path (ex-data e))))))
+        (fs/delete project-roster))
+      (testing "portability: an override adding a new harness + model column translates for unmodified code"
+        (spit (str project-roster) "{:harnesses {:gemini {:model-flag \"--model\"}} :models {\"claude-opus-5\" {:gemini \"gemini-2.5-pro\"}}}")
+        (let [config (cli/roster-config home-dir)]
+          (is (= ["--model" "gemini-2.5-pro"] (core/model-args config "gemini" "claude-opus-5")))
+          ;; A kind still absent from `:harnesses` remains empty args — the addition is
+          ;; purely additive data, no code change and no other kind affected.
+          (is (= [] (core/model-args config "vertex" "claude-opus-5"))))
+        (fs/delete project-roster)))
+    (testing "missing shipped default is fatal"
+      (with-redefs [cli/launcher-bin (constantly (str (fs/path tmp "empty-install" "skills" "herdr-subagents" "scripts" "subagent")))
+                    ledger/assignment-root (constantly project-root)]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"missing shipped default roster table" (cli/roster-config home-dir)))))))
+
+(def roster-model-personas
+  {"canonical-worker" "---\nname: canonical-worker\ndescription: fixture canonical-id persona\nkind: pi\nmodel: claude-opus-5\n---\nFixture canonical worker.\n"
+   "kindless-worker" "---\nname: kindless-worker\ndescription: fixture kindless canonical-id persona\nmodel: claude-opus-5\n---\nFixture kindless worker.\n"})
+(defn- start-native-args [log]
+  (first (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+(defn- flag-value [argv flag] (second (drop-while #(not= flag %) argv)))
+
+;; Acceptance: a definition model survives a kind override instead of being dropped (the
+;; retired paired kind+model rule), and is translated for the resolved kind.
+(deftest kind-override-retains-and-translates-the-definition-model
+  (let [{:keys [env log]} (fake-env {} roster-model-personas)
+        proc (call! env "start" "canonical-worker" "--kind" "claude" "--task" "kind override retains model")]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "opus" (flag-value (start-native-args log) "--model")))))
+
+;; Acceptance: a kindless roster model is now honoured for any resolved kind, not only
+;; pi (the retired pi-only kindless guard).
+(deftest kindless-model-is-honoured-for-any-resolved-kind
+  (let [{:keys [env log]} (fake-env {} roster-model-personas)
+        proc (call! env "start" "kindless-worker" "--kind" "claude" "--task" "kindless model non-pi kind")]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "opus" (flag-value (start-native-args log) "--model")))))
+
+;; Preview case: `--print-prompt` (against the fake herdr CLI) reports both the
+;; canonical resolved model and the effective translated native model args.
+(deftest preview-shows-canonical-and-translated-model
+  (let [{:keys [env]} (fake-env {} roster-model-personas)
+        proc (call! env "run" "canonical-worker" "--kind" "claude" "--task" "preview translation" "--print-prompt")]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "claude-opus-5" (get-in (result proc) [:result :model])))
+    (is (= ["--model" "opus"] (get-in (result proc) [:result :model-args])))))
+
+;; A `SUBAGENT_ASSIGNMENT_ROOT` relocation (the fixture's `dir`, distinct from the real
+;; repo root) resolves the project roster override under the relocated root, winning
+;; over the shipped default.
+(deftest relocated-assignment-root-resolves-project-roster-override
+  (let [{:keys [env dir]} (fake-env {} roster-model-personas)]
+    (spit (str (fs/path dir ".agents" "subagents" "roster.edn")) "{:models {\"claude-opus-5\" {:claude \"opus-relocated\"}}}")
+    (let [proc (call! env "run" "canonical-worker" "--kind" "claude" "--task" "relocated override" "--print-prompt")]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= ["--model" "opus-relocated"] (get-in (result proc) [:result :model-args]))))))
+
+(def minimal-persona
+  {"probe" "---\nname: probe\ndescription: fixture persona for roster fail-fast\nkind: pi\n---\nFixture probe.\n"})
+
+;; Config is loaded and schema-validated before any ledger allocation or pane mutation:
+;; a malformed project override must abort the whole spawn before either exists.
+(deftest invalid-roster-override-fails-before-ledger-or-mutation
+  (let [{:keys [env log dir]} (fake-env {} minimal-persona)]
+    (spit (str (fs/path dir ".agents" "subagents" "roster.edn")) "{:harnesses {:pi {:model-flag \"\"}}}")
+    (let [proc (call! env "start" "probe" "--task" "invalid roster aborts")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"model-flag" (:out proc)))
+      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))
+      (is (not-any? mutating? (calls log))))))

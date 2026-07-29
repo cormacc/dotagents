@@ -1,0 +1,211 @@
+#+TITLE: subagent: harness-agnostic model resolution via per-harness lookup tables :skill_herdr-subagents:
+#+DATE: 2026-07-29 Wed
+#+PARENT: [[archive:e6229f7b-8018-46c2-9947-9bcbe22b4d56][subagent: harness-agnostic model resolution via per-harness lookup tables :skill_herdr-subagents:]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-subagents/scripts/docs/contract.md]]
+
+* Intent
+
+Make a persona's declared =model:= take effect regardless of the resolved harness kind by translating canonical model IDs through per-harness lookup tables in the subagent CLI, replacing the interim pi-only kindless-model exception from [[plan:2026-07-27-subagent-per-persona-spawn-capability-re.org]]. Unlisted model IDs pass through unchanged so the ID set stays open.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* inline + SKILL.md/contract.md
+
+** Scope
+
+*** In scope
+- Canonical model-ID → per-harness-syntax lookup table externalised as EDN, applied to the resolved model at spawn time (frontmatter, `--model` flag, and same-kind parent inheritance all flow through it).
+- Default table ships at `skills/herdr-subagents/subagents/roster.edn`; local overrides at `<git-root>/.agents/subagents/roster.edn` then `~/.agents/subagents/roster.edn` (project wins, mirroring persona resolution), merged per model-ID over the default.
+- Path resolution is pinned per deployment mode: the default table resolves relative to the installed skill/launcher location (bare-subtree installs included), and the project override resolves under `ledger/assignment-root` (the existing `SUBAGENT_ASSIGNMENT_ROOT` relocation semantics), never a fresh cwd/git probe.
+- The EDN table is a first-class skill artifact: SKILL.md § Manual fallback directs an agent without the `subagent` CLI to read the table chain and translate models by hand.
+- The harness set is open: roster.edn carries a `:harnesses` section declaring how each kind receives a model (flag spelling), and model rows may carry columns for any kind. An override file can add a new harness + model columns to evaluate a new tool with no skill update, provided herdr itself supports the kind.
+- Retire the pi-only exception in `resolve-model`: a frontmatter model is honoured for any resolved kind via translation.
+- Retire the paired kind+model drop rule: a definition model survives a kind override instead of being dropped — translation makes it portable, so the drop is legacy noise.
+- Extend `model-args` so codex spawns receive a model argument (currently only `pi`/`claude` do); verify the codex CLI flag first.
+- Verify the extrapolated claude/codex column values against the actual CLIs before implementation (task body table is UI-extrapolated).
+- Update [[proj:skills/herdr-subagents/SKILL.md]] § Roster and routing and [[proj:skills/herdr-subagents/scripts/docs/contract.md]] to document canonical IDs, the table, and the pass-through fallback.
+- Migrate the eight roster definitions in [[proj:subagents/]] from pi `provider/model` syntax to canonical IDs.
+
+*** Out of scope
+- Cross-kind parent-model inheritance (a child resolving to a different kind than its parent still inherits no model).
+- Reverse mapping harness-native model strings back to canonical IDs.
+- Any change to spawn gating, depth bounds, ledger, envelope, or label grammar.
+- Harness entries beyond pi/claude/codex in the *default* roster.edn (overrides own experimental kinds).
+- Teaching herdr new agent kinds — `:harnesses` only tells the subagent CLI how to pass a model to a kind herdr already recognises; kind validation stays herdr's.
+
+** Acceptance
+
+*** Core functionality
+- [X] Kindless roster `model: claude-opus-5` yields `--model opus` when the resolved kind is `claude` → spec:[[proj:skills/herdr-subagents/SKILL.md]] test:`cli_test.clj` deftest `kindless-model-is-honoured-for-any-resolved-kind`
+- [X] The same persona yields `--model anthropic/claude-opus-5` for kind `pi` and the verified codex equivalent for kind `codex`.
+- [X] `gpt-*` canonical IDs resolve to their tabled pi/claude equivalents (e.g. `gpt-5.6-terra` → pi `anthropic/claude-sonnet-5`, claude `sonnet`).
+- [X] A definition model survives a kind override: definition `kind: pi` + `model: claude-opus-5` spawned with `--kind claude` yields `--model opus`.
+- [X] A model ID absent from the table passes through unchanged to the resolved harness.
+- [X] `model-args` emits a model argument for kind `codex`.
+- [X] All eight roster definitions in `subagents/` declare canonical model IDs.
+- [X] The default table is valid EDN at `skills/herdr-subagents/subagents/roster.edn` and is the single source the CLI loads.
+- [X] A model-ID row in an override file replaces the default row for that ID.
+- [X] `model-args` is driven by the merged `:harnesses` section, not a hardcoded kind set.
+- [X] An override adding a `:harnesses` entry plus model columns for a new kind yields translated model args for that kind with no code or skill change.
+- [X] A resolved kind with no `:harnesses` entry yields empty model args (today's behaviour for unlisted kinds).
+- [X] `--print-prompt` reports both the canonical resolved model and the effective translated model / native model args from the merged config.
+- [X] SKILL.md and contract.md document the canonical-ID contract, the table file chain, and the pass-through fallback.
+- [X] SKILL.md § Manual fallback names the table files so a CLI-less agent can translate models directly.
+
+*** Edge cases
+- [X] Nil resolved model still yields empty `model-args`.
+- [X] Explicit `--model <canonical-id>` on a spawn is translated the same as a frontmatter model.
+- [X] Pane labels are unchanged by the roster migration (`model-basename` of `claude-opus-5` equals the basename of `anthropic/claude-opus-5`).
+- [X] Missing override files are silently ignored; project override wins over home override for the same model ID; a missing *shipped default* table is fatal.
+- [X] A malformed or structurally invalid table/override (non-map `:harnesses`, non-string model value, blank `:model-flag`, …) fails with a path-bearing error *before* any ledger allocation or pane mutation, never a silent fallback.
+- [X] A bare-subtree skill install still resolves the shipped default table; a `SUBAGENT_ASSIGNMENT_ROOT` relocation resolves the project override under the relocated root.
+
+*** Anti-criteria
+- [X] Must not: emit a tabled model ID's wrong-harness spelling — a tabled ID always translates for the resolved kind (unlisted IDs pass through by contract, and their spelling is the declarer's responsibility).
+- [X] Must not: fail or warn on an unlisted model ID — the ID set is open by contract.
+- [X] Must not: fail or warn on a kind with no `:harnesses` entry — the kind set is open by contract.
+- [X] Must not: perform kind validation in the subagent CLI — herdr owns which kinds exist.
+- [X] Must not: change spawn-policy, depth, ledger, or envelope behaviour.
+
+** Decisions
+- Canonical table is external EDN with a local-override chain :: `skills/herdr-subagents/subagents/roster.edn` (default) ← `~/.agents/subagents/roster.edn` ← `<git-root>/.agents/subagents/roster.edn` (project wins, mirroring persona-definition precedence). Data inside the skill tree keeps the table readable by the manual-fallback path (agent driving the herdr CLI directly, no `subagent` script), and overrides absorb model churn without touching the skill repo. Revised from the initial in-code `def` after review.
+  Rejected:
+  - `def` in `core.clj`: invisible to the manual-fallback path and forces a skill-repo edit for every model change.
+  - Per-persona frontmatter columns (`model-claude:` …): duplicates the table across eight personas and drifts.
+- EDN shape is `{:harnesses {:pi {:model-flag "--model"} …} :models {"<canonical-id>" {:pi "…" :claude "…" :codex "…"}}}` :: `:harnesses` makes the kind set open — model-flag knowledge moves from `core.clj` into data, so overrides can onboard new tools; model-row keys are arbitrary kind keywords resolved against it.
+  Rejected:
+  - Hardcoded kind set in `model-args`: every new harness needs a skill push, defeating the portability goal.
+  - Per-harness arg templates (`--model=<m>`, positional forms): YAGNI — a single `:model-flag` producing `[flag model]` covers pi/claude/codex; extend the schema when a real harness needs more.
+- Override merge is row-level (per model ID, and per harness ID in `:harnesses`), not deep :: a row you override is a row you own; partial per-kind deep-merge makes effective values hard to predict from any single file.
+- Table config is loaded and schema-validated before any ledger or pane mutation :: fail-fast at the `model-args` boundary (`cli.clj:238`) would fire after ledger allocation and pane creation, which is not fail-fast at all. Validation covers parse errors *and* shape/type errors (schema allows sparse model rows and open keyword harness IDs); explicit user config must not silently no-op (same rationale as the `--retro` fail-fast precedent). A missing override file is not an error; a missing shipped default is fatal.
+- Default table resolves from the installed skill/launcher location; project override from `ledger/assignment-root` :: two independent roots — a loader rooted at the assignment project cannot find a globally installed skill default, and one rooted at cwd/git ignores a relocated `SUBAGENT_ASSIGNMENT_ROOT`. Mirrors how persona lookup already resolves (`cli.clj:44-49`).
+- Paired kind+model drop rule removed :: the drop existed only because a pi-syntax model was meaningless to another harness; canonical IDs + translation void that premise. `resolve-model` simplifies to requested > frontmatter model > same-kind parent inheritance > nil.
+- Translation applied to the *resolved* model at the `model-args` boundary :: one choke point covers frontmatter, `--model` flag, and same-kind parent inheritance uniformly; `resolve-model` keeps choosing *which* declaration wins, translation decides *how it is spelled*.
+- `gpt-*` → anthropic mappings on pi (and vice versa on codex) are deliberate tier-equivalence remaps, not identity claims :: a persona author picks a capability tier; each harness runs its best equivalent.
+
+** Shipped
+- ADDED [[proj:skills/herdr-subagents/subagents/roster.edn]] — default canonical model table (`:harnesses` pi/claude/codex + fourteen `:models` rows: seven CLI-verified versioned IDs plus unversioned floating aliases `claude-{fable,opus,sonnet,haiku}` / `gpt-{sol,terra,luna}` resolving to the latest tier version). Post-closure adjustment: relocated from the skill root into `subagents/` and aliases added on user request.
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] — § Roster and routing states the canonical-ID + roster.edn-chain contract (pi-only kindless sentence and paired-kind drop rule deleted); § Manual fallback adds the read-table-and-translate step; § Advisor strategy example uses a canonical ID.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] — new § Model resolution (shape, chain, row-level merge, pre-mutation fail-fast, open ID/kind contracts, preview fields); `SUBAGENT_ASSIGNMENT_ROOT` also governs the project roster.edn override.
+- `core.clj`: `translate-model` (pure), data-driven `model-args`, `resolve-model` simplified to requested > frontmatter > same-kind inheritance > nil, `parse-roster`/`merge-roster` + path-bearing shape validation. `cli.clj`: default←home←project loader (skill-location default, assignment-root project override), config validated before ledger/pane mutation, `--print-prompt` reports `:model-args` alongside the canonical model.
+- MODIFIED `subagents/*.md` (all eight) — frontmatter `model:` migrated to canonical IDs.
+- Tests: 314→323 deftests, 1511→1569 assertions, green.
+
+** Gotchas
+- The claude `haiku` alias is undocumented (docs list `sonnet`/`opus`; local help adds `fable`) — the haiku-tier rows use the full model name `claude-haiku-4-5` instead.
+- Bare-subtree installs must ship the whole skill directory, not just `scripts/`: the default table lives at `subagents/roster.edn` in the skill tree, and the launcher resolves it from the installed skill location (the bare-subtree test fixture initially copied only `scripts/`).
+- `cli_test.clj`'s default fake-env `.agents/subagents/` is a symlink into the live tracked `subagents/` dir — tests writing roster overrides there must pass an explicit personas map or they mutate the repo.
+- Babashka's `(System/getProperty "user.home")` ignores a subprocess `$HOME` override — tests exercising the home-override leg must inject the home path rather than rely on env isolation.
+- Subagent result publish is once-only: an envelope rejected by `collect` validation (e.g. relative artifact paths) cannot be repaired by re-prompting the child; the parent must validate identity manually against the ledger and capture the artifacts itself.
+
+** Risks
+- The override chain reads user-editable files at spawn time; a stale or experimental override can silently redirect every child's model. Accepted: row-level replace + pre-mutation fail-fast keep effective values predictable, and `--print-prompt` exposes both the canonical and the effective translated model.
+
+* Plan
+
+** DONE Verify per-harness model syntax against the actual CLIs
+CLOSED: [2026-07-29 Wed 12:58]
+:PROPERTIES:
+:CUSTOM_ID: 29f76a25-5904-4f0f-8db9-09622c606914
+:CREATED: [2026-07-29 Tue]
+:STARTED: [2026-07-29 Wed 12:56]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 12:56]
+- State "DONE" from "STARTED" [2026-07-29 Wed 12:58]
+:END:
+Gate PASSED; one table correction (haiku alias → full name). Details: * Implementation § Task 1.
+
+** DONE Ship default roster.edn and implement loader + translation
+CLOSED: [2026-07-29 Wed 13:20]
+:PROPERTIES:
+:CUSTOM_ID: 827f0fc6-2c43-4142-b376-a0f7977fa0fd
+:CREATED: [2026-07-29 Tue]
+:STARTED: [2026-07-29 Wed 12:58]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 12:58]
+- State "DONE" from "STARTED" [2026-07-29 Wed 13:20]
+:END:
+Shipped per ** Acceptance / ** Shipped (delegated: advised-worker, wave 1).
+
+** DONE Tests: cross-kind translation and pass-through coverage
+CLOSED: [2026-07-29 Wed 13:20]
+:PROPERTIES:
+:CUSTOM_ID: e1165d05-6e45-4e2d-ad8b-3e5b842b4518
+:CREATED: [2026-07-29 Tue]
+:STARTED: [2026-07-29 Wed 12:58]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 12:58]
+- State "DONE" from "STARTED" [2026-07-29 Wed 13:20]
+:END:
+323 deftests / 1569 assertions green; key deftests: `roster-parse-merge-and-shape-validation`, `roster-config-loader-precedence-and-deployment-modes`, `kind-override-retains-and-translates-the-definition-model`, `kindless-model-is-honoured-for-any-resolved-kind`, `preview-shows-canonical-and-translated-model`, `relocated-assignment-root-resolves-project-roster-override`, `invalid-roster-override-fails-before-ledger-or-mutation`, `label-stability-across-canonical-id-migration` (delegated: advised-worker, wave 1).
+
+** DONE Docs: SKILL.md and contract.md model-resolution contract
+CLOSED: [2026-07-29 Wed 13:02]
+:PROPERTIES:
+:CUSTOM_ID: ae5f7332-c0b5-44d7-b146-f1c7e8588c6d
+:CREATED: [2026-07-29 Tue]
+:STARTED: [2026-07-29 Wed 12:58]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 12:58]
+- State "DONE" from "STARTED" [2026-07-29 Wed 13:02]
+:END:
+Shipped per ** Shipped (delegated: advised-worker, wave 1; contract.md had no paired-kind drop statement to delete — additive only there).
+
+** DONE Migrate roster definitions to canonical model IDs
+CLOSED: [2026-07-29 Wed 13:22]
+:PROPERTIES:
+:CUSTOM_ID: 4aa84684-6d36-4828-950d-b27e392a067f
+:CREATED: [2026-07-29 Tue]
+:STARTED: [2026-07-29 Wed 13:20]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 13:20]
+- State "DONE" from "STARTED" [2026-07-29 Wed 13:22]
+:END:
+All eight migrated; pi previews resolve as expected (delegated: advised-worker, wave 2).
+
+** DONE Live smoke verification across kinds
+CLOSED: [2026-07-29 Wed 13:22]
+:PROPERTIES:
+:CUSTOM_ID: 5006e8e3-6e73-4c04-bb15-a6ae9923f9f3
+:CREATED: [2026-07-29 Tue]
+:STARTED: [2026-07-29 Wed 13:20]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 13:20]
+- State "DONE" from "STARTED" [2026-07-29 Wed 13:22]
+:END:
+All probes matched; evidence in * Validation (delegated: advised-worker, wave 2; independently re-probed by the orchestrator).
+
+* Implementation
+
+** Execution shape
+Task 1 executed by the orchestrator (local CLI probes gate everything downstream); tasks 2–6 delegated to advised-worker subagents in two waves — wave 1 parallel (code+tests | docs, disjoint file sets), wave 2 single (roster migration + smoke, code-dependent). The docs worker's envelope was rejected for relative artifact paths and publish is once-only, so its COMPLETE result was validated manually against the ledger (see ** Gotchas); its one prose slip (a tabled remap presented as the pass-through example in contract.md) was fixed by the orchestrator.
+
+** Task 1: harness syntax verification (decision gate — PASSED)
+- codex: top-level `-m/--model` confirmed via `codex --help`; `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna` all verified live via `codex exec -m …`. Launcher native-arg mode compatible (top-level flag).
+- claude: `--model` confirmed; help lists aliases `fable`/`opus`/`sonnet` explicitly and accepts full model names (e.g. `claude-fable-5`). The `haiku` alias is undocumented (Anthropic CLI docs list only `sonnet`/`opus`; local help adds `fable`) and could not be live-probed (CLI not logged in).
+- Table correction: the `claude-haiku-4-5` and `gpt-5.6-luna` rows use full name `claude-haiku-4-5` in the claude column instead of the unverified `haiku` alias.
+- Gate outcome: positive — no scope/acceptance revision needed; codex ships in the default `:harnesses` with `:model-flag "--model"`.
+
+** Pre-implementation review
+Pre-implementation design review (gpt-5.6-sol reviewer via openai-codex, task f97447a4, full report in `.agents/tmp/herdr-subagents/f97447a4-1e1c-4ff2-90f7-8e88dd7383e6-review.md`): five P2 findings. Applied: path-resolution pinning per deployment mode, schema validation + pre-mutation fail-fast, translated-model preview exposure, codex verification as a decision gate. Rejected: legacy compatibility for external paired `kind: pi` + `provider/model` rosters — no clients exist outside this repo and in-repo definitions migrate during execution; the related anti-criterion was reworded to tabled-ID spellings so it stays satisfiable against the open pass-through contract.
+
+* Validation
+- Live codex probes: `codex exec -m gpt-5.6-{sol,terra,luna}` each answered — all three identifiers accepted.
+- Claude aliases verified from `claude --help` text only; live probe impossible (CLI not logged in on this host). `fable`/`opus`/`sonnet` documented; haiku tier uses the full model name.
+- Dry-probe matrix via `subagent run … --print-prompt` (identity env unset): worker→pi `anthropic/claude-opus-5`; worker→claude `opus`; worker→codex `gpt-5.6-sol`; unlisted ID→claude verbatim pass-through; planner→pi `anthropic/claude-fable-5`. Codex probe independently reproduced by the orchestrator (`:model-args ["--model" "gpt-5.6-sol"]` with canonical `:model claude-opus-5`).
+- `bb test` from repo root re-run by the orchestrator: 323 tests / 1569 assertions / 0 failures.
+
+* Open questions
+** DECIDED Should the paired kind+model drop rule survive once roster models are canonical?
+:PROPERTIES:
+:DECIDED: [2026-07-29 Wed]
+:END:
+Decision: remove it — legacy noise. The drop existed only because a pi-syntax model was meaningless to another harness; translation voids that premise. A definition model now survives a kind override and is translated for the resolved kind. See ‘Paired kind+model drop rule removed’ under ** Decisions.

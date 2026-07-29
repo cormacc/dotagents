@@ -55,6 +55,30 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
       (let [candidate (fs/path (ledger/assignment-root) "skills" "herdr-subagents" "scripts" "subagent")]
         (when (fs/exists? candidate) (str (fs/absolutize candidate))))
       (fail "could not resolve subagent launcher" {})))
+;; The default roster table ships in the skill's `subagents/` data directory, not the
+;; `scripts/` subdirectory the launcher lives in:
+;; `skills/herdr-subagents/subagents/roster.edn`, a sibling tree of `.../scripts/`.
+;; Deriving it from the launcher path (never cwd/git) keeps a bare-subtree install and a
+;; relocated `SUBAGENT_ASSIGNMENT_ROOT` both able to find their own shipped default.
+(defn default-roster-path []
+  (str (fs/path (fs/parent (fs/parent (fs/path (launcher-bin)))) "subagents" "roster.edn")))
+(defn roster-file [path]
+  (when (fs/exists? path) (core/parse-roster (str path) (slurp (str path)))))
+;; Loader precedence: shipped default ← home override ← project override (project
+;; wins), merged row-level by `core/merge-roster`. A missing override file is silently
+;; ignored; a missing shipped default is fatal. `home` is an explicit argument (default
+;; `user.home`) so callers/tests can inject it directly instead of relying on `$HOME`,
+;; which Babashka's `user.home` property does not observe.
+(defn roster-config
+  ([] (roster-config (System/getProperty "user.home")))
+  ([home]
+   (let [default-path (default-roster-path)
+         home-path (fs/path home ".agents" "subagents" "roster.edn")
+         project-path (fs/path (ledger/assignment-root) ".agents" "subagents" "roster.edn")]
+     (core/merge-roster
+      (or (roster-file default-path) (fail "missing shipped default roster table" {:path (str default-path)}))
+      (or (roster-file home-path) {})
+      (or (roster-file project-path) {})))))
 (defn parent-identity []
   (let [agent (herdr/agent! (System/getenv "HERDR_PANE_ID"))]
     {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent)) :parent-kind (:agent agent) :parent-pane (:pane_id agent)}))
@@ -120,10 +144,13 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
   (let [path (roster persona) frontmatter (core/parse-frontmatter (slurp (str path))) ident (parent-identity)
         kind (core/resolve-kind {:requested (one opts :kind) :frontmatter frontmatter :parent-kind (:parent-kind ident)})
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
+        config (roster-config)
         retro (retro-policy persona opts frontmatter)
         spawns (spawns-policy persona opts frontmatter)]
     {:preview (prompt-text {:spawns (:spawns spawns) :persona-path path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
-     :persona-path (str path) :kind kind :model model :retro (:retro retro) :retro-source (:retro-source retro)
+     ;; :model is the canonical resolved ID; :model-args is the effective translated
+     ;; native spelling (e.g. `["--model" "opus"]`) from the merged roster config.
+     :persona-path (str path) :kind kind :model model :model-args (core/model-args config kind model) :retro (:retro retro) :retro-source (:retro-source retro)
      :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)}))
 ;; A published result is immutable, so a result that fails validation can never become
 ;; valid. Record it as the non-final `invalid` status (pane retained, needs manual
@@ -202,6 +229,10 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
             ident (parent-identity)
             kind (core/resolve-kind {:requested (one opts :kind) :frontmatter frontmatter :parent-kind (:parent-kind ident)})
             model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
+            ;; Loaded and schema-validated here, before `ledger/fresh-result`'s
+            ;; `fs/create-dirs` and every later ledger/pane mutation: a malformed roster
+            ;; table must fail fast, never after allocation has begun.
+            config (roster-config)
             retro (retro-policy persona opts frontmatter)
             spawns (spawns-policy persona opts frontmatter)
             tab? (boolean (one opts :tab))
@@ -235,7 +266,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
               (let [renamed (herdr/rename! (:pane-id persisted) label)]
                 (when-not (= label (:label renamed)) (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))
                 (ledger/update! task assoc :status "renamed")
-                (let [native (concat (core/model-args kind model)
+                (let [native (concat (core/model-args config kind model)
                                      (when (#{"pi" "claude"} kind)
                                        ["--append-system-prompt"
                                         (core/persona-system-prompt kind (str path) (slurp (str path)))]))]

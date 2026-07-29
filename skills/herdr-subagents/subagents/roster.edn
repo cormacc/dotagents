@@ -1,0 +1,37 @@
+;; Canonical subagent model-ID → per-harness-syntax lookup table.
+;;
+;; `:harnesses` declares how each resolved kind receives a model (currently a
+;; single `--model` flag for all three); the kind set is open — an override
+;; may add an entry for a new kind (e.g. `:gemini`) with no code change.
+;;
+;; `:models` maps a canonical ID to a sparse row of harness-native spellings.
+;; Unversioned IDs (claude-opus, gpt-sol, …) are floating aliases resolving to the
+;; latest available version of that tier; versioned IDs pin a specific release.
+;; An ID or a kind absent here passes through unchanged by contract (see
+;; design/log/2026-07-29-subagent-harness-agnostic-model-resoluti.org).
+;;
+;; Verified against the actual CLIs (task 1 of that record, decision gate
+;; PASSED): claude accepts `fable`/`opus`/`sonnet` plus full model names;
+;; `haiku` is an undocumented alias, so `claude-haiku-4-5` uses the full name
+;; instead. codex `gpt-5.6-{sol,terra,luna}` verified live via `codex exec -m`.
+;;
+;; Override chain (project wins): this file (default) ← ~/.agents/subagents/roster.edn
+;; ← <assignment-root>/.agents/subagents/roster.edn — merged row-level (per model
+;; ID, per harness ID), never deep-merged.
+{:harnesses {:pi     {:model-flag "--model"}
+             :claude {:model-flag "--model"}
+             :codex  {:model-flag "--model"}}
+ :models {"claude-fable"     {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
+          "claude-opus"      {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
+          "claude-sonnet"    {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
+          "claude-haiku"     {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
+          "gpt-sol"          {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
+          "gpt-terra"        {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
+          "gpt-luna"         {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
+          "claude-fable-5"   {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
+          "claude-opus-5"    {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
+          "claude-sonnet-5"  {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
+          "claude-haiku-4-5" {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
+          "gpt-5.6-sol"      {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
+          "gpt-5.6-terra"    {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
+          "gpt-5.6-luna"     {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}}}

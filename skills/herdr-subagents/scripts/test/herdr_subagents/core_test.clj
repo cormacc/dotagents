@@ -1,7 +1,7 @@
 (ns herdr-subagents.core-test
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
-            [clojure.test :refer [deftest is]]
+            [clojure.test :refer [deftest is testing]]
             [herdr-subagents.cli :as cli]
             [herdr-subagents.core :as core]
             [herdr-subagents.ledger :as ledger]
@@ -17,16 +17,34 @@
   (is (= "codex" (core/resolve-kind {:requested "codex" :frontmatter {:kind "pi"} :parent-kind "claude"})))
   ;; A requested model still wins over every frontmatter and parent-model value.
   (is (= "m" (core/resolve-model {:requested "m" :resolved-kind "pi" :frontmatter {:kind "pi" :model "f"} :parent-kind "pi" :parent-model "p"})))
-  ;; A declared kind/model pair remains honoured only for its declared kind.
+  ;; A definition model now survives a kind override instead of being dropped: it is
+  ;; honoured for any resolved kind (translation, not `resolve-model`, decides the
+  ;; per-harness spelling), so a paired `kind: pi` declaration is no longer special.
   (is (= "f" (core/resolve-model {:resolved-kind "pi" :frontmatter {:kind "pi" :model "f"} :parent-kind "pi" :parent-model "p"})))
-  (is (nil? (core/resolve-model {:resolved-kind "codex" :frontmatter {:kind "pi" :model "f"} :parent-kind "pi" :parent-model "p"})))
-  ;; Pi accepts the roster's kindless provider/model value; non-pi overrides drop it.
+  (is (= "f" (core/resolve-model {:resolved-kind "codex" :frontmatter {:kind "pi" :model "f"} :parent-kind "pi" :parent-model "p"})))
+  ;; A kindless roster model is likewise honoured for every resolved kind now, not only pi.
   (is (= "f" (core/resolve-model {:resolved-kind "pi" :frontmatter {:model "f"} :parent-kind "pi" :parent-model "p"})))
-  (is (nil? (core/resolve-model {:resolved-kind "codex" :frontmatter {:model "f"} :parent-kind "pi" :parent-model "p"})))
+  (is (= "f" (core/resolve-model {:resolved-kind "codex" :frontmatter {:model "f"} :parent-kind "pi" :parent-model "p"})))
   ;; Same-kind parent inheritance remains the fallback when frontmatter has no model.
   (is (= "p" (core/resolve-model {:resolved-kind "pi" :frontmatter {} :parent-kind "pi" :parent-model "p"})))
-  (is (= ["--model" "x"] (core/model-args "pi" "x")))
-  (is (= [] (core/model-args "codex" "x")))
+  (let [config {:harnesses {:pi {:model-flag "--model"} :claude {:model-flag "--model"} :codex {:model-flag "--model"}}
+               :models {"claude-opus-5" {:pi "anthropic/claude-opus-5" :claude "opus" :codex "gpt-5.6-sol"}}}]
+    ;; Known ID x every declared kind: translated to that harness's native spelling.
+    (is (= "anthropic/claude-opus-5" (core/translate-model config "pi" "claude-opus-5")))
+    (is (= "opus" (core/translate-model config "claude" "claude-opus-5")))
+    (is (= "gpt-5.6-sol" (core/translate-model config "codex" "claude-opus-5")))
+    ;; An ID absent from the table passes through unchanged — the ID set is open.
+    (is (= "unlisted-model" (core/translate-model config "pi" "unlisted-model")))
+    ;; A nil model passes through as nil.
+    (is (nil? (core/translate-model config "pi" nil)))
+    (is (= ["--model" "opus"] (core/model-args config "claude" "claude-opus-5")))
+    (is (= ["--model" "gpt-5.6-sol"] (core/model-args config "codex" "claude-opus-5")))
+    ;; Unlisted ID: still translated-as-passthrough into the resolved kind's flag.
+    (is (= ["--model" "unlisted-model"] (core/model-args config "claude" "unlisted-model")))
+    ;; Nil resolved model still yields empty model-args.
+    (is (= [] (core/model-args config "pi" nil)))
+    ;; A kind with no `:harnesses` entry yields empty model args — the kind set is open.
+    (is (= [] (core/model-args config "gemini" "claude-opus-5"))))
   (is (= "/tmp/persona.md" (core/persona-system-prompt "pi" "/tmp/persona.md" "BODY")))
   (is (= "BODY" (core/persona-system-prompt "claude" "/tmp/persona.md" "BODY")))
   (is (= "planner-1/scout-2-claude-fable-5" (core/child-label {:parent-label "planner-1-claude-fable-5" :parent-persona "planner" :persona "scout" :index 2 :model "anthropic/claude-fable-5"})))
@@ -40,6 +58,48 @@
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"anchored persona/index prefix"
                         (core/nested-prefix "planner-1/scout-2-claude-fable-5" "scout")))
   (is (= "worker-1" (core/root-label "worker" 1 nil))))
+
+(deftest roster-parse-merge-and-shape-validation
+  (testing "valid EDN parses"
+    (is (= {:harnesses {:pi {:model-flag "--model"}} :models {"claude-opus-5" {:pi "anthropic/claude-opus-5"}}}
+           (core/parse-roster "/tmp/roster.edn"
+                              "{:harnesses {:pi {:model-flag \"--model\"}} :models {\"claude-opus-5\" {:pi \"anthropic/claude-opus-5\"}}}"))))
+  (testing "sparse model rows and harness keywords unknown to :harnesses are allowed"
+    (is (= {:models {"partial" {:gemini "g-model"}}} (core/parse-roster "/tmp/roster.edn" "{:models {\"partial\" {:gemini \"g-model\"}}}"))))
+  (testing "malformed EDN throws naming the offending path"
+    (is (try (core/parse-roster "/tmp/bad.edn" "{:harnesses") false
+             (catch clojure.lang.ExceptionInfo e
+               (and (str/includes? (.getMessage e) "/tmp/bad.edn") (= "/tmp/bad.edn" (:path (ex-data e))))))))
+  (testing "structurally invalid shapes throw naming the offending path"
+    (doseq [[label text] {"non-map top level" "[1 2 3]"
+                          ":harnesses not a map" "{:harnesses [1 2]}"
+                          ":harnesses entry not a map" "{:harnesses {:pi \"nope\"}}"
+                          "blank :model-flag" "{:harnesses {:pi {:model-flag \"\"}}}"
+                          "non-string :model-flag" "{:harnesses {:pi {:model-flag 1}}}"
+                          ":models not a map" "{:models [1 2]}"
+                          ":models entry not a map" "{:models {\"x\" \"nope\"}}"
+                          ":models row value not a string" "{:models {\"x\" {:pi 1}}}"}]
+      (is (try (core/parse-roster "/tmp/shape.edn" text) false
+               (catch clojure.lang.ExceptionInfo e (= "/tmp/shape.edn" (:path (ex-data e)))))
+          label)))
+  (testing "merge is row-level replacement, not deep, and later configs win"
+    (let [default {:harnesses {:pi {:model-flag "--model"} :claude {:model-flag "--model"}}
+                   :models {"a" {:pi "pa" :claude "ca"} "b" {:pi "pb"}}}
+          home {:models {"a" {:pi "pa-home"}}} ;; replaces the whole "a" row, dropping :claude
+          project {:harnesses {:claude {:model-flag "--model2"}} :models {"b" {:pi "pb-project"}}}
+          merged (core/merge-roster default home project)]
+      (is (= {:pi "pa-home"} (get-in merged [:models "a"])))
+      (is (= {:pi "pb-project"} (get-in merged [:models "b"])))
+      (is (= {:model-flag "--model"} (get-in merged [:harnesses :pi])))
+      (is (= {:model-flag "--model2"} (get-in merged [:harnesses :claude]))))))
+
+;; Pane labels use `model-basename`, independent of roster translation: a canonical bare
+;; ID and its pre-migration pi-syntax equivalent share the same basename, so labels are
+;; unaffected by the roster migration.
+(deftest label-stability-across-canonical-id-migration
+  (is (= (core/model-basename "anthropic/claude-opus-5") (core/model-basename "claude-opus-5")))
+  (is (= "worker-1-claude-opus-5" (core/root-label "worker" 1 "claude-opus-5")))
+  (is (= "worker-1-claude-opus-5" (core/root-label "worker" 1 "anthropic/claude-opus-5"))))
 
 (deftest retro-skill-resolution-and-policy
   (let [probe #{"/project/.agents/skills/retro/SKILL.md" "/project/skills/retro/SKILL.md" "/home/u/.agents/skills/retro/SKILL.md"}]

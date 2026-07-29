@@ -1,7 +1,7 @@
 ---
 name: researcher
 description: External-knowledge research - library capabilities, current best practices, API behaviors, tradeoffs between options. Reads docs, runs web searches, and synthesises findings with source links. Use when a planning or implementation decision depends on facts outside the codebase.
-model: anthropic/claude-sonnet-5
+model: claude-sonnet-5
 retro: false
 ---
 

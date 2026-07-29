@@ -20,6 +20,21 @@
 
 * Explorations
 
+** TODO Determine whether pi allows automatic anthropic prompt caching
+:PROPERTIES:
+:CUSTOM_ID: dfa273c4-1d43-484f-a515-b6666a64fad7
+:CREATED: [2026-07-29 Wed 13:32]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 13:32]
+:END:
+Failing to cache prefix (system prompt and tools) can run through anthropic usage allowance quickly. See if this is the case for pi.
+
+See the following dirge PRs for context / prior art:
+- https://github.com/dirge-code/dirge/pull/727
+- https://github.com/dirge-code/dirge/pull/726
+- https://github.com/dirge-code/dirge/pull/732
+
 ** TODO [#D] Evaluate rpiv-pi workflow setup
 :PROPERTIES:
 :CUSTOM_ID: 95649700-252c-46d1-92fd-584f8b3b6237
@@ -176,34 +191,6 @@ These may be defined globally or project-locally.
 Workflows may specify delegation to ephemeral and/or persistent subagents.
 Consider whether individual workflows should be defined as skills leveraging the herdr-subagents skill, or in a dedicated subfolder of .agents referenced by the herdr-subagents skill.
 
-** TODO subagent: harness-agnostic model resolution via per-harness lookup tables :skill_herdr-subagents:
-:PROPERTIES:
-:CUSTOM_ID: e6229f7b-8018-46c2-9947-9bcbe22b4d56
-:CREATED: [2026-07-28 Tue 14:39]
-:END:
-:LOGBOOK:
-- Created [2026-07-28 Tue 14:39]
-:END:
-Roster `model:` values are written in pi's `provider/model` syntax. The interim fix (see plan 2026-07-27-subagent-per-persona-spawn-capability-re.org) honours a kindless frontmatter model only when the resolved kind is `pi`; spawns resolved to any other harness kind still drop the declared model and fall through to that harness's own default.
-
-Desired outcome: per-harness lookup tables in the herdr-subagents skill mapping a canonical model identity to each harness's syntax (e.g. `anthropic/claude-opus-5` → claude CLI `opus`, codex `gpt-…` forms), so a persona's declared model takes effect regardless of resolved kind, with a defined fallback when a harness has no mapping.
-
-Origin: mid-implementation discovery that 10c7990 (kindless roster) made every roster `model:` line inert — kind-inheriting spawns resolved model nil and children silently ran on the harness default.
-
-The proposed mappings are tabulated below. Note -- the entries in the claude and codex columns are extrapolated from the ui - they should be verified during planning / execution.
-
-The set of model-ids is not closed -- any model-id in a subagent definition that is not listed in the lookup table should be assumed to be a valid model ID for the user's harness of choice.
-
-| model-id         | pi                         | claude | codex         |
-|------------------+----------------------------+--------+---------------|
-| claude-fable-5   | anthropic/claude-fable-5   | fable  | gpt-5.6-sol   |
-| claude-opus-5    | anthropic/claude-opus-5    | opus   | gpt-5.6-sol   |
-| claude-sonnet-5  | anthropic/claude-sonnet-5  | sonnet | gpt-5.6-terra |
-| claude-haiku-4-5 | anthropic/claude-haiku-4-5 | haiku  | gpt-5.6-luna  |
-| gpt-5.6-sol      | anthropic/claude-opus-5    | opus   | gpt-5.6-sol   |
-| gpt-5.6-terra    | anthropic/claude-sonnet-5  | sonnet | gpt-5.6-terra |
-| gpt-5.6-luna     | anthropic/claude-haiku-4-5 | haiku  | gpt-5.6-luna  |
-
 ** TODO ot move: TUI/pi-overlay exposure and --before/--after ordering
 :PROPERTIES:
 :CUSTOM_ID: da7350ac-60c6-4336-9b7e-e0cbce51658c
@@ -246,6 +233,29 @@ Currently the subagent skill doesn't include any defaults / examples. We should 
 - Created [2026-07-29 Wed 11:30]
 :END:
 Under `start` (non-blocking waiting policy), `subagent publish` currently emits only a Herdr operator notification (`notification show`) -- the orchestrating parent agent gets no signal and must poll via `collect`. Extend `publish` so a non-blocking parent is also notified that the result is ready for collection, e.g. by delivering a message to the parent pane/session recorded in the ledger (`:parent-session`). Preserve the contract invariant that the validated RESULT file remains the only *completion* signal -- the notification is advisory, prompting the parent to run `collect`. Update `scripts/docs/contract.md` (waiting-policy row, § Ledger and completion) and the herdr-subagents SKILL.md invocation-policy wording accordingly. Motivating session: interactive planner run where the parent only learned of publication from the human operator.
+
+** TODO org-tasks: Automate installation of babashka / ot
+:PROPERTIES:
+:CUSTOM_ID: ca95bb66-6c5c-4037-97cd-75274010b214
+:CREATED: [2026-07-29 Wed 13:03]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 13:03]
+:END:
+Currently we assume babashka is available, and the skill calls the ot cli tool using absolute path.
+It would be nice to do a bootstrap check on initial skill activation...
+- if babashka not found in path, offer to install it via an appropriate method
+- if ot not found in path, offer to install it also (maybe using bbin?)
+
+** TODO subagents: Don't block until all wave agents done
+:PROPERTIES:
+:CUSTOM_ID: 157a2c3d-a1f6-43cd-b681-97eeba69cfaa
+:CREATED: [2026-07-29 Wed 13:05]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 13:05]
+:END:
+Currently the subagents skill spawns parallel agents in waves of 2, then blocks until all agents in that wave have completed work. This is inefficient if run durations vary significantly. Reframe the protocol in terms of agent count, limiting the amount of spawned agents in process for a given parent. I.e. if one of N active agents completes successfully, we can kick off another unblocked task agent immediately rather than waiting for the remaining active agents to complete.
 
 * Fixes
 ** TODO ot ready reports unresolved-task for blockers resolvable inside #+IMPORT:-linked plan files :org-tasks:ot:bug:

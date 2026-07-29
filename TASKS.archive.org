@@ -1468,3 +1468,40 @@ Write-ups
 
 Prior art / implementations
 - https://github.com/aivsomkar/advisor-strategy-skill
+
+** DONE subagent: harness-agnostic model resolution via per-harness lookup tables :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 13:24]
+:PROPERTIES:
+:CUSTOM_ID: e6229f7b-8018-46c2-9947-9bcbe22b4d56
+:CREATED: [2026-07-28 Tue 14:39]
+:STARTED: [2026-07-29 Wed 12:56]
+:ARCHIVED: [2026-07-29 Wed 13:24]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-28 Tue 14:39]
+- State "STARTED" from "TODO" [2026-07-29 Wed 12:56]
+- State "DONE" from "STARTED" [2026-07-29 Wed 13:24]
+:END:
+#+IMPORT: [[plan:2026-07-29-subagent-harness-agnostic-model-resoluti.org]]
+Roster `model:` values are written in pi's `provider/model` syntax. The interim fix (see plan 2026-07-27-subagent-per-persona-spawn-capability-re.org) honours a kindless frontmatter model only when the resolved kind is `pi`; spawns resolved to any other harness kind still drop the declared model and fall through to that harness's own default.
+
+Desired outcome: per-harness lookup tables in the herdr-subagents skill mapping a canonical model identity to each harness's syntax (e.g. `anthropic/claude-opus-5` → claude CLI `opus`, codex `gpt-…` forms), so a persona's declared model takes effect regardless of resolved kind, with a defined fallback when a harness has no mapping.
+
+Origin: mid-implementation discovery that 10c7990 (kindless roster) made every roster `model:` line inert — kind-inheriting spawns resolved model nil and children silently ran on the harness default.
+
+The proposed mappings are tabulated below. Note -- the entries in the claude and codex columns are extrapolated from the ui - they should be verified during planning / execution.
+
+The set of model-ids is not closed -- any model-id in a subagent definition that is not listed in the lookup table should be assumed to be a valid model ID for the user's harness of choice.
+
+| model-id         | pi                         | claude | codex         |
+|------------------+----------------------------+--------+---------------|
+| claude-fable-5   | anthropic/claude-fable-5   | fable  | gpt-5.6-sol   |
+| claude-opus-5    | anthropic/claude-opus-5    | opus   | gpt-5.6-sol   |
+| claude-sonnet-5  | anthropic/claude-sonnet-5  | sonnet | gpt-5.6-terra |
+| claude-haiku-4-5 | anthropic/claude-haiku-4-5 | haiku  | gpt-5.6-luna  |
+| gpt-5.6-sol      | anthropic/claude-opus-5    | opus   | gpt-5.6-sol   |
+| gpt-5.6-terra    | anthropic/claude-sonnet-5  | sonnet | gpt-5.6-terra |
+| gpt-5.6-luna     | anthropic/claude-haiku-4-5 | haiku  | gpt-5.6-luna  |
+
+After implementation, existing subagents should be updated to use the new canonical model IDs.

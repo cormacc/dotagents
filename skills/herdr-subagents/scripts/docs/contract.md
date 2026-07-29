@@ -28,7 +28,7 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `SUBAGENT_ASSIGNMENT_ROOT` | parent | Overrides the `git rev-parse --show-toplevel` probe behind the assignment root. It relocates the ledger, index markers, and `RESULT` paths **and** project-roster lookup (`<root>/.agents/subagents/`) together, because all four are per-project notions. A blank value is ignored, a relative value is absolutised so `RESULT` stays absolute, and a value that is not an existing directory is rejected. When set, it is injected into the child pane so nested delegation stays in the same root. |
+| `SUBAGENT_ASSIGNMENT_ROOT` | parent | Overrides the `git rev-parse --show-toplevel` probe behind the assignment root. It relocates the ledger, index markers, `RESULT` paths, project-roster lookup (`<root>/.agents/subagents/`), **and** the project roster.edn model-table override (`<root>/.agents/subagents/roster.edn`) together, because all five are per-project notions; the default roster.edn resolves from the installed skill/launcher location instead, never from the assignment root. A blank value is ignored, a relative value is absolutised so `RESULT` stays absolute, and a value that is not an existing directory is rejected. When set, it is injected into the child pane so nested delegation stays in the same root. |
 | `SUBAGENT_LIVE_SMOKE`, `SUBAGENT_LIVE_SMOKE_MODEL` | `bb smoke-subagent` | Guards the live smoke, which also needs `HERDR_ENV=1`. Never CI work. |
 | `SUBAGENT_POLL_INTERVAL_MS` | parent | Sleep between settled-without-result wait iterations. Unset, blank, unparseable, zero, and negative values all fall back to 1000 ms. |
 | `HERDR_SUBAGENT_CHILD` | child | Live agent name recorded on the ledger. |
@@ -38,6 +38,18 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 | `HERDR_SUBAGENT_WAITING_POLICY` | child | `blocking` or `non-blocking`; the latter makes a successful publish emit an operator notification. |
 | `HERDR_SUBAGENT_PERSONA` | child | The child's own persona. When set it marks the CLI's own spawns as below-root: nested labels compose from it and spawn enforcement reads `HERDR_SUBAGENT_SPAWNS` (see § Spawn gating). An agent started outside `subagent` has neither unless the variable is set. |
 | `HERDR_SUBAGENT_SPAWNS` | child | Space-joined spawn allow-list resolved by the parent (see § Spawn gating). Blank and unset both mean leaf; a below-root spawn always injects an empty value. |
+
+## Model resolution
+
+`resolve-model` precedence is requested > frontmatter model > same-kind parent inheritance > nil. The resolved value is translated at the `model-args` boundary, the single choke point for frontmatter models, explicit `--model` flags, and same-kind parent inheritance alike.
+
+The canonical model-ID table is external EDN: `{:harnesses {:<kind> {:model-flag "…"} …} :models {"<canonical-id>" {:<kind> "…" …} …}}`. `:harnesses` keeps the kind set open — a resolved kind absent from it yields no model args, and herdr alone validates which kinds exist. `:models` rows are sparse, and tabled mappings may deliberately remap across providers (e.g. `gpt-5.6-terra` → pi `anthropic/claude-sonnet-5`, claude `sonnet` — a tier-equivalence remap, not an identity claim); a model ID absent from the table passes through to the resolved kind unchanged.
+
+File chain, project wins: skill default `skills/herdr-subagents/subagents/roster.edn` (resolved as `subagents/roster.edn` under the launcher's skill directory) ← `~/.agents/subagents/roster.edn` ← `<git-root>/.agents/subagents/roster.edn`. Unversioned canonical IDs (`claude-opus`, `gpt-sol`, …) are floating aliases resolving to the latest version of the tier; versioned IDs pin a release. Merge is row-level replacement, per model ID and per harness ID, never a deep merge — an override row fully owns that ID.
+
+Config is loaded and schema-validated (parse errors and shape/type errors alike) before any ledger allocation or pane mutation; a validation failure carries the offending path. A missing override file is ignored; a missing shipped default is fatal.
+
+`--print-prompt` reports both the canonical resolved model and the effective translated model / native model args.
 
 ## Ledger and completion
 

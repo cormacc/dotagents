@@ -120,6 +120,13 @@
           bare (str (fs/path (:dir h) "bare" "x" "y" "scripts"))
           _ (fs/create-dirs (fs/parent bare))
           _ (fs/copy-tree scripts-dir bare)
+          ;; A bare-subtree install ships the whole skill directory, subagents/roster.edn
+          ;; included (it is a first-class skill artifact, not a `scripts/`-only concern)
+          ;; — copy it into a `subagents/` sibling of `scripts`, exactly where the
+          ;; default-roster resolution (derived from the launcher path, never cwd/git)
+          ;; expects to find it.
+          _ (fs/create-dirs (fs/path (fs/parent bare) "subagents"))
+          _ (fs/copy (fs/path root "skills" "herdr-subagents" "subagents" "roster.edn") (fs/path (fs/parent bare) "subagents" "roster.edn"))
           bin (str bare "/subagent")
           proc (launch! h bin (:caller h))
           argv (bb-argv h)]
