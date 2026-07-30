@@ -39,8 +39,8 @@
      ;; `<root>/skills/` is the second skill probe and the shape this repository uses, so
      ;; the retro skill resolves in-fixture without an installed `~/.agents/skills`.
      (fs/create-sym-link skills (fs/path root "skills"))
-     {:dir dir :log log :env-file env-file :prompt-file prompt-file :roster (str roster) :skills (str skills)
-      :env (merge {"PATH" (str dir ":" (System/getenv "PATH")) "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p" "HERDR_SUBAGENT_BIN" bin "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file "FAKE_HERDR_PROMPT_FILE" prompt-file
+     {:dir dir :log log :env-file env-file :prompt-file prompt-file :roster (str roster) :skills (str skills) :state (str (fs/path dir "state"))
+      :env (merge {"PATH" (str dir ":" (System/getenv "PATH")) "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p" "HERDR_SUBAGENT_BIN" bin "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file "FAKE_HERDR_PROMPT_FILE" prompt-file "FAKE_HERDR_STATE_DIR" (str (fs/path dir "state"))
                    "HOME" (str home) "SUBAGENT_ASSIGNMENT_ROOT" (str dir)} overrides)})))
 
 (def advisor-strategy-roster
@@ -131,7 +131,12 @@
     (is (some #(= ["pane" "close"] (vec (take 2 %))) argv))
     (is (re-find #"(?s)\$\(unsafe\).*`unsafe`" (slurp prompt-file)))
     (is (= #{["pane" "layout"] ["pane" "split"] ["tab" "create"] ["pane" "rename"] ["pane" "get"] ["pane" "close"] ["agent" "start"] ["agent" "prompt"] ["agent" "wait"] ["agent" "get"] ["agent" "list"] ["notification" "show"]}
-           (set (map #(vec (take 2 %)) (filter #(= "--help" (nth % 2 nil)) argv)))))))
+           (set (map #(vec (take 2 %)) (filter #(= "--help" (nth % 2 nil)) argv)))))
+    ;; The advisory parent push needs `agent wait --until`, so the spawn-side contract is
+    ;; widened even though `publish!` never runs preflight. Every spawn above proves the
+    ;; fixture advertises it: a missing flag throws "lacks required flag" during preflight.
+    (is (= ["--timeout" "--until"]
+           (some (fn [[command flags]] (when (= ["agent" "wait"] command) flags)) herdr/required-capabilities)))))
 
 (defn- ledger-entry* [dir task]
   (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true))
@@ -615,10 +620,63 @@
       (is (= "COMPLETE" (get-in (result proc) [:result :status])))
       (is (nil? (:child-session entry))))))
 
+(defn- start-call-count [log] (count (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+(defn- split-call-count [log] (count (filter #(and (= ["pane" "split"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+
 (deftest partial-start-failure-is-tracked-and-cleaned
   (let [{:keys [env log]} (fake-env {"FAKE_FAIL_START" "1"}) proc (call! env "start" "worker" "--task" "fail")]
     (is (= 1 (:exit proc)))
+    (is (some #(= ["pane" "close"] (vec (take 2 %))) (calls log)))
+    ;; A non-`agent_pane_busy` error code fails on the first attempt: no retry.
+    (is (= 1 (start-call-count log)))))
+
+;; `agent_pane_busy` is the one herdr mutation error `agent start` retries; a
+;; busy-then-available pane spawns successfully with no duplicate pane or ledger entry.
+(deftest agent-start-retries-transient-pane-busy-then-succeeds
+  (let [{:keys [env log dir]} (fake-env {"FAKE_START_BUSY_COUNT" "2"})
+        proc (call! env "start" "worker" "--task" "busy then available")
+        task (get-in (result proc) [:result :task])
+        entry (ledger-entry* dir task)]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (nil? (:failure-phase entry)))
+    (is (= "prompted" (:status entry)))
+    (is (= "w:child" (:pane-id entry)))
+    ;; Two simulated `agent_pane_busy` failures plus the eventual success.
+    (is (= 3 (start-call-count log)))
+    (is (= 1 (split-call-count log)))
+    ;; The retry never triggers cleanup: no pane is ever closed (excluding the harmless
+    ;; `pane close --help` preflight probe, present on every spawn).
+    (is (not (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+    ;; exactly one ledger entry
+    (is (= 1 (count (filter #(and (fs/regular-file? %) (str/ends-with? (fs/file-name %) ".json"))
+                             (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))))))
+
+;; A mapped-but-different error code (real `{"error":{"code":...}}` shape, not the
+;; bare-string FAKE_FAIL_START) proves code discrimination, not just nil-safety: only
+;; `agent_pane_busy` is retried, so this fails on the first attempt.
+(deftest agent-start-other-error-code-fails-on-first-attempt
+  (let [{:keys [env log]} (fake-env {"FAKE_START_ERROR_CODE" "agent_pane_unavailable"})
+        proc (call! env "start" "worker" "--task" "non-busy code")]
+    (is (= 1 (:exit proc)))
+    (is (= 1 (start-call-count log)))
     (is (some #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
+
+;; Budget exhaustion (every attempt busy) still yields the existing `:start`-phase
+;; cleanup: one ledger entry, failed status, and a closed child pane.
+(deftest agent-start-retry-budget-exhaustion-fails-cleanly
+  (let [{:keys [env log dir]} (fake-env {"FAKE_START_BUSY_COUNT" "99"})
+        proc (call! env "start" "worker" "--task" "always busy")
+        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))
+                           :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
+                       (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))]
+    (is (= 1 (:exit proc)))
+    (is (= "failed" (:status entry)))
+    (is (= "start" (:failure-phase entry)))
+    (is (some #(= ["pane" "close" "w:child"] (vec (take 3 %))) (calls log)))
+    (is (= herdr/start-retry-attempts (start-call-count log)))
+    (is (= 1 (split-call-count log)))
+    (is (= 1 (count (filter #(and (fs/regular-file? %) (str/ends-with? (fs/file-name %) ".json"))
+                             (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))))))
 
 (defn- wait-call-count [log]
   (count (filter #(and (= ["agent" "wait"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
@@ -700,6 +758,35 @@
         (is (nil? (get-in (result proc) [:result :pane-retained])))
         (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))))
 
+
+;; Publication is exactly-once and immutable, so a relative artifact path must be caught
+;; before the write, not only at collect (core/artifact-path is the same predicate there).
+(deftest relative-artifact-rejected-before-publication
+  (let [{:keys [env dir]} (fake-env {}) base (merge env {"HERDR_SUBAGENT_CHILD" "child" "HERDR_SUBAGENT_TASK" "task" "HERDR_SUBAGENT_WAITING_POLICY" "blocking"})
+        target (str (fs/path dir "relative-artifact.result"))
+        tmp-siblings (fn [] (->> (fs/list-dir dir) (map str) (filter #(str/includes? % ".tmp"))))]
+    (testing "a relative --artifact is rejected before RESULT or a .tmp sibling exist"
+      (let [proc (call! (merge base {"HERDR_SUBAGENT_RESULT" target}) "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" "relative/report.md — report")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"absolute" (:out proc)))
+        (is (not (fs/exists? target)))
+        (is (empty? (tmp-siblings)))))
+    (testing "the same violation via --from-file is rejected identically"
+      (let [body (str (fs/path dir "relative-artifact-body.json"))]
+        (spit body (json/generate-string {:status "COMPLETE" :summary "done" :artifacts ["relative/report.md — report"] :findings [] :next nil}))
+        (let [proc (call! (merge base {"HERDR_SUBAGENT_RESULT" target}) "publish" "--from-file" body)]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"absolute" (:out proc)))
+          (is (not (fs/exists? target)))
+          (is (empty? (tmp-siblings))))))
+    (testing "a corrected retry in the same child session then succeeds"
+      (let [artifact (str (fs/path dir "report.md"))
+            proc (call! (merge base {"HERDR_SUBAGENT_RESULT" target}) "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" (str artifact " — report"))]
+        (is (zero? (:exit proc)) (:err proc))
+        (is (fs/exists? target))
+        (is (str/includes? (slurp target) (str "- " artifact " — report")))
+        (is (empty? (tmp-siblings)))))))
+
 (deftest missing-artifact-is-non-final-and-repeatable
   (let [{:keys [env log]} (fake-env {"FAKE_PUBLISH_ARTIFACT" "/nonexistent/subagent-artifact — missing"})
         proc (call! env "run" "worker" "--task" "bad artifact" "--timeout" "200")
@@ -713,6 +800,965 @@
       (is (zero? (:exit again)) (:err again))
       (is (= "invalid" (get-in (result again) [:result :status]))))))
 
+;; --- advisory progress reporting --------------------------------------------------
+;; `progress` makes no herdr call at all, so every case below is pure ledger/env
+;; plumbing; the fixture needs no new verb to cover it.
+(defn- child-progress-env [env entry]
+  (merge env {"HERDR_SUBAGENT_CHILD" (:child entry) "HERDR_SUBAGENT_TASK" (:task entry) "HERDR_SUBAGENT_RESULT" (:result entry)}))
+
+(deftest progress-records-first-snapshot-and-status-list-expose-it-unchanged
+  (let [{:keys [env dir]} (fake-env {})
+        start (call! env "start" "worker" "--task" "long-running work")
+        task (get-in (result start) [:result :task])
+        entry (ledger-entry* dir task)
+        proc (call! (child-progress-env env entry) "progress" "--summary" "phase one done")]
+    (is (zero? (:exit start)) (:err start))
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "recorded" (get-in (result proc) [:result :status])))
+    (is (= "phase one done" (get-in (result proc) [:result :progress :summary])))
+    (let [updated (ledger-entry* dir task)]
+      (is (= "phase one done" (get-in updated [:progress :summary])))
+      (is (some? (get-in updated [:progress :reported-at])))
+      (is (= (:status entry) (:status updated)) "progress never changes assignment status")
+      (is (nil? (:captured-at updated)) "progress never captures the assignment"))
+    (testing "status and list expose the same snapshot through the existing ledger entry shape"
+      (let [status-proc (call! env "status" task) list-proc (call! env "list")]
+        (is (zero? (:exit status-proc)) (:err status-proc))
+        (is (= "phase one done" (get-in (result status-proc) [:result :progress :summary])))
+        (is (zero? (:exit list-proc)) (:err list-proc))
+        (is (some #(= "phase one done" (get-in % [:progress :summary])) (get-in (result list-proc) [:result])))))))
+
+(deftest progress-throttles-within-the-configured-interval-leaving-snapshot-untouched
+  (let [{:keys [env dir]} (fake-env {})
+        start (call! env "start" "worker" "--task" "throttle guard")
+        task (get-in (result start) [:result :task])
+        entry (ledger-entry* dir task)
+        child-env (child-progress-env env entry)
+        first-proc (call! child-env "progress" "--summary" "first snapshot")
+        first-snapshot (:progress (ledger-entry* dir task))
+        second-proc (call! child-env "progress" "--summary" "second snapshot, must not land")
+        second-snapshot (:progress (ledger-entry* dir task))]
+    (is (zero? (:exit first-proc)) (:err first-proc))
+    (is (= "recorded" (get-in (result first-proc) [:result :status])))
+    (is (zero? (:exit second-proc)) (:err second-proc))
+    (is (= "throttled" (get-in (result second-proc) [:result :status])) "a non-error outcome, not a failure")
+    (is (= first-snapshot second-snapshot) "the stored snapshot stays byte-identical")
+    (is (= "first snapshot" (:summary second-snapshot)))))
+
+(deftest progress-rewrites-the-snapshot-once-the-interval-elapses
+  (let [{:keys [env dir]} (fake-env {"SUBAGENT_PROGRESS_INTERVAL_MS" "50"})
+        start (call! env "start" "worker" "--task" "elapsed interval")
+        task (get-in (result start) [:result :task])
+        entry (ledger-entry* dir task)
+        child-env (child-progress-env env entry)]
+    (is (zero? (:exit (call! child-env "progress" "--summary" "first"))))
+    (Thread/sleep 100)
+    (let [second (call! child-env "progress" "--summary" "second")]
+      (is (zero? (:exit second)) (:err second))
+      (is (= "recorded" (get-in (result second) [:result :status])))
+      (is (= "second" (get-in (ledger-entry* dir task) [:progress :summary]))))))
+
+(deftest progress-never-invokes-herdr-or-notifies-the-parent
+  (let [{:keys [env dir log]} (fake-env {})
+        start (call! env "start" "worker" "--task" "no herdr calls from progress")
+        task (get-in (result start) [:result :task])
+        entry (ledger-entry* dir task)
+        before (count (calls log))
+        proc (call! (child-progress-env env entry) "progress" "--summary" "phase boundary")]
+    (is (zero? (:exit start)) (:err start))
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "recorded" (get-in (result proc) [:result :status])))
+    (is (= before (count (calls log))) "progress makes no herdr call at all, so the call log is untouched")))
+
+(deftest a-non-positive-progress-interval-never-escapes-the-default
+  (let [{:keys [env dir]} (fake-env {"SUBAGENT_PROGRESS_INTERVAL_MS" "-5"})
+        start (call! env "start" "worker" "--task" "negative progress interval")
+        task (get-in (result start) [:result :task])
+        entry (ledger-entry* dir task)
+        child-env (child-progress-env env entry)]
+    (is (zero? (:exit (call! child-env "progress" "--summary" "first"))))
+    (let [second (call! child-env "progress" "--summary" "second, should still throttle")]
+      (is (zero? (:exit second)) (:err second))
+      (is (= "throttled" (get-in (result second) [:result :status]))
+          "a non-positive override must fall back to the 60s default, not to 0"))))
+
+(deftest progress-rejected-once-result-file-exists-even-when-uncaptured
+  (let [{:keys [env dir]} (fake-env {})
+        start (call! env "start" "worker" "--task" "result exists uncaptured")
+        task (get-in (result start) [:result :task])
+        entry (ledger-entry* dir task)
+        envelope (core/envelope {:child (:child entry) :task task :result (:result entry)
+                                  :status "COMPLETE" :summary "done" :artifacts [] :findings [] :next nil})]
+    (spit (:result entry) envelope)
+    (let [proc (call! (child-progress-env env entry) "progress" "--summary" "too late")]
+      (is (zero? (:exit start)) (:err start))
+      (is (= 1 (:exit proc)))
+      (is (re-find #"RESULT" (:out proc)))
+      (is (nil? (:progress (ledger-entry* dir task)))))))
+
+(deftest progress-rejected-after-capture
+  (let [{:keys [env dir]} (fake-env {})
+        run (call! env "run" "worker" "--task" "captured before progress")
+        task (get-in (result run) [:result :task])
+        entry (ledger-entry* dir task)]
+    (is (zero? (:exit run)) (:err run))
+    (is (= "COMPLETE" (get-in (result run) [:result :status])))
+    (is (some? (:captured-at entry)))
+    ;; Isolate the :captured-at guard from the (also-true) RESULT-exists guard: a
+    ;; captured assignment stays rejected even were its RESULT file later removed.
+    (fs/delete-if-exists (:result entry))
+    (let [proc (call! (child-progress-env env entry) "progress" "--summary" "too late")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"captured" (:out proc)))
+      (is (nil? (:progress (ledger-entry* dir task)))))))
+
+(deftest progress-rejected-on-a-terminal-failed-status
+  (let [{:keys [env dir]} (fake-env {"FAKE_FAIL_START" "1"})
+        proc (call! env "start" "worker" "--task" "start failure")
+        ;; The failed `start` exits non-zero without printing the task id, so recover
+        ;; the single entry file from the ledger directory directly (see `tab-placement-
+        ;; partial-start-failure-is-tracked-and-cleaned` above for the same recovery).
+        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))
+                           :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
+                       (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))
+        progress-proc (call! (child-progress-env env entry) "progress" "--summary" "too late")]
+    (is (= 1 (:exit proc)))
+    (is (= "failed" (:status entry)))
+    (is (nil? (:captured-at entry)))
+    (is (= 1 (:exit progress-proc)))
+    (is (re-find #"terminal" (:out progress-proc)))
+    (is (nil? (:progress (ledger-entry* dir (:task entry)))))))
+
+(deftest progress-rejected-on-wrong-or-missing-child-identity
+  (let [{:keys [env dir]} (fake-env {})
+        start (call! env "start" "worker" "--task" "identity guard")
+        task (get-in (result start) [:result :task])
+        entry (ledger-entry* dir task)]
+    (is (zero? (:exit start)) (:err start))
+    (testing "a mismatched child cannot update another assignment's entry"
+      (let [proc (call! (merge env {"HERDR_SUBAGENT_CHILD" "someone-else" "HERDR_SUBAGENT_TASK" task "HERDR_SUBAGENT_RESULT" (:result entry)}) "progress" "--summary" "spoofed")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"mismatch" (:out proc)))))
+    (testing "a missing child env fails fast rather than falling back to another identity"
+      (let [proc (call! (merge env {"HERDR_SUBAGENT_TASK" task "HERDR_SUBAGENT_RESULT" (:result entry)}) "progress" "--summary" "no identity")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"HERDR_SUBAGENT_CHILD" (:out proc)))))
+    (is (nil? (:progress (ledger-entry* dir task))))))
+
+(deftest progress-instruction-appears-only-under-the-non-blocking-policy
+  (let [{:keys [env]} (fake-env {})
+        blocking (call! env "run" "worker" "--task" "blocking preview" "--print-prompt")
+        non-blocking (call! env "start" "worker" "--task" "non-blocking preview" "--print-prompt")]
+    (is (zero? (:exit blocking)) (:err blocking))
+    (is (zero? (:exit non-blocking)) (:err non-blocking))
+    (is (not (re-find #"progress --summary" (:out blocking))))
+    (is (re-find #"progress --summary" (:out non-blocking)))
+    (is (re-find #"SUBAGENT_PROGRESS_INTERVAL_MS" (:out non-blocking)))
+    (is (not (re-find #"draft findings" (:out blocking))))))
+
+;; --- `collect --any` fan-in -------------------------------------------------------
+;; Multi-child helpers. The fixture clobbers FAKE_HERDR_ENV_FILE on every placement, so
+;; a fan-out test reads each child's identity from its own ledger entry instead.
+(defn- start-child! [env dir assignment]
+  (let [proc (call! env "start" "worker" "--task" assignment)]
+    (when-not (zero? (:exit proc)) (throw (ex-info "fixture spawn failed" {:out (:out proc) :err (:err proc)})))
+    (ledger-entry* dir (get-in (result proc) [:result :task]))))
+(defn- publish-child!
+  ([entry] (publish-child! entry "COMPLETE"))
+  ([entry status]
+   (spit (:result entry)
+         (core/envelope {:child (:child entry) :task (:task entry) :result (:result entry)
+                         :status status :summary "fan-in child" :artifacts [] :findings [] :next nil}))))
+(defn- child-state! [state entry file value]
+  (let [path (fs/path state "children" (:child entry) file)]
+    (fs/create-dirs (fs/parent path))
+    (spit (str path) value)))
+(defn- agent-list-count [log]
+  (count (filter #(and (= ["agent" "list"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+;; `--help` must be excluded explicitly: `pane close --help` is an unconditional preflight
+;; probe sharing this call log, and a two-token prefix match would silently swallow it.
+(defn- closed-panes [log]
+  (set (keep #(when (and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (nth % 2 nil))
+             (calls log))))
+
+;; --- `prune` --------------------------------------------------------------------
+;; Remedies the one documented `collect --any` gap: a `run`/`start` killed between
+;; `ledger/write!` and its cleanup leaves a same-session, uncaptured, non-`failed` entry
+;; that no `RESULT` will ever complete and whose child can never reappear in `agent list`.
+;; No fake-herdr change is needed: `child-state!` "gone" already models a vanished child.
+
+(deftest prune-succeeds-on-a-stale-uncaptured-entry-with-no-live-child
+  (let [{:keys [env log dir state]} (fake-env {})
+        a (start-child! env dir "orphaned by a killed spawn")]
+    (child-state! state a "gone" "")
+    (let [proc (call! env "prune" (:task a)) res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "failed" (:status res)))
+      (is (= "orphaned" (:failure-phase res)))
+      (is (= "missing-agent" (:prune-reason res)))
+      (is (some? (:pruned-at res)))
+      (let [updated (ledger-entry* dir (:task a))]
+        (is (= "failed" (:status updated)))
+        (is (= "orphaned" (:failure-phase updated)))
+        (is (= "missing-agent" (:prune-reason updated)))
+        (is (some? (:pruned-at updated))))
+      (is (empty? (closed-panes log)) "prune never closes the recorded pane"))))
+
+(deftest prune-makes-the-entry-ineligible-for-collect-any
+  (let [{:keys [env dir state]} (fake-env {})
+        a (start-child! env dir "sole candidate, killed mid-flight")]
+    (child-state! state a "gone" "")
+    (is (zero? (:exit (call! env "prune" (:task a)))))
+    (let [res (:result (result (call! env "collect" "--any")))]
+      (is (= "pending" (:status res)))
+      (is (= "no-candidates" (:reason res))))))
+
+(deftest prune-refuses-when-the-named-child-is-still-live
+  (let [{:keys [env log dir]} (fake-env {})
+        a (start-child! env dir "still alive, not stale")
+        before (ledger-entry* dir (:task a))
+        proc (call! env "prune" (:task a))]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"present in agent list" (:out proc)))
+    (is (= before (ledger-entry* dir (:task a))))
+    (is (empty? (closed-panes log)))))
+
+(deftest prune-refuses-an-already-captured-entry
+  (let [{:keys [env dir]} (fake-env {})
+        run (call! env "run" "worker" "--task" "already captured before prune")
+        task (get-in (result run) [:result :task])
+        before (ledger-entry* dir task)
+        proc (call! env "prune" task)]
+    (is (zero? (:exit run)) (:err run))
+    (is (some? (:captured-at before)))
+    (is (= 1 (:exit proc)))
+    (is (re-find #"captured" (:out proc)))
+    (is (= before (ledger-entry* dir task)))))
+
+(deftest prune-refuses-an-already-terminal-entry
+  (let [{:keys [env dir]} (fake-env {"FAKE_FAIL_START" "1"})
+        proc (call! env "start" "worker" "--task" "start failure before prune")
+        ;; The failed `start` exits non-zero without printing the task id, so recover the
+        ;; single entry file directly (see `progress-rejected-on-a-terminal-failed-status`).
+        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))
+                           :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
+                       (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))
+        prune-proc (call! env "prune" (:task entry))]
+    (is (= 1 (:exit proc)))
+    (is (= "failed" (:status entry)))
+    (is (nil? (:captured-at entry)))
+    (is (= 1 (:exit prune-proc)))
+    (is (re-find #"terminal" (:out prune-proc)))
+    (is (= entry (ledger-entry* dir (:task entry))))))
+
+(deftest prune-refuses-when-result-file-already-exists
+  (let [{:keys [env dir]} (fake-env {})
+        a (start-child! env dir "result exists uncaptured before prune")]
+    (publish-child! a)
+    (let [proc (call! env "prune" (:task a))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"RESULT" (:out proc)))
+      (is (nil? (:captured-at (ledger-entry* dir (:task a)))))
+      (is (= "prompted" (:status (ledger-entry* dir (:task a))))))))
+
+;; Mirrors `collect-pane-close-is-scoped-to-the-owning-session`'s foreign-pane pattern: a
+;; different `HERDR_PANE_ID` resolves to a caller identity that never matches the entry's
+;; recorded `:parent-session`, so ownership is refused rather than merely retaining a pane.
+(deftest prune-refuses-a-foreign-parent-session
+  (let [{:keys [env dir]} (fake-env {})
+        a (start-child! env dir "foreign session prune attempt")
+        proc (call! (merge env {"HERDR_PANE_ID" "w:other"}) "prune" (:task a))]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"own" (:out proc)))
+    (is (nil? (:captured-at (ledger-entry* dir (:task a)))))
+    (is (= "prompted" (:status (ledger-entry* dir (:task a)))))))
+
+(deftest prune-refuses-an-unresolvable-caller-identity
+  (let [{:keys [env dir]} (fake-env {})
+        a (start-child! env dir "unresolvable caller identity")
+        proc (call! (merge env {"FAKE_FAIL_AGENT_GET" "w:p"}) "prune" (:task a))]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"own" (:out proc)))
+    (is (= "prompted" (:status (ledger-entry* dir (:task a)))))))
+
+;; Ambiguous liveness must never allow a prune: an unusable `agent list` (no `agents` key)
+;; is indistinguishable from schema drift, so it must refuse even when the child really is
+;; `gone` — a positive absence, not merely an unusable listing, is the only proof accepted.
+(deftest prune-refuses-when-agent-list-is-unusable
+  (let [{:keys [env dir state]} (fake-env {"FAKE_AGENT_LIST_NO_AGENTS_KEY" "1"})
+        a (start-child! env dir "ambiguous liveness must never allow a prune")]
+    (child-state! state a "gone" "")
+    (let [proc (call! env "prune" (:task a))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"unusable" (:out proc)))
+      (is (= "prompted" (:status (ledger-entry* dir (:task a))))))))
+
+(deftest prune-requires-a-task-positional
+  (let [{:keys [env]} (fake-env {})
+        proc (call! env "prune")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"full task uuid" (:out proc)))))
+
+;; This command never scans the ledger or resolves a prefix: an exact-filename miss is
+;; the same "unknown assignment task" `ledger/read!` already raises for `collect`/`status`.
+(deftest prune-does-not-resolve-a-task-id-prefix
+  (let [{:keys [env dir]} (fake-env {})
+        a (start-child! env dir "prefix must never resolve")
+        prefix (subs (:task a) 0 8)
+        proc (call! env "prune" prefix)]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"unknown assignment task" (:out proc)))))
+
+;; Pins two facts together: (a) `usage` renders the identical `<full-task-uuid>`
+;; placeholder for every assignment command, and (b) `collect`/`status` preserve the
+;; same exact-ledger-key `unknown assignment task` rejection `prune` already pins above
+;; -- never `ot`-style prefix resolution.
+(deftest collect-and-status-do-not-resolve-a-task-id-prefix
+  (let [{:keys [env dir]} (fake-env {}) usage (:out (call! env "--help"))
+        a (start-child! env dir "prefix must never resolve")
+        prefix (subs (:task a) 0 8)]
+    (is (str/includes? usage "subagent collect <full-task-uuid> [--wait --timeout MS]"))
+    (is (str/includes? usage "subagent status [full-task-uuid] | list"))
+    (is (str/includes? usage "no prefix is ever resolved"))
+    (is (not (str/includes? usage "collect <task>")))
+    (is (not (str/includes? usage "status [task]")))
+    (doseq [command ["collect" "status"]]
+      (let [proc (call! env command prefix)]
+        (is (= 1 (:exit proc)) command)
+        (is (re-find #"unknown assignment task" (:out proc)) command)))))
+
+;; A child can publish and exit inside the `agent list` subprocess window — the exact
+;; hazard `collect-any!` re-polls to avoid. `fake-herdr`'s `publish-queue` reproduces it:
+;; the RESULT appears as a side effect of the very `agent list` call `prune!` uses for its
+;; liveness proof, so the final mutation must re-check the freshest ledger state rather
+;; than the pre-listing snapshot, and the race-won RESULT must remain collectible.
+(deftest prune-refuses-a-result-published-during-the-liveness-scan
+  (let [{:keys [env dir state]} (fake-env {})
+        a (start-child! env dir "publishes inside the agent list window")]
+    (child-state! state a "gone" "")
+    (spit (str (fs/path state "publish-queue")) (str (:child a) "\n"))
+    (let [proc (call! env "prune" (:task a))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"captured or published" (:out proc)))
+      (is (nil? (:captured-at (ledger-entry* dir (:task a)))))
+      (is (= "prompted" (:status (ledger-entry* dir (:task a)))))
+      (let [collected (call! env "collect" (:task a))]
+        (is (zero? (:exit collected)) (:err collected))
+        (is (= "COMPLETE" (get-in (result collected) [:result :status])))))))
+
+;; A bare `not=` would let an unresolvable caller (nil) own an entry whose own
+;; `:parent-session` is also nil — a hand-edited or legacy-format ledger file — since
+;; nil equals nil. The child is separately marked `gone` so only the ownership guard
+;; (not the liveness guard) is exercised by this scenario.
+(deftest prune-refuses-when-recorded-and-caller-identity-are-both-unresolvable
+  (let [{:keys [env dir state]} (fake-env {})
+        a (start-child! env dir "nil recorded parent-session")]
+    (child-state! state a "gone" "")
+    (let [path (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str (:task a) ".json"))
+          corrupted (dissoc a :parent-session)]
+      (spit (str path) (json/generate-string corrupted))
+      (let [proc (call! (merge env {"FAKE_FAIL_AGENT_GET" "w:p"}) "prune" (:task a))]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"own" (:out proc)))
+        (is (= corrupted (ledger-entry* dir (:task a))))))))
+
+;; The *second* child publishes first, so first-of-N cannot be an artefact of spawn order.
+;; One capture closes exactly one pane and leaves the sibling's ledger entry untouched.
+(deftest collect-any-captures-the-first-published-child
+  (let [{:keys [env log dir]} (fake-env {})
+        a (start-child! env dir "fan-in child a")
+        b (start-child! env dir "fan-in child b")]
+    (is (= "w:child" (:pane-id a)))
+    (is (= "w:child-2" (:pane-id b)))
+    (publish-child! b)
+    (let [proc (call! env "collect" "--any")
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)))
+      (is (= (:task b) (:task res)))
+      ;; one candidate (a) is still in flight after this capture
+      (is (= 1 (:remaining res)))
+      ;; only the captured child's pane is closed
+      (is (= #{(:pane-id b)} (closed-panes log)))
+      ;; the sibling's ledger entry is untouched: still uncaptured and still `prompted`
+      (let [sibling (ledger-entry* dir (:task a))]
+        (is (nil? (:captured-at sibling)))
+        (is (= "prompted" (:status sibling)))
+        (is (= (dissoc a :child-session) (dissoc sibling :child-session))))
+      ;; the captured entry itself carries the normal capture bookkeeping
+      (is (= "COMPLETE" (:status (ledger-entry* dir (:task b)))))
+      (is (some? (:captured-at (ledger-entry* dir (:task b))))))))
+
+;; The fan-in result must be the single-task `collect` shape plus exactly one field.
+(deftest collect-any-result-is-the-single-task-shape-plus-remaining
+  (let [{single-env :env single-dir :dir} (fake-env {})
+        {any-env :env any-dir :dir} (fake-env {})
+        one (start-child! single-env single-dir "shape via single-task collect")
+        other (start-child! any-env any-dir "shape via fan-in collect")]
+    (publish-child! one)
+    (publish-child! other)
+    (let [single (:result (result (call! single-env "collect" (:task one))))
+          any (:result (result (call! any-env "collect" "--any")))]
+      (is (= "COMPLETE" (:status single)))
+      (is (= "COMPLETE" (:status any)))
+      (is (= (conj (set (keys single)) :remaining) (set (keys any))))
+      (is (= 0 (:remaining any))))))
+
+;; Candidacy is same `:parent-session` + no `:captured-at` + `:status` not `failed`. The
+;; `failed` exclusion is load-bearing: `safe-cleanup!` marks a dead spawn `failed` without
+;; a `:captured-at`, so without it `no-candidates` would be unreachable forever.
+(deftest collect-any-candidacy-excludes-failed-captured-and-foreign-entries
+  (let [{:keys [env dir]} (fake-env {})
+        live (start-child! env dir "live fan-in child")
+        dead (call! (merge env {"FAKE_FAIL_START" "1"}) "start" "worker" "--task" "dead spawn")]
+    (is (= 1 (:exit dead)))
+    (publish-child! live)
+    (testing "a foreign parent session sees no candidates, even with one publishable"
+      ;; FAKE_SESSION_FROM=get gives `agent get w:other` a real, different session value.
+      ;; Asserted before the owning capture, so the entry is genuinely still capturable.
+      (let [proc (call! (merge env {"HERDR_PANE_ID" "w:other" "FAKE_SESSION_FROM" "get"}) "collect" "--any")]
+        (is (zero? (:exit proc)) (:err proc))
+        (is (= "pending" (get-in (result proc) [:result :status])))
+        (is (= "no-candidates" (get-in (result proc) [:result :reason])))
+        ;; Never captured across the ownership boundary.
+        (is (nil? (:captured-at (ledger-entry* dir (:task live)))))))
+    (testing "a terminal spawn-failure entry is never a candidate"
+      (let [res (:result (result (call! env "collect" "--any")))]
+        (is (= "COMPLETE" (:status res)))
+        (is (= (:task live) (:task res)))
+        ;; the failed entry is excluded from the candidate count, not merely from capture
+        (is (= 0 (:remaining res)))))
+    (testing "with every candidate captured, `no-candidates` is reachable"
+      (let [res (:result (result (call! env "collect" "--any")))]
+        (is (= "pending" (:status res)))
+        (is (= "no-candidates" (:reason res)))))))
+
+;; A child can publish and exit inside the `agent list` subprocess window, so a terminal
+;; short-circuit must never discard an envelope already on disk. The fixture reproduces the
+;; race exactly: `agent list` prints its array *then* runs the publish queue, so a child
+;; that is both invisible to the listing and queued publishes during the very call that
+;; would otherwise classify it away.
+(deftest collect-any-never-discards-a-result-published-inside-the-liveness-window
+  (testing "a vanished-and-publishing child is captured, not reported no-live-children"
+    (let [{:keys [env dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+          a (start-child! env dir "races the liveness scan")]
+      (child-state! state a "gone" "")
+      (spit (str (fs/path state "publish-queue")) (str (:child a) "\n"))
+      (let [res (:result (result (call! env "collect" "--any" "--wait" "--timeout" "20000")))]
+        (is (= "COMPLETE" (:status res)))
+        (is (= (:task a) (:task res)))
+        (is (= 0 (:remaining res))))))
+  (testing "a blocked sibling does not short-circuit past a racing publication either"
+    (let [{:keys [env log dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+          a (start-child! env dir "blocked sibling")
+          b (start-child! env dir "races the liveness scan")]
+      (child-state! state a "status" "blocked")
+      ;; `nameless` keeps `agent get` working, so closure of the captured pane is provable.
+      (child-state! state b "nameless" "")
+      (spit (str (fs/path state "publish-queue")) (str (:child b) "\n"))
+      (let [res (:result (result (call! env "collect" "--any" "--wait" "--timeout" "20000")))]
+        (is (= "COMPLETE" (:status res)))
+        (is (= (:task b) (:task res)))
+        (is (= 1 (:remaining res)))
+        (is (= #{(:pane-id b)} (closed-panes log)))))))
+
+;; Liveness by `name` only: a real `agent list` contains nameless entries for manually
+;; started agents, so an unidentifiable entry must count as vanished rather than keeping an
+;; exited child "live" forever and making `no-live-children` unreachable.
+(deftest collect-any-treats-a-nameless-listing-entry-as-vanished
+  (let [{:keys [env dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+        a (start-child! env dir "nameless listing entry")]
+    (child-state! state a "nameless" "")
+    (let [began (System/currentTimeMillis)
+          res (:result (result (call! env "collect" "--any" "--wait" "--timeout" "20000")))]
+      (is (= "pending" (:status res)))
+      (is (= "no-live-children" (:reason res)))
+      (is (< (- (System/currentTimeMillis) began) 8000)))))
+
+;; "Liveness unknown" must degrade to polling, not to a spurious `no-live-children`: an
+;; exit-0 listing with no `agents` key is indistinguishable from schema drift, and an
+;; `(into {} … nil)` would hand the short-circuit a truthy empty index.
+(deftest collect-any-degrades-to-polling-when-the-listing-payload-is-unusable
+  (let [{:keys [env dir]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50" "FAKE_AGENT_LIST_NO_AGENTS_KEY" "1"})]
+    (start-child! env dir "unusable listing")
+    (let [res (:result (result (call! env "collect" "--any" "--wait" "--timeout" "300")))]
+      (is (= "pending" (:status res)))
+      (is (= "timeout" (:reason res))))))
+
+;; An unresolvable caller identity cannot be scoped, so it is reported distinctly rather
+;; than as an empty fan-out. Non-throwing, matching `collect`, which never runs preflight.
+(deftest collect-any-reports-an-unresolvable-caller-distinctly
+  (let [{:keys [env dir]} (fake-env {})]
+    (start-child! env dir "orphaned by a failing parent probe")
+    (let [proc (call! (merge env {"FAKE_FAIL_AGENT_GET" "w:p"}) "collect" "--any")]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "pending" (get-in (result proc) [:result :status])))
+      (is (= "unknown-caller" (get-in (result proc) [:result :reason]))))))
+
+(deftest collect-any-with-no-entries-reports-no-candidates
+  (let [{:keys [env log]} (fake-env {})
+        proc (call! env "collect" "--any")]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "pending" (get-in (result proc) [:result :status])))
+    (is (= "no-candidates" (get-in (result proc) [:result :reason])))
+    ;; No candidate set means no liveness scan at all.
+    (is (zero? (agent-list-count log)))))
+
+;; Without `--wait` the budget is zero, so an in-flight candidate that has not published
+;; is one poll and out — no sleep, and the same `timeout` reason a spent budget reports.
+(deftest collect-any-without-wait-polls-once
+  (let [{:keys [env log dir]} (fake-env {})]
+    (start-child! env dir "in flight, never publishes")
+    (let [before (agent-list-count log)
+          began (System/currentTimeMillis)
+          proc (call! env "collect" "--any")
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "pending" (:status res)))
+      (is (= "timeout" (:reason res)))
+      (is (= 1 (- (agent-list-count log) before)))
+      (is (< (- (System/currentTimeMillis) began) 3000))
+      (is (empty? (closed-panes log))))))
+
+(deftest collect-any-rejects-a-task-positional
+  (let [{:keys [env]} (fake-env {})
+        proc (call! env "collect" "--any" "some-task")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"takes no task argument" (:out proc)))))
+
+;; Elapsed budget with nothing published, plus the poll-interval discipline: one
+;; `agent list` per tick, and never a sleep that overshoots the total timeout.
+(deftest collect-any-timeout-honours-the-poll-interval
+  (testing "a spent budget reports pending/timeout after a bounded number of polls"
+    (let [{:keys [env log dir]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})]
+      (start-child! env dir "never publishes a")
+      (start-child! env dir "never publishes b")
+      (let [before (agent-list-count log)
+            proc (call! env "collect" "--any" "--wait" "--timeout" "400")
+            polls (- (agent-list-count log) before)]
+        (is (zero? (:exit proc)) (:err proc))
+        (is (= "pending" (get-in (result proc) [:result :status])))
+        (is (= "timeout" (get-in (result proc) [:result :reason])))
+        ;; One listing per tick: above 1 (it really looped) and under the 400/50 + 1
+        ;; sleep-derived ceiling with slack for fork cost.
+        (is (<= 2 polls 14) (str "polls=" polls)))))
+  (testing "a poll interval longer than the remaining budget never overshoots it"
+    ;; A full 5 s sleep would dominate the wall time; `min(interval, remaining)` cannot.
+    (let [{:keys [env dir]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "5000"})]
+      (start-child! env dir "long interval child")
+      (let [began (System/currentTimeMillis)
+            proc (call! env "collect" "--any" "--wait" "--timeout" "200")
+            elapsed (- (System/currentTimeMillis) began)]
+        (is (zero? (:exit proc)) (:err proc))
+        (is (= "timeout" (get-in (result proc) [:result :reason])))
+        (is (< elapsed 4000) (str "elapsed=" elapsed))))))
+
+;; All candidates blocked short-circuits instead of consuming the budget, and never
+;; closes a pane (a blocked child is resumable in its retained pane).
+(deftest collect-any-all-blocked-candidates-short-circuit
+  (let [{:keys [env log dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+        a (start-child! env dir "blocked a")
+        b (start-child! env dir "blocked b")]
+    (doseq [entry [a b]] (child-state! state entry "status" "blocked"))
+    (let [began (System/currentTimeMillis)
+          proc (call! env "collect" "--any" "--wait" "--timeout" "20000")
+          elapsed (- (System/currentTimeMillis) began)
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "blocked" (:status res)))
+      (is (= #{(:task a) (:task b)} (set (:tasks res))))
+      (is (< elapsed 8000) (str "elapsed=" elapsed))
+      (is (empty? (closed-panes log)))
+      ;; Neither entry is consumed: both stay capturable once unblocked.
+      (doseq [entry [a b]] (is (nil? (:captured-at (ledger-entry* dir (:task entry)))))))))
+
+;; A single unblocked sibling is enough to keep polling: the short-circuit is
+;; "every live candidate", never "any".
+(deftest collect-any-one-unblocked-sibling-defeats-the-blocked-short-circuit
+  (let [{:keys [env dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+        a (start-child! env dir "blocked sibling")
+        b (start-child! env dir "working sibling")]
+    (child-state! state a "status" "blocked")
+    (child-state! state b "status" "working")
+    ;; The fixture publishes b's result on the second poll tick, mid-wait.
+    (spit (str (fs/path state "publish-queue")) (str "\n" (:child b) "\n"))
+    (let [proc (call! env "collect" "--any" "--wait" "--timeout" "5000")
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)))
+      (is (= (:task b) (:task res)))
+      (is (= 1 (:remaining res))))))
+
+;; Every candidate's agent has vanished: `agent get`/`agent list` no longer know it.
+(deftest collect-any-all-vanished-children-report-no-live-children
+  (let [{:keys [env log dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+        a (start-child! env dir "vanished a")
+        b (start-child! env dir "vanished b")]
+    (doseq [entry [a b]] (child-state! state entry "gone" ""))
+    (let [began (System/currentTimeMillis)
+          proc (call! env "collect" "--any" "--wait" "--timeout" "20000")
+          elapsed (- (System/currentTimeMillis) began)
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "pending" (:status res)))
+      (is (= "no-live-children" (:reason res)))
+      (is (< elapsed 8000) (str "elapsed=" elapsed))
+      (is (empty? (closed-panes log))))))
+
+;; --- `collect --any` settle-close --------------------------------------------------
+;; `maybe-close!` probes `agent_status` once with no retry, so a child still `working` at
+;; the instant of capture used to keep its COMPLETE pane forever. One bounded `agent wait`
+;; on the captured child (only) precedes that unmodified close attempt. The fixture's
+;; per-child `settle-to` marker is what avoids `agent wait`'s original publish side effect
+;; on an already-published child.
+(defn- child-waits [log child]
+  (filterv #(and (= ["agent" "wait" child] (vec (take 3 %))) (not (some #{"--help"} %))) (calls log)))
+;; A local reader: the shared `flag-value` helper is defined further down this file.
+(defn- argv-flag [argv flag] (second (drop-while #(not= flag %) argv)))
+
+(deftest collect-any-settles-a-working-child-before-closing-its-pane
+  (let [{:keys [env log dir state]} (fake-env {})
+        a (start-child! env dir "settle-close sibling")
+        b (start-child! env dir "settle-close capture")]
+    ;; b published but is still mid-turn — exactly the reproduced race.
+    (child-state! state b "status" "working")
+    (child-state! state b "settle-to" "idle")
+    (publish-child! b)
+    (let [proc (call! env "collect" "--any")
+          res (:result (result proc))
+          waits (child-waits log (:child b))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)))
+      (is (= (:task b) (:task res)))
+      (is (= 1 (:remaining res)))
+      ;; the settled child's pane is closed; the sibling is untouched
+      (is (= #{(:pane-id b)} (closed-panes log)))
+      ;; exactly one settle wait, on the captured child only, at the default budget and
+      ;; deliberately without `--until`: the bare form settles on `blocked` too.
+      (is (= 1 (count waits)))
+      (is (empty? (child-waits log (:child a))))
+      (is (= (str cli/default-settle-close-ms) (argv-flag (first waits) "--timeout")))
+      (is (not-any? #{"--until"} (first waits))))))
+
+(deftest settle-close-budget-defaults-outlast-the-notify-wait-and-honour-the-override
+  (is (= 45000 cli/default-settle-close-ms))
+  ;; Load-bearing ordering: the 30 s notify wait is what keeps a publishing child `working`.
+  (is (> cli/default-settle-close-ms cli/default-notify-timeout-ms))
+  (is (= 1234 (cli/parse-settle-close "1234")))
+  (doseq [raw [nil "" "   " "soon" "0" "-5"]]
+    (is (= cli/default-settle-close-ms (cli/parse-settle-close raw)) (pr-str raw)))
+  (let [{:keys [env log dir state]} (fake-env {"SUBAGENT_SETTLE_CLOSE_MS" "1500"})
+        b (start-child! env dir "settle budget override")]
+    (child-state! state b "status" "working")
+    (child-state! state b "settle-to" "idle")
+    (publish-child! b)
+    (let [proc (call! env "collect" "--any")]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "1500" (argv-flag (first (child-waits log (:child b))) "--timeout"))))))
+
+;; Budget expiry and a failed `agent wait` alike still make the one close attempt, which
+;; simply finds the child unsettled: the pane is retained and the envelope's own status is
+;; reported unchanged.
+(deftest collect-any-settle-close-give-up-retains-the-pane-without-touching-the-result
+  (doseq [outcome ["timeout" "error"]]
+    (let [{:keys [env log dir state]} (fake-env {})
+          b (start-child! env dir "settle-close give-up")]
+      (child-state! state b "status" "working")
+      (child-state! state b "settle-to" outcome)
+      (publish-child! b)
+      (let [proc (call! env "collect" "--any")
+            res (:result (result proc))]
+        (is (zero? (:exit proc)) (str outcome " " (:err proc)))
+        (is (= "COMPLETE" (:status res)) outcome)
+        (is (= 0 (:remaining res)) outcome)
+        (is (= 1 (count (child-waits log (:child b)))) outcome)
+        (is (empty? (closed-panes log)) outcome)
+        ;; capture bookkeeping is the normal one: the close outcome never demotes it
+        (is (= "COMPLETE" (:status (ledger-entry* dir (:task b)))) outcome)))))
+
+;; The whole result, `remaining` included, is a function of capture and candidacy — never
+;; of the close outcome. Two single-child fan-outs differing *only* in settlement.
+(deftest collect-any-result-is-identical-whether-the-close-succeeds-or-gives-up
+  (let [collect-one! (fn [settle-to]
+                       (let [{:keys [env log dir state]} (fake-env {})
+                             b (start-child! env dir "identical shape either way")]
+                         (child-state! state b "status" "working")
+                         (child-state! state b "settle-to" settle-to)
+                         (publish-child! b)
+                         {:res (:result (result (call! env "collect" "--any")))
+                          :closed (closed-panes log) :pane (:pane-id b)}))
+        closed (collect-one! "idle")
+        gave-up (collect-one! "timeout")
+        ;; identity fields (and the raw `:text` carrying them) are per-fixture; everything
+        ;; else must match exactly
+        strip #(dissoc % :child :task :result :text)]
+    (is (= #{(:pane closed)} (:closed closed)))
+    (is (empty? (:closed gave-up)))
+    (is (= (set (keys (:res closed))) (set (keys (:res gave-up)))))
+    (is (= (strip (:res closed)) (strip (:res gave-up))))
+    (is (= 0 (:remaining (:res gave-up))))))
+
+;; `herdr/wait!` is used deliberately instead of `wait-settled!`: without `--until` the
+;; wait returns on *any* settled state, so a blocked child ends it immediately rather than
+;; burning the budget — and its pane is still retained, because closure needs idle/done.
+;; The fixture honours `--until` exactly as herdr does, so a `wait-settled!` regression
+;; makes this child time out and the elapsed bound (not only the argv assertion above)
+;; fails.
+(deftest collect-any-settle-wait-ends-early-on-a-blocked-child
+  (let [{:keys [env log dir state]} (fake-env {})
+        b (start-child! env dir "settles to blocked")]
+    (child-state! state b "status" "working")
+    (child-state! state b "settle-to" "blocked")
+    (publish-child! b)
+    (let [began (System/currentTimeMillis)
+          proc (call! env "collect" "--any")
+          elapsed (- (System/currentTimeMillis) began)
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)))
+      (is (= 1 (count (child-waits log (:child b)))))
+      (is (empty? (closed-panes log)))
+      ;; The fixture writes the settled status through only when the wait actually matched,
+      ;; and it honours `--until` as herdr does — so this is what pins "blocked ends the
+      ;; wait": a `wait-settled!` regression times out and leaves `working` behind.
+      (is (= "blocked" (str/trim (slurp (str (fs/path state "children" (:child b) "status"))))))
+      ;; nowhere near the 45 s budget: the bare wait matched `blocked`
+      (is (< elapsed 20000) (str "elapsed=" elapsed)))))
+
+;; A captured BLOCKED envelope never closes a pane, so there is nothing for a settle wait
+;; to buy: it is skipped entirely rather than delaying the fan-in by the whole budget.
+(deftest collect-any-blocked-envelope-skips-the-settle-wait
+  (let [{:keys [env log dir state]} (fake-env {})
+        b (start-child! env dir "blocked envelope")]
+    (child-state! state b "status" "working")
+    ;; Deliberately present: the call-log assertion below proves the wait was never issued,
+    ;; and this marker would have made it succeed had it been.
+    (child-state! state b "settle-to" "idle")
+    (publish-child! b "BLOCKED")
+    (let [proc (call! env "collect" "--any")
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "BLOCKED" (:status res)))
+      (is (empty? (child-waits log (:child b))))
+      (is (empty? (closed-panes log))))))
+
+;; --- advisory parent push at publish time -----------------------------------------
+;; `start-child!` spawns from the parent pane `w:p`; the child then publishes with its own
+;; injected identity, which is exactly the runtime shape of the push path.
+(defn- child-publish-env [env entry policy]
+  (merge env {"HERDR_SUBAGENT_CHILD" (:child entry) "HERDR_SUBAGENT_TASK" (:task entry)
+              "HERDR_SUBAGENT_RESULT" (:result entry) "HERDR_SUBAGENT_WAITING_POLICY" policy
+              "HERDR_PANE_ID" (:pane-id entry)}))
+;; `--help` must be excluded explicitly (as in `closed-panes`): preflight probes
+;; `agent prompt/get/wait --help` on every spawn and shares this call log.
+(defn- parent-calls [log command]
+  (filterv #(and (= (conj command "w:p") (vec (take 3 %))) (not (some #{"--help"} %))) (calls log)))
+(defn- parent-prompts [log] (parent-calls log ["agent" "prompt"]))
+(defn- parent-waits [log] (parent-calls log ["agent" "wait"]))
+(defn- parent-gets [log] (parent-calls log ["agent" "get"]))
+(defn- flag-value [argv flag] (second (drop-while #(not= flag %) argv)))
+
+(deftest ledger-records-the-parent-pane-at-allocation
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "parent pane recorded")]
+    (is (= "w:p" (:parent-pane entry)))
+    (is (= "session" (:parent-session entry)))))
+
+;; One `agent get` probe, then one advisory `agent prompt` naming the child, the task, and
+;; the `collect` command. Never `--wait`: that path can return `agent_prompt_stalled`.
+(deftest non-blocking-publish-pushes-one-advisory-prompt-to-a-settled-parent
+  (doseq [status ["idle" "done"]]
+    (let [{:keys [env log dir]} (fake-env {})
+          entry (start-child! env dir (str "push to " status " parent"))
+          proc (call! (merge (child-publish-env env entry "non-blocking") {"FAKE_PARENT_STATUS" status})
+                      "publish" "--status" "COMPLETE" "--summary" "done")
+          res (:result (result proc))
+          pushes (parent-prompts log)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)) status)
+      (is (= "sent" (get-in res [:parent-push :push])) status)
+      (is (= 1 (count pushes)) status)
+      (let [text (nth (first pushes) 3)]
+        (is (str/includes? text (:child entry)))
+        (is (str/includes? text (:task entry)))
+        (is (str/includes? text (str "collect " (:task entry)))))
+      (is (not-any? #(some #{"--wait"} %) pushes) status)
+      ;; Exactly one probe at publish time, on top of the single spawn-side identity read.
+      (is (= 2 (count (parent-gets log))) status)
+      (is (empty? (parent-waits log)) status)
+      ;; The operator toast is retained alongside the push.
+      (is (some #(and (= ["notification" "show"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)) status))))
+
+;; Under `blocking` the parent is already in its own wait loop: no probe, no push at all.
+(deftest blocking-publish-never-probes-or-pushes-to-the-parent
+  (let [{:keys [env log dir]} (fake-env {})
+        entry (start-child! env dir "blocking policy")
+        proc (call! (child-publish-env env entry "blocking") "publish" "--status" "COMPLETE" "--summary" "done")
+        res (:result (result proc))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "COMPLETE" (:status res)))
+    (is (nil? (:parent-push res)))
+    (is (nil? (:notification res)))
+    (is (empty? (parent-prompts log)))
+    (is (empty? (parent-waits log)))
+    ;; Only the spawn-side identity read: publish added no probe.
+    (is (= 1 (count (parent-gets log))))))
+
+;; Prompt text submitted to a blocked agent lands in its approval UI, so a blocked parent
+;; is never pushed to and never waited for.
+(deftest a-blocked-parent-receives-no-push
+  (let [{:keys [env log dir]} (fake-env {})
+        entry (start-child! env dir "blocked parent")
+        proc (call! (merge (child-publish-env env entry "non-blocking") {"FAKE_PARENT_STATUS" "blocked"})
+                    "publish" "--status" "COMPLETE" "--summary" "done")
+        res (:result (result proc))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "COMPLETE" (:status res)))
+    (is (fs/exists? (:result entry)))
+    (is (= "skipped" (get-in res [:parent-push :push])))
+    (is (= "parent-blocked" (get-in res [:parent-push :reason])))
+    (is (empty? (parent-prompts log)))
+    (is (empty? (parent-waits log)))))
+
+;; Panes outlive agent sessions: a replacement agent in the reused parent pane must never
+;; be prompted, the same ownership boundary `maybe-close!` enforces for pane closure.
+(deftest a-foreign-parent-session-receives-no-push
+  (let [{:keys [env log dir]} (fake-env {})
+        entry (start-child! env dir "replaced parent")
+        proc (call! (merge (child-publish-env env entry "non-blocking") {"FAKE_PARENT_SESSION" "replacement"})
+                    "publish" "--status" "COMPLETE" "--summary" "done")
+        res (:result (result proc))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "COMPLETE" (:status res)))
+    (is (= "skipped" (get-in res [:parent-push :push])))
+    (is (= "session-mismatch" (get-in res [:parent-push :reason])))
+    (is (empty? (parent-prompts log)))
+    ;; A foreign session is not waited for either: there is nothing to settle.
+    (is (empty? (parent-waits log)))))
+
+;; `working` and `unknown` both get one bounded settle wait, then the single push.
+(deftest an-unsettled-parent-is-waited-for-then-pushed-once
+  (doseq [[status timeout argv] [["working" "30000" []] ["unknown" "1234" ["--notify-timeout" "1234"]]]]
+    (let [{:keys [env log dir]} (fake-env {})
+          entry (start-child! env dir (str status " parent"))
+          proc (apply call! (merge (child-publish-env env entry "non-blocking") {"FAKE_PARENT_STATUS" status})
+                      "publish" "--status" "COMPLETE" "--summary" "done" argv)
+          res (:result (result proc))
+          waits (parent-waits log)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)) status)
+      (is (= "sent" (get-in res [:parent-push :push])) status)
+      ;; `:waited` claims only that a settle wait preceded the outcome, never settlement.
+      (is (true? (get-in res [:parent-push :waited])) status)
+      (is (= 1 (count waits)) status)
+      ;; Narrower than herdr's default match set, which also includes `blocked`.
+      (is (= ["--until" "idle" "--until" "done"] (vec (take-last 4 (first waits)))) status)
+      (is (= timeout (flag-value (first waits) "--timeout")) status)
+      (is (= 1 (count (parent-prompts log))) status))))
+
+;; The wait is bounded: an exhausted budget names the outcome and pushes nothing.
+(deftest a-parent-that-never-settles-reports-timed-out-without-pushing
+  (let [{:keys [env log dir]} (fake-env {})
+        entry (start-child! env dir "never settles")
+        proc (call! (merge (child-publish-env env entry "non-blocking") {"FAKE_PARENT_STATUS" "working" "FAKE_PARENT_WAIT" "timeout"})
+                    "publish" "--status" "COMPLETE" "--summary" "done" "--notify-timeout" "50")
+        res (:result (result proc))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "COMPLETE" (:status res)))
+    (is (fs/exists? (:result entry)))
+    (is (= "timed-out" (get-in res [:parent-push :push])))
+    (is (= 50 (get-in res [:parent-push :timeout-ms])))
+    (is (= "working" (get-in res [:parent-push :parent-status])))
+    (is (= 1 (count (parent-waits log))))
+    (is (empty? (parent-prompts log)))))
+
+;; The settle wait can be satisfied by a *replacement* agent settling in the reused pane,
+;; so both gates are re-checked on the AgentInfo observed after the wait, not before it.
+(deftest both-gates-are-rechecked-on-the-agent-observed-after-the-wait
+  (let [{:keys [env log dir]} (fake-env {})
+        entry (start-child! env dir "replaced mid-wait")
+        proc (call! (merge (child-publish-env env entry "non-blocking")
+                           {"FAKE_PARENT_STATUS" "working" "FAKE_PARENT_WAIT_SESSION" "replacement"})
+                    "publish" "--status" "COMPLETE" "--summary" "done" "--notify-timeout" "500")
+        res (:result (result proc))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "COMPLETE" (:status res)))
+    (is (= "skipped" (get-in res [:parent-push :push])))
+    (is (= "session-mismatch" (get-in res [:parent-push :reason])))
+    (is (true? (get-in res [:parent-push :waited])))
+    (is (= 1 (count (parent-waits log))))
+    (is (empty? (parent-prompts log)))))
+
+;; Backward compatibility: an entry allocated before `:parent-pane` existed names no parent
+;; to probe, so the push is skipped without a single herdr call.
+(deftest an-entry-without-a-parent-pane-is-skipped-without-probing
+  (let [{:keys [env log dir]} (fake-env {})
+        entry (start-child! env dir "legacy entry")
+        path (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str (:task entry) ".json")))
+        probes (count (parent-gets log))]
+    (spit path (json/generate-string (dissoc entry :parent-pane)))
+    (let [proc (call! (child-publish-env env entry "non-blocking") "publish" "--status" "COMPLETE" "--summary" "done")
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)))
+      (is (fs/exists? (:result entry)))
+      (is (= "skipped" (get-in res [:parent-push :push])))
+      (is (= "no-parent-pane" (get-in res [:parent-push :reason])))
+      (is (= probes (count (parent-gets log))))
+      (is (empty? (parent-prompts log))))))
+
+;; Publication is committed before the push, so any herdr failure on the push path is
+;; reported and nothing more: status and exit code are untouched.
+(deftest a-herdr-failure-on-the-push-path-never-affects-publication
+  (testing "the probe itself fails"
+    (let [{:keys [env log dir]} (fake-env {})
+          entry (start-child! env dir "probe fails")
+          proc (call! (merge (child-publish-env env entry "non-blocking") {"FAKE_FAIL_AGENT_GET" "w:p"})
+                      "publish" "--status" "COMPLETE" "--summary" "done")
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)))
+      (is (fs/exists? (:result entry)))
+      (is (= "error" (get-in res [:parent-push :push])))
+      (is (= "probe-failed" (get-in res [:parent-push :reason])))
+      (is (empty? (parent-prompts log)))))
+  ;; A failed submission may already have delivered text partially, so it is named
+  ;; distinctly from a parent that was never contacted.
+  (testing "the submission itself fails"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (start-child! env dir "prompt fails")
+          proc (call! (merge (child-publish-env env entry "non-blocking") {"FAKE_FAIL_PROMPT" "1"})
+                      "publish" "--status" "COMPLETE" "--summary" "done")
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)))
+      (is (fs/exists? (:result entry)))
+      (is (= "error" (get-in res [:parent-push :push])))
+      (is (= "prompt-failed" (get-in res [:parent-push :reason])))))
+  (testing "the settle wait fails with a non-timeout code"
+    (let [{:keys [env log dir]} (fake-env {})
+          entry (start-child! env dir "wait fails")
+          proc (call! (merge (child-publish-env env entry "non-blocking") {"FAKE_PARENT_STATUS" "working" "FAKE_PARENT_WAIT" "agent_not_found"})
+                      "publish" "--status" "COMPLETE" "--summary" "done" "--notify-timeout" "500")
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)))
+      (is (= "error" (get-in res [:parent-push :push])))
+      (is (= "agent_not_found" (get-in res [:parent-push :reason])))
+      (is (empty? (parent-prompts log)))))
+  (testing "a publication with no ledger entry has no parent to probe"
+    (let [{:keys [env log dir]} (fake-env {})
+          target (str (fs/path dir "orphan.result"))
+          proc (call! (merge env {"HERDR_SUBAGENT_CHILD" "child" "HERDR_SUBAGENT_TASK" "task"
+                                  "HERDR_SUBAGENT_RESULT" target "HERDR_SUBAGENT_WAITING_POLICY" "non-blocking"})
+                      "publish" "--status" "COMPLETE" "--summary" "done")
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (fs/exists? target))
+      (is (= "skipped" (get-in res [:parent-push :push])))
+      (is (= "unknown-ledger-entry" (get-in res [:parent-push :reason])))
+      (is (empty? (parent-prompts log))))))
+
 (deftest help-is-human-readable-text
   (let [{:keys [env]} (fake-env {})]
     (doseq [argv [["--help"] ["help"] ["run" "--help"] ["publish" "--help"]]]
@@ -720,6 +1766,7 @@
         (is (zero? (:exit proc)) (str argv " -> " (:err proc)))
         (is (str/starts-with? (:out proc) "subagent run|start"))
         (is (not (str/includes? (:out proc) "\"ok\"")))))))
+
 
 ;; Ties the shipped default table to the record's verified rows, independent of the
 ;; loader/translation machinery under test elsewhere in this namespace.
@@ -896,3 +1943,178 @@
       (is (re-find #"model-flag" (:out proc)))
       (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))
       (is (not-any? mutating? (calls log))))))
+
+;; --- portable Markdown artifact links ---------------------------------------------
+;; Two link surfaces with deliberately different weight: the publish-time advisory is
+;; built from the child's *declared* body (unvalidated), while `collect` renders only
+;; artifacts whose existence it just checked. Neither may emit a raw OSC 8 escape.
+(defn- publish-artifacts! [entry artifacts]
+  (spit (:result entry)
+        (core/envelope {:child (:child entry) :task (:task entry) :result (:result entry)
+                        :status "COMPLETE" :summary "artifact links" :artifacts artifacts :findings [] :next nil})))
+(defn- artifact-file! [dir name] (let [path (str (fs/path dir name))] (spit path "artifact body") path))
+
+(deftest collect-returns-existence-validated-artifact-links
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "collect artifact links")
+        ;; One hostile name covering spaces, `#`, `%`, and Markdown-significant label
+        ;; characters at once, plus a second artifact to pin ordering and multiplicity.
+        spaced (artifact-file! dir "a report #1 100% [draft].md")
+        plain (artifact-file! dir "notes.md")
+        declared [(str spaced " — the *main* report") plain]]
+    (publish-artifacts! entry declared)
+    (let [res (:result (result (call! env "collect" (:task entry))))
+          links (:artifact-links res)]
+      (is (= "COMPLETE" (:status res)))
+      (is (= 2 (count links)))
+      (is (= (mapv core/artifact-link declared) links))
+      (testing "the label is the whole absolute path, escaped, never a basename"
+        (is (str/includes? (first links) (str "[" (str/replace spaced #"([\\`*_\[\]])" "\\\\$1") "]")))
+        (is (str/starts-with? (first links) (str "[" dir))))
+      (testing "the destination is a canonical, percent-encoded file URI"
+        (is (str/includes? (first links) "](file:///"))
+        (is (str/includes? (first links) "%20"))
+        (is (str/includes? (first links) "%23"))
+        (is (str/includes? (first links) "%25"))
+        (is (str/includes? (first links) "%5B")))
+      (testing "the purpose survives, escaped, outside the link"
+        (is (str/ends-with? (first links) ") — the \\*main\\* report"))
+        (is (not (str/includes? (second links) " — "))))
+      (testing "no raw OSC 8 escape sequence reaches the parent"
+        (is (not-any? #(str/includes? % "\u001b") links))
+        (is (not-any? #(str/includes? % "]8;;") links)))
+      (testing "the links are durable on the ledger entry, after the pane is closed"
+        (is (= links (:artifact-links (ledger-entry* dir (:task entry)))))
+        (is (= links (get-in (result (call! env "status" (:task entry))) [:result :artifact-links])))))))
+
+;; Absent is not the same claim as validated-empty, so an empty ARTIFACTS list must add no
+;; key at all — on the entry or in the collect result — and neither may an invalid one.
+(deftest empty-and-invalid-artifact-lists-produce-no-links
+  (testing "no declared artifacts: no key anywhere"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (start-child! env dir "no artifacts")]
+      (publish-artifacts! entry [])
+      (let [res (:result (result (call! env "collect" (:task entry))))]
+        (is (= "COMPLETE" (:status res)))
+        (is (not (contains? res :artifact-links)))
+        (is (not (contains? (ledger-entry* dir (:task entry)) :artifact-links))))))
+  (testing "an artifact that fails the existence check never becomes a validated link"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (start-child! env dir "missing artifact")]
+      (publish-artifacts! entry ["/nonexistent/subagent-link-artifact — missing"])
+      (let [res (:result (result (call! env "collect" (:task entry))))]
+        (is (= "invalid" (:status res)))
+        (is (not (contains? res :artifact-links)))
+        (is (not (contains? (ledger-entry* dir (:task entry)) :artifact-links)))))))
+
+;; `--any` must remain the single-task shape plus exactly `remaining`: links flow through
+;; the shared capture path rather than being added by the fan-in branch.
+(deftest collect-any-carries-artifact-links-without-widening-its-shape
+  (let [{single-env :env single-dir :dir} (fake-env {})
+        {any-env :env any-dir :dir} (fake-env {})
+        one (start-child! single-env single-dir "links via single-task collect")
+        other (start-child! any-env any-dir "links via fan-in collect")
+        a (artifact-file! single-dir "one report.md")
+        b (artifact-file! any-dir "other report.md")]
+    (publish-artifacts! one [(str a " — single")])
+    (publish-artifacts! other [(str b " — fan-in")])
+    (let [single (:result (result (call! single-env "collect" (:task one))))
+          any (:result (result (call! any-env "collect" "--any")))]
+      (is (= [(core/artifact-link (str b " — fan-in"))] (:artifact-links any)))
+      (is (= (conj (set (keys single)) :remaining) (set (keys any))))
+      (is (= 0 (:remaining any))))))
+
+;; The advisory push carries declared links, labelled as pending validation. Publish still
+;; performs no existence check, so this artifact deliberately does not exist.
+(deftest publication-advisory-lists-declared-artifacts-as-pending-validation
+  (let [{:keys [env dir prompt-file]} (fake-env {})
+        entry (start-child! env dir "advisory artifact links")
+        missing "/nonexistent/subagent advisory #1.md"
+        second-artifact (str (fs/path dir "second.md"))
+        proc (call! (merge (child-publish-env env entry "non-blocking") {"FAKE_PARENT_STATUS" "idle"})
+                    "publish" "--status" "COMPLETE" "--summary" "done"
+                    "--artifact" (str missing " — pending report")
+                    "--artifact" second-artifact)
+        res (:result (result proc))
+        pushed (slurp prompt-file)]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "sent" (get-in res [:parent-push :push])))
+    (testing "the advisory is labelled as advisory/pending collection validation"
+      (is (re-find #"(?i)advisory" pushed))
+      (is (str/includes? pushed "pending validation by `collect`")))
+    (testing "each declared artifact appears as a Markdown link with an encoded file URI"
+      (is (str/includes? pushed (str "- " (core/artifact-link (str missing " — pending report")))))
+      (is (str/includes? pushed (str "- " (core/artifact-link second-artifact))))
+      (is (str/includes? pushed "(file:///"))
+      (is (str/includes? pushed "%20"))
+      (is (str/includes? pushed "%23")))
+    (testing "advisory links are never collected evidence"
+      (is (not (contains? res :artifact-links))))
+    (testing "no raw OSC 8 escape sequence is submitted to the parent"
+      (is (not (str/includes? pushed "\u001b")))
+      (is (not (str/includes? pushed "]8;;"))))))
+
+;; A publication with no artifacts adds no advisory section at all — not an empty one.
+(deftest publication-advisory-omits-an-empty-artifact-section
+  (let [{:keys [env dir prompt-file]} (fake-env {})
+        entry (start-child! env dir "no advisory artifacts")
+        proc (call! (merge (child-publish-env env entry "non-blocking") {"FAKE_PARENT_STATUS" "idle"})
+                    "publish" "--status" "COMPLETE" "--summary" "done")
+        pushed (slurp prompt-file)]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "sent" (get-in (result proc) [:result :parent-push :push])))
+    ;; The push itself still happens and still names the collect command.
+    (is (str/includes? pushed (str "collect " (:task entry))))
+    (is (not (re-find #"(?i)declared artifacts" pushed)))
+    (is (not (str/includes? pushed "(file://")))
+    ;; The artifact list is the only multi-line part of the advisory.
+    (is (= 1 (count (str/split-lines pushed))))))
+
+;; `collect` has no `:captured-at` short-circuit and `ledger/update!` rewrites the whole
+;; entry, so a re-collect whose artifact has since been deleted must actively drop the links
+;; the first capture wrote: an `invalid` entry may never advertise validated links.
+(deftest a-recollect-that-loses-its-artifact-drops-the-stored-links
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "recollect drops stale links")
+        artifact (artifact-file! dir "vanishing report.md")]
+    (publish-artifacts! entry [(str artifact " — the report")])
+    (let [first-pass (:result (result (call! env "collect" (:task entry))))]
+      (is (= "COMPLETE" (:status first-pass)))
+      (is (= 1 (count (:artifact-links first-pass))))
+      (is (some? (:artifact-links (ledger-entry* dir (:task entry))))))
+    (fs/delete artifact)
+    (let [second-pass (:result (result (call! env "collect" (:task entry))))]
+      (is (= "invalid" (:status second-pass)))
+      (is (not (contains? second-pass :artifact-links)))
+      (is (not (contains? (ledger-entry* dir (:task entry)) :artifact-links))))))
+
+;; Publication is committed before the advisory renders, so one unrenderable artifact must
+;; not cost the parent its notification. A NUL byte is the reachable case: `artifact-path`
+;; accepts it (it only checks the leading `/`) while `Paths/get` rejects it. It cannot travel
+;; through argv at all — which is also why it cannot be degraded to raw text, only dropped —
+;; so it reaches `publish` via `--from-file`.
+(deftest an-unrenderable-declared-artifact-degrades-the-advisory-but-still-pushes
+  (let [{:keys [env dir prompt-file]} (fake-env {})
+        entry (start-child! env dir "unrenderable advisory artifact")
+        good (str (fs/path dir "good.md"))
+        body (str (fs/path dir "nul-body.json"))]
+    ;; Written as a JSON escape so the file itself carries no NUL byte.
+    (spit body (str "{\"status\":\"COMPLETE\",\"summary\":\"done\",\"artifacts\":"
+                    "[\"/tmp/nul\\u0000x.md — broken\",\"" good " — fine\"],"
+                    "\"findings\":[],\"next\":null}"))
+    (let [proc (call! (merge (child-publish-env env entry "non-blocking") {"FAKE_PARENT_STATUS" "idle"})
+                      "publish" "--from-file" body)
+          res (:result (result proc))
+          pushed (slurp prompt-file)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)))
+      ;; The parent is contacted, not reported as a prompt failure.
+      (is (= "sent" (get-in res [:parent-push :push])))
+      ;; The unrenderable item is dropped and counted; its sibling still links normally.
+      (is (str/includes? pushed "1 declared artifact path(s) not renderable"))
+      (is (not (str/includes? pushed "/tmp/nul")))
+      (is (not (str/includes? pushed "\u0000")))
+      (is (str/includes? pushed (str "- " (core/artifact-link (str good " — fine")))))
+      (is (re-find #"(?i)advisory" pushed))
+      ;; The envelope keeps the child's declared list verbatim.
+      (is (str/includes? (slurp (:result entry)) "broken")))))

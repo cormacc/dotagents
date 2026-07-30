@@ -381,3 +381,84 @@
       (is (= 1 (ledger/allocate-index! "other/session" "worker")))
       (is (= 1 (ledger/allocate-index! "/a/b" "scout")))
       (is (= 1 (ledger/allocate-index! "/a_b" "scout"))))))
+
+;; --- portable Markdown artifact links ---------------------------------------------
+;; The visible label is always the whole absolute path (never a basename) and the
+;; destination is a `Path.toUri` encoded `file://` URI. No raw OSC 8 escape is ever
+;; emitted: this is portable fallback syntax whose clickability depends on the harness.
+(deftest artifact-link-renders-portable-markdown
+  (testing "a bare path renders label + URI with no purpose suffix"
+    (is (= "[/tmp/report.md](file:///tmp/report.md)" (core/artifact-link "/tmp/report.md"))))
+  (testing "a purpose is preserved after the same ` — ` delimiter artifact-path splits on"
+    (is (= "[/tmp/report.md](file:///tmp/report.md) — the report"
+           (core/artifact-link "/tmp/report.md — the report")))
+    ;; Only the first delimiter splits, so a purpose may itself contain one.
+    (is (= "[/tmp/r.md](file:///tmp/r.md) — a — b"
+           (core/artifact-link "/tmp/r.md — a — b"))))
+  (testing "reserved path characters are percent-encoded by Path.toUri, not by hand"
+    (is (= "[/tmp/a b/report.md](file:///tmp/a%20b/report.md)" (core/artifact-link "/tmp/a b/report.md")))
+    (is (= "[/tmp/a#b.md](file:///tmp/a%23b.md)" (core/artifact-link "/tmp/a#b.md")))
+    (is (= "[/tmp/100%/x.md](file:///tmp/100%25/x.md)" (core/artifact-link "/tmp/100%/x.md")))
+    (is (= "[/tmp/q?r.md](file:///tmp/q%3Fr.md)" (core/artifact-link "/tmp/q?r.md")))
+    ;; Non-ASCII too: `File.toURI` would leave this raw and omit the empty authority.
+    (is (= "[/tmp/ü.md](file:///tmp/%C3%BC.md)" (core/artifact-link "/tmp/ü.md")))
+    ;; Every destination carries the canonical empty authority, never `file:/tmp/…`.
+    (is (str/includes? (core/artifact-link "/tmp/report.md") "(file:///")))
+  (testing "parentheses are encoded because an unbalanced one ends a Markdown destination"
+    (is (= "[/tmp/a(b)/c.md](file:///tmp/a%28b%29/c.md)" (core/artifact-link "/tmp/a(b)/c.md")))
+    (is (= "[/tmp/open(.md](file:///tmp/open%28.md)" (core/artifact-link "/tmp/open(.md"))))
+  (testing "Markdown-significant characters are escaped in both the label and the purpose"
+    (is (= "[/tmp/w\\[x\\].md](file:///tmp/w%5Bx%5D.md) — see \\[docs\\]"
+           (core/artifact-link "/tmp/w[x].md — see [docs]")))
+    ;; `&` and `<` are inline constructs: unescaped, a CommonMark renderer would decode the
+    ;; entity reference and display a *different* path than the artifact actually has.
+    (is (= "[/tmp/amp\\&amp;.md](file:///tmp/amp&amp;.md)" (core/artifact-link "/tmp/amp&amp;.md")))
+    (is (= "[/tmp/lt\\<b\\>.md](file:///tmp/lt%3Cb%3E.md) — \\<b\\>bold\\</b\\> \\& raw"
+           (core/artifact-link "/tmp/lt<b>.md — <b>bold</b> & raw")))
+    ;; GFM strikethrough.
+    (is (= "[/tmp/a\\~\\~b.md](file:///tmp/a~~b.md)" (core/artifact-link "/tmp/a~~b.md")))
+    (is (= "[/tmp/a\\*b\\_c\\`d.md](file:///tmp/a*b_c%60d.md) — \\*emphatic\\* \\_purpose\\_"
+           (core/artifact-link "/tmp/a*b_c`d.md — *emphatic* _purpose_")))
+    (is (= "[/tmp/back\\\\slash.md](file:///tmp/back%5Cslash.md)"
+           (core/artifact-link "/tmp/back\\slash.md"))))
+  (testing "no raw OSC 8 escape sequence and no basename-only label"
+    (let [rendered (core/artifact-link "/tmp/deep/nested/report.md — r")]
+      (is (not (str/includes? rendered "\u001b")))
+      (is (not (str/includes? rendered "]8;;")))
+      (is (str/includes? rendered "[/tmp/deep/nested/report.md]"))))
+  (testing "the splitter is shared with artifact-path, so both see the same path"
+    (doseq [line ["/tmp/a b/report.md — purpose" "/tmp/a#b.md" "/tmp/a(b)/c.md — p"]]
+      (let [path (core/artifact-path line)]
+        (is (= path (:path (core/artifact-parts line))))
+        (is (str/starts-with? (core/artifact-link line) (str "[" (core/markdown-escape path) "]"))))))
+  ;; `Paths/get` resolves a relative path against the process cwd, so a caller that skipped
+  ;; `artifact-path` would otherwise get a confident link to the wrong file.
+  (testing "absoluteness is enforced by the renderer, not trusted from the caller"
+    (doseq [bad ["rel/x.md" "rel/x.md — purpose" " — only a purpose" "" nil]]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"artifact path must be absolute"
+                            (core/artifact-link bad))
+          (pr-str bad)))))
+
+;; `Path.toUri` stats the filesystem, so the renderer is not pure: an existing directory
+;; gains a trailing slash its label does not have. Pinned rather than left latent, since it
+;; also means the advisory (rendered before the file need exist) can differ from the
+;; collected link for the same declared artifact.
+(deftest artifact-link-uri-reflects-directory-state-on-disk
+  (let [dir (fs/create-temp-dir {:prefix "subagent-artifact-uri-"})
+        file (str (fs/path dir "report.md"))
+        absent (str (fs/path dir "not-created"))]
+    (spit file "body")
+    (is (str/ends-with? (core/file-uri (str dir)) "/"))
+    (is (not (str/ends-with? (core/file-uri file) "/")))
+    (is (not (str/ends-with? (core/file-uri absent) "/")))
+    ;; The label is the declared path either way, so a directory artifact's label omits the
+    ;; slash its destination carries.
+    (is (= (str "[" dir "](file://" dir "/)") (core/artifact-link (str dir))))))
+
+;; The ` — ` delimiter is envelope grammar, not an escapable value: a path containing it
+;; mis-splits identically for `artifact-path` and the renderer, which is why a truncated
+;; prefix is caught by the collect-time existence check rather than by the renderer.
+(deftest artifact-link-mis-splits-a-path-containing-the-delimiter
+  (let [line "/tmp/a — b.md"]
+    (is (= "/tmp/a" (core/artifact-path line)))
+    (is (= "[/tmp/a](file:///tmp/a) — b.md" (core/artifact-link line)))))

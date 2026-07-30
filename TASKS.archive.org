@@ -1572,3 +1572,38 @@ It can be useful to define a workflow involving one or more subagents and/or her
 These may be defined globally or project-locally.
 Workflows may specify delegation to ephemeral and/or persistent subagents.
 Consider whether individual workflows should be defined as skills leveraging the herdr-subagents skill, or in a dedicated subfolder of .agents referenced by the herdr-subagents skill.
+
+** DONE subagent: make the advised worker the default (worker), rename frontier worker to skilled-worker :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 13:36]
+:PROPERTIES:
+:CUSTOM_ID: de7dec54-848b-497f-a83c-37e31ec39e21
+:CREATED: [2026-07-29 Wed 13:35]
+:ARCHIVED: [2026-07-29 Wed 13:36]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 13:35]
+- State "DONE" from "TODO" [2026-07-29 Wed 13:36]
+:END:
+Inline change (no record): renamed subagents/worker.md -> skilled-worker.md (frontier executor, claude-opus, spawns scout researcher) and subagents/advised-worker.md -> worker.md (default executor with mandatory advisor consult, claude-sonnet, spawns scout researcher advisor) via git mv. All eight roster definitions now declare unversioned canonical model aliases (claude-fable/claude-opus/claude-sonnet; scout/researcher/worker on claude-sonnet). SKILL.md updated: frontmatter persona list, spawn-grant sentence, § Advisor strategy retitled 'default worker' with a rename note for the 2026-07-29 advisor-strategy record. Three live-roster-coupled deftests in cli_test.clj updated (advisor grant + unversioned label suffix); bb test green (323/1576). Verified via --print-prompt probes for both personas.
+
+** DONE subagent comms housekeeping
+CLOSED: [2026-07-30 Thu 14:36]
+:PROPERTIES:
+:CUSTOM_ID: f5a92f29-a085-48d6-8553-2925835a4639
+:CREATED: [2026-07-29 Wed 18:11]
+:STARTED: [2026-07-29 Wed 18:53]
+:ARCHIVED: [2026-07-30 Thu 14:36]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 18:11]
+- State "STARTED" from "TODO" [2026-07-29 Wed 18:53]
+- State "DONE" from "STARTED" [2026-07-29 Wed 22:15]
+- State "STARTED" from "DONE" [2026-07-30 Thu 10:37]
+- State "DONE" from "STARTED" [2026-07-30 Thu 13:23]
+- State "STARTED" from "DONE" [2026-07-30 Thu 13:39]
+- State "DONE" from "STARTED" [2026-07-30 Thu 14:36]
+:END:
+#+IMPORT: [[plan:2026-07-29-subagent-comms-housekeeping.org]]
+Group communication, scheduling, and publication-hardening follow-ups for the herdr-subagents delegation protocol.

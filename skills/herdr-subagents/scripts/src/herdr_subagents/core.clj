@@ -234,10 +234,53 @@
      :findings (section-lines lines "FINDINGS:")
      :next (field! lines "NEXT") :process (process-items lines) :text text}))
 
+;; An ARTIFACTS item is `<absolute path>[ — <purpose>]`. One splitter owns that delimiter
+;; so the absoluteness check and the link renderer can never disagree about it.
+;; A path *containing* ` — ` mis-splits, exactly as it always has for `artifact-path`: the
+;; delimiter is envelope grammar, not an escapable value. The truncated prefix then fails
+;; the collect-time existence check in all but pathological cases.
+(defn artifact-parts [line]
+  (let [[path purpose] (str/split (str line) #" — " 2)]
+    {:path path :purpose purpose}))
 (defn artifact-path [line]
-  (let [[path _] (str/split line #" — " 2)]
+  (let [{:keys [path]} (artifact-parts line)]
     (when-not (str/starts-with? path "/") (throw (ex-info "artifact path must be absolute" {:artifact line :path path})))
     path))
+;; Escapes only the characters that change *inline* rendering: the two that could break out
+;; of a link label (`[`, `]`), the escape character itself, the code/emphasis markers a path
+;; may legitimately contain, and `&`/`<`/`>`/`~`. Those last four matter because a rendered
+;; label must stay byte-identical to the real path: a CommonMark renderer decodes the entity
+;; reference in `/tmp/amp&amp;.md` to `/tmp/amp&.md` (a *different* file), and raw inline
+;; HTML (`<b>`) can vanish outright. All are ASCII punctuation, so `\&`/`\<` are valid
+;; escapes. Line-level constructs (`#`, `-`) cannot fire mid-line and are left alone.
+(defn markdown-escape [text]
+  (str/replace (str text) #"([\\`*_\[\]<>&~])" "\\\\$1"))
+;; Not pure: `Path.toUri` stats the path and appends a trailing `/` when it is an existing
+;; directory, so a directory artifact's label omits the slash its URI carries, and the
+;; advisory (rendered before the file need exist) may differ from the collected link.
+;; `Path.toUri` (not `File.toURI`, which omits the empty authority and yields `file:/…`)
+;; does the percent-encoding: spaces, `#`, `%`, `?`, `[`, `]`, and non-ASCII all come back
+;; encoded, and hand-rolling that is exactly the bug this avoids. It leaves `(` and `)`
+;; alone — legal URI sub-delims — but an unbalanced parenthesis terminates a Markdown link
+;; destination early, so those two are percent-encoded afterwards. That is a Markdown
+;; concern, not a second encoder: the result is the same file URI either way.
+(defn file-uri [path]
+  (-> (str (.toUri (java.nio.file.Paths/get (str path) (make-array String 0))))
+      (str/replace "(" "%28")
+      (str/replace ")" "%29")))
+;; Portable fallback syntax, never a raw OSC 8 escape: a renderer that understands
+;; Markdown links can turn this into a terminal hyperlink, and every other reader still
+;; sees the full absolute path plus a usable URL. The visible label is always the whole
+;; absolute path — a basename would discard the context the parent needs after the child
+;; pane is gone. Absoluteness is enforced here rather than trusted from the caller: both
+;; current callers pre-validate, but `Paths/get` resolves a relative path against the
+;; process cwd, so a caller that forgot would emit a confident link to the wrong file.
+(defn artifact-link [artifact]
+  (let [line (str artifact)
+        path (artifact-path line)
+        purpose (:purpose (artifact-parts line))
+        link (str "[" (markdown-escape path) "](" (file-uri path) ")")]
+    (if (str/blank? purpose) link (str link " — " (markdown-escape purpose)))))
 (defn validate-envelope [ledger text]
   (let [parsed (parse-envelope text)]
     (doseq [key [:child :task :result]]

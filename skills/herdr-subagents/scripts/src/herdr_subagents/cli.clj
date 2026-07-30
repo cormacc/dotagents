@@ -8,8 +8,8 @@
   (:import [java.nio.file Files FileAlreadyExistsException Paths]
            [java.util UUID]))
 
-(def usage "subagent run|start <persona> --task TEXT [--tab] [--spawns NAMES|none] [options]\nsubagent collect <task> [--wait --timeout MS]\nsubagent status [task] | list
-subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]*\n\n--tab places the child in a new unfocused tab of the caller's workspace instead of a split.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nOpaque assignment input is --task, --task-file, or stdin. Run `subagent --help` for contract details.")
+(def usage "subagent run|start <persona> --task TEXT [--tab] [--spawns NAMES|none] [options]\nsubagent collect <full-task-uuid> [--wait --timeout MS]\nsubagent collect --any [--wait --timeout MS]\nsubagent status [full-task-uuid] | list
+subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--notify-timeout MS]\nsubagent progress --summary TEXT\nsubagent prune <full-task-uuid>\n\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the child in a new unfocused tab of the caller's workspace instead of a split.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to SUBAGENT_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncollect, status, and prune all resolve their assignment argument as the exact ledger key emitted by run/start; unlike ot, no prefix is ever resolved.\nOpaque assignment input is --task, --task-file, or stdin. Run `subagent --help` for contract details.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -18,10 +18,35 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
   (let [n (some-> raw str/trim not-empty parse-long)]
     (if (and n (pos? n)) n 1000)))
 (defn poll-interval-ms [] (parse-poll-interval (System/getenv "SUBAGENT_POLL_INTERVAL_MS")))
+;; Bounds the settle wait before the advisory parent push only; same non-positive/
+;; unparseable discipline as parse-poll-interval.
+(def default-notify-timeout-ms 30000)
+(defn parse-notify-timeout [raw]
+  (let [n (some-> raw str/trim not-empty parse-long)]
+    (if (and n (pos? n)) n default-notify-timeout-ms)))
+;; Throttle floor for `progress --summary`; same non-positive/unparseable/blank ->
+;; default discipline as parse-poll-interval/parse-notify-timeout.
+(def default-progress-interval-ms 60000)
+(defn parse-progress-interval [raw]
+  (let [n (some-> raw str/trim not-empty parse-long)]
+    (if (and n (pos? n)) n default-progress-interval-ms)))
+(defn progress-interval-ms [] (parse-progress-interval (System/getenv "SUBAGENT_PROGRESS_INTERVAL_MS")))
+;; Bounds the settle wait a `collect --any` capture makes before its one-shot pane close
+;; (see `collect-any!`); same non-positive/unparseable/blank -> default discipline as
+;; parse-poll-interval/parse-notify-timeout/parse-progress-interval. The default is
+;; deliberately larger than `default-notify-timeout-ms`: a non-blocking child publishing
+;; while its parent sits inside `collect --any` reads `working` for that entire notify
+;; wait (the parent, mid-collect, never settles idle/done), which is exactly the
+;; reproduced pane retention, so a budget at or below 30 000 ms would miss it.
+(def default-settle-close-ms 45000)
+(defn parse-settle-close [raw]
+  (let [n (some-> raw str/trim not-empty parse-long)]
+    (if (and n (pos? n)) n default-settle-close-ms)))
+(defn settle-close-ms [] (parse-settle-close (System/getenv "SUBAGENT_SETTLE_CLOSE_MS")))
 ;; Single source of truth for value-less flags. `option-map` and `help-request?` both
 ;; consume argv and must agree: a flag known to only one of them silently swallows the
 ;; following element (e.g. `run worker --retro --task 'X'` losing its assignment).
-(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab"})
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--any"})
 (defn option-map [args]
   (loop [xs args out {}]
     (if-let [x (first xs)]
@@ -104,6 +129,11 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
          "\nEmit each surviving candidate as one `--process` item shaped `signal → category → proposed rule` (at most five)."
          "\nEmit nothing when the session does not meet that threshold; an absent PROCESS section is a valid outcome, not a failure."
          "\nDo not choose a destination, load `self-improvement`, run `ot`, or edit any instruction file: the parent owns approval and persistence.")))
+;; Advisory only, and only worth asking for when there is nobody blocking on this child
+;; already: a `blocking` run's parent is already waiting and gets nothing extra to poll.
+(defn progress-instruction [waiting-policy]
+  (when (= waiting-policy "non-blocking")
+    (str "\nReport concise phase-boundary progress with `$HERDR_SUBAGENT_BIN progress --summary \"...\"` at most once per SUBAGENT_PROGRESS_INTERVAL_MS (default 60000 ms); never include draft findings or result content, and never treat it as completion.")))
 (defn prompt-text [{:keys [spawns persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
   (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
        (delegation-guidance spawns) " Herdr assigned TASK=" task " and RESULT=" result ". "
@@ -111,6 +141,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
        "The waiting policy is " waiting-policy "."
        (retro-instruction retro-skill)
+       (progress-instruction waiting-policy)
        (when prompt-extra (str "\nAdditional constraints: " prompt-extra))))
 (defn retro-flag [opts]
   (let [on (boolean (one opts :retro)) off (boolean (one opts :no-retro))]
@@ -174,13 +205,24 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
           (doseq [artifact artifacts]
             (let [path (core/artifact-path artifact)]
               (when-not (fs/exists? path) (fail "result artifact does not exist" {:artifact artifact :path path}))))
-          ;; An over-length PROCESS section is degraded, not fatal: record the fact on the
-          ;; entry and keep the envelope's own status.
-          (ledger/update! (:task entry) #(cond-> (assoc % :status (:status parsed) :captured-at (now) :envelope parsed :artifacts artifacts)
-                                           (:process-overflow parsed) (assoc :process-overflow true)))
-          parsed)
+          ;; Rendered only after every artifact passed the existence check above, so a
+          ;; collected link is evidence in a way a publish-time advisory link is not. The
+          ;; parent surfaces these to the user once the child pane is gone. `cond->`, not
+          ;; an empty vector: absent is not the same claim as validated-empty.
+          (let [links (when (seq artifacts) (mapv core/artifact-link artifacts))]
+            ;; An over-length PROCESS section is degraded, not fatal: record the fact on the
+            ;; entry and keep the envelope's own status.
+            (ledger/update! (:task entry) #(cond-> (assoc % :status (:status parsed) :captured-at (now) :envelope parsed :artifacts artifacts)
+                                             links (assoc :artifact-links links)
+                                             (:process-overflow parsed) (assoc :process-overflow true)))
+            (cond-> parsed links (assoc :artifact-links links))))
         (catch Exception e
-          (ledger/update! (:task entry) assoc :status "invalid" :captured-at (now) :invalid-reason (.getMessage e) :invalid-data (ex-data e))
+          ;; `ledger/update!` rewrites the whole entry, so an earlier successful capture's
+          ;; `:artifact-links` must be actively dropped: a re-collect whose artifact has
+          ;; since been deleted is `invalid`, and an `invalid` entry may never advertise
+          ;; existence-validated links.
+          (ledger/update! (:task entry) #(-> (dissoc % :artifact-links)
+                                             (assoc :status "invalid" :captured-at (now) :invalid-reason (.getMessage e) :invalid-data (ex-data e))))
           {:status "invalid" :task (:task entry) :pane-id (:pane-id entry) :result result
            :reason (.getMessage e) :detail (ex-data e) :pane-retained true})))))
 ;; The child's transcript reference is only reachable while Herdr still knows the agent,
@@ -258,7 +300,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
             assignment (task-text opts)
             bin (launcher-bin)
             name (child-name persona task)
-            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :placement (if tab? "tab" "split") :status "allocating" :created-at (now)}]
+            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :placement (if tab? "tab" "split") :status "allocating" :created-at (now)}]
         ;; Persist before the first pane mutation, so every partial failure is recoverable.
         (ledger/write! entry)
         (try
@@ -297,6 +339,88 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
             (let [current (ledger/read! task)]
               (when (not= "failed" (:status current)) (safe-cleanup! current :split)))
             (throw e)))))))
+;; --- advisory parent push ----------------------------------------------------------
+;; Under `non-blocking` the parent has nothing to block on, so a committed publish pushes
+;; one advisory `agent prompt` naming the child, the task, and the `collect` command to
+;; run. Two gates must both hold, on whichever `AgentInfo` was observed *last*:
+;;   1. `agent_status` is `idle` or `done` — never hijack an active turn, and never a
+;;      `blocked` parent, whose prompt text would land in an approval UI;
+;;   2. the probe's `agent_session` value equals the ledger's `:parent-session` — panes
+;;      outlive agent sessions, so status alone would let a delayed child prompt an
+;;      unrelated replacement agent occupying the reused pane. This is the same ownership
+;;      boundary `maybe-close!` enforces for pane closure. A parent whose session cannot be
+;;      observed fails the gate by construction (nil never equals a recorded identity),
+;;      which is the safe direction: the ledger's `:parent-session` is never nil.
+;; Never `--wait` (that path can return `agent_prompt_stalled`), and never under the
+;; `blocking` policy, where the parent is already in its own wait loop.
+;; Declared artifacts are rendered as portable Markdown file links so a parent whose child
+;; pane has already closed can still open them. These come from the child's *declared*
+;; envelope body: publish only ever checked path shape, never existence, so the list is
+;; explicitly advisory and only `collect`'s existence-validated `artifact-links` are
+;; evidence. An empty list adds no section at all rather than an empty one.
+;; Publication is already committed when this renders, so one unrenderable artifact must
+;; never cost the parent its whole notification. `artifact-path` accepts a NUL byte that
+;; `Paths/get` rejects, and such a path cannot be degraded to *raw* text either: the byte
+;; would then reach the `agent prompt` argv and fail the submission itself. So the item is
+;; dropped and counted — the RESULT envelope remains the authoritative declared list.
+(defn artifact-advisory [artifacts]
+  (when (seq artifacts)
+    (let [items (keep (fn [artifact]
+                        (try (str "- " (core/artifact-link (str artifact)))
+                             (catch Exception _ nil)))
+                      artifacts)
+          dropped (- (count artifacts) (count items))]
+      (str "\nDeclared artifacts (advisory — pending validation by `collect`):\n"
+           (str/join "\n" (cond-> (vec items)
+                            (pos? dropped)
+                            (conj (str "- (" dropped " declared artifact path(s) not renderable as a link; see the RESULT envelope)"))))))))
+(defn push-text [bin child task status artifacts]
+  (str "Subagent " child " published a " status " result for task " task
+       ". Capture it with `" bin " collect " task "`."
+       " Advisory only: the validated RESULT file remains the sole completion signal."
+       (artifact-advisory artifacts)))
+(defn settled-parent? [status] (contains? #{"idle" "done"} status))
+(defn push-decision [entry agent]
+  (cond
+    (not= (:parent-session entry) (get-in agent [:agent_session :value])) {:push "skipped" :reason "session-mismatch"}
+    (settled-parent? (:agent_status agent)) {:push "send"}
+    (= "blocked" (:agent_status agent)) {:push "skipped" :reason "parent-blocked"}
+    :else {:push "wait" :reason "parent-unsettled" :parent-status (:agent_status agent)}))
+;; Publication is already committed when this runs, so every outcome — sent, skipped with
+;; a reason, timed out, or a herdr error — is only *reported*: nothing here may change the
+;; publish status or exit code. Each herdr call therefore carries its own reason (a failed
+;; `agent prompt` may have delivered text partially, which is not the same operator fact as
+;; a parent that was never contacted), with a last-resort catch behind them.
+(defn notify-parent! [entry {:keys [child task status timeout artifacts]}]
+  (try
+    (if-let [pane (:parent-pane entry)]
+      (let [send! (fn [extra]
+                    (try (herdr/prompt! pane (push-text (launcher-bin) child task status artifacts))
+                         (merge {:push "sent" :parent-pane pane} extra)
+                         (catch Exception e {:push "error" :parent-pane pane :reason "prompt-failed" :message (.getMessage e)})))
+            probe (try {:agent (herdr/agent! pane)} (catch Exception e {:error (.getMessage e)}))]
+        (if (:error probe)
+          {:push "error" :parent-pane pane :reason "probe-failed" :message (:error probe)}
+          (let [decision (push-decision entry (:agent probe))]
+            (case (:push decision)
+              "send" (send! nil)
+              ;; `:waited` records only that a settle wait preceded the outcome — never that
+              ;; the parent settled, which the post-wait re-check may still reject.
+              "wait" (let [outcome (herdr/wait-settled! pane timeout)
+                           observed (get-in outcome [:value :result :agent])
+                           code (get-in outcome [:error :response :error :code])
+                           ;; Re-checked on the freshly observed AgentInfo: the wait can be
+                           ;; satisfied by a *replacement* agent settling in the same pane.
+                           after (when observed (push-decision entry observed))]
+                       (cond
+                         (and (not (:ok outcome)) (= "timeout" code)) {:push "timed-out" :parent-pane pane :timeout-ms timeout :parent-status (:parent-status decision)}
+                         (not (:ok outcome)) {:push "error" :parent-pane pane :reason (or code "wait-failed") :waited true}
+                         (nil? after) {:push "skipped" :reason "parent-unobserved" :parent-pane pane :waited true}
+                         (= "send" (:push after)) (send! {:waited true})
+                         :else (assoc after :push "skipped" :parent-pane pane :waited true)))
+              (assoc decision :parent-pane pane)))))
+      {:push "skipped" :reason "no-parent-pane"})
+    (catch Exception e {:push "error" :reason "push-failed" :message (.getMessage e)})))
 (defn publication-body [opts]
   (if-let [path (one opts :from-file)]
     (let [body (json/parse-string (slurp path) true)]
@@ -304,14 +428,32 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
     {:status (one opts :status) :summary (one opts :summary) :artifacts (all opts :artifact) :findings (all opts :finding) :next (one opts :next) :process (all opts :process)}))
 (defn publish! [opts]
   (let [env #(System/getenv %) child (or (env "HERDR_SUBAGENT_CHILD") (fail "missing HERDR_SUBAGENT_CHILD" {})) task (or (env "HERDR_SUBAGENT_TASK") (fail "missing HERDR_SUBAGENT_TASK" {})) result (or (env "HERDR_SUBAGENT_RESULT") (fail "missing HERDR_SUBAGENT_RESULT" {})) policy (or (env "HERDR_SUBAGENT_WAITING_POLICY") (fail "missing HERDR_SUBAGENT_WAITING_POLICY" {}))
-        body (publication-body opts) text (core/envelope (merge {:child child :task task :result result} body)) target (fs/path result) temp (fs/path (str result "." (UUID/randomUUID) ".tmp"))]
+        body (publication-body opts)
+        ;; Publication is exactly-once and immutable, so a relative artifact path must fail
+        ;; before the write, not only at collect (core/artifact-path is the same check
+        ;; there): a child could otherwise never repair a COMPLETE-but-invalid envelope.
+        ;; Checked on the raw --artifact/--from-file values, before any path is rewritten.
+        ;; `str` guards a non-string --from-file artifact entry: without it a nil/numeric
+        ;; JSON value would NPE before reaching artifact-path's own clean error.
+        _ (doseq [artifact (:artifacts body)] (core/artifact-path (str artifact)))
+        text (core/envelope (merge {:child child :task task :result result} body)) target (fs/path result) temp (fs/path (str result "." (UUID/randomUUID) ".tmp"))]
     (when-not (core/policies policy) (fail "invalid HERDR_SUBAGENT_WAITING_POLICY" {:policy policy}))
     (fs/create-dirs (fs/parent target))
     (try
       (spit (str temp) text) (Files/createLink (Paths/get (str target) (make-array String 0)) (Paths/get (str temp) (make-array String 0))) (fs/delete-if-exists temp)
       ;; Result publication is committed before notification. Notification failure is observable but never turns it into a retryable failure.
-      (let [notification (when (= policy "non-blocking") (try (herdr/notify! (str "Subagent " child " published") (str "child=" child " task=" task " result=" result)) (catch Exception e {:notification-error (.getMessage e)})))]
-        (cond-> {:task task :result result :status (:status body)} notification (assoc :notification notification)))
+      (let [notification (when (= policy "non-blocking") (try (herdr/notify! (str "Subagent " child " published") (str "child=" child " task=" task " result=" result)) (catch Exception e {:notification-error (.getMessage e)})))
+            ;; The operator toast is retained; the push is additional. A publication whose
+            ;; task has no ledger entry (a hand-driven `publish`) has no parent to probe.
+            push (when (= policy "non-blocking")
+                   (if-let [entry (try (ledger/read! task) (catch Exception _ nil))]
+                     (notify-parent! entry {:child child :task task :status (:status body)
+                                            :artifacts (:artifacts body)
+                                            :timeout (parse-notify-timeout (one opts :notify-timeout))})
+                     {:push "skipped" :reason "unknown-ledger-entry"}))]
+        (cond-> {:task task :result result :status (:status body)}
+          notification (assoc :notification notification)
+          push (assoc :parent-push push)))
       (catch FileAlreadyExistsException e
         (fs/delete-if-exists temp) (try (herdr/notify! "Subagent publish failed" (str "child=" child " pane=" (or (env "HERDR_PANE_ID") "unknown") " task=" task " error=RESULT already exists")) (catch Exception _))
         (throw (ex-info "RESULT already exists; publication is exactly once" {:result result} e)))
@@ -321,6 +463,194 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
   (let [entry (ledger/read! task) owned? (caller-owns? entry)]
     (if (:wait opts) (wait-and-capture! entry (Long/parseLong (or (one opts :timeout) "600000")) owned?)
         (if-let [parsed (capture! entry)] (maybe-close! entry parsed owned?) {:status "pending" :task task :pane-id (:pane-id entry)}))))
+;; --- advisory progress reporting ---------------------------------------------------
+;; A latest-only snapshot for the injected child identity, never a second transcript:
+;; `status`/`list` already return the raw ledger entry (see `live`), so a `:progress`
+;; key needs no further plumbing there. Identity and lifecycle are all checked before
+;; the throttle, so a foreign, post-publish, captured, or terminal assignment can never
+;; be perturbed by a stray or malicious `progress` call.
+(defn- progress-elapsed-ms [reported-at]
+  ;; Defensive: a hand-edited or foreign-format :reported-at must degrade to "treat as
+  ;; stale" (rewrite), never hard-fail an advisory command. A negative value (backward
+  ;; clock step) is treated the same way rather than throttling until the clock catches up.
+  (try (let [elapsed (- (System/currentTimeMillis) (.toEpochMilli (java.time.Instant/parse reported-at)))]
+         (when (<= 0 elapsed) elapsed))
+       (catch Exception _ nil)))
+(defn progress! [opts]
+  (let [env #(System/getenv %)
+        child (or (env "HERDR_SUBAGENT_CHILD") (fail "missing HERDR_SUBAGENT_CHILD" {}))
+        task (or (env "HERDR_SUBAGENT_TASK") (fail "missing HERDR_SUBAGENT_TASK" {}))
+        _ (or (env "HERDR_SUBAGENT_RESULT") (fail "missing HERDR_SUBAGENT_RESULT" {}))
+        summary (or (one opts :summary) (fail "provide --summary" {}))
+        entry (ledger/read! task)]
+    ;; Wrong or missing child identity must never update another assignment's entry,
+    ;; silently or otherwise — checked first, ahead of every lifecycle rejection below.
+    (when-not (= child (:child entry))
+      (fail "child identity mismatch: cannot update another assignment's progress" {:task task}))
+    ;; The entry's own :result is the completion signal capture! checks (cli.clj's
+    ;; `capture!`), not the injected env value: a mismatched env can never bypass this.
+    (when (fs/exists? (:result entry))
+      (fail "cannot report progress: RESULT already published" {:task task}))
+    (when (:captured-at entry)
+      (fail "cannot report progress: assignment already captured" {:task task}))
+    ;; "invalid" is defence-in-depth, not load-bearing: capture!'s invalid branch always
+    ;; sets :captured-at too, so the guard above already excludes it. "failed" (spawn-
+    ;; failure cleanup) sets no :captured-at and is the one this check actually protects.
+    (when (contains? #{"failed" "invalid"} (:status entry))
+      (fail "cannot report progress: assignment is terminal" {:task task :status (:status entry)}))
+    (let [previous (:progress entry)
+          elapsed-ms (some-> (:reported-at previous) progress-elapsed-ms)]
+      ;; Throttled is a non-error, non-final outcome: the stored snapshot is left
+      ;; byte-identical (no `ledger/update!` call at all on this branch).
+      (if (and elapsed-ms (< elapsed-ms (progress-interval-ms)))
+        {:status "throttled" :task task :progress previous}
+        (let [snapshot {:summary summary :reported-at (now)}]
+          (ledger/update! task assoc :progress snapshot)
+          {:status "recorded" :task task :progress snapshot})))))
+;; --- explicit stale-entry pruning ---------------------------------------------------
+;; Remedies the one known `collect --any` gap (contract.md § Fan-in "Known limitation"):
+;; a `run`/`start` killed between `ledger/write!` and its cleanup leaves a same-session,
+;; uncaptured, non-`failed` entry that no `RESULT` will ever complete and whose named
+;; child can never reappear in `agent list` — yet it satisfies the `--any` candidate
+;; predicate forever. This command is the only way to clear one, by full ledger task id,
+;; scoped to the caller's own session and proven stale rather than merely old.
+;; Ownership reuses `parent-identity` (never `caller-owns?`'s permissive fallback, which
+;; exists only so a foreign `collect` can still capture-with-retained-pane): pruning is
+;; destructive, so an unresolvable caller identity must refuse exactly like a genuine
+;; foreign session, never merely retain something. `:parent-session` is documented as
+;; never nil on an entry this CLI wrote, but a hand-edited or legacy-format ledger file
+;; could still omit it, so both sides are required non-nil below rather than trusting
+;; that invariant to make a bare `not=` safe against a nil-vs-nil coincidence.
+(defn- caller-parent-session []
+  (try (:parent-session (parent-identity)) (catch Exception _ nil)))
+;; `live-agents` is defined below (it belongs next to `any-candidates`/`collect-any!`,
+;; its only other caller); this forward declaration lets `prune!` reuse it unchanged.
+(declare live-agents)
+(defn prune! [task]
+  (when-not task (fail "prune requires a full task uuid" {}))
+  (let [entry (ledger/read! task)
+        caller (caller-parent-session)
+        recorded (:parent-session entry)]
+    ;; Both sides must be non-nil, not merely equal: a bare `not=` would let a caller
+    ;; whose own identity is unresolvable (nil) own an entry whose `:parent-session` is
+    ;; also nil (a hand-edited or legacy-format ledger file), since nil = nil. Pruning is
+    ;; destructive, so that nil-vs-nil coincidence must never grant ownership.
+    (when-not (and caller recorded (= caller recorded))
+      (fail "prune refused: caller session does not own this ledger entry" {:task task}))
+    (when (:captured-at entry)
+      (fail "prune refused: assignment already captured" {:task task}))
+    (when (contains? #{"failed" "invalid"} (:status entry))
+      (fail "prune refused: assignment is already terminal" {:task task :status (:status entry)}))
+    (when (fs/exists? (:result entry))
+      (fail "prune refused: RESULT already exists" {:task task}))
+    ;; Reuses `live-agents` (same name-keyed classification `--any` uses) rather than a
+    ;; second liveness scan: `nil` means the listing itself is unusable, so liveness is
+    ;; unknown and a prune must never proceed — only a listing that positively omits this
+    ;; child's name is proof of absence.
+    (let [index (live-agents)]
+      (when-not index
+        (fail "prune refused: agent list is unusable; liveness is unknown" {:task task}))
+      (when (contains? index (:child entry))
+        (fail "prune refused: named child is present in agent list" {:task task :child (:child entry)})))
+    ;; The `agent list` call above can itself race a child publishing and exiting inside
+    ;; its subprocess window — the same hazard `collect-any!` re-polls to avoid (see its
+    ;; comment above `capture-first`). So the final mutation re-validates the *freshest*
+    ;; ledger state inside `ledger/update!`'s own function, not the `entry` snapshot taken
+    ;; before the listing, and refuses rather than overwriting a capture or a RESULT that
+    ;; appeared during the check. Never closes `:pane-id` — it may be stale, reused, or
+    ;; already gone; this command only ever touches the ledger JSON.
+    (ledger/update! task (fn [current]
+                           (if (or (:captured-at current) (fs/exists? (:result current)))
+                             (fail "prune refused: assignment was captured or published during the liveness check" {:task task})
+                             (assoc current :status "failed" :failure-phase "orphaned" :pruned-at (now) :prune-reason "missing-agent"))))))
+;; Fan-in candidacy: same `:parent-session` as the caller, not yet captured, and not a
+;; terminal spawn failure. The ledger is repo-wide, so the session scope is what makes
+;; `--any` safe to run alongside another parent. The `failed` exclusion is load-bearing
+;; rather than tidiness: `safe-cleanup!` marks a dead spawn `failed` *without* a
+;; `:captured-at`, so an uncaptured-only predicate would keep that entry a candidate
+;; forever and make both `no-candidates` and the all-blocked short-circuit unreachable.
+;; `invalid` entries need no exclusion — `capture!` sets `:captured-at` on that branch too.
+;; `ledger/entries` is sorted by `:created-at`, so poll order is spawn order.
+;; `parent-session` is a loop invariant, so it is checked by the caller rather than per
+;; entry: an unresolvable caller identity must not slurp and parse every ledger file for a
+;; guaranteed-empty result.
+(defn any-candidates [parent-session]
+  (vec (filter #(and (= parent-session (:parent-session %))
+                     (nil? (:captured-at %))
+                     (not= "failed" (:status %)))
+               (ledger/entries))))
+(defn- capture-first [candidates]
+  (some (fn [entry] (when-let [parsed (capture! entry)] [entry parsed])) candidates))
+;; One `agent list` per tick classifies every candidate's liveness, instead of one
+;; `agent get` per child. `nil` means the listing itself failed: liveness is unknown, so
+;; neither short-circuit may fire and the loop keeps polling to its budget. Agents are
+;; indexed by `name` (the ledger's `:child`), which Herdr clears when an agent exits —
+;; exactly the vanished case. Deliberately no `pane_id` fallback: a real listing contains
+;; nameless entries for manually started agents, so falling back to the pane would keep an
+;; exited child "live" forever and make `no-live-children` unreachable.
+;; `when-let` on the raw listing matters: `(into {} … nil)` would yield a truthy `{}` and
+;; silently classify every candidate as vanished on an exit-0 payload with no `agents` key.
+;; A genuine empty listing is `[]`, which is truthy, so zero live agents still short-circuits.
+(defn live-agents []
+  (try (when-let [agents (herdr/agents)]
+         (into {} (keep #(when-let [name (:name %)] [name %])) agents))
+       (catch Exception _ nil)))
+;; `agent wait` takes a single target, so N children cannot be awaited in one call:
+;; `--any` polls result files each tick instead of blocking in `herdr/wait!`, sleeping
+;; `min(poll-interval, remaining-budget)` so the total timeout is never overshot by a
+;; full interval. Candidates are same-session by construction, so a capture is always
+;; owned and `capture!`/`maybe-close!` are reused unchanged — only the captured child's
+;; pane is closed, under the existing COMPLETE/FAILED + settled rules. That poll budget
+;; bounds waiting for a *publication* only; the post-capture settle wait below is a
+;; separate, additional bound, so a late capture can return up to `settle-close-ms` after
+;; `--timeout` would have elapsed.
+(defn collect-any! [opts]
+  (let [session (try (:parent-session (parent-identity)) (catch Exception _ nil))
+        ;; Without `--wait` the budget is zero: one poll, then the same `timeout` outcome.
+        deadline (+ (System/currentTimeMillis)
+                    (if (one opts :wait) (Long/parseLong (or (one opts :timeout) "600000")) 0))]
+    ;; Distinct from `no-candidates`: nothing can be scoped without a caller identity, and
+    ;; reporting an empty fan-out would hide the misconfiguration. Non-final, like every
+    ;; other `pending`, and non-throwing to match `collect`, which never runs `preflight!`.
+    (if-not session
+      {:status "pending" :reason "unknown-caller"}
+      (loop []
+        (let [candidates (any-candidates session)
+              ;; Settle-close, after the capture and never before it: `maybe-close!` probes
+              ;; `agent_status` exactly once with no retry, so a child still mid-turn at the
+              ;; instant of capture would keep its COMPLETE/FAILED pane forever. One bounded
+              ;; `herdr/wait!` — deliberately *not* `wait-settled!`, whose `--until idle
+              ;; --until done` would burn the whole budget on a blocked child; the bare form
+              ;; returns on any settled state, including blocked, whose pane must be kept
+              ;; anyway. A captured BLOCKED envelope never closes a pane, so it skips the
+              ;; wait entirely. Whatever the outcome — settled, timed out, or a herdr error —
+              ;; the unmodified `maybe-close!` makes the same single close attempt, and
+              ;; giving up only retains the pane: no result field, `remaining` included,
+              ;; depends on the close outcome.
+              captured (fn [[entry parsed]]
+                         (when (#{"COMPLETE" "FAILED"} (:status parsed))
+                           (try (herdr/wait! (:child entry) (settle-close-ms)) (catch Exception _ nil)))
+                         (assoc (maybe-close! entry parsed true) :remaining (dec (count candidates))))]
+          (if (empty? candidates)
+            {:status "pending" :reason "no-candidates"}
+            (if-let [hit (capture-first candidates)]
+              (captured hit)
+              (let [index (live-agents)
+                    ;; Re-scan before any terminal short-circuit: a child can publish and
+                    ;; exit inside the `agent list` subprocess window, and `blocked` /
+                    ;; `no-live-children` must never discard a valid envelope already on
+                    ;; disk. The first scan stays as the fast path.
+                    hit (capture-first candidates)]
+                (if hit
+                  (captured hit)
+                  (let [live (when index (filterv #(contains? index (:child %)) candidates))
+                        blocked (when index (filterv #(= "blocked" (:agent_status (get index (:child %)))) live))]
+                    (cond
+                      (and index (empty? live)) {:status "pending" :reason "no-live-children"}
+                      (and index (seq live) (= (count live) (count blocked))) {:status "blocked" :tasks (mapv :task blocked)}
+                      :else (let [remaining (- deadline (System/currentTimeMillis))]
+                              (if (<= remaining 0) {:status "pending" :reason "timeout"}
+                                  (do (Thread/sleep (min (poll-interval-ms) remaining)) (recur)))))))))))))))
 (defn live [entry]
   (let [agent (try (herdr/agent! (:child entry)) (catch Exception _ nil))
         entry (or (when-not (:child-session entry) (record-session! (:task entry) (:agent_session agent))) entry)]
@@ -344,9 +674,14 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
       (let [opts (option-map args) positional (:_ opts)]
         (case command
           "run" (let [entry (spawn! (first positional) opts "blocking")] (if (:preview entry) entry (wait-and-capture! entry (Long/parseLong (or (one opts :timeout) "600000")) true)))
-          "start" (spawn! (first positional) opts "non-blocking") "collect" (collect! (first positional) opts)
+          "start" (spawn! (first positional) opts "non-blocking")
+          "collect" (let [any? (boolean (one opts :any))]
+                      (when (and any? (first positional)) (fail "collect --any takes no task argument" {:task (first positional)}))
+                      (if any? (collect-any! opts) (collect! (first positional) opts)))
           "status" (if-let [task (first positional)] (live (ledger/read! task)) (mapv live (ledger/entries)))
           "list" (mapv live (ledger/entries)) "publish" (publish! opts)
+          "progress" (progress! opts)
+          "prune" (prune! (first positional))
           (fail "unknown subagent command" {:command command}))))))
 (defn -main [& argv]
   (try (let [result (execute argv)] (println (if (string? result) result (core/json-envelope true result))))

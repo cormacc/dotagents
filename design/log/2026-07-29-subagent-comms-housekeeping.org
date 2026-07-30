@@ -1,0 +1,399 @@
+#+TITLE: subagent comms housekeeping
+#+DATE: 2026-07-29 Wed
+#+PARENT: [[archive:f5a92f29-a085-48d6-8553-2925835a4639][subagent comms housekeeping]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+SPEC: [[proj:skills/herdr-subagents/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-subagents/README.org]]
+#+SPEC: [[proj:skills/herdr-subagents/scripts/README.md]]
+
+* Intent
+
+Make the delegation loop's completion, progress, and handoff path observable and recoverable: a parent running several children should learn of the *first* completion, inspect bounded progress, retain portable artifact links after child-pane closure, and explicitly retire a stale assignment. Child publication mistakes should stay fixable in-session; persona, model, retro, and spawn-gating semantics remain untouched.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+** Scope
+*** In scope
+- New fan-in primitive `subagent collect --any [--wait --timeout MS]`: capture the first published in-flight child of the caller's `:parent-session`.
+- Multi-child support in the `fake-herdr` test fixture (per-child env/status/publish), a prerequisite of any `--any` coverage.
+- Reframe root fan-out policy from "waves of at most two" to "at most N (default 2) children in flight", spawning a replacement as soon as one is captured.
+- Advisory settle-gated parent push at publish time under the `non-blocking` waiting policy, plus the `:parent-pane` ledger field it needs.
+- Bounded retry of `agent start` on the transient herdr error code `agent_pane_busy`.
+- Publish-time rejection of relative `ARTIFACTS` entries, keeping the collect-side check as backstop.
+- Contract/skill/README updates for all of the above: [[proj:skills/herdr-subagents/scripts/docs/contract.md]], [[proj:skills/herdr-subagents/SKILL.md]], [[proj:skills/herdr-subagents/README.org]], [[proj:skills/herdr-subagents/scripts/README.md]].
+- Latest-only, throttled progress snapshots for long-running non-blocking children, visible through `status` / `list` without entering the result envelope or parent transcript.
+- Explicit, ownership-scoped pruning of one stale assignment by full UUID; no automatic ledger sweep or fan-in candidacy heuristic.
+- Documentation that assignment commands require the complete emitted UUID and never resolve `ot`-style prefixes.
+- Portable Markdown artifact links (`[absolute path](file:///...) — purpose`) in the non-blocking publication advisory and in validated collect output; parent policy surfaces collected links to the user after pane closure.
+- Bounded settle-close for `collect --any` captures: one budgeted `agent wait` on the captured child before the existing one-shot pane close, so a child observed mid-turn no longer permanently retains its pane; give-up retains the pane without touching the result.
+
+*** Out of scope
+- Multi-child *spawn* orchestration in the CLI: `run`/`start` stay one child per invocation; scheduling remains parent policy, now supported by a fan-in read.
+- Any relaxation of the one-nesting-level depth bound or of below-root "one blocking child at a time".
+- Resident (non-ephemeral) lifecycle changes.
+- Making any signal other than the validated `RESULT` file authoritative for completion.
+- Retrying `agent prompt`, `pane split`, `pane rename`, or `publish` itself.
+- Cross-parent-session pane closure, and any change to single-task `collect` ownership semantics (including its foreign-session capture-with-`pane-retained` behaviour).
+- Progress history, draft findings, parent prompts, or operator notifications: progress is one bounded ledger snapshot, not a second transcript/result channel.
+- Automatic age/liveness sweeps or widening the `collect --any` candidacy predicate; stale retirement is an explicit command for one assignment.
+- Prefix resolution for assignment commands; this change documents exact full-UUID semantics rather than adding aliases.
+- Raw OSC 8 escape sequences or a guarantee that every harness/terminal makes links clickable; the contract guarantees portable Markdown plus a standard encoded `file://` URI.
+
+** Acceptance
+*** Core functionality
+- [x] `subagent collect --any --wait --timeout MS` returns the first in-flight child of the caller's `:parent-session` to publish a valid envelope.
+- [x] Its result is the single-task `collect` shape plus exactly one added field, `remaining` (count of still-in-flight candidates); no other field differs.
+- [x] The in-flight candidate set is exactly: same `:parent-session`, no `:captured-at`, and `:status` not `failed`.
+- [x] That capture closes only the captured child's pane, under the existing `COMPLETE`/`FAILED` + settled-child rule.
+- [x] Sibling in-flight children are left untouched by an `--any` capture: panes retained, ledger entries unmodified.
+- [x] `collect --any` without `--wait` polls once and reports `pending` when nothing is publishable.
+- [x] `collect --any` with no in-flight candidates reports `pending` with reason `no-candidates` rather than failing.
+- [x] A child publishing under the `non-blocking` policy delivers one advisory `agent prompt` to the parent pane naming the child, the task id, and the `collect` invocation to run.
+- [x] The push happens only when one `agent get` on `:parent-pane` reports `idle`/`done`.
+- [x] The push happens only when that probe's `agent_session` value equals the ledger's `:parent-session`.
+- [x] `agent start` failing with herdr code `agent_pane_busy` is retried within a bounded attempt/backoff budget.
+- [x] A busy-then-available pane yields a successful spawn with one child pane and one ledger entry.
+- [x] `subagent publish --artifact <relative-path>` fails before the `RESULT` file is created, reporting that the artifact path must be absolute.
+- [x] A repeat `publish` with absolute paths in the same child session then succeeds.
+- [x] `SKILL.md` § Invocation policy states the concurrency-limit protocol (at most N in flight, fan in with `collect --any`, spawn a replacement on capture) with no "waves" wording left.
+- [x] `subagent progress --summary TEXT` records one latest progress snapshot (`summary`, `reported-at`) for the injected child/task identity, and `status` / `list` expose it unchanged.
+- [x] `subagent prune <full-task-uuid>` marks one same-session, uncaptured, result-less, non-live assignment `failed` with auditable prune metadata, making it ineligible for `collect --any`.
+- [x] `collect` returns a portable Markdown `artifact-links` vector for every existence-validated artifact, preserving its purpose text.
+- [x] The non-blocking publication advisory lists each declared artifact as `[absolute path](encoded file URI) — purpose`, labelled as advisory until `collect` validates it.
+- [x] `SKILL.md` requires the parent to surface validated artifact links to the user after collection, including when the child pane closed automatically.
+- [x] User-facing invocation docs and help say that `collect`, `status`, and `prune` require the complete emitted assignment UUID; short prefixes remain unsupported.
+- [x] An `--any` capture of a `COMPLETE`/`FAILED` envelope whose child still reads `working` waits (bounded) for the child to settle before the close attempt.
+- [x] A child that settles to `idle`/`done` within that budget has its pane closed.
+- [x] The settle budget is a named default (45 000 ms) overridable via `SUBAGENT_SETTLE_CLOSE_MS`.
+- [x] `contract.md` § Fan-in documents the bounded settle-close: budget, override, and pane-retained give-up.
+
+*** Edge cases
+- [x] A `working` or `unknown` parent is waited for with a bounded `agent wait --until idle --until done` (default 30 s, `--notify-timeout` override).
+- [x] Both gates (status and `agent_session` identity) are re-checked on the `AgentInfo` observed after that wait, before the single push.
+- [x] A `blocked` parent receives no push at all (text must never land in an approval UI).
+- [x] A parent pane now hosting a different agent session receives no push, reported as skipped.
+- [x] Each push outcome — sent, skipped, timed-out, herdr error — is named in the `publish` result.
+- [x] The `publish` status and exit code are identical whatever the push outcome.
+- [x] `collect --any` where every in-flight child is `blocked` reports `blocked` with the affected task ids instead of consuming the whole timeout budget.
+- [x] `collect --any` where every candidate's child agent has vanished (`agent get` fails) reports `pending` / `no-live-children` instead of waiting out the budget.
+- [x] `collect --any` honours `SUBAGENT_POLL_INTERVAL_MS` and does not overshoot the total timeout by a full interval.
+- [x] `collect --any` with an unresolvable caller identity reports `pending` / `unknown-caller`, distinctly from `no-candidates`.
+- [x] An `agent_pane_busy` budget exhaustion still runs the existing `:failure-phase "start"` cleanup (single ledger entry, child pane closed).
+- [x] `publish --from-file` artifact lists are validated identically to repeated `--artifact` flags.
+- [x] A rejected `publish` leaves no `RESULT` file behind.
+- [x] A rejected `publish` leaves no `.tmp` sibling behind.
+- [x] Progress updates inside the configured minimum interval (default 60 s; `SUBAGENT_PROGRESS_INTERVAL_MS` override) are reported as throttled and do not rewrite the snapshot.
+- [x] Progress is rejected after `RESULT` exists, after capture, or on a terminal `failed`/`invalid` entry; it never changes completion status.
+- [x] `prune` refuses a foreign-session assignment, a live child, an existing `RESULT`, or a captured/terminal entry without changing ledger state or closing a pane.
+- [x] Artifact file URIs percent-encode spaces, `#`, `%`, and other reserved path characters; Markdown label text is escaped and contains no raw OSC 8 sequence.
+- [x] Empty artifact lists add neither an advisory artifact section nor collected `artifact-links`; an invalid/missing artifact never becomes a validated link.
+- [x] Settle-budget expiry or a failed `agent wait` still makes the one close attempt and reports the envelope's own status with the pane retained.
+- [x] The captured `--any` result's fields (including `remaining`) are identical whether the close succeeded or gave up.
+- [x] A child that settles to `blocked` ends the settle wait early and keeps its pane.
+- [x] A captured `BLOCKED` envelope skips the settle wait entirely.
+
+*** Anti-criteria
+- Must not: treat the advisory push, an operator toast, or terminal output as a completion signal — the validated `RESULT` file remains the only one.
+- Must not: push to the parent under the `blocking` waiting policy.
+- Must not: use `agent prompt --wait` for the push (that path can return `agent_prompt_stalled`).
+- Must not: capture, validate, or close entries belonging to another `:parent-session` via `--any`.
+- Must not: treat a terminal spawn-failure entry (`:status "failed"`) as an `--any` candidate.
+- Must not: push to a parent pane whose current agent session differs from the ledger's `:parent-session` — panes outlive sessions, and a replacement agent must never be prompted.
+- Must not: change single-task `collect` behaviour, including its foreign-session `pane-retained` outcome.
+- Must not: absolutize, rewrite, or otherwise reinterpret child-supplied artifact paths.
+- Must not: add an artifact *existence* check at publish time (artifacts may still be written up to collection).
+- Must not: retry any herdr mutation other than `agent start`, or retry on error codes other than `agent_pane_busy`.
+- Must not: grant a below-root child concurrent children.
+- Must not: treat progress as completion, append progress history, put draft findings in progress, or push a progress prompt/notification to the parent.
+- Must not: prune automatically from `collect --any`, close the stale entry's pane, or prune an entry owned by another parent session.
+- Must not: resolve short assignment-ID prefixes.
+- Must not: emit raw terminal-control hyperlinks or claim clickability independent of harness/terminal support.
+- Must not: make publish-time artifact links evidence that the artifact exists; only `collect` produces validated links.
+- Must not: wait for settlement before capturing, or apply the settle wait to any child other than the one captured.
+- Must not: report anything other than the captured envelope's own status when the settle-close gives up.
+
+** Decisions
+- Chose a fan-in read (`collect --any`) over a CLI-side scheduler :: the parent already owns spawn decisions and task dependencies; it only lacked "tell me which child finished first". Rejected:
+  - A `subagent fanout` command taking N assignments: duplicates the parent's dependency knowledge and would need its own queue/state machine in the ledger.
+  - Pure polling loops in the skill text (`status` in a shell loop): every parent reinvents backoff, ownership scoping, and blocked detection.
+- `--any` polls `RESULT` files rather than blocking in `agent wait` :: `agent wait` takes a single target, so N children cannot be awaited in one call. Consequence: lifecycle-based blocked detection degrades to one `agent list`/`agent get` scan per poll iteration, which is what keeps the all-blocked case from burning the budget.
+- `--any` candidate set is same `:parent-session` + no `:captured-at` + `:status` not `failed` :: makes a repo-wide shared ledger safe to fan in over and keeps the ownership anti-criterion mechanically enforced. The `failed` exclusion is load-bearing rather than tidiness: `safe-cleanup!` (`cli.clj:228`) writes `:status "failed"` *without* `:captured-at`, so a session-scoped "uncaptured" predicate alone would keep dead spawn-failure entries as candidates forever, making both the `no-candidates` and all-blocked outcomes unreachable. `invalid` entries need no exclusion — `capture!` sets `:captured-at` on that branch too.
+- Advisory push is gated on parent session identity *and* status :: a submitted prompt is the only channel that actually causes the parent to run `collect`, but a pane outlives the agent that occupied it, so status alone would let a delayed child prompt an unrelated replacement agent in a reused pane — the same ownership boundary `maybe-close!` already enforces for pane closure. Gating on `idle`/`done` (with a bounded wait for `working`) avoids hijacking an active turn, and refusing to push to a `blocked` parent avoids answering an approval dialog. Rejected:
+  - `pane send-text`: never consumes a parent turn, but the parent may not look at its input box for a long time, and it needs a new preflight capability (`pane send-text` is absent from `required-capabilities`).
+  - Operator toast only: the motivating failure was precisely a parent that learned of publication from the human operator.
+- Relative artifact paths are rejected, not absolutized :: publication is immutable, so the cheap fix is to fail *before* the immutable write and let the child retry; silently resolving against the assignment root would reinterpret intent (child cwd vs root) and could name a file the child never meant.
+- Retry is keyed on the herdr error `code`, not on message text :: `herdr` returns `{"error":{"code":"agent_pane_busy","message":"..."}}`, already decoded into `:response` by `herdr/invoke`. The code survives `value!` too (it re-throws the whole error map as `ex-data`), so retrying over `invoke` inside `herdr/start!` is a placement preference — no catch/re-throw of an `ex-info` — not a data-availability constraint.
+- Progress is a latest-only ledger snapshot, not a push :: add child-only `progress --summary`, overwrite at phase boundaries no more than once per configured interval, and expose the snapshot through existing `status` / `list`. Rejected: progress `agent prompt` (interrupts/consumes parent turns), operator toast (human-only noise), and progress history (unbounded second transcript).
+- Stale cleanup is explicit and single-assignment :: `prune <full-task-uuid>` reuses parent-session ownership and `agent list` liveness, then marks only a proven stale entry `failed` with `:pruned-at` / `:prune-reason`; it never closes the recorded pane because that pane may have been reused. Rejected: implicit collection-time pruning and age-based candidacy changes.
+- Artifact context uses portable Markdown over raw OSC 8 :: render `[escaped absolute path](Path.toUri) — purpose`; Pi user messages turn Markdown links into OSC 8 when supported, while other renderers retain readable Markdown/URL fallback. Publish links are advisory; `collect` links are existence-validated. Rejected: raw control sequences in model-visible prompts and basename-only labels that lose path context.
+- Assignment IDs remain exact ledger keys :: document complete UUIDs in help/examples instead of introducing a second prefix-resolution contract parallel to `ot`.
+- Settle-close budget is additional to `--timeout`, never deducted from it :: `--timeout` bounds only the polling for a publication; folding the settle wait into that same budget would make a late capture's close chance depend on when it happened to land within the poll window, rather than being a fixed, predictable bound.
+- `--any`'s settle-close is one bounded `herdr/wait!` on the captured child, not a re-check sleep loop :: `agent wait` polls natively in one subprocess and (without `--until`) returns on *any* settled state, so a blocked child ends the wait early instead of burning the budget. The budget must outlast publish's parent push: a non-blocking child that publishes while its parent sits in `collect --any` reads `working` for the full 30 s notify wait (the parent, mid-collect, never settles idle/done), which is exactly the reproduced retention — hence a 45 s default (named var, `SUBAGENT_SETTLE_CLOSE_MS` override) rather than a poll-interval-scale bound. Rejected:
+  - Bounded re-check after a short sleep: reimplements `agent wait`'s polling at one `agent get` subprocess per probe, and any budget short enough to feel like a re-check loses the guaranteed ≥30 s notify stall, missing the motivating reproduction.
+  - Deferred close on a later `collect --any` tick: the last captured child never sees another tick — the reproduced case leaked exactly the final two captures.
+  - Trimming publish's notify wait when the parent is `working`: relitigates the shipped push gate from the wrong side of the race.
+
+** Shipped
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: § Ledger and completion now states that `publish` rejects a relative artifact path before the one-shot write, that `collect`'s `core/artifact-path` is the identical backstop, and that publish time checks path shape only — never existence.
+- `subagent publish` fails fast on a relative `--artifact` / `--from-file` artifact entry, leaving no `RESULT` and no `.tmp` sibling, so a child can correct and retry in-session.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: § Preconditions now documents the `agent start` retry — which code is retried, the budget, and that no other spawn mutation is retried.
+- `agent start` survives the post-split startup race: four attempts 500 ms apart on herdr code `agent_pane_busy` only.
+- ADDED `subagent collect --any [--wait --timeout MS]` :: session-scoped fan-in returning the first child to publish, plus `remaining`; outcomes `no-candidates`, `timeout`, `blocked`, `no-live-children`, `unknown-caller`.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new § Fan-in (candidacy, tick structure, outcome table, known limitation).
+- The `fake-herdr` fixture now models ≥2 concurrent children (per-child env/status/publication, populated `agent list`), unblocking every future multi-child test.
+- ADDED advisory parent push :: under `non-blocking`, a successful `publish` prompts the parent pane once (gated on settled status *and* session identity), reporting the outcome as `result.parent-push`; bounded by `--notify-timeout` (default 30 000 ms).
+- ADDED `:parent-pane` to ledger entries at allocation.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: `agent wait` capability row now requires `--until`; push semantics and `--notify-timeout` documented (new § Parent push).
+- ADDED `subagent progress --summary TEXT` :: child-only, throttled (`SUBAGENT_PROGRESS_INTERVAL_MS`, default 60 000 ms), latest-only ledger snapshot (`:progress {:summary :reported-at}`), exposed unchanged through `status`/`list`; never a completion signal.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new § Progress (identity checks, throttling, rejection cases, the ledger-race known limitation).
+- ADDED `subagent prune <full-task-uuid>` :: ownership- and staleness-proven retirement of one orphaned assignment, marking it `:status "failed" :failure-phase "orphaned"` with `:pruned-at`/`:prune-reason` audit metadata; never closes a pane.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new § Pruning; Fan-in's known-limitation paragraph now points to it.
+- ADDED `core/artifact-link` :: renders each existence-validated `ARTIFACTS` item as `[escaped absolute path](Path.toUri encoded file:// URI) — escaped purpose`; advisory (declared, unvalidated) in the non-blocking publish push, existence-validated `artifact-links` on `collect`/`collect --any`, persisted on the ledger entry.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new § Artifact links (portable-syntax-not-clickability-guarantee, advisory-vs-validated weight table, encoding/escaping detail).
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] :: § Completion and pane safety requires the parent to surface *validated* artifact links to the user after collection, distinct from the advisory publish-time list.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/src/herdr_subagents/cli.clj]] :: `usage` placeholders unified to `<full-task-uuid>` for `collect`/`status`/`prune`.
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]], [[proj:skills/herdr-subagents/scripts/README.md]], [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: each states assignment commands require the complete UUID `run`/`start` emitted, distinct from `ot`'s `:CUSTOM_ID:` prefix matching and from any org task id.
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] :: § Invocation policy Cardinality is now "at most N (default 2) in flight, fan in with `collect --any --wait`, replace on capture"; Waiting notes the advisory push while keeping `RESULT` as the sole completion signal. No "waves" wording remains anywhere.
+- MODIFIED [[proj:skills/herdr-subagents/README.org]] :: the known-gap bullet no longer claims fan-out has no dedicated CLI command; it now separates scheduling (parent policy) from fan-in (`collect --any`).
+- MODIFIED [[proj:skills/herdr-subagents/scripts/README.md]] :: documents `--any` and `--notify-timeout` with a fan-in example.
+- ADDED `collect --any` settle-close :: one bounded `herdr/wait!` on the captured child (gated on `COMPLETE`/`FAILED`) before the unmodified `maybe-close!`; budget `SUBAGENT_SETTLE_CLOSE_MS` (default 45 000 ms), deliberately larger than the 30 000 ms notify-push default.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: § Fan-in gained the settle-close paragraph; new `SUBAGENT_SETTLE_CLOSE_MS` environment row.
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] :: § Completion and pane safety's self-declared "prune this note once that lands" caveat (naming this very task) replaced with the shipped bounded-settle-wait behaviour.
+
+** Gotchas
+- `herdr agent wait` without `--until` matches idle, done **and blocked** — stated only in the `--help` epilogue prose, not in the flag list. The settle wait must pass `--until idle --until done` explicitly; reusing `herdr/wait!` would have let a blocked parent satisfy the wait and receive prompt text in its approval UI. Read herdr's epilogue prose whenever an omitted flag's default is load-bearing.
+- A fixture verb can carry side effects for its original role: `fake-herdr`'s `agent wait` publishes the *target child's* result, so reusing it for the parent-side settle wait would have published a result as a side effect of the notification path. Branch on the target before the existing role's case when a verb gains a second role.
+- `herdr agent list` entries carry `name` only for *named* agents; a manually started agent appears nameless (verified live: all four current panes have `name: null`). Liveness must therefore be keyed on `name` with no `pane_id` fallback — a fallback would keep an exited child "live" forever and make `no-live-children` unreachable.
+- `herdr <cmd> --help` documents flags only, never the JSON response shape. Learn a response shape from one live read-only invocation or from `contract.md`, never from a fixture stub (which may encode no shape at all).
+- An absence/anti-criterion assertion can pass vacuously from test *ordering*, not just from prefix matching: the fan-in foreign-session assertion initially sat after the owning capture and passed on `:captured-at` alone. Verify each must-not by mutating the guard it protects and confirming the test fails.
+- The fixture's preflight probes are in the same call log as real mutations, so a naive two-token prefix match (`["pane" "close"]`) matches the unconditional `pane close --help` probe and silently passes an absence assertion. Always exclude `--help` explicitly, as `mutating?` (`cli_test.clj:22`) already does.
+- `--artifact none` is now rejected. The `- none` sentinel is a *rendering* artefact of an empty list (`core/section-lines` maps `["none"]` back to `[]`), never something a child should pass; before this change an improvised `--artifact none` published a silently empty artifact list, and now it fails loudly with "artifact path must be absolute". No persona or doc instructs that form, so this is a deliberate tightening rather than a regression.
+- `collect --any`'s fast-path capture (`capture-first` finding a published `RESULT` before any liveness scan) used to call `maybe-close!` immediately with no settle-wait, checking the child's `agent_status` exactly once — a child observed mid-turn (`working`) then permanently retained its otherwise-`COMPLETE` pane. Discovered live this session (two workers' panes stayed open after capture); fixed by task `e8ea2227`'s bounded settle-close, above.
+- A concurrent Edit-tool write from a sibling worker can silently clobber an in-progress worker's own uncommitted append to the same shared file (observed on `cli_test.clj` during the parallel progress/artifact-links wave); both workers self-detected via a failing `bb test` and re-verified before publishing, but nothing in the CLI or worker persona guards against this class of race. See `** Follow-ups`.
+- `fake-herdr`'s `agent wait` used to record `--until` in its call log without honouring it, so a behavioural claim about that flag ("blocked ends the wait early") was pinned only by an argv-shape check — a real regression would still have passed. Fixed: the fixture now honours `--until`, timing out when the requested state is excluded. When a fixture verb gains a new flag-dependent behavioural claim, make the fixture actually implement the flag's effect, not just log it.
+
+** Follow-ups
+- [[task:3fa0b8dd-193a-4177-beac-17cdf14cda32][subagent: safer concurrent shared-file writes across parallel workers]] — the per-worker "verify your own edit survived" habit is a mitigation, not a structural guarantee.
+
+** Risks
+- The push can still arrive as a duplicate stimulus when the parent is simultaneously blocked in `collect --any --wait`; accepted — the prompt is idempotent advice and `collect` on an already-captured entry returns the same outcome.
+- Bounded `agent wait` inside `publish` keeps the child process alive after the result is committed. Accepted: the parent may close the child pane mid-wait, which kills only the notification, never the published result.
+- `--any` fairness is poll-order dependent when two children publish inside the same interval; accepted (one is returned, the other stays capturable).
+- A parent that never fans in leaves in-flight entries with panes open; unchanged from today's `start` behaviour, and `status`/`list` still show them.
+- Progress is cooperative: a child that ignores the injected phase-boundary instruction still has no heartbeat. Accepted — progress remains advisory and cannot replace Herdr lifecycle state.
+- Explicit prune requires the parent to identify the stale full UUID; accepted to keep destructive ledger mutation deliberate and ownership-checkable.
+- Publish advisory links can point at an artifact that later fails collection; accepted because the advisory says validation is pending and only collected `artifact-links` are trusted.
+- Markdown `file://` links are clickable only when the harness renderer and terminal support hyperlinks; absolute visible labels and URI fallback preserve useful context otherwise.
+- `core/artifact-link` is not pure: `Path.toUri` stats the filesystem, so an existing-directory artifact's URI gains a trailing slash its label omits, and a pre-collection advisory link can differ from the post-collection validated link for the same declared line. Accepted and pinned by test.
+- `progress`'s `ledger/update!` has no compare-and-swap: a concurrent parent `capture!`/`record-session!` write can race a child's `progress` write and lose one side. Bounded and recoverable (worst case, a dropped `:captured-at` briefly re-enters `collect --any` candidacy for a harmless re-parse of the already-published `RESULT`); not worth ledger locking.
+- The settle-close budget is additive to `--timeout`, so a capture landing just before `--timeout` would have elapsed can return up to `SUBAGENT_SETTLE_CLOSE_MS` later than `--timeout` alone suggests. Accepted: `--timeout` bounds only publication polling, and the settle wait is a separate, predictable, post-capture bound.
+
+* Plan
+** DONE subagent: validate artifact paths at publish time (relative paths currently fail only at collect) :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 19:05]
+:PROPERTIES:
+:CUSTOM_ID: 7a06633b-41b4-42a2-b072-a98213a3d30a
+:CREATED: [2026-07-29 Wed 14:01]
+:STARTED: [2026-07-29 Wed 18:53]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 14:01]
+- State "STARTED" from "TODO" [2026-07-29 Wed 18:53]
+- State "DONE" from "STARTED" [2026-07-29 Wed 19:05]
+:END:
+Landed: `publish!` reuses `core/artifact-path` on the raw `--artifact` / `--from-file` values before the one-shot write. Coverage: `relative-artifact-rejected-before-publication`.
+
+** DONE subagent: retry agent start on transient agent_pane_busy :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 19:32]
+:PROPERTIES:
+:CUSTOM_ID: 54a14361-6aa6-4ed1-bfcc-f4eca9ffaf24
+:CREATED: [2026-07-27 Mon 17:26]
+:STARTED: [2026-07-29 Wed 19:05]
+:END:
+:LOGBOOK:
+- Created [2026-07-27 Mon 17:26]
+- State "STARTED" from "TODO" [2026-07-29 Wed 19:05]
+- State "DONE" from "STARTED" [2026-07-29 Wed 19:32]
+:END:
+Landed: `herdr/start!` retries `agent_pane_busy` only — 4 attempts, 500 ms apart (`start-retry-attempts` / `start-retry-backoff-ms`). Coverage: busy-then-success, other-code-first-attempt, budget exhaustion.
+
+** DONE subagent: add a `collect --any` fan-in primitive for bounded-concurrency fan-out
+CLOSED: [2026-07-29 Wed 20:06]
+:PROPERTIES:
+:CUSTOM_ID: 157a2c3d-a1f6-43cd-b681-97eeba69cfaa
+:CREATED: [2026-07-29 Wed 13:05]
+:STARTED: [2026-07-29 Wed 19:32]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 13:05]
+- State "STARTED" from "TODO" [2026-07-29 Wed 19:32]
+- State "DONE" from "STARTED" [2026-07-29 Wed 20:06]
+:END:
+Landed: session-scoped `collect --any` with a poll / `agent list` / re-poll tick, plus the multi-child `fake-herdr` fixture. Coverage: 14 fan-in tests. See `* Implementation` for the two advisor-caught liveness bugs.
+
+** DONE subagent: notify a non-blocking parent when a child publishes its result :skill_herdr-subagents:
+CLOSED: [2026-07-29 Wed 21:59]
+:PROPERTIES:
+:CUSTOM_ID: 6a4101d1-2612-4a5b-bda1-97cccece98cb
+:CREATED: [2026-07-29 Wed 11:30]
+:STARTED: [2026-07-29 Wed 20:06]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 11:30]
+- State "STARTED" from "TODO" [2026-07-29 Wed 20:06]
+- State "DONE" from "STARTED" [2026-07-29 Wed 21:59]
+:END:
+Landed: `notify-parent!` under `non-blocking` only, gated on session identity then settled status, bounded by `--notify-timeout`; `:parent-pane` recorded at allocation; `--until` added to the `agent wait` capability row. Coverage: 10 push tests.
+
+** DONE subagent: reframe fan-out policy docs from waves to a concurrency limit
+CLOSED: [2026-07-29 Wed 22:09]
+:PROPERTIES:
+:CUSTOM_ID: 3aa79461-5ce3-491b-b9b9-f92f47e923ef
+:CREATED: [2026-07-29 Wed 18:40]
+:STARTED: [2026-07-29 Wed 21:59]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-29 Wed 21:59]
+- State "DONE" from "STARTED" [2026-07-29 Wed 22:09]
+:END:
+Landed: `SKILL.md` Cardinality reframed to N-in-flight + `collect --any` fan-in, `README.org` known-gap corrected, `scripts/README.md` documents both flags; `usage` and `contract.md` verified already accurate.
+
+** DONE subagent: add advisory progress reporting for long-running children :skill_herdr-subagents:
+CLOSED: [2026-07-30 Thu 11:56]
+:PROPERTIES:
+:CUSTOM_ID: 108792ca-26e7-4a0e-a256-e09f798749b8
+:CREATED: [2026-07-30 Thu 10:31]
+:STARTED: [2026-07-30 Thu 11:06]
+:END:
+:LOGBOOK:
+- Created [2026-07-30 Thu 10:31]
+- State "STARTED" from "TODO" [2026-07-30 Thu 11:06]
+- State "DONE" from "STARTED" [2026-07-30 Thu 11:56]
+:END:
+Landed: `progress --summary` stores one throttled, identity-checked latest snapshot on the ledger entry (`:progress`); `status`/`list` expose it via the existing entry shape. Coverage: 9 tests.
+
+** DONE subagent: prune stale ledger entries left by a killed spawn :skill_herdr-subagents:
+CLOSED: [2026-07-30 Thu 12:53]
+:PROPERTIES:
+:CUSTOM_ID: 032dbe16-144e-487d-ad82-cc6c2be1b162
+:CREATED: [2026-07-29 Wed 22:13]
+:STARTED: [2026-07-30 Thu 11:59]
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 22:13]
+- State "STARTED" from "TODO" [2026-07-30 Thu 11:59]
+- State "DONE" from "STARTED" [2026-07-30 Thu 12:53]
+:END:
+Landed: `prune <full-task-uuid>` proves ownership (both sides non-nil) then staleness (uncaptured, non-terminal, no `RESULT`, absent from `agent list`) before marking the entry `failed`/`orphaned`; never closes the pane. Coverage: 13 tests.
+
+** DONE subagent: surface artifacts as portable Markdown file links :skill_herdr-subagents:
+CLOSED: [2026-07-30 Thu 11:56]
+:PROPERTIES:
+:CUSTOM_ID: 41a5c747-e6f0-42e8-bb8a-df142c8006db
+:CREATED: [2026-07-30 Thu 10:49]
+:STARTED: [2026-07-30 Thu 11:06]
+:END:
+:LOGBOOK:
+- Created [2026-07-30 Thu 10:49]
+- State "STARTED" from "TODO" [2026-07-30 Thu 11:06]
+- State "DONE" from "STARTED" [2026-07-30 Thu 11:56]
+:END:
+Landed: `core/artifact-link` renders each validated `ARTIFACTS` item as `[escaped path](Path.toUri) — escaped purpose`; advisory (declared) links in the publish push, existence-validated `artifact-links` on `collect`/`collect --any`. Coverage: 10 tests across `core_test.clj`/`cli_test.clj`.
+
+** DONE subagent: document full UUID requirement for assignment commands :skill_herdr-subagents:
+CLOSED: [2026-07-30 Thu 13:22]
+:PROPERTIES:
+:CUSTOM_ID: a7697946-6937-4256-a2d2-c413c0097767
+:CREATED: [2026-07-30 Thu 10:31]
+:STARTED: [2026-07-30 Thu 12:54]
+:END:
+:LOGBOOK:
+- Created [2026-07-30 Thu 10:31]
+- State "STARTED" from "TODO" [2026-07-30 Thu 12:54]
+- State "DONE" from "STARTED" [2026-07-30 Thu 13:22]
+:END:
+Landed: `usage`, `SKILL.md`, `scripts/README.md`, and `contract.md` consistently state `collect`/`status`/`prune` require the full emitted UUID (no `ot`-style prefix resolution); extended the existing prefix-rejection test to cover all three commands.
+
+** DONE subagent: settle-close a collect --any capture instead of the one-shot pane close :skill_herdr-subagents:
+CLOSED: [2026-07-30 Thu 14:32]
+:PROPERTIES:
+:CUSTOM_ID: e8ea2227-4563-4191-83cf-b2045d233229
+:CREATED: [2026-07-30 Thu 12:31]
+:STARTED: [2026-07-30 Thu 13:50]
+:END:
+:LOGBOOK:
+- Created [2026-07-30 Thu 12:31]
+- State "STARTED" from "TODO" [2026-07-30 Thu 13:50]
+- State "DONE" from "STARTED" [2026-07-30 Thu 14:32]
+:END:
+Landed: `collect-any!`'s `captured` helper now makes one bounded `herdr/wait!` (no `--until`) on the captured child, gated on a `COMPLETE`/`FAILED` envelope, before the unmodified `maybe-close!`; budget `default-settle-close-ms` 45 000 ms / `SUBAGENT_SETTLE_CLOSE_MS` override. Coverage: 6 tests.
+
+* Implementation
+
+** Settle-close for `collect --any` (task e8ea2227)
+The wait lives inside `collect-any!`'s `captured` helper, applied only to a `capture-first` hit and gated on `(#{"COMPLETE" "FAILED"} (:status parsed))` — a captured `BLOCKED` envelope never closes a pane, so it skips the wait entirely. `herdr/wait!` (no `--until`) is used deliberately over `wait-settled!` (which excludes `blocked`): the bare form returns on *any* settled state, so a child that settles `blocked` ends the wait immediately instead of burning the whole budget, and `maybe-close!`'s own unmodified idle/done check still refuses to close its pane. Whatever the wait's outcome — settled, timed out, or a herdr error — the call is wrapped in a `try`/`catch` that discards it, and the unmodified `maybe-close!` makes the same single close attempt regardless; `remaining` is computed from the candidate set observed at capture, before the wait, which is what keeps the result's fields identical whether the close succeeded or gave up.
+
+An advisor consult caught a vacuous test: the fixture recorded `--until` in its call log but did not honour it, so the "blocked ends the wait early" assertion was pinned only by an argv-shape check, not by actual behaviour — a `herdr/wait!` → `wait-settled!` regression would still have passed. Teaching `fake-herdr`'s `agent wait` to honour `--until` (timing out when the settled state is excluded from the requested set) converted it into a real behavioural guard; the same regression now also fails on elapsed time. The worker independently applied this same non-vacuous-test discipline (already filed as task `fd8e0daf`) without being told to.
+
+The fixture also needed a new per-child `settle-to` marker, branched before the pre-existing `FAKE_WAIT` dispatch: the settle-close wait targets a child that has *already* published and is merely still `working`, so reusing the original `agent wait` verb unmodified would have re-triggered its publish side effect. `settle-to` settles the target without publishing, writing the settled status through to the child's `status` file so a following `agent get` agrees.
+
+The budget (`default-settle-close-ms`, 45 000 ms / `SUBAGENT_SETTLE_CLOSE_MS`) is deliberately larger than `default-notify-timeout-ms` (30 000): the reproduced retention is exactly a non-blocking child publishing while its own parent sits inside `collect --any`, which keeps that parent `working` (never idle/done) for the entire 30 s notify-push wait — a budget at or below that would miss the very case that motivated the fix. This settle budget is additive to `--timeout`, not deducted from it, so a capture landing near the end of the poll budget can return up to the settle budget later than `--timeout` alone suggests; documented in `contract.md` rather than treated as a bug.
+
+Coverage: 6 tests, including an elapsed-time bound (not just an argv check) proving the blocked-early-exit and a full field-equality comparison (modulo per-fixture identity fields) proving the give-up-vs-success result shape is identical. `bb test`: 404 / 2164 green (baseline 398 / 2117).
+
+** Full-UUID documentation consistency pass (task a7697946)
+Docs-only, as scoped: `usage`'s `collect`/`status` placeholders (previously bare `<task>`) now match `prune`'s pre-existing `<full-task-uuid>`; one sentence added to each of `SKILL.md`, `scripts/README.md`, and `contract.md` naming the ledger task id as a fresh `java.util.UUID/randomUUID`, an identifier space unrelated to any org `:CUSTOM_ID:`. The existing prefix-rejection test was extended to cover all three commands rather than duplicated per-command. `bb test`: 398 / 2117 green.
+
+** Explicit stale-assignment pruning (task 032dbe16)
+`prune!` checks ownership first (`caller-parent-session` equals the entry's `:parent-session`, **both non-nil** — an advisor consult caught that a bare `not=` would let an unresolvable caller, itself `nil`, coincidentally "own" a hand-edited entry with a missing `:parent-session`), then staleness cheapest-first: no `:captured-at`, non-terminal `:status`, no `RESULT` on disk, and only last the one herdr call — the named child absent from `live-agents` (reused, not reimplemented; `nil` means liveness unknown and refuses rather than permitting).
+
+The same advisor consult caught a second real race: the `agent list` liveness check can itself be stale by the time of the write, if the child publishes and exits inside that call's own window (the identical hazard `collect --any` already re-polls to avoid). The fix re-validates the *freshest* ledger state for `:captured-at`/`RESULT` inside `ledger/update!`'s own function, not against the pre-listing snapshot, and refuses — mutating nothing — if either appeared during the check.
+
+Coverage: 13 tests, including both advisor-caught races (`prune-refuses-when-recorded-and-caller-identity-are-both-unresolvable`, `prune-refuses-a-result-published-during-the-liveness-scan`) and prefix-rejection (`prune-does-not-resolve-a-task-id-prefix`). `bb test`: 397 / 2108 green.
+
+** Advisory progress reporting (task 108792ca)
+`progress!` checks in order: injected `HERDR_SUBAGENT_CHILD`/`_TASK`/`_RESULT` present, the entry's `:child` equals the injected child (never a stray/foreign update), the entry's own `:result` (not the injected env value) does not yet exist on disk, no `:captured-at`, `:status` not terminal (`failed`/`invalid`) — then throttles against `:progress :reported-at` via `SUBAGENT_PROGRESS_INTERVAL_MS`. Throttled is a non-`ledger/update!` no-op (`{:status "throttled" :progress previous}`); an accepted report overwrites the single `:progress` snapshot in place. No herdr call anywhere in the path, so no fixture change was needed. An advisor consult caught two gaps before publish: the RESULT-exists guard must key off the ledger entry's own `:result`, not the injected env (which a caller could mismatch), and `:reported-at` parsing needed defensive handling (unparseable or negative-elapsed treated as stale-so-proceed, never a crash or an under-throttle).
+
+Known limitation, documented in `contract.md` § Progress: `ledger/update!` has no compare-and-swap, so a child's `progress` write racing a concurrent parent `capture!`/`record-session!` on the same entry can lose one side's update. Bounded and recoverable (worst case, a dropped `:captured-at` just re-enters `collect --any` candidacy for a harmless re-parse of the already-published `RESULT`); not worth ledger locking.
+
+`bb test`: 380 / 2024 green at hand-off (further isolated runs by the concurrent sibling worker briefly showed unrelated failures from its own in-progress writes to shared test files; both authors' final `bb test` runs were independently green once each had landed).
+
+** Portable Markdown artifact links (task 41a5c747)
+`core/artifact-link` reuses `core/artifact-path`'s absoluteness check (via a shared `artifact-parts` splitter) rather than trusting a pre-validated caller, builds the `file://` URI with `java.nio.file.Paths/get … .toUri` (not `File.toURI`, which omits the empty authority and yields `file:/…`), and backslash-escapes Markdown-significant characters in both the label and the purpose — including `&`/`<`/`>`/`~`, since an unescaped entity reference would make a CommonMark renderer display a *different* path in the one field that must stay trustworthy. `(` and `)` are legal URI sub-delimiters `toUri` leaves alone but are percent-encoded afterward because an unbalanced parenthesis would truncate a Markdown link destination.
+
+An advisor consult (REVISE) caught real defects before publish: the plan's named API (`File.toUri`) does not exist (`File.toURI` is the real method and is *not* what should be used — `Paths/get … .toUri` is correct and canonical); `Path.toUri` performs I/O (stats the path, appending a trailing slash for an existing directory), so the renderer is not pure and a directory artifact's advisory link can differ from its collected link for the same declared line — pinned by `artifact-link-uri-reflects-directory-state-on-disk` rather than hidden; and a NUL byte passes `core/artifact-path` but fails both `Paths/get` and the `agent prompt` argv boundary, so an unrenderable declared artifact is dropped from the advisory and counted (`- (N … not renderable …)`) rather than raw-texted or allowed to crash the whole push.
+
+`capture!` builds `artifact-links` only after every artifact clears the existing `fs/exists?` loop, stores it on the ledger entry via `cond->` (an empty/absent list adds no key at all — absence is not the same claim as validated-empty), and the `invalid` branch actively `dissoc`s any `:artifact-links` a prior successful capture had stored, since a re-collect after the artifact vanishes must never keep advertising a stale validated link. `collect --any`'s result shape is unaffected beyond the existing `remaining` field, since it flows through the same `capture!`/`maybe-close!` path.
+
+Gotcha for future editors of `cli_test.clj`/`core_test.clj`: mid-implementation, this worker's own append to `cli_test.clj` was silently clobbered by the concurrent sibling worker's stale-read write to the same file; both workers re-read and re-verified before publishing, and the final merged file is intact and green (see `bb test` below), but a herdr-subagents follow-up on safer concurrent file writes across parallel workers may be worth filing separately from this record.
+
+`bb test`: 384 / 2053 green (final, after both wave-1 tasks landed).
+
+** Publish-time artifact validation (task 7a06633b)
+The check is one `doseq` in `publish!`'s outer `let`, placed before `text`/`target`/`temp` are computed and before `fs/create-dirs`, so nothing touches the filesystem on the rejection path. It reuses `core/artifact-path` (unchanged) rather than adding a second path predicate, and inspects the raw `(:artifacts body)` values so no path is rewritten. `(str artifact)` guards a non-string `--from-file` JSON entry, which would otherwise NPE before reaching `artifact-path`'s own clean error.
+
+Coverage: `relative-artifact-rejected-before-publication` (`cli_test.clj:706`) asserts rejection via both `--artifact` and `--from-file`, absence of `RESULT` and any `.tmp` sibling, and a corrected retry to the *same* target. That retry deliberately names an artifact file that does not exist, which is what pins the no-existence-check-at-publish anti-criterion. `bb test`: 337 tests / 1702 assertions green (baseline 336 / 1690).
+
+** Advisory parent push (task 6a4101d1)
+`notify-parent!` runs only under `non-blocking`, only after the committed link, and only when `push-decision` clears both gates — session identity is checked *first*, so a mismatched parent is reported as `session-mismatch` regardless of its status. A parent whose session cannot be observed fails the gate by construction (`nil` never equals the recorded identity), which is the safe direction since a ledger `:parent-session` is never nil.
+
+Each herdr call carries its own reason rather than sharing one catch: a failed `agent prompt` may have delivered text partially, which is a different operator fact from a parent that was never contacted (`probe-failed` vs `prompt-failed`). `:waited` records only that a settle wait preceded the outcome — never that the parent settled, because the post-wait re-check may still reject a *replacement* agent that settled in the same pane. `publish!` had no ledger dependency before this task, so `ledger/read!` is try-wrapped: a hand-driven `publish` with a synthetic task reports `skipped` / `unknown-ledger-entry` instead of throwing.
+
+An advisor consult caught three real gaps, all fixed: the collapsed probe/submission catch, a `:settled-after-wait true` field that contradicted `reason parent-unsettled` (renamed `:waited`), and an untested but reachable no-`:parent-pane` branch. `bb test`: 363 / 1895 green, with 8 guards mutation-tested.
+
+** Fan-in primitive `collect --any` (task 157a2c3d)
+Each tick is: poll every candidate's `RESULT`, one `agent list` to classify liveness, then **poll again** before any terminal outcome. That re-scan is not defensive padding — an advisor consult caught that a child can publish and exit inside the `agent list` subprocess window, so without it both `blocked` and `no-live-children` could discard a valid `COMPLETE` envelope on disk and leak its pane. The same consult caught `(into {} … nil)` yielding a truthy `{}`, which would have classified every child as vanished on any exit-0 payload lacking an `agents` key; `when-let` on the raw listing keeps "liveness unknown" (keep polling) distinct from "known zero live" (short-circuit).
+
+`maybe-close!` is called with `owned? true` because candidacy is same-session by construction. Without `--wait` the budget is zero, so a single poll that finds nothing reports `pending` / `timeout` — the same reason string as an elapsed budget, since a zero budget *is* elapsed.
+
+Known limitation, documented in `contract.md` rather than fixed: a `run`/`start` killed between `ledger/write!` and its cleanup leaves a same-session, uncaptured, non-`failed` entry that stays a candidate indefinitely, inflating `remaining` and making `no-candidates` unreachable for that session. Widening the candidacy predicate to cover it would weaken the pre-decided contract; clearing the stale ledger file is the remedy.
+
+`bb test`: 353 / 1791 green. Mutation testing (break a guard, re-run, revert) was applied to four guards and paid for itself twice — it confirmed the `:status "failed"` exclusion is load-bearing and exposed the vacuous foreign-session assertion noted under `** Gotchas`.
+
+** Transient `agent_pane_busy` retry (task 54a14361)
+Retry lives in `herdr/start!` as a `loop` over `invoke`, keyed on `[:error :response :error :code]`; `start-retry-attempts` (4) and `start-retry-backoff-ms` (500) are named vars so tests assert against the budget rather than a literal. The budget is not tuned to a measured race length — the motivating smoke failure cleared on one immediate rerun and no duration was recorded — so it is deliberately small: ~1.5 s of worst-case delay against losing the whole allocation.
+
+The fixture gained two orthogonal knobs: `FAKE_START_BUSY_COUNT` (fail N leading `agent start` calls with a real `agent_pane_busy` error map, counter file under the test temp dir) and `FAKE_START_ERROR_CODE` (fail every call with an arbitrary code). The second exists because the pre-existing `FAKE_FAIL_START` emits a bare-string error, which only proves nil-safety — not that the code is discriminated; an advisor consult caught that gap. Coverage: busy-then-success (one split, one ledger entry, no pane closed), other-code-fails-first-attempt, and budget exhaustion (`:failure-phase "start"`, pane closed, `start-retry-attempts` calls). `bb test`: 340 / 1721 green.

@@ -9,7 +9,7 @@ help() {
     'pane split') flags='--pane --direction --cwd --env KEY=VALUE --no-focus' ;;
     'tab create') flags='--workspace --cwd --label --env KEY=VALUE --no-focus' ;;
     'agent start') flags='--kind --pane' ;;
-    'agent wait') flags='--timeout' ;;
+    'agent wait') flags='--timeout --until' ;;
     'notification show') flags='--body' ;;
   esac
   if [ "${FAKE_MISSING_CAPABILITY:-}" = "$1-$2" ]; then flags='' ; fi
@@ -25,12 +25,91 @@ session_fragment() {
   [ "${FAKE_SESSION_FROM:-start}" = "$1" ] && session_json
   return 0
 }
+# Multi-child state lives under a per-test directory (FAKE_HERDR_STATE_DIR, default
+# `<log>.state`) rather than in new global knobs:
+#
+#   <state>/pane-seq                     placement counter (child 1 keeps id `w:child`)
+#   <state>/children/<child>/env         that child's injected --env lines
+#   <state>/children/<child>/pane        that child's pane id
+#   <state>/children/<child>/status      that child's `agent get`/`agent list` status
+#   <state>/children/<child>/publish-status  per-child STATUS for its published result
+#   <state>/children/<child>/settle-to   `agent wait <child>` settles to this status (and
+#                                        writes it through to `status`) with no publish
+#                                        side effect; `timeout`/`error` fail the wait, and
+#                                        an `--until` set excluding it times out
+#   <state>/children/<child>/gone        agent has vanished: `agent get` fails, absent from `agent list`
+#   <state>/children/<child>/nameless    listed with a pane_id but no `name`, as herdr does
+#                                        for a manually started agent — not identifiable
+#   <state>/publish-queue                child names, one per line; each `agent list`
+#                                        publishes the first and consumes the line
+#
+# FAKE_HERDR_ENV_FILE keeps its single-child meaning: the most recent placement.
+state_dir() {
+  local dir="${FAKE_HERDR_STATE_DIR:-${FAKE_HERDR_LOG}.state}"
+  mkdir -p "$dir"
+  printf '%s' "$dir"
+}
+# The first child keeps the historical `w:child` id, so single-child expectations across
+# the existing suite are unchanged; later children get `w:child-2`, `w:child-3`, …
+next_pane_id() {
+  local dir n
+  dir="$(state_dir)"
+  n=0; [ -f "$dir/pane-seq" ] && n="$(cat "$dir/pane-seq")"
+  n=$((n + 1)); echo "$n" >"$dir/pane-seq"
+  if [ "$n" = 1 ]; then printf 'w:child'; else printf 'w:child-%s' "$n"; fi
+}
+# Records a placement's env into both the legacy single file and the per-child directory,
+# and echoes the allocated pane id.
+capture_env() {
+  local dir pane child
+  : >"${FAKE_HERDR_ENV_FILE:?}"
+  while [ "$#" -gt 0 ]; do [ "$1" = --env ] && echo "$2" >>"$FAKE_HERDR_ENV_FILE"; shift; done
+  dir="$(state_dir)"
+  pane="$(next_pane_id)"
+  child="$(grep '^HERDR_SUBAGENT_CHILD=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2- || true)"
+  if [ -n "$child" ]; then
+    mkdir -p "$dir/children/$child"
+    cp "$FAKE_HERDR_ENV_FILE" "$dir/children/$child/env"
+    printf '%s' "$pane" >"$dir/children/$child/pane"
+  fi
+  printf '%s' "$pane"
+}
+child_status() {
+  local file="$(state_dir)/children/$1/status"
+  if [ -f "$file" ]; then cat "$file"; else printf '%s' "${FAKE_AGENT_STATUS:-idle}"; fi
+}
+# FAKE_START_BUSY_COUNT fails that many leading `agent start` calls with
+# `agent_pane_busy`, then succeeds; the counter lives under the test's temp dir so
+# concurrent tests never collide. Absent/zero means no simulated busy pane.
+start_busy_gate() {
+  local n limit="${FAKE_START_BUSY_COUNT:-0}"
+  [ "$limit" -gt 0 ] || return 0
+  local counter="${FAKE_START_BUSY_COUNTER_FILE:-${FAKE_HERDR_LOG}.start-busy-count}"
+  n=0; [ -f "$counter" ] && n="$(cat "$counter")"
+  if [ "$n" -lt "$limit" ]; then
+    echo "$((n + 1))" >"$counter"
+    echo '{"error":{"code":"agent_pane_busy","message":"agent target pane w3:p3W is not an available shell"}}' >&2
+    return 1
+  fi
+  return 0
+}
+# publish_result [child-name]: publishes from the named child's captured env when it is
+# known, otherwise from the single-child FAKE_HERDR_ENV_FILE (unchanged behaviour).
 publish_result() {
-  [ -n "${FAKE_HERDR_ENV_FILE:-}" ] || return 0
+  local env_file="${FAKE_HERDR_ENV_FILE:-}" per_child status
+  if [ -n "${1:-}" ]; then
+    per_child="$(state_dir)/children/$1/env"
+    [ -f "$per_child" ] && env_file="$per_child"
+  fi
+  [ -n "$env_file" ] && [ -f "$env_file" ] || return 0
   local result child task
-  result="$(grep '^HERDR_SUBAGENT_RESULT=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2-)"
-  child="$(grep '^HERDR_SUBAGENT_CHILD=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2-)"
-  task="$(grep '^HERDR_SUBAGENT_TASK=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2-)"
+  result="$(grep '^HERDR_SUBAGENT_RESULT=' "$env_file" | head -1 | cut -d= -f2-)"
+  child="$(grep '^HERDR_SUBAGENT_CHILD=' "$env_file" | head -1 | cut -d= -f2-)"
+  task="$(grep '^HERDR_SUBAGENT_TASK=' "$env_file" | head -1 | cut -d= -f2-)"
+  status="${FAKE_PUBLISH_STATUS:-COMPLETE}"
+  if [ -n "$child" ] && [ -f "$(state_dir)/children/$child/publish-status" ]; then
+    status="$(cat "$(state_dir)/children/$child/publish-status")"
+  fi
   [ "${FAKE_BAD_ENVELOPE:-}" = 1 ] && task=wrong
   local process_section=""
   if [ -n "${FAKE_PUBLISH_PROCESS:-}" ]; then
@@ -44,7 +123,7 @@ publish_result() {
 CHILD: $child
 TASK: $task
 RESULT: $result
-STATUS: ${FAKE_PUBLISH_STATUS:-COMPLETE}
+STATUS: $status
 SUMMARY: fake completed
 ARTIFACTS:
 - ${FAKE_PUBLISH_ARTIFACT:-none}
@@ -54,6 +133,19 @@ NEXT: none
 ${process_section}--- END HERDR RESULT ---
 EOF
 }
+# Each `agent list` publishes the first child named in <state>/publish-queue and consumes
+# that line, modelling children that publish while a parent polls in `collect --any`.
+publish_queue_step() {
+  local dir queue head rest
+  dir="$(state_dir)"
+  queue="$dir/publish-queue"
+  [ -s "$queue" ] || return 0
+  head="$(head -1 "$queue")"
+  rest="$(tail -n +2 "$queue")"
+  printf '%s' "$rest" >"$queue"
+  [ -n "$head" ] && publish_result "$head"
+  return 0
+}
 case "${1:-}" in
   --version) echo "herdr ${FAKE_HERDR_VERSION:-0.7.5}" ;;
   pane)
@@ -61,8 +153,8 @@ case "${1:-}" in
     case "$2" in
       layout) echo '{"result":{"layout":{"area":{"width":113,"height":110},"focused_pane_id":"other","panes":[{"pane_id":"w:other","rect":{"width":200,"height":50}},{"pane_id":"w:p","rect":{"width":113,"height":55}}]}}}' ;;
       get) printf '{"result":{"pane":{"pane_id":"w:p","label":"%s"}}}\n' "${FAKE_PARENT_LABEL:-planner-1-model}" ;;
-      split) : >"${FAKE_HERDR_ENV_FILE:?}"; shift 2; while [ "$#" -gt 0 ]; do [ "$1" = --env ] && echo "$2" >>"$FAKE_HERDR_ENV_FILE"; shift; done; echo '{"result":{"pane":{"pane_id":"w:child"}}}' ;;
-      rename) printf '{"result":{"pane":{"pane_id":"w:child","label":"%s"}}}\n' "${4:-}" ;;
+      split) shift 2; pane="$(capture_env "$@")"; printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "$pane" ;;
+      rename) printf '{"result":{"pane":{"pane_id":"%s","label":"%s"}}}\n' "${3:-}" "${4:-}" ;;
       close)
         if [ "${FAKE_FAIL_CLOSE:-}" = 1 ]; then echo '{"error":"close"}' >&2; exit 1; fi
         echo '{"result":{}}' ;;
@@ -70,14 +162,21 @@ case "${1:-}" in
   tab)
     if [ "${3:-}" = --help ]; then help tab "$2"; exit 0; fi
     case "$2" in
-      create) : >"${FAKE_HERDR_ENV_FILE:?}"; shift 2; while [ "$#" -gt 0 ]; do [ "$1" = --env ] && echo "$2" >>"$FAKE_HERDR_ENV_FILE"; shift; done; echo '{"result":{"root_pane":{"pane_id":"w:child"},"tab":{"tab_id":"w:tab"}}}' ;;
+      create) shift 2; pane="$(capture_env "$@")"; printf '{"result":{"root_pane":{"pane_id":"%s"},"tab":{"tab_id":"%s"}}}\n' "$pane" "${pane/child/tab}" ;;
     esac ;;
   agent)
     if [ "${3:-}" = --help ]; then help agent "$2"; exit 0; fi
     case "$2" in
       get)
         if [ -n "${FAKE_FAIL_AGENT_GET:-}" ] && [ "${3:-}" = "$FAKE_FAIL_AGENT_GET" ]; then echo '{"error":"agent get"}' >&2; exit 1; fi
-        if [ "${3:-}" = w:p ]; then echo '{"result":{"agent":{"agent":"pi","pane_id":"w:p","agent_session":{"value":"session"},"agent_status":"idle"}}}'; else
+        # The parent pane. FAKE_PARENT_STATUS / FAKE_PARENT_SESSION drive the advisory
+        # push gates at publish time; their defaults keep the historical shape exactly.
+        if [ "${3:-}" = w:p ]; then printf '{"result":{"agent":{"agent":"pi","pane_id":"w:p","agent_session":{"value":"%s"},"agent_status":"%s"}}}\n' "${FAKE_PARENT_SESSION:-session}" "${FAKE_PARENT_STATUS:-idle}"; else
+          # A `gone` marker models a vanished child: `agent get` fails as it does when
+          # Herdr no longer knows the agent name.
+          if [ -f "$(state_dir)/children/${3:-}/gone" ]; then
+            echo '{"error":{"code":"agent_not_found","message":"no such agent"}}' >&2; exit 1
+          fi
           fragment="$(session_fragment get)"
           if [ "${FAKE_SESSION_FROM:-}" = late-get ]; then
             counter="${FAKE_HERDR_LOG}.child-get"
@@ -85,14 +184,103 @@ case "${1:-}" in
             n=$((n + 1)); echo "$n" >"$counter"
             if [ "$n" -gt 1 ]; then fragment="$(session_json)"; fi
           fi
-          printf '{"result":{"agent":{"agent_status":"%s"%s}}}\n' "${FAKE_AGENT_STATUS:-idle}" "$fragment"
+          printf '{"result":{"agent":{"agent_status":"%s"%s}}}\n' "$(child_status "${3:-}")" "$fragment"
         fi ;;
-      list) echo '{"result":{"agents":[]}}' ;;
-      start) [ "${FAKE_FAIL_START:-}" = 1 ] && { echo '{"error":"start"}' >&2; exit 1; }; printf '{"result":{"agent":{"name":"child"%s}}}\n' "$(session_fragment start)" ;;
-      prompt) printf '%s' "${4:-}" >"${FAKE_HERDR_PROMPT_FILE:?}"; echo '{"result":{"agent":{"agent_status":"working"}}}' ;;
-      wait) case "${FAKE_WAIT:-publish}" in
-        publish) publish_result; printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
-        timeout-publish) publish_result; echo '{"error":"timeout"}' >&2; exit 1 ;;
+      # Reports every placed child that has not been marked `gone`, with its per-child
+      # status and pane id — the single call `collect --any` uses per poll tick. Absent
+      # state (no spawn yet) keeps the historical empty list.
+      list)
+        # FAKE_AGENT_LIST_NO_AGENTS_KEY returns a well-formed exit-0 envelope with no
+        # `agents` key, so a caller can prove it degrades to polling instead of deciding
+        # every child has vanished.
+        if [ "${FAKE_AGENT_LIST_NO_AGENTS_KEY:-}" = 1 ]; then echo '{"result":{}}'; publish_queue_step; exit 0; fi
+        dir="$(state_dir)"
+        printf '{"result":{"agents":['
+        first=1
+        if [ -d "$dir/children" ]; then
+          for child_dir in "$dir"/children/*; do
+            [ -d "$child_dir" ] || continue
+            if [ -f "$child_dir/gone" ]; then continue; fi
+            name="$(basename "$child_dir")"
+            pane=""; [ -f "$child_dir/pane" ] && pane="$(cat "$child_dir/pane")"
+            if [ "$first" = 1 ]; then first=0; else printf ','; fi
+            if [ -f "$child_dir/nameless" ]; then
+              printf '{"agent":"pi","agent_status":"%s","pane_id":"%s"}' "$(child_status "$name")" "$pane"
+            else
+              printf '{"agent":"pi","name":"%s","agent_status":"%s","pane_id":"%s"}' "$name" "$(child_status "$name")" "$pane"
+            fi
+          done
+        fi
+        printf ']}}\n'
+        publish_queue_step ;;
+      start)
+        [ "${FAKE_FAIL_START:-}" = 1 ] && { echo '{"error":"start"}' >&2; exit 1; }
+        # FAKE_START_ERROR_CODE fails every `agent start` call with the given herdr
+        # error code (real map shape, not the bare-string FAKE_FAIL_START), so a
+        # non-`agent_pane_busy` code can prove first-attempt failure.
+        if [ -n "${FAKE_START_ERROR_CODE:-}" ]; then
+          printf '{"error":{"code":"%s","message":"fake non-busy error"}}\n' "$FAKE_START_ERROR_CODE" >&2
+          exit 1
+        fi
+        start_busy_gate || exit 1
+        printf '{"result":{"agent":{"name":"child"%s}}}\n' "$(session_fragment start)" ;;
+      # FAKE_FAIL_PROMPT models a submission that fails *after* the parent may already
+      # have seen partial text, which is why the CLI names that reason separately.
+      prompt)
+        [ "${FAKE_FAIL_PROMPT:-}" = 1 ] && { echo '{"error":{"code":"agent_prompt_failed","message":"fake prompt failure"}}' >&2; exit 1; }
+        printf '%s' "${4:-}" >"${FAKE_HERDR_PROMPT_FILE:?}"; echo '{"result":{"agent":{"agent_status":"working"}}}' ;;
+      # `agent wait <target>` publishes that target's own result, so a multi-child
+      # fixture publishes per child rather than clobbering one shared env file.
+      # A wait on the parent pane is the advisory push's settle wait, never the child
+      # wait loop, so it is dispatched separately: FAKE_PARENT_WAIT selects settle (the
+      # default), timeout, or an arbitrary error code, and FAKE_PARENT_WAIT_STATUS /
+      # FAKE_PARENT_WAIT_SESSION describe the AgentInfo it settles with (a differing
+      # session models a replacement agent taking over the reused pane).
+      wait) if [ "${3:-}" = w:p ]; then
+        case "${FAKE_PARENT_WAIT:-settle}" in
+          timeout) echo '{"error":{"code":"timeout","message":"timed out waiting for agent status"}}' >&2; exit 1 ;;
+          settle) printf '{"result":{"agent":{"agent":"pi","pane_id":"w:p","agent_session":{"value":"%s"},"agent_status":"%s"}}}\n' "${FAKE_PARENT_WAIT_SESSION:-${FAKE_PARENT_SESSION:-session}}" "${FAKE_PARENT_WAIT_STATUS:-idle}" ;;
+          *) printf '{"error":{"code":"%s","message":"fake parent wait error"}}\n' "$FAKE_PARENT_WAIT" >&2; exit 1 ;;
+        esac
+        exit 0
+      fi
+      # A per-child `settle-to` marker models the `collect --any` settle-close wait: the
+      # target has *already* published and is merely still `working`, so this wait must
+      # settle it without the publish side effect `agent wait` carries in its original
+      # (child wait loop) role. Branched on target state before the FAKE_WAIT cases for
+      # exactly that reason. Consequence for future tests: a child carrying `settle-to`
+      # never reaches the FAKE_WAIT cases, so it can never publish *through* the wait —
+      # publish such a child directly (or via `publish-queue`) instead.
+      # Contents: a status to settle to (written through to the child's `status` file so a
+      # following `agent get` agrees), or `timeout`/`error` to fail the wait. `--until` is
+      # honoured as herdr does — a caller that narrows the match set to states excluding
+      # this child's settled state times out instead of being handed a settlement it did
+      # not ask for, which is what keeps `--until`-free waits distinguishable in tests.
+      settle_target="${3:-}"
+      settle_marker="$(state_dir)/children/$settle_target/settle-to"
+      if [ -f "$settle_marker" ]; then
+        settle_to="$(cat "$settle_marker")"
+        settle_untils=""
+        while [ "$#" -gt 0 ]; do
+          if [ "$1" = --until ]; then settle_untils="$settle_untils ${2:-}"; shift 2 || break; else shift; fi
+        done
+        case "$settle_to" in
+          timeout) echo '{"error":{"code":"timeout","message":"timed out waiting for agent status"}}' >&2; exit 1 ;;
+          error) echo '{"error":{"code":"agent_not_found","message":"fake settle wait error"}}' >&2; exit 1 ;;
+        esac
+        if [ -n "$settle_untils" ]; then
+          case " $settle_untils " in
+            *" $settle_to "*) : ;;
+            *) echo '{"error":{"code":"timeout","message":"timed out waiting for agent status"}}' >&2; exit 1 ;;
+          esac
+        fi
+        printf '%s' "$settle_to" >"$(state_dir)/children/$settle_target/status"
+        printf '{"result":{"agent":{"agent_status":"%s"%s}}}\n' "$settle_to" "$(session_fragment wait)"
+        exit 0
+      fi
+      case "${FAKE_WAIT:-publish}" in
+        publish) publish_result "${3:-}"; printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
+        timeout-publish) publish_result "${3:-}"; echo '{"error":"timeout"}' >&2; exit 1 ;;
         blocked) printf '{"result":{"agent":{"agent_status":"blocked"%s}}}\n' "$(session_fragment wait)" ;;
         idle-then-publish)
           counter_file="${FAKE_WAIT_COUNTER_FILE:-${FAKE_HERDR_LOG}.wait-count}"
@@ -101,7 +289,7 @@ case "${1:-}" in
           count=$((count + 1))
           echo "$count" >"$counter_file"
           if [ "$count" -gt "${FAKE_WAIT_PUBLISH_AFTER:-3}" ]; then
-            publish_result
+            publish_result "${3:-}"
           fi
           printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
         *) printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;

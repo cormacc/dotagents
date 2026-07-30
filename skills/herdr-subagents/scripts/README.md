@@ -14,7 +14,7 @@ bb test
 
 The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/skills` is a *directory* symlink), uses the repository `bb.edn` when present, and falls back to `bb --deps-root <scripts> -Sdeps '{:paths ["src"]}'` for a bare skill subtree. It never `cd`s before `exec`, so the CLI's working directory is always the caller's — that value becomes the child pane's `--cwd` and drives assignment-root/roster resolution. It has no additional Maven dependencies.
 
-`run` and `start` take opaque assignment text from exactly one of `--task`, `--task-file`, or stdin. `--prompt-extra` appends exceptional constraints; `--print-prompt` previews the invariant wrapper. The CLI never offers raw prompt mode.
+`run` and `start` take opaque assignment text from exactly one of `--task`, `--task-file`, or stdin; `collect`, `status`, and `prune` in turn require the complete task UUID that `run`/`start` emitted — unlike `ot`'s `:CUSTOM_ID:` prefix matching, no prefix is ever resolved. `--prompt-extra` appends exceptional constraints; `--print-prompt` previews the invariant wrapper. The CLI never offers raw prompt mode.
 
 The value-less flags `--retro` and `--no-retro` override process-retro gating for one spawn. See [docs/contract.md](docs/contract.md) § Retro gating for precedence, optional-skill behavior, ledger fields, and the `PROCESS:` envelope grammar.
 
@@ -22,12 +22,21 @@ The value-bearing `--spawns` flag overrides the persona's frontmatter `spawns:` 
 
 The value-less flag `--tab` places the child in a new unfocused tab of the caller's workspace instead of a split. Every other spawn contract (env, label, ledger, collect, closure) is unchanged, and there is no inheritance: a tab-placed child's own spawns still split by default. See [docs/contract.md](docs/contract.md) § Placement.
 
+The value-less flag `--any` on `collect` takes no task argument; it captures the *first* in-flight child of the caller's own session to publish a valid result, instead of waiting on one named task — the read/capture primitive behind bounded-concurrency fan-out. See [docs/contract.md](docs/contract.md) § Fan-in for candidacy, poll structure, and outcomes.
+
+The value-bearing `--notify-timeout` flag on `publish` bounds the settle wait before the advisory parent push under the non-blocking waiting policy (default 30000 ms). See [docs/contract.md](docs/contract.md) § Parent push for the push gates and outcome table.
+
+The value-bearing `--summary` flag on the child-only `progress` command stores one latest, throttled advisory snapshot (`SUBAGENT_PROGRESS_INTERVAL_MS`, default 60000 ms) under the ledger entry, visible through `status`/`list`; it is never a second transcript and never a completion signal. See [docs/contract.md](docs/contract.md) § Progress for identity validation, throttling, and rejection cases.
+
+`subagent prune <full-task-uuid>` retires exactly one stale, same-session assignment orphaned by a killed `run`/`start`: it requires ownership of the exact ledger entry and proof the entry is uncaptured, non-terminal, result-less, and absent from one `agent list` call before marking it `failed` with `:pruned-at`/`:prune-reason` metadata, so `collect --any` stops counting it as a candidate; it never scans the ledger, ages out a candidate, or resolves a prefix. See [docs/contract.md](docs/contract.md) § Pruning for the ownership check and staleness proof.
+
 ```sh
 SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
 "$SUBAGENT" run scout --task 'Find the relevant source files.' --timeout 600000
 "$SUBAGENT" start reviewer --task-file assignment.md
-"$SUBAGENT" collect <task-id> --wait --timeout 600000
-"$SUBAGENT" status <task-id>
+"$SUBAGENT" collect <full-task-uuid> --wait --timeout 600000
+"$SUBAGENT" collect --any --wait --timeout 600000
+"$SUBAGENT" status <full-task-uuid>
 ```
 
 A child calls the injected absolute launcher path:
@@ -38,6 +47,8 @@ A child calls the injected absolute launcher path:
 ```
 
 `--process` is repeatable, and `--from-file` accepts the same list as a `"process"` array.
+
+Each `--artifact` is also surfaced as a portable Markdown link, `[absolute path](file:///encoded/path) — purpose`: advisory (declared, unvalidated) in the parent push a non-blocking publish sends, and existence-validated as `result.artifact-links` on a successful `collect` / `collect --any`. That is fallback *syntax* only — the URI is built with `Path.toUri` and no terminal-control escape is ever emitted, so whether it renders as a clickable hyperlink depends on the parent's harness and terminal support. See [docs/contract.md](docs/contract.md) § Artifact links.
 
 ## Tests and smoke
 

@@ -43,7 +43,11 @@ gather-context → take-action → verify-output loop:
    user to start one (`lein repl :headless`, `clj -M:repl`, shadow-cljs
    watch, etc.) — their build/watch setup is session-owned.
 3. **Explore unfamiliar code in the REPL.** `(clojure.repl/doc x)`,
-   `(clojure.repl/source x)`, `(clojure.repl/dir ns)`.
+   `(clojure.repl/source x)`, `(clojure.repl/dir ns)`. For an unfamiliar Java
+   interop call, evaluate it on a real input before relying on its documented
+   behavior — some `java.nio`/`java.io` methods (e.g. `Path.toUri`) perform
+   filesystem I/O and are not pure. Never assert purity, totality, or
+   determinism of a function in code comments or docs without having checked.
 4. **Define and validate in the REPL before saving** — happy path, nil, empty
    collections, edge cases.
 5. **Save with `edit` or `write`.**
@@ -125,6 +129,12 @@ If REPL eval, namespace load, or a test fails:
 3. Fix the root cause.
 4. Reload affected namespaces.
 5. Re-run verification.
+
+After a large multi-line replacement via a tool that does its own text
+escaping, run a cheap compile-check (`bb -e '(require (quote project.ns)
+:reload)'` or equivalent) immediately, before the full test suite — an
+extra layer of string-escaping can produce a syntactically balanced but
+semantically bogus top-level form that a delimiter check alone won't catch.
 
 For unbalanced-delimiter / EOF errors, run `clj-paren-repair` (file) or
 `clojure_paren_repair` (string) instead of editing by hand.

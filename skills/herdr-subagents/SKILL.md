@@ -11,10 +11,10 @@ Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/SKILL.md
 SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
 "$SUBAGENT" run scout --task 'Locate the implementation and report paths.'
 "$SUBAGENT" start reviewer --task-file assignment.md
-"$SUBAGENT" collect <task-id> --wait --timeout 600000
+"$SUBAGENT" collect <full-task-uuid> --wait --timeout 600000
 ```
 
-The CLI wraps opaque `--task`, `--task-file`, or stdin text with the persona, delegation, identity, publication, and optional retro instructions. Use `--prompt-extra` for exceptional constraints and `--print-prompt` to inspect the result; do not reconstruct a raw prompt or result envelope during normal operation.
+The CLI wraps opaque `--task`, `--task-file`, or stdin text with the persona, delegation, identity, publication, and optional retro instructions. `collect`, `status`, and `prune` require the complete UUID that `run`/`start` emitted; unlike `ot`'s `:CUSTOM_ID:` prefix matching, no prefix is ever resolved. Use `--prompt-extra` for exceptional constraints and `--print-prompt` to inspect the result; do not reconstruct a raw prompt or result envelope during normal operation.
 
 ## Roster and routing
 
@@ -41,9 +41,9 @@ The default `worker` is a cheap executor whose `advisor` is a consult-only front
 
 Choose explicitly:
 
-- **Waiting:** `run` is blocking; `start` plus later `collect` is non-blocking. Give review and implementation work an explicit `--timeout` rather than relying on the ten-minute default.
+- **Waiting:** `run` is blocking; `start` plus later `collect` (or `collect --any` for fan-in) is non-blocking. A non-blocking child's publish also pushes one advisory prompt to a settled, session-matching parent pane naming the `collect` command to run — advisory only; the validated `RESULT` file (below) remains the sole completion signal. A non-blocking, long-running child is also asked to report concise phase-boundary progress with `progress --summary`, throttled to at most once per `SUBAGENT_PROGRESS_INTERVAL_MS` (default 60 s) and visible through `status`/`list` as one latest snapshot — never draft findings, never a completion signal. Give review and implementation work an explicit `--timeout` rather than relying on the ten-minute default. A `run`/`collect --wait` timeout is non-final, not a failure: check `status <task>` to distinguish a child still legitimately working from one genuinely stalled, then continue with `collect <task> --wait` rather than concluding failure or respawning.
 - **Placement:** default spawn splits the caller's pane. `--tab` instead creates the child in a new unfocused tab of the caller's workspace; every other contract (env, label, ledger, collect, closure) is identical. There is no inheritance: a tab-placed child's own spawns still split by default.
-- **Cardinality:** the CLI handles one child. For many, direct parent fan-out in waves of at most two — a root-only privilege; below root, strictly one blocking child at a time. Never child-to-child work.
+- **Cardinality:** the CLI handles one child per invocation. For many, a root parent keeps at most N (default 2) children in flight — a root-only privilege — fanning in with `collect --any --wait` and spawning a replacement child immediately on each capture. Below root, strictly one blocking ephemeral child at a time; every below-root spawn is a leaf grandchild. Never child-to-child work. A killed spawn's stale ledger entry (uncaptured, no result, its child never reappearing in `agent list`) is cleared with `prune <full-task-uuid>` rather than left to inflate `--any`'s candidate count indefinitely.
 - **Lifecycle:** ephemeral by default. Residents are explicit opt-in only for correlated work and retain their spawn identity, pane, label, persona, and one active task.
 
 Reuse a resident only after its live name **and pane ID** match the ledger, it is `idle`/`done`, and its previous result was validated and captured. `working`, `blocked`, `unknown`, missing, or mismatched residents are not reusable. Never change persona, accept concurrent work, or close an active resident.
@@ -67,6 +67,10 @@ The validated parent-chosen `RESULT` file is the only completion signal. Never t
 A child that cannot finish is instructed to publish once with `BLOCKED` (genuine blocking dependency, resumable) or `FAILED` (unrecoverable after reasonable retries) carrying a partial account of completed vs remaining work — read that summary before re-prompting or respawning.
 
 `BLOCKED` retains its pane. `COMPLETE`/`FAILED` permit closing only a pane this parent created, after required artifacts are captured and Herdr reports the child settled. Never close user/other-agent panes, kill a parent, or stop the Herdr server. A different parent session may collect and validate an assignment but must retain its pane.
+
+A `COMPLETE`/`FAILED` JSON `status` asserts a validated result, not that every side effect landed: check pane state (`herdr pane list`) rather than assuming closure. A `collect --any` capture now waits (bounded, `SUBAGENT_SETTLE_CLOSE_MS`, default 45 s) for the captured child to settle before its one close attempt, but a child that never settles inside that budget still keeps its pane.
+
+Surface the collected `artifact-links` to the user before relying on or discarding child-pane context: those Markdown `file://` links are the only durable route to a child's artifacts once `COMPLETE`/`FAILED` closed its pane automatically and transcript access is gone. Use the *validated* collect-time list, not the advisory list in the publication push — publish checks path shape only, so an advisory link is context, never evidence that the file exists. Clickability depends on the harness and terminal; the absolute path in each label is always readable.
 
 Use caller context or explicit IDs, `--no-focus`, and response IDs—not focused UI state. Labels never contain a workspace name and never replace unique agent names. Nested labels depend on the spawning agent's injected `HERDR_SUBAGENT_PERSONA`; a spawning persona started outside `subagent` has no nested-label identity unless that variable is set.
 

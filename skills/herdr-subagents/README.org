@@ -90,7 +90,7 @@ Publication identity comes from injected =HERDR_SUBAGENT_*= variables rather tha
 
 * Known gaps
 
-- The CLI implements one child per invocation. Resident lifecycle and fan-out waves remain parent policy in [[file:SKILL.md][SKILL.md]], not dedicated CLI commands.
+- The CLI implements one child per invocation for =run=/=start=; multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] — no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself.
 - =HERDR_SUBAGENT_BIN= intentionally carries the deployed absolute path rather than a canonical repository path; launcher-matrix coverage is its guard.
 - =ot ready= cannot resolve blockers inside =#+IMPORT:=-linked plan files, so plan-internal dependencies report =[opaque]=. This is an org-tasks limitation, not a delegation issue.
 
