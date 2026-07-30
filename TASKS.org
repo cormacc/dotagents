@@ -197,31 +197,6 @@ It would be nice to do a bootstrap check on initial skill activation...
 - if babashka not found in path, offer to install it via an appropriate method
 - if ot not found in path, offer to install it also (maybe using bbin?)
 
-** DONE subagents: make default spawn options configurable
-CLOSED: [2026-07-30 Thu 16:29]
-:PROPERTIES:
-:CUSTOM_ID: efefd387-2775-478b-9409-9fd44846023a
-:CREATED: [2026-07-30 Thu 11:06]
-:STARTED: [2026-07-30 Thu 15:41]
-:END:
-:LOGBOOK:
-- Created [2026-07-30 Thu 11:06]
-- State "STARTED" from "TODO" [2026-07-30 Thu 15:41]
-- State "DONE" from "STARTED" [2026-07-30 Thu 16:29]
-:END:
-#+IMPORT: [[plan:2026-07-30-subagents-make-default-spawn-options-con.org]]
-Currently subagents are spawned in a new split within the current tab by default, but this can be overridden at spawn time to create a new tab instead. The user could be allowed to specify this as follows:
-- Rename roster.edn to config.edn
-- Make default placement new tab for first-level children of the orchestrator, and split within the tab for additional levels of fanout.
-- Add configurable defaults, e.g.
-
-#+begin_src clojure
-  {:defaults {:placement :tab-split ;Either `:tab-split` (the default), `:split` or `:tab`
-              :kind      :inherit}  ;Either `:inherit` or a configured harness id (`:pi`, `:claude` etc.)
-   ;; ... model definitions etc.
-  }
-#+end_src
-
 ** TODO subagents: review advisor strategy defaults
 :PROPERTIES:
 :CUSTOM_ID: 899fe848-586c-4568-9e08-cd164e3a703c

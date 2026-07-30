@@ -1,6 +1,6 @@
 #+TITLE: subagents: make default spawn options configurable
 #+DATE: 2026-07-30 Thu
-#+PARENT: [[task:efefd387-2775-478b-9409-9fd44846023a][subagents: make default spawn options configurable]]
+#+PARENT: [[archive:efefd387-2775-478b-9409-9fd44846023a][subagents: make default spawn options configurable]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]

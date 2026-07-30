@@ -16,6 +16,8 @@ SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
 
 The CLI wraps opaque `--task`, `--task-file`, or stdin text with the persona, delegation, identity, publication, and optional retro instructions. `collect`, `status`, and `prune` require the complete UUID that `run`/`start` emitted; unlike `ot`'s `:CUSTOM_ID:` prefix matching, no prefix is ever resolved. Use `--prompt-extra` for exceptional constraints and `--print-prompt` to inspect the result; do not reconstruct a raw prompt or result envelope during normal operation.
 
+An assignment never silently contradicts its persona's declared interaction model: a persona defined to work interactively (for example `planner`) keeps asking the user in its own pane. Question routing is an explicit choice the assignment states — resolve interactively in-pane, or park questions for the parent — and is independent of the parent's waiting policy, since every pane is interactive regardless of whether the parent blocks.
+
 ## Roster and routing
 
 Definitions are `<name>.md` files discovered in descending precedence: `<git-root>/.agents/subagents/` (project override), then `~/.agents/subagents/` (home override), then the installed skill's `skills/herdr-subagents/subagents/` (packaged default). The project copy wins; read the selected definition. The packaged directory is never projected into `~/.agents/subagents/`, which remains exclusively for genuine home overrides.

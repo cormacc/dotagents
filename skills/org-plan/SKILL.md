@@ -34,7 +34,7 @@ The *splitting test*, *anti-criteria*, and *body discipline* blocks below are th
 
 ## Planning principles
 
-- Prefer plans that can be executed and verified task-by-task. A plan task is useful only when its acceptance criteria are observable.
+- Prefer plans that can be executed and verified task-by-task. A plan task is useful only when its acceptance criteria are observable. Keep the mechanical fallout of a change in the same task as its cause (renamed references, updated call sites, adjusted fixtures); a task whose acceptance criteria cannot be met until a later task lands is mis-split.
 - Keep `* Summary` (condensed final/current state) and `* Implementation` (detailed tactical ledger) distinct; they serve different readers. Add `* Validation` only when there is non-obvious verification evidence to preserve (see its section).
 - Capture durable design decisions in `* Summary` or a promoted `* Context` so later sessions do not reverse-engineer them from `git log`.
 - Keep the change-record `.org` file canonical. If durable supporting resources are too verbose or awkward for the record body (research reports, screenshots, transcripts, generated audits), put them in an optional same-stem folder beside the record (for `design/log/YYYY-slug.org`, use `design/log/YYYY-slug/`) and link/summarise them from the record.
@@ -260,7 +260,7 @@ When a non-goal would be easy to violate by accident, capture it as an anti-crit
 
 ### Body discipline
 
-Each plan task's body is the criteria list plus, at most, one pointer or non-obvious constraint. Prefer a `file:line` reference to a similar existing pattern, or an inline code sketch when no reference fits. Skipping examples leads to workers reporting back for clarification — spend the 30 seconds now.
+Each plan task's body is the criteria list plus, at most, one pointer or non-obvious constraint. Prefer a stable symbol reference (file path plus function or var name) to a similar existing pattern — never a bare line number or range, which drifts between planning and execution — or an inline code sketch when no reference fits. Skipping examples leads to workers reporting back for clarification — spend the 30 seconds now.
 
 ## Plan task metadata and status
 
