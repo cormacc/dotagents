@@ -8,8 +8,8 @@
   (:import [java.nio.file Files FileAlreadyExistsException Paths]
            [java.util UUID]))
 
-(def usage "subagent run|start <persona> --task TEXT [--tab] [--spawns NAMES|none] [options]\nsubagent collect <full-task-uuid> [--wait --timeout MS]\nsubagent collect --any [--wait --timeout MS]\nsubagent status [full-task-uuid] | list
-subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--notify-timeout MS]\nsubagent progress --summary TEXT\nsubagent prune <full-task-uuid>\n\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the child in a new unfocused tab of the caller's workspace instead of a split.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to SUBAGENT_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncollect, status, and prune all resolve their assignment argument as the exact ledger key emitted by run/start; unlike ot, no prefix is ever resolved.\nOpaque assignment input is --task, --task-file, or stdin. Run `subagent --help` for contract details.")
+(def usage "subagent run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\nsubagent collect <full-task-uuid> [--wait --timeout MS]\nsubagent collect --any [--wait --timeout MS]\nsubagent status [full-task-uuid] | list
+subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--notify-timeout MS]\nsubagent progress --summary TEXT\nsubagent prune <full-task-uuid>\n\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the child in a new unfocused tab of the caller's workspace instead of a split; --split explicitly selects a split.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to SUBAGENT_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncollect, status, and prune all resolve their assignment argument as the exact ledger key emitted by run/start; unlike ot, no prefix is ever resolved.\nOpaque assignment input is --task, --task-file, or stdin. Run `subagent --help` for contract details.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -46,7 +46,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
 ;; Single source of truth for value-less flags. `option-map` and `help-request?` both
 ;; consume argv and must agree: a flag known to only one of them silently swallows the
 ;; following element (e.g. `run worker --retro --task 'X'` losing its assignment).
-(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--any"})
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any"})
 (defn option-map [args]
   (loop [xs args out {}]
     (if-let [x (first xs)]
@@ -69,7 +69,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
 (declare launcher-bin)
 (defn skill-directory []
   (fs/parent (fs/parent (fs/path (launcher-bin)))))
-;; Shipped personas and the roster table are siblings of `scripts/`, so both derive from
+;; Shipped personas and config are siblings of `scripts/`, so both derive from
 ;; the resolved launcher path rather than the assignment root or current working directory.
 (defn packaged-personas-directory []
   (str (fs/path (skill-directory) "subagents")))
@@ -94,25 +94,25 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
       (let [candidate (fs/path (ledger/assignment-root) "skills" "herdr-subagents" "scripts" "subagent")]
         (when (fs/exists? candidate) (str (fs/absolutize candidate))))
       (fail "could not resolve subagent launcher" {})))
-(defn default-roster-path []
-  (str (packaged-personas-directory) "/roster.edn"))
-(defn roster-file [path]
-  (when (fs/exists? path) (core/parse-roster (str path) (slurp (str path)))))
+(defn default-config-path []
+  (str (packaged-personas-directory) "/config.edn"))
+(defn config-file [path]
+  (when (fs/exists? path) (core/parse-config (str path) (slurp (str path)))))
 ;; Loader precedence: shipped default ← home override ← project override (project
-;; wins), merged row-level by `core/merge-roster`. A missing override file is silently
-;; ignored; a missing shipped default is fatal. `home` is an explicit argument (default
-;; `user.home`) so callers/tests can inject it directly instead of relying on `$HOME`,
-;; which Babashka's `user.home` property does not observe.
-(defn roster-config
-  ([] (roster-config (home-directory)))
+;; wins), merged with `core/merge-config`. A missing override file is silently ignored;
+;; a missing shipped default is fatal. `home` is an explicit argument (default `user.home`)
+;; so callers/tests can inject it directly instead of relying on `$HOME`, which Babashka's
+;; `user.home` property does not observe.
+(defn config
+  ([] (config (home-directory)))
   ([home]
-   (let [default-path (default-roster-path)
-         home-path (fs/path home ".agents" "subagents" "roster.edn")
-         project-path (fs/path (ledger/assignment-root) ".agents" "subagents" "roster.edn")]
-     (core/merge-roster
-      (or (roster-file default-path) (fail "missing shipped default roster table" {:path default-path}))
-      (or (roster-file home-path) {})
-      (or (roster-file project-path) {})))))
+   (let [default-path (default-config-path)
+         home-path (fs/path home ".agents" "subagents" "config.edn")
+         project-path (fs/path (ledger/assignment-root) ".agents" "subagents" "config.edn")]
+     (core/merge-config
+      (or (config-file default-path) (fail "missing shipped default config" {:path default-path}))
+      (or (config-file home-path) {})
+      (or (config-file project-path) {})))))
 (defn parent-identity []
   (let [agent (herdr/agent! (System/getenv "HERDR_PANE_ID"))]
     {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent)) :parent-kind (:agent agent) :parent-pane (:pane_id agent)}))
@@ -153,6 +153,14 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
   (let [skill (retro-skill-path)
         resolved (core/resolve-retro {:persona persona :flag (retro-flag opts) :frontmatter frontmatter :retro-skill skill})]
     (assoc resolved :retro-skill (when (:retro resolved) skill))))
+(defn placement-flag [opts]
+  (let [tab? (boolean (one opts :tab)) split? (boolean (one opts :split))]
+    (when (and tab? split?) (fail "--tab and --split are mutually exclusive" {}))
+    (cond tab? "tab" split? "split" :else nil)))
+(defn placement-policy [opts config]
+  (core/resolve-placement {:flag (placement-flag opts)
+                           :configured (get-in config [:defaults :placement])
+                           :below-root? (some? (System/getenv "HERDR_SUBAGENT_PERSONA"))}))
 ;; Depth and capability gate: below root (own HERDR_SUBAGENT_PERSONA set) a run/start is
 ;; refused before herdr/preflight!, ledger allocation, and any pane mutation, so a denied
 ;; spawn creates nothing billable. Blank and unset HERDR_SUBAGENT_SPAWNS both parse to
@@ -185,13 +193,14 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
   (let [path (roster persona) frontmatter (core/parse-frontmatter (slurp (str path))) ident (parent-identity)
         kind (core/resolve-kind {:requested (one opts :kind) :frontmatter frontmatter :parent-kind (:parent-kind ident)})
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
-        config (roster-config)
+        config (config)
+        placement (placement-policy opts config)
         retro (retro-policy persona opts frontmatter)
         spawns (spawns-policy persona opts frontmatter)]
     {:preview (prompt-text {:spawns (:spawns spawns) :persona-path path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
      ;; :model is the canonical resolved ID; :model-args is the effective translated
      ;; native spelling (e.g. `["--model" "opus"]`) from the merged roster config.
-     :persona-path (str path) :kind kind :model model :model-args (core/model-args config kind model) :retro (:retro retro) :retro-source (:retro-source retro)
+     :persona-path (str path) :kind kind :model model :model-args (core/model-args config kind model) :placement placement :retro (:retro retro) :retro-source (:retro-source retro)
      :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)}))
 ;; A published result is immutable, so a result that fails validation can never become
 ;; valid. Record it as the non-final `invalid` status (pane retained, needs manual
@@ -282,12 +291,12 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
             kind (core/resolve-kind {:requested (one opts :kind) :frontmatter frontmatter :parent-kind (:parent-kind ident)})
             model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
             ;; Loaded and schema-validated here, before `ledger/fresh-result`'s
-            ;; `fs/create-dirs` and every later ledger/pane mutation: a malformed roster
-            ;; table must fail fast, never after allocation has begun.
-            config (roster-config)
+            ;; `fs/create-dirs` and every later ledger/pane mutation: malformed config
+            ;; must fail fast, never after allocation has begun.
+            config (config)
+            placement (placement-policy opts config)
             retro (retro-policy persona opts frontmatter)
             spawns (spawns-policy persona opts frontmatter)
-            tab? (boolean (one opts :tab))
             task (ledger/fresh-task)
             result (ledger/fresh-result task)
             index (ledger/allocate-index! (:parent-session ident) persona)
@@ -300,20 +309,19 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
             assignment (task-text opts)
             bin (launcher-bin)
             name (child-name persona task)
-            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :placement (if tab? "tab" "split") :status "allocating" :created-at (now)}]
+            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :placement placement :status "allocating" :created-at (now)}]
         ;; Persist before the first pane mutation, so every partial failure is recoverable.
         (ledger/write! entry)
         (try
           (let [env (cond-> {"HERDR_SUBAGENT_CHILD" name "HERDR_SUBAGENT_TASK" task "HERDR_SUBAGENT_RESULT" result "HERDR_SUBAGENT_BIN" bin "HERDR_SUBAGENT_WAITING_POLICY" waiting-policy "HERDR_SUBAGENT_PERSONA" persona "HERDR_SUBAGENT_SPAWNS" (str/join " " (:spawns spawns))}
                       ;; Keep a relocated assignment root in force for any nested delegation.
                       (System/getenv "SUBAGENT_ASSIGNMENT_ROOT") (assoc "SUBAGENT_ASSIGNMENT_ROOT" (ledger/assignment-root)))
-                ;; `--tab` skips caller-rect!/direction entirely: a tab needs neither. No
-                ;; inheritance: placement is spawn argv only, never carried in `env`, so a
-                ;; tab-placed child's own spawns still split by default.
-                placement (if tab?
-                            (herdr/tab-create! {:cwd (System/getProperty "user.dir") :label label :env env})
-                            (herdr/split! {:direction (core/direction (herdr/caller-rect!)) :cwd (System/getProperty "user.dir") :env env}))
-                persisted (ledger/update! task assoc :pane-id (:pane_id placement) :tab-id (:tab-id placement) :status "split")]
+                ;; Tab placement skips caller-rect!/direction entirely: a tab needs neither.
+                ;; Placement is never carried in `env`, so children resolve their own config.
+                pane-placement (if (= placement "tab")
+                                 (herdr/tab-create! {:cwd (System/getProperty "user.dir") :label label :env env})
+                                 (herdr/split! {:direction (core/direction (herdr/caller-rect!)) :cwd (System/getProperty "user.dir") :env env}))
+                persisted (ledger/update! task assoc :pane-id (:pane_id pane-placement) :tab-id (:tab-id pane-placement) :status "split")]
             (try
               (let [renamed (herdr/rename! (:pane-id persisted) label)]
                 (when-not (= label (:label renamed)) (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))

@@ -119,7 +119,7 @@
           _ (fs/copy-tree scripts-dir bare)
           ;; A bare-subtree install ships the complete sibling `subagents/` tree. This
           ;; fixture deliberately has no project or home persona directory, so both the
-          ;; worker definition and roster.edn must resolve from beside the launcher.
+          ;; worker definition and config.edn must resolve from beside the launcher.
           _ (fs/copy-tree (fs/path root "skills" "herdr-subagents" "subagents")
                           (fs/path (fs/parent bare) "subagents"))
           bin (str bare "/subagent")

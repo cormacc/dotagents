@@ -16,10 +16,13 @@
 ;; name instead; the requested `feather` row deliberately uses `haiku`. codex
 ;; `gpt-5.6-{sol,terra,luna}` verified live via `codex exec -m`.
 ;;
-;; Override chain (project wins): this file (default) ← ~/.agents/subagents/roster.edn
-;; ← <assignment-root>/.agents/subagents/roster.edn — merged row-level (per model
-;; ID, per harness ID), never deep-merged.
-{:harnesses {:pi     {:model-flag "--model"}
+;; `:defaults` contains spawn defaults. `:placement` is :split, :tab, or :tab-split;
+;; :tab-split chooses tab at root and split below root. Placement is never inherited.
+;; Override chain (project wins): this file (default) ← ~/.agents/subagents/config.edn
+;; ← <assignment-root>/.agents/subagents/config.edn. Model rows replace wholesale;
+;; defaults merge per key.
+{:defaults {:placement :split}
+ :harnesses {:pi     {:model-flag "--model"}
              :claude {:model-flag "--model"}
              :codex  {:model-flag "--model"}}
  :models {"heavy"            {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}

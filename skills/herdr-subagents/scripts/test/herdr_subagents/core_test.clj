@@ -74,15 +74,15 @@
                         (core/nested-prefix "planner-1/scout-2-claude-fable-5" "scout")))
   (is (= "worker-1" (core/root-label "worker" 1 nil))))
 
-(deftest roster-parse-merge-and-shape-validation
+(deftest config-parse-merge-and-shape-validation
   (testing "valid EDN parses"
     (is (= {:harnesses {:pi {:model-flag "--model"}} :models {"claude-opus-5" {:pi "anthropic/claude-opus-5"}}}
-           (core/parse-roster "/tmp/roster.edn"
+           (core/parse-config "/tmp/config.edn"
                               "{:harnesses {:pi {:model-flag \"--model\"}} :models {\"claude-opus-5\" {:pi \"anthropic/claude-opus-5\"}}}"))))
   (testing "sparse model rows and harness keywords unknown to :harnesses are allowed"
-    (is (= {:models {"partial" {:gemini "g-model"}}} (core/parse-roster "/tmp/roster.edn" "{:models {\"partial\" {:gemini \"g-model\"}}}"))))
+    (is (= {:models {"partial" {:gemini "g-model"}}} (core/parse-config "/tmp/config.edn" "{:models {\"partial\" {:gemini \"g-model\"}}}"))))
   (testing "malformed EDN throws naming the offending path"
-    (is (try (core/parse-roster "/tmp/bad.edn" "{:harnesses") false
+    (is (try (core/parse-config "/tmp/bad.edn" "{:harnesses") false
              (catch clojure.lang.ExceptionInfo e
                (and (str/includes? (.getMessage e) "/tmp/bad.edn") (= "/tmp/bad.edn" (:path (ex-data e))))))))
   (testing "structurally invalid shapes throw naming the offending path"
@@ -94,19 +94,59 @@
                           ":models not a map" "{:models [1 2]}"
                           ":models entry not a map" "{:models {\"x\" \"nope\"}}"
                           ":models row value not a string" "{:models {\"x\" {:pi 1}}}"}]
-      (is (try (core/parse-roster "/tmp/shape.edn" text) false
+      (is (try (core/parse-config "/tmp/shape.edn" text) false
                (catch clojure.lang.ExceptionInfo e (= "/tmp/shape.edn" (:path (ex-data e)))))
           label)))
-  (testing "merge is row-level replacement, not deep, and later configs win"
+  (testing "invalid defaults fail in parse-config with their path, before merge-with can run"
+    (doseq [[label text message] [["non-map defaults" "{:defaults :split}" #"defaults must be a map"]
+                                  ["unknown defaults key" "{:defaults {:unknown :split}}" #"defaults has unknown key"]
+                                  ["unknown placement" "{:defaults {:placement :sideways}}" #"placement must be" ]]]
+      (is (try
+            (core/parse-config "/tmp/defaults.edn" text)
+            false
+            (catch clojure.lang.ExceptionInfo e
+              (and (= "/tmp/defaults.edn" (:path (ex-data e)))
+                   (re-find message (.getMessage e))))
+            (catch Throwable _ false))
+          label)))
+  (testing "merge is row-level replacement, defaults merge per key, and later configs win"
+    ;; `parse-config` admits only :placement in :defaults; synthetic keys isolate the
+    ;; generic merge primitive's per-key behavior from the closed input schema.
     (let [default {:harnesses {:pi {:model-flag "--model"} :claude {:model-flag "--model"}}
-                   :models {"a" {:pi "pa" :claude "ca"} "b" {:pi "pb"}}}
-          home {:models {"a" {:pi "pa-home"}}} ;; replaces the whole "a" row, dropping :claude
-          project {:harnesses {:claude {:model-flag "--model2"}} :models {"b" {:pi "pb-project"}}}
-          merged (core/merge-roster default home project)]
+                   :models {"a" {:pi "pa" :claude "ca"} "b" {:pi "pb"}}
+                   :defaults {:placement :split :preserved :default}
+                   :extension {:enabled true}}
+          home {:models {"a" {:pi "pa-home"}} ;; replaces the whole "a" row, dropping :claude
+                :defaults {:placement :tab}}
+          project {:harnesses {:claude {:model-flag "--model2"}}
+                   :models {"b" {:pi "pb-project"}}
+                   :defaults {:placement :tab-split :project true}}
+          merged (core/merge-config default home project)]
       (is (= {:pi "pa-home"} (get-in merged [:models "a"])))
       (is (= {:pi "pb-project"} (get-in merged [:models "b"])))
       (is (= {:model-flag "--model"} (get-in merged [:harnesses :pi])))
-      (is (= {:model-flag "--model2"} (get-in merged [:harnesses :claude]))))))
+      (is (= {:model-flag "--model2"} (get-in merged [:harnesses :claude])))
+      (is (= {:placement :tab-split :preserved :default :project true} (:defaults merged)))
+      (is (= {:enabled true} (:extension merged))))))
+
+(deftest placement-resolution-contract
+  (testing "every flag/configuration/depth combination"
+    (doseq [[flag configured below-root? expected]
+            [[nil nil false "split"] [nil nil true "split"]
+             [nil :split false "split"] [nil :split true "split"]
+             [nil :tab false "tab"] [nil :tab true "tab"]
+             [nil :tab-split false "tab"] [nil :tab-split true "split"]
+             ["tab" nil false "tab"] ["tab" nil true "tab"]
+             ["tab" :split false "tab"] ["tab" :split true "tab"]
+             ["tab" :tab false "tab"] ["tab" :tab true "tab"]
+             ["tab" :tab-split false "tab"] ["tab" :tab-split true "tab"]
+             ["split" nil false "split"] ["split" nil true "split"]
+             ["split" :split false "split"] ["split" :split true "split"]
+             ["split" :tab false "split"] ["split" :tab true "split"]
+             ["split" :tab-split false "split"] ["split" :tab-split true "split"]]]
+      (is (= expected
+             (core/resolve-placement {:flag flag :configured configured :below-root? below-root?}))
+          (str {:flag flag :configured configured :below-root? below-root?})))))
 
 ;; Pane labels use `model-basename`, independent of roster translation: a canonical bare
 ;; ID and its pre-migration pi-syntax equivalent share the same basename, so labels are

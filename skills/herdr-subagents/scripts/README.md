@@ -20,7 +20,7 @@ The value-less flags `--retro` and `--no-retro` override process-retro gating fo
 
 The value-bearing `--spawns` flag overrides the persona's frontmatter `spawns:` allow-list for one spawn (whitespace/comma separated); the literal `none` forces a leaf, and below the root only `--spawns none` is accepted. See [docs/contract.md](docs/contract.md) § Spawn gating for precedence, fail-fast cases, depth enforcement, and ledger fields.
 
-The value-less flag `--tab` places the child in a new unfocused tab of the caller's workspace instead of a split. Every other spawn contract (env, label, ledger, collect, closure) is unchanged, and there is no inheritance: a tab-placed child's own spawns still split by default. See [docs/contract.md](docs/contract.md) § Placement.
+The value-less flags `--tab` and `--split` explicitly select tab or split placement and are mutually exclusive; either overrides configured `:defaults :placement`, which otherwise falls back to shipped `:split`. A configured `:tab-split` resolves to tab at root and split below root. Tab placement creates a new unfocused tab of the caller's workspace. Every other spawn contract (env, label, ledger, collect, closure) is unchanged, and placement is never persisted per-child or inherited via env: a child's own spawns resolve from config and depth alone. See [docs/contract.md](docs/contract.md) § Placement.
 
 The value-less flag `--any` on `collect` takes no task argument; it captures the *first* in-flight child of the caller's own session to publish a valid result, instead of waiting on one named task — the read/capture primitive behind bounded-concurrency fan-out. See [docs/contract.md](docs/contract.md) § Fan-in for candidacy, poll structure, and outcomes.
 

@@ -115,8 +115,8 @@
         (:model frontmatter) (:model frontmatter)
         (= resolved-kind parent-kind) parent-model
         :else nil))
-;; Canonical model IDs are spelled differently per harness kind; the merged roster
-;; config (see `parse-roster`/`merge-roster`) carries both the per-kind flag spelling
+;; Canonical model IDs are spelled differently per harness kind; the merged config
+;; (see `parse-config`/`merge-config`) carries both the per-kind flag spelling
 ;; (`:harnesses`) and the per-ID translation table (`:models`). Both the ID set and the
 ;; kind set are open by contract: an unlisted ID or a kind with no `:harnesses` entry
 ;; is never a failure, only a pass-through/empty result.
@@ -125,40 +125,55 @@
 (defn model-args [config kind model]
   (let [translated (translate-model config kind model) flag (get-in config [:harnesses (keyword kind) :model-flag])]
     (if (and translated flag) [flag translated] [])))
-;; roster.edn shape validation: sparse model rows and harness keywords absent from
-;; `:harnesses` are allowed (the kind set is open by contract) — only the declared
-;; shape itself (map types, non-blank flag strings) is enforced, and every failure
-;; carries the offending file path so a malformed override is diagnosable.
-(defn- validate-roster-shape! [path config]
-  (when-not (map? config) (throw (ex-info "roster table must be an EDN map" {:path path :value config})))
+;; config.edn shape validation: sparse model rows and harness keywords absent from
+;; `:harnesses` are allowed (the kind set is open by contract). `:defaults` is closed
+;; so placement typos fail loudly. Every failure carries the offending file path.
+(defn- validate-config-shape! [path config]
+  (when-not (map? config) (throw (ex-info "config must be an EDN map" {:path path :value config})))
   (let [harnesses (get config :harnesses {}) models (get config :models {})]
-    (when-not (map? harnesses) (throw (ex-info "roster :harnesses must be a map" {:path path :value harnesses})))
+    (when-not (map? harnesses) (throw (ex-info "config :harnesses must be a map" {:path path :value harnesses})))
     (doseq [[kind entry] harnesses]
-      (when-not (keyword? kind) (throw (ex-info "roster :harnesses key must be a keyword" {:path path :key kind})))
-      (when-not (map? entry) (throw (ex-info "roster :harnesses entry must be a map" {:path path :harness kind :value entry})))
+      (when-not (keyword? kind) (throw (ex-info "config :harnesses key must be a keyword" {:path path :key kind})))
+      (when-not (map? entry) (throw (ex-info "config :harnesses entry must be a map" {:path path :harness kind :value entry})))
       (let [flag (:model-flag entry)]
         (when-not (and (string? flag) (not (str/blank? flag)))
-          (throw (ex-info "roster :harnesses entry :model-flag must be a non-blank string" {:path path :harness kind :model-flag flag})))))
-    (when-not (map? models) (throw (ex-info "roster :models must be a map" {:path path :value models})))
+          (throw (ex-info "config :harnesses entry :model-flag must be a non-blank string" {:path path :harness kind :model-flag flag})))))
+    (when-not (map? models) (throw (ex-info "config :models must be a map" {:path path :value models})))
     (doseq [[id row] models]
-      (when-not (string? id) (throw (ex-info "roster :models key must be a string" {:path path :key id})))
-      (when-not (map? row) (throw (ex-info "roster :models entry must be a map" {:path path :model id :value row})))
+      (when-not (string? id) (throw (ex-info "config :models key must be a string" {:path path :key id})))
+      (when-not (map? row) (throw (ex-info "config :models entry must be a map" {:path path :model id :value row})))
       (doseq [[kind value] row]
-        (when-not (keyword? kind) (throw (ex-info "roster :models row key must be a keyword" {:path path :model id :key kind})))
-        (when-not (string? value) (throw (ex-info "roster :models row value must be a string" {:path path :model id :harness kind :value value}))))))
+        (when-not (keyword? kind) (throw (ex-info "config :models row key must be a keyword" {:path path :model id :key kind})))
+        (when-not (string? value) (throw (ex-info "config :models row value must be a string" {:path path :model id :harness kind :value value})))))
+    (when (contains? config :defaults)
+      (let [defaults (:defaults config)]
+        (when-not (map? defaults) (throw (ex-info "config :defaults must be a map" {:path path :value defaults})))
+        (when-not (every? #{:placement} (keys defaults))
+          (throw (ex-info "config :defaults has unknown key" {:path path :defaults defaults})))
+        (when (contains? defaults :placement)
+          (when-not (#{:split :tab :tab-split} (:placement defaults))
+            (throw (ex-info "config :defaults :placement must be :split, :tab, or :tab-split"
+                            {:path path :placement (:placement defaults)})))))))
   config)
-;; Parse is pure given text: `parse-roster` never touches disk (file IO — `fs/exists?`,
+;; Parse is pure given text: `parse-config` never touches disk (file IO — `fs/exists?`,
 ;; `slurp` — stays at the cli.clj boundary), mirroring `parse-frontmatter`.
-(defn parse-roster [path text]
-  (validate-roster-shape! path
+(defn parse-config [path text]
+  (validate-config-shape! path
     (try (edn/read-string text)
-         (catch Exception e (throw (ex-info (str "roster table is invalid EDN: " path) {:path path} e))))))
-;; Override merge is row-level (per model ID, per harness ID), never deep: a row you
-;; override is a row you own. Later configs win; `merge` on each top-level map already
-;; replaces whole values for shared keys rather than merging into them.
-(defn merge-roster [& configs]
-  {:harnesses (apply merge (map #(get % :harnesses {}) configs))
-   :models (apply merge (map #(get % :models {}) configs))})
+         (catch Exception e (throw (ex-info (str "config is invalid EDN: " path) {:path path} e))))))
+;; Per-file validation guarantees the map-valued known top-level keys are safe to merge.
+;; `merge-with merge` therefore preserves row replacement at level two while allowing
+;; `:defaults` to merge its keys across the override chain.
+(defn merge-config [& configs]
+  (apply merge-with merge configs))
+(defn resolve-placement [{:keys [flag configured below-root?]}]
+  (case flag
+    "tab" "tab"
+    "split" "split"
+    (case configured
+      :tab "tab"
+      :tab-split (if below-root? "split" "tab")
+      "split")))
 (defn persona-system-prompt [kind path body]
   (if (= kind "pi") path body))
 (defn root-label [persona index model]

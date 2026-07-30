@@ -1,0 +1,163 @@
+#+TITLE: subagents: make default spawn options configurable
+#+DATE: 2026-07-30 Thu
+#+PARENT: [[task:efefd387-2775-478b-9409-9fd44846023a][subagents: make default spawn options configurable]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-subagents/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-subagents/scripts/README.md]]
+
+* Intent
+
+Rename the subagent CLI's model-table file =roster.edn= to =config.edn= and extend it with an optional =:defaults {:placement …}= block so the spawn placement default (=:split=, =:tab=, or depth-aware =:tab-split=) is user-configurable through the existing packaged ← home ← project override chain. Shipped behaviour is unchanged; placement inheritance stays forbidden.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+** Scope
+
+*** In scope
+- =git mv= of =skills/herdr-subagents/subagents/roster.edn= → =config.edn=; loader, launcher-relative default path, and all live doc/spec surfaces follow. Hard rename, no dual-read or legacy detection (the roster file shipped yesterday; no external use).
+- Optional =:defaults= config block with a single =:placement= key (=:split= | =:tab= | =:tab-split=), closed schema (unknown =:defaults= keys rejected), validated per-file before merge with the offending path in the error.
+- Full-config merge via =(apply merge-with merge configs)= replacing the hand-written per-table merge; level-2 values still replace wholesale (row-level, never deep).
+- Placement resolution =flag > configured default > shipped :split=, resolved once in a shared helper used by =spawn!= and =preview!=; =:tab-split= resolves per depth (root → tab, below-root → split) using the existing =HERDR_SUBAGENT_PERSONA= discriminator.
+- New value-less =--split= flag as the explicit counterpart to =--tab=; the pair is mutually exclusive.
+- =--print-prompt= reports the resolved placement.
+- Doc lockstep: =contract.md= (§ Model resolution → config, § Placement, =SUBAGENT_ASSIGNMENT_ROOT= env row), =SKILL.md=, =scripts/README.md=, repo =AGENTS.md=, =README.md=, =skills/README.org=, =skills/herdr-subagents/README.org=, config header comment.
+
+*** Out of scope
+- =:kind= defaults (=:inherit= restates the existing parent-kind fallback; a configured harness id has no current use case) — parked.
+- Focus changes: tab placement stays unfocused (=--no-focus=), for the config default and explicit =--tab= alike.
+- Legacy =roster.edn= detection or transition dual-read.
+- Rewriting historical surfaces: =design/log/*=, =TASKS.archive.org=, and TASKS.org task bodies keep their =roster.edn= mentions.
+- =dotfiles/AGENTS.md:60= (parent repo) — see Follow-ups.
+- Kind/model resolution semantics — untouched.
+
+** Acceptance
+
+*** Core functionality
+- [X] Shipped default config resolves at =skills/herdr-subagents/subagents/config.edn=; no code path reads =roster.edn= at any chain location. → test:=cli_test.clj:1924=
+- [X] Override chain is =config.edn= at packaged ← home ← project (project wins); =:harnesses=/=:models= row-level replacement behaviour unchanged. → test:=core_test.clj= merge-config assertions
+- [X] Config accepts optional =:defaults {:placement …}= with values =:split=, =:tab=, =:tab-split=.
+- [X] =:defaults= merges per-key across the chain (override only the key you set). Verified directly: overriding row ="a"= with ={:pi "9"}= drops its =:claude= entry while =:defaults= merges per key.
+- [X] Placement precedence: explicit flag (=--tab=/=--split=) > configured =:defaults :placement= > shipped default =:split=. → test:=core_test.clj:132= (24-case matrix)
+- [X] =:tab-split= resolves per depth: root caller (no =HERDR_SUBAGENT_PERSONA=) → tab; below-root → split. → test:=core_test.clj:132=
+- [X] Tab placement behaviour is identical to today's =--tab= (unfocused tab; same env/label/ledger/close contract). Proven by absence: =herdr.clj= was never touched, so both placement argument lists and =--no-focus= are byte-identical; pre-existing tab-placement tests still green.
+- [X] Schema validation rejects an invalid =:placement= value, naming the offending file, before any ledger allocation or pane mutation. → test:=core_test.clj:101-102=
+- [X] =--print-prompt= reports the resolved placement alongside kind/model. → test:=cli_test.clj:384=
+- [X] Shipped =config.edn= explicitly declares =:defaults {:placement :split}=; code falls back to =:split= when the key is absent.
+
+*** Edge cases
+- [X] =--tab= and =--split= together fail fast. Verified live: ={"ok":false,… "--tab and --split are mutually exclusive"}=.
+- [X] Configured =:placement :tab= applies below root too (grandchild in a tab is legal). → test:=cli_test.clj:399=
+- [X] Missing shipped =config.edn= is fatal; missing override files are silently ignored (unchanged semantics). → test:=cli_test.clj:1924=
+- [X] Malformed =:defaults= (non-map value, unknown key, unknown placement keyword) fails per-file validation with the offending path — before =merge-with= could throw on it. → test:=core_test.clj:101=
+- [X] No =:defaults= configured anywhere → observable behaviour identical to today (split default at every depth; =--tab= opt-in). → test:=core_test.clj:132= plus live =--print-prompt= =split=.
+- [X] After the doc task, =rg 'roster\.edn'= in this repo matches only =design/log/=, =TASKS.archive.org=, and TASKS.org task bodies.
+
+*** Anti-criteria
+- Must not change default behaviour for an unconfigured installation.
+- Must not introduce placement inheritance: no new child env var carries placement; a tab-placed child's own spawns resolve from config + depth only.
+- Must not change focus behaviour on tab creation.
+- Must not change kind or model resolution semantics.
+- Must not add =:kind= to =:defaults=.
+- Must not rewrite =roster.edn= mentions in historical records or archives.
+
+** Decisions
+- Hard rename, no legacy detection :: roster.edn shipped yesterday with no use outside this repo; a transition window buys nothing.
+  Rejected:
+  - Dual-read =config.edn= → =roster.edn= fallback: lingering ambiguity about which file won.
+  - Fail-fast on detected legacy files: guards against a population of zero.
+- =:tab-split= is a configurable default, not the shipped one :: shipped default stays =:split=, so unconfigured behaviour is byte-identical; users opt into depth-aware tabs via =:defaults=.
+  Rejected:
+  - Shipping =:tab-split= as default (original task-body proposal): silent behaviour change for every existing spawn site.
+- =:defaults= lives in the renamed =config.edn= alongside the model table :: one override chain, one merge, one validation pass; the rename exists precisely because the file is no longer just a roster.
+- Full-config merge is =(apply merge-with merge configs)= :: generalises the documented row-level semantics — top-level collisions merge per-key at level 2, level-2 values replace wholesale — and =:defaults= merging falls out for free. Per-file validation before merge is load-bearing: it converts a would-be =ClassCastException= on a non-map collision into a path-named schema error.
+- Closed =:defaults= schema :: unknown keys inside =:defaults= are rejected so typos fail loud, unlike the deliberately open kind set in =:harnesses=.
+- Depth discriminator reuses =HERDR_SUBAGENT_PERSONA= :: same signal spawn gating uses, so =:tab-split='s root/below-root split can never diverge from the existing depth model. An agent with the var set outside =subagent= counts as below-root, consistently.
+- =:kind= defaults parked (YAGNI) :: =:inherit= restates =resolve-kind='s existing parent-kind fallback; a configured harness id awaits a real use case.
+- Terminology: only the model-table file is renamed :: SKILL.md's "roster" for the persona list (§ Roster and routing) is a distinct concept and keeps its name.
+
+** Shipped
+- MODIFIED [[proj:skills/herdr-subagents/subagents/config.edn]] — renamed from =roster.edn= (=git mv=, history preserved); now declares =:defaults {:placement :split}= alongside =:harnesses=/=:models=, with a header comment documenting the block and the override chain.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/src/herdr_subagents/core.clj]] — =parse-roster=/=validate-roster-shape!=/=merge-roster= → =parse-config=/=validate-config-shape!=/=merge-config=; =merge-config= is =(apply merge-with merge configs)=; new pure =resolve-placement=; closed =:defaults= schema validated per file with the offending path.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/src/herdr_subagents/cli.clj]] — =default-roster-path=/=roster-file=/=roster-config= → =default-config-path=/=config-file=/=config=; shared placement resolution for =spawn!= and =preview!=; new mutually-exclusive =--split= flag; =:placement= in =--print-prompt= and on the ledger entry.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] — § Model resolution names =config.edn= and documents =:defaults= + closed schema + per-key merge; § Placement states the precedence and =:tab-split= depth rule; the no-inheritance invariant reworded from "spawn argv only" to "never persisted per-child, never inherited via environment"; =SUBAGENT_ASSIGNMENT_ROOT= row updated.
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] — § Roster and routing, § Invocation policy (configurable default + =--split=), § Manual fallback name the =config.edn= chain. The *persona*-list sense of "roster" deliberately keeps its name.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/README.md]] — =config.edn= chain and reworded no-inheritance sentence.
+- MODIFIED =AGENTS.md=, =README.md=, =skills/README.org=, =skills/herdr-subagents/README.org= — =roster.edn= → =config.edn=.
+- MODIFIED test namespaces =cli_test.clj=, =core_test.clj=, =launcher_test.clj= — renamed references plus new placement/merge/validation/CLI coverage. Suite 404 → 407 tests, 2164 → 2217 assertions.
+- No behaviour change for an unconfigured installation: shipped default remains =:split= at every depth.
+
+** Gotchas
+- The plan pinned a helper pattern at =cli.clj:170-200=; the real definitions were =retro-flag:146=, =retro-policy:152=, =spawns-policy:176= — drift inside a single day. Cite symbols, not line ranges, in plan-task bodies.
+- The rename mechanically invalidated ~98 test references, so the code-only plan task could not produce a green suite on its own. Splitting "rename" from "update the tests the rename breaks" across two plan tasks was a planning error; mechanical reference updates belong with the rename that causes them.
+- A concurrent sibling worker's =bb test= run is not trustworthy evidence while the other worker is mid-edit. The docs worker reported green from a moment when the tests worker had not finished; only the orchestrator's post-fan-in run counts.
+
+** Risks
+- A manually exported =HERDR_SUBAGENT_PERSONA= makes =:tab-split= resolve to split — accepted; consistent with spawn gating's treatment of the same state.
+
+** Follow-ups
+- None outstanding. The cross-repo =dotfiles/AGENTS.md= update landed in the same session (see § Implementation); =agents.nix= needed no change, as expected.
+
+* Plan
+
+** DONE Rename roster.edn → config.edn and add configurable placement defaults
+CLOSED: [2026-07-30 Thu 16:00]
+:PROPERTIES:
+:CUSTOM_ID: 5084e58e-77f1-47df-a7db-200fdc594bdb
+:CREATED: [2026-07-30 Thu 15:34]
+:STARTED: [2026-07-30 Thu 15:41]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-30 Thu 15:41]
+- State "DONE" from "STARTED" [2026-07-30 Thu 16:00]
+:END:
+Rename plus =:defaults= schema, =merge-config=, =resolve-placement=, and the =--split= flag. Delivered as specified; mechanical test-reference updates absorbed here by agreement. Outcomes in =* Implementation=.
+
+** DONE Test coverage for rename, placement resolution, merge, and validation
+CLOSED: [2026-07-30 Thu 16:28]
+:PROPERTIES:
+:CUSTOM_ID: a3634c58-faae-465d-a972-0c19832f32a5
+:CREATED: [2026-07-30 Thu 15:34]
+:BLOCKED-BY: 5084e58e-77f1-47df-a7db-200fdc594bdb
+:STARTED: [2026-07-30 Thu 16:02]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-30 Thu 16:02]
+- State "DONE" from "STARTED" [2026-07-30 Thu 16:28]
+:END:
+New coverage for the placement matrix, =merge-config=, per-file validation rejection, and the CLI flag/preview surface. Suite 404 → 407 tests, 2164 → 2217 assertions.
+
+** DONE Doc lockstep: retire roster.edn from live spec surfaces
+CLOSED: [2026-07-30 Thu 16:10]
+:PROPERTIES:
+:CUSTOM_ID: 857f9a1c-d9de-4f4a-8762-1dab1aa4896d
+:CREATED: [2026-07-30 Thu 15:34]
+:BLOCKED-BY: 5084e58e-77f1-47df-a7db-200fdc594bdb
+:STARTED: [2026-07-30 Thu 16:02]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-30 Thu 16:02]
+- State "DONE" from "STARTED" [2026-07-30 Thu 16:10]
+:END:
+Seven live doc surfaces moved to =config.edn=; the no-inheritance invariant reworded rather than dropped. Acceptance gate met: =rg 'roster\.edn'= now matches only =design/log/=, =TASKS.archive.org=, and the TASKS.org task body.
+
+* Implementation
+
+All three plan tasks were delegated to =worker= subagents on =gpt-5.6-terra= (kind resolved to pi by parent inheritance, translated to =openai-codex/gpt-5.6-terra=; a model ID never selects a harness). The docs and tests tasks ran concurrently against disjoint file sets. The orchestrator re-derived every load-bearing claim against source rather than trusting a child's report — see § Verification.
+
+- Symbol renames: =default-roster-path= → =default-config-path=, =roster-file= → =config-file=, =roster-config= → =config=, =parse-roster= → =parse-config=, =validate-roster-shape!= → =validate-config-shape!=, =merge-roster= → =merge-config=.
+- =merge-config= (=core.clj:167=) is exactly =(apply merge-with merge configs)=. The generic primitive gives =:defaults= per-key merging for free while preserving wholesale =:models= row replacement.
+- =core/resolve-placement= (=core.clj:169=) is pure over ={:flag :configured :below-root?}=, so the whole precedence + depth contract is unit-testable without touching herdr; =below-root?= is =(some? (System/getenv "HERDR_SUBAGENT_PERSONA"))=.
+- Per-file validation before merge is what converts a would-be =ClassCastException= on a non-map collision into a path-named schema error — the ordering is load-bearing, not stylistic.
+- =herdr.clj= was never touched, which is what makes the unchanged-tab-behaviour and focus anti-criteria provable by absence rather than by assertion.
+- Cross-repo close-out: =dotfiles/AGENTS.md= (parent repo, outside this submodule) named =roster.edn= in its =agents.nix= bridge section. Updated to =config.edn= and, since the file's role broadened, corrected to state that it "replaces complete model-ID rows and merges =:defaults= per key" — a bare rename would have left the row-replacement claim covering =:defaults=, which merges instead. That file hard-wraps at ~76 columns (the no-hard-wrap rule governs =TASKS*.org= and change-records, not repo Markdown), so the wrap was preserved. =agents.nix= needed no change: it symlinks whole directories, never individual filenames.
+
+** Verification
+- =bb test= re-run by the orchestrator after fan-in: **407 tests, 2217 assertions, 0 failures, 0 errors** (from a 404/2164 baseline).
+- Live CLI: =--tab --split= → ={"ok":false,… "--tab and --split are mutually exclusive"}=; =--print-prompt= reports =placement= =split= unconfigured and =tab= under =--tab=.
+- =resolve-placement= 24-case matrix and =merge-config= row-replacement semantics re-derived in a REPL independently of the child's tests, then found to match =core_test.clj:132=.
+- No-inheritance anti-criterion proven by absence: no placement value appears on any =--env= flag.
+- =git mv= preserved history (=git status= reports =R=, not add+delete); =src= diffstat was byte-stable across the concurrent tests-worker run, confirming it never touched production code.

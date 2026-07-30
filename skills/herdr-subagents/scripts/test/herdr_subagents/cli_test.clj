@@ -381,6 +381,43 @@
     (is (re-find #"available" (:out proc)))
     (is (not-any? mutating? (calls log)))))
 
+(deftest placement-flags-and-preview-contract
+  (testing "--tab and --split are mutually exclusive before ledger allocation or mutation"
+    (let [{:keys [env log dir]} (fake-env {})
+          proc (call! env "start" "worker" "--tab" "--split" "--task" "conflicting placement")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"--tab and --split are mutually exclusive" (:out proc)))
+      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))
+      (is (not-any? mutating? (calls log)))))
+  (testing "--print-prompt reports the resolved placement"
+    (doseq [[flag expected] [[[] "split"] [["--tab"] "tab"] [["--split"] "split"]]]
+      (let [{:keys [env]} (fake-env {})
+            proc (apply call! env (concat ["run" "worker"] flag ["--task" "placement preview" "--print-prompt"]))]
+        (is (zero? (:exit proc)) (:err proc))
+        (is (= expected (get-in (result proc) [:result :placement])) (str flag))))))
+
+(deftest configured-placement-defaults-flow-through-cli
+  (let [{:keys [env log dir]} (fake-env {})
+        project-config (fs/path dir ".agents" "subagents" "config.edn")
+        preview (fn [env & flags]
+                  (let [proc (apply call! env (concat ["run" "worker"] flags ["--task" "configured placement" "--print-prompt"]))]
+                    (is (zero? (:exit proc)) (:err proc))
+                    (get-in (result proc) [:result :placement])))]
+    (fs/create-dirs (fs/parent project-config))
+    (spit (str project-config) "{:defaults {:placement :tab}}")
+    (is (= "tab" (preview env)))
+    (is (= "tab" (preview (merge env {"HERDR_SUBAGENT_PERSONA" "worker" "HERDR_SUBAGENT_SPAWNS" "worker"}))))
+    (let [proc (call! env "start" "worker" "--task" "configured tab placement")
+          task (get-in (result proc) [:result :task])
+          entry (ledger-entry* dir task)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "tab" (:placement entry)))
+      (is (some #(and (= ["tab" "create"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+    (spit (str project-config) "{:defaults {:placement :tab-split}}")
+    (is (= "tab" (preview env)))
+    (is (= "split" (preview (merge env {"HERDR_SUBAGENT_PERSONA" "worker" "HERDR_SUBAGENT_SPAWNS" "worker"}))))
+    (is (= "split" (preview env "--split")))))
+
 (deftest start-collect-status-and-blocked-contract
   ;; The hand-written envelope is BLOCKED, which also covers a BLOCKED envelope
   ;; end-to-end: captured, but the pane is never closed.
@@ -1770,8 +1807,8 @@
 
 ;; Ties the shipped default table to the record's verified rows, independent of the
 ;; loader/translation machinery under test elsewhere in this namespace.
-(deftest default-roster-table-content-contract
-  (let [config (core/parse-roster "roster.edn" (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "roster.edn"))))
+(deftest default-config-content-contract
+  (let [config (core/parse-config "config.edn" (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "config.edn"))))
         weight-rows {"heavy" {:pi "anthropic/claude-fable-5" :claude "fable" :codex "gpt-5.6-sol"}
                      "middle" {:pi "anthropic/claude-opus-5" :claude "opus" :codex "gpt-5.6-sol"}
                      "light" {:pi "anthropic/claude-sonnet-5" :claude "sonnet" :codex "gpt-5.6-terra"}
@@ -1779,6 +1816,7 @@
     (is (= "--model" (get-in config [:harnesses :pi :model-flag])))
     (is (= "--model" (get-in config [:harnesses :claude :model-flag])))
     (is (= "--model" (get-in config [:harnesses :codex :model-flag])))
+    (is (= {:placement :split} (:defaults config)))
     (testing "all twelve weight-alias translations"
       (doseq [[alias row] weight-rows
               [kind native-model] row]
@@ -1820,73 +1858,73 @@
 
 ;; Loader precedence, row-level replacement, missing/malformed/invalid-shape handling,
 ;; and bare-subtree/relocated-root path derivation, exercised directly against
-;; `cli/roster-config` (no subprocess needed) so `user.home` never enters the picture
+;; `cli/config` (no subprocess needed) so `user.home` never enters the picture
 ;; — `home` is an explicit injected argument, and `launcher-bin`/`assignment-root` are
 ;; stubbed via `with-redefs` rather than relying on `$HOME`, which Babashka's
 ;; `user.home` property does not observe (see cli_test.clj fake-env docstring).
-(deftest roster-config-loader-precedence-and-deployment-modes
-  (let [tmp (str (fs/create-temp-dir {:prefix "roster-loader-"}))
-        ;; A bare-subtree install: only `scripts/` + a sibling `roster.edn`, nested under
+(deftest config-loader-precedence-and-deployment-modes
+  (let [tmp (str (fs/create-temp-dir {:prefix "config-loader-"}))
+        ;; A bare-subtree install: only `scripts/` + a sibling `config.edn`, nested under
         ;; arbitrary ancestor names with no `bb.edn` anywhere — proving derivation is from
         ;; the launcher path alone, never cwd/git.
         launcher (str (fs/path tmp "install" "a" "b" "skills" "herdr-subagents" "scripts" "subagent"))
-        default-roster (fs/path tmp "install" "a" "b" "skills" "herdr-subagents" "subagents" "roster.edn")
+        default-config (fs/path tmp "install" "a" "b" "skills" "herdr-subagents" "subagents" "config.edn")
         home-dir (str (fs/path tmp "home"))
         project-root (str (fs/path tmp "project"))
-        project-roster (fs/path project-root ".agents" "subagents" "roster.edn")
-        home-roster (fs/path home-dir ".agents" "subagents" "roster.edn")]
-    (fs/create-dirs (fs/parent default-roster))
+        project-config (fs/path project-root ".agents" "subagents" "config.edn")
+        home-roster (fs/path home-dir ".agents" "subagents" "config.edn")]
+    (fs/create-dirs (fs/parent default-config))
     (fs/create-dirs project-root) (fs/create-dirs home-dir)
-    (spit (str default-roster) (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "roster.edn"))))
+    (spit (str default-config) (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "config.edn"))))
     (with-redefs [cli/launcher-bin (constantly launcher) ledger/assignment-root (constantly project-root)]
       (testing "default only"
-        (let [config (cli/roster-config home-dir)]
+        (let [config (cli/config home-dir)]
           (is (= "opus" (get-in config [:models "middle" :claude])))
           (is (= "--model" (get-in config [:harnesses :codex :model-flag])))))
       (testing "home override replaces a weight-alias row"
         (fs/create-dirs (fs/parent home-roster))
         (spit (str home-roster) "{:models {\"middle\" {:claude \"middle-home\"}}}")
-        (is (= "middle-home" (get-in (cli/roster-config home-dir) [:models "middle" :claude]))))
+        (is (= "middle-home" (get-in (cli/config home-dir) [:models "middle" :claude]))))
       (testing "project beats home for the same weight alias; row-level replacement drops untouched columns"
-        (fs/create-dirs (fs/parent project-roster))
-        (spit (str project-roster) "{:models {\"middle\" {:claude \"middle-project\"}}}")
-        (let [config (cli/roster-config home-dir)]
+        (fs/create-dirs (fs/parent project-config))
+        (spit (str project-config) "{:models {\"middle\" {:claude \"middle-project\"}}}")
+        (let [config (cli/config home-dir)]
           (is (= "middle-project" (get-in config [:models "middle" :claude])))
           ;; The overridden row replaces the whole default row: :pi/:codex are gone, not
           ;; deep-merged alongside the new :claude value.
           (is (nil? (get-in config [:models "middle" :pi])))))
       (testing "canonical rows retain home/project replacement precedence"
         (spit (str home-roster) "{:models {\"claude-opus-5\" {:claude \"opus-home\"}}}")
-        (is (= "opus-home" (get-in (cli/roster-config home-dir) [:models "claude-opus-5" :claude])))
-        (spit (str project-roster) "{:models {\"claude-opus-5\" {:claude \"opus-project\"}}}")
-        (let [config (cli/roster-config home-dir)]
+        (is (= "opus-home" (get-in (cli/config home-dir) [:models "claude-opus-5" :claude])))
+        (spit (str project-config) "{:models {\"claude-opus-5\" {:claude \"opus-project\"}}}")
+        (let [config (cli/config home-dir)]
           (is (= "opus-project" (get-in config [:models "claude-opus-5" :claude])))
           (is (nil? (get-in config [:models "claude-opus-5" :pi])))))
       (testing "missing override files are silently ignored"
-        (fs/delete home-roster) (fs/delete project-roster)
-        (is (= "opus" (get-in (cli/roster-config home-dir) [:models "middle" :claude]))))
+        (fs/delete home-roster) (fs/delete project-config)
+        (is (= "opus" (get-in (cli/config home-dir) [:models "middle" :claude]))))
       (testing "malformed EDN in an override throws naming its path"
-        (spit (str project-roster) "{:models")
-        (is (try (cli/roster-config home-dir) false
-                 (catch clojure.lang.ExceptionInfo e (= (str project-roster) (:path (ex-data e))))))
-        (fs/delete project-roster))
+        (spit (str project-config) "{:models")
+        (is (try (cli/config home-dir) false
+                 (catch clojure.lang.ExceptionInfo e (= (str project-config) (:path (ex-data e))))))
+        (fs/delete project-config))
       (testing "a structurally invalid override throws naming its path"
-        (spit (str project-roster) "{:harnesses {:pi {:model-flag \"\"}}}")
-        (is (try (cli/roster-config home-dir) false
-                 (catch clojure.lang.ExceptionInfo e (= (str project-roster) (:path (ex-data e))))))
-        (fs/delete project-roster))
+        (spit (str project-config) "{:harnesses {:pi {:model-flag \"\"}}}")
+        (is (try (cli/config home-dir) false
+                 (catch clojure.lang.ExceptionInfo e (= (str project-config) (:path (ex-data e))))))
+        (fs/delete project-config))
       (testing "portability: an override adding a new harness + model column translates for unmodified code"
-        (spit (str project-roster) "{:harnesses {:gemini {:model-flag \"--model\"}} :models {\"claude-opus-5\" {:gemini \"gemini-2.5-pro\"}}}")
-        (let [config (cli/roster-config home-dir)]
+        (spit (str project-config) "{:harnesses {:gemini {:model-flag \"--model\"}} :models {\"claude-opus-5\" {:gemini \"gemini-2.5-pro\"}}}")
+        (let [config (cli/config home-dir)]
           (is (= ["--model" "gemini-2.5-pro"] (core/model-args config "gemini" "claude-opus-5")))
           ;; A kind still absent from `:harnesses` remains empty args — the addition is
           ;; purely additive data, no code change and no other kind affected.
           (is (= [] (core/model-args config "vertex" "claude-opus-5"))))
-        (fs/delete project-roster)))
+        (fs/delete project-config)))
     (testing "missing shipped default is fatal"
       (with-redefs [cli/launcher-bin (constantly (str (fs/path tmp "empty-install" "skills" "herdr-subagents" "scripts" "subagent")))
                     ledger/assignment-root (constantly project-root)]
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"missing shipped default roster table" (cli/roster-config home-dir)))))))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"missing shipped default config" (cli/config home-dir)))))))
 
 (def roster-model-personas
   {"canonical-worker" "---\nname: canonical-worker\ndescription: fixture canonical-id persona\nkind: pi\nmodel: claude-opus-5\n---\nFixture canonical worker.\n"
@@ -1923,9 +1961,9 @@
 ;; A `SUBAGENT_ASSIGNMENT_ROOT` relocation (the fixture's `dir`, distinct from the real
 ;; repo root) resolves the project roster override under the relocated root, winning
 ;; over the shipped default.
-(deftest relocated-assignment-root-resolves-project-roster-override
+(deftest relocated-assignment-root-resolves-project-config-override
   (let [{:keys [env dir]} (fake-env {} roster-model-personas)]
-    (spit (str (fs/path dir ".agents" "subagents" "roster.edn")) "{:models {\"claude-opus-5\" {:claude \"opus-relocated\"}}}")
+    (spit (str (fs/path dir ".agents" "subagents" "config.edn")) "{:models {\"claude-opus-5\" {:claude \"opus-relocated\"}}}")
     (let [proc (call! env "run" "canonical-worker" "--kind" "claude" "--task" "relocated override" "--print-prompt")]
       (is (zero? (:exit proc)) (:err proc))
       (is (= ["--model" "opus-relocated"] (get-in (result proc) [:result :model-args]))))))
@@ -1937,7 +1975,7 @@
 ;; a malformed project override must abort the whole spawn before either exists.
 (deftest invalid-roster-override-fails-before-ledger-or-mutation
   (let [{:keys [env log dir]} (fake-env {} minimal-persona)]
-    (spit (str (fs/path dir ".agents" "subagents" "roster.edn")) "{:harnesses {:pi {:model-flag \"\"}}}")
+    (spit (str (fs/path dir ".agents" "subagents" "config.edn")) "{:harnesses {:pi {:model-flag \"\"}}}")
     (let [proc (call! env "start" "probe" "--task" "invalid roster aborts")]
       (is (= 1 (:exit proc)))
       (is (re-find #"model-flag" (:out proc)))
