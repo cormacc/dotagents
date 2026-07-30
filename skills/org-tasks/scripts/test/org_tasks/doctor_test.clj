@@ -491,7 +491,7 @@
   (let [content (str "* Summary\n"
                      "** Acceptance\n"
                      "*** Core functionality\n"
-                     "- [ ] Widget renders → spec:[[proj:design/specs/theming.org]] test:`test/widget_test.clj:1`\n"
+                     "- [ ] Widget renders → spec:[[proj:design/specs/theming.org]] test:`test/widget_test.clj` `dark-mode-render`\n"
                      "* Plan\n"
                      "** TODO Work\n"
                      ":PROPERTIES:\n"

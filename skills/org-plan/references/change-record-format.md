@@ -139,11 +139,11 @@ Background, motivation, alternatives, constraints, trade-offs. **Default to omit
 
 ### Acceptance criteria citation
 
-Optional: cite the spec clause and/or test a criterion depends on with a `→` suffix (`spec:[[proj:PATH]]` and/or `test:REF`); see org-plan SKILL.md § Spec/test citation on acceptance criteria.
+Optional: cite the spec clause and/or test a criterion depends on with a `→` suffix (`spec:[[proj:PATH]]` and/or `test:REF`); cite tests by file path plus `deftest`/test name (optionally with a short quoted assertion anchor) rather than a bare line number, which drifts. See org-plan SKILL.md § Spec/test citation on acceptance criteria.
 
 ```org
 *** Core functionality
-- [ ] Widget renders in dark mode → spec:[[proj:design/specs/theming.org]] test:`test/widget_test.clj:42`
+- [ ] Widget renders in dark mode → spec:[[proj:design/specs/theming.org]] test:`test/widget_test.clj` `dark-mode-render`
 ```
 
 ## Spec keyword

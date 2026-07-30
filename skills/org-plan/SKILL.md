@@ -238,10 +238,10 @@ For non-trivial plan tasks, put a short `Acceptance criteria:` bullet list at th
 
 ### Spec/test citation on acceptance criteria
 
-An `** Acceptance` criterion may optionally cite the spec clause it satisfies and/or the test that asserts it, appended after the criterion text with a `→` separator: `spec:[[proj:PATH]]` and/or `test:` followed by a bare reference (file:line, test name, or code span). Both tokens are optional and independent; citing a spec without a test is fine for `*** Anti-criteria` (the anti-criterion itself is the evidence) but for `*** Core functionality` / `*** Edge cases` a spec-citing criterion should also cite a `test:` — `ot doctor` nudges (never blocks) when one is missing. Citations are opt-in: an uncited criterion produces no finding.
+An `** Acceptance` criterion may optionally cite the spec clause it satisfies and/or the test that asserts it, appended after the criterion text with a `→` separator: `spec:[[proj:PATH]]` and/or `test:` followed by a test reference. Prefer a stable test reference: the file path plus the `deftest`/test name, optionally with a short quoted source anchor from the assertion (`test/widget_test.clj` `dark-mode-render` `"is dark"`). Reserve a bare line number or range for cheap-to-re-derive one-off pointers — it drifts silently as unrelated tests land above it. Both tokens are optional and independent; citing a spec without a test is fine for `*** Anti-criteria` (the anti-criterion itself is the evidence) but for `*** Core functionality` / `*** Edge cases` a spec-citing criterion should also cite a `test:` — `ot doctor` nudges (never blocks) when one is missing. Citations are opt-in: an uncited criterion produces no finding.
 
 ```org
-- [ ] Widget renders in dark mode → spec:[[proj:design/specs/theming.org]] test:`test/widget_test.clj:42`
+- [ ] Widget renders in dark mode → spec:[[proj:design/specs/theming.org]] test:`test/widget_test.clj` `dark-mode-render`
 ```
 
 See `references/change-record-format.md` § Acceptance criteria citation for a worked example, and `../org-tasks/references/ot-cli.md` § Spec keyword and checks for the `ot doctor` finding this feeds.
