@@ -169,15 +169,44 @@
     (is (= {:spawns [] :spawns-source "depth"} (select-keys entry [:spawns :spawns-source])))))
 
 (deftest root-worker-spawn-records-and-injects-frontmatter-policy
-  (let [{:keys [env env-file dir]} (fake-env {})
+  (let [{:keys [env env-file dir prompt-file]} (fake-env {})
         proc (call! env "start" "worker" "--task" "root worker policy")
         task (get-in (result proc) [:result :task])
-        entry (ledger-entry* dir task)]
+        entry (ledger-entry* dir task)
+        prompt (slurp prompt-file)]
     (is (zero? (:exit proc)) (:err proc))
     ;; The default `worker` (formerly advised-worker) grants the advisor consult too.
     (is (= {:spawns ["scout" "researcher" "advisor"] :spawns-source "frontmatter"}
            (select-keys entry [:spawns :spawns-source])))
-    (is (= "scout researcher advisor" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))))
+    (is (= "scout researcher advisor" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))
+    ;; The live worker's mandatory pre-publish advisor review is recorded and reaches the
+    ;; prompt as an instruction, not as something the gap-only trigger could forbid.
+    (is (= ["advisor"] (:required entry)))
+    (is (str/includes? prompt "Your persona definition mandates the advisor consult it specifies"))
+    (is (str/includes? prompt "You may additionally spawn scout or researcher only when a factual gap or material judgment blocks progress."))
+    (is (not (str/includes? prompt "at most one blocking ephemeral scout or researcher or advisor")))))
+
+(deftest worker-mandate-drops-with-the-effective-allow-list
+  (testing "--spawns none forces a leaf and withdraws the mandate"
+    (let [{:keys [env dir prompt-file]} (fake-env {})
+          proc (call! env "start" "worker" "--spawns" "none" "--task" "forced leaf worker")
+          task (get-in (result proc) [:result :task])
+          entry (ledger-entry* dir task)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= {:spawns [] :spawns-source "flag" :required []}
+             (select-keys entry [:spawns :spawns-source :required])))
+      (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))))
+  (testing "a below-root worker is depth-forced to a leaf and carries no mandate"
+    (let [{:keys [env dir prompt-file]} (fake-env {"HERDR_SUBAGENT_PERSONA" "planner"
+                                                   "HERDR_SUBAGENT_SPAWNS" "worker"
+                                                   "FAKE_PARENT_LABEL" "planner-1-claude-opus-5"})
+          proc (call! env "start" "worker" "--task" "nested worker")
+          task (get-in (result proc) [:result :task])
+          entry (ledger-entry* dir task)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= {:spawns [] :spawns-source "depth" :required []}
+             (select-keys entry [:spawns :spawns-source :required])))
+      (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents.")))))
 
 (deftest advisor-strategy-spawn-contract
   (testing "the root advised-worker resolves its fixture allow-list"

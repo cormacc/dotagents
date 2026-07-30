@@ -3,6 +3,7 @@ name: worker
 description: Default worker - implements a scoped task with focused frontier-advisor consultation, verifies acceptance criteria, and reports concrete changes and test evidence
 model: light
 spawns: scout researcher advisor
+requires: advisor
 ---
 
 # Worker Agent

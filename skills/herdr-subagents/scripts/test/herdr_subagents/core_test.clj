@@ -223,6 +223,24 @@
                (and (re-find #"unresolvable persona `resercher`" (.getMessage e))
                     (= {:persona "worker" :spawn "resercher" :source "frontmatter"} (ex-data e))))))))
 
+(deftest resolve-required-contract
+  ;; Absent or blank `requires:` means no mandate; the key is independent of `spawns:`.
+  (is (= [] (core/resolve-required {:persona "worker" :frontmatter {:spawns "scout advisor"} :spawns ["scout" "advisor"]})))
+  (is (= [] (core/resolve-required {:persona "worker" :frontmatter {:spawns "advisor" :requires ""} :spawns ["advisor"]})))
+  ;; A declared mandate inside the effective allow-list survives, order preserved.
+  (is (= ["advisor"] (core/resolve-required {:persona "worker" :frontmatter {:spawns "scout researcher advisor" :requires "advisor"}
+                                             :spawns ["scout" "researcher" "advisor"]})))
+  ;; Narrowing: `--spawns none` and the depth-forced leaf both drop the mandate, and a
+  ;; flag that narrows the list drops only the mandates it excluded.
+  (is (= [] (core/resolve-required {:persona "worker" :frontmatter {:spawns "scout advisor" :requires "advisor"} :spawns []})))
+  (is (= [] (core/resolve-required {:persona "worker" :frontmatter {:spawns "scout advisor" :requires "advisor"} :spawns ["scout"]})))
+  ;; A mandate absent from the persona's own `spawns:` is a roster defect: it fails fast
+  ;; even when the effective list would have hidden it (here, a depth-forced leaf).
+  (is (try (core/resolve-required {:persona "worker" :frontmatter {:spawns "scout" :requires "advisor"} :spawns []}) false
+           (catch clojure.lang.ExceptionInfo e
+             (and (re-find #"names `advisor`, which is absent from its `spawns:` allow-list" (.getMessage e))
+                  (= {:persona "worker" :requires "advisor" :spawns ["scout"]} (ex-data e)))))))
+
 (deftest frontmatter-and-envelope-contract
   (is (= {:name "scout" :description "x" :kind "pi" :model "vendor/model"}
          (core/parse-frontmatter "---\nname: scout\ndescription: x\nkind: pi\nmodel: vendor/model\n---\nbody")))
@@ -236,8 +254,9 @@
 
 (deftest delegation-guidance-and-smoke-success-contract
   (is (.endsWith (cli/launcher-bin) "/skills/herdr-subagents/scripts/subagent"))
-  ;; The prompt text is intentionally pinned: the trigger applies to factual research
-  ;; and judgment consults alike, while preserving the blocking, one-child leaf bound.
+  ;; The prompt text is intentionally pinned. Without a `requires:` mandate the single
+  ;; gap-only trigger covers factual research and discretionary judgment consults alike,
+  ;; while preserving the blocking, one-child leaf bound.
   (is (= "You may spawn at most one blocking ephemeral scout or researcher only when a factual gap or material judgment blocks progress; that child must remain a leaf."
          (cli/delegation-guidance ["scout" "researcher"])))
   (is (= "You may spawn at most one blocking ephemeral scout or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."
@@ -246,6 +265,21 @@
   ;; grants planner and worker, while scout and researcher remain leaves.
   (is (= "You are a leaf: do not spawn subagents." (cli/delegation-guidance [])))
   (is (= "You are a leaf: do not spawn subagents." (cli/delegation-guidance nil)))
+  ;; A mandated consult is stated as an instruction to carry out, never filtered through
+  ;; the gap-only trigger, while the one-at-a-time leaf bound still covers both kinds.
+  (is (= (str "Your persona definition mandates the advisor consult it specifies: perform it at the points that definition defines, not only when blocked."
+              " You may additionally spawn scout or researcher only when a factual gap or material judgment blocks progress."
+              " Spawn at most one blocking ephemeral child at a time, and every child must remain a leaf.")
+         (cli/delegation-guidance ["scout" "researcher" "advisor"] ["advisor"])))
+  ;; Mandate-only policy: no optional clause at all, and plural agreement holds.
+  (is (= (str "Your persona definition mandates the advisor and reviewer consults it specifies: perform it at the points that definition defines, not only when blocked."
+              " Spawn at most one blocking ephemeral child at a time, and every child must remain a leaf.")
+         (cli/delegation-guidance ["advisor" "reviewer"] ["advisor" "reviewer"])))
+  ;; A mandate outside the effective allow-list is dropped rather than emitted as an
+  ;; impossible instruction: a forced leaf stays a leaf, and a narrowed list stays gap-only.
+  (is (= "You are a leaf: do not spawn subagents." (cli/delegation-guidance [] ["advisor"])))
+  (is (= "You may spawn at most one blocking ephemeral scout only when a factual gap or material judgment blocks progress; that child must remain a leaf."
+         (cli/delegation-guidance ["scout"] ["advisor"])))
   (is (= {:status "COMPLETE"} (smoke/complete! {:status "COMPLETE"})))
   (is (try
         (smoke/complete! {:status "FAILED"})
