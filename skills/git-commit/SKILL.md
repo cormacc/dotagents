@@ -25,6 +25,11 @@ notes below are the project-specific bits worth restating.
    verify each intermediate tree (e.g. run the test suite) before
    committing it.
 
+   Reconcile `git status` against the change's expected file set and stage
+   those paths explicitly. A worktree shared with subagents, other agent
+   sessions, or the user may hold unrelated edits; never `git add -A`/`.`
+   there, and surface anything foreign you deliberately left unstaged.
+
 2. Pick the type:
    - `feat` — new functionality
    - `fix` — bug fix

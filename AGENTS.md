@@ -22,6 +22,7 @@
 - Prefer available structured read/edit tools over ad-hoc scripts for routine file inspection and modification.
 - When scripting is necessary, prefer Babashka to Python for repository-local automation. Use Python when invoking an existing Python tool or when its ecosystem is materially better suited.
 - For scripted transformations, write a candidate under `<repository-root>/.agents/tmp/`, inspect its diff, and only then replace the source; do not perform unverified in-place rewrites.
+- Redirect long-running or expensive command output to a file under `<repository-root>/.agents/tmp/` and read slices from it. Piping through `head`/`tail` discards the rest and often forces a costly re-run.
 
 # Temporary files
 Resolve the repository root with `git rev-parse --show-toplevel`, then use

@@ -1,6 +1,6 @@
 #+TITLE: Optimise test build
 #+DATE: 2026-07-30 Thu
-#+PARENT: [[task:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]]
+#+PARENT: [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+NO_SPEC: true

@@ -81,6 +81,9 @@ clojure_eval { port: PORT, code: "(clojure.repl/find-doc \"regular expression\")
 
 # Read function source
 clojure_eval { port: PORT, code: "(clojure.repl/source filter)" }
+# NB: source/source-fn return nil for namespaces babashka reimplements
+# internally (clojure.test, clojure.repl, ...). Read those semantics from
+# babashka/src/babashka/impl/<ns>.clj upstream instead of reflecting.
 
 # Get arglists
 clojure_eval { port: PORT, code: "(:arglists (meta #'reduce))" }

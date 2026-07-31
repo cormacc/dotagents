@@ -1714,3 +1714,24 @@ Origin:
 
 Evidence:
 Captured PROCESS testimony from task 75d653f1; verified against `subagents/worker.md` workflow step 7 + Advisor consultation and `cli.clj` `delegation-guidance`.
+
+** DONE Optimise test build
+CLOSED: [2026-07-31 Fri 09:54]
+:PROPERTIES:
+:CUSTOM_ID: c6c38412-651d-4015-9f08-ae5a217640c6
+:CREATED: [2026-07-30 Thu 13:20]
+:STARTED: [2026-07-30 Thu 20:06]
+:ARCHIVED: [2026-07-31 Fri 09:54]
+:ARCHIVE_OLPATH: Housekeeping
+:END:
+:LOGBOOK:
+- Created [2026-07-30 Thu 13:20]
+- State "STARTED" from "TODO" [2026-07-30 Thu 20:06]
+- State "DONE" from "STARTED" [2026-07-31 Fri 09:54]
+:END:
+#+IMPORT: [[plan:2026-07-30-optimise-test-build.org]]
+The repo test build (`bb test`) takes more than two minutes to run on my dev machine. This is unacceptable friction.
+- Categorise tests as fast or slow
+- Review slow tests for relevance or optimisation opportunities
+- Delete slow tests (or any tests) that don't add real value
+- Extract any remaining useful slow tests into a separate build - exclude them from the default build

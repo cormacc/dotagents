@@ -245,25 +245,6 @@ Deferred from 2fe1ce2a (see [[file:design/log/2026-07-30-optimise-test-build.org
 
 * Housekeeping
 
-** DONE Optimise test build
-CLOSED: [2026-07-31 Fri 09:54]
-:PROPERTIES:
-:CUSTOM_ID: c6c38412-651d-4015-9f08-ae5a217640c6
-:CREATED: [2026-07-30 Thu 13:20]
-:STARTED: [2026-07-30 Thu 20:06]
-:END:
-:LOGBOOK:
-- Created [2026-07-30 Thu 13:20]
-- State "STARTED" from "TODO" [2026-07-30 Thu 20:06]
-- State "DONE" from "STARTED" [2026-07-31 Fri 09:54]
-:END:
-#+IMPORT: [[plan:2026-07-30-optimise-test-build.org]]
-The repo test build (`bb test`) takes more than two minutes to run on my dev machine. This is unacceptable friction.
-- Categorise tests as fast or slow
-- Review slow tests for relevance or optimisation opportunities
-- Delete slow tests (or any tests) that don't add real value
-- Extract any remaining useful slow tests into a separate build - exclude them from the default build
-
 ** STARTED Create self-improvement skill :pi:
 :PROPERTIES:
 :CUSTOM_ID: 2262ed25-f0fc-40fd-9d21-41a0b16fb3a1
@@ -422,6 +403,8 @@ Consider a more systemic fix: e.g. the orchestrator applying all edits to files 
 
 *EDIT* An alternative strategy would be to embed some orchestration guidance in a new section of the herdr-subagents skill (OR a new orchestration skill? Though probably the former). When planning implementation, parallel workers should be used only for completely orthogonal tasks. Consider whether some consideration for orchestration should be included in the org-plan workflow and/or planner subagent -- as the context required for these decisions has likely already been built during planning? Evaluate the viability of using git worktrees for parallel workers -- either across the board, or just when some risk of overlap has been flagged.
 
+*EDIT 2* [2026-07-31 Fri] Part of the strategy above landed via the test-build retro, as a second prevention-side partial mitigation: herdr-subagents § Invocation policy (Cardinality) now states that concurrency is bounded by edit targets as well as by N and forbids fanning out siblings whose file sets overlap, and org-plan § Splitting test now keeps work that must edit the same function or form in one task. Both are orchestrator/planner habits, so the structural guarantee this task asks for is still open. Remaining: the git-worktree-per-worker evaluation, whether the `planner` persona itself should carry overlap analysis (its plan for [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]] split one edit to one `fake-env` map across two nominally independent tasks, which forced the orchestrator to re-serialise them), and orchestrator-applied or advisory-locked shared-file writes.
+
 Origin:
 - cwd: /home/cormacc/dotfiles/agents
 - git: git@github.com:cormacc/dotagents.git @ main
@@ -430,3 +413,26 @@ Origin:
 
 Evidence:
 design/log/2026-07-29-subagent-comms-housekeeping.org, Implementation § Portable Markdown artifact links (task 41a5c747): "this workers own append to cli_test.clj was silently clobbered by the concurrent sibling workers stale-read write... a herdr-subagents follow-up on safer concurrent file writes across parallel workers may be worth filing separately from this record."
+
+** TODO ot doctor: warn on dangling file paths cited in change-record prose :skill_org-tasks:
+:PROPERTIES:
+:CUSTOM_ID: 88f30aea-14a3-4107-b587-911f7748c14c
+:CREATED: [2026-07-31 Fri 10:02]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 10:02]
+:END:
+Change-records cite repo-relative source paths in prose (`** Scope`, plan-task bodies, `** Shipped`). Nothing validates them, so a wrong path survives planning, sign-off, and delegation. `ot doctor` already validates `#+SPEC:` link targets for dangling paths — extend that check to prose-cited paths so the same class of error is caught for the rest of the record.
+
+- Detect repo-relative source-path-looking tokens in record prose
+- Warn (never block) when the path does not exist, consistent with existing advisory findings
+- Tolerate paths inside src/example blocks and deliberately illustrative paths without excessive false positives
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: cormacc/dotagents @ main
+- timestamp: [2026-07-31 Fri 09:54]
+- sender: agent
+
+Evidence:
+In design/log/2026-07-30-optimise-test-build.org the planner wrote `skills/org-tasks/scripts/src/org_tasks/test_runner.clj` in `** Scope`; the runner actually lives under `scripts/test/`. The path passed record review and was propagated verbatim into a worker assignment; only the implementing worker caught it, by failing to find the file. `ot doctor` reported no issues throughout.

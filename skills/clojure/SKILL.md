@@ -115,6 +115,14 @@ short list:
 - Babashka resolves `user.home` from the OS user database, not `$HOME`: in bb
   subprocess tests, never rely on a `$HOME` override to isolate
   home-directory probes — inject an explicit root/path override instead.
+- Conversely, bb's classpath cache *does* follow `$HOME`, so overriding it for
+  isolation silently forces cold classpath resolution (~0.7s vs ~70ms per
+  call) and bootstraps a `.clojure/` into the fake home. `CLJ_CACHE`
+  (classpath cache) and `CLJ_CONFIG` (user config/`tools` dir) are
+  independent knobs — set both to one shared warm dir, not just `CLJ_CACHE`.
+- Measure per-test timing inside a real namespace or suite run. A test timed
+  as the first subprocess-spawning call in a fresh `bb` process over-reads by
+  ~3× on one-time JIT/class-load warm-up.
 
 See [references/idioms.md](references/idioms.md) for threading-macro,
 control-flow, data-structure, error-handling, testing, and anti-pattern
@@ -135,6 +143,10 @@ escaping, run a cheap compile-check (`bb -e '(require (quote project.ns)
 :reload)'` or equivalent) immediately, before the full test suite — an
 extra layer of string-escaping can produce a syntactically balanced but
 semantically bogus top-level form that a delimiter check alone won't catch.
+
+Keep `bb -e` to a single short form. Multi-line code carrying `$`, regexes,
+or nested quotes misevaluates silently inside a shell heredoc; write it to
+`.agents/tmp/*.clj` and run `bb <file>` instead.
 
 For unbalanced-delimiter / EOF errors, run `clj-paren-repair` (file) or
 `clojure_paren_repair` (string) instead of editing by hand.

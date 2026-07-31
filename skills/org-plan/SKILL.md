@@ -254,6 +254,8 @@ Before committing a criterion, scan it:
 - Can part A pass while part B fails? → separate them.
 - Contains "all" / "every" / "complete"? → enumerate what "all" means.
 
+Splitting acts on criteria, not on edit sites: work that must edit the same function or form belongs in one task even when its criteria are separately observable, since separate tasks cannot then be executed concurrently.
+
 ### Anti-criteria
 
 When a non-goal would be easy to violate by accident, capture it as an anti-criterion in the same list, prefixed `Must not:` (or under a dedicated `Anti-criteria:` heading for plan tasks with several). Examples: *Must not: write to the production database. Must not: introduce a new top-level dependency. Must not: change the public API signature.*
