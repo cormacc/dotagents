@@ -50,7 +50,7 @@ Act on the decisions taken at the gate of [[plan:2026-07-31-subagents-review-adv
 
 ** Decisions
 
-- Roll back rather than repurpose =requires:= :: the mechanism exists solely to express the mandatory advisor consult, and =worker= is its only declarant. With the mandate gone it has no user, and keeping an unused capability-mandate concept would cost prompt tokens and reader attention for nothing. Rejected: retaining it undeclared for future personas \u2014 speculative, and cheap to reintroduce from =7b67e13= if ever wanted.
+- Roll back rather than repurpose =requires:= :: the mechanism exists solely to express the mandatory advisor consult, and =worker= is its only declarant. With the mandate gone it has no user, and keeping an unused capability-mandate concept would cost prompt tokens and reader attention for nothing. Rejected: retaining it undeclared for future personas — speculative, and cheap to reintroduce from =7b67e13= if ever wanted.
 - Retire =skilled-worker= rather than keep a hard no-advisor guarantee :: an optional capability that goes unused is not a meaningful difference from one that is absent, and the roster is easier to reason about with a single executor persona parameterised by =--model=. Rejected: keeping it so =advisor= is absent from =spawns:= entirely.
 - Keep the advisor at middle :: the one equal-executor comparison favoured middle (35/35 at $5.3666) over heavy (34/35 at $7.1269); =--model heavy= stays available per spawn for extremis, which was never actually exercised in the evaluation.
 
