@@ -236,13 +236,15 @@ Scope discrimination (verified 2026-07-31): this defect is specific to the **age
 
 Implementation notes from the stopgap (verified 2026-07-31): the lifecycle state is nested at `result.agent.agent_status` in `herdr agent get` output, not `result.agent_status` — misreading it yields `unknown` and, if the nudge is unconditional, fires a burst of stray Enters. Gate the nudge on a definite `idle`. Dispatch failure is intermittent, not universal: of nine spawns in that session, seven needed one Enter and two dispatched unaided, so any fix must tolerate a prompt that has already landed.
 
-** TODO herdr-orch: absorb pi-herdr coverage into the bb CLI, rename skill and binary to oh :skill_herdr-subagents:
+** STARTED herdr-orch: absorb pi-herdr coverage into the bb CLI, rename skill and binary to oh :skill_herdr-subagents:
 :PROPERTIES:
 :CUSTOM_ID: 4a9a24b3-2518-4cf5-9d8d-64b5fa0c76ba
 :CREATED: [2026-08-01 Sat 00:29]
+:STARTED: [2026-08-01 Sat 00:35]
 :END:
 :LOGBOOK:
 - Created [2026-08-01 Sat 00:29]
+- State "STARTED" from "TODO" [2026-08-01 Sat 00:35]
 :END:
 #+IMPORT: [[plan:2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org]]
 Replace the floating upstream `@ogulcancelik/pi-herdr` pi extension with first-party coverage in the herdr-subagents Babashka CLI, then rename the skill to `herdr-orch` and the binary to `oh` to match the broadened charter.

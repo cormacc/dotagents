@@ -76,10 +76,16 @@ Replace =@ogulcancelik/pi-herdr= with coverage in the existing harness-agnostic 
 
 * Plan
 
-** TODO Complete the herdr.clj operation surface and port pi-herdr's behaviours
+** DONE Complete the herdr.clj operation surface and port pi-herdr's behaviours
+CLOSED: [2026-08-01 Sat 00:45]
 :PROPERTIES:
 :CUSTOM_ID: a6b07a1f-1609-4761-87ed-9239b33817f0
 :CREATED: [2026-08-01 Sat]
+:STARTED: [2026-08-01 Sat 00:35]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-01 Sat 00:35]
+- State "DONE" from "STARTED" [2026-08-01 Sat 00:45]
 :END:
 Add the 16 missing operations and the behaviours that make them usable. Behaviours matter more than plumbing here: the self-close guard is real enforcement the CLI lacks, and the read-source fallback fixes a trap that made a successful command look like it never ran.
 Acceptance criteria:
