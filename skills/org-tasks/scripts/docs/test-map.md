@@ -42,6 +42,13 @@ is an org file the Clojure parser must read and re-emit byte-identically.
 
 - `bb test` invokes `org-tasks.test-runner/run` which uses `clojure.test` and
   discovers every namespace under `scripts/test/`.
+- A namespace opts in to parallel deftest execution with `^{:parallel-tests
+  true}` ns metadata (currently only `herdr-subagents.cli-test`, whose fixture
+  spawns real `subagent` subprocesses); every other namespace still runs
+  exactly as before. Within an opted-in namespace, vars marked `^:serial` run
+  first, sequentially, before the rest run on a bounded thread pool (default
+  `Runtime/availableProcessors`, override with `OT_TEST_PARALLELISM`). Any
+  test mutating in-process state (e.g. `with-redefs`) must be `^:serial`.
 - Round-trip tests read fixture content, run `parse-tasks` →
   `serialize-tasks-preserving-file`, and assert byte equality with the
   original.

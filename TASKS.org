@@ -210,18 +210,54 @@ Currently the advisor subagent definition specifies a medium-weight model, and t
 - Does the worker allow for the advisor model to be overridden at spawn time?
 - Consider whether the worker and skilled-worker should be merged, with the worker defaulting to having an advisor available, but allowing that to be overridden at spawn time
 
+** TODO [#C] Guard ^:serial tagging of state-mutating deftests in parallel namespaces
+:PROPERTIES:
+:CUSTOM_ID: f8e76842-6fe5-468a-a9da-95d2c8796556
+:CREATED: [2026-07-31 Fri 09:52]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 09:52]
+:END:
+A deftest that uses `with-redefs` (or otherwise mutates in-process state) inside a `^{:parallel-tests true}` namespace must carry `^:serial`, but nothing enforces it — a future test that forgets the tag would race silently rather than fail.
+
+Deferred from 2fe1ce2a (see [[file:design/log/2026-07-30-optimise-test-build.org][Optimise test build]]): the advisor flagged a static/source-level meta-test as a real regression-safety net, but parsing form-level metadata via `clojure.core/read` was judged too fragile to add under that task's budget.
+
+- Find a robust way to detect `with-redefs`/state mutation in deftest forms of an opted-in namespace
+- Fail the suite when such a deftest lacks `^:serial`
+- Prefer a reliable narrow check over a broad fragile one
+
+** TODO [#D] Pin OT_TEST_PARALLELISM in CI if parallel test timing proves tight
+:PROPERTIES:
+:CUSTOM_ID: 6fcafd18-40d8-4247-9c66-3f89c9495632
+:CREATED: [2026-07-31 Fri 09:53]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 09:53]
+:END:
+The parallel test runner sizes its pool from `Runtime/availableProcessors`, which over-reports inside a cgroup-limited CI container — the host sees all cores while the container is throttled, so wall-clock-bound tests could flake in CI even though they are stable on the dev machine.
+
+Deferred from 2fe1ce2a (see [[file:design/log/2026-07-30-optimise-test-build.org][Optimise test build]]): no flake was reproducible locally at either `OT_TEST_PARALLELISM=2` or `=60` on a 20-thread host, so this is speculative until CI shows it.
+
+- Only act if CI actually demonstrates timing flakiness
+- Pin `OT_TEST_PARALLELISM` to the container CPU limit in the CI invocation
+
 * Fixes
 
 * Housekeeping
 
-** TODO Optimise test build
+** DONE Optimise test build
+CLOSED: [2026-07-31 Fri 09:54]
 :PROPERTIES:
 :CUSTOM_ID: c6c38412-651d-4015-9f08-ae5a217640c6
 :CREATED: [2026-07-30 Thu 13:20]
+:STARTED: [2026-07-30 Thu 20:06]
 :END:
 :LOGBOOK:
 - Created [2026-07-30 Thu 13:20]
+- State "STARTED" from "TODO" [2026-07-30 Thu 20:06]
+- State "DONE" from "STARTED" [2026-07-31 Fri 09:54]
 :END:
+#+IMPORT: [[plan:2026-07-30-optimise-test-build.org]]
 The repo test build (`bb test`) takes more than two minutes to run on my dev machine. This is unacceptable friction.
 - Categorise tests as fast or slow
 - Review slow tests for relevance or optimisation opportunities

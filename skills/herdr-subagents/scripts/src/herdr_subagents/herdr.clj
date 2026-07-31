@@ -68,7 +68,16 @@
 ;; caught and re-thrown; every other error code fails on the first attempt, and no other
 ;; mutation (`pane split`, `agent prompt`, `pane rename`) is retried.
 (def start-retry-attempts 4)
-(def start-retry-backoff-ms 500)
+(def default-start-retry-backoff-ms 500)
+;; `SUBAGENT_START_RETRY_BACKOFF_MS` env override, same strictly-positive/unparseable ->
+;; default discipline as `parse-poll-interval` in cli.clj (zero is truthy in Clojure and
+;; `Thread/sleep` rejects negatives). Kept local to this ns (not required from cli.clj) to
+;; avoid a circular require; the fixture uses it to make retry tests fast without touching
+;; the unconfigured default.
+(defn parse-start-retry-backoff [raw]
+  (let [n (some-> raw str/trim not-empty parse-long)]
+    (if (and n (pos? n)) n default-start-retry-backoff-ms)))
+(defn start-retry-backoff-ms [] (parse-start-retry-backoff (System/getenv "SUBAGENT_START_RETRY_BACKOFF_MS")))
 (defn start! [name kind pane native-args]
   (let [argv (into ["agent" "start" name "--kind" kind "--pane" pane] (when (seq native-args) (into ["--"] native-args)))]
     (loop [attempt 1]
@@ -76,7 +85,7 @@
         (cond
           (:ok outcome) (get-in (:value outcome) [:result :agent])
           (and (< attempt start-retry-attempts) (= "agent_pane_busy" (get-in outcome [:error :response :error :code])))
-          (do (Thread/sleep start-retry-backoff-ms) (recur (inc attempt)))
+          (do (Thread/sleep (start-retry-backoff-ms)) (recur (inc attempt)))
           :else (throw (ex-info "Herdr command failed" (:error outcome))))))))
 (defn prompt! [target text] (value! ["agent" "prompt" target text]))
 (defn wait! [target timeout] (invoke ["agent" "wait" target "--timeout" (str timeout)]))

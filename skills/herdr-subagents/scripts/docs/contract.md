@@ -39,6 +39,7 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 | `SUBAGENT_POLL_INTERVAL_MS` | parent | Sleep between settled-without-result wait iterations, and between `collect --any` poll ticks. Unset, blank, unparseable, zero, and negative values all fall back to 1000 ms. |
 | `SUBAGENT_SETTLE_CLOSE_MS` | parent | Budget for the single `agent wait` a `collect --any` capture makes on the captured child before its one-shot pane close (see § Fan-in). Unset, blank, unparseable, zero, and negative values all fall back to 45000 ms — same discipline as `SUBAGENT_POLL_INTERVAL_MS`. |
 | `SUBAGENT_PROGRESS_INTERVAL_MS` | child | Minimum interval between `progress --summary` snapshots that actually rewrite the ledger's `:progress` (see § Progress). Unset, blank, unparseable, zero, and negative values all fall back to 60000 ms — same discipline as `SUBAGENT_POLL_INTERVAL_MS`. |
+| `SUBAGENT_START_RETRY_BACKOFF_MS` | parent | Sleep between `agent start` retries on a transient `agent_pane_busy` error (see the `start-retry-attempts`/`start!` retry loop). Unset, blank, unparseable, zero, and negative values all fall back to 500 ms — same discipline as `SUBAGENT_POLL_INTERVAL_MS`. Test-only in practice: `bb test`'s fixture sets it low so retry tests run fast. |
 | `HERDR_SUBAGENT_CHILD` | child | Live agent name recorded on the ledger. |
 | `HERDR_SUBAGENT_TASK` | child | Assignment id. |
 | `HERDR_SUBAGENT_RESULT` | child | Exact absolute result path to publish. |

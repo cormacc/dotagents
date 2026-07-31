@@ -1,4 +1,7 @@
-(ns herdr-subagents.cli-test
+;; Parallel deftest execution (org-tasks.test-runner) is opt-in per namespace;
+;; this is the one namespace it's enabled for (task 2fe1ce2a). Contract: any
+;; test mutating in-process state must be ^:serial.
+(ns ^{:parallel-tests true} herdr-subagents.cli-test
   (:require [babashka.fs :as fs]
             [babashka.process :as process]
             [cheshire.core :as json]
@@ -19,6 +22,27 @@
 (def bin (str root "/skills/herdr-subagents/scripts/subagent"))
 (def fake (str root "/skills/herdr-subagents/scripts/test/fixtures/fake-herdr"))
 (defn calls [log] (if (fs/exists? log) (mapv #(str/split % #"\037") (str/split-lines (slurp log))) []))
+;; One shared per-run dir for babashka's deps.clj-honoured `CLJ_CACHE` (user classpath
+;; cache override, normally `~/.clojure/.cpcache`) and `CLJ_CONFIG` (user config-dir
+;; override, normally `~/.clojure` itself: a default `deps.edn`/`tools/tools.edn` is
+;; bootstrapped there on first use regardless of `CLJ_CACHE`), shared by every `fake-env`
+;; call for the whole test run. Each call gives its subprocess a fresh, empty `HOME` for
+;; isolation, but both of these are keyed off `HOME` by default, so without them every one
+;; of the ~180 `subagent` invocations paid a cold (~0.7s) classpath-resolution cost instead
+;; of a warm (~70ms) one, and left a `.clojure` directory behind in the fake `HOME`. The
+;; delay warms the shared cache exactly once (a plain `--help` call, which needs no
+;; `HERDR_ENV`) under its own throwaway `HOME` with the same two env vars, so warming
+;; never touches the real user's `~/.clojure` and the resulting cache key matches every
+;; later call.
+(def shared-clj-cache
+  (delay
+    (let [dir (str (fs/create-temp-dir {:prefix "cli-test-clj-cache-"}))
+          warm-home (str (fs/create-temp-dir {:prefix "cli-test-clj-cache-warm-home-"}))
+          proc @(process/process [bin "--help"] {:out :string :err :string :env {"PATH" (System/getenv "PATH") "HOME" warm-home "CLJ_CACHE" dir "CLJ_CONFIG" dir}})]
+      ;; A failed warm-up would silently degrade every later call back to cold
+      ;; classpath resolution rather than fail correctness, so fail loudly instead.
+      (when-not (zero? (:exit proc)) (throw (ex-info "failed to warm shared CLJ_CACHE" {:exit (:exit proc) :err (:err proc)})))
+      dir)))
 (defn mutating? [argv] (and (not (some #{"--help"} argv)) (contains? #{["pane" "split"] ["tab" "create"] ["pane" "rename"] ["pane" "close"] ["agent" "start"] ["agent" "prompt"]} (vec (take 2 argv)))))
 ;; `SUBAGENT_ASSIGNMENT_ROOT` keeps the ledger, index markers, result files, and project
 ;; override lookup inside the per-test temp dir: `bb test` must never touch the live tree.
@@ -41,7 +65,12 @@
      (fs/create-sym-link skills (fs/path root "skills"))
      {:dir dir :log log :env-file env-file :prompt-file prompt-file :roster (str roster) :skills (str skills) :state (str (fs/path dir "state"))
       :env (merge {"PATH" (str dir ":" (System/getenv "PATH")) "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p" "HERDR_SUBAGENT_BIN" bin "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file "FAKE_HERDR_PROMPT_FILE" prompt-file "FAKE_HERDR_STATE_DIR" (str (fs/path dir "state"))
-                   "HOME" (str home) "SUBAGENT_ASSIGNMENT_ROOT" (str dir)} overrides)})))
+                   "HOME" (str home) "SUBAGENT_ASSIGNMENT_ROOT" (str dir)
+                   "CLJ_CACHE" @shared-clj-cache "CLJ_CONFIG" @shared-clj-cache
+                   ;; Fast-by-default retry backoff: keeps the two `agent-start-retr*` tests
+                   ;; under 500ms without changing the unconfigured production default (500).
+                   "SUBAGENT_START_RETRY_BACKOFF_MS" "10"}
+                  overrides)})))
 
 (def advisor-strategy-roster
   {"advised-worker" "---\nname: advised-worker\ndescription: fixture executor\nkind: pi\nmodel: anthropic/claude-sonnet-5\nspawns: scout researcher advisor\n---\nFixture executor.\n"
@@ -51,7 +80,9 @@
 (defn call! [env & argv] @(process/process (into [bin] argv) {:out :string :err :string :env env}))
 (defn result [proc] (json/parse-string (:out proc) true))
 
-(deftest three-source-persona-discovery-contract
+;; Mutates global with-redefs state (ledger/assignment-root, cli/home-directory,
+;; cli/packaged-personas-directory, cli/launcher-bin) -- must run serially.
+(deftest ^:serial three-source-persona-discovery-contract
   (let [dir (fs/create-temp-dir {:prefix "persona-discovery-"})
         project (str (fs/path dir "project"))
         home (str (fs/path dir "home"))
@@ -102,7 +133,9 @@
   (with-redefs [cli/launcher-bin (constantly "/opt/installed/herdr-subagents/scripts/subagent")]
     (is (= "/opt/installed/herdr-subagents/subagents" (cli/packaged-personas-directory))))))
 
-(deftest available-personas-follows-home-roster-symlink
+;; Mutates global with-redefs state (ledger/assignment-root, cli/home-directory,
+;; cli/packaged-personas-directory) -- must run serially.
+(deftest ^:serial available-personas-follows-home-roster-symlink
   (let [dir (fs/create-temp-dir {:prefix "persona-list-symlink-"})
         project (str (fs/path dir "project"))
         home (str (fs/path dir "home"))
@@ -743,6 +776,20 @@
     (is (= 1 (split-call-count log)))
     (is (= 1 (count (filter #(and (fs/regular-file? %) (str/ends-with? (fs/file-name %) ".json"))
                              (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))))))
+
+;; Zero is truthy in Clojure and Thread/sleep rejects negatives, so both must fall back;
+;; same discipline as `poll-interval-parsing` for `cli/parse-poll-interval`. This is the
+;; only place the unconfigured 500ms default is exercised: `fake-env` sets the env override
+;; for every other test in this namespace.
+(deftest start-retry-backoff-parsing
+  (is (= 500 (herdr/parse-start-retry-backoff nil)))
+  (is (= 500 (herdr/parse-start-retry-backoff "")))
+  (is (= 500 (herdr/parse-start-retry-backoff "   ")))
+  (is (= 500 (herdr/parse-start-retry-backoff "0")))
+  (is (= 500 (herdr/parse-start-retry-backoff "-5")))
+  (is (= 500 (herdr/parse-start-retry-backoff "abc")))
+  (is (= 500 herdr/default-start-retry-backoff-ms))
+  (is (= 10 (herdr/parse-start-retry-backoff "10"))))
 
 (defn- wait-call-count [log]
   (count (filter #(and (= ["agent" "wait"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
@@ -1871,7 +1918,9 @@
           (str unversioned " resolves to the same row as " latest)))
     (is (= ["--model" "gpt-5.6-terra"] (core/model-args config "codex" "claude-sonnet-5")))))
 
-(deftest packaged-persona-weight-selector-contract
+;; Named as a serial test by the shared-runner opt-in contract (task 2fe1ce2a),
+;; kept alongside the other with-redefs-based contract tests for the same reason.
+(deftest ^:serial packaged-persona-weight-selector-contract
   (let [expected {"planner" "heavy"
                   "advisor" "middle"
                   "reviewer" "middle"
@@ -1891,7 +1940,9 @@
 ;; — `home` is an explicit injected argument, and `launcher-bin`/`assignment-root` are
 ;; stubbed via `with-redefs` rather than relying on `$HOME`, which Babashka's
 ;; `user.home` property does not observe (see cli_test.clj fake-env docstring).
-(deftest config-loader-precedence-and-deployment-modes
+;; Mutates global with-redefs state (cli/launcher-bin, ledger/assignment-root) --
+;; must run serially.
+(deftest ^:serial config-loader-precedence-and-deployment-modes
   (let [tmp (str (fs/create-temp-dir {:prefix "config-loader-"}))
         ;; A bare-subtree install: only `scripts/` + a sibling `config.edn`, nested under
         ;; arbitrary ancestor names with no `bb.edn` anywhere — proving derivation is from

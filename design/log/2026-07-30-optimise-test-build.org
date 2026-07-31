@@ -1,0 +1,145 @@
+#+TITLE: Optimise test build
+#+DATE: 2026-07-30 Thu
+#+PARENT: [[task:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+NO_SPEC: true
+
+* Intent
+Make the default `bb test` run in seconds instead of minutes without deleting or weakening any test, by fixing the test-fixture classpath-cache miss and parallelising the subprocess-bound `herdr-subagents.cli-test` namespace.
+
+* Summary
+*Level:* production · *Tests:* the suite itself + timing evidence · *Docs:* inline
+
+** Scope
+*** In scope
+- Shared warm `CLJ_CACHE` injected by `fake-env` in `skills/herdr-subagents/scripts/test/herdr_subagents/cli_test.clj`, warmed once per run.
+- Opt-in per-deftest parallel execution in `skills/org-tasks/scripts/test/org_tasks/test_runner.clj` (`^{:parallel-tests true}` ns metadata, `^:serial` var opt-out), enabled for `herdr-subagents.cli-test`.
+- Env-configurable `start-retry-backoff-ms` seam in `skills/herdr-subagents/scripts/src/herdr_subagents/herdr.clj` (default 500 unchanged); fixture sets it low.
+*** Out of scope
+- Deleting, skipping, or splitting tests into a separate build (evidence showed no low-value slow tests; see Decisions).
+- `launcher-test` optimisation (2.5s of genuine multi-form launcher work; immaterial under the bar).
+- In-process CLI invocation refactor (would forfeit end-to-end subprocess fidelity).
+- `scripts/check.sh` changes (it keeps running the full suite via `bb test`).
+
+** Acceptance
+*** Core functionality
+- [X] `bb test` wall time ≤ 30s on the dev machine (baseline 2m40s) — measured 9.6–10.0s
+- [X] All `herdr-subagents.cli-test` deftests pass (111: the original 110 plus one added parsing test)
+- [X] No test deleted or skipped; assertion count unchanged at 2245, test count 409 → 410 (one *added*)
+- [X] cli-test subprocesses never write to the real user's `~/.clojure`; the shared cache lives under a per-run temp dir
+- [X] The 4 `with-redefs` deftests (`three-source-persona-discovery-contract`, `available-personas-follows-home-roster-symlink`, `packaged-persona-weight-selector-contract`, `config-loader-precedence-and-deployment-modes`) run serially
+*** Edge cases
+- [X] A failing parallel test yields exit code 1 with a legible, non-interleaved failure report
+- [X] Failure/error counts aggregate correctly across parallel workers into the runner summary
+- [X] Explicit namespace-whitelist invocation (`bb test <ns>`) still works
+- [X] A test's own env `overrides` still beat fixture-injected defaults (merge order)
+- [X] Full suite passes 3 consecutive runs under parallel execution (flake check)
+*** Anti-criteria
+- Must not delete, skip, or weaken any existing test.
+- Must not change production behaviour under default configuration (env seams only).
+- Must not depend on the developer's real `~/.clojure` cache or on network access.
+
+** Decisions
+- Root cause is fixture overhead, not test bloat :: measured per-namespace and per-deftest: `herdr-subagents.cli-test` is 157s of the 160s suite; ~100s of that is cold bb/deps.clj classpath resolution because `fake-env` gives every test a fresh temp `HOME` (0.7s cold vs 68ms warm per call, 180 subprocess calls). The task's original categorise/delete/extract framing was dropped with user agreement — no test earns deletion on the evidence.
+- Shared per-run `CLJ_CACHE` temp dir, warmed once :: preserves per-test `HOME` isolation (fake HOME stays empty — verified) while making every subprocess call warm; explicit one-shot warm-up also prevents parallel cold starts racing the cache directory.
+  Rejected:
+  - Sharing the real user cache: couples tests to user state and writes outside the sandbox.
+- Approach A: in-process threaded runner :: `org-tasks.test-runner` runs a namespace's deftest vars on a bounded pool when the ns opts in via `^{:parallel-tests true}`; vars marked `^:serial` run first, alone. Per-var bound `*report-counters*`/`*test-out*` (buffered, printed atomically), counters merged into the existing summary/exit logic.
+  Rejected:
+  - Process-level sharding: stronger isolation but runner CLI plumbing, N× namespace loads, cross-process aggregation — same wall-time.
+  - Poll-interval tuning: measured no effect (residual cost is fork-bound, not sleep-bound).
+  - Fast/slow suite split: user chose to keep one default suite once ≤30s was achievable.
+- Env seam for `start-retry-backoff-ms` :: user relaxed the test-only anti-criterion to allow it; same parse discipline as `SUBAGENT_POLL_INTERVAL_MS`, default 500ms unchanged; saves ~2.5s and shortens the parallel long-pole.
+
+** Shipped
+- `bb test` drops from 2m40s to ~9.6s (~16×) with no test deleted, skipped, or weakened.
+- `org-tasks.test-runner` gains opt-in per-namespace parallel deftest execution: `^{:parallel-tests true}` ns metadata, `^:serial` per-var opt-out, `OT_TEST_PARALLELISM` pool-size override. Namespaces without the opt-in run byte-for-byte as before.
+- MODIFIED `skills/org-tasks/scripts/docs/test-map.md` — documents the opt-in, the `^:serial` contract, and `OT_TEST_PARALLELISM`.
+- MODIFIED `skills/herdr-subagents/scripts/docs/contract.md` — adds the `SUBAGENT_START_RETRY_BACKOFF_MS` environment row.
+- New production env seam `SUBAGENT_START_RETRY_BACKOFF_MS` (default 500 unchanged); the test fixture sets 10.
+
+** Gotchas
+- `CLJ_CACHE` and `CLJ_CONFIG` are independent knobs, not one. Isolating a babashka subprocess with a fresh `HOME` needs both: `CLJ_CACHE` alone still bootstraps a `.clojure/deps.edn` + `tools/` into the fake `HOME` and leaves the classpath cold. Both are keyed off `HOME` by default, which is why ~180 fixture subprocesses each paid 0.7s instead of 70ms.
+- Timing a single deftest as the first subprocess-spawning call in a fresh `bb` process over-reads its cost ~3× (one-time JIT/class-load), so per-test timing bars must be measured embedded in a real namespace/suite run.
+- `run-parallel-ns` calls `t/test-var` directly and so does *not* replicate `clojure.test/test-ns`'s `use-fixtures` / `test-ns-hook` handling. `assert-supported!` fails loudly rather than silently skipping them; nothing in the repo uses either today.
+
+** Risks
+- A future state-mutating cli-test deftest that forgets `^:serial` could race. Parallelism is opt-in per namespace with a contract comment at the opt-in site, but nothing enforces the tag — see Follow-ups.
+- `Runtime/availableProcessors` over-reports inside a cgroup-limited CI container, so the ≤30s bar and flake-freedom are established on the dev machine only. `check.sh` semantics are unchanged; no flake reproduced at `OT_TEST_PARALLELISM=2` or `=60` on a 20-thread host. Accepted — see Follow-ups.
+
+** Follow-ups
+- [[task:f8e76842-6fe5-468a-a9da-95d2c8796556][Guard ^:serial tagging of state-mutating deftests in parallel namespaces]]
+- [[task:6fcafd18-40d8-4247-9c66-3f89c9495632][Pin OT_TEST_PARALLELISM in CI if parallel test timing proves tight]]
+
+* Plan
+
+** DONE Share a warm CLJ_CACHE across cli-test subprocess invocations
+CLOSED: [2026-07-30 Thu 20:03]
+:PROPERTIES:
+:CUSTOM_ID: 2c37468e-8195-4ddc-b505-6abf974a59d6
+:CREATED: [2026-07-30 Thu]
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-07-30 Thu 20:03]
+:END:
+Delivered: shared per-run `CLJ_CACHE` + `CLJ_CONFIG` temp dir, warmed once via a namespace-level `delay` in `fake-env`. cli-test 157s → 60–67s; fake `HOME`s left clean.
+
+** DONE Make agent-start retry backoff env-configurable and fast in tests
+CLOSED: [2026-07-30 Thu 20:03]
+:PROPERTIES:
+:CUSTOM_ID: 5645b697-762d-4554-b311-478b54f231b4
+:CREATED: [2026-07-30 Thu]
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-07-30 Thu 20:03]
+:END:
+Delivered: `SUBAGENT_START_RETRY_BACKOFF_MS` seam in `herdr.clj` (default 500 unchanged), fixture injects 10. The two retry tests dropped to 431ms / 373ms in-suite.
+
+** DONE Parallel deftest execution in the shared test runner
+CLOSED: [2026-07-30 Thu 20:30]
+:PROPERTIES:
+:CUSTOM_ID: 2fe1ce2a-fe06-49e2-834c-5dd5284d1291
+:BLOCKED-BY: task:2c37468e-8195-4ddc-b505-6abf974a59d6
+:CREATED: [2026-07-30 Thu]
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-07-30 Thu 20:30]
+:END:
+Delivered: opt-in `^{:parallel-tests true}` bounded-pool runner with `^:serial` opt-out and `OT_TEST_PARALLELISM`. `bb test` 1m8s → 9.6–10.0s. Note: the runner lives at `scripts/test/org_tasks/test_runner.clj`, not `scripts/src/…` as originally planned here.
+
+* Implementation
+** Shared warm CLJ_CACHE (2c37468e)
+- `shared-clj-cache` is a namespace-level `delay` in `cli_test.clj`, realized on the first `fake-env` call and shared by every subsequent call for the whole `bb test` process. It creates one per-run `fs/create-temp-dir`, warms it with a plain `subagent --help` (needs no `HERDR_ENV`) under its own throwaway `HOME`, and throws if that warm-up subprocess exits non-zero (a silent failure would otherwise degrade every later call back to cold classpath resolution without failing correctness).
+- Deviation from the record's sketch: the sketch named only `CLJ_CACHE`. Experimentally, babashka's embedded deps.clj resolver treats the classpath *cache* dir (`CLJ_CACHE`, default `~/.clojure/.cpcache`) and the user *config* dir (`CLJ_CONFIG`, default `~/.clojure` itself, where a `deps.edn`/`tools/tools.edn` bootstrap is written on first use) as separate concerns — `CLJ_CACHE` alone still left a `.clojure` directory in every fake `HOME`. Setting both `CLJ_CACHE` and `CLJ_CONFIG` to the same shared temp dir (verified no filename collision: `deps.edn`/`tools/` vs `<hash>.basis`/`<hash>.cp`) satisfies the "no `.clojure` directory" criterion; the warm-up call uses the identical pair so the warmed cache key matches every later call.
+- Both env vars are injected in `fake-env`'s default map before the `overrides` merge, preserving override-wins order.
+** Env-configurable retry backoff (5645b697)
+- `herdr.clj`'s `start-retry-backoff-ms` changed from a bare `def` to a 0-arg fn reading `SUBAGENT_START_RETRY_BACKOFF_MS`, via a local `parse-start-retry-backoff` following the same strictly-positive/unparseable → default discipline as `cli/parse-poll-interval`. Kept local to `herdr.clj` (not required from `cli.clj`) to avoid a circular require, since `cli.clj` already requires `herdr`.
+- `default-start-retry-backoff-ms` stays 500 (unconfigured default unchanged); `fake-env` injects `"10"` for every test via the same default-then-overrides merge.
+- Added `start-retry-backoff-parsing` (`cli_test.clj`) covering nil/blank/zero/negative/unparseable → 500 and `"10"` → 10, since `fake-env` sets the override for every other test in the namespace and the default path had no other coverage.
+- Added a `SUBAGENT_START_RETRY_BACKOFF_MS` row to `scripts/docs/contract.md`'s Environment table (the seam is no longer test-only, even though only the fixture sets it in practice).
+** Parallel deftest execution in the shared test runner (2fe1ce2a)
+- `org-tasks.test-runner/run` dispatches each discovered namespace, in the same order as before, to either `run-parallel-ns` (opted-in via `^{:parallel-tests true}` ns metadata) or bare `clojure.test/test-ns` (unchanged path). Both return a `test-ns`-shaped counts map; `(apply merge-with + summaries)` plus one final `do-report {:type :summary}` replaces the old `(apply t/run-tests nses)` call with the same single-summary output shape.
+- `run-parallel-ns` runs `^:serial` vars first, sequentially, in the caller's own bindings (identical to today's unparallelised path), then submits the rest to a bounded `ExecutorService` (`Executors/newFixedThreadPool`, sized by `pool-size`) via `.invokeAll`, which blocks until the whole batch drains before returning — so a `^:serial` var in one opted-in namespace can never overlap a parallel var, even with more than one opted-in namespace.
+- Each parallel task (`run-var-isolated`) binds a fresh `*report-counters*` ref and a private `java.io.StringWriter` as `*test-out*` inside the task body itself (no `bound-fn`/conveyance needed since the `binding` executes on the worker thread), calls `clojure.test/test-var` unmodified, then returns `{:output :counts}`; the driving loop prints each var's whole buffered chunk and merges its counts in original-submission order once `.invokeAll` returns, so concurrent runs never interleave mid-line.
+- Pool size: `OT_TEST_PARALLELISM` env override, same unset/blank/unparseable/non-positive → default (`Runtime/availableProcessors`) discipline as `SUBAGENT_POLL_INTERVAL_MS` elsewhere in this repo; documented in `skills/org-tasks/scripts/docs/test-map.md`.
+- `herdr-subagents.cli-test`'s ns form carries `^{:parallel-tests true}` plus a preceding comment stating the `^:serial` contract; its 4 `with-redefs`-based deftests (`three-source-persona-discovery-contract`, `available-personas-follows-home-roster-symlink`, `packaged-persona-weight-selector-contract`, `config-loader-precedence-and-deployment-modes`) are tagged `^:serial` with a one-line comment naming the global state each mutates.
+- `run-parallel-ns` fails loudly (`assert-supported!`) if the opted-in namespace ever defines `use-fixtures` (`::t/once-fixtures`/`::t/each-fixtures` ns metadata) or a `test-ns-hook` var, neither of which `t/test-var` alone replicates; latent today (verified: no `use-fixtures`/`test-ns-hook` hits in the repo) but would otherwise silently skip those hooks rather than fail.
+- Print/report order is strictly the original per-namespace discovery order; the only behavioural diff from before this change is that an opted-in namespace runs its non-`^:serial` vars in parallel.
+
+* Validation
+Dev machine, 20 hardware threads, 2026-07-30. Wall times for `bb test` (410 tests, 2245 assertions, green throughout):
+
+| Stage | `bb test` | `cli-test` alone |
+|-------+-----------+------------------|
+| Baseline | 2m40s | 157s (110 tests) |
+| + shared CLJ_CACHE/CLJ_CONFIG, retry seam | 1m8s | 60-67s |
+| + parallel deftest execution | 9.6-10.0s | 6.3-6.6s |
+
+- Diagnosis: cli-test was 157s of the 160s baseline; cold vs warm subprocess start measured 0.73s vs 68-83ms, over ~180 `call!` invocations. `SUBAGENT_POLL_INTERVAL_MS=25` changed nothing (`user 24s + sys 31s ~= wall 56s`) — the residual was fork-bound, not sleep-bound, which is what justified parallelism over further tuning.
+- Flake checks: 3 consecutive green full-suite runs at each stage. The named timing-sensitive risks (`collect-any-timeout-honours-the-poll-interval`, the three `bounded-poll-*` tests) never flaked, so none needed `^:serial`. Pool-size extremes `OT_TEST_PARALLELISM=2` and `=60` (3x oversubscribed) both stayed green.
+- Isolation: 141 fake `HOME`s after a cli-test run, 0 containing `.clojure` (also checked across four earlier full-suite runs, 141-423 per run).
+- Failure path: an injected `(is (= 1 2))` in a non-`^:serial` deftest yields exit 1 with a single correctly-attributed, non-interleaved `FAIL` block and an accurate `1 failures, 0 errors` summary; reverted and re-verified clean. Checked independently by both the implementing worker and the orchestrator.
+- Namespace whitelist: single opted-in ns, single unopted-in ns, and two-ns combinations all pass.
+- Per-task retry timings (measured in-suite, not in isolation): 431ms / 373ms against a <500ms bar, from 1.8s / 1.3s warm baselines.
+- Advisor consults: 2c37468e/5645b697 REVISE -> addressed (default-path unit test, contract.md row, CLJ_CONFIG deviation recorded); 2fe1ce2a PROCEED with the `assert-supported!` guard and print-order restoration added before publishing.
