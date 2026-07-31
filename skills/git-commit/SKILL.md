@@ -5,9 +5,7 @@ description: 'Generate standardized git commit messages following conventional c
 
 # Git Commit Message Writer
 
-Format: `<type>[(scope)][!]: <description>` followed by an optional body and
-footers. Conventional Commits spec applies; assume the model knows it. The
-notes below are the project-specific bits worth restating.
+Format: `<type>[(scope)][!]: <description>` followed by an optional body and footers. Conventional Commits spec applies; assume the model knows it. The notes below are the project-specific bits worth restating.
 
 ## Workflow
 
@@ -17,18 +15,11 @@ notes below are the project-specific bits worth restating.
    git diff --staged    # prefer staged when present
    git diff HEAD        # otherwise all tracked
    ```
-   `git diff HEAD` does *not* include untracked files; check `git status` for
-   them.
+   `git diff HEAD` does *not* include untracked files; check `git status` for them.
 
-   If a requested standalone commit depends on other uncommitted work,
-   surface the dependency and propose dependency-ordered commits instead;
-   verify each intermediate tree (e.g. run the test suite) before
-   committing it.
+   If a requested standalone commit depends on other uncommitted work, surface the dependency and propose dependency-ordered commits instead; verify each intermediate tree (e.g. run the test suite) before committing it.
 
-   Reconcile `git status` against the change's expected file set and stage
-   those paths explicitly. A worktree shared with subagents, other agent
-   sessions, or the user may hold unrelated edits; never `git add -A`/`.`
-   there, and surface anything foreign you deliberately left unstaged.
+   Reconcile `git status` against the change's expected file set and stage those paths explicitly. A worktree shared with subagents, other agent sessions, or the user may hold unrelated edits; never `git add -A`/`.` there, and surface anything foreign you deliberately left unstaged.
 
 2. Pick the type:
    - `feat` — new functionality
@@ -39,17 +30,14 @@ notes below are the project-specific bits worth restating.
 3. Pick a scope (optional noun for the area touched), then write the subject:
    - Imperative mood ("add", not "added"), no trailing period, ≤72 chars.
 
-4. **Body — only what's needed.** What's changed and why. Prompt the user for
-   the *why* if it's not evident from the diff. Refer to associated design
-   change-records rather than restating their content.
+4. **Body — only what's needed.** What's changed and why. Prompt the user for the *why* if it's not evident from the diff. Refer to associated design change-records rather than restating their content.
 
    Do **not** include:
    - Test run details / output
    - Abandoned approaches or failed experiments
    - Co-author / generation attribution footers unless the user asks
 
-5. Show the proposed message to the user and wait for explicit approval before
-   running `git commit`.
+5. Show the proposed message to the user and wait for explicit approval before running `git commit`.
 
 ## Examples
 

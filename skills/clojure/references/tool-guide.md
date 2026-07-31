@@ -1,15 +1,12 @@
 # Tool Guide: Clojure Eval and Paren Repair
 
-Complete reference for nREPL evaluation and delimiter repair, covering both
-pi-clojure (native pi tools) and the clj-nrepl CLI fallback.
+Complete reference for nREPL evaluation and delimiter repair, covering both pi-clojure (native pi tools) and the clj-nrepl CLI fallback.
 
 ---
 
 ## Eval: pi-clojure (preferred)
 
-Native pi tools — direct TCP connection to nREPL, no process-spawn overhead.
-Available when the `pi-clojure` extension is loaded (`clojure_eval` appears in
-your tool list).
+Native pi tools — direct TCP connection to nREPL, no process-spawn overhead. Available when the `pi-clojure` extension is loaded (`clojure_eval` appears in your tool list).
 
 ### Finding the port
 
@@ -23,9 +20,7 @@ Port files checked (in order):
 
 Default ports tried: 7888, 1666, 50505, 58885, 63333, 7889
 
-Validates by evaluating `(+ 1 1)` on the discovered port. Discovery stops when
-cancelled; every candidate has a five-second validation budget, including TCP
-connection setup.
+Validates by evaluating `(+ 1 1)` on the discovered port. Discovery stops when cancelled; every candidate has a five-second validation budget, including TCP connection setup.
 
 ### Parameters for clojure_eval
 
@@ -59,10 +54,7 @@ clojure_eval { port: PORT, code: "(str/upper-case \"hello\")" }
 clojure_eval { port: PORT, ns: "project.core", code: "(my-fn 42)" }
 ```
 
-Pi cancellation aborts pending connection/evaluation work, closes the socket,
-and settles the operation once. Eval output and tool details are bounded to pi's
-standard 2000 lines or 50KB; read source or use a narrower expression when more
-data is needed.
+Pi cancellation aborts pending connection/evaluation work, closes the socket, and settles the operation once. Eval output and tool details are bounded to pi's standard 2000 lines or 50KB; read source or use a narrower expression when more data is needed.
 
 ### Discovery commands
 
@@ -124,8 +116,7 @@ clojure_eval { port: PORT, code: "(empty? [])" }
 
 ## Eval: clj-nrepl-eval (fallback)
 
-CLI tool. Use when `clojure_eval` is not in your tool list. Spawns a process
-per call.
+CLI tool. Use when `clojure_eval` is not in your tool list. Spawns a process per call.
 
 ### Basic syntax
 
@@ -170,9 +161,7 @@ clj-nrepl-eval -p PORT "(core/my-function test-data)"
 
 ## Paren repair: clj-paren-repair (preferred for file repair)
 
-CLI tool. Uses edamame (real Clojure reader), parinfer-rust, and cljfmt.
-Repairs and formats files in place. Preferred over `clojure_paren_repair` for
-any file-based work, even when pi-clojure is loaded.
+CLI tool. Uses edamame (real Clojure reader), parinfer-rust, and cljfmt. Repairs and formats files in place. Preferred over `clojure_paren_repair` for any file-based work, even when pi-clojure is loaded.
 
 ### Usage
 
@@ -202,10 +191,7 @@ Supported: `.clj`, `.cljs`, `.cljc`, `.bb`, `.edn`, `.lpy`
 
 ## Paren repair: clojure_paren_repair (string repair, pi-clojure)
 
-Native pi tool. Uses JS parinfer. Operates on code strings, not files.
-Use when `clj-paren-repair` is unavailable, or when repairing a string before
-writing a new file. Repair output is bounded to pi's standard 2000 lines or
-50KB.
+Native pi tool. Uses JS parinfer. Operates on code strings, not files. Use when `clj-paren-repair` is unavailable, or when repairing a string before writing a new file. Repair output is bounded to pi's standard 2000 lines or 50KB.
 
 ```
 # Fix unbalanced delimiters
@@ -232,8 +218,7 @@ clj -Sdeps '{:deps {nrepl/nrepl {:mvn/version "1.0.0"}}}' -M -m nrepl.cmdline
 
 ### Wrong port
 
-Re-run `clojure_find_nrepl_port` or `clj-nrepl-eval --discover-ports` to
-re-discover the active port.
+Re-run `clojure_find_nrepl_port` or `clj-nrepl-eval --discover-ports` to re-discover the active port.
 
 ### Namespace not found
 
@@ -246,5 +231,4 @@ clj-nrepl-eval -p PORT "(require '[namespace.name])"
 
 ### Expression errors
 
-Isolate the failing sub-expression, then use `(clojure.repl/doc ...)` to
-verify signatures and `(clojure.repl/source ...)` to inspect the implementation.
+Isolate the failing sub-expression, then use `(clojure.repl/doc ...)` to verify signatures and `(clojure.repl/source ...)` to inspect the implementation.

@@ -14,8 +14,7 @@ Manual fallback, when `ot` is unavailable:
    #+LINK: archive file:../../TASKS.archive.org::#%s
    ```
 
-   These resolve from a change-record's location (`design/log/`). `plan`
-   is referenced only from `TASKS.org`, so it is defined there, not here.
+   These resolve from a change-record's location (`design/log/`). `plan` is referenced only from `TASKS.org`, so it is defined there, not here.
 
 2. Create `TASKS.org`:
 

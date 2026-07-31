@@ -74,7 +74,7 @@ const subagentDir = join(root, "skills", "herdr-subagents", "subagents");
 const subagentPath = "skills/herdr-subagents/subagents";
 const subagentFiles = readdirSync(subagentDir).filter((name) => name.endsWith(".md")).sort();
 if (subagentFiles.length === 0) fail(`${subagentPath}/ contains no definitions`);
-const allowedSubagentKeys = new Set(["name", "description", "kind", "model", "retro", "spawns"]);
+const allowedSubagentKeys = new Set(["name", "description", "kind", "model", "retro", "spawns", "requires"]);
 
 function routingMetadataErrors(fm: Record<string, unknown>): string[] {
   const errors: string[] = [];

@@ -70,12 +70,7 @@ Use `--format json` for machine callers. JSON/EDN commands use schema `org-tasks
 
 ### Compatibility policy
 
-Preserve backward compatibility when reading or updating existing `TASKS.org`
-and imported Org files. The skill, `ot` CLI, pi integrations, and JSON/EDN
-machine envelopes are a closed-loop, repository-internal surface: they may
-evolve together when the implementation, documentation, and tests change in
-the same repository change. `org-tasks/v1` is therefore not an external
-compatibility promise.
+Preserve backward compatibility when reading or updating existing `TASKS.org` and imported Org files. The skill, `ot` CLI, pi integrations, and JSON/EDN machine envelopes are a closed-loop, repository-internal surface: they may evolve together when the implementation, documentation, and tests change in the same repository change. `org-tasks/v1` is therefore not an external compatibility promise.
 
 ID-accepting commands accept full UUIDs or any unique `:CUSTOM_ID:` prefix of at least four characters (the 8-char prefix shown in `ot list` / `ot scan` is pasteable directly). Mutators such as `status`, `handoff`, `blocker`, `issue`, and `ready` also target tasks inside `#+IMPORT:`-linked plan files and persist to the owning file. Ambiguous values fail with `ambiguous-id` and list candidates.
 

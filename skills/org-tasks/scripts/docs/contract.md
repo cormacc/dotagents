@@ -1,10 +1,6 @@
 # `ot` machine-output contract
 
-This document pins the JSON / EDN contract every machine-readable `ot`
-command emits when called with `--format json` or `--format edn`. It is the
-shared surface between `ot` and any consumer (the pi extension, other coding
-harnesses, CI scripts, future Emacs companions). Bump rules are in
-`design/log/2026-05-18-tasks-extension-ot-cli.org` § Decisions.
+This document pins the JSON / EDN contract every machine-readable `ot` command emits when called with `--format json` or `--format edn`. It is the shared surface between `ot` and any consumer (the pi extension, other coding harnesses, CI scripts, future Emacs companions). Bump rules are in `design/log/2026-05-18-tasks-extension-ot-cli.org` § Decisions.
 
 ## Schema version
 
@@ -30,8 +26,7 @@ harnesses, CI scripts, future Emacs companions). Bump rules are in
 ```
 
 - `result` is the per-command payload documented below.
-- `warnings` is an array of `{ code, message, location? }` for non-fatal
-  conditions (e.g. unreadable change-record encountered during a scan).
+- `warnings` is an array of `{ code, message, location? }` for non-fatal conditions (e.g. unreadable change-record encountered during a scan).
 
 ### Failure
 
@@ -49,11 +44,7 @@ harnesses, CI scripts, future Emacs companions). Bump rules are in
 }
 ```
 
-- `code` is a stable kebab-case identifier (`section-not-found`,
-  `unknown-task`, `ambiguous-id`, `path-outside-project`,
-  `duplicate-linked-issue`, `validation`, `invalid-status`, `out-of-root`,
-  `unreadable`, `git-unavailable`, `empty-summary`, `conflict`,
-  `unterminated-drawer`).
+- `code` is a stable kebab-case identifier (`section-not-found`, `unknown-task`, `ambiguous-id`, `path-outside-project`, `duplicate-linked-issue`, `validation`, `invalid-status`, `out-of-root`, `unreadable`, `git-unavailable`, `empty-summary`, `conflict`, `unterminated-drawer`).
 - `message` is a single-line human-readable summary.
 - `file` and `line` are populated when locatable; otherwise `null`.
 - `details` may carry command-specific extra context.
@@ -61,12 +52,7 @@ harnesses, CI scripts, future Emacs companions). Bump rules are in
 
 #### `conflict`
 
-Write-time optimistic-concurrency check: a mutator (`status`, `priority`,
-`move`, `archive`, `publish`, `unpublish`, `create`, `record create`, `issue`/
-`blocker`/`handoff` mutations, `backfill`) detects that a target file's
-on-disk bytes no longer match the snapshot it loaded at the start of the
-command — e.g. another `ot` process or an editor wrote to it in between.
-The command aborts without writing:
+Write-time optimistic-concurrency check: a mutator (`status`, `priority`, `move`, `archive`, `publish`, `unpublish`, `create`, `record create`, `issue`/ `blocker`/`handoff` mutations, `backfill`) detects that a target file's on-disk bytes no longer match the snapshot it loaded at the start of the command — e.g. another `ot` process or an editor wrote to it in between. The command aborts without writing:
 
 ```json
 {
@@ -78,10 +64,7 @@ The command aborts without writing:
 
 #### `unterminated-drawer`
 
-A `:PROPERTIES:` or `:LOGBOOK:` drawer that never reaches a matching
-`:END:` before end-of-file. Every command that loads the graph
-(read-only or mutating) fails fast with this code rather than silently
-treating the rest of the file as drawer content or rewriting it:
+A `:PROPERTIES:` or `:LOGBOOK:` drawer that never reaches a matching `:END:` before end-of-file. Every command that loads the graph (read-only or mutating) fails fast with this code rather than silently treating the rest of the file as drawer content or rewriting it:
 
 ```json
 {
@@ -94,10 +77,7 @@ treating the rest of the file as drawer content or rewriting it:
 
 #### `ambiguous-id`
 
-Id-accepting commands resolve exact `:CUSTOM_ID:` values first, then accept any
-unique prefix of at least four characters. When a prefix matches more than one
-task, commands fail with `code: "ambiguous-id"` and include the matching tasks in
-`details.matches`:
+Id-accepting commands resolve exact `:CUSTOM_ID:` values first, then accept any unique prefix of at least four characters. When a prefix matches more than one task, commands fail with `code: "ambiguous-id"` and include the matching tasks in `details.matches`:
 
 ```json
 {
@@ -115,8 +95,7 @@ task, commands fail with `code: "ambiguous-id"` and include the matching tasks i
 
 ## Common task shape (`Task`)
 
-Returned by `list` (`rows[]` and within `tree[]`), `show`, `create`,
-`status`, and as the `task` field of related result payloads.
+Returned by `list` (`rows[]` and within `tree[]`), `show`, `create`, `status`, and as the `task` field of related result payloads.
 
 ```jsonc
 {
@@ -144,22 +123,15 @@ Returned by `list` (`rows[]` and within `tree[]`), `show`, `create`,
 }
 ```
 
-Tree form additionally carries `"children": [Task]` and an `"importChildren":
-[Task]` array populated when an `#+IMPORT:` change-record is resolvable. `ot show` / `ot selected` omit `sourceContent` and `effectiveSourceContent` by default; pass `ot show <id> --include-content` to include those raw strings on the returned task tree. `ot list` deduplicates large source strings into its `result.sources` map instead.
+Tree form additionally carries `"children": [Task]` and an `"importChildren": [Task]` array populated when an `#+IMPORT:` change-record is resolvable. `ot show` / `ot selected` omit `sourceContent` and `effectiveSourceContent` by default; pass `ot show <id> --include-content` to include those raw strings on the returned task tree. `ot list` deduplicates large source strings into its `result.sources` map instead.
 
 ## Default invocation and TUI stdout contract
 
 - Bare `ot` on an interactive terminal runs the standalone task TUI.
-- Bare `ot` without an interactive terminal emits the same success envelope as
-  `ot selected --format json` and exits without blocking.
-- Bare `ot --format json` also emits the selected-task envelope and never starts
-  interactive rendering.
-- During an interactive session, terminal rendering/control sequences are written
-  to stderr or the controlling terminal. Stdout is reserved for exactly one final
-  `org-tasks/v1` selected-task envelope after the TUI exits.
-- The final envelope reflects the persisted `#+SELECTED:` value. Moving the
-  cursor is not selection; press `s` to persist a new selected task, or `s` again
-  on the selected row to clear it.
+- Bare `ot` without an interactive terminal emits the same success envelope as `ot selected --format json` and exits without blocking.
+- Bare `ot --format json` also emits the selected-task envelope and never starts interactive rendering.
+- During an interactive session, terminal rendering/control sequences are written to stderr or the controlling terminal. Stdout is reserved for exactly one final `org-tasks/v1` selected-task envelope after the TUI exits.
+- The final envelope reflects the persisted `#+SELECTED:` value. Moving the cursor is not selection; press `s` to persist a new selected task, or `s` again on the selected row to clear it.
 
 ## Per-command results
 
@@ -187,33 +159,18 @@ Tree form additionally carries `"children": [Task]` and an `"importChildren":
 - `tree` is depth-first nested by `children` and `importChildren`.
 - `rows` is the same tasks flattened in walker order, each carrying `parentId`.
 - `selectedId` echoes `#+SELECTED:` from `TASKS.local.org`.
-- `sources` is keyed by absolute source path and carries file content once per
-  path so UI clients can resolve link templates or preserve org text without
-  duplicating large strings on every task row.
-- `--format text` renders an `id` column showing the first 8 characters of
-  each `:CUSTOM_ID:`. The prefix is pasteable into any id-accepting command
-  because it satisfies the ≥ 4-char minimum; collisions surface as
-  `ambiguous-id` at lookup time (see `ot doctor`'s `:patterned-sibling-ids`
-  for prevention).
+- `sources` is keyed by absolute source path and carries file content once per path so UI clients can resolve link templates or preserve org text without duplicating large strings on every task row.
+- `--format text` renders an `id` column showing the first 8 characters of each `:CUSTOM_ID:`. The prefix is pasteable into any id-accepting command because it satisfies the ≥ 4-char minimum; collisions surface as `ambiguous-id` at lookup time (see `ot doctor`'s `:patterned-sibling-ids` for prevention).
 
 Options:
 
-- `--levels <n>` (non-negative integer) caps hierarchy depth: `0` shows
-  only top-level tasks, `1` shows top-level plus their direct children,
-  `2` adds grandchildren, and so on. Omit the flag for unlimited depth.
-  Depth is measured against the actual displayed graph, so a status
-  filter that hides a parent still resolves its surviving descendants
-  against the deepest visible ancestor.
-- `--status-filter <STATUS>` / `-S` (repeatable) keeps only matching
-  rows.
-- `--scope active | archived | all` selects which task files
-  contribute (currently advisory; the loader walks the active set in
-  every mode).
+- `--levels <n>` (non-negative integer) caps hierarchy depth: `0` shows only top-level tasks, `1` shows top-level plus their direct children, `2` adds grandchildren, and so on. Omit the flag for unlimited depth. Depth is measured against the actual displayed graph, so a status filter that hides a parent still resolves its surviving descendants against the deepest visible ancestor.
+- `--status-filter <STATUS>` / `-S` (repeatable) keeps only matching rows.
+- `--scope active | archived | all` selects which task files contribute (currently advisory; the loader walks the active set in every mode).
 
 ### `ot show <id>`
 
-`<id>` may be a full `:CUSTOM_ID:` or any unique prefix of at least four
-characters. Ambiguous values fail with `ambiguous-id`.
+`<id>` may be a full `:CUSTOM_ID:` or any unique prefix of at least four characters. Ambiguous values fail with `ambiguous-id`.
 
 ```json
 "result": {
@@ -241,12 +198,7 @@ characters. Ambiguous values fail with `ambiguous-id`.
 }
 ```
 
-Options include `--section`, `--parent`, `--after`, `--priority`, repeated
-`--tag`, `--body`, repeated `--linked-issue`, repeated `--also-scan`,
-`--allow-create-section`, and compatibility/test overrides `--id` and
-`--created-at`. `--parent` inserts a child under that task; `--after` inserts a
-sibling after the anchor task. Errors: `section-not-found`, `duplicate-linked-issue`,
-`path-outside-project`, `empty-summary`.
+Options include `--section`, `--parent`, `--after`, `--priority`, repeated `--tag`, `--body`, repeated `--linked-issue`, repeated `--also-scan`, `--allow-create-section`, and compatibility/test overrides `--id` and `--created-at`. `--parent` inserts a child under that task; `--after` inserts a sibling after the anchor task. Errors: `section-not-found`, `duplicate-linked-issue`, `path-outside-project`, `empty-summary`.
 
 ### `ot move <id> (--parent <id> | --section <name>)`
 
@@ -264,37 +216,11 @@ sibling after the anchor task. Errors: `section-not-found`, `duplicate-linked-is
 }
 ```
 
-Relocates an *existing* task subtree **within its own file**. Exactly one
-destination is required: `--parent <id>` appends the subtree as that task's last
-child (heading depth re-normalised for the whole subtree), `--section <name>`
-returns it to a level-2 heading at the end of that level-1 section — the depth
-`ot create` gives a top-level task. `parentId` is `null` for a `--section` move
-and `section` is `null` for a `--parent` move. `previousParentId` is `null` when
-the task was already a root of its file. `movedCount` counts the moved root plus
-its descendants; `fromLevel`/`toLevel` are the subtree root's heading depth
-before and after. `task` reflects the post-move `level` and `line`. Like every
-mutator that returns `Task` (`status`, `priority`, `move`, `archive`,
-`unarchive`, `publish`, and `unpublish`), its default JSON/EDN projection omits
-`sourceContent` and `effectiveSourceContent` across the complete task tree.
-Pass `--include-content` to any of those commands to include both fields;
-text output is unchanged. This applies equally to `--dry-run` envelopes.
+Relocates an *existing* task subtree **within its own file**. Exactly one destination is required: `--parent <id>` appends the subtree as that task's last child (heading depth re-normalised for the whole subtree), `--section <name>` returns it to a level-2 heading at the end of that level-1 section — the depth `ot create` gives a top-level task. `parentId` is `null` for a `--section` move and `section` is `null` for a `--parent` move. `previousParentId` is `null` when the task was already a root of its file. `movedCount` counts the moved root plus its descendants; `fromLevel`/`toLevel` are the subtree root's heading depth before and after. `task` reflects the post-move `level` and `line`. Like every mutator that returns `Task` (`status`, `priority`, `move`, `archive`, `unarchive`, `publish`, and `unpublish`), its default JSON/EDN projection omits `sourceContent` and `effectiveSourceContent` across the complete task tree. Pass `--include-content` to any of those commands to include both fields; text output is unchanged. This applies equally to `--dry-run` envelopes.
 
-The subtree's source lines are relocated verbatim apart from heading stars, so
-`:CUSTOM_ID:`, `:CREATED:` / `:STARTED:`, `CLOSED:`, `:LOGBOOK:`, `#+IMPORT:`,
-unknown drawer properties, bodies, descendant order, and intra-subtree blank
-lines are byte-preserved, and every region of the file outside the move is left
-untouched. Because `:CUSTOM_ID:` never changes, `#+IMPORT:` links and a
-change-record's `#+PARENT: [[task:<uuid>]]` keep resolving across a move.
+The subtree's source lines are relocated verbatim apart from heading stars, so `:CUSTOM_ID:`, `:CREATED:` / `:STARTED:`, `CLOSED:`, `:LOGBOOK:`, `#+IMPORT:`, unknown drawer properties, bodies, descendant order, and intra-subtree blank lines are byte-preserved, and every region of the file outside the move is left untouched. Because `:CUSTOM_ID:` never changes, `#+IMPORT:` links and a change-record's `#+PARENT: [[task:<uuid>]]` keep resolving across a move.
 
-Cross-file moves are refused: locality changes belong to `publish` /
-`unpublish`, and the archive to `archive` / `unarchive`. Errors:
-`argument-error` (no id, or both / neither of `--parent` and `--section`),
-`unknown-task` and `ambiguous-id` (either id), `section-not-found` (no such
-level-1 section in the owning file), `validation` (archived source, destination
-is the source itself or one of its descendants, destination lives in another
-file), plus `conflict`, `unreadable`, and `unterminated-drawer`. `--dry-run`
-runs every preflight and reports the same fields with `dryRun: true`, writing
-nothing.
+Cross-file moves are refused: locality changes belong to `publish` / `unpublish`, and the archive to `archive` / `unarchive`. Errors: `argument-error` (no id, or both / neither of `--parent` and `--section`), `unknown-task` and `ambiguous-id` (either id), `section-not-found` (no such level-1 section in the owning file), `validation` (archived source, destination is the source itself or one of its descendants, destination lives in another file), plus `conflict`, `unreadable`, and `unterminated-drawer`. `--dry-run` runs every preflight and reports the same fields with `dryRun: true`, writing nothing.
 
 ### `ot status <id> <new-status>`
 
@@ -309,8 +235,7 @@ nothing.
 }
 ```
 
-`promoted` lists ancestor auto-promotions performed by the same call. ID-accepting mutators resolve targets across the full loaded graph, including tasks in `TASKS.org`, `TASKS.local.org`, and `#+IMPORT:`-linked plan/change-record files. For linked plan targets, writes persist to the task's own `sourcePath`; ancestor auto-promotion may also update the importing TASKS file. Errors:
-`unknown-task`, `invalid-status`, `validation`.
+`promoted` lists ancestor auto-promotions performed by the same call. ID-accepting mutators resolve targets across the full loaded graph, including tasks in `TASKS.org`, `TASKS.local.org`, and `#+IMPORT:`-linked plan/change-record files. For linked plan targets, writes persist to the task's own `sourcePath`; ancestor auto-promotion may also update the importing TASKS file. Errors: `unknown-task`, `invalid-status`, `validation`.
 
 ### `ot priority <id> [<level>]`
 
@@ -338,8 +263,7 @@ Pass `--clear` (or omit the id) to deselect.
 
 ### `ot selected`
 
-Same payload as `ot show <selectedId>` (or `{"selected": null}` when nothing
-is selected).
+Same payload as `ot show <selectedId>` (or `{"selected": null}` when nothing is selected).
 
 ### `ot archive <id>`
 
@@ -411,8 +335,7 @@ Restores only an archive-resolved exact UUID or unique prefix. It refuses unknow
 }
 ```
 
-Errors: `out-of-root`, `unreadable`. Not-found is a non-error result with
-`"found": false`.
+Errors: `out-of-root`, `unreadable`. Not-found is a non-error result with `"found": false`.
 
 ### `ot scan`
 
@@ -436,8 +359,7 @@ Errors: `out-of-root`, `unreadable`. Not-found is a non-error result with
 }
 ```
 
-`recordSummary` may also be `{ "found": false }` (record missing/unreadable
-or lacking `* Summary`) or `null` (task has no `#+IMPORT:` at all).
+`recordSummary` may also be `{ "found": false }` (record missing/unreadable or lacking `* Summary`) or `null` (task has no `#+IMPORT:` at all).
 
 ### `ot record create <id>`
 
@@ -505,14 +427,7 @@ or lacking `* Summary`) or `null` (task has no `#+IMPORT:` at all).
 }
 ```
 
-Mutates only the target task's trailing heading tags and returns the resulting
-ordered tag vector. Tags use `[A-Za-z0-9_]+`; surrounding whitespace and one
-`:tag:` wrapper are normalised, while whitespace within a tag, colons, and
-other characters fail with `invalid-tag`. `add` does not duplicate a tag and
-`remove` is a no-op when it is absent. Both commands accept `--dry-run` and
-then return the same envelope without writing. The normal graph saver writes
-the owning `TASKS.org`, `TASKS.local.org`, or imported plan file atomically;
-a changed source fails with `conflict` and remains untouched.
+Mutates only the target task's trailing heading tags and returns the resulting ordered tag vector. Tags use `[A-Za-z0-9_]+`; surrounding whitespace and one `:tag:` wrapper are normalised, while whitespace within a tag, colons, and other characters fail with `invalid-tag`. `add` does not duplicate a tag and `remove` is a no-op when it is absent. Both commands accept `--dry-run` and then return the same envelope without writing. The normal graph saver writes the owning `TASKS.org`, `TASKS.local.org`, or imported plan file atomically; a changed source fails with `conflict` and remains untouched.
 
 ### `ot ready <id>`
 
@@ -540,10 +455,7 @@ a changed source fails with `conflict` and remains untouched.
 
 ### `ot uuid`
 
-Generate one or more UUIDv4 values for use as `:CUSTOM_ID:` on hand-authored
-task blocks. Prefer this over inventing IDs in prose; sequential / shared-prefix
-IDs produce ambiguous resolution and are flagged by `ot doctor`'s
-`:patterned-sibling-ids` check.
+Generate one or more UUIDv4 values for use as `:CUSTOM_ID:` on hand-authored task blocks. Prefer this over inventing IDs in prose; sequential / shared-prefix IDs produce ambiguous resolution and are flagged by `ot doctor`'s `:patterned-sibling-ids` check.
 
 ```json
 "result": {
@@ -552,8 +464,7 @@ IDs produce ambiguous resolution and are flagged by `ot doctor`'s
 }
 ```
 
-Options: `--count <n>` (default `1`, must be positive). Text output is one UUID
-per line.
+Options: `--count <n>` (default `1`, must be positive). Text output is one UUID per line.
 
 ## Global options
 

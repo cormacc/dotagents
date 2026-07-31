@@ -356,3 +356,138 @@ Origin:
 
 Evidence:
 In design/log/2026-07-30-optimise-test-build.org the planner wrote `skills/org-tasks/scripts/src/org_tasks/test_runner.clj` in `** Scope`; the runner actually lives under `scripts/test/`. The path passed record review and was propagated verbatim into a worker assignment; only the implementing worker caught it, by failing to find the file. `ot doctor` reported no issues throughout.
+
+** TODO [#B] Skill vendoring improvements :project-convention:
+:PROPERTIES:
+:CUSTOM_ID: 98cf369c-83aa-4961-bf8b-2fa3aca8b2f3
+:CREATED: [2026-07-31 Fri 13:17]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 13:17]
+:END:
+Vendored third-party skills (dirge, find-skills, skill-creator, herdr) currently sit hand-copied inside the published `skills/` tree with no recorded provenance. Two constraints shape the fix:
+
+1. Vendored skills must stay manageable by `npx skills` (add/update). That rules out the herdr-style in-file vendor header: any local edit changes the file, so `skills-lock.json` `computedHash` never matches upstream and an update overwrites the header regardless. Provenance therefore has to live outside the skill bodies, in `skills-lock.json`.
+2. Vendored skills must NOT be republished by `npx skills add cormacc/dotagents`, while all agent config stays maintainable within this single repo.
+
+`herdr` is a permanent exception to (1): its `SKILL.md` sits at its repo root, so `npx skills add ogulcancelik/herdr` installs the entire Rust project (Cargo.toml, flake.nix, src/, docs/). It stays hand-vendored with its existing header until upstream packages it under a `skills/` subdirectory.
+
+Verified findings behind this task:
+- `skills-lock.json` (v1) records `source`, `sourceType`, `skillPath`, `computedHash` per skill. `computedHash` is a content hash of the installed skill, confirmed by an update that rewrote only the hashes. This is the correct drift signal and the intended design: it answers "has this skill changed?", which is the only question that matters for a vendored copy. Do NOT track upstream repo commits — a SHA churns on every unrelated commit to the source repo while saying nothing about whether the skill itself moved. The provisional README "Revision" column is therefore wrong and should be dropped rather than backfilled.
+- `npx skills add cormacc/dotagents --list` reports 16 skills, including all 4 vendored ones: they are currently republished to consumers, who get stale copies rather than upstream.
+- `npx skills add` installs into `<project>/.agents/skills/` or `~/.agents/skills/`. Since `agents.nix` symlinks `~/.agents/skills` at this repo's `skills/`, a global install writes straight into the published tree — the likely origin of the current state.
+- Attribution gap: herdr ships a LICENSE upstream that did not come across with its SKILL.md.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: cormacc/dotagents @ main
+- timestamp: [2026-07-31 Fri 13:40]
+- sender: agent
+
+*** TODO Establish how npx skills can manage repo-committed vendored skills
+:PROPERTIES:
+:CUSTOM_ID: 0a6c3fed-9c9f-4b30-b33e-a916868502e0
+:CREATED: [2026-07-31 Fri 13:17]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 13:17]
+:END:
+Blocking research for the rest of this task. Resolve mechanically against the tool, not by inference:
+- Does `npx skills` support publish-side exclusion, so a repo can host vendored skills without offering them via `add <repo>`? Note `--full-depth` implies a root `SKILL.md` suppresses subdirectory discovery by default — check whether that is exploitable without hiding the 16 first-party skills.
+- Do `experimental_install` / `update` work against skills committed in this repo at a non-default path, or do they only manage `.agents/skills/` and `~/.agents/skills/`?
+- Can a project-level `skills-lock.json` drive updates for skills whose install target is a source-controlled directory?
+- How does any of this interact with `~/.agents/skills` being a symlink into this repo (per agents.nix)?
+
+Acceptance criteria:
+- Each question answered with the exact command run and its observed output.
+- A recommended target layout for vendored skills that satisfies both constraints, or an explicit statement that no layout satisfies both and what the tradeoff is.
+- Experiments run in a scratch directory, never against this repo or another project.
+
+*** TODO Stop republishing vendored skills from the published skills/ tree
+:PROPERTIES:
+:CUSTOM_ID: 3df8b6a2-27d2-4495-ba32-a3bbb38ee303
+:CREATED: [2026-07-31 Fri 13:17]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 13:17]
+:END:
+Move the vendored skills (dirge, find-skills, skill-creator, herdr) out of the set that `npx skills add cormacc/dotagents` offers, using the layout chosen by the research subtask, while keeping them present in this repo and resolvable at `~/.agents/skills`.
+
+Depends on the research subtask for the target path. Likely needs a matching `agents.nix` change in the parent dotfiles repo so the relocated skills still reach `~/.agents/skills` — that is cross-repo work; validate the parent flake from its own root.
+
+Acceptance criteria:
+- `npx skills add cormacc/dotagents --list` reports only first-party and adopted-and-modified skills; no vendored skill appears.
+- Every vendored skill still resolves under `~/.agents/skills` after a Home Manager switch.
+- `scripts/check-metadata.ts` passes, with its inventory expectation updated to match the new split.
+- No vendored skill body is modified.
+
+*** TODO Adopt skills-lock.json as the provenance record for vendored skills
+:PROPERTIES:
+:CUSTOM_ID: 2300b750-ad34-479c-bee4-ef27a1e5d67c
+:CREATED: [2026-07-31 Fri 13:17]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 13:17]
+:END:
+Record vendored-skill provenance in a committed `skills-lock.json` written by `npx skills` itself, rather than in-file headers, so bodies stay byte-identical and updatable.
+
+Acceptance criteria:
+- A committed lockfile records `source`, `sourceType`, `skillPath`, and `computedHash` for each vendored skill except herdr.
+- `npx skills update` runs cleanly against the vendored set and touches only skill bodies plus the lockfile.
+- No vendor header is added to any skill managed this way.
+- herdr keeps its existing header, with its exception rationale stated where the convention is documented.
+
+*** TODO Backfill provenance for dirge, find-skills and skill-creator
+:PROPERTIES:
+:CUSTOM_ID: 87f1a303-a11c-454b-b9f5-ed57c1b5947d
+:CREATED: [2026-07-31 Fri 13:17]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 13:17]
+:END:
+These three were hand-copied with no recorded source. Recover provenance by re-adding each through `npx skills` so the tool writes the lockfile entry, then confirm the installed body matches what is already committed.
+
+Do not guess or hand-write a source or SHA. If a body has diverged from upstream, report the diff and stop rather than silently overwriting local changes — a divergence means it is adapted, not vendored, and belongs in the "Adopted or adapted" group instead.
+
+Acceptance criteria:
+- Each of the three has a lockfile entry naming its real upstream repo, or is reclassified as adopted-and-modified with the divergence recorded.
+- Any body replaced is byte-identical to upstream at time of sync.
+- skills/README.org reflects the outcome per the documentation subtask.
+
+*** TODO Document the vendoring convention in skills/README.org
+:PROPERTIES:
+:CUSTOM_ID: 5121483a-1f26-47ec-8424-dadc3e3ee497
+:CREATED: [2026-07-31 Fri 13:18]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 13:18]
+:END:
+Replace the provisional Vendored table columns with ones that reflect the chosen model: content hash is the drift signal, not an upstream revision.
+
+Acceptance criteria:
+- The "Revision" column is removed; no upstream commit SHA is recorded for any lockfile-managed skill.
+- The table names each vendored skill and its upstream `source`, and points at `skills-lock.json` as the authoritative provenance and drift record rather than duplicating hashes into prose (duplication is its own churn).
+- The convention states that vendored bodies stay byte-identical so `npx skills update` keeps working, and that local fixes go upstream or to a non-vendored destination.
+- The herdr row is marked as the standing exception (hand-vendored with an in-file header, because upstream ships SKILL.md at repo root), with the condition for retiring the exception.
+- `npx run check:metadata` inventory expectations still pass.
+
+*** TODO find-skills documents npx skills check as read-only, but it updates
+:PROPERTIES:
+:CUSTOM_ID: 73b47d41-89ee-4a44-9ac2-db463f31ae93
+:CREATED: [2026-07-31 Fri 13:18]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 13:18]
+:END:
+find-skills/SKILL.md § Other useful commands claims "`npx skills check` — list updates available". It actually performs updates: running it in an unrelated project upgraded 3 installed skills and rewrote their `skills-lock.json` hashes. The current `--help` lists no `check` command at all under Updates, only `update`.
+
+This is a live foot-gun: an agent following the skill mutates a project it was only inspecting.
+
+find-skills is vendored, so the body must not be edited locally. Resolve by one of:
+- fixing it upstream and re-syncing;
+- correcting the documented command set at a non-vendored destination if find-skills is reclassified as adapted;
+- retiring the stale command reference as part of the backfill subtask, if upstream has already dropped `check`.
+
+Acceptance criteria:
+- The wrong read-only claim no longer reaches an agent following the skill.
+- Whatever route is taken, no local edit is left sitting in a lockfile-managed vendored body.

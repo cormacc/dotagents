@@ -1,8 +1,6 @@
 # TypeScript → `ot` test mapping
 
-Source of truth for the migration. Each TS test file maps to a Babashka
-namespace under `skills/org-tasks/scripts/test/`. Golden fixtures live under
-`skills/org-tasks/scripts/test/fixtures/`.
+Source of truth for the migration. Each TS test file maps to a Babashka namespace under `skills/org-tasks/scripts/test/`. Golden fixtures live under `skills/org-tasks/scripts/test/fixtures/`.
 
 | TS file (pi/extensions/tasks/)   | `ot` namespace                                 | Scope                                                                       |
 | -------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
@@ -23,8 +21,7 @@ namespace under `skills/org-tasks/scripts/test/`. Golden fixtures live under
 
 ## Golden round-trip fixtures
 
-Lives under `skills/org-tasks/scripts/test/fixtures/round-trip/`. Each fixture
-is an org file the Clojure parser must read and re-emit byte-identically.
+Lives under `skills/org-tasks/scripts/test/fixtures/round-trip/`. Each fixture is an org file the Clojure parser must read and re-emit byte-identically.
 
 | File                                    | Covers                                                                 |
 | --------------------------------------- | ---------------------------------------------------------------------- |
@@ -40,29 +37,15 @@ is an org file the Clojure parser must read and re-emit byte-identically.
 
 ## Test harness
 
-- `bb test` invokes `org-tasks.test-runner/run` which uses `clojure.test` and
-  discovers every namespace under `scripts/test/`.
-- A namespace opts in to parallel deftest execution with `^{:parallel-tests
-  true}` ns metadata (currently only `herdr-subagents.cli-test`, whose fixture
-  spawns real `subagent` subprocesses); every other namespace still runs
-  exactly as before. Within an opted-in namespace, vars marked `^:serial` run
-  first, sequentially, before the rest run on a bounded thread pool (default
-  `Runtime/availableProcessors`, override with `OT_TEST_PARALLELISM`). Any
-  test mutating in-process state (e.g. `with-redefs`) must be `^:serial`.
-- Round-trip tests read fixture content, run `parse-tasks` →
-  `serialize-tasks-preserving-file`, and assert byte equality with the
-  original.
-- Where the TS test directly constructs a `Task` via TS object literal, the
-  Clojure equivalent constructs a `task` map from the same data and asserts
-  serializer output.
-- TUI tests avoid brittle full-ANSI snapshots. Pure state/layout functions are
-  tested directly; CLI tests assert stdout remains machine JSON for non-TTY
-  default invocations.
+- `bb test` invokes `org-tasks.test-runner/run` which uses `clojure.test` and discovers every namespace under `scripts/test/`.
+- A namespace opts in to parallel deftest execution with `^{:parallel-tests true}` ns metadata (currently only `herdr-subagents.cli-test`, whose fixture spawns real `subagent` subprocesses); every other namespace still runs exactly as before. Within an opted-in namespace, vars marked `^:serial` run first, sequentially, before the rest run on a bounded thread pool (default `Runtime/availableProcessors`, override with `OT_TEST_PARALLELISM`). Any test mutating in-process state (e.g. `with-redefs`) must be `^:serial`.
+- Round-trip tests read fixture content, run `parse-tasks` → `serialize-tasks-preserving-file`, and assert byte equality with the original.
+- Where the TS test directly constructs a `Task` via TS object literal, the Clojure equivalent constructs a `task` map from the same data and asserts serializer output.
+- TUI tests avoid brittle full-ANSI snapshots. Pure state/layout functions are tested directly; CLI tests assert stdout remains machine JSON for non-TTY default invocations.
 
 ## Cutover gate
 
-Per the Migration Strategy decision, each pi extension command switches to
-`ot` only when both:
+Per the Migration Strategy decision, each pi extension command switches to `ot` only when both:
 
 1. The corresponding `org-tasks.<cmd>-test` namespace passes via `bb test`.
 2. The relevant round-trip fixture diffs are clean.
