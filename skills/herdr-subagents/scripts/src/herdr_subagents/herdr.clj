@@ -84,8 +84,12 @@
 ;; The child pane is `.result.root_pane`, not `.result.pane` (tab creation also returns
 ;; `.result.tab`); `--label` here sets the *tab's* label, distinct from the pane label
 ;; the existing rename! flow applies afterward.
-(defn tab-create! [{:keys [cwd label env]}]
-  (let [result (get-in (value! (into ["tab" "create" "--workspace" (System/getenv "HERDR_WORKSPACE_ID") "--cwd" cwd "--label" label "--no-focus"] (env-args env))) [:result])]
+(defn tab-create! [{:keys [cwd label env focus workspace]}]
+  (let [result (get-in (value! (into (cond-> ["tab" "create" "--workspace" (or workspace (System/getenv "HERDR_WORKSPACE_ID")) "--cwd" cwd]
+                                      label (into ["--label" label])
+                                      focus (conj "--focus")
+                                      (not focus) (conj "--no-focus"))
+                                    (env-args env))) [:result])]
     (assoc (:root_pane result) :tab-id (get-in result [:tab :tab_id]))))
 (defn rename! [pane label] (get-in (value! ["pane" "rename" pane label]) [:result :pane]))
 (declare current-pane!)
@@ -111,6 +115,7 @@
 (defn tab-focus! [tab] (get-in (value! ["tab" "focus" tab]) [:result :tab]))
 (defn pane-list! [workspace]
   (get-in (value! (cond-> ["pane" "list"] workspace (into ["--workspace" workspace]))) [:result :panes]))
+(defn pane-layout! [pane] (get-in (value! ["pane" "layout" "--pane" pane]) [:result :layout]))
 (defn current-pane! [] (get-in (value! ["pane" "current" "--current"]) [:result :pane]))
 
 (defn- read-argv [object target {:keys [source lines format]}]
@@ -213,11 +218,14 @@
           (do (Thread/sleep (start-retry-backoff-ms)) (recur (inc attempt)))
           :else (let [error (:error outcome)] (throw (ex-info (:message error) error))))))))
 (defn prompt! [target text] (value! ["agent" "prompt" target text]))
-(defn wait! [target timeout] (invoke ["agent" "wait" target "--timeout" (str timeout)]))
+(defn agent-wait! [target timeout until]
+  (invoke (into ["agent" "wait" target "--timeout" (str timeout)]
+                (mapcat #(vector "--until" %) until))))
+(defn wait! [target timeout] (agent-wait! target timeout []))
 ;; Settle wait for the advisory parent push. `--until idle --until done` is *narrower*
 ;; than herdr's default match set (idle, done, blocked) on purpose: a blocked parent must
 ;; never be woken with prompt text that would land in its approval UI, so blocked has to
 ;; keep the wait pending until the budget elapses rather than satisfy it.
 (defn wait-settled! [target timeout]
-  (invoke ["agent" "wait" target "--timeout" (str timeout) "--until" "idle" "--until" "done"]))
+  (agent-wait! target timeout ["idle" "done"]))
 (defn notify! [title body] (value! ["notification" "show" title "--body" body]))

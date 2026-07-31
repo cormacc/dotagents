@@ -17,7 +17,7 @@ SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
 LABEL="${1:?usage: spawn-cell.sh <label> <persona> [args...]}"; shift
 PERSONA="${1:?persona required}"; shift
 
-json="$("$SUBAGENT" start "$PERSONA" "$@")"
+json="$("$SUBAGENT" task start "$PERSONA" "$@")"
 task=$(printf '%s' "$json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["task"])')
 child=$(printf '%s' "$json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["child"])')
 pane=$(printf '%s' "$json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["pane-id"])')

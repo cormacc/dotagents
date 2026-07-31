@@ -9,9 +9,9 @@ Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/SKILL.md
 
 ```sh
 SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
-"$SUBAGENT" run scout --task 'Locate the implementation and report paths.'
-"$SUBAGENT" start reviewer --task-file assignment.md
-"$SUBAGENT" collect <full-task-uuid> --wait --timeout 600000
+"$SUBAGENT" task run scout --task 'Locate the implementation and report paths.'
+"$SUBAGENT" task start reviewer --task-file assignment.md
+"$SUBAGENT" task collect <full-task-uuid> --wait --timeout 600000
 ```
 
 The CLI wraps opaque `--task`, `--task-file`, or stdin text with the persona, delegation, identity, publication, and optional retro instructions. `collect`, `status`, and `prune` require the complete UUID that `run`/`start` emitted; unlike `ot`'s `:CUSTOM_ID:` prefix matching, no prefix is ever resolved. Use `--prompt-extra` for exceptional constraints and `--print-prompt` to inspect the result; do not reconstruct a raw prompt or result envelope during normal operation.
@@ -43,7 +43,7 @@ Delegation capability is declared, not assumed: a persona may spawn only what it
 
 **Tier guidance:** light is the efficient default for well-specified implementation work. Feather is a false economy for it — measured head to head, feather cost 1.1–2.4x more than light and ran 2.3–8.1x slower for an identical score, burning 2–2.5x the tokens, and accounted for every delegation-protocol failure observed. Reserve middle and above for work whose difficulty is genuinely established rather than assumed.
 
-The advisor-tier override is a convention, not a structured flag: instruct the worker (via `--prompt-extra`) to spawn its consult with `--model <tier>`. That is verified to work — but only when the worker actually uses `subagent run advisor`. A worker that hand-rolls a consult with raw `herdr agent start` silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so treat ledger consult counts and advisor costs as a floor rather than the truth.
+The advisor-tier override is a convention, not a structured flag: instruct the worker (via `--prompt-extra`) to spawn its consult with `--model <tier>`. That is verified to work — but only when the worker actually uses `subagent task run advisor`. A worker that hand-rolls a consult with raw `herdr agent start` silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so treat ledger consult counts and advisor costs as a floor rather than the truth.
 
 See the [evaluation record](../../design/log/2026-07-31-subagents-review-advisor-strategy-defaul.org) for the three benchmark rounds behind this, and the [implementation record](../../design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org) for what changed. The earlier [2026-07-29 advisor-strategy record](../../design/log/2026-07-29-subagent-implement-the-advisor-strategy.org) is superseded: its mandatory consult and its separate frontier-executor persona are both retired.
 

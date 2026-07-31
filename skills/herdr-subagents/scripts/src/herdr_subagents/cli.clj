@@ -8,8 +8,7 @@
   (:import [java.nio.file Files FileAlreadyExistsException Paths]
            [java.util UUID]))
 
-(def usage "subagent run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\nsubagent collect <full-task-uuid> [--wait --timeout MS]\nsubagent collect --any [--wait --timeout MS]\nsubagent status [full-task-uuid] | list
-subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--notify-timeout MS]\nsubagent progress --summary TEXT\nsubagent prune <full-task-uuid>\n\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the child in a new unfocused tab of the caller's workspace instead of a split; --split explicitly selects a split.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to SUBAGENT_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncollect, status, and prune all resolve their assignment argument as the exact ledger key emitted by run/start; unlike ot, no prefix is ever resolved.\nOpaque assignment input is --task, --task-file, or stdin. Run `subagent --help` for contract details.")
+(def usage "subagent pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\nsubagent tab create|list|focus\nsubagent ws create|list|focus\n\nRAW AGENT CONTROL\n  subagent agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  subagent task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  subagent task collect <full-task-uuid> [--wait --timeout MS]\n  subagent task collect --any [--wait --timeout MS]\n  subagent task status [full-task-uuid] | list\n  subagent task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--notify-timeout MS]\n  subagent task progress --summary TEXT\n  subagent task prune <full-task-uuid>\n\nsubagent spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `subagent task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new unfocused tab of the caller's workspace instead of a split; --split explicitly selects a split.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to SUBAGENT_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncollect, status, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; unlike ot, no prefix is ever resolved.\nOpaque assignment input is --task, --task-file, or stdin. Run `subagent --help` for contract details.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -46,11 +45,12 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
 ;; Single source of truth for value-less flags. `option-map` and `help-request?` both
 ;; consume argv and must agree: a flag known to only one of them silently swallows the
 ;; following element (e.g. `run worker --retro --task 'X'` losing its assignment).
-(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any"})
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--focus" "--no-focus" "--clear" "--raw"})
 (defn option-map [args]
   (loop [xs args out {}]
     (if-let [x (first xs)]
-      (cond (boolean-flags x) (recur (next xs) (assoc out (keyword (subs x 2)) true))
+      (cond (= "--" x) (assoc out :native (vec (next xs)))
+            (boolean-flags x) (recur (next xs) (assoc out (keyword (subs x 2)) true))
             (str/starts-with? x "--") (let [key (keyword (subs x 2)) value (second xs)]
                                           (when-not value (fail "option requires a value" {:option x}))
                                           (recur (nnext xs) (update out key (fnil conj []) value)))
@@ -133,11 +133,11 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
 ;; already: a `blocking` run's parent is already waiting and gets nothing extra to poll.
 (defn progress-instruction [waiting-policy]
   (when (= waiting-policy "non-blocking")
-    (str "\nReport concise phase-boundary progress with `$HERDR_SUBAGENT_BIN progress --summary \"...\"` at most once per SUBAGENT_PROGRESS_INTERVAL_MS (default 60000 ms); never include draft findings or result content, and never treat it as completion.")))
+    (str "\nReport concise phase-boundary progress with `$HERDR_SUBAGENT_BIN task progress --summary \"...\"` at most once per SUBAGENT_PROGRESS_INTERVAL_MS (default 60000 ms); never include draft findings or result content, and never treat it as completion.")))
 (defn prompt-text [{:keys [spawns persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
   (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
        (delegation-guidance spawns) " Herdr assigned TASK=" task " and RESULT=" result ". "
-       "When finished, publish exactly once with `$HERDR_SUBAGENT_BIN publish --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
+       "When finished, publish exactly once with `$HERDR_SUBAGENT_BIN task publish --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
        "The waiting policy is " waiting-policy "."
        (retro-instruction retro-skill)
@@ -384,7 +384,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
                             (conj (str "- (" dropped " declared artifact path(s) not renderable as a link; see the RESULT envelope)"))))))))
 (defn push-text [bin child task status artifacts]
   (str "Subagent " child " published a " status " result for task " task
-       ". Capture it with `" bin " collect " task "`."
+       ". Capture it with `" bin " task collect " task "`."
        " Advisory only: the validated RESULT file remains the sole completion signal."
        (artifact-advisory artifacts)))
 (defn settled-parent? [status] (contains? #{"idle" "done"} status))
@@ -664,7 +664,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
         entry (or (when-not (:child-session entry) (record-session! (:task entry) (:agent_session agent))) entry)]
     (assoc entry :live-agent agent)))
 ;; `--help` is the documented non-JSON exception: it prints usage and exits 0 for any
-;; command, so `subagent run --help` never returns "option requires a value".
+;; command, so `subagent task run --help` never returns "option requires a value".
 (defn help-request? [command args]
   (boolean (or (#{"--help" "-h" "help"} command)
                ;; Mirror option-map's consumption so opaque assignment text that happens
@@ -675,22 +675,111 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
                          (boolean-flags x) (recur (next xs))
                          (str/starts-with? x "--") (recur (nnext xs))
                          :else (recur (next xs))))))))
+(defn require-positionals [items n description]
+  (when-not (= n (count items))
+    (fail (str description " requires " n " argument" (when (not= n 1) "s"))
+          {:arguments items}))
+  items)
+(defn parse-env [values]
+  (into {}
+        (map (fn [value]
+               (let [[key val] (str/split value #"=" 2)]
+                 (when (or (str/blank? key) (nil? val))
+                   (fail "--env must be KEY=VALUE" {:value value}))
+                 [key val])))
+        values))
+(defn current-cwd [] (System/getProperty "user.dir"))
+(defn raw-pane! [op opts positional]
+  (case op
+    "split" (herdr/split! {:direction (or (one opts :direction) (core/direction (herdr/caller-rect!)))
+                            :cwd (or (one opts :cwd) (current-cwd)) :env (parse-env (all opts :env))})
+    "run" (let [[pane command] (require-positionals positional 2 "pane run")] (herdr/pane-run! pane command))
+    "read" (let [[pane] (require-positionals positional 1 "pane read")] (herdr/pane-read! pane (select-keys opts [:source :lines :format])))
+    "wait-output" (let [[pane] (require-positionals positional 1 "pane wait-output")
+                         match (one opts :match) regex (one opts :regex)]
+                     (when (= (boolean match) (boolean regex))
+                       (fail "pane wait-output requires exactly one of --match or --regex" {}))
+                     (herdr/pane-wait-output! pane (assoc (select-keys opts [:source :lines :timeout :raw]) (if regex :regex :match) (or regex match))))
+    "send-text" (let [[pane text] (require-positionals positional 2 "pane send-text")] (herdr/pane-send-text! pane text))
+    "send-keys" (let [[pane & keys] positional]
+                  (when (or (nil? pane) (empty? keys)) (fail "pane send-keys requires a pane and at least one key" {}))
+                  (herdr/pane-send-keys! pane keys))
+    "close" (let [[pane] (require-positionals positional 1 "pane close")] (herdr/close! pane))
+    "list" (do (require-positionals positional 0 "pane list")
+                 (let [items (herdr/pane-list! (one opts :workspace))]
+                   (herdr/render-panes items (:pane_id (herdr/current-pane!)))))
+    "current" (do (require-positionals positional 0 "pane current") (herdr/current-pane!))
+    "get" (let [[pane] (require-positionals positional 1 "pane get")] (herdr/pane! pane))
+    "layout" (let [[pane] (require-positionals positional 1 "pane layout")] (herdr/pane-layout! pane))
+    "rename" (let [[pane label] (require-positionals positional 2 "pane rename")] (herdr/rename! pane label))
+    (fail "unknown pane command" {:command op})))
+(defn raw-tab! [op opts positional]
+  (case op
+    "create" (do (require-positionals positional 0 "tab create")
+                  (herdr/tab-create! {:workspace (one opts :workspace) :cwd (or (one opts :cwd) (current-cwd))
+                                      :label (one opts :label) :env (parse-env (all opts :env)) :focus (boolean (one opts :focus))}))
+    "list" (do (require-positionals positional 0 "tab list") (herdr/tab-list! (one opts :workspace)))
+    "focus" (let [[tab] (require-positionals positional 1 "tab focus")] (herdr/tab-focus! tab))
+    (fail "unknown tab command" {:command op})))
+(defn raw-workspace! [op opts positional]
+  (case op
+    "create" (do (require-positionals positional 0 "ws create")
+                  (herdr/workspace-create! {:cwd (or (one opts :cwd) (current-cwd)) :label (one opts :label)
+                                            :env (parse-env (all opts :env)) :focus (boolean (one opts :focus))}))
+    "list" (do (require-positionals positional 0 "ws list") (herdr/workspace-list!))
+    "focus" (let [[workspace] (require-positionals positional 1 "ws focus")] (herdr/workspace-focus! workspace))
+    (fail "unknown ws command" {:command op})))
+(defn raw-agent! [op opts positional]
+  (case op
+    "start" (let [[name] (require-positionals positional 1 "agent start") kind (or (one opts :kind) (fail "agent start requires --kind" {})) pane (or (one opts :pane) (fail "agent start requires --pane" {}))]
+              (herdr/start! name kind pane (:native opts)))
+    "prompt" (let [[target text] (require-positionals positional 2 "agent prompt")] (herdr/prompt! target text))
+    "wait" (let [[target] (require-positionals positional 1 "agent wait")] (herdr/agent-wait! target (Long/parseLong (or (one opts :timeout) "600000")) (all opts :until)))
+    "read" (let [[target] (require-positionals positional 1 "agent read")] (herdr/agent-read! target (select-keys opts [:source :lines :format])))
+    "send-keys" (let [[target & keys] positional]
+                  (when (or (nil? target) (empty? keys)) (fail "agent send-keys requires a target and at least one key" {}))
+                  (herdr/agent-send-keys! target keys))
+    "focus" (let [[target] (require-positionals positional 1 "agent focus")] (herdr/agent-focus! target))
+    "rename" (let [[target name] positional clear? (boolean (one opts :clear))]
+               (when (or (nil? target) (and (not clear?) (nil? name)) (and clear? name))
+                 (fail "agent rename requires <target> <name> or <target> --clear" {}))
+               (herdr/agent-rename! target name clear?))
+    "list" (do (require-positionals positional 0 "agent list") (herdr/render-agents (herdr/agents)))
+    "get" (let [[target] (require-positionals positional 1 "agent get")] (herdr/agent! target))
+    (fail "unknown agent command" {:command op})))
+(defn task! [op opts positional]
+  (case op
+    "run" (let [entry (spawn! (first positional) opts "blocking")] (if (:preview entry) entry (wait-and-capture! entry (Long/parseLong (or (one opts :timeout) "600000")) true)))
+    "start" (spawn! (first positional) opts "non-blocking")
+    "collect" (let [any? (boolean (one opts :any))]
+                (when (and any? (first positional)) (fail "collect --any takes no task argument" {:task (first positional)}))
+                (if any? (collect-any! opts) (collect! (first positional) opts)))
+    "status" (if-let [task (first positional)] (live (ledger/read! task)) (mapv live (ledger/entries)))
+    "list" (mapv live (ledger/entries))
+    "publish" (publish! opts)
+    "progress" (progress! opts)
+    "prune" (prune! (first positional))
+    (fail "unknown task command" {:command op})))
+(defn spawn-command! [opts positional]
+  (let [[command] (require-positionals positional 1 "spawn")]
+    (when (some #{command} (available-personas))
+      (fail "spawn only runs shell commands; use `subagent task run <persona>` for delegation" {:persona command}))
+    (let [pane (herdr/tab-create! {:cwd (or (one opts :cwd) (current-cwd)) :label (or (one opts :label) "spawn") :env {} :focus false})]
+      (herdr/pane-run! (:pane_id pane) command)
+      {:pane-id (:pane_id pane) :tab-id (:tab-id pane)})))
 (defn execute [argv]
-  (let [[command & args] argv]
-    (if (help-request? command args)
+  (let [[group op & args] argv]
+    (if (help-request? group (cons op args))
       usage
       (let [opts (option-map args) positional (:_ opts)]
-        (case command
-          "run" (let [entry (spawn! (first positional) opts "blocking")] (if (:preview entry) entry (wait-and-capture! entry (Long/parseLong (or (one opts :timeout) "600000")) true)))
-          "start" (spawn! (first positional) opts "non-blocking")
-          "collect" (let [any? (boolean (one opts :any))]
-                      (when (and any? (first positional)) (fail "collect --any takes no task argument" {:task (first positional)}))
-                      (if any? (collect-any! opts) (collect! (first positional) opts)))
-          "status" (if-let [task (first positional)] (live (ledger/read! task)) (mapv live (ledger/entries)))
-          "list" (mapv live (ledger/entries)) "publish" (publish! opts)
-          "progress" (progress! opts)
-          "prune" (prune! (first positional))
-          (fail "unknown subagent command" {:command command}))))))
+        (case group
+          "pane" (raw-pane! op opts positional)
+          "tab" (raw-tab! op opts positional)
+          "ws" (raw-workspace! op opts positional)
+          "agent" (raw-agent! op opts positional)
+          "task" (task! op opts positional)
+          "spawn" (spawn-command! (option-map (cons op args)) (:_ (option-map (cons op args))))
+          (fail "unknown subagent command" {:command group}))))))
 (defn -main [& argv]
   (try (let [result (execute argv)] (println (if (string? result) result (core/json-envelope true result))))
        (catch Exception e (println (core/json-envelope false {:message (.getMessage e) :data (ex-data e)})) (System/exit 1))))

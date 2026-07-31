@@ -40,10 +40,10 @@
     (when-not (= "1" (required! "HERDR_ENV")) (throw (ex-info "live smoke requires HERDR_ENV=1" {})))
     (when-not (= "1" (required! "SUBAGENT_LIVE_SMOKE")) (throw (ex-info "live smoke requires SUBAGENT_LIVE_SMOKE=1" {})))
     (let [model (required! "SUBAGENT_LIVE_SMOKE_MODEL")
-          root (-> (cli/execute ["run" "scout" "--model" model "--task" "Run the guarded root smoke: verify HERDR_SUBAGENT_CHILD, HERDR_SUBAGENT_TASK, HERDR_SUBAGENT_RESULT, and HERDR_SUBAGENT_WAITING_POLICY are set; then publish COMPLETE with a concise summary using the injected launcher."]) complete!)
+          root (-> (cli/execute ["task" "run" "scout" "--model" model "--task" "Run the guarded root smoke: verify HERDR_SUBAGENT_CHILD, HERDR_SUBAGENT_TASK, HERDR_SUBAGENT_RESULT, and HERDR_SUBAGENT_WAITING_POLICY are set; then publish COMPLETE with a concise summary using the injected launcher."]) complete!)
           root-entry (entry! root)
           _ (when-not (re-matches #"scout-[0-9]+(?:-.+)?" (:label root-entry)) (throw (ex-info "root smoke label is invalid" {:label (:label root-entry)})))
-          nested (-> (cli/execute ["run" "planner" "--model" model "--task" (str "Run the guarded nested smoke. Spawn exactly one blocking scout with the injected launcher using model " model "; ask it to verify its injected identity and publish COMPLETE. Wait for its result, require that it completed, then publish your own COMPLETE result.")]) complete!)
+          nested (-> (cli/execute ["task" "run" "planner" "--model" model "--task" (str "Run the guarded nested smoke. Spawn exactly one blocking scout with the injected launcher using model " model "; ask it to verify its injected identity and publish COMPLETE. Wait for its result, require that it completed, then publish your own COMPLETE result.")]) complete!)
           planner-entry (entry! nested)
           prefix (core/nested-prefix (:label planner-entry) "planner")
           child-entry (some #(when (str/starts-with? (:label %) (str prefix "/scout-")) %) (ledger/entries))]
@@ -64,7 +64,7 @@
                                            :retro-leg "skipped: no retro skill installed"
                                            :root-label (:label root-entry) :nested-label (:label child-entry)
                                            :child-sessions (mapv session! [root-entry planner-entry child-entry])}))
-        (let [retro (-> (cli/execute ["run" "worker" "--retro" "--model" model
+        (let [retro (-> (cli/execute ["task" "run" "worker" "--retro" "--model" model
                                       "--task" (str "Run the guarded retrospective smoke. "
                                                     "Display your assignment's current status by running `\"$HERDR_SUBAGENT_BIN\" show $HERDR_SUBAGENT_TASK`. "
                                                     "If that does not work, find the correct invocation and complete the status check anyway. "

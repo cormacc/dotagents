@@ -96,11 +96,17 @@ Acceptance criteria:
 - Herdr error envelopes map to actionable messages; no-output subcommands are treated as success on exit 0
 - Must not: expect JSON from subcommands that emit none — the defect being replaced
 
-** TODO Expose object-namespaced CLI verbs plus spawn sugar
+** DONE Expose object-namespaced CLI verbs plus spawn sugar
+CLOSED: [2026-08-01 Sat 00:59]
 :PROPERTIES:
 :CUSTOM_ID: 0d56a81f-3f01-4530-a1ad-a1d380707d57
 :CREATED: [2026-08-01 Sat]
 :BLOCKED-BY: task:a6b07a1f-1609-4761-87ed-9239b33817f0
+:STARTED: [2026-08-01 Sat 00:45]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-01 Sat 00:45]
+- State "DONE" from "STARTED" [2026-08-01 Sat 00:59]
 :END:
 Add =pane|tab|ws|agent= verb groups and move the delegation verbs under =task=, keeping them lexically distinct from raw agent control. Add =spawn "<command>"= as sugar for create-tab-plus-run.
 Acceptance criteria:

@@ -14,7 +14,7 @@ bb test
 
 The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/skills` is a *directory* symlink), uses the repository `bb.edn` when present, and falls back to `bb --deps-root <scripts> -Sdeps '{:paths ["src"]}'` for a bare skill subtree. It never `cd`s before `exec`, so the CLI's working directory is always the caller's — that value becomes the child pane's `--cwd` and drives assignment-root/roster resolution. It has no additional Maven dependencies.
 
-`run` and `start` take opaque assignment text from exactly one of `--task`, `--task-file`, or stdin; `collect`, `status`, and `prune` in turn require the complete task UUID that `run`/`start` emitted — unlike `ot`'s `:CUSTOM_ID:` prefix matching, no prefix is ever resolved. `--prompt-extra` appends exceptional constraints; `--print-prompt` previews the invariant wrapper. The CLI never offers raw prompt mode.
+`task run` and `task start` take opaque assignment text from exactly one of `--task`, `--task-file`, or stdin; `task collect`, `task status`, and `task prune` in turn require the complete task UUID that `task run`/`task start` emitted — unlike `ot`'s `:CUSTOM_ID:` prefix matching, no prefix is ever resolved. `--prompt-extra` appends exceptional constraints; `--print-prompt` previews the invariant wrapper. The CLI never offers raw prompt mode.
 
 The value-less flags `--retro` and `--no-retro` override process-retro gating for one spawn. See [docs/contract.md](docs/contract.md) § Retro gating for precedence, optional-skill behavior, ledger fields, and the `PROCESS:` envelope grammar.
 
@@ -28,21 +28,21 @@ The value-bearing `--notify-timeout` flag on `publish` bounds the settle wait be
 
 The value-bearing `--summary` flag on the child-only `progress` command stores one latest, throttled advisory snapshot (`SUBAGENT_PROGRESS_INTERVAL_MS`, default 60000 ms) under the ledger entry, visible through `status`/`list`; it is never a second transcript and never a completion signal. See [docs/contract.md](docs/contract.md) § Progress for identity validation, throttling, and rejection cases.
 
-`subagent prune <full-task-uuid>` retires exactly one stale, same-session assignment orphaned by a killed `run`/`start`: it requires ownership of the exact ledger entry and proof the entry is uncaptured, non-terminal, result-less, and absent from one `agent list` call before marking it `failed` with `:pruned-at`/`:prune-reason` metadata, so `collect --any` stops counting it as a candidate; it never scans the ledger, ages out a candidate, or resolves a prefix. See [docs/contract.md](docs/contract.md) § Pruning for the ownership check and staleness proof.
+`subagent task prune <full-task-uuid>` retires exactly one stale, same-session assignment orphaned by a killed `task run`/`task start`: it requires ownership of the exact ledger entry and proof the entry is uncaptured, non-terminal, result-less, and absent from one `agent list` call before marking it `failed` with `:pruned-at`/`:prune-reason` metadata, so `collect --any` stops counting it as a candidate; it never scans the ledger, ages out a candidate, or resolves a prefix. See [docs/contract.md](docs/contract.md) § Pruning for the ownership check and staleness proof.
 
 ```sh
 SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
-"$SUBAGENT" run scout --task 'Find the relevant source files.' --timeout 600000
-"$SUBAGENT" start reviewer --task-file assignment.md
-"$SUBAGENT" collect <full-task-uuid> --wait --timeout 600000
-"$SUBAGENT" collect --any --wait --timeout 600000
-"$SUBAGENT" status <full-task-uuid>
+"$SUBAGENT" task run scout --task 'Find the relevant source files.' --timeout 600000
+"$SUBAGENT" task start reviewer --task-file assignment.md
+"$SUBAGENT" task collect <full-task-uuid> --wait --timeout 600000
+"$SUBAGENT" task collect --any --wait --timeout 600000
+"$SUBAGENT" task status <full-task-uuid>
 ```
 
 A child calls the injected absolute launcher path:
 
 ```sh
-"$HERDR_SUBAGENT_BIN" publish --status COMPLETE --summary 'Implemented and tested.' \
+"$HERDR_SUBAGENT_BIN" task publish --status COMPLETE --summary 'Implemented and tested.' \
   --process 'documented flag rejected → guardrail → verify flags against source before use'
 ```
 
