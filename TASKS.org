@@ -228,7 +228,7 @@ Deferred from 2fe1ce2a (see [[file:design/log/2026-07-30-optimise-test-build.org
 :END:
 Every subagent spawn in the 2026-07-31 advisor-evaluation session left the composed prompt typed into the freshly spawned pane but unsubmitted, needing a manual focus + Enter. Confirmed mechanically: a child read `idle` five seconds after `subagent start`, and one `herdr agent send-keys <child> enter` moved it to `working`. Submit-delays of 25.6-46.6s were measured against 0.8s for a pre-regression historical run.
 
-`subagent start`/`run` should verify the prompt actually landed rather than trusting the atomic prompt+Enter, e.g. poll lifecycle state briefly after prompting and re-send Enter on a definite `idle` (never on an unobservable `unknown`, which risks submitting stray empty input). The stopgap used during the experiment is `.agents/tmp/advisor-eval/spawn-cell.sh`.
+`subagent start`/`run` should verify the prompt actually landed rather than trusting the atomic prompt+Enter, e.g. poll lifecycle state briefly after prompting and re-send Enter on a definite `idle` (never on an unobservable `unknown`, which risks submitting stray empty input). The stopgap used during the experiment is committed at `design/log/2026-07-31-subagents-review-advisor-strategy-defaul/spawn-cell.sh`.
 
 Related: `prompted-at` is consequently unsafe as a duration baseline for any measurement; derive the start from the child transcript first user message instead.
 

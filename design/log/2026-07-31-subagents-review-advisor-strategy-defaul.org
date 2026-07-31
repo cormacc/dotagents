@@ -92,7 +92,7 @@ No production code or contract doc changed here by design — the anti-criteria 
 - =acceptance/metrics=, a ledger + transcript extractor reporting duration, submit-delay, consult tier/verdict, tokens and real dollar cost, reusable for any future subagent comparison.
 - Two reports: =comparison-report.md= (7 cells) and =feather-trio-report.md= (3 cells plus the light reference line).
 - =rubric.md=, the reading guide covering both rounds, including ledger-verified consult compliance and the fixed report row order.
-- =.agents/tmp/advisor-eval/spawn-cell.sh=, the dispatch workaround now referenced by the open CLI defect.
+- =design/log/2026-07-31-subagents-review-advisor-strategy-defaul/spawn-cell.sh=, the dispatch workaround now referenced by the open CLI defect.
 - Five gate decisions recorded below, and the =$41.4099= total cost of reaching them.
 
 *Spec note:* =#+SPEC:= names =skills/herdr-subagents/SKILL.md=, which this record deliberately did not touch — modifying it before the gate was an explicit anti-criterion. It was reviewed at closure and updated by the implementation record, which rewrote § Advisor strategy as § Executor tier and advisor strategy.
@@ -266,11 +266,11 @@ Noted for the run task: =.agents/tmp/= already contains substantial prior adviso
 
 Every spawn in this session left the composed prompt typed into the new pane but *unsubmitted*, requiring a manual focus and Enter; the user first noticed it against an extension-update notification, and it persisted after updating extensions. Confirmed mechanically: cell E read =idle= five seconds after =subagent start=, one =herdr agent send-keys <child> enter= moved it to =working=. Measured submit-delays were 25.6s (A), 40.4s (B), 37.3s (C), 46.6s (D) against 0.8s for a pre-notification historical run, so the regression is recent and its size varies per cell.
 
-Two consequences: wall-clock duration must be measured from the transcript's first user message rather than =prompted-at= (already corrected in =acceptance/metrics=), and cells are now spawned through =.agents/tmp/advisor-eval/spawn-cell.sh=, which polls lifecycle state and sends Enter only on a definite =idle= — nudging on an unobservable =unknown= risks submitting stray empty input. The durable CLI-side fix is tracked separately as a repo task, not fixed inside this experiment.
+Two consequences: wall-clock duration must be measured from the transcript's first user message rather than =prompted-at= (already corrected in =acceptance/metrics=), and cells are now spawned through =design/log/2026-07-31-subagents-review-advisor-strategy-defaul/spawn-cell.sh=, which polls lifecycle state and sends Enter only on a definite =idle= — nudging on an unobservable =unknown= risks submitting stray empty input. The durable CLI-side fix is tracked separately as a repo task, not fixed inside this experiment.
 
 *** Comparison report (task febc1e3c)
 
-Report: [[proj:design/log/2026-07-31-subagents-review-advisor-strategy-defaul/comparison-report.md]]. Raw per-cell artifacts are the =cell-*-score.edn= and =cell-*-metrics.edn= files under =.agents/tmp/advisor-eval/=, with judgement calls in =compliance-notes.md= alongside them.
+Report: [[proj:design/log/2026-07-31-subagents-review-advisor-strategy-defaul/comparison-report.md]]. The per-cell =*-score.edn= and =*-metrics.edn= artifacts were working files under gitignored =.agents/tmp/advisor-eval/= and are deliberately not durable; their figures and the qualitative judgement calls drawn from them are carried by the two committed reports.
 
 Headline: quality saturates above feather (A, B, D and G all 35/35), and cell A — =skilled-worker= with no advisor — won on every axis at once: joint-best score, cheapest perfect score ($3.2288) and fastest perfect score (389.8s). Both controlled comparisons argue against a heavy default: at equal light executor, middle advisor scored 35/35 for $5.3666 while heavy scored 34/35 for $7.1269; at equal middle executor, adding a heavy advisor cost $2.98 and 135s for no score gain over A. Heavy only earned its cost at feather (G 35/35 versus F 34/35 and E 32/35).
 
