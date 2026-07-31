@@ -123,6 +123,7 @@ short list:
 - Measure per-test timing inside a real namespace or suite run. A test timed
   as the first subprocess-spawning call in a fresh `bb` process over-reads by
   ~3× on one-time JIT/class-load warm-up.
+- `fs/glob` does not traverse a directory symlink — it returns `[]` unless called with `{:follow-links true}`. Home Manager installs managed trees as symlinks, so any discovery walk over them needs the flag, and its test needs a real `fs/create-sym-link` fixture rather than a plain directory.
 
 See [references/idioms.md](references/idioms.md) for threading-macro,
 control-flow, data-structure, error-handling, testing, and anti-pattern

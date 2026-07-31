@@ -145,6 +145,12 @@ Run the cheapest check that proves the edit. In order of cost:
 | `nix develop` / `direnv reload`                                | Smoke-test a devShell.                            |
 | `*-rebuild switch …`                                           | Actually activate. Destructive — only on request. |
 
+Every `.#` above resolves against the *current* flake. When the edit targets a flake outside the current repository — for example a submodule editing its parent's config — `cd` to that flake root first; evaluating from the subdirectory silently evaluates the wrong flake:
+
+```
+cd <target-flake-root> && nix eval --impure .#homeConfigurations.<name>.activationPackage.drvPath --raw
+```
+
 `nix repl` is useful for iterative exploration:
 
 ```

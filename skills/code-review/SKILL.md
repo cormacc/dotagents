@@ -37,6 +37,8 @@ Treat user-controlled URLs, shell fragments, SQL, HTML, file paths, and broadcas
 
 Run the narrowest relevant tests, type checks, linters, or reproduction commands. Report commands and failures. A passing suite does not prove correctness; inspect whether tests assert the changed semantics. Do not claim a failure without reproducing it or tracing a concrete reachable path.
 
+A must-not assertion can pass without exercising the guard it claims to prove — because setup or ordering already excludes the case, an overlapping general guard fires first, or a fixture logs a flag without honouring it. For load-bearing negative guarantees only, break the guarded condition, confirm the focused test fails, then restore it.
+
 ## Severity
 
 - **P0 — critical:** exploitable security breach, data loss/corruption, or production-wide outage. Must be immediately actionable and provable.

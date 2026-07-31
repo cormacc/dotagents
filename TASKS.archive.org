@@ -1735,3 +1735,101 @@ The repo test build (`bb test`) takes more than two minutes to run on my dev mac
 - Review slow tests for relevance or optimisation opportunities
 - Delete slow tests (or any tests) that don't add real value
 - Extract any remaining useful slow tests into a separate build - exclude them from the default build
+
+** DONE Document Babashka glob symlink traversal :skill_clojure:
+CLOSED: [2026-07-31 Fri 12:58]
+:PROPERTIES:
+:CUSTOM_ID: c98bbfe1-a4d8-4402-b0da-46f78b777b1a
+:CREATED: [2026-07-29 Wed 15:45]
+:ARCHIVED: [2026-07-31 Fri 12:58]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 15:45]
+- State "DONE" from "TODO" [2026-07-31 Fri 12:58]
+:END:
+Document that babashka.fs/glob requires {:follow-links true} when enumerating a Home Manager-managed directory symlink, and add the expected test pattern.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: dotagents @ main
+- timestamp: [2026-07-29 Wed]
+- sender: agent
+
+Evidence:
+- Packaged-persona discovery initially omitted the Home Manager symlinked home roster until fs/glob was invoked with {:follow-links true} and covered by a symlink fixture.
+
+** DONE Validate parent-flake Nix edits from their root :skill_nix:
+CLOSED: [2026-07-31 Fri 12:58]
+:PROPERTIES:
+:CUSTOM_ID: 6c23aa9b-6345-4397-97a3-5a8006959d62
+:CREATED: [2026-07-29 Wed 15:45]
+:ARCHIVED: [2026-07-31 Fri 12:58]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 15:45]
+- State "DONE" from "TODO" [2026-07-31 Fri 12:58]
+:END:
+Clarify that validation for a Nix target outside the current repository must run from the target flake root before selecting an output.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: dotagents @ main
+- timestamp: [2026-07-29 Wed]
+- sender: agent
+
+Evidence:
+- A worker editing parent dotfiles agents.nix initially evaluated the agents submodule; cd /home/cormacc/dotfiles && nix eval --impure .#homeConfigurations.default.activationPackage.drvPath --raw was the verified replacement.
+
+** DONE code-review: verify negative tests are non-vacuous :skill_code-review:
+CLOSED: [2026-07-31 Fri 12:58]
+:PROPERTIES:
+:CUSTOM_ID: fd8e0daf-8272-4442-b7d8-8b3d62948b1e
+:CREATED: [2026-07-30 Thu 10:31]
+:ARCHIVED: [2026-07-31 Fri 12:58]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-07-30 Thu 10:31]
+- State "DONE" from "TODO" [2026-07-31 Fri 12:58]
+:END:
+Negative and anti-criterion assertions can pass without exercising the guard they claim to prove—for example because setup state already excludes the case, test ordering captures it first, or a logged `--help` probe satisfies a broad matcher. Add a general review/testing rule: when a must-not assertion is materially susceptible to a vacuous pass, temporarily break or remove the guarded condition and confirm the focused test fails, then restore it. Keep this targeted to load-bearing negative guarantees rather than requiring mutation checks for every ordinary assertion.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-07-30 Thu 10:25]
+- sender: agent
+
+Evidence:
+During `collect --any` work, mutation checks proved the `:status "failed"` candidate exclusion and exposed a foreign-session assertion that passed only because an owning capture had already set `:captured-at`. A separate pane-close absence assertion initially matched the unconditional `pane close --help` preflight probe. The pattern is general testing validity, not Herdr-specific behavior.
+
+Additional facet (2026-07-30, `prune` implementation, task 032dbe16): overlapping lifecycle guards can also produce a vacuous pass without any test-ordering or matcher trick — a specific guard's precondition can be implied by a more general one that always fires first (e.g. an already-captured entry is also, incidentally, non-terminal), so a test asserting on the specific guard's message alone can pass for the wrong reason. Extend the rule: when two guards overlap this way, isolate the specific guard under test by first neutralizing the general precondition, not by asserting on message text alone.
+
+Additional facet (2026-07-30, `collect --any` settle-close implementation, task e8ea2227): a fixture standing in for an external system can produce the same vacuous pass by *recording* a flag without *honouring* it — a test asserting a call carried a given flag (e.g. `--until`) can pass even though the fixture's behavior is identical with or without it, so a regression that drops the flag still passes. Extend the rule again: when a test's claim depends on a flag's effect, make the fixture actually implement that effect, not just log the argv.
+
+** CANCELLED herdr: document verification of CLI defaults and response shapes :skill_herdr:
+CLOSED: [2026-07-31 Fri 12:59]
+:PROPERTIES:
+:CUSTOM_ID: e1b8b150-ad39-45ce-94a3-a190be7df728
+:CREATED: [2026-07-30 Thu 10:31]
+:ARCHIVED: [2026-07-31 Fri 12:59]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-07-30 Thu 10:31]
+- State "CANCELLED" from "TODO" [2026-07-31 Fri 12:59]
+:END:
+Herdr command help serves two different evidence roles: its epilogue prose may define load-bearing defaults, while it does not define JSON response field schemas. Add a narrow discovery guardrail to the Herdr skill: read the complete help text—including epilogue prose—when omitted-flag behavior matters; obtain response fields from authoritative source/contract or one live read-only invocation, never by inferring them from a fixture stub.
+
+*CANCELLED* [2026-07-31 Fri] As written this task cannot be actioned: its named destination `skills/herdr/SKILL.md` is vendored from upstream (ogulcancelik/herdr) and carries an explicit "Keep the body byte-identical to upstream" contract, so local guidance cannot be added there without breaking re-sync. The underlying guardrail is still valid; re-file it once a destination is chosen — candidates are a local companion doc beside the vendored skill, the `herdr-subagents` skill (which already owns local Herdr usage contracts), or an upstream contribution to the Herdr project itself.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-07-30 Thu 10:25]
+- sender: agent
+
+Evidence:
+`agent wait` without `--until` matches idle, done, and blocked only in the help epilogue; missing that would have violated the blocked-parent no-push guarantee. `agent list` JSON `name` behavior required a live read-only invocation because help documents no response schema; fake-herdr initially returned no agents at all.
