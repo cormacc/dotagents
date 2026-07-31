@@ -118,29 +118,11 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
     {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent)) :parent-kind (:agent agent) :parent-pane (:pane_id agent)}))
 ;; Composed from the resolved spawn policy, not the persona name: any persona whose
 ;; policy is non-empty gets the delegation sentence, everyone else the leaf sentence.
-;; Two distinct triggers share one capability bound. A `requires:` consult is mandated by
-;; the persona's own workflow and must not be filtered through the gap-only test that
-;; governs discretionary delegation — conflating them made a worker read its mandatory
-;; pre-publish advisor review as forbidden. The one-at-a-time, blocking, leaf bound is
-;; stated once and applies to both kinds; `enforce-spawns!` remains the mechanical gate.
-(defn delegation-guidance
-  ([spawns] (delegation-guidance spawns nil))
-  ([spawns required]
-   (let [required (vec (filter (set spawns) required))
-         optional (vec (remove (set required) spawns))]
-     (cond
-       (empty? spawns) "You are a leaf: do not spawn subagents."
-       (empty? required)
-       (str "You may spawn at most one blocking ephemeral " (str/join " or " spawns)
-            " only when a factual gap or material judgment blocks progress; that child must remain a leaf.")
-       :else
-       (str "Your persona definition mandates the " (str/join " and " required)
-            (if (= 1 (count required)) " consult" " consults")
-            " it specifies: perform it at the points that definition defines, not only when blocked."
-            (when (seq optional)
-              (str " You may additionally spawn " (str/join " or " optional)
-                   " only when a factual gap or material judgment blocks progress."))
-            " Spawn at most one blocking ephemeral child at a time, and every child must remain a leaf.")))))
+(defn delegation-guidance [spawns]
+  (if (seq spawns)
+    (str "You may spawn at most one blocking ephemeral " (str/join " or " spawns)
+         " only when a factual gap or material judgment blocks progress; that child must remain a leaf.")
+    "You are a leaf: do not spawn subagents."))
 (defn retro-instruction [retro-skill]
   (when retro-skill
     (str "\nBefore publishing, apply steps 1-2 of " retro-skill " to your own session, using that skill's own threshold and signal categories."
@@ -152,9 +134,9 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
 (defn progress-instruction [waiting-policy]
   (when (= waiting-policy "non-blocking")
     (str "\nReport concise phase-boundary progress with `$HERDR_SUBAGENT_BIN progress --summary \"...\"` at most once per SUBAGENT_PROGRESS_INTERVAL_MS (default 60000 ms); never include draft findings or result content, and never treat it as completion.")))
-(defn prompt-text [{:keys [spawns required persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
+(defn prompt-text [{:keys [spawns persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
   (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
-       (delegation-guidance spawns required) " Herdr assigned TASK=" task " and RESULT=" result ". "
+       (delegation-guidance spawns) " Herdr assigned TASK=" task " and RESULT=" result ". "
        "When finished, publish exactly once with `$HERDR_SUBAGENT_BIN publish --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
        "The waiting policy is " waiting-policy "."
@@ -202,12 +184,10 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
 (defn spawns-policy [persona opts frontmatter]
   (let [directories (persona-directories)
         resolved (core/resolve-spawns {:persona persona :flag (one opts :spawns) :frontmatter frontmatter
-                                       :resolve-persona #(core/resolve-persona (fn [path] (fs/exists? path)) directories %)})
-        effective (if (System/getenv "HERDR_SUBAGENT_PERSONA")
-                    {:spawns [] :spawns-source "depth"}
-                    resolved)]
-    (assoc effective :required (core/resolve-required {:persona persona :frontmatter frontmatter
-                                                      :spawns (:spawns effective)}))))
+                                       :resolve-persona #(core/resolve-persona (fn [path] (fs/exists? path)) directories %)})]
+    (if (System/getenv "HERDR_SUBAGENT_PERSONA")
+      {:spawns [] :spawns-source "depth"}
+      resolved)))
 (defn preview! [persona opts waiting-policy]
   (herdr/preflight!)
   (let [path (roster persona) frontmatter (core/parse-frontmatter (slurp (str path))) ident (parent-identity)
@@ -217,11 +197,11 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
         placement (placement-policy opts config)
         retro (retro-policy persona opts frontmatter)
         spawns (spawns-policy persona opts frontmatter)]
-    {:preview (prompt-text {:spawns (:spawns spawns) :required (:required spawns) :persona-path path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
+    {:preview (prompt-text {:spawns (:spawns spawns) :persona-path path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
      ;; :model is the canonical resolved ID; :model-args is the effective translated
      ;; native spelling (e.g. `["--model" "opus"]`) from the merged roster config.
      :persona-path (str path) :kind kind :model model :model-args (core/model-args config kind model) :placement placement :retro (:retro retro) :retro-source (:retro-source retro)
-     :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :required (:required spawns)}))
+     :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)}))
 ;; A published result is immutable, so a result that fails validation can never become
 ;; valid. Record it as the non-final `invalid` status (pane retained, needs manual
 ;; intervention) instead of throwing out of the wait loop and making the assignment
@@ -329,7 +309,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
             assignment (task-text opts)
             bin (launcher-bin)
             name (child-name persona task)
-            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :required (:required spawns) :placement placement :status "allocating" :created-at (now)}]
+            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :placement placement :status "allocating" :created-at (now)}]
         ;; Persist before the first pane mutation, so every partial failure is recoverable.
         (ledger/write! entry)
         (try
@@ -351,7 +331,7 @@ subagent publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TE
                                        ["--append-system-prompt"
                                         (core/persona-system-prompt kind (str path) (slurp (str path)))]))]
                   (record-session! task (:agent_session (herdr/start! name kind (:pane-id persisted) native)))
-                  (let [prompt (prompt-text {:spawns (:spawns spawns) :required (:required spawns) :persona-path path :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})]
+                  (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path path :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})]
                     (ledger/update! task assoc :status "started" :started-at (now))
                     (herdr/prompt! name prompt)
                     (let [prompted (ledger/update! task assoc :status "prompted" :prompted-at (now))]

@@ -1,0 +1,176 @@
+#!/usr/bin/env bb
+;; Extract per-cell evaluation metrics for one executor cell from the
+;; herdr-subagents ledger and the child's pi session transcript.
+;;
+;;   ./metrics <cell-task-uuid> [--label NAME] [--edn out.edn]
+;;
+;; Reports: wall-clock duration, advisor consult count with resolved tier and
+;; per-consult duration, and token/cost totals for the cell and each consult.
+;;
+;; Ledger schema verified against .agents/tmp/herdr-subagents/ledger/*.json:
+;; created-at / started-at / prompted-at / captured-at, child-session
+;; {kind,value}, parent-session, label, persona-path, status, envelope.
+;;
+;; Duration deliberately uses the RESULT file's mtime as the completion moment,
+;; not captured-at: under the non-blocking policy captured-at is when the parent
+;; got round to collecting, which can lag publication arbitrarily.
+;;
+;; The start moment is the first user message in the child's transcript, NOT
+;; prompted-at. A spawned pane can leave the composed prompt typed but
+;; unsubmitted (observed when pi showed an extension-update notification, which
+;; appears to swallow the submit), so prompted-at can precede the real start by
+;; tens of seconds, unevenly across cells. submit-delay-s reports that gap so it
+;; stays auditable instead of silently inflating the comparison.
+
+(require '[cheshire.core :as json]
+         '[clojure.pprint :as pp]
+         '[clojure.string :as str]
+         '[babashka.fs :as fs])
+
+(def ledger-dir
+  (or (System/getenv "SUBAGENT_LEDGER_DIR")
+      (str (fs/path (or (System/getenv "PWD") ".")
+                    ".agents/tmp/herdr-subagents/ledger"))))
+
+(defn- entries []
+  (for [f (fs/glob ledger-dir "*.json")
+        :let [m (try (json/parse-string (slurp (str f)) true) (catch Exception _ nil))]
+        :when m]
+    (assoc m ::file (str f))))
+
+(defn- instant [s] (when s (java.time.Instant/parse s)))
+
+(defn- mtime [path]
+  (when (and path (fs/exists? path))
+    (java.time.Instant/ofEpochMilli (fs/file-time->millis (fs/last-modified-time path)))))
+
+(defn- secs [^java.time.Instant a ^java.time.Instant b]
+  (when (and a b) (/ (Math/round (* 10.0 (/ (- (.toEpochMilli b) (.toEpochMilli a)) 1000.0))) 10.0)))
+
+(defn- duration-s
+  "Wall time from the child's real start (first user message in its transcript,
+  falling back to prompted-at) to publication (result mtime, falling back to
+  captured-at)."
+  [e info]
+  (let [start (or (:first-user-ts info) (instant (or (:prompted-at e) (:started-at e))))
+        end (or (mtime (:result e)) (instant (:captured-at e)))]
+    (secs start end)))
+
+(defn- submit-delay-s
+  "Gap between the CLI believing it prompted and the prompt actually landing.
+  Non-zero means the pane held the text unsubmitted."
+  [e info]
+  (when-let [fu (:first-user-ts info)]
+    (secs (instant (:prompted-at e)) fu)))
+
+(defn- session-path [e]
+  (let [{:keys [kind value]} (:child-session e)]
+    (when (= "path" kind) value)))
+
+(defn- transcript-usage
+  "Sum usage across a pi session jsonl. Returns nil when unreadable."
+  [path]
+  (when (and path (fs/exists? path))
+    (with-open [r (clojure.java.io/reader path)]
+      (reduce
+       (fn [acc line]
+         (let [d (try (json/parse-string line true) (catch Exception _ nil))
+               u (get-in d [:message :usage])
+               c (:cost u)
+               first-user? (and (nil? (:first-user-ts acc))
+                                (= "message" (:type d))
+                                (= "user" (get-in d [:message :role]))
+                                (:timestamp d))]
+           (cond-> acc
+             first-user? (assoc :first-user-ts (instant (:timestamp d)))
+             (:modelId d) (update :models conj (:modelId d))
+             u (-> (update :total-tokens + (or (:totalTokens u) 0))
+                   (update :output + (or (:output u) 0))
+                   (update :cache-read + (or (:cacheRead u) 0))
+                   (update :cache-write + (or (:cacheWrite u) 0))
+                   (update :assistant-msgs inc))
+             c (update :cost-usd + (reduce + 0 (keep #(when (number? %) %) (vals c)))))))
+       {:total-tokens 0 :output 0 :cache-read 0 :cache-write 0
+        :cost-usd 0.0 :assistant-msgs 0 :models #{} :first-user-ts nil}
+       (line-seq r)))))
+
+(defn- round-usd [x] (when x (/ (Math/round (* 10000.0 x)) 10000.0)))
+
+(defn- tier-from-label
+  "Nested labels look like worker-3/advisor-1-middle; the trailing token is the
+  resolved weight alias or explicit model id."
+  [label]
+  (when label
+    (let [leaf (last (str/split label #"/"))]
+      (second (re-matches #"[a-z-]+?-\d+-(.+)" leaf)))))
+
+(defn- summarize [e consults]
+  (let [u (transcript-usage (session-path e))
+        cs (for [c consults
+                 :let [cu (transcript-usage (session-path c))]]
+             {:task (:task c)
+              :label (:label c)
+              :tier (tier-from-label (:label c))
+              :status (:status c)
+              :duration-s (duration-s c cu)
+              :submit-delay-s (submit-delay-s c cu)
+              :verdict (some-> c :envelope :summary (subs 0 (min 160 (count (or (-> c :envelope :summary) "")))))
+              :total-tokens (:total-tokens cu)
+              :cost-usd (round-usd (:cost-usd cu))
+              :models (some-> cu :models vec)})]
+    {:task (:task e)
+     :label (:label e)
+     :persona (some-> (:persona-path e) (str/split #"/") last)
+     :status (:status e)
+     :duration-s (duration-s e u)
+     :submit-delay-s (submit-delay-s e u)
+     :executor {:total-tokens (:total-tokens u)
+                :cost-usd (round-usd (:cost-usd u))
+                :assistant-msgs (:assistant-msgs u)
+                :models (some-> u :models vec)}
+     :consults {:count (count consults)
+                :tiers (vec (distinct (keep #(:tier %) cs)))
+                :detail (vec cs)}
+     :totals {:cost-usd (round-usd (+ (or (:cost-usd u) 0)
+                                      (reduce + 0.0 (keep #(or (:cost-usd %) 0) cs))))
+              :total-tokens (+ (or (:total-tokens u) 0)
+                               (reduce + 0 (keep #(or (:total-tokens %) 0) cs)))}}))
+
+(let [args *command-line-args*
+      task (first (remove #(str/starts-with? % "--") args))
+      edn-path (second (drop-while #(not= "--edn" %) args))
+      all (entries)
+      e (first (filter #(= task (:task %)) all))]
+  (when-not task
+    (println "usage: metrics <cell-task-uuid> [--edn out.edn]") (System/exit 2))
+  (when-not e
+    (println (str "error: no ledger entry for " task " in " ledger-dir)) (System/exit 2))
+  (let [own-session (session-path e)
+        consults (->> all
+                      (filter #(and own-session (= own-session (:parent-session %))))
+                      (filter #(str/includes? (str (:persona-path %)) "advisor"))
+                      (sort-by :created-at))
+        s (summarize e consults)]
+    (println (format "cell %s  persona=%s  status=%s" (:label s) (:persona s) (:status s)))
+    (println (format "  duration        %.1fs  (submit-delay %s)"
+                     (double (or (:duration-s s) 0))
+                     (if-let [d (:submit-delay-s s)] (format "%.1fs" (double d)) "n/a")))
+    (println (format "  executor tokens %d  cost $%.4f  models=%s"
+                     (or (-> s :executor :total-tokens) 0)
+                     (double (or (-> s :executor :cost-usd) 0))
+                     (str/join "," (-> s :executor :models))))
+    (println (format "  consults        %d  tiers=%s"
+                     (-> s :consults :count)
+                     (str/join "," (-> s :consults :tiers))))
+    (doseq [c (-> s :consults :detail)]
+      (println (format "    - %s tier=%s %s %.1fs tokens=%d cost=$%.4f"
+                       (:label c) (:tier c) (:status c)
+                       (double (or (:duration-s c) 0))
+                       (or (:total-tokens c) 0)
+                       (double (or (:cost-usd c) 0)))))
+    (println (format "  TOTAL tokens    %d  cost $%.4f"
+                     (-> s :totals :total-tokens)
+                     (double (or (-> s :totals :cost-usd) 0))))
+    (when edn-path
+      (spit edn-path (with-out-str (pp/pprint s)))
+      (println "\nwrote" edn-path))))

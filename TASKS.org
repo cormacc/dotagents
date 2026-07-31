@@ -174,16 +174,6 @@ Target: https://github.com/ogulcancelik/herdr, canonical source src/integration/
 :END:
 Follow-ups from the initial `ot move` implementation (task 2a2f5aed): expose move in the ot TUI and pi tasks overlay (boundary.md notes the pending parity — needs a key map entry plus a destination picker), and add `--before`/`--after` ordering control so a move is not restricted to append-as-last-child / last-in-section semantics.
 
-** TODO subagent: paired comparison of skilled-worker vs worker :skill_herdr-subagents:
-:PROPERTIES:
-:CUSTOM_ID: 1a2fdaa6-860d-4210-8d2d-67d4c807a6f3
-:CREATED: [2026-07-29 Wed 11:14]
-:END:
-:LOGBOOK:
-- Created [2026-07-29 Wed 11:14]
-:END:
-Exploratory payoff for the advisor strategy (see [[plan:2026-07-29-subagent-implement-the-advisor-strategy.org]]): run the same scoped implementation task through `skilled-worker` (opus-5) and `worker` (sonnet-5 + opus-5 advisor), compare output quality, advisor consult count, and token cost. Also try one run with the advisor tier escalated to fable-5 via `--model heavy`.
-
 ** TODO org-tasks: Automate installation of babashka / ot
 :PROPERTIES:
 :CUSTOM_ID: ca95bb66-6c5c-4037-97cd-75274010b214
@@ -196,19 +186,6 @@ Currently we assume babashka is available, and the skill calls the ot cli tool u
 It would be nice to do a bootstrap check on initial skill activation...
 - if babashka not found in path, offer to install it via an appropriate method
 - if ot not found in path, offer to install it also (maybe using bbin?)
-
-** TODO subagents: review advisor strategy defaults
-:PROPERTIES:
-:CUSTOM_ID: 899fe848-586c-4568-9e08-cd164e3a703c
-:CREATED: [2026-07-30 Thu 11:06]
-:END:
-:LOGBOOK:
-- Created [2026-07-30 Thu 11:06]
-:END:
-Currently the advisor subagent definition specifies a medium-weight model, and the worker includes a provision for escalation to a heavy-weight advisor at need. Consider the following:
-- Should the advisor just specify a heavy-weight model directly?
-- Does the worker allow for the advisor model to be overridden at spawn time?
-- Consider whether the worker and skilled-worker should be merged, with the worker defaulting to having an advisor available, but allowing that to be overridden at spawn time
 
 ** TODO [#C] Guard ^:serial tagging of state-mutating deftests in parallel namespaces
 :PROPERTIES:
@@ -240,6 +217,20 @@ Deferred from 2fe1ce2a (see [[file:design/log/2026-07-30-optimise-test-build.org
 
 - Only act if CI actually demonstrates timing flakiness
 - Pin `OT_TEST_PARALLELISM` to the container CPU limit in the CI invocation
+
+** TODO herdr-subagents: verify prompt dispatch after spawn
+:PROPERTIES:
+:CUSTOM_ID: d4bd209f-6abd-4c5c-87bb-b240773c5a62
+:CREATED: [2026-07-31 Fri 15:33]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 15:33]
+:END:
+Every subagent spawn in the 2026-07-31 advisor-evaluation session left the composed prompt typed into the freshly spawned pane but unsubmitted, needing a manual focus + Enter. Confirmed mechanically: a child read `idle` five seconds after `subagent start`, and one `herdr agent send-keys <child> enter` moved it to `working`. Submit-delays of 25.6-46.6s were measured against 0.8s for a pre-regression historical run.
+
+`subagent start`/`run` should verify the prompt actually landed rather than trusting the atomic prompt+Enter, e.g. poll lifecycle state briefly after prompting and re-send Enter on a definite `idle` (never on an unobservable `unknown`, which risks submitting stray empty input). The stopgap used during the experiment is `.agents/tmp/advisor-eval/spawn-cell.sh`.
+
+Related: `prompted-at` is consequently unsafe as a duration baseline for any measurement; derive the start from the child transcript first user message instead.
 
 * Fixes
 
@@ -383,7 +374,6 @@ Origin:
 - git: cormacc/dotagents @ main
 - timestamp: [2026-07-31 Fri 13:40]
 - sender: agent
-
 *** TODO Establish how npx skills can manage repo-committed vendored skills
 :PROPERTIES:
 :CUSTOM_ID: 0a6c3fed-9c9f-4b30-b33e-a916868502e0
@@ -402,7 +392,6 @@ Acceptance criteria:
 - Each question answered with the exact command run and its observed output.
 - A recommended target layout for vendored skills that satisfies both constraints, or an explicit statement that no layout satisfies both and what the tradeoff is.
 - Experiments run in a scratch directory, never against this repo or another project.
-
 *** TODO Stop republishing vendored skills from the published skills/ tree
 :PROPERTIES:
 :CUSTOM_ID: 3df8b6a2-27d2-4495-ba32-a3bbb38ee303
@@ -420,7 +409,6 @@ Acceptance criteria:
 - Every vendored skill still resolves under `~/.agents/skills` after a Home Manager switch.
 - `scripts/check-metadata.ts` passes, with its inventory expectation updated to match the new split.
 - No vendored skill body is modified.
-
 *** TODO Adopt skills-lock.json as the provenance record for vendored skills
 :PROPERTIES:
 :CUSTOM_ID: 2300b750-ad34-479c-bee4-ef27a1e5d67c
@@ -436,7 +424,6 @@ Acceptance criteria:
 - `npx skills update` runs cleanly against the vendored set and touches only skill bodies plus the lockfile.
 - No vendor header is added to any skill managed this way.
 - herdr keeps its existing header, with its exception rationale stated where the convention is documented.
-
 *** TODO Backfill provenance for dirge, find-skills and skill-creator
 :PROPERTIES:
 :CUSTOM_ID: 87f1a303-a11c-454b-b9f5-ed57c1b5947d
@@ -453,7 +440,6 @@ Acceptance criteria:
 - Each of the three has a lockfile entry naming its real upstream repo, or is reclassified as adopted-and-modified with the divergence recorded.
 - Any body replaced is byte-identical to upstream at time of sync.
 - skills/README.org reflects the outcome per the documentation subtask.
-
 *** TODO Document the vendoring convention in skills/README.org
 :PROPERTIES:
 :CUSTOM_ID: 5121483a-1f26-47ec-8424-dadc3e3ee497
@@ -470,7 +456,6 @@ Acceptance criteria:
 - The convention states that vendored bodies stay byte-identical so `npx skills update` keeps working, and that local fixes go upstream or to a non-vendored destination.
 - The herdr row is marked as the standing exception (hand-vendored with an in-file header, because upstream ships SKILL.md at repo root), with the condition for retiring the exception.
 - `npx run check:metadata` inventory expectations still pass.
-
 *** TODO find-skills documents npx skills check as read-only, but it updates
 :PROPERTIES:
 :CUSTOM_ID: 73b47d41-89ee-4a44-9ac2-db463f31ae93
@@ -491,3 +476,43 @@ find-skills is vendored, so the body must not be edited locally. Resolve by one 
 Acceptance criteria:
 - The wrong read-only claim no longer reaches an agent following the skill.
 - Whatever route is taken, no local edit is left sitting in a lockfile-managed vendored body.
+
+** TODO subagent assignments: never assert an unverified baseline or attribution :skill_herdr-subagents:
+:PROPERTIES:
+:CUSTOM_ID: b8a7727c-1234-474c-aa3d-7c79a7877cb9
+:CREATED: [2026-07-31 Fri 20:54]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 20:54]
+:END:
+A parent assignment must not state a baseline, failure attribution, or suspected-cause framing that the parent has not measured. Either establish it first, or mark it explicitly unverified and instruct the child to establish it empirically before accepting the framing. The same rule applies to causal claims the agent reports to the user: assert a cause only after checking it, since a confident wrong attribution is more expensive than an admitted unknown.
+
+The existing herdr-subagents "Trusting a result" section covers verifying a child's claims; this is the reciprocal direction — the parent's own claims flowing into an assignment or a report.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: connect/portal @ firmware-asset-check
+- timestamp: [2026-07-31 Fri 21:00]
+- sender: agent
+
+Evidence:
+Two instances in one session. (1) A reviewer assignment asserted that some of 15 suite failures were "pre-existing/environmental (e.g. hardware integration tests)". The named base commit was in fact fully green, so every failure was refactor-caused; the whole attribution table depended on the child refuting the parent, and it reported the wrong premise as its top process candidate. (2) When ot doctor flagged a dangling :BLOCKED-BY+: reference, the agent reported it to the user as its own editing error without checking; the user had in fact deleted the task manually. Both were avoidable by one measurement before asserting.
+
+** TODO AGENTS.md: warn that rg -r silently rewrites match output :agents-md:
+:PROPERTIES:
+:CUSTOM_ID: b8b4ddae-b885-42c0-9140-d60064bfc3ae
+:CREATED: [2026-07-31 Fri 20:55]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 20:55]
+:END:
+Add a File-operations rule: never fold `-r` into an rg flag cluster. `-r/--replace` consumes the next value as a replacement template, so `rg -rn "pattern"` silently emits matches rewritten to "n" instead of erroring or numbering lines. The failure is silent and the output looks plausible, which is what makes it dangerous — it invites a wrong conclusion from apparently real evidence.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: connect/portal @ firmware-asset-check
+- timestamp: [2026-07-31 Fri 21:00]
+- sender: agent
+
+Evidence:
+Used twice in one session. `rg -rn "app-schema/compatible" test/` returned `(dispatch! [[:n]])` rather than the real call sites, and a second occurrence hit the same trap while searching for bucket effects. Correct invocations are `rg -n <pattern>` for line numbers; `-r` only ever belongs with an explicit replacement template.

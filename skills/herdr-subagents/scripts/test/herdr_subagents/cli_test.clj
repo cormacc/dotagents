@@ -212,24 +212,23 @@
     (is (= {:spawns ["scout" "researcher" "advisor"] :spawns-source "frontmatter"}
            (select-keys entry [:spawns :spawns-source])))
     (is (= "scout researcher advisor" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))
-    ;; The live worker's mandatory pre-publish advisor review is recorded and reaches the
-    ;; prompt as an instruction, not as something the gap-only trigger could forbid.
-    (is (= ["advisor"] (:required entry)))
-    (is (str/includes? prompt "Your persona definition mandates the advisor consult it specifies"))
-    (is (str/includes? prompt "You may additionally spawn scout or researcher only when a factual gap or material judgment blocks progress."))
-    (is (not (str/includes? prompt "at most one blocking ephemeral scout or researcher or advisor")))))
+    ;; The advisor is available but discretionary: the mandatory pre-publish review was
+    ;; retired, so the single gap-only clause covers it and no ledger mandate is recorded.
+    (is (not (contains? entry :required)))
+    (is (str/includes? prompt "You may spawn at most one blocking ephemeral scout or researcher or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."))
+    (is (not (str/includes? prompt "mandates")))))
 
-(deftest worker-mandate-drops-with-the-effective-allow-list
-  (testing "--spawns none forces a leaf and withdraws the mandate"
+(deftest worker-spawn-policy-narrows-to-a-leaf
+  (testing "--spawns none forces a leaf"
     (let [{:keys [env dir prompt-file]} (fake-env {})
           proc (call! env "start" "worker" "--spawns" "none" "--task" "forced leaf worker")
           task (get-in (result proc) [:result :task])
           entry (ledger-entry* dir task)]
       (is (zero? (:exit proc)) (:err proc))
-      (is (= {:spawns [] :spawns-source "flag" :required []}
-             (select-keys entry [:spawns :spawns-source :required])))
+      (is (= {:spawns [] :spawns-source "flag"}
+             (select-keys entry [:spawns :spawns-source])))
       (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))))
-  (testing "a below-root worker is depth-forced to a leaf and carries no mandate"
+  (testing "a below-root worker is depth-forced to a leaf"
     (let [{:keys [env dir prompt-file]} (fake-env {"HERDR_SUBAGENT_PERSONA" "planner"
                                                    "HERDR_SUBAGENT_SPAWNS" "worker"
                                                    "FAKE_PARENT_LABEL" "planner-1-claude-opus-5"})
@@ -237,8 +236,8 @@
           task (get-in (result proc) [:result :task])
           entry (ledger-entry* dir task)]
       (is (zero? (:exit proc)) (:err proc))
-      (is (= {:spawns [] :spawns-source "depth" :required []}
-             (select-keys entry [:spawns :spawns-source :required])))
+      (is (= {:spawns [] :spawns-source "depth"}
+             (select-keys entry [:spawns :spawns-source])))
       (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents.")))))
 
 (deftest advisor-strategy-spawn-contract
@@ -1924,7 +1923,6 @@
   (let [expected {"planner" "heavy"
                   "advisor" "middle"
                   "reviewer" "middle"
-                  "skilled-worker" "middle"
                   "visual-tester" "middle"
                   "researcher" "light"
                   "scout" "light"
@@ -1932,6 +1930,9 @@
     (doseq [[persona weight] expected]
       (is (= weight (:model (core/parse-frontmatter (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" (str persona ".md")))))))
           (str persona " declares " weight)))
+    ;; `skilled-worker` was retired: `worker --model <tier>` covers it (see
+    ;; design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org).
+    (is (not (fs/exists? (fs/path root "skills" "herdr-subagents" "subagents" "skilled-worker.md"))))
     (is (str/includes? (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "worker.md"))) "--model heavy"))))
 
 ;; Loader precedence, row-level replacement, missing/malformed/invalid-shape handling,

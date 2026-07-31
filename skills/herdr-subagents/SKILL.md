@@ -1,6 +1,6 @@
 ---
 name: herdr-subagents
-description: "Delegate work to subagents inside Herdr: use when asked to spawn, delegate, fan out, or run a scout/researcher/planner/reviewer/worker/skilled-worker/advisor. Requires HERDR_ENV=1; use the in-skill subagent CLI for single-child delegation and the Herdr skill for pane mechanics."
+description: "Delegate work to subagents inside Herdr: use when asked to spawn, delegate, fan out, or run a scout/researcher/planner/reviewer/worker/advisor. Requires HERDR_ENV=1; use the in-skill subagent CLI for single-child delegation and the Herdr skill for pane mechanics."
 ---
 
 # Herdr subagents
@@ -33,13 +33,19 @@ Resolve kind independently from model: spawn request overrides definition, defin
 
 The shipped `:pi` column supplies Pi's explicit provider-qualified model; tier-equivalent cross-provider mappings are confined to the `:claude` and `:codex` columns. Unversioned IDs (`claude-opus`, `gpt-sol`, …) are floating aliases for the latest version of that tier; versioned IDs pin a release. A model ID absent from the table passes through unchanged, and a definition model survives a kind override, translated for the resolved kind. Unknown personas require listing the roster and asking, not improvising.
 
-Delegation capability is declared, not assumed: a persona may spawn only what its frontmatter `spawns:` allow-list grants (`planner` and `skilled-worker` grant `scout researcher`; `worker` grants `scout researcher advisor`; every other persona is a leaf), and the value-bearing `--spawns` flag overrides the list for one spawn — the literal `none` forces a leaf. Nesting is one level absolutely: anything spawned below the root is a leaf regardless of its frontmatter, and a below-root spawn stays blocking, one-at-a-time, and ephemeral. The CLI enforces the allow-list and the depth bound mechanically before any ledger or pane mutation.
+Delegation capability is declared, not assumed: a persona may spawn only what its frontmatter `spawns:` allow-list grants (`planner` grants `scout researcher`; `worker` grants `scout researcher advisor`; every other persona is a leaf), and the value-bearing `--spawns` flag overrides the list for one spawn — the literal `none` forces a leaf. Nesting is one level absolutely: anything spawned below the root is a leaf regardless of its frontmatter, and a below-root spawn stays blocking, one-at-a-time, and ephemeral. The CLI enforces the allow-list and the depth bound mechanically before any ledger or pane mutation.
 
-Granted capability and mandated capability are separate: a persona's frontmatter `requires:` names the subset of its `spawns:` grant whose consult its own workflow mandates (`worker` declares `requires: advisor` for its pre-publish review), and the composed prompt states that mandate as an instruction to carry out at the persona's defined points rather than filtering it through the gap-only trigger that governs discretionary delegation. A mandate never widens capability, and it is withdrawn whenever the effective allow-list drops it (`--spawns none`, or any below-root spawn).
+## Executor tier and advisor strategy
 
-## Advisor strategy (default worker)
+`worker` is the single executor persona, parameterised by `--model`; pick the tier with `--model` rather than reaching for a different persona. Its `advisor` is a consult-only, read-only grandchild that returns a verdict, a recommended approach, and pass/fail checks, and never spawns an advisor of its own.
 
-The default `worker` is a cheap executor whose `advisor` is a consult-only frontier grandchild. It takes one mandatory focused pre-publish review consult, with optional escalation consults for judgment calls or debugging dead ends; soft cap: three consults. The caller selects an advisor tier with `--model` (for example, `--model claude-fable`); tier escalation is caller-driven—an advisor never spawns an advisor. Use `skilled-worker` for a frontier-model executor without the advisor loop. See the [change record](../../design/log/2026-07-29-subagent-implement-the-advisor-strategy.org) for rationale (which predates the rename: its “advised-worker” is today's `worker`, its “worker” today's `skilled-worker`).
+**The advisor is opt-in, for a stuck worker only.** There is no routine pre-publish review. A worker consults on a debugging dead end after repeated failed attempts, or on a materially ambiguous high-stakes decision it cannot settle from source; soft cap three consults. The advisor runs at its own `middle` default, and a caller or worker may raise a single high-stakes consult with `--model heavy`.
+
+**Tier guidance:** light is the efficient default for well-specified implementation work. Feather is a false economy for it — measured head to head, feather cost 1.1–2.4x more than light and ran 2.3–8.1x slower for an identical score, burning 2–2.5x the tokens, and accounted for every delegation-protocol failure observed. Reserve middle and above for work whose difficulty is genuinely established rather than assumed.
+
+The advisor-tier override is a convention, not a structured flag: instruct the worker (via `--prompt-extra`) to spawn its consult with `--model <tier>`. That is verified to work — but only when the worker actually uses `subagent run advisor`. A worker that hand-rolls a consult with raw `herdr agent start` silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so treat ledger consult counts and advisor costs as a floor rather than the truth.
+
+See the [evaluation record](../../design/log/2026-07-31-subagents-review-advisor-strategy-defaul.org) for the three benchmark rounds behind this, and the [implementation record](../../design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org) for what changed. The earlier [2026-07-29 advisor-strategy record](../../design/log/2026-07-29-subagent-implement-the-advisor-strategy.org) is superseded: its mandatory consult and its separate frontier-executor persona are both retired.
 
 ## Invocation policy
 

@@ -1,0 +1,23 @@
+{:paths ["src" "test"]
+ :tasks
+ {test {:doc "Run the visible smoke tests"
+        :requires ([clojure.test :as t]
+                   [segwin-smoke-test])
+        :task (let [{:keys [fail error]} (t/run-tests 'segwin-smoke-test)]
+                (when (pos? (+ fail error))
+                  (System/exit 1)))}
+  bench {:doc "Time the 30,000 / 30,000 scoring-size workload (budget: 60s)"
+         :requires ([segwin :as sw]
+                    [workload :as w])
+         :task (let [{:keys [n-points n-ops]} w/scoring-size
+                     ops (w/gen n-points n-ops 1)
+                     t0 (System/nanoTime)
+                     res (sw/run-ops ops)
+                     ms (/ (- (System/nanoTime) t0) 1e6)]
+                 (println (format "points=%d ops=%d  elapsed=%.0f ms  budget=60000 ms  %s"
+                                  n-points n-ops ms
+                                  (if (< ms 60000) "WITHIN BUDGET" "OVER BUDGET")))
+                 (println (format "results=%d checksum=%d"
+                                  (count res)
+                                  (reduce (fn [a x] (unchecked-add a (long (or x 0)))) 0 res)))
+                 (when-not (< ms 60000) (System/exit 1)))}}}

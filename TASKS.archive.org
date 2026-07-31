@@ -1833,3 +1833,42 @@ Origin:
 
 Evidence:
 `agent wait` without `--until` matches idle, done, and blocked only in the help epilogue; missing that would have violated the blocked-parent no-push guarantee. `agent list` JSON `name` behavior required a live read-only invocation because help documents no response schema; fake-herdr initially returned no agents at all.
+
+** DONE subagents: review advisor strategy defaults
+CLOSED: [2026-07-31 Fri 22:47]
+:PROPERTIES:
+:CUSTOM_ID: 899fe848-586c-4568-9e08-cd164e3a703c
+:CREATED: [2026-07-30 Thu 11:06]
+:STARTED: [2026-07-31 Fri 14:36]
+:ARCHIVED: [2026-07-31 Fri 22:47]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-30 Thu 11:06]
+- State "STARTED" from "TODO" [2026-07-31 Fri 14:36]
+- State "DONE" from "STARTED" [2026-07-31 Fri 22:47]
+:END:
+#+IMPORT: [[plan:2026-07-31-subagents-review-advisor-strategy-defaul.org]]
+Currently the advisor subagent definition specifies a medium-weight model, and the worker includes a provision for escalation to a heavy-weight advisor at need. Consider the following:
+- Should the advisor just specify a heavy-weight model directly?
+- Does the worker allow for the advisor model to be overridden at spawn time?
+- Consider whether the worker and skilled-worker should be merged, with the worker defaulting to having an advisor available, but allowing that to be overridden at spawn time
+
+** DONE subagents: retire the mandatory advisor consult and the skilled-worker persona :skill_herdr-subagents:
+CLOSED: [2026-07-31 Fri 20:54]
+:PROPERTIES:
+:CUSTOM_ID: 6588f447-e61a-4a04-9733-2614a1b7c558
+:CREATED: [2026-07-31 Fri 20:42]
+:STARTED: [2026-07-31 Fri 20:45]
+:ARCHIVED: [2026-07-31 Fri 20:54]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 20:42]
+- State "STARTED" from "TODO" [2026-07-31 Fri 20:45]
+- State "DONE" from "STARTED" [2026-07-31 Fri 20:54]
+:END:
+#+IMPORT: [[plan:2026-07-31-subagents-retire-the-mandatory-advisor-c.org]]
+Implements the decisions from the advisor-strategy evaluation (parent task 899fe848, record 2026-07-31-subagents-review-advisor-strategy-defaul.org).
+
+Three rounds of benchmarking found no measurable quality gain from the mandatory pre-publish advisor consult at any executor tier, while it cost $1.43-$2.98 per run and could not be mechanically enforced. The changes: eliminate the mandate and roll back the `requires:` / `:required` mechanism that expressed it (commit 7b67e13); keep the advisor as an opt-in escalation at its existing middle default, with `--model heavy` available per spawn; retire `skilled-worker`, since `worker --model <tier>` with an unused optional advisor covers it; and re-document the advisor strategy and tier guidance against the measured evidence.

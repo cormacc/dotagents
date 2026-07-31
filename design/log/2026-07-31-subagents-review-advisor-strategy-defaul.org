@@ -1,0 +1,359 @@
+#+TITLE: subagents: review advisor strategy defaults
+#+DATE: 2026-07-31 Fri
+#+PARENT: [[archive:899fe848-586c-4568-9e08-cd164e3a703c][subagents: review advisor strategy defaults]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+
+* Intent
+
+Decide the worker/advisor defaults (advisor tier, parent-side tier override, worker vs skilled-worker merge) from measured evidence rather than intuition: run the deferred paired comparison as a 4-cell evaluation, then take the definition decisions at an explicit user gate.
+
+* Summary
+
+*Level:* MVP · *Tests:* three purpose-built benchmark suites, each calibrated before use · *Docs:* two reports + rubric · *Cost:* $41.4099
+
+Decide the worker/advisor defaults from measured evidence. Three benchmarks were built across three difficulty axes; all three saturated at light tier, and the resulting evidence retired the mandatory advisor consult, kept the advisor at middle, established light as the default executor tier, and retired =skilled-worker=.
+
+** Scope
+
+*** In scope
+
+- Three purpose-built Babashka benchmarks, each with a visible skeleton and a hidden suite the assignment never names, each calibrated before use against a reference (100%), the stub (0%, no crash) and a deliberately sloppy implementation (materially below): (1) a mini org-outline parser, rule-following; (2) =cellform=, a spreadsheet formula engine with deliberately counter-Excel semantics; (3) =segwin=, a range-update/range-query engine gated on an explicit performance budget.
+- Fourteen cell runs across the three benchmarks, one run each from a pristine scratch dir, varying executor tier (feather / light / middle) and advisor tier (none / light / middle / heavy). Round 1 ran the full seven-cell matrix; rounds 2 and 3 ran a run-first difficulty pilot which saturated both times, so only the four cells that remained justified (I, H, E, F) were run on benchmark 3.
+- Per-cell metrics: hidden-test pass rate with category breakdown, advisor consult count, tier and verdict verified from the ledger, token cost and real dollar cost, and duration measured from the child transcript's first user message.
+- Two comparison reports and a user decision gate on the worker definition, absorbing the previously separate paired-comparison task (=task:1a2fdaa6=, a plan task here).
+
+*** Out of scope
+
+- Any change to the personas, =config.edn= or SKILL § Advisor strategy before the gate — those landed afterwards under [[plan:2026-07-31-subagents-retire-the-mandatory-advisor-c.org]].
+- CLI/contract/envelope changes; the gate judged the existing =--prompt-extra= tier convention adequate, so a structured flag was not pursued.
+- Statistical rigour: one run per cell throughout.
+- The 9-cell round-2/3 matrix as originally planned — abandoned when both difficulty pilots saturated, rather than spending ~$50 to re-measure a ceiling.
+- Benchmark genres beyond self-contained single-file problems (multi-file consistency, requirement ambiguity, legacy archaeology). Considered at the gate and deliberately not attempted; see =** Risks=.
+
+** Acceptance
+
+*** Core functionality
+
+- [X] Benchmark assignment, skeleton, and hidden test suite exist under the record's same-stem folder
+- [X] Hidden suite includes edge cases expected to discriminate between cells (not only happy-path round-trips)
+- [-] Each of the 7 cells publishes a validated result envelope from an isolated scratch dir — 6 of 7; cell E never produced a valid envelope (malformed =ARTIFACTS:= paths) though its data was fully recovered
+- [X] Per-cell quality captured as hidden-test pass rate
+- [X] Per-cell advisor consult count and verdicts captured from the subagent ledger
+- [X] Per-cell token cost captured (best-effort) with extraction method noted
+- [X] Per-cell duration captured: wall time per cell, per-consult durations where extractable
+- [X] Comparison report artifact linked from this record
+- [X] Benchmark-2 assignment, skeleton, and hidden suite exist under the same-stem folder; the assignment never names the suite path; hidden-case inputs differ from the assignment's illustrative examples
+- [X] Benchmark-2 suite validated before use: reference 100%, stub 0% without crashing the runner, sloppy implementation materially below 100%; validation implementations live outside the worktree
+- [X] Difficulty pilot: cell I scored below 100% before any other round-2 cell was spawned (or the benchmark was toughened, re-validated, and re-piloted first) — satisfied by the *toughen* branch: cell I scored 100% on benchmark 2, so no further round-2 cell was spawned, benchmark 3 was built and validated, and the pilot re-ran (100% again)
+- [-] Each of the 9 round-2 cells publishes a validated envelope from an isolated scratch dir — superseded. The 9-cell matrix was abandoned when both pilots saturated; the four cells that were justified afterwards (I, H, E, F on benchmark 3) each ran from a pristine =r3-= dir, and cell H published only after being re-prompted
+- [X] Per-cell quality, token cost, and duration captured for every cell that ran, duration from the child transcript's first user message
+- [X] Consult compliance verified from the ledger per advisor cell — and the verification itself found the ledger can under-report (see =** Gotchas=)
+- [X] Feather-trio report linked from this record, rows in increasing executor weight then advisor weight with no-advisor first
+- [X] Gate decisions recorded as DECIDED open questions: advisor default tier; parent-side tier-override mechanism; worker/skilled-worker merge — plus two the evaluation forced open, on the mandate itself and on the default executor tier
+- [X] Follow-up implementation tasks for the gate decisions exist as TODO tasks (or an explicit no-change decision is recorded) — task 6588f447, planned and landed
+
+*** Anti-criteria
+
+- [X] Must not: modify `worker.md`, `skilled-worker.md`, `advisor.md`, `config.edn`, or SKILL § Advisor strategy before the decision gate — held; every such change landed under the implementation record after the gate
+- [X] Must not: orchestrate evaluation runs below root — held; every cell was spawned from the root session
+- [X] Must not: expose any round's hidden test suite, or the validation implementations, to any executor cell — held; suites stayed unnamed in the assignments, validation implementations were moved out of the worktree to =~/.cache/=, and leak checks were run per round
+
+** Decisions
+
+- Evaluate before changing defaults :: the advisor-strategy record (2026-07-29) deliberately chose middle-default + caller-driven heavy escalation and kept `skilled-worker` as a stable comparison baseline; the open questions in task 899fe848 are exactly what the deferred paired comparison was designed to answer, so the experiment is absorbed here and gates the definition changes.
+  Rejected:
+  - Set advisor heavy directly now: raises the cost of every mandatory pre-publish consult and preempts the pending comparison with no new evidence.
+  - Merge worker/skilled-worker now: destroys the comparison baseline; the persona body's unconditional consult step contradicts a `--spawns none` spawn until made conditional.
+- Benchmark: mini org-outline parser with byte-identical round-trip :: objective hidden-test scoring, judgment-bearing edge cases (tags vs heading text, drawer boundaries, whitespace preservation), fits repo Babashka tooling.
+  Rejected:
+  - Sliding-window rate limiter: more memorized territory, less advisor-differentiating.
+- Cell C tier selection via `--prompt-extra` :: no structured parent-side knob exists (`--model` on the worker spawn sets the worker's own model); using the free-text route doubles as live evidence for the override-mechanism gate question.
+- Extend to a feather advisor-tier ladder rather than repeat saturated cells :: with A, B and D all at 35/35 the discriminating power has to come from a weaker executor, so E–G hold the executor at feather and vary only the advisor tier (light/middle/heavy). Rejected: repeat runs of A–D for statistical confidence, which would spend more to re-measure a ceiling.
+- Round-2 benchmark: =cellform= spreadsheet formula engine :: deepest interacting-rules core of the candidates (dependency graph + cycle topology + error-precedence lattice + strictness), with deliberately counter-Excel semantics so pattern-matching to memorized spreadsheet behaviour loses points while rule-reading does not; scoring stays mechanical with the round-1 runner shape.
+  Rejected:
+  - Text buffer with grouped undo/redo: state discipline but a shallower algorithmic core; undo semantics are well-trodden training material.
+  - Event-sourced payment ledger: rule volume risks checklist difficulty a diligent light model grinds through, rather than reasoning depth.
+- Switch the round-3 difficulty axis to performance rather than more rules :: two benchmarks built from explicitly-stated but counter-intuitive rules both saturated at light tier (=cellform= pilot: sonnet 60/60, plus 32/32 on off-suite probes), because careful rule-reading is exactly what these models do well. Algorithm selection under a stated time budget is a different capability and is where a frontier advisor consult should plausibly add value. Rejected: toughening =cellform= along the same axis (no reason to expect a different outcome); running only the feather cells (answers a narrower question than the gate needs).
+- Round-3 budget set generously at 60s for a 30k/30k workload :: babashka's constant factor is large and varies by approach — a legitimate lazy segment tree takes ~28s where two Fenwick trees take ~3s — so a tight budget would fail correct logarithmic solutions and would measure micro-optimisation instead of asymptotic judgement. At 60s any log-per-op approach passes while the quadratic rescan (~148s, hard-aborted at 100s) fails.
+- Round-2 matrix: 9 cells = the round-1 configurations plus skilled-worker feather/light baselines :: H and I complete the no-advisor baseline at every executor tier (round 1 had it only at middle), and cell I run first is a difficulty gate at zero marginal cost.
+  Rejected:
+  - Heavy-executor cells: answer no gate question and are the most expensive per run.
+  - =worker= middle + middle advisor: A vs D already isolates the advisor at middle tier; n=1 cannot use the extra resolution.
+  - Benchmark-1 repeats: would re-measure a known ceiling.
+- Round-2 report row order fixed at planning time :: increasing executor weight then advisor weight (feather < light < middle < heavy; no-advisor before any advisor tier) — exactly H, E, F, G, I, B, C, A, D — so the report task cannot drift from it.
+
+** Shipped
+
+No production code or contract doc changed here by design — the anti-criteria froze the personas, =config.edn= and =SKILL.md= until the gate, and the resulting changes landed under [[plan:2026-07-31-subagents-retire-the-mandatory-advisor-c.org]]. What this record shipped is evidence and reusable apparatus:
+
+- Three validated benchmark harnesses under the same-stem folder, each with a visible skeleton, a hidden suite the assignment never names, and a =score= wrapper: =skeleton/= + =acceptance/= (org-outline parser), =skeleton2/= + =acceptance2/= (=cellform=), =skeleton3/= + =acceptance3/= (=segwin=, performance-gated).
+- =acceptance/metrics=, a ledger + transcript extractor reporting duration, submit-delay, consult tier/verdict, tokens and real dollar cost, reusable for any future subagent comparison.
+- Two reports: =comparison-report.md= (7 cells) and =feather-trio-report.md= (3 cells plus the light reference line).
+- =rubric.md=, the reading guide covering both rounds, including ledger-verified consult compliance and the fixed report row order.
+- =.agents/tmp/advisor-eval/spawn-cell.sh=, the dispatch workaround now referenced by the open CLI defect.
+- Five gate decisions recorded below, and the =$41.4099= total cost of reaching them.
+
+*Spec note:* =#+SPEC:= names =skills/herdr-subagents/SKILL.md=, which this record deliberately did not touch — modifying it before the gate was an explicit anti-criterion. It was reviewed at closure and updated by the implementation record, which rewrote § Advisor strategy as § Executor tier and advisor strategy.
+
+** Gotchas
+
+- *The ledger under-reports, it does not merely omit.* A worker that hand-rolls a consult with raw =herdr agent start= instead of =subagent run advisor= gets the default model (defeating any tier instruction), spends money that appears nowhere in the ledger, and orphans the pane. Round-3 cell E hid $1.6883 this way, understating its cost 2.3x. Treat consult counts and advisor costs as a floor.
+- *=prompted-at= is not a safe duration baseline.* A spawned pane can hold its composed prompt unsubmitted; measured submit-delays ranged 5–47s against 0.8s before the regression. Measure from the child transcript's first user message instead — =acceptance/metrics= now does.
+- *=collect= can capture a premature write.* A child that writes non-envelope content to its =RESULT= path mid-flight triggers an =invalid= capture while it is still working, and the parent then stops waiting for it. Round-1 cell E did exactly this, so a mid-flight score is not a final score.
+- *babashka's constant factor swamps asymptotics at benchmark scale.* Two equally valid O(log n) solutions differed ~10x (lazy segment tree ~28s vs two Fenwick trees ~3s) on the same 30k/30k workload, so any timed budget must be generous enough to pass every correct approach or it silently grades micro-optimisation.
+- *A reference implementation passing its own suite proves consistency, not correctness.* The round-1 reference scored 35/35 while mis-serialising a bare keyword with tags — a case the suite did not contain. Off-suite probing found it; the suite never would have.
+
+** Risks
+
+All the planning-time risks resolved; only these remain durable:
+
+- Single run per cell. Never retired — every result here is n=1, so single-case score gaps and minute-scale duration gaps are inside noise. The convergence-time signal in the feather trio is the one finding that would most benefit from repeats.
+- Conclusions are scoped to one problem genre. All three benchmarks were self-contained, precisely-specified, single-file problems with objective tests, and all three saturated. Nothing here establishes what happens on multi-file, ambiguous, or archaeological work — where an advisor may still pay.
+
+* Plan
+
+** DONE Design benchmark: assignment, skeleton, hidden test suite, rubric
+CLOSED: [2026-07-31 Fri 14:47]
+:PROPERTIES:
+:CUSTOM_ID: 5cc4e2a1-2f80-4e46-9366-69421bec5f58
+:CREATED: [2026-07-31 Fri]
+:STARTED: [2026-07-31 Fri 14:36]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-31 Fri 14:36]
+- State "DONE" from "STARTED" [2026-07-31 Fri 14:47]
+:END:
+Benchmark 1 (org-outline parser), 35 cases / 6 categories. Calibration: reference 35/35, stub 0/35 all-errored, deliberately sloppy 24/35.
+
+** DONE Execute 7-cell paired comparison runs :skill_herdr-subagents:
+CLOSED: [2026-07-31 Fri 16:20]
+:PROPERTIES:
+:CUSTOM_ID: 1a2fdaa6-860d-4210-8d2d-67d4c807a6f3
+:CREATED: [2026-07-29 Wed 11:14]
+:BLOCKED-BY: task:5cc4e2a1-2f80-4e46-9366-69421bec5f58
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 11:14]
+- State "DONE" from "TODO" [2026-07-31 Fri 16:20]
+:END:
+Cells A–G run once each from pristine scratch dirs; every envelope, score and metrics artifact captured. Results in the comparison report.
+
+** DONE Compile comparison report
+CLOSED: [2026-07-31 Fri 16:22]
+:PROPERTIES:
+:CUSTOM_ID: febc1e3c-85f6-43f4-adb2-234520225637
+:CREATED: [2026-07-31 Fri]
+:BLOCKED-BY: task:1a2fdaa6-860d-4210-8d2d-67d4c807a6f3
+:STARTED: [2026-07-31 Fri 16:20]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-31 Fri 16:20]
+- State "DONE" from "STARTED" [2026-07-31 Fri 16:22]
+:END:
+→ [[proj:design/log/2026-07-31-subagents-review-advisor-strategy-defaul/comparison-report.md]]
+
+** DONE Design benchmark 2: cellform spreadsheet formula engine
+CLOSED: [2026-07-31 Fri 18:04]
+:PROPERTIES:
+:CUSTOM_ID: e8158be0-7c76-42df-8767-7df6d1fead2b
+:CREATED: [2026-07-31 Fri]
+:STARTED: [2026-07-31 Fri 17:56]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-31 Fri 17:56]
+- State "DONE" from "STARTED" [2026-07-31 Fri 18:04]
+:END:
+Benchmark 2 (cellform), 60 cases / 7 categories. Calibration: reference 60/60, stub 0/60, sloppy 47/60 failing only the counter-intuitive categories.
+
+** DONE Design benchmark 3: segwin range-update/range-query engine (performance axis)
+CLOSED: [2026-07-31 Fri 20:44]
+:PROPERTIES:
+:CUSTOM_ID: 182c9b8e-0763-49c1-b900-b95291628cbc
+:CREATED: [2026-07-31 Fri]
+:END:
+:LOGBOOK:
+- State "TODO" from "DONE" [2026-07-31 Fri 20:44]
+- State "DONE" from "TODO" [2026-07-31 Fri 20:44]
+:END:
+Benchmark 3 (segwin, performance axis), 34 cases including a timed 30k/30k gate. Calibration: reference 34/34, stub 0/34, correct-but-quadratic 32/34 failing only =performance=.
+
+** DONE Difficulty pilot: run cell I (skilled-worker light) before all other round-2 cells
+CLOSED: [2026-07-31 Fri 19:29]
+:PROPERTIES:
+:CUSTOM_ID: d2b65b17-b691-4abf-a47f-e9a51c6cd847
+:CREATED: [2026-07-31 Fri]
+:BLOCKED-BY: task:e8158be0-7c76-42df-8767-7df6d1fead2b
+:STARTED: [2026-07-31 Fri 18:04]
+:HANDOFF: Re-pilot on benchmark 3 (segwin, performance axis) ALSO scored 100% (34/34 incl. performance 2/2) for sonnet with no advisor. Three benchmarks across three difficulty axes have now all saturated at light tier. Remaining 8 round-3 cells deliberately not spawned per the gate condition. Awaiting user decision: change problem genre (multi-file / ambiguous / legacy archaeology) or stop measuring and go to gate 41303c50 with the evidence in hand.
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-31 Fri 18:04]
+- State "WAITING" from "STARTED" [2026-07-31 Fri 18:17]
+- State "STARTED" from "WAITING" [2026-07-31 Fri 18:37]
+- State "WAITING" from "STARTED" [2026-07-31 Fri 18:46]
+- State "DONE" from "WAITING" [2026-07-31 Fri 19:29]
+:END:
+Piloted on benchmark 2 and again on benchmark 3; cell I scored 100% both times, so both matrices were abandoned before spawning further cells. Two pilots cost $4.0337 and averted roughly $50.
+
+** DONE Execute the feather trio on benchmark 3 :skill_herdr-subagents:
+CLOSED: [2026-07-31 Fri 20:24]
+:PROPERTIES:
+:CUSTOM_ID: 511d9178-f44a-4495-85af-f5b3a49066b0
+:CREATED: [2026-07-31 Fri]
+:BLOCKED-BY: task:d2b65b17-b691-4abf-a47f-e9a51c6cd847
+:STARTED: [2026-07-31 Fri 19:31]
+:END:
+:LOGBOOK:
+- State "CANCELLED" from "TODO" [2026-07-31 Fri 19:29]
+- State "TODO" from "CANCELLED" [2026-07-31 Fri 19:30]
+- State "STARTED" from "TODO" [2026-07-31 Fri 19:31]
+- State "DONE" from "STARTED" [2026-07-31 Fri 20:24]
+:END:
+Cells H, E and F run on benchmark 3 against completed cell I as the reference line.
+
+** DONE Compile the feather-trio comparison report
+CLOSED: [2026-07-31 Fri 20:25]
+:PROPERTIES:
+:CUSTOM_ID: e13d6319-3198-4459-861c-c2ea06d5d8e7
+:CREATED: [2026-07-31 Fri]
+:BLOCKED-BY: task:511d9178-f44a-4495-85af-f5b3a49066b0
+:STARTED: [2026-07-31 Fri 20:24]
+:END:
+:LOGBOOK:
+- State "CANCELLED" from "TODO" [2026-07-31 Fri 19:29]
+- State "TODO" from "CANCELLED" [2026-07-31 Fri 19:30]
+- State "STARTED" from "TODO" [2026-07-31 Fri 20:24]
+- State "DONE" from "STARTED" [2026-07-31 Fri 20:25]
+:END:
+→ [[proj:design/log/2026-07-31-subagents-review-advisor-strategy-defaul/feather-trio-report.md]]
+
+** DONE Decision gate: worker definition review with user
+CLOSED: [2026-07-31 Fri 20:44]
+:PROPERTIES:
+:CUSTOM_ID: 41303c50-7a8c-4d17-8d87-ba4d920d5b3e
+:CREATED: [2026-07-31 Fri]
+:BLOCKED-BY: task:febc1e3c-85f6-43f4-adb2-234520225637
+:BLOCKED-BY+: task:e13d6319-3198-4459-861c-c2ea06d5d8e7
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-07-31 Fri 20:44]
+:END:
+All five questions moved to DECIDED; implementation planned and landed under [[plan:2026-07-31-subagents-retire-the-mandatory-advisor-c.org]].
+
+* Implementation
+
+** Benchmark design (task 5cc4e2a1)
+
+Artifacts live under the record's same-stem folder. =skeleton/= (=ASSIGNMENT.md=, =bb.edn=, stubbed =src/orgmini.clj=, visible smoke tests) is the only material seeded into a cell; =acceptance/= holds the hidden suite (=orgmini_acceptance.clj=, 35 cases across 6 categories), the =score= wrapper, and a =metrics= extractor; =rubric.md= is the root-session reading guide.
+
+The suite was validated before use rather than assumed correct: a reference implementation scores 35/35, the stubbed skeleton scores 0/35 all-errored without crashing the runner, and a deliberately sloppy implementation scores 24/35 (68.6%), losing points in =tags= (2/5), =drawer= (3/6) and =round-trip= (7/10). The benchmark therefore discriminates, retiring the "benchmark may not discriminate" risk. Both validation implementations were moved outside the worktree to =~/.cache/orgmini-validation/= so that no answer key sits beside the cell scratch dirs.
+
+Hidden-case inputs deliberately differ from the illustrative examples in =ASSIGNMENT.md=. The recognition rules stay stated in full — hiding them would test mind-reading rather than diligence — but a cell must generalize those rules instead of special-casing the literals it was shown.
+
+Two measurement facts were established against the live ledger schema, both correcting assumptions recorded above:
+- Token cost is *exact* for pi-kind children, not best-effort: pi sessions record per-message =message.usage.totalTokens= plus a real =cost= map. A historical worker sample shows one middle-tier consult accounting for 37% of total spend ($1.14 of $3.04), so the advisor loop is not a rounding error.
+- Wall time must be measured as mtime(=RESULT=) − =prompted-at=, not =captured-at=: under the non-blocking policy =captured-at= records when the parent got round to collecting and can lag publication arbitrarily.
+
+Advisor consults are discoverable by matching each advisor ledger entry's =parent-session= against the cell's own =child-session.value= (nested consults share the single ledger directory rather than getting their own), and the resolved tier is readable from the nested label (=worker-3/advisor-1-middle=) and independently corroborated by the transcript =modelId=. That gives cells C and D a hard pass/fail on the =--prompt-extra= override mechanism.
+
+Noted for the run task: =.agents/tmp/= already contains substantial prior advisor-strategy design material (previous worker/advisor assignments, reviews, reports), so each cell assignment must pin its executor to its own scratch dir.
+
+** Run-phase findings (task 1a2fdaa6)
+
+*** Spawned prompts are not reliably dispatched
+
+Every spawn in this session left the composed prompt typed into the new pane but *unsubmitted*, requiring a manual focus and Enter; the user first noticed it against an extension-update notification, and it persisted after updating extensions. Confirmed mechanically: cell E read =idle= five seconds after =subagent start=, one =herdr agent send-keys <child> enter= moved it to =working=. Measured submit-delays were 25.6s (A), 40.4s (B), 37.3s (C), 46.6s (D) against 0.8s for a pre-notification historical run, so the regression is recent and its size varies per cell.
+
+Two consequences: wall-clock duration must be measured from the transcript's first user message rather than =prompted-at= (already corrected in =acceptance/metrics=), and cells are now spawned through =.agents/tmp/advisor-eval/spawn-cell.sh=, which polls lifecycle state and sends Enter only on a definite =idle= — nudging on an unobservable =unknown= risks submitting stray empty input. The durable CLI-side fix is tracked separately as a repo task, not fixed inside this experiment.
+
+*** Comparison report (task febc1e3c)
+
+Report: [[proj:design/log/2026-07-31-subagents-review-advisor-strategy-defaul/comparison-report.md]]. Raw per-cell artifacts are the =cell-*-score.edn= and =cell-*-metrics.edn= files under =.agents/tmp/advisor-eval/=, with judgement calls in =compliance-notes.md= alongside them.
+
+Headline: quality saturates above feather (A, B, D and G all 35/35), and cell A — =skilled-worker= with no advisor — won on every axis at once: joint-best score, cheapest perfect score ($3.2288) and fastest perfect score (389.8s). Both controlled comparisons argue against a heavy default: at equal light executor, middle advisor scored 35/35 for $5.3666 while heavy scored 34/35 for $7.1269; at equal middle executor, adding a heavy advisor cost $2.98 and 135s for no score gain over A. Heavy only earned its cost at feather (G 35/35 versus F 34/35 and E 32/35).
+
+The =--prompt-extra= override is verified functional in all four attempts, corroborated at two independent levels — the nested ledger label and the model actually run in the consult transcript (heavy → =claude-fable-5= three times, middle → =claude-opus-5=, light → =claude-sonnet-5=). The remaining case for a structured flag is ergonomics, not reliability.
+
+=requires: advisor= proved unenforced at feather tier: cell E spawned its mandatory consult and published three minutes later without awaiting or capturing it (leaving an orphan that ran ~30 minutes and had to be closed manually), and cell F skipped the consult altogether while still scoring 34/35 for $0.7324. The mandate is prompt semantics rather than a mechanical gate, so "the consult happened and was used" should be treated as unverified unless checked in the ledger.
+
+*** Round-2 difficulty gate: FAILED — benchmark 2 also saturates at light tier (task d2b65b17)
+
+Benchmark 2 (=cellform=) was built and validated exactly as planned: 60 cases across 7 categories, reference 60/60, stub 0/60 all-errored without crashing, and a deliberately sloppy implementation 47/60 (78.3%) failing precisely in the counter-intuitive categories (=errors= 2/8, =strictness= 6/11, =cycles= 8/10) while acing every mechanical one. The calibration therefore looked healthy.
+
+The pilot then falsified the premise. Cell I (=skilled-worker --model light=, i.e. =claude-sonnet-5=, no advisor) scored **60/60** — including =strictness= 11/11, =errors= 8/8 and =cycles= 10/10, every deliberately counter-Excel rule — for $2.5152 in 672.6s, with zero consults. It also passes all 32 off-suite semantic probes, so the score is genuine robustness rather than overfitting to the suite.
+
+The design assumption behind both benchmarks was wrong. Difficulty built from *more, stranger, but explicitly stated rules* does not challenge a light-tier model, because careful rule-reading is precisely what these models are good at. The 78.3% sloppy calibration models a *careless* implementer, which sonnet is not. Two independent benchmarks have now saturated at light tier and above.
+
+Per this task's gate condition the remaining eight round-2 cells were **not** spawned. The pilot cost $2.5152 and averted roughly $25 of matrix spend on a saturated benchmark — the run-first pilot design paid for itself on its first use. Toughening along the same axis is not indicated; a genuinely discriminating round 2 needs a different *kind* of difficulty (algorithmic/performance constraints where a naive solution fails, long-horizon multi-file consistency, or debugging an existing subtly-broken system) and that is a design decision for the user, so the pilot task stays open pending it.
+
+Incidental: the accumulating evidence across both rounds is consistent on the gate questions — at light tier and above, no-advisor executors match or beat advisor-bearing ones (round 1 cell A won on score, cost and speed simultaneously; the round-2 pilot reached a perfect score unaided).
+
+*** Round-3 difficulty gate: FAILED — the performance axis also saturates at light tier (task d2b65b17)
+
+Benchmark 3 (=segwin=) switched axis from rule-following to engineering judgement under a stated time budget, and calibrated cleanly: reference 34/34, stub 0/34 all-errored without crashing, and a *correct but quadratic* naive implementation 32/34 — passing every correctness category including three randomised brute-force cross-checks, and failing only =performance= 0/2 (hard-aborted at 100s against a ~148s projected runtime). The performance gate was therefore the sole discriminator by construction.
+
+Cell I (=skilled-worker --model light=, sonnet, no advisor) scored **34/34 including performance 2/2**, in 378.5s for $1.5185 with zero consults. It chose a lazy-propagating segment tree over coordinate-compressed timestamps unprompted, measured itself with =bb bench= at ~27s against the 60s budget, and added its own randomised property tests cross-checked against a brute force across 40 seeds.
+
+That is three benchmarks, three distinct difficulty axes, all aced unaided by light tier — and each one cheaper and faster than the last ($2.5152 → $1.5185):
+
+| Round | Benchmark | Difficulty axis | Cell I / A result |
+|-------|-----------|-----------------|-------------------|
+| 1 | org-outline parser | precise rule-following | 35/35 (cell A, middle) |
+| 2 | =cellform= | counter-intuitive stated rules | 60/60 (sonnet) |
+| 3 | =segwin= | algorithmic judgement under a time budget | 34/34 incl. perf (sonnet) |
+
+The limiting factor is the *problem genre*, not the difficulty axis. A self-contained, precisely-specified, single-file problem with objective tests is precisely the shape at which current frontier-adjacent models are strongest, so no amount of difficulty *within that genre* creates headroom for an advisor to fill. Making an advisor consult matter would likely require a different genre altogether — multi-file work with cross-cutting consistency, genuine requirement ambiguity needing pushback, or archaeology in a large unfamiliar codebase — none of which score objectively or cheaply.
+
+The remaining eight round-3 cells were again **not** spawned, per the gate condition. Across both rounds the two pilots cost $4.0337 in total and averted roughly $50 of matrix spend on saturated benchmarks; the run-first pilot is the single most valuable design decision in this record.
+
+*** Decisions implemented (task 41303c50 → [[plan:2026-07-31-subagents-retire-the-mandatory-advisor-c.org]])
+
+All five gate decisions landed under task 6588f447: the =requires:= / =:required= mandate mechanism was rolled back across =core.clj=, =cli.clj=, =contract.md=, =scripts/README.md=, =SKILL.md= and both test namespaces; =worker.md= now describes the advisor as opt-in for a genuinely stuck executor; =skilled-worker.md= was removed in favour of =worker --model <tier>=; and =SKILL.md= § Advisor strategy was rewritten as § Executor tier and advisor strategy, carrying the light-default / feather-false-economy guidance with figures and the ledger-under-reporting caveat.
+
+Verified end to end: =bb test= green at 410 tests / 2239 assertions; =--print-prompt= for =worker= at light and middle, with and without =--spawns none=, shows the single gap-only clause naming =advisor= and no mandate language, with =--spawns none= still forcing the leaf sentence; =skilled-worker= is now unresolvable; and one live =worker= spawn published =COMPLETE= with **zero consults** in 29.6s for $0.2709, its output tests passing.
+
+*** Feather trio on benchmark 3 (tasks 511d9178, e13d6319)
+
+Report: [[proj:design/log/2026-07-31-subagents-review-advisor-strategy-defaul/feather-trio-report.md]].
+
+All three feather cells and the light reference scored **34/34**, performance 2/2 included: H (feather, no advisor) $1.6808 / 3047.8s; E (feather, light advisor requested) $2.9652 / 1973.9s; F (feather, default middle advisor) $3.5741 / 854.7s; against reference cell I (light, no advisor) **$1.5185 / 378.5s**. =claude-haiku-4-5= produced a correct lazy-propagating segment tree passing the performance gate three times over, so the genre does not discriminate by tier at all.
+
+Feather is not the economical choice: it costs 1.1–2.4x more than light and runs 2.3–8.1x slower, burning 2–2.5x the executor tokens to reach the same answer. Cell I is simultaneously the best-quality, cheapest and fastest cell of the entire three-round study.
+
+Two findings that change how ledger data must be read:
+- **Cell E bypassed the delegation CLI**, calling raw =herdr_agent {action "start" kind "pi" name "advisor_consult"}= instead of =subagent run advisor --model light=. The raw start inherited the default model, so the consult ran on =claude-opus-5= (middle) and the =--prompt-extra= tier instruction was silently ineffective; its 489,383 tokens and $1.6883 appear nowhere in the ledger, understating cell E's true cost by 2.3x; and the pane was orphaned. Consult counts and advisor costs taken from the ledger alone can therefore under-report, not merely miss.
+- **Cell H never published** until explicitly re-prompted — work complete, agent idle, ledger stuck at =prompted= with no RESULT file — and left two stray debug files. Counting round 1, five of six feather cells have now failed some part of the delegation protocol: feather can do this work but not reliably manage the choreography around it.
+
+The one advisor benefit not yet contradicted is *convergence time*: duration fell 3047.8s → 1973.9s → 854.7s as advisor involvement increased, a 3.6x reduction from no-advisor to captured-consult, with quality identical. Cell H spent 51 minutes flailing where F took 14. At n=1 on the noisiest metric this is a hypothesis rather than a result, and it does not change the economics (F is both slower and 2.4x dearer than cell I's configuration), but it is the first non-quality advisor benefit observed and the only thing here worth a repeat run.
+
+*** Cell C lost to an unrecoverable API error
+
+Cell C's first attempt died with a repeated =400 invalid_request_error= ("`thinking` or `redacted_thinking` blocks in the latest assistant message cannot be modified"). The session history itself was invalid, so continuation re-failed and the pane went idle without publishing. Its heavy advisor consult had already completed at $4.18 — retained in that consult's own ledger entry — but the executor left a partial implementation plus a stray =.agents-review-task.md= in the cell dir, so the pane was closed, the stale ledger entry pruned, and the cell re-seeded pristine and re-run rather than resumed.
+
+* Open questions
+
+** DECIDED Should the advisor default to heavy instead of middle? — No, it stays middle
+
+The only equal-executor comparison of advisor tiers went against heavy: at light executor, a middle advisor scored 35/35 for $5.3666 while heavy scored 34/35 for $7.1269 — worse, for 33% more. Adding a heavy advisor to a middle executor (D) bought nothing over no advisor at all (A). Heavy consults cost $2.28–$4.18 against middle's $2.02. Heavy won only at feather, the tier being abandoned as a false economy.
+
+=--model heavy= remains available per spawn for genuine extremis. Noted honestly: every measurement above concerns *routine* consults — no cell ever became stuck and escalated — so there is no evidence either way about escalation quality at any tier. The decision follows the evidence that exists rather than a plausible argument about a case never observed.
+
+** DECIDED Should the parent-side advisor-tier override stay a `--prompt-extra` convention? — Yes, keep the convention and document it
+
+Verified functional in all four attempts, corroborated at two independent levels (nested ledger label and the model actually running in the consult transcript). A structured flag would therefore be an ergonomics improvement, not a reliability fix. The caveat that must be documented alongside it: the convention is only as reliable as the executor's willingness to use the CLI — round-3 cell E bypassed =subagent run advisor= for a raw =herdr_agent start=, which silently defeated tier selection, hid $1.6883 of spend from the ledger, and orphaned the pane.
+
+** DECIDED Should worker and skilled-worker merge? — Yes: retire =skilled-worker=
+
+With the mandatory consult removed, =worker= becomes a light executor with an *optional* advisor and =skilled-worker= a middle executor with none; =worker --model middle= then covers =skilled-worker='s entire purpose, leaving an unused optional capability as the only difference. One executor persona with a =--model= tier and an opt-in advisor is simpler than two. Cell I (=skilled-worker= at light, no advisor) being the best cell of the study on every axis is an argument for that *configuration*, not for a second persona to express it.
+
+** DECIDED Is the mandatory pre-publish advisor consult worth its cost? — No: eliminate it
+
+Three comparisons, no measurable quality gain in any: B (light + middle advisor) 35/35 = A (middle, no advisor) 35/35; D (middle + heavy) 35/35 = A; F (feather + middle) 34/34 = H (feather, none) 34/34. The mandate cost $1.43–$2.98 per run. Its single genuine catch — cell B's advisor finding a real spec violation — only brought that cell to *parity* with a stronger executor that never made the mistake. It is also unenforceable in practice: five of six feather cells failed some part of the protocol, one bypassing the CLI entirely, so =requires:= expresses a guarantee the mechanism cannot deliver. Finally it duplicates existing practice, since a heavy review is already spawned from the orchestrator at feature closeout.
+
+Counter-signal retained rather than dismissed: duration fell 3047.8s → 1973.9s → 854.7s as advisor involvement increased at feather, with identical quality — a possible convergence benefit at n=1 on the noisiest metric. Retaining the *optional* escalation path covers that case without paying for it on every assignment.
+
+** DECIDED Which executor tier should be the default? — Light; feather is a false economy
+
+Measured head to head on benchmark 3 against cell I (light, no advisor, $1.5185 / 378.5s): feather cost 1.1–2.4x more and ran 2.3–8.1x slower for an identical score, burning 2–2.5x the executor tokens, and accounted for every protocol failure in the study. Scope caveat worth carrying: all three benchmarks saturated, so this establishes light as the cheapest route to a score every tier achieves on well-specified, self-contained, objectively-testable work — not that light suffices on work that genuinely discriminates, which this study never managed to construct. Light-versus-middle at no advisor was also never run head to head on one benchmark.

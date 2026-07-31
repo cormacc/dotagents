@@ -1,0 +1,7 @@
+{:paths ["src" "test"]
+ :tasks {test {:doc "Run the visible smoke tests"
+               :requires ([clojure.test :as t]
+                          [cellform-smoke-test])
+               :task (let [{:keys [fail error]} (t/run-tests 'cellform-smoke-test)]
+                       (when (pos? (+ fail error))
+                         (System/exit 1)))}}}

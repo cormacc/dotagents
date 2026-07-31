@@ -103,20 +103,6 @@
         (throw (ex-info (str "spawns policy for persona `" persona "` names unresolvable persona `" n "` (source: " source ")")
                         {:persona persona :spawn n :source source}))))
     {:spawns (vec names) :spawns-source source}))
-;; `requires:` names the subset of the persona's own `spawns:` allow-list whose consult
-;; the persona *mandates* (worker's pre-publish advisor review), as opposed to the
-;; gap-only delegation the composed prompt otherwise describes. Validation is against the
-;; declared frontmatter list so a roster typo stays loud at any depth and under any flag;
-;; the result is then narrowed to the effective allow-list, so `--spawns none` or a
-;; depth-forced leaf drops the mandate instead of emitting an impossible instruction.
-(defn resolve-required [{:keys [persona frontmatter spawns]}]
-  (let [declared (parse-spawns (:requires frontmatter))
-        allowed (set (parse-spawns (:spawns frontmatter)))]
-    (doseq [n declared]
-      (when-not (contains? allowed n)
-        (throw (ex-info (str "requires policy for persona `" persona "` names `" n "`, which is absent from its `spawns:` allow-list")
-                        {:persona persona :requires n :spawns (vec allowed)}))))
-    (vec (filter (set spawns) declared))))
 
 (defn direction [{:keys [width height]}]
   (if (and (>= width 80) (>= width (* 2 height))) "right" "down"))

@@ -1,0 +1,171 @@
+#+TITLE: subagents: retire the mandatory advisor consult and the skilled-worker persona :skill_herdr-subagents:
+#+DATE: 2026-07-31 Fri
+#+PARENT: [[archive:6588f447-e61a-4a04-9733-2614a1b7c558][subagents: retire the mandatory advisor consult and the skilled-worker persona :skill_herdr-subagents:]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+
+* Intent
+
+Act on the decisions taken at the gate of [[plan:2026-07-31-subagents-review-advisor-strategy-defaul.org]]: remove the mandatory pre-publish advisor consult and the =requires:= mechanism that expressed it, keep the advisor as an opt-in escalation at middle, retire =skilled-worker=, and re-document the advisor strategy against measured evidence rather than intuition.
+
+* Summary
+
+*Level:* MVP · *Tests:* existing suite green (410 tests / 2239 assertions) · *Docs:* SKILL + persona bodies
+
+** Scope
+
+*** In scope
+
+- Remove =requires: advisor= from =worker.md= and roll back the =requires:= / =:required= mechanism introduced by commit =7b67e13= (=core.clj=, =cli.clj=, =contract.md=, =scripts/README.md=, =SKILL.md=, =core_test.clj=, =cli_test.clj=).
+- Rewrite =worker.md='s advisor guidance: the pre-publish consult stops being mandatory and becomes an opt-in escalation for genuine difficulty.
+- Retire =skilled-worker=: delete the definition and update its three =SKILL.md= references plus the roster-coupled assertion in =cli_test.clj=.
+- Rewrite =SKILL.md= § Advisor strategy, and add tier guidance recording that light is the efficient default and feather a false economy for implementation work.
+- Document the advisor-tier override convention, including that it is defeated when an executor bypasses the CLI.
+
+*** Out of scope
+
+- Changing =advisor.md='s =model: middle=; the gate decided the tier stays as it is.
+- A structured parent-side advisor-tier flag; the gate ruled the existing convention adequate and a flag merely ergonomic.
+- Mechanical enforcement of consults. The evaluation concluded the mandate could not be enforced, which is why it is being removed rather than hardened.
+- The dispatch defect tracked separately as task =d4bd209f=.
+
+** Acceptance
+
+*** Core functionality
+
+- [X] =worker.md= declares no =requires:=, and its advisor step is opt-in rather than mandatory
+- [X] No =requires:= / =:required= handling remains in =core.clj=, =cli.clj=, =contract.md=, =scripts/README.md= or =SKILL.md=
+- [X] A composed =worker= prompt (=--print-prompt=) contains no mandated-consult clause, while the gap-only discretionary clause still names =advisor=
+- [X] =skilled-worker.md= is gone and no live reference to it remains outside =design/log/= and =TASKS.archive.org=
+- [X] =worker --model middle --spawns none= still resolves and composes correctly, covering the retired persona's use
+- [X] =SKILL.md= § Advisor strategy describes an opt-in middle advisor with per-spawn =--model heavy=, cites the evaluation record, and states the light-default / feather-false-economy guidance
+- [X] =bb test= green
+
+*** Anti-criteria
+
+- [X] Must not: change =advisor.md='s model tier — held; the file is untouched
+- [X] Must not: add mechanical consult enforcement in place of the removed mandate — held; =enforce-spawns!= remains the only gate and nothing replaced =resolve-required=
+- [X] Must not: rewrite history in =design/log/= or =TASKS.archive.org= to erase =skilled-worker= — held; the only surviving live mentions are a test asserting its absence and its own explanatory comment
+
+** Decisions
+
+- Roll back rather than repurpose =requires:= :: the mechanism exists solely to express the mandatory advisor consult, and =worker= is its only declarant. With the mandate gone it has no user, and keeping an unused capability-mandate concept would cost prompt tokens and reader attention for nothing. Rejected: retaining it undeclared for future personas \u2014 speculative, and cheap to reintroduce from =7b67e13= if ever wanted.
+- Retire =skilled-worker= rather than keep a hard no-advisor guarantee :: an optional capability that goes unused is not a meaningful difference from one that is absent, and the roster is easier to reason about with a single executor persona parameterised by =--model=. Rejected: keeping it so =advisor= is absent from =spawns:= entirely.
+- Keep the advisor at middle :: the one equal-executor comparison favoured middle (35/35 at $5.3666) over heavy (34/35 at $7.1269); =--model heavy= stays available per spawn for extremis, which was never actually exercised in the evaluation.
+
+** Shipped
+
+- MODIFIED =skills/herdr-subagents/SKILL.md= (=#+SPEC:=) — § Advisor strategy replaced by § Executor tier and advisor strategy; the mandated-capability paragraph and the =skilled-worker= references removed from the frontmatter description and the spawn-grant sentence.
+- MODIFIED =scripts/docs/contract.md= and =scripts/README.md= — =requires:= / =:required= paragraphs removed.
+- REMOVED =subagents/skilled-worker.md=; =worker --model <tier>= now covers it.
+- MODIFIED =subagents/worker.md= — no =requires:=, no step-7 consult (workflow is seven steps), § Advisor consultation rewritten as opt-in with two named triggers and a =BLOCKED= exit.
+- MODIFIED =core.clj= (=resolve-required= gone) and =cli.clj= (single-arity =delegation-guidance=; =:required= removed from prompt composition, preview and ledger entry). The ledger no longer carries a =:required= key.
+- MODIFIED =core_test.clj= / =cli_test.clj= — coverage converted, not dropped: the mandate tests became a *stale-key-is-inert* test, an arity guard against the two-arity variant returning, a leaf-narrowing test, and a positive assertion that =skilled-worker.md= is absent.
+
+** Gotchas
+
+- A retired frontmatter key must be *inert*, not an error. Personas live in a three-tier resolution chain including unmanaged =~/.agents/subagents/=, so a hand-written definition may still declare =requires:=; =ignores-retired-requires-frontmatter-key= pins that it is ignored without perturbing spawn resolution.
+- =cli_test.clj= couples to the live packaged roster, so adding or retiring a persona breaks assertions there. Retiring one is not a pure deletion: update the weight table and assert the absence, or the coupling silently rots.
+
+** Risks
+
+- Removing the mandate may slow weak executors: the feather trio showed duration falling 3047.8s → 854.7s as advisor involvement rose. Accepted — n=1 on the noisiest metric, feather is deprecated for this work, and the opt-in escalation path remains for a genuinely stuck worker.
+
+** Follow-ups
+
+- Task =d4bd209f= — spawn dispatch does not reliably submit the composed prompt. Unrelated to this change but hit repeatedly while verifying it; =spawn-cell.sh= is the current stopgap.
+
+* Plan
+
+** DONE Roll back the requires: / :required mandate mechanism
+CLOSED: [2026-07-31 Fri 20:49]
+:PROPERTIES:
+:CUSTOM_ID: ad7c6ecf-037e-4cee-a129-98e0ec786d4b
+:CREATED: [2026-07-31 Fri]
+:STARTED: [2026-07-31 Fri 20:45]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-31 Fri 20:45]
+- State "DONE" from "STARTED" [2026-07-31 Fri 20:49]
+:END:
+Mechanism reversed across =core.clj=, =cli.clj=, =contract.md=, =scripts/README.md= and =SKILL.md=; test coverage converted rather than deleted.
+
+** DONE Rewrite worker.md advisor guidance as opt-in escalation
+CLOSED: [2026-07-31 Fri 20:50]
+:PROPERTIES:
+:CUSTOM_ID: c66a8c1d-f95c-43ee-be95-1fd46ee8a8b7
+:CREATED: [2026-07-31 Fri]
+:BLOCKED-BY: task:ad7c6ecf-037e-4cee-a129-98e0ec786d4b
+:STARTED: [2026-07-31 Fri 20:49]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-31 Fri 20:49]
+- State "DONE" from "STARTED" [2026-07-31 Fri 20:50]
+:END:
+=requires: advisor= dropped, step 7 removed, § Advisor consultation rewritten as opt-in with two named triggers.
+
+** DONE Retire the skilled-worker persona
+CLOSED: [2026-07-31 Fri 20:51]
+:PROPERTIES:
+:CUSTOM_ID: 3e8af8f0-eb31-4e69-af14-985f4387cc80
+:CREATED: [2026-07-31 Fri]
+:BLOCKED-BY: task:c66a8c1d-f95c-43ee-be95-1fd46ee8a8b7
+:STARTED: [2026-07-31 Fri 20:50]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-31 Fri 20:50]
+- State "DONE" from "STARTED" [2026-07-31 Fri 20:51]
+:END:
+=skilled-worker.md= removed with =git rm=; three =SKILL.md= references and the roster weight table updated.
+
+** DONE Rewrite SKILL.md advisor strategy and add tier guidance
+CLOSED: [2026-07-31 Fri 20:51]
+:PROPERTIES:
+:CUSTOM_ID: 93149919-993d-455a-9d35-7f7c62ca8f5f
+:CREATED: [2026-07-31 Fri]
+:BLOCKED-BY: task:3e8af8f0-eb31-4e69-af14-985f4387cc80
+:STARTED: [2026-07-31 Fri 20:50]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-31 Fri 20:50]
+- State "DONE" from "STARTED" [2026-07-31 Fri 20:51]
+:END:
+§ Advisor strategy → § Executor tier and advisor strategy, carrying tier guidance and the ledger-under-reporting caveat.
+
+** DONE Verify end to end and update the parent evaluation record
+CLOSED: [2026-07-31 Fri 20:54]
+:PROPERTIES:
+:CUSTOM_ID: c12de41f-3bc3-427d-845b-e0bbfe5a172d
+:CREATED: [2026-07-31 Fri]
+:BLOCKED-BY: task:93149919-993d-455a-9d35-7f7c62ca8f5f
+:STARTED: [2026-07-31 Fri 20:51]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-07-31 Fri 20:51]
+- State "DONE" from "STARTED" [2026-07-31 Fri 20:54]
+:END:
+=bb test= green (410/2239); prompt probes clean at both tiers; live worker published with zero consults.
+
+* Implementation
+
+** Landed
+
+*Mechanism rollback (ad7c6ecf).* Reversed commit =7b67e13='s mechanism only. =core.clj=: =resolve-required= and its comment block removed. =cli.clj=: =delegation-guidance= restored to single arity, =prompt-text= no longer threads =required=, =spawns-policy= reverted to returning the resolved policy directly, and =:required= dropped from the =--print-prompt= preview, the ledger entry, and both =prompt-text= call sites. =contract.md= and =scripts/README.md= paragraphs removed; =SKILL.md='s "Granted capability and mandated capability are separate" paragraph removed.
+
+Test coverage was updated rather than deleted. =core_test.clj='s =resolve-required-contract= became =ignores-retired-requires-frontmatter-key=, which pins the more useful property now: a stale =requires:= key in a hand-written or third-party persona must be *inert* rather than an error, and must not perturb the resolved spawn policy. The pinned =delegation-guidance= assertions gained a case proving an =advisor= in the allow-list is covered by the ordinary gap-only clause, plus an =ArityException= assertion so the two-arity mandate variant cannot quietly return. =cli_test.clj='s =worker-mandate-drops-with-the-effective-allow-list= became =worker-spawn-policy-narrows-to-a-leaf=, retaining both narrowing paths (=--spawns none= and depth-forced) while asserting the ledger carries no =:required= key.
+
+*Persona changes (c66a8c1d, 3e8af8f0).* =worker.md= lost =requires: advisor=, and its step 7 "Consult before publishing" is gone — the workflow is now seven steps ending at *Report*. Its § Advisor consultation opens by stating there is no routine pre-publish review and why, names the two genuine triggers (debugging dead end after repeated failures; materially ambiguous high-stakes decision), keeps the focused-context budget and the soft cap of three, and directs a stuck worker to publish =BLOCKED= rather than keep spending. The =description:= no longer advertises advisor consultation as a defining feature. =skilled-worker.md= was removed with =git rm=; its three =SKILL.md= references and the roster-coupled weight table in =cli_test.clj= were updated, the latter gaining a positive assertion that the file is absent.
+
+*Documentation (93149919).* § Advisor strategy became § Executor tier and advisor strategy: one executor persona parameterised by =--model=, an opt-in middle advisor for a stuck worker with =--model heavy= for a high-stakes call, the light-default and feather-false-economy guidance with measured figures, and the override convention documented together with its failure mode — a worker that hand-rolls a consult via raw =herdr agent start= inherits the default model, spends outside the ledger, and orphans the pane, so ledger consult counts are a floor rather than the truth. The superseded 2026-07-29 record is marked as such instead of carrying its stale rename note.
+
+** Verification (c12de41f)
+
+- =bb test=: 410 tests, 2239 assertions, 0 failures, 0 errors.
+- =--print-prompt= for =worker= at light and at middle: single gap-only clause naming =advisor=, no mandate language, no =:required= key. With =--spawns none= at both tiers: leaf sentence, =advisor= absent.
+- =subagent run skilled-worker= fails with =persona not found=, and the reported roster is =advisor planner researcher reviewer scout visual-tester worker=.
+- Live =worker= spawn on a trivial task published =COMPLETE= with **zero consults**, 29.6s, $0.2709, and its generated tests pass — confirming no worker attempts a consult it no longer owes.
+
+** Follow-ups not taken
+
+The spawn-dispatch defect remains open as task =d4bd209f=; it is unrelated to this change but was hit repeatedly while verifying it. No mechanical consult enforcement was added, per the anti-criteria: the evaluation concluded the mandate was unenforceable, which is why it was removed rather than hardened.
