@@ -29,7 +29,11 @@
 (def max-output-lines 2000)
 (def max-output-bytes (* 50 1024))
 
-(defn- decode [s] (some-> (not-empty (str/trim s)) (json/parse-string true)))
+;; Tolerant by design: Herdr writes a JSON envelope for most failures but plain text for
+;; argument errors, and a hard parse failure there would mask the actionable message.
+(defn- decode [s]
+  (try (some-> (not-empty (str/trim s)) (json/parse-string true))
+       (catch Exception _ nil)))
 (defn herdr-error [argv stderr]
   (let [response (decode stderr)
         error (:error response)
@@ -42,8 +46,10 @@
      :message (str command " failed" (when detail (str ": " detail)))}))
 (defn invoke [argv]
   (let [{:keys [exit out err]} @(process/process (into ["herdr"] argv) {:out :string :err :string})]
-    ;; Several Herdr mutation subcommands deliberately signal success only through exit
-    ;; status. `:value nil` is therefore a successful result, not a missing JSON error.
+    ;; `:value` is a best-effort decode: several subcommands emit nothing and signal
+    ;; success only through exit status, and the read family emits raw terminal text that
+    ;; is not JSON at all. `decode` is tolerant for exactly that reason, so `:value` is nil
+    ;; for both cases while `:out` still carries the text `text!` needs.
     (if (zero? exit) {:ok true :value (decode out) :out out}
         ;; Herdr usually writes its envelope to stderr, but accept stdout too as the
         ;; upstream adapter does: either stream may carry the actionable JSON error.

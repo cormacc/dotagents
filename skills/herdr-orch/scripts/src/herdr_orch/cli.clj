@@ -694,7 +694,7 @@
     "split" (herdr/split! {:direction (or (one opts :direction) (core/direction (herdr/caller-rect!)))
                             :cwd (or (one opts :cwd) (current-cwd)) :env (parse-env (all opts :env))})
     "run" (let [[pane command] (require-positionals positional 2 "pane run")] (herdr/pane-run! pane command))
-    "read" (let [[pane] (require-positionals positional 1 "pane read")] (herdr/pane-read! pane (select-keys opts [:source :lines :format])))
+    "read" (let [[pane] (require-positionals positional 1 "pane read")] (herdr/pane-read! pane {:source (one opts :source) :lines (one opts :lines) :format (one opts :format)}))
     "wait-output" (let [[pane] (require-positionals positional 1 "pane wait-output")
                          match (one opts :match) regex (one opts :regex)]
                      (when (= (boolean match) (boolean regex))
@@ -735,7 +735,7 @@
               (herdr/start! name kind pane (:native opts)))
     "prompt" (let [[target text] (require-positionals positional 2 "agent prompt")] (herdr/prompt! target text))
     "wait" (let [[target] (require-positionals positional 1 "agent wait")] (herdr/agent-wait! target (Long/parseLong (or (one opts :timeout) "600000")) (all opts :until)))
-    "read" (let [[target] (require-positionals positional 1 "agent read")] (herdr/agent-read! target (select-keys opts [:source :lines :format])))
+    "read" (let [[target] (require-positionals positional 1 "agent read")] (herdr/agent-read! target {:source (one opts :source) :lines (one opts :lines) :format (one opts :format)}))
     "send-keys" (let [[target & keys] positional]
                   (when (or (nil? target) (empty? keys)) (fail "agent send-keys requires a target and at least one key" {}))
                   (herdr/agent-send-keys! target keys))

@@ -115,3 +115,29 @@
   (is (= "worker: [p1] (idle, focused) /tmp/project\nmanual: [p2] (working)"
          (herdr/render-agents [{:name "worker" :pane_id "p1" :agent_status "idle" :focused true :cwd "/tmp/project"}
                                {:agent "manual" :pane_id "p2" :agent_status "working"}]))))
+
+;; Regression: the CLI stores options as a multimap, so a `--lines 6` flag arrives as
+;; ["6"]. Passing that slice straight through produced the literal argv value `["6"]`,
+;; which Herdr rejected. The fixtures could not catch it because they emit JSON for every
+;; subcommand, so the resulting plain-text `Error: ...` on stderr never appeared.
+(deftest read-options-reach-herdr-as-scalars
+  (let [calls (atom [])]
+    (with-redefs [herdr/invoke (fn [argv] (swap! calls conj argv) {:ok true :out "text" :value nil})]
+      (herdr/pane-read! "w:p" {:source "visible" :lines "6"})
+      (herdr/agent-read! "child" {:source "visible" :lines "6"}))
+    (doseq [argv @calls]
+      (is (not-any? sequential? argv) (str "argv carries a collection: " (pr-str argv)))
+      (when-let [tail (second (drop-while #(not= "--lines" %) argv))]
+        (is (= "6" tail))))))
+
+;; Regression: Herdr writes a JSON envelope for most failures but plain text for argument
+;; errors, and the read family emits raw terminal text on success. Neither may be parsed
+;; as JSON: a hard parse failure masked the actionable message with a Jackson token error.
+(deftest non-json-output-is-tolerated
+  (with-redefs [herdr/invoke (fn [_] {:ok true :out "\u276f echo hi\nhi" :value nil})]
+    (is (str/includes? (herdr/pane-read! "w:p" {}) "hi")))
+  (with-redefs [herdr/invoke (fn [argv]
+                               {:ok false :error (assoc (herdr/herdr-error argv "Error: invalid value for --lines: bogus")
+                                                        :exit 2)})]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"invalid value for --lines: bogus"
+                          (herdr/pane-read! "w:p" {:lines "bogus"})))))
