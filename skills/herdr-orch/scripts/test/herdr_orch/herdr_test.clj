@@ -1,8 +1,8 @@
-(ns herdr-subagents.herdr-test
+(ns herdr-orch.herdr-test
   (:require [clojure.set :as set]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
-            [herdr-subagents.herdr :as herdr]))
+            [herdr-orch.herdr :as herdr]))
 
 (def expected-operations
   #{["workspace" "list"] ["workspace" "create"] ["workspace" "focus"]

@@ -218,7 +218,7 @@ Deferred from 2fe1ce2a (see [[file:design/log/2026-07-30-optimise-test-build.org
 - Only act if CI actually demonstrates timing flakiness
 - Pin `OT_TEST_PARALLELISM` to the container CPU limit in the CI invocation
 
-** TODO herdr-subagents: verify prompt dispatch after spawn
+** TODO herdr-orch: verify prompt dispatch after spawn
 :PROPERTIES:
 :CUSTOM_ID: d4bd209f-6abd-4c5c-87bb-b240773c5a62
 :CREATED: [2026-07-31 Fri 15:33]
@@ -226,9 +226,9 @@ Deferred from 2fe1ce2a (see [[file:design/log/2026-07-30-optimise-test-build.org
 :LOGBOOK:
 - Created [2026-07-31 Fri 15:33]
 :END:
-Every subagent spawn in the 2026-07-31 advisor-evaluation session left the composed prompt typed into the freshly spawned pane but unsubmitted, needing a manual focus + Enter. Confirmed mechanically: a child read `idle` five seconds after `subagent start`, and one `herdr agent send-keys <child> enter` moved it to `working`. Submit-delays of 25.6-46.6s were measured against 0.8s for a pre-regression historical run.
+Every subagent spawn in the 2026-07-31 advisor-evaluation session left the composed prompt typed into the freshly spawned pane but unsubmitted, needing a manual focus + Enter. Confirmed mechanically: a child read `idle` five seconds after `oh start`, and one `herdr agent send-keys <child> enter` moved it to `working`. Submit-delays of 25.6-46.6s were measured against 0.8s for a pre-regression historical run.
 
-`subagent start`/`run` should verify the prompt actually landed rather than trusting the atomic prompt+Enter, e.g. poll lifecycle state briefly after prompting and re-send Enter on a definite `idle` (never on an unobservable `unknown`, which risks submitting stray empty input). The stopgap used during the experiment is committed at `design/log/2026-07-31-subagents-review-advisor-strategy-defaul/spawn-cell.sh`.
+`oh start`/`run` should verify the prompt actually landed rather than trusting the atomic prompt+Enter, e.g. poll lifecycle state briefly after prompting and re-send Enter on a definite `idle` (never on an unobservable `unknown`, which risks submitting stray empty input). The stopgap used during the experiment is committed at `design/log/2026-07-31-subagents-review-advisor-strategy-defaul/spawn-cell.sh`.
 
 Related: `prompted-at` is consequently unsafe as a duration baseline for any measurement; derive the start from the child transcript first user message instead.
 
@@ -236,7 +236,7 @@ Scope discrimination (verified 2026-07-31): this defect is specific to the **age
 
 Implementation notes from the stopgap (verified 2026-07-31): the lifecycle state is nested at `result.agent.agent_status` in `herdr agent get` output, not `result.agent_status` — misreading it yields `unknown` and, if the nudge is unconditional, fires a burst of stray Enters. Gate the nudge on a definite `idle`. Dispatch failure is intermittent, not universal: of nine spawns in that session, seven needed one Enter and two dispatched unaided, so any fix must tolerate a prompt that has already landed.
 
-** STARTED herdr-orch: absorb pi-herdr coverage into the bb CLI, rename skill and binary to oh :skill_herdr-subagents:
+** STARTED herdr-orch: absorb pi-herdr coverage into the bb CLI, rename skill and binary to oh :skill_herdr-orch:
 :PROPERTIES:
 :CUSTOM_ID: 4a9a24b3-2518-4cf5-9d8d-64b5fa0c76ba
 :CREATED: [2026-08-01 Sat 00:29]
@@ -247,7 +247,7 @@ Implementation notes from the stopgap (verified 2026-07-31): the lifecycle state
 - State "STARTED" from "TODO" [2026-08-01 Sat 00:35]
 :END:
 #+IMPORT: [[plan:2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org]]
-Replace the floating upstream `@ogulcancelik/pi-herdr` pi extension with first-party coverage in the herdr-subagents Babashka CLI, then rename the skill to `herdr-orch` and the binary to `oh` to match the broadened charter.
+Replace the floating upstream `@ogulcancelik/pi-herdr` pi extension with first-party coverage in the herdr-orch Babashka CLI, then rename the skill to `herdr-orch` and the binary to `oh` to match the broadened charter.
 
 Driver: pi-herdr 0.4.0 always reports failure for `pane run`, `pane send-text` and `pane send-keys` (it routes no-output herdr subcommands through a JSON-expecting helper), so agents believe successful terminal operations failed — see task 34683f68. All 12 pi extensions are floating with no pinning convention, so a local patch would be wiped on update. Meanwhile the delegation layer already had to be harness-agnostic (claude/codex children cannot call pi tools), so `herdr.clj` is already the mechanical layer and already covers 11 of the 27 operations pi-herdr exposes.
 
@@ -302,7 +302,7 @@ Evidence:
 - Session dirty diff: lastChangelogVersion="0.76.0", defaultProvider="anthropic", defaultModel="claude-opus-4-7".
 - Filter wrapper exists at ./install-git-filter.sh; was not active on this clone.
 
-** TODO subagent: make Claude-kind persona injection shell-safe :skill_herdr-subagents:
+** TODO subagent: make Claude-kind persona injection shell-safe :skill_herdr-orch:
 :PROPERTIES:
 :CUSTOM_ID: e3928501-48a5-471b-ae2f-4d55dbe8c3f7
 :CREATED: [2026-07-30 Thu 10:31]
@@ -310,7 +310,7 @@ Evidence:
 :LOGBOOK:
 - Created [2026-07-30 Thu 10:31]
 :END:
-A legitimate `subagent start reviewer --kind claude ...` path failed before agent startup with Herdr `invalid_agent_argument` ("agent arguments cannot be encoded safely for the target shell"). `spawn!` currently passes the complete persona body through Claude `--append-system-prompt`; the harness-agnostic design explicitly supports Claude kind and says Claude requires body text, so this is a broken supported path rather than a model-routing issue. Reproduce it deliberately, identify a shell-safe transport for multiline persona content, and add real/fake coverage without selecting kind from model identity.
+A legitimate `oh start reviewer --kind claude ...` path failed before agent startup with Herdr `invalid_agent_argument` ("agent arguments cannot be encoded safely for the target shell"). `spawn!` currently passes the complete persona body through Claude `--append-system-prompt`; the harness-agnostic design explicitly supports Claude kind and says Claude requires body text, so this is a broken supported path rather than a model-routing issue. Reproduce it deliberately, identify a shell-safe transport for multiline persona content, and add real/fake coverage without selecting kind from model identity.
 
 Origin:
 - cwd: /home/cormacc/dotfiles/agents
@@ -321,7 +321,7 @@ Origin:
 Evidence:
 Failed reviewer assignment task 7f42e2db used explicit `--kind claude --model claude-fable`; Herdr returned JSON code `invalid_agent_argument`. Source path: `cli.clj` native args construction around `--append-system-prompt`; prior design note: `design/log/2026-07-24-herdr-subagent-skill-scripts.org` says Pi accepts a path while Claude requires persona body text.
 
-** TODO subagent: safer concurrent shared-file writes across parallel workers :skill_herdr-subagents:
+** TODO subagent: safer concurrent shared-file writes across parallel workers :skill_herdr-orch:
 :PROPERTIES:
 :CUSTOM_ID: 3fa0b8dd-193a-4177-beac-17cdf14cda32
 :CREATED: [2026-07-30 Thu 14:47]
@@ -333,9 +333,9 @@ Two parallel workers editing the same repo (disjoint per-file anchors, no shared
 
 Consider a more systemic fix: e.g. the orchestrator applying all edits to files two or more concurrent workers might touch itself (serializing just those hunks) rather than delegating shared-file edits to both workers directly, or a lightweight advisory lock file per touched path that a worker checks before and after writing.
 
-*EDIT* An alternative strategy would be to embed some orchestration guidance in a new section of the herdr-subagents skill (OR a new orchestration skill? Though probably the former). When planning implementation, parallel workers should be used only for completely orthogonal tasks. Consider whether some consideration for orchestration should be included in the org-plan workflow and/or planner subagent -- as the context required for these decisions has likely already been built during planning? Evaluate the viability of using git worktrees for parallel workers -- either across the board, or just when some risk of overlap has been flagged.
+*EDIT* An alternative strategy would be to embed some orchestration guidance in a new section of the herdr-orch skill (OR a new orchestration skill? Though probably the former). When planning implementation, parallel workers should be used only for completely orthogonal tasks. Consider whether some consideration for orchestration should be included in the org-plan workflow and/or planner subagent -- as the context required for these decisions has likely already been built during planning? Evaluate the viability of using git worktrees for parallel workers -- either across the board, or just when some risk of overlap has been flagged.
 
-*EDIT 2* [2026-07-31 Fri] Part of the strategy above landed via the test-build retro, as a second prevention-side partial mitigation: herdr-subagents § Invocation policy (Cardinality) now states that concurrency is bounded by edit targets as well as by N and forbids fanning out siblings whose file sets overlap, and org-plan § Splitting test now keeps work that must edit the same function or form in one task. Both are orchestrator/planner habits, so the structural guarantee this task asks for is still open. Remaining: the git-worktree-per-worker evaluation, whether the `planner` persona itself should carry overlap analysis (its plan for [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]] split one edit to one `fake-env` map across two nominally independent tasks, which forced the orchestrator to re-serialise them), and orchestrator-applied or advisory-locked shared-file writes.
+*EDIT 2* [2026-07-31 Fri] Part of the strategy above landed via the test-build retro, as a second prevention-side partial mitigation: herdr-orch § Invocation policy (Cardinality) now states that concurrency is bounded by edit targets as well as by N and forbids fanning out siblings whose file sets overlap, and org-plan § Splitting test now keeps work that must edit the same function or form in one task. Both are orchestrator/planner habits, so the structural guarantee this task asks for is still open. Remaining: the git-worktree-per-worker evaluation, whether the `planner` persona itself should carry overlap analysis (its plan for [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]] split one edit to one `fake-env` map across two nominally independent tasks, which forced the orchestrator to re-serialise them), and orchestrator-applied or advisory-locked shared-file writes.
 
 Origin:
 - cwd: /home/cormacc/dotfiles/agents
@@ -344,7 +344,7 @@ Origin:
 - sender: agent
 
 Evidence:
-design/log/2026-07-29-subagent-comms-housekeeping.org, Implementation § Portable Markdown artifact links (task 41a5c747): "this workers own append to cli_test.clj was silently clobbered by the concurrent sibling workers stale-read write... a herdr-subagents follow-up on safer concurrent file writes across parallel workers may be worth filing separately from this record."
+design/log/2026-07-29-subagent-comms-housekeeping.org, Implementation § Portable Markdown artifact links (task 41a5c747): "this workers own append to cli_test.clj was silently clobbered by the concurrent sibling workers stale-read write... a herdr-orch follow-up on safer concurrent file writes across parallel workers may be worth filing separately from this record."
 
 ** TODO ot doctor: warn on dangling file paths cited in change-record prose :skill_org-tasks:
 :PROPERTIES:
@@ -498,7 +498,7 @@ Acceptance criteria:
 - The wrong read-only claim no longer reaches an agent following the skill.
 - Whatever route is taken, no local edit is left sitting in a lockfile-managed vendored body.
 
-** TODO subagent assignments: never assert an unverified baseline or attribution :skill_herdr-subagents:
+** TODO subagent assignments: never assert an unverified baseline or attribution :skill_herdr-orch:
 :PROPERTIES:
 :CUSTOM_ID: b8a7727c-1234-474c-aa3d-7c79a7877cb9
 :CREATED: [2026-07-31 Fri 20:54]
@@ -508,7 +508,7 @@ Acceptance criteria:
 :END:
 A parent assignment must not state a baseline, failure attribution, or suspected-cause framing that the parent has not measured. Either establish it first, or mark it explicitly unverified and instruct the child to establish it empirically before accepting the framing. The same rule applies to causal claims the agent reports to the user: assert a cause only after checking it, since a confident wrong attribution is more expensive than an admitted unknown.
 
-The existing herdr-subagents "Trusting a result" section covers verifying a child's claims; this is the reciprocal direction — the parent's own claims flowing into an assignment or a report.
+The existing herdr-orch "Trusting a result" section covers verifying a child's claims; this is the reciprocal direction — the parent's own claims flowing into an assignment or a report.
 
 Origin:
 - cwd: /home/cormacc/nmd/products/connect/portal
@@ -596,9 +596,9 @@ Two coupled problems with the `Agent feedback` routing tags.
 
 1. Compound tags do not compose. The documented convention is `skill_<name>` / `ext_<name>`, so a skill and its companion pi extension produce two unrelated tokens and there is no way to select "everything about org-tasks" or "all skill feedback". Preferred scheme: two adjacent tags -- a facet plus a name -- e.g. `:skill:org_tasks:` and `:ext:org_tasks:`. Both facets then filter independently of the subject.
 
-2. Tags containing a hyphen do not round-trip. `ot create --tag skill_herdr-subagents` writes the tag onto the heading verbatim, but `ot tag add` rejects the same value (`invalid-tag; expected letters, digits, and underscores`) and `ot list --format json` reports `tags: []`. Every existing `:skill_herdr-subagents:` task in this file therefore reads back untagged, so the documented routing tags are currently unqueryable.
+2. Tags containing a hyphen do not round-trip. `ot create --tag skill_herdr-orch` writes the tag onto the heading verbatim, but `ot tag add` rejects the same value (`invalid-tag; expected letters, digits, and underscores`) and `ot list --format json` reports `tags: []`. Every existing `:skill_herdr-orch:` task in this file therefore reads back untagged, so the documented routing tags are currently unqueryable.
 
-Note the constraint before implementing: `org-tag-re` is `[[:alnum:]_@#%]+`, so hyphens are not valid org tags at all -- `ot`s validator is correct and Emacs would mis-parse them. The name component must therefore be underscored (`org_tasks`, `herdr_subagents`), or the mapping from skill name to tag must be defined explicitly. Whichever is chosen, `ot create --tag` must validate on the same rule it enforces elsewhere rather than writing a value its own parser will later ignore.
+Note the constraint before implementing: `org-tag-re` is `[[:alnum:]_@#%]+`, so hyphens are not valid org tags at all -- `ot`s validator is correct and Emacs would mis-parse them. The name component must therefore be underscored (`org_tasks`, `herdr_orch`), or the mapping from skill name to tag must be defined explicitly. Whichever is chosen, `ot create --tag` must validate on the same rule it enforces elsewhere rather than writing a value its own parser will later ignore.
 
 Scope:
 - Decide and document the facet/name convention in the `self-improvement` skill entry conventions.
@@ -612,4 +612,4 @@ Origin:
 - sender: human+agent
 
 Evidence:
-Hit while filing retro items this session: `ot create --tag skill_herdr-subagents` succeeded and the heading shows `:skill_herdr-subagents:`, but the task lists with `tags: []`, as do the pre-existing tasks using the same form. Confirmed `org-tag-re` = `[[:alnum:]_@#%]+` in Emacs; `org-tasks` fails it, `org_tasks` passes.
+Hit while filing retro items this session: `ot create --tag skill_herdr-orch` succeeded and the heading shows `:skill_herdr-orch:`, but the task lists with `tags: []`, as do the pre-existing tasks using the same form. Confirmed `org-tag-re` = `[[:alnum:]_@#%]+` in Emacs; `org-tasks` fails it, `org_tasks` passes.

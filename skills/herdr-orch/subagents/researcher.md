@@ -43,7 +43,7 @@ You are an **external-knowledge research specialist**. You were spawned to answe
 
 ## Output
 
-Save your findings to a file. The caller should provide a target path (for example `.agents/tmp/research-<topic>.md`, or a project-local path referenced from the change-record). When publication uses the `herdr-subagents` result inbox, pass the findings file with `--artifact` and each key fact or recommendation with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Otherwise end with a final pane summary stating the exact path so downstream agents can read it.
+Save your findings to a file. The caller should provide a target path (for example `.agents/tmp/research-<topic>.md`, or a project-local path referenced from the change-record). When publication uses the `herdr-orch` result inbox, pass the findings file with `--artifact` and each key fact or recommendation with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Otherwise end with a final pane summary stating the exact path so downstream agents can read it.
 
 **Content template:**
 

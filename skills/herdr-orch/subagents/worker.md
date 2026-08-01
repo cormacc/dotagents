@@ -36,7 +36,7 @@ If you cannot make progress and a consult has not unblocked you, publish `BLOCKE
 
 ## Delegating factual gaps
 
-You may spawn at most one blocking ephemeral `scout` (codebase facts) or `researcher` (external facts) at a time, and only when a factual gap blocks the assignment and cannot be resolved quickly from available context; that child is a leaf. Load the `herdr-subagents` skill and follow its contract: give the child one precise question, the decision it unlocks, the relevant files or required sources, and the expected evidence. Accept completion only from the validated result file, verify the child's claims against source before acting on them, and never delegate the implementation itself.
+You may spawn at most one blocking ephemeral `scout` (codebase facts) or `researcher` (external facts) at a time, and only when a factual gap blocks the assignment and cannot be resolved quickly from available context; that child is a leaf. Load the `herdr-orch` skill and follow its contract: give the child one precise question, the decision it unlocks, the relevant files or required sources, and the expected evidence. Accept completion only from the validated result file, verify the child's claims against source before acting on them, and never delegate the implementation itself.
 
 ## Engineering rules
 
@@ -45,4 +45,4 @@ You may spawn at most one blocking ephemeral `scout` (codebase facts) or `resear
 - Preserve unrelated worktree changes and never overwrite another actor's edits. When the assignment names a concurrent sibling worker, that protection is not automatic in the other direction: after any multi-line edit to a file the sibling may also touch, re-read it and confirm your own change survived before publishing.
 - Do not claim success without test or inspection evidence.
 - Do not commit unless the assignment explicitly requests a commit. When requested, load the `git-commit` skill and follow repository commit conventions.
-- If publication uses the `herdr-subagents` result inbox, follow the assignment's exact `TASK`, `RESULT`, atomic-write, and artifact contract; pass report/evidence files with `--artifact` and each remaining risk or follow-up with `--finding`; do not substitute paths or treat pane text as the result.
+- If publication uses the `herdr-orch` result inbox, follow the assignment's exact `TASK`, `RESULT`, atomic-write, and artifact contract; pass report/evidence files with `--artifact` and each remaining risk or follow-up with `--finding`; do not substitute paths or treat pane text as the result.

@@ -1,4 +1,4 @@
-#+TITLE: herdr-subagents — design rationale and maintenance notes
+#+TITLE: herdr-orch — design rationale and maintenance notes
 
 Supplements [[file:SKILL.md][SKILL.md]] with the rationale and maintenance context for the =subagent= CLI. Ordinary delegation should not load this file.
 
@@ -43,18 +43,18 @@ The =retro= skill is optional by design. Project/global skill resolution lets in
 
 ** Per-persona spawn capability
 
-The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27 spawn-capability change-record]] replaced the prose-only planner exception with declared roster capability: a frontmatter =spawns:= allow-list resolved once at spawn (flag > frontmatter > default deny), recorded on the ledger as =:spawns=/=:spawns-source=, injected as =HERDR_SUBAGENT_SPAWNS=, and enforced mechanically by the child CLI before preflight, ledger allocation, or pane mutation. Prompt-only enforcement was rejected because its failure modes are billable and pane-creating; child self-resolution from the roster was rejected because it cannot carry a per-spawn flag override and mid-flight roster edits would change a live child's capability. Any below-root spawn injects an empty grandchild policy with source =depth= — one nesting level absolutely, no depth counter — so labels stay display-only metadata. Below-root one-at-a-time cardinality deliberately remains prompt-strength doctrine.
+The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27 spawn-capability change-record]] replaced the prose-only planner exception with declared roster capability: a frontmatter =spawns:= allow-list resolved once at spawn (flag > frontmatter > default deny), recorded on the ledger as =:spawns=/=:spawns-source=, injected as =HERDR_ORCH_SPAWNS=, and enforced mechanically by the child CLI before preflight, ledger allocation, or pane mutation. Prompt-only enforcement was rejected because its failure modes are billable and pane-creating; child self-resolution from the roster was rejected because it cannot carry a per-spawn flag override and mid-flight roster edits would change a live child's capability. Any below-root spawn injects an empty grandchild policy with source =depth= — one nesting level absolutely, no depth counter — so labels stay display-only metadata. Below-root one-at-a-time cardinality deliberately remains prompt-strength doctrine.
 
 * Architecture
 
 | Namespace | Responsibility |
 |---+---|
-| [[file:scripts/src/herdr_subagents/core.clj][core.clj]] | Pure protocol logic: roster/skill resolution, kind/model policy, retro and spawn policy, geometry, labels, and envelope render/parse/validation. |
-| [[file:scripts/src/herdr_subagents/herdr.clj][herdr.clj]] | Vector-argv Herdr adapter, JSON/error decoding, minimum-version check, and non-mutating capability preflight. |
-| [[file:scripts/src/herdr_subagents/ledger.clj][ledger.clj]] | Assignment-root resolution, atomic ledger writes, result-path allocation, and exclusive-create monotonic index allocation. |
-| [[file:scripts/src/herdr_subagents/cli.clj][cli.clj]] | Command orchestration, prompt composition, spawn-policy enforcement, publication, capture, session backfill, ownership-scoped closure, and bounded waiting. |
-| [[file:scripts/src/herdr_subagents/smoke.clj][smoke.clj]] | Explicitly guarded billable integration smoke; never loaded by =bb test=. |
-| [[file:scripts/subagent][subagent]] | Bash launcher selecting repository =bb.edn= or the standalone =-Sdeps= path while preserving caller cwd. |
+| [[file:scripts/src/herdr_orch/core.clj][core.clj]] | Pure protocol logic: roster/skill resolution, kind/model policy, retro and spawn policy, geometry, labels, and envelope render/parse/validation. |
+| [[file:scripts/src/herdr_orch/herdr.clj][herdr.clj]] | Vector-argv Herdr adapter, JSON/error decoding, minimum-version check, and non-mutating capability preflight. |
+| [[file:scripts/src/herdr_orch/ledger.clj][ledger.clj]] | Assignment-root resolution, atomic ledger writes, result-path allocation, and exclusive-create monotonic index allocation. |
+| [[file:scripts/src/herdr_orch/cli.clj][cli.clj]] | Command orchestration, prompt composition, spawn-policy enforcement, publication, capture, session backfill, ownership-scoped closure, and bounded waiting. |
+| [[file:scripts/src/herdr_orch/smoke.clj][smoke.clj]] | Explicitly guarded billable integration smoke; never loaded by =bb test=. |
+| [[file:scripts/oh][subagent]] | Bash launcher selecting repository =bb.edn= or the standalone =-Sdeps= path while preserving caller cwd. |
 
 * Review and maintenance notes
 
@@ -72,26 +72,26 @@ All =herdr= calls in =src/= must remain vector argv. Keep the standalone launche
 
 ** Test isolation caveat
 
-=SUBAGENT_ASSIGNMENT_ROOT= relocates project config lookup and all assignment state into each fixture. The CLI tests symlink both the tracked config and project =skills/= tree into that root. They also set =$HOME=, but Babashka's =System/getProperty("user.home")= comes from the JVM/OS property rather than the subprocess environment, so =$HOME= alone cannot hide the global config or skill probes. Tests of the no-global-skill branch therefore belong at the pure =core= policy boundary unless the process property itself is controlled.
+=ORCH_ASSIGNMENT_ROOT= relocates project config lookup and all assignment state into each fixture. The CLI tests symlink both the tracked config and project =skills/= tree into that root. They also set =$HOME=, but Babashka's =System/getProperty("user.home")= comes from the JVM/OS property rather than the subprocess environment, so =$HOME= alone cannot hide the global config or skill probes. Tests of the no-global-skill branch therefore belong at the pure =core= policy boundary unless the process property itself is controlled.
 
-A full =bb test= should create no entries under the repository's live =.agents/tmp/herdr-subagents/= tree. When mutation-testing assignment-root or launcher behavior, set an override and inspect that tree afterwards.
+A full =bb test= should create no entries under the repository's live =.agents/tmp/herdr-orch/= tree. When mutation-testing assignment-root or launcher behavior, set an override and inspect that tree afterwards.
 
 ** Reflexive changes
 
 A child editing =scripts/= is modifying the same launcher used by its own =publish= and the parent's =collect=. Before delegating such work, copy a known-good scripts tree outside this repository and give the child its launcher as a fallback. Put the snapshot where the launcher's repository-root walk cannot rediscover this checkout's =bb.edn=; otherwise the supposed snapshot loads working-tree source.
 
-Publication identity comes from injected =HERDR_SUBAGENT_*= variables rather than the ledger, so an isolated snapshot can publish the assigned result. Verify the fallback before relying on it.
+Publication identity comes from injected =HERDR_ORCH_*= variables rather than the ledger, so an isolated snapshot can publish the assigned result. Verify the fallback before relying on it.
 
 ** Deployment and live smoke
 
 =agents.nix= deploys =~/.agents/skills= as a directory symlink, which includes this skill's packaged =subagents/= directory. Launcher canonicalisation must therefore use physical paths when locating the repository configuration while retaining the absolute deployed launcher path injected into the child. Do not project packaged definitions into =~/.agents/subagents/=: that path is deliberately unmanaged and reserved for genuine home overrides; project overrides remain =<git-root>/.agents/subagents/=.
 
-=bb smoke-subagent= is billable and guarded by =HERDR_ENV=1=, =SUBAGENT_LIVE_SMOKE=1=, and =SUBAGENT_LIVE_SMOKE_MODEL=. It calls =cli/execute= in-process and therefore cannot validate the Bash launcher. Launcher changes need a separate deployed-path smoke from a scratch project. The retrospective leg deliberately lets the child encounter an unannounced invalid command: announcing the trap turns it into a known one-off that the =retro= eligibility gate correctly rejects.
+=bb smoke-subagent= is billable and guarded by =HERDR_ENV=1=, =ORCH_LIVE_SMOKE=1=, and =ORCH_LIVE_SMOKE_MODEL=. It calls =cli/execute= in-process and therefore cannot validate the Bash launcher. Launcher changes need a separate deployed-path smoke from a scratch project. The retrospective leg deliberately lets the child encounter an unannounced invalid command: announcing the trap turns it into a known one-off that the =retro= eligibility gate correctly rejects.
 
 * Known gaps
 
 - The CLI implements one child per invocation for =run=/=start=; multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] — no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself.
-- =HERDR_SUBAGENT_BIN= intentionally carries the deployed absolute path rather than a canonical repository path; launcher-matrix coverage is its guard.
+- =HERDR_ORCH_BIN= intentionally carries the deployed absolute path rather than a canonical repository path; launcher-matrix coverage is its guard.
 - =ot ready= cannot resolve blockers inside =#+IMPORT:=-linked plan files, so plan-internal dependencies report =[opaque]=. This is an org-tasks limitation, not a delegation issue.
 
 * History

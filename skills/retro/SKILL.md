@@ -15,7 +15,7 @@ Proactively offer one retro only when a substantive session is ending and the sc
 
 ## 1. Detect signals
 
-When the session delegated work through [`herdr-subagents`](../herdr-subagents/SKILL.md), fold in the children's own candidates as scan input alongside your own signals: each captured result envelope may carry a `PROCESS:` list of `signal → category → proposed rule` items, persisted on the ledger entry under `:envelope`, and each entry's `:child-session` records where the child's transcript lives for a manual read when the candidates are thin. A child performs steps 1–2 only; you still own steps 3–6, so route, dedup, and persist its candidates yourself. Candidates are testimony from an agent scanning itself: verify each one against source before it reaches the table below, and let near-duplicates from a fan-out collapse into single rows.
+When the session delegated work through [`herdr-orch`](../herdr-orch/SKILL.md), fold in the children's own candidates as scan input alongside your own signals: each captured result envelope may carry a `PROCESS:` list of `signal → category → proposed rule` items, persisted on the ledger entry under `:envelope`, and each entry's `:child-session` records where the child's transcript lives for a manual read when the candidates are thin. A child performs steps 1–2 only; you still own steps 3–6, so route, dedup, and persist its candidates yourself. Candidates are testimony from an agent scanning itself: verify each one against source before it reaches the table below, and let near-duplicates from a fan-out collapse into single rows.
 
 Prioritize:
 

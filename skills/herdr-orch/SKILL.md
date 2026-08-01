@@ -1,17 +1,17 @@
 ---
-name: herdr-subagents
-description: "Delegate work to subagents inside Herdr: use when asked to spawn, delegate, fan out, or run a scout/researcher/planner/reviewer/worker/advisor. Requires HERDR_ENV=1; use the in-skill subagent CLI for single-child delegation and the Herdr skill for pane mechanics."
+name: herdr-orch
+description: "Orchestrate Herdr terminals and subagents with the in-skill `oh` CLI: delegate work (spawn, fan out, or run a scout/researcher/planner/reviewer/worker/advisor) and control panes, tabs and workspaces (split, run a command, read output, wait, close). Requires HERDR_ENV=1."
 ---
 
 # Herdr subagents
 
-Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/SKILL.md) safety rules and verify `HERDR_ENV=1` before delegation. For ordinary one-child delegation use `scripts/subagent`; the canonical mechanical CLI, ledger, envelope, and exit-code contract is [`scripts/docs/contract.md`](scripts/docs/contract.md), with invocation and test entry points in [`scripts/README.md`](scripts/README.md).
+Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/SKILL.md) safety rules and verify `HERDR_ENV=1` before delegation. For ordinary one-child delegation use `scripts/oh`; the canonical mechanical CLI, ledger, envelope, and exit-code contract is [`scripts/docs/contract.md`](scripts/docs/contract.md), with invocation and test entry points in [`scripts/README.md`](scripts/README.md).
 
 ```sh
-SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
-"$SUBAGENT" task run scout --task 'Locate the implementation and report paths.'
-"$SUBAGENT" task start reviewer --task-file assignment.md
-"$SUBAGENT" task collect <full-task-uuid> --wait --timeout 600000
+OH="$HOME/.agents/skills/herdr-orch/scripts/oh"
+"$OH" task run scout --task 'Locate the implementation and report paths.'
+"$OH" task start reviewer --task-file assignment.md
+"$OH" task collect <full-task-uuid> --wait --timeout 600000
 ```
 
 The CLI wraps opaque `--task`, `--task-file`, or stdin text with the persona, delegation, identity, publication, and optional retro instructions. `collect`, `status`, and `prune` require the complete UUID that `run`/`start` emitted; unlike `ot`'s `:CUSTOM_ID:` prefix matching, no prefix is ever resolved. Use `--prompt-extra` for exceptional constraints and `--print-prompt` to inspect the result; do not reconstruct a raw prompt or result envelope during normal operation.
@@ -20,9 +20,9 @@ An assignment never silently contradicts its persona's declared interaction mode
 
 ## Roster and routing
 
-Definitions are `<name>.md` files discovered in descending precedence: `<git-root>/.agents/subagents/` (project override), then `~/.agents/subagents/` (home override), then the installed skill's `skills/herdr-subagents/subagents/` (packaged default). The project copy wins; read the selected definition. The packaged directory is never projected into `~/.agents/subagents/`, which remains exclusively for genuine home overrides.
+Definitions are `<name>.md` files discovered in descending precedence: `<git-root>/.agents/subagents/` (project override), then `~/.agents/subagents/` (home override), then the installed skill's `skills/herdr-orch/subagents/` (packaged default). The project copy wins; read the selected definition. The packaged directory is never projected into `~/.agents/subagents/`, which remains exclusively for genuine home overrides.
 
-Resolve kind independently from model: spawn request overrides definition, definition overrides parent kind, and a model name—including a weight alias—never selects a harness. Roster `model:` values are translated only through the already-resolved kind via the separate `config.edn` chain: skill default `skills/herdr-subagents/subagents/config.edn` ← `~/.agents/subagents/config.edn` ← `<git-root>/.agents/subagents/config.edn` (project wins). This is row-level replacement, not definition shadowing: an override row completely replaces the same model ID's row and is never deep-merged. The shipped weights are:
+Resolve kind independently from model: spawn request overrides definition, definition overrides parent kind, and a model name—including a weight alias—never selects a harness. Roster `model:` values are translated only through the already-resolved kind via the separate `config.edn` chain: skill default `skills/herdr-orch/subagents/config.edn` ← `~/.agents/subagents/config.edn` ← `<git-root>/.agents/subagents/config.edn` (project wins). This is row-level replacement, not definition shadowing: an override row completely replaces the same model ID's row and is never deep-merged. The shipped weights are:
 
 | Weight | Pi | Claude | Codex |
 |---|---|---|---|
@@ -43,7 +43,7 @@ Delegation capability is declared, not assumed: a persona may spawn only what it
 
 **Tier guidance:** light is the efficient default for well-specified implementation work. Feather is a false economy for it — measured head to head, feather cost 1.1–2.4x more than light and ran 2.3–8.1x slower for an identical score, burning 2–2.5x the tokens, and accounted for every delegation-protocol failure observed. Reserve middle and above for work whose difficulty is genuinely established rather than assumed.
 
-The advisor-tier override is a convention, not a structured flag: instruct the worker (via `--prompt-extra`) to spawn its consult with `--model <tier>`. That is verified to work — but only when the worker actually uses `subagent task run advisor`. A worker that hand-rolls a consult with raw `herdr agent start` silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so treat ledger consult counts and advisor costs as a floor rather than the truth.
+The advisor-tier override is a convention, not a structured flag: instruct the worker (via `--prompt-extra`) to spawn its consult with `--model <tier>`. That is verified to work — but only when the worker actually uses `oh task run advisor`. A worker that hand-rolls a consult with raw `herdr agent start` silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so treat ledger consult counts and advisor costs as a floor rather than the truth.
 
 See the [evaluation record](../../design/log/2026-07-31-subagents-review-advisor-strategy-defaul.org) for the three benchmark rounds behind this, and the [implementation record](../../design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org) for what changed. The earlier [2026-07-29 advisor-strategy record](../../design/log/2026-07-29-subagent-implement-the-advisor-strategy.org) is superseded: its mandatory consult and its separate frontier-executor persona are both retired.
 
@@ -51,7 +51,7 @@ See the [evaluation record](../../design/log/2026-07-31-subagents-review-advisor
 
 Choose explicitly:
 
-- **Waiting:** `run` is blocking; `start` plus later `collect` (or `collect --any` for fan-in) is non-blocking. A non-blocking child's publish also pushes one advisory prompt to a settled, session-matching parent pane naming the `collect` command to run — advisory only; the validated `RESULT` file (below) remains the sole completion signal. A non-blocking, long-running child is also asked to report concise phase-boundary progress with `progress --summary`, throttled to at most once per `SUBAGENT_PROGRESS_INTERVAL_MS` (default 60 s) and visible through `status`/`list` as one latest snapshot — never draft findings, never a completion signal. Give review and implementation work an explicit `--timeout` rather than relying on the ten-minute default. A `run`/`collect --wait` timeout is non-final, not a failure: check `status <task>` to distinguish a child still legitimately working from one genuinely stalled, then continue with `collect <task> --wait` rather than concluding failure or respawning.
+- **Waiting:** `run` is blocking; `start` plus later `collect` (or `collect --any` for fan-in) is non-blocking. A non-blocking child's publish also pushes one advisory prompt to a settled, session-matching parent pane naming the `collect` command to run — advisory only; the validated `RESULT` file (below) remains the sole completion signal. A non-blocking, long-running child is also asked to report concise phase-boundary progress with `progress --summary`, throttled to at most once per `ORCH_PROGRESS_INTERVAL_MS` (default 60 s) and visible through `status`/`list` as one latest snapshot — never draft findings, never a completion signal. Give review and implementation work an explicit `--timeout` rather than relying on the ten-minute default. A `run`/`collect --wait` timeout is non-final, not a failure: check `status <task>` to distinguish a child still legitimately working from one genuinely stalled, then continue with `collect <task> --wait` rather than concluding failure or respawning.
 - **Placement:** explicit `--tab` or `--split` overrides configured `:defaults :placement`, which otherwise defaults to shipped `:split`; `:tab-split` resolves to tab at root and split below root. Tab placement creates the child in a new unfocused tab of the caller's workspace; every other contract (env, label, ledger, collect, closure) is identical. Placement is never persisted per-child or inherited via env: a child's own spawns resolve from config and depth alone.
 - **Cardinality:** the CLI handles one child per invocation. For many, a root parent keeps at most N (default 2) children in flight — a root-only privilege — fanning in with `collect --any --wait` and spawning a replacement child immediately on each capture. Below root, strictly one blocking ephemeral child at a time; every below-root spawn is a leaf grandchild. Never child-to-child work. Children share one worktree, so concurrency is bounded by edit targets as well as by N: never fan out siblings whose file sets overlap — sequence them, or merge them into one assignment — and when overlap is unavoidable, name the concurrent sibling in each assignment so the re-read rule in `worker`'s engineering rules applies. A killed spawn's stale ledger entry (uncaptured, no result, its child never reappearing in `agent list`) is cleared with `prune <full-task-uuid>` rather than left to inflate `--any`'s candidate count indefinitely. When the children of a fan-out share one design — a common assignment, harness, or benchmark — run one representative child first as a validity gate and confirm the premise still holds before spawning the rest; a pilot that invalidates the design costs one child instead of N.
 - **Lifecycle:** ephemeral by default. Residents are explicit opt-in only for correlated work and retain their spawn identity, pane, label, persona, and one active task.
@@ -71,7 +71,7 @@ Treat process candidates as testimony and scan input for your own retro. The chi
 The validated parent-chosen `RESULT` file is the only completion signal. Never treat `agent read`, terminal history, prompt text, or a visible final summary as completion. The child publishes exactly once with the injected launcher:
 
 ```sh
-"$HERDR_SUBAGENT_BIN" publish --status COMPLETE --summary 'Concise result.'
+"$HERDR_ORCH_BIN" publish --status COMPLETE --summary 'Concise result.'
 ```
 
 A child that cannot finish is instructed to publish once with `BLOCKED` (genuine blocking dependency, resumable) or `FAILED` (unrecoverable after reasonable retries) carrying a partial account of completed vs remaining work — read that summary before re-prompting or respawning.
@@ -82,11 +82,11 @@ An `invalid` capture is not necessarily terminal either. A child that writes non
 
 `BLOCKED` retains its pane. `COMPLETE`/`FAILED` permit closing only a pane this parent created, after required artifacts are captured and Herdr reports the child settled. Never close user/other-agent panes, kill a parent, or stop the Herdr server. A different parent session may collect and validate an assignment but must retain its pane.
 
-A `COMPLETE`/`FAILED` JSON `status` asserts a validated result, not that every side effect landed: check pane state (`herdr pane list`) rather than assuming closure. A `collect --any` capture now waits (bounded, `SUBAGENT_SETTLE_CLOSE_MS`, default 45 s) for the captured child to settle before its one close attempt, but a child that never settles inside that budget still keeps its pane.
+A `COMPLETE`/`FAILED` JSON `status` asserts a validated result, not that every side effect landed: check pane state (`herdr pane list`) rather than assuming closure. A `collect --any` capture now waits (bounded, `ORCH_SETTLE_CLOSE_MS`, default 45 s) for the captured child to settle before its one close attempt, but a child that never settles inside that budget still keeps its pane.
 
 Surface the collected `artifact-links` to the user before relying on or discarding child-pane context: those Markdown `file://` links are the only durable route to a child's artifacts once `COMPLETE`/`FAILED` closed its pane automatically and transcript access is gone. Use the *validated* collect-time list, not the advisory list in the publication push — publish checks path shape only, so an advisory link is context, never evidence that the file exists. Clickability depends on the harness and terminal; the absolute path in each label is always readable.
 
-Use caller context or explicit IDs, `--no-focus`, and response IDs—not focused UI state. Labels never contain a workspace name and never replace unique agent names. Nested labels depend on the spawning agent's injected `HERDR_SUBAGENT_PERSONA`; a spawning persona started outside `subagent` has no nested-label identity unless that variable is set.
+Use caller context or explicit IDs, `--no-focus`, and response IDs—not focused UI state. Labels never contain a workspace name and never replace unique agent names. Nested labels depend on the spawning agent's injected `HERDR_ORCH_PERSONA`; a spawning persona started outside `subagent` has no nested-label identity unless that variable is set.
 
 ## Trusting a result
 

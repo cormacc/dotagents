@@ -66,7 +66,7 @@ capture_env() {
   while [ "$#" -gt 0 ]; do [ "$1" = --env ] && echo "$2" >>"$FAKE_HERDR_ENV_FILE"; shift; done
   dir="$(state_dir)"
   pane="$(next_pane_id)"
-  child="$(grep '^HERDR_SUBAGENT_CHILD=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2- || true)"
+  child="$(grep '^HERDR_ORCH_CHILD=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2- || true)"
   if [ -n "$child" ]; then
     mkdir -p "$dir/children/$child"
     cp "$FAKE_HERDR_ENV_FILE" "$dir/children/$child/env"
@@ -103,9 +103,9 @@ publish_result() {
   fi
   [ -n "$env_file" ] && [ -f "$env_file" ] || return 0
   local result child task
-  result="$(grep '^HERDR_SUBAGENT_RESULT=' "$env_file" | head -1 | cut -d= -f2-)"
-  child="$(grep '^HERDR_SUBAGENT_CHILD=' "$env_file" | head -1 | cut -d= -f2-)"
-  task="$(grep '^HERDR_SUBAGENT_TASK=' "$env_file" | head -1 | cut -d= -f2-)"
+  result="$(grep '^HERDR_ORCH_RESULT=' "$env_file" | head -1 | cut -d= -f2-)"
+  child="$(grep '^HERDR_ORCH_CHILD=' "$env_file" | head -1 | cut -d= -f2-)"
+  task="$(grep '^HERDR_ORCH_TASK=' "$env_file" | head -1 | cut -d= -f2-)"
   status="${FAKE_PUBLISH_STATUS:-COMPLETE}"
   if [ -n "$child" ] && [ -f "$(state_dir)/children/$child/publish-status" ]; then
     status="$(cat "$(state_dir)/children/$child/publish-status")"

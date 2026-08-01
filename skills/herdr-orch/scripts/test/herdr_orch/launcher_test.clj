@@ -1,6 +1,6 @@
-(ns herdr-subagents.launcher-test
+(ns herdr-orch.launcher-test
   "Launcher matrix: the four supported invocation forms must select the right
-  Babashka branch, keep `HERDR_SUBAGENT_BIN` absolute, and preserve the caller's
+  Babashka branch, keep `HERDR_ORCH_BIN` absolute, and preserve the caller's
   working directory (which becomes the child pane's `--cwd`)."
   (:require [babashka.fs :as fs]
             [babashka.process :as process]
@@ -14,8 +14,8 @@
   (if (fs/absolute? *file*)
     (str (fs/canonicalize (fs/path (fs/parent *file*) "../../../../..")))
     (or (git-toplevel) (throw (ex-info "cannot resolve repo root" {})))))
-(def scripts-dir (str root "/skills/herdr-subagents/scripts"))
-(def repo-bin (str scripts-dir "/subagent"))
+(def scripts-dir (str root "/skills/herdr-orch/scripts"))
+(def repo-bin (str scripts-dir "/oh"))
 (def fake (str scripts-dir "/test/fixtures/fake-herdr"))
 (def real-bb (str (fs/which "bb")))
 
@@ -49,7 +49,7 @@
              "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p"
              "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file
              "FAKE_HERDR_PROMPT_FILE" (str (fs/path dir "prompt"))
-             "SUBAGENT_ASSIGNMENT_ROOT" dir
+             "ORCH_ASSIGNMENT_ROOT" dir
              "BB_ARGV_LOG" bb-log "REAL_BB" real-bb}})))
 
 (defn- launch!
@@ -68,42 +68,42 @@
         _ @(process/process ["git" "init" "-q" project] {:out :string :err :string})
         ;; Empty HOME and no project persona directory: the shipped definition must
         ;; resolve from the deployed launcher's skill subtree.
-        env (-> (:env h) (dissoc "SUBAGENT_ASSIGNMENT_ROOT") (assoc "HOME" (str (fs/path (:dir h) "empty-home"))))
+        env (-> (:env h) (dissoc "ORCH_ASSIGNMENT_ROOT") (assoc "HOME" (str (fs/path (:dir h) "empty-home"))))
         ;; Through the *deployed* directory-symlinked path — the documented invocation,
         ;; and the one the pre-fix launcher resolved into its own scripts directory.
         deploy (str (fs/path (:dir h) "deploy-root"))
         _ (fs/create-sym-link deploy (fs/path root "skills"))
-        bin (str deploy "/herdr-subagents/scripts/subagent")
+        bin (str deploy "/herdr-orch/scripts/oh")
         proc @(process/process ["/bin/sh" "-c" "exec \"$0\" \"$@\"" bin "task" "start" "worker" "--task" "foreign project"]
                                {:out :string :err :string :env env :dir project})
         env-map (injected (:env-file h))]
     (is (zero? (:exit proc)) (:err proc))
     (is (= project (flag-value (split-argv (:log h)) "--cwd")))
-    (is (str/starts-with? (get env-map "HERDR_SUBAGENT_RESULT")
-                          (str (fs/path project ".agents" "tmp" "herdr-subagents"))))
+    (is (str/starts-with? (get env-map "HERDR_ORCH_RESULT")
+                          (str (fs/path project ".agents" "tmp" "herdr-orch"))))
     ;; The override is absent, so it must not be injected either.
-    (is (nil? (get env-map "SUBAGENT_ASSIGNMENT_ROOT")))))
+    (is (nil? (get env-map "ORCH_ASSIGNMENT_ROOT")))))
 
 (deftest launcher-matrix-selects-branch-and-preserves-cwd
   (testing "repo-relative invocation"
-    (let [h (harness) proc (launch! h "./skills/herdr-subagents/scripts/subagent" root)]
+    (let [h (harness) proc (launch! h "./skills/herdr-orch/scripts/oh" root)]
       (is (zero? (:exit proc)) (:err proc))
       (is (some #{"--config"} (bb-argv h)))
       (is (= (str root "/bb.edn") (flag-value (bb-argv h) "--config")))
       (is (= root (flag-value (split-argv (:log h)) "--cwd")))
       ;; A relative argv0 must still inject an absolute launcher path.
-      (is (= repo-bin (get (injected (:env-file h)) "HERDR_SUBAGENT_BIN")))))
+      (is (= repo-bin (get (injected (:env-file h)) "HERDR_ORCH_BIN")))))
   (testing "repo-absolute invocation"
     (let [h (harness) proc (launch! h repo-bin (:caller h))]
       (is (zero? (:exit proc)) (:err proc))
       (is (= (str root "/bb.edn") (flag-value (bb-argv h) "--config")))
       (is (= (:caller h) (flag-value (split-argv (:log h)) "--cwd")))
-      (is (= repo-bin (get (injected (:env-file h)) "HERDR_SUBAGENT_BIN")))))
+      (is (= repo-bin (get (injected (:env-file h)) "HERDR_ORCH_BIN")))))
   (testing "deployed directory-symlink invocation"
     (let [h (harness)
           deploy (str (fs/path (:dir h) "deploy"))
           _ (fs/create-sym-link deploy (fs/path root "skills"))
-          bin (str deploy "/herdr-subagents/scripts/subagent")
+          bin (str deploy "/herdr-orch/scripts/oh")
           proc (launch! h bin (:caller h))]
       (is (zero? (:exit proc)) (:err proc))
       ;; `~/.agents/skills` is a *directory* symlink; only `cd -P` reaches the repo bb.edn.
@@ -111,7 +111,7 @@
       ;; Fails if the launcher ever `cd`s to its own script directory again.
       (is (= (:caller h) (flag-value (split-argv (:log h)) "--cwd")))
       ;; The deployed path itself is injected (absolute and stable for the child).
-      (is (= bin (get (injected (:env-file h)) "HERDR_SUBAGENT_BIN")))))
+      (is (= bin (get (injected (:env-file h)) "HERDR_ORCH_BIN")))))
   (testing "bare skill-subtree invocation from a caller cwd with its own bb.edn"
     (let [h (harness)
           bare (str (fs/path (:dir h) "bare" "x" "y" "scripts"))
@@ -120,9 +120,9 @@
           ;; A bare-subtree install ships the complete sibling `subagents/` tree. This
           ;; fixture deliberately has no project or home persona directory, so both the
           ;; worker definition and config.edn must resolve from beside the launcher.
-          _ (fs/copy-tree (fs/path root "skills" "herdr-subagents" "subagents")
+          _ (fs/copy-tree (fs/path root "skills" "herdr-orch" "subagents")
                           (fs/path (fs/parent bare) "subagents"))
-          bin (str bare "/subagent")
+          bin (str bare "/oh")
           proc (launch! h bin (:caller h))
           argv (bb-argv h)]
       (is (zero? (:exit proc)) (:err proc))
@@ -133,4 +133,4 @@
       (is (= bare (flag-value argv "--deps-root")))
       (is (= "{:paths [\"src\"]}" (flag-value argv "-Sdeps")))
       (is (= (:caller h) (flag-value (split-argv (:log h)) "--cwd")))
-      (is (= bin (get (injected (:env-file h)) "HERDR_SUBAGENT_BIN"))))))
+      (is (= bin (get (injected (:env-file h)) "HERDR_ORCH_BIN"))))))

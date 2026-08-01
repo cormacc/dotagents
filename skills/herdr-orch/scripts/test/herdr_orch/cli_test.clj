@@ -1,16 +1,16 @@
 ;; Parallel deftest execution (org-tasks.test-runner) is opt-in per namespace;
 ;; this is the one namespace it's enabled for (task 2fe1ce2a). Contract: any
 ;; test mutating in-process state must be ^:serial.
-(ns ^{:parallel-tests true} herdr-subagents.cli-test
+(ns ^{:parallel-tests true} herdr-orch.cli-test
   (:require [babashka.fs :as fs]
             [babashka.process :as process]
             [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [herdr-subagents.cli :as cli]
-            [herdr-subagents.core :as core]
-            [herdr-subagents.herdr :as herdr]
-            [herdr-subagents.ledger :as ledger]))
+            [herdr-orch.cli :as cli]
+            [herdr-orch.core :as core]
+            [herdr-orch.herdr :as herdr]
+            [herdr-orch.ledger :as ledger]))
 
 (defn- git-toplevel []
   (let [proc @(process/process ["git" "rev-parse" "--show-toplevel"] {:out :string :err :string})]
@@ -19,8 +19,8 @@
   (if (fs/absolute? *file*)
     (str (fs/canonicalize (fs/path (fs/parent *file*) "../../../../..")))
     (or (git-toplevel) (throw (ex-info "cannot resolve repo root" {})))))
-(def bin (str root "/skills/herdr-subagents/scripts/subagent"))
-(def fake (str root "/skills/herdr-subagents/scripts/test/fixtures/fake-herdr"))
+(def bin (str root "/skills/herdr-orch/scripts/oh"))
+(def fake (str root "/skills/herdr-orch/scripts/test/fixtures/fake-herdr"))
 (defn calls [log] (if (fs/exists? log) (mapv #(str/split % #"\037") (str/split-lines (slurp log))) []))
 ;; One shared per-run dir for babashka's deps.clj-honoured `CLJ_CACHE` (user classpath
 ;; cache override, normally `~/.clojure/.cpcache`) and `CLJ_CONFIG` (user config-dir
@@ -44,7 +44,7 @@
       (when-not (zero? (:exit proc)) (throw (ex-info "failed to warm shared CLJ_CACHE" {:exit (:exit proc) :err (:err proc)})))
       dir)))
 (defn mutating? [argv] (and (not (some #{"--help"} argv)) (contains? #{["pane" "split"] ["tab" "create"] ["pane" "rename"] ["pane" "close"] ["agent" "start"] ["agent" "prompt"]} (vec (take 2 argv)))))
-;; `SUBAGENT_ASSIGNMENT_ROOT` keeps the ledger, index markers, result files, and project
+;; `ORCH_ASSIGNMENT_ROOT` keeps the ledger, index markers, result files, and project
 ;; override lookup inside the per-test temp dir: `bb test` must never touch the live tree.
 ;; `HOME` points at an empty directory, so default personas and roster data resolve from
 ;; the launcher's packaged skill subtree. Tests may supply isolated project definitions.
@@ -64,8 +64,8 @@
      ;; the retro skill resolves in-fixture without an installed `~/.agents/skills`.
      (fs/create-sym-link skills (fs/path root "skills"))
      {:dir dir :log log :env-file env-file :prompt-file prompt-file :roster (str roster) :skills (str skills) :state (str (fs/path dir "state"))
-      :env (merge {"PATH" (str dir ":" (System/getenv "PATH")) "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p" "HERDR_SUBAGENT_BIN" bin "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file "FAKE_HERDR_PROMPT_FILE" prompt-file "FAKE_HERDR_STATE_DIR" (str (fs/path dir "state"))
-                   "HOME" (str home) "SUBAGENT_ASSIGNMENT_ROOT" (str dir)
+      :env (merge {"PATH" (str dir ":" (System/getenv "PATH")) "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p" "HERDR_ORCH_BIN" bin "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file "FAKE_HERDR_PROMPT_FILE" prompt-file "FAKE_HERDR_STATE_DIR" (str (fs/path dir "state"))
+                   "HOME" (str home) "ORCH_ASSIGNMENT_ROOT" (str dir)
                    "CLJ_CACHE" @shared-clj-cache "CLJ_CONFIG" @shared-clj-cache
                    ;; Fast-by-default retry backoff: keeps the two `agent-start-retr*` tests
                    ;; under 500ms without changing the unconfigured production default (500).
@@ -86,7 +86,7 @@
   (let [dir (fs/create-temp-dir {:prefix "persona-discovery-"})
         project (str (fs/path dir "project"))
         home (str (fs/path dir "home"))
-        packaged (str (fs/path dir "installed" "herdr-subagents" "subagents"))
+        packaged (str (fs/path dir "installed" "herdr-orch" "subagents"))
         write-persona! (fn [directory name]
                          (fs/create-dirs directory)
                          (spit (str (fs/path directory (str name ".md")))
@@ -130,8 +130,8 @@
                       (= ["home-only" "home-wins" "packaged-only" "project-only" "project-wins"]
                          (:available (ex-data e))))))))
   ;; This must follow the resolved launcher location, not the assignment root or cwd.
-  (with-redefs [cli/launcher-bin (constantly "/opt/installed/herdr-subagents/scripts/subagent")]
-    (is (= "/opt/installed/herdr-subagents/subagents" (cli/packaged-personas-directory))))))
+  (with-redefs [cli/launcher-bin (constantly "/opt/installed/herdr-orch/scripts/oh")]
+    (is (= "/opt/installed/herdr-orch/subagents" (cli/packaged-personas-directory))))))
 
 ;; Mutates global with-redefs state (ledger/assignment-root, cli/home-directory,
 ;; cli/packaged-personas-directory) -- must run serially.
@@ -156,9 +156,9 @@
         argv (calls log)
         injected (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
     (is (zero? (:exit proc)))
-    ;; SUBAGENT_ASSIGNMENT_ROOT relocates ledger + result state and is inherited by the child.
-    (is (str/starts-with? (injected "HERDR_SUBAGENT_RESULT") (str (fs/path dir ".agents" "tmp" "herdr-subagents"))))
-    (is (= (str dir) (injected "SUBAGENT_ASSIGNMENT_ROOT")))
+    ;; ORCH_ASSIGNMENT_ROOT relocates ledger + result state and is inherited by the child.
+    (is (str/starts-with? (injected "HERDR_ORCH_RESULT") (str (fs/path dir ".agents" "tmp" "herdr-orch"))))
+    (is (= (str dir) (injected "ORCH_ASSIGNMENT_ROOT")))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (= ["pane" "split" "--pane" "w:p" "--direction" "right"] (subvec (vec (first (filter #(and (= ["pane" "split"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))) 0 6)))
     (is (some #(= ["pane" "close"] (vec (take 2 %))) argv))
@@ -172,29 +172,29 @@
            (some (fn [[command flags]] (when (= ["agent" "wait"] command) flags)) herdr/required-capabilities)))))
 
 (defn- ledger-entry* [dir task]
-  (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true))
+  (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str task ".json")))) true))
 (defn- injected-env [env-file key]
   (get (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file)))) key))
 
 ;; The below-root policy check precedes preflight, ledger allocation, and all Herdr calls.
 (deftest below-root-disallowed-spawn-is-side-effect-free
-  (let [{:keys [env log dir]} (fake-env {"HERDR_SUBAGENT_PERSONA" "worker" "HERDR_SUBAGENT_SPAWNS" "scout researcher"})
+  (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout researcher"})
         proc (call! env "task" "start" "worker" "--task" "disallowed nested worker")]
     (is (= 1 (:exit proc)))
-    (is (re-find #"spawn refused: target persona is not in this agent's HERDR_SUBAGENT_SPAWNS allow-list" (:out proc)))
-    (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))
+    (is (re-find #"spawn refused: target persona is not in this agent's HERDR_ORCH_SPAWNS allow-list" (:out proc)))
+    (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))
     (is (empty? (calls log)))))
 
 (deftest below-root-worker-scout-is-a-leaf
-  (let [{:keys [env log env-file dir prompt-file]} (fake-env {"HERDR_SUBAGENT_PERSONA" "worker"
-                                                               "HERDR_SUBAGENT_SPAWNS" "scout researcher"
+  (let [{:keys [env log env-file dir prompt-file]} (fake-env {"HERDR_ORCH_PERSONA" "worker"
+                                                               "HERDR_ORCH_SPAWNS" "scout researcher"
                                                                "FAKE_PARENT_LABEL" "worker-1-claude-opus-5"})
         proc (call! env "task" "start" "scout" "--task" "permitted nested scout")
         task (get-in (result proc) [:result :task])
         entry (ledger-entry* dir task)
         rename (first (filter #(and (= ["pane" "rename"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))]
     (is (zero? (:exit proc)) (:err proc))
-    (is (= "" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))
+    (is (= "" (injected-env env-file "HERDR_ORCH_SPAWNS")))
     (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))
     ;; The live roster's scout declares the provider-neutral `light` alias.
     (is (= "worker-1/scout-1-light" (:label entry)))
@@ -211,7 +211,7 @@
     ;; The default `worker` (formerly advised-worker) grants the advisor consult too.
     (is (= {:spawns ["scout" "researcher" "advisor"] :spawns-source "frontmatter"}
            (select-keys entry [:spawns :spawns-source])))
-    (is (= "scout researcher advisor" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))
+    (is (= "scout researcher advisor" (injected-env env-file "HERDR_ORCH_SPAWNS")))
     ;; The advisor is available but discretionary: the mandatory pre-publish review was
     ;; retired, so the single gap-only clause covers it and no ledger mandate is recorded.
     (is (not (contains? entry :required)))
@@ -229,8 +229,8 @@
              (select-keys entry [:spawns :spawns-source])))
       (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))))
   (testing "a below-root worker is depth-forced to a leaf"
-    (let [{:keys [env dir prompt-file]} (fake-env {"HERDR_SUBAGENT_PERSONA" "planner"
-                                                   "HERDR_SUBAGENT_SPAWNS" "worker"
+    (let [{:keys [env dir prompt-file]} (fake-env {"HERDR_ORCH_PERSONA" "planner"
+                                                   "HERDR_ORCH_SPAWNS" "worker"
                                                    "FAKE_PARENT_LABEL" "planner-1-claude-opus-5"})
           proc (call! env "task" "start" "worker" "--task" "nested worker")
           task (get-in (result proc) [:result :task])
@@ -249,17 +249,17 @@
       (is (zero? (:exit proc)) (:err proc))
       (is (= {:spawns ["scout" "researcher" "advisor"] :spawns-source "frontmatter"}
              (select-keys entry [:spawns :spawns-source])))
-      (is (= "scout researcher advisor" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))))
+      (is (= "scout researcher advisor" (injected-env env-file "HERDR_ORCH_SPAWNS")))))
   (testing "a permitted nested advisor is forced to a leaf and carries the model override"
-    (let [{:keys [env env-file dir prompt-file]} (fake-env {"HERDR_SUBAGENT_PERSONA" "advised-worker"
-                                                              "HERDR_SUBAGENT_SPAWNS" "advisor"
+    (let [{:keys [env env-file dir prompt-file]} (fake-env {"HERDR_ORCH_PERSONA" "advised-worker"
+                                                              "HERDR_ORCH_SPAWNS" "advisor"
                                                               "FAKE_PARENT_LABEL" "advised-worker-1-claude-sonnet-5"}
                                                              advisor-strategy-roster)
           proc (call! env "task" "start" "advisor" "--model" "anthropic/claude-fable-5" "--task" "nested advisor consult")
           task (get-in (result proc) [:result :task])
           entry (ledger-entry* dir task)]
       (is (zero? (:exit proc)) (:err proc))
-      (is (= "" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))
+      (is (= "" (injected-env env-file "HERDR_ORCH_SPAWNS")))
       (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))
       (is (= {:spawns [] :spawns-source "depth"} (select-keys entry [:spawns :spawns-source])))
       (is (= "advised-worker-1/advisor-1-claude-fable-5" (:label entry)))
@@ -283,7 +283,7 @@
         task (get-in (result proc) [:result :task])
         entry (ledger-entry* dir task)]
     (is (zero? (:exit proc)) (:err proc))
-    (is (= "" (injected-env env-file "HERDR_SUBAGENT_SPAWNS")))
+    (is (= "" (injected-env env-file "HERDR_ORCH_SPAWNS")))
     (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))
     (is (= {:spawns [] :spawns-source "flag"} (select-keys entry [:spawns :spawns-source])))))
 
@@ -291,15 +291,15 @@
 ;; frontmatter `spawns:` declaration: depth forces the injected policy empty, but the
 ;; roster defect must surface loudly instead of silently degrading to a leaf.
 (deftest below-root-spawn-validates-target-frontmatter
-  (let [{:keys [env log dir roster]} (fake-env {"HERDR_SUBAGENT_PERSONA" "worker"
-                                                "HERDR_SUBAGENT_SPAWNS" "broken"})]
+  (let [{:keys [env log dir roster]} (fake-env {"HERDR_ORCH_PERSONA" "worker"
+                                                "HERDR_ORCH_SPAWNS" "broken"})]
     (fs/create-dirs roster)
     (spit (str (fs/path roster "broken.md"))
           "---\nname: broken\ndescription: fixture persona with a misspelled grant\nspawns: does-not-exist\n---\nFixture persona.\n")
     (let [proc (call! env "task" "start" "broken" "--task" "broken nested frontmatter")]
       (is (= 1 (:exit proc)))
       (is (re-find #"unresolvable persona `does-not-exist`" (:out proc)))
-      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))
+      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log))))))
 
 (deftest relocated-assignment-root-persona-shadows-packaged-default
@@ -311,7 +311,7 @@
                              (calls log)))]
     (is (zero? (:exit proc)) (:err proc))
     (is (some #(= (str roster "/worker.md") %) start))
-    (is (not-any? #(= (str root "/skills/herdr-subagents/subagents/worker.md") %) start))))
+    (is (not-any? #(= (str root "/skills/herdr-orch/subagents/worker.md") %) start))))
 
 (deftest spawns-env-is-identical-for-tab-and-split-placement
   (let [{split-env :env split-env-file :env-file} (fake-env {})
@@ -320,9 +320,9 @@
         tab (call! tab-env "task" "start" "worker" "--tab" "--task" "tab policy env")]
     (is (zero? (:exit split)) (:err split))
     (is (zero? (:exit tab)) (:err tab))
-    (is (= "scout researcher advisor" (injected-env split-env-file "HERDR_SUBAGENT_SPAWNS")))
-    (is (= (injected-env split-env-file "HERDR_SUBAGENT_SPAWNS")
-           (injected-env tab-env-file "HERDR_SUBAGENT_SPAWNS")))))
+    (is (= "scout researcher advisor" (injected-env split-env-file "HERDR_ORCH_SPAWNS")))
+    (is (= (injected-env split-env-file "HERDR_ORCH_SPAWNS")
+           (injected-env tab-env-file "HERDR_ORCH_SPAWNS")))))
 
 ;; `--tab` places the child in a new unfocused tab of the caller's workspace instead of
 ;; a split, but every other contract (env, label, ledger, collect, closure) is identical.
@@ -345,8 +345,8 @@
     (is (some #(= ["pane" "rename" "w:child"] (vec (take 3 %))) argv))
     (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))
     ;; Env injection is identical to a split spawn.
-    (is (str/starts-with? (injected "HERDR_SUBAGENT_CHILD") "worker-"))
-    (is (= "blocking" (injected "HERDR_SUBAGENT_WAITING_POLICY")))
+    (is (str/starts-with? (injected "HERDR_ORCH_CHILD") "worker-"))
+    (is (= "blocking" (injected "HERDR_ORCH_WAITING_POLICY")))
     (is (= "tab" (:placement entry)))
     (is (= "w:tab" (:tab-id entry)))
     (is (= "w:child" (:pane-id entry)))))
@@ -387,7 +387,7 @@
         argv (calls log)
         ;; The failed `start` exits non-zero without printing the task id, so recover the
         ;; single entry file from the ledger directory (skipping the `indices/` subdir).
-        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))
+        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))
                            :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
                        (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))]
     (is (= 1 (:exit proc)))
@@ -408,12 +408,12 @@
     (is (some #(str/ends-with? % "/worker.md") pi-start))
     ;; With no project or home definition, the persona resolves from the launcher-local
     ;; package rather than requiring a repository-root `subagents/` directory.
-    (is (some #(= (str root "/skills/herdr-subagents/subagents/worker.md") %) pi-start))
+    (is (some #(= (str root "/skills/herdr-orch/subagents/worker.md") %) pi-start))
     (is (str/includes? (slurp prompt-file) "assignment from a file"))
     (is (str/includes? (slurp prompt-file) "Additional constraints: stay read-only")))
   ;; Also covers the nested planner label end-to-end: the injected persona gates it.
   ;; Below root the spawn gate requires the target in the injected allow-list.
-  (let [{:keys [env log]} (fake-env {"HERDR_SUBAGENT_PERSONA" "planner" "HERDR_SUBAGENT_SPAWNS" "worker"})
+  (let [{:keys [env log]} (fake-env {"HERDR_ORCH_PERSONA" "planner" "HERDR_ORCH_SPAWNS" "worker"})
         claude-proc (call! env "task" "start" "worker" "--kind" "claude" "--model" "sonnet" "--task" "claude persona")
         claude-start (first (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))
         rename (first (filter #(and (= ["pane" "rename"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))]
@@ -448,7 +448,7 @@
           proc (call! env "task" "start" "worker" "--tab" "--split" "--task" "conflicting placement")]
       (is (= 1 (:exit proc)))
       (is (re-find #"--tab and --split are mutually exclusive" (:out proc)))
-      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))
+      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log)))))
   (testing "--print-prompt reports the resolved placement"
     (doseq [[flag expected] [[[] "split"] [["--tab"] "tab"] [["--split"] "split"]]]
@@ -467,7 +467,7 @@
     (fs/create-dirs (fs/parent project-config))
     (spit (str project-config) "{:defaults {:placement :tab}}")
     (is (= "tab" (preview env)))
-    (is (= "tab" (preview (merge env {"HERDR_SUBAGENT_PERSONA" "worker" "HERDR_SUBAGENT_SPAWNS" "worker"}))))
+    (is (= "tab" (preview (merge env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"}))))
     (let [proc (call! env "task" "start" "worker" "--task" "configured tab placement")
           task (get-in (result proc) [:result :task])
           entry (ledger-entry* dir task)]
@@ -476,7 +476,7 @@
       (is (some #(and (= ["tab" "create"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
     (spit (str project-config) "{:defaults {:placement :tab-split}}")
     (is (= "tab" (preview env)))
-    (is (= "split" (preview (merge env {"HERDR_SUBAGENT_PERSONA" "worker" "HERDR_SUBAGENT_SPAWNS" "worker"}))))
+    (is (= "split" (preview (merge env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"}))))
     (is (= "split" (preview env "--split")))))
 
 (deftest start-collect-status-and-blocked-contract
@@ -484,8 +484,8 @@
   ;; end-to-end: captured, but the pane is never closed.
   (let [{:keys [env env-file log]} (fake-env {}) start (call! env "task" "start" "worker" "--task" "later") task (get-in (result start) [:result :task])
         values (into {} (map #(str/split % #"=" 2) (str/split-lines (slurp env-file))))
-        envelope (core/envelope {:child (values "HERDR_SUBAGENT_CHILD") :task task :result (values "HERDR_SUBAGENT_RESULT") :status "BLOCKED" :summary "later" :artifacts [] :findings [] :next nil})]
-    (spit (values "HERDR_SUBAGENT_RESULT") envelope)
+        envelope (core/envelope {:child (values "HERDR_ORCH_CHILD") :task task :result (values "HERDR_ORCH_RESULT") :status "BLOCKED" :summary "later" :artifacts [] :findings [] :next nil})]
+    (spit (values "HERDR_ORCH_RESULT") envelope)
     (is (= "BLOCKED" (get-in (result (call! env "task" "collect" task)) [:result :status])))
     (is (zero? (:exit (call! env "task" "status" task))))
     (is (zero? (:exit (call! env "task" "list"))))
@@ -509,17 +509,17 @@
     (is (re-find #"identity" (get-in (result proc) [:result :reason])))
     (is (not-any? #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
   (let [{:keys [env log dir]} (fake-env {}) target (str (fs/path dir "published.result"))
-        publication-env (merge env {"HERDR_SUBAGENT_CHILD" "child" "HERDR_SUBAGENT_TASK" "task" "HERDR_SUBAGENT_RESULT" target "HERDR_SUBAGENT_WAITING_POLICY" "non-blocking"})
+        publication-env (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task" "HERDR_ORCH_RESULT" target "HERDR_ORCH_WAITING_POLICY" "non-blocking"})
         ok (call! publication-env "task" "publish" "--status" "COMPLETE" "--summary" "done") second (call! publication-env "task" "publish" "--status" "COMPLETE" "--summary" "again")
         from-file-target (str (fs/path dir "from-file.result")) body (str (fs/path dir "body.json"))]
     (is (zero? (:exit ok))) (is (= 1 (:exit second))) (is (fs/exists? target))
     (is (some #(and (= ["notification" "show"] (vec (take 2 %))) (some (fn [arg] (str/includes? arg "child=child task=task")) %)) (calls log)))
     (spit body (json/generate-string {:status "COMPLETE" :summary "published from file" :artifacts [] :findings [] :next nil}))
-    (let [proc (call! (merge publication-env {"HERDR_SUBAGENT_RESULT" from-file-target "HERDR_SUBAGENT_WAITING_POLICY" "blocking"}) "task" "publish" "--from-file" body)]
+    (let [proc (call! (merge publication-env {"HERDR_ORCH_RESULT" from-file-target "HERDR_ORCH_WAITING_POLICY" "blocking"}) "task" "publish" "--from-file" body)]
       (is (zero? (:exit proc)) (:err proc))
       (is (str/includes? (slurp from-file-target) "SUMMARY: published from file"))))
   (let [{:keys [env dir]} (fake-env {"FAKE_NOTIFY_FAIL" "1"}) target (str (fs/path dir "notify.result"))
-        proc (call! (merge env {"HERDR_SUBAGENT_CHILD" "child" "HERDR_SUBAGENT_TASK" "task" "HERDR_SUBAGENT_RESULT" target "HERDR_SUBAGENT_WAITING_POLICY" "non-blocking"}) "task" "publish" "--status" "COMPLETE" "--summary" "done")]
+        proc (call! (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task" "HERDR_ORCH_RESULT" target "HERDR_ORCH_WAITING_POLICY" "non-blocking"}) "task" "publish" "--status" "COMPLETE" "--summary" "done")]
     (is (zero? (:exit proc))) (is (fs/exists? target))))
 
 ;; The failure-publication instruction is invariant across personas: without it a child
@@ -566,7 +566,7 @@
         (is (str/includes? (:out proc) "resolved assignment")))
       (let [proc (call! env "task" "run" "worker" "--retro" "--help")]
         (is (zero? (:exit proc)) (:err proc))
-        (is (str/starts-with? (:out proc) "subagent pane"))))
+        (is (str/starts-with? (:out proc) "oh pane"))))
     (testing "contradictory flags fail fast"
       (let [proc (call! env "task" "run" "worker" "--task" "x" "--retro" "--no-retro" "--print-prompt")]
         (is (= 1 (:exit proc)))
@@ -575,7 +575,7 @@
       (let [solo (fs/create-temp-dir {:prefix "fake-herdr-roster-"})]
         (fs/create-dirs (fs/path solo ".agents" "subagents"))
         (spit (str (fs/path solo ".agents" "subagents" "broken.md")) "---\nname: broken\nkind: pi\nretro: sometimes\n---\nbody")
-        (let [proc (call! (merge env {"SUBAGENT_ASSIGNMENT_ROOT" (str solo)}) "task" "run" "broken" "--task" "x" "--print-prompt")]
+        (let [proc (call! (merge env {"ORCH_ASSIGNMENT_ROOT" (str solo)}) "task" "run" "broken" "--task" "x" "--print-prompt")]
           (is (= 1 (:exit proc)))
           (is (re-find #"must be true or false" (:out proc)))
           (is (re-find #"broken" (:out proc)))
@@ -598,7 +598,7 @@
   (let [{:keys [env dir]} (fake-env {"FAKE_PUBLISH_PROCESS" "unsolicited → behavioral → still accepted"})
         proc (call! env "task" "run" "scout" "--task" "gated out but publishes" "--timeout" "200")
         task (get-in (result proc) [:result :task])
-        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true)]
+        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str task ".json")))) true)]
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (false? (:retro entry)))
     (is (= ["unsolicited → behavioral → still accepted"] (get-in entry [:envelope :process])))))
@@ -607,8 +607,8 @@
 ;; ledger entry's `:envelope` at capture, and never gating capture or pane closure.
 (deftest process-candidates-publish-and-persist
   (let [{:keys [env dir]} (fake-env {}) target (str (fs/path dir "process.result"))
-        base (merge env {"HERDR_SUBAGENT_CHILD" "child" "HERDR_SUBAGENT_TASK" "task" "HERDR_SUBAGENT_WAITING_POLICY" "blocking"})
-        proc (call! (merge base {"HERDR_SUBAGENT_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done"
+        base (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task" "HERDR_ORCH_WAITING_POLICY" "blocking"})
+        proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done"
                     "--process" "wrong flag → guardrail → verify flags first"
                     "--process" "repeated probe → behavioral → cache the probe")]
     (is (zero? (:exit proc)) (:err proc))
@@ -616,7 +616,7 @@
            (vec (drop 10 (str/split-lines (slurp target))))))
     ;; Six candidates are rejected at publish; the result file is never created.
     (let [over (str (fs/path dir "over.result"))
-          rejected (apply call! (merge base {"HERDR_SUBAGENT_RESULT" over}) "task" "publish" "--status" "COMPLETE" "--summary" "done"
+          rejected (apply call! (merge base {"HERDR_ORCH_RESULT" over}) "task" "publish" "--status" "COMPLETE" "--summary" "done"
                           (mapcat (fn [n] ["--process" (str "s" n " → c → r" n)]) (range 6)))]
       (is (= 1 (:exit rejected)))
       (is (re-find #"PROCESS exceeds" (:out rejected)))
@@ -625,14 +625,14 @@
     (let [from-file (str (fs/path dir "from-file-process.result")) body (str (fs/path dir "process-body.json"))]
       (spit body (json/generate-string {:status "BLOCKED" :summary "blocked but instructive" :artifacts [] :findings [] :next nil
                                         :process ["missing env → guardrail → preflight the env"]}))
-      (let [proc (call! (merge base {"HERDR_SUBAGENT_RESULT" from-file}) "task" "publish" "--from-file" body)]
+      (let [proc (call! (merge base {"HERDR_ORCH_RESULT" from-file}) "task" "publish" "--from-file" body)]
         (is (zero? (:exit proc)) (:err proc))
         (is (str/includes? (slurp from-file) "PROCESS:\n- missing env → guardrail → preflight the env\n--- END HERDR RESULT ---")))))
   ;; End to end: a published section survives capture onto the ledger entry.
   (let [{:keys [env dir]} (fake-env {"FAKE_PUBLISH_PROCESS" "stale doc → guardrail → read the contract first"})
         proc (call! env "task" "run" "worker" "--task" "process capture" "--timeout" "200")
         task (get-in (result proc) [:result :task])
-        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true)]
+        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str task ".json")))) true)]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (= ["stale doc → guardrail → read the contract first"] (get-in entry [:envelope :process])))
@@ -642,7 +642,7 @@
   (let [{:keys [env log dir]} (fake-env {"FAKE_PUBLISH_PROCESS" (str/join "\n- " (map #(str "s" % " → c → r" %) (range 6)))})
         proc (call! env "task" "run" "worker" "--task" "process overflow" "--timeout" "200")
         task (get-in (result proc) [:result :task])
-        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true)]
+        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str task ".json")))) true)]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (= "COMPLETE" (:status entry)))
@@ -651,7 +651,7 @@
     (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
 
 (defn- ledger-entry [dir task]
-  (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str task ".json")))) true))
+  (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str task ".json")))) true))
 (defn- child-get-count [log]
   (count (filter #(and (= ["agent" "get"] (vec (take 2 %))) (not= "w:p" (nth % 2 nil)) (not (some #{"--help"} %))) (calls log))))
 
@@ -698,8 +698,8 @@
           task (get-in (result start) [:result :task])
           values (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
       (is (nil? (:child-session (ledger-entry dir task))))
-      (spit (values "HERDR_SUBAGENT_RESULT")
-            (core/envelope {:child (values "HERDR_SUBAGENT_CHILD") :task task :result (values "HERDR_SUBAGENT_RESULT")
+      (spit (values "HERDR_ORCH_RESULT")
+            (core/envelope {:child (values "HERDR_ORCH_CHILD") :task task :result (values "HERDR_ORCH_RESULT")
                             :status "BLOCKED" :summary "blocked" :artifacts [] :findings [] :next nil}))
       (is (= "BLOCKED" (get-in (result (call! env "task" "collect" task)) [:result :status])))
       (is (= "/tmp/fake-child-session.jsonl" (get-in (ledger-entry dir task) [:child-session :value])))
@@ -747,7 +747,7 @@
     (is (not (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
     ;; exactly one ledger entry
     (is (= 1 (count (filter #(and (fs/regular-file? %) (str/ends-with? (fs/file-name %) ".json"))
-                             (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))))))
+                             (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))))))
 
 ;; A mapped-but-different error code (real `{"error":{"code":...}}` shape, not the
 ;; bare-string FAKE_FAIL_START) proves code discrimination, not just nil-safety: only
@@ -764,7 +764,7 @@
 (deftest agent-start-retry-budget-exhaustion-fails-cleanly
   (let [{:keys [env log dir]} (fake-env {"FAKE_START_BUSY_COUNT" "99"})
         proc (call! env "task" "start" "worker" "--task" "always busy")
-        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))
+        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))
                            :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
                        (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))]
     (is (= 1 (:exit proc)))
@@ -774,7 +774,7 @@
     (is (= herdr/start-retry-attempts (start-call-count log)))
     (is (= 1 (split-call-count log)))
     (is (= 1 (count (filter #(and (fs/regular-file? %) (str/ends-with? (fs/file-name %) ".json"))
-                             (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))))))
+                             (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))))))
 
 ;; Zero is truthy in Clojure and Thread/sleep rejects negatives, so both must fall back;
 ;; same discipline as `poll-interval-parsing` for `cli/parse-poll-interval`. This is the
@@ -849,8 +849,8 @@
 (deftest collect-pane-close-is-scoped-to-the-owning-session
   (let [{:keys [env env-file log]} (fake-env {}) start (call! env "task" "start" "worker" "--task" "foreign") task (get-in (result start) [:result :task])
         values (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))
-        envelope (core/envelope {:child (values "HERDR_SUBAGENT_CHILD") :task task :result (values "HERDR_SUBAGENT_RESULT") :status "COMPLETE" :summary "foreign" :artifacts [] :findings [] :next nil})]
-    (spit (values "HERDR_SUBAGENT_RESULT") envelope)
+        envelope (core/envelope {:child (values "HERDR_ORCH_CHILD") :task task :result (values "HERDR_ORCH_RESULT") :status "COMPLETE" :summary "foreign" :artifacts [] :findings [] :next nil})]
+    (spit (values "HERDR_ORCH_RESULT") envelope)
     (testing "a different parent session captures but never closes"
       (let [proc (call! (merge env {"HERDR_PANE_ID" "w:other"}) "task" "collect" task)]
         (is (zero? (:exit proc)) (:err proc))
@@ -874,11 +874,11 @@
 ;; Publication is exactly-once and immutable, so a relative artifact path must be caught
 ;; before the write, not only at collect (core/artifact-path is the same predicate there).
 (deftest relative-artifact-rejected-before-publication
-  (let [{:keys [env dir]} (fake-env {}) base (merge env {"HERDR_SUBAGENT_CHILD" "child" "HERDR_SUBAGENT_TASK" "task" "HERDR_SUBAGENT_WAITING_POLICY" "blocking"})
+  (let [{:keys [env dir]} (fake-env {}) base (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task" "HERDR_ORCH_WAITING_POLICY" "blocking"})
         target (str (fs/path dir "relative-artifact.result"))
         tmp-siblings (fn [] (->> (fs/list-dir dir) (map str) (filter #(str/includes? % ".tmp"))))]
     (testing "a relative --artifact is rejected before RESULT or a .tmp sibling exist"
-      (let [proc (call! (merge base {"HERDR_SUBAGENT_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" "relative/report.md — report")]
+      (let [proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" "relative/report.md — report")]
         (is (= 1 (:exit proc)))
         (is (re-find #"absolute" (:out proc)))
         (is (not (fs/exists? target)))
@@ -886,14 +886,14 @@
     (testing "the same violation via --from-file is rejected identically"
       (let [body (str (fs/path dir "relative-artifact-body.json"))]
         (spit body (json/generate-string {:status "COMPLETE" :summary "done" :artifacts ["relative/report.md — report"] :findings [] :next nil}))
-        (let [proc (call! (merge base {"HERDR_SUBAGENT_RESULT" target}) "task" "publish" "--from-file" body)]
+        (let [proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--from-file" body)]
           (is (= 1 (:exit proc)))
           (is (re-find #"absolute" (:out proc)))
           (is (not (fs/exists? target)))
           (is (empty? (tmp-siblings))))))
     (testing "a corrected retry in the same child session then succeeds"
       (let [artifact (str (fs/path dir "report.md"))
-            proc (call! (merge base {"HERDR_SUBAGENT_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" (str artifact " — report"))]
+            proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" (str artifact " — report"))]
         (is (zero? (:exit proc)) (:err proc))
         (is (fs/exists? target))
         (is (str/includes? (slurp target) (str "- " artifact " — report")))
@@ -916,7 +916,7 @@
 ;; `progress` makes no herdr call at all, so every case below is pure ledger/env
 ;; plumbing; the fixture needs no new verb to cover it.
 (defn- child-progress-env [env entry]
-  (merge env {"HERDR_SUBAGENT_CHILD" (:child entry) "HERDR_SUBAGENT_TASK" (:task entry) "HERDR_SUBAGENT_RESULT" (:result entry)}))
+  (merge env {"HERDR_ORCH_CHILD" (:child entry) "HERDR_ORCH_TASK" (:task entry) "HERDR_ORCH_RESULT" (:result entry)}))
 
 (deftest progress-records-first-snapshot-and-status-list-expose-it-unchanged
   (let [{:keys [env dir]} (fake-env {})
@@ -958,7 +958,7 @@
     (is (= "first snapshot" (:summary second-snapshot)))))
 
 (deftest progress-rewrites-the-snapshot-once-the-interval-elapses
-  (let [{:keys [env dir]} (fake-env {"SUBAGENT_PROGRESS_INTERVAL_MS" "50"})
+  (let [{:keys [env dir]} (fake-env {"ORCH_PROGRESS_INTERVAL_MS" "50"})
         start (call! env "task" "start" "worker" "--task" "elapsed interval")
         task (get-in (result start) [:result :task])
         entry (ledger-entry* dir task)
@@ -983,7 +983,7 @@
     (is (= before (count (calls log))) "progress makes no herdr call at all, so the call log is untouched")))
 
 (deftest a-non-positive-progress-interval-never-escapes-the-default
-  (let [{:keys [env dir]} (fake-env {"SUBAGENT_PROGRESS_INTERVAL_MS" "-5"})
+  (let [{:keys [env dir]} (fake-env {"ORCH_PROGRESS_INTERVAL_MS" "-5"})
         start (call! env "task" "start" "worker" "--task" "negative progress interval")
         task (get-in (result start) [:result :task])
         entry (ledger-entry* dir task)
@@ -1030,7 +1030,7 @@
         ;; The failed `start` exits non-zero without printing the task id, so recover
         ;; the single entry file from the ledger directory directly (see `tab-placement-
         ;; partial-start-failure-is-tracked-and-cleaned` above for the same recovery).
-        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))
+        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))
                            :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
                        (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))
         progress-proc (call! (child-progress-env env entry) "task" "progress" "--summary" "too late")]
@@ -1048,13 +1048,13 @@
         entry (ledger-entry* dir task)]
     (is (zero? (:exit start)) (:err start))
     (testing "a mismatched child cannot update another assignment's entry"
-      (let [proc (call! (merge env {"HERDR_SUBAGENT_CHILD" "someone-else" "HERDR_SUBAGENT_TASK" task "HERDR_SUBAGENT_RESULT" (:result entry)}) "task" "progress" "--summary" "spoofed")]
+      (let [proc (call! (merge env {"HERDR_ORCH_CHILD" "someone-else" "HERDR_ORCH_TASK" task "HERDR_ORCH_RESULT" (:result entry)}) "task" "progress" "--summary" "spoofed")]
         (is (= 1 (:exit proc)))
         (is (re-find #"mismatch" (:out proc)))))
     (testing "a missing child env fails fast rather than falling back to another identity"
-      (let [proc (call! (merge env {"HERDR_SUBAGENT_TASK" task "HERDR_SUBAGENT_RESULT" (:result entry)}) "task" "progress" "--summary" "no identity")]
+      (let [proc (call! (merge env {"HERDR_ORCH_TASK" task "HERDR_ORCH_RESULT" (:result entry)}) "task" "progress" "--summary" "no identity")]
         (is (= 1 (:exit proc)))
-        (is (re-find #"HERDR_SUBAGENT_CHILD" (:out proc)))))
+        (is (re-find #"HERDR_ORCH_CHILD" (:out proc)))))
     (is (nil? (:progress (ledger-entry* dir task))))))
 
 (deftest progress-instruction-appears-only-under-the-non-blocking-policy
@@ -1065,7 +1065,7 @@
     (is (zero? (:exit non-blocking)) (:err non-blocking))
     (is (not (re-find #"progress --summary" (:out blocking))))
     (is (re-find #"progress --summary" (:out non-blocking)))
-    (is (re-find #"SUBAGENT_PROGRESS_INTERVAL_MS" (:out non-blocking)))
+    (is (re-find #"ORCH_PROGRESS_INTERVAL_MS" (:out non-blocking)))
     (is (not (re-find #"draft findings" (:out blocking))))))
 
 ;; --- `collect --any` fan-in -------------------------------------------------------
@@ -1152,7 +1152,7 @@
         proc (call! env "task" "start" "worker" "--task" "start failure before prune")
         ;; The failed `start` exits non-zero without printing the task id, so recover the
         ;; single entry file directly (see `progress-rejected-on-a-terminal-failed-status`).
-        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))
+        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))
                            :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
                        (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))
         prune-proc (call! env "task" "prune" (:task entry))]
@@ -1229,8 +1229,8 @@
   (let [{:keys [env dir]} (fake-env {}) usage (:out (call! env "--help"))
         a (start-child! env dir "prefix must never resolve")
         prefix (subs (:task a) 0 8)]
-    (is (str/includes? usage "subagent task collect <full-task-uuid> [--wait --timeout MS]"))
-    (is (str/includes? usage "subagent task status [full-task-uuid] | list"))
+    (is (str/includes? usage "oh task collect <full-task-uuid> [--wait --timeout MS]"))
+    (is (str/includes? usage "oh task status [full-task-uuid] | list"))
     (is (str/includes? usage "no prefix is ever resolved"))
     (is (not (str/includes? usage "collect <task>")))
     (is (not (str/includes? usage "status [task]")))
@@ -1266,7 +1266,7 @@
   (let [{:keys [env dir state]} (fake-env {})
         a (start-child! env dir "nil recorded parent-session")]
     (child-state! state a "gone" "")
-    (let [path (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str (:task a) ".json"))
+    (let [path (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str (:task a) ".json"))
           corrupted (dissoc a :parent-session)]
       (spit (str path) (json/generate-string corrupted))
       (let [proc (call! (merge env {"FAKE_FAIL_AGENT_GET" "w:p"}) "task" "prune" (:task a))]
@@ -1559,7 +1559,7 @@
   (is (= 1234 (cli/parse-settle-close "1234")))
   (doseq [raw [nil "" "   " "soon" "0" "-5"]]
     (is (= cli/default-settle-close-ms (cli/parse-settle-close raw)) (pr-str raw)))
-  (let [{:keys [env log dir state]} (fake-env {"SUBAGENT_SETTLE_CLOSE_MS" "1500"})
+  (let [{:keys [env log dir state]} (fake-env {"ORCH_SETTLE_CLOSE_MS" "1500"})
         b (start-child! env dir "settle budget override")]
     (child-state! state b "status" "working")
     (child-state! state b "settle-to" "idle")
@@ -1658,8 +1658,8 @@
 ;; `start-child!` spawns from the parent pane `w:p`; the child then publishes with its own
 ;; injected identity, which is exactly the runtime shape of the push path.
 (defn- child-publish-env [env entry policy]
-  (merge env {"HERDR_SUBAGENT_CHILD" (:child entry) "HERDR_SUBAGENT_TASK" (:task entry)
-              "HERDR_SUBAGENT_RESULT" (:result entry) "HERDR_SUBAGENT_WAITING_POLICY" policy
+  (merge env {"HERDR_ORCH_CHILD" (:child entry) "HERDR_ORCH_TASK" (:task entry)
+              "HERDR_ORCH_RESULT" (:result entry) "HERDR_ORCH_WAITING_POLICY" policy
               "HERDR_PANE_ID" (:pane-id entry)}))
 ;; `--help` must be excluded explicitly (as in `closed-panes`): preflight probes
 ;; `agent prompt/get/wait --help` on every spawn and shares this call log.
@@ -1806,7 +1806,7 @@
 (deftest an-entry-without-a-parent-pane-is-skipped-without-probing
   (let [{:keys [env log dir]} (fake-env {})
         entry (start-child! env dir "legacy entry")
-        path (str (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger" (str (:task entry) ".json")))
+        path (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str (:task entry) ".json")))
         probes (count (parent-gets log))]
     (spit path (json/generate-string (dissoc entry :parent-pane)))
     (let [proc (call! (child-publish-env env entry "non-blocking") "task" "publish" "--status" "COMPLETE" "--summary" "done")
@@ -1861,8 +1861,8 @@
   (testing "a publication with no ledger entry has no parent to probe"
     (let [{:keys [env log dir]} (fake-env {})
           target (str (fs/path dir "orphan.result"))
-          proc (call! (merge env {"HERDR_SUBAGENT_CHILD" "child" "HERDR_SUBAGENT_TASK" "task"
-                                  "HERDR_SUBAGENT_RESULT" target "HERDR_SUBAGENT_WAITING_POLICY" "non-blocking"})
+          proc (call! (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task"
+                                  "HERDR_ORCH_RESULT" target "HERDR_ORCH_WAITING_POLICY" "non-blocking"})
                       "task" "publish" "--status" "COMPLETE" "--summary" "done")
           res (:result (result proc))]
       (is (zero? (:exit proc)) (:err proc))
@@ -1938,14 +1938,14 @@
     (doseq [argv [["--help"] ["help"] ["task" "run" "--help"] ["task" "publish" "--help"]]]
       (let [proc (apply call! env argv)]
         (is (zero? (:exit proc)) (str argv " -> " (:err proc)))
-        (is (str/starts-with? (:out proc) "subagent pane"))
+        (is (str/starts-with? (:out proc) "oh pane"))
         (is (not (str/includes? (:out proc) "\"ok\"")))))))
 
 
 ;; Ties the shipped default table to the record's verified rows, independent of the
 ;; loader/translation machinery under test elsewhere in this namespace.
 (deftest default-config-content-contract
-  (let [config (core/parse-config "config.edn" (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "config.edn"))))
+  (let [config (core/parse-config "config.edn" (slurp (str (fs/path root "skills" "herdr-orch" "subagents" "config.edn"))))
         weight-rows {"heavy" {:pi "anthropic/claude-fable-5" :claude "fable" :codex "gpt-5.6-sol"}
                      "middle" {:pi "anthropic/claude-opus-5" :claude "opus" :codex "gpt-5.6-sol"}
                      "light" {:pi "anthropic/claude-sonnet-5" :claude "sonnet" :codex "gpt-5.6-terra"}
@@ -1990,12 +1990,12 @@
                   "scout" "light"
                   "worker" "light"}]
     (doseq [[persona weight] expected]
-      (is (= weight (:model (core/parse-frontmatter (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" (str persona ".md")))))))
+      (is (= weight (:model (core/parse-frontmatter (slurp (str (fs/path root "skills" "herdr-orch" "subagents" (str persona ".md")))))))
           (str persona " declares " weight)))
     ;; `skilled-worker` was retired: `worker --model <tier>` covers it (see
     ;; design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org).
-    (is (not (fs/exists? (fs/path root "skills" "herdr-subagents" "subagents" "skilled-worker.md"))))
-    (is (str/includes? (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "worker.md"))) "--model heavy"))))
+    (is (not (fs/exists? (fs/path root "skills" "herdr-orch" "subagents" "skilled-worker.md"))))
+    (is (str/includes? (slurp (str (fs/path root "skills" "herdr-orch" "subagents" "worker.md"))) "--model heavy"))))
 
 ;; Loader precedence, row-level replacement, missing/malformed/invalid-shape handling,
 ;; and bare-subtree/relocated-root path derivation, exercised directly against
@@ -2010,15 +2010,15 @@
         ;; A bare-subtree install: only `scripts/` + a sibling `config.edn`, nested under
         ;; arbitrary ancestor names with no `bb.edn` anywhere — proving derivation is from
         ;; the launcher path alone, never cwd/git.
-        launcher (str (fs/path tmp "install" "a" "b" "skills" "herdr-subagents" "scripts" "subagent"))
-        default-config (fs/path tmp "install" "a" "b" "skills" "herdr-subagents" "subagents" "config.edn")
+        launcher (str (fs/path tmp "install" "a" "b" "skills" "herdr-orch" "scripts" "oh"))
+        default-config (fs/path tmp "install" "a" "b" "skills" "herdr-orch" "subagents" "config.edn")
         home-dir (str (fs/path tmp "home"))
         project-root (str (fs/path tmp "project"))
         project-config (fs/path project-root ".agents" "subagents" "config.edn")
         home-roster (fs/path home-dir ".agents" "subagents" "config.edn")]
     (fs/create-dirs (fs/parent default-config))
     (fs/create-dirs project-root) (fs/create-dirs home-dir)
-    (spit (str default-config) (slurp (str (fs/path root "skills" "herdr-subagents" "subagents" "config.edn"))))
+    (spit (str default-config) (slurp (str (fs/path root "skills" "herdr-orch" "subagents" "config.edn"))))
     (with-redefs [cli/launcher-bin (constantly launcher) ledger/assignment-root (constantly project-root)]
       (testing "default only"
         (let [config (cli/config home-dir)]
@@ -2065,7 +2065,7 @@
           (is (= [] (core/model-args config "vertex" "claude-opus-5"))))
         (fs/delete project-config)))
     (testing "missing shipped default is fatal"
-      (with-redefs [cli/launcher-bin (constantly (str (fs/path tmp "empty-install" "skills" "herdr-subagents" "scripts" "subagent")))
+      (with-redefs [cli/launcher-bin (constantly (str (fs/path tmp "empty-install" "skills" "herdr-orch" "scripts" "oh")))
                     ledger/assignment-root (constantly project-root)]
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"missing shipped default config" (cli/config home-dir)))))))
 
@@ -2101,7 +2101,7 @@
     (is (= "claude-opus-5" (get-in (result proc) [:result :model])))
     (is (= ["--model" "opus"] (get-in (result proc) [:result :model-args])))))
 
-;; A `SUBAGENT_ASSIGNMENT_ROOT` relocation (the fixture's `dir`, distinct from the real
+;; A `ORCH_ASSIGNMENT_ROOT` relocation (the fixture's `dir`, distinct from the real
 ;; repo root) resolves the project roster override under the relocated root, winning
 ;; over the shipped default.
 (deftest relocated-assignment-root-resolves-project-config-override
@@ -2122,7 +2122,7 @@
     (let [proc (call! env "task" "start" "probe" "--task" "invalid roster aborts")]
       (is (= 1 (:exit proc)))
       (is (re-find #"model-flag" (:out proc)))
-      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-subagents" "ledger"))))
+      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log))))))
 
 ;; --- portable Markdown artifact links ---------------------------------------------

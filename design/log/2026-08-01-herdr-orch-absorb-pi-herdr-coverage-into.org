@@ -120,8 +120,9 @@ Acceptance criteria:
 :PROPERTIES:
 :CUSTOM_ID: 0b30ff43-aa5d-45aa-b845-f3915eb84656
 :CREATED: [2026-08-01 Sat]
-:BLOCKED-BY: task:0d56a81f-3f01-4530-a1ad-a1d380707d57
+:BLOCKED-BY: task:9fa14b6c-3a4d-45ab-b3bd-bb5567d4b662
 :END:
+Resequenced after task 2: the rename now runs first, so the proxy is written against the final =oh= name instead of being written against =subagent= and immediately rewritten. The original ordering existed only to land the risky rename last, and that risk is governed by the in-flight check rather than by this task.
 A passthrough extension under =pi/extensions/= exposing =herdr_layout=, =herdr_pane= and =herdr_agent= mapped onto =oh=, then remove =npm:@ogulcancelik/pi-herdr= from =pi/settings.json=. Check for tool-name collision before removal if both are briefly registered.
 Acceptance criteria:
 - The three tools work through the proxy for every action they advertise
@@ -130,22 +131,28 @@ Acceptance criteria:
 - The extension contains no logic beyond schema, dispatch and error surfacing
 - Must not: touch =pi/extensions/herdr-agent-state.ts=
 
-** TODO Rename skill, binary, env prefix and ledger directory
+** DONE Rename skill, binary, env prefix and ledger directory
+CLOSED: [2026-08-01 Sat 12:09]
 :PROPERTIES:
 :CUSTOM_ID: 9fa14b6c-3a4d-45ab-b3bd-bb5567d4b662
 :CREATED: [2026-08-01 Sat]
-:BLOCKED-BY: task:0b30ff43-aa5d-45aa-b845-f3915eb84656
+:BLOCKED-BY: task:0d56a81f-3f01-4530-a1ad-a1d380707d57
+:STARTED: [2026-08-01 Sat 12:05]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-01 Sat 12:05]
+- State "DONE" from "STARTED" [2026-08-01 Sat 12:09]
 :END:
 The riskiest step, deliberately last. =git mv= the skill directory to =herdr-orch=, rename the launcher to =oh=, switch the env prefix to =HERDR_ORCH_*=, move the ledger/result directory, and carry all mechanical fallout in this task: namespaces, docs, tests, persona bodies, =AGENTS.md=, and the =agents.nix= symlink wiring if it names the skill.
 
 *Root-session only — this task must not be delegated.* A delegated child holds =$HERDR_SUBAGENT_BIN= pointing at the very launcher it would rename, so it would destroy its own publish path mid-assignment and strand its work with no envelope. "Nothing in flight" therefore includes the executor itself: the root session performs this rename directly.
 Acceptance criteria:
-- No =herdr-subagents=, =subagent= or =HERDR_SUBAGENT_= reference outside =design/log/= and =TASKS.archive.org=
-- =.agents/subagents/= and =~/.agents/subagents/= untouched; persona resolution still finds project, home and packaged tiers
-- =bb test= green
-- Verified no child in flight before starting
-- Must not: delegate this task — the child would rename its own launcher and lose its publish path
-- Must not: leave a compatibility alias — out of scope by decision
+- [X] No =herdr-subagents=, =subagent= or =HERDR_SUBAGENT_= reference outside =design/log/= and =TASKS.archive.org=
+- [X] =.agents/subagents/= and =~/.agents/subagents/= untouched; persona resolution still finds project, home and packaged tiers
+- [X] =bb test= green
+- [X] Verified no child in flight before starting
+- [X] Must not: delegate this task — the child would rename its own launcher and lose its publish path
+- [X] Must not: leave a compatibility alias — out of scope by decision
 
 ** TODO Verify end to end and retire the superseded upstream report
 :PROPERTIES:

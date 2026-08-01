@@ -70,8 +70,8 @@ for (const removed of ["glab-help", "glab-version", "glab-check-update"]) {
   if (existsSync(join(root, "skills", "gitlab-cli-skills", removed))) fail(`trivial GitLab child still exists: ${removed}`);
 }
 
-const subagentDir = join(root, "skills", "herdr-subagents", "subagents");
-const subagentPath = "skills/herdr-subagents/subagents";
+const subagentDir = join(root, "skills", "herdr-orch", "subagents");
+const subagentPath = "skills/herdr-orch/subagents";
 const subagentFiles = readdirSync(subagentDir).filter((name) => name.endsWith(".md")).sort();
 if (subagentFiles.length === 0) fail(`${subagentPath}/ contains no definitions`);
 const allowedSubagentKeys = new Set(["name", "description", "kind", "model", "retro", "spawns", "requires"]);
@@ -96,7 +96,7 @@ const invalidRoutingMetadataFixtures = [
 ] as const;
 for (const [label, source] of invalidRoutingMetadataFixtures) {
   const errors = routingMetadataErrors(parse(source) as Record<string, unknown>);
-  if (errors.length === 0) fail(`subagent routing-metadata fixture '${label}' unexpectedly passed`);
+  if (errors.length === 0) fail(`oh routing-metadata fixture '${label}' unexpectedly passed`);
 }
 
 for (const file of subagentFiles) {

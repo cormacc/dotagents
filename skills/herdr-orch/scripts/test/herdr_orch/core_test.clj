@@ -1,29 +1,29 @@
-(ns herdr-subagents.core-test
+(ns herdr-orch.core-test
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [herdr-subagents.cli :as cli]
-            [herdr-subagents.core :as core]
-            [herdr-subagents.ledger :as ledger]
-            [herdr-subagents.smoke :as smoke]))
+            [herdr-orch.cli :as cli]
+            [herdr-orch.core :as core]
+            [herdr-orch.ledger :as ledger]
+            [herdr-orch.smoke :as smoke]))
 
 (deftest resolution-and-label-contract
-  (let [directories (core/persona-directories "/project" "/home/u" "/installed/herdr-subagents/subagents")]
-    (is (= ["/project/.agents/subagents" "/home/u/.agents/subagents" "/installed/herdr-subagents/subagents"] directories))
+  (let [directories (core/persona-directories "/project" "/home/u" "/installed/herdr-orch/subagents")]
+    (is (= ["/project/.agents/subagents" "/home/u/.agents/subagents" "/installed/herdr-orch/subagents"] directories))
     (testing "project shadows home and packaged definitions"
       (is (= "/project/.agents/subagents/scout.md"
              (core/resolve-persona #{"/project/.agents/subagents/scout.md"
                                      "/home/u/.agents/subagents/scout.md"
-                                     "/installed/herdr-subagents/subagents/scout.md"}
+                                     "/installed/herdr-orch/subagents/scout.md"}
                                    directories "scout"))))
     (testing "home shadows packaged definitions"
       (is (= "/home/u/.agents/subagents/scout.md"
              (core/resolve-persona #{"/home/u/.agents/subagents/scout.md"
-                                     "/installed/herdr-subagents/subagents/scout.md"}
+                                     "/installed/herdr-orch/subagents/scout.md"}
                                    directories "scout"))))
     (testing "packaged definitions are the fallback"
-      (is (= "/installed/herdr-subagents/subagents/scout.md"
-             (core/resolve-persona #{"/installed/herdr-subagents/subagents/scout.md"}
+      (is (= "/installed/herdr-orch/subagents/scout.md"
+             (core/resolve-persona #{"/installed/herdr-orch/subagents/scout.md"}
                                    directories "scout"))))
     (is (nil? (core/resolve-persona #{} directories "unknown"))))
   (is (= "right" (core/direction {:width 160 :height 80})))
@@ -69,7 +69,7 @@
   (is (= "worker-3/scout-1-claude-fable-5" (core/child-label {:parent-label "worker-3-claude-fable-5" :parent-persona "worker" :persona "scout" :index 1 :model "anthropic/claude-fable-5"})))
   ;; A nested parent label (a grandchild spawn) still throws in nested-prefix. This is
   ;; an undesigned backstop only, not enforcement: depth is enforced mechanically by
-  ;; the injected HERDR_SUBAGENT_SPAWNS, never by label parsing.
+  ;; the injected HERDR_ORCH_SPAWNS, never by label parsing.
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"anchored persona/index prefix"
                         (core/nested-prefix "planner-1/scout-2-claude-fable-5" "scout")))
   (is (= "worker-1" (core/root-label "worker" 1 nil))))
@@ -232,7 +232,7 @@
          (core/resolve-spawns {:persona "worker"
                                :frontmatter {:spawns "scout advisor" :requires "advisor"}
                                :resolve-persona (fn [n] n)})))
-  (is (nil? (resolve 'herdr-subagents.core/resolve-required))))
+  (is (nil? (resolve 'herdr-orch.core/resolve-required))))
 
 (deftest frontmatter-and-envelope-contract
   (is (= {:name "scout" :description "x" :kind "pi" :model "vendor/model"}
@@ -246,7 +246,7 @@
     (is (thrown? Exception (core/artifact-path "relative — report")))))
 
 (deftest delegation-guidance-and-smoke-success-contract
-  (is (.endsWith (cli/launcher-bin) "/skills/herdr-subagents/scripts/subagent"))
+  (is (.endsWith (cli/launcher-bin) "/skills/herdr-orch/scripts/oh"))
   ;; The prompt text is intentionally pinned. One gap-only trigger covers factual research
   ;; and discretionary judgment consults alike, while preserving the blocking, one-child
   ;; leaf bound. There is deliberately no mandated-consult variant.

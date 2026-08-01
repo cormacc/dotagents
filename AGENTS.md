@@ -8,7 +8,7 @@
   commands in that domain -- don't parallelise the skill load with domain probes.
 
 # Subagents
-- Reusable Herdr subagent definitions resolve `<git-root>/.agents/subagents/` (project override) > `~/.agents/subagents/` (home override) > `skills/herdr-subagents/subagents/` (packaged default). The home path is unmanaged and reserved for genuine overrides. To delegate work inside Herdr, use the `herdr-subagents` skill.
+- Reusable Herdr subagent definitions resolve `<git-root>/.agents/subagents/` (project override) > `~/.agents/subagents/` (home override) > `skills/herdr-orch/subagents/` (packaged default). The home path is unmanaged and reserved for genuine overrides. To delegate work inside Herdr, use the `herdr-orch` skill.
 - Resolve a subagent's kind independently from its model: explicit kind request, then persona definition, then parent kind. Do not select a harness from a model ID or weight alias. The separate `config.edn` chain replaces complete same-ID rows package < home < project; it never deep-merges or selects kind. Translate the resolved model through that kind's roster column; Pi receives the configured provider-qualified `:pi` model. Weight mappings: `heavy` = Pi `anthropic/claude-fable-5`, Claude `fable`, Codex `gpt-5.6-sol`; `middle` = Pi `anthropic/claude-opus-5`, Claude `opus`, Codex `gpt-5.6-sol`; `light` = Pi `anthropic/claude-sonnet-5`, Claude `sonnet`, Codex `gpt-5.6-terra`; `feather` = Pi `anthropic/claude-haiku-4-5`, Claude `haiku`, Codex `gpt-5.6-luna`.
 
 # Git operations

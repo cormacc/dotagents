@@ -1,4 +1,4 @@
-(ns herdr-subagents.ledger
+(ns herdr-orch.ledger
   (:require [babashka.fs :as fs]
             [babashka.process :as process]
             [cheshire.core :as json]
@@ -6,7 +6,7 @@
   (:import [java.nio.file Files FileAlreadyExistsException Paths StandardCopyOption]
            [java.util UUID]))
 
-;; `SUBAGENT_ASSIGNMENT_ROOT` relocates ledger, index markers, result paths, and
+;; `ORCH_ASSIGNMENT_ROOT` relocates ledger, index markers, result paths, and
 ;; project-roster lookup together (they are all per-project notions). A blank value
 ;; is treated as unset; a relative value is absolutised against the process cwd so
 ;; RESULT is always absolute; a value that is not an existing directory is rejected.
@@ -14,16 +14,16 @@
   (when-let [value (some-> raw str/trim not-empty)]
     (let [path (fs/absolutize value)]
       (when-not (fs/directory? path)
-        (throw (ex-info "SUBAGENT_ASSIGNMENT_ROOT must name an existing directory" {:value value :resolved (str path)})))
+        (throw (ex-info "ORCH_ASSIGNMENT_ROOT must name an existing directory" {:value value :resolved (str path)})))
       (str (fs/canonicalize path)))))
 (defn assignment-root []
-  (or (resolve-override (System/getenv "SUBAGENT_ASSIGNMENT_ROOT"))
+  (or (resolve-override (System/getenv "ORCH_ASSIGNMENT_ROOT"))
       (let [{:keys [exit out]} @(process/process ["git" "rev-parse" "--show-toplevel"] {:out :string :err :string})]
         (if (zero? exit) (str/trim out) (str (fs/absolutize "."))))))
-(defn directory [] (fs/path (assignment-root) ".agents" "tmp" "herdr-subagents" "ledger"))
+(defn directory [] (fs/path (assignment-root) ".agents" "tmp" "herdr-orch" "ledger"))
 (defn ensure! [] (fs/create-dirs (directory)) (directory))
 (defn assignment-path [task] (fs/path (ensure!) (str task ".json")))
-(defn result-directory [] (fs/path (assignment-root) ".agents" "tmp" "herdr-subagents"))
+(defn result-directory [] (fs/path (assignment-root) ".agents" "tmp" "herdr-orch"))
 (defn fresh-task [] (str (UUID/randomUUID)))
 (defn fresh-result [task]
   (fs/create-dirs (result-directory))

@@ -1,10 +1,10 @@
-(ns herdr-subagents.core
-  "Pure protocol helpers for the subagent CLI."
+(ns herdr-orch.core
+  "Pure protocol helpers for the oh CLI."
   (:require [clojure.string :as str]
             [clojure.edn :as edn]
             [cheshire.core :as json]))
 
-(def schema "herdr-subagents/v1")
+(def schema "herdr-orch/v1")
 (def statuses #{"COMPLETE" "BLOCKED" "FAILED"})
 (def policies #{"blocking" "non-blocking"})
 (def max-findings 5)

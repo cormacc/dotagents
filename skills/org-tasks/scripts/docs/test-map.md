@@ -38,7 +38,7 @@ Lives under `skills/org-tasks/scripts/test/fixtures/round-trip/`. Each fixture i
 ## Test harness
 
 - `bb test` invokes `org-tasks.test-runner/run` which uses `clojure.test` and discovers every namespace under `scripts/test/`.
-- A namespace opts in to parallel deftest execution with `^{:parallel-tests true}` ns metadata (currently only `herdr-subagents.cli-test`, whose fixture spawns real `subagent` subprocesses); every other namespace still runs exactly as before. Within an opted-in namespace, vars marked `^:serial` run first, sequentially, before the rest run on a bounded thread pool (default `Runtime/availableProcessors`, override with `OT_TEST_PARALLELISM`). Any test mutating in-process state (e.g. `with-redefs`) must be `^:serial`.
+- A namespace opts in to parallel deftest execution with `^{:parallel-tests true}` ns metadata (currently only `herdr-orch.cli-test`, whose fixture spawns real `subagent` subprocesses); every other namespace still runs exactly as before. Within an opted-in namespace, vars marked `^:serial` run first, sequentially, before the rest run on a bounded thread pool (default `Runtime/availableProcessors`, override with `OT_TEST_PARALLELISM`). Any test mutating in-process state (e.g. `with-redefs`) must be `^:serial`.
 - Round-trip tests read fixture content, run `parse-tasks` → `serialize-tasks-preserving-file`, and assert byte equality with the original.
 - Where the TS test directly constructs a `Task` via TS object literal, the Clojure equivalent constructs a `task` map from the same data and asserts serializer output.
 - TUI tests avoid brittle full-ANSI snapshots. Pure state/layout functions are tested directly; CLI tests assert stdout remains machine JSON for non-TTY default invocations.

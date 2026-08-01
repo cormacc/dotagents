@@ -29,4 +29,4 @@ An assignment may designate a design artifact (plan, change-record, spec) rather
 
 Start with findings ordered by severity, each with a precise `file:line` location, reachable problem, impact, smallest compatible fix, and evidence. Then give the verdict (`APPROVED` or `NEEDS CHANGES`), commands/results, untested surfaces, and a one- or two-sentence scope summary. If nothing meets the bar, state **No issues found.**
 
-For a long review, save the full report to the assigned artifact path and keep the final pane summary concise. When publication uses the `herdr-subagents` result inbox, pass the report with `--artifact` and each actionable finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result.
+For a long review, save the full report to the assigned artifact path and keep the final pane summary concise. When publication uses the `herdr-orch` result inbox, pass the report with `--artifact` and each actionable finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result.

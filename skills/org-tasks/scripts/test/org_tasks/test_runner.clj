@@ -14,7 +14,7 @@
   whole once that var finishes, so concurrent output never interleaves.
   Pool size defaults to `(.availableProcessors (Runtime/getRuntime))` and is
   overridable via `OT_TEST_PARALLELISM` (unset/blank/unparseable/non-positive
-  all fall back to the default, same discipline as herdr-subagents' env-seam
+  all fall back to the default, same discipline as herdr-orch' env-seam
   parsers, e.g. `SUBAGENT_POLL_INTERVAL_MS`).
 
   Any test mutating in-process state (with-redefs, shared atoms/refs outside
@@ -52,7 +52,7 @@
   "Bounded pool size for the parallel batch: strictly positive env override
   via OT_TEST_PARALLELISM, else `Runtime/availableProcessors`. Same
   unset/blank/unparseable/non-positive -> default discipline used by the
-  herdr-subagents env-seam parsers (e.g. `parse-poll-interval`)."
+  herdr-orch env-seam parsers (e.g. `parse-poll-interval`)."
   []
   (let [n (some-> (System/getenv "OT_TEST_PARALLELISM") str/trim not-empty parse-long)]
     (if (and n (pos? n)) n (.availableProcessors (Runtime/getRuntime)))))

@@ -1,4 +1,4 @@
-(ns herdr-subagents.herdr
+(ns herdr-orch.herdr
   "Safe argv adapter for Herdr 0.7.5. No command text is passed to a shell."
   (:require [babashka.process :as process]
             [cheshire.core :as json]
@@ -6,7 +6,7 @@
 
 (def minimum-version [0 7 5])
 ;; The mechanical surface intentionally includes pane rename, which is useful to the
-;; subagent launcher even though pi-herdr did not expose it. Keep this set explicit so a
+;; oh launcher even though pi-herdr did not expose it. Keep this set explicit so a
 ;; missing wrapper is a test failure rather than an accidental capability regression.
 (def operations
   #{["workspace" "list"] ["workspace" "create"] ["workspace" "focus"]
@@ -65,7 +65,7 @@
   (let [{:keys [exit out err]} @(process/process (into ["herdr"] (conj command "--help")) {:out :string :err :string})]
     (if (#{0 2} exit) (str out err) (throw (ex-info "unable to inspect Herdr capability" {:command command :stderr err})))))
 (defn preflight! []
-  (when-not (= "1" (System/getenv "HERDR_ENV")) (throw (ex-info "subagent requires HERDR_ENV=1; run inside a Herdr pane" {:kind :environment})))
+  (when-not (= "1" (System/getenv "HERDR_ENV")) (throw (ex-info "oh requires HERDR_ENV=1; run inside a Herdr pane" {:kind :environment})))
   (let [actual (version)]
     (when-not (at-least? actual minimum-version) (throw (ex-info "Herdr 0.7.5 or newer is required" {:actual actual :minimum minimum-version}))))
   (doseq [[command flags] required-capabilities]

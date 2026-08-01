@@ -1,13 +1,13 @@
 # `subagent` — Herdr delegation CLI
 
-`subagent` is the harness-agnostic executable behind the `herdr-subagents` skill. It performs the mechanical single-child, ephemeral delegation protocol while the skill retains delegation and safety policy.
+`subagent` is the harness-agnostic executable behind the `herdr-orch` skill. It performs the mechanical single-child, ephemeral delegation protocol while the skill retains delegation and safety policy.
 
 ## Run
 
 From the repository root (the repo `bb.edn` provides the `test` task; `bb test` fails from `scripts/`):
 
 ```sh
-./skills/herdr-subagents/scripts/subagent --help
+./skills/herdr-orch/scripts/oh --help
 bb run subagent --help
 bb test
 ```
@@ -26,23 +26,23 @@ The value-less flag `--any` on `collect` takes no task argument; it captures the
 
 The value-bearing `--notify-timeout` flag on `publish` bounds the settle wait before the advisory parent push under the non-blocking waiting policy (default 30000 ms). See [docs/contract.md](docs/contract.md) § Parent push for the push gates and outcome table.
 
-The value-bearing `--summary` flag on the child-only `progress` command stores one latest, throttled advisory snapshot (`SUBAGENT_PROGRESS_INTERVAL_MS`, default 60000 ms) under the ledger entry, visible through `status`/`list`; it is never a second transcript and never a completion signal. See [docs/contract.md](docs/contract.md) § Progress for identity validation, throttling, and rejection cases.
+The value-bearing `--summary` flag on the child-only `progress` command stores one latest, throttled advisory snapshot (`ORCH_PROGRESS_INTERVAL_MS`, default 60000 ms) under the ledger entry, visible through `status`/`list`; it is never a second transcript and never a completion signal. See [docs/contract.md](docs/contract.md) § Progress for identity validation, throttling, and rejection cases.
 
-`subagent task prune <full-task-uuid>` retires exactly one stale, same-session assignment orphaned by a killed `task run`/`task start`: it requires ownership of the exact ledger entry and proof the entry is uncaptured, non-terminal, result-less, and absent from one `agent list` call before marking it `failed` with `:pruned-at`/`:prune-reason` metadata, so `collect --any` stops counting it as a candidate; it never scans the ledger, ages out a candidate, or resolves a prefix. See [docs/contract.md](docs/contract.md) § Pruning for the ownership check and staleness proof.
+`oh task prune <full-task-uuid>` retires exactly one stale, same-session assignment orphaned by a killed `task run`/`task start`: it requires ownership of the exact ledger entry and proof the entry is uncaptured, non-terminal, result-less, and absent from one `agent list` call before marking it `failed` with `:pruned-at`/`:prune-reason` metadata, so `collect --any` stops counting it as a candidate; it never scans the ledger, ages out a candidate, or resolves a prefix. See [docs/contract.md](docs/contract.md) § Pruning for the ownership check and staleness proof.
 
 ```sh
-SUBAGENT="$HOME/.agents/skills/herdr-subagents/scripts/subagent"
-"$SUBAGENT" task run scout --task 'Find the relevant source files.' --timeout 600000
-"$SUBAGENT" task start reviewer --task-file assignment.md
-"$SUBAGENT" task collect <full-task-uuid> --wait --timeout 600000
-"$SUBAGENT" task collect --any --wait --timeout 600000
-"$SUBAGENT" task status <full-task-uuid>
+OH="$HOME/.agents/skills/herdr-orch/scripts/oh"
+"$OH" task run scout --task 'Find the relevant source files.' --timeout 600000
+"$OH" task start reviewer --task-file assignment.md
+"$OH" task collect <full-task-uuid> --wait --timeout 600000
+"$OH" task collect --any --wait --timeout 600000
+"$OH" task status <full-task-uuid>
 ```
 
 A child calls the injected absolute launcher path:
 
 ```sh
-"$HERDR_SUBAGENT_BIN" task publish --status COMPLETE --summary 'Implemented and tested.' \
+"$HERDR_ORCH_BIN" task publish --status COMPLETE --summary 'Implemented and tested.' \
   --process 'documented flag rejected → guardrail → verify flags against source before use'
 ```
 
@@ -52,4 +52,4 @@ Each `--artifact` is also surfaced as a portable Markdown link, `[absolute path]
 
 ## Tests and smoke
 
-`bb test` runs unit and fake-process coverage without launching an agent, entirely inside per-test temporary directories (`SUBAGENT_ASSIGNMENT_ROOT`); it must not touch the live `<git-root>/.agents/tmp/herdr-subagents/` tree. When probing root-CLI behaviour manually from inside a delegated session, unset `HERDR_SUBAGENT_PERSONA` and `HERDR_SUBAGENT_SPAWNS` first — the injected identity marks every spawn below-root ([docs/contract.md](docs/contract.md) § Spawn gating). The separate `bb smoke-subagent` is intentionally guarded and requires `HERDR_ENV=1`, `SUBAGENT_LIVE_SMOKE=1`, and `SUBAGENT_LIVE_SMOKE_MODEL`; it is never CI work. Maintainer rationale and smoke coverage notes live in [../README.org](../README.org); output and file contracts live in [docs/contract.md](docs/contract.md).
+`bb test` runs unit and fake-process coverage without launching an agent, entirely inside per-test temporary directories (`ORCH_ASSIGNMENT_ROOT`); it must not touch the live `<git-root>/.agents/tmp/herdr-orch/` tree. When probing root-CLI behaviour manually from inside a delegated session, unset `HERDR_ORCH_PERSONA` and `HERDR_ORCH_SPAWNS` first — the injected identity marks every spawn below-root ([docs/contract.md](docs/contract.md) § Spawn gating). The separate `bb smoke-subagent` is intentionally guarded and requires `HERDR_ENV=1`, `ORCH_LIVE_SMOKE=1`, and `ORCH_LIVE_SMOKE_MODEL`; it is never CI work. Maintainer rationale and smoke coverage notes live in [../README.org](../README.org); output and file contracts live in [docs/contract.md](docs/contract.md).

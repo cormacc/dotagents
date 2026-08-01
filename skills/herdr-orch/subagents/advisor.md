@@ -25,4 +25,4 @@ Advise the caller at a focused mid-task judgment point, report actionable guidan
 
 ## Output
 
-Lead with the verdict, recommended approach, and concrete pass/fail checks. When publication uses the `herdr-subagents` result inbox, serialize a short consult as `SUMMARY: <PROCEED|REVISE|STOP> — <recommended approach>` on one line. Pass every actionable check as a `--finding` (at most five); never hide findings only in `SUMMARY`. When the recommendation cannot fit that line, write the full report to the assigned artifact path and pass it with `--artifact`.
+Lead with the verdict, recommended approach, and concrete pass/fail checks. When publication uses the `herdr-orch` result inbox, serialize a short consult as `SUMMARY: <PROCEED|REVISE|STOP> — <recommended approach>` on one line. Pass every actionable check as a `--finding` (at most five); never hide findings only in `SUMMARY`. When the recommendation cannot fit that line, write the full report to the assigned artifact path and pass it with `--artifact`.

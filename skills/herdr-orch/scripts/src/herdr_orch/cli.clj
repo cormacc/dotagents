@@ -1,14 +1,14 @@
-(ns herdr-subagents.cli
+(ns herdr-orch.cli
   (:require [babashka.fs :as fs]
             [cheshire.core :as json]
             [clojure.string :as str]
-            [herdr-subagents.core :as core]
-            [herdr-subagents.herdr :as herdr]
-            [herdr-subagents.ledger :as ledger])
+            [herdr-orch.core :as core]
+            [herdr-orch.herdr :as herdr]
+            [herdr-orch.ledger :as ledger])
   (:import [java.nio.file Files FileAlreadyExistsException Paths]
            [java.util UUID]))
 
-(def usage "subagent pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\nsubagent tab create|list|focus\nsubagent ws create|list|focus\n\nRAW AGENT CONTROL\n  subagent agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  subagent task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  subagent task collect <full-task-uuid> [--wait --timeout MS]\n  subagent task collect --any [--wait --timeout MS]\n  subagent task status [full-task-uuid] | list\n  subagent task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--notify-timeout MS]\n  subagent task progress --summary TEXT\n  subagent task prune <full-task-uuid>\n\nsubagent spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `subagent task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new unfocused tab of the caller's workspace instead of a split; --split explicitly selects a split.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to SUBAGENT_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncollect, status, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; unlike ot, no prefix is ever resolved.\nOpaque assignment input is --task, --task-file, or stdin. Run `subagent --help` for contract details.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS]\n  oh task collect --any [--wait --timeout MS]\n  oh task status [full-task-uuid] | list\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--notify-timeout MS]\n  oh task progress --summary TEXT\n  oh task prune <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new unfocused tab of the caller's workspace instead of a split; --split explicitly selects a split.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to ORCH_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncollect, status, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; unlike ot, no prefix is ever resolved.\nOpaque assignment input is --task, --task-file, or stdin. Run `oh --help` for contract details.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -29,7 +29,7 @@
 (defn parse-progress-interval [raw]
   (let [n (some-> raw str/trim not-empty parse-long)]
     (if (and n (pos? n)) n default-progress-interval-ms)))
-(defn progress-interval-ms [] (parse-progress-interval (System/getenv "SUBAGENT_PROGRESS_INTERVAL_MS")))
+(defn progress-interval-ms [] (parse-progress-interval (System/getenv "ORCH_PROGRESS_INTERVAL_MS")))
 ;; Bounds the settle wait a `collect --any` capture makes before its one-shot pane close
 ;; (see `collect-any!`); same non-positive/unparseable/blank -> default discipline as
 ;; parse-poll-interval/parse-notify-timeout/parse-progress-interval. The default is
@@ -41,7 +41,7 @@
 (defn parse-settle-close [raw]
   (let [n (some-> raw str/trim not-empty parse-long)]
     (if (and n (pos? n)) n default-settle-close-ms)))
-(defn settle-close-ms [] (parse-settle-close (System/getenv "SUBAGENT_SETTLE_CLOSE_MS")))
+(defn settle-close-ms [] (parse-settle-close (System/getenv "ORCH_SETTLE_CLOSE_MS")))
 ;; Single source of truth for value-less flags. `option-map` and `help-request?` both
 ;; consume argv and must agree: a flag known to only one of them silently swallows the
 ;; following element (e.g. `run worker --retro --task 'X'` losing its assignment).
@@ -90,10 +90,10 @@
         (fail "persona not found in project, home, or packaged roster" {:persona persona :available (available-personas)}))))
 (defn child-name [persona task] (str persona "-" (subs task 0 8)))
 (defn launcher-bin []
-  (or (System/getenv "HERDR_SUBAGENT_BIN")
-      (let [candidate (fs/path (ledger/assignment-root) "skills" "herdr-subagents" "scripts" "subagent")]
+  (or (System/getenv "HERDR_ORCH_BIN")
+      (let [candidate (fs/path (ledger/assignment-root) "skills" "herdr-orch" "scripts" "oh")]
         (when (fs/exists? candidate) (str (fs/absolutize candidate))))
-      (fail "could not resolve subagent launcher" {})))
+      (fail "could not resolve oh launcher" {})))
 (defn default-config-path []
   (str (packaged-personas-directory) "/config.edn"))
 (defn config-file [path]
@@ -133,11 +133,11 @@
 ;; already: a `blocking` run's parent is already waiting and gets nothing extra to poll.
 (defn progress-instruction [waiting-policy]
   (when (= waiting-policy "non-blocking")
-    (str "\nReport concise phase-boundary progress with `$HERDR_SUBAGENT_BIN task progress --summary \"...\"` at most once per SUBAGENT_PROGRESS_INTERVAL_MS (default 60000 ms); never include draft findings or result content, and never treat it as completion.")))
+    (str "\nReport concise phase-boundary progress with `$HERDR_ORCH_BIN task progress --summary \"...\"` at most once per ORCH_PROGRESS_INTERVAL_MS (default 60000 ms); never include draft findings or result content, and never treat it as completion.")))
 (defn prompt-text [{:keys [spawns persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
   (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
        (delegation-guidance spawns) " Herdr assigned TASK=" task " and RESULT=" result ". "
-       "When finished, publish exactly once with `$HERDR_SUBAGENT_BIN task publish --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
+       "When finished, publish exactly once with `$HERDR_ORCH_BIN task publish --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
        "The waiting policy is " waiting-policy "."
        (retro-instruction retro-skill)
@@ -160,20 +160,20 @@
 (defn placement-policy [opts config]
   (core/resolve-placement {:flag (placement-flag opts)
                            :configured (get-in config [:defaults :placement])
-                           :below-root? (some? (System/getenv "HERDR_SUBAGENT_PERSONA"))}))
-;; Depth and capability gate: below root (own HERDR_SUBAGENT_PERSONA set) a run/start is
+                           :below-root? (some? (System/getenv "HERDR_ORCH_PERSONA"))}))
+;; Depth and capability gate: below root (own HERDR_ORCH_PERSONA set) a run/start is
 ;; refused before herdr/preflight!, ledger allocation, and any pane mutation, so a denied
-;; spawn creates nothing billable. Blank and unset HERDR_SUBAGENT_SPAWNS both parse to
+;; spawn creates nothing billable. Blank and unset HERDR_ORCH_SPAWNS both parse to
 ;; the empty allow-list — the empty-string/unset distinction is never load-bearing.
 (defn enforce-spawns! [persona opts]
-  (when-let [own (System/getenv "HERDR_SUBAGENT_PERSONA")]
+  (when-let [own (System/getenv "HERDR_ORCH_PERSONA")]
     (let [flag (one opts :spawns)]
       (when (and flag (not= "none" flag))
         (fail "below-root spawns cannot grant capability: only `--spawns none` is permitted"
               {:own-persona own :target persona :spawns flag})))
-    (let [allowed (core/parse-spawns (System/getenv "HERDR_SUBAGENT_SPAWNS"))]
+    (let [allowed (core/parse-spawns (System/getenv "HERDR_ORCH_SPAWNS"))]
       (when-not (some #{persona} allowed)
-        (fail "spawn refused: target persona is not in this agent's HERDR_SUBAGENT_SPAWNS allow-list"
+        (fail "spawn refused: target persona is not in this agent's HERDR_ORCH_SPAWNS allow-list"
               {:own-persona own :target persona :allowed allowed})))))
 ;; Mirrors retro-policy: resolved once at spawn (flag > frontmatter > default deny),
 ;; recorded on the entry, and injected into the child. Resolution always runs so an
@@ -185,7 +185,7 @@
   (let [directories (persona-directories)
         resolved (core/resolve-spawns {:persona persona :flag (one opts :spawns) :frontmatter frontmatter
                                        :resolve-persona #(core/resolve-persona (fn [path] (fs/exists? path)) directories %)})]
-    (if (System/getenv "HERDR_SUBAGENT_PERSONA")
+    (if (System/getenv "HERDR_ORCH_PERSONA")
       {:spawns [] :spawns-source "depth"}
       resolved)))
 (defn preview! [persona opts waiting-policy]
@@ -301,9 +301,9 @@
             result (ledger/fresh-result task)
             index (ledger/allocate-index! (:parent-session ident) persona)
             ;; Nested labels compose for any spawning persona, gated on the spawner's
-            ;; own injected HERDR_SUBAGENT_PERSONA (display metadata only — depth is
+            ;; own injected HERDR_ORCH_PERSONA (display metadata only — depth is
             ;; enforced by enforce-spawns!, never by label parsing).
-            own-persona (System/getenv "HERDR_SUBAGENT_PERSONA")
+            own-persona (System/getenv "HERDR_ORCH_PERSONA")
             parent-label (:label (herdr/pane! (:parent-pane ident)))
             label (core/child-label {:parent-label (when own-persona parent-label) :parent-persona own-persona :persona persona :index index :model model})
             assignment (task-text opts)
@@ -313,9 +313,9 @@
         ;; Persist before the first pane mutation, so every partial failure is recoverable.
         (ledger/write! entry)
         (try
-          (let [env (cond-> {"HERDR_SUBAGENT_CHILD" name "HERDR_SUBAGENT_TASK" task "HERDR_SUBAGENT_RESULT" result "HERDR_SUBAGENT_BIN" bin "HERDR_SUBAGENT_WAITING_POLICY" waiting-policy "HERDR_SUBAGENT_PERSONA" persona "HERDR_SUBAGENT_SPAWNS" (str/join " " (:spawns spawns))}
+          (let [env (cond-> {"HERDR_ORCH_CHILD" name "HERDR_ORCH_TASK" task "HERDR_ORCH_RESULT" result "HERDR_ORCH_BIN" bin "HERDR_ORCH_WAITING_POLICY" waiting-policy "HERDR_ORCH_PERSONA" persona "HERDR_ORCH_SPAWNS" (str/join " " (:spawns spawns))}
                       ;; Keep a relocated assignment root in force for any nested delegation.
-                      (System/getenv "SUBAGENT_ASSIGNMENT_ROOT") (assoc "SUBAGENT_ASSIGNMENT_ROOT" (ledger/assignment-root)))
+                      (System/getenv "ORCH_ASSIGNMENT_ROOT") (assoc "ORCH_ASSIGNMENT_ROOT" (ledger/assignment-root)))
                 ;; Tab placement skips caller-rect!/direction entirely: a tab needs neither.
                 ;; Placement is never carried in `env`, so children resolve their own config.
                 pane-placement (if (= placement "tab")
@@ -435,7 +435,7 @@
       {:status (:status body) :summary (:summary body) :artifacts (vec (:artifacts body)) :findings (vec (:findings body)) :next (:next body) :process (vec (:process body))})
     {:status (one opts :status) :summary (one opts :summary) :artifacts (all opts :artifact) :findings (all opts :finding) :next (one opts :next) :process (all opts :process)}))
 (defn publish! [opts]
-  (let [env #(System/getenv %) child (or (env "HERDR_SUBAGENT_CHILD") (fail "missing HERDR_SUBAGENT_CHILD" {})) task (or (env "HERDR_SUBAGENT_TASK") (fail "missing HERDR_SUBAGENT_TASK" {})) result (or (env "HERDR_SUBAGENT_RESULT") (fail "missing HERDR_SUBAGENT_RESULT" {})) policy (or (env "HERDR_SUBAGENT_WAITING_POLICY") (fail "missing HERDR_SUBAGENT_WAITING_POLICY" {}))
+  (let [env #(System/getenv %) child (or (env "HERDR_ORCH_CHILD") (fail "missing HERDR_ORCH_CHILD" {})) task (or (env "HERDR_ORCH_TASK") (fail "missing HERDR_ORCH_TASK" {})) result (or (env "HERDR_ORCH_RESULT") (fail "missing HERDR_ORCH_RESULT" {})) policy (or (env "HERDR_ORCH_WAITING_POLICY") (fail "missing HERDR_ORCH_WAITING_POLICY" {}))
         body (publication-body opts)
         ;; Publication is exactly-once and immutable, so a relative artifact path must fail
         ;; before the write, not only at collect (core/artifact-path is the same check
@@ -445,7 +445,7 @@
         ;; JSON value would NPE before reaching artifact-path's own clean error.
         _ (doseq [artifact (:artifacts body)] (core/artifact-path (str artifact)))
         text (core/envelope (merge {:child child :task task :result result} body)) target (fs/path result) temp (fs/path (str result "." (UUID/randomUUID) ".tmp"))]
-    (when-not (core/policies policy) (fail "invalid HERDR_SUBAGENT_WAITING_POLICY" {:policy policy}))
+    (when-not (core/policies policy) (fail "invalid HERDR_ORCH_WAITING_POLICY" {:policy policy}))
     (fs/create-dirs (fs/parent target))
     (try
       (spit (str temp) text) (Files/createLink (Paths/get (str target) (make-array String 0)) (Paths/get (str temp) (make-array String 0))) (fs/delete-if-exists temp)
@@ -486,9 +486,9 @@
        (catch Exception _ nil)))
 (defn progress! [opts]
   (let [env #(System/getenv %)
-        child (or (env "HERDR_SUBAGENT_CHILD") (fail "missing HERDR_SUBAGENT_CHILD" {}))
-        task (or (env "HERDR_SUBAGENT_TASK") (fail "missing HERDR_SUBAGENT_TASK" {}))
-        _ (or (env "HERDR_SUBAGENT_RESULT") (fail "missing HERDR_SUBAGENT_RESULT" {}))
+        child (or (env "HERDR_ORCH_CHILD") (fail "missing HERDR_ORCH_CHILD" {}))
+        task (or (env "HERDR_ORCH_TASK") (fail "missing HERDR_ORCH_TASK" {}))
+        _ (or (env "HERDR_ORCH_RESULT") (fail "missing HERDR_ORCH_RESULT" {}))
         summary (or (one opts :summary) (fail "provide --summary" {}))
         entry (ledger/read! task)]
     ;; Wrong or missing child identity must never update another assignment's entry,
@@ -664,7 +664,7 @@
         entry (or (when-not (:child-session entry) (record-session! (:task entry) (:agent_session agent))) entry)]
     (assoc entry :live-agent agent)))
 ;; `--help` is the documented non-JSON exception: it prints usage and exits 0 for any
-;; command, so `subagent task run --help` never returns "option requires a value".
+;; command, so `oh task run --help` never returns "option requires a value".
 (defn help-request? [command args]
   (boolean (or (#{"--help" "-h" "help"} command)
                ;; Mirror option-map's consumption so opaque assignment text that happens
@@ -763,7 +763,7 @@
 (defn spawn-command! [opts positional]
   (let [[command] (require-positionals positional 1 "spawn")]
     (when (some #{command} (available-personas))
-      (fail "spawn only runs shell commands; use `subagent task run <persona>` for delegation" {:persona command}))
+      (fail "spawn only runs shell commands; use `oh task run <persona>` for delegation" {:persona command}))
     (let [pane (herdr/tab-create! {:cwd (or (one opts :cwd) (current-cwd)) :label (or (one opts :label) "spawn") :env {} :focus false})]
       (herdr/pane-run! (:pane_id pane) command)
       {:pane-id (:pane_id pane) :tab-id (:tab-id pane)})))
@@ -779,7 +779,7 @@
           "agent" (raw-agent! op opts positional)
           "task" (task! op opts positional)
           "spawn" (spawn-command! (option-map (cons op args)) (:_ (option-map (cons op args))))
-          (fail "unknown subagent command" {:command group}))))))
+          (fail "unknown oh command" {:command group}))))))
 (defn -main [& argv]
   (try (let [result (execute argv)] (println (if (string? result) result (core/json-envelope true result))))
        (catch Exception e (println (core/json-envelope false {:message (.getMessage e) :data (ex-data e)})) (System/exit 1))))
