@@ -116,11 +116,15 @@ Acceptance criteria:
 - Existing delegation behaviour is unchanged apart from the verb path
 - Must not: accept a =spawn= invocation that could be read as delegation
 
-** TODO Add the thin pi proxy extension and drop pi-herdr
+** STARTED Add the thin pi proxy extension and drop pi-herdr
 :PROPERTIES:
 :CUSTOM_ID: 0b30ff43-aa5d-45aa-b845-f3915eb84656
 :CREATED: [2026-08-01 Sat]
 :BLOCKED-BY: task:9fa14b6c-3a4d-45ab-b3bd-bb5567d4b662
+:STARTED: [2026-08-01 Sat 15:53]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-01 Sat 15:53]
 :END:
 Resequenced after task 2: the rename now runs first, so the proxy is written against the final =oh= name instead of being written against =subagent= and immediately rewritten. The original ordering existed only to land the risky rename last, and that risk is governed by the in-flight check rather than by this task.
 A passthrough extension under =pi/extensions/= exposing =herdr_layout=, =herdr_pane= and =herdr_agent= mapped onto =oh=, then remove =npm:@ogulcancelik/pi-herdr= from =pi/settings.json=. Check for tool-name collision before removal if both are briefly registered.

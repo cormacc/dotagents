@@ -699,7 +699,7 @@
                          match (one opts :match) regex (one opts :regex)]
                      (when (= (boolean match) (boolean regex))
                        (fail "pane wait-output requires exactly one of --match or --regex" {}))
-                     (herdr/pane-wait-output! pane (assoc (select-keys opts [:source :lines :timeout :raw]) (if regex :regex :match) (or regex match))))
+                     (herdr/pane-wait-output! pane (assoc {:source (one opts :source) :lines (one opts :lines) :timeout (one opts :timeout) :raw (one opts :raw)} (if regex :regex :match) (or regex match))))
     "send-text" (let [[pane text] (require-positionals positional 2 "pane send-text")] (herdr/pane-send-text! pane text))
     "send-keys" (let [[pane & keys] positional]
                   (when (or (nil? pane) (empty? keys)) (fail "pane send-keys requires a pane and at least one key" {}))

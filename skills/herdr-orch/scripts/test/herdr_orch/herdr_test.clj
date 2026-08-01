@@ -124,7 +124,8 @@
   (let [calls (atom [])]
     (with-redefs [herdr/invoke (fn [argv] (swap! calls conj argv) {:ok true :out "text" :value nil})]
       (herdr/pane-read! "w:p" {:source "visible" :lines "6"})
-      (herdr/agent-read! "child" {:source "visible" :lines "6"}))
+      (herdr/agent-read! "child" {:source "visible" :lines "6"})
+      (herdr/pane-wait-output! "w:p" {:match "ready" :source "visible" :lines "6" :timeout "3000"}))
     (doseq [argv @calls]
       (is (not-any? sequential? argv) (str "argv carries a collection: " (pr-str argv)))
       (when-let [tail (second (drop-while #(not= "--lines" %) argv))]
