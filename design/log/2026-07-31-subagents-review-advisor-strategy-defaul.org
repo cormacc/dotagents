@@ -3,7 +3,7 @@
 #+PARENT: [[archive:899fe848-586c-4568-9e08-cd164e3a703c][subagents: review advisor strategy defaults]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
-#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
 
 * Intent
 

@@ -1,6 +1,6 @@
 ---
 name: org-tasks
-description: "Org-mode task memory for TASKS.org and the `ot` CLI/TUI — owns task file format and lifecycle (planning belongs to `org-plan`). Use for adding/editing/resuming/archiving tasks, TASKS*.org, #+IMPORT:, #+SELECTED:, :CUSTOM_ID:, :BLOCKED-BY:, :HANDOFF:, linked issues, `ot`, or the ot task-browser TUI."
+description: "Org-mode task memory for TASKS.org and the `ot` CLI/TUI -- owns task file format and lifecycle (planning belongs to `org-plan`). Use for adding/editing/resuming/archiving tasks, TASKS*.org, #+IMPORT:, #+SELECTED:, :CUSTOM_ID:, :BLOCKED-BY:, :HANDOFF:, linked issues, `ot`, or the ot task-browser TUI."
 ---
 
 # Org-mode task management and memory protocol
@@ -30,6 +30,7 @@ The field-level contract lives in `references/protocol.md`; load it when repairi
 - `:BLOCKED-BY:` / `:BLOCKED-BY+:`, `:HANDOFF:`, and `:LINKED_ISSUES:` are protocol fields managed by `ot blocker`, `ot ready`, `ot handoff`, and `ot issue`; write task blockers as explicit `task:<UUID>` (bare full UUIDs remain compatible legacy task references).
 - `#+SPEC:` is a single optional keyword naming relevant specification docs as bare `[[proj:PATH]]` links: in `TASKS.org` it declares repo-wide discovery roots, in change-records it lists task-relevant specs (opt out with `#+NO_SPEC: true`). The discovery model is owned by `../org-plan/SKILL.md` § Spec discovery (`#+SPEC:`); the `ot doctor` findings (`spec-untouched`, `spec-value-malformed`, `spec-path-dangling`) and `TASKS.org`-only validation are documented in `references/ot-cli.md` § Spec keyword and checks.
 - Do not hard-wrap. In every org file this protocol manages (`TASKS*.org` and `#+IMPORT:`-linked change-records), keep each paragraph and each list item as a single logical line (soft-wrap); preserve real line breaks only in headings, drawers, keywords, tables, and src/example blocks. Never reflow to a fixed column such as 80.
+- A scripted line-prefix rewrite over a task subtree must exclude `:PROPERTIES:` and `:LOGBOOK:` drawers, whose entries also begin with `- `. A regex such as `(?m)^- ` will silently rewrite logged state transitions along with the list items you meant to touch, and a small edit is no safer than a large one.
 
 Unknown `#+` keywords and drawer properties round-trip untouched; third-party metadata should use an `UPPERCASE_NAMESPACE_` prefix.
 
@@ -80,7 +81,7 @@ Install and local development: `scripts/README.md`.
 
 - Use the smallest useful task granularity: each task should describe a concrete outcome that can become `DONE`.
 - Prefer guaranteed `ot create` for new top-level tasks so IDs, timestamps, drawers, linked-issue duplicate checks, and section insertion stay deterministic. An available harness wrapper may delegate to the same command but is optional.
-- Regroup existing tasks with `ot move <id> --parent <dest-id>` / `--section <name>` rather than hand-editing or scripting org surgery; it preserves IDs, lifecycle metadata, descendants, and file locality. Moves are in-file only — use `ot publish`/`ot unpublish` to change locality and `ot unarchive` before moving an archived task.
+- Regroup existing tasks with `ot move <id> --parent <dest-id>` / `--section <name>` rather than hand-editing or scripting org surgery; it preserves IDs, lifecycle metadata, descendants, and file locality. Moves are in-file only -- use `ot publish`/`ot unpublish` to change locality and `ot unarchive` before moving an archived task.
 - Keep `TASKS.org` high-level. Put detailed checklists, implementation history, and acceptance criteria in linked change-records.
 - Add discovered work as new `TODO` tasks rather than burying it in prose.
 - Select local active work with `ot select <id>` or clear with `ot select --clear`.
@@ -92,7 +93,7 @@ Bootstrap new projects with `ot init`. If `ot` is unavailable, use `references/b
 
 Bare `ot` on an interactive terminal opens a standalone task-browser TUI: task tree with status/priority colouring, a details pane (beside the tree, or stacked below it on narrow/portrait terminals), and keybindings for all the common mutations. On exit it prints the selected-task envelope to stdout. Full key map and behaviour: `references/ot-cli.md` § Interactive TUI.
 
-The TUI needs no harness integration — it is the interactive surface for humans and for agents/harnesses without a dedicated extension. The pi tasks extension is a pi-specific overlay with the same key map and semantics; both dispatch mutations through the same `ot` commands, so either surface can be used interchangeably.
+The TUI needs no harness integration -- it is the interactive surface for humans and for agents/harnesses without a dedicated extension. The pi tasks extension is a pi-specific overlay with the same key map and semantics; both dispatch mutations through the same `ot` commands, so either surface can be used interchangeably.
 
 ## Status discipline
 
@@ -133,7 +134,7 @@ When a record grows beyond cheap re-ingestion, split or archive completed histor
 
 ### Session closeout
 
-Persist accurate task status and handoff information before any session-learning follow-up. Closing or archiving a top-level task is the checkpoint at which to *check* for retro signals rather than wait for the user to remember: scan for the correction or friction signals defined by [`retro`](../retro/SKILL.md), and treat unscanned child `PROCESS` candidates captured from `herdr-orch` delegation as such a signal — they die with the session unless a retro routes them. When signals exist, offer one retro after persistence. A bare `DONE`/`CANCELLED` with no signals still never triggers one.
+Persist accurate task status and handoff information before any session-learning follow-up. Closing or archiving a top-level task is the checkpoint at which to *check* for retro signals rather than wait for the user to remember: scan for the correction or friction signals defined by [`retro`](../retro/SKILL.md), and treat unscanned child `PROCESS` candidates captured from `herdr-orch` delegation as such a signal -- they die with the session unless a retro routes them. When signals exist, offer one retro after persistence. A bare `DONE`/`CANCELLED` with no signals still never triggers one.
 
 ## Archiving
 

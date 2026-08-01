@@ -92,7 +92,7 @@ The subtree's source lines move verbatim apart from heading stars, so `:CUSTOM_I
 
 ## Interactive TUI
 
-Bare `ot` on an interactive terminal launches the standalone task browser. It is harness-agnostic: any human or agent with a TTY can use it — no pi extension required. The pi tasks extension is a pi-specific overlay with the same key map; both surfaces dispatch every mutation through the same `ot` commands (`status --cycle`, `priority --cycle`, `select`, `archive`, …), so semantics never diverge.
+Bare `ot` on an interactive terminal launches the standalone task browser. It is harness-agnostic: any human or agent with a TTY can use it -- no pi extension required. The pi tasks extension is a pi-specific overlay with the same key map; both surfaces dispatch every mutation through the same `ot` commands (`status --cycle`, `priority --cycle`, `select`, `archive`, …), so semantics never diverge.
 
 Layout: task tree (status, id prefix, priority, summary) plus a details pane. The details pane renders beside the tree on landscape terminals and stacks below it when the terminal is narrow (< 80 columns) or portrait (width < height × 2, correcting for the ~1:2 cell aspect). Colours are shared with `ot list` via `styling/palette-256`.
 
@@ -154,7 +154,7 @@ ID-accepting commands accept full `:CUSTOM_ID:` values or any unique prefix of a
 
 `#+SPEC:` is a single keyword naming relevant specification documents, used in two contexts (disambiguated by file) and always carrying its value as a bare `[[proj:PATH]]` org link (repo-root relative, so the path is directly navigable in Emacs from TASKS.org and from records):
 
-- In `TASKS.org` it declares where the project's living specs live — the *discovery input*: repeatable, optional, each value a `[[proj:PATH]]` link to a spec file or folder. See the org-plan skill for the discovery model (default root, implicit specs, rooted/transitive traversal).
+- In `TASKS.org` it declares where the project's living specs live -- the *discovery input*: repeatable, optional, each value a `[[proj:PATH]]` link to a spec file or folder. See the org-plan skill for the discovery model (default root, implicit specs, rooted/transitive traversal).
 - In a change-record it lists the specs relevant to that change (cite individual sub-specs). Whether each was actually impacted is a closeout determination recorded in `** Shipped`; `ot doctor` reconciles the list against git only as an advisory nudge:
 
 ```org
@@ -162,7 +162,7 @@ ID-accepting commands accept full `:CUSTOM_ID:` values or any unique prefix of a
 #+SPEC: [[proj:design/specs/data-model.org]]
 ```
 
-Use `#+NO_SPEC: true` when the project has no durable contract layer, the task is below the spec threshold, or the contract is intentionally unaffected. Any truthy value (`true`/`t`/`yes`/`y`/`on`/`1`) is accepted. `#+NO_SPEC:` suppresses only the `spec-untouched` nudge — a malformed `#+SPEC:` value in the same record is still reported.
+Use `#+NO_SPEC: true` when the project has no durable contract layer, the task is below the spec threshold, or the contract is intentionally unaffected. Any truthy value (`true`/`t`/`yes`/`y`/`on`/`1`) is accepted. `#+NO_SPEC:` suppresses only the `spec-untouched` nudge -- a malformed `#+SPEC:` value in the same record is still reported.
 
 ## `ot spec list`
 
@@ -170,8 +170,8 @@ Use `#+NO_SPEC: true` when the project has no durable contract layer, the task i
 
 `ot doctor` emits these spec findings:
 
-- `spec-untouched` — a `#+SPEC:` path declared in a record has not been touched in the current git working tree/index. A nudge, not a gate; it cannot infer omitted specs that were never declared.
-- `spec-value-malformed` — a `#+SPEC:` value is not a bare `[[proj:PATH]]` link: a plain path, the labelled `[[proj:PATH][label]]` form, or a path that is absolute, escapes the repo root (`..`), or is whitespace-padded.
-- `spec-path-dangling` — a `#+SPEC:` link in TASKS.org points at a path that does not resolve on disk (file or folder).
-- `spec-citation-untested` — an `** Acceptance` criterion cites `spec:` (see org-plan SKILL.md § Spec/test citation on acceptance criteria) but no `test:` evidence, and is not under `*** Anti-criteria` (which is its own evidence). A nudge only; a criterion with no citation at all produces no finding.
-- `spec-stale` ("declared-but-stale") — a `#+SPEC:` path declared in a record is unchanged in the current git working tree/index while code it transitively links to (per the `ot spec list` traversal) did change. A lightweight local echo of SOTA drift gates — still advisory, never blocking; does not fire when the spec itself also changed, or when nothing it links to changed.
+- `spec-untouched` -- a `#+SPEC:` path declared in a record has not been touched in the current git working tree/index. A nudge, not a gate; it cannot infer omitted specs that were never declared.
+- `spec-value-malformed` -- a `#+SPEC:` value is not a bare `[[proj:PATH]]` link: a plain path, the labelled `[[proj:PATH][label]]` form, or a path that is absolute, escapes the repo root (`..`), or is whitespace-padded.
+- `spec-path-dangling` -- a `#+SPEC:` link in TASKS.org points at a path that does not resolve on disk (file or folder).
+- `spec-citation-untested` -- an `** Acceptance` criterion cites `spec:` (see org-plan SKILL.md § Spec/test citation on acceptance criteria) but no `test:` evidence, and is not under `*** Anti-criteria` (which is its own evidence). A nudge only; a criterion with no citation at all produces no finding.
+- `spec-stale` ("declared-but-stale") -- a `#+SPEC:` path declared in a record is unchanged in the current git working tree/index while code it transitively links to (per the `ot spec list` traversal) did change. A lightweight local echo of SOTA drift gates -- still advisory, never blocking; does not fire when the spec itself also changed, or when nothing it links to changed.

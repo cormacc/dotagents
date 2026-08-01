@@ -31,7 +31,7 @@ No prompt needed. The user adds `[[jira:KEY]]` to `:LINKED_ISSUES:` and sets `#+
 
 ### Planning / resume context
 
-When [`org-plan`](../org-plan/SKILL.md) is drafting/refining a change-record — or when an agent resumes a task with Jira-shaped `:LINKED_ISSUES:` — fetch current Jira scope before relying on stale local prose. Keep fetched data ephemeral: distil only plan-relevant facts into the change-record per `org-plan`'s section contract (`* Summary` first, promote `* Context` only when the Jira rationale/scope exceeds the summary, use `* Open questions` for gaps).
+When [`org-plan`](../org-plan/SKILL.md) is drafting/refining a change-record -- or when an agent resumes a task with Jira-shaped `:LINKED_ISSUES:` -- fetch current Jira scope before relying on stale local prose. Keep fetched data ephemeral: distil only plan-relevant facts into the change-record per `org-plan`'s section contract (`* Summary` first, promote `* Context` only when the Jira rationale/scope exceeds the summary, use `* Open questions` for gaps).
 
 For each Jira-shaped token:
 
@@ -39,13 +39,13 @@ For each Jira-shaped token:
 2. Resolve cloudId.
 3. Fetch the parent with `atlassian_getJiraIssue` (summary, status, issue type, priority, assignee, plain-text description, parent key, relevant issue links).
 4. Walk children only while they materially shape scope. Epics use `"parent" = KEY` (or legacy `"Epic Link" = KEY`); Tasks/Stories/Bugs use `parent = KEY`. Stop at done/out-of-scope branches or beyond two levels below the linked issue.
-5. Distil: name each linked parent and why it frames the work; include in-scope children only when they affect the plan; record blockers; surface gaps in `* Open questions`. Do **not** mint Jira issues during this read-only walk. Jira keys are never org `:CUSTOM_ID:` values — link Jira-derived local tasks via `:LINKED_ISSUES:`.
+5. Distil: name each linked parent and why it frames the work; include in-scope children only when they affect the plan; record blockers; surface gaps in `* Open questions`. Do **not** mint Jira issues during this read-only walk. Jira keys are never org `:CUSTOM_ID:` values -- link Jira-derived local tasks via `:LINKED_ISSUES:`.
 
 Re-fetch on later sessions rather than caching raw Jira JSON or ADF.
 
 ### Clone (`/jira clone <KEY>`)
 
-Two-step dispatch — the slash command asks the agent to call `atlassian_getJiraIssue`, then forward parsed fields to the registered `jira_clone_apply` tool. The agent never assembles the org heading / drawer / body via `edit`; all rendering lives in the `tasks` extension.
+Two-step dispatch -- the slash command asks the agent to call `atlassian_getJiraIssue`, then forward parsed fields to the registered `jira_clone_apply` tool. The agent never assembles the org heading / drawer / body via `edit`; all rendering lives in the `tasks` extension.
 
 1. Validate `KEY` against the regex. Bare numeric input is prepended with `#+JIRA_PROJECT-` (or refused if absent). The slash command already does this via `resolveKey()`.
 2. Call `atlassian_getJiraIssue` with the resolved cloudId and `fields="summary,priority,labels,description,issuetype,parent,subtasks"`. Do not request `*all` or expand customfields.
@@ -56,7 +56,7 @@ Two-step dispatch — the slash command asks the agent to call `atlassian_getJir
 
 ### Get (`/jira get <KEY>`)
 
-Standalone display affordance — prints a compact per-key block (heading, status, priority, labels, parent, subtask count, description preview, URL). No file writes. Reuses the clone field filter.
+Standalone display affordance -- prints a compact per-key block (heading, status, priority, labels, parent, subtask count, description preview, URL). No file writes. Reuses the clone field filter.
 
 1. Resolve cloudId.
 2. Call `atlassian_getJiraIssue` with the field filter.
@@ -93,4 +93,4 @@ All write-path development and smoke testing runs against project `SAND`. Never 
 
 ## Offline / disconnected behaviour
 
-Badge display and `J` browser-open work unconditionally (live in `tasks`, don't touch the MCP). Anything in this skill that needs the MCP must surface a clear notification ("Atlassian MCP not connected — run /mcp reconnect atlassian") rather than failing silently.
+Badge display and `J` browser-open work unconditionally (live in `tasks`, don't touch the MCP). Anything in this skill that needs the MCP must surface a clear notification ("Atlassian MCP not connected -- run /mcp reconnect atlassian") rather than failing silently.

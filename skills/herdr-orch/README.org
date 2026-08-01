@@ -1,4 +1,4 @@
-#+TITLE: herdr-orch — design rationale and maintenance notes
+#+TITLE: herdr-orch -- design rationale and maintenance notes
 
 Supplements [[file:SKILL.md][SKILL.md]] with the rationale and maintenance context for the =subagent= CLI. Ordinary delegation should not load this file.
 
@@ -43,7 +43,7 @@ The =retro= skill is optional by design. Project/global skill resolution lets in
 
 ** Per-persona spawn capability
 
-The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27 spawn-capability change-record]] replaced the prose-only planner exception with declared roster capability: a frontmatter =spawns:= allow-list resolved once at spawn (flag > frontmatter > default deny), recorded on the ledger as =:spawns=/=:spawns-source=, injected as =HERDR_ORCH_SPAWNS=, and enforced mechanically by the child CLI before preflight, ledger allocation, or pane mutation. Prompt-only enforcement was rejected because its failure modes are billable and pane-creating; child self-resolution from the roster was rejected because it cannot carry a per-spawn flag override and mid-flight roster edits would change a live child's capability. Any below-root spawn injects an empty grandchild policy with source =depth= — one nesting level absolutely, no depth counter — so labels stay display-only metadata. Below-root one-at-a-time cardinality deliberately remains prompt-strength doctrine.
+The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27 spawn-capability change-record]] replaced the prose-only planner exception with declared roster capability: a frontmatter =spawns:= allow-list resolved once at spawn (flag > frontmatter > default deny), recorded on the ledger as =:spawns=/=:spawns-source=, injected as =HERDR_ORCH_SPAWNS=, and enforced mechanically by the child CLI before preflight, ledger allocation, or pane mutation. Prompt-only enforcement was rejected because its failure modes are billable and pane-creating; child self-resolution from the roster was rejected because it cannot carry a per-spawn flag override and mid-flight roster edits would change a live child's capability. Any below-root spawn injects an empty grandchild policy with source =depth= -- one nesting level absolutely, no depth counter -- so labels stay display-only metadata. Below-root one-at-a-time cardinality deliberately remains prompt-strength doctrine.
 
 * Architecture
 
@@ -90,14 +90,14 @@ Publication identity comes from injected =HERDR_ORCH_*= variables rather than th
 
 * Known gaps
 
-- The CLI implements one child per invocation for =run=/=start=; multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] — no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself.
+- The CLI implements one child per invocation for =run=/=start=; multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] -- no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself.
 - =HERDR_ORCH_BIN= intentionally carries the deployed absolute path rather than a canonical repository path; launcher-matrix coverage is its guard.
 - =ot ready= cannot resolve blockers inside =#+IMPORT:=-linked plan files, so plan-internal dependencies report =[opaque]=. This is an org-tasks limitation, not a delegation issue.
 
 * History
 
-- [[file:../../design/log/2026-07-22-harness-agnostic-subagents.org][2026-07-22]] — harness-neutral roster and kind/model resolution.
-- [[file:../../design/log/2026-07-23-add-hierarchical-pane-labels-to-herdr-su.org][2026-07-23]] — hierarchical pane labels.
-- [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24]] — delegation CLI and implementation-review remediations.
-- [[file:../../design/log/2026-07-27-subagent-retrospectives.org][2026-07-27]] — optional child retrospectives, process annotations, and child-session recording.
-- [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27]] — per-persona spawn capability replacing the planner-only exception.
+- [[file:../../design/log/2026-07-22-harness-agnostic-subagents.org][2026-07-22]] -- harness-neutral roster and kind/model resolution.
+- [[file:../../design/log/2026-07-23-add-hierarchical-pane-labels-to-herdr-su.org][2026-07-23]] -- hierarchical pane labels.
+- [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24]] -- delegation CLI and implementation-review remediations.
+- [[file:../../design/log/2026-07-27-subagent-retrospectives.org][2026-07-27]] -- optional child retrospectives, process annotations, and child-session recording.
+- [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27]] -- per-persona spawn capability replacing the planner-only exception.

@@ -3,8 +3,8 @@
 #+PARENT: [[task:4a9a24b3-2518-4cf5-9d8d-64b5fa0c76ba][herdr-orch: absorb pi-herdr coverage into the bb CLI, rename skill and binary to oh]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
-#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
-#+SPEC: [[proj:skills/herdr-subagents/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
 
 * Intent
 

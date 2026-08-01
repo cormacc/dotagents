@@ -1,8 +1,8 @@
-# `ot` — org-tasks command-line interface
+# `ot` -- org-tasks command-line interface
 
 `ot` is the Babashka-powered protocol engine for the [`org-tasks`](../SKILL.md) memory protocol. It owns parsing, serialization, status lifecycle and priority writes, archive/unarchive mechanics, selection, doctor checks, section reads, summary scans, change-record scaffolding, and a standalone terminal task browser. Other coding agents (pi, Emacs companions, CI scripts) shell out to `ot` rather than reimplementing the protocol.
 
-This README covers install, testing, and the documentation map. It deliberately does not repeat CLI usage, contracts, or architecture — each of those has exactly one home (see [Documentation map](#documentation-map)).
+This README covers install, testing, and the documentation map. It deliberately does not repeat CLI usage, contracts, or architecture -- each of those has exactly one home (see [Documentation map](#documentation-map)).
 
 ## Install
 
@@ -28,11 +28,11 @@ bbin install ./. --local/root . --as ot
 bb run ot --help
 ```
 
-The local shim resolves the dotagents repo root from its own path and invokes `bb --config <repo>/bb.edn --deps-root <repo> -m org-tasks.cli`, so it works regardless of the caller's working directory. Its fallback `-Sdeps` (used when no repo `bb.edn` is present, e.g. standalone skill installs) must stay in sync with `bb.edn` — `bb.edn` is the source of truth.
+The local shim resolves the dotagents repo root from its own path and invokes `bb --config <repo>/bb.edn --deps-root <repo> -m org-tasks.cli`, so it works regardless of the caller's working directory. Its fallback `-Sdeps` (used when no repo `bb.edn` is present, e.g. standalone skill installs) must stay in sync with `bb.edn` -- `bb.edn` is the source of truth.
 
 ## Usage
 
-Run `ot --help` for the command index and `ot <command> --help` for per-command options — both are derived from the same command registry as dispatch itself, so they cannot drift. Full usage reference, including the interactive TUI, key map, root resolution, and id-prefix rules: [`../references/ot-cli.md`](../references/ot-cli.md).
+Run `ot --help` for the command index and `ot <command> --help` for per-command options -- both are derived from the same command registry as dispatch itself, so they cannot drift. Full usage reference, including the interactive TUI, key map, root resolution, and id-prefix rules: [`../references/ot-cli.md`](../references/ot-cli.md).
 
 ## Testing
 

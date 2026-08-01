@@ -23,16 +23,16 @@ Read the repository instructions and the `org-plan` and `org-tasks` skills befor
 
 ## Planning flow
 
-1. **Investigate context** — read supplied context, repository instructions, relevant code, and existing records. Summarize the current system and confirm orientation.
-2. **Confirm intent** — state explicit asks, implicit needs, scope boundaries, and the most important outcome. Ask the user to correct the interpretation.
-3. **Resolve ambiguity** — ask a compact set of preference questions. Obtain factual answers from code, documentation, or a delegated specialist rather than asking the user to explain discoverable facts.
-4. **Agree on done** — confirm effort level, test/doc expectations, and a concise set of atomic acceptance criteria. Apply the `org-plan` splitting and anti-criteria rules.
-5. **Choose an approach** — present two or three materially different options when alternatives exist, lead with a recommendation, and wait for the user's choice.
-6. **Validate the design** — walk through architecture, components, data flow, and important edge cases at the level warranted by the change. Pause for confirmation between substantial sections.
-7. **Premortem** — for non-trivial work, identify load-bearing assumptions and realistic failure modes; mitigate or explicitly accept them.
-8. **Write the change-record** — use `ot record create` and fill the durable sections according to `org-plan`. Set the record to `Review` and ask for sign-off before creating plan tasks.
-9. **Create plan tasks** — add independently executable `** TODO` tasks under `* Plan`, each with an `ot uuid`, explicit files/constraints, atomic acceptance criteria, and either a code sketch or a precise existing-code reference. Add blockers only for real ordering dependencies.
-10. **Summarize and exit** — after sign-off, set the record to `Accepted`; report the record path, parent task ID, plan-task IDs, key decisions, validation strategy, risks, and open questions.
+1. **Investigate context** -- read supplied context, repository instructions, relevant code, and existing records. Summarize the current system and confirm orientation.
+2. **Confirm intent** -- state explicit asks, implicit needs, scope boundaries, and the most important outcome. Ask the user to correct the interpretation.
+3. **Resolve ambiguity** -- ask a compact set of preference questions. Obtain factual answers from code, documentation, or a delegated specialist rather than asking the user to explain discoverable facts.
+4. **Agree on done** -- confirm effort level, test/doc expectations, and a concise set of atomic acceptance criteria. Apply the `org-plan` splitting and anti-criteria rules.
+5. **Choose an approach** -- present two or three materially different options when alternatives exist, lead with a recommendation, and wait for the user's choice.
+6. **Validate the design** -- walk through architecture, components, data flow, and important edge cases at the level warranted by the change. Pause for confirmation between substantial sections.
+7. **Premortem** -- for non-trivial work, identify load-bearing assumptions and realistic failure modes; mitigate or explicitly accept them.
+8. **Write the change-record** -- use `ot record create` and fill the durable sections according to `org-plan`. Set the record to `Review` and ask for sign-off before creating plan tasks.
+9. **Create plan tasks** -- add independently executable `** TODO` tasks under `* Plan`, each with an `ot uuid`, explicit files/constraints, atomic acceptance criteria, and either a code sketch or a precise existing-code reference. Add blockers only for real ordering dependencies.
+10. **Summarize and exit** -- after sign-off, set the record to `Accepted`; report the record path, parent task ID, plan-task IDs, key decisions, validation strategy, risks, and open questions.
 
 The user may explicitly request a compressed or partial planning session. For a trivial single-task change they may also opt out of the change-record entirely; per `org-plan` § Trivial changes, document the agreed plan and acceptance bullets inline in the TASKS.org task body instead. Otherwise do not silently skip a stage; keep simple stages brief instead.
 

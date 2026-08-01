@@ -6,7 +6,7 @@ Complete reference for nREPL evaluation and delimiter repair, covering both pi-c
 
 ## Eval: pi-clojure (preferred)
 
-Native pi tools — direct TCP connection to nREPL, no process-spawn overhead. Available when the `pi-clojure` extension is loaded (`clojure_eval` appears in your tool list).
+Native pi tools -- direct TCP connection to nREPL, no process-spawn overhead. Available when the `pi-clojure` extension is loaded (`clojure_eval` appears in your tool list).
 
 ### Finding the port
 
@@ -30,7 +30,7 @@ Validates by evaluating `(+ 1 1)` on the discovered port. Discovery stops when c
 | `code` | string | Clojure expression to evaluate |
 | `host` | string | nREPL host (default: `"localhost"`) |
 | `ns` | string | Namespace to evaluate in (optional) |
-| `timeout` | integer | 1–2147483647 ms; covers connection setup and response processing (default: 30000) |
+| `timeout` | integer | 1--2147483647 ms; covers connection setup and response processing (default: 30000) |
 
 ### Examples
 
@@ -125,12 +125,12 @@ clj-nrepl-eval [options] "clojure-expression"
 ```
 
 Options:
-- `-p, --port PORT` — nREPL port (required for eval)
-- `-H, --host HOST` — nREPL host (default: 127.0.0.1)
-- `-t, --timeout MS` — timeout (default 120000)
-- `-r, --reset-session` — reset persistent session for `host:port`
-- `-d, --discover-ports` — scan `.nrepl-port` + running JVM/Babashka procs and exit (does **not** evaluate code)
-- `-c, --connected-ports` — list previously connected servers and exit
+- `-p, --port PORT` -- nREPL port (required for eval)
+- `-H, --host HOST` -- nREPL host (default: 127.0.0.1)
+- `-t, --timeout MS` -- timeout (default 120000)
+- `-r, --reset-session` -- reset persistent session for `host:port`
+- `-d, --discover-ports` -- scan `.nrepl-port` + running JVM/Babashka procs and exit (does **not** evaluate code)
+- `-c, --connected-ports` -- list previously connected servers and exit
 
 ### Examples
 

@@ -3,7 +3,7 @@
 #+PARENT: [[archive:dcabf1d1-f0ec-4239-bdc7-78f0032da407][Add hierarchical pane labels to Herdr subagent spawning]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
-#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
 
 * Intent
 

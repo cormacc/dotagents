@@ -23,7 +23,7 @@ Jira keys are stored as typed org links in the generic `:LINKED_ISSUES:` drawer 
 - Whitespace-separated org-link tokens; `:LINKED_ISSUES:` is multi-valued.
 - A single task may link to many issues; mixing Jira typed links with raw URL org-link tokens (e.g. `[[https://github.com/.../issues/42][gh#42]]`) in the same drawer line is supported. Typed `[[jira:KEY]]` keeps the issue key portable across checkouts.
 - Bare `PROJ-NNN` tokens are not part of the protocol (one-time migration sweep complete).
-- The property is created on first link only — never auto-backfilled on existing tasks (mirrors `:STARTED:` behaviour).
+- The property is created on first link only -- never auto-backfilled on existing tasks (mirrors `:STARTED:` behaviour).
 
 ### File-level keywords
 
@@ -38,7 +38,7 @@ Jira keys are stored as typed org links in the generic `:LINKED_ISSUES:` drawer 
 | Keyword            | Owner   | Purpose                                                    |
 | ------------------ | ------- | ---------------------------------------------------------- |
 | `#+LINK: jira`     | `tasks` | Org link abbreviation for badges, `J` open, raw-URL filtering, base URL derivation. |
-| `#+JIRA_CLOUDID`   | `jira`  | MCP routing — skips `getAccessibleAtlassianResources`.     |
+| `#+JIRA_CLOUDID`   | `jira`  | MCP routing -- skips `getAccessibleAtlassianResources`.     |
 | `#+JIRA_PROJECT`   | `jira`  | Default project for `/jira create`; short-key disambiguation. |
 
 `TASKS.local.org` overrides any of these (last-write-wins, mirroring `#+SELECTED:`).
@@ -54,7 +54,7 @@ Jira keys are stored as typed org links in the generic `:LINKED_ISSUES:` drawer 
 1. **Typed Jira link** `[[jira:KEY]]`, where `KEY` matches `/^[A-Z][A-Z0-9_]+-\d+$/` → Jira key.
 2. **Raw org-link token** `[[url][label]]` whose target host matches the base URL derived from `#+LINK: jira .../browse/%s` → Jira key.
 
-Tokens that match neither are silently ignored by Jira workflows — a task carrying `[[jira:MBFW-123]] [[https://github.com/foo/bar/issues/42][gh#42]]` exposes only `MBFW-123` to `/jira claim`.
+Tokens that match neither are silently ignored by Jira workflows -- a task carrying `[[jira:MBFW-123]] [[https://github.com/foo/bar/issues/42][gh#42]]` exposes only `MBFW-123` to `/jira claim`.
 
 ## cloudId resolution
 
@@ -78,7 +78,7 @@ LOGBOOK is durable audit history; live event payloads are the trigger for Jira w
 
 ## `jira_clone_apply` return shapes
 
-- `status: "inserted"` — confirm with the new heading and Jira URL.
-- `status: "duplicate"` — cite `details.existingId` and refuse to re-clone (the same `:LINKED_ISSUES:` token already appears in TASKS.org / TASKS.local.org / their imports).
-- `status: "section_not_found"` — ask whether to retry with `allowCreateSection: true` or correct the section name.
-- `status: "error"` — surface the message verbatim.
+- `status: "inserted"` -- confirm with the new heading and Jira URL.
+- `status: "duplicate"` -- cite `details.existingId` and refuse to re-clone (the same `:LINKED_ISSUES:` token already appears in TASKS.org / TASKS.local.org / their imports).
+- `status: "section_not_found"` -- ask whether to retry with `allowCreateSection: true` or correct the section name.
+- `status: "error"` -- surface the message verbatim.

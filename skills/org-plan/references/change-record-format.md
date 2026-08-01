@@ -87,7 +87,7 @@ See `src/services/AuthService.ts:15-40` for the existing pattern.
 Decision: retain `:BLOCKED-BY:`; no `:WAITS_FOR:` field.
 ```
 
-## Optional sections — when to include
+## Optional sections -- when to include
 
 ### `* Validation`
 
@@ -96,7 +96,7 @@ Decision: retain `:BLOCKED-BY:`; no `:WAITS_FOR:` field.
 - Non-obvious verification evidence: manual/exploratory checks, smoke tests, a specific reproduction, performance numbers, or an explicit note that no automated checks were run (and why).
 ```
 
-Include only when there is verification evidence worth preserving beyond the routine. Omit when the only thing to record is that the standard automated suites pass — green unit/integration tests are an implicit pre-merge requirement, not record-worthy. `** Acceptance` is verified at closure whether or not this section exists.
+Include only when there is verification evidence worth preserving beyond the routine. Omit when the only thing to record is that the standard automated suites pass -- green unit/integration tests are an implicit pre-merge requirement, not record-worthy. `** Acceptance` is verified at closure whether or not this section exists.
 
 ### `* User story`
 
@@ -105,7 +105,7 @@ Include only when there is verification evidence worth preserving beyond the rou
 As a [role], I want [capability], so that [outcome].
 ```
 
-Include when there is a real end-user or operator perspective worth preserving. The "so that" clause is the most leaked motivation in any artifact — once captured here, it survives the telephone game through plan → plan tasks → commits.
+Include when there is a real end-user or operator perspective worth preserving. The "so that" clause is the most leaked motivation in any artifact -- once captured here, it survives the telephone game through plan → plan tasks → commits.
 
 Skip for refactors, infra, dev-tooling, observability work.
 
@@ -124,7 +124,7 @@ Skip for refactors, infra, dev-tooling, observability work.
 - Network failure mid-request: client retries with backoff; server idempotent.
 ```
 
-Include for feature work where the user-facing flow is load-bearing. Drafting-time aid — at closure, the happy path is in Implementation and edge cases are anti-criteria or `** Gotchas`; prune unless the walkthrough still carries unique value.
+Include for feature work where the user-facing flow is load-bearing. Drafting-time aid -- at closure, the happy path is in Implementation and edge cases are anti-criteria or `** Gotchas`; prune unless the walkthrough still carries unique value.
 
 Optional Given/When/Then form for an edge case where scenario rigour pays for itself (see org-plan SKILL.md § `* Behavior`):
 
@@ -150,8 +150,8 @@ Optional: cite the spec clause and/or test a criterion depends on with a `→` s
 
 One keyword, `#+SPEC:`, used in two contexts (disambiguated by the file it appears in), always carrying a bare `[[proj:PATH]]` org link (repo-root relative, navigable in Emacs from both TASKS.org and records; the labelled `[[proj:PATH][label]]` form, bare non-link paths, and absolute/`..`-escaping paths are malformed):
 
-- In `TASKS.org` — *discovery input*: zero or more repeatable declarations of where a project's living specs live (a spec file or a folder, recursive). Project-wide, not per-record. See org-plan SKILL.md § Spec discovery (`#+SPEC:`) for the default root, implicit specs, and rooted/transitive discovery rules.
-- In a change-record — *planning-time relevance declaration*: which individual specs from the discovered set are relevant to this particular change; `ot doctor` may nudge at closure if a listed spec is unchanged in git.
+- In `TASKS.org` -- *discovery input*: zero or more repeatable declarations of where a project's living specs live (a spec file or a folder, recursive). Project-wide, not per-record. See org-plan SKILL.md § Spec discovery (`#+SPEC:`) for the default root, implicit specs, and rooted/transitive discovery rules.
+- In a change-record -- *planning-time relevance declaration*: which individual specs from the discovered set are relevant to this particular change; `ot doctor` may nudge at closure if a listed spec is unchanged in git.
 
 Use repeated `#+SPEC:` declarations when work is expected to change durable behaviour, public APIs, protocols, domain models, or agent/operator workflow:
 
@@ -164,7 +164,7 @@ Opt out with `#+NO_SPEC: true`. See org-plan SKILL.md § Spec planning for when 
 
 ## `#+STATUS:` lifecycle
 
-`#+STATUS:` is advisory only; task-level state remains owned by org-tasks. Advance it manually as the record matures — `Draft` while planning, `Review` when handing off for sign-off, `Accepted` once approved, `Active` during execution, `Complete` at closure. Nothing enforces these transitions; leaving it at `Draft` is acceptable for solo work.
+`#+STATUS:` is advisory only; task-level state remains owned by org-tasks. Advance it manually as the record matures -- `Draft` while planning, `Review` when handing off for sign-off, `Accepted` once approved, `Active` during execution, `Complete` at closure. Nothing enforces these transitions; leaving it at `Draft` is acceptable for solo work.
 
 | Status | Meaning |
 |--------|---------|

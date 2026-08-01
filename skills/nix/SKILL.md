@@ -7,8 +7,8 @@ description: Edit Nix flakes, NixOS / Home Manager / nix-darwin modules, and per
 
 Most Nix tasks fall into two buckets:
 
-1. **System / user config** — NixOS modules, Home Manager modules, nix-darwin modules. Lives in a dotfiles flake. Edits change running systems.
-2. **Per-project build environment** — `flake.nix` with `devShells`, consumed via `nix develop` or direnv `use flake`. Edits change what `cd $project` gives you.
+1. **System / user config** -- NixOS modules, Home Manager modules, nix-darwin modules. Lives in a dotfiles flake. Edits change running systems.
+2. **Per-project build environment** -- `flake.nix` with `devShells`, consumed via `nix develop` or direnv `use flake`. Edits change what `cd $project` gives you.
 
 Both are flakes. Both are evaluated before they run anything. The single biggest source of friction is preferring hand-rolled files (`home.file`, `writeShellScriptBin`, `extraConfig` strings, manual systemd unit copies) over first-class options. Default to the option; reach for the hand-roll only when no option exists.
 
@@ -41,14 +41,14 @@ When tempted to write any of the following, look for a first-class option first:
 | Bespoke `<?xml … plist …?>` strings             | `lib.generators.toPlist {} { … }`                        |
 | Hand-formatted ini / toml / json into a string  | `lib.generators.toINI` / `toTOML` / `builtins.toJSON`    |
 
-If no option fits, hand-rolling is fine — but add a comment naming the option you looked for so the next reviewer doesn't redo the search.
+If no option fits, hand-rolling is fine -- but add a comment naming the option you looked for so the next reviewer doesn't redo the search.
 
 ## System / user config rules
 
 - **Boundary discipline.** Per-machine OS state goes in NixOS modules; per-user state goes in Home Manager. nix-darwin sits on the OS side for macOS. Don't put user dotfiles in `environment.etc`; don't put bootloader config in `home-manager`.
 - **`mkOutOfStoreSymlink` for editable configs.** When a config file lives in the dotfiles repo and the user wants to edit it without a rebuild, prefer `config.lib.file.mkOutOfStoreSymlink` over `source = ./path` (which copies into the store and requires a switch per edit).
 - **`home.activation` DAG ordering.** Use `lib.hm.dag.entryBefore [ "writeBoundary" ]` for sanity-check scripts that should fail before HM writes anything; `entryAfter [ "writeBoundary" ]` for scripts that need the symlinks in place. Don't mutate files HM itself manages.
-- **Override priorities.** `lib.mkDefault` lowers priority; `lib.mkForce` raises it; `lib.mkBefore` / `lib.mkAfter` order list merges. When you hit *"option X has conflicting definition values"*, the answer is almost always one of these — not a second `nix.settings.foo = …` line.
+- **Override priorities.** `lib.mkDefault` lowers priority; `lib.mkForce` raises it; `lib.mkBefore` / `lib.mkAfter` order list merges. When you hit *"option X has conflicting definition values"*, the answer is almost always one of these -- not a second `nix.settings.foo = …` line.
 - **`nix.settings.*` replace vs. merge.** `substituters` and `trusted-public-keys` *replace* the upstream default. `extra-substituters` and `extra-trusted-public-keys` *merge*. Use the replacing form in a base module, the `extra-*` form in host overlays.
 - **`--impure` is per-flake, not universal.** If a flake reads env vars (`builtins.getEnv "HOME"`, `NAME`, etc.) it requires `--impure`. Most third-party flakes don't and shouldn't.
 
@@ -76,7 +76,7 @@ A minimal `flake.nix` for a project devShell:
 
 - **`packages` vs `nativeBuildInputs` vs `buildInputs`.** In a `mkShell`, `packages` is the modern catch-all for things you want on `$PATH`. `nativeBuildInputs` is for build-time tools when the shell is also used to compile something cross-platform; `buildInputs` is for linkable libraries. For a pure-tooling devShell, just use `packages`.
 - **direnv integration.** `.envrc` should be `use flake` (one line). Users need `programs.direnv.nix-direnv.enable = true` in HM for the cached fast path; without it every shell entry re-evaluates.
-- **No floating fetches in devShells.** Don't `builtins.fetchGit` without a `rev` — it re-fetches on every eval and breaks reproducibility. If you need an external source, make it a flake input (`flake.lock` pins it) or use `pkgs.fetchFromGitHub` with both `rev` and `hash`.
+- **No floating fetches in devShells.** Don't `builtins.fetchGit` without a `rev` -- it re-fetches on every eval and breaks reproducibility. If you need an external source, make it a flake input (`flake.lock` pins it) or use `pkgs.fetchFromGitHub` with both `rev` and `hash`.
 - **`mkShellNoCC` for shells that don't need a C compiler** (Python, JS, shell tooling). Slightly faster eval, smaller closure.
 
 ## Validation
@@ -92,9 +92,9 @@ Run the cheapest check that proves the edit. In order of cost:
 | `home-manager build --flake .#name --impure`                   | Same for HM.                                      |
 | `darwin-rebuild build --flake .#host --impure`                 | Same for nix-darwin.                              |
 | `nix develop` / `direnv reload`                                | Smoke-test a devShell.                            |
-| `*-rebuild switch …`                                           | Actually activate. Destructive — only on request. |
+| `*-rebuild switch …`                                           | Actually activate. Destructive -- only on request. |
 
-Every `.#` above resolves against the *current* flake. When the edit targets a flake outside the current repository — for example a submodule editing its parent's config — `cd` to that flake root first; evaluating from the subdirectory silently evaluates the wrong flake:
+Every `.#` above resolves against the *current* flake. When the edit targets a flake outside the current repository -- for example a submodule editing its parent's config -- `cd` to that flake root first; evaluating from the subdirectory silently evaluates the wrong flake:
 
 ```
 cd <target-flake-root> && nix eval --impure .#homeConfigurations.<name>.activationPackage.drvPath --raw
@@ -108,13 +108,13 @@ nix-repl> nixosConfigurations.strix.config.nix.settings.substituters
 nix-repl> :p homeConfigurations.default.config.programs.ssh.matchBlocks
 ```
 
-For dirty-working-tree evals, `git add` new files first — Nix copies only tracked files into the store, and `path does not exist` errors point at an untracked `.nix` file.
+For dirty-working-tree evals, `git add` new files first -- Nix copies only tracked files into the store, and `path does not exist` errors point at an untracked `.nix` file.
 
 ## Pinning and inputs
 
 - **Pin everything.** Floating `builtins.fetchGit` / `fetchTarball` without `rev` + `narHash` is reproducibility debt. Convert to a flake input (which `flake.lock` pins automatically) or to `pkgs.fetchFromGitHub` with a `hash`.
 - **`inputs.foo.inputs.nixpkgs.follows = "nixpkgs"`** collapses a transitive nixpkgs to the parent's, shrinking closure and eval time. **Don't add it** for inputs whose authors deliberately pin nixpkgs to match a binary cache (e.g. anything serving a cachix.org with closure hashes). When in doubt, leave the input's own pin alone and accept the extra eval.
-- **`flake.lock` is source.** Don't `nix flake update` casually — every bump is a potentially-breaking change. Update one input at a time (`nix flake lock --update-input foo`) when you have a reason.
+- **`flake.lock` is source.** Don't `nix flake update` casually -- every bump is a potentially-breaking change. Update one input at a time (`nix flake lock --update-input foo`) when you have a reason.
 
 ## Reporting changes
 

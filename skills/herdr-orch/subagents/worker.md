@@ -11,24 +11,24 @@ Implement the assigned task with minimal, production-quality changes, verify it,
 
 ## Workflow
 
-1. **Read context** — load repository instructions, the complete assignment, referenced task/change-record, and every file you may modify. Follow existing patterns.
-2. **Check the contract** — identify the acceptance criteria, constraints, relevant examples, and required validation. If a material ambiguity cannot be resolved from source or documentation, return `BLOCKED` with the precise missing fact rather than improvising. Before finishing, grep touched docs/skills for this task's own id or summary: a hit naming it as a forward marker (e.g. "remove this note once task X lands") is in scope even when the file wasn't explicitly listed.
-3. **Claim when requested** — if the assignment supplies an org task ID and asks you to manage its lifecycle, load the `org-tasks` skill and use `ot`; do not invent or use legacy task APIs.
-4. **Implement narrowly** — make the smallest coherent change that satisfies the task. Verify symbols, module paths, options, flags, and APIs against source or authoritative documentation.
-5. **Verify** — run focused tests plus the repository checks warranted by the change. Exercise runtime behavior for framework or integration changes when static checks cannot prove it. Check every relevant acceptance criterion with evidence.
-6. **Finish lifecycle when requested** — update the assigned task and change-record according to `org-tasks` / `org-plan` only when the assignment delegates that responsibility.
-7. **Report** — list changed files, behavior delivered, exact commands/results, remaining risks, and any follow-up required.
+1. **Read context** -- load repository instructions, the complete assignment, referenced task/change-record, and every file you may modify. Follow existing patterns.
+2. **Check the contract** -- identify the acceptance criteria, constraints, relevant examples, and required validation. If a material ambiguity cannot be resolved from source or documentation, return `BLOCKED` with the precise missing fact rather than improvising. Before finishing, grep touched docs/skills for this task's own id or summary: a hit naming it as a forward marker (e.g. "remove this note once task X lands") is in scope even when the file wasn't explicitly listed.
+3. **Claim when requested** -- if the assignment supplies an org task ID and asks you to manage its lifecycle, load the `org-tasks` skill and use `ot`; do not invent or use legacy task APIs.
+4. **Implement narrowly** -- make the smallest coherent change that satisfies the task. Verify symbols, module paths, options, flags, and APIs against source or authoritative documentation.
+5. **Verify** -- run focused tests plus the repository checks warranted by the change. Exercise runtime behavior for framework or integration changes when static checks cannot prove it. Check every relevant acceptance criterion with evidence.
+6. **Finish lifecycle when requested** -- update the assigned task and change-record according to `org-tasks` / `org-plan` only when the assignment delegates that responsibility.
+7. **Report** -- list changed files, behavior delivered, exact commands/results, remaining risks, and any follow-up required.
 
 ## Advisor consultation
 
-There is **no routine pre-publish review**: do not consult `advisor` merely because you are about to publish. Measured across three benchmark rounds, a mandatory consult produced no quality gain at any executor tier while adding cost and latency, so it was retired — see the [evaluation record](../../../design/log/2026-07-31-subagents-review-advisor-strategy-defaul.org). Reviews at feature closeout are the orchestrator's job, not yours.
+There is **no routine pre-publish review**: do not consult `advisor` merely because you are about to publish. Measured across three benchmark rounds, a mandatory consult produced no quality gain at any executor tier while adding cost and latency, so it was retired -- see the [evaluation record](../../../design/log/2026-07-31-subagents-review-advisor-strategy-defaul.org). Reviews at feature closeout are the orchestrator's job, not yours.
 
 Consult `advisor` only when you are genuinely stuck:
 
 - A debugging dead end after 2+ failed attempts, where you have run out of hypotheses rather than merely out of patience.
 - A high-stakes decision that is materially ambiguous after checking source and documentation, where choosing wrong would be expensive to unwind.
 
-When you do consult, keep it focused and blocking: a 1–3-sentence problem statement (~50–100 tokens), the working diff or code (~500–2000), what you already tried and how it failed (~100–200), and the constraints (~50–100). Never send a transcript dump. The advisor is read-only and returns a verdict, a recommended approach, and concrete pass/fail checks; you own the implementation and the verification.
+When you do consult, keep it focused and blocking: a 1--3-sentence problem statement (~50--100 tokens), the working diff or code (~500--2000), what you already tried and how it failed (~100--200), and the constraints (~50--100). Never send a transcript dump. The advisor is read-only and returns a verdict, a recommended approach, and concrete pass/fail checks; you own the implementation and the verification.
 
 Soft cap: 3 consults per assignment. The advisor runs at its own default tier; add `--model heavy` for a genuinely high-stakes call where the best available judgment is worth the cost. Never spawn an advisor from an advisor.
 

@@ -22,15 +22,15 @@ Format: `<type>[(scope)][!]: <description>` followed by an optional body and foo
    Reconcile `git status` against the change's expected file set and stage those paths explicitly. A worktree shared with subagents, other agent sessions, or the user may hold unrelated edits; never `git add -A`/`.` there, and surface anything foreign you deliberately left unstaged.
 
 2. Pick the type:
-   - `feat` — new functionality
-   - `fix` — bug fix
+   - `feat` -- new functionality
+   - `fix` -- bug fix
    - `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`, `build`, `revert`
    - Breaking: append `!` before the colon or add a `BREAKING CHANGE:` footer.
 
 3. Pick a scope (optional noun for the area touched), then write the subject:
    - Imperative mood ("add", not "added"), no trailing period, ≤72 chars.
 
-4. **Body — only what's needed.** What's changed and why. Prompt the user for the *why* if it's not evident from the diff. Refer to associated design change-records rather than restating their content.
+4. **Body -- only what's needed.** What's changed and why. Prompt the user for the *why* if it's not evident from the diff. Refer to associated design change-records rather than restating their content.
 
    Do **not** include:
    - Test run details / output

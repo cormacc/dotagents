@@ -5,7 +5,7 @@
 #+SPEC: [[proj:README.md]]
 #+SPEC: [[proj:AGENTS.md]]
 #+SPEC: [[proj:skills/README.org]]
-#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
 #+SPEC: [[proj:skills/skill-creator/SKILL.md]]
 #+SPEC: [[proj:subagents/claude-code.md]]
 #+SPEC: [[proj:subagents/planner.md]]

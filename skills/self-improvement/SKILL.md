@@ -24,7 +24,7 @@ Skip one-off mistakes, taste disagreements, ordinary direction changes, correct 
 
 ## Two loops
 
-### Slow loop — default, TODO first
+### Slow loop -- default, TODO first
 
 Use for code changes, scripts, extensions, new files, restructures, multiple plausible designs, cross-project routing, or any uncertain change.
 
@@ -44,7 +44,7 @@ Use for code changes, scripts, extensions, new files, restructures, multiple pla
 
 If `ot` is missing, stop with: `Install the org-tasks CLI (skills/org-tasks/scripts/ot or bbin), then rerun this capture.` If the target has no `TASKS.org`, stop with: `Run ot --root <root> init before filing cross-project feedback.` Never silently edit another repository as a transport fallback.
 
-### Tight loop — explicit exception
+### Tight loop -- explicit exception
 
 This is the sole exception to TODO-first. Use it only when all conditions hold:
 

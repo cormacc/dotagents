@@ -1,6 +1,6 @@
-# Dataspex — fallback cljs forms
+# Dataspex -- fallback cljs forms
 
-Reference data for agents that don't have the pi `dataspex` extension loaded. Each form here is the canonical, token-disciplined equivalent of one `dataspex` op in `SKILL.md`. Mirror the same default projections and length/depth bounds — paste verbatim and adjust the label / path / `n` as needed.
+Reference data for agents that don't have the pi `dataspex` extension loaded. Each form here is the canonical, token-disciplined equivalent of one `dataspex` op in `SKILL.md`. Mirror the same default projections and length/depth bounds -- paste verbatim and adjust the label / path / `n` as needed.
 
 ## Eval idiom
 
@@ -15,9 +15,9 @@ These forms are CLJS. From a JVM nREPL, evaluate them in the connected ClojureSc
 Read forms below wrap their value in `(with-out-str (binding [*print-length* ...] (pr <expr>)))` so the cljs *return value* is an already-bounded string. Reading that string out of `:results[0]` (rather than `:out`) sidesteps two cross-cutting bugs:
 
 1. *Shadow's 1 MB remote writer limit* fires when the cljs return value is too large, regardless of `*print-length*` / `*print-level*` (those don't constrain shadow's own serialisation of the return value).
-2. *`:out` is not per-call under concurrent `cljs-eval` against the same build* — sibling requests share the runtime's `*out*` and each request's `:out` snapshot accumulates bytes printed by other requests. `:results` is per-call.
+2. *`:out` is not per-call under concurrent `cljs-eval` against the same build* -- sibling requests share the runtime's `*out*` and each request's `:out` snapshot accumulates bytes printed by other requests. `:results` is per-call.
 
-To unwrap `:results[0]` (which is shadow's pr-str of the cljs string), use `clojure.edn/read-string` on the JVM side. If your agent has no Clojure evaluator at all, this skill can't help — surface that to the user.
+To unwrap `:results[0]` (which is shadow's pr-str of the cljs string), use `clojure.edn/read-string` on the JVM side. If your agent has no Clojure evaluator at all, this skill can't help -- surface that to the user.
 
 `:app` is the shadow build id. Discover the active build with:
 
@@ -149,7 +149,7 @@ Opt in to full `:val` snapshots only when needed:
 
 ### Equivalent of `dataspex op=db_query`
 
-Server-side projection — only the result set crosses the wire, never the DB:
+Server-side projection -- only the result set crosses the wire, never the DB:
 
 ```clojure
 (do
@@ -165,7 +165,7 @@ Server-side projection — only the result set crosses the wire, never the DB:
 
 ### Equivalent of `dataspex op=actions_tail`
 
-`LogInspector` is JS-interop-flavoured — the underlying log is only reachable via `aget`:
+`LogInspector` is JS-interop-flavoured -- the underlying log is only reachable via `aget`:
 
 ```clojure
 (with-out-str
@@ -183,8 +183,8 @@ Server-side projection — only the result set crosses the wire, never the DB:
 
 ## Pitfalls
 
-- **Read `:results[0]`, not `:out`.** The forms above use `(with-out-str (pr ...))`, so the bounded string is the cljs *return value* and lives in `:results[0]` (already shadow-pr-str'd; `clojure.edn/read-string` it to unwrap). Reading `:out` is unsafe because concurrent `cljs-eval` calls against the same build share the runtime's `*out*` — a request can see bytes printed by sibling requests in its `:out` snapshot.
+- **Read `:results[0]`, not `:out`.** The forms above use `(with-out-str (pr ...))`, so the bounded string is the cljs *return value* and lives in `:results[0]` (already shadow-pr-str'd; `clojure.edn/read-string` it to unwrap). Reading `:out` is unsafe because concurrent `cljs-eval` calls against the same build share the runtime's `*out*` -- a request can see bytes printed by sibling requests in its `:out` snapshot.
 - **Shadow's remote writer has its own 1 MB limit.** Even with tight `*print-length*` / `*print-level*` bindings, shadow tries to serialise the cljs *return value* of the form across the runtime boundary, *outside* the binding scope. A deep atom can fail with `The limit of 1048576 bytes was reached while printing` unless the form's *return value* is itself a bounded string (which is what `(with-out-str (binding [...] (pr ...)))` achieves).
-- **`*print-length*` / `*print-level*` are CLJS dynamic vars.** They must appear inside the form passed to `cljs-eval`, not on the JVM side — the printing happens in the browser runtime.
+- **`*print-length*` / `*print-level*` are CLJS dynamic vars.** They must appear inside the form passed to `cljs-eval`, not on the JVM side -- the printing happens in the browser runtime.
 - **`pr-str` truncation markers.** Long collections truncate with `#` at print- level bounds and `...` at print-length bounds. If you need the structured value, drop the bounds (or path-navigate first) and re-read.
 - **No retroactive `:history-limit` widening.** If the parallel `*-audit` label was registered with a tight limit, untrack and re-register with a larger one rather than trying to grow it.

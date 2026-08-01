@@ -3,7 +3,7 @@
 #+PARENT: [[archive:d6690050-b0c8-4ba7-8c06-afff4fa2f761][herdr-subagent skill scripts]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
-#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
 
 * Intent
 

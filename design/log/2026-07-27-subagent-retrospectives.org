@@ -3,8 +3,8 @@
 #+PARENT: [[archive:57a1cf23-78b2-4066-b415-1b5847c4c012][Integrate retrospective skill in subagent lifecycle :skill_herdr-subagents:]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
-#+SPEC: [[proj:skills/herdr-subagents/SKILL.md]]
-#+SPEC: [[proj:skills/herdr-subagents/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
 #+SPEC: [[proj:skills/retro/SKILL.md]]
 
 * Intent

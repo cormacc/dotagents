@@ -4,6 +4,9 @@
   documentation.
 - When asked a question, just answer the question -- don't start coding.
   Use tools and write scripts only to obtain additional required information.
+- An empty result is not evidence of absence. A wrong field name, path or source
+  returns nothing rather than failing, so confirm the query matched at all before
+  reporting that nothing did.
 - When a matched skill owns a domain, read it before issuing exploratory
   commands in that domain -- don't parallelise the skill load with domain probes.
 
@@ -23,6 +26,7 @@
 - When scripting is necessary, prefer Babashka to Python for repository-local automation. Use Python when invoking an existing Python tool or when its ecosystem is materially better suited.
 - For scripted transformations, write a candidate under `<repository-root>/.agents/tmp/`, inspect its diff, and only then replace the source; do not perform unverified in-place rewrites.
 - Redirect long-running or expensive command output to a file under `<repository-root>/.agents/tmp/` and read slices from it. Piping through `head`/`tail` discards the rest and often forces a costly re-run.
+- Do not author unicode dashes in prose. Write `--` (org converts it on export) or use an org descriptive list `- Term :: detail`; literal em-dashes have been emitted as `\uXXXX` escapes and committed as mojibake. Where a format makes one significant syntax -- the herdr-orch `ARTIFACTS` item splits on a literal ` — ` -- leave it alone.
 
 # Temporary files
 Resolve the repository root with `git rev-parse --show-toplevel`, then use
