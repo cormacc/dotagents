@@ -236,23 +236,6 @@ Scope discrimination (verified 2026-07-31): this defect is specific to the **age
 
 Implementation notes from the stopgap (verified 2026-07-31): the lifecycle state is nested at `result.agent.agent_status` in `herdr agent get` output, not `result.agent_status` — misreading it yields `unknown` and, if the nudge is unconditional, fires a burst of stray Enters. Gate the nudge on a definite `idle`. Dispatch failure is intermittent, not universal: of nine spawns in that session, seven needed one Enter and two dispatched unaided, so any fix must tolerate a prompt that has already landed.
 
-** STARTED herdr-orch: absorb pi-herdr coverage into the bb CLI, rename skill and binary to oh :skill_herdr-orch:
-:PROPERTIES:
-:CUSTOM_ID: 4a9a24b3-2518-4cf5-9d8d-64b5fa0c76ba
-:CREATED: [2026-08-01 Sat 00:29]
-:STARTED: [2026-08-01 Sat 00:35]
-:END:
-:LOGBOOK:
-- Created [2026-08-01 Sat 00:29]
-- State "STARTED" from "TODO" [2026-08-01 Sat 00:35]
-:END:
-#+IMPORT: [[plan:2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org]]
-Replace the floating upstream `@ogulcancelik/pi-herdr` pi extension with first-party coverage in the herdr-orch Babashka CLI, then rename the skill to `herdr-orch` and the binary to `oh` to match the broadened charter.
-
-Driver: pi-herdr 0.4.0 always reports failure for `pane run`, `pane send-text` and `pane send-keys` (it routes no-output herdr subcommands through a JSON-expecting helper), so agents believe successful terminal operations failed — see task 34683f68. All 12 pi extensions are floating with no pinning convention, so a local patch would be wiped on update. Meanwhile the delegation layer already had to be harness-agnostic (claude/codex children cannot call pi tools), so `herdr.clj` is already the mechanical layer and already covers 11 of the 27 operations pi-herdr exposes.
-
-Approach: complete the operation surface in `herdr.clj`, expose it through object-namespaced CLI verbs, add a thin pi proxy extension for tool discoverability (window management only, never delegation), drop pi-herdr, and rename last.
-
 * Fixes
 
 * Housekeeping
@@ -562,6 +545,8 @@ Concrete instance: two stale `bb nrepl-server` tabs. The command dispatched and 
 Not to be confused with task d4bd209f: `herdr pane run` dispatch itself is reliable (11/11 across warm splits, cold splits and new tabs). That task concerns the distinct agent-prompt path.
 
 Related upstream work: task a6be7668 targets the same upstream repository.
+
+*Superseded for our purposes [2026-08-01].* `@ogulcancelik/pi-herdr` was removed from `pi/settings.json` and replaced by the first-party `pi/extensions/herdr-orch` proxy, so this defect no longer affects this repository and nothing here is blocked on an upstream fix. Retained solely as a courtesy report worth sending upstream, since the diagnosis is precise and the fix is one line per action; close it if that report is sent or judged not worth sending.
 
 ** TODO ot: support task removal and inbound-reference integrity :org_tasks:
 :PROPERTIES:

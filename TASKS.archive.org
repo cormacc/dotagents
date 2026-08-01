@@ -1872,3 +1872,24 @@ CLOSED: [2026-07-31 Fri 20:54]
 Implements the decisions from the advisor-strategy evaluation (parent task 899fe848, record 2026-07-31-subagents-review-advisor-strategy-defaul.org).
 
 Three rounds of benchmarking found no measurable quality gain from the mandatory pre-publish advisor consult at any executor tier, while it cost $1.43-$2.98 per run and could not be mechanically enforced. The changes: eliminate the mandate and roll back the `requires:` / `:required` mechanism that expressed it (commit 7b67e13); keep the advisor as an opt-in escalation at its existing middle default, with `--model heavy` available per spawn; retire `skilled-worker`, since `worker --model <tier>` with an unused optional advisor covers it; and re-document the advisor strategy and tier guidance against the measured evidence.
+
+** DONE herdr-orch: absorb pi-herdr coverage into the bb CLI, rename skill and binary to oh :skill_herdr-orch:
+CLOSED: [2026-08-01 Sat 16:11]
+:PROPERTIES:
+:CUSTOM_ID: 4a9a24b3-2518-4cf5-9d8d-64b5fa0c76ba
+:CREATED: [2026-08-01 Sat 00:29]
+:STARTED: [2026-08-01 Sat 00:35]
+:ARCHIVED: [2026-08-01 Sat 16:11]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-01 Sat 00:29]
+- State "STARTED" from "TODO" [2026-08-01 Sat 00:35]
+- State "DONE" from "STARTED" [2026-08-01 Sat 16:11]
+:END:
+#+IMPORT: [[plan:2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org]]
+Replace the floating upstream `@ogulcancelik/pi-herdr` pi extension with first-party coverage in the herdr-orch Babashka CLI, then rename the skill to `herdr-orch` and the binary to `oh` to match the broadened charter.
+
+Driver: pi-herdr 0.4.0 always reports failure for `pane run`, `pane send-text` and `pane send-keys` (it routes no-output herdr subcommands through a JSON-expecting helper), so agents believe successful terminal operations failed — see task 34683f68. All 12 pi extensions are floating with no pinning convention, so a local patch would be wiped on update. Meanwhile the delegation layer already had to be harness-agnostic (claude/codex children cannot call pi tools), so `herdr.clj` is already the mechanical layer and already covers 11 of the 27 operations pi-herdr exposes.
+
+Approach: complete the operation surface in `herdr.clj`, expose it through object-namespaced CLI verbs, add a thin pi proxy extension for tool discoverability (window management only, never delegation), drop pi-herdr, and rename last.
