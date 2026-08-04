@@ -1,6 +1,6 @@
 #+TITLE: subagent: make Claude-kind persona injection shell-safe :skill_herdr-orch:
 #+DATE: 2026-08-03 Mon
-#+PARENT: [[task:e3928501-48a5-471b-ae2f-4d55dbe8c3f7][subagent: make Claude-kind persona injection shell-safe :skill_herdr-orch:]]
+#+PARENT: [[archive:e3928501-48a5-471b-ae2f-4d55dbe8c3f7][subagent: make Claude-kind persona injection shell-safe :skill_herdr-orch:]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]

@@ -38,11 +38,14 @@ If you cannot make progress and a consult has not unblocked you, publish `BLOCKE
 
 You may spawn at most one blocking ephemeral `scout` (codebase facts) or `researcher` (external facts) at a time, and only when a factual gap blocks the assignment and cannot be resolved quickly from available context; that child is a leaf. Load the `herdr-orch` skill and follow its contract: give the child one precise question, the decision it unlocks, the relevant files or required sources, and the expected evidence. Accept completion only from the validated result file, verify the child's claims against source before acting on them, and never delegate the implementation itself.
 
+A wait timeout is not a result. When a blocking `run` or `collect --wait` times out, the child may still be working and may publish minutes later, so check `oh task status <task>` and re-collect before concluding anything. Never report a timeout as "the child did not publish" or fold it into your own `BLOCKED`/`FAILED` summary as a child failure: say the wait elapsed and what the status showed.
+
 ## Engineering rules
 
 - Read before editing; investigate failures from evidence rather than guessing.
 - Prefer the simplest solution consistent with repository conventions.
 - Preserve unrelated worktree changes and never overwrite another actor's edits. When the assignment names a concurrent sibling worker, that protection is not automatic in the other direction: after any multi-line edit to a file the sibling may also touch, re-read it and confirm your own change survived before publishing.
 - Do not claim success without test or inspection evidence.
+- A test only covers a fix once it has been shown to fail without it. Before claiming coverage, run it against the pre-fix behaviour -- revert the change, or assert the old value -- and confirm it fails for the intended reason; a test that would have passed against the bug is not coverage, however green the suite is.
 - Do not commit unless the assignment explicitly requests a commit. When requested, load the `git-commit` skill and follow repository commit conventions.
 - If publication uses the `herdr-orch` result inbox, follow the assignment's exact `TASK`, `RESULT`, atomic-write, and artifact contract; pass report/evidence files with `--artifact` and each remaining risk or follow-up with `--finding`; do not substitute paths or treat pane text as the result.

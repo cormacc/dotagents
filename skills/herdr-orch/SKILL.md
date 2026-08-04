@@ -66,6 +66,8 @@ Use `--retro` or `--no-retro` only when overriding the persona policy for this s
 
 A gated-in child applies steps 1--2 of [`retro`](../retro/SKILL.md), using that skill's threshold. Surviving one-line candidates arrive in the result's optional `PROCESS:` section and the ledger `:envelope`; no candidates is a valid result. The ledger's best-effort `:child-session` is the transcript reference for any manual follow-up after pane closure. Exact precedence, fields, limits, and section grammar belong to the [mechanical contract](scripts/docs/contract.md).
 
+One exception: `PROCESS` candidates produced by a `bb smoke-subagent` run are manufactured, not observed. That smoke's retro leg is deliberately given an invalid invocation so `retro` has a real failure to admit, and the resulting candidate is indistinguishable from a genuine one in the collected envelope. Never route smoke-run candidates to `self-improvement` or report them as durable findings.
+
 Treat process candidates as testimony and scan input for your own retro. The child must not choose a destination, load `self-improvement`, run `ot`, or edit instruction files; the parent owns verification, deduplication, approval, and persistence.
 
 ## Completion and pane safety
