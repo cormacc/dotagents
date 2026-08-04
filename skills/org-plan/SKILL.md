@@ -50,6 +50,7 @@ Plans are written for engineers with project context. Optimise for signal densit
 - Default to omitting `* Context`. Promote it only when durable rationale materially exceeds what `* Summary` can carry.
 - Plan-task bodies are acceptance criteria plus, at most, one pointer or non-obvious constraint.
 - Avoid preamble, marketing tone, future-tense implementation narrative after work lands, and prose that restates task headings.
+- Write the end state, not the journey to it. A record describes what now exists and why it is that way; it is not a chronicle of how it got built. Delivery mechanics -- which agent did what, task sequencing, what was tried first -- are not durable. Do not re-enumerate what the diff and commit already carry: name a changed contract because a reader must know its shape changed, not to inventory files.
 - Do not hard-wrap. Write each paragraph and list item as a single logical line (soft-wrap); preserve real line breaks only in headings, drawers, keywords, tables, and src/example blocks. Never reflow a record to a fixed column such as 80. This is the canonical org-tasks rule (`../org-tasks/SKILL.md` § Protocol summary) applied to change-records.
 - Because of that rule, line counts say nothing about a record's density -- one bullet is one line however long it runs. Measure prose in words (`wc -w`), and exclude the `* Plan` scaffolding, whose drawers dominate a line count and are not yours to condense.
 - At closure, delete spike-style `* Implementation` subsections such as `*** What worked`, `*** What's awkward`, or `*** Implications for task N`; condense durable findings into Summary decisions/gotchas or implementation outcomes.
@@ -334,6 +335,7 @@ Prune:
 4. Condense `** Risks` -- promote accepted-risks-that-paid-off into `** Decisions` or `** Gotchas`; delete the residue.
 5. Collapse the plan layer. `* Plan` is execution scaffolding: once every task is `DONE`, trim completed plan-task bodies to compact acceptance/audit value (`:LOGBOOK:` preserves timing; `* Implementation` captures outcomes). Keep the durable definition of done in `** Acceptance` (see *Two layers in one record*).
 6. Remove planning-flavoured Implementation subsections and condense useful content into outcomes, `** Gotchas`, or `** Decisions`.
+7. Cut change narration. Closure should shrink a record, not grow it: if `** Shipped` or `* Implementation` gained prose describing the *process* of delivery, reduce it to the end state a future reader needs. Prefer deleting a bullet to condensing it -- for a single-audience project, anything reconstructible from the commit or diff is not worth a line.
 7. Check that each Gotcha is a project-side surprise. Move library-level facts to the relevant skill/reference, or create follow-up work to do so.
 
 `* Intent` itself is not pruned -- it stays as the durable record of what this work was *for*. If Intent and Summary's effort line both still apply, the record passes the closure bar.
