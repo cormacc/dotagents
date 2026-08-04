@@ -14,13 +14,13 @@ bb test
 
 The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/skills` is a *directory* symlink), uses the repository `bb.edn` when present, and falls back to `bb --deps-root <scripts> -Sdeps '{:paths ["src"]}'` for a bare skill subtree. It never `cd`s before `exec`, so the CLI's working directory is always the caller's -- that value becomes the child pane's `--cwd` and drives assignment-root/roster resolution. It has no additional Maven dependencies.
 
-`task run` and `task start` take opaque assignment text from exactly one of `--task`, `--task-file`, or stdin; `task collect`, `task status`, and `task prune` in turn require the complete task UUID that `task run`/`task start` emitted -- unlike `ot`'s `:CUSTOM_ID:` prefix matching, no prefix is ever resolved. `--prompt-extra` appends exceptional constraints; `--print-prompt` previews the invariant wrapper. The CLI never offers raw prompt mode.
+`task run` and `task start` take opaque assignment text from exactly one of `--task`, `--task-file`, or stdin; `task collect`, `task status`, and `task prune` in turn require the complete task UUID that `task run`/`task start` emitted; no prefix is ever resolved. `--prompt-extra` appends exceptional constraints; `--print-prompt` previews the invariant wrapper. The CLI never offers raw prompt mode.
 
 The value-less flags `--retro` and `--no-retro` override process-retro gating for one spawn. See [docs/contract.md](docs/contract.md) § Retro gating for precedence, optional-skill behavior, ledger fields, and the `PROCESS:` envelope grammar.
 
 The value-bearing `--spawns` flag overrides the persona's frontmatter `spawns:` allow-list for one spawn (whitespace/comma separated); the literal `none` forces a leaf, and below the root only `--spawns none` is accepted. See [docs/contract.md](docs/contract.md) § Spawn gating for precedence, fail-fast cases, depth enforcement, and ledger fields.
 
-The value-less flags `--tab` and `--split` explicitly select tab or split placement and are mutually exclusive; either overrides configured `:defaults :placement`, which otherwise falls back to shipped `:split`. A configured `:tab-split` resolves to tab at root and split below root. Tab placement creates a new unfocused tab of the caller's workspace. Every other spawn contract (env, label, ledger, collect, closure) is unchanged, and placement is never persisted per-child or inherited via env: a child's own spawns resolve from config and depth alone. See [docs/contract.md](docs/contract.md) § Placement.
+The value-less flags `--tab` and `--split` explicitly select tab or split placement and are mutually exclusive. See [docs/contract.md](docs/contract.md) § Placement for precedence, the `:tab-split` resolution, and what tab placement does and does not change.
 
 The value-less flag `--any` on `collect` takes no task argument; it captures the *first* in-flight child of the caller's own session to publish a valid result, instead of waiting on one named task -- the read/capture primitive behind bounded-concurrency fan-out. See [docs/contract.md](docs/contract.md) § Fan-in for candidacy, poll structure, and outcomes.
 

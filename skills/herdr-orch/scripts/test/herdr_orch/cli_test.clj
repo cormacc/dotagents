@@ -2019,6 +2019,16 @@
             (str alias " " (name kind) " row"))
         (is (= ["--model" native-model] (core/model-args config (name kind) alias))
             (str alias " translates for " (name kind)))))
+    ;; contract.md is the single enumerated documentation home for these rows; every
+    ;; other document states the rule and links to it. Pin the surviving copy here so a
+    ;; model bump that misses the table fails the suite instead of drifting silently.
+    (testing "contract.md's weight table matches the shipped config"
+      (let [doc (slurp (str (fs/path root "skills" "herdr-orch" "scripts" "docs" "contract.md")))
+            documented (into {} (for [[_ weight pi claude codex]
+                                      (re-seq #"(?m)^\|\s*`(heavy|middle|light|feather)`\s*\|\s*`([^`]+)`\s*\|\s*`([^`]+)`\s*\|\s*`([^`]+)`\s*\|\s*$" doc)]
+                                  [weight {:pi pi :claude claude :codex codex}]))]
+        (is (= weight-rows documented)
+            "contract.md § Model resolution must enumerate exactly the shipped weight rows")))
     ;; Pi receives the configured OpenAI model for `gpt-*`; only the claude/codex
     ;; columns use tier-equivalent cross-provider mappings.
     (is (= {:pi "openai-codex/gpt-5.6-terra" :claude "sonnet" :codex "gpt-5.6-terra"} (get-in config [:models "gpt-5.6-terra"])))

@@ -57,7 +57,7 @@ Persona transport is per kind: pi uses `--append-system-prompt <path>`, claude u
 
 ### Harness `:extra-args`
 
-A `:harnesses` entry may carry `:extra-args`, a vector of non-blank strings appended to that kind's native `agent start` argv, between the model args and the persona transport. The shipped config declares none for any kind, so the flag set is empty unless an override file asks for it, and it is granted per kind: naming `:claude` never affects `:pi`. Its purpose is to relax interactive command approval for unattended delegation, since both claude and codex otherwise block on it. The home-layer override ships claude `--permission-mode auto` and codex `--ask-for-approval never --sandbox workspace-write`: prompts suppressed for routine work, dangerous actions still escalating. Note that claude `bypassPermissions` does not achieve this -- it gates on its own startup confirmation, so an unattended child stalls there instead.
+A `:harnesses` entry may carry `:extra-args`, a vector of non-blank strings appended to that kind's native `agent start` argv, between the model args and the persona transport. The shipped config declares none for any kind, so the flag set is empty unless an override file asks for it, and it is granted per kind: naming `:claude` never affects `:pi`. Its purpose is to relax interactive command approval for unattended delegation, since both claude and codex otherwise block on it. The recommended grant for an unattended child is claude `--permission-mode auto` and codex `--ask-for-approval never --sandbox workspace-write`: prompts suppressed for routine work, dangerous actions still escalating. Whether any install actually declares it is a property of that machine's override files, not of this contract. Note that claude `bypassPermissions` does not achieve this -- it gates on its own startup confirmation, so an unattended child stalls there instead.
 
 `merge-config` is `merge-with merge`, so a `:harnesses` entry is replaced wholesale at level two exactly as a `:models` row is; an override adding `:extra-args` must therefore restate `:model-flag`. `parse-config` rejects, with the offending file path, a non-sequential `:extra-args`, a non-string or blank member, and any member containing `\n`, `\t`, or `\r` -- the last because Herdr rejects control characters in agent argv with `invalid_agent_argument` before pane lookup, so the failure belongs at config-parse time rather than at spawn.
 
@@ -69,7 +69,16 @@ The canonical model-ID table is in external EDN alongside optional spawn default
 
 File chain, project wins: skill default `skills/herdr-orch/subagents/config.edn` (resolved as `subagents/config.edn` under the launcher's skill directory) ← `~/.agents/subagents/config.edn` ← `<git-root>/.agents/subagents/config.edn`. These config files are model-table/defaults overrides, not persona-definition sources: an override replaces a complete row by model ID (including a weight row) and never deep-merges its harness columns, while `:defaults` merges per key. Thus a home or project `"heavy"` row replaces the shipped `"heavy"` row; it neither shadows a persona definition nor chooses the harness.
 
-The shipped weight rows translate only after kind resolution: `heavy` → Pi `anthropic/claude-fable-5`, Claude `fable`, Codex `gpt-5.6-sol`; `middle` → Pi `anthropic/claude-opus-5`, Claude `opus`, Codex `gpt-5.6-sol`; `light` → Pi `anthropic/claude-sonnet-5`, Claude `sonnet`, Codex `gpt-5.6-terra`; `feather` → Pi `anthropic/claude-haiku-4-5`, Claude `haiku`, Codex `gpt-5.6-luna`. A weight alias is model data and never selects or changes kind. Unversioned canonical IDs (`claude-opus`, `gpt-sol`, …) are floating aliases resolving to the latest version of the tier; versioned IDs pin a release.
+This table is the single enumerated home for the shipped weight rows; every other document states the rule and links here. `cli_test.clj`'s `default-config-content-contract` asserts it cell-for-cell against `subagents/config.edn`, so a model bump that misses this table fails `bb test`. The rows translate only after kind resolution:
+
+| Weight | Pi | Claude | Codex |
+|---|---|---|---|
+| `heavy` | `anthropic/claude-fable-5` | `fable` | `gpt-5.6-sol` |
+| `middle` | `anthropic/claude-opus-5` | `opus` | `gpt-5.6-sol` |
+| `light` | `anthropic/claude-sonnet-5` | `sonnet` | `gpt-5.6-terra` |
+| `feather` | `anthropic/claude-haiku-4-5` | `haiku` | `gpt-5.6-luna` |
+
+A weight alias is model data and never selects or changes kind. Unversioned canonical IDs (`claude-opus`, `gpt-sol`, …) are floating aliases resolving to the latest version of the tier; versioned IDs pin a release.
 
 Config is loaded and schema-validated (parse errors and shape/type errors alike) before any ledger allocation or pane mutation; a validation failure carries the offending path. A missing override file is ignored; a missing shipped default is fatal.
 

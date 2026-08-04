@@ -1,6 +1,6 @@
 ---
 name: herdr-orch
-description: "Orchestrate Herdr terminals and subagents with the in-skill `oh` CLI: delegate work (spawn, fan out, or run a persona such as scout/researcher/planner/reviewer/worker/advisor/visual-tester) and control panes, tabs and workspaces (split, run a command, read output, wait, close). Requires HERDR_ENV=1."
+description: "Delegate work to Herdr subagents with the in-skill `oh` CLI: spawn, fan out, or run a persona such as scout/researcher/planner/reviewer/worker/advisor/visual-tester, then collect, validate, and close it. `oh` also wraps raw pane/tab/workspace/agent control for orchestration; for direct Herdr use unrelated to delegation, prefer the `herdr` skill. Requires HERDR_ENV=1."
 ---
 
 # Herdr subagents
