@@ -2,9 +2,9 @@
 
 ## Preconditions
 
-All spawn operations require `HERDR_ENV=1`, Herdr >= 0.7.5, and installed non-mutating help shapes for `pane layout/split/rename/get/close`, `tab create`, `agent start/prompt/wait/get/list`, and `notification show`. Preflight precedes ledger allocation and pane mutation. `tab create` is probed unconditionally, whether or not the spawn uses `--tab`.
+All spawn operations require `HERDR_ENV=1` and Herdr >= 0.7.5. Preflight is those two checks and nothing else -- one `herdr --version` subprocess -- and precedes ledger allocation and pane mutation. `publish` never runs preflight at all.
 
-`agent wait` is probed for both `--timeout` and `--until`. `--until` is needed only by the advisory parent push (§ Parent push), and `publish` never runs preflight at all, so that path relies on the >= 0.7.5 version gate rather than on a probe; the spawn-side row is widened anyway so the declared capability set stays honest about what the CLI uses.
+The version gate is the entire capability check: every command and flag the CLI uses (`pane layout/split/rename/get/close`, `tab create`, `agent start/prompt/wait/get/list`, `notification show`) shipped in 0.7.5, so per-command `--help` probing could only ever have caught a binary misreporting its own version. `herdr api schema` exposes a socket protocol number, not CLI flag shapes, and is deliberately not used as a substitute.
 
 Every command that resolves caller identity (`spawn!`, `collect --any`, `prune`, via `parent-identity`/`caller-parent-session`) runs `agent get` on `$HERDR_PANE_ID`. That call requires the calling pane to itself be hosting a recognized agent, not a bare shell; invoked from a raw, non-agent-occupied pane it fails with herdr code `agent_not_found`.
 

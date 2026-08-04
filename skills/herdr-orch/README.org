@@ -167,7 +167,7 @@ The [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07
 
 The earlier prose-only protocol required the parent to perform label calculation, geometry selection, split/start/prompt operations, bounded waiting, envelope parsing, artifact checks, and pane closure by hand. Besides repeated model round-trips, partial compliance failed silently: identities could be mistyped, visible summaries substituted for result files, and panes closed before capture.
 
-The CLI absorbs those operations behind one spawn/collect interface and returns the validated envelope inline. Capability probes add subprocess work before mutation, but convert unsupported-Herdr states into an actionable error before a pane or ledger assignment is partially created. Exact invocation counts are intentionally not frozen here because lifecycle hooks change; use the fake-Herdr log when evaluating current overhead.
+The CLI absorbs those operations behind one spawn/collect interface and returns the validated envelope inline. The =minimum-version= gate converts an unsupported-Herdr state into an actionable error before a pane or ledger assignment is partially created, for one subprocess; the twelve per-command =--help= probes it replaced bought nothing further, since every command and flag the CLI uses shipped in that same minimum version. Exact invocation counts are intentionally not frozen here because lifecycle hooks change; use the fake-Herdr log when evaluating current overhead.
 
 ** Optional process retrospectives
 
@@ -190,7 +190,7 @@ The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.
 | Namespace | Responsibility |
 |---+---|
 | [[file:scripts/src/herdr_orch/core.clj][core.clj]] | Pure protocol logic: roster/skill resolution, kind/model policy, retro and spawn policy, geometry, labels, and envelope render/parse/validation. |
-| [[file:scripts/src/herdr_orch/herdr.clj][herdr.clj]] | Vector-argv Herdr adapter, JSON/error decoding, minimum-version check, and non-mutating capability preflight. |
+| [[file:scripts/src/herdr_orch/herdr.clj][herdr.clj]] | Vector-argv Herdr adapter, JSON/error decoding, and the minimum-version preflight gate. |
 | [[file:scripts/src/herdr_orch/ledger.clj][ledger.clj]] | Assignment-root resolution, atomic ledger writes, result-path allocation, and exclusive-create monotonic index allocation. |
 | [[file:scripts/src/herdr_orch/cli.clj][cli.clj]] | Command orchestration, prompt composition, spawn-policy enforcement, publication, capture, session backfill, ownership-scoped closure, and bounded waiting. |
 | [[file:scripts/src/herdr_orch/smoke.clj][smoke.clj]] | Explicitly guarded billable integration smoke; never loaded by =bb test=. |
@@ -209,7 +209,7 @@ The regression suite names the important boundaries; preserve the tests rather t
 - =default-config-content-contract= pins contract.md's weight table to =config.edn= and pins every pre-two-level model ID to its old argv; keep its expectation matrix hardcoded, or the preservation check becomes circular.
 - live-smoke helper assertions are unit-tested because the billable smoke is never part of the standard suite.
 
-All =herdr= calls in =src/= must remain vector argv. Keep the standalone launcher dependency-free beyond Babashka built-ins. When Herdr changes, review =required-capabilities= and the fake fixture's help output together.
+All =herdr= calls in =src/= must remain vector argv. Keep the standalone launcher dependency-free beyond Babashka built-ins. When Herdr changes, =minimum-version= in [[file:scripts/src/herdr_orch/herdr.clj][herdr.clj]] is the single capability declaration -- raise it when the CLI starts depending on a newer command or flag, rather than reintroducing per-command probes.
 
 Configuration examples in this file are not covered by any test, unlike contract.md's weight table. Validate a changed example by parsing it out of the document and running it through =validate-merged-config!= against the shipped table; an example can become executable-wrong rather than merely stale.
 

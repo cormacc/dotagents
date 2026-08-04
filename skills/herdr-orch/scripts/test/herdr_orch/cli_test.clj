@@ -43,7 +43,7 @@
       ;; classpath resolution rather than fail correctness, so fail loudly instead.
       (when-not (zero? (:exit proc)) (throw (ex-info "failed to warm shared CLJ_CACHE" {:exit (:exit proc) :err (:err proc)})))
       dir)))
-(defn mutating? [argv] (and (not (some #{"--help"} argv)) (contains? #{["pane" "split"] ["tab" "create"] ["pane" "rename"] ["pane" "close"] ["agent" "start"] ["agent" "prompt"]} (vec (take 2 argv)))))
+(defn mutating? [argv] (contains? #{["pane" "split"] ["tab" "create"] ["pane" "rename"] ["pane" "close"] ["agent" "start"] ["agent" "prompt"]} (vec (take 2 argv))))
 ;; `ORCH_ASSIGNMENT_ROOT` keeps the ledger, index markers, result files, and project
 ;; override lookup inside the per-test temp dir: `bb test` must never touch the live tree.
 ;; `HOME` points at an empty directory, so default personas and roster data resolve from
@@ -163,16 +163,13 @@
     (is (str/starts-with? (injected "HERDR_ORCH_RESULT") (str (fs/path dir ".tmp" "herdr-orch"))))
     (is (= (str dir) (injected "ORCH_ASSIGNMENT_ROOT")))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
-    (is (= ["pane" "split" "--pane" "w:p" "--direction" "right"] (subvec (vec (first (filter #(and (= ["pane" "split"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))) 0 6)))
+    (is (= ["pane" "split" "--pane" "w:p" "--direction" "right"] (subvec (vec (first (filter #(= ["pane" "split"] (vec (take 2 %))) argv))) 0 6)))
     (is (some #(= ["pane" "close"] (vec (take 2 %))) argv))
     (is (re-find #"(?s)\$\(unsafe\).*`unsafe`" (slurp prompt-file)))
-    (is (= #{["pane" "layout"] ["pane" "split"] ["tab" "create"] ["pane" "rename"] ["pane" "get"] ["pane" "close"] ["agent" "start"] ["agent" "prompt"] ["agent" "wait"] ["agent" "get"] ["agent" "list"] ["notification" "show"]}
-           (set (map #(vec (take 2 %)) (filter #(= "--help" (nth % 2 nil)) argv)))))
-    ;; The advisory parent push needs `agent wait --until`, so the spawn-side contract is
-    ;; widened even though `publish!` never runs preflight. Every spawn above proves the
-    ;; fixture advertises it: a missing flag throws "lacks required flag" during preflight.
-    (is (= ["--timeout" "--until"]
-           (some (fn [[command flags]] (when (= ["agent" "wait"] command) flags)) herdr/required-capabilities)))))
+    ;; Preflight is the version gate alone: no per-command `--help` probing survives, so a
+    ;; spawn issues exactly one non-mutating capability call.
+    (is (empty? (filter #(some #{"--help"} %) argv)))
+    (is (= 1 (count (filter #(= ["--version"] (vec %)) argv))))))
 
 (defn- ledger-entry* [dir task]
   (json/parse-string (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json")))) true))
@@ -195,7 +192,7 @@
         proc (call! env "task" "start" "scout" "--task" "permitted nested scout")
         task (get-in (result proc) [:result :task])
         entry (ledger-entry* dir task)
-        rename (first (filter #(and (= ["pane" "rename"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))]
+        rename (first (filter #(= ["pane" "rename"] (vec (take 2 %))) (calls log)))]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "" (injected-env env-file "HERDR_ORCH_SPAWNS")))
     (is (str/includes? (slurp prompt-file) "You are a leaf: do not spawn subagents."))
@@ -309,8 +306,7 @@
   (let [{:keys [env log roster]} (fake-env {}
                                            {"worker" "---\nname: worker\ndescription: relocated project worker\nmodel: light\n---\nProject override.\n"})
         proc (call! env "task" "start" "worker" "--task" "project persona shadows package")
-        start (first (filter #(and (= ["agent" "start"] (vec (take 2 %)))
-                                  (not (some #{"--help"} %)))
+        start (first (filter #(= ["agent" "start"] (vec (take 2 %)))
                              (calls log)))]
     (is (zero? (:exit proc)) (:err proc))
     (is (some #(= (str roster "/worker.md") %) start))
@@ -332,7 +328,7 @@
 (deftest tab-placement-contract
   (let [{:keys [env log env-file dir]} (fake-env {}) proc (call! env "task" "run" "worker" "--tab" "--task" "tab placement" "--timeout" "20")
         argv (calls log)
-        tab-create (first (filter #(and (= ["tab" "create"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))
+        tab-create (first (filter #(= ["tab" "create"] (vec (take 2 %))) argv))
         task (get-in (result proc) [:result :task])
         entry (ledger-entry* dir task)
         injected (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
@@ -343,10 +339,10 @@
     (is (some #{"--no-focus"} tab-create))
     (is (some #{"--label"} tab-create))
     ;; No split command at all for a tab-placed spawn.
-    (is (not-any? #(and (= ["pane" "split"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))
+    (is (not-any? #(= ["pane" "split"] (vec (take 2 %))) argv))
     ;; The rename→start→prompt flow and closure are unchanged, against the tab's root pane.
     (is (some #(= ["pane" "rename" "w:child"] (vec (take 3 %))) argv))
-    (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))
+    (is (some #(= ["pane" "close"] (vec (take 2 %))) argv))
     ;; Env injection is identical to a split spawn.
     (is (str/starts-with? (injected "HERDR_ORCH_CHILD") "worker-"))
     (is (= "blocking" (injected "HERDR_ORCH_WAITING_POLICY")))
@@ -360,7 +356,7 @@
         task (get-in (result proc) [:result :task]) entry (ledger-entry* dir task)]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
-    (is (not-any? #(and (= ["tab" "create"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))
+    (is (not-any? #(= ["tab" "create"] (vec (take 2 %))) (calls log)))
     (is (= "split" (:placement entry)))
     (is (nil? (:tab-id entry)))))
 
@@ -394,7 +390,7 @@
                            :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
                        (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))]
     (is (= 1 (:exit proc)))
-    (is (some #(and (= ["tab" "create"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))
+    (is (some #(= ["tab" "create"] (vec (take 2 %))) argv))
     (is (some #(= ["pane" "close" "w:child"] (vec (take 3 %))) argv))
     (is (= "failed" (:status entry)))
     (is (= "start" (:failure-phase entry)))
@@ -406,7 +402,7 @@
   (let [{:keys [env log roster dir prompt-file]} (fake-env {}) file (str (fs/path dir "assignment.md"))
         _ (spit file "assignment from a file")
         pi-proc (call! env "task" "start" "worker" "--task-file" file "--prompt-extra" "stay read-only")
-        pi-start (first (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))]
+        pi-start (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log)))]
     (is (zero? (:exit pi-proc)))
     (is (some #(str/ends-with? % "/worker.md") pi-start))
     ;; With no project or home definition, the persona resolves from the launcher-local
@@ -420,8 +416,8 @@
         persona-path (str root "/skills/herdr-orch/subagents/worker.md")
         persona-body (slurp persona-path)
         claude-proc (call! env "task" "start" "worker" "--kind" "claude" "--model" "sonnet" "--task" "claude persona")
-        claude-start (first (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))
-        rename (first (filter #(and (= ["pane" "rename"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))]
+        claude-start (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log)))
+        rename (first (filter #(= ["pane" "rename"] (vec (take 2 %))) (calls log)))]
     (is (zero? (:exit claude-proc)))
     (is (= persona-path (last claude-start)))
     (is (some #(= ["--append-system-prompt-file" persona-path] %) (partition 2 1 claude-start)))
@@ -449,17 +445,17 @@
         (is (= prompt (slurp prompt-file)))))))
 
 (deftest preflight-fails-before-ledger-or-mutation
-  (doseq [overrides [{"FAKE_HERDR_VERSION" "0.7.4"} {"FAKE_MISSING_CAPABILITY" "pane-split"}]]
-    (let [{:keys [env log]} (fake-env overrides) proc (call! env "task" "start" "worker" "--task" "x")]
-      (is (= 1 (:exit proc)))
-      (is (not-any? mutating? (calls log))))))
+  (let [{:keys [env log]} (fake-env {"FAKE_HERDR_VERSION" "0.7.4"}) proc (call! env "task" "start" "worker" "--task" "x")]
+    (is (= 1 (:exit proc)))
+    (is (str/includes? (str (:out proc) (:err proc)) "0.7.5"))
+    (is (not-any? mutating? (calls log)))))
 
 (deftest preview-is-side-effect-free
   (let [{:keys [env log]} (fake-env {}) proc (call! env "task" "run" "worker" "--task" "preview" "--print-prompt")]
     (is (zero? (:exit proc)))
     (is (re-find #"<assigned-task>" (:out proc)))
     (is (not-any? mutating? (calls log)))
-    (is (not-any? #(and (= ["pane" "get"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+    (is (not-any? #(= ["pane" "get"] (vec (take 2 %))) (calls log))))
   (let [{:keys [env log]} (fake-env {}) proc (call! env "task" "start" "not-a-persona" "--task" "x")]
     (is (= 1 (:exit proc)))
     (is (re-find #"persona not found" (:out proc)))
@@ -497,7 +493,7 @@
           entry (ledger-entry* dir task)]
       (is (zero? (:exit proc)) (:err proc))
       (is (= "tab" (:placement entry)))
-      (is (some #(and (= ["tab" "create"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+      (is (some #(= ["tab" "create"] (vec (take 2 %))) (calls log))))
     (spit (str project-config) "{:defaults {:placement :tab-split}}")
     (is (= "tab" (preview env)))
     (is (= "split" (preview (merge env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"}))))
@@ -509,7 +505,7 @@
   ;; them only for the kind that was named.
   (let [{:keys [env log dir]} (fake-env {})
         project-config (fs/path dir ".agents" "subagents" "config.edn")
-        start-argv (fn [] (first (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))]
+        start-argv (fn [] (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))]
     (fs/create-dirs (fs/parent project-config))
     ;; No override: nothing resembling a permission flag reaches `agent start`.
     (let [proc (call! env "task" "start" "worker" "--kind" "claude" "--model" "sonnet" "--task" "default permissions")]
@@ -520,7 +516,7 @@
           argv-for (fn [kind]
                      (let [proc (call! env "task" "start" "worker" "--kind" kind "--model" "sonnet" "--task" "bypass permissions")]
                        (is (zero? (:exit proc)) (:err proc))
-                       (vec (last (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))))]
+                       (vec (last (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))))]
       (fs/create-dirs (fs/parent config))
       (spit (str config)
             (str "{:harnesses {:claude {:model-flag \"--model\" :extra-args [\"--permission-mode\" \"bypassPermissions\"]}"
@@ -548,10 +544,10 @@
     (is (zero? (:exit (call! env "task" "status" task))))
     (is (zero? (:exit (call! env "task" "list"))))
     (is (some #(= ["agent" "get"] (vec (take 2 %))) (calls log)))
-    (is (not-any? #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+    (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log))))
   (let [{:keys [env log]} (fake-env {"FAKE_WAIT" "blocked"}) proc (call! env "task" "run" "worker" "--task" "blocked" "--timeout" "20")]
     (is (= "blocked" (get-in (result proc) [:result :status])))
-    (is (not-any? #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
+    (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
 
 (deftest result-edge-and-publication-contract
   ;; Publication during a structured Herdr wait error, with a FAILED envelope end-to-end.
@@ -565,7 +561,7 @@
     (is (zero? (:exit proc)))
     (is (= "invalid" (get-in (result proc) [:result :status])))
     (is (re-find #"identity" (get-in (result proc) [:result :reason])))
-    (is (not-any? #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+    (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log))))
   (let [{:keys [env log dir]} (fake-env {}) target (str (fs/path dir "published.result"))
         publication-env (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task" "HERDR_ORCH_RESULT" target "HERDR_ORCH_WAITING_POLICY" "non-blocking"})
         ok (call! publication-env "task" "publish" "--status" "COMPLETE" "--summary" "done") second (call! publication-env "task" "publish" "--status" "COMPLETE" "--summary" "again")
@@ -709,12 +705,12 @@
     (is (= "COMPLETE" (:status entry)))
     (is (true? (:process-overflow entry)))
     (is (= 5 (count (get-in entry [:envelope :process]))))
-    (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
+    (is (some #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
 
 (defn- ledger-entry [dir task]
   (json/parse-string (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json")))) true))
 (defn- child-get-count [log]
-  (count (filter #(and (= ["agent" "get"] (vec (take 2 %))) (not= "w:p" (nth % 2 nil)) (not (some #{"--help"} %))) (calls log))))
+  (count (filter #(and (= ["agent" "get"] (vec (take 2 %))) (not= "w:p" (nth % 2 nil))) (calls log))))
 
 ;; The child's session reference must survive pane close, and no single hook is reliable:
 ;; Herdr reports `agent_session` asynchronously, so each fixture mode below exercises one
@@ -729,7 +725,7 @@
       (is (= {:agent "pi" :kind "path" :source "pi" :value "/tmp/fake-child-session.jsonl"} (:child-session entry)))
       ;; The entry is read back after capture *and* pane close, so the reference outlives
       ;; the pane it came from.
-      (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
+      (is (some #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
   (testing "a session absent at start is backfilled by the post-prompt agent get"
     (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "get"})
           proc (call! env "task" "start" "worker" "--task" "session after prompt")
@@ -764,7 +760,7 @@
                             :status "BLOCKED" :summary "blocked" :artifacts [] :findings [] :next nil}))
       (is (= "BLOCKED" (get-in (result (call! env "task" "collect" task)) [:result :status])))
       (is (= "/tmp/fake-child-session.jsonl" (get-in (ledger-entry dir task) [:child-session :value])))
-      (is (not-any? #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
+      (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
   (testing "a child that never publishes still carries its session"
     (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "start" "FAKE_WAIT" "idle-forever" "ORCH_POLL_INTERVAL_MS" "50"})
           proc (call! env "task" "run" "worker" "--task" "never publishes" "--timeout" "200")
@@ -779,8 +775,8 @@
       (is (= "COMPLETE" (get-in (result proc) [:result :status])))
       (is (nil? (:child-session entry))))))
 
-(defn- start-call-count [log] (count (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
-(defn- split-call-count [log] (count (filter #(and (= ["pane" "split"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+(defn- start-call-count [log] (count (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))
+(defn- split-call-count [log] (count (filter #(= ["pane" "split"] (vec (take 2 %))) (calls log))))
 
 (deftest partial-start-failure-is-tracked-and-cleaned
   (let [{:keys [env log]} (fake-env {"FAKE_FAIL_START" "1"}) proc (call! env "task" "start" "worker" "--task" "fail")]
@@ -803,9 +799,8 @@
     ;; Two simulated `agent_pane_busy` failures plus the eventual success.
     (is (= 3 (start-call-count log)))
     (is (= 1 (split-call-count log)))
-    ;; The retry never triggers cleanup: no pane is ever closed (excluding the harmless
-    ;; `pane close --help` preflight probe, present on every spawn).
-    (is (not (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+    ;; The retry never triggers cleanup: no pane is ever closed.
+    (is (not (some #(= ["pane" "close"] (vec (take 2 %))) (calls log))))
     ;; exactly one ledger entry
     (is (= 1 (count (filter #(and (fs/regular-file? %) (str/ends-with? (fs/file-name %) ".json"))
                              (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))))))))
@@ -852,7 +847,7 @@
   (is (= 10 (herdr/parse-start-retry-backoff "10"))))
 
 (defn- wait-call-count [log]
-  (count (filter #(and (= ["agent" "wait"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+  (count (filter #(= ["agent" "wait"] (vec (take 2 %))) (calls log))))
 
 ;; Capture correctness after several settled-without-result iterations. The fixture
 ;; publishes on a fixed call count, so this test proves capture/parity only — the
@@ -900,12 +895,12 @@
 ;; failure never demoting an already-captured COMPLETE to a nonzero exit.
 (deftest default-budget-and-close-failure-tolerance
   (let [{:keys [env log]} (fake-env {"FAKE_FAIL_CLOSE" "1"}) proc (call! env "task" "run" "worker" "--task" "default budget")
-        wait (first (filter #(and (= ["agent" "wait"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))
+        wait (first (filter #(= ["agent" "wait"] (vec (take 2 %))) (calls log)))
         budget (parse-long (second (drop-while #(not= "--timeout" %) wait)))]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (<= 599000 budget 600000))
-    (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
+    (is (some #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
 
 (deftest collect-pane-close-is-scoped-to-the-owning-session
   (let [{:keys [env env-file log]} (fake-env {}) start (call! env "task" "start" "worker" "--task" "foreign") task (get-in (result start) [:result :task])
@@ -918,18 +913,18 @@
         (is (= "COMPLETE" (get-in (result proc) [:result :status])))
         (is (true? (get-in (result proc) [:result :pane-retained])))
         (is (= "foreign-parent-session" (get-in (result proc) [:result :ownership])))
-        (is (not-any? #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
+        (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
     (testing "an unresolvable caller identity is non-owning but still captures"
       (let [proc (call! (merge env {"FAKE_FAIL_AGENT_GET" "w:p"}) "task" "collect" task)]
         (is (zero? (:exit proc)) (:err proc))
         (is (= "COMPLETE" (get-in (result proc) [:result :status])))
         (is (true? (get-in (result proc) [:result :pane-retained])))
-        (is (not-any? #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
+        (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
     (testing "the owning session still closes"
       (let [proc (call! env "task" "collect" task)]
         (is (zero? (:exit proc)) (:err proc))
         (is (nil? (get-in (result proc) [:result :pane-retained])))
-        (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))))
+        (is (some #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))))
 
 
 ;; Publication is exactly-once and immutable, so a relative artifact path must be caught
@@ -967,7 +962,7 @@
     (is (zero? (:exit proc)) (:err proc))
     (is (= "invalid" (get-in (result proc) [:result :status])))
     (is (re-find #"artifact" (get-in (result proc) [:result :reason])))
-    (is (not-any? #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))
+    (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))
     ;; Publication is immutable, so re-collecting must repeat the outcome, not throw.
     (let [again (call! env "task" "collect" task)]
       (is (zero? (:exit again)) (:err again))
@@ -1147,11 +1142,9 @@
     (fs/create-dirs (fs/parent path))
     (spit (str path) value)))
 (defn- agent-list-count [log]
-  (count (filter #(and (= ["agent" "list"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
-;; `--help` must be excluded explicitly: `pane close --help` is an unconditional preflight
-;; probe sharing this call log, and a two-token prefix match would silently swallow it.
+  (count (filter #(= ["agent" "list"] (vec (take 2 %))) (calls log))))
 (defn- closed-panes [log]
-  (set (keep #(when (and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (nth % 2 nil))
+  (set (keep #(when (= ["pane" "close"] (vec (take 2 %))) (nth % 2 nil))
              (calls log))))
 
 ;; --- `prune` --------------------------------------------------------------------
@@ -1585,7 +1578,7 @@
 ;; per-child `settle-to` marker is what avoids `agent wait`'s original publish side effect
 ;; on an already-published child.
 (defn- child-waits [log child]
-  (filterv #(and (= ["agent" "wait" child] (vec (take 3 %))) (not (some #{"--help"} %))) (calls log)))
+  (filterv #(= ["agent" "wait" child] (vec (take 3 %))) (calls log)))
 ;; A local reader: the shared `flag-value` helper is defined further down this file.
 (defn- argv-flag [argv flag] (second (drop-while #(not= flag %) argv)))
 
@@ -1806,10 +1799,8 @@
   (merge env {"HERDR_ORCH_CHILD" (:child entry) "HERDR_ORCH_TASK" (:task entry)
               "HERDR_ORCH_RESULT" (:result entry) "HERDR_ORCH_WAITING_POLICY" policy
               "HERDR_PANE_ID" (:pane-id entry)}))
-;; `--help` must be excluded explicitly (as in `closed-panes`): preflight probes
-;; `agent prompt/get/wait --help` on every spawn and shares this call log.
 (defn- parent-calls [log command]
-  (filterv #(and (= (conj command "w:p") (vec (take 3 %))) (not (some #{"--help"} %))) (calls log)))
+  (filterv #(= (conj command "w:p") (vec (take 3 %))) (calls log)))
 (defn- parent-prompts [log] (parent-calls log ["agent" "prompt"]))
 (defn- parent-waits [log] (parent-calls log ["agent" "wait"]))
 (defn- parent-gets [log] (parent-calls log ["agent" "get"]))
@@ -1844,7 +1835,7 @@
       (is (= 2 (count (parent-gets log))) status)
       (is (empty? (parent-waits log)) status)
       ;; The operator toast is retained alongside the push.
-      (is (some #(and (= ["notification" "show"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)) status))))
+      (is (some #(= ["notification" "show"] (vec (take 2 %))) (calls log)) status))))
 
 ;; Under `blocking` the parent is already in its own wait loop: no probe, no push at all.
 (deftest blocking-publish-never-probes-or-pushes-to-the-parent
@@ -2274,7 +2265,7 @@
   {"canonical-worker" "---\nname: canonical-worker\ndescription: fixture canonical-id persona\nkind: pi\nmodel: claude-opus-5\n---\nFixture canonical worker.\n"
    "kindless-worker" "---\nname: kindless-worker\ndescription: fixture kindless canonical-id persona\nmodel: claude-opus-5\n---\nFixture kindless worker.\n"})
 (defn- start-native-args [log]
-  (first (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+  (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))
 (defn- flag-value [argv flag] (second (drop-while #(not= flag %) argv)))
 
 ;; Acceptance: a definition model survives a kind override instead of being dropped (the

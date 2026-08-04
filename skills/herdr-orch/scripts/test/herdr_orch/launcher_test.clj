@@ -22,7 +22,7 @@
 (defn- calls [log] (if (fs/exists? log) (mapv #(str/split % #"\037") (str/split-lines (slurp log))) []))
 (defn- flag-value [argv flag] (second (drop-while #(not= flag %) argv)))
 (defn- split-argv [log]
-  (first (filter #(and (= ["pane" "split"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
+  (first (filter #(= ["pane" "split"] (vec (take 2 %))) (calls log))))
 (defn- injected [env-file]
   (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file)))))
 

@@ -2089,3 +2089,35 @@ Outcome: the settle wait now lives in maybe-close! (cli.clj), so run, collect <u
 - Must not: wait before the capture.
 - Must not: let a wait or close failure demote a captured result.
 - Must not: use wait-settled! (its --until idle|done burns the budget on a blocked child).
+
+** DONE Drop herdr-orch per-spawn --help capability probes
+CLOSED: [2026-08-04 Tue 20:33]
+:PROPERTIES:
+:CUSTOM_ID: 0dab4494-46ee-4aba-8f82-cc88aa9753e0
+:CREATED: [2026-08-04 Tue 20:30]
+:STARTED: [2026-08-04 Tue 20:30]
+:ARCHIVED: [2026-08-04 Tue 20:33]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-04 Tue 20:30]
+- State "STARTED" from "TODO" [2026-08-04 Tue 20:30]
+- State "DONE" from "STARTED" [2026-08-04 Tue 20:33]
+:END:
+Every `oh task run`/`start`/`--print-prompt` runs `herdr --version` plus 12 `herdr <cmd> --help` subprocesses (`required-capabilities` in `scripts/src/herdr_orch/herdr.clj`), substring-grepping help text to prove flags that all shipped in Herdr 0.7.5 -- the same `minimum-version` the preflight already enforces. On any binary passing the version gate these probes can only fail if the binary misreports its own version.
+
+Design (inline, agreed -- no change-record):
+- Reduce `preflight!` to the `HERDR_ENV` check plus the existing version gate; delete `required-capabilities` and `command-help`.
+- Do NOT map CLI flags onto `herdr api schema`: the schema describes the socket protocol, so that would add machinery rather than remove it. The version gate already produces the actionable pre-mutation error the probes were defending.
+- Simplify the fake-herdr fixture accordingly (its per-command help emulation exists only for these probes), and update contract.md § Preconditions plus the README known-regression note that pairs `required-capabilities` with the fixture help output.
+
+Acceptance criteria:
+- [ ] A spawn issues exactly one `herdr` preflight subprocess (the version check), down from 13.
+- [ ] An under-minimum Herdr still fails before any pane or ledger mutation, with a message naming the required version.
+- [ ] `required-capabilities` and `command-help` no longer exist in `herdr.clj`.
+- [ ] `bb test` passes with the fixture help-shape emulation removed.
+- [ ] contract.md § Preconditions and README.org no longer describe per-command capability probing.
+- Must not: change spawn, capture, closure, or ledger behaviour.
+- Must not: add a socket-protocol capability check in place of the probes.
+
+Source: design review against upstream docs (herdr 0.7.5, protocol 18); report at `.tmp/orch-upstream-review/report.md`.

@@ -2,19 +2,6 @@
 set -euo pipefail
 printf '%s\037' "$@" >>"${FAKE_HERDR_LOG:?}"
 printf '\n' >>"$FAKE_HERDR_LOG"
-help() {
-  local command="herdr $1 $2" flags=""
-  case "$1 $2" in
-    'pane layout') flags='--pane' ;;
-    'pane split') flags='--pane --direction --cwd --env KEY=VALUE --no-focus' ;;
-    'tab create') flags='--workspace --cwd --label --env KEY=VALUE --no-focus' ;;
-    'agent start') flags='--kind --pane' ;;
-    'agent wait') flags='--timeout --until' ;;
-    'notification show') flags='--body' ;;
-  esac
-  if [ "${FAKE_MISSING_CAPABILITY:-}" = "$1-$2" ]; then flags='' ; fi
-  printf '%s %s\n' "$command" "$flags"
-}
 # FAKE_SESSION_FROM names the single hook that reports `agent_session`
 # (start|get|wait|late-get|none); `late-get` withholds it from the first child
 # `agent get` so a later hook has to backfill it.
@@ -153,7 +140,6 @@ publish_queue_step() {
 case "${1:-}" in
   --version) echo "herdr ${FAKE_HERDR_VERSION:-0.7.5}" ;;
   pane)
-    if [ "${3:-}" = --help ]; then help pane "$2"; exit 0; fi
     case "$2" in
       layout) echo '{"result":{"layout":{"area":{"width":113,"height":110},"focused_pane_id":"other","panes":[{"pane_id":"w:other","rect":{"width":200,"height":50}},{"pane_id":"w:p","rect":{"width":113,"height":55}}]}}}' ;;
       get) printf '{"result":{"pane":{"pane_id":"w:p","label":"%s"}}}\n' "${FAKE_PARENT_LABEL:-planner-1-model}" ;;
@@ -164,12 +150,10 @@ case "${1:-}" in
         echo '{"result":{}}' ;;
     esac ;;
   tab)
-    if [ "${3:-}" = --help ]; then help tab "$2"; exit 0; fi
     case "$2" in
       create) shift 2; pane="$(capture_env "$@")"; printf '{"result":{"root_pane":{"pane_id":"%s"},"tab":{"tab_id":"%s"}}}\n' "$pane" "${pane/child/tab}" ;;
     esac ;;
   agent)
-    if [ "${3:-}" = --help ]; then help agent "$2"; exit 0; fi
     case "$2" in
       get)
         if [ -n "${FAKE_FAIL_AGENT_GET:-}" ] && [ "${3:-}" = "$FAKE_FAIL_AGENT_GET" ]; then echo '{"error":"agent get"}' >&2; exit 1; fi
@@ -312,5 +296,5 @@ case "${1:-}" in
         *) printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
       esac ;;
     esac ;;
-  notification) if [ "${3:-}" = --help ]; then help notification "$2"; else [ "${FAKE_NOTIFY_FAIL:-}" = 1 ] && { echo '{"error":"notify"}' >&2; exit 1; }; echo '{"result":{}}'; fi ;;
+  notification) [ "${FAKE_NOTIFY_FAIL:-}" = 1 ] && { echo '{"error":"notify"}' >&2; exit 1; }; echo '{"result":{}}' ;;
 esac

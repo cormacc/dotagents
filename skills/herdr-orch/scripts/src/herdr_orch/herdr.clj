@@ -17,15 +17,6 @@
     ["agent" "list"] ["agent" "get"] ["agent" "start"] ["agent" "prompt"]
     ["agent" "wait"] ["agent" "read"] ["agent" "send-keys"] ["agent" "focus"]
     ["agent" "rename"]})
-(def required-capabilities
-  [[ ["pane" "layout"] ["--pane"]]
-   [ ["pane" "split"] ["--pane" "--direction" "--cwd" "--env" "--no-focus"]]
-   [ ["tab" "create"] ["--workspace" "--cwd" "--label" "--env" "--no-focus"]]
-   [ ["pane" "rename"] []] [["pane" "get"] []] [["pane" "close"] []]
-   [ ["agent" "start"] ["--kind" "--pane"]] [["agent" "prompt"] []]
-   [ ["agent" "wait"] ["--timeout" "--until"]] [["agent" "get"] []] [["agent" "list"] []]
-   [ ["notification" "show"] ["--body"]]])
-
 (def max-output-lines 2000)
 (def max-output-bytes (* 50 1024))
 
@@ -67,17 +58,17 @@
         found (some->> (re-find #"(\d+)\.(\d+)\.(\d+)" out) rest (mapv #(Long/parseLong %)))]
     (if (and (zero? exit) found) found (throw (ex-info "unable to determine Herdr version" {:exit exit :stderr err})))))
 (defn at-least? [actual expected] (not (neg? (compare actual expected))))
-(defn command-help [command]
-  (let [{:keys [exit out err]} @(process/process (into ["herdr"] (conj command "--help")) {:out :string :err :string})]
-    (if (#{0 2} exit) (str out err) (throw (ex-info "unable to inspect Herdr capability" {:command command :stderr err})))))
+;; The version gate is the whole capability check. Every command and flag the CLI uses
+;; shipped in `minimum-version`, so per-command `--help` probing (12 extra subprocesses on
+;; every spawn, matched by substring against help text) could only have caught a binary
+;; that misreports its own version -- while costing a probe table, a help parser, and a
+;; help-shape emulation the test fixture had to keep in sync. A socket-protocol check via
+;; `herdr api schema` was rejected as a replacement: it describes the socket API, not CLI
+;; flags, so mapping one onto the other would add machinery rather than remove it.
 (defn preflight! []
   (when-not (= "1" (System/getenv "HERDR_ENV")) (throw (ex-info "oh requires HERDR_ENV=1; run inside a Herdr pane" {:kind :environment})))
   (let [actual (version)]
     (when-not (at-least? actual minimum-version) (throw (ex-info "Herdr 0.7.5 or newer is required" {:actual actual :minimum minimum-version}))))
-  (doseq [[command flags] required-capabilities]
-    (let [text (command-help command) prefix (str "herdr " (str/join " " command))]
-      (when-not (str/includes? text prefix) (throw (ex-info "installed Herdr lacks required command" {:command command})))
-      (doseq [flag flags] (when-not (str/includes? text flag) (throw (ex-info "installed Herdr lacks required flag" {:command command :flag flag}))))))
   true)
 (defn- env-args [env] (mapcat (fn [[k v]] ["--env" (str k "=" v)]) env))
 (defn caller-rect! []
