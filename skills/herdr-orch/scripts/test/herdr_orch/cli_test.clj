@@ -69,7 +69,7 @@
                    "CLJ_CACHE" @shared-clj-cache "CLJ_CONFIG" @shared-clj-cache
                    ;; Fast-by-default retry backoff: keeps the two `agent-start-retr*` tests
                    ;; under 500ms without changing the unconfigured production default (500).
-                   "SUBAGENT_START_RETRY_BACKOFF_MS" "10"}
+                   "ORCH_START_RETRY_BACKOFF_MS" "10"}
                   overrides)})))
 
 (def advisor-strategy-roster
@@ -735,7 +735,7 @@
       (is (= "path" (get-in entry [:child-session :kind])))
       (is (= "/tmp/fake-child-session.jsonl" (get-in entry [:child-session :value])))))
   (testing "a wait outcome backfills without adding a Herdr call to the loop"
-    (let [{:keys [env dir log]} (fake-env {"FAKE_SESSION_FROM" "wait" "FAKE_WAIT" "idle-then-publish" "FAKE_WAIT_PUBLISH_AFTER" "3" "SUBAGENT_POLL_INTERVAL_MS" "20"})
+    (let [{:keys [env dir log]} (fake-env {"FAKE_SESSION_FROM" "wait" "FAKE_WAIT" "idle-then-publish" "FAKE_WAIT_PUBLISH_AFTER" "3" "ORCH_POLL_INTERVAL_MS" "20"})
           proc (call! env "task" "run" "worker" "--task" "session from wait" "--timeout" "5000")
           entry (ledger-entry dir (get-in (result proc) [:result :task]))]
       (is (= "COMPLETE" (get-in (result proc) [:result :status])))
@@ -763,7 +763,7 @@
       (is (= "/tmp/fake-child-session.jsonl" (get-in (ledger-entry dir task) [:child-session :value])))
       (is (not-any? #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
   (testing "a child that never publishes still carries its session"
-    (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "start" "FAKE_WAIT" "idle-forever" "SUBAGENT_POLL_INTERVAL_MS" "50"})
+    (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "start" "FAKE_WAIT" "idle-forever" "ORCH_POLL_INTERVAL_MS" "50"})
           proc (call! env "task" "run" "worker" "--task" "never publishes" "--timeout" "200")
           entry (ledger-entry dir (get-in (result proc) [:result :task]))]
       (is (= "pending" (get-in (result proc) [:result :status])))
@@ -855,7 +855,7 @@
 ;; publishes on a fixed call count, so this test proves capture/parity only — the
 ;; interval-derived bound lives in `bounded-poll-timeout-without-result`.
 (deftest bounded-poll-eventual-publication
-  (let [{:keys [env log]} (fake-env {"FAKE_WAIT" "idle-then-publish" "FAKE_WAIT_PUBLISH_AFTER" "3" "SUBAGENT_POLL_INTERVAL_MS" "50"})
+  (let [{:keys [env log]} (fake-env {"FAKE_WAIT" "idle-then-publish" "FAKE_WAIT_PUBLISH_AFTER" "3" "ORCH_POLL_INTERVAL_MS" "50"})
         proc (call! env "task" "run" "worker" "--task" "idle then publish" "--timeout" "5000")]
     (is (zero? (:exit proc)))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
@@ -866,7 +866,7 @@
 ;; this budget). The bound is well under half that, and above the sleep-derived ceiling
 ;; of 400/50 + 1 = 9.
 (deftest bounded-poll-timeout-without-result
-  (let [{:keys [env log]} (fake-env {"FAKE_WAIT" "idle-forever" "SUBAGENT_POLL_INTERVAL_MS" "50"})
+  (let [{:keys [env log]} (fake-env {"FAKE_WAIT" "idle-forever" "ORCH_POLL_INTERVAL_MS" "50"})
         proc (call! env "task" "run" "worker" "--task" "never publishes" "--timeout" "400")]
     (is (zero? (:exit proc)))
     (is (= "pending" (get-in (result proc) [:result :status])))
@@ -874,7 +874,7 @@
     (is (<= (wait-call-count log) 14))))
 
 (deftest bounded-poll-covers-collect-wait
-  (let [{:keys [env log]} (fake-env {"FAKE_WAIT" "idle-then-publish" "FAKE_WAIT_PUBLISH_AFTER" "2" "SUBAGENT_POLL_INTERVAL_MS" "50"})
+  (let [{:keys [env log]} (fake-env {"FAKE_WAIT" "idle-then-publish" "FAKE_WAIT_PUBLISH_AFTER" "2" "ORCH_POLL_INTERVAL_MS" "50"})
         start (call! env "task" "start" "worker" "--task" "later") task (get-in (result start) [:result :task])
         proc (call! env "task" "collect" task "--wait" "--timeout" "5000")]
     (is (zero? (:exit proc)))
@@ -882,7 +882,7 @@
     (is (<= 3 (wait-call-count log)))))
 
 (deftest a-negative-poll-interval-never-escapes
-  (let [{:keys [env]} (fake-env {"FAKE_WAIT" "idle-forever" "SUBAGENT_POLL_INTERVAL_MS" "-5"})
+  (let [{:keys [env]} (fake-env {"FAKE_WAIT" "idle-forever" "ORCH_POLL_INTERVAL_MS" "-5"})
         proc (call! env "task" "run" "worker" "--task" "negative interval" "--timeout" "200")]
     (is (zero? (:exit proc)))
     (is (= "pending" (get-in (result proc) [:result :status])))))
@@ -1410,7 +1410,7 @@
 ;; would otherwise classify it away.
 (deftest collect-any-never-discards-a-result-published-inside-the-liveness-window
   (testing "a vanished-and-publishing child is captured, not reported no-live-children"
-    (let [{:keys [env dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+    (let [{:keys [env dir state]} (fake-env {"ORCH_POLL_INTERVAL_MS" "50"})
           a (start-child! env dir "races the liveness scan")]
       (child-state! state a "gone" "")
       (spit (str (fs/path state "publish-queue")) (str (:child a) "\n"))
@@ -1419,7 +1419,7 @@
         (is (= (:task a) (:task res)))
         (is (= 0 (:remaining res))))))
   (testing "a blocked sibling does not short-circuit past a racing publication either"
-    (let [{:keys [env log dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+    (let [{:keys [env log dir state]} (fake-env {"ORCH_POLL_INTERVAL_MS" "50"})
           a (start-child! env dir "blocked sibling")
           b (start-child! env dir "races the liveness scan")]
       (child-state! state a "status" "blocked")
@@ -1436,7 +1436,7 @@
 ;; started agents, so an unidentifiable entry must count as vanished rather than keeping an
 ;; exited child "live" forever and making `no-live-children` unreachable.
 (deftest collect-any-treats-a-nameless-listing-entry-as-vanished
-  (let [{:keys [env dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+  (let [{:keys [env dir state]} (fake-env {"ORCH_POLL_INTERVAL_MS" "50"})
         a (start-child! env dir "nameless listing entry")]
     (child-state! state a "nameless" "")
     (let [began (System/currentTimeMillis)
@@ -1449,7 +1449,7 @@
 ;; exit-0 listing with no `agents` key is indistinguishable from schema drift, and an
 ;; `(into {} … nil)` would hand the short-circuit a truthy empty index.
 (deftest collect-any-degrades-to-polling-when-the-listing-payload-is-unusable
-  (let [{:keys [env dir]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50" "FAKE_AGENT_LIST_NO_AGENTS_KEY" "1"})]
+  (let [{:keys [env dir]} (fake-env {"ORCH_POLL_INTERVAL_MS" "50" "FAKE_AGENT_LIST_NO_AGENTS_KEY" "1"})]
     (start-child! env dir "unusable listing")
     (let [res (:result (result (call! env "task" "collect" "--any" "--wait" "--timeout" "300")))]
       (is (= "pending" (:status res)))
@@ -1500,7 +1500,7 @@
 ;; `agent list` per tick, and never a sleep that overshoots the total timeout.
 (deftest collect-any-timeout-honours-the-poll-interval
   (testing "a spent budget reports pending/timeout after a bounded number of polls"
-    (let [{:keys [env log dir]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})]
+    (let [{:keys [env log dir]} (fake-env {"ORCH_POLL_INTERVAL_MS" "50"})]
       (start-child! env dir "never publishes a")
       (start-child! env dir "never publishes b")
       (let [before (agent-list-count log)
@@ -1514,7 +1514,7 @@
         (is (<= 2 polls 14) (str "polls=" polls)))))
   (testing "a poll interval longer than the remaining budget never overshoots it"
     ;; A full 5 s sleep would dominate the wall time; `min(interval, remaining)` cannot.
-    (let [{:keys [env dir]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "5000"})]
+    (let [{:keys [env dir]} (fake-env {"ORCH_POLL_INTERVAL_MS" "5000"})]
       (start-child! env dir "long interval child")
       (let [began (System/currentTimeMillis)
             proc (call! env "task" "collect" "--any" "--wait" "--timeout" "200")
@@ -1526,7 +1526,7 @@
 ;; All candidates blocked short-circuits instead of consuming the budget, and never
 ;; closes a pane (a blocked child is resumable in its retained pane).
 (deftest collect-any-all-blocked-candidates-short-circuit
-  (let [{:keys [env log dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+  (let [{:keys [env log dir state]} (fake-env {"ORCH_POLL_INTERVAL_MS" "50"})
         a (start-child! env dir "blocked a")
         b (start-child! env dir "blocked b")]
     (doseq [entry [a b]] (child-state! state entry "status" "blocked"))
@@ -1545,7 +1545,7 @@
 ;; A single unblocked sibling is enough to keep polling: the short-circuit is
 ;; "every live candidate", never "any".
 (deftest collect-any-one-unblocked-sibling-defeats-the-blocked-short-circuit
-  (let [{:keys [env dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+  (let [{:keys [env dir state]} (fake-env {"ORCH_POLL_INTERVAL_MS" "50"})
         a (start-child! env dir "blocked sibling")
         b (start-child! env dir "working sibling")]
     (child-state! state a "status" "blocked")
@@ -1561,7 +1561,7 @@
 
 ;; Every candidate's agent has vanished: `agent get`/`agent list` no longer know it.
 (deftest collect-any-all-vanished-children-report-no-live-children
-  (let [{:keys [env log dir state]} (fake-env {"SUBAGENT_POLL_INTERVAL_MS" "50"})
+  (let [{:keys [env log dir state]} (fake-env {"ORCH_POLL_INTERVAL_MS" "50"})
         a (start-child! env dir "vanished a")
         b (start-child! env dir "vanished b")]
     (doseq [entry [a b]] (child-state! state entry "gone" ""))

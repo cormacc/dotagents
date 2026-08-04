@@ -15,7 +15,7 @@
   Pool size defaults to `(.availableProcessors (Runtime/getRuntime))` and is
   overridable via `OT_TEST_PARALLELISM` (unset/blank/unparseable/non-positive
   all fall back to the default, same discipline as herdr-orch' env-seam
-  parsers, e.g. `SUBAGENT_POLL_INTERVAL_MS`).
+  parsers, e.g. `ORCH_POLL_INTERVAL_MS`).
 
   Any test mutating in-process state (with-redefs, shared atoms/refs outside
   its own isolated counters, global env/fs fixtures not itself

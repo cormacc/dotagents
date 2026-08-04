@@ -213,7 +213,7 @@
 (defn parse-start-retry-backoff [raw]
   (let [n (some-> raw str/trim not-empty parse-long)]
     (if (and n (pos? n)) n default-start-retry-backoff-ms)))
-(defn start-retry-backoff-ms [] (parse-start-retry-backoff (System/getenv "SUBAGENT_START_RETRY_BACKOFF_MS")))
+(defn start-retry-backoff-ms [] (parse-start-retry-backoff (System/getenv "ORCH_START_RETRY_BACKOFF_MS")))
 (defn start! [name kind pane native-args]
   (let [argv (into ["agent" "start" name "--kind" kind "--pane" pane] (when (seq native-args) (into ["--"] native-args)))]
     (loop [attempt 1]

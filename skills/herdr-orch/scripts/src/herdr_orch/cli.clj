@@ -16,7 +16,7 @@
 (defn parse-poll-interval [raw]
   (let [n (some-> raw str/trim not-empty parse-long)]
     (if (and n (pos? n)) n 1000)))
-(defn poll-interval-ms [] (parse-poll-interval (System/getenv "SUBAGENT_POLL_INTERVAL_MS")))
+(defn poll-interval-ms [] (parse-poll-interval (System/getenv "ORCH_POLL_INTERVAL_MS")))
 ;; Bounds the settle wait before the advisory parent push only; same non-positive/
 ;; unparseable discipline as parse-poll-interval.
 (def default-notify-timeout-ms 30000)
