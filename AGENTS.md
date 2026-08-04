@@ -25,12 +25,17 @@
 - Single-quote shell search patterns containing backticks or `$` (common with markdown-derived text); double quotes invite command substitution.
 - Prefer available structured read/edit tools over ad-hoc scripts for routine file inspection and modification.
 - When scripting is necessary, prefer Babashka to Python for repository-local automation. Use Python when invoking an existing Python tool or when its ecosystem is materially better suited.
-- For scripted transformations, write a candidate under `<repository-root>/.agents/tmp/`, inspect its diff, and only then replace the source; do not perform unverified in-place rewrites.
+- For scripted transformations, write a candidate under `<repository-root>/.tmp/`, inspect its diff, and only then replace the source; do not perform unverified in-place rewrites.
 - A human may be editing the same file. Before replacing one wholesale, check for a live editor lock (an Emacs `.#<basename>` sibling naming a running PID) and prefer targeted edits, which fail loudly on stale text instead of silently discarding unsaved work. Re-read immediately before editing any file the user has touched this session.
-- Redirect long-running or expensive command output to a file under `<repository-root>/.agents/tmp/` and read slices from it. Piping through `head`/`tail` discards the rest and often forces a costly re-run.
+- Redirect long-running or expensive command output to a file under `<repository-root>/.tmp/` and read slices from it. Piping through `head`/`tail` discards the rest and often forces a costly re-run.
 - Do not author unicode dashes in prose. Write `--` (org converts it on export) or use an org descriptive list `- Term :: detail`; literal em-dashes have been emitted as `\uXXXX` escapes and committed as mojibake. Where a format makes one significant syntax -- the herdr-orch `ARTIFACTS` item splits on a literal ` — ` -- leave it alone.
 
 # Temporary files
 Resolve the repository root with `git rev-parse --show-toplevel`, then use
-`<repository-root>/.agents/tmp/` for scripts, data, experiments, testing, and other
+`<repository-root>/.tmp/` for scripts, data, experiments, testing, and other
 ad-hoc work. Do not assume `$PROJECT_ROOT` is defined.
+
+Never put transient state under `.agents/`: that tree is durable agent configuration,
+and some harnesses (codex under `--sandbox workspace-write`) deliberately mount it
+read-only so an agent cannot rewrite its own instructions mid-task. A scratch or result
+path inside it fails to write for those children.

@@ -1,4 +1,4 @@
-# `subagent` contract
+# `oh` contract
 
 ## Preconditions
 
@@ -24,9 +24,9 @@ Failures use `{ "ok": false, "schema": "herdr-orch/v1", "error": {"message": "..
 
 `status` without a task and `list` return a JSON **array** of ledger entries under `result`; every other command returns an object.
 
-A result that is published but fails validation (identity mismatch, malformed envelope, missing or relative artifact path) is recorded as the non-final status `invalid`, with the reason on the ledger entry and in `result.reason`. `invalid` is terminal for the child (publication is immutable and cannot be retried) and needs manual intervention; the pane is retained and re-collecting returns the same outcome instead of failing.
+A result that is published but fails validation (identity mismatch, malformed envelope, missing or relative artifact path) is recorded as the non-final status `invalid`, with the reason on the ledger entry and in `result.reason`. For a result written by `task publish` this is terminal: publication is one-shot and immutable, so the file can never become valid, and the pane is retained pending manual intervention. Collection is not memoised, though -- `capture!` re-reads and re-validates the file on every call -- so a child that wrote non-envelope content *directly* to its `RESULT` path mid-flight can still be captured validly later, which is why SKILL.md tells a parent to check the child's lifecycle state before treating `invalid` as final.
 
-`run` uses a ten-minute total wait budget unless `--timeout` overrides it. Timeout, no result, and blocked outcomes are non-final and retain the child pane. `collect` polls once unless `--wait --timeout` is supplied.
+`run` uses a ten-minute total wait budget unless `--timeout` overrides it. Timeout, no result, and blocked outcomes are non-final and retain the child pane. `collect` polls once unless `--wait` is supplied, which waits with the same ten-minute default that `--timeout` overrides.
 
 When a wait outcome settles (idle/done) without a valid result file, the loop sleeps `min(SUBAGENT_POLL_INTERVAL_MS, remaining-budget)` before polling again instead of re-invoking `agent wait` immediately; default interval is 1000 ms. This applies identically to `run` and `collect --wait` (both dispatch through the same wait loop) and never overshoots the total timeout by a full interval. `collect --any` uses the same sleep discipline and the same budget default, but polls result files directly instead of blocking in `agent wait` (see § Fan-in).
 
@@ -36,6 +36,7 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 |---|---|---|
 | `ORCH_ASSIGNMENT_ROOT` | parent | Overrides the `git rev-parse --show-toplevel` probe behind the assignment root. It relocates the ledger, index markers, `RESULT` paths, project config lookup (`<root>/.agents/subagents/`), **and** the project `config.edn` model-table/defaults override (`<root>/.agents/subagents/config.edn`) together, because all five are per-project notions; the default `config.edn` resolves from the installed skill/launcher location instead, never from the assignment root. A blank value is ignored, a relative value is absolutised so `RESULT` stays absolute, and a value that is not an existing directory is rejected. When set, it is injected into the child pane so nested delegation stays in the same root. |
 | `ORCH_LIVE_SMOKE`, `ORCH_LIVE_SMOKE_MODEL` | `bb smoke-subagent` | Guards the live smoke, which also needs `HERDR_ENV=1`. Never CI work. |
+| `ORCH_LIVE_SMOKE_KIND` | `bb smoke-subagent` | Optional harness override for the live smoke; unset means the default kind, `claude` exercises Claude. |
 | `SUBAGENT_POLL_INTERVAL_MS` | parent | Sleep between settled-without-result wait iterations, and between `collect --any` poll ticks. Unset, blank, unparseable, zero, and negative values all fall back to 1000 ms. |
 | `ORCH_SETTLE_CLOSE_MS` | parent | Budget for the single `agent wait` a `collect --any` capture makes on the captured child before its one-shot pane close (see § Fan-in). Unset, blank, unparseable, zero, and negative values all fall back to 45000 ms -- same discipline as `SUBAGENT_POLL_INTERVAL_MS`. |
 | `ORCH_PROGRESS_INTERVAL_MS` | child | Minimum interval between `progress --summary` snapshots that actually rewrite the ledger's `:progress` (see § Progress). Unset, blank, unparseable, zero, and negative values all fall back to 60000 ms -- same discipline as `SUBAGENT_POLL_INTERVAL_MS`. |
@@ -45,7 +46,7 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 | `HERDR_ORCH_RESULT` | child | Exact absolute result path to publish. |
 | `HERDR_ORCH_BIN` | child | Absolute launcher path for `publish`. |
 | `HERDR_ORCH_WAITING_POLICY` | child | `blocking` or `non-blocking`; the latter makes a successful publish emit an operator notification **and** attempt one advisory parent push (§ Parent push). |
-| `HERDR_ORCH_PERSONA` | child | The child's own persona. When set it marks the CLI's own spawns as below-root: nested labels compose from it and spawn enforcement reads `HERDR_ORCH_SPAWNS` (see § Spawn gating). An agent started outside `subagent` has neither unless the variable is set. |
+| `HERDR_ORCH_PERSONA` | child | The child's own persona. When set it marks the CLI's own spawns as below-root: nested labels compose from it and spawn enforcement reads `HERDR_ORCH_SPAWNS` (see § Spawn gating). An agent started outside `oh` has neither unless the variable is set. |
 | `HERDR_ORCH_SPAWNS` | child | Space-joined spawn allow-list resolved by the parent (see § Spawn gating). Blank and unset both mean leaf; a below-root spawn always injects an empty value. |
 
 ## Persona discovery
@@ -76,7 +77,7 @@ Config is loaded and schema-validated (parse errors and shape/type errors alike)
 
 ## Ledger and completion
 
-The CLI stores one JSON ledger entry per task under `<assignment-root>/.agents/tmp/herdr-orch/ledger/`; index marker files provide lock-free, parent-session/per-persona monotonic allocation. The child receives `HERDR_ORCH_CHILD`, `_TASK`, `_RESULT`, `_BIN`, `_WAITING_POLICY`, `_PERSONA`, and `_SPAWNS` (plus `ORCH_ASSIGNMENT_ROOT` when overridden) through repeatable `--env` flags on the placement command (`pane split`, or `tab create` under `--tab`). `collect`, `status`, and `prune` all resolve their assignment argument as this exact ledger key: unlike `ot`'s `:CUSTOM_ID:` prefix matching, no partial or truncated id is ever resolved, and a shortened value fails with `unknown assignment task`. The ledger task id is a fresh `java.util.UUID/randomUUID`, an identifier space unrelated to any org `:CUSTOM_ID:`.
+The CLI stores one JSON ledger entry per task under `<assignment-root>/.tmp/herdr-orch/ledger/`; index marker files provide lock-free, parent-session/per-persona monotonic allocation. The child receives `HERDR_ORCH_CHILD`, `_TASK`, `_RESULT`, `_BIN`, `_WAITING_POLICY`, `_PERSONA`, and `_SPAWNS` (plus `ORCH_ASSIGNMENT_ROOT` when overridden) through repeatable `--env` flags on the placement command (`pane split`, or `tab create` under `--tab`). `collect`, `status`, and `prune` all resolve their assignment argument as this exact ledger key: unlike `ot`'s `:CUSTOM_ID:` prefix matching, no partial or truncated id is ever resolved, and a shortened value fails with `unknown assignment task`. The ledger task id is a fresh `java.util.UUID/randomUUID`, an identifier space unrelated to any org `:CUSTOM_ID:`.
 
 The exact `RESULT` file is the only completion signal. It must be atomically published once from a sibling temporary file using `Files.createLink(result, temp)` then unlinking `temp`; a pre-existing result is an error and is never overwritten. `publish` itself rejects a relative artifact path (from `--artifact` or `--from-file`, unmodified) before that write, so the one-shot file is never created for a mistake the child could still fix in-session; `collect`'s identical check (`core/artifact-path`) remains the backstop against any other route to a ledger entry. Artifacts named by the result must exist before collection captures it -- publish time checks only the path shape, never existence.
 

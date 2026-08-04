@@ -73,6 +73,6 @@ If REPL eval, namespace load, or a test fails:
 
 After a large multi-line replacement via a tool that does its own text escaping, run a cheap compile-check (`bb -e '(require (quote project.ns) :reload)'` or equivalent) immediately, before the full test suite -- an extra layer of string-escaping can produce a syntactically balanced but semantically bogus top-level form that a delimiter check alone won't catch.
 
-Keep `bb -e` to a single short form. Multi-line code carrying `$`, regexes, or nested quotes misevaluates silently inside a shell heredoc; write it to `.agents/tmp/*.clj` and run `bb <file>` instead.
+Keep `bb -e` to a single short form. Multi-line code carrying `$`, regexes, or nested quotes misevaluates silently inside a shell heredoc; write it to `.tmp/*.clj` and run `bb <file>` instead.
 
 For unbalanced-delimiter / EOF errors, run `clj-paren-repair` (file) or `clojure_paren_repair` (string) instead of editing by hand.

@@ -3,8 +3,8 @@ set -euo pipefail
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
-mkdir -p "$root/.agents/tmp"
-work="$(mktemp -d "$root/.agents/tmp/check.XXXXXX")"
+mkdir -p "$root/.tmp"
+work="$(mktemp -d "$root/.tmp/check.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 
 printf '==> reproducible Node installs\n'

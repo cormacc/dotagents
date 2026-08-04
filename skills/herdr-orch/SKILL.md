@@ -1,6 +1,6 @@
 ---
 name: herdr-orch
-description: "Orchestrate Herdr terminals and subagents with the in-skill `oh` CLI: delegate work (spawn, fan out, or run a scout/researcher/planner/reviewer/worker/advisor) and control panes, tabs and workspaces (split, run a command, read output, wait, close). Requires HERDR_ENV=1."
+description: "Orchestrate Herdr terminals and subagents with the in-skill `oh` CLI: delegate work (spawn, fan out, or run a persona such as scout/researcher/planner/reviewer/worker/advisor/visual-tester) and control panes, tabs and workspaces (split, run a command, read output, wait, close). Requires HERDR_ENV=1."
 ---
 
 # Herdr subagents
@@ -14,7 +14,9 @@ OH="$HOME/.agents/skills/herdr-orch/scripts/oh"
 "$OH" task collect <full-task-uuid> --wait --timeout 600000
 ```
 
-The CLI wraps opaque `--task`, `--task-file`, or stdin text with the persona, delegation, identity, publication, and optional retro instructions. `collect`, `status`, and `prune` require the complete UUID that `run`/`start` emitted; unlike `ot`'s `:CUSTOM_ID:` prefix matching, no prefix is ever resolved. Use `--prompt-extra` for exceptional constraints and `--print-prompt` to inspect the result; do not reconstruct a raw prompt or result envelope during normal operation.
+The CLI wraps opaque `--task`, `--task-file`, or stdin text with the persona, delegation, identity, publication, and optional retro instructions. `collect`, `status`, and `prune` require the complete UUID that `run`/`start` emitted -- no prefix is ever resolved. Use `--prompt-extra` for exceptional constraints and `--print-prompt` to inspect the result; do not reconstruct a raw prompt or result envelope during normal operation.
+
+`oh` also mirrors the raw Herdr `pane`, `tab`, `ws`, and `agent` verbs, plus `oh spawn "<shell command>"` for an ordinary command in a new unfocused tab, each returning the same JSON envelope; run `oh --help` for the verb list. The upstream Herdr safety rules apply to those exactly as they do to direct `herdr` use.
 
 An assignment never silently contradicts its persona's declared interaction model: a persona defined to work interactively (for example `planner`) keeps asking the user in its own pane. Question routing is an explicit choice the assignment states -- resolve interactively in-pane, or park questions for the parent -- and is independent of the parent's waiting policy, since every pane is interactive regardless of whether the parent blocks.
 
@@ -22,18 +24,9 @@ An assignment never silently contradicts its persona's declared interaction mode
 
 Definitions are `<name>.md` files discovered in descending precedence: `<git-root>/.agents/subagents/` (project override), then `~/.agents/subagents/` (home override), then the installed skill's `skills/herdr-orch/subagents/` (packaged default). The project copy wins; read the selected definition. The packaged directory is never projected into `~/.agents/subagents/`, which holds only home-layer overrides.
 
-Resolve kind independently from model: spawn request overrides definition, definition overrides parent kind, and a model name--including a weight alias--never selects a harness. Roster `model:` values are translated only through the already-resolved kind via the separate `config.edn` chain: skill default `skills/herdr-orch/subagents/config.edn` ← `~/.agents/subagents/config.edn` ← `<git-root>/.agents/subagents/config.edn` (project wins). This is row-level replacement, not definition shadowing: an override row completely replaces the same model ID's row and is never deep-merged. The shipped weights are:
+**Resolve kind independently from model:** spawn request overrides definition, definition overrides parent kind, and a model name -- including a weight alias -- never selects a harness. Ask for a harness with `--kind` and a tier with `--model`; naming a model that happens to be one vendor's does not move the child to that vendor's CLI. The four shipped weights are `heavy`, `middle`, `light`, and `feather`; each is translated for the already-resolved kind through the `config.edn` chain, so `--model light` is the portable way to ask for a tier. Per-harness spellings, chain precedence, row-replacement semantics, floating-versus-pinned IDs, pass-through of unknown IDs, and `:extra-args` (including how an override relaxes a harness's interactive approval so unattended children do not stall) all live in the [contract](scripts/docs/contract.md) -- read it when authoring or debugging an override, not when delegating.
 
-| Weight | Pi | Claude | Codex |
-|---|---|---|---|
-| `heavy` | `anthropic/claude-fable-5` | `fable` | `gpt-5.6-sol` |
-| `middle` | `anthropic/claude-opus-5` | `opus` | `gpt-5.6-sol` |
-| `light` | `anthropic/claude-sonnet-5` | `sonnet` | `gpt-5.6-terra` |
-| `feather` | `anthropic/claude-haiku-4-5` | `haiku` | `gpt-5.6-luna` |
-
-A `:harnesses` entry may also carry `:extra-args`, a vector of native `agent start` arguments appended for that kind alone. Nothing ships in it: it exists so an override can relax a harness's interactive command approval, which is what makes unattended delegation possible for harnesses that otherwise stall in a pane nobody is watching. Prefer bounded autonomy over a blanket bypass: claude `--permission-mode auto` and codex `--ask-for-approval never --sandbox workspace-write` suppress routine prompts while still escalating genuinely dangerous actions, which is what an unattended child should stall on. `bypassPermissions` is a poor choice for this despite its name -- it gates on its own startup confirmation, so the child stalls there instead -- and `acceptEdits` still prompts for every Bash command. A `:harnesses` entry is replaced wholesale rather than key-merged, so such an override must restate `:model-flag`; validation rejects a missing one, a blank or non-string member, and any control character (Herdr refuses those in argv) naming the offending file.
-
-The shipped `:pi` column supplies Pi's explicit provider-qualified model; tier-equivalent cross-provider mappings are confined to the `:claude` and `:codex` columns. Unversioned IDs (`claude-opus`, `gpt-sol`, …) are floating aliases for the latest version of that tier; versioned IDs pin a release. A model ID absent from the table passes through unchanged, and a definition model survives a kind override, translated for the resolved kind. Unknown personas require listing the roster and asking, not improvising.
+Unknown personas require listing the roster and asking, not improvising.
 
 Delegation capability is declared, not assumed: a persona may spawn only what its frontmatter `spawns:` allow-list grants (`planner` grants `scout researcher`; `worker` grants `scout researcher advisor`; every other persona is a leaf), and the value-bearing `--spawns` flag overrides the list for one spawn -- the literal `none` forces a leaf. Nesting is one level absolutely: anything spawned below the root is a leaf regardless of its frontmatter, and a below-root spawn stays blocking, one-at-a-time, and ephemeral. The CLI enforces the allow-list and the depth bound mechanically before any ledger or pane mutation.
 
@@ -43,11 +36,9 @@ Delegation capability is declared, not assumed: a persona may spawn only what it
 
 **The advisor is opt-in, for a stuck worker only.** There is no routine pre-publish review. A worker consults on a debugging dead end after repeated failed attempts, or on a materially ambiguous high-stakes decision it cannot settle from source; soft cap three consults. The advisor runs at its own `middle` default, and a caller or worker may raise a single high-stakes consult with `--model heavy`.
 
-**Tier guidance:** light is the efficient default for well-specified implementation work. Feather is a false economy for it -- measured head to head, feather cost 1.1--2.4x more than light and ran 2.3--8.1x slower for an identical score, burning 2--2.5x the tokens, and accounted for every delegation-protocol failure observed. Reserve middle and above for work whose difficulty is genuinely established rather than assumed.
+**Tier guidance:** light is the efficient default for well-specified implementation work. Feather is a false economy for it -- benchmarked head to head it cost more, ran slower, burned more tokens for an identical score, and accounted for every delegation-protocol failure observed. Reserve middle and above for work whose difficulty is genuinely established rather than assumed. Measurements and supersession history are in [README.org](README.org) § History.
 
 The advisor-tier override is a convention, not a structured flag: instruct the worker (via `--prompt-extra`) to spawn its consult with `--model <tier>`. That is verified to work -- but only when the worker actually uses `oh task run advisor`. A worker that hand-rolls a consult with raw `herdr agent start` silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so treat ledger consult counts and advisor costs as a floor rather than the truth.
-
-See the [evaluation record](../../design/log/2026-07-31-subagents-review-advisor-strategy-defaul.org) for the three benchmark rounds behind this, and the [implementation record](../../design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org) for what changed. The earlier [2026-07-29 advisor-strategy record](../../design/log/2026-07-29-subagent-implement-the-advisor-strategy.org) is superseded: its mandatory consult and its separate frontier-executor persona are both retired.
 
 ## Invocation policy
 
@@ -66,8 +57,6 @@ Use `--retro` or `--no-retro` only when overriding the persona policy for this s
 
 A gated-in child applies steps 1--2 of [`retro`](../retro/SKILL.md), using that skill's threshold. Surviving one-line candidates arrive in the result's optional `PROCESS:` section and the ledger `:envelope`; no candidates is a valid result. The ledger's best-effort `:child-session` is the transcript reference for any manual follow-up after pane closure. Exact precedence, fields, limits, and section grammar belong to the [mechanical contract](scripts/docs/contract.md).
 
-One exception: `PROCESS` candidates produced by a `bb smoke-subagent` run are manufactured, not observed. That smoke's retro leg is deliberately given an invalid invocation so `retro` has a real failure to admit, and the resulting candidate is indistinguishable from a genuine one in the collected envelope. Never route smoke-run candidates to `self-improvement` or report them as durable findings.
-
 Treat process candidates as testimony and scan input for your own retro. The child must not choose a destination, load `self-improvement`, run `ot`, or edit instruction files; the parent owns verification, deduplication, approval, and persistence.
 
 ## Completion and pane safety
@@ -75,7 +64,7 @@ Treat process candidates as testimony and scan input for your own retro. The chi
 The validated parent-chosen `RESULT` file is the only completion signal. Never treat `agent read`, terminal history, prompt text, or a visible final summary as completion. The child publishes exactly once with the injected launcher:
 
 ```sh
-"$HERDR_ORCH_BIN" publish --status COMPLETE --summary 'Concise result.'
+"$HERDR_ORCH_BIN" task publish --status COMPLETE --summary 'Concise result.'
 ```
 
 A child that cannot finish is instructed to publish once with `BLOCKED` (genuine blocking dependency, resumable) or `FAILED` (unrecoverable after reasonable retries) carrying a partial account of completed vs remaining work -- read that summary before re-prompting or respawning.
@@ -90,7 +79,7 @@ A `COMPLETE`/`FAILED` JSON `status` asserts a validated result, not that every s
 
 Surface the collected `artifact-links` to the user before relying on or discarding child-pane context: those Markdown `file://` links are the only durable route to a child's artifacts once `COMPLETE`/`FAILED` closed its pane automatically and transcript access is gone. Use the *validated* collect-time list, not the advisory list in the publication push -- publish checks path shape only, so an advisory link is context, never evidence that the file exists. Clickability depends on the harness and terminal; the absolute path in each label is always readable.
 
-Use caller context or explicit IDs, `--no-focus`, and response IDs--not focused UI state. Labels never contain a workspace name and never replace unique agent names. Nested labels depend on the spawning agent's injected `HERDR_ORCH_PERSONA`; a spawning persona started outside `subagent` has no nested-label identity unless that variable is set.
+Use caller context or explicit IDs, `--no-focus`, and response IDs--not focused UI state. Labels never contain a workspace name and never replace unique agent names. Nested labels depend on the spawning agent's injected `HERDR_ORCH_PERSONA`; a spawning persona started outside `oh` has no nested-label identity unless that variable is set.
 
 ## Trusting a result
 

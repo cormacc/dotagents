@@ -20,10 +20,10 @@
   (or (resolve-override (System/getenv "ORCH_ASSIGNMENT_ROOT"))
       (let [{:keys [exit out]} @(process/process ["git" "rev-parse" "--show-toplevel"] {:out :string :err :string})]
         (if (zero? exit) (str/trim out) (str (fs/absolutize "."))))))
-(defn directory [] (fs/path (assignment-root) ".agents" "tmp" "herdr-orch" "ledger"))
+(defn directory [] (fs/path (assignment-root) ".tmp" "herdr-orch" "ledger"))
 (defn ensure! [] (fs/create-dirs (directory)) (directory))
 (defn assignment-path [task] (fs/path (ensure!) (str task ".json")))
-(defn result-directory [] (fs/path (assignment-root) ".agents" "tmp" "herdr-orch"))
+(defn result-directory [] (fs/path (assignment-root) ".tmp" "herdr-orch"))
 (defn fresh-task [] (str (UUID/randomUUID)))
 (defn fresh-result [task]
   (fs/create-dirs (result-directory))

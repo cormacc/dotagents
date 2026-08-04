@@ -22,7 +22,9 @@ Thumbs.db
 .vscode/
 *.elc
 
-# Local agent state
+# Local transient state (deliberately outside .agents/, which some harnesses
+# mount read-only as durable agent configuration)
+.tmp/
 .agents/tmp/
 TASKS.local.org
 # Harness plan-mode scratch (canonical plans live in design/log/*.org)

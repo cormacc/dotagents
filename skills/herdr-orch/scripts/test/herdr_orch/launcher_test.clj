@@ -80,7 +80,7 @@
     (is (zero? (:exit proc)) (:err proc))
     (is (= project (flag-value (split-argv (:log h)) "--cwd")))
     (is (str/starts-with? (get env-map "HERDR_ORCH_RESULT")
-                          (str (fs/path project ".agents" "tmp" "herdr-orch"))))
+                          (str (fs/path project ".tmp" "herdr-orch"))))
     ;; The override is absent, so it must not be injected either.
     (is (nil? (get env-map "ORCH_ASSIGNMENT_ROOT")))))
 

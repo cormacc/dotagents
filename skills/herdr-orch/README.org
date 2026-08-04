@@ -1,6 +1,6 @@
 #+TITLE: herdr-orch -- design rationale and maintenance notes
 
-Supplements [[file:SKILL.md][SKILL.md]] with the rationale and maintenance context for the =subagent= CLI. Ordinary delegation should not load this file.
+Supplements [[file:SKILL.md][SKILL.md]] with the rationale and maintenance context for the =oh= CLI (renamed from =subagent=; =bb run subagent= survives as the Babashka task alias). Ordinary delegation should not load this file.
 
 Division of labour:
 
@@ -54,7 +54,7 @@ The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.
 | [[file:scripts/src/herdr_orch/ledger.clj][ledger.clj]] | Assignment-root resolution, atomic ledger writes, result-path allocation, and exclusive-create monotonic index allocation. |
 | [[file:scripts/src/herdr_orch/cli.clj][cli.clj]] | Command orchestration, prompt composition, spawn-policy enforcement, publication, capture, session backfill, ownership-scoped closure, and bounded waiting. |
 | [[file:scripts/src/herdr_orch/smoke.clj][smoke.clj]] | Explicitly guarded billable integration smoke; never loaded by =bb test=. |
-| [[file:scripts/oh][subagent]] | Bash launcher selecting repository =bb.edn= or the standalone =-Sdeps= path while preserving caller cwd. |
+| [[file:scripts/oh][oh]] | Bash launcher selecting repository =bb.edn= or the standalone =-Sdeps= path while preserving caller cwd. |
 
 * Review and maintenance notes
 
@@ -72,9 +72,11 @@ All =herdr= calls in =src/= must remain vector argv. Keep the standalone launche
 
 ** Test isolation caveat
 
+Assignment state lives under =<assignment-root>/.tmp/herdr-orch/=, deliberately outside =.agents/=: that tree is durable agent configuration, and codex under =--sandbox workspace-write= mounts it read-only so a child cannot rewrite its own instructions. A =RESULT= path inside it is unwritable, which silently makes publication -- the protocol's only completion signal -- impossible for codex-kind children.
+
 =ORCH_ASSIGNMENT_ROOT= relocates project config lookup and all assignment state into each fixture. The CLI tests symlink both the tracked config and project =skills/= tree into that root. They also set =$HOME=, but Babashka's =System/getProperty("user.home")= comes from the JVM/OS property rather than the subprocess environment, so =$HOME= alone cannot hide the global config or skill probes. Tests of the no-global-skill branch therefore belong at the pure =core= policy boundary unless the process property itself is controlled.
 
-A full =bb test= should create no entries under the repository's live =.agents/tmp/herdr-orch/= tree. When mutation-testing assignment-root or launcher behavior, set an override and inspect that tree afterwards.
+A full =bb test= should create no entries under the repository's live =.tmp/herdr-orch/= tree. When mutation-testing assignment-root or launcher behavior, set an override and inspect that tree afterwards.
 
 ** Reflexive changes
 
@@ -87,6 +89,8 @@ Publication identity comes from injected =HERDR_ORCH_*= variables rather than th
 =agents.nix= deploys =~/.agents/skills= as a directory symlink, which includes this skill's packaged =subagents/= directory. Launcher canonicalisation must therefore use physical paths when locating the repository configuration while retaining the absolute deployed launcher path injected into the child. Do not project packaged definitions into =~/.agents/subagents/=: that path is deliberately unmanaged and reserved for genuine home overrides; project overrides remain =<git-root>/.agents/subagents/=.
 
 =bb smoke-subagent= is billable and guarded by =HERDR_ENV=1=, =ORCH_LIVE_SMOKE=1=, and =ORCH_LIVE_SMOKE_MODEL=. It calls =cli/execute= in-process and therefore cannot validate the Bash launcher. Launcher changes need a separate deployed-path smoke from a scratch project. The retrospective leg deliberately lets the child encounter an unannounced invalid command: announcing the trap turns it into a known one-off that the =retro= eligibility gate correctly rejects.
+
+Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, and are indistinguishable from genuine ones in the collected envelope. Never route them to =self-improvement= or report them as durable findings.
 
 * Known gaps
 
@@ -101,3 +105,12 @@ Publication identity comes from injected =HERDR_ORCH_*= variables rather than th
 - [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24]] -- delegation CLI and implementation-review remediations.
 - [[file:../../design/log/2026-07-27-subagent-retrospectives.org][2026-07-27]] -- optional child retrospectives, process annotations, and child-session recording.
 - [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27]] -- per-persona spawn capability replacing the planner-only exception.
+- [[file:../../design/log/2026-07-29-subagent-harness-agnostic-model-resoluti.org][2026-07-29]] -- harness-agnostic model resolution.
+- [[file:../../design/log/2026-07-29-subagent-comms-housekeeping.org][2026-07-29]] -- parent/child communication housekeeping.
+- [[file:../../design/log/2026-07-29-subagent-package-default-example-subagen.org][2026-07-29]] -- packaged default persona roster.
+- [[file:../../design/log/2026-07-29-subagent-implement-the-advisor-strategy.org][2026-07-29]] -- advisor strategy (superseded by 2026-07-31).
+- [[file:../../design/log/2026-07-30-subagents-make-default-spawn-options-con.org][2026-07-30]] -- configurable default spawn options.
+- [[file:../../design/log/2026-07-31-subagents-review-advisor-strategy-defaul.org][2026-07-31]] -- advisor/tier benchmark rounds behind current tier guidance.
+- [[file:../../design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org][2026-07-31]] -- retired the mandatory advisor consult and the frontier-executor persona.
+- [[file:../../design/log/2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org][2026-08-01]] -- absorbed pi-herdr coverage; skill/CLI renamed to =herdr-orch=/=oh=.
+- [[file:../../design/log/2026-08-03-subagent-make-claude-kind-persona-inject.org][2026-08-03]] -- claude-kind persona injection and bounded-permission overrides.

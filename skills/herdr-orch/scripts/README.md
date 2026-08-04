@@ -1,6 +1,6 @@
-# `subagent` -- Herdr delegation CLI
+# `oh` -- Herdr delegation CLI
 
-`subagent` is the harness-agnostic executable behind the `herdr-orch` skill. It performs the mechanical single-child, ephemeral delegation protocol while the skill retains delegation and safety policy.
+`oh` (the executable formerly named `subagent`; `bb run subagent` remains its Babashka task alias) is the harness-agnostic executable behind the `herdr-orch` skill. It performs the mechanical single-child, ephemeral delegation protocol while the skill retains delegation and safety policy.
 
 ## Run
 
@@ -52,4 +52,4 @@ Each `--artifact` is also surfaced as a portable Markdown link, `[absolute path]
 
 ## Tests and smoke
 
-`bb test` runs unit and fake-process coverage without launching an agent, entirely inside per-test temporary directories (`ORCH_ASSIGNMENT_ROOT`); it must not touch the live `<git-root>/.agents/tmp/herdr-orch/` tree. When probing root-CLI behaviour manually from inside a delegated session, unset `HERDR_ORCH_PERSONA` and `HERDR_ORCH_SPAWNS` first -- the injected identity marks every spawn below-root ([docs/contract.md](docs/contract.md) § Spawn gating). The separate `bb smoke-subagent` is intentionally guarded and requires `HERDR_ENV=1`, `ORCH_LIVE_SMOKE=1`, and `ORCH_LIVE_SMOKE_MODEL`; it is never CI work. Maintainer rationale and smoke coverage notes live in [../README.org](../README.org); output and file contracts live in [docs/contract.md](docs/contract.md).
+`bb test` runs unit and fake-process coverage without launching an agent, entirely inside per-test temporary directories (`ORCH_ASSIGNMENT_ROOT`); it must not touch the live `<git-root>/.tmp/herdr-orch/` tree. When probing root-CLI behaviour manually from inside a delegated session, unset `HERDR_ORCH_PERSONA` and `HERDR_ORCH_SPAWNS` first -- the injected identity marks every spawn below-root ([docs/contract.md](docs/contract.md) § Spawn gating). The separate `bb smoke-subagent` is intentionally guarded and requires `HERDR_ENV=1`, `ORCH_LIVE_SMOKE=1`, and `ORCH_LIVE_SMOKE_MODEL`; it is never CI work. Maintainer rationale and smoke coverage notes live in [../README.org](../README.org); output and file contracts live in [docs/contract.md](docs/contract.md).

@@ -160,7 +160,7 @@
         injected (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
     (is (zero? (:exit proc)))
     ;; ORCH_ASSIGNMENT_ROOT relocates ledger + result state and is inherited by the child.
-    (is (str/starts-with? (injected "HERDR_ORCH_RESULT") (str (fs/path dir ".agents" "tmp" "herdr-orch"))))
+    (is (str/starts-with? (injected "HERDR_ORCH_RESULT") (str (fs/path dir ".tmp" "herdr-orch"))))
     (is (= (str dir) (injected "ORCH_ASSIGNMENT_ROOT")))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (= ["pane" "split" "--pane" "w:p" "--direction" "right"] (subvec (vec (first (filter #(and (= ["pane" "split"] (vec (take 2 %))) (not (some #{"--help"} %))) argv))) 0 6)))
@@ -175,7 +175,7 @@
            (some (fn [[command flags]] (when (= ["agent" "wait"] command) flags)) herdr/required-capabilities)))))
 
 (defn- ledger-entry* [dir task]
-  (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str task ".json")))) true))
+  (json/parse-string (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json")))) true))
 (defn- injected-env [env-file key]
   (get (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file)))) key))
 
@@ -185,7 +185,7 @@
         proc (call! env "task" "start" "worker" "--task" "disallowed nested worker")]
     (is (= 1 (:exit proc)))
     (is (re-find #"spawn refused: target persona is not in this agent's HERDR_ORCH_SPAWNS allow-list" (:out proc)))
-    (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))
+    (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
     (is (empty? (calls log)))))
 
 (deftest below-root-worker-scout-is-a-leaf
@@ -302,7 +302,7 @@
     (let [proc (call! env "task" "start" "broken" "--task" "broken nested frontmatter")]
       (is (= 1 (:exit proc)))
       (is (re-find #"unresolvable persona `does-not-exist`" (:out proc)))
-      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log))))))
 
 (deftest relocated-assignment-root-persona-shadows-packaged-default
@@ -390,7 +390,7 @@
         argv (calls log)
         ;; The failed `start` exits non-zero without printing the task id, so recover the
         ;; single entry file from the ledger directory (skipping the `indices/` subdir).
-        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))
+        entry (first (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
                            :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
                        (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))]
     (is (= 1 (:exit proc)))
@@ -472,7 +472,7 @@
           proc (call! env "task" "start" "worker" "--tab" "--split" "--task" "conflicting placement")]
       (is (= 1 (:exit proc)))
       (is (re-find #"--tab and --split are mutually exclusive" (:out proc)))
-      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log)))))
   (testing "--print-prompt reports the resolved placement"
     (doseq [[flag expected] [[[] "split"] [["--tab"] "tab"] [["--split"] "split"]]]
@@ -656,7 +656,7 @@
   (let [{:keys [env dir]} (fake-env {"FAKE_PUBLISH_PROCESS" "unsolicited → behavioral → still accepted"})
         proc (call! env "task" "run" "scout" "--task" "gated out but publishes" "--timeout" "200")
         task (get-in (result proc) [:result :task])
-        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str task ".json")))) true)]
+        entry (json/parse-string (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json")))) true)]
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (false? (:retro entry)))
     (is (= ["unsolicited → behavioral → still accepted"] (get-in entry [:envelope :process])))))
@@ -690,7 +690,7 @@
   (let [{:keys [env dir]} (fake-env {"FAKE_PUBLISH_PROCESS" "stale doc → guardrail → read the contract first"})
         proc (call! env "task" "run" "worker" "--task" "process capture" "--timeout" "200")
         task (get-in (result proc) [:result :task])
-        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str task ".json")))) true)]
+        entry (json/parse-string (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json")))) true)]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (= ["stale doc → guardrail → read the contract first"] (get-in entry [:envelope :process])))
@@ -700,7 +700,7 @@
   (let [{:keys [env log dir]} (fake-env {"FAKE_PUBLISH_PROCESS" (str/join "\n- " (map #(str "s" % " → c → r" %) (range 6)))})
         proc (call! env "task" "run" "worker" "--task" "process overflow" "--timeout" "200")
         task (get-in (result proc) [:result :task])
-        entry (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str task ".json")))) true)]
+        entry (json/parse-string (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json")))) true)]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (= "COMPLETE" (:status entry)))
@@ -709,7 +709,7 @@
     (is (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))))
 
 (defn- ledger-entry [dir task]
-  (json/parse-string (slurp (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str task ".json")))) true))
+  (json/parse-string (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json")))) true))
 (defn- child-get-count [log]
   (count (filter #(and (= ["agent" "get"] (vec (take 2 %))) (not= "w:p" (nth % 2 nil)) (not (some #{"--help"} %))) (calls log))))
 
@@ -805,7 +805,7 @@
     (is (not (some #(and (= ["pane" "close"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))
     ;; exactly one ledger entry
     (is (= 1 (count (filter #(and (fs/regular-file? %) (str/ends-with? (fs/file-name %) ".json"))
-                             (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))))))
+                             (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))))))))
 
 ;; A mapped-but-different error code (real `{"error":{"code":...}}` shape, not the
 ;; bare-string FAKE_FAIL_START) proves code discrimination, not just nil-safety: only
@@ -822,7 +822,7 @@
 (deftest agent-start-retry-budget-exhaustion-fails-cleanly
   (let [{:keys [env log dir]} (fake-env {"FAKE_START_BUSY_COUNT" "99"})
         proc (call! env "task" "start" "worker" "--task" "always busy")
-        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))
+        entry (first (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
                            :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
                        (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))]
     (is (= 1 (:exit proc)))
@@ -832,7 +832,7 @@
     (is (= herdr/start-retry-attempts (start-call-count log)))
     (is (= 1 (split-call-count log)))
     (is (= 1 (count (filter #(and (fs/regular-file? %) (str/ends-with? (fs/file-name %) ".json"))
-                             (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))))))
+                             (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))))))))
 
 ;; Zero is truthy in Clojure and Thread/sleep rejects negatives, so both must fall back;
 ;; same discipline as `poll-interval-parsing` for `cli/parse-poll-interval`. This is the
@@ -1088,7 +1088,7 @@
         ;; The failed `start` exits non-zero without printing the task id, so recover
         ;; the single entry file from the ledger directory directly (see `tab-placement-
         ;; partial-start-failure-is-tracked-and-cleaned` above for the same recovery).
-        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))
+        entry (first (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
                            :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
                        (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))
         progress-proc (call! (child-progress-env env entry) "task" "progress" "--summary" "too late")]
@@ -1210,7 +1210,7 @@
         proc (call! env "task" "start" "worker" "--task" "start failure before prune")
         ;; The failed `start` exits non-zero without printing the task id, so recover the
         ;; single entry file directly (see `progress-rejected-on-a-terminal-failed-status`).
-        entry (first (for [f (fs/list-dir (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))
+        entry (first (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
                            :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
                        (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))
         prune-proc (call! env "task" "prune" (:task entry))]
@@ -1324,7 +1324,7 @@
   (let [{:keys [env dir state]} (fake-env {})
         a (start-child! env dir "nil recorded parent-session")]
     (child-state! state a "gone" "")
-    (let [path (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str (:task a) ".json"))
+    (let [path (fs/path dir ".tmp" "herdr-orch" "ledger" (str (:task a) ".json"))
           corrupted (dissoc a :parent-session)]
       (spit (str path) (json/generate-string corrupted))
       (let [proc (call! (merge env {"FAKE_FAIL_AGENT_GET" "w:p"}) "task" "prune" (:task a))]
@@ -1864,7 +1864,7 @@
 (deftest an-entry-without-a-parent-pane-is-skipped-without-probing
   (let [{:keys [env log dir]} (fake-env {})
         entry (start-child! env dir "legacy entry")
-        path (str (fs/path dir ".agents" "tmp" "herdr-orch" "ledger" (str (:task entry) ".json")))
+        path (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str (:task entry) ".json")))
         probes (count (parent-gets log))]
     (spit path (json/generate-string (dissoc entry :parent-pane)))
     (let [proc (call! (child-publish-env env entry "non-blocking") "task" "publish" "--status" "COMPLETE" "--summary" "done")
@@ -2180,7 +2180,7 @@
     (let [proc (call! env "task" "start" "probe" "--task" "invalid roster aborts")]
       (is (= 1 (:exit proc)))
       (is (re-find #"model-flag" (:out proc)))
-      (is (not (fs/exists? (fs/path dir ".agents" "tmp" "herdr-orch" "ledger"))))
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log))))))
 
 ;; --- portable Markdown artifact links ---------------------------------------------
