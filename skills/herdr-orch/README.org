@@ -238,7 +238,7 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 * Known gaps
 
 - The CLI implements one child per invocation for =run=/=start=; multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] -- no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself.
-- =collect <full-task-uuid>= does not settle-wait before its single close attempt, unlike =collect --any=, so a parent collecting immediately on the publication push usually retains the child's pane.
+- Every capture path settle-waits (bounded by =ORCH_SETTLE_CLOSE_MS=, default 45 s) before its single close attempt, but a child that never settles inside that budget still retains its pane -- closure is one attempt, never retried.
 - =oh task prune= refuses any entry owned by another session, which is correct but leaves no command for the common case of a stale entry from an ended session; clear those by deleting the ledger JSON.
 - =HERDR_ORCH_BIN= intentionally carries the deployed absolute path rather than a canonical repository path; launcher-matrix coverage is its guard.
 

@@ -108,6 +108,24 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 :END:
 #+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
 
+** TODO Spike worktree-backed herdr-orch fan-out
+:PROPERTIES:
+:CUSTOM_ID: e28067af-282f-47bd-b8fe-809663925f7b
+:CREATED: [2026-08-04 Tue 20:29]
+:END:
+:LOGBOOK:
+- Created [2026-08-04 Tue 20:29]
+:END:
+Upstream Herdr 0.7.5 ships `herdr worktree create|open|remove` (git worktree-backed workspaces, grouped with the parent repo workspace). This could lift the SKILL.md constraint that children share one worktree, so siblings whose file sets overlap must be sequenced or merged into one assignment -- each child would get its own checkout and edits would reconcile as ordinary branch merges.
+
+Spike, not a patch. Known interactions to resolve first:
+- The ledger/assignment root resolves per git root, so a child in a different checkout resolves a *different* assignment root unless `ORCH_ASSIGNMENT_ROOT` is injected (today injected only when overridden).
+- Placement currently targets the caller workspace (`tab create --workspace $HERDR_WORKSPACE_ID`) or a pane split; a worktree child needs a third placement mode.
+- Result paths must stay in the parent root -- `ORCH_ASSIGNMENT_ROOT` injection already achieves this.
+- Merge and cleanup burden moves to the parent.
+
+If validated, cite it in SKILL.md as the escape hatch for the overlapping-file-set rule. Source: design review of herdr-orch against upstream docs (herdr 0.7.5, protocol 18).
+
 * Improvements
 
 ** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:

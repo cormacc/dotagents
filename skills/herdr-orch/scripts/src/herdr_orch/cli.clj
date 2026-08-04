@@ -443,8 +443,10 @@
               "wait" (let [outcome (herdr/wait-settled! pane timeout)
                            observed (get-in outcome [:value :result :agent])
                            code (get-in outcome [:error :response :error :code])
-                           ;; Re-checked on the freshly observed AgentInfo: the wait can be
-                           ;; satisfied by a *replacement* agent settling in the same pane.
+                           ;; Re-checked on the freshly observed AgentInfo. `agent wait` pins
+                           ;; the resolved occupant, so a *replacement* cannot satisfy the wait
+                           ;; itself; the re-check guards the unguarded gap between this wait
+                           ;; returning and the `agent prompt` submission below.
                            after (when observed (push-decision entry observed))]
                        (cond
                          (and (not (:ok outcome)) (= "timeout" code)) {:push "timed-out" :parent-pane pane :timeout-ms timeout :parent-status (:parent-status decision)}
