@@ -26,7 +26,7 @@ Skip one-off mistakes, taste disagreements, ordinary direction changes, correct 
 
 ### Slow loop -- default, TODO first
 
-Use for code changes, scripts, extensions, new files, restructures, multiple plausible designs, cross-project routing, or any uncertain change.
+Use for code changes, scripts, extensions, new files, restructures, multiple plausible designs, cross-project routing (except the home-config carve-out in the tight loop below), or any uncertain change.
 
 1. Identify the owning tier.
 2. Resolve its repository root.
@@ -48,13 +48,15 @@ If `ot` is missing, stop with: `Install the org-tasks CLI (skills/org-tasks/scri
 
 This is the sole exception to TODO-first. Use it only when all conditions hold:
 
-- the artifact is in the current repository;
+- the artifact is in the current repository, or in a home-config tier (dotagents / dotfiles) whose working tree is clean;
 - the change is a tiny, self-contained documentation clarification;
 - exact wording and location are obvious;
 - no executable code, script, extension, restructure, or cross-cutting behavior changes;
 - the user explicitly approves the proposed diff.
 
-Flow: show the minimal diff and rationale → obtain approval → edit and commit. Any uncertainty or pushback returns to the slow loop. This exception does not apply across repositories.
+Flow: show the minimal diff and rationale → obtain approval → edit and commit. Any uncertainty or pushback returns to the slow loop.
+
+Outside the current repository the exception is narrow: it reaches the home-config tiers (dotagents, dotfiles) and nothing else, because those hold this agent's own instructions and a session in any project may be the only one that sees the friction. It requires a clean target working tree -- a dirty tree means the edit lands inside someone else's uncommitted change set, so check first and fall back to the slow loop when it is dirty. Leave the cross-repo edit uncommitted unless the user asks otherwise, and report the touched path so it is not mistaken for local work. Unrelated project repositories remain slow-loop only.
 
 ## Routing
 
