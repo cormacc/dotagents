@@ -126,8 +126,8 @@
   (let [translated (translate-model config kind model) flag (get-in config [:harnesses (keyword kind) :model-flag])]
     (if (and translated flag) [flag translated] [])))
 ;; Opt-in per-harness native args, appended to every `agent start` for that kind. The
-;; shipped config ships none, so a permission bypass -- claude
-;; `--permission-mode bypassPermissions`, codex `--dangerously-bypass-approvals-and-sandbox`
+;; shipped config ships none, so relaxed command approval -- claude
+;; `--permission-mode auto`, codex `--ask-for-approval never --sandbox workspace-write`
 ;; -- is only ever granted by an override file that asks for it explicitly. Because
 ;; `merge-config` replaces a harness entry wholesale rather than merging its keys, such an
 ;; override must restate `:model-flag`; validation enforces that.

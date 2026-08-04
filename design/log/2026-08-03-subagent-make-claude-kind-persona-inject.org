@@ -31,14 +31,14 @@ Make `oh start <persona> --kind claude` work again by switching the Claude perso
 ** Acceptance
 
 *** Core functionality
-- [ ] Claude-kind spawn argv carries `--append-system-prompt-file` + the resolved absolute persona path → test:`scripts/test/herdr_orch/cli_test.clj` `persona-system-prompt-dialect`
-- [ ] Pi-kind spawn argv still carries `--append-system-prompt` + the persona path → test:`scripts/test/herdr_orch/cli_test.clj` `persona-system-prompt-dialect`
-- [ ] No `agent start` native argv value contains a control character for any supported kind (fake-herdr rejects them suite-wide)
-- [ ] `oh task start <persona> --kind claude --task ...` reaches `agent start` without `invalid_agent_argument`
+- [X] Claude-kind spawn argv carries `--append-system-prompt-file` + the resolved absolute persona path → test:`scripts/test/herdr_orch/cli_test.clj` `persona-system-prompt-dialect`
+- [X] Pi-kind spawn argv still carries `--append-system-prompt` + the persona path → test:`scripts/test/herdr_orch/cli_test.clj` `persona-system-prompt-dialect`
+- [X] No `agent start` native argv value contains a control character for any supported kind (fake-herdr rejects them suite-wide)
+- [X] `oh task start <persona> --kind claude --task ...` reaches `agent start` without `invalid_agent_argument`
 
 *** Edge cases
-- [ ] Kinds other than pi/claude get no persona flag (prompt-level adoption only) → test:`scripts/test/herdr_orch/core_test.clj`
-- [ ] Preview (`--print-prompt`) remains side-effect-free and consistent with the new claude args
+- [X] Kinds other than pi/claude get no persona flag (prompt-level adoption only) → test:`scripts/test/herdr_orch/core_test.clj`
+- [X] Preview (`--print-prompt`) remains side-effect-free and consistent with the new claude args
 
 *** Anti-criteria
 - Must not: select kind from model identity or weight alias (resolution stays request > frontmatter > parent).
@@ -53,6 +53,21 @@ Make `oh start <persona> --kind claude` work again by switching the Claude perso
   - Flatten body to a single line: lossy for markdown structure, ugly, still fragile.
 - `persona-system-prompt` returns the complete flag+value pair per kind :: the bug lived in `cli.clj` hardcoding `--append-system-prompt` for both kinds; moving flag choice into core removes the split-brain.
 - Fake-herdr models the observed Herdr 0.7.5 contract (reject `\n`, `\t`, `\r` in agent args; quoting-hazard chars and long values pass) :: makes the regression structurally impossible to reintroduce silently for any kind.
+
+** Shipped
+
+- MODIFIED `skills/herdr-orch/scripts/src/herdr_orch/core.clj` :: `persona-system-prompt` becomes `persona-args`, returning the per-kind flag/value pair.
+- MODIFIED `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` :: `spawn!` assembles native args from `persona-args`; `home-directory` now prefers `$HOME`.
+- MODIFIED `skills/herdr-orch/scripts/src/herdr_orch/smoke.clj` :: opt-in `ORCH_LIVE_SMOKE_KIND`; `session!` is kind-aware.
+- MODIFIED `skills/herdr-orch/scripts/test/fixtures/fake-herdr` :: rejects control characters in `agent start` native args.
+- MODIFIED `skills/herdr-orch/scripts/docs/contract.md` :: per-kind persona transport line, plus the `:extra-args` section from the sibling permissions task.
+- MODIFIED `bb.edn` :: `smoke-subagent` doc names `ORCH_LIVE_SMOKE_KIND`.
+
+** Gotchas
+
+- Herdr reports `agent_session` for pi panes only. A claude child's ledger `:child-session` is legitimately `null`, which is why the field is best-effort by contract; only pi may be asserted strictly.
+- Babashka's `user.home` ignores `$HOME`, so before this change a real `~/.agents/subagents/config.edn` leaked into every `fake-env` subprocess. The suite was hermetic only while that file did not exist.
+- A `task run` timeout is not a failure. Both claude smoke failures reported "child did not publish COMPLETE" while the children went on to publish valid envelopes minutes later.
 
 ** Risks
 - Older Claude CLI without `--append-system-prompt-file` fails at startup with `unknown option`; introduction version unconfirmed in the public changelog. Accepted: failure is loud and immediate; verified floor 2.1.220 documented inline.
@@ -82,7 +97,8 @@ Acceptance criteria:
 Must not: change kind/model resolution, prompt text, or `config.edn` semantics.
 Reference: `skills/herdr-orch/scripts/src/herdr_orch/core.clj` `persona-system-prompt`; `cli.clj` `spawn!` native-args `let`.
 
-** STARTED Teach fake-herdr to reject control characters in agent args
+** DONE Teach fake-herdr to reject control characters in agent args
+CLOSED: [2026-08-04 Tue 12:10]
 :PROPERTIES:
 :CUSTOM_ID: f6dfcbf2-a396-480a-a7d5-b1541bd50b52
 :CREATED: [2026-08-03 Mon 17:31]
@@ -91,6 +107,7 @@ Reference: `skills/herdr-orch/scripts/src/herdr_orch/core.clj` `persona-system-p
 :END:
 :LOGBOOK:
 - State "STARTED" from "TODO" [2026-08-04 Tue 09:52]
+- State "DONE" from "STARTED" [2026-08-04 Tue 12:10]
 :END:
 Acceptance criteria:
 - In `test/fixtures/fake-herdr`'s `agent start` branch, any agent arg after `--` containing `\n`, `\t`, or `\r` emits exactly `{"error":{"code":"invalid_agent_argument","message":"agent arguments cannot be encoded safely for the target shell"},"id":"cli:agent:start"}` on the error stream and exits non-zero, before any pane/state handling (matching observed Herdr 0.7.5 ordering).
@@ -99,7 +116,8 @@ Acceptance criteria:
 - `bb test` green.
 Reference: record `* Validation` probe results for the observed contract.
 
-** STARTED Claude-kind live smoke coverage and contract.md persona-transport line
+** DONE Claude-kind live smoke coverage and contract.md persona-transport line
+CLOSED: [2026-08-04 Tue 12:10]
 :PROPERTIES:
 :CUSTOM_ID: a88a2c08-4952-42da-89cf-54a89acfae1b
 :CREATED: [2026-08-03 Mon 17:31]
@@ -108,6 +126,7 @@ Reference: record `* Validation` probe results for the observed contract.
 :END:
 :LOGBOOK:
 - State "STARTED" from "TODO" [2026-08-04 Tue 09:52]
+- State "DONE" from "STARTED" [2026-08-04 Tue 12:10]
 :END:
 Acceptance criteria:
 - `bb smoke-subagent` can exercise a `--kind claude` spawn end-to-end under the existing guards (`HERDR_ENV=1`, `ORCH_LIVE_SMOKE=1`, `ORCH_LIVE_SMOKE_MODEL`); no new unguarded integration test.
@@ -137,6 +156,13 @@ Claude-kind smoke attempt (2026-08-04):
 Parent verification at closure (2026-08-04):
 - That same child later published a valid `COMPLETE` v1 envelope once its command approvals were granted in-pane, and `"$HERDR_ORCH_BIN" task collect 9bcb9caf-52ca-484a-af18-91c378da575c` validated and captured it. A claude-kind child therefore satisfies the whole contract end to end -- `--append-system-prompt-file` transport, roster `light` -> `sonnet` translation, multiline prompt delivery, and a validated publication -- so the transport fix is confirmed against the real harness.
 - What does not work is an *unattended* claude-kind smoke: Claude Code runs with interactive command approval (`manual mode on`), so the child stalls at its first tool call until a human approves. The publication landed roughly 52 minutes after `task run` had already timed out, which is why the executing worker reported a timeout while the underlying path was in fact sound.
-- Consequence for the `a88a2c08` criterion "one claude-kind smoke run passes locally": unmet, and not achievable without pre-granting non-interactive permissions to the spawned Claude. That is a separate decision about what `agent start` args a claude-kind child receives, deliberately left out of this record's scope.
+- Consequence for the `a88a2c08` criterion "one claude-kind smoke run passes locally": unmet at that point, and not achievable without pre-granting non-interactive permissions to the spawned Claude. That was settled by the sibling permissions task (TASKS.org 9720d723), which added opt-in harness `:extra-args`.
 - `bb test` re-run independently by the parent: `Ran 420 tests containing 2292 assertions. 0 failures, 0 errors.`
 - Incidental gotcha worth knowing: blank-but-set `HERDR_ORCH_PERSONA`/`HERDR_ORCH_SPAWNS` are still visible to the CLI and refuse the spawn, so a smoke invoked from inside a subagent pane needs `env -u` rather than `VAR=`.
+
+Closing runs, with `--permission-mode auto` granted by the home-layer override:
+- A single `oh task start scout --kind claude` child read a file, ran two shell commands, and published a validated `COMPLETE` with no approval prompt and no trust dialog. `hasTrustDialogAccepted` for this repo remained `false` throughout, so Herdr's launch path never triggers the folder-trust dialog; the startup check that stalled the earlier attempt belonged to `bypassPermissions` specifically.
+- First full claude smoke then failed on `session!` alone -- all four legs had published `COMPLETE`, but Herdr reports no `agent_session` for claude, so the assertion was made kind-aware.
+- `env -u HERDR_ORCH_PERSONA -u HERDR_ORCH_SPAWNS ORCH_LIVE_SMOKE=1 ORCH_LIVE_SMOKE_MODEL=light ORCH_LIVE_SMOKE_KIND=claude bb smoke-subagent` -> `{"ok":true,...}`, exit 0, `retro-source: "flag"`, one PROCESS candidate, four `:kind "none"` sessions.
+- Default (pi) invocation re-run as the regression check -> `{"ok":true,...}`, exit 0, `retro-source: "flag"`, four `:kind "path"` sessions. Unchanged behaviour.
+- `bb test`: 421 tests, 2319 assertions, 0 failures.

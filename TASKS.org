@@ -236,7 +236,8 @@ Scope discrimination (verified 2026-07-31): this defect is specific to the **age
 
 Implementation notes from the stopgap (verified 2026-07-31): the lifecycle state is nested at `result.agent.agent_status` in `herdr agent get` output, not `result.agent_status` — misreading it yields `unknown` and, if the nudge is unconditional, fires a burst of stray Enters. Gate the nudge on a definite `idle`. Dispatch failure is intermittent, not universal: of nine spawns in that session, seven needed one Enter and two dispatched unaided, so any fix must tolerate a prompt that has already landed.
 
-** STARTED subagent: opt-in harness permission bypass for claude and codex :skill_herdr-orch:
+** DONE subagent: opt-in harness permission bypass for claude and codex :skill_herdr-orch:
+CLOSED: [2026-08-04 Tue 12:10]
 :PROPERTIES:
 :CUSTOM_ID: 9720d723-8306-45cb-ab38-2ec50e97ca39
 :CREATED: [2026-08-04 Tue 11:30]
@@ -245,6 +246,7 @@ Implementation notes from the stopgap (verified 2026-07-31): the lifecycle state
 :LOGBOOK:
 - Created [2026-08-04 Tue 11:30]
 - State "STARTED" from "TODO" [2026-08-04 Tue 11:30]
+- State "DONE" from "STARTED" [2026-08-04 Tue 12:10]
 :END:
 Claude Code and Codex both default to interactive per-command approval, so a spawned
 subagent stalls at its first tool call waiting for a human who is not watching its pane;
@@ -260,9 +262,20 @@ Inline plan (no separate change-record; small, two-file core change, trivial rol
   `~/.agents/subagents` by the dotfiles `agents.nix`.
 
 Decisions:
-- claude gets `--permission-mode bypassPermissions`; codex gets
-  `--dangerously-bypass-approvals-and-sandbox`. Verified against Claude Code 2.1.220 and
-  codex-cli 0.145.0.
+- claude gets `--permission-mode auto`; codex gets `--ask-for-approval never --sandbox
+  workspace-write`. Verified against Claude Code 2.1.220 and codex-cli 0.145.0.
+- Both blanket bypasses were tried first and rejected. `bypassPermissions` has its own
+  startup confirmation, so an unattended child stalls anyway -- the very failure this task
+  exists to remove -- and it disables the checks wholesale. `auto` classifies against
+  shipped rules (17 allow / 65 soft-deny / 1 hard-deny, per `claude auto-mode config`):
+  ordinary subagent work is allowed, while force-push, prod deploy and `curl | bash` still
+  escalate, which is what we want an unattended child to stall on. `acceptEdits` was too
+  narrow -- it clears edits but prompts for every Bash command. For codex, `never` +
+  `workspace-write` matches that intent; `--dangerously-bypass-approvals-and-sandbox` would
+  also remove the sandbox, a far larger grant than "do not ask me".
+- The folder-trust dialog is not a factor: `hasTrustDialogAccepted` for this repo stayed
+  `false` while a claude child ran commands unprompted, so Herdr's launch path never
+  triggers it.
 - `pi` is deliberately excluded: it does not suffer this approval stall, so granting it a
   bypass would widen the blast radius for nothing.
 - Home layer rather than project layer, so the grant applies on every host and project.
@@ -279,7 +292,10 @@ Acceptance criteria:
 - [X] `bb test` green -- 421 tests / 2314 assertions, 0 failures
 - [X] Both flags verified against the installed claude and codex binaries
 - [X] `agents.nix` symlinks `~/.agents/subagents` and parses under `nix-instantiate --parse`
-- [ ] Home Manager switch run, so `~/.agents/subagents/config.edn` actually resolves
+- [X] Home Manager switch run, so `~/.agents/subagents/config.edn` actually resolves
+- [X] A claude-kind child runs commands and publishes COMPLETE with no approval prompt
+- [X] Full claude-kind smoke passes unattended (`ok: true`), and the default pi invocation still passes unchanged
+- [X] Test suite is hermetic against the developer's own home config (`home-directory` prefers `$HOME`)
 
 Anti-criteria:
 - Must not enable any bypass by default, in the packaged config or in code.
@@ -344,7 +360,8 @@ Evidence:
 - Session dirty diff: lastChangelogVersion="0.76.0", defaultProvider="anthropic", defaultModel="claude-opus-4-7".
 - Filter wrapper exists at ./install-git-filter.sh; was not active on this clone.
 
-** STARTED subagent: make Claude-kind persona injection shell-safe :skill_herdr-orch:
+** DONE subagent: make Claude-kind persona injection shell-safe :skill_herdr-orch:
+CLOSED: [2026-08-04 Tue 12:10]
 :PROPERTIES:
 :CUSTOM_ID: e3928501-48a5-471b-ae2f-4d55dbe8c3f7
 :CREATED: [2026-07-30 Thu 10:31]
@@ -353,6 +370,7 @@ Evidence:
 :LOGBOOK:
 - Created [2026-07-30 Thu 10:31]
 - State "STARTED" from "TODO" [2026-08-03 Mon 17:35]
+- State "DONE" from "STARTED" [2026-08-04 Tue 12:10]
 :END:
 #+IMPORT: [[plan:2026-08-03-subagent-make-claude-kind-persona-inject.org]]
 A legitimate `oh start reviewer --kind claude ...` path failed before agent startup with Herdr `invalid_agent_argument` ("agent arguments cannot be encoded safely for the target shell"). `spawn!` currently passes the complete persona body through Claude `--append-system-prompt`; the harness-agnostic design explicitly supports Claude kind and says Claude requires body text, so this is a broken supported path rather than a model-routing issue. Reproduce it deliberately, identify a shell-safe transport for multiline persona content, and add real/fake coverage without selecting kind from model identity.

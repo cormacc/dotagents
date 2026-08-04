@@ -14,18 +14,36 @@
 ;; watching its pane. The parent then reports a timeout while the child sits blocked.
 ;; These flags make non-interactive delegation possible for those two harnesses.
 ;;
-;; RISK: this grants every claude- and codex-kind subagent unsandboxed, unprompted
-;; command execution in the caller's worktree, for every project on this machine.
-;; That is a deliberate trade for a single-user workstation; do not copy it onto a
-;; shared or internet-exposed host. `pi` is intentionally omitted -- it is not
-;; affected by this class of approval stall, and granting a bypass it does not need
-;; would widen the blast radius for nothing.
+;; CHOICE OF MODE -- bounded autonomy, not a blanket bypass:
 ;;
-;; Verified: Claude Code 2.1.220 (`--permission-mode` choices include
-;; `bypassPermissions`), codex-cli 0.145.0
-;; (`--dangerously-bypass-approvals-and-sandbox`).
+;; claude `--permission-mode auto` classifies each action against shipped rules
+;; (17 allow / 65 soft-deny / 1 hard-deny on Claude Code 2.1.220, inspectable via
+;; `claude auto-mode config`). Ordinary subagent work is in `allow`: read-only
+;; operations, local file operations within project scope, installing already-declared
+;; dependencies, and pushing to the session repo. Genuinely dangerous actions --
+;; force push, production deploy, `curl | bash`, mass deletion -- stay in soft-deny and
+;; still escalate, which is the point: an unattended child should stall on those rather
+;; than proceed. `bypassPermissions` was rejected: it disables the checks wholesale and
+;; additionally blocks on its own startup confirmation, so it stalls anyway.
+;; `acceptEdits` was rejected as too narrow -- it clears file edits but still prompts for
+;; every Bash command, which is most of what a subagent does.
+;;
+;; codex has no single equivalent, so the two axes are set to match that intent:
+;; `-a never` (no approval prompts) with `--sandbox workspace-write` (writes confined to
+;; the workspace). `--dangerously-bypass-approvals-and-sandbox` was rejected for the same
+;; reason as `bypassPermissions`: it removes the sandbox as well as the prompts, which is
+;; a far larger grant than "do not ask me".
+;;
+;; RISK: every claude- and codex-kind subagent runs commands unprompted in the caller's
+;; worktree, on every project on this machine. Bounded by claude's deny rules and codex's
+;; workspace sandbox, but still a real grant: do not copy this onto a shared or
+;; internet-exposed host. `pi` is intentionally omitted -- it does not suffer this
+;; approval stall, so granting it anything would widen the blast radius for nothing.
+;;
+;; Verified against Claude Code 2.1.220 and codex-cli 0.145.0.
 
 {:harnesses {:claude {:model-flag "--model"
-                      :extra-args ["--permission-mode" "bypassPermissions"]}
+                      :extra-args ["--permission-mode" "auto"]}
              :codex  {:model-flag "--model"
-                      :extra-args ["--dangerously-bypass-approvals-and-sandbox"]}}}
+                      :extra-args ["--ask-for-approval" "never"
+                                   "--sandbox" "workspace-write"]}}}

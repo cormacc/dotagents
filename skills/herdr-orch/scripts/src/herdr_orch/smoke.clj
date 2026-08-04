@@ -14,13 +14,26 @@
 (defn entry! [result] (ledger/read! (:task result)))
 ;; A recorded session is the only durable transcript reference once the pane is gone, so
 ;; the smoke proves it exists and, for the `path` discriminator, resolves.
-(defn session! [entry]
-  (let [session (:child-session entry)]
-    (when-not (and (:kind session) (:value session))
-      (throw (ex-info "live smoke entry has no usable :child-session" {:task (:task entry) :child-session session})))
-    (when (and (= "path" (:kind session)) (not (fs/exists? (:value session))))
-      (throw (ex-info "live smoke :child-session path does not exist" {:task (:task entry) :path (:value session)})))
-    session))
+;;
+;; It is kind-dependent, though: Herdr reports `agent_session` for pi panes and not for
+;; claude ones, which is why the ledger field is best-effort by contract. Demanding one
+;; from every kind failed a claude smoke whose four legs had all published COMPLETE, so a
+;; kind Herdr does not track reports its absence instead of failing. pi stays strict --
+;; that is the path where a missing session would be a real regression.
+(defn session! [kind entry]
+  (let [session (:child-session entry)
+        tracked? (= "pi" (or kind "pi"))]
+    (cond
+      (and (nil? session) (not tracked?))
+      {:kind "none" :value (str "herdr reports no agent_session for kind " kind)}
+
+      :else
+      (do
+        (when-not (and (:kind session) (:value session))
+          (throw (ex-info "live smoke entry has no usable :child-session" {:task (:task entry) :kind kind :child-session session})))
+        (when (and (= "path" (:kind session)) (not (fs/exists? (:value session))))
+          (throw (ex-info "live smoke :child-session path does not exist" {:task (:task entry) :path (:value session)})))
+        session))))
 ;; The signal-manufacturing leg must not pass on silence: an empty section there means
 ;; either the prompt or `retro`'s threshold left the default-enabled path inert.
 (defn process! [result]
@@ -69,7 +82,7 @@
         (println (core/json-envelope true {:root-task (:task root) :nested-task (:task nested)
                                            :retro-leg "skipped: no retro skill installed"
                                            :root-label (:label root-entry) :nested-label (:label child-entry)
-                                           :child-sessions (mapv session! [root-entry planner-entry child-entry])}))
+                                           :child-sessions (mapv (partial session! kind) [root-entry planner-entry child-entry])}))
         (let [retro (-> (cli/execute (smoke-task-args "worker" kind model
                                                         (str "Run the guarded retrospective smoke. "
                                                              "Display your assignment's current status by running `\"$HERDR_ORCH_BIN\" show $HERDR_ORCH_TASK`. "
@@ -82,7 +95,7 @@
           (println (core/json-envelope true {:root-task (:task root) :nested-task (:task nested) :retro-task (:task retro)
                                              :root-label (:label root-entry) :nested-label (:label child-entry)
                                              :retro-source (:retro-source retro-entry) :process (:process retro)
-                                             :child-sessions (mapv session! [root-entry planner-entry child-entry retro-entry])})))))
+                                             :child-sessions (mapv (partial session! kind) [root-entry planner-entry child-entry retro-entry])})))))
     (catch Exception e
       (println (core/json-envelope false {:message (.getMessage e) :data (ex-data e)}))
       (System/exit 1))))

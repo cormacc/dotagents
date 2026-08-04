@@ -304,6 +304,16 @@
          (smoke/smoke-task-args "worker" nil "light" "smoke" :retro? true)))
   (is (= ["task" "run" "worker" "--retro" "--kind" "claude" "--model" "light" "--task" "smoke"]
          (smoke/smoke-task-args "worker" "claude" "light" "smoke" :retro? true)))
+  (testing "session! tolerates only the kinds herdr does not track"
+    ;; claude: herdr reports no `agent_session`, so absence is reported rather than fatal.
+    ;; This is the assertion that failed a claude smoke whose every leg published COMPLETE.
+    (is (= "none" (:kind (smoke/session! "claude" {:child-session nil}))))
+    ;; pi absence stays fatal -- there it would be a real regression.
+    (is (try (smoke/session! "pi" {:child-session nil}) false
+             (catch Exception e (str/includes? (ex-message e) "no usable :child-session"))))
+    ;; A claude session that *is* present is still validated, not waved through.
+    (is (try (smoke/session! "claude" {:child-session {:kind "path" :value "/definitely/absent"}}) false
+             (catch Exception e (str/includes? (ex-message e) "does not exist")))))
   (is (try
         (smoke/complete! {:status "FAILED"})
         false
@@ -320,11 +330,14 @@
   (is (= {:process []} (smoke/no-process! {:process []})))
   (is (thrown? Exception (smoke/no-process! {:process ["a → b → c"]})))
   (let [file (str (fs/create-temp-file {:prefix "smoke-session-"}))]
-    (is (= {:kind "path" :value file} (smoke/session! {:child-session {:kind "path" :value file}})))
-    (is (= {:kind "id" :value "opaque"} (smoke/session! {:child-session {:kind "id" :value "opaque"}})))
+    (is (= {:kind "path" :value file} (smoke/session! "pi" {:child-session {:kind "path" :value file}})))
+    (is (= {:kind "id" :value "opaque"} (smoke/session! "pi" {:child-session {:kind "id" :value "opaque"}})))
     ;; A `path` session that does not resolve is not a usable transcript reference.
-    (is (thrown? Exception (smoke/session! {:child-session {:kind "path" :value (str file ".missing")}})))
-    (is (thrown? Exception (smoke/session! {:child-session {:value "no kind"}})))))
+    (is (thrown? Exception (smoke/session! "pi" {:child-session {:kind "path" :value (str file ".missing")}})))
+    (is (thrown? Exception (smoke/session! "pi" {:child-session {:value "no kind"}})))
+    ;; A nil kind is the unset-env default, i.e. pi, and stays strict.
+    (is (= {:kind "path" :value file} (smoke/session! nil {:child-session {:kind "path" :value file}})))
+    (is (thrown? Exception (smoke/session! nil {:child-session nil})))))
 
 ;; Zero is truthy in Clojure and Thread/sleep rejects negatives, so both must fall back.
 (deftest poll-interval-parsing
