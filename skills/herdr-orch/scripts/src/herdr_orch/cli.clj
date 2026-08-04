@@ -65,7 +65,12 @@
   (if (fs/directory? dir)
     (mapv #(str (fs/strip-ext (fs/file-name %))) (fs/glob dir "*.md" {:follow-links true}))
     []))
-(defn home-directory [] (System/getProperty "user.home"))
+;; `$HOME` wins over `user.home`, which Babashka resolves from the passwd entry and never
+;; from the environment. Honouring `$HOME` is the POSIX expectation, and it is what keeps a
+;; subprocess test hermetic: without it a real `~/.agents/subagents/config.edn` on the
+;; developer's machine leaks into every fake-env spawn, which is how the harness
+;; `:extra-args` override was first observed contaminating the suite.
+(defn home-directory [] (or (not-empty (System/getenv "HOME")) (System/getProperty "user.home")))
 (declare launcher-bin)
 (defn skill-directory []
   (fs/parent (fs/parent (fs/path (launcher-bin)))))
@@ -100,9 +105,9 @@
   (when (fs/exists? path) (core/parse-config (str path) (slurp (str path)))))
 ;; Loader precedence: shipped default ← home override ← project override (project
 ;; wins), merged with `core/merge-config`. A missing override file is silently ignored;
-;; a missing shipped default is fatal. `home` is an explicit argument (default `user.home`)
-;; so callers/tests can inject it directly instead of relying on `$HOME`, which Babashka's
-;; `user.home` property does not observe.
+;; a missing shipped default is fatal. `home` is an explicit argument (defaulting to
+;; `home-directory`) so in-process callers/tests can inject it directly rather than going
+;; through the environment.
 (defn config
   ([] (config (home-directory)))
   ([home]
