@@ -57,7 +57,7 @@ Use `--retro` or `--no-retro` only when overriding the persona policy for this s
 
 A gated-in child applies steps 1--2 of [`retro`](../retro/SKILL.md), using that skill's threshold. Surviving one-line candidates arrive in the result's optional `PROCESS:` section and the ledger `:envelope`; no candidates is a valid result. The ledger's best-effort `:child-session` is the transcript reference for any manual follow-up after pane closure. Exact precedence, fields, limits, and section grammar belong to the [mechanical contract](scripts/docs/contract.md).
 
-Treat process candidates as testimony and scan input for your own retro. The child must not choose a destination, load `self-improvement`, run `ot`, or edit instruction files; the parent owns verification, deduplication, approval, and persistence.
+Treat process candidates as testimony and scan input for your own retro. A child must not act on its own candidates: it does not choose a destination, write to instruction files, task systems, or any other durable store, or invoke whatever persistence tooling the installation provides. The parent owns verification, deduplication, approval, and persistence.
 
 ## Completion and pane safety
 

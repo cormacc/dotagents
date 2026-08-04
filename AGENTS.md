@@ -22,7 +22,7 @@
 
 # File operations
 - Use `rg` for file and content searches.
-- Verify a flag means what you assume before trusting output: `rg -r` is `--replace`, not recursive (rg recurses by default), and Rust-regex escaping differs from POSIX (`\+` matches a literal plus), so a wrong flag or pattern usually yields confident wrong output rather than an error.
+- Verify a flag means what you assume before trusting output: `rg -r` is `--replace`, not recursive (rg recurses by default), and Rust-regex escaping differs from POSIX (`\+` matches a literal plus), so a wrong flag or pattern usually yields confident wrong output rather than an error. Never fold `-r` into a flag cluster: `rg -rn 'pattern'` consumes `n` as the replacement template and prints every match rewritten to `n`, which looks like real evidence.
 - Single-quote shell search patterns containing backticks or `$` (common with markdown-derived text); double quotes invite command substitution.
 - Prefer available structured read/edit tools over ad-hoc scripts for routine file inspection and modification.
 - When scripting is necessary, prefer Babashka to Python for repository-local automation. Use Python when invoking an existing Python tool or when its ecosystem is materially better suited.

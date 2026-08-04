@@ -1,29 +1,165 @@
-#+TITLE: herdr-orch -- design rationale and maintenance notes
+#+TITLE: herdr-orch -- harness-agnostic subagent orchestration
 
-Supplements [[file:SKILL.md][SKILL.md]] with the rationale and maintenance context for the =oh= CLI (renamed from =subagent=; =bb run subagent= survives as the Babashka task alias). Ordinary delegation should not load this file.
-
-Division of labour:
+Where things live:
 
 | Document | Canonical content |
 |---+---|
-| [[file:SKILL.md][SKILL.md]] | Agent-runtime delegation, trust, and pane-safety policy |
+| This file | What the skill is, how to configure it, and why it is built this way |
+| [[file:SKILL.md][SKILL.md]] | The delegation, trust, and pane-safety policy an agent loads at runtime |
 | [[file:scripts/README.md][scripts/README.md]] | CLI invocation, tests, and smoke entry points |
 | [[file:scripts/docs/contract.md][scripts/docs/contract.md]] | Every mechanical contract: CLI, JSON, environment, ledger, envelope, model resolution, retro/spawn gating, placement, fan-in, pruning, progress, parent push, artifact links, labels, and geometry |
-| This file | Rationale, architecture, review notes, and history |
 
-* Why this skill exists
+* Table of Contents                                       :TOC_1_gh:noexport:
+- [[#what-is-this][What is this?]]
+- [[#how-do-i-use-it][How do I use it?]]
+- [[#design-rationale][Design rationale]]
+- [[#architecture][Architecture]]
+- [[#review-and-maintenance-notes][Review and maintenance notes]]
+- [[#known-gaps][Known gaps]]
+- [[#history][History]]
+- [[#llm-use-statement][LLM use statement]]
 
-Herdr supplies panes, tabs, and agent lifecycle operations, but not a delegation protocol: persona selection, naming, parent/child identity, durable completion, or safe pane disposal. Those mistakes are costly. A parent can mistake transcript text for completion or destroy work by closing a pane before capturing its result.
+* What is this?
 
-The skill therefore separates policy from mechanics. [[file:SKILL.md][SKILL.md]] carries the small runtime policy an agent needs, while the Babashka CLI makes identity, publication, validation, and ownership checks repeatable. The upstream [[https://github.com/ogulcancelik/herdr/blob/master/SKILL.md][Herdr skill]] remains the authority for direct pane and agent operations; this repository vendors a copy at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]], but the CLI path needs only the =herdr= binary and =HERDR_ENV=1=, so standalone installs of this skill work without it.
+A harness-agnostic orchestration framework for agent-assisted development. Subagent personas and their interactions are defined independently of any one coding harness, so you can evaluate or migrate between harnesses without rebuilding your workflow. The bundled =oh= CLI absorbs the mechanical ceremony of orchestration, which keeps token and tool-call overhead down.
+
+Developed primarily against =pi=, and verified against =claude code= and =codex=. Additional harnesses are configurable (§ Harness configuration).
+
+My own use is human-in-the-loop and low-fanout -- subagents for context and token-cost management rather than parallel development by swarms. That is preference, not prescription: the skill is written so other orchestration models can be built on top of it with appropriate persona definitions.
+
+* How do I use it?
+
+** Requirements
+
+- [[https://babashka.org][babashka]] on =PATH= -- the =oh= CLI is Clojure/babashka.
+- The =herdr= binary, and =HERDR_ENV=1= in the environment (i.e. running inside a Herdr pane).
+- Optional: the =org-plan= and =org-tasks= skills in this repository complement it but are not required.
+
+Herdr itself is the authority for direct pane and agent operations; the [[https://github.com/ogulcancelik/herdr/blob/master/SKILL.md][upstream Herdr skill]] is vendored here at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]] for convenience, but the CLI path does not need it, so standalone installs work without it.
+
+** Installation
+
+#+begin_src shell
+npx skills add https://github.com/cormacc/dotagents/tree/main/skills/herdr-orch
+#+end_src
+
+** Configuration file locations and fallback strategy
+
+Two independent chains, both resolving project > home > packaged:
+
+| What | Locations, highest precedence first |
+|---+---|
+| Persona definitions (=<name>.md=) | =<git-root>/.agents/subagents/=, =~/.agents/subagents/=, this skill's =subagents/= |
+| Model and harness config (=config.edn=) | =<git-root>/.agents/subagents/=, =~/.agents/subagents/=, this skill's =subagents/= |
+
+They differ in how they combine. A persona definition *shadows* atomically by name -- the highest-precedence file wins outright. =config.edn= files are *merged* (§ Model configuration).
+
+=~/.agents/subagents/= is reserved for genuine home overrides; packaged definitions are never projected into it. A missing override file is ignored; a missing packaged =config.edn= is fatal.
+
+Assignment state (ledger, result files) lives under =<assignment-root>/.tmp/herdr-orch/=, never =.agents/= -- see § Where assignment state lives for why that matters.
+
+** Defining subagents
+
+A persona is a Markdown file with frontmatter. =name= and =description= are advisory; the CLI reads =kind=, =model=, =spawns=, and =retro=. Everything after the frontmatter is the persona's instructions.
+
+#+begin_src markdown
+---
+name: scout
+description: Fast codebase reconnaissance - maps existing code and conventions
+model: light        # weight alias or canonical ID; omit to inherit
+kind: claude        # omit to inherit the parent's harness
+spawns: scout       # whitespace-separated allow-list; omit for a leaf
+retro: false        # omit to use the installation default
+---
+
+# Scout Agent
+
+<the persona's instructions>
+#+end_src
+
+All four keys are optional. Omitting =kind= is usually right: the child then inherits the harness Herdr measured for the parent, rather than one you assumed.
+
+** Model configuration
+
+=config.edn= carries two levels, plus harness invocation and spawn defaults:
+
+- =:aliases= -- short or weight name → canonical model ID.
+- =:models= -- canonical ID → the native spelling each harness wants.
+
+Canonical IDs use pi's =<provider>/<model>= form. The packaged defaults cover the models available on Anthropic and OpenAI subscriptions, with =heavy=, =middle=, =light=, and =feather= as the portable weight aliases; their per-kind values are enumerated once, in [[file:scripts/docs/contract.md][contract.md]] § Model resolution.
+
+*** The merge rule that catches people
+
+=merge-config= is =merge-with merge=, so the merge is exactly two levels deep:
+
+- Top-level keys (=:aliases=, =:models=, =:harnesses=, =:defaults=) merge across files.
+- One level down, an entry *replaces* its counterpart wholesale: an override =:models= row for ="anthropic/claude-opus-5"= replaces that whole row rather than merging columns into it, and an override =:harnesses :claude= entry replaces the packaged one -- so it must restate =:model-flag=, or validation rejects the file by name.
+- =:aliases= and =:defaults= are the exceptions, because their values are scalars: each key merges independently. Retargeting ="heavy"= therefore costs one line and disturbs no sibling alias and no =:models= row. That is the point of the two-level split.
+
+A weight name is an =:aliases= key, never a =:models= key. The same key in both maps is rejected post-merge, naming the key -- which is the error you will see when migrating an override that carried a full ="heavy"= row.
+
+*** Worked example
+
+A home override pinning the =heavy= tier to a specific Claude release, making claude-kind children usable unattended, and giving every child its own tab:
+
+#+begin_src clojure
+{:aliases  {"heavy" "anthropic/claude-fable-5-20260714"}   ; one line retargets the tier
+ :models   {"anthropic/claude-fable-5-20260714"            ; a new canonical ID needs a row
+            {:claude "claude-fable-5-20260714"             ; pinned, not the floating alias
+             :codex "gpt-5.6-sol"}}                        ; cross-provider equivalent
+ :harnesses {:claude {:model-flag "--model"                ; mandatory even when unchanged
+                      :extra-args ["--permission-mode" "auto"]}}
+ :defaults  {:placement :tab}}
+#+end_src
+
+The new canonical ID needs a row only because it is new; pointing ="heavy"= at an already-shipped canonical ID needs the =:aliases= entry alone.
+
+There is no =:pi= column, and adding one would be redundant: an ID with no matching column falls through to the *canonical* ID, which is already the pi-style spelling. So pi receives =--model anthropic/claude-fable-5-20260714=, claude =--model claude-fable-5-20260714=, and codex =--model gpt-5.6-sol=. The =:codex= column is present because it is a genuine cross-provider remap.
+
+** Harness configuration
+
+=:harnesses= says how a resolved kind is invoked. =:model-flag= is required in every entry, including an entry you add only to attach =:extra-args=, because the level replaces wholesale.
+
+=:extra-args= exists so an override can relax a harness's interactive command approval: without it, claude and codex children stall at their first tool call in a pane nobody is watching. Prefer a bounded grant to a blanket bypass -- the live home override at [[file:../../subagents/config.edn][subagents/config.edn]] records the reasoning and the rejected alternatives, and [[file:scripts/docs/contract.md][contract.md]] § Harness =:extra-args= gives the validation rules.
+
+The kind set is open on the config side: adding a =:harnesses= entry for a new kind needs no code change, and a kind with no entry simply receives no model arguments.
+
+*** Upstream support is the real constraint
+
+Herdr, not this skill, decides which kinds exist. The authoritative, version-specific list is the =--kind= enum printed by:
+
+#+begin_src sh
+herdr agent start --help   # the --kind option lists its possible values
+#+end_src
+
+It is deliberately not duplicated here or in [[file:scripts/docs/contract.md][contract.md]]; Herdr adds kinds on its own release cadence, and a copied list silently goes stale. Herdr also updates a remote agent-detection manifest in the background (=manifest_check= in =herdr --default-config=), so the set can widen without a herdr upgrade.
+
+Upstream support is required at *both* ends of a delegation, which is stricter than it first appears:
+
+- *As a child*, the kind must be startable: =oh= spawns via =herdr agent start --kind=, which not only launches the executable but verifies it was *detected* in the pane. A harness absent from the enum cannot be spawned however it is configured, and shadowing a supported kind's executable on =PATH= does not work -- detection fails rather than mis-registering.
+- *As the orchestrator*, the kind must be registered too. Every caller-identity command (=task run=/=start=, =collect --any=, =prune=) runs =agent get= on =$HERDR_PANE_ID=; from a pane hosting an unrecognised process that fails with =agent_not_found=, so an unsupported harness cannot drive delegation at all, only be driven.
+
+What does survive without registration is publication and capture: =task publish= takes its identity purely from the injected =HERDR_ORCH_*= variables and makes no Herdr agent call, and =task collect <full-task-uuid>= reads the result file, skipping only the pane close. So an unsupported harness can be hand-launched into a =pane split --env …= pane and still return a valid result. Treat that as a manual fallback, not a supported path: such a child is invisible to =agent list=, so it is excluded from =collect --any= and, more dangerously, satisfies =prune='s staleness proof while still working.
+
+** Verifying a configuration change
+
+Config is parsed and shape-validated before any ledger allocation or pane mutation, and every failure names the offending file, so a broken override costs nothing billable. =:defaults= is a closed map -- =:placement= only, valued =:split=, =:tab=, or =:tab-split= -- so a typo fails loudly instead of being ignored.
+
+To see what a spawn would do without spawning it:
+
+#+begin_src sh
+oh task run scout --task x --model heavy --print-prompt
+#+end_src
+
+The preview reports =kind=, the resolved (pre-alias) =model=, its post-alias =model-canonical=, the translated =model-args= the harness will receive, and the resolved =placement=, =retro=/=retro-source=, and =spawns=/=spawns-source=. Read the two model fields together to localise a miss: if =model-canonical= still shows your short name, no =:aliases= entry matched; if it is right but =model-args= repeats it instead of a harness-native ID, the =:models= row has no column for that kind.
 
 * Design rationale
 
 ** Harness-neutral roster and CLI
 
-The packaged roster under [[file:subagents/][subagents/]] uses Markdown plus frontmatter. =name= and =description= are advisory; =kind=, =model=, =spawns= (§ Per-persona spawn capability) and =retro= (§ Optional process retrospectives) are the keys the CLI actually reads. Persona definitions resolve project override (=<git-root>/.agents/subagents/=), then home override (=~/.agents/subagents/=), then this packaged directory; definitions shadow atomically by name. The resolved =kind= selects the child harness, so a parent is not restricted to its own harness. Keeping orchestration in a pi extension would have broken that property.
+The resolved =kind= selects the child harness, so a parent is not restricted to its own. Keeping orchestration in a pi extension would have broken that property.
 
-The separate =config.edn= chain has the same default ← home ← project order but a different merge rule: a home or project row replaces the full row with that model ID, including =heavy=, =middle=, =light=, or =feather=; it does not deep-merge or select a kind. Those aliases map only after kind selection; their per-kind values are enumerated once, in [[file:scripts/docs/contract.md][contract.md]] § Model resolution, which =default-config-content-contract= pins to =config.edn=.
+Persona definitions and =config.edn= share a precedence order but deliberately not a combination rule: a persona is a whole document that should shadow atomically, while model configuration is tabular and benefits from composition. Hence shadow-by-name for the former, two-level merge for the latter.
 
 The [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24 change-record]] records the implementation choice: Babashka behind a thin launcher was preferred to a harness-specific extension or pure Bash. It provides vector argv, JSON handling, testable protocol logic, and atomic filesystem operations without adding Maven dependencies. Folding delegation into =ot= was rejected because task memory and terminal delegation are separate domains.
 
@@ -37,9 +173,9 @@ The CLI absorbs those operations behind one spawn/collect interface and returns 
 
 The [[file:../../design/log/2026-07-27-subagent-retrospectives.org][2026-07-27 change-record]] added child-side process learning without giving children persistence authority. A gated child scans context it already holds and can attach compact =signal → category → proposed rule= candidates to the durable result. The parent still verifies, deduplicates, routes, and seeks approval, so self-retro remains testimony rather than an automated write path.
 
-=PROCESS:= was added as an optional trailing v1 annotation instead of a separate retro artifact or envelope v2. The position preserves existing v1 readers, omission preserves old output when there are no candidates, and the ledger already persists validated envelopes. =:child-session= complements this with a best-effort transcript reference for thin candidates or crash investigation. The exact grammar and degradation rules live only in [[file:scripts/docs/contract.md][contract.md]].
+=PROCESS:= was added as an optional trailing v1 annotation instead of a separate retro artifact or envelope v2. The position preserves existing v1 readers, omission preserves old output when there are no candidates, and the ledger already persists validated envelopes. =:child-session= complements this with a best-effort transcript reference for thin candidates or crash investigation.
 
-The =retro= skill is optional by design. Project/global skill resolution lets integrated installations enable it by default, while third-party installations without it continue delegating with no injected instruction. Only explicit =--retro= fails when the capability is absent because an operator request must not silently become a no-op. The live smoke follows the same rule and reports a skipped retro leg when the skill is unavailable.
+The =retro= skill is optional by design. Project/global skill resolution lets integrated installations enable it by default, while third-party installations without it continue delegating with no injected instruction. Only explicit =--retro= fails when the capability is absent, because an operator request must not silently become a no-op. The live smoke follows the same rule and reports a skipped retro leg when the skill is unavailable.
 
 ** Where assignment state lives
 
@@ -48,54 +184,6 @@ Assignment state lives under =<assignment-root>/.tmp/herdr-orch/=, deliberately 
 ** Per-persona spawn capability
 
 The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27 spawn-capability change-record]] replaced the prose-only planner exception with declared roster capability: a frontmatter =spawns:= allow-list resolved once at spawn (flag > frontmatter > default deny), recorded on the ledger as =:spawns=/=:spawns-source=, injected as =HERDR_ORCH_SPAWNS=, and enforced mechanically by the child CLI before preflight, ledger allocation, or pane mutation. Prompt-only enforcement was rejected because its failure modes are billable and pane-creating; child self-resolution from the roster was rejected because it cannot carry a per-spawn flag override and mid-flight roster edits would change a live child's capability. Any below-root spawn injects an empty grandchild policy with source =depth= -- one nesting level absolutely, no depth counter -- so labels stay display-only metadata. Below-root one-at-a-time cardinality deliberately remains prompt-strength doctrine.
-
-* Configuring a user override
-
-=config.edn= tunes four things: what short name a model ID abbreviates (=:aliases=), how a canonical model ID is translated for a harness (=:models=), how a harness is invoked (=:harnesses=), and what a spawn defaults to (=:defaults=). It never defines a persona -- those are =<name>.md= files with their own resolution chain -- and it never selects a kind.
-
-The chain is packaged =skills/herdr-orch/subagents/config.edn= ← home =~/.agents/subagents/config.edn= ← project =<git-root>/.agents/subagents/config.edn=, project winning. In this repository the home layer is [[file:../../subagents/config.edn][subagents/config.edn]], symlinked to =~/.agents/subagents/= by the dotfiles =agents.nix=; edit it there rather than under =~=.
-
-** The merge rule that catches people
-
-=merge-config= is =merge-with merge=, so the merge is exactly two levels deep:
-
-- Top-level keys (=:aliases=, =:models=, =:harnesses=, =:defaults=) merge across files.
-- One level down, an entry *replaces* its counterpart wholesale. An override =:models= row for ="anthropic/claude-opus-5"= replaces the packaged row for that canonical ID rather than merging columns into it, and an override =:harnesses :claude= entry replaces the packaged one -- so it must restate =:model-flag=, or validation rejects the file by name.
-- =:aliases= and =:defaults= are the exceptions, because their values are scalars: each key merges independently. Retargeting ="heavy"= therefore costs one line and leaves every sibling alias and every =:models= row untouched -- this is the whole point of the two-level split.
-
-A weight name like ="heavy"= is an =:aliases= key, *not* a =:models= key. Putting one in =:models= is now a loud failure rather than a silent override: the post-merge check rejects any key present in both maps, naming it. If you are migrating a pre-two-level override that carried a full ="heavy"= row, that is the error you will see.
-
-** Worked example
-
-A home override that pins the =heavy= tier to a specific Claude release, makes claude-kind children usable unattended, and puts every child in its own tab:
-
-#+begin_src clojure
-{:aliases  {"heavy" "anthropic/claude-fable-5-20260714"}   ; one line retargets the tier
- :models   {"anthropic/claude-fable-5-20260714"            ; a new canonical ID needs a row
-            {:claude "claude-fable-5-20260714"             ; pinned, not the floating alias
-             :codex "gpt-5.6-sol"}}                        ; cross-provider equivalent
- :harnesses {:claude {:model-flag "--model"                ; mandatory even when unchanged
-                      :extra-args ["--permission-mode" "auto"]}}
- :defaults  {:placement :tab}}
-#+end_src
-
-Retargeting the alias is one line because =:aliases= merges per key; no other weight and no packaged =:models= row is disturbed. The new canonical ID needs its own row only because it is genuinely new -- pointing ="heavy"= at an already-shipped canonical ID needs the =:aliases= entry alone.
-
-There is no =:pi= column, and adding one would be redundant: an ID with no row column falls through to the *canonical* ID, which is already the pi-style =provider/model= spelling pi wants. Here that means pi receives =--model anthropic/claude-fable-5-20260714=, claude receives =--model claude-fable-5-20260714=, and codex receives =--model gpt-5.6-sol=. The =:codex= column is stated because it is a genuine cross-provider remap; omit it and codex would receive the canonical ID verbatim. =:model-flag= is restated at the =:harnesses= level for a different reason: that level replaces wholesale, and omitting it is a hard validation error rather than a silent pass-through.
-
-=:extra-args= exists so an override can relax a harness's interactive command approval; without it, claude and codex children stall at their first tool call in a pane nobody is watching. Prefer a bounded grant to a blanket bypass -- the live home override documents the reasoning and the rejected alternatives at length, and [[file:scripts/docs/contract.md][contract.md]] § Harness =:extra-args= gives the validation rules.
-
-** Verifying an override
-
-Config is parsed and shape-validated before any ledger allocation or pane mutation, and every failure names the offending file, so a broken override costs nothing billable. =:defaults= is a closed map -- =:placement= only, valued =:split=, =:tab=, or =:tab-split= -- so a typo fails loudly instead of being ignored.
-
-Check what a spawn would actually do without spawning it:
-
-#+begin_src sh
-oh task run scout --task x --model heavy --print-prompt
-#+end_src
-
-The preview envelope reports =kind=, the resolved (pre-alias) =model=, its post-alias canonical ID as =model-canonical=, the translated =model-args= (the native flag and value the harness receives), plus the resolved =placement=, =retro=/=retro-source=, and =spawns=/=spawns-source=. Read the two model fields together to localise a miss: if =model-canonical= still shows your short name, no =:aliases= entry matched it; if =model-canonical= is right but =model-args= repeats it rather than a harness-native ID, the =:models= row has no column for the resolved kind.
 
 * Architecture
 
@@ -118,15 +206,20 @@ The regression suite names the important boundaries; preserve the tests rather t
 - =launcher-matrix-selects-branch-and-preserves-cwd= must fail if launcher path canonicalisation or caller cwd preservation regresses.
 - result capture must precede ownership-scoped pane closure, and foreign/unresolvable parent identity must retain the pane.
 - retro tests must remain behavioural at prompt/CLI boundaries: frontmatter values are strings, value-less flags participate in two argv consumers, and optional annotations must not demote a valid result.
+- =default-config-content-contract= pins contract.md's weight table to =config.edn= and pins every pre-two-level model ID to its old argv; keep its expectation matrix hardcoded, or the preservation check becomes circular.
 - live-smoke helper assertions are unit-tested because the billable smoke is never part of the standard suite.
 
 All =herdr= calls in =src/= must remain vector argv. Keep the standalone launcher dependency-free beyond Babashka built-ins. When Herdr changes, review =required-capabilities= and the fake fixture's help output together.
+
+Configuration examples in this file are not covered by any test, unlike contract.md's weight table. Validate a changed example by parsing it out of the document and running it through =validate-merged-config!= against the shipped table; an example can become executable-wrong rather than merely stale.
 
 ** Test isolation caveat
 
 =ORCH_ASSIGNMENT_ROOT= relocates project config lookup and all assignment state into each fixture. The CLI tests symlink both the tracked config and project =skills/= tree into that root. They also set =$HOME=, but Babashka's =System/getProperty("user.home")= comes from the JVM/OS property rather than the subprocess environment, so =$HOME= alone cannot hide the global config or skill probes. Tests of the no-global-skill branch therefore belong at the pure =core= policy boundary unless the process property itself is controlled.
 
 A full =bb test= should create no entries under the repository's live =.tmp/herdr-orch/= tree. When mutation-testing assignment-root or launcher behavior, set an override and inspect that tree afterwards.
+
+=bb test= runs from the repository root; there is no =bb.edn= under =scripts/=.
 
 ** Reflexive changes
 
@@ -145,8 +238,9 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 * Known gaps
 
 - The CLI implements one child per invocation for =run=/=start=; multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] -- no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself.
+- =collect <full-task-uuid>= does not settle-wait before its single close attempt, unlike =collect --any=, so a parent collecting immediately on the publication push usually retains the child's pane.
+- =oh task prune= refuses any entry owned by another session, which is correct but leaves no command for the common case of a stale entry from an ended session; clear those by deleting the ledger JSON.
 - =HERDR_ORCH_BIN= intentionally carries the deployed absolute path rather than a canonical repository path; launcher-matrix coverage is its guard.
-- =ot ready= cannot resolve blockers inside =#+IMPORT:=-linked plan files, so plan-internal dependencies report =[opaque]=. This is an org-tasks limitation, not a delegation issue.
 
 * History
 
@@ -164,3 +258,8 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 - [[file:../../design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org][2026-07-31]] -- retired the mandatory advisor consult and the frontier-executor persona.
 - [[file:../../design/log/2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org][2026-08-01]] -- absorbed pi-herdr coverage; skill/CLI renamed to =herdr-orch=/=oh=.
 - [[file:../../design/log/2026-08-03-subagent-make-claude-kind-persona-inject.org][2026-08-03]] -- claude-kind persona injection and bounded-permission overrides.
+- [[file:../../design/log/2026-08-04-herdr-orch-simplify-model-aliasing.org][2026-08-04]] -- two-level model table: =:aliases= plus canonical =:models= rows.
+
+* LLM use statement
+
+This skill is almost entirely LLM-authored (though heavily human-guided), dogfooding both itself and the =org-plan= spec-driven workflow.

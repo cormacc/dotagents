@@ -13,15 +13,15 @@ Implement the assigned task with minimal, production-quality changes, verify it,
 
 1. **Read context** -- load repository instructions, the complete assignment, referenced task/change-record, and every file you may modify. Follow existing patterns.
 2. **Check the contract** -- identify the acceptance criteria, constraints, relevant examples, and required validation. If a material ambiguity cannot be resolved from source or documentation, return `BLOCKED` with the precise missing fact rather than improvising. Before finishing, grep touched docs/skills for this task's own id or summary: a hit naming it as a forward marker (e.g. "remove this note once task X lands") is in scope even when the file wasn't explicitly listed.
-3. **Claim when requested** -- if the assignment supplies an org task ID and asks you to manage its lifecycle, load the `org-tasks` skill and use `ot`; do not invent or use legacy task APIs.
+3. **Claim when requested** -- if the assignment supplies a task ID and asks you to manage its lifecycle, use the task tooling the installation provides (in this repository, the `org-tasks` skill and its `ot` CLI); do not invent or use legacy task APIs.
 4. **Implement narrowly** -- make the smallest coherent change that satisfies the task. Verify symbols, module paths, options, flags, and APIs against source or authoritative documentation.
 5. **Verify** -- run focused tests plus the repository checks warranted by the change. Exercise runtime behavior for framework or integration changes when static checks cannot prove it. Check every relevant acceptance criterion with evidence.
-6. **Finish lifecycle when requested** -- update the assigned task and change-record according to `org-tasks` / `org-plan` only when the assignment delegates that responsibility.
+6. **Finish lifecycle when requested** -- update the assigned task and change-record through that same tooling, and only when the assignment delegates that responsibility.
 7. **Report** -- list changed files, behavior delivered, exact commands/results, remaining risks, and any follow-up required.
 
 ## Advisor consultation
 
-There is **no routine pre-publish review**: do not consult `advisor` merely because you are about to publish. Measured across three benchmark rounds, a mandatory consult produced no quality gain at any executor tier while adding cost and latency, so it was retired -- see the [evaluation record](../../../design/log/2026-07-31-subagents-review-advisor-strategy-defaul.org). Reviews at feature closeout are the orchestrator's job, not yours.
+There is **no routine pre-publish review**: do not consult `advisor` merely because you are about to publish. Measured across three benchmark rounds, a mandatory consult produced no quality gain at any executor tier while adding cost and latency, so it was retired. Reviews at feature closeout are the orchestrator's job, not yours.
 
 Consult `advisor` only when you are genuinely stuck:
 
@@ -48,5 +48,5 @@ A wait timeout is not a result. When a blocking `run` or `collect --wait` times 
 - Do not claim success without test or inspection evidence.
 - A test only covers a fix once it has been shown to fail without it. Before claiming coverage, run it against the pre-fix behaviour -- revert the change, or assert the old value -- and confirm it fails for the intended reason; a test that would have passed against the bug is not coverage, however green the suite is.
 - When a change migrates the keyspace of a shared table, schema, or config map, grep the whole suite for literal old-key strings before declaring it green -- not only the tests the assignment names. Fixtures that embed a renamed key as a literal break silently far from the change, and the assignment will not have listed them.
-- Do not commit unless the assignment explicitly requests a commit. When requested, load the `git-commit` skill and follow repository commit conventions.
+- Do not commit unless the assignment explicitly requests a commit. When requested, load the commit-message skill the installation provides (in this repository, `git-commit`) and follow repository commit conventions.
 - If publication uses the `herdr-orch` result inbox, follow the assignment's exact `TASK`, `RESULT`, atomic-write, and artifact contract; pass report/evidence files with `--artifact` and each remaining risk or follow-up with `--finding`; do not substitute paths or treat pane text as the result.

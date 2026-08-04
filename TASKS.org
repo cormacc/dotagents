@@ -483,13 +483,15 @@ Origin:
 Evidence:
 Two instances in one session. (1) A reviewer assignment asserted that some of 15 suite failures were "pre-existing/environmental (e.g. hardware integration tests)". The named base commit was in fact fully green, so every failure was refactor-caused; the whole attribution table depended on the child refuting the parent, and it reported the wrong premise as its top process candidate. (2) When ot doctor flagged a dangling :BLOCKED-BY+: reference, the agent reported it to the user as its own editing error without checking; the user had in fact deleted the task manually. Both were avoidable by one measurement before asserting.
 
-** TODO AGENTS.md: warn that rg -r silently rewrites match output :agents-md:
+** DONE AGENTS.md: warn that rg -r silently rewrites match output :agents-md:
+CLOSED: [2026-08-04 Tue 19:53]
 :PROPERTIES:
 :CUSTOM_ID: b8b4ddae-b885-42c0-9140-d60064bfc3ae
 :CREATED: [2026-07-31 Fri 20:55]
 :END:
 :LOGBOOK:
 - Created [2026-07-31 Fri 20:55]
+- State "DONE" from "TODO" [2026-08-04 Tue 19:53]
 :END:
 Add a File-operations rule: never fold `-r` into an rg flag cluster. `-r/--replace` consumes the next value as a replacement template, so `rg -rn "pattern"` silently emits matches rewritten to "n" instead of erroring or numbering lines. The failure is silent and the output looks plausible, which is what makes it dangerous — it invites a wrong conclusion from apparently real evidence.
 
@@ -602,3 +604,37 @@ Origin:
 
 Evidence:
 Three of three ephemeral children (one planner, two workers) published COMPLETE, were validated and captured, and retained their panes; all three needed a manual oh pane close. Each was collected immediately on the advisory push, i.e. while still settling.
+
+** TODO herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill_herdr-orch:
+:PROPERTIES:
+:CUSTOM_ID: 22f68a11-eeef-43e9-81d3-79341842ca84
+:CREATED: [2026-08-04 Tue 19:44]
+:END:
+:LOGBOOK:
+- Created [2026-08-04 Tue 19:44]
+:END:
+A harness absent from herdr's `agent start --kind` enum (e.g. dirge) cannot participate in delegation at all today, even though most of the protocol does not actually depend on agent registration. Adding the kind upstream is the clean fix; this task is the local workaround.
+
+What already works without registration (verified):
+- `task publish` takes identity purely from the injected HERDR_ORCH_* env vars and makes no herdr agent call (cli.clj:443).
+- `task collect <full-task-uuid>` captures and validates the result file; maybe-close! (cli.clj:258) swallows the failed agent lookup and simply skips the pane close.
+- `pane split --env KEY=VALUE` can inject the protocol variables (cli.clj:755 -> herdr.clj:89). Note `oh spawn` cannot -- it hardcodes :env {} (cli.clj:827).
+
+What is blocked:
+- Spawning: spawn! calls herdr/start! with the kind (cli.clj:339), and `agent start` additionally verifies the expected agent was *detected*, so PATH-shadowing a supported kind fails rather than mis-registering.
+- Orchestrating: parent-identity (cli.clj:122) runs `agent get` on $HERDR_PANE_ID, so an unsupported harness cannot drive `task run`/`start`, `collect --any`, or `prune` either. Verified empirically: from a bare pane, `oh task run scout --task x --print-prompt` fails with agent_not_found.
+
+Desired outcome: let a :harnesses entry declare itself launch-by-command (a command template plus e.g. :managed false). spawn! then uses `pane split` + `pane run` instead of `agent start` and flags the ledger entry as unmanaged.
+
+Load-bearing safety requirement: for an unmanaged entry, `prune` and `collect --any` must treat absence from `agent list` as *unknown*, never as proof of death. Today absence is part of prune's staleness proof, so an unmanaged child that is alive and working satisfies the whole proof (uncaptured, non-terminal, no RESULT yet, absent from the listing) and can be pruned mid-flight. Shipping the launch path without this would build that hazard into the tool.
+
+Accepted degradation for unmanaged kinds: no lifecycle states, no :child-session, no auto-close, no agent prompt/wait/read, excluded from fan-in, and no ability to spawn grandchildren. The result file remains the completion signal, which is the part that matters.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-04 Tue 20:15]
+- sender: agent
+
+Evidence:
+`herdr agent start --help` enumerates: pi, claude, codex, gemini, cursor, devin, agy, cline, omp, mastracode, opencode, copilot, kimi, kiro, droid, amp, grok, hermes, kilo, qodercli, maki. dirge is absent but does expose `--model`, so only the launch/detect half is missing. herdr has no local extension point: no agent definitions in config.toml, no plugins subcommand, and no manifest file on disk.
