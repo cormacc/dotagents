@@ -59,9 +59,31 @@
     ;; Nil resolved model still yields empty model-args.
     (is (= [] (core/model-args config "pi" nil)))
     ;; A kind with no `:harnesses` entry yields empty model args — the kind set is open.
-    (is (= [] (core/model-args config "gemini" "claude-opus-5"))))
-  (is (= "/tmp/persona.md" (core/persona-system-prompt "pi" "/tmp/persona.md" "BODY")))
-  (is (= "BODY" (core/persona-system-prompt "claude" "/tmp/persona.md" "BODY")))
+    (is (= [] (core/model-args config "gemini" "claude-opus-5")))
+    ;; `:extra-args` is opt-in: a config without it grants no native args at all. This is
+    ;; the assertion that fails if a permission bypass is ever shipped on by default.
+    (is (= [] (core/harness-extra-args config "claude")))
+    (is (= [] (core/harness-extra-args config "codex")))
+    (is (= [] (core/harness-extra-args config "gemini"))))
+  (testing "opt-in :extra-args reach the resolved kind only"
+    (let [config {:harnesses {:pi {:model-flag "--model"}
+                              :claude {:model-flag "--model" :extra-args ["--permission-mode" "bypassPermissions"]}
+                              :codex {:model-flag "--model" :extra-args ["--dangerously-bypass-approvals-and-sandbox"]}}}]
+      (is (= ["--permission-mode" "bypassPermissions"] (core/harness-extra-args config "claude")))
+      (is (= ["--dangerously-bypass-approvals-and-sandbox"] (core/harness-extra-args config "codex")))
+      ;; A kind the override did not name is untouched — granting claude never grants pi.
+      (is (= [] (core/harness-extra-args config "pi")))))
+  (testing "a harness override replaces the whole entry, so :model-flag must be restated"
+    ;; `merge-config` is `merge-with merge`: level-two harness entries are replaced, not
+    ;; key-merged. An override that omits `:model-flag` is therefore rejected at parse.
+    (is (try (core/parse-config "/tmp/extra.edn" "{:harnesses {:claude {:extra-args [\"--permission-mode\" \"bypassPermissions\"]}}}") false
+             (catch Exception e (str/includes? (ex-message e) ":model-flag"))))
+    (is (= {:harnesses {:claude {:model-flag "--model" :extra-args ["--permission-mode" "bypassPermissions"]}}}
+           (core/merge-config {:harnesses {:claude {:model-flag "--model"}}}
+                              {:harnesses {:claude {:model-flag "--model" :extra-args ["--permission-mode" "bypassPermissions"]}}}))))
+  (is (= ["--append-system-prompt" "/tmp/persona.md"] (core/persona-args "pi" "/tmp/persona.md")))
+  (is (= ["--append-system-prompt-file" "/tmp/persona.md"] (core/persona-args "claude" "/tmp/persona.md")))
+  (is (= [] (core/persona-args "codex" "/tmp/persona.md")))
   (is (= "planner-1/scout-2-claude-fable-5" (core/child-label {:parent-label "planner-1-claude-fable-5" :parent-persona "planner" :persona "scout" :index 2 :model "anthropic/claude-fable-5"})))
   ;; A kind-inheriting pi spawn resolves the roster's kindless model, so nested labels
   ;; carry its basename suffix.
@@ -91,6 +113,11 @@
                           ":harnesses entry not a map" "{:harnesses {:pi \"nope\"}}"
                           "blank :model-flag" "{:harnesses {:pi {:model-flag \"\"}}}"
                           "non-string :model-flag" "{:harnesses {:pi {:model-flag 1}}}"
+                          ":extra-args not sequential" "{:harnesses {:pi {:model-flag \"--model\" :extra-args \"--yolo\"}}}"
+                          ":extra-args non-string member" "{:harnesses {:pi {:model-flag \"--model\" :extra-args [1]}}}"
+                          ":extra-args blank member" "{:harnesses {:pi {:model-flag \"--model\" :extra-args [\"\"]}}}"
+                          ;; Herdr rejects control characters in native argv, so they fail here first.
+                          ":extra-args control character" "{:harnesses {:pi {:model-flag \"--model\" :extra-args [\"--a\\nb\"]}}}"
                           ":models not a map" "{:models [1 2]}"
                           ":models entry not a map" "{:models {\"x\" \"nope\"}}"
                           ":models row value not a string" "{:models {\"x\" {:pi 1}}}"}]
@@ -265,6 +292,18 @@
   (is (not (str/includes? (cli/delegation-guidance ["scout" "researcher" "advisor"]) "mandates")))
   (is (thrown? clojure.lang.ArityException (cli/delegation-guidance ["scout"] ["advisor"])))
   (is (= {:status "COMPLETE"} (smoke/complete! {:status "COMPLETE"})))
+  ;; An unset selector preserves today's Pi-default argv; an explicit selector is
+  ;; forwarded independently of the model, so the roster translates that kind's column.
+  (is (= ["task" "run" "scout" "--model" "light" "--task" "smoke"]
+         (smoke/smoke-task-args "scout" nil "light" "smoke")))
+  (is (= ["task" "run" "scout" "--kind" "claude" "--model" "light" "--task" "smoke"]
+         (smoke/smoke-task-args "scout" "claude" "light" "smoke")))
+  ;; The worker retro leg is deliberately explicit, retaining the original flag
+  ;; semantics rather than relying on the default retro policy.
+  (is (= ["task" "run" "worker" "--retro" "--model" "light" "--task" "smoke"]
+         (smoke/smoke-task-args "worker" nil "light" "smoke" :retro? true)))
+  (is (= ["task" "run" "worker" "--retro" "--kind" "claude" "--model" "light" "--task" "smoke"]
+         (smoke/smoke-task-args "worker" "claude" "light" "smoke" :retro? true)))
   (is (try
         (smoke/complete! {:status "FAILED"})
         false

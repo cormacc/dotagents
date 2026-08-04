@@ -236,6 +236,65 @@ Scope discrimination (verified 2026-07-31): this defect is specific to the **age
 
 Implementation notes from the stopgap (verified 2026-07-31): the lifecycle state is nested at `result.agent.agent_status` in `herdr agent get` output, not `result.agent_status` — misreading it yields `unknown` and, if the nudge is unconditional, fires a burst of stray Enters. Gate the nudge on a definite `idle`. Dispatch failure is intermittent, not universal: of nine spawns in that session, seven needed one Enter and two dispatched unaided, so any fix must tolerate a prompt that has already landed.
 
+** STARTED subagent: opt-in harness permission bypass for claude and codex :skill_herdr-orch:
+:PROPERTIES:
+:CUSTOM_ID: 9720d723-8306-45cb-ab38-2ec50e97ca39
+:CREATED: [2026-08-04 Tue 11:30]
+:STARTED: [2026-08-04 Tue 11:30]
+:END:
+:LOGBOOK:
+- Created [2026-08-04 Tue 11:30]
+- State "STARTED" from "TODO" [2026-08-04 Tue 11:30]
+:END:
+Claude Code and Codex both default to interactive per-command approval, so a spawned
+subagent stalls at its first tool call waiting for a human who is not watching its pane;
+the parent then reports a timeout while the child sits blocked. Discovered while
+validating the Claude-kind persona transport (see task e3928501): the claude smoke child
+only published ~52 minutes late, after approvals were granted by hand.
+
+Inline plan (no separate change-record; small, two-file core change, trivial rollback):
+- Add an opt-in `:extra-args` vector to `config.edn` `:harnesses` entries, appended to that
+  kind's native `agent start` argv between the model args and the persona transport.
+- Ship nothing in it. A permission bypass is granted only by an override file that asks.
+- Provide that override at the home layer: dotagents `subagents/config.edn`, symlinked to
+  `~/.agents/subagents` by the dotfiles `agents.nix`.
+
+Decisions:
+- claude gets `--permission-mode bypassPermissions`; codex gets
+  `--dangerously-bypass-approvals-and-sandbox`. Verified against Claude Code 2.1.220 and
+  codex-cli 0.145.0.
+- `pi` is deliberately excluded: it does not suffer this approval stall, so granting it a
+  bypass would widen the blast radius for nothing.
+- Home layer rather than project layer, so the grant applies on every host and project.
+  This reverses the previous "~/.agents/subagents is intentionally unmanaged" policy, so
+  dotfiles/AGENTS.md, dotagents/AGENTS.md and herdr-orch/SKILL.md were corrected.
+- `:extra-args` validation rejects control characters at config-parse time, because Herdr
+  refuses them in argv with `invalid_agent_argument` before pane lookup.
+
+Acceptance criteria:
+- [X] `core/harness-extra-args` returns [] for every kind under the shipped config
+- [X] A configured kind's args reach the real `agent start` argv; an unnamed kind is unaffected
+- [X] `parse-config` rejects non-sequential, non-string, blank, and control-character members, naming the file
+- [X] An override omitting `:model-flag` is rejected (harness entries are replaced wholesale, not key-merged)
+- [X] `bb test` green -- 421 tests / 2314 assertions, 0 failures
+- [X] Both flags verified against the installed claude and codex binaries
+- [X] `agents.nix` symlinks `~/.agents/subagents` and parses under `nix-instantiate --parse`
+- [ ] Home Manager switch run, so `~/.agents/subagents/config.edn` actually resolves
+
+Anti-criteria:
+- Must not enable any bypass by default, in the packaged config or in code.
+- Must not grant `pi` a permission bypass.
+- Must not select kind from model identity, or change `:models` row-replacement semantics.
+
+Security note: this is the home layer, so every claude- and codex-kind subagent gets
+unsandboxed, unprompted command execution in the caller's worktree, for every project on
+this machine. Acceptable on a single-user workstation; do not propagate to a shared or
+internet-exposed host.
+
+Files: dotagents `skills/herdr-orch/scripts/src/herdr_orch/{core,cli}.clj`,
+`test/herdr_orch/{core,cli}_test.clj`, `subagents/config.edn`, `skills/herdr-orch/SKILL.md`,
+`skills/herdr-orch/scripts/docs/contract.md`, `AGENTS.md`; dotfiles `agents.nix`, `AGENTS.md`.
+
 * Fixes
 
 * Housekeeping
@@ -285,14 +344,17 @@ Evidence:
 - Session dirty diff: lastChangelogVersion="0.76.0", defaultProvider="anthropic", defaultModel="claude-opus-4-7".
 - Filter wrapper exists at ./install-git-filter.sh; was not active on this clone.
 
-** TODO subagent: make Claude-kind persona injection shell-safe :skill_herdr-orch:
+** STARTED subagent: make Claude-kind persona injection shell-safe :skill_herdr-orch:
 :PROPERTIES:
 :CUSTOM_ID: e3928501-48a5-471b-ae2f-4d55dbe8c3f7
 :CREATED: [2026-07-30 Thu 10:31]
+:STARTED: [2026-08-03 Mon 17:35]
 :END:
 :LOGBOOK:
 - Created [2026-07-30 Thu 10:31]
+- State "STARTED" from "TODO" [2026-08-03 Mon 17:35]
 :END:
+#+IMPORT: [[plan:2026-08-03-subagent-make-claude-kind-persona-inject.org]]
 A legitimate `oh start reviewer --kind claude ...` path failed before agent startup with Herdr `invalid_agent_argument` ("agent arguments cannot be encoded safely for the target shell"). `spawn!` currently passes the complete persona body through Claude `--append-system-prompt`; the harness-agnostic design explicitly supports Claude kind and says Claude requires body text, so this is a broken supported path rather than a model-routing issue. Reproduce it deliberately, identify a shell-safe transport for multiline persona content, and add real/fake coverage without selecting kind from model identity.
 
 Origin:

@@ -1,0 +1,31 @@
+;; Home-layer subagent overrides, symlinked to ~/.agents/subagents by the dotfiles
+;; `agents.nix`. This is the middle link of the config chain:
+;;   packaged skills/herdr-orch/subagents/config.edn
+;;     <- this file (~/.agents/subagents/config.edn)
+;;       <- project <git-root>/.agents/subagents/config.edn
+;;
+;; `merge-config` is `merge-with merge`, so a `:harnesses` entry here REPLACES the
+;; packaged entry for that kind wholesale rather than merging its keys. Every entry
+;; below must therefore restate `:model-flag`; omitting it fails validation at parse
+;; with this file's path.
+;;
+;; WHY: Claude Code and Codex both default to interactive per-command approval, so a
+;; spawned subagent stalls at its first tool call waiting for a human who is not
+;; watching its pane. The parent then reports a timeout while the child sits blocked.
+;; These flags make non-interactive delegation possible for those two harnesses.
+;;
+;; RISK: this grants every claude- and codex-kind subagent unsandboxed, unprompted
+;; command execution in the caller's worktree, for every project on this machine.
+;; That is a deliberate trade for a single-user workstation; do not copy it onto a
+;; shared or internet-exposed host. `pi` is intentionally omitted -- it is not
+;; affected by this class of approval stall, and granting a bypass it does not need
+;; would widen the blast radius for nothing.
+;;
+;; Verified: Claude Code 2.1.220 (`--permission-mode` choices include
+;; `bypassPermissions`), codex-cli 0.145.0
+;; (`--dangerously-bypass-approvals-and-sandbox`).
+
+{:harnesses {:claude {:model-flag "--model"
+                      :extra-args ["--permission-mode" "bypassPermissions"]}
+             :codex  {:model-flag "--model"
+                      :extra-args ["--dangerously-bypass-approvals-and-sandbox"]}}}

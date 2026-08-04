@@ -35,15 +35,21 @@
   (when (seq (:process result))
     (throw (ex-info "a frontmatter-opted-out leg published PROCESS candidates" {:task (:task result) :process (:process result)})))
   result)
+(defn smoke-task-args [persona kind model task & {:keys [retro?]}]
+  (cond-> ["task" "run" persona]
+    retro? (conj "--retro")
+    kind (into ["--kind" kind])
+    true (into ["--model" model "--task" task])))
 (defn -main [& _]
   (try
     (when-not (= "1" (required! "HERDR_ENV")) (throw (ex-info "live smoke requires HERDR_ENV=1" {})))
     (when-not (= "1" (required! "ORCH_LIVE_SMOKE")) (throw (ex-info "live smoke requires ORCH_LIVE_SMOKE=1" {})))
     (let [model (required! "ORCH_LIVE_SMOKE_MODEL")
-          root (-> (cli/execute ["task" "run" "scout" "--model" model "--task" "Run the guarded root smoke: verify HERDR_ORCH_CHILD, HERDR_ORCH_TASK, HERDR_ORCH_RESULT, and HERDR_ORCH_WAITING_POLICY are set; then publish COMPLETE with a concise summary using the injected launcher."]) complete!)
+          kind (some-> (System/getenv "ORCH_LIVE_SMOKE_KIND") str/trim not-empty)
+          root (-> (cli/execute (smoke-task-args "scout" kind model "Run the guarded root smoke: verify HERDR_ORCH_CHILD, HERDR_ORCH_TASK, HERDR_ORCH_RESULT, and HERDR_ORCH_WAITING_POLICY are set; then publish COMPLETE with a concise summary using the injected launcher.")) complete!)
           root-entry (entry! root)
           _ (when-not (re-matches #"scout-[0-9]+(?:-.+)?" (:label root-entry)) (throw (ex-info "root smoke label is invalid" {:label (:label root-entry)})))
-          nested (-> (cli/execute ["task" "run" "planner" "--model" model "--task" (str "Run the guarded nested smoke. Spawn exactly one blocking scout with the injected launcher using model " model "; ask it to verify its injected identity and publish COMPLETE. Wait for its result, require that it completed, then publish your own COMPLETE result.")]) complete!)
+          nested (-> (cli/execute (smoke-task-args "planner" kind model (str "Run the guarded nested smoke. Spawn exactly one blocking scout with the injected launcher using model " model "; ask it to verify its injected identity and publish COMPLETE. Wait for its result, require that it completed, then publish your own COMPLETE result."))) complete!)
           planner-entry (entry! nested)
           prefix (core/nested-prefix (:label planner-entry) "planner")
           child-entry (some #(when (str/starts-with? (:label %) (str prefix "/scout-")) %) (ledger/entries))]
@@ -64,11 +70,12 @@
                                            :retro-leg "skipped: no retro skill installed"
                                            :root-label (:label root-entry) :nested-label (:label child-entry)
                                            :child-sessions (mapv session! [root-entry planner-entry child-entry])}))
-        (let [retro (-> (cli/execute ["task" "run" "worker" "--retro" "--model" model
-                                      "--task" (str "Run the guarded retrospective smoke. "
-                                                    "Display your assignment's current status by running `\"$HERDR_ORCH_BIN\" show $HERDR_ORCH_TASK`. "
-                                                    "If that does not work, find the correct invocation and complete the status check anyway. "
-                                                    "Report the status and the exact invocation that worked in your summary, then publish COMPLETE, applying the retro instruction in this prompt to your own session as written.")])
+        (let [retro (-> (cli/execute (smoke-task-args "worker" kind model
+                                                        (str "Run the guarded retrospective smoke. "
+                                                             "Display your assignment's current status by running `\"$HERDR_ORCH_BIN\" show $HERDR_ORCH_TASK`. "
+                                                             "If that does not work, find the correct invocation and complete the status check anyway. "
+                                                             "Report the status and the exact invocation that worked in your summary, then publish COMPLETE, applying the retro instruction in this prompt to your own session as written.")
+                                                        :retro? true))
                         complete!)
               retro-entry (entry! retro)]
           (process! retro)

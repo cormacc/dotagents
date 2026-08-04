@@ -52,6 +52,14 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 
 Persona definitions are `<name>.md` files resolved in descending precedence: project `<git-root>/.agents/subagents/` > home `~/.agents/subagents/` > packaged `<skill-dir>/subagents/`, where `<skill-dir>` is derived from the installed launcher. This atomic name shadowing is distinct from the roster-table replacement in § Model resolution. The packaged directory is a skill default, not a Home Manager projection into the home override path.
 
+Persona transport is per kind: pi uses `--append-system-prompt <path>`, claude uses `--append-system-prompt-file <path>`, and other kinds use prompt-level adoption only.
+
+### Harness `:extra-args`
+
+A `:harnesses` entry may carry `:extra-args`, a vector of non-blank strings appended to that kind's native `agent start` argv, between the model args and the persona transport. The shipped config declares none for any kind, so the flag set is empty unless an override file asks for it, and it is granted per kind: naming `:claude` never affects `:pi`. Its purpose is a harness permission bypass (claude `--permission-mode bypassPermissions`, codex `--dangerously-bypass-approvals-and-sandbox`) for unattended delegation, since both harnesses otherwise block on interactive command approval.
+
+`merge-config` is `merge-with merge`, so a `:harnesses` entry is replaced wholesale at level two exactly as a `:models` row is; an override adding `:extra-args` must therefore restate `:model-flag`. `parse-config` rejects, with the offending file path, a non-sequential `:extra-args`, a non-string or blank member, and any member containing `\n`, `\t`, or `\r` -- the last because Herdr rejects control characters in agent argv with `invalid_agent_argument` before pane lookup, so the failure belongs at config-parse time rather than at spawn.
+
 ## Model resolution
 
 `resolve-model` precedence is requested > frontmatter model > same-kind parent inheritance > nil. The resolved value is translated at the `model-args` boundary, the single choke point for frontmatter models, explicit `--model` flags, and same-kind parent inheritance alike.

@@ -20,7 +20,7 @@ An assignment never silently contradicts its persona's declared interaction mode
 
 ## Roster and routing
 
-Definitions are `<name>.md` files discovered in descending precedence: `<git-root>/.agents/subagents/` (project override), then `~/.agents/subagents/` (home override), then the installed skill's `skills/herdr-orch/subagents/` (packaged default). The project copy wins; read the selected definition. The packaged directory is never projected into `~/.agents/subagents/`, which remains exclusively for genuine home overrides.
+Definitions are `<name>.md` files discovered in descending precedence: `<git-root>/.agents/subagents/` (project override), then `~/.agents/subagents/` (home override), then the installed skill's `skills/herdr-orch/subagents/` (packaged default). The project copy wins; read the selected definition. The packaged directory is never projected into `~/.agents/subagents/`, which holds only home-layer overrides.
 
 Resolve kind independently from model: spawn request overrides definition, definition overrides parent kind, and a model name--including a weight alias--never selects a harness. Roster `model:` values are translated only through the already-resolved kind via the separate `config.edn` chain: skill default `skills/herdr-orch/subagents/config.edn` ← `~/.agents/subagents/config.edn` ← `<git-root>/.agents/subagents/config.edn` (project wins). This is row-level replacement, not definition shadowing: an override row completely replaces the same model ID's row and is never deep-merged. The shipped weights are:
 
@@ -30,6 +30,8 @@ Resolve kind independently from model: spawn request overrides definition, defin
 | `middle` | `anthropic/claude-opus-5` | `opus` | `gpt-5.6-sol` |
 | `light` | `anthropic/claude-sonnet-5` | `sonnet` | `gpt-5.6-terra` |
 | `feather` | `anthropic/claude-haiku-4-5` | `haiku` | `gpt-5.6-luna` |
+
+A `:harnesses` entry may also carry `:extra-args`, a vector of native `agent start` arguments appended for that kind alone. Nothing ships in it: it exists so an override can grant a harness a permission bypass -- claude `--permission-mode bypassPermissions`, codex `--dangerously-bypass-approvals-and-sandbox` -- which is what makes unattended delegation possible for harnesses that otherwise stall on interactive command approval in a pane nobody is watching. A `:harnesses` entry is replaced wholesale rather than key-merged, so such an override must restate `:model-flag`; validation rejects a missing one, a blank or non-string member, and any control character (Herdr refuses those in argv) naming the offending file.
 
 The shipped `:pi` column supplies Pi's explicit provider-qualified model; tier-equivalent cross-provider mappings are confined to the `:claude` and `:codex` columns. Unversioned IDs (`claude-opus`, `gpt-sol`, …) are floating aliases for the latest version of that tier; versioned IDs pin a release. A model ID absent from the table passes through unchanged, and a definition model survives a kind override, translated for the resolved kind. Unknown personas require listing the roster and asking, not improvising.
 

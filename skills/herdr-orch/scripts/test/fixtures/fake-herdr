@@ -214,6 +214,19 @@ case "${1:-}" in
         printf ']}}\n'
         publish_queue_step ;;
       start)
+        # Herdr rejects only native agent args, after the `--` separator. Prompts may
+        # legitimately be multiline, so they remain unchecked in the separate branch.
+        native_args=0
+        for agent_arg in "$@"; do
+          if [ "$native_args" = 1 ]; then
+            if [[ "$agent_arg" == *$'\n'* || "$agent_arg" == *$'\t'* || "$agent_arg" == *$'\r'* ]]; then
+              printf '%s\n' '{"error":{"code":"invalid_agent_argument","message":"agent arguments cannot be encoded safely for the target shell"},"id":"cli:agent:start"}' >&2
+              exit 1
+            fi
+          elif [ "$agent_arg" = -- ]; then
+            native_args=1
+          fi
+        done
         [ "${FAKE_FAIL_START:-}" = 1 ] && { echo '{"error":"start"}' >&2; exit 1; }
         # FAKE_START_ERROR_CODE fails every `agent start` call with the given herdr
         # error code (real map shape, not the bare-string FAKE_FAIL_START), so a

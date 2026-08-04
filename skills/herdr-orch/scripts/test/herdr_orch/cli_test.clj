@@ -78,6 +78,9 @@
    "scout" "---\nname: scout\ndescription: fixture scout\nkind: pi\nmodel: anthropic/claude-sonnet-5\nretro: false\n---\nFixture scout.\n"
    "researcher" "---\nname: researcher\ndescription: fixture researcher\nkind: pi\nmodel: anthropic/claude-sonnet-5\nretro: false\n---\nFixture researcher.\n"})
 (defn call! [env & argv] @(process/process (into [bin] argv) {:out :string :err :string :env env}))
+(defn fake-start! [env & native-args]
+  @(process/process (into [fake "agent" "start" "child" "--kind" "pi" "--pane" "w:child" "--"] native-args)
+                    {:out :string :err :string :env env}))
 (defn result [proc] (json/parse-string (:out proc) true))
 
 ;; Mutates global with-redefs state (ledger/assignment-root, cli/home-directory,
@@ -414,15 +417,36 @@
   ;; Also covers the nested planner label end-to-end: the injected persona gates it.
   ;; Below root the spawn gate requires the target in the injected allow-list.
   (let [{:keys [env log]} (fake-env {"HERDR_ORCH_PERSONA" "planner" "HERDR_ORCH_SPAWNS" "worker"})
+        persona-path (str root "/skills/herdr-orch/subagents/worker.md")
+        persona-body (slurp persona-path)
         claude-proc (call! env "task" "start" "worker" "--kind" "claude" "--model" "sonnet" "--task" "claude persona")
         claude-start (first (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))
         rename (first (filter #(and (= ["pane" "rename"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log)))]
     (is (zero? (:exit claude-proc)))
-    (is (= "---" (last claude-start)))
-    (is (not-any? #(str/ends-with? % "/worker.md") claude-start))
+    (is (= persona-path (last claude-start)))
+    (is (some #(= ["--append-system-prompt-file" persona-path] %) (partition 2 1 claude-start)))
+    (is (not-any? #(= persona-body %) claude-start))
     ;; Fake `pane get w:p` reports the parent label `planner-1-model`.
     (is (= ["pane" "rename" "w:child" "planner-1/worker-1-sonnet"] (vec rename)))
     (is (= "planner-1/worker-1-sonnet" (get-in (result claude-proc) [:result :label])))))
+
+(deftest fake-herdr-agent-start-native-argument-contract
+  (let [{:keys [env prompt-file]} (fake-env {})
+        expected "{\"error\":{\"code\":\"invalid_agent_argument\",\"message\":\"agent arguments cannot be encoded safely for the target shell\"},\"id\":\"cli:agent:start\"}\n"]
+    (testing "multiline persona bodies are unrepresentable in agent start argv"
+      (doseq [body ["line one\nline two" "line one\tline two" "line one\rline two"]]
+        (let [proc (fake-start! env "--append-system-prompt" body)]
+          (is (= 1 (:exit proc)))
+          (is (= expected (:err proc))))))
+    (testing "shell-quoting hazards and long single-line values pass unchanged"
+      (doseq [body ["$VAR `command` 'single' \"double\"" (apply str (repeat 4000 "x"))]]
+        (is (zero? (:exit (fake-start! env "--append-system-prompt" body))))))
+    (testing "multiline prompt text remains valid"
+      (let [prompt "line one\nline two"
+            proc @(process/process [fake "agent" "prompt" "child" prompt]
+                                   {:out :string :err :string :env env})]
+        (is (zero? (:exit proc)))
+        (is (= prompt (slurp prompt-file)))))))
 
 (deftest preflight-fails-before-ledger-or-mutation
   (doseq [overrides [{"FAKE_HERDR_VERSION" "0.7.4"} {"FAKE_MISSING_CAPABILITY" "pane-split"}]]
@@ -478,6 +502,40 @@
     (is (= "tab" (preview env)))
     (is (= "split" (preview (merge env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"}))))
     (is (= "split" (preview env "--split")))))
+
+(deftest configured-harness-extra-args-reach-agent-start
+  ;; A permission bypass is opt-in configuration, never a shipped default: the same spawn
+  ;; carries no native permission args until an override asks for them, and then carries
+  ;; them only for the kind that was named.
+  (let [{:keys [env log dir]} (fake-env {})
+        project-config (fs/path dir ".agents" "subagents" "config.edn")
+        start-argv (fn [] (first (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))]
+    (fs/create-dirs (fs/parent project-config))
+    ;; No override: nothing resembling a permission flag reaches `agent start`.
+    (let [proc (call! env "task" "start" "worker" "--kind" "claude" "--model" "sonnet" "--task" "default permissions")]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (not-any? #{"--permission-mode" "bypassPermissions" "--dangerously-bypass-approvals-and-sandbox"} (start-argv))))
+    (let [{:keys [env log dir]} (fake-env {})
+          config (fs/path dir ".agents" "subagents" "config.edn")
+          argv-for (fn [kind]
+                     (let [proc (call! env "task" "start" "worker" "--kind" kind "--model" "sonnet" "--task" "bypass permissions")]
+                       (is (zero? (:exit proc)) (:err proc))
+                       (vec (last (filter #(and (= ["agent" "start"] (vec (take 2 %))) (not (some #{"--help"} %))) (calls log))))))]
+      (fs/create-dirs (fs/parent config))
+      (spit (str config)
+            (str "{:harnesses {:claude {:model-flag \"--model\" :extra-args [\"--permission-mode\" \"bypassPermissions\"]}"
+                 "             :codex {:model-flag \"--model\" :extra-args [\"--dangerously-bypass-approvals-and-sandbox\"]}}}"))
+      (let [claude-argv (argv-for "claude")]
+        (is (some #(= ["--permission-mode" "bypassPermissions"] %) (partition 2 1 claude-argv)))
+        ;; The persona transport still follows the bypass args, unbroken by the insertion.
+        (is (some #(and (= "--append-system-prompt-file" (first %)) (str/ends-with? (second %) "/worker.md")) (partition 2 1 claude-argv))))
+      (let [codex-argv (argv-for "codex")]
+        (is (some #{"--dangerously-bypass-approvals-and-sandbox"} codex-argv))
+        ;; Codex gets no persona flag: prompt-level adoption only, per `persona-args`.
+        (is (not-any? #{"--append-system-prompt" "--append-system-prompt-file"} codex-argv)))
+      ;; pi was never named by the override, so it is unaffected.
+      (let [pi-argv (argv-for "pi")]
+        (is (not-any? #{"--permission-mode" "bypassPermissions" "--dangerously-bypass-approvals-and-sandbox"} pi-argv))))))
 
 (deftest start-collect-status-and-blocked-contract
   ;; The hand-written envelope is BLOCKED, which also covers a BLOCKED envelope

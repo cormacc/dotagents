@@ -125,6 +125,14 @@
 (defn model-args [config kind model]
   (let [translated (translate-model config kind model) flag (get-in config [:harnesses (keyword kind) :model-flag])]
     (if (and translated flag) [flag translated] [])))
+;; Opt-in per-harness native args, appended to every `agent start` for that kind. The
+;; shipped config ships none, so a permission bypass -- claude
+;; `--permission-mode bypassPermissions`, codex `--dangerously-bypass-approvals-and-sandbox`
+;; -- is only ever granted by an override file that asks for it explicitly. Because
+;; `merge-config` replaces a harness entry wholesale rather than merging its keys, such an
+;; override must restate `:model-flag`; validation enforces that.
+(defn harness-extra-args [config kind]
+  (vec (get-in config [:harnesses (keyword kind) :extra-args])))
 ;; config.edn shape validation: sparse model rows and harness keywords absent from
 ;; `:harnesses` are allowed (the kind set is open by contract). `:defaults` is closed
 ;; so placement typos fail loudly. Every failure carries the offending file path.
@@ -137,7 +145,20 @@
       (when-not (map? entry) (throw (ex-info "config :harnesses entry must be a map" {:path path :harness kind :value entry})))
       (let [flag (:model-flag entry)]
         (when-not (and (string? flag) (not (str/blank? flag)))
-          (throw (ex-info "config :harnesses entry :model-flag must be a non-blank string" {:path path :harness kind :model-flag flag})))))
+          (throw (ex-info "config :harnesses entry :model-flag must be a non-blank string" {:path path :harness kind :model-flag flag}))))
+      ;; `:extra-args` reaches Herdr as native `agent start` argv, which rejects control
+      ;; characters outright, so a bad value fails here with the offending file rather
+      ;; than as an opaque `invalid_agent_argument` at spawn time.
+      (when (contains? entry :extra-args)
+        (let [extra (:extra-args entry)]
+          (when-not (sequential? extra)
+            (throw (ex-info "config :harnesses entry :extra-args must be a vector of strings" {:path path :harness kind :extra-args extra})))
+          (doseq [arg extra]
+            (when-not (and (string? arg) (not (str/blank? arg)))
+              (throw (ex-info "config :harnesses entry :extra-args must be a vector of non-blank strings" {:path path :harness kind :arg arg})))
+            (when (re-find #"[\n\t\r]" arg)
+              (throw (ex-info "config :harnesses entry :extra-args must not contain control characters; Herdr rejects them at agent start"
+                              {:path path :harness kind :arg arg})))))))
     (when-not (map? models) (throw (ex-info "config :models must be a map" {:path path :value models})))
     (doseq [[id row] models]
       (when-not (string? id) (throw (ex-info "config :models key must be a string" {:path path :key id})))
@@ -174,8 +195,13 @@
       :tab "tab"
       :tab-split (if below-root? "split" "tab")
       "split")))
-(defn persona-system-prompt [kind path body]
-  (if (= kind "pi") path body))
+;; Claude Code 2.1.220 accepts this file transport. Intentionally no runtime version
+;; probe or body-text fallback: unsupported versions fail loudly at startup.
+(defn persona-args [kind path]
+  (case kind
+    "pi" ["--append-system-prompt" path]
+    "claude" ["--append-system-prompt-file" path]
+    []))
 (defn root-label [persona index model]
   (str persona "-" index (when-let [m (model-basename model)] (str "-" m))))
 (defn nested-prefix [parent-label parent-persona]

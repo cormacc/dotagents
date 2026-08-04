@@ -11,7 +11,8 @@
   commands in that domain -- don't parallelise the skill load with domain probes.
 
 # Subagents
-- Reusable Herdr subagent definitions resolve `<git-root>/.agents/subagents/` (project override) > `~/.agents/subagents/` (home override) > `skills/herdr-orch/subagents/` (packaged default). The home path is unmanaged and reserved for genuine overrides. To delegate work inside Herdr, use the `herdr-orch` skill.
+- Reusable Herdr subagent definitions resolve `<git-root>/.agents/subagents/` (project override) > `~/.agents/subagents/` (home override) > `skills/herdr-orch/subagents/` (packaged default). The home path is this repo's `subagents/`, symlinked by the dotfiles `agents.nix`; edit it here rather than under `~`. To delegate work inside Herdr, use the `herdr-orch` skill.
+- `subagents/config.edn` grants claude and codex subagents a permission bypass (`--permission-mode bypassPermissions`, `--dangerously-bypass-approvals-and-sandbox`) because both harnesses otherwise stall on interactive approval in an unwatched pane. It is opt-in configuration, never a shipped default, and `pi` is deliberately excluded.
 - Resolve a subagent's kind independently from its model: explicit kind request, then persona definition, then parent kind. Do not select a harness from a model ID or weight alias. The separate `config.edn` chain replaces complete same-ID rows package < home < project; it never deep-merges or selects kind. Translate the resolved model through that kind's roster column; Pi receives the configured provider-qualified `:pi` model. Weight mappings: `heavy` = Pi `anthropic/claude-fable-5`, Claude `fable`, Codex `gpt-5.6-sol`; `middle` = Pi `anthropic/claude-opus-5`, Claude `opus`, Codex `gpt-5.6-sol`; `light` = Pi `anthropic/claude-sonnet-5`, Claude `sonnet`, Codex `gpt-5.6-terra`; `feather` = Pi `anthropic/claude-haiku-4-5`, Claude `haiku`, Codex `gpt-5.6-luna`.
 
 # Git operations

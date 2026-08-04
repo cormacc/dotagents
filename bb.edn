@@ -37,7 +37,7 @@
                   (apply (requiring-resolve 'org-tasks.test-runner/run)
                          *command-line-args*))}
 
-  smoke-subagent {:doc "Run explicitly guarded live Herdr subagent smoke"
+  smoke-subagent {:doc "Run explicitly guarded live Herdr subagent smoke (set ORCH_LIVE_SMOKE_KIND=claude to exercise Claude)"
                   :task (apply (requiring-resolve 'herdr-orch.smoke/-main)
                                *command-line-args*)}
 

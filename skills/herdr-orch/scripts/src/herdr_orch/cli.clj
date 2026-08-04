@@ -327,9 +327,8 @@
                 (when-not (= label (:label renamed)) (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))
                 (ledger/update! task assoc :status "renamed")
                 (let [native (concat (core/model-args config kind model)
-                                     (when (#{"pi" "claude"} kind)
-                                       ["--append-system-prompt"
-                                        (core/persona-system-prompt kind (str path) (slurp (str path)))]))]
+                                     (core/harness-extra-args config kind)
+                                     (core/persona-args kind (str path)))]
                   (record-session! task (:agent_session (herdr/start! name kind (:pane-id persisted) native)))
                   (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path path :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})]
                     (ledger/update! task assoc :status "started" :started-at (now))
