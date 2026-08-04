@@ -2030,47 +2030,77 @@
 ;; loader/translation machinery under test elsewhere in this namespace.
 (deftest default-config-content-contract
   (let [config (core/parse-config "config.edn" (slurp (str (fs/path root "skills" "herdr-orch" "subagents" "config.edn"))))
+        ;; The pre-migration flat table (design/log/2026-08-04-herdr-orch-simplify-model-aliasing.org
+        ;; task 1's starting point): every ID used to be its own `:models` row. Hardcoded
+        ;; here, never derived from the new two-level table below, so the argv-preservation
+        ;; check cannot be circular.
+        old-flat-table {"heavy"            {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
+                         "middle"           {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
+                         "light"            {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
+                         "feather"          {:pi "anthropic/claude-haiku-4-5" :claude "haiku"            :codex "gpt-5.6-luna"}
+                         "claude-fable"     {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
+                         "claude-opus"      {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
+                         "claude-sonnet"    {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
+                         "claude-haiku"     {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
+                         "gpt-sol"          {:pi "openai-codex/gpt-5.6-sol"   :claude "opus"             :codex "gpt-5.6-sol"}
+                         "gpt-terra"        {:pi "openai-codex/gpt-5.6-terra" :claude "sonnet"           :codex "gpt-5.6-terra"}
+                         "gpt-luna"         {:pi "openai-codex/gpt-5.6-luna"  :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
+                         "claude-fable-5"   {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
+                         "claude-opus-5"    {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
+                         "claude-sonnet-5"  {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
+                         "claude-haiku-4-5" {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
+                         "gpt-5.6-sol"      {:pi "openai-codex/gpt-5.6-sol"   :claude "opus"             :codex "gpt-5.6-sol"}
+                         "gpt-5.6-terra"    {:pi "openai-codex/gpt-5.6-terra" :claude "sonnet"           :codex "gpt-5.6-terra"}
+                         "gpt-5.6-luna"     {:pi "openai-codex/gpt-5.6-luna"  :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}}
         weight-rows {"heavy" {:pi "anthropic/claude-fable-5" :claude "fable" :codex "gpt-5.6-sol"}
                      "middle" {:pi "anthropic/claude-opus-5" :claude "opus" :codex "gpt-5.6-sol"}
                      "light" {:pi "anthropic/claude-sonnet-5" :claude "sonnet" :codex "gpt-5.6-terra"}
-                     "feather" {:pi "anthropic/claude-haiku-4-5" :claude "haiku" :codex "gpt-5.6-luna"}}]
+                     "feather" {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}}]
     (is (= "--model" (get-in config [:harnesses :pi :model-flag])))
     (is (= "--model" (get-in config [:harnesses :claude :model-flag])))
     (is (= "--model" (get-in config [:harnesses :codex :model-flag])))
     (is (= {:placement :split} (:defaults config)))
-    (testing "all twelve weight-alias translations"
-      (doseq [[alias row] weight-rows
-              [kind native-model] row]
-        (is (= native-model (get-in config [:models alias kind]))
-            (str alias " " (name kind) " row"))
-        (is (= ["--model" native-model] (core/model-args config (name kind) alias))
-            (str alias " translates for " (name kind)))))
+    (is (= 7 (count (:models config))) "shipped :models has exactly 7 canonical rows")
+    (is (= 18 (count (:aliases config))) "shipped :aliases has exactly 18 entries")
+    (testing "argv preservation: every pre-migration ID translates identically for every kind, except feather+claude"
+      (doseq [[id row] old-flat-table
+              [kind native-model] row
+              :let [expected (if (and (= id "feather") (= kind :claude)) "claude-haiku-4-5" native-model)]]
+        (is (= ["--model" expected] (core/model-args config (name kind) id))
+            (str id " translates for " (name kind)))))
     ;; contract.md is the single enumerated documentation home for these rows; every
     ;; other document states the rule and links to it. Pin the surviving copy here so a
     ;; model bump that misses the table fails the suite instead of drifting silently.
-    (testing "contract.md's weight table matches the shipped config"
+    (testing "contract.md's weight table matches the shipped config's effective translations"
       (let [doc (slurp (str (fs/path root "skills" "herdr-orch" "scripts" "docs" "contract.md")))
             documented (into {} (for [[_ weight pi claude codex]
                                       (re-seq #"(?m)^\|\s*`(heavy|middle|light|feather)`\s*\|\s*`([^`]+)`\s*\|\s*`([^`]+)`\s*\|\s*`([^`]+)`\s*\|\s*$" doc)]
                                   [weight {:pi pi :claude claude :codex codex}]))]
         (is (= weight-rows documented)
-            "contract.md § Model resolution must enumerate exactly the shipped weight rows")))
+            "contract.md § Model resolution must enumerate exactly the shipped weight rows")
+        (doseq [[weight row] weight-rows
+                [kind native-model] row]
+          (is (= ["--model" native-model] (core/model-args config (name kind) weight))
+              (str weight " " (name kind) " must resolve to the documented cell")))))
     ;; Pi receives the configured OpenAI model for `gpt-*`; only the claude/codex
     ;; columns use tier-equivalent cross-provider mappings.
-    (is (= {:pi "openai-codex/gpt-5.6-terra" :claude "sonnet" :codex "gpt-5.6-terra"} (get-in config [:models "gpt-5.6-terra"])))
-    (is (= {:pi "openai-codex/gpt-5.6-sol" :claude "opus" :codex "gpt-5.6-sol"} (get-in config [:models "gpt-5.6-sol"])))
-    (is (= {:pi "openai-codex/gpt-5.6-luna" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"} (get-in config [:models "gpt-5.6-luna"])))
+    (is (= ["--model" "openai-codex/gpt-5.6-terra"] (core/model-args config "pi" "gpt-5.6-terra")))
+    (is (= ["--model" "sonnet"] (core/model-args config "claude" "gpt-5.6-terra")))
+    (is (= ["--model" "gpt-5.6-terra"] (core/model-args config "codex" "gpt-5.6-terra")))
     (is (= ["--model" "openai-codex/gpt-5.6-sol"] (core/model-args config "pi" "gpt-5.6-sol")))
     (is (= ["--model" "opus"] (core/model-args config "claude" "gpt-5.6-sol")))
+    (is (= ["--model" "openai-codex/gpt-5.6-luna"] (core/model-args config "pi" "gpt-5.6-luna")))
+    (is (= ["--model" "claude-haiku-4-5"] (core/model-args config "claude" "gpt-5.6-luna")))
     ;; The canonical `claude-haiku*` rows retain the full name despite `feather` using
-    ;; the requested undocumented `haiku` alias.
-    (is (= "claude-haiku-4-5" (get-in config [:models "claude-haiku-4-5" :claude])))
+    ;; the requested undocumented `haiku` alias in the pre-migration table.
+    (is (= "claude-haiku-4-5" (get-in config [:models "anthropic/claude-haiku-4-5" :claude])))
     ;; Unversioned canonical IDs are floating aliases for the latest version of the tier.
     (doseq [[unversioned latest] [["claude-fable" "claude-fable-5"] ["claude-opus" "claude-opus-5"]
                                   ["claude-sonnet" "claude-sonnet-5"] ["claude-haiku" "claude-haiku-4-5"]
-                                  ["gpt-sol" "gpt-5.6-sol"] ["gpt-terra" "gpt-5.6-terra"] ["gpt-luna" "gpt-5.6-luna"]]]
-      (is (= (get-in config [:models latest]) (get-in config [:models unversioned]))
-          (str unversioned " resolves to the same row as " latest)))
+                                  ["gpt-sol" "gpt-5.6-sol"] ["gpt-terra" "gpt-5.6-terra"] ["gpt-luna" "gpt-5.6-luna"]]
+            kind ["pi" "claude" "codex"]]
+      (is (= (core/model-args config kind latest) (core/model-args config kind unversioned))
+          (str unversioned " resolves identically to " latest " for " kind)))
     (is (= ["--model" "gpt-5.6-terra"] (core/model-args config "codex" "claude-sonnet-5")))))
 
 ;; Named as a serial test by the shared-runner opt-in contract (task 2fe1ce2a),
@@ -2116,30 +2146,23 @@
     (with-redefs [cli/launcher-bin (constantly launcher) ledger/assignment-root (constantly project-root)]
       (testing "default only"
         (let [config (cli/config home-dir)]
-          (is (= "opus" (get-in config [:models "middle" :claude])))
+          (is (= "opus" (get-in config [:models "anthropic/claude-opus-5" :claude])))
           (is (= "--model" (get-in config [:harnesses :codex :model-flag])))))
-      (testing "home override replaces a weight-alias row"
+      (testing "home override replaces a canonical model row"
         (fs/create-dirs (fs/parent home-roster))
-        (spit (str home-roster) "{:models {\"middle\" {:claude \"middle-home\"}}}")
-        (is (= "middle-home" (get-in (cli/config home-dir) [:models "middle" :claude]))))
-      (testing "project beats home for the same weight alias; row-level replacement drops untouched columns"
+        (spit (str home-roster) "{:models {\"anthropic/claude-opus-5\" {:claude \"opus-home\"}}}")
+        (is (= "opus-home" (get-in (cli/config home-dir) [:models "anthropic/claude-opus-5" :claude]))))
+      (testing "project beats home for the same canonical row; row-level replacement drops untouched columns"
         (fs/create-dirs (fs/parent project-config))
-        (spit (str project-config) "{:models {\"middle\" {:claude \"middle-project\"}}}")
+        (spit (str project-config) "{:models {\"anthropic/claude-opus-5\" {:claude \"opus-project\"}}}")
         (let [config (cli/config home-dir)]
-          (is (= "middle-project" (get-in config [:models "middle" :claude])))
-          ;; The overridden row replaces the whole default row: :pi/:codex are gone, not
+          (is (= "opus-project" (get-in config [:models "anthropic/claude-opus-5" :claude])))
+          ;; The overridden row replaces the whole default row: :codex is gone, not
           ;; deep-merged alongside the new :claude value.
-          (is (nil? (get-in config [:models "middle" :pi])))))
-      (testing "canonical rows retain home/project replacement precedence"
-        (spit (str home-roster) "{:models {\"claude-opus-5\" {:claude \"opus-home\"}}}")
-        (is (= "opus-home" (get-in (cli/config home-dir) [:models "claude-opus-5" :claude])))
-        (spit (str project-config) "{:models {\"claude-opus-5\" {:claude \"opus-project\"}}}")
-        (let [config (cli/config home-dir)]
-          (is (= "opus-project" (get-in config [:models "claude-opus-5" :claude])))
-          (is (nil? (get-in config [:models "claude-opus-5" :pi])))))
+          (is (nil? (get-in config [:models "anthropic/claude-opus-5" :codex])))))
       (testing "missing override files are silently ignored"
         (fs/delete home-roster) (fs/delete project-config)
-        (is (= "opus" (get-in (cli/config home-dir) [:models "middle" :claude]))))
+        (is (= "opus" (get-in (cli/config home-dir) [:models "anthropic/claude-opus-5" :claude]))))
       (testing "malformed EDN in an override throws naming its path"
         (spit (str project-config) "{:models")
         (is (try (cli/config home-dir) false
@@ -2151,12 +2174,12 @@
                  (catch clojure.lang.ExceptionInfo e (= (str project-config) (:path (ex-data e))))))
         (fs/delete project-config))
       (testing "portability: an override adding a new harness + model column translates for unmodified code"
-        (spit (str project-config) "{:harnesses {:gemini {:model-flag \"--model\"}} :models {\"claude-opus-5\" {:gemini \"gemini-2.5-pro\"}}}")
+        (spit (str project-config) "{:harnesses {:gemini {:model-flag \"--model\"}} :models {\"anthropic/claude-opus-5\" {:gemini \"gemini-2.5-pro\"}}}")
         (let [config (cli/config home-dir)]
-          (is (= ["--model" "gemini-2.5-pro"] (core/model-args config "gemini" "claude-opus-5")))
+          (is (= ["--model" "gemini-2.5-pro"] (core/model-args config "gemini" "anthropic/claude-opus-5")))
           ;; A kind still absent from `:harnesses` remains empty args — the addition is
           ;; purely additive data, no code change and no other kind affected.
-          (is (= [] (core/model-args config "vertex" "claude-opus-5"))))
+          (is (= [] (core/model-args config "vertex" "anthropic/claude-opus-5"))))
         (fs/delete project-config)))
     (testing "missing shipped default is fatal"
       (with-redefs [cli/launcher-bin (constantly (str (fs/path tmp "empty-install" "skills" "herdr-orch" "scripts" "oh")))
@@ -2200,7 +2223,7 @@
 ;; over the shipped default.
 (deftest relocated-assignment-root-resolves-project-config-override
   (let [{:keys [env dir]} (fake-env {} roster-model-personas)]
-    (spit (str (fs/path dir ".agents" "subagents" "config.edn")) "{:models {\"claude-opus-5\" {:claude \"opus-relocated\"}}}")
+    (spit (str (fs/path dir ".agents" "subagents" "config.edn")) "{:models {\"anthropic/claude-opus-5\" {:claude \"opus-relocated\"}}}")
     (let [proc (call! env "task" "run" "canonical-worker" "--kind" "claude" "--task" "relocated override" "--print-prompt")]
       (is (zero? (:exit proc)) (:err proc))
       (is (= ["--model" "opus-relocated"] (get-in (result proc) [:result :model-args]))))))
@@ -2216,6 +2239,51 @@
     (let [proc (call! env "task" "start" "probe" "--task" "invalid roster aborts")]
       (is (= 1 (:exit proc)))
       (is (re-find #"model-flag" (:out proc)))
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
+      (is (not-any? mutating? (calls log))))))
+
+;; A project override introducing a fresh `:aliases` key (never a shipped `:models` row)
+;; retargets `--model` end-to-end through the real loader, and `--print-prompt` reports
+;; the post-alias canonical ID alongside the resolved (pre-alias) model and the native
+;; translated model-args -- acceptance for two-level model resolution in code. The target
+;; is the genuine canonical ID rather than the shipped `"claude-opus-5"` alias, because
+;; pointing a fresh alias at an existing alias key would be a rejected multi-hop chain.
+(deftest preview-reports-post-alias-canonical-model
+  (let [{:keys [env dir]} (fake-env {} roster-model-personas)]
+    (spit (str (fs/path dir ".agents" "subagents" "config.edn")) "{:aliases {\"fixture-heavy\" \"anthropic/claude-opus-5\"}}")
+    (let [proc (call! env "task" "run" "canonical-worker" "--kind" "claude" "--model" "fixture-heavy" "--task" "alias preview" "--print-prompt")]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "fixture-heavy" (get-in (result proc) [:result :model])))
+      (is (= "anthropic/claude-opus-5" (get-in (result proc) [:result :model-canonical])))
+      (is (= ["--model" "opus"] (get-in (result proc) [:result :model-args]))))))
+
+;; Post-merge validation fires before any ledger allocation or pane mutation, exactly
+;; like the per-file shape checks above. `"anthropic/claude-opus-5"` is already a shipped
+;; `:models` key (the two-level table's canonical row), so a project override adding it
+;; as an `:aliases` key collides on merge without this test having to shadow anything
+;; itself.
+(deftest project-override-alias-model-key-overlap-fails-before-ledger-or-mutation
+  (let [{:keys [env log dir]} (fake-env {} minimal-persona)]
+    (spit (str (fs/path dir ".agents" "subagents" "config.edn")) "{:aliases {\"anthropic/claude-opus-5\" \"anthropic/claude-fable-5\"}}")
+    (let [proc (call! env "task" "start" "probe" "--task" "alias/model overlap aborts")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #":aliases" (:out proc)) (:out proc))
+      (is (re-find #":models" (:out proc)) (:out proc))
+      (is (re-find #"anthropic/claude-opus-5" (:out proc)) (:out proc))
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
+      (is (not-any? mutating? (calls log))))))
+
+;; A chained alias (a value that is itself an `:aliases` key) is rejected the same way,
+;; using fresh keys absent from the shipped table so only the chain check can fire. The
+;; second hop targets the genuine canonical ID (a `:models` key) rather than the shipped
+;; `"claude-opus-5"` alias, which would itself trip the chain check and make the failing
+;; key non-deterministic between the two violations.
+(deftest project-override-alias-chain-fails-before-ledger-or-mutation
+  (let [{:keys [env log dir]} (fake-env {} minimal-persona)]
+    (spit (str (fs/path dir ".agents" "subagents" "config.edn")) "{:aliases {\"fixture-x\" \"fixture-y\" \"fixture-y\" \"anthropic/claude-opus-5\"}}")
+    (let [proc (call! env "task" "start" "probe" "--task" "alias chain aborts")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"fixture-y" (:out proc)) (:out proc))
       (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log))))))
 

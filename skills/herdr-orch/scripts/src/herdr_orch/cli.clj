@@ -114,10 +114,11 @@
    (let [default-path (default-config-path)
          home-path (fs/path home ".agents" "subagents" "config.edn")
          project-path (fs/path (ledger/assignment-root) ".agents" "subagents" "config.edn")]
-     (core/merge-config
-      (or (config-file default-path) (fail "missing shipped default config" {:path default-path}))
-      (or (config-file home-path) {})
-      (or (config-file project-path) {})))))
+     (core/validate-merged-config!
+      (core/merge-config
+       (or (config-file default-path) (fail "missing shipped default config" {:path default-path}))
+       (or (config-file home-path) {})
+       (or (config-file project-path) {}))))))
 (defn parent-identity []
   (let [agent (herdr/agent! (System/getenv "HERDR_PANE_ID"))]
     {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent)) :parent-kind (:agent agent) :parent-pane (:pane_id agent)}))
@@ -203,9 +204,10 @@
         retro (retro-policy persona opts frontmatter)
         spawns (spawns-policy persona opts frontmatter)]
     {:preview (prompt-text {:spawns (:spawns spawns) :persona-path path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
-     ;; :model is the canonical resolved ID; :model-args is the effective translated
+     ;; :model is the resolved (pre-alias) ID; :model-canonical is that ID after the
+     ;; single-hop `:aliases` translation; :model-args is the effective translated
      ;; native spelling (e.g. `["--model" "opus"]`) from the merged roster config.
-     :persona-path (str path) :kind kind :model model :model-args (core/model-args config kind model) :placement placement :retro (:retro retro) :retro-source (:retro-source retro)
+     :persona-path (str path) :kind kind :model model :model-canonical (core/canonical-model config model) :model-args (core/model-args config kind model) :placement placement :retro (:retro retro) :retro-source (:retro-source retro)
      :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)}))
 ;; A published result is immutable, so a result that fails validation can never become
 ;; valid. Record it as the non-final `invalid` status (pane retained, needs manual

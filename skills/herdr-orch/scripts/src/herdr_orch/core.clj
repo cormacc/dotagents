@@ -116,12 +116,18 @@
         (= resolved-kind parent-kind) parent-model
         :else nil))
 ;; Canonical model IDs are spelled differently per harness kind; the merged config
-;; (see `parse-config`/`merge-config`) carries both the per-kind flag spelling
-;; (`:harnesses`) and the per-ID translation table (`:models`). Both the ID set and the
-;; kind set are open by contract: an unlisted ID or a kind with no `:harnesses` entry
-;; is never a failure, only a pass-through/empty result.
+;; (see `parse-config`/`merge-config`) carries a single-hop `:aliases` map (short name
+;; -> canonical ID) alongside the per-kind flag spelling (`:harnesses`) and the per-ID
+;; translation table (`:models`). Both the ID set and the kind set are open by contract:
+;; an unlisted ID/alias or a kind with no `:harnesses` entry is never a failure, only a
+;; pass-through/empty result. `canonical-model` is the single alias hop: its result is
+;; looked up in `:models` directly, never re-resolved through `:aliases` again — a chain
+;; is a validation error (`validate-merged-config!`), not runtime behaviour.
+(defn canonical-model [config model]
+  (get-in config [:aliases model] model))
 (defn translate-model [config kind model]
-  (or (get-in config [:models model (keyword kind)]) model))
+  (let [canonical (canonical-model config model)]
+    (or (get-in config [:models canonical (keyword kind)]) canonical)))
 (defn model-args [config kind model]
   (let [translated (translate-model config kind model) flag (get-in config [:harnesses (keyword kind) :model-flag])]
     (if (and translated flag) [flag translated] [])))
@@ -166,6 +172,16 @@
       (doseq [[kind value] row]
         (when-not (keyword? kind) (throw (ex-info "config :models row key must be a keyword" {:path path :model id :key kind})))
         (when-not (string? value) (throw (ex-info "config :models row value must be a string" {:path path :model id :harness kind :value value})))))
+    ;; `:aliases` is a flat short-name -> canonical-ID map; both sides are keys/values
+    ;; that must round-trip through argv and error messages, so both are constrained to
+    ;; non-blank strings exactly like a `:models` row value.
+    (let [aliases (get config :aliases {})]
+      (when-not (map? aliases) (throw (ex-info "config :aliases must be a map" {:path path :value aliases})))
+      (doseq [[k v] aliases]
+        (when-not (and (string? k) (not (str/blank? k)))
+          (throw (ex-info "config :aliases key must be a non-blank string" {:path path :key k})))
+        (when-not (and (string? v) (not (str/blank? v)))
+          (throw (ex-info "config :aliases value must be a non-blank string" {:path path :key k :value v})))))
     (when (contains? config :defaults)
       (let [defaults (:defaults config)]
         (when-not (map? defaults) (throw (ex-info "config :defaults must be a map" {:path path :value defaults})))
@@ -187,6 +203,23 @@
 ;; `:defaults` to merge its keys across the override chain.
 (defn merge-config [& configs]
   (apply merge-with merge configs))
+;; Per-file validation only constrains shape within one file; a key can legally be a
+;; sole `:models` row in one layer and a sole `:aliases` entry in another and still
+;; collide only after `merge-config` composes them. Both checks here fire on the merged
+;; result, before any ledger allocation or pane mutation (see `cli/config`), and both
+;; are validation errors rather than a silent precedence rule: an alias/model overlap
+;; would otherwise let one direction silently shadow the other (see the change-record's
+;; "Decisions" section), and a chained alias (a value that is itself an `:aliases` key) would
+;; make the effective translation depend on lower-layer files the reader may never see.
+(defn validate-merged-config! [config]
+  (let [aliases (get config :aliases {}) models (get config :models {})]
+    (doseq [k (keys aliases)]
+      (when (contains? models k)
+        (throw (ex-info "config key is present in both :aliases and :models" {:key k}))))
+    (doseq [v (vals aliases)]
+      (when (contains? aliases v)
+        (throw (ex-info "config :aliases value is itself an :aliases key; multi-hop alias chains are not supported" {:key v})))))
+  config)
 (defn resolve-placement [{:keys [flag configured below-root?]}]
   (case flag
     "tab" "tab"

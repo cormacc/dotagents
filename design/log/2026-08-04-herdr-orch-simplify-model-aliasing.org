@@ -1,0 +1,139 @@
+#+TITLE: herdr-orch :: simplify model aliasing
+#+DATE: 2026-08-04 Tue
+#+PARENT: [[archive:2fdbe1f1-d1b2-4747-a777-1bc68fa32578][herdr-orch :: simplify model aliasing]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+
+* Intent
+
+Split the flat subagent model table into two levels -- `:models` keyed by pi-style provider-qualified canonical IDs, plus an `:aliases` map from weight/short name to canonical ID -- so an override can retarget one alias in one line instead of restating every harness spelling. Effective translations are preserved except one deliberate cell.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* inline + contract.md
+
+** Scope
+
+*** In scope
+- Two-level resolution: alias -> canonical ID (single hop) -> per-kind row, with the *canonical* ID passing through on a miss.
+- Shipped [[proj:skills/herdr-orch/subagents/config.edn]]: 7 canonical `:models` rows + 18 `:aliases`.
+- Validation of `:aliases` shape per file, and of alias/model key overlap and alias chains post-merge.
+- `--print-prompt` reports the post-alias canonical model.
+- contract.md § Model resolution, `config.edn` header, AGENTS.md subagents bullet.
+
+*** Out of scope
+- Multi-hop alias chains or per-alias row exceptions.
+- Derivation rules generating per-harness IDs from structured entries.
+- Any change to kind resolution, spawn policy, ledger, envelope, `:harnesses` semantics, or `merge-config` itself (`merge-with merge` already composes `:aliases` per key).
+- New harness entries or model rows beyond the migrated set.
+
+** Acceptance
+
+*** Core functionality
+- [X] Shipped `:models` has exactly 7 rows keyed by pi-style `provider/model` canonical IDs, each carrying only `:claude` and `:codex` columns.
+- [X] Shipped `:aliases` maps each of `heavy`/`middle`/`light`/`feather` to its canonical ID.
+- [X] Shipped `:aliases` maps each unversioned floating name (`claude-fable`, `claude-opus`, `claude-sonnet`, `claude-haiku`, `gpt-sol`, `gpt-terra`, `gpt-luna`) to its canonical ID.
+- [X] Shipped `:aliases` maps each bare versioned name (`claude-fable-5`, `claude-opus-5`, `claude-sonnet-5`, `claude-haiku-4-5`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`) to its canonical ID.
+- [X] For every pre-change table ID and each of pi/claude/codex, `model-args` yields the same argv as the flat table, except `feather` + claude → test:`test/herdr_orch/cli_test.clj` `default-config-content-contract`
+- [X] `feather` on kind claude yields `--model claude-haiku-4-5`.
+- [X] An aliased ID whose canonical ID has no `:models` row translates to the canonical ID (not the requested alias) for every kind.
+- [X] An override consisting solely of `{:aliases {"heavy" "<canonical>"}}` retargets `heavy` for all kinds without restating `:models` or `:harnesses`.
+- [X] A project alias entry beats a home alias entry for the same key while sibling aliases from lower layers survive.
+- [X] A merged config with a key in both `:aliases` and `:models` fails before ledger allocation or pane mutation with a message naming the key.
+- [X] An `:aliases` value that is itself an `:aliases` key fails with a message naming the key.
+- [X] A non-map `:aliases`, or a non-string/blank key or value, fails per-file naming the offending path.
+- [X] `--print-prompt` reports the post-alias canonical model (`:model-canonical`) alongside the resolved model and native model args.
+- [X] contract.md § Model resolution documents the two-level shape, `:aliases` per-key merge vs `:models` row replacement, the single-hop rule, and the overlap failure.
+- [X] `default-config-content-contract` still pins the contract.md weight table cell-for-cell against the shipped config's *effective* translations.
+- [X] The AGENTS.md subagents bullet states alias-level retargeting alongside row replacement.
+- [X] `skills/herdr-orch/subagents/config-new.edn` no longer exists.
+
+*** Edge cases
+- [X] A model ID absent from both `:aliases` and `:models` passes through unchanged.
+- [X] A resolved kind with no `:harnesses` entry yields empty model args for an aliased model.
+- [X] A nil resolved model yields empty model args.
+- [X] Missing override files stay silently ignored; a missing shipped default stays fatal.
+
+*** Anti-criteria
+- [X] Must not: change kind resolution, spawn policy, depth, ledger, or envelope behaviour.
+- [X] Must not: let an alias or model ID select or change a harness kind.
+- [X] Must not: deep-merge `:models` rows or `:harnesses` entries -- level-two wholesale replacement stays.
+- [X] Must not: resolve multi-hop alias chains.
+- [X] Must not: warn or fail on an unknown model ID or a kind with no `:harnesses` entry -- both sets stay open.
+
+** Decisions
+- Canonical ID is the pi-style `provider/model` string :: the `:pi` column becomes redundant (pass-through delivers the canonical spelling), rows shrink to genuine cross-provider remaps, and the same model via another provider is just a second row; aliases carry the human ergonomics so canonical verbosity costs nothing.
+  Rejected:
+  - Bare model names: keeps a redundant `:pi` column on every row and forces invented IDs for a second provider.
+  - Map entries `{:provider … :model …}` with derivation rules: schema and rule machinery nothing currently needs.
+- Alias/model key overlap fails loudly post-merge :: no silent shadowing in either direction; a legacy override carrying a full weight row fails at spawn naming the key rather than silently changing meaning.
+  Rejected:
+  - `:models` exact row wins (back-compat): a stale row silently shadows the alias override the user just wrote.
+  - `:aliases` wins silently: a legacy row override silently stops taking effect.
+- Aliases are single-hop and chains are validation errors :: multi-hop makes effective values non-local across override files.
+- The canonical haiku row uses the documented full name `claude-haiku-4-5` :: a two-level table cannot keep feather's undocumented `haiku` shorthand without per-alias exceptions, which would reintroduce the duplication this change removes. One effective cell changes; same model. This knowingly supersedes the earlier deliberate choice of the shorthand.
+- `:aliases` composition needs no merge code :: `merge-config` is `merge-with merge`, so a top-level `:aliases` map already merges per key across packaged < home < project; pinned by tests rather than new code.
+
+** Shipped
+- `--model feather` on kind claude passes `--model claude-haiku-4-5`, not `--model haiku`. Same model; the only effective translation change.
+- Retargeting a weight is `{:aliases {"heavy" "<canonical-id>"}}` -- one line, no harness spellings restated.
+- An override carrying a weight row in `:models` now fails at spawn naming the key.
+- MODIFIED contract docs :: [[proj:skills/herdr-orch/scripts/docs/contract.md]] § Model resolution and [[proj:skills/herdr-orch/SKILL.md]] describe the two-level shape; [[proj:AGENTS.md]] no longer claims pi receives a `:pi` column.
+
+** Gotchas
+- A config example outside contract.md has no test guarding it, so it can become executable-wrong rather than merely stale :: README.org's worked override (`{:models {"heavy" …}}`) hard-fails with `config key is present in both :aliases and :models {:key "heavy"}`. Validate doc examples by parsing them out of the doc and running them through `validate-merged-config!`.
+- Migrating a shared table's keyspace breaks fixtures nothing names :: four loader-precedence tests embedded `"heavy"`/`"middle"`/`"claude-opus-5"` as literal `:models` override keys. Grep the whole suite for literal old-key strings before declaring such a migration green.
+- An argv-preservation claim is only as good as its expectation source :: hardcode the pre-migration matrix from the old table (or `git show HEAD:`), never derive it from the new one, or a green suite proves nothing.
+- `bb test` runs from the repository root only :: there is no `bb.edn` under `skills/herdr-orch/scripts/`, and running it there fails with `test (Is a directory)`.
+
+** Risks
+- Claude renaming or dropping a native spelling is unchanged exposure, but now localised: one canonical row fixes every alias of that model.
+
+* Plan
+
+** DONE Two-level model resolution in code
+CLOSED: [2026-08-04 Tue 15:20]
+:PROPERTIES:
+:CUSTOM_ID: 88bcc181-cd20-4d13-b481-f3335568d7d3
+:CREATED: [2026-08-04 Tue]
+:STARTED: [2026-08-04 Tue 15:11]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-04 Tue 15:11]
+- State "DONE" from "STARTED" [2026-08-04 Tue 15:20]
+:END:
+Two-hop `translate-model` via `canonical-model`, `:aliases` shape validation, post-merge `validate-merged-config!`, and the `:model-canonical` preview field.
+
+** DONE Migrate the shipped table to two levels
+CLOSED: [2026-08-04 Tue 16:29]
+:PROPERTIES:
+:CUSTOM_ID: 6fcf6c60-e3f6-4f10-ae4a-7d9b52b94dda
+:CREATED: [2026-08-04 Tue]
+:BLOCKED-BY: 88bcc181-cd20-4d13-b481-f3335568d7d3
+:STARTED: [2026-08-04 Tue 16:18]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-04 Tue 16:18]
+- State "DONE" from "STARTED" [2026-08-04 Tue 16:29]
+:END:
+7 canonical rows + 18 aliases, argv preservation pinned against a hardcoded copy of the old flat table.
+
+** DONE Document the two-level contract
+CLOSED: [2026-08-04 Tue 16:34]
+:PROPERTIES:
+:CUSTOM_ID: fbdc81e3-0b59-41ef-b73f-82fef534900a
+:CREATED: [2026-08-04 Tue]
+:BLOCKED-BY: 6fcf6c60-e3f6-4f10-ae4a-7d9b52b94dda
+:STARTED: [2026-08-04 Tue 16:30]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-04 Tue 16:30]
+- State "DONE" from "STARTED" [2026-08-04 Tue 16:34]
+:END:
+contract.md § Model resolution and the AGENTS.md subagents bullet. README.org and SKILL.md were corrected separately.
+
+* Implementation
+
+The argv-preservation matrix is pinned in `default-config-content-contract` against a hardcoded copy of the pre-migration table; keep it hardcoded, or the check becomes circular.

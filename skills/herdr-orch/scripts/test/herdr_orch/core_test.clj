@@ -65,6 +65,31 @@
     (is (= [] (core/harness-extra-args config "claude")))
     (is (= [] (core/harness-extra-args config "codex")))
     (is (= [] (core/harness-extra-args config "gemini"))))
+  (testing "single-hop alias resolution: alias -> canonical -> per-kind row, canonical passthrough on miss"
+    (let [config {:harnesses {:pi {:model-flag "--model"} :claude {:model-flag "--model"} :codex {:model-flag "--model"}}
+                 :aliases {"heavy" "claude-opus-5" "ghost" "nowhere-canonical"}
+                 :models {"claude-opus-5" {:pi "anthropic/claude-opus-5" :claude "opus" :codex "gpt-5.6-sol"}}}]
+      ;; alias -> canonical -> row lookup, for every declared kind.
+      (is (= "anthropic/claude-opus-5" (core/translate-model config "pi" "heavy")))
+      (is (= "opus" (core/translate-model config "claude" "heavy")))
+      (is (= "gpt-5.6-sol" (core/translate-model config "codex" "heavy")))
+      (is (= ["--model" "opus"] (core/model-args config "claude" "heavy")))
+      ;; `canonical-model` exposes the post-alias hop directly, independent of kind.
+      (is (= "claude-opus-5" (core/canonical-model config "heavy")))
+      ;; An alias whose canonical target has no `:models` row: the *canonical* ID passes
+      ;; through, never the requested alias.
+      (is (= "nowhere-canonical" (core/canonical-model config "ghost")))
+      (is (= "nowhere-canonical" (core/translate-model config "pi" "ghost")))
+      (is (= ["--model" "nowhere-canonical"] (core/model-args config "pi" "ghost")))
+      ;; An ID absent from both `:aliases` and `:models` still passes through unchanged
+      ;; with a non-empty `:aliases` map present.
+      (is (= "unlisted-model" (core/translate-model config "pi" "unlisted-model")))
+      ;; A kind with no `:harnesses` entry yields empty model args for an aliased model.
+      (is (= [] (core/model-args config "gemini" "heavy")))
+      ;; A nil model yields empty model args even with `:aliases` present, and
+      ;; `canonical-model` passes nil through rather than throwing.
+      (is (= [] (core/model-args config "pi" nil)))
+      (is (nil? (core/canonical-model config nil)))))
   (testing "opt-in :extra-args reach the resolved kind only"
     (let [config {:harnesses {:pi {:model-flag "--model"}
                               :claude {:model-flag "--model" :extra-args ["--permission-mode" "bypassPermissions"]}
@@ -120,7 +145,12 @@
                           ":extra-args control character" "{:harnesses {:pi {:model-flag \"--model\" :extra-args [\"--a\\nb\"]}}}"
                           ":models not a map" "{:models [1 2]}"
                           ":models entry not a map" "{:models {\"x\" \"nope\"}}"
-                          ":models row value not a string" "{:models {\"x\" {:pi 1}}}"}]
+                          ":models row value not a string" "{:models {\"x\" {:pi 1}}}"
+                          ":aliases not a map" "{:aliases [1 2]}"
+                          ":aliases key not a string" "{:aliases {1 \"x\"}}"
+                          ":aliases blank key" "{:aliases {\"\" \"x\"}}"
+                          ":aliases value not a string" "{:aliases {\"a\" 1}}"
+                          ":aliases blank value" "{:aliases {\"a\" \"\"}}"}]
       (is (try (core/parse-config "/tmp/shape.edn" text) false
                (catch clojure.lang.ExceptionInfo e (= "/tmp/shape.edn" (:path (ex-data e)))))
           label)))
@@ -154,7 +184,36 @@
       (is (= {:model-flag "--model"} (get-in merged [:harnesses :pi])))
       (is (= {:model-flag "--model2"} (get-in merged [:harnesses :claude])))
       (is (= {:placement :tab-split :preserved :default :project true} (:defaults merged)))
-      (is (= {:enabled true} (:extension merged))))))
+      (is (= {:enabled true} (:extension merged)))))
+  (testing "a solitary :aliases override retargets an alias across every kind without restating :models or :harnesses"
+    (let [default {:harnesses {:pi {:model-flag "--model"} :claude {:model-flag "--model"} :codex {:model-flag "--model"}}
+                   :aliases {"heavy" "canonical-a"}
+                   :models {"canonical-a" {:pi "pa" :claude "ca" :codex "xa"}
+                            "canonical-b" {:pi "pb" :claude "cb" :codex "xb"}}}
+          override {:aliases {"heavy" "canonical-b"}}
+          merged (core/merge-config default override)]
+      (is (= "canonical-b" (get-in merged [:aliases "heavy"])))
+      (doseq [kind ["pi" "claude" "codex"]]
+        (is (= (get-in merged [:models "canonical-b" (keyword kind)]) (core/translate-model merged kind "heavy"))
+            (str "heavy retargeted for " kind)))))
+  (testing "project alias wins over home alias for the same key; sibling aliases from lower layers survive"
+    (let [default {:aliases {"a" "canonical-default" "b" "canonical-shared"}}
+          home {:aliases {"a" "canonical-home"}}
+          project {:aliases {"a" "canonical-project"}}
+          merged (core/merge-config default home project)]
+      (is (= "canonical-project" (get-in merged [:aliases "a"])))
+      (is (= "canonical-shared" (get-in merged [:aliases "b"]))))))
+
+(deftest merged-config-alias-model-overlap-and-chain-validation
+  (testing "a key present in both :aliases and :models fails, naming the key"
+    (is (try (core/validate-merged-config! {:aliases {"heavy" "canonical-a"} :models {"heavy" {:pi "x"}}}) false
+             (catch clojure.lang.ExceptionInfo e (= "heavy" (:key (ex-data e)))))))
+  (testing "an :aliases value that is itself an :aliases key fails, naming the key (multi-hop chain)"
+    (is (try (core/validate-merged-config! {:aliases {"heavy" "middle" "middle" "canonical-a"}}) false
+             (catch clojure.lang.ExceptionInfo e (= "middle" (:key (ex-data e)))))))
+  (testing "no overlap and no chain: the merged config passes through unchanged"
+    (let [config {:aliases {"heavy" "canonical-a"} :models {"canonical-a" {:pi "x"}}}]
+      (is (= config (core/validate-merged-config! config))))))
 
 (deftest placement-resolution-contract
   (testing "every flag/configuration/depth combination"

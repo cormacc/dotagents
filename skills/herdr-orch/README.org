@@ -51,7 +51,7 @@ The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.
 
 * Configuring a user override
 
-=config.edn= tunes three things: how a model ID is translated for a harness (=:models=), how a harness is invoked (=:harnesses=), and what a spawn defaults to (=:defaults=). It never defines a persona -- those are =<name>.md= files with their own resolution chain -- and it never selects a kind.
+=config.edn= tunes four things: what short name a model ID abbreviates (=:aliases=), how a canonical model ID is translated for a harness (=:models=), how a harness is invoked (=:harnesses=), and what a spawn defaults to (=:defaults=). It never defines a persona -- those are =<name>.md= files with their own resolution chain -- and it never selects a kind.
 
 The chain is packaged =skills/herdr-orch/subagents/config.edn= ← home =~/.agents/subagents/config.edn= ← project =<git-root>/.agents/subagents/config.edn=, project winning. In this repository the home layer is [[file:../../subagents/config.edn][subagents/config.edn]], symlinked to =~/.agents/subagents/= by the dotfiles =agents.nix=; edit it there rather than under =~=.
 
@@ -59,24 +59,29 @@ The chain is packaged =skills/herdr-orch/subagents/config.edn= ← home =~/.agen
 
 =merge-config= is =merge-with merge=, so the merge is exactly two levels deep:
 
-- Top-level keys (=:models=, =:harnesses=, =:defaults=) merge across files.
-- One level down, an entry *replaces* its counterpart wholesale. An override =:models= row for ="heavy"= replaces the packaged ="heavy"= row rather than merging columns into it, and an override =:harnesses :claude= entry replaces the packaged one -- so it must restate =:model-flag=, or validation rejects the file by name.
-- =:defaults= is the exception, because its values are scalars: each key merges independently.
+- Top-level keys (=:aliases=, =:models=, =:harnesses=, =:defaults=) merge across files.
+- One level down, an entry *replaces* its counterpart wholesale. An override =:models= row for ="anthropic/claude-opus-5"= replaces the packaged row for that canonical ID rather than merging columns into it, and an override =:harnesses :claude= entry replaces the packaged one -- so it must restate =:model-flag=, or validation rejects the file by name.
+- =:aliases= and =:defaults= are the exceptions, because their values are scalars: each key merges independently. Retargeting ="heavy"= therefore costs one line and leaves every sibling alias and every =:models= row untouched -- this is the whole point of the two-level split.
+
+A weight name like ="heavy"= is an =:aliases= key, *not* a =:models= key. Putting one in =:models= is now a loud failure rather than a silent override: the post-merge check rejects any key present in both maps, naming it. If you are migrating a pre-two-level override that carried a full ="heavy"= row, that is the error you will see.
 
 ** Worked example
 
 A home override that pins the =heavy= tier to a specific Claude release, makes claude-kind children usable unattended, and puts every child in its own tab:
 
 #+begin_src clojure
-{:models   {"heavy" {:pi "anthropic/claude-fable-5"
-                     :claude "claude-fable-5-20260714"   ; pinned, not the floating alias
-                     :codex "gpt-5.6-sol"}}               ; restated: the row replaces, not merges
- :harnesses {:claude {:model-flag "--model"               ; mandatory even when unchanged
+{:aliases  {"heavy" "anthropic/claude-fable-5-20260714"}   ; one line retargets the tier
+ :models   {"anthropic/claude-fable-5-20260714"            ; a new canonical ID needs a row
+            {:claude "claude-fable-5-20260714"             ; pinned, not the floating alias
+             :codex "gpt-5.6-sol"}}                        ; cross-provider equivalent
+ :harnesses {:claude {:model-flag "--model"                ; mandatory even when unchanged
                       :extra-args ["--permission-mode" "auto"]}}
  :defaults  {:placement :tab}}
 #+end_src
 
-The =:codex= column and the =:pi= column are restated because the row replaces the packaged one; omitting them would leave =--model heavy= untranslated for those kinds, and an untranslated ID passes through to the harness verbatim. =:model-flag= is restated for the same reason at the =:harnesses= level, where omitting it is a hard validation error rather than a silent pass-through.
+Retargeting the alias is one line because =:aliases= merges per key; no other weight and no packaged =:models= row is disturbed. The new canonical ID needs its own row only because it is genuinely new -- pointing ="heavy"= at an already-shipped canonical ID needs the =:aliases= entry alone.
+
+There is no =:pi= column, and adding one would be redundant: an ID with no row column falls through to the *canonical* ID, which is already the pi-style =provider/model= spelling pi wants. Here that means pi receives =--model anthropic/claude-fable-5-20260714=, claude receives =--model claude-fable-5-20260714=, and codex receives =--model gpt-5.6-sol=. The =:codex= column is stated because it is a genuine cross-provider remap; omit it and codex would receive the canonical ID verbatim. =:model-flag= is restated at the =:harnesses= level for a different reason: that level replaces wholesale, and omitting it is a hard validation error rather than a silent pass-through.
 
 =:extra-args= exists so an override can relax a harness's interactive command approval; without it, claude and codex children stall at their first tool call in a pane nobody is watching. Prefer a bounded grant to a blanket bypass -- the live home override documents the reasoning and the rejected alternatives at length, and [[file:scripts/docs/contract.md][contract.md]] § Harness =:extra-args= gives the validation rules.
 
@@ -90,7 +95,7 @@ Check what a spawn would actually do without spawning it:
 oh task run scout --task x --model heavy --print-prompt
 #+end_src
 
-The preview envelope reports =kind=, the canonical =model=, the translated =model-args= (the native flag and value the harness receives), plus the resolved =placement=, =retro=/=retro-source=, and =spawns=/=spawns-source=. If =model-args= still shows your alias rather than a harness-native ID, the row did not match the resolved kind.
+The preview envelope reports =kind=, the resolved (pre-alias) =model=, its post-alias canonical ID as =model-canonical=, the translated =model-args= (the native flag and value the harness receives), plus the resolved =placement=, =retro=/=retro-source=, and =spawns=/=spawns-source=. Read the two model fields together to localise a miss: if =model-canonical= still shows your short name, no =:aliases= entry matched it; if =model-canonical= is right but =model-args= repeats it rather than a harness-native ID, the =:models= row has no column for the resolved kind.
 
 * Architecture
 

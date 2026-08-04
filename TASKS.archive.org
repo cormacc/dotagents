@@ -1996,3 +1996,52 @@ Origin:
 
 Evidence:
 Failed reviewer assignment task 7f42e2db used explicit `--kind claude --model claude-fable`; Herdr returned JSON code `invalid_agent_argument`. Source path: `cli.clj` native args construction around `--append-system-prompt`; prior design note: `design/log/2026-07-24-herdr-subagent-skill-scripts.org` says Pi accepts a path while Claude requires persona body text.
+
+** DONE [#B] herdr-orch :: simplify model aliasing
+CLOSED: [2026-08-04 Tue 18:30]
+:PROPERTIES:
+:CUSTOM_ID: 2fdbe1f1-d1b2-4747-a777-1bc68fa32578
+:CREATED: [2026-08-04 Tue 14:13]
+:STARTED: [2026-08-04 Tue 15:11]
+:ARCHIVED: [2026-08-04 Tue 18:30]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-04 Tue 14:13]
+- State "STARTED" from "TODO" [2026-08-04 Tue 15:11]
+- State "DONE" from "STARTED" [2026-08-04 Tue 18:30]
+:END:
+#+IMPORT: [[plan:2026-08-04-herdr-orch-simplify-model-aliasing.org]]
+Currently the model alias table is flat. Overriding one or more of the aliases requires us to specify the model for each harness, leading to quite a lot of duplication.
+
+Splitting this into two levels might be more ergonomic.
+
+We retain the current table format for cross harness model equivalents (the provider-and-version-qualified model names), but switch to using a single canonical ID for the alias definitions -- so [[./skills/herdr-orch/subagents/config.edn]] becomes something like:
+
+#+begin_src edn
+{:defaults {:placement :split}
+ :harnesses {:pi     {:model-flag "--model"}
+             :claude {:model-flag "--model"}
+             :codex  {:model-flag "--model"}}
+ :models {"claude-fable-5"   {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
+          "claude-opus-5"    {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
+          "claude-sonnet-5"  {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
+          "claude-haiku-4-5" {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
+          "gpt-5.6-sol"      {:pi "openai-codex/gpt-5.6-sol"   :claude "opus"             :codex "gpt-5.6-sol"}
+          "gpt-5.6-terra"    {:pi "openai-codex/gpt-5.6-terra" :claude "sonnet"           :codex "gpt-5.6-terra"}
+          "gpt-5.6-luna"     {:pi "openai-codex/gpt-5.6-luna"  :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}}
+ :aliases {"heavy"            "claude-fable-5"
+           "middle"           "claude-opus-5"
+           "light"            "claude-sonnet-5"
+           "feather"          "claude-haiku-4-5"
+           "claude-fable"     "claude-fable-5"
+           "claude-opus"      "claude-opus-5"
+           "claude-sonnet"    "claude-sonnet-5"
+           "claude-haiku"     "claude-haiku-4-5"
+           "gpt-sol"          "gpt-5.6-sol"
+           "gpt-terra"        "gpt-5.6-terra"
+           "gpt-luna"         "gpt-5.6-luna"}}
+#+end_src
+
+Open questions
+- canonical model ID format :: Should this retain provider information to allow using the same model via different providers? If so should the canonical name be the pi name? Or a map -- entries something like {:provider :anthropic :model :claude-fable-5}. And perhaps an optional derivation rule to generate model IDs per harness from the map entries?
