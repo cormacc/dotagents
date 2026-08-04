@@ -336,7 +336,7 @@ Prune:
 5. Collapse the plan layer. `* Plan` is execution scaffolding: once every task is `DONE`, trim completed plan-task bodies to compact acceptance/audit value (`:LOGBOOK:` preserves timing; `* Implementation` captures outcomes). Keep the durable definition of done in `** Acceptance` (see *Two layers in one record*).
 6. Remove planning-flavoured Implementation subsections and condense useful content into outcomes, `** Gotchas`, or `** Decisions`.
 7. Cut change narration. Closure should shrink a record, not grow it: if `** Shipped` or `* Implementation` gained prose describing the *process* of delivery, reduce it to the end state a future reader needs. Prefer deleting a bullet to condensing it -- for a single-audience project, anything reconstructible from the commit or diff is not worth a line.
-7. Check that each Gotcha is a project-side surprise. Move library-level facts to the relevant skill/reference, or create follow-up work to do so.
+8. Check that each Gotcha is a project-side surprise. Move library-level facts to the relevant skill/reference, or create follow-up work to do so.
 
 `* Intent` itself is not pruned -- it stays as the durable record of what this work was *for*. If Intent and Summary's effort line both still apply, the record passes the closure bar.
 
