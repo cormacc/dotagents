@@ -1715,6 +1715,90 @@
       (is (empty? (child-waits log (:child b))))
       (is (empty? (closed-panes log))))))
 
+;; --- single-assignment settle-close ------------------------------------------------
+;; The settle wait belongs to `maybe-close!`, which every capture path reaches, so
+;; `collect <task>` gets exactly the same one. It has to: a parent collecting on the
+;; advisory publication push probes a child that is still `working` for the whole notify
+;; wait, so the immediate probe never saw a settled child and the documented single close
+;; attempt was unreachable on this path.
+(deftest collect-settles-a-working-child-before-closing-its-pane
+  (let [{:keys [env log dir state]} (fake-env {})
+        b (start-child! env dir "single-path settle-close")]
+    (child-state! state b "status" "working")
+    (child-state! state b "settle-to" "idle")
+    (publish-child! b)
+    (let [proc (call! env "task" "collect" (:task b))
+          res (:result (result proc))
+          waits (child-waits log (:child b))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)))
+      (is (= #{(:pane-id b)} (closed-panes log)))
+      ;; one wait, on the captured child, at the default budget and without `--until`
+      (is (= 1 (count waits)))
+      (is (= (str cli/default-settle-close-ms) (argv-flag (first waits) "--timeout")))
+      (is (not-any? #{"--until"} (first waits))))))
+
+;; Same give-up contract as the fan-in path: budget expiry and a failed wait alike fall
+;; through to the one close attempt, which finds the child unsettled and retains the pane
+;; without demoting the captured result or the exit code.
+(deftest collect-settle-close-give-up-retains-the-pane-without-touching-the-result
+  (doseq [outcome ["timeout" "error"]]
+    (let [{:keys [env log dir state]} (fake-env {})
+          b (start-child! env dir "single-path give-up")]
+      (child-state! state b "status" "working")
+      (child-state! state b "settle-to" outcome)
+      (publish-child! b)
+      (let [proc (call! env "task" "collect" (:task b))
+            res (:result (result proc))]
+        (is (zero? (:exit proc)) (str outcome " " (:err proc)))
+        (is (= "COMPLETE" (:status res)) outcome)
+        (is (= 1 (count (child-waits log (:child b)))) outcome)
+        (is (empty? (closed-panes log)) outcome)
+        (is (= "COMPLETE" (:status (ledger-entry* dir (:task b)))) outcome)))))
+
+;; A captured BLOCKED envelope closes no pane, so there is nothing for the wait to buy.
+(deftest collect-blocked-envelope-skips-the-settle-wait
+  (let [{:keys [env log dir state]} (fake-env {})
+        b (start-child! env dir "single-path blocked envelope")]
+    (child-state! state b "status" "working")
+    ;; Deliberately present: it would have satisfied the wait had one been issued.
+    (child-state! state b "settle-to" "idle")
+    (publish-child! b "BLOCKED")
+    (let [proc (call! env "task" "collect" (:task b))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "BLOCKED" (get-in (result proc) [:result :status])))
+      (is (empty? (child-waits log (:child b))))
+      (is (empty? (closed-panes log))))))
+
+;; A foreign parent session never closes a pane, so it never waits for one to settle either.
+(deftest collect-from-a-foreign-session-makes-no-settle-wait
+  (let [{:keys [env log dir state]} (fake-env {})
+        b (start-child! env dir "foreign session settle-close")]
+    (child-state! state b "status" "working")
+    (child-state! state b "settle-to" "idle")
+    (publish-child! b)
+    (let [proc (call! (merge env {"HERDR_PANE_ID" "w:other"}) "task" "collect" (:task b))
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (:status res)))
+      (is (true? (:pane-retained res)))
+      (is (= "foreign-parent-session" (:ownership res)))
+      (is (empty? (child-waits log (:child b))))
+      (is (empty? (closed-panes log))))))
+
+;; Never before the capture: a collect with nothing published is `pending` and issues no
+;; wait at all, so the budget can never be spent waiting for a child that has not answered.
+(deftest collect-without-a-published-result-never-waits
+  (let [{:keys [env log dir state]} (fake-env {})
+        b (start-child! env dir "nothing published yet")]
+    (child-state! state b "status" "working")
+    (child-state! state b "settle-to" "idle")
+    (let [proc (call! env "task" "collect" (:task b))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "pending" (get-in (result proc) [:result :status])))
+      (is (empty? (child-waits log (:child b))))
+      (is (empty? (closed-panes log))))))
+
 ;; --- advisory parent push at publish time -----------------------------------------
 ;; `start-child!` spawns from the parent pane `w:p`; the child then publishes with its own
 ;; injected identity, which is exactly the runtime shape of the push path.

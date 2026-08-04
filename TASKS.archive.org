@@ -2045,3 +2045,47 @@ We retain the current table format for cross harness model equivalents (the prov
 
 Open questions
 - canonical model ID format :: Should this retain provider information to allow using the same model via different providers? If so should the canonical name be the pi name? Or a map -- entries something like {:provider :anthropic :model :claude-fable-5}. And perhaps an optional derivation rule to generate model IDs per harness from the map entries?
+
+** DONE oh task collect <uuid>: settle-wait before the close attempt, as collect --any does :skill_herdr-orch:
+CLOSED: [2026-08-04 Tue 20:11]
+:PROPERTIES:
+:CUSTOM_ID: 2d635148-3c24-417d-b9c5-a6828c5dfcd3
+:CREATED: [2026-08-04 Tue 19:15]
+:STARTED: [2026-08-04 Tue 20:06]
+:ARCHIVED: [2026-08-04 Tue 20:11]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-08-04 Tue 19:15]
+- State "STARTED" from "TODO" [2026-08-04 Tue 20:06]
+- State "DONE" from "STARTED" [2026-08-04 Tue 20:11]
+:END:
+A validated COMPLETE capture on the single-assignment path almost never closes the child pane, so every ephemeral child has to be closed by hand despite the documented "one close attempt".
+
+Cause: maybe-close! (skills/herdr-orch/scripts/src/herdr_orch/cli.clj:258) only closes when agent_status is idle/done, but only the collect --any path wraps it in herdr/wait! (same file, ~:646). Plain collect <full-task-uuid> (~:479) probes immediately, so a parent that collects on the advisory publication push always finds the child still working and silently skips the close. The result is correct and captured; only the disposal is lost.
+
+Desired outcome: give collect <full-task-uuid> the same bounded ORCH_SETTLE_CLOSE_MS settle-wait that collect --any already has, so the contract's single close attempt is actually reachable on both paths. Keep it after the capture and never before it, matching the existing --any ordering, and keep a close failure non-fatal to the captured result.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-04 Tue 19:05]
+- sender: agent
+
+Evidence:
+Three of three ephemeral children (one planner, two workers) published COMPLETE, were validated and captured, and retained their panes; all three needed a manual oh pane close. Each was collected immediately on the advisory push, i.e. while still settling.
+
+Plan (inline, no change-record): move the post-capture settle wait into maybe-close! itself -- owned entries with a COMPLETE/FAILED envelope only, after capture, wait failure non-fatal -- and delete the now-duplicated wrapper in collect-any!. One rule in one place covers all four capture paths (collect <uuid>, collect --wait, run blocking, collect --any); user accepted that run/--wait gain the same bounded wait rather than keeping the literal single-path scope.
+
+Acceptance criteria:
+- [X] collect <uuid> on a COMPLETE child still reported working closes its pane after one bounded agent wait.
+- [X] Exactly one settle wait, on the captured child only, at ORCH_SETTLE_CLOSE_MS and with no --until.
+- [X] A captured BLOCKED envelope makes no settle wait.
+- [X] A foreign-parent-session capture makes no settle wait.
+- [X] Existing collect --any settle-close tests pass unmodified.
+- [X] docs/contract.md no longer scopes the settle wait to collect --any.
+
+Outcome: the settle wait now lives in maybe-close! (cli.clj), so run, collect <uuid>, collect --wait and collect --any share one bounded wait plus the single close attempt; collect-any! keeps only its remaining/--timeout accounting. One fixture change was needed: fake-herdr's agent wait published the target's RESULT, so the new post-capture wait clobbered hand-written envelopes -- publish_result now honours exactly-once publication as the real protocol does. Five new single-path tests (settles+closes, give-up on timeout/error, BLOCKED skip, foreign-session skip, pending-never-waits); reverting the wait line fails both the new and the pre-existing --any settle tests. 430 tests / 2464 assertions green.
+- Must not: wait before the capture.
+- Must not: let a wait or close failure demote a captured result.
+- Must not: use wait-settled! (its --until idle|done burns the budget on a blocked child).

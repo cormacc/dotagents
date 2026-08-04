@@ -30,12 +30,12 @@
   (let [n (some-> raw str/trim not-empty parse-long)]
     (if (and n (pos? n)) n default-progress-interval-ms)))
 (defn progress-interval-ms [] (parse-progress-interval (System/getenv "ORCH_PROGRESS_INTERVAL_MS")))
-;; Bounds the settle wait a `collect --any` capture makes before its one-shot pane close
-;; (see `collect-any!`); same non-positive/unparseable/blank -> default discipline as
-;; parse-poll-interval/parse-notify-timeout/parse-progress-interval. The default is
-;; deliberately larger than `default-notify-timeout-ms`: a non-blocking child publishing
-;; while its parent sits inside `collect --any` reads `working` for that entire notify
-;; wait (the parent, mid-collect, never settles idle/done), which is exactly the
+;; Bounds the settle wait every capture of a COMPLETE/FAILED envelope makes before its
+;; one-shot pane close (see `maybe-close!`); same non-positive/unparseable/blank ->
+;; default discipline as parse-poll-interval/parse-notify-timeout/parse-progress-interval.
+;; The default is deliberately larger than `default-notify-timeout-ms`: a non-blocking
+;; child publishing while its parent sits inside a collect reads `working` for that entire
+;; notify wait (the parent, mid-collect, never settles idle/done), which is exactly the
 ;; reproduced pane retention, so a budget at or below 30 000 ms would miss it.
 (def default-settle-close-ms 45000)
 (defn parse-settle-close [raw]
@@ -255,12 +255,32 @@
              (= recorded (try (:parent-session (parent-identity)) (catch Exception _ nil))))))
 ;; The ledger is repo-wide, so only the parent session that created an entry may close
 ;; its pane. An unresolvable caller identity is non-owning: capture still succeeds.
+;;
+;; Settle-close lives here, not in one caller, because the close probe below reads
+;; `agent_status` exactly once with no retry: a child still mid-turn at the instant of
+;; capture would otherwise keep its COMPLETE/FAILED pane forever. Every capture path
+;; (`collect <task>`, `collect --wait`, `run`, `collect --any`) reaches closure through
+;; this one function, so the wait belongs to it rather than being duplicated per path --
+;; a `collect` that probes immediately on the advisory publication push always reads
+;; `working` and silently skips the documented single close attempt.
+;;
+;; After the capture and never before it: the wait only buys the child time to reach
+;; idle/done, so a captured BLOCKED envelope (which never closes a pane) and a foreign
+;; capture (which never closes one either) both skip it entirely. One bounded
+;; `herdr/wait!` -- deliberately *not* `wait-settled!`, whose `--until idle --until done`
+;; would burn the whole budget on a blocked child; the bare form returns on any settled
+;; state, including blocked, whose pane must be kept anyway. Whatever the outcome --
+;; settled, timed out, or a herdr error -- the same single close attempt then runs, and
+;; giving up only retains the pane: no field of the captured result depends on it.
 (defn maybe-close! [entry parsed owned?]
   (if-not owned?
     (assoc parsed :pane-retained true :ownership "foreign-parent-session")
-    ;; The refresh is hoisted out of the COMPLETE/FAILED branch: a BLOCKED entry keeps its
-    ;; pane but still needs its session reference recorded.
-    (let [agent (try (herdr/agent! (:child entry)) (catch Exception _ nil))]
+    (let [_ (when (#{"COMPLETE" "FAILED"} (:status parsed))
+              (try (herdr/wait! (:child entry) (settle-close-ms)) (catch Exception _ nil)))
+          ;; Probed after the settle wait, so a child that reached idle/done inside it is
+          ;; seen as settled. The refresh is hoisted out of the COMPLETE/FAILED branch: a
+          ;; BLOCKED entry keeps its pane but still needs its session reference recorded.
+          agent (try (herdr/agent! (:child entry)) (catch Exception _ nil))]
       (when-not (:child-session entry) (record-session! (:task entry) (:agent_session agent)))
       (when (#{"COMPLETE" "FAILED"} (:status parsed))
         (when (and (:pane-id entry) agent (#{"idle" "done"} (:agent_status agent)))
@@ -614,10 +634,10 @@
 ;; `min(poll-interval, remaining-budget)` so the total timeout is never overshot by a
 ;; full interval. Candidates are same-session by construction, so a capture is always
 ;; owned and `capture!`/`maybe-close!` are reused unchanged — only the captured child's
-;; pane is closed, under the existing COMPLETE/FAILED + settled rules. That poll budget
-;; bounds waiting for a *publication* only; the post-capture settle wait below is a
-;; separate, additional bound, so a late capture can return up to `settle-close-ms` after
-;; `--timeout` would have elapsed.
+;; pane is closed, under the existing COMPLETE/FAILED + settled rules, including the
+;; post-capture settle wait `maybe-close!` owns. That poll budget bounds waiting for a
+;; *publication* only; the settle wait is a separate, additional bound, so a late capture
+;; can return up to `settle-close-ms` after `--timeout` would have elapsed.
 (defn collect-any! [opts]
   (let [session (try (:parent-session (parent-identity)) (catch Exception _ nil))
         ;; Without `--wait` the budget is zero: one poll, then the same `timeout` outcome.
@@ -630,20 +650,10 @@
       {:status "pending" :reason "unknown-caller"}
       (loop []
         (let [candidates (any-candidates session)
-              ;; Settle-close, after the capture and never before it: `maybe-close!` probes
-              ;; `agent_status` exactly once with no retry, so a child still mid-turn at the
-              ;; instant of capture would keep its COMPLETE/FAILED pane forever. One bounded
-              ;; `herdr/wait!` — deliberately *not* `wait-settled!`, whose `--until idle
-              ;; --until done` would burn the whole budget on a blocked child; the bare form
-              ;; returns on any settled state, including blocked, whose pane must be kept
-              ;; anyway. A captured BLOCKED envelope never closes a pane, so it skips the
-              ;; wait entirely. Whatever the outcome — settled, timed out, or a herdr error —
-              ;; the unmodified `maybe-close!` makes the same single close attempt, and
-              ;; giving up only retains the pane: no result field, `remaining` included,
-              ;; depends on the close outcome.
+              ;; `remaining` is a function of capture and candidacy alone -- computed from
+              ;; the candidate set observed at capture, before `maybe-close!`'s settle wait
+              ;; and close attempt, so no field of the result depends on the close outcome.
               captured (fn [[entry parsed]]
-                         (when (#{"COMPLETE" "FAILED"} (:status parsed))
-                           (try (herdr/wait! (:child entry) (settle-close-ms)) (catch Exception _ nil)))
                          (assoc (maybe-close! entry parsed true) :remaining (dec (count candidates))))]
           (if (empty? candidates)
             {:status "pending" :reason "no-candidates"}

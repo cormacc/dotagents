@@ -582,29 +582,6 @@ Origin:
 Evidence:
 Hit while filing retro items this session: `ot create --tag skill_herdr-orch` succeeded and the heading shows `:skill_herdr-orch:`, but the task lists with `tags: []`, as do the pre-existing tasks using the same form. Confirmed `org-tag-re` = `[[:alnum:]_@#%]+` in Emacs; `org-tasks` fails it, `org_tasks` passes.
 
-** TODO oh task collect <uuid>: settle-wait before the close attempt, as collect --any does :skill_herdr-orch:
-:PROPERTIES:
-:CUSTOM_ID: 2d635148-3c24-417d-b9c5-a6828c5dfcd3
-:CREATED: [2026-08-04 Tue 19:15]
-:END:
-:LOGBOOK:
-- Created [2026-08-04 Tue 19:15]
-:END:
-A validated COMPLETE capture on the single-assignment path almost never closes the child pane, so every ephemeral child has to be closed by hand despite the documented "one close attempt".
-
-Cause: maybe-close! (skills/herdr-orch/scripts/src/herdr_orch/cli.clj:258) only closes when agent_status is idle/done, but only the collect --any path wraps it in herdr/wait! (same file, ~:646). Plain collect <full-task-uuid> (~:479) probes immediately, so a parent that collects on the advisory publication push always finds the child still working and silently skips the close. The result is correct and captured; only the disposal is lost.
-
-Desired outcome: give collect <full-task-uuid> the same bounded ORCH_SETTLE_CLOSE_MS settle-wait that collect --any already has, so the contract's single close attempt is actually reachable on both paths. Keep it after the capture and never before it, matching the existing --any ordering, and keep a close failure non-fatal to the captured result.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-04 Tue 19:05]
-- sender: agent
-
-Evidence:
-Three of three ephemeral children (one planner, two workers) published COMPLETE, were validated and captured, and retained their panes; all three needed a manual oh pane close. Each was collected immediately on the advisory push, i.e. while still settling.
-
 ** TODO herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill_herdr-orch:
 :PROPERTIES:
 :CUSTOM_ID: 22f68a11-eeef-43e9-81d3-79341842ca84

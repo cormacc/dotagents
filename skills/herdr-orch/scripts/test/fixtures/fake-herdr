@@ -95,6 +95,9 @@ start_busy_gate() {
 }
 # publish_result [child-name]: publishes from the named child's captured env when it is
 # known, otherwise from the single-child FAKE_HERDR_ENV_FILE (unchanged behaviour).
+# Publication is exactly once and immutable in the real protocol (`publish` refuses an
+# existing RESULT), so an already-published child is never re-published here either: a
+# second wait on the same child must not clobber an envelope a test wrote by hand.
 publish_result() {
   local env_file="${FAKE_HERDR_ENV_FILE:-}" per_child status
   if [ -n "${1:-}" ]; then
@@ -104,6 +107,7 @@ publish_result() {
   [ -n "$env_file" ] && [ -f "$env_file" ] || return 0
   local result child task
   result="$(grep '^HERDR_ORCH_RESULT=' "$env_file" | head -1 | cut -d= -f2-)"
+  [ -n "$result" ] && [ -f "$result" ] && return 0
   child="$(grep '^HERDR_ORCH_CHILD=' "$env_file" | head -1 | cut -d= -f2-)"
   task="$(grep '^HERDR_ORCH_TASK=' "$env_file" | head -1 | cut -d= -f2-)"
   status="${FAKE_PUBLISH_STATUS:-COMPLETE}"
@@ -257,7 +261,7 @@ case "${1:-}" in
         esac
         exit 0
       fi
-      # A per-child `settle-to` marker models the `collect --any` settle-close wait: the
+      # A per-child `settle-to` marker models the post-capture settle-close wait: the
       # target has *already* published and is merely still `working`, so this wait must
       # settle it without the publish side effect `agent wait` carries in its original
       # (child wait loop) role. Branched on target state before the FAKE_WAIT cases for
