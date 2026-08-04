@@ -679,6 +679,60 @@
                          (boolean-flags x) (recur (next xs))
                          (str/starts-with? x "--") (recur (nnext xs))
                          :else (recur (next xs))))))))
+;; Per-command signatures. The global `usage` lists which commands exist; this lists how
+;; to call one, because a group listing cannot show positional arity and a caller who
+;; guesses wrong pays a failed invocation. Keep each line true to the `require-positionals`
+;; arity and flag reads in the handler directly below it.
+(def signatures
+  {"pane" ["split [--direction right|down] [--cwd DIR] [--env KEY=VALUE]*"
+           "run <pane> <command>"
+           "read <pane> [--source visible|recent|recent-unwrapped|detection] [--lines N] [--format text|ansi]"
+           "wait-output <pane> (--match TEXT | --regex PATTERN) [--source S] [--lines N] [--timeout MS] [--raw]"
+           "send-text <pane> <text>"
+           "send-keys <pane> <key> [<key>...]"
+           "close <pane>"
+           "list [--workspace ID]"
+           "current"
+           "get <pane>"
+           "layout <pane>"
+           "rename <pane> <label>"]
+   "tab" ["create [--workspace ID] [--cwd DIR] [--label TEXT] [--env KEY=VALUE]* [--focus]"
+          "list [--workspace ID]"
+          "focus <tab>"]
+   "ws" ["create [--cwd DIR] [--label TEXT] [--env KEY=VALUE]* [--focus]"
+         "list"
+         "focus <workspace>"]
+   "agent" ["start <name> --kind KIND --pane PANE [--native ARG]*"
+            "prompt <target> <text>"
+            "wait <target> [--timeout MS] [--until STATE]*"
+            "read <target> [--source S] [--lines N] [--format text|ansi]"
+            "send-keys <target> <key> [<key>...]"
+            "focus <target>"
+            "rename <target> (<name> | --clear)"
+            "list"
+            "get <target>"]
+   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--kind KIND] [--model MODEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--prompt-extra TEXT] [--print-prompt]"
+           "start <persona> (--task TEXT | --task-file PATH | stdin) [same options as run]"
+           "collect <full-task-uuid> [--wait] [--timeout MS]"
+           "collect --any [--wait] [--timeout MS]"
+           "status [full-task-uuid]"
+           "list"
+           "publish --status COMPLETE|BLOCKED|FAILED --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--from-file PATH] [--notify-timeout MS]"
+           "progress --summary TEXT"
+           "prune <full-task-uuid>"]
+   "spawn" ["spawn \"<shell command>\""]})
+(defn help-text
+  "Global usage, one group's signatures, or a single command's signature."
+  [group op]
+  (if-let [lines (and group (signatures group))]
+    (let [prefix (if (= group "spawn") "oh " (str "oh " group " "))
+          matching (when (and op (not (str/starts-with? op "-")))
+                     (seq (filter #(or (= op (first (str/split % #" ")))
+                                       ;; `spawn`'s only signature repeats the group name.
+                                       (= group "spawn"))
+                                  lines)))]
+      (str/join "\n" (map #(str prefix %) (or matching lines))))
+    usage))
 (defn require-positionals [items n description]
   (when-not (= n (count items))
     (fail (str description " requires " n " argument" (when (not= n 1) "s"))
@@ -774,7 +828,7 @@
 (defn execute [argv]
   (let [[group op & args] argv]
     (if (help-request? group (cons op args))
-      usage
+      (help-text group op)
       (let [opts (option-map args) positional (:_ opts)]
         (case group
           "pane" (raw-pane! op opts positional)

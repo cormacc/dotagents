@@ -624,7 +624,10 @@
         (is (str/includes? (:out proc) "resolved assignment")))
       (let [proc (call! env "task" "run" "worker" "--retro" "--help")]
         (is (zero? (:exit proc)) (:err proc))
-        (is (str/starts-with? (:out proc) "oh pane"))))
+        ;; Help text, not a missing-assignment failure: `--retro` must not have eaten
+        ;; `--help`. Per-command help means this is `task run`'s signature, not the
+        ;; global usage.
+        (is (str/starts-with? (:out proc) "oh task run <persona>"))))
     (testing "contradictory flags fail fast"
       (let [proc (call! env "task" "run" "worker" "--task" "x" "--retro" "--no-retro" "--print-prompt")]
         (is (= 1 (:exit proc)))
@@ -1993,11 +1996,34 @@
 
 (deftest help-is-human-readable-text
   (let [{:keys [env]} (fake-env {})]
-    (doseq [argv [["--help"] ["help"] ["task" "run" "--help"] ["task" "publish" "--help"]]]
-      (let [proc (apply call! env argv)]
-        (is (zero? (:exit proc)) (str argv " -> " (:err proc)))
-        (is (str/starts-with? (:out proc) "oh pane"))
-        (is (not (str/includes? (:out proc) "\"ok\"")))))))
+    (testing "bare and unknown-group help is the global usage"
+      (doseq [argv [["--help"] ["help"] ["bogus" "--help"]]]
+        (let [proc (apply call! env argv)]
+          (is (zero? (:exit proc)) (str argv " -> " (:err proc)))
+          (is (str/starts-with? (:out proc) "oh pane"))
+          (is (not (str/includes? (:out proc) "\"ok\""))))))
+    ;; A group listing cannot show positional arity, so `<group> <op> --help` must narrow
+    ;; to the one signature; guessing an arity costs a failed invocation.
+    (testing "group help lists its own commands and command help narrows to one"
+      (doseq [[argv expected] {["agent" "--help"] "oh agent start <name> --kind KIND"
+                               ["agent" "prompt" "--help"] "oh agent prompt <target> <text>"
+                               ["pane" "rename" "--help"] "oh pane rename <pane> <label>"
+                               ["task" "publish" "--help"] "oh task publish --status COMPLETE|BLOCKED|FAILED"
+                               ["spawn" "--help"] "oh spawn \"<shell command>\""}]
+        (let [proc (apply call! env argv)]
+          (is (zero? (:exit proc)) (str argv " -> " (:err proc)))
+          (is (str/starts-with? (:out proc) expected) (str argv " -> " (:out proc)))
+          (is (not (str/includes? (:out proc) "\"ok\""))))))
+    (testing "a single-command help does not dump every other command"
+      (let [proc (call! env "agent" "prompt" "--help")]
+        (is (= 1 (count (str/split-lines (str/trim (:out proc))))))))
+    ;; `task run --help` must still short-circuit before the assignment-input check, so a
+    ;; help request never becomes "exactly one of --task/--task-file/stdin".
+    (testing "help short-circuits commands with required options"
+      (doseq [argv [["task" "run" "--help"] ["agent" "start" "--help"]]]
+        (let [proc (apply call! env argv)]
+          (is (zero? (:exit proc)) (str argv " -> " (:err proc)))
+          (is (not (str/includes? (:out proc) "\"ok\""))))))))
 
 
 ;; Ties the shipped default table to the record's verified rows, independent of the

@@ -20,7 +20,7 @@ Every non-help command writes exactly one JSON object to stdout:
 
 Failures use `{ "ok": false, "schema": "herdr-orch/v1", "error": {"message": "...", "data": {}} }`. Diagnostics do not carry a completion signal.
 
-`--help` is the one documented exception: `oh --help`, `oh help`, and `<command> --help` print human-readable usage text and exit 0. There is no JSON help or discovery variant.
+`--help` is the one documented exception: it prints human-readable usage text and exits 0. There is no JSON help or discovery variant. Help narrows to the most specific match: `oh --help` and `oh help` print the global command list, `oh <group> --help` prints every signature in that group, and `oh <group> <op> --help` prints just that command's signature, including its positional arity. An unrecognised group falls back to the global list. Help is resolved before option parsing, so `--help` on a command with required options (`oh task run --help`, `oh agent start --help`) prints usage instead of failing on the missing option.
 
 `status` without a task and `list` return a JSON **array** of ledger entries under `result`; every other command returns an object.
 

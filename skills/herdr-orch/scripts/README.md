@@ -7,7 +7,9 @@
 From the repository root (the repo `bb.edn` provides the `test` task; `bb test` fails from `scripts/`):
 
 ```sh
-./skills/herdr-orch/scripts/oh --help
+./skills/herdr-orch/scripts/oh --help          # global command list
+./skills/herdr-orch/scripts/oh agent --help    # every signature in one group
+./skills/herdr-orch/scripts/oh agent prompt --help  # one command, with its positional arity
 bb run subagent --help
 bb test
 ```
