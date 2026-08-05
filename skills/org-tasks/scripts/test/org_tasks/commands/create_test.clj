@@ -37,6 +37,33 @@
         (is (= 1 exit))
         (is (= "empty-summary" (:code e)))))))
 
+(deftest create-invalid-tag-errors
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [{:keys [err exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "create" "Hyphen tag" "--tag" "skill_herdr-orch")
+            e (parse-json-error err)
+            content (slurp (str (fs/path root "TASKS.org")))]
+        (is (= 1 exit))
+        (is (= "invalid-tag" (:code e)))
+        ;; The write must be refused, not persisted with an unqueryable tag.
+        (is (not (str/includes? content "Hyphen tag")))))))
+
+(deftest create-normalises-wrapped-tag
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [{:keys [out exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "create" "Wrapped tag" "--tag" ":backend:")
+            r (parse-json-result out)
+            content (slurp (str (fs/path root "TASKS.org")))]
+        (is (zero? exit))
+        (is (some? (:id r)))
+        (is (str/includes? content "** TODO Wrapped tag :backend:"))))))
+
 (deftest create-duplicate-linked-issue-refused
   (with-temp-dir
     (fn [root]

@@ -27,7 +27,13 @@
                   (and rel-id (not local?)) (or (:source-path anchor) (:tasks files))
                   local?                    (:local files)
                   :else                     (:tasks files))
-        labels  (coerce-seq (:tag opts))
+        ;; Validate --tag on the same rule `ot tag add` enforces, and pass the
+        ;; normalised token through, so create can never write a tag its own
+        ;; parser will later ignore (e.g. a hyphenated value read back as no tag).
+        norm-labels (mapv (juxt identity parser/normalise-task-tag)
+                          (coerce-seq (:tag opts)))
+        invalid-labels (mapv first (filter (comp nil? second) norm-labels))
+        labels  (mapv second norm-labels)
         tokens  (coerce-seq (:linked-issue opts))
         ;; Mirror the pi extension's `alsoScan` heuristic: when
         ;; inserting into TASKS.org, also scan TASKS.local.org for
@@ -57,6 +63,13 @@
       (out/emit-error opts
                       {:code "empty-summary"
                        :message "ot create requires a non-empty summary."})
+
+      (seq invalid-labels)
+      (out/emit-error opts
+                      {:code "invalid-tag"
+                       :message (str "Invalid tag "
+                                     (str/join ", " (map pr-str invalid-labels))
+                                     "; expected letters, digits, and underscores")})
 
       (:dry-run opts)
       (out/emit-result opts

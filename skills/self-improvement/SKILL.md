@@ -82,14 +82,16 @@ Cross-project routing is a direct `ot --root <target> ...` operation. It does no
 
 ## Entry conventions
 
-Use one or more target tags:
+Use one or more target tags. The scheme is a **facet plus a name** as two adjacent Org tags, so a facet (`skill`, `ext`, `prompt`) filters independently of its subject -- `:skill:org_tasks:` and `:ext:org_tasks:` both select everything about org-tasks, and `:skill:` alone selects all skill feedback. Standalone categories carry no name:
 
-- `skill_<name>`
-- `ext_<name>`
-- `agents-md`
-- `prompt_<name>`
-- `project-convention`
-- `tier-unknown`
+- `skill <name>` -> `:skill:<name>:`
+- `ext <name>` -> `:ext:<name>:`
+- `prompt <name>` -> `:prompt:<name>:`
+- `agents_md`
+- `project_convention`
+- `tier_unknown`
+
+Org tags accept only `[A-Za-z0-9_@#%]`, so the name component must be underscored: map a hyphenated skill/extension directory name by replacing `-` with `_` (`herdr-orch` -> `herdr_orch`, `org-tasks` -> `org_tasks`, `pi-herdr` -> `herdr`). A hyphenated tag does not round-trip -- it is written verbatim onto the heading but read back as no tag at all -- so `ot` rejects it; pass only underscored tokens to `ot create --tag` / `ot tag add`.
 
 Body shape:
 
