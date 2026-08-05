@@ -42,7 +42,7 @@ Common commands:
 ot init
 ot root
 ot list --format json  # result includes resolved root + files.{tasks,local,archive}
-ot show selected --format json
+ot selected --format json  # selection query: {"selected": null} and exit 0 when nothing is selected
 ot show <id-or-selected>  # text output includes the task body; JSON/EDN retain Task.description
 ot create "New task" --section Improvements --body 'Description text' --tag mytag --linked-issue '[[jira:ABC-1]]'
 ot move <id> --parent <dest-id>   # reparent an existing subtree in place (--section <name> lifts it back to top level)
@@ -122,13 +122,13 @@ Treat org files as durable memory and conversation as ephemeral. Load eagerly on
 
 Resume checklist:
 
-1. Run `ot show selected --format json`. If it returns `{"selected": null}`, use `ot list --status-filter STARTED --format json` to find active work or ask the user.
+1. Run `ot selected --format json` -- not `ot show selected`, which is strict and exits non-zero when nothing is selected. A `null` `selected` with a `null` `selectedId` means no selection: use `ot list --status-filter STARTED --format json` to find active work or ask the user. A `null` `selected` with a *non-null* `selectedId` is a stale pointer to a task that no longer exists (`ot doctor` reports `selected-not-found`); repair or re-select rather than treating it as an empty selection.
 2. Use the returned `task` + `ancestors` for subtree, properties, body, LOGBOOK, handoff, blockers, and linked issues.
 3. If `record.path` is present, read `ot section <path> Summary --format json`; read `Context` only when `record.hasContext` is true.
 4. Surface handoff notes and open questions immediately; use `record.hasOpenQuestions` as the cheap signal before reading that section.
 5. Defer full `* Implementation`, completed plan-task bodies, and off-path acceptance details until needed.
 
-Anti-pattern: do not hand-read `TASKS.org`, `TASKS.local.org`, or `TASKS.setup.org` to answer "what's selected"; use `ot show selected --format json`.
+Anti-pattern: do not hand-read `TASKS.org`, `TASKS.local.org`, or `TASKS.setup.org` to answer "what's selected"; use `ot selected --format json`.
 
 When a record grows beyond cheap re-ingestion, split or archive completed history rather than omitting `* Summary` or truncating silently.
 

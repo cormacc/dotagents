@@ -185,7 +185,7 @@ Options:
 }
 ```
 
-`ancestors` is ordered root → parent. `record` is `null` when the task has no resolvable `#+IMPORT:` change-record. `task.children` and `task.importChildren` carry nested task trees. `sourceContent` and `effectiveSourceContent` are omitted unless `--include-content` is passed. Text-mode `show` and `selected` append a non-empty `Task.description` after one blank separator line; the JSON/EDN payload and its `description` field are unchanged.
+`ot show` is strict about its argument: an id that resolves to nothing fails with `unknown-task` and exit 1, and `ot show selected` on a project with no selection is that same failure (its message names `ot selected`). Use `ot selected` to *query* the selection. `ancestors` is ordered root → parent. `record` is `null` when the task has no resolvable `#+IMPORT:` change-record. `task.children` and `task.importChildren` carry nested task trees. `sourceContent` and `effectiveSourceContent` are omitted unless `--include-content` is passed. Text-mode `show` and `selected` append a non-empty `Task.description` after one blank separator line; the JSON/EDN payload and its `description` field are unchanged.
 
 ### `ot create`
 
@@ -263,7 +263,7 @@ Pass `--clear` (or omit the id) to deselect.
 
 ### `ot selected`
 
-Same payload as `ot show <selectedId>` (or `{"selected": null}` when nothing is selected).
+Same payload as `ot show <selectedId>`, or `{"selected": null, "selectedId": ...}` with exit 0 when the selection cannot be shown. `selectedId` discriminates the two reasons: `null` means nothing is selected, while a non-null value is a stale `#+SELECTED:` pointer to a task that no longer exists (`ot doctor` reports `selected-not-found`).
 
 ### `ot archive <id>`
 

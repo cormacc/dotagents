@@ -160,10 +160,20 @@
   (let [{:keys [project-root tasks selected-id]} (load-context opts)
         id (resolve-id-arg opts result selected-id)]
     (cond
+      ;; `show` is deliberately strict: an argument that resolves to nothing is a usage
+      ;; error here exactly as a bogus UUID is, so `ot show $id` stays scriptable. The
+      ;; resume surface for an empty selection is `ot selected`, which reports
+      ;; `{"selected": null}` and exits 0 -- name it, so a caller that reached this by
+      ;; running `ot show selected` on an unselected project is redirected rather than
+      ;; left concluding the tooling is broken.
       (nil? id)
       (out/emit-error opts
                       {:code "unknown-task"
-                       :message "ot show requires a task id (or 'selected')."})
+                       :message (if (= "selected" (positional-arg result :id))
+                                  (str "ot show selected found no selection. "
+                                       "Use `ot selected`, which reports "
+                                       "{\"selected\": null} and exits 0.")
+                                  "ot show requires a task id (or 'selected').")})
 
       :else
       (let [t (resolve-required-id tasks id opts)

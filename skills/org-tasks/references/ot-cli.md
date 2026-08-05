@@ -39,8 +39,11 @@ ot init
 ot root
 ot list --format json
 ot list --levels 0
+ot selected --format json  # the selection query: {"selected": null} + exit 0 when nothing
+                        # is selected, so it is the safe resume probe
 ot show <id-or-selected>  # text mode appends a non-empty task body after metadata
                         # JSON/EDN retain the Task.description payload
+                        # strict: `show selected` exits 1 when nothing is selected
 ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'
 ot create "New sibling" --relative-to <id> --as sibling   # after <id>, same level
 ot create "New child"   --relative-to <id> --as child     # nested under <id>

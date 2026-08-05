@@ -292,4 +292,51 @@
         (is (zero? exit))
         (is (= "Second" (get-in r [:task :summary])))))))
 
+;; The two selection surfaces are not interchangeable, and a resume checklist that
+;; confuses them exits non-zero on the most ordinary state a project can be in (nothing
+;; selected). `selected` is the queryable one; `show` stays strict so `ot show $id` remains
+;; scriptable. Pinned together so neither drifts into the other's contract.
+(deftest empty-selection-is-queryable-through-selected-but-not-show
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (run-cli! "--root" root "--format" "json" "select" "--clear")
+      (testing "`selected` reports the absence as success"
+        (let [{:keys [out exit]}
+              (run-cli! "--root" root "--format" "json" "selected")
+              r (parse-json-result out)]
+          (is (zero? exit))
+          (is (nil? (:selected r)))
+          (is (nil? (:selectedId r)))))
+      (testing "`show selected` fails, naming the command that does not"
+        (let [{:keys [err exit]}
+              (run-cli! "--root" root "--format" "json" "show" "selected")
+              e (parse-json-error err)]
+          (is (= 1 exit))
+          (is (= "unknown-task" (:code e)))
+          (is (str/includes? (:message e) "ot selected"))))
+      (testing "bare `show` keeps the plain usage message, selection or not"
+        (let [{:keys [err exit]}
+              (run-cli! "--root" root "--format" "json" "show")
+              e (parse-json-error err)]
+          (is (= 1 exit))
+          (is (not (str/includes? (:message e) "no selection"))))))))
+
+;; A dangling `#+SELECTED:` (pointer to a task that no longer exists) is a third state,
+;; distinguishable only by `selectedId` surviving while `selected` is null -- which is what
+;; lets a resume step tell "nothing selected" from "stale selection" (repair: `ot doctor`
+;; reports `selected-not-found`).
+(deftest dangling-selection-keeps-the-pointer-while-reporting-no-task
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (spit (str (fs/path root "TASKS.local.org"))
+            "#+SELECTED: deadbeef-0000-4000-8000-000000000000\n")
+      (let [{:keys [out exit]}
+            (run-cli! "--root" root "--format" "json" "selected")
+            r (parse-json-result out)]
+        (is (zero? exit))
+        (is (nil? (:selected r)))
+        (is (= "deadbeef-0000-4000-8000-000000000000" (:selectedId r)))))))
+
 ;; ── status ──────────────────────────────────────────────────────
