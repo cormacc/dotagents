@@ -846,6 +846,96 @@
   (is (= 500 herdr/default-start-retry-backoff-ms))
   (is (= 10 (herdr/parse-start-retry-backoff "10"))))
 
+;; --- post-prompt dispatch verification --------------------------------------------
+;; `agent prompt` submits atomically, but a swallowed Enter leaves the composed prompt in
+;; the child's composer, which burned a pane and the parent's whole timeout budget while the
+;; ledger read `prompted`. The fixture models both outcomes: a dispatched prompt drives the
+;; child to `working`, while FAKE_HELD_PROMPT leaves it `idle` until an explicit `enter`.
+(defn- enter-nudges [log child]
+  (filterv #(= ["agent" "send-keys" child "enter"] (vec (take 4 %))) (calls log)))
+
+(deftest dispatched-prompt-is-confirmed-without-touching-the-keyboard
+  (let [{:keys [env log dir]} (fake-env {"ORCH_POLL_INTERVAL_MS" "20"})
+        proc (call! env "task" "start" "worker" "--task" "prompt lands unaided")
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "dispatched" (get-in entry [:dispatch :status])))
+    (is (= "working" (get-in entry [:dispatch :state])))
+    (is (= 0 (get-in entry [:dispatch :nudges])))
+    (is (string? (:dispatched-at entry)))
+    ;; The confirming probe is the same `agent get` that backfills `:child-session`: the
+    ;; check adds no Herdr call of its own to a healthy spawn.
+    (is (= 1 (child-get-count log)))
+    (is (empty? (enter-nudges log (:child entry))))))
+
+(deftest held-prompt-is-nudged-once-and-then-confirmed
+  (let [{:keys [env log dir]} (fake-env {"FAKE_HELD_PROMPT" "1" "ORCH_POLL_INTERVAL_MS" "20"})
+        proc (call! env "task" "start" "worker" "--task" "prompt held unsubmitted")
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "dispatched" (get-in entry [:dispatch :status])))
+    (is (= 1 (get-in entry [:dispatch :nudges])))
+    (is (string? (:dispatched-at entry)))
+    ;; Exactly one Enter: the nudge is not repeated once the child is observably working.
+    (is (= 1 (count (enter-nudges log (:child entry)))))))
+
+;; An unobservable child must never be guessed at: Enter on a state we could not read risks
+;; submitting stray empty input into whatever the pane actually holds.
+(deftest unknown-state-is-never-nudged
+  (doseq [[label overrides] {"unknown status" {"FAKE_AGENT_STATUS" "unknown"}
+                             "failing agent get" {"FAKE_FAIL_CHILD_GET" "1"}}]
+    (let [{:keys [env log dir]} (fake-env (merge {"FAKE_HELD_PROMPT" "stuck" "ORCH_POLL_INTERVAL_MS" "20"
+                                                  "ORCH_DISPATCH_TIMEOUT_MS" "120"}
+                                                 overrides))
+          proc (call! env "task" "start" "worker" "--task" (str "unobservable child: " label))
+          task (get-in (result proc) [:result :task])
+          entry (ledger-entry* dir task)]
+      (is (zero? (:exit proc)) (str label " " (:err proc)))
+      (is (= "unconfirmed" (get-in entry [:dispatch :status])) label)
+      (is (= 0 (get-in entry [:dispatch :nudges])) label)
+      (is (nil? (:dispatched-at entry)) label)
+      (is (empty? (enter-nudges log (:child entry))) label))))
+
+;; A child that never dispatches is a diagnosis, not a spawn failure: the pane is kept and
+;; the ordinary wait/collect path still runs, so `run` reports its usual `pending` timeout.
+(deftest unconfirmed-dispatch-neither-fails-the-spawn-nor-closes-the-pane
+  (let [{:keys [env log dir]} (fake-env {"FAKE_HELD_PROMPT" "stuck" "ORCH_POLL_INTERVAL_MS" "20"
+                                         "ORCH_DISPATCH_TIMEOUT_MS" "150" "FAKE_WAIT" "idle-forever"})
+        proc (call! env "task" "run" "worker" "--task" "prompt never dispatches" "--timeout" "150")
+        task (get-in (result proc) [:result :task])
+        entry (ledger-entry* dir task)]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "pending" (get-in (result proc) [:result :status])))
+    (is (= "unconfirmed" (get-in entry [:dispatch :status])))
+    (is (= "idle" (get-in entry [:dispatch :state])))
+    ;; Nudged up to the cap and no further, so a misread state cannot burst keys.
+    (is (= cli/max-dispatch-nudges (get-in entry [:dispatch :nudges])))
+    (is (= cli/max-dispatch-nudges (count (enter-nudges log (:child entry)))))
+    (is (nil? (:dispatched-at entry)))
+    (is (= "w:child" (:pane-id entry)))
+    (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
+
+;; A child that settled before the first probe has plainly dispatched; only `idle` and
+;; `unknown` are ambiguous.
+(deftest already-settled-child-counts-as-dispatched
+  (doseq [state ["done" "blocked"]]
+    (let [{:keys [env log dir]} (fake-env {"FAKE_AGENT_STATUS" state "FAKE_HELD_PROMPT" "stuck"
+                                           "ORCH_POLL_INTERVAL_MS" "20" "ORCH_DISPATCH_TIMEOUT_MS" "120"})
+          proc (call! env "task" "start" "worker" "--task" (str "settled at " state))
+          entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+      (is (zero? (:exit proc)) (str state " " (:err proc)))
+      (is (= "dispatched" (get-in entry [:dispatch :status])) state)
+      (is (= state (get-in entry [:dispatch :state])) state)
+      (is (empty? (enter-nudges log (:child entry))) state))))
+
+;; Same non-positive/unparseable/blank discipline as every other ORCH_* budget.
+(deftest dispatch-timeout-parsing
+  (is (= 15000 cli/default-dispatch-timeout-ms))
+  (is (= 2 cli/max-dispatch-nudges))
+  (is (= 1234 (cli/parse-dispatch-timeout "1234")))
+  (doseq [raw [nil "" "   " "soon" "0" "-5"]]
+    (is (= cli/default-dispatch-timeout-ms (cli/parse-dispatch-timeout raw)) (pr-str raw))))
+
 (defn- wait-call-count [log]
   (count (filter #(= ["agent" "wait"] (vec (take 2 %))) (calls log))))
 

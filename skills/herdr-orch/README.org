@@ -208,6 +208,7 @@ The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.
 The regression suite names the important boundaries; preserve the tests rather than duplicating their mechanics here:
 
 - =bounded-poll-timeout-without-result= must fail if the wait-loop sleep is removed.
+- =unknown-state-is-never-nudged= must fail if the post-prompt dispatch check ever sends keys to a child whose state it could not observe, and =dispatched-prompt-is-confirmed-without-touching-the-keyboard= must fail if a healthy spawn starts paying for a poll interval or a second =agent get=.
 - =launcher-matrix-selects-branch-and-preserves-cwd= must fail if launcher path canonicalisation or caller cwd preservation regresses.
 - result capture must precede ownership-scoped pane closure, and foreign/unresolvable parent identity must retain the pane.
 - retro tests must remain behavioural at prompt/CLI boundaries: frontmatter values are strings, value-less flags participate in two argv consumers, and optional annotations must not demote a valid result.
@@ -264,6 +265,7 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 - [[file:../../design/log/2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org][2026-08-01]] -- absorbed pi-herdr coverage; skill/CLI renamed to =herdr-orch=/=oh=.
 - [[file:../../design/log/2026-08-03-subagent-make-claude-kind-persona-inject.org][2026-08-03]] -- claude-kind persona injection and bounded-permission overrides.
 - [[file:../../design/log/2026-08-04-herdr-orch-simplify-model-aliasing.org][2026-08-04]] -- two-level model table: =:aliases= plus canonical =:models= rows.
+- [[file:../../design/log/2026-08-05-herdr-orch-verify-prompt-dispatch-after.org][2026-08-05]] -- post-prompt dispatch verification for spawned children.
 
 * LLM use statement
 

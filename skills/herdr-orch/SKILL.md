@@ -71,6 +71,8 @@ A child that cannot finish is instructed to publish once with `BLOCKED` (genuine
 
 A child that publishes *nothing* is a separate case: its ledger entry stays `prompted` with no `RESULT` file even though the work may be finished. When such a child has settled, re-prompt it to publish with the injected launcher before considering a respawn -- respawning discards completed work and pays for it twice.
 
+Before that, read the entry's `:dispatch`: every spawn verifies that its prompt actually left the child's composer (contract.md § Dispatch verification), so `unconfirmed` means the work may never have begun at all rather than finished silently -- read the pane instead of waiting out the timeout. For the same reason `:prompted-at` is the submission *attempt*, never a duration baseline; use `:dispatched-at`.
+
 An `invalid` capture is not necessarily terminal either. A child that writes non-envelope content to its `RESULT` path mid-flight triggers validation failure while it is still working, and the parent then stops waiting for it. Before treating `invalid` as final, check the child's lifecycle state; if it is still `working`, let it settle and collect again, and treat anything already scored from that path as a mid-flight snapshot rather than a result.
 
 `BLOCKED` retains its pane. `COMPLETE`/`FAILED` permit closing only a pane this parent created, after required artifacts are captured and Herdr reports the child settled. Never close user/other-agent panes, kill a parent, or stop the Herdr server. A different parent session may collect and validate an assignment but must retain its pane.

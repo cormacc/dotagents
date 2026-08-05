@@ -65,6 +65,22 @@ child_status() {
   local file="$(state_dir)/children/$1/status"
   if [ -f "$file" ]; then cat "$file"; else printf '%s' "${FAKE_AGENT_STATUS:-idle}"; fi
 }
+# Write a child's lifecycle state through, so a later `agent get`/`agent list` agrees with
+# whatever the last hook reported. A dispatched prompt drives a child to `working` and a
+# settled wait drives it back, which is what makes the post-prompt dispatch check
+# observable at all: without the write-through every child would read the default `idle`
+# and look like it was holding its prompt unsubmitted.
+set_child_status() {
+  local dir="$(state_dir)/children/${1:-}"
+  [ -n "${1:-}" ] && [ -d "$dir" ] || return 0
+  printf '%s' "$2" >"$dir/status"
+  return 0
+}
+# FAKE_HELD_PROMPT models the swallowed Enter: `agent prompt` delivers the text but leaves
+# the child unsubmitted (status untouched), so only an explicit `agent send-keys <child>
+# enter` dispatches it. `FAKE_HELD_PROMPT=stuck` never dispatches at all, modelling a child
+# whose prompt is never confirmed within the budget.
+prompt_dispatches() { [ -z "${FAKE_HELD_PROMPT:-}" ]; }
 # FAKE_START_BUSY_COUNT fails that many leading `agent start` calls with
 # `agent_pane_busy`, then succeeds; the counter lives under the test's temp dir so
 # concurrent tests never collide. Absent/zero means no simulated busy pane.
@@ -157,6 +173,11 @@ case "${1:-}" in
     case "$2" in
       get)
         if [ -n "${FAKE_FAIL_AGENT_GET:-}" ] && [ "${3:-}" = "$FAKE_FAIL_AGENT_GET" ]; then echo '{"error":"agent get"}' >&2; exit 1; fi
+        # FAKE_FAIL_CHILD_GET fails every *child* `agent get` without naming one: child
+        # names embed a fresh task UUID, so a test cannot predict the target that
+        # FAKE_FAIL_AGENT_GET matches. The parent pane stays observable, so the advisory
+        # push gates are unaffected.
+        if [ "${FAKE_FAIL_CHILD_GET:-}" = 1 ] && [ "${3:-}" != w:p ]; then echo '{"error":"agent get"}' >&2; exit 1; fi
         # The parent pane. FAKE_PARENT_STATUS / FAKE_PARENT_SESSION drive the advisory
         # push gates at publish time; their defaults keep the historical shape exactly.
         if [ "${3:-}" = w:p ]; then printf '{"result":{"agent":{"agent":"pi","pane_id":"w:p","agent_session":{"value":"%s"},"agent_status":"%s"}}}\n' "${FAKE_PARENT_SESSION:-session}" "${FAKE_PARENT_STATUS:-idle}"; else
@@ -229,7 +250,21 @@ case "${1:-}" in
       # have seen partial text, which is why the CLI names that reason separately.
       prompt)
         [ "${FAKE_FAIL_PROMPT:-}" = 1 ] && { echo '{"error":{"code":"agent_prompt_failed","message":"fake prompt failure"}}' >&2; exit 1; }
-        printf '%s' "${4:-}" >"${FAKE_HERDR_PROMPT_FILE:?}"; echo '{"result":{"agent":{"agent_status":"working"}}}' ;;
+        printf '%s' "${4:-}" >"${FAKE_HERDR_PROMPT_FILE:?}"
+        if prompt_dispatches; then set_child_status "${3:-}" working; fi
+        echo '{"result":{"agent":{"agent_status":"working"}}}' ;;
+      # Keys are logged like every other call; the one modelled side effect is that an
+      # `enter` submits a held prompt (unless the child is deliberately stuck), which is how
+      # a nudged spawn becomes observably `working`.
+      send-keys)
+        if [ "${FAKE_HELD_PROMPT:-}" != stuck ]; then
+          # An `if` guard, not `[ ... ] && ...`: under `set -e` a failing AND-list on the
+          # loop's last iteration would abort the fixture before it answered.
+          for key in "$@"; do
+            if [ "$key" = enter ]; then set_child_status "${3:-}" working; fi
+          done
+        fi
+        echo '{"result":{}}' ;;
       # `agent wait <target>` publishes that target's own result, so a multi-child
       # fixture publishes per child rather than clobbering one shared env file.
       # A wait on the parent pane is the advisory push's settle wait, never the child
@@ -279,10 +314,12 @@ case "${1:-}" in
         printf '{"result":{"agent":{"agent_status":"%s"%s}}}\n' "$settle_to" "$(session_fragment wait)"
         exit 0
       fi
+      # Every branch writes its reported state through (see set_child_status): a child left
+      # `working` by its dispatched prompt must settle for the close probe that follows.
       case "${FAKE_WAIT:-publish}" in
-        publish) publish_result "${3:-}"; printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
-        timeout-publish) publish_result "${3:-}"; echo '{"error":"timeout"}' >&2; exit 1 ;;
-        blocked) printf '{"result":{"agent":{"agent_status":"blocked"%s}}}\n' "$(session_fragment wait)" ;;
+        publish) publish_result "${3:-}"; set_child_status "${3:-}" idle; printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
+        timeout-publish) publish_result "${3:-}"; set_child_status "${3:-}" idle; echo '{"error":"timeout"}' >&2; exit 1 ;;
+        blocked) set_child_status "${3:-}" blocked; printf '{"result":{"agent":{"agent_status":"blocked"%s}}}\n' "$(session_fragment wait)" ;;
         idle-then-publish)
           counter_file="${FAKE_WAIT_COUNTER_FILE:-${FAKE_HERDR_LOG}.wait-count}"
           count=0
@@ -292,8 +329,9 @@ case "${1:-}" in
           if [ "$count" -gt "${FAKE_WAIT_PUBLISH_AFTER:-3}" ]; then
             publish_result "${3:-}"
           fi
+          set_child_status "${3:-}" idle
           printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
-        *) printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
+        *) set_child_status "${3:-}" idle; printf '{"result":{"agent":{"agent_status":"idle"%s}}}\n' "$(session_fragment wait)" ;;
       esac ;;
     esac ;;
   notification) [ "${FAKE_NOTIFY_FAIL:-}" = 1 ] && { echo '{"error":"notify"}' >&2; exit 1; }; echo '{"result":{}}' ;;

@@ -1,0 +1,115 @@
+#+TITLE: herdr-orch: verify prompt dispatch after spawn
+#+DATE: 2026-08-05 Wed
+#+PARENT: [[archive:d4bd209f-6abd-4c5c-87bb-b240773c5a62][herdr-orch: verify prompt dispatch after spawn]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+
+* Intent
+
+Make `oh task run`/`start` verify that the composed prompt was actually submitted into the freshly started child, instead of trusting `herdr agent prompt`'s atomic prompt+Enter. A spawn whose prompt sits unsubmitted in the child's composer burns a pane, a model allocation, and the parent's whole timeout budget while looking healthy on the ledger.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* inline + contract.md
+
+** Scope
+
+*** In scope
+- A bounded post-prompt dispatch check in the delegation spawn path: poll the child's lifecycle state and re-send Enter on a persisting *definite* `idle`.
+- Ledger visibility for the outcome, so a held prompt is diagnosable after the fact and `:prompted-at` stops being mistaken for a dispatch timestamp.
+- One env knob for the budget, following the existing `ORCH_*` non-positive/unparseable/blank -> default discipline.
+- Contract documentation of the new step, knob, and ledger fields; fixture support for `agent send-keys` and a held-prompt child.
+
+*** Out of scope
+- Raw `oh agent prompt` passthrough: it stays a dumb one-shot wrapper, since its caller sees the target and can nudge.
+- Fixing the underlying Herdr/pi startup race. This is a parent-side mitigation; the defect is in the agent-prompt path (`agent start` then `agent prompt` into a starting TUI), not the `pane run` shell path (task 34683f68 covers the separate tool-layer reporting bug).
+- Deriving spawn-to-first-turn durations from child transcripts. The record notes why `:prompted-at` is not that baseline and offers `:dispatched-at`; transcript parsing is not built here.
+- Any use of `agent prompt --wait` for the primary submission (see Decisions).
+
+** Acceptance
+
+*** Core functionality
+- [X] After `agent prompt`, a spawn observing the child `working` records a confirmed dispatch and sends no keys -> test:`test/herdr_orch/cli_test.clj` `dispatched-prompt-is-confirmed-without-touching-the-keyboard`
+- [X] A spawn observing a persisting `idle` sends exactly one `agent send-keys <child> enter` and confirms once the child reaches `working` -> test:`test/herdr_orch/cli_test.clj` `held-prompt-is-nudged-once-and-then-confirmed`
+- [X] The nudge count is bounded, and dispatch polling never exceeds its configured budget -> test:`test/herdr_orch/cli_test.clj` `unconfirmed-dispatch-neither-fails-the-spawn-nor-closes-the-pane`
+- [X] The ledger entry carries the dispatch outcome (confirmed vs unconfirmed, nudge count, `:dispatched-at`), so `oh task status`/`start` output shows it -> spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`test/herdr_orch/cli_test.clj` `dispatched-prompt-is-confirmed-without-touching-the-keyboard`
+- [X] `ORCH_DISPATCH_TIMEOUT_MS` overrides the budget, with blank/zero/negative/unparseable falling back to the default -> test:`test/herdr_orch/cli_test.clj` `dispatch-timeout-parsing`
+
+*** Edge cases
+- [X] An `unknown` reading never triggers a nudge; the poll simply retries -> test:`test/herdr_orch/cli_test.clj` `unknown-state-is-never-nudged`
+- [X] A child that never leaves `idle` within the budget yields an `unconfirmed` dispatch, not a failed spawn: the pane is retained and the wait/collect path proceeds unchanged -> test:`test/herdr_orch/cli_test.clj` `unconfirmed-dispatch-neither-fails-the-spawn-nor-closes-the-pane`
+- [X] A failing `agent get` during the check is tolerated (treated as unobservable) and never aborts the spawn -> test:`test/herdr_orch/cli_test.clj` `unknown-state-is-never-nudged`
+- [X] A child that already settled `done`/`blocked` at first observation counts as dispatched, not held -> test:`test/herdr_orch/cli_test.clj` `already-settled-child-counts-as-dispatched`
+
+*** Anti-criteria
+- Must not send Enter on an `unknown` or unobservable state.
+- Must not convert a landed prompt into a spawn failure, or close the child pane on an unconfirmed dispatch.
+- Must not use `agent prompt --wait` for the primary submission: `agent_prompt_stalled` on a prompt whose text did land would trip `safe-cleanup!` and destroy a healthy child.
+- Must not read `agent_status` from `result.agent_status`; it is nested at `result.agent.agent_status`.
+- Must not add a dispatch check to raw `oh agent prompt`.
+
+** Decisions
+- Poll `agent get` after a plain `agent prompt`, rather than submitting with `agent prompt --wait --until working` :: the polling shape is the one mechanically verified by the stopgap, and it cannot turn a landed prompt into a thrown spawn error. Rejected:
+  - `agent prompt --wait --until working --timeout N`: Herdr's own stall detector (`agent_prompt_stalled` after 5000 ms without an observed state change) is attractive, but a non-zero exit from the primary submission reaches `safe-cleanup!`, which closes the child pane -- exactly the outcome we are preventing.
+  - Reading the child pane for the held prompt text (`agent read`): couples the parent to pi's composer rendering, and gives no better signal than the lifecycle state.
+  - Doing nothing and documenting the manual Enter: the failure is intermittent (7 of 9 spawns in the observed session) and invisible until the parent's timeout expires.
+- Bound the nudges rather than the attempts alone :: a wrong state read must cost at most a couple of stray Enters, never a burst. A stray Enter is survivable (an empty composer submits nothing), which is what makes a small cap the right trade against an unbounded retry.
+- Record the outcome on the ledger instead of failing :: dispatch failure is intermittent and recoverable; the parent's existing wait/collect loop already handles a slow child, and a retained pane is inspectable.
+- Nudge only a *persisting* `idle`, not the first one :: `agent prompt` returns when the keystrokes are delivered, so a child that has merely not begun its turn also reads `idle` for a moment. Requiring two consecutive `idle` readings costs one poll interval in the held case and nothing in the healthy one -- a dispatched child is already out of `idle` on the first probe, so a normal spawn sleeps zero times and makes exactly one `agent get`. Rejected: sleeping one interval *before* the first probe (the stopgap's shape, at 5 s), which taxes every healthy spawn and the whole test suite for a failure mode that is the exception.
+- Reuse `ORCH_POLL_INTERVAL_MS` for the probe cadence :: only the budget needs a new knob, and a second interval knob would have to be kept consistent with the first.
+
+** Shipped
+- `oh task run`/`start` verify prompt submission after `agent prompt`: bounded by `ORCH_DISPATCH_TIMEOUT_MS` (default 15 s), probing at `ORCH_POLL_INTERVAL_MS`, nudging `enter` on a persisting definite `idle` up to two times, never on `unknown`.
+- Ledger entries gain `:dispatch` (`{status, state, nudges}`; status `dispatched` or `unconfirmed`) and `:dispatched-at`. `:prompted-at` is now explicitly the submission attempt, not a duration baseline.
+- MODIFIED [[proj:skills/herdr-orch/scripts/docs/contract.md]]: new § Dispatch verification, `ORCH_DISPATCH_TIMEOUT_MS` row, and `ORCH_POLL_INTERVAL_MS`'s extended meaning.
+- MODIFIED [[proj:skills/herdr-orch/SKILL.md]]: operators check `:dispatch` before re-prompting a child that published nothing.
+- The fake-herdr fixture models lifecycle state honestly: a dispatched prompt drives a child `working`, a settled wait writes its reported state through, `FAKE_HELD_PROMPT` (`1`/`stuck`) withholds dispatch, and `FAKE_FAIL_CHILD_GET` makes a child unobservable.
+
+** Gotchas
+- The fixture's child `agent get` status was a single global default (`idle`), which is indistinguishable from a held prompt. Any future spawn-time state check needs the same write-through treatment, or it silently exercises only the failure path -- and, with a pre-probe sleep, taxes all ~180 fixture spawns.
+- The fixture runs under `set -euo pipefail`, where a `[ test ] && cmd` line as the last statement of a loop aborts the script when the test fails. Use an `if` guard inside fixture loops.
+
+* Plan
+
+** DONE Add the bounded dispatch check to the spawn path
+CLOSED: [2026-08-05 Wed 15:23]
+:PROPERTIES:
+:CUSTOM_ID: 65cfb1e8-f3f2-4fef-b881-3403eb6dfa5b
+:CREATED: [2026-08-05 Wed]
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-08-05 Wed 15:23]
+:END:
+`cli/verify-dispatch!`, replacing the post-prompt `agent get` probe that only backfilled `:child-session`.
+
+** DONE Cover the check in the fake-herdr fixture and tests
+CLOSED: [2026-08-05 Wed 15:23]
+:PROPERTIES:
+:CUSTOM_ID: 8a05354d-8564-4a2c-adf8-3749ab731c43
+:CREATED: [2026-08-05 Wed]
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-08-05 Wed 15:23]
+:END:
+Six tests under `;; --- post-prompt dispatch verification` in `test/herdr_orch/cli_test.clj`; fixture lifecycle write-through in `test/fixtures/fake-herdr`.
+
+** DONE Document the step in contract.md
+CLOSED: [2026-08-05 Wed 15:23]
+:PROPERTIES:
+:CUSTOM_ID: e439e1c7-a4ce-49ec-9e9e-663e51f50c19
+:CREATED: [2026-08-05 Wed]
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-08-05 Wed 15:23]
+:END:
+contract.md § Dispatch verification, plus the `ORCH_DISPATCH_TIMEOUT_MS` row and README.org regression boundaries.
+
+* Implementation
+
+- The check subsumes the former standalone post-prompt `agent get`: its probe is also the `:child-session` backfill, so a healthy spawn still costs exactly one call. Do not re-add a separate probe alongside it.
+
+* Validation
+
+One live billable spawn (`oh task run scout --model feather`, herdr 0.7.5, pi child) confirmed the whole path end to end: the child dispatched unaided (`:dispatch {status dispatched, state working, nudges 0}`), `:dispatched-at` landed 1.07 s after `:prompted-at`, the result was captured `COMPLETE`, and the pane closed. The first probe was not yet `working`, so the persisting-idle gate is what kept a stray Enter from being sent to a prompt that was about to land on its own -- the naive gate would have nudged. `agent send-keys <target> <KEY>...` and `agent get <target>` argv shapes were checked against the installed binary's help rather than assumed.

@@ -2121,3 +2121,28 @@ Acceptance criteria:
 - Must not: add a socket-protocol capability check in place of the probes.
 
 Source: design review against upstream docs (herdr 0.7.5, protocol 18); report at `.tmp/orch-upstream-review/report.md`.
+
+** DONE herdr-orch: verify prompt dispatch after spawn
+CLOSED: [2026-08-05 Wed 17:18]
+:PROPERTIES:
+:CUSTOM_ID: d4bd209f-6abd-4c5c-87bb-b240773c5a62
+:CREATED: [2026-07-31 Fri 15:33]
+:STARTED: [2026-08-05 Wed 15:12]
+:ARCHIVED: [2026-08-05 Wed 17:18]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 15:33]
+- State "STARTED" from "TODO" [2026-08-05 Wed 15:12]
+- State "DONE" from "STARTED" [2026-08-05 Wed 17:18]
+:END:
+#+IMPORT: [[plan:2026-08-05-herdr-orch-verify-prompt-dispatch-after.org]]
+Every subagent spawn in the 2026-07-31 advisor-evaluation session left the composed prompt typed into the freshly spawned pane but unsubmitted, needing a manual focus + Enter. Confirmed mechanically: a child read `idle` five seconds after `oh start`, and one `herdr agent send-keys <child> enter` moved it to `working`. Submit-delays of 25.6-46.6s were measured against 0.8s for a pre-regression historical run.
+
+`oh start`/`run` should verify the prompt actually landed rather than trusting the atomic prompt+Enter, e.g. poll lifecycle state briefly after prompting and re-send Enter on a definite `idle` (never on an unobservable `unknown`, which risks submitting stray empty input). The stopgap used during the experiment is committed at `design/log/2026-07-31-subagents-review-advisor-strategy-defaul/spawn-cell.sh`.
+
+Related: `prompted-at` is consequently unsafe as a duration baseline for any measurement; derive the start from the child transcript first user message instead.
+
+Scope discrimination (verified 2026-07-31): this defect is specific to the **agent-prompt** path (`herdr agent start` followed by `agent prompt` into a starting pi TUI), where 7 of 9 spawns needed a manual Enter. The ordinary shell path is *not* affected — `herdr pane run` dispatched 11/11 across warm splits, cold splits and freshly created tabs. Do not re-scope this task as a general Herdr submission defect; the separate tool-layer bug that makes successful pane operations *look* failed is task 34683f68.
+
+Implementation notes from the stopgap (verified 2026-07-31): the lifecycle state is nested at `result.agent.agent_status` in `herdr agent get` output, not `result.agent_status` — misreading it yields `unknown` and, if the nudge is unconditional, fires a burst of stray Enters. Gate the nudge on a definite `idle`. Dispatch failure is intermittent, not universal: of nine spawns in that session, seven needed one Enter and two dispatched unaided, so any fix must tolerate a prompt that has already landed.
