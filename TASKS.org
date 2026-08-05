@@ -633,3 +633,22 @@ Origin:
 
 Evidence:
 `herdr agent start --help` enumerates: pi, claude, codex, gemini, cursor, devin, agy, cline, omp, mastracode, opencode, copilot, kimi, kiro, droid, amp, grok, hermes, kilo, qodercli, maki. dirge is absent but does expose `--model`, so only the launch/detect half is missing. herdr has no local extension point: no agent definitions in config.toml, no plugins subcommand, and no manifest file on disk.
+
+** TODO clojure skill: make ad-hoc validator and regex checks fail fast :skill_clojure:
+:PROPERTIES:
+:CUSTOM_ID: 94cc1d46-63cf-464a-9107-ac21993bfbab
+:CREATED: [2026-08-05 Wed 11:26]
+:END:
+:LOGBOOK:
+- Created [2026-08-05 Wed 11:26]
+:END:
+Strengthen the Clojure skill's guidance for ad-hoc Babashka validation so agents do not repeat a malformed complex form across an input set. Require a complex validator to be proven on one representative input before a per-file/per-locale loop, and retain the existing direction to put multi-line or quote-heavy bb forms in a checked .tmp script. Also require newly authored Clojure regex literals to be evaluated against at least one positive and one negative example before relying on them in validation or matching logic.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-05 Wed 11:26]
+- sender: agent
+
+Evidence:
+A reviewer subagent's preliminary rebase validation repeated a delimiter error in a complex bb -e form once per locale, then initially double-escaped a Clojure regex literal so re-matches failed. The current Clojure skill already warns that multi-line bb -e is fragile, but does not require a one-input smoke test before looping or explicit positive/negative regex examples.

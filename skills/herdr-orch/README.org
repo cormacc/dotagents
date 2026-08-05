@@ -103,13 +103,18 @@ A weight name is an =:aliases= key, never a =:models= key. The same key in both 
 A home override pinning the =heavy= tier to a specific Claude release, making claude-kind children usable unattended, and giving every child its own tab:
 
 #+begin_src clojure
-{:aliases  {"heavy" "anthropic/claude-fable-5-20260714"}   ; one line retargets the tier
- :models   {"anthropic/claude-fable-5-20260714"            ; a new canonical ID needs a row
-            {:claude "claude-fable-5-20260714"             ; pinned, not the floating alias
-             :codex "gpt-5.6-sol"}}                        ; cross-provider equivalent
- :harnesses {:claude {:model-flag "--model"                ; mandatory even when unchanged
-                      :extra-args ["--permission-mode" "auto"]}}
- :defaults  {:placement :tab}}
+  {:aliases  {"heavy" "anthropic/claude-fable-5-20260714"}   ; one line retargets the tier
+   :models   {"anthropic/claude-fable-5-20260714"            ; a new canonical ID needs a row
+              {:claude "claude-fable-5-20260714"             ; pinned, not the floating alias
+               :codex "gpt-5.6-sol"}}                        ; cross-provider equivalent
+   ;; Override the default permissions for more autonomous operation
+   ;; We intentionally don't do this by default - it should be opt in
+   :harnesses {:claude {:model-flag "--model"                ; mandatory even when unchanged
+                        :extra-args ["--permission-mode" "auto"]}
+               :codex {:model-flag "--model"
+                        :extra-args ["--ask-for-approval" "never"
+                                     "--sandbox" "workspace-write"]}}
+   :defaults  {:placement :tab}}
 #+end_src
 
 The new canonical ID needs a row only because it is new; pointing ="heavy"= at an already-shipped canonical ID needs the =:aliases= entry alone.
