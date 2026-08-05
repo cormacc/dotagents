@@ -2146,3 +2146,92 @@ Related: `prompted-at` is consequently unsafe as a duration baseline for any mea
 Scope discrimination (verified 2026-07-31): this defect is specific to the **agent-prompt** path (`herdr agent start` followed by `agent prompt` into a starting pi TUI), where 7 of 9 spawns needed a manual Enter. The ordinary shell path is *not* affected — `herdr pane run` dispatched 11/11 across warm splits, cold splits and freshly created tabs. Do not re-scope this task as a general Herdr submission defect; the separate tool-layer bug that makes successful pane operations *look* failed is task 34683f68.
 
 Implementation notes from the stopgap (verified 2026-07-31): the lifecycle state is nested at `result.agent.agent_status` in `herdr agent get` output, not `result.agent_status` — misreading it yields `unknown` and, if the nudge is unconditional, fires a burst of stray Enters. Gate the nudge on a definite `idle`. Dispatch failure is intermittent, not universal: of nine spawns in that session, seven needed one Enter and two dispatched unaided, so any fix must tolerate a prompt that has already landed.
+
+* Agent feedback
+** DONE AGENTS.md: warn that rg -r silently rewrites match output :agents_md:
+CLOSED: [2026-08-04 Tue 19:53]
+:PROPERTIES:
+:CUSTOM_ID: b8b4ddae-b885-42c0-9140-d60064bfc3ae
+:CREATED: [2026-07-31 Fri 20:55]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 20:55]
+- State "DONE" from "TODO" [2026-08-04 Tue 19:53]
+:END:
+Add a File-operations rule: never fold `-r` into an rg flag cluster. `-r/--replace` consumes the next value as a replacement template, so `rg -rn "pattern"` silently emits matches rewritten to "n" instead of erroring or numbering lines. The failure is silent and the output looks plausible, which is what makes it dangerous — it invites a wrong conclusion from apparently real evidence.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: connect/portal @ firmware-asset-check
+- timestamp: [2026-07-31 Fri 21:00]
+- sender: agent
+
+Evidence:
+Used twice in one session. `rg -rn "app-schema/compatible" test/` returned `(dispatch! [[:n]])` rather than the real call sites, and a second occurrence hit the same trap while searching for bucket effects. Correct invocations are `rg -n <pattern>` for line numbers; `-r` only ever belongs with an explicit replacement template.
+
+
+** DONE self-improvement + ot: split routing tags into facet + name, and fix tag round-trip :skill:self_improvement:
+CLOSED: [2026-08-05 Wed 18:38]
+:PROPERTIES:
+:CUSTOM_ID: 36ff3ca4-c6e8-4747-a661-7f67e3d04761
+:CREATED: [2026-08-01 Sat 00:03]
+:END:
+:LOGBOOK:
+- Created [2026-08-01 Sat 00:03]
+- State "DONE" from "TODO" [2026-08-05 Wed 18:38]
+:END:
+Two coupled problems with the `Agent feedback` routing tags.
+
+1. Compound tags do not compose. The documented convention is `skill_<name>` / `ext_<name>`, so a skill and its companion pi extension produce two unrelated tokens and there is no way to select "everything about org-tasks" or "all skill feedback". Preferred scheme: two adjacent tags -- a facet plus a name -- e.g. `:skill:org_tasks:` and `:ext:org_tasks:`. Both facets then filter independently of the subject.
+
+2. Tags containing a hyphen do not round-trip. `ot create --tag skill_herdr-orch` writes the tag onto the heading verbatim, but `ot tag add` rejects the same value (`invalid-tag; expected letters, digits, and underscores`) and `ot list --format json` reports `tags: []`. Every existing `:skill_herdr-orch:` task in this file therefore reads back untagged, so the documented routing tags are currently unqueryable.
+
+Note the constraint before implementing: `org-tag-re` is `[[:alnum:]_@#%]+`, so hyphens are not valid org tags at all -- `ot`s validator is correct and Emacs would mis-parse them. The name component must therefore be underscored (`org_tasks`, `herdr_orch`), or the mapping from skill name to tag must be defined explicitly. Whichever is chosen, `ot create --tag` must validate on the same rule it enforces elsewhere rather than writing a value its own parser will later ignore.
+
+Scope:
+- Decide and document the facet/name convention in the `self-improvement` skill entry conventions.
+- Make `ot create --tag` reject what `ot tag add` rejects.
+- Migrate existing compound tags in this file.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: connect/portal @ firmware-asset-check
+- timestamp: [2026-07-31 Fri 22:30]
+- sender: human+agent
+
+Evidence:
+Hit while filing retro items this session: `ot create --tag skill_herdr-orch` succeeded and the heading shows `:skill_herdr-orch:`, but the task lists with `tags: []`, as do the pre-existing tasks using the same form. Confirmed `org-tag-re` = `[[:alnum:]_@#%]+` in Emacs; `org-tasks` fails it, `org_tasks` passes.
+
+
+
+** CANCELLED pi-herdr: pane run/send_text/send_keys always report failure despite succeeding :ext:herdr:
+CLOSED: [2026-08-05 Wed 19:40]
+:PROPERTIES:
+:CUSTOM_ID: 34683f68-361e-4d16-94ac-04d39edf0f0d
+:CREATED: [2026-07-31 Fri 23:58]
+:END:
+:LOGBOOK:
+- State "CANCELLED"  from "DONE"       [2026-08-05 Wed 19:40]
+- State "DONE"       from "WAITING"    [2026-08-05 Wed 19:40]
+- State "WAITING"    from "STARTED"    [2026-08-05 Wed 19:40]
+- State "STARTED"    from "TODO"       [2026-08-05 Wed 19:40]
+- Created [2026-07-31 Fri 23:58]
+:END:
+Upstream defect in `@ogulcancelik/pi-herdr` (installed at ~/.pi/agent/npm/node_modules/@ogulcancelik/pi-herdr/index.ts). Three pane write-actions call `execHerdrJson` on herdr CLI subcommands that emit no stdout, so the helper throws `Expected JSON output from herdr ...` on every successful invocation:
+
+- index.ts:507 `pane run`
+- index.ts:553 `pane send-text`
+- index.ts:561 `pane send-keys`
+- index.ts:711 `agent send-keys` (same pattern; not exercised, to avoid disturbing live agents)
+
+Verified empirically: `herdr pane run|send-text|send-keys` each exit 0 with zero stdout bytes, while `pane close` (index.ts:570) emits 46 bytes of JSON and therefore works. Fix is to use `execHerdr` (exit-code semantics, which already maps non-zero to parseHerdrError) for the no-output subcommands.
+
+Impact: the operation *does* happen, so an agent told it failed will either retry — double-executing a command — or abandon a long-running process it actually started. Compounded by the tool defaulting reads to `--source recent-unwrapped`, which returned empty on freshly created panes where `--source visible` had content, so the obvious verification step silently confirms the false failure.
+
+Concrete instance: two stale `bb nrepl-server` tabs. The command dispatched and threw `java.net.BindException: Address already in use` (a `bb nrepl-server` from 2026-07-28 held 127.0.0.1:1667), but the spurious tool error meant the real failure was never seen, so the clojure skill's documented "reuse the existing port" guidance was never applied.
+
+Not to be confused with task d4bd209f: `herdr pane run` dispatch itself is reliable (11/11 across warm splits, cold splits and new tabs). That task concerns the distinct agent-prompt path.
+
+Related upstream work: task a6be7668 targets the same upstream repository.
+
+*Superseded for our purposes [2026-08-01].* `@ogulcancelik/pi-herdr` was removed from `pi/settings.json` and replaced by the first-party `pi/extensions/herdr-orch` proxy, so this defect no longer affects this repository and nothing here is blocked on an upstream fix. Retained solely as a courtesy report worth sending upstream, since the diagnosis is precise and the fix is one line per action; close it if that report is sent or judged not worth sending.

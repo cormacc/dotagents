@@ -92,10 +92,16 @@ CLOSED: [2026-04-29 Wed 08:03]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
 Outcome: triggers narrow enough to avoid noise — user correction of an agent action traceable to explicit =AGENTS.md= / skill guideline; repeated tool misuse rooted in unclear documentation; discovered protocol gaps.
-** TODO [#C] End-to-end smoke test across two pi sessions
+** CANCELLED [#C] End-to-end smoke test across two pi sessions
+CLOSED: [2026-08-05 Wed 19:41]
 :PROPERTIES:
 :CUSTOM_ID: 4a8e0d6b-1c2d-4e3f-9a0b-1c2d3e4f5a6b
 :CREATED: [2026-04-29 Wed 01:09]
+:END:
+:LOGBOOK:
+- State "CANCELLED"  from "DONE"       [2026-08-05 Wed 19:41]
+- State "DONE"       from "WAITING"    [2026-08-05 Wed 19:41]
+- State "STARTED"    from "TODO"       [2026-08-05 Wed 19:41]
 :END:
 Deferred — requires a second live pi session in another project plus interactive observation of the dotfiles-side ack. Static checks covered in =* Implementation → Static verification=.
 - *Local tier*: invoke skill in some project with a fake project-local observation; verify entry lands in that project's =TASKS.org= with the right tag; second near-duplicate submission collapses via dedupe.
