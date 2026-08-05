@@ -1,31 +1,44 @@
 #+TITLE: Create self-improvement skill
 #+DATE: 2026-04-29 Wed
-#+PARENT: [[task:2262ed25-f0fc-40fd-9d21-41a0b16fb3a1][Create self-improvement skill]]
+#+PARENT: [[archive:2262ed25-f0fc-40fd-9d21-41a0b16fb3a1][Create self-improvement skill]]
 #+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+
+* Intent
+Give the agent a durable way to turn recurring friction with its own configuration into actionable work, so a lesson learned in one session is not lost when that session ends. The skill owns eligibility, ownership routing, and persistence; it never becomes a second task store.
 
 * Summary
-A single =self-improvement= skill (=skills/self-improvement/SKILL.md=) captures friction with agent / pi configuration at the moment it arises and routes it as actionable TODO work to the right tier. Project-local feedback (project =AGENTS.md=, project skills, project conventions) lands in the current project's =TASKS.org= under =* Agent feedback= via =tasks_insert_task=. Global feedback (dotfiles =AGENTS.md=, =~/.agents/skills=, =~/.pi/agent=) is sent via =pi-intercom= to a live dotfiles session (auto-spawned in tmux if none alive) which triages and inserts into =~/dotfiles/TASKS.org=. Spec-only skill artefact: no scripts. Unified triage routine handles classify→tag→dedupe→confirm→insert→ack at both tiers.
+*Level:* production · *Tests:* none (spec-only artefact, no scripts) · *Docs:* full
+
+** Scope
+*** In scope
+- =skills/self-improvement/SKILL.md= as the canonical contract for durable-friction eligibility, ownership routing, deduplication, and persistence.
+- Routing across three tiers: project-local, dotagents, and dotfiles.
+- Persistence as =* Agent feedback= TODO tasks through the =ot= CLI, with entry conventions for target tags and body shape.
+- =skills/README.org= entry so the skill is discoverable alongside its siblings.
+*** Out of scope
+- Any executable artefact -- the skill is spec-only, no scripts.
+- A parallel feedback inbox: entries are ordinary org tasks under standard =org-tasks= lifecycle and archiving.
+- Promotion of a captured item into a change-record, which belongs to =org-plan=.
+- Session-to-session messaging, removed by the transport pivot (see Decisions).
 
 ** Decisions
-- Single skill, repo-agnostic :: keys behaviour off *what the feedback is about*, not which repo it's invoked in.
-- Routing by target tier :: project-local vs dotfiles-global; ambiguous defaults to current project with a =:tier-unknown:= tag.
-- Submit + triage as one flow :: no separate client/server; the routing session also runs triage when local.
-- Cross-tier transport :: =pi-intercom=, fire-and-forget =send=, prefix tag =[self-improvement]=. Plain prose envelope, structured =Origin:= block; no JSON schema.
-- Confirmation policy inverted from usual default :: human-sender confirms wording (dotfiles agent has reformulated their words); agent-sender auto-inserts (no human at submit-time).
-- Persistence under =* Agent feedback= :: feedback becomes durable TODOs via =tasks_insert_task=; standard org-tasks lifecycle / archive applies. No parallel inbox.
-- Auto-spawn dotfiles session :: cmux-preferred / tmux-fallback recipe with intercom-registration polling and retry budget.
+- Single repo-agnostic skill :: keys behaviour off *what the feedback is about*, not which repo it is invoked from.
+- Routing by owning tier :: project-local vs dotagents vs dotfiles, classified after resolving symlinks; ambiguous ownership asks once, then defaults to the current project with a =tier_unknown= tag.
+- TODO-first by default :: the slow loop files a task and stops; a narrow tight loop permits one tiny approved documentation edit, in the current repo or a clean home-config tier.
+- Direct cross-repo writes rather than agent-to-agent transport :: supersedes the original =pi-intercom= hand-off, which discovered or tmux-spawned a live dotfiles session, sent it a prose envelope, and waited for it to triage, insert, and acknowledge. Cross-project routing is now a plain =ot --root <target> create=, which drops the live-session dependency, the spawn recipe, and the acknowledgement round-trip. Landed 2026-07-15 in =dd43f48=; see [[plan:2026-07-14-housekeeping.org][housekeeping record]].
+- Confirmation policy inverted from the usual default :: a human sender confirms wording, because the agent has reformulated their words; an agent sender writes without asking, because no human is present at capture time.
 
 ** Shipped
-- =skills/self-improvement/SKILL.md= covering when-to-use (user- and agent-invoked), routing, two flows (local insert / cross-tier intercom), spawn recipe, triage routine, =* Agent feedback= entry conventions, and a worked example.
-- =skills/README.org= populated with intro + one-line entries for every existing skill so the new entry has context (modest scope creep — kept the file useful instead of a stub).
+- ADDED :: =skills/self-improvement/SKILL.md= -- trigger gate, three-tier routing table, slow/tight loops, =* Agent feedback= entry conventions, and verification steps.
+- MODIFIED :: =skills/README.org= -- intro plus a one-line entry per skill, so the new entry has context.
 
 ** Gotchas
-- Acknowledgement uses =send= not =reply=: the original submit was fire-and-forget so there is no in-flight =ask= to =reply= to. The originating agent watches for inbound messages with the =[self-improvement]= prefix as the planning prompt.
-- =mkOutOfStoreSymlink= for =agents/skills= picks up new directories automatically — no =hms= run needed when adding a skill.
+- =mkOutOfStoreSymlink= for =agents/skills= picks up new directories automatically, so adding a skill needs no Home Manager switch.
 
 ** Follow-ups
-- End-to-end smoke test across two pi sessions (deferred from plan task =4a8e0d6b=).
-- Re-tier routing for the dotfiles ↔ dotagents extraction landed later in TASKS.org task =7e21788d=.
+- Re-tiering for the dotfiles/dotagents split landed in [[archive:7e21788d-b4e6-439b-b300-ca84ab4a2fcc][Re-tier self-improvement skill routing]].
+- The =* Agent feedback= tag conventions moved to the facet+name scheme in [[task:36ff3ca4-c6e8-4747-a661-7f67e3d04761][split routing tags into facet + name]].
 
 * Plan
 
@@ -43,7 +56,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
-Outcome: path-based signals (resolves under =$HOME/dotfiles= or =~/.agents= / =~/.pi/agent= → global; else project-local) + artefact-based signals (dotfiles-shipped → global; project-only =AGENTS.md= / scripts / conventions → project-local) + ambiguity handling (ask; default to project + =:tier-unknown:= if declined).
 ** DONE [#A] Implement local-tier submit+insert flow
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -51,7 +63,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
-Outcome: collect description → auto-detect metadata (session / cwd / git remote+branch / timestamp / sender type) → classify → dedupe → confirm-if-human → insert via =tasks_insert_task= with =allowCreateSection: true= → prompt "plan now or backlog?".
 ** DONE [#A] Implement cross-tier submit flow (intercom send)
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -59,7 +70,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
-Outcome: discover live dotfiles sessions via =intercom action:list= (filter by cwd under =$HOME/dotfiles=); spawn one if none exists (see next task); =intercom action:send= with structured envelope (free-form body + metadata + sender-type marker); return immediately, don't block on triage.
 ** DONE [#B] Auto-spawn dotfiles session when none alive
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -67,7 +77,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
-Outcome: tmux session named =dotfiles-feedback= running =pi= with cwd =$HOME/dotfiles=; poll for intercom registration with retry budget; surface clear error if it never appears.
 ** DONE [#A] Implement triage-mode flow (dotfiles inbound + local self-triage)
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -75,7 +84,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
-Outcome: unified routine (inbound intercom in dotfiles session OR local self-triage): parse envelope → classify → dedupe against open entries in the target repo's =* Agent feedback= (merge evidence on near-match) → draft summary+body → confirm-if-human → insert via =tasks_insert_task= with =allowCreateSection: true= → ack sender with new task UUID and "plan now or backlog?".
 ** DONE [#B] Document =* Agent feedback= entry conventions
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -83,7 +91,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
-Outcome: heading =** TODO [summary]= with affected-target tag; body = free-form description + =Origin:= block (session / cwd / git remote+branch / timestamp / sender type) + optional verbatim transcript; promotion = standard =org-plan= flow.
 ** DONE [#C] Define agent self-proposal trigger heuristics
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -91,7 +98,6 @@ CLOSED: [2026-04-29 Wed 08:03]
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
-Outcome: triggers narrow enough to avoid noise — user correction of an agent action traceable to explicit =AGENTS.md= / skill guideline; repeated tool misuse rooted in unclear documentation; discovered protocol gaps.
 ** CANCELLED [#C] End-to-end smoke test across two pi sessions
 CLOSED: [2026-08-05 Wed 19:41]
 :PROPERTIES:
@@ -103,9 +109,7 @@ CLOSED: [2026-08-05 Wed 19:41]
 - State "DONE"       from "WAITING"    [2026-08-05 Wed 19:41]
 - State "STARTED"    from "TODO"       [2026-08-05 Wed 19:41]
 :END:
-Deferred — requires a second live pi session in another project plus interactive observation of the dotfiles-side ack. Static checks covered in =* Implementation → Static verification=.
-- *Local tier*: invoke skill in some project with a fake project-local observation; verify entry lands in that project's =TASKS.org= with the right tag; second near-duplicate submission collapses via dedupe.
-- *Cross tier*: invoke skill with a fake dotfiles-global observation; verify the dotfiles session is discovered or spawned, entry lands in =~/dotfiles/TASKS.org=, async ack reaches sender.
+Obsolete: the transport pivot removed the second session this would have exercised.
 ** DONE [#C] Document the skill in agents/skills/README.org
 CLOSED: [2026-04-29 Wed 08:03]
 :PROPERTIES:
@@ -113,30 +117,8 @@ CLOSED: [2026-04-29 Wed 08:03]
 :CREATED: [2026-04-29 Wed 01:09]
 :STARTED: [2026-04-29 Wed 08:03]
 :END:
-Outcome: one-paragraph entry for =self-improvement= linking its =SKILL.md=.
+
 * Implementation
+The skill is a single spec document, so the plan tasks above map to sections of =SKILL.md= rather than to separate artefacts.
 
-** Skill artefact
-
-Spec-only SKILL.md collapses plan tasks 1-8 into one document with sections per responsibility:
-- When to use (user- and agent-invoked, including self-proposal triggers).
-- Routing decision table.
-- Two flows (local insert + cross-tier intercom) with shared metadata-collection step.
-- Spawn recipe (cmux-preferred / tmux fallback, registration polling + retry budget).
-- Unified triage routine (project-local self-triage + dotfiles inbound).
-- =* Agent feedback= entry conventions (heading shape, body template, dedupe-by-append, change-record promotion).
-- Worked example (Flow B + agent self-propose).
-
-** Implementation notes
-
-- /Free-form text envelope, not JSON./ Cross-tier message is plain string with =[self-improvement]= prefix and a structured =Origin:= block. pi-intercom messages are agent-to-agent prose; the prefix avoids inventing a schema.
-- /Acknowledgement uses =send=, not =reply=./ Original submit was fire-and-forget — no in-flight =ask= to reply to. Triage emits a fresh =send= with the prefix; the originating agent treats inbound prefixed messages as the planning prompt.
-- /Confirmation policy./ Inverted from the usual "trust humans more" default: human-sender → confirm wording (the dotfiles-side agent has reformulated their words); agent-sender → auto-insert (no human at submit-time).
-- /No archiving of feedback entries here./ Standard =org-tasks= status discipline handles DONE/CANCELLED archiving.
-
-* Validation
-
-- Static verification (in lieu of deferred two-session smoke test): skill visible at =~/.agents/skills/self-improvement/SKILL.md=; YAML frontmatter parses; sibling skill references resolve; =pi-intercom= skill path resolves; all tool dependencies (=tasks_insert_task=, =intercom=, =date=, =git remote=, =cmux=/=tmux=) are part of the standard surface.
-
-
-* Open questions
+Its current shape -- trigger gate, two loops, routing table, entry conventions, verification -- postdates the transport pivot recorded under Decisions. The cross-tier submit, session-spawn, and inbound-triage machinery built by plan tasks =d0730273=, =92ada34d=, and =e71730f4= no longer exists; what survives from them is the classify/dedupe logic, now run by whichever session captures the friction instead of by a dotfiles-side triage session.

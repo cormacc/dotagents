@@ -848,6 +848,38 @@ in place. Same node, same writer.
 Cancellation note: can't reproduce.
 
 * Improvements
+** CANCELLED [#D] Implement vulpea tasks UI for emacs         :org:emacs:ui:
+CLOSED: [2026-08-05 Wed 22:42]
+:PROPERTIES:
+:CUSTOM_ID: 92d3a8d9-a01f-4f93-bc3a-90f24d12a4e5
+:CREATED: [2026-05-15 Fri 09:53]
+:END:
+:LOGBOOK:
+- State "CANCELLED"  from "DONE"       [2026-08-05 Wed 22:42]
+- State "DONE"       from "WAITING"    [2026-08-05 Wed 22:42]
+- State "WAITING"    from "STARTED"    [2026-08-05 Wed 22:42]
+- State "STARTED"    from "TODO"       [2026-08-05 Wed 22:42]
+- Created [2026-05-15 Fri 09:53]
+:END:
+Follow-on from [[plan:2026-05-14-evaluate-vulpea-org-memory.org][vulpea evaluation]]. Prototype an Emacs-local tasks side panel only after deciding the minimum ID mirror/custom extractor bridge needed to make org-memory tasks first-class vulpea notes.
+
+
+** CANCELLED [#B] Upstream Herdr settled-state Pi integration :ext:herdr:
+CLOSED: [2026-08-05 Wed 20:09]
+:PROPERTIES:
+:CUSTOM_ID: a6be7668-26a2-4b12-b2b9-c40d07af55dc
+:CREATED: [2026-07-20 Mon 17:30]
+:END:
+:LOGBOOK:
+- State "CANCELLED"  from "DONE"       [2026-08-05 Wed 20:09]
+- State "DONE"       from "WAITING"    [2026-08-05 Wed 20:09]
+- State "WAITING"    from "STARTED"    [2026-08-05 Wed 20:09]
+- State "STARTED"    from "TODO"       [2026-08-05 Wed 20:09]
+- Created [2026-07-20 Mon 17:30]
+:END:
+Target: https://github.com/ogulcancelik/herdr, canonical source src/integration/assets/pi/herdr-agent-state.ts (embedded by src/integration/mod.rs). Replace retryGraceMs/retryableErrorPattern and agent_end completion guesses with working state through agent_settled; retain the terminal agent_end error until settlement, then report blocked or idle; retain and idempotently invoke the herdr:blocked event unsubscriber on session_shutdown, including reload/session replacement coverage. Do not edit dotagents pi/extensions/herdr-agent-state.ts directly because Herdr regenerates it.
+
+
 
 ** CANCELLED [#D] Extract org-mode tooling to a dedicated pi extension with a tree-sitter foundation :pi:extension:org:refactor:
 CLOSED: [2026-06-02 Tue 16:55]
@@ -2235,3 +2267,17 @@ Not to be confused with task d4bd209f: `herdr pane run` dispatch itself is relia
 Related upstream work: task a6be7668 targets the same upstream repository.
 
 *Superseded for our purposes [2026-08-01].* `@ogulcancelik/pi-herdr` was removed from `pi/settings.json` and replaced by the first-party `pi/extensions/herdr-orch` proxy, so this defect no longer affects this repository and nothing here is blocked on an upstream fix. Retained solely as a courtesy report worth sending upstream, since the diagnosis is precise and the fix is one line per action; close it if that report is sent or judged not worth sending.
+
+** DONE Create self-improvement skill :pi:
+CLOSED: [2026-08-05 Wed 19:58]
+:PROPERTIES:
+:CUSTOM_ID: 2262ed25-f0fc-40fd-9d21-41a0b16fb3a1
+:CREATED: [2026-04-29 Wed 00:55]
+:STARTED: [2026-04-29 Wed 08:00]
+:ARCHIVED: [2026-08-05 Wed 19:58]
+:ARCHIVE_OLPATH: Housekeeping
+:END:
+:LOGBOOK:
+- State "DONE" from "STARTED" [2026-08-05 Wed 19:58]
+:END:
+#+IMPORT: [[plan:2026-04-28-create-self-improvement-skill.org]]

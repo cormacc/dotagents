@@ -7,6 +7,8 @@ description: End-of-session retrospective. Reviews a substantive ending session 
 
 Review the session for repeatable correction signals and synthesize candidate agent-process improvements. This is a session-learning workflow, not the retrospective project change-record workflow owned by [`org-plan`](../org-plan/SKILL.md).
 
+**Boundary.** Detection, classification, and presentation are this skill's. Eligibility, ownership routing, deduplication, persistence, and verification of persisted findings are canonically [`self-improvement`](../self-improvement/SKILL.md)'s -- load it once findings are approved and follow it exactly, rather than re-deriving those rules here.
+
 ## Threshold
 
 Proactively offer one retro only when a substantive session is ending and the scan below finds repeated corrections or mounting friction. Task completion and change-record closure are not signals by themselves. If the session had fewer than roughly five substantive exchanges, say that it is unlikely to contain durable lessons and skip unless the user insists.
@@ -24,7 +26,7 @@ Prioritize:
 3. **Repeated friction** -- avoidable back-and-forth, manual workaround, or undocumented convention.
 4. **Validated approach** -- an explicitly approved pattern that contradicts or fills a gap in current guidance.
 
-Apply [`self-improvement`](../self-improvement/SKILL.md)'s canonical trigger gate to decide which scanned signals are durable enough to keep. It owns common eligibility, including what to skip.
+Keep only signals that pass `self-improvement`'s trigger gate.
 
 ## 2. Classify
 
@@ -39,7 +41,7 @@ Tool/API failures are normally guardrails. Only behavioral and guardrail finding
 
 ## 3. Choose the narrowest owner
 
-For every retained finding, load [`self-improvement`](../self-improvement/SKILL.md) and follow its canonical ownership, routing, deduplication, and persistence rules. Resolve symlinks and inspect the target instructions before proposing a destination; do not invent destinations that the current repository does not declare as canonical.
+Route each retained finding per `self-improvement`'s ownership and routing rules.
 
 ## 4. Present findings
 
@@ -54,13 +56,10 @@ Wait for user approval before editing or filing tasks. The user may reject, rewr
 
 ## 5. Apply approved changes
 
-For each approved item, apply `self-improvement`'s tight-loop or TODO-first workflow exactly. Keep `AGENTS.md` concise and skill bodies under roughly 500 lines; move detailed material to references when needed.
+For each approved item, apply `self-improvement`'s tight-loop or TODO-first workflow exactly.
 
 Do not commit unless the user requested a commit or the active task protocol explicitly includes it.
 
 ## 6. Verify
 
-- Re-read each modified instruction file.
-- Use `self-improvement`'s verification rules for persisted findings.
-- Confirm no duplicate or contradictory guidance was introduced.
-- Report changed paths, task UUIDs, and intentionally deferred tech debt/backlog.
+Verify per `self-improvement` § Verification, then report changed paths, task UUIDs, and any tech debt / backlog findings intentionally left unfiled.

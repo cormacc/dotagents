@@ -74,9 +74,9 @@ Conceptual split:
 - installation wiring, Nix/Home Manager integration, shell environment → dotfiles;
 - project-only conventions → project-local.
 
-Within that tier, choose the narrowest canonical owner: a skill workflow belongs in that skill or its reference; a project convention belongs in the project `AGENTS.md`; executable or non-trivial work belongs in an `Agent feedback` TODO. Read the target instructions before proposing changes, and do not invent harness-specific destinations that the repository does not declare.
+Within that tier, choose the narrowest canonical owner: a skill workflow belongs in that skill or its reference; a project convention belongs in the project `AGENTS.md`; executable or non-trivial work belongs in an `Agent feedback` TODO. Read the target instructions before proposing changes, and do not invent harness-specific destinations that the repository does not declare. Keep the destination proportionate: `AGENTS.md` stays concise, and a skill body that outgrows itself moves detail into `references/` per [`skill-creator`](../skill-creator/SKILL.md).
 
-Ask once when ownership is ambiguous. If unresolved, use the current project and tag `tier-unknown`.
+Ask once when ownership is ambiguous. If unresolved, use the current project and tag `tier_unknown`.
 
 Cross-project routing is a direct `ot --root <target> ...` operation. It does not depend on a live target agent session, `pi-intercom`, or optional pi task tools.
 
