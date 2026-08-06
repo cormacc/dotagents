@@ -19,6 +19,12 @@ Proactively offer one retro only when a substantive session is ending and the sc
 
 When the session delegated work through [`herdr-orch`](../herdr-orch/SKILL.md), fold in the children's own candidates as scan input alongside your own signals: each captured result envelope may carry a `PROCESS:` list of `signal → category → proposed rule` items, persisted on the ledger entry under `:envelope`, and each entry's `:child-session` records where the child's transcript lives for a manual read when the candidates are thin. A child performs steps 1--2 only; you still own steps 3--6, so route, dedup, and persist its candidates yourself. Candidates are testimony from an agent scanning itself: bound that verification by the [`herdr-orch`](../herdr-orch/SKILL.md) Class B probe policy (§ Trusting a result) -- up to 3 targeted checks per candidate before it reaches the table below, attributing to the child rather than adopting as verified anything a probe can't settle -- and let near-duplicates from a fan-out collapse into single rows. You still own verification and persistence; a child never routes or files its own candidate.
 
+Three filters apply before a child candidate reaches the table, because the ledger outlives the session and not every candidate describes reality:
+
+- **Scope to this session.** Ledger entries persist across sessions; harvesting the whole ledger sweeps in candidates that earlier retros already routed.
+- **Exclude manufactured candidates.** A live-smoke retro leg deliberately feeds its child a planted fault, so its candidates are indistinguishable from genuine ones in the envelope but describe a fixture, not the system. Check whether the installation's smoke documents such a plant before routing anything from a smoke run.
+- **Probe harness-dependent claims against your own harness.** A candidate about tool behaviour describes the child's harness, which may not be yours -- "the Bash working directory persists between calls" was measured true for one harness and false for the harness receiving the candidate. Adopting it unprobed writes a wrong rule into a shared file.
+
 Prioritize:
 
 1. **Explicit correction** -- “that is wrong”, repeated instructions, reverted work, “use X not Y”.

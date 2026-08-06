@@ -83,6 +83,8 @@ Install and local development: `scripts/README.md`.
 
 - Use the smallest useful task granularity: each task should describe a concrete outcome that can become `DONE`.
 - Prefer guaranteed `ot create` for new top-level tasks so IDs, timestamps, drawers, linked-issue duplicate checks, and section insertion stay deterministic. An available harness wrapper may delegate to the same command but is optional.
+- There is no `ot` mutator for a task or subtask's body prose. Editing that prose in place and verifying with `ot show <id>` plus `ot doctor` is the sanctioned route, not a protocol violation -- do not search for a verb that does not exist, and do not reach for `ot create` to replace a task whose body needs a correction.
+- A task body's source citations are a snapshot of when it was written. Before treating a stored body as a baseline, re-verify the symbols, paths, and line numbers it names: a task can outlive the function it cites, and a stale citation sends the next reader after code that no longer exists.
 - Regroup existing tasks with `ot move <id> --parent <dest-id>` / `--section <name>` rather than hand-editing or scripting org surgery; it preserves IDs, lifecycle metadata, descendants, and file locality. Moves are in-file only -- use `ot publish`/`ot unpublish` to change locality and `ot unarchive` before moving an archived task.
 - Keep `TASKS.org` high-level. Put detailed checklists, implementation history, and acceptance criteria in linked change-records.
 - Add discovered work as new `TODO` tasks rather than burying it in prose.

@@ -39,6 +39,14 @@ Run the narrowest relevant tests, type checks, linters, or reproduction commands
 
 A must-not assertion can pass without exercising the guard it claims to prove -- because setup or ordering already excludes the case, an overlapping general guard fires first, or a fixture logs a flag without honouring it. For load-bearing negative guarantees only, break the guarded condition, confirm the focused test fails, then restore it.
 
+**A guard is unverified until its trigger has been observed firing.** Three shapes recur, all of which read correct and pass a green suite:
+
+- A predicate over an external-world property -- file lifetime, process liveness, name release, resource occupancy -- exercised only against a fixture the test itself controls. The fixture then proves the code matches the spec, not that the spec matches reality. Pin such a predicate against the real system at least once.
+- A guard nested inside a presence check (`(and found? ...)`, `if let`, a null-guarded block) is vacuous exactly when the thing is absent -- usually the case the guard exists for. Ask what happens on the absent branch.
+- An allow-list-shaped sweep -- a lint, doc-contract, or policy test iterating a hardcoded list of files, keys, or phrases -- polices only what its list names. Check the list for what it omits, and prefer banning the specific false claim over a shared phrase that a true statement may also use.
+
+A test that needs a particular value of a configurable default must pin it explicitly or accept either outcome. A test inheriting a product default turns a later default change into unrelated red, obscuring whichever failures are real.
+
 ## Severity
 
 - **P0 -- critical:** exploitable security breach, data loss/corruption, or production-wide outage. Must be immediately actionable and provable.
