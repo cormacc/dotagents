@@ -20,6 +20,18 @@
 
 * Explorations
 
+** TODO Evaluate using a dedicated persistent auditor to hand off claim validation
+:PROPERTIES:
+:CUSTOM_ID: f5621a90-e497-451d-b154-e1995b3c264e
+:CREATED: [2026-08-06 Thu 11:48]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 11:48]
+:END:
+Successive retros have introduced guidance that the orchestrator should verify claims made by spawned subagents when publishing their results.
+This seems to be bloating orchestrator context, as it drives the orchestrator to ingest files already processed/summarised by the subagent, subverting the efficacy of the subagent strategy for context management in longer sessions. Consider whether this verification advice should be rolled back, or alternatively whether the orchestrator should spin up a dedicated/persistent auditor subagent that it hands envelopes off to for review.
+Alternatively would updating the publication gate instructions for the subagent to do a verification pass have the same effect without bloating parent context?
+
 ** TODO Determine whether pi allows automatic anthropic prompt caching :pi:
 :PROPERTIES:
 :CUSTOM_ID: dfa273c4-1d43-484f-a515-b6666a64fad7
@@ -487,23 +499,3 @@ Origin:
 
 Evidence:
 One worker settled idle after completing the requested fix but omitted publication and required a targeted publish prompt. Another had a validated COMPLETE result but remained working long after collection; it required Ctrl-D to exit and explicit closure of the parent-created pane.
-
-** TODO Make the pi tasks extension test runner hermetic :ext:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: b3fcc5d9-141f-4589-a2a0-d7a95985092a
-:CREATED: [2026-08-06 Thu 10:24]
-:END:
-:LOGBOOK:
-- Created [2026-08-06 Thu 10:24]
-:END:
-#+IMPORT: [[plan:2026-08-06-make-the-pi-tasks-extension-test-runner.org]]
-The pi tasks extension test runner depends on ambient TypeScript and Pi package resolution and can spend minutes timing out in its RPC harness instead of producing an actionable preflight failure. Make the runner resolve repository-declared dependencies deterministically, isolate child-process loader environment, and either run the RPC checks reliably or fail fast with precise setup guidance.
-
-Origin:
-- cwd: /Users/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-06 Thu 10:23]
-- sender: agent
-
-Evidence:
-pi/extensions/tasks/test.sh passed dependency-free focused tests but could not resolve @earendil-works/pi-coding-agent for import-dependent tests, while pi-integration.test.ts repeatedly timed out. A worker needed alternate dependency-aware invocations to validate the new ot bridge.

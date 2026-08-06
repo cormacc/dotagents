@@ -397,11 +397,26 @@ regression suites:
   tags OR-semantics, `maxBodyChars` truncation (with and without the
   `…` sentinel) and default cap, tasks without `:CUSTOM_ID:` skipped,
   plan tasks inside change-records emitting their own rows.
+- `pi-integration.test.ts` — RPC mode-boundary tests for `/tasks new`,
+  `/tasks doctor`, and bare `/tasks`, spawning the installed `pi` binary
+  directly. `/tasks` subcommands are dispatched before any model call, so
+  the harness passes no `--provider`/`--model` and generates no dummy
+  provider extension. It decodes stdout with its own LF-only JSONL reader
+  (`docs/rpc.md` documents Node `readline` as protocol-non-compliant
+  because it also splits on U+2028/U+2029) and races each expected event
+  against child stderr, an `extension_error` event, and early exit, so a
+  known startup failure reports promptly instead of surfacing only as a
+  generic timeout.
 
 These tests are the authoritative behavioural contract for the
 org-memory protocol implemented by this extension.
 
-Requires `tsx` on `$PATH` (e.g. via `npx tsx` or a global install).
+`test.sh` runs every test through the repository's root-local, locked
+`node_modules/.bin/tsx` (from `package-lock.json`) rather than any
+ambient/global `tsx` or `npx --yes tsx` fallback. If the locked development
+dependencies are not installed, it fails immediately with the exact
+recovery command (`npm ci` from the repository root) instead of starting
+tests that cannot resolve their runtime imports.
 
 ## Dependencies
 

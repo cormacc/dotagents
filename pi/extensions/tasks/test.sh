@@ -4,10 +4,39 @@ set -euo pipefail
 # Test runner for the tasks extension.
 #
 # Sanity-checks the extension's structural shape and runs the
-# parser/scaffold unit tests via tsx. Designed to mirror
-# emacsclient/test.sh in style.
+# parser/scaffold unit tests via the root-local, lockfile-pinned tsx.
+# Designed to mirror emacsclient/test.sh in style, but deliberately has no
+# ambient/global tsx or `npx --yes` fallback: the dependency closure this
+# runner tests against is exactly what the root package-lock.json declares.
 
 cd "$(dirname "$0")"
+
+root="$(cd ../../.. && pwd)"
+TSX="$root/node_modules/.bin/tsx"
+
+fail_locked_deps() {
+  echo "not ok - $1" >&2
+  echo "not ok - run \`npm ci\` from the repository root ($root) to install the locked development dependencies, then re-run this test.sh" >&2
+  exit 1
+}
+
+if [ ! -x "$TSX" ]; then
+  fail_locked_deps "locked tsx not found at $TSX"
+fi
+
+# The tsx-executable check above only proves one binary is present; a
+# partial install (for example: tsx present, @earendil-works/pi-coding-agent
+# absent) must still fail before the first test runs instead of starting
+# import-dependent tests that fail deep inside a later file. `npm ls
+# --depth=0 --include=dev` walks the root package.json's declared
+# dependency/devDependency/peerDependency closure against the actually
+# installed node_modules tree (and the lockfile) with no implicit download
+# or ambient/global resolution, and exits non-zero on any UNMET DEPENDENCY.
+if ! NPM_LS_OUTPUT="$(npm ls --prefix "$root" --depth=0 --include=dev 2>&1)"; then
+  echo "not ok - locked development dependency closure is incomplete:" >&2
+  echo "$NPM_LS_OUTPUT" | sed 's/^/  /' >&2
+  fail_locked_deps "root node_modules does not satisfy the declared dependency closure (see npm ls output above)"
+fi
 
 # ── structural sanity ────────────────────────────────────────────────
 
@@ -29,102 +58,47 @@ fi
 # ── unit tests ───────────────────────────────────────────────────────
 
 CODE=0
+
 echo "# Running parser/scaffold unit tests..."
-# Use `tsx` directly when on PATH, otherwise fall back to `npx tsx`.
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./parser.test.ts || CODE=1
-else
-  npx --yes tsx ./parser.test.ts || CODE=1
-fi
+"$TSX" ./parser.test.ts || CODE=1
 
 echo "# Running insert helper unit tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./insert.test.ts || CODE=1
-else
-  npx --yes tsx ./insert.test.ts || CODE=1
-fi
+"$TSX" ./insert.test.ts || CODE=1
 
 echo "# Running SETUPFILE expansion unit tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./effective.test.ts || CODE=1
-else
-  npx --yes tsx ./effective.test.ts || CODE=1
-fi
+"$TSX" ./effective.test.ts || CODE=1
 
 echo "# Running lifecycle unit tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./lifecycle.test.ts || CODE=1
-else
-  npx --yes tsx ./lifecycle.test.ts || CODE=1
-fi
+"$TSX" ./lifecycle.test.ts || CODE=1
 
 echo "# Running path sandbox unit tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./paths.test.ts || CODE=1
-else
-  npx --yes tsx ./paths.test.ts || CODE=1
-fi
+"$TSX" ./paths.test.ts || CODE=1
 
 echo "# Running global agent-directory path tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ../lib/agent-paths.test.ts || CODE=1
-else
-  npx --yes tsx ../lib/agent-paths.test.ts || CODE=1
-fi
+"$TSX" ../lib/agent-paths.test.ts || CODE=1
 
 echo "# Running doctor unit tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./doctor.test.ts || CODE=1
-else
-  npx --yes tsx ./doctor.test.ts || CODE=1
-fi
+"$TSX" ./doctor.test.ts || CODE=1
 
 echo "# Running agent-memory scenario tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./memory.test.ts || CODE=1
-else
-  npx --yes tsx ./memory.test.ts || CODE=1
-fi
+"$TSX" ./memory.test.ts || CODE=1
 
 echo "# Running closure-time summary unit tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./summary.test.ts || CODE=1
-else
-  npx --yes tsx ./summary.test.ts || CODE=1
-fi
+"$TSX" ./summary.test.ts || CODE=1
 
 echo "# Running section reader unit tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./section.test.ts || CODE=1
-else
-  npx --yes tsx ./section.test.ts || CODE=1
-fi
+"$TSX" ./section.test.ts || CODE=1
 
 echo "# Running scan-summaries unit tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./scan.test.ts || CODE=1
-else
-  npx --yes tsx ./scan.test.ts || CODE=1
-fi
+"$TSX" ./scan.test.ts || CODE=1
 
 echo "# Running expanded-overlay removal unit tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./removal.test.ts || CODE=1
-else
-  npx --yes tsx ./removal.test.ts || CODE=1
-fi
+"$TSX" ./removal.test.ts || CODE=1
 
 printf "# Running ot wrapper integration smoke tests...\n"
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./ot.test.ts || CODE=1
-else
-  npx --yes tsx ./ot.test.ts || CODE=1
-fi
+"$TSX" ./ot.test.ts || CODE=1
 
 echo "# Running /tasks mode-boundary RPC integration tests..."
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./pi-integration.test.ts || CODE=1
-else
-  npx --yes tsx ./pi-integration.test.ts || CODE=1
-fi
+"$TSX" ./pi-integration.test.ts || CODE=1
+
 exit "$CODE"

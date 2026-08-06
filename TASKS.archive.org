@@ -2328,3 +2328,33 @@ Origin:
 
 Evidence:
 The full suite repeatedly reported the same nine failures in herdr_orch.cli-test and herdr_orch.launcher-test: 457 tests, 2678 assertions, 9 failures. The failures were reproduced from a clean git archive and all differed only by /var versus /private/var path spelling.
+
+** DONE Make the pi tasks extension test runner hermetic :ext:org_tasks:
+CLOSED: [2026-08-06 Thu 12:38]
+:PROPERTIES:
+:CUSTOM_ID: b3fcc5d9-141f-4589-a2a0-d7a95985092a
+:CREATED: [2026-08-06 Thu 10:24]
+:STARTED: [2026-08-06 Thu 11:16]
+:ARCHIVED: [2026-08-06 Thu 12:38]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 10:24]
+- State "STARTED" from "TODO" [2026-08-06 Thu 11:16]
+- State "DONE" from "STARTED" [2026-08-06 Thu 11:30]
+- State "STARTED" from "DONE" [2026-08-06 Thu 11:45]
+- State "DONE" from "STARTED" [2026-08-06 Thu 12:10]
+- State "STARTED" from "DONE" [2026-08-06 Thu 12:36]
+- State "DONE" from "STARTED" [2026-08-06 Thu 12:38]
+:END:
+#+IMPORT: [[plan:2026-08-06-make-the-pi-tasks-extension-test-runner.org]]
+The pi tasks extension test runner depends on ambient TypeScript and Pi package resolution and can spend minutes timing out in its RPC harness instead of producing an actionable preflight failure. Make the runner resolve repository-declared dependencies deterministically, isolate child-process loader environment, and either run the RPC checks reliably or fail fast with precise setup guidance.
+
+Origin:
+- cwd: /Users/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-06 Thu 10:23]
+- sender: agent
+
+Evidence:
+pi/extensions/tasks/test.sh passed dependency-free focused tests but could not resolve @earendil-works/pi-coding-agent for import-dependent tests, while pi-integration.test.ts repeatedly timed out. A worker needed alternate dependency-aware invocations to validate the new ot bridge.
