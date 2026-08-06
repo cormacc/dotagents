@@ -1,6 +1,6 @@
 #+TITLE: Design a context-efficient evidence policy for subagent claims
 #+DATE: 2026-08-06 Thu
-#+PARENT: [[task:f5621a90-e497-451d-b154-e1995b3c264e][Design a context-efficient evidence policy for subagent claims]]
+#+PARENT: [[archive:f5621a90-e497-451d-b154-e1995b3c264e][Design a context-efficient evidence policy for subagent claims]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:AGENTS.md]]

@@ -14,8 +14,5 @@
     "npm:pi-web-access",
     "git:github.com/lemonade-sdk/lemonade-pi-plugin@main"
   ],
-  "theme": "dark",
-  "lastChangelogVersion": "0.83.0",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.6-sol"
+  "theme": "dark"
 }

@@ -265,6 +265,7 @@ ClojureScript (`.cljs`):
 
 - `is` does NOT stop test execution on failure -- all assertions run.
 - The message argument to `is` is ALWAYS evaluated, even on success; keep it cheap.
+- In cross-platform `.cljc` tests, assert regex matcher behavior against known matching and non-matching inputs. Do not compare regex objects for equality or compare their printed strings: regex equality is identity-based, and JVM `Pattern` and JavaScript `RegExp` render differently.
 
 ## Common Patterns
 
