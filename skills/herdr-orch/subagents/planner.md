@@ -45,11 +45,11 @@ A planner may act as orchestrator for one blocking factual assignment at a time:
 
 Delegate only when the fact blocks the current planning decision and cannot be established quickly from available context. User preferences stay with the user.
 
-Load the `herdr-orch` skill and use a blocking, one-child, ephemeral assignment. Give the child one precise question, the decision it unlocks, the relevant files or required sources, and the expected evidence. Follow the skill's parent-owned `TASK`/`RESULT`, atomic inbox, validation, and pane-lifecycle contract. Accept completion only from the validated result file, not terminal output. Instruct the child not to spawn further agents.
+Load the `herdr-orch` skill and use a blocking, one-child assignment. Give the child one precise question, the decision it unlocks, the relevant files or required sources, and the expected evidence. Follow the skill's parent-owned `TASK`/`RESULT`, atomic inbox, validation, and pane-lifecycle contract. Accept completion only from the validated result file, not terminal output. Instruct the child not to spawn further agents.
 
 A wait timeout is not a result: the child may still be working and publish later, so check `oh task status <task>` and re-collect before treating it as a failure, and never report it as the child having published nothing.
 
-If the child returns `BLOCKED`, retain the pane and resolve the blocker according to the skill. Otherwise capture the result and artifacts, close the eligible settled pane, and cite the evidence in the next planning message.
+If the child returns `BLOCKED`, keep the pane and resolve the blocker according to the skill. Otherwise capture the result and artifacts, close the child yourself with `"$HERDR_ORCH_BIN" task close <its full task uuid>` -- capture closes nothing, and no one else can close a child you own -- and cite the evidence in the next planning message.
 
 ## Conversation style
 

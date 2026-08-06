@@ -335,10 +335,14 @@
   (is (.endsWith (cli/launcher-bin) "/skills/herdr-orch/scripts/oh"))
   ;; The prompt text is intentionally pinned. One gap-only trigger covers factual research
   ;; and discretionary judgment consults alike, while preserving the blocking, one-child
-  ;; leaf bound. There is deliberately no mandated-consult variant.
-  (is (= "You may spawn at most one blocking ephemeral scout or researcher only when a factual gap or material judgment blocks progress; that child must remain a leaf."
+  ;; leaf bound. There is deliberately no mandated-consult variant. The closing sentence is
+  ;; the one lifecycle rule the CLI cannot enforce -- only an entry's owner may close it --
+  ;; so it is composed here once rather than repeated in every delegating persona.
+  (is (= (str "You may spawn at most one blocking scout or researcher only when a factual gap or material judgment blocks progress; that child must remain a leaf."
+              " Capturing its result closes nothing, so close it yourself with `$HERDR_ORCH_BIN task close <its full task uuid>` before you publish: nobody else can close a child you own.")
          (cli/delegation-guidance ["scout" "researcher"])))
-  (is (= "You may spawn at most one blocking ephemeral scout or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."
+  (is (= (str "You may spawn at most one blocking scout or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."
+              " Capturing its result closes nothing, so close it yourself with `$HERDR_ORCH_BIN task close <its full task uuid>` before you publish: nobody else can close a child you own.")
          (cli/delegation-guidance ["scout" "advisor"])))
   ;; Leaf guidance remains the default for an empty resolved policy; the live roster
   ;; grants planner and worker, while scout and researcher remain leaves.
@@ -346,7 +350,8 @@
   (is (= "You are a leaf: do not spawn subagents." (cli/delegation-guidance nil)))
   ;; An advisor in the allow-list is covered by that same gap-only clause: the retired
   ;; mandate variant must not reappear, and the function takes exactly one argument.
-  (is (= "You may spawn at most one blocking ephemeral scout or researcher or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."
+  (is (= (str "You may spawn at most one blocking scout or researcher or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."
+              " Capturing its result closes nothing, so close it yourself with `$HERDR_ORCH_BIN task close <its full task uuid>` before you publish: nobody else can close a child you own.")
          (cli/delegation-guidance ["scout" "researcher" "advisor"])))
   (is (not (str/includes? (cli/delegation-guidance ["scout" "researcher" "advisor"]) "mandates")))
   (is (thrown? clojure.lang.ArityException (cli/delegation-guidance ["scout"] ["advisor"])))

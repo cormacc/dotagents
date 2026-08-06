@@ -1,0 +1,220 @@
+#+TITLE: herdr-orch: support resident reviewers for incremental review rounds
+#+DATE: 2026-08-06 Thu
+#+PARENT: [[task:4957d0e5-5bda-4532-aa20-631fbde1983b][herdr-orch: support resident reviewers for incremental review rounds]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+
+* Intent
+
+Let a parent keep a settled child (typically a reviewer or worker) and assign it follow-on rounds in its existing context, deciding continuation or closure explicitly after each published result. The child stays fully lifecycle-agnostic: it builds context, works, publishes, and either receives another assignment or gets closed.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+** Scope
+
+*** In scope
+
+- Remove automatic pane closure from every capture path (`run`, `collect`, `collect --wait`, `collect --any`); capture keeps validation, artifact links, and session backfill only.
+- New `oh task close <full-task-uuid>` and `oh task close --settled` sweep: the explicit, guarded, auditable closure verb owning the relocated settle-wait machinery (`ORCH_SETTLE_CLOSE_MS`), closing only on a live child-name *and* pane-ID match and only from a child's newest entry.
+- New `oh task continue <full-task-uuid> --task/--task-file/stdin [--wait]`: guarded reuse verb allocating a fresh task/result per round, new ledger entry with `:continues`, continuation prompt, `verify-dispatch!`.
+- `publish`/`progress` gain a `--task` identity override (env `HERDR_ORCH_TASK` remains the default); the result path derives from the named ledger entry.
+- Waiting policy becomes ledger-only: every entry records its own round's `:waiting-policy`, `publish!` reads it there, and env `HERDR_ORCH_WAITING_POLICY` is deleted from spawn env and from `publish!` altogether.
+- contract.md and SKILL.md rewritten for the new lifecycle; sweep of packaged persona texts and cross-references asserting auto-close.
+- `bb test` coverage for all of the above plus a continue-round live-smoke variant.
+
+*** Out of scope
+
+- Spawn-time residency flags, persona `retain:` frontmatter, capture-time `--retain` -- superseded by the explicit close/continue model.
+- Envelope grammar or `collect --any` candidacy changes.
+- Compatibility shims of any kind: this surface is closed-loop and repository-internal (`oh` writes every envelope and `oh` reads every envelope), so no legacy path, dual-read, or deprecation window is retained anywhere in this change.
+- Any child-visible lifecycle state or child-chosen retention.
+- Auto-resolving a stale publish identity to the newest round (hint only, never implicit re-targeting).
+- The general summary/handoff revalidation rule, tracked by [[task:aaea2185-f6be-4260-8a9c-207b3a834866][Re-verify state claims before restating them in a summary]].
+
+** Shipped
+
+- ADDED :: `oh task close <full-task-uuid>` and `close --settled`; `oh task continue <full-task-uuid> [--wait]`; `--task` identity override on `publish`/`progress`; ledger fields `:continues`, `:closed-at`, per-round `:waiting-policy`; contract.md § Close and § Continue; `lifecycle-documentation-contract` static test; a continue-round live-smoke leg.
+- MODIFIED :: capture (`run`, `collect`, `collect --wait`, `collect --any`) closes nothing; SKILL.md lifecycle and Class C (a closeout validator must be **spawned fresh**); README.org lifecycle prose and History; planner/worker persona texts.
+- REMOVED :: capture-time auto-close and its settle wait; `HERDR_ORCH_WAITING_POLICY` (env and validation); the `unknown-ledger-entry` push half-case; the spawn prompt's "The waiting policy is …" line; dead-owner recovery.
+
+** Acceptance
+
+*** Core functionality
+
+- [X] No capture path (`run`, `collect`, `collect --wait`, `collect --any`) closes a pane; `maybe-close!`'s settle wait, status probe, and `herdr/close!` are gone from capture.
+- [X] Capture still records `record-session!` backfill and foreign/owned reporting unchanged.
+- [X] `oh task close <full-task-uuid>` closes a pane only on a live observation matching *both* the entry's `:child` name and its `:pane-id` in `idle`/`done`, only from the newest ledger entry for that child, after a bounded `ORCH_SETTLE_CLOSE_MS` wait; `:closed-at` is recorded on that newest entry.
+- [X] A child absent from a positively-usable `agent list` yields the non-destructive `{"status":"gone","reason":"child-absent"}` outcome and never closes the recorded pane. Absence proves only that the name was released, so the recorded `:pane-id` may host an unrelated replacement agent or user process -- the same reason `prune!` already refuses to close a pruned entry's pane.
+- [X] `close` refuses (loudly, no mutation): foreign or unresolvable caller identity (both `:parent-session`s must be non-nil), uncaptured entry, an uncaptured newer entry naming the same `:child`, or a stale round -- an entry that is not the newest for its child.
+- [X] WITHDRAWN, not delivered :: this criterion required `close` to accept a "dead owner" -- an entry whose recorded `:parent-session` transcript no longer exists. Built as specified, then removed: the test never fires, because pi transcripts persist on disk indefinitely. Orphaned children are now an explicit operator-cleanup limitation documented in contract.md § Close, and `close` still refuses every foreign or unresolvable caller. Rationale and the rejected liveness signal are in Gotchas; the diagnosis is in Decisions.
+- [X] `close` re-validates the freshest ledger state inside its final mutation, mirroring `prune!`'s race re-check.
+- [X] An unsettled child yields the non-destructive `{"status":"retained","reason":"unsettled"}` outcome; close is retryable.
+- [X] `oh task close --settled` takes no task argument (supplying one fails), groups owned captured entries by child across continuation lineage, considers only the newest entry per child, issues at most one close attempt per child, and returns a per-task outcome array.
+- [X] `oh task continue <full-task-uuid>` allocates a fresh task UUID and result path and writes a new ledger entry inheriting `:child`/`:pane-id`/`:label`/`:persona-path` with `:continues <prior-task>`.
+- [X] `continue` refuses (loudly, no mutation) unless: caller owns the entry, the prior entry is captured with a validated envelope (`COMPLETE`, `FAILED`, or `BLOCKED`), the live agent name *and* pane ID match `:child`/`:pane-id`, `agent_status` is `idle`/`done`, and no other uncaptured entry names that child.
+- [X] `continue` is root-only: a caller with `HERDR_ORCH_PERSONA` set is refused before any ledger or pane mutation.
+- [X] `continue` writes its new uncaptured ledger entry before prompting the pane, then runs `verify-dispatch!` after the prompt.
+- [X] The continuation prompt names the new TASK, instructs publication with `--task`, identifies the assignment as a follow-on round, and requires revalidation of prior findings and mutable baselines before restating them.
+- [X] `continue --wait` blocks like `run`; default is non-blocking like `start`. The chosen policy is written to the new entry's `:waiting-policy`, which is the sole input to both the prompt's guidance (progress instruction, parent push) and `publish!`'s notify/push behaviour for that round -- prompt text alone cannot change the mechanical path.
+- [X] `publish --task <uuid>` overrides env `HERDR_ORCH_TASK`; the result path derives from the named ledger entry, and the entry's `:child` must equal env `HERDR_ORCH_CHILD`.
+- [X] Waiting policy has exactly one home: the ledger entry's `:waiting-policy`. `HERDR_ORCH_WAITING_POLICY` is removed from the spawn env map (`cli.clj:395`) and from `publish!`'s resolution and validation (`cli.clj:518`, `:528`); no fallback path remains, so a continued round cannot carry a stale policy.
+- [X] A `publish` whose task has no ledger entry is silent -- no toast, no parent push -- because a publication with no entry has no parent to advise; this replaces the current `{"push":"skipped","reason":"unknown-ledger-entry"}` half-case (`cli.clj:537-538`) with one uniform rule and is a deliberate narrowing of the hand-driven `publish` in SKILL.md § Manual fallback.
+- [X] `progress --task <uuid>` applies the same override and validation.
+- [X] A publish that fails because the env-derived task is already published, when exactly one uncaptured entry names the same child, emits an error naming the fix: retry with `--task <uuid>`.
+- [X] contract.md documents: the close and continue verbs with guards and refusal cases, the `--settled` sweep's one-close-per-child grouping, the `gone` and dead-owner outcomes, `publish`/`progress` `--task`, ledger fields `:continues`/`:closed-at`/per-round `:waiting-policy`, the removal of `HERDR_ORCH_WAITING_POLICY` from the child env table, the silent ledger-less publish, and capture's non-closing semantics, and that a continued entry's `:child` name does not derive from its own task UUID.
+- [X] SKILL.md lifecycle text states: panes persist until the parent closes or continues them; close-or-continue after every capture; and Class C is *rewritten* to require the final delegated validator to be newly spawned for that closeout and never a child continued from an earlier round, retaining the existing prohibition on an implementing worker reaffirming its own result.
+- [X] `bb test` passes with new coverage for capture-no-close, close guards and sweep, continue guards and prompt, and publish/progress overrides -- including a replacement agent occupying a recorded `:pane-id`, two captured continuation rounds of one child, a stale-round close attempt, one-close-per-child sweep behaviour, a dead-owner close, and both policy transitions (`run` -> `continue`, `start` -> `continue --wait`) asserted on notify/push behaviour rather than prompt text alone.
+- [X] The live smoke gains a continue-round variant proving same-pane context continuation end-to-end.
+
+*** Edge cases
+
+- [X] `continue` on an `invalid`, uncaptured, or pruned prior entry: refused.
+- [X] `continue` on a captured `BLOCKED` envelope whose agent is settled `idle`/`done`: accepted (unified blocked-resumption).
+- [X] `close` on an entry whose agent has vanished from a positively-usable listing: reported `gone`, pane retained, nothing mutated; an unusable or failed listing is equally non-destructive. A vanished child's pane is an accepted manual-cleanup case, deliberately not an automatic close.
+- [X] `close` on an entry whose recorded `:pane-id` is now occupied by a different live agent: refused, pane untouched -- the child-name-and-pane-ID match fails.
+- [X] `close --settled` with two captured rounds of the same child: exactly one close attempt, against the newest entry only.
+- [X] Foreign-session capture behaviour unchanged.
+- [X] `prune` and `collect --any` candidacy treat continuation entries as ordinary entries.
+- [X] The parent-push advisory names close-or-continue alongside the collect command.
+
+*** Anti-criteria
+
+- [X] Must not: close a pane on evidence weaker than a live observation matching both the child name and the pane ID -- name absence, a stale ledger `:pane-id`, or result prose are never sufficient.
+- [X] Must not: infer continuation or closure from `NEXT:` or any result prose.
+- [X] Must not: relax per-task one-shot result publication (hard-link once; pre-existing result stays an error).
+- [X] Must not: make the child aware of, or able to choose, its own lifecycle (nothing lifecycle-related in spawn env or spawn prompt).
+- [X] Must not: auto-resolve a stale publish identity to another entry.
+- [X] Must not: change the envelope grammar -- not for compatibility, but because this design needs no grammar change and altering it would forfeit free reuse of `collect`, validation, and fan-in.
+- [X] Must not: change the `collect --any` candidate predicate; continuation entries must remain ordinary candidates or fan-in silently miscounts.
+- [X] Must not: leave two sources of truth for any lifecycle value -- policy, result path, and pane identity each resolve from the ledger entry alone.
+
+** Decisions
+
+- Design principles: flexibility, robustness, simplicity, minimal runtime checks on hot paths.
+- Mechanical enforcement over instruction :: where a contract detail can be enforced by the CLI -- derived from the ledger, validated at the boundary, or refused loudly -- it must not instead be delegated to prompt text the child is asked to obey. Every rule moved into code removes tokens from every future spawn and removes a failure mode where the child simply does not comply. Prompts carry assignment content and one exact command to run; they do not carry protocol the CLI could have guaranteed.
+- Chose explicit per-publication lifecycle (no auto-close, `close`/`continue` verbs) :: session evidence showed (a) the retain decision is best made after reading the published result, where no spawn-time flag can serve, and (b) auto-close failure is silent *by construction* -- wait, probe, and close errors are swallowed and never alter any result field (`cli.clj:330-340`, asserted by `cli_test.clj:1719` and `cli_test.clj:1828`) -- so a parent can never rely on it and must enforce closure anyway. Failure *frequency* is unmeasured and deliberately not claimed: no rate exists in source, tests, docs, or task history, and the argument rests on unreliability-by-construction alone.
+  Rejected:
+  - Spawn-time `--resident` and/or persona `retain:` frontmatter with capture-time `--retain` promotion: prediction-based; solves the wrong moment; three-layer resolution surface for no gain once closure is explicit.
+  - Ephemeral-by-default with retention flags: preserves the unreliable auto-close and the settle-wait on every capture.
+  - Multi-publish to one result path: breaks one-shot atomicity; per-round fresh task/result reuses collect, validation, and fan-in unchanged.
+- One-shot publication is retained per task, relaxed per child lifetime: a child may publish once per assigned round; continuation allocates the next round rather than republishing.
+- `--task` overrides identity; the ledger owns policy :: `publish!` currently reads `HERDR_ORCH_WAITING_POLICY` from env (`cli.clj:518`, validated `:528`) while spawn injects it exactly once (`cli.clj:395`), so a continued round would publish under its spawn-time policy -- a `start`-spawned child continued with `--wait` taking the non-blocking push path, a `run`-spawned child continued non-blocking publishing with no advisory at all. Rather than add an env fallback, the env var is deleted and the entry's `:waiting-policy` becomes the single home for the value. A stale policy then cannot be represented, which is stronger than validating against one. A mistyped `--task` can still only reach the same child's own rounds, because `:child` must match env `HERDR_ORCH_CHILD`, which is stable across rounds.
+- No compatibility constraints, by design :: `oh` writes every envelope and `oh` reads every one, so `herdr-orch/v1` has no external consumer and the schema version is free to move whenever clarity demands it. The earlier "must not change the machine schema version" anti-criterion protected nothing and was removed; the envelope grammar stays frozen only because this design needs no grammar change, and the `collect --any` predicate stays frozen because fan-in correctness depends on it. Simplicity and robustness are the only constraints that survive: no legacy path, dual-read, or deprecation window anywhere.
+- Herdr floor is an observation, not a constraint :: every call this design uses (`pane close`, `agent get`/`list`/`prompt`/`wait`) shipped in 0.7.5, so the existing version gate in `herdr.clj` needs no change. Recorded here rather than as an anti-criterion, since no implementer has to engineer for it.
+- Stale-identity failures hint, never auto-resolve: implicit re-targeting would reintroduce hidden lifecycle magic.
+- `continue` doubles as the blocked-resumption verb: resuming a captured `BLOCKED` envelope requires a fresh task anyway; envelope-status `BLOCKED` is distinct from agent-status `blocked`, and the `idle`/`done` delivery guard prevents typing into an approval UI.
+- Constitution note: this change rewrites the skill's own documented lifecycle contract (SKILL.md + contract.md); that is the point of the change, not silent divergence.
+- Class C must be rewritten, not retained verbatim :: `SKILL.md:98` says only "the root or an ephemeral reviewer" and never says *fresh*; it inherits that meaning from the adjacent "ephemeral by default" lifecycle default at `SKILL.md:50`, which this change removes. Preserving the sentence byte-identically would therefore silently drop the freshness guarantee, letting a long-resident reviewer reaffirm its own earlier review at feature closeout -- exactly what parent task `4957d0e5` forbids for high-consequence closure.
+- Revised after design review (`.tmp/herdr-orch/40fcdfe3-100a-4975-a956-b07e4c087af4-design-review.md`, verdict NEEDS CHANGES) :: close-safety, waiting-policy relocation, the Class C rewrite, dead-owner recovery, plan serialisation, and the `prune!` reference were all corrected here; the record returned to `Review` for sign-off.
+
+** Gotchas
+
+- A pane outlives its agent, so name-absence is never permission to close. `close` reports `gone` and retains the pane; the recorded `:pane-id` may host an unrelated replacement. Accepted trade: a leaked pane beats a wrongly killed one.
+- **Dead-owner recovery was specified, built, and removed.** The original criterion accepted a close when the recorded `:parent-session` transcript "no longer exists" -- which never becomes false, because pi transcripts persist on disk indefinitely. It passed every unit test, because fixtures write transcript paths the test itself controls, so the fixture proved the code matched the spec rather than the spec matching reality. Caught only when a real orphan appeared in a real sweep. Consequence: an orphaned child whose owning session ended cannot be closed through the protocol at all -- operator cleanup, documented in contract.md § Close. `agent list` does expose `agent_session`, but absence from one listing proves only current detachment, so a liveness-based rebuild needs a sounder signal than that.
+- **A doc-contract test polices only the files it lists.** `lifecycle-documentation-contract` passed green while README.org still asserted capture-time closure, because README.org was absent from its `lifecycle-docs` vector. Adding the file is half the fix; the banned-phrase list must also name the wording each stale document actually used. Ban the false subject ("Every capture path settle-waits"), never a shared predicate ("before its single close attempt") that is true of `close`.
+- Pane accumulation is now the parent's problem by design. `close --settled` is the cheap sweep; it exits 0 while reporting per-child refusals inside its array, so a caller checking only the exit code will read a sweep-with-refusals as fully successful.
+- Root cannot close a grandchild it does not own, so the smoke's nested leg *instructs* its planner child to close its own scout. That is an LLM-compliance dependency rather than a mechanical guard -- loud on failure, but a real flakiness surface.
+- Anchoring in long residencies is mitigated by the continuation prompt's revalidation clause and by the rewritten Class C rule; independence is a property of the spawn, not of the instruction.
+
+* Plan
+
+** DONE Remove pane closure from every capture path
+CLOSED: [2026-08-06 Thu 22:21]
+:PROPERTIES:
+:CUSTOM_ID: e55d18e4-7b26-47c2-80c6-0efd66bf7760
+:CREATED: [2026-08-06 Thu 21:08]
+:BLOCKED-BY: task:f903bd82-b26a-4187-a3aa-dd8696678e69
+:BLOCKED-BY+: task:95705ac5-0e94-4422-9195-fe44c93f37da
+:STARTED: [2026-08-06 Thu 22:11]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-06 Thu 22:11]
+- State "DONE" from "STARTED" [2026-08-06 Thu 22:21]
+:END:
+Landed. `maybe-close!` keeps only session backfill and foreign/owned reporting; `settle-close-ms` moved to `close`/`continue`.
+
+** DONE Add `oh task close` with `--settled` sweep
+CLOSED: [2026-08-06 Thu 21:59]
+:PROPERTIES:
+:CUSTOM_ID: f903bd82-b26a-4187-a3aa-dd8696678e69
+:CREATED: [2026-08-06 Thu 21:08]
+:BLOCKED-BY: task:c165b881-6faf-493a-bb23-b9d2fa09221f
+:STARTED: [2026-08-06 Thu 21:51]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-06 Thu 21:51]
+- State "DONE" from "STARTED" [2026-08-06 Thu 21:59]
+:END:
+Landed, minus dead-owner recovery (removed -- see Gotchas). Outcomes: `closed`, `gone`, `retained`; `--settled` sweeps newest-round-per-child.
+
+** DONE Add `--task` identity override to `publish` and `progress`
+CLOSED: [2026-08-06 Thu 21:51]
+:PROPERTIES:
+:CUSTOM_ID: c165b881-6faf-493a-bb23-b9d2fa09221f
+:CREATED: [2026-08-06 Thu 21:08]
+:STARTED: [2026-08-06 Thu 21:42]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-06 Thu 21:42]
+- State "DONE" from "STARTED" [2026-08-06 Thu 21:51]
+:END:
+Landed. `HERDR_ORCH_WAITING_POLICY` deleted outright; policy resolves from the entry, and a ledger-less publish is silent.
+
+** DONE Add `oh task continue` for follow-on rounds
+CLOSED: [2026-08-06 Thu 22:11]
+:PROPERTIES:
+:CUSTOM_ID: 95705ac5-0e94-4422-9195-fe44c93f37da
+:CREATED: [2026-08-06 Thu 21:08]
+:BLOCKED-BY: task:c165b881-6faf-493a-bb23-b9d2fa09221f
+:BLOCKED-BY+: task:f903bd82-b26a-4187-a3aa-dd8696678e69
+:STARTED: [2026-08-06 Thu 21:59]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-06 Thu 21:59]
+- State "DONE" from "STARTED" [2026-08-06 Thu 22:11]
+:END:
+Landed. Root-only, guarded by the same live child+pane match `close` uses; allocates a fresh task/result per round with `:continues`.
+
+** DONE Rewrite lifecycle docs and sweep auto-close references
+CLOSED: [2026-08-06 Thu 23:02]
+:PROPERTIES:
+:CUSTOM_ID: ed671083-2542-45e8-9ca1-9377ac337182
+:CREATED: [2026-08-06 Thu 21:08]
+:BLOCKED-BY: task:e55d18e4-7b26-47c2-80c6-0efd66bf7760
+:BLOCKED-BY+: task:f903bd82-b26a-4187-a3aa-dd8696678e69
+:BLOCKED-BY+: task:c165b881-6faf-493a-bb23-b9d2fa09221f
+:BLOCKED-BY+: task:95705ac5-0e94-4422-9195-fe44c93f37da
+:BLOCKED-BY+: task:f8ea9243-798c-4590-8113-5a29ef0bffdd
+:STARTED: [2026-08-06 Thu 22:39]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-06 Thu 22:39]
+- State "DONE" from "STARTED" [2026-08-06 Thu 23:02]
+:END:
+Landed. contract.md gained § Close and § Continue; SKILL.md states close-or-continue and the rewritten Class C; `lifecycle-documentation-contract` pins the prose. The first sweep missed README.org because that file was absent from the test's own file list -- see Gotchas.
+
+** DONE Live-smoke continue-round variant
+CLOSED: [2026-08-06 Thu 22:38]
+:PROPERTIES:
+:CUSTOM_ID: f8ea9243-798c-4590-8113-5a29ef0bffdd
+:CREATED: [2026-08-06 Thu 21:08]
+:BLOCKED-BY: task:95705ac5-0e94-4422-9195-fe44c93f37da
+:BLOCKED-BY+: task:f903bd82-b26a-4187-a3aa-dd8696678e69
+:BLOCKED-BY+: task:e55d18e4-7b26-47c2-80c6-0efd66bf7760
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-08-06 Thu 22:38]
+:END:
+Landed. `continue-leg!` proves same-pane context by round-two recall of a random token never written to disk, then asserts `:continues`, inherited identity, and a `closed` outcome. First green run: `.tmp/smoke-continue.log`, exit 0.
+
+* Implementation
+
+`bb test`: 457 tests / 2680 assertions before, 483 / 2908 after, 0 failures. Live smoke green (`.tmp/smoke-continue.log`, exit 0), proving same-pane context continuation.
+
+Delivered by delegation across two worker rounds, with an independent design review before implementation and an independent closure validation after. Both reviews found real defects: the design review corrected close-safety, waiting-policy relocation, and the Class C rewrite before any code was written; the closure validation caught the README sweep gap and the surviving prompt line after `bb test` was already green. Neither was reachable from a passing suite.
+
+The change dogfooded itself: `continue` assigned the docs round to the worker that wrote the code, and `close --settled` cleaned up the smoke's children -- reporting `gone` for two panes the *old* auto-close had already taken, which is the close-safety guard working on its first production run.

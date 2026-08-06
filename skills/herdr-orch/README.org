@@ -144,7 +144,7 @@ Upstream support is required at *both* ends of a delegation, which is stricter t
 - *As a child*, the kind must be startable: =oh= spawns via =herdr agent start --kind=, which not only launches the executable but verifies it was *detected* in the pane. A harness absent from the enum cannot be spawned however it is configured, and shadowing a supported kind's executable on =PATH= does not work -- detection fails rather than mis-registering.
 - *As the orchestrator*, the kind must be registered too. Every caller-identity command (=task run=/=start=, =collect --any=, =prune=) runs =agent get= on =$HERDR_PANE_ID=; from a pane hosting an unrecognised process that fails with =agent_not_found=, so an unsupported harness cannot drive delegation at all, only be driven.
 
-What does survive without registration is publication and capture: =task publish= takes its identity purely from the injected =HERDR_ORCH_*= variables and makes no Herdr agent call, and =task collect <full-task-uuid>= reads the result file, skipping only the pane close. So an unsupported harness can be hand-launched into a =pane split --env …= pane and still return a valid result. Treat that as a manual fallback, not a supported path: such a child is invisible to =agent list=, so it is excluded from =collect --any= and, more dangerously, satisfies =prune='s staleness proof while still working.
+What does survive without registration is publication and capture: =task publish= takes its identity purely from the injected =HERDR_ORCH_*= variables and makes no Herdr agent call, and =task collect <full-task-uuid>= reads the result file, which closes nothing for any child. So an unsupported harness can be hand-launched into a =pane split --env …= pane and still return a valid result. Treat that as a manual fallback, not a supported path: such a child is invisible to =agent list=, so it is excluded from =collect --any= and, more dangerously, satisfies =prune='s staleness proof while still working.
 
 ** Verifying a configuration change
 
@@ -210,7 +210,8 @@ The regression suite names the important boundaries; preserve the tests rather t
 - =bounded-poll-timeout-without-result= must fail if the wait-loop sleep is removed.
 - =unknown-state-is-never-nudged= must fail if the post-prompt dispatch check ever sends keys to a child whose state it could not observe, and =dispatched-prompt-is-confirmed-without-touching-the-keyboard= must fail if a healthy spawn starts paying for a poll interval or a second =agent get=.
 - =launcher-matrix-selects-branch-and-preserves-cwd= must fail if launcher path canonicalisation or caller cwd preservation regresses.
-- result capture must precede ownership-scoped pane closure, and foreign/unresolvable parent identity must retain the pane.
+- capture must never close a pane: closure belongs to =task close= alone, and =close=/=close --settled= must refuse a foreign or unresolvable parent identity, a stale non-newest round, and any child whose live name and pane id do not both match the ledger entry.
+- =lifecycle-documentation-contract= must fail if any lifecycle document -- this README included -- reasserts capture-time closure; a document omitted from its file list is a document the suite cannot police.
 - retro tests must remain behavioural at prompt/CLI boundaries: frontmatter values are strings, value-less flags participate in two argv consumers, and optional annotations must not demote a valid result.
 - =default-config-content-contract= pins contract.md's weight table to =config.edn= and pins every pre-two-level model ID to its old argv; keep its expectation matrix hardcoded, or the preservation check becomes circular.
 - live-smoke helper assertions are unit-tested because the billable smoke is never part of the standard suite.
@@ -246,7 +247,8 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 * Known gaps
 
 - The CLI implements one child per invocation for =run=/=start=; multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] -- no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself.
-- Every capture path settle-waits (bounded by =ORCH_SETTLE_CLOSE_MS=, default 45 s) before its single close attempt, but a child that never settles inside that budget still retains its pane -- closure is one attempt, never retried.
+- =task close= settle-waits (bounded by =ORCH_SETTLE_CLOSE_MS=, default 45 s) before its single close attempt, but a child that never settles inside that budget still retains its pane -- closure is one attempt, never retried. Capture never closes anything.
+- An orphaned child whose owning session has ended cannot be closed through the protocol at all: =close= refuses a foreign or unresolvable parent identity, and dead-owner recovery was deliberately not built, because absence from one =agent list= proves only current detachment and a weaker ownership test would let a live foreign caller close another parent's pane. Clear those panes manually.
 - =oh task prune= refuses any entry owned by another session, which is correct but leaves no command for the common case of a stale entry from an ended session; clear those by deleting the ledger JSON.
 - =HERDR_ORCH_BIN= intentionally carries the deployed absolute path rather than a canonical repository path; launcher-matrix coverage is its guard.
 
@@ -269,6 +271,7 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 - [[file:../../design/log/2026-08-04-herdr-orch-simplify-model-aliasing.org][2026-08-04]] -- two-level model table: =:aliases= plus canonical =:models= rows.
 - [[file:../../design/log/2026-08-05-herdr-orch-verify-prompt-dispatch-after.org][2026-08-05]] -- post-prompt dispatch verification for spawned children.
 - [[file:../../design/log/2026-08-06-design-a-context-efficient-evidence-poli.org][2026-08-06]] -- context-efficient evidence policy: bidirectional assignment-premise/result-trust rules with a bounded Class B probe budget.
+- [[file:../../design/log/2026-08-06-herdr-orch-support-resident-reviewers-fo.org][2026-08-06]] -- explicit close/continue lifecycle: capture stops closing panes, =task close=/=task continue= replace auto-close and residency flags, and waiting policy moves to the ledger entry.
 
 * LLM use statement
 

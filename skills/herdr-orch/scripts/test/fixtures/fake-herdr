@@ -280,7 +280,7 @@ case "${1:-}" in
         esac
         exit 0
       fi
-      # A per-child `settle-to` marker models the post-capture settle-close wait: the
+      # A per-child `settle-to` marker models the settle wait `close`/`continue` make: the
       # target has *already* published and is merely still `working`, so this wait must
       # settle it without the publish side effect `agent wait` carries in its original
       # (child wait loop) role. Branched on target state before the FAKE_WAIT cases for
