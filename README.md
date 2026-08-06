@@ -103,7 +103,7 @@ Herdr persona definitions resolve project (`<git-root>/.agents/subagents/`) > ho
 
 Activation fails early when the submodule is uninitialized. It installs local npm dependencies for chromium, pi-clojure, and dataspex when their manifests change. Chromium and pi-clojure now carry exact direct versions plus tracked lockfiles; the root check exercises those locks with `npm ci`.
 
-This editable route intentionally preserves owner-local settings ownership: tracked `pi/settings.json` is live-linked and may be edited in the submodule. A clone-local clean filter installed by `install-git-filter.sh` removes configured volatile fields before commit. The package route, by contrast, ships no settings.
+This editable route intentionally preserves owner-local settings ownership: tracked `pi/settings.json` is live-linked and may be edited in the submodule. A clone-local `pi-settings` clean filter removes configured volatile fields (`lastChangelogVersion`, `defaultProvider`, `defaultModel`) before commit; it requires `jq` on PATH and is declared `required = true`. Under the dotfiles Home Manager wiring, activation registers it automatically when `filter.pi-settings.clean` is unset; on any other clone run `./install-git-filter.sh` once from the checkout root (idempotent). The package route, by contrast, ships no settings.
 
 Changes in out-of-store links take effect after pi `/reload`; no Home Manager switch is required unless the wiring itself changes.
 

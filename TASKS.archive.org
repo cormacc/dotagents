@@ -2508,3 +2508,42 @@ Origin:
 
 Evidence:
 A worker auditing parent verification used an unscoped find for ledger directories. Herdr-orch test runs had left hundreds of fake-herdr fixture ledgers under /tmp, drowning the two real project ledgers and truncating output. Restricting discovery to actual project roots recovered the intended data.
+
+** DONE pi/settings.json: auto-install git clean filter on activation :project_convention:
+CLOSED: [2026-08-06 Thu 18:46]
+:PROPERTIES:
+:CUSTOM_ID: a064abbd-0192-4ca2-8394-50d371c57651
+:CREATED: [2026-05-29 Fri 00:20]
+:ARCHIVED: [2026-08-06 Thu 18:46]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-05-29 Fri 00:20]
+- State "DONE" from "TODO" [2026-08-06 Thu 18:46]
+:END:
+pi writes runtime state (lastChangelogVersion, defaultProvider, defaultModel) into pi/settings.json alongside durable config (packages, theme, thinking settings), producing dirty-tree noise every session.
+
+install-git-filter.sh already exists and solves this cleanly via a `clean` filter that strips the three volatile keys at stage time (smudge = cat). The remaining friction is that it requires a manual per-clone invocation, easy to forget on a fresh checkout — the clone used in this session evidently never had it run.
+
+Action:
+- Add a Home Manager activation hook in agents.nix that invokes install-git-filter.sh from the dotagents submodule when present and the filter isn't already configured (`git config --get filter.pi-settings.clean`).
+- Make the script idempotent re. already-installed state (it currently re-runs cleanly, but the activation hook should short-circuit when configured to avoid unnecessary work).
+- Document in agents/README.org and the dotagents AGENTS.md so manual invocation is also discoverable for non-Nix clones.
+- Optionally widen the strip list as pi adds more runtime keys (reactive; not part of initial scope).
+
+Explicitly not in scope:
+- pi/settings.template.json vendored + gitignore live file. Requires manual template updates after every package install or setting change; high drift risk.
+
+Follow-up: 12543944-2045-444a-8135-b7cfb47a6d3e — upstream request to pi maintainers for a runtime/config split, which would remove the need for this workaround entirely.
+
+Origin:
+- session: this one
+- cwd: /Users/cormacc/dotfiles/agents
+- git: github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-05-28 Thu]
+- sender: agent
+
+Evidence:
+- pi/settings.json HEAD: packages[], theme, hideThinkingBlock, defaultThinkingLevel.
+- Session dirty diff: lastChangelogVersion="0.76.0", defaultProvider="anthropic", defaultModel="claude-opus-4-7".
+- Filter wrapper exists at ./install-git-filter.sh; was not active on this clone.

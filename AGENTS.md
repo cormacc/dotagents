@@ -23,6 +23,7 @@
 # Git operations
 - When moving files controlled by git, ALWAYS use `git mv` rather than `mv` -- this preserves history.
 - When reverting file changes you made, use git instead of editing the file again.
+- `pi/settings.json` is tracked but rewritten by pi at runtime; a clone-local `pi-settings` clean filter (`.gitattributes` + `./install-git-filter.sh`, requires `jq`) strips `lastChangelogVersion`, `defaultProvider`, and `defaultModel` at stage time. Under dotfiles the filter is registered by Home Manager activation (`agents.nix` -> `installPiSettingsGitFilter`); on any other clone run the script once. If those keys show up in a diff, the filter is not installed -- do not hand-revert the file.
 - For commit messages, see the `git-commit` skill. Commit bodies should refer to associated design change records rather than restating detail.
 
 # File operations

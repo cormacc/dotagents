@@ -28,7 +28,10 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+# `|| true` matters: under `set -e` a failing command substitution aborts the
+# assignment itself, so without it a non-repo cwd exits 128 silently and the
+# diagnostic below never runs.
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "$REPO_ROOT" ]]; then
   echo "ERROR: not inside a git repository." >&2
   exit 1
