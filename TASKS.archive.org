@@ -2297,3 +2297,34 @@ CLOSED: [2026-08-06 Thu 10:18]
 - State "DONE" from "STARTED" [2026-08-06 Thu 10:18]
 :END:
 #+IMPORT: [[plan:2026-08-06-org-tasks-housekeeping.org]]
+
+** DONE Canonicalize macOS temporary paths in herdr-orch tests :skill:herdr_orch:
+CLOSED: [2026-08-06 Thu 10:39]
+:PROPERTIES:
+:CUSTOM_ID: 82655bdd-2234-42be-af88-1833b2530a5f
+:CREATED: [2026-08-06 Thu 10:24]
+:STARTED: [2026-08-06 Thu 10:35]
+:ARCHIVED: [2026-08-06 Thu 10:39]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 10:24]
+- State "STARTED" from "TODO" [2026-08-06 Thu 10:35]
+- State "DONE" from "STARTED" [2026-08-06 Thu 10:39]
+:END:
+Herdr-orch tests compared logical macOS =/var= temporary paths with canonical =/private/var= paths, leaving the complete Babashka suite permanently non-green on macOS.
+
+Record:
+- Intent :: Make launcher/orchestration fixtures derive every expected path from one canonical temporary root so the suite reports genuine regressions on every platform.
+- Decision :: Apply =babashka.fs/canonicalize= once in =herdr-orch.cli-test/fake-env= and =herdr-orch.launcher-test/harness= before deriving paths and environment values; do not normalize production outputs or weaken assertions.
+- Shipped :: Both fixture constructors now store canonical roots, with direct invariant assertions guarding against mixed logical/canonical fixture paths. Exact result-path, assignment-root, persona, cwd, deps-root, and launcher-identity checks remain intact; production source and intentionally logical deployed-bin paths are unchanged.
+- Validation :: The focused baseline reproduced 9 failures across 131 tests / 1047 assertions. The fixed focused run passed 131 tests / 1049 assertions; complete =bb test= passed 457 tests / 2680 assertions, both with 0 failures and 0 errors.
+
+Origin:
+- cwd: /Users/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-06 Thu 10:23]
+- sender: agent
+
+Evidence:
+The full suite repeatedly reported the same nine failures in herdr_orch.cli-test and herdr_orch.launcher-test: 457 tests, 2678 assertions, 9 failures. The failures were reproduced from a clean git archive and all differed only by /var versus /private/var path spelling.

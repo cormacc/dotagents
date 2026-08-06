@@ -29,7 +29,7 @@
 (defn- harness
   "Temp assignment root + a PATH shim providing the fake `herdr` and a logging `bb`."
   []
-  (let [dir (str (fs/create-temp-dir {:prefix "subagent-launcher-"}))
+  (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "subagent-launcher-"})))
         shim (fs/path dir "shim")
         bb-shim (fs/path shim "bb")
         caller (fs/path dir "caller")]
@@ -78,6 +78,7 @@
                                {:out :string :err :string :env env :dir project})
         env-map (injected (:env-file h))]
     (is (zero? (:exit proc)) (:err proc))
+    (is (= (:dir h) (str (fs/canonicalize (:dir h)))))
     (is (= project (flag-value (split-argv (:log h)) "--cwd")))
     (is (str/starts-with? (get env-map "HERDR_ORCH_RESULT")
                           (str (fs/path project ".tmp" "herdr-orch"))))

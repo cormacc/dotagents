@@ -1,0 +1,103 @@
+#+TITLE: Make the pi tasks extension test runner hermetic
+#+DATE: 2026-08-06 Thu
+#+PARENT: [[task:b3fcc5d9-141f-4589-a2a0-d7a95985092a][Make the pi tasks extension test runner hermetic]]
+#+SPEC: [[proj:pi/extensions/tasks/README.md]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Intent
+
+Make the pi tasks extension test entrypoint deterministic and diagnostic: repository tests use the repository's declared dependency closure, and RPC mode-boundary failures surface the child-process cause immediately instead of consuming repeated 30-second timeouts.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+** Scope
+
+*** In scope
+- Run every tasks-extension TypeScript test through the root lockfile's local =tsx= and fail fast when the declared development dependencies are not installed.
+- Replace the unnecessary dummy-provider RPC setup with a model-free =pi --mode rpc --no-session= harness for extension commands.
+- Parse RPC stdout with LF-only JSONL framing, capture child stderr/exit, and race expected events against process failure.
+- Sanitize inherited Node loader/module-path variables before spawning pi while preserving the isolated HOME and agent directory.
+- Update the tasks extension README and repository extension-check path to state and exercise the deterministic test contract.
+
+*** Out of scope
+- Changes to task-extension runtime behavior, command semantics, or UI mode boundaries.
+- Real provider/model calls, authentication, or network-backed integration tests.
+- Refactoring other extension test runners or introducing a shared test framework before a second consumer needs it.
+- Hardcoding the active Nix store path or coupling tests to a globally installed =tsx=.
+
+** Acceptance
+
+*** Core functionality
+- [ ] =pi/extensions/tasks/test.sh= invokes the root-local =node_modules/.bin/tsx= for every TypeScript test and exits immediately with an actionable =npm ci= instruction when the locked dependencies are absent.
+- [ ] Import-dependent tests resolve =@earendil-works/pi-coding-agent= from the root dependency closure without =NODE_PATH= or a global =tsx= fallback.
+- [ ] The RPC harness starts the installed pi binary without a dummy provider, =--provider=, or =--model= and still verifies =/tasks new=, =/tasks doctor=, and bare =/tasks= mode behavior.
+- [ ] RPC output uses an LF-only JSONL decoder rather than Node =readline=, matching the documented protocol framing.
+- [ ] Extension-load errors, early child exit, and malformed RPC output fail the current test promptly with captured stderr instead of degrading into the outer timeout.
+- [ ] =scripts/check-extensions.sh= reaches a green tasks-extension runner after =npm ci= from a clean checkout.
+
+*** Edge cases
+- [ ] Parent =NODE_PATH=, =NODE_OPTIONS=, and tsx loader state do not leak into the spawned pi process.
+- [ ] Child cleanup closes stdin, terminates only the process created by the test, awaits exit, and removes temporary HOME/agent state on success and failure.
+- [ ] Response/event correlation cannot let a notification from an earlier command satisfy a later assertion.
+- [ ] The runtime-load check continues exercising the installed pi binary rather than only importing extension modules directly under tsx.
+
+*** Anti-criteria
+- [ ] Must not: make a real LLM request or require provider credentials.
+- [ ] Must not: hide stderr, ignore an =extension_error= event, or retain timeout-only failure messages when the child already exited.
+- [ ] Must not: weaken the existing RPC/TUI boundary assertions or treat =ctx.hasUI= as proof that the custom overlay is supported.
+- [ ] Must not: vendor pi packages, mutate the user's npm installation, or derive module paths from a Nix store layout.
+
+** Decisions
+- Use the root npm lockfile as the direct-test dependency boundary :: package.json and package-lock.json already declare =tsx= and the pi coding-agent development package; the runner should consume that closure or fail before starting tests.
+  Rejected:
+  - Keep the global =tsx=/=npx --yes= fallback: it compiles files while leaving runtime imports dependent on ambient installation state.
+  - Inject the installed pi binary's =NODE_PATH=: Node ESM does not make that a portable package-resolution contract, and it caused jiti to load the wrong package surface during debugging.
+- Test extension commands with model-free RPC and a sanitized child environment :: extension commands are dispatched before model prompting, and a manual =pi --mode rpc --no-session -e ...= probe produced the expected doctor response with =NODE_PATH= unset.
+  Rejected:
+  - Generate a dummy provider extension: it adds a second extension and package-resolution boundary that the commands under test never use.
+  - Replace the subprocess with =AgentSession=: that would stop testing installed-binary extension discovery and RPC framing.
+- Make process failure a first-class test event :: stdout JSON, stderr, child errors, and exit all feed one bounded harness so a known cause wins over a later generic timeout.
+  Rejected:
+  - Increase the 30-second timeout: it makes deterministic startup failures slower without adding evidence.
+
+** Risks
+- The root development package can lag the installed pi binary; direct tests validate the locked package surface while RPC tests must remain the compatibility check against the installed executable.
+- A bespoke JSONL helper can itself mishandle chunk boundaries; fixtures must cover split UTF-8 chunks, multiple records per chunk, CRLF tolerance, and a final unterminated record if the helper accepts one.
+
+* Plan
+
+** TODO Make the shell runner consume the locked dependency closure :ext:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: 36581b59-1b70-4e2c-9af4-a9c5fc3d7d17
+:CREATED: [2026-08-06 Thu 10:31]
+:END:
+Acceptance criteria:
+- One root-local tsx command runs every listed test; missing locked dependencies fail before the first test with the exact recovery command.
+- The runner preserves aggregate failure reporting after startup preflight and remains callable from =scripts/check-extensions.sh=.
+- README test/dependency instructions match the executable precondition.
+Anti-criteria:
+- Must not: download tools implicitly or fall back to ambient package resolution.
+Pointer: =pi/extensions/tasks/test.sh= and the root =package-lock.json=.
+
+** TODO Replace the dummy-provider RPC harness with diagnostic model-free RPC :ext:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: 03fd0896-2934-4f2e-9356-d8e1907c1461
+:CREATED: [2026-08-06 Thu 10:31]
+:END:
+Acceptance criteria:
+- The three mode-boundary scenarios pass without provider/model flags or generated extensions.
+- A strict JSONL reader, unique request IDs, captured stderr, and child error/exit races produce immediate actionable failures.
+- Tests prove loader variables are stripped and an early extension-load failure cannot survive until the generic timeout.
+- The installed pi binary loads =pi/extensions/tasks/index.ts= without =extension_error= output.
+Anti-criteria:
+- Must not: make a model call, depend on Node =readline= framing, or leak child processes.
+Pointer: =pi/extensions/tasks/pi-integration.test.ts= and =docs/rpc.md= in the installed pi documentation.
+
+* Implementation
+
+- The root lockfile declares =tsx= and =@earendil-works/pi-coding-agent=, but the current checkout's =node_modules= contains only the former; the existing per-test global/npx fallback therefore starts tests that cannot resolve their runtime imports.
+- The current RPC harness generates a dummy provider in each temporary HOME, inherits the parent's module-loader environment, discards child stderr, and reports all startup failures as 30-second event timeouts.
+- Pi's RPC contract requires LF-only JSONL framing and explicitly warns that Node =readline= also splits on Unicode separators.
+- A model-free manual probe with =NODE_PATH= removed returned a successful correlated prompt response and =tasks doctor: no issues found= notification, confirming that these extension-command tests do not need a provider.

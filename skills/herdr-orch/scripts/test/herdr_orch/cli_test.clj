@@ -51,7 +51,7 @@
 (defn fake-env
   ([overrides] (fake-env overrides nil))
   ([overrides personas]
-   (let [dir (fs/create-temp-dir {:prefix "fake-herdr-"}) log (str (fs/path dir "calls")) env-file (str (fs/path dir "env")) prompt-file (str (fs/path dir "prompt"))
+   (let [dir (fs/canonicalize (fs/create-temp-dir {:prefix "fake-herdr-"})) log (str (fs/path dir "calls")) env-file (str (fs/path dir "env")) prompt-file (str (fs/path dir "prompt"))
          home (fs/path dir "home") roster (fs/path dir ".agents" "subagents") skills (fs/path dir "skills")]
      (fs/create-sym-link (fs/path dir "herdr") fake)
      (fs/create-dirs home)
@@ -159,6 +159,7 @@
         argv (calls log)
         injected (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
     (is (zero? (:exit proc)))
+    (is (= (str dir) (str (fs/canonicalize dir))))
     ;; ORCH_ASSIGNMENT_ROOT relocates ledger + result state and is inherited by the child.
     (is (str/starts-with? (injected "HERDR_ORCH_RESULT") (str (fs/path dir ".tmp" "herdr-orch"))))
     (is (= (str dir) (injected "ORCH_ASSIGNMENT_ROOT")))

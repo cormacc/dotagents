@@ -468,3 +468,42 @@ Origin:
 
 Evidence:
 A reviewer subagent's preliminary rebase validation repeated a delimiter error in a complex bb -e form once per locale, then initially double-escaped a Clojure regex literal so re-matches failed. The current Clojure skill already warns that multi-line bb -e is fragile, but does not require a one-input smoke test before looping or explicit positive/negative regex examples.
+
+** TODO herdr-orch: recover incomplete child completion states :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: f61dab75-0f20-4b24-8b95-7f43ad8610ba
+:CREATED: [2026-08-06 Thu 10:24]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 10:24]
+:END:
+Herdr orchestration leaves two completion edge cases to manual pane intervention: a settled child may finish without publishing its RESULT, while a child with a validated COMPLETE result may remain reported as working and therefore evade automatic pane closure. Add a safe, parent-owned recovery path that distinguishes these states, preserves result validation and ownership checks, and avoids requiring ad-hoc prompts or terminal keys.
+
+Origin:
+- cwd: /Users/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-06 Thu 10:23]
+- sender: agent
+
+Evidence:
+One worker settled idle after completing the requested fix but omitted publication and required a targeted publish prompt. Another had a validated COMPLETE result but remained working long after collection; it required Ctrl-D to exit and explicit closure of the parent-created pane.
+
+** TODO Make the pi tasks extension test runner hermetic :ext:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: b3fcc5d9-141f-4589-a2a0-d7a95985092a
+:CREATED: [2026-08-06 Thu 10:24]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 10:24]
+:END:
+#+IMPORT: [[plan:2026-08-06-make-the-pi-tasks-extension-test-runner.org]]
+The pi tasks extension test runner depends on ambient TypeScript and Pi package resolution and can spend minutes timing out in its RPC harness instead of producing an actionable preflight failure. Make the runner resolve repository-declared dependencies deterministically, isolate child-process loader environment, and either run the RPC checks reliably or fail fast with precise setup guidance.
+
+Origin:
+- cwd: /Users/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-06 Thu 10:23]
+- sender: agent
+
+Evidence:
+pi/extensions/tasks/test.sh passed dependency-free focused tests but could not resolve @earendil-works/pi-coding-agent for import-dependent tests, while pi-integration.test.ts repeatedly timed out. A worker needed alternate dependency-aware invocations to validate the new ot bridge.
