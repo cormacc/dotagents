@@ -85,7 +85,7 @@ Use caller context or explicit IDs, `--no-focus`, and response IDs--not focused 
 
 ## Assignment premises
 
-A parent assignment must not assert an unmeasured, load-bearing premise -- a baseline, failure attribution, or suspected cause -- as settled fact. Either verify it before composing the assignment, or label it `unverified:` and instruct the child to establish it empirically before adopting that framing. This is the reciprocal of Trusting a result below: that section bounds probes on claims flowing child to parent; this bounds claims flowing parent to child.
+A parent assignment must not assert an unmeasured, load-bearing premise -- a baseline, failure attribution, or suspected cause -- as settled fact. Either verify it before composing the assignment, or label it `unverified:` and instruct the child to establish it empirically before adopting that framing. Measurement of mutable state is a snapshot: after intervening edits or lifecycle/configuration changes, re-measure it before reusing it as an assignment premise, review exclusion, or causal frame. This is the reciprocal of Trusting a result below: that section bounds probes on claims flowing child to parent; this bounds claims flowing parent to child.
 
 ## Trusting a result
 

@@ -508,3 +508,98 @@ Origin:
 
 Evidence:
 After `ot archive b3fcc5d9-141f-4589-a2a0-d7a95985092a --yes`, `ot show b3fcc5d9-141f-4589-a2a0-d7a95985092a --format json` returned `unknown-task`; `ot scan --scope archived --format json` found the archived row. Source confirms `show-cmd` loads the active context while `unarchive` resolves `TASKS.archive.org` directly.
+
+** DONE herdr-orch: re-measure mutable assignment baselines after intervening changes :skill:herdr_orch:
+CLOSED: [2026-08-06 Thu 18:20]
+:PROPERTIES:
+:CUSTOM_ID: d5e56dab-541e-4cd5-8265-9cc51db69cbd
+:CREATED: [2026-08-06 Thu 16:27]
+:STARTED: [2026-08-06 Thu 18:19]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 16:27]
+- State "STARTED" from "TODO" [2026-08-06 Thu 18:19]
+- State "DONE" from "STARTED" [2026-08-06 Thu 18:20]
+:END:
+Treat a measured but mutable baseline as a snapshot rather than a permanently verified premise. When files, task metadata, configuration, or other state changes after measurement, re-measure the baseline before using it as an assignment premise, review exclusion, or causal frame.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-06 Thu 16:26]
+- sender: human
+
+Evidence:
+Successive reviewer assignments carried explicit ot doctor warning counts that were correct when measured but stale after additional #+SPEC edits. Reviewers measured 4+1, then 5+2, then 6+3 rather than accepting the supplied exclusion baseline. The current Assignment premises rule covers unmeasured premises but not measured state invalidated by intervening mutations.
+
+** DONE herdr-orch: document print-prompt launcher-only preview semantics :skill:herdr_orch:
+CLOSED: [2026-08-06 Thu 18:20]
+:PROPERTIES:
+:CUSTOM_ID: ed6c196f-1273-4c81-bf83-3d87eccd6b63
+:CREATED: [2026-08-06 Thu 16:27]
+:STARTED: [2026-08-06 Thu 18:19]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 16:27]
+- State "STARTED" from "TODO" [2026-08-06 Thu 18:19]
+- State "DONE" from "STARTED" [2026-08-06 Thu 18:20]
+:END:
+Document that --print-prompt previews launcher-composed guidance and a persona file path, not the persona body. Persona-local rules must be verified by reading the resolved persona file. Also document that a delegated leaf cannot preview a persona outside its HERDR_ORCH_SPAWNS allow-list because the spawn gate can refuse before preview generation.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-06 Thu 16:26]
+- sender: human
+
+Evidence:
+Two leaf reviewers attempted oh task run <persona> --print-prompt to verify worker/reviewer body edits. Both were refused by the allow-list, and cli.clj prompt-text/preview! confirmed that previews include the persona path rather than its body. Direct persona-file inspection was the verified replacement.
+
+** DONE herdr-orch: scope real-ledger discovery away from test fixtures :skill:herdr_orch:
+CLOSED: [2026-08-06 Thu 18:20]
+:PROPERTIES:
+:CUSTOM_ID: 9b9f9513-171d-4d1d-b8dc-83650a075371
+:CREATED: [2026-08-06 Thu 16:27]
+:STARTED: [2026-08-06 Thu 18:19]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 16:27]
+- State "STARTED" from "TODO" [2026-08-06 Thu 18:19]
+- State "DONE" from "STARTED" [2026-08-06 Thu 18:20]
+:END:
+Document a safe discovery rule for cross-project ledger audits: search known assignment roots, or explicitly exclude fake-Herdr and test-fixture paths. Never use an unscoped /tmp or broad filesystem search for directories named ledger.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-06 Thu 16:26]
+- sender: human
+
+Evidence:
+A worker auditing parent verification used an unscoped find for ledger directories. Herdr-orch test runs had left hundreds of fake-herdr fixture ledgers under /tmp, drowning the two real project ledgers and truncating output. Restricting discovery to actual project roots recovered the intended data.
+
+** TODO herdr-orch: support resident reviewers for incremental review rounds :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 4957d0e5-5bda-4532-aa20-631fbde1983b
+:CREATED: [2026-08-06 Thu 17:48]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 17:48]
+:END:
+Design explicit resident lifecycle support for correlated incremental reviews. A parent should be able to opt a reviewer into residency at spawn time, or retain/promote it at capture time before automatic pane closure, then assign a fresh task/result while preserving the same verified persona, name, pane, and context. Publication may recommend retention through NEXT metadata, but the child must not choose its own lifecycle. Keep a fresh ephemeral reviewer available for final Class C approval so incremental context does not become self-confirming.
+
+Required design constraints:
+- Resident reuse requires the live name and pane ID to match the ledger, previous result captured/validated, settled idle/done state, same persona, and no active task.
+- COMPLETE/FAILED remains one-shot per task; reuse allocates a new task/result instead of republishing.
+- BLOCKED retains its current genuine-dependency meaning and must not be abused as a keepalive.
+- Parent control is explicit, likely via spawn-time --resident and/or collect --retain; no retention inferred automatically from result prose.
+- Compare context savings against anchoring risk and pane/model occupancy; use a fresh reviewer for final high-consequence closure.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-06 Thu 16:26]
+- sender: human
+
+Evidence:
+This session ran multiple incremental reviews of one evolving change-record and implementation. Ephemeral reviewers rebuilt repository and artifact context each round; citing previous reports reduced duplicate findings but did not remove re-ingestion. Current source has no resident ledger field or CLI flag, and maybe-close! automatically closes settled COMPLETE/FAILED children after capture. The skill describes resident policy, but the task protocol provides no supported conversion or reuse operation.

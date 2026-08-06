@@ -89,7 +89,7 @@ A weight alias is model data and never selects or changes kind. Unversioned cano
 
 Config is loaded and schema-validated (parse errors and shape/type errors alike) before any ledger allocation or pane mutation; a validation failure carries the offending path. A missing override file is ignored; a missing shipped default is fatal.
 
-`--print-prompt` reports the resolved (pre-alias) model, its post-alias canonical ID under the `:model-canonical` key, and the effective translated native model args.
+`--print-prompt` reports the resolved (pre-alias) model, its post-alias canonical ID under the `:model-canonical` key, and the effective translated native model args. Its prompt preview contains the resolved persona file path and launcher-composed guidance, not the persona body; inspect the resolved file directly when validating persona-local rules. Spawn capability is enforced before preview generation, so a delegated leaf cannot use `--print-prompt` for a persona outside its `HERDR_ORCH_SPAWNS` allow-list.
 
 ## Ledger and completion
 

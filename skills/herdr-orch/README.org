@@ -225,6 +225,8 @@ Configuration examples in this file are not covered by any test, unlike contract
 
 A full =bb test= should create no entries under the repository's live =.tmp/herdr-orch/= tree. When mutation-testing assignment-root or launcher behavior, set an override and inspect that tree afterwards.
 
+Test runs create many fake-Herdr ledger directories under temporary fixture roots. A cross-project audit must discover real ledgers only beneath known assignment roots, or explicitly exclude fake-Herdr/test-fixture paths; never use an unscoped filesystem or =/tmp= search for directories named =ledger=.
+
 =bb test= runs from the repository root; there is no =bb.edn= under =scripts/=.
 
 ** Reflexive changes
