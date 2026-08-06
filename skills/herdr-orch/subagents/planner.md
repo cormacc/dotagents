@@ -49,7 +49,7 @@ Load the `herdr-orch` skill and use a blocking, one-child assignment. Give the c
 
 A wait timeout is not a result: the child may still be working and publish later, so check `oh task status <task>` and re-collect before treating it as a failure, and never report it as the child having published nothing.
 
-If the child returns `BLOCKED`, keep the pane and resolve the blocker according to the skill. Otherwise capture the result and artifacts, close the child yourself with `"$HERDR_ORCH_BIN" task close <its full task uuid>` -- capture closes nothing, and no one else can close a child you own -- and cite the evidence in the next planning message.
+Close the child after every capture, whatever it returned. `continue` is root-only, so a `BLOCKED` child you spawned can never be resumed: retaining its pane leaks it. Resolve the blocker yourself, or spawn a fresh assignment for it. Cite the captured evidence in the next planning message.
 
 ## Conversation style
 

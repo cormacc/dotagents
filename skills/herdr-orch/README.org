@@ -146,6 +146,41 @@ Upstream support is required at *both* ends of a delegation, which is stricter t
 
 What does survive without registration is publication and capture: =task publish= takes its identity purely from the injected =HERDR_ORCH_*= variables and makes no Herdr agent call, and =task collect <full-task-uuid>= reads the result file, which closes nothing for any child. So an unsupported harness can be hand-launched into a =pane split --env …= pane and still return a valid result. Treat that as a manual fallback, not a supported path: such a child is invisible to =agent list=, so it is excluded from =collect --any= and, more dangerously, satisfies =prune='s staleness proof while still working.
 
+** Child placement
+
+=:defaults :placement= decides where a spawned child's pane comes from. Three values:
+
+| Value | At root | Below root (spawner has =HERDR_ORCH_PERSONA=) |
+|---+---+---|
+| =:split= | split the caller's pane | split the caller's pane |
+| =:tab= | new unfocused tab in the caller's workspace | new unfocused tab in the caller's workspace |
+| =:tab-split= | new unfocused tab | split the caller's pane |
+
+Resolution order, highest first:
+
+1. An explicit =--tab= or =--split= flag on =task run=/=task start= (supplying both fails).
+2. The merged =:defaults :placement= (project > home > packaged, merged per key).
+3. The code fallback in =resolve-placement=, which is ="split"=.
+
+=:tab-split= is the shipped default. Spawning is cheap and the intended usage is
+promiscuous, so first-level subagents accumulate fast: one tab each stays reviewable and
+recoverable, where splitting every one of them produces an ever-narrowing column nobody can
+read. A grandchild still splits its parent's pane, which keeps a nested unit visually
+together and where the parent can watch it. Depth is discriminated by the spawning CLI's
+own injected =HERDR_ORCH_PERSONA=, never by a label or a counter.
+
+The code fallback stays ="split"= deliberately, and is *not* kept in step with the shipped
+value. It fires only for a merged config that declares no =:placement= at all, which the
+packaged file -- mandatory; a missing packaged =config.edn= is fatal -- always does. For
+that degraded case a split is the conservative answer, because it needs no
+=HERDR_WORKSPACE_ID=. Changing the product default is therefore a one-line edit to
+[[file:subagents/config.edn][subagents/config.edn]], not a code change.
+
+Placement is resolved per spawn and never inherited: it is not persisted per child, carried
+in the child's environment, or consulted by that child's own spawns. The ledger entry
+records the resolved =:placement= (="split"= or ="tab"=) and =:tab-id= for audit only. See
+[[file:scripts/docs/contract.md][contract.md]] § Placement for the mechanical detail.
+
 ** Verifying a configuration change
 
 Config is parsed and shape-validated before any ledger allocation or pane mutation, and every failure names the offending file, so a broken override costs nothing billable. =:defaults= is a closed map -- =:placement= only, valued =:split=, =:tab=, or =:tab-split= -- so a typo fails loudly instead of being ignored.

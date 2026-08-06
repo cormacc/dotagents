@@ -161,9 +161,7 @@ case "${1:-}" in
       get) printf '{"result":{"pane":{"pane_id":"w:p","label":"%s"}}}\n' "${FAKE_PARENT_LABEL:-planner-1-model}" ;;
       split) shift 2; pane="$(capture_env "$@")"; printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "$pane" ;;
       rename) printf '{"result":{"pane":{"pane_id":"%s","label":"%s"}}}\n' "${3:-}" "${4:-}" ;;
-      close)
-        if [ "${FAKE_FAIL_CLOSE:-}" = 1 ]; then echo '{"error":"close"}' >&2; exit 1; fi
-        echo '{"result":{}}' ;;
+      close) echo '{"result":{}}' ;;
     esac ;;
   tab)
     case "$2" in

@@ -21,8 +21,11 @@
 
 (defn- calls [log] (if (fs/exists? log) (mapv #(str/split % #"\037") (str/split-lines (slurp log))) []))
 (defn- flag-value [argv flag] (second (drop-while #(not= flag %) argv)))
-(defn- split-argv [log]
-  (first (filter #(= ["pane" "split"] (vec (take 2 %))) (calls log))))
+;; The placement command -- `pane split` or `tab create`, whichever the shipped
+;; `:defaults :placement` selects. These tests are about the cwd the launcher hands the
+;; child, which both commands carry as `--cwd`, so they must not pin a placement.
+(defn- placement-argv [log]
+  (first (filter #(#{["pane" "split"] ["tab" "create"]} (vec (take 2 %))) (calls log))))
 (defn- injected [env-file]
   (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file)))))
 
@@ -79,7 +82,7 @@
         env-map (injected (:env-file h))]
     (is (zero? (:exit proc)) (:err proc))
     (is (= (:dir h) (str (fs/canonicalize (:dir h)))))
-    (is (= project (flag-value (split-argv (:log h)) "--cwd")))
+    (is (= project (flag-value (placement-argv (:log h)) "--cwd")))
     (is (str/starts-with? (get env-map "HERDR_ORCH_RESULT")
                           (str (fs/path project ".tmp" "herdr-orch"))))
     ;; The override is absent, so it must not be injected either.
@@ -91,14 +94,14 @@
       (is (zero? (:exit proc)) (:err proc))
       (is (some #{"--config"} (bb-argv h)))
       (is (= (str root "/bb.edn") (flag-value (bb-argv h) "--config")))
-      (is (= root (flag-value (split-argv (:log h)) "--cwd")))
+      (is (= root (flag-value (placement-argv (:log h)) "--cwd")))
       ;; A relative argv0 must still inject an absolute launcher path.
       (is (= repo-bin (get (injected (:env-file h)) "HERDR_ORCH_BIN")))))
   (testing "repo-absolute invocation"
     (let [h (harness) proc (launch! h repo-bin (:caller h))]
       (is (zero? (:exit proc)) (:err proc))
       (is (= (str root "/bb.edn") (flag-value (bb-argv h) "--config")))
-      (is (= (:caller h) (flag-value (split-argv (:log h)) "--cwd")))
+      (is (= (:caller h) (flag-value (placement-argv (:log h)) "--cwd")))
       (is (= repo-bin (get (injected (:env-file h)) "HERDR_ORCH_BIN")))))
   (testing "deployed directory-symlink invocation"
     (let [h (harness)
@@ -110,7 +113,7 @@
       ;; `~/.agents/skills` is a *directory* symlink; only `cd -P` reaches the repo bb.edn.
       (is (= (str root "/bb.edn") (flag-value (bb-argv h) "--config")))
       ;; Fails if the launcher ever `cd`s to its own script directory again.
-      (is (= (:caller h) (flag-value (split-argv (:log h)) "--cwd")))
+      (is (= (:caller h) (flag-value (placement-argv (:log h)) "--cwd")))
       ;; The deployed path itself is injected (absolute and stable for the child).
       (is (= bin (get (injected (:env-file h)) "HERDR_ORCH_BIN")))))
   (testing "bare skill-subtree invocation from a caller cwd with its own bb.edn"
@@ -133,5 +136,5 @@
       ;; `is not a relative path` from a cwd that contains a bb.edn.
       (is (= bare (flag-value argv "--deps-root")))
       (is (= "{:paths [\"src\"]}" (flag-value argv "-Sdeps")))
-      (is (= (:caller h) (flag-value (split-argv (:log h)) "--cwd")))
+      (is (= (:caller h) (flag-value (placement-argv (:log h)) "--cwd")))
       (is (= bin (get (injected (:env-file h)) "HERDR_ORCH_BIN"))))))

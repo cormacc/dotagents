@@ -209,6 +209,25 @@ Scope:
 
 Depends on the close/continue lifecycle work landing first ([[task:4957d0e5-5bda-4532-aa20-631fbde1983b]]): that change is actively rewriting `cli.clj`, the ledger schema, and the same four documents.
 
+** TODO org-tasks: bb test runner should validate its arguments and explain itself :tooling:
+:PROPERTIES:
+:CUSTOM_ID: 8fcbb2fb-30bd-4fb9-aa54-95b4a315b91a
+:CREATED: [2026-08-07 Fri 00:41]
+:END:
+:LOGBOOK:
+- Created [2026-08-07 Fri 00:41]
+:END:
+The bb test runner accepts only positional namespace symbols and rejects nothing: `bb test --var X` fails with "Could not locate __var.bb ... on classpath" instead of a usage error, so a mistyped selector looks like a classpath problem. Running it from skills/herdr-orch/scripts/ likewise fails with "test (Is a directory)" rather than a useful message.
+
+The second gotcha is currently worked around in prose: it is restated in scripts/README.md, in the herdr-orch skill, and was repeated in four separate subagent assignments this session. A usage error in the runner deletes all of those.
+
+Acceptance:
+- The runner validates positional arguments and prints usage on an unrecognised one.
+- Invocation from a subdirectory either works or fails with an actionable message naming the repository root.
+- The prose warnings are removed once the runner explains itself.
+
+Origin: reported independently by two subagents as a process candidate, 2026-08-06.
+
 * Fixes
 
 * Housekeeping
@@ -398,7 +417,7 @@ A harness absent from herdr's `agent start --kind` enum (e.g. dirge) cannot part
 
 What already works without registration (verified):
 - `task publish` takes identity purely from the injected HERDR_ORCH_* env vars and makes no herdr agent call (cli.clj:443).
-- `task collect <full-task-uuid>` captures and validates the result file; maybe-close! (cli.clj:258) swallows the failed agent lookup and simply skips the pane close.
+- `task collect <full-task-uuid>` captures and validates the result file, and closes no pane on any path (`finish-capture!`; `maybe-close!` was removed with the explicit close/continue lifecycle in 436cbe2). The only agent call left in capture is a best-effort `agent get` that backfills the child's session reference, and a failed lookup there is swallowed, so an unregistered child still captures cleanly.
 - `pane split --env KEY=VALUE` can inject the protocol variables (cli.clj:755 -> herdr.clj:89). Note `oh spawn` cannot -- it hardcodes :env {} (cli.clj:827).
 
 What is blocked:
@@ -517,8 +536,7 @@ Origin:
 Evidence:
 Closing summary asserted a namespace still hard-coded a parameter it had resolved at call sites, which the refactor completed minutes earlier had removed; user challenged and it was retracted. Same session also misattributed a change-record edit to the user based on an Emacs lock plus timing rather than checking.
 
-** DONE herdr-orch: support resident reviewers for incremental review rounds :skill:herdr_orch:
-CLOSED: [2026-08-06 Thu 23:27]
+** STARTED herdr-orch: support resident reviewers for incremental review rounds :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 4957d0e5-5bda-4532-aa20-631fbde1983b
 :CREATED: [2026-08-06 Thu 17:48]
@@ -528,6 +546,7 @@ CLOSED: [2026-08-06 Thu 23:27]
 - Created [2026-08-06 Thu 17:48]
 - State "STARTED" from "TODO" [2026-08-06 Thu 21:42]
 - State "DONE" from "STARTED" [2026-08-06 Thu 23:27]
+- State "STARTED" from "DONE" [2026-08-07 Fri 00:39]
 :END:
 #+IMPORT: [[plan:2026-08-06-herdr-orch-support-resident-reviewers-fo.org]]
 Design explicit resident lifecycle support for correlated incremental reviews. A parent should be able to opt a reviewer into residency at spawn time, or retain/promote it at capture time before automatic pane closure, then assign a fresh task/result while preserving the same verified persona, name, pane, and context. Publication may recommend retention through NEXT metadata, but the child must not choose its own lifecycle. Keep a fresh ephemeral reviewer available for final Class C approval so incremental context does not become self-confirming.

@@ -27,10 +27,15 @@
 ;;
 ;; `:defaults` contains spawn defaults. `:placement` is :split, :tab, or :tab-split;
 ;; :tab-split chooses tab at root and split below root. Placement is never inherited.
+;; The shipped value is :tab-split: with promiscuous spawning, one tab per first-level
+;; subagent stays reviewable and recoverable, where splitting every root child produces an
+;; ever-narrowing column, while a grandchild still splits so a nested unit reads as a unit.
+;; `resolve-placement`'s own fallback stays "split" deliberately -- it fires only for a
+;; config declaring no :placement at all, which this (mandatory) file always does.
 ;; Override chain (project wins): this file (default) ← ~/.agents/subagents/config.edn
 ;; ← <assignment-root>/.agents/subagents/config.edn. `:models` rows and `:harnesses`
 ;; entries replace wholesale; `:aliases` and `:defaults` merge per key.
-{:defaults {:placement :split}
+{:defaults {:placement :tab-split}
  :harnesses {:pi     {:model-flag "--model"}
              :claude {:model-flag "--model"}
              :codex  {:model-flag "--model"}}

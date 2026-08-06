@@ -8,7 +8,7 @@
   (:import [java.nio.file Files FileAlreadyExistsException Paths]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS]\n  oh task collect --any [--wait --timeout MS]\n  oh task status [full-task-uuid] | list\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task progress --summary TEXT [--task UUID]\n  oh task prune <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new unfocused tab of the caller's workspace instead of a split; --split explicitly selects a split.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to ORCH_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncontinue assigns a settled, captured child another round in its existing context: root-only, guarded by the same live child+pane match close uses, allocating a fresh task and result and writing a new ledger entry with :continues. --wait blocks like run; the default is non-blocking like start.\nclose is the only path that closes a child pane: capture never does. It acts on a captured entry that is the newest round for its child, and only on a live observation matching both that entry's child name and its pane id in idle/done; --settled sweeps the caller's own captured children, newest round only, at most one attempt each.\ncollect, status, close, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; no prefix is ever resolved.\nOpaque assignment input is --task, --task-file, or stdin. Run `oh --help` for contract details.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS]\n  oh task collect --any [--wait --timeout MS]\n  oh task status [full-task-uuid] | list\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task progress --summary TEXT [--task UUID]\n  oh task prune <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new unfocused tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to ORCH_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncontinue assigns a settled, captured child another round in its existing context: root-only, guarded by the same live child+pane match close uses, allocating a fresh task and result and writing a new ledger entry with :continues. --wait blocks like run; the default is non-blocking like start.\nclose is the only path that closes a *spawned* child's pane: no capture does, and the only other closure is spawn-failure cleanup taking a pane the child never worked in. It acts on a captured entry that is the newest round for its child, and only on a live observation matching both that entry's child name and its pane id in idle/done; --settled sweeps the caller's own captured children, newest round only, at most one attempt each.\ncollect, status, close, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; no prefix is ever resolved.\nOpaque assignment input is --task, --task-file, or stdin. Run `oh --help` for contract details.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -481,37 +481,42 @@
 ;; publish status or exit code. Each herdr call therefore carries its own reason (a failed
 ;; `agent prompt` may have delivered text partially, which is not the same operator fact as
 ;; a parent that was never contacted), with a last-resort catch behind them.
+;; `:parent-pane` is never nil on an entry this CLI wrote: both writers take it from
+;; `parent-identity`, whose `agent get` must have succeeded for the caller to get this far
+;; (`spawn!` additionally dereferences it in `pane get` before allocating anything). A
+;; hand-edited ledger file that omits it is not a supported input -- this surface keeps no
+;; legacy path anywhere -- and degrades to the `push-failed` catch below rather than
+;; needing a branch of its own.
 (defn notify-parent! [entry {:keys [child task status timeout artifacts]}]
   (try
-    (if-let [pane (:parent-pane entry)]
-      (let [send! (fn [extra]
-                    (try (herdr/prompt! pane (push-text (launcher-bin) child task status artifacts))
-                         (merge {:push "sent" :parent-pane pane} extra)
-                         (catch Exception e {:push "error" :parent-pane pane :reason "prompt-failed" :message (.getMessage e)})))
-            probe (try {:agent (herdr/agent! pane)} (catch Exception e {:error (.getMessage e)}))]
-        (if (:error probe)
-          {:push "error" :parent-pane pane :reason "probe-failed" :message (:error probe)}
-          (let [decision (push-decision entry (:agent probe))]
-            (case (:push decision)
-              "send" (send! nil)
-              ;; `:waited` records only that a settle wait preceded the outcome — never that
-              ;; the parent settled, which the post-wait re-check may still reject.
-              "wait" (let [outcome (herdr/wait-settled! pane timeout)
-                           observed (get-in outcome [:value :result :agent])
-                           code (get-in outcome [:error :response :error :code])
-                           ;; Re-checked on the freshly observed AgentInfo. `agent wait` pins
-                           ;; the resolved occupant, so a *replacement* cannot satisfy the wait
-                           ;; itself; the re-check guards the unguarded gap between this wait
-                           ;; returning and the `agent prompt` submission below.
-                           after (when observed (push-decision entry observed))]
-                       (cond
-                         (and (not (:ok outcome)) (= "timeout" code)) {:push "timed-out" :parent-pane pane :timeout-ms timeout :parent-status (:parent-status decision)}
-                         (not (:ok outcome)) {:push "error" :parent-pane pane :reason (or code "wait-failed") :waited true}
-                         (nil? after) {:push "skipped" :reason "parent-unobserved" :parent-pane pane :waited true}
-                         (= "send" (:push after)) (send! {:waited true})
-                         :else (assoc after :push "skipped" :parent-pane pane :waited true)))
-              (assoc decision :parent-pane pane)))))
-      {:push "skipped" :reason "no-parent-pane"})
+    (let [pane (:parent-pane entry)
+          send! (fn [extra]
+                  (try (herdr/prompt! pane (push-text (launcher-bin) child task status artifacts))
+                       (merge {:push "sent" :parent-pane pane} extra)
+                       (catch Exception e {:push "error" :parent-pane pane :reason "prompt-failed" :message (.getMessage e)})))
+          probe (try {:agent (herdr/agent! pane)} (catch Exception e {:error (.getMessage e)}))]
+      (if (:error probe)
+        {:push "error" :parent-pane pane :reason "probe-failed" :message (:error probe)}
+        (let [decision (push-decision entry (:agent probe))]
+          (case (:push decision)
+            "send" (send! nil)
+            ;; `:waited` records only that a settle wait preceded the outcome — never that
+            ;; the parent settled, which the post-wait re-check may still reject.
+            "wait" (let [outcome (herdr/wait-settled! pane timeout)
+                         observed (get-in outcome [:value :result :agent])
+                         code (get-in outcome [:error :response :error :code])
+                         ;; Re-checked on the freshly observed AgentInfo. `agent wait` pins
+                         ;; the resolved occupant, so a *replacement* cannot satisfy the wait
+                         ;; itself; the re-check guards the unguarded gap between this wait
+                         ;; returning and the `agent prompt` submission below.
+                         after (when observed (push-decision entry observed))]
+                     (cond
+                       (and (not (:ok outcome)) (= "timeout" code)) {:push "timed-out" :parent-pane pane :timeout-ms timeout :parent-status (:parent-status decision)}
+                       (not (:ok outcome)) {:push "error" :parent-pane pane :reason (or code "wait-failed") :waited true}
+                       (nil? after) {:push "skipped" :reason "parent-unobserved" :parent-pane pane :waited true}
+                       (= "send" (:push after)) (send! {:waited true})
+                       :else (assoc after :push "skipped" :parent-pane pane :waited true)))
+            (assoc decision :parent-pane pane)))))
     (catch Exception e {:push "error" :reason "push-failed" :message (.getMessage e)})))
 (defn publication-body [opts]
   (if-let [path (one opts :from-file)]
@@ -544,6 +549,16 @@
         ;; writes its RESULT, but with no entry there is no policy, no parent, and hence no
         ;; toast and no push. One uniform rule, not a special case.
         entry (try (ledger/read! task) (catch Exception _ nil))
+        ;; ...but only when the identity came from the injected environment. An explicit
+        ;; `--task` naming no entry is a caller error, and falling through to it would be
+        ;; destructive rather than merely wrong: `result` would resolve to env
+        ;; `HERDR_ORCH_RESULT` -- this child's *original* round path -- so the envelope
+        ;; lands under a foreign `TASK:` and, publication being one-shot, that round can
+        ;; never publish again. Refuse before the write. This is also what makes the
+        ;; identity claim above true: a mistyped `--task` reaches nothing at all, and a
+        ;; correctly typed one is still bounded to the caller's own child by the check below.
+        _ (when (and (one opts :task) (nil? entry))
+            (fail "--task names no ledger entry" {:task task :child child}))
         _ (when (and entry (not= child (:child entry)))
             (fail "child identity mismatch: the named assignment belongs to another child" {:task task :child child :entry-child (:child entry)}))
         ;; The entry owns the result path and the waiting policy; env supplies the result
@@ -708,8 +723,14 @@
 ;; `ledger/entries` is sorted by `:created-at`, so the last entry naming a child is that
 ;; child's current round -- the only round whose `:pane-id` may be acted on. Continuation
 ;; lineage needs no traversal of `:continues`: the child name is stable across rounds.
+;; A terminal `failed` round is skipped, exactly as `any-candidates` already skips it: an
+;; allocation that never reached its pane (a spawn cleaned up by `safe-cleanup!`, a
+;; continuation whose prompt threw) is not a claim on anything, and leaving it "newest"
+;; would wedge the child -- `close` would refuse it as uncaptured and refuse the real round
+;; as stale, with no verb able to retire either.
+(defn- live-round? [entry] (not= "failed" (:status entry)))
 (defn- newest-round [entries child]
-  (last (filter #(= child (:child %)) entries)))
+  (last (filter #(and (= child (:child %)) (live-round? %)) entries)))
 (defn- assert-closable! [entry entries]
   (let [task (:task entry) child (:child entry)
         caller (caller-parent-session) recorded (:parent-session entry)]
@@ -778,9 +799,14 @@
     (->> (ledger/entries)
          (group-by :child)
          vals
-         ;; Newest round per child is chosen *before* any filtering, so a child whose
-         ;; current round is uncaptured, foreign, or already closed drops out entirely
-         ;; rather than falling back to an older round that names the same pane.
+         ;; Terminal `failed` rounds are dropped first, for the same reason `newest-round`
+         ;; skips them: an allocation that never reached its pane (a cleaned-up spawn, a
+         ;; continuation whose prompt threw) is not a claim on anything, and letting one
+         ;; count as "newest" would silently exclude a child whose real round is closable.
+         (map #(filterv live-round? %))
+         ;; Newest surviving round per child is chosen *before* any further filtering, so a
+         ;; child whose current round is uncaptured, foreign, or already closed drops out
+         ;; entirely rather than falling back to an older round that names the same pane.
          (map last)
          (filter #(and (= caller (:parent-session %)) (:captured-at %) (:pane-id %)
                        (nil? (:closed-at %)) (not= "invalid" (:status %))))
@@ -810,7 +836,11 @@
        "This is a new assignment, not a revision of your last one: Herdr assigned TASK=" task " and RESULT=" result ". "
        "Revalidate every prior finding and every mutable baseline against current source before restating it; a claim you have not re-checked this round does not carry forward. "
        "When finished, publish exactly once with `$HERDR_ORCH_BIN task publish --task " task " --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
-       "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering."
+       ;; Every publication instruction the round emits must carry `--task`, not only the
+       ;; COMPLETE one: a continued child's injected `HERDR_ORCH_TASK` still names its
+       ;; original, already-published round, so a bare `--status BLOCKED` cannot publish at
+       ;; all -- the failure path would break exactly when it is needed.
+       "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--task " task " --status BLOCKED` (dependency) or `--task " task " --status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering."
        (progress-instruction waiting-policy task)))
 (defn continue! [prior-task opts]
   (when-not prior-task (fail "continue requires a full task uuid" {}))
@@ -839,7 +869,10 @@
               {:task prior-task :status (:status entry)}))
       (when (:closed-at entry)
         (fail "continue refused: this child's pane was already closed" {:task prior-task :closed-at (:closed-at entry)}))
-      (when-let [open (seq (filter #(and (= child (:child %)) (nil? (:captured-at %))) entries))]
+      ;; `live-round?` excludes a terminal `failed` round here for the same reason
+      ;; `newest-round` does: a continuation whose prompt threw is retired, not open, and
+      ;; must not block the retry that recovers from it.
+      (when-let [open (seq (filter #(and (= child (:child %)) (nil? (:captured-at %)) (live-round? %)) entries))]
         (fail "continue refused: an uncaptured round already names this child"
               {:task prior-task :child child :open (mapv :task open)}))
       (when-not (= prior-task (:task (newest-round entries child)))
@@ -869,7 +902,19 @@
           ;; between the two leaves a recoverable uncaptured entry rather than a prompted
           ;; child that no entry names.
           (ledger/write! next-entry)
-          (herdr/prompt! child (continuation-prompt {:assignment assignment :task task :result result :waiting-policy waiting-policy}))
+          ;; The entry must survive a failed prompt (a failed `agent prompt` may still have
+          ;; delivered text, so deleting it could orphan a working child), but it must not
+          ;; survive as `continuing`: that status is uncaptured, non-terminal, and newest,
+          ;; which refuses `close` and `continue` on both rounds, refuses `prune` while the
+          ;; child is live, and stays a `collect --any` candidate forever. Retiring it the
+          ;; way `safe-cleanup!` retires a dead spawn makes the round recoverable -- retry
+          ;; the `continue`, or `close` the prior round. No pane is touched: unlike a spawn
+          ;; failure, the pane here predates this verb and belongs to a healthy child.
+          (try
+            (herdr/prompt! child (continuation-prompt {:assignment assignment :task task :result result :waiting-policy waiting-policy}))
+            (catch Exception e
+              (ledger/update! task assoc :status "failed" :failed-at (now) :failure-phase "continue-prompt")
+              (throw e)))
           (ledger/update! task assoc :status "prompted" :prompted-at (now))
           (verify-dispatch! task child)
           (let [written (ledger/read! task)]

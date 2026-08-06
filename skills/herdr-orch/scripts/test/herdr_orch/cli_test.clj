@@ -154,8 +154,10 @@
                   cli/packaged-personas-directory (constantly (str (fs/path dir "packaged")))]
       (is (= ["home-only"] (cli/available-personas))))))
 
+;; `--split` is explicit because this test pins the split argv itself, not the shipped
+;; placement default (which is `:tab-split`, so a root spawn otherwise creates a tab).
 (deftest preflight-and-vector-argv-contract
-  (let [{:keys [env log prompt-file dir env-file]} (fake-env {}) proc (call! env "task" "run" "worker" "--task" "quotes ' newline\n $(unsafe) `unsafe`" "--timeout" "20")
+  (let [{:keys [env log prompt-file dir env-file]} (fake-env {}) proc (call! env "task" "run" "worker" "--split" "--task" "quotes ' newline\n $(unsafe) `unsafe`" "--timeout" "20")
         argv (calls log)
         injected (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
     (is (zero? (:exit proc)))
@@ -366,15 +368,35 @@
     (is (= "w:tab" (:tab-id entry)))
     (is (= "w:child" (:pane-id entry)))))
 
-;; Regression guard: a default spawn (no `--tab`) never issues a mutating `tab create`.
-(deftest default-placement-emits-no-tab-commands
-  (let [{:keys [env log dir]} (fake-env {}) proc (call! env "task" "run" "worker" "--task" "default placement" "--timeout" "20")
-        task (get-in (result proc) [:result :task]) entry (ledger-entry* dir task)]
-    (is (zero? (:exit proc)) (:err proc))
-    (is (= "COMPLETE" (get-in (result proc) [:result :status])))
-    (is (not-any? #(= ["tab" "create"] (vec (take 2 %))) (calls log)))
-    (is (= "split" (:placement entry)))
-    (is (nil? (:tab-id entry)))))
+;; The shipped `:defaults :placement` is `:tab-split`, so an unflagged *root* spawn takes a
+;; tab -- one tab per first-level subagent, rather than an ever-narrowing column of splits --
+;; and an unflagged *below-root* spawn still splits, keeping a nested unit together.
+;; `--split` remains the escape hatch and must issue no `tab create` at all.
+(deftest shipped-default-placement-is-tab-at-root-and-split-below
+  (testing "root: tab"
+    (let [{:keys [env log dir]} (fake-env {}) proc (call! env "task" "run" "worker" "--task" "default placement" "--timeout" "20")
+          task (get-in (result proc) [:result :task]) entry (ledger-entry* dir task)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+      (is (not-any? #(= ["pane" "split"] (vec (take 2 %))) (calls log)))
+      (is (= "tab" (:placement entry)))
+      (is (= "w:tab" (:tab-id entry)))))
+  (testing "below root: split"
+    (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"
+                                           "FAKE_PARENT_LABEL" "worker-1-light"})
+          proc (call! env "task" "run" "scout" "--task" "nested placement" "--timeout" "20")
+          _ (is (zero? (:exit proc)) (:out proc))
+          task (get-in (result proc) [:result :task]) entry (ledger-entry* dir task)]
+      (is (not-any? #(= ["tab" "create"] (vec (take 2 %))) (calls log)))
+      (is (= "split" (:placement entry)))
+      (is (nil? (:tab-id entry)))))
+  (testing "--split overrides the configured default and issues no tab command"
+    (let [{:keys [env log dir]} (fake-env {}) proc (call! env "task" "run" "worker" "--split" "--task" "forced split" "--timeout" "20")
+          task (get-in (result proc) [:result :task]) entry (ledger-entry* dir task)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (not-any? #(= ["tab" "create"] (vec (take 2 %))) (calls log)))
+      (is (= "split" (:placement entry)))
+      (is (nil? (:tab-id entry))))))
 
 ;; `--tab` under non-blocking `start` follows the same contract: the ledger records the
 ;; tab placement immediately and a later `collect --wait` captures and closes as usual.
@@ -489,8 +511,9 @@
       (is (re-find #"--tab and --split are mutually exclusive" (:out proc)))
       (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log)))))
+  ;; The unflagged root row is the shipped `:tab-split` default resolving at root.
   (testing "--print-prompt reports the resolved placement"
-    (doseq [[flag expected] [[[] "split"] [["--tab"] "tab"] [["--split"] "split"]]]
+    (doseq [[flag expected] [[[] "tab"] [["--tab"] "tab"] [["--split"] "split"]]]
       (let [{:keys [env]} (fake-env {})
             proc (apply call! env (concat ["task" "run" "worker"] flag ["--task" "placement preview" "--print-prompt"]))]
         (is (zero? (:exit proc)) (:err proc))
@@ -810,7 +833,9 @@
 ;; busy-then-available pane spawns successfully with no duplicate pane or ledger entry.
 (deftest agent-start-retries-transient-pane-busy-then-succeeds
   (let [{:keys [env log dir]} (fake-env {"FAKE_START_BUSY_COUNT" "2"})
-        proc (call! env "task" "start" "worker" "--task" "busy then available")
+        ;; `--split` pins the placement this test counts (`split-call-count`); the retry
+        ;; behaviour under test is identical for either placement.
+        proc (call! env "task" "start" "worker" "--split" "--task" "busy then available")
         task (get-in (result proc) [:result :task])
         entry (ledger-entry* dir task)]
     (is (zero? (:exit proc)) (:err proc))
@@ -840,7 +865,9 @@
 ;; cleanup: one ledger entry, failed status, and a closed child pane.
 (deftest agent-start-retry-budget-exhaustion-fails-cleanly
   (let [{:keys [env log dir]} (fake-env {"FAKE_START_BUSY_COUNT" "99"})
-        proc (call! env "task" "start" "worker" "--task" "always busy")
+        ;; `--split` pins the placement this test counts (`split-call-count`); cleanup is
+        ;; identical for either placement.
+        proc (call! env "task" "start" "worker" "--split" "--task" "always busy")
         entry (first (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
                            :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
                        (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))]
@@ -1943,24 +1970,6 @@
     (is (= 1 (count (parent-waits log))))
     (is (empty? (parent-prompts log)))))
 
-;; Backward compatibility: an entry allocated before `:parent-pane` existed names no parent
-;; to probe, so the push is skipped without a single herdr call.
-(deftest an-entry-without-a-parent-pane-is-skipped-without-probing
-  (let [{:keys [env log dir]} (fake-env {})
-        entry (start-child! env dir "legacy entry")
-        path (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str (:task entry) ".json")))
-        probes (count (parent-gets log))]
-    (spit path (json/generate-string (dissoc entry :parent-pane)))
-    (let [proc (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "done")
-          res (:result (result proc))]
-      (is (zero? (:exit proc)) (:err proc))
-      (is (= "COMPLETE" (:status res)))
-      (is (fs/exists? (:result entry)))
-      (is (= "skipped" (get-in res [:parent-push :push])))
-      (is (= "no-parent-pane" (get-in res [:parent-push :reason])))
-      (is (= probes (count (parent-gets log))))
-      (is (empty? (parent-prompts log))))))
-
 ;; Publication is committed before the push, so any herdr failure on the push path is
 ;; reported and nothing more: status and exit code are untouched.
 (deftest a-herdr-failure-on-the-push-path-never-affects-publication
@@ -2081,6 +2090,43 @@
     (is (not (fs/exists? (:result mine))))
     (is (nil? (:progress (ledger-entry* dir (:task theirs)))))))
 
+;; An explicit `--task` naming no entry is a caller error, and the *silent* fallback is the
+;; damage: `result` would resolve to the injected `HERDR_ORCH_RESULT`, so this round's
+;; envelope would land in the child's original round file under a foreign `TASK:` -- and
+;; publication being one-shot, that round could then never publish at all. Refuse before
+;; the write. The env-derived hand-driven publish (SKILL.md § Manual fallback) keeps working.
+(deftest publish-refuses-an-explicit-task-that-names-no-ledger-entry
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "round one")
+        unknown (str (java.util.UUID/randomUUID))
+        proc (call! (child-publish-env env entry) "task" "publish" "--task" unknown
+                    "--status" "COMPLETE" "--summary" "typo in the uuid")]
+    (is (= 1 (:exit proc)))
+    (is (str/includes? (:out proc) "--task names no ledger entry"))
+    ;; The real round is untouched and can still publish: the mistyped flag burned nothing.
+    (is (not (fs/exists? (:result entry))))
+    (let [ok (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "the real result")]
+      (is (zero? (:exit ok)) (:out ok))
+      (is (str/includes? (slurp (:result entry)) (str "TASK: " (:task entry)))))))
+
+;; The asymmetry that guard must preserve: an *env-derived* task with no entry is the
+;; legitimate hand-driven publish, and stays silent-but-working -- no entry means no policy,
+;; so no toast and no push, but the RESULT is still written.
+(deftest a-hand-driven-publish-with-no-ledger-entry-still-writes-its-result
+  (let [{:keys [env log dir]} (fake-env {})
+        result-path (str (fs/path dir "hand-driven.result"))
+        proc (call! (merge env {"HERDR_ORCH_CHILD" "hand-driven-child"
+                                "HERDR_ORCH_TASK" (str (java.util.UUID/randomUUID))
+                                "HERDR_ORCH_RESULT" result-path})
+                    "task" "publish" "--status" "COMPLETE" "--summary" "by hand")
+        res (:result (result proc))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= result-path (:result res)))
+    (is (fs/exists? result-path))
+    (is (nil? (:parent-push res)))
+    (is (nil? (:notification res)))
+    (is (empty? (parent-prompts log)))))
+
 (deftest progress-task-override-targets-the-named-round
   (let [{:keys [env dir]} (fake-env {})
         first-round (start-child! env dir "progress round one")
@@ -2152,9 +2198,9 @@
     (is (= "prompted" (:status entry)))
     (is (some? (:prompted-at entry)))
     (is (= "dispatched" (get-in entry [:dispatch :status])))
-    ;; Prompted in place: the existing pane, no split, no new agent.
+    ;; Prompted in place: the existing pane, no new placement of any kind, no new agent.
     (is (some #(= ["agent" "prompt" (:child prior)] (vec (take 3 %))) (calls log)))
-    (is (= 1 (count (filter #(= ["pane" "split"] (vec (take 2 %))) (calls log)))))
+    (is (= 1 (count (filter #(#{["pane" "split"] ["tab" "create"]} (vec (take 2 %))) (calls log)))))
     (is (= 1 (count (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log)))))
     (is (str/includes? prompt "round two assignment"))))
 
@@ -2172,8 +2218,13 @@
     (is (str/includes? prompt "Follow-on round"))
     (is (str/includes? prompt "This is a new assignment, not a revision of your last one"))
     (is (str/includes? prompt "Revalidate every prior finding and every mutable baseline"))
-    (is (str/includes? prompt "`--status BLOCKED` (dependency)"))
-    (is (str/includes? prompt "`--status FAILED` (unrecoverable)"))
+    ;; Every publication instruction the round emits carries `--task`, not only the
+    ;; COMPLETE one: the child's injected HERDR_ORCH_TASK still names its original,
+    ;; already-published round, so a bare `--status BLOCKED` could not publish at all and
+    ;; the failure path would break exactly when it is needed.
+    (is (str/includes? prompt (str "`--task " (:task entry) " --status BLOCKED` (dependency)")))
+    (is (str/includes? prompt (str "`--task " (:task entry) " --status FAILED` (unrecoverable)")))
+    (is (not (re-find #"`--status (BLOCKED|FAILED)`" prompt)))
     ;; Nothing lifecycle-related: the child never learns it was continued or retained.
     (is (not (str/includes? prompt "continue")))
     (is (not (str/includes? prompt "resident")))))
@@ -2222,22 +2273,68 @@
         (is (nil? (:notification pub-res)))
         (is (not-any? #(= ["notification" "show"] (vec (take 2 %))) (calls log)))))))
 
-;; The new entry is persisted before the pane is prompted, so a failed prompt leaves a
-;; recoverable uncaptured entry rather than a prompted child no entry names.
-(deftest continue-writes-its-entry-before-prompting-the-pane
-  (let [{:keys [env dir]} (fake-env {})
+;; The new entry is persisted before the pane is prompted -- a failed `agent prompt` may
+;; still have delivered its text, so the entry must exist -- but a prompt that throws then
+;; retires it, the way `safe-cleanup!` retires a dead spawn. Left as `continuing` it would
+;; be uncaptured, non-terminal, and newest, which wedges the child: `close` and `continue`
+;; refuse on both rounds, `prune` refuses while the child is live, and `collect --any`
+;; counts it forever. No pane is touched: it predates this verb and hosts a healthy child.
+(deftest continue-retires-its-entry-when-the-prompt-fails
+  (let [{:keys [env log dir]} (fake-env {})
         prior (capture-entry! dir (start-child! env dir "round one"))
+        closes-before (count (filter #(= ["pane" "close"] (vec (take 2 %))) (calls log)))
         ;; The failure is injected on the continuation's own prompt only; the spawn above
         ;; must succeed for there to be a round to continue.
         proc (call! (merge env {"FAKE_FAIL_PROMPT" "1"}) "task" "continue" (:task prior) "--task" "round two")
-        rounds (filterv #(= (:task prior) (:continues %))
-                        (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
-                              :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
-                          (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))]
+        rounds-of (fn [] (filterv #(= (:task prior) (:continues %))
+                                  (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
+                                        :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
+                                    (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" "")))))
+        rounds (rounds-of)]
     (is (= 1 (:exit proc)))
-    (is (= 1 (count rounds)))
-    (is (= "continuing" (:status (first rounds))))
-    (is (nil? (:prompted-at (first rounds))))))
+    (is (= 1 (count rounds)) "the entry survives the failure rather than being deleted")
+    (is (= "failed" (:status (first rounds))))
+    (is (= "continue-prompt" (:failure-phase (first rounds))))
+    (is (some? (:failed-at (first rounds))))
+    (is (nil? (:prompted-at (first rounds))))
+    (is (= closes-before (count (filter #(= ["pane" "close"] (vec (take 2 %))) (calls log))))
+        "the child's own pane is never closed by a failed continuation")
+    ;; Recoverable: the retry succeeds, so a failed continuation costs a round, not a child.
+    (let [retry (call! env "task" "continue" (:task prior) "--task" "round two, retried")]
+      (is (zero? (:exit retry)) (:out retry))
+      (is (= 2 (count (rounds-of))))
+      (is (= "prompted" (:status (ledger-entry* dir (get-in (result retry) [:result :task]))))))
+    ;; ...and so is closing the prior round instead: a retired round is not "newest".
+    (is (= 1 (count (filter #(and (= "failed" (:status %)) (= "continue-prompt" (:failure-phase %)))
+                            (rounds-of)))))))
+
+;; The same retirement seen from `close`: with only the failed continuation in between, the
+;; prior round is still the child's newest *live* round and stays closable.
+(deftest a-failed-continuation-round-does-not-block-closing-the-prior-round
+  (let [{:keys [env log dir]} (fake-env {})
+        prior (capture-entry! dir (start-child! env dir "round one"))
+        failed (call! (merge env {"FAKE_FAIL_PROMPT" "1"}) "task" "continue" (:task prior) "--task" "round two")
+        proc (call! env "task" "close" (:task prior))
+        res (:result (result proc))]
+    (is (= 1 (:exit failed)))
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= "closed" (:status res)))
+    (is (= #{(:pane-id prior)} (closed-panes log)))
+    (is (some? (:closed-at (closed-entry dir prior))))))
+
+;; ...and from the sweep, which groups by child and must not let a retired round stand in
+;; for the child's real, closable one.
+(deftest close-settled-ignores-a-retired-continuation-round
+  (let [{:keys [env log dir]} (fake-env {})
+        prior (capture-entry! dir (start-child! env dir "round one"))
+        failed (call! (merge env {"FAKE_FAIL_PROMPT" "1"}) "task" "continue" (:task prior) "--task" "round two")
+        proc (call! env "task" "close" "--settled")
+        outcomes (:result (result proc))]
+    (is (= 1 (:exit failed)))
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= [(:task prior)] (mapv :task outcomes)))
+    (is (= ["closed"] (mapv :status outcomes)))
+    (is (= #{(:pane-id prior)} (closed-panes log)))))
 
 (deftest continue-is-root-only-and-refuses-before-any-mutation
   (let [{:keys [env log dir]} (fake-env {})
@@ -2576,6 +2673,24 @@
     (is (nil? (:closed-at (closed-entry dir first-round))))
     (is (nil? (:closed-at (closed-entry dir second-round))))))
 
+;; An `invalid` capture means the envelope needs manual intervention, so the sweep must
+;; leave the operator the pane they would use to deal with it -- while still closing every
+;; other child in the same pass, so the exclusion is visibly a filter and not an abort.
+(deftest close-settled-skips-an-invalid-capture
+  (let [{:keys [env log dir]} (fake-env {})
+        invalid (patch-entry! dir (capture-entry! dir (start-child! env dir "invalid envelope"))
+                              :status "invalid")
+        ok (capture-entry! dir (start-child! env dir "valid envelope"))
+        proc (call! env "task" "close" "--settled")
+        outcomes (:result (result proc))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= [(:task ok)] (mapv :task outcomes)))
+    (is (= #{(:pane-id ok)} (closed-panes log)))
+    (is (nil? (:closed-at (closed-entry dir invalid))))
+    ;; Not even a settle wait is spent on it: it is excluded by the candidate filter, so no
+    ;; close is ever attempted against its pane.
+    (is (empty? (child-waits log (:child invalid))))))
+
 ;; Foreign and already-closed entries are not candidates at all, so a sweep is idempotent.
 (deftest close-settled-skips-foreign-and-already-closed-entries
   (let [{:keys [env log dir]} (fake-env {})
@@ -2717,7 +2832,7 @@
     (is (= "--model" (get-in config [:harnesses :pi :model-flag])))
     (is (= "--model" (get-in config [:harnesses :claude :model-flag])))
     (is (= "--model" (get-in config [:harnesses :codex :model-flag])))
-    (is (= {:placement :split} (:defaults config)))
+    (is (= {:placement :tab-split} (:defaults config)))
     (is (= 7 (count (:models config))) "shipped :models has exactly 7 canonical rows")
     (is (= 18 (count (:aliases config))) "shipped :aliases has exactly 18 entries")
     (testing "argv preservation: every pre-migration ID translates identically for every kind, except feather+claude"

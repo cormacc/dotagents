@@ -2,13 +2,15 @@
 #+DATE: 2026-08-06 Thu
 #+PARENT: [[task:4957d0e5-5bda-4532-aa20-631fbde1983b][herdr-orch: support resident reviewers for incremental review rounds]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Complete
+#+STATUS: Active
 #+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
 
 * Intent
 
 Let a parent keep a settled child (typically a reviewer or worker) and assign it follow-on rounds in its existing context, deciding continuation or closure explicitly after each published result. The child stays fully lifecycle-agnostic: it builds context, works, publishes, and either receives another assignment or gets closed.
+
+Phase 2 pays down the cost of that explicitness. Making the parent decide after every capture added round trips and prose rules, so the ceremony the CLI can perform itself moves into the CLI: enforce contract details mechanically, and stop charging every spawn for instructions a guard could guarantee.
 
 * Summary
 
@@ -25,6 +27,7 @@ Let a parent keep a settled child (typically a reviewer or worker) and assign it
 - Waiting policy becomes ledger-only: every entry records its own round's `:waiting-policy`, `publish!` reads it there, and env `HERDR_ORCH_WAITING_POLICY` is deleted from spawn env and from `publish!` altogether.
 - contract.md and SKILL.md rewritten for the new lifecycle; sweep of packaged persona texts and cross-references asserting auto-close.
 - `bb test` coverage for all of the above plus a continue-round live-smoke variant.
+- Phase 2 (ceremony reduction) :: agent-facing output formats, a publish-side guard for a caller's own unclosed children, an orphan-cleanup verb, a `PROCESS`-candidate harvest, `collect --close`, and per-persona timeouts.
 
 *** Out of scope
 
@@ -39,7 +42,8 @@ Let a parent keep a settled child (typically a reviewer or worker) and assign it
 
 - ADDED :: `oh task close <full-task-uuid>` and `close --settled`; `oh task continue <full-task-uuid> [--wait]`; `--task` identity override on `publish`/`progress`; ledger fields `:continues`, `:closed-at`, per-round `:waiting-policy`; contract.md § Close and § Continue; `lifecycle-documentation-contract` static test; a continue-round live-smoke leg.
 - MODIFIED :: capture (`run`, `collect`, `collect --wait`, `collect --any`) closes nothing; SKILL.md lifecycle and Class C (a closeout validator must be **spawned fresh**); README.org lifecycle prose and History; planner/worker persona texts.
-- REMOVED :: capture-time auto-close and its settle wait; `HERDR_ORCH_WAITING_POLICY` (env and validation); the `unknown-ledger-entry` push half-case; the spawn prompt's "The waiting policy is …" line; dead-owner recovery.
+- REMOVED :: capture-time auto-close and its settle wait; `HERDR_ORCH_WAITING_POLICY` (env and validation); the `unknown-ledger-entry` push half-case; the spawn prompt's "The waiting policy is …" line; dead-owner recovery; the unreachable `no-parent-pane` branch and the dead `FAKE_FAIL_CLOSE` fixture.
+- CHANGED (follow-up) :: shipped `:defaults :placement` is now `:tab-split` -- a first-level child gets its own tab, grandchildren split inside it, which stays reviewable and recoverable under promiscuous spawning. `resolve-placement`'s `"split"` fallback deliberately stays: it fires only for a config declaring no `:placement`, which the mandatory shipped file always does. README.org documents all three values and the resolution order.
 
 ** Acceptance
 
@@ -81,6 +85,16 @@ Let a parent keep a settled child (typically a reviewer or worker) and assign it
 - [X] `prune` and `collect --any` candidacy treat continuation entries as ordinary entries.
 - [X] The parent-push advisory names close-or-continue alongside the collect command.
 
+*** Ceremony reduction (phase 2)
+
+- [ ] Delegation verbs (`collect`, `status`, `list`) accept `--format text` and stop emitting the parsed envelope *and* a duplicate raw `text` blob in the same payload; the raw envelope is opt-in.
+- [ ] `publish` refuses, or loudly warns, when the caller still owns an uncaptured or unclosed child in the ledger -- the rule SKILL.md currently states only in prose.
+- [ ] An orphan-cleanup verb replaces the documented two-step `agent list` then `pane close` recipe, applying the same live child+pane match with operator-supplied authority.
+- [ ] A verb harvests this session's `PROCESS` candidates from the ledger, deduplicated, so a retro does not depend on re-reading every capture.
+- [ ] `collect --close` performs capture and closure in one call without weakening the explicit close-or-continue decision.
+- [ ] Persona frontmatter carries `timeout:`, replacing the standing "give review and implementation work an explicit `--timeout`" instruction.
+- [ ] Every rule these changes make mechanical is *deleted* from SKILL.md, not merely restated alongside the guard. Net prose must shrink.
+
 *** Anti-criteria
 
 - [X] Must not: close a pane on evidence weaker than a live observation matching both the child name and the pane ID -- name absence, a stale ledger `:pane-id`, or result prose are never sufficient.
@@ -119,6 +133,8 @@ Let a parent keep a settled child (typically a reviewer or worker) and assign it
 - Pane accumulation is now the parent's problem by design. `close --settled` is the cheap sweep; it exits 0 while reporting per-child refusals inside its array, so a caller checking only the exit code will read a sweep-with-refusals as fully successful.
 - Root cannot close a grandchild it does not own, so the smoke's nested leg *instructs* its planner child to close its own scout. That is an LLM-compliance dependency rather than a mechanical guard -- loud on failure, but a real flakiness surface.
 - Anchoring in long residencies is mitigated by the continuation prompt's revalidation clause and by the rewritten Class C rule; independence is a property of the spawn, not of the instruction.
+- **A guard wrapped in a presence check is vacuous exactly where it matters -- three instances in one change.** Dead-owner tested a file that always exists; `lifecycle-documentation-contract` swept only the files its own list named; and `publish`'s child-identity check was wrapped in `(and entry ...)`, so an explicit `--task` naming an unknown entry skipped it and fell through to the env result path, burning the child's real one-shot round. All three read correct, passed review, and passed a green suite. When a guard's condition includes "if we found the thing", ask what happens when the thing is absent -- that is usually the case the guard exists for.
+- **Parallel review with two models found disjoint defect sets and opposite verdicts.** One returned APPROVED with no P0-P2; the other returned NEEDS CHANGES with four P2s, every one confirmed at source. They agreed on a single line of one file. Single-reviewer sign-off on this surface is not sufficient evidence.
 
 * Plan
 
@@ -211,9 +227,76 @@ CLOSED: [2026-08-06 Thu 22:38]
 :END:
 Landed. `continue-leg!` proves same-pane context by round-two recall of a random token never written to disk, then asserts `:continues`, inherited identity, and a `closed` outcome. First green run: `.tmp/smoke-continue.log`, exit 0.
 
+** TODO Agent-facing output: `--format text` and no duplicated envelope
+:PROPERTIES:
+:CUSTOM_ID: f6cc6df4-660e-4da9-8971-35a54771e129
+:CREATED: [2026-08-07 Fri 00:40]
+:END:
+Highest token cost measured in live use: every capture returned `summary`/`findings`/`process`/`artifacts` *and* a `text` blob repeating all of it, and each of six collects was piped through ad-hoc Python purely to strip the duplicate. `oh task list` is worse -- it emits full envelopes, findings and process included, for every historical entry.
+Acceptance criteria:
+- `collect`, `status`, and `list` accept `--format text`; `--format` currently exists only on `pane read`/`agent read` (`cli.clj:1021`, `:1040`).
+- The raw envelope `text` is opt-in (`--raw`) rather than always present beside the parsed fields.
+- `list --format text` is one line per child: child, pane, status, captured, closed.
+
+** TODO Guard a publishing child's own unclosed children
+:PROPERTIES:
+:CUSTOM_ID: 4f29615a-ddfe-47c6-ab6b-28c0623c94bf
+:CREATED: [2026-08-07 Fri 00:40]
+:END:
+SKILL.md states "a delegating persona must close its own children before publishing" as prose only; no such check exists in `cli.clj`. Measured consequence: the live smoke leaked a grandchild pane, and the fix was to *instruct* a planner child to close its scout plus assert on the outcome -- an LLM-compliance dependency where the ledger already holds the answer.
+Acceptance criteria:
+- `publish` refuses, or loudly warns, when the caller owns an uncaptured or unclosed child.
+- The smoke's nested leg relies on that guard rather than on its planner child obeying an instruction.
+- The prose rule is deleted from SKILL.md once the guard exists.
+
+** TODO Orphan-cleanup verb
+:PROPERTIES:
+:CUSTOM_ID: d39fa580-ff6e-4f97-89cc-2398fa7c26e1
+:CREATED: [2026-08-07 Fri 00:40]
+:END:
+SKILL.md documents a two-step manual recipe (`oh agent list`, then `oh pane close <pane-id>`) for a child whose owning session ended. Ownership is absolute by design and gains no dead-owner exception; the operator supplies the authority the protocol cannot infer.
+Acceptance criteria:
+- One verb lists, and optionally closes, captured entries whose owning session is no longer this one, applying the same live child+pane match `close` uses.
+- It never closes on name-absence alone, and never on a pane-id mismatch.
+- The prose recipe is replaced by the verb in SKILL.md.
+
+** TODO Harvest `PROCESS` candidates from the ledger
+:PROPERTIES:
+:CUSTOM_ID: 7afb2c33-d916-4a65-a67f-6478e8ae05d0
+:CREATED: [2026-08-07 Fri 00:40]
+:END:
+Sixteen candidates accumulated across six children in one session, tracked only by re-reading capture output. The ledger holds every one, and SKILL.md warns they die with the session unless a retro routes them.
+Acceptance criteria:
+- A verb returns this session's `PROCESS` candidates from ledger entries, deduplicated, with their originating child and task.
+- Output is usable as direct retro input without re-reading captures.
+Must not: route, persist, or act on candidates -- the parent still owns verification, deduplication, and approval.
+
+** TODO `collect --close`
+:PROPERTIES:
+:CUSTOM_ID: 339bd67e-0359-4fc8-9aff-dea3c4afa7a9
+:CREATED: [2026-08-07 Fri 00:40]
+:END:
+Capture-then-close was two calls, six times, in one session. The redesign's insight was that the *retain* decision needs the result first -- but for an ephemeral scout or reviewer the close decision is known at spawn.
+Acceptance criteria:
+- `collect --close` captures and then closes in one invocation, with closure still subject to every `close` guard and reporting its own outcome (`closed`/`retained`/`gone`).
+- A capture whose closure refuses still returns the validated result; the flag never suppresses or degrades the capture.
+Must not: make closure implicit anywhere else, or reintroduce capture-time auto-close by default.
+
+** TODO Persona `timeout:` frontmatter
+:PROPERTIES:
+:CUSTOM_ID: 343f80c8-3734-49de-9e4e-8573c4f8e819
+:CREATED: [2026-08-07 Fri 00:40]
+:END:
+"Give review and implementation work an explicit `--timeout`" is a per-persona constant expressed as a standing instruction to every caller.
+Acceptance criteria:
+- Persona frontmatter accepts `timeout:`, resolving as explicit `--timeout` > frontmatter > shipped default, mirroring how `model:` and `retro:` already resolve.
+- Review and implementation personas declare one; the SKILL.md instruction is deleted.
+
 * Implementation
 
-`bb test`: 457 tests / 2680 assertions before, 483 / 2908 after, 0 failures. Live smoke green (`.tmp/smoke-continue.log`, exit 0), proving same-pane context continuation.
+`bb test`: 457 tests / 2680 assertions at baseline, 483 / 2908 at first delivery, 487 / 2943 after the post-merge review round; 0 failures throughout. Live smoke green twice, the second run after the follow-up fixes, exercising the changed continuation-prompt and close paths and confirming the grandchild-leak fix (no pane left behind).
+
+Delivered in two commits: the lifecycle itself, then a follow-up round closing four defects a post-merge parallel review found -- the `--task` result-path burn, a BLOCKED/FAILED instruction missing its round task, an unretirable `"continuing"` status, and a persona telling a below-root spawner to retain a grandchild `continue` can never resume.
 
 Delivered by delegation across two worker rounds, with an independent design review before implementation and an independent closure validation after. Both reviews found real defects: the design review corrected close-safety, waiting-policy relocation, and the Class C rewrite before any code was written; the closure validation caught the README sweep gap and the surviving prompt line after `bb test` was already green. Neither was reachable from a passing suite.
 
