@@ -499,3 +499,22 @@ Origin:
 
 Evidence:
 One worker settled idle after completing the requested fix but omitted publication and required a targeted publish prompt. Another had a validated COMPLETE result but remained working long after collection; it required Ctrl-D to exit and explicit closure of the parent-created pane.
+
+** TODO Review how ot CLI surfaces archived tasks :skill:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: 4c344404-66e2-48fb-b907-544ec41a730f
+:CREATED: [2026-08-06 Thu 13:03]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 13:03]
+:END:
+`ot show <id>` resolves only the active graph, while archived verification currently requires `ot scan --scope archived`; the two read surfaces return different shapes and the distinction was previously undocumented. Review whether `show` should resolve archived IDs, accept an explicit scope, or remain active-only with a dedicated archive inspection command, then align read-command semantics and errors.
+
+Origin:
+- cwd: /Users/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-06 Thu 13:03]
+- sender: agent
+
+Evidence:
+After `ot archive b3fcc5d9-141f-4589-a2a0-d7a95985092a --yes`, `ot show b3fcc5d9-141f-4589-a2a0-d7a95985092a --format json` returned `unknown-task`; `ot scan --scope archived --format json` found the archived row. Source confirms `show-cmd` loads the active context while `unarchive` resolves `TASKS.archive.org` directly.

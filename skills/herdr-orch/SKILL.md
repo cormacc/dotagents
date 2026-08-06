@@ -87,6 +87,8 @@ Use caller context or explicit IDs, `--no-focus`, and response IDs--not focused 
 
 Validation proves identity, not correctness: a `COMPLETE` envelope means the right child answered the right assignment, never that its content is true. Before persisting a child's claim to a change-record, task, spec, or commit message--or acting destructively on it--confirm it against source. Re-count reported totals, re-run quoted commands, and inspect cited files. Resolve disagreement with a local probe rather than confidence or seniority.
 
+Keep top-level lifecycle closure on the root side of that trust boundary. An implementation worker may manage its scoped plan tasks, but must not close the parent task or perform final record pruning; the root orchestrator retains those steps until the implementation result has been independently validated. The validator may be the root itself or a separate reviewer/auditor, but never the implementation worker merely reaffirming its own result.
+
 ## Manual fallback
 
 If the script is unavailable, follow the [upstream Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/SKILL.md) mechanically. Before prompting, read the `config.edn` chain (skill default ← home override ← project override) and translate the persona's model for the target kind, then create a parent ledger and absolute result path and inject `CHILD`, `TASK`, and `RESULT`. Have the child atomically publish the exact [v1 result envelope](scripts/docs/contract.md#ledger-and-completion), then validate and capture it before closing only the ephemeral pane you created. Retain blocked panes.

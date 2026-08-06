@@ -130,6 +130,8 @@ Key map:
 
 Native Emacs `org-archive-subtree` may leave `#+SELECTED:` pointing at the archived active subtree because that local keyword is outside the archived file. Queries stay read-only: use `ot selected`/`ot doctor` to observe it, then `ot select --clear-stale` to atomically clear only an unresolved pointer. Normal `ot archive` already clears a selected archived subtree itself.
 
+`ot show <id>` resolves only the active graph (`TASKS.org`, local tasks, and linked imports), so a successfully archived id returns `unknown-task`. Verify archive visibility with `ot scan --scope archived --format json`; use `ot unarchive` when the archived subtree itself must be restored for active-graph inspection or mutation.
+
 `ot unarchive <id>` resolves exact IDs and unique prefixes from `TASKS.archive.org` only. It restores the archived subtree into an existing shared `TASKS.org` level-1 section, preferring explicit `--section` over the `:ARCHIVE_OLPATH:` stamped by `ot archive`; legacy entries and roots archived from a file-level `#+IMPORT:` record carry no `:ARCHIVE_OLPATH:`, so they require `--section` rather than being guessed. It removes `:ARCHIVED:` / `:ARCHIVE_OLPATH:`, reverses a matching linked record parent from `archive:` to `task:`, and does not change status, `CLOSED:`, or LOGBOOK. `--dry-run` reports the source, destination, section, and proposed parent rewrite without writing.
 
 `n`/`N` mirror the pi overlay: with a cursor they create a sibling/child of the current task (inheriting its file/`--local` routing); with an empty list they create a top-level task under the default section.
