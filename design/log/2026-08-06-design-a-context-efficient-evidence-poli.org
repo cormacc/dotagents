@@ -1,0 +1,169 @@
+#+TITLE: Design a context-efficient evidence policy for subagent claims
+#+DATE: 2026-08-06 Thu
+#+PARENT: [[task:f5621a90-e497-451d-b154-e1995b3c264e][Design a context-efficient evidence policy for subagent claims]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:AGENTS.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/README.org]]
+#+SPEC: [[proj:skills/herdr-orch/subagents/reviewer.md]]
+#+SPEC: [[proj:skills/herdr-orch/subagents/worker.md]]
+#+SPEC: [[proj:skills/retro/SKILL.md]]
+
+* Intent
+
+Define one evidence principle for factual and causal claims while giving parent-to-child premises and child-to-parent results mechanisms proportionate to their different costs. Preserve independent validation where consequences require it without making routine delegation duplicate the child's context in the parent.
+
+* Summary
+
+*Level:* production · *Tests:* smoke · *Docs:* full
+
+Use explicit epistemic status when composing assignments, bounded evidence probes when consuming results, and independent review only at high-consequence trust boundaries. The initial 1--3 candidate probe-budget range is confirmed at 3 probes per load-bearing claim from a 5-session, 13-result parent-verification sample (see `* Implementation`).
+
+** Scope
+
+*** In scope
+
+- Sample 3--5 recent orchestration sessions to estimate parent context spent re-reading child evidence and the rate at which parent checks corrected a claim.
+- Add the general rule that factual or causal claims are measured, attributed, or presented as uncertain to `AGENTS.md`.
+- Rewrite `skills/herdr-orch/SKILL.md` Trusting a result guidance as three consequence classes with bounded probes and disagreement-driven escalation.
+- Add assignment-premise verification to `skills/herdr-orch/subagents/reviewer.md` and bound grandchild-result verification in `skills/herdr-orch/subagents/worker.md`.
+- Align `skills/retro/SKILL.md` child PROCESS-candidate verification with the Class B probe budget while preserving parent ownership of verification and persistence.
+- Preserve the existing independent-validation boundary for destructive actions, feature closeout, and top-level lifecycle closure.
+- Add the accepted policy record to `skills/herdr-orch/README.org` history when implementation lands.
+
+*** Out of scope
+
+- Changing the `RESULT` envelope, identity validation, artifact validation, launcher, ledger, or `oh` CLI.
+- Adding a persistent auditor, a new auditor persona, or routine mandatory reviewer spawn.
+- Mechanically parsing or enforcing an `UNVERIFIED:` assignment block before textual guidance has been observed in use.
+- Replacing the implementer's normal obligation to test its own work.
+
+** Acceptance
+
+*** Core functionality
+
+- [X] `AGENTS.md` states that factual or causal claims are measured, attributed to their source, or presented as uncertain.
+- [X] `AGENTS.md` retains its CRITICAL requirement to verify symbol, function, config-option, module-path, variable, CLI-flag, and API-field identity regardless of consequence class.
+- [X] `skills/herdr-orch/SKILL.md` requires an unmeasured load-bearing assignment premise to be labeled unverified.
+- [X] `skills/herdr-orch/SKILL.md` requires the parent assignment to instruct the child to establish an unverified premise empirically before accepting its framing.
+- [X] `skills/herdr-orch/SKILL.md` states that Class A transient results require no routine parent probe unless they conflict with other evidence.
+- [X] `skills/herdr-orch/SKILL.md` states an explicit Class B probe budget whose confirmed value is recorded under `** Decisions`.
+- [X] The Class B probe budget applies only to load-bearing claims.
+- [X] Class B claims outside the probe budget are explicitly attributed rather than adopted as parent-verified facts.
+- [X] Class C destructive actions retain independent validation by the root or an ephemeral reviewer.
+- [X] Class C feature closeout retains independent validation by the root or an ephemeral reviewer.
+- [X] Top-level lifecycle closure retains independent validation by the root or an ephemeral reviewer.
+- [X] `skills/herdr-orch/SKILL.md` states that a failed probe stops reliance on the disputed claim.
+- [X] `skills/herdr-orch/SKILL.md` states that escalation widens verification only as far as the disagreement requires.
+- [X] `worker.md` Delegating factual gaps states an explicit probe bound instead of "verify the child's claims against source before acting on them".
+- [X] Reviewer guidance requires verifying the stated baseline before accepting failure attribution.
+- [X] `skills/retro/SKILL.md` applies the Class B probe bound to child PROCESS candidates.
+- [X] `skills/herdr-orch/README.org` history links this change-record.
+- [X] A 3--5 session sample records parent verification cost before the initial Class B budget is set.
+- [X] The same session sample records how often parent checks corrected a claim.
+
+*** Edge cases
+
+- [X] Mechanical result validation remains explicitly limited to identity and envelope correctness rather than content truth.
+- [X] `skills/herdr-orch/SKILL.md` states that an identifier the parent uses in an edit, command, or persisted text is checked at point of use even in Class A.
+- [X] `skills/herdr-orch/SKILL.md` keeps child self-verification available in Class A, Class B, and Class C.
+- [X] Child self-verification is never described as independent validation.
+- [X] `skills/herdr-orch/SKILL.md` keeps economically unprobeable claims usable when explicitly attributed or presented as uncertain.
+
+*** Anti-criteria
+
+- [X] Must not: direct the parent to perform corpus-wide re-reading by default.
+- [X] Must not: direct the parent to reproduce the child's full investigation by default.
+- [X] Must not: add a persistent auditor without a new benchmark showing value.
+- [X] Must not: add a mandatory review hop without a new benchmark showing value.
+- [X] Must not: permit an implementation worker to validate its own top-level closure.
+- [X] Must not: change orchestration protocol for a textual policy change.
+- [X] Must not: change runtime code for a textual policy change.
+
+** Decisions
+
+- Use one principle with two directional mechanisms :: parent premises use measured/unverified labeling at assignment composition; child results use consequence-tiered probes at capture. Treating both directions as duplicate verification would impose cost where labeling is sufficient.
+- Adopt three consequence classes :: Class A trusts a validated envelope, Class B uses an explicit small probe budget of up to 3 probes per load-bearing claim confirmed from the session sample (`* Implementation`), and Class C requires independent validation. Session-sample evidence confirmed, without revision, the three candidate examples: a scout account of subsystem behavior used only to choose an in-flight approach (Class A), a claim persisted to a task, record, spec, commit message, or user report (Class B), and a destructive action, feature closeout, or top-level lifecycle closure (Class C). Probe disagreement triggers escalation; persistence alone does not trigger full re-ingestion.
+- Preserve identity checks outside the bounded claim policy :: the existing AGENTS.md CRITICAL requirement to verify symbols, functions, config options, module paths, variables, CLI flags, and API fields remains unconditional because an incorrect identifier makes the underlying probe or action invalid; attribution is not a substitute for checking those identities.
+- Start with textual policy rather than protocol enforcement :: the current problem is broad and unbounded guidance, while no evidence yet shows that assignment labels need mechanical syntax or validation.
+- Reject a persistent auditor :: the prior mandatory-advisor evaluation found no quality gain from routine review while adding cost and latency; an ephemeral reviewer already supplies independence when Class C warrants it.
+  Rejected:
+  - Self-verification only: cheap but not independent and insufficient when the parent adopts durable or high-consequence claims.
+  - Routine ephemeral audit for Class B: moves context out of the parent but adds latency, cost, and another testimony layer without measured benefit.
+
+** Shipped
+
+- MODIFIED `AGENTS.md` :: added the general factual/causal claim rule (measured, attributed, or presented as uncertain), kept adjacent to and explicitly distinguished from the unconditional CRITICAL identifier-verification rule.
+- MODIFIED `skills/herdr-orch/SKILL.md` :: added `** Assignment premises` (the parent-to-child direction) and rewrote `** Trusting a result` as three named consequence classes with a confirmed Class B probe budget, failed-probe and disagreement-escalation rules, and a self-verification/identifier-check carve-out; kept to 247 body words (251 including the heading).
+- MODIFIED `skills/herdr-orch/subagents/reviewer.md` :: added a baseline-verification constraint (confirm a claimed pre-existing/environmental failure against its stated baseline before accepting the attribution).
+- MODIFIED `skills/herdr-orch/subagents/worker.md` :: replaced the unbounded "verify the child's claims against source" instruction with the Class B probe bound.
+- MODIFIED `skills/retro/SKILL.md` :: bounded child `PROCESS`-candidate verification by the same Class B probe policy.
+- MODIFIED `skills/herdr-orch/README.org` :: linked this record from `* History`.
+- ADDED `design/log/2026-08-06-design-a-context-efficient-evidence-poli/session-sample.md` :: durable 5-session, 13-result audit supporting the initial Class B probe budget.
+
+** Risks
+
+- The 5-session, 13-result sample is directional rather than statistically powered; the 3-probe Class B budget is an initial bound to revisit only when new measured evidence warrants it.
+
+* Plan
+
+** DONE Audit current parent verification cost and finalize policy thresholds
+CLOSED: [2026-08-06 Thu 15:14]
+:PROPERTIES:
+:CUSTOM_ID: 9a519789-8b61-4859-8462-bc2027a70a84
+:CREATED: [2026-08-06 Thu]
+:STARTED: [2026-08-06 Thu 15:05]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu]
+- State "STARTED" from "TODO" [2026-08-06 Thu 15:05]
+- State "DONE" from "STARTED" [2026-08-06 Thu 15:14]
+:END:
+Result: durable 5-session, 13-result sample recorded; Class B budget confirmed at up to 3 probes per load-bearing claim.
+
+** DONE Rewrite evidence guidance across the shared policy and personas
+CLOSED: [2026-08-06 Thu 15:21]
+:PROPERTIES:
+:CUSTOM_ID: 7a5101d8-a68d-4855-8185-9dc2001b9629
+:CREATED: [2026-08-06 Thu]
+:BLOCKED-BY: task:9a519789-8b61-4859-8462-bc2027a70a84
+:STARTED: [2026-08-06 Thu 15:14]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu]
+- State "STARTED" from "TODO" [2026-08-06 Thu 15:14]
+- State "DONE" from "STARTED" [2026-08-06 Thu 15:21]
+:END:
+Result: shared policy, local persona/retro rules, and README history updated without runtime or protocol changes.
+
+** DONE Review the implemented policy against its trust boundaries
+CLOSED: [2026-08-06 Thu 15:45]
+:PROPERTIES:
+:CUSTOM_ID: 098f39fd-ca2c-4e22-854a-f8bf91159e8a
+:CREATED: [2026-08-06 Thu]
+:BLOCKED-BY: task:7a5101d8-a68d-4855-8185-9dc2001b9629
+:STARTED: [2026-08-06 Thu 15:23]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu]
+- State "STARTED" from "TODO" [2026-08-06 Thu 15:23]
+- State "DONE" from "STARTED" [2026-08-06 Thu 15:45]
+:END:
+Result: root checks passed and the independent reviewer approved after the durable audit evidence was corrected.
+
+* Implementation
+
+** Evidence audit
+
+The durable [[file:2026-08-06-design-a-context-efficient-evidence-poli/session-sample.md][5-session, 13-result sample]] found per-result verification ranging from 0--15 actions and 0--5 re-read files. One child claim was corrected and one pointer was refined; each disagreement required approximately 2-3 targeted claim probes depending on counting convention, with none exceeding 3. This supports an initial Class B budget of up to 3 probes per load-bearing claim without claiming a general future correction rate.
+
+** Policy
+
+The complete three-class result policy lives only in `skills/herdr-orch/SKILL.md` (247 body words; 251 with heading). `AGENTS.md` keeps identifier verification unconditional, while reviewer, worker, and retro guidance carry only their local premise or bounded-probe rules. The absorbed test-baseline and `ot doctor` incidents map to the reviewer baseline constraint and general factual/causal claim rule respectively.
+
+* Validation
+
+- Repository-root `bb test`: 457 tests, 2680 assertions, zero failures/errors.
+- `ot doctor --format json`: zero errors and warnings; `git diff --check`: clean; no diff under `skills/herdr-orch/scripts/`.
+- A root-owned ephemeral reviewer approved the policy after the sample became durable and its per-result/per-claim evidence was reconciled.

@@ -83,11 +83,21 @@ Surface the collected `artifact-links` to the user before relying on or discardi
 
 Use caller context or explicit IDs, `--no-focus`, and response IDs--not focused UI state. Labels never contain a workspace name and never replace unique agent names. Nested labels depend on the spawning agent's injected `HERDR_ORCH_PERSONA`; a spawning persona started outside `oh` has no nested-label identity unless that variable is set.
 
+## Assignment premises
+
+A parent assignment must not assert an unmeasured, load-bearing premise -- a baseline, failure attribution, or suspected cause -- as settled fact. Either verify it before composing the assignment, or label it `unverified:` and instruct the child to establish it empirically before adopting that framing. This is the reciprocal of Trusting a result below: that section bounds probes on claims flowing child to parent; this bounds claims flowing parent to child.
+
 ## Trusting a result
 
-Validation proves identity, not correctness: a `COMPLETE` envelope means the right child answered the right assignment, never that its content is true. Before persisting a child's claim to a change-record, task, spec, or commit message--or acting destructively on it--confirm it against source. Re-count reported totals, re-run quoted commands, and inspect cited files. Resolve disagreement with a local probe rather than confidence or seniority.
+Mechanical validation proves identity and envelope shape, never content truth. Weigh each claim by its consequence class.
 
-Keep top-level lifecycle closure on the root side of that trust boundary. An implementation worker may manage its scoped plan tasks, but must not close the parent task or perform final record pruning; the root orchestrator retains those steps until the implementation result has been independently validated. The validator may be the root itself or a separate reviewer/auditor, but never the implementation worker merely reaffirming its own result.
+**Class A -- transient.** A validated envelope needs no routine probe unless it conflicts with other evidence. Example: a scout's subsystem-behavior account used only to pick an in-flight approach.
+
+**Class B -- persisted or load-bearing.** Probe up to 3 targeted checks per claim -- re-run a command, re-count a total, open a cited file -- before adopting it. Example: a claim persisted to a task, record, spec, commit message, or user report. A claim outside that budget, or genuinely uneconomical to probe, stays attributed to its source or flagged uncertain, never adopted as parent-verified fact. A failed probe stops reliance on the disputed claim; escalate only as far as the disagreement requires, never into full re-ingestion.
+
+**Class C -- destructive or closing.** A destructive action, feature closeout, or top-level lifecycle closure requires independent validation by the root or an ephemeral reviewer -- never the implementing worker reaffirming its own result. Example: marking a parent task DONE after a delegated implementation lands. A worker manages its own scoped plan tasks but never closes the parent task or prunes the final record.
+
+Child self-verification helps in every class but is never independent validation -- only a probe or separate validator is. An identifier the parent uses in an edit, command, or persisted text is checked at point of use regardless of class; AGENTS.md's CRITICAL rule is unconditional and outside this probe budget.
 
 ## Manual fallback
 

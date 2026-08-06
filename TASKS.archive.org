@@ -2358,3 +2358,28 @@ Origin:
 
 Evidence:
 pi/extensions/tasks/test.sh passed dependency-free focused tests but could not resolve @earendil-works/pi-coding-agent for import-dependent tests, while pi-integration.test.ts repeatedly timed out. A worker needed alternate dependency-aware invocations to validate the new ot bridge.
+
+** CANCELLED subagent assignments: never assert an unverified baseline or attribution :skill:herdr_orch:
+CLOSED: [2026-08-06 Thu 13:40]
+:PROPERTIES:
+:CUSTOM_ID: b8a7727c-1234-474c-aa3d-7c79a7877cb9
+:CREATED: [2026-07-31 Fri 20:54]
+:ARCHIVED: [2026-08-06 Thu 13:40]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 20:54]
+- State "CANCELLED" from "TODO" [2026-08-06 Thu 13:40]
+:END:
+A parent assignment must not state a baseline, failure attribution, or suspected-cause framing that the parent has not measured. Either establish it first, or mark it explicitly unverified and instruct the child to establish it empirically before accepting the framing. The same rule applies to causal claims the agent reports to the user: assert a cause only after checking it, since a confident wrong attribution is more expensive than an admitted unknown.
+
+The existing herdr-orch "Trusting a result" section covers verifying a child's claims; this is the reciprocal direction — the parent's own claims flowing into an assignment or a report.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: connect/portal @ firmware-asset-check
+- timestamp: [2026-07-31 Fri 21:00]
+- sender: agent
+
+Evidence:
+Two instances in one session. (1) A reviewer assignment asserted that some of 15 suite failures were "pre-existing/environmental (e.g. hardware integration tests)". The named base commit was in fact fully green, so every failure was refactor-caused; the whole attribution table depended on the child refuting the parent, and it reported the wrong premise as its top process candidate. (2) When ot doctor flagged a dangling :BLOCKED-BY+: reference, the agent reported it to the user as its own editing error without checking; the user had in fact deleted the task manually. Both were avoidable by one measurement before asserting.

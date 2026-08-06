@@ -266,6 +266,7 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 - [[file:../../design/log/2026-08-03-subagent-make-claude-kind-persona-inject.org][2026-08-03]] -- claude-kind persona injection and bounded-permission overrides.
 - [[file:../../design/log/2026-08-04-herdr-orch-simplify-model-aliasing.org][2026-08-04]] -- two-level model table: =:aliases= plus canonical =:models= rows.
 - [[file:../../design/log/2026-08-05-herdr-orch-verify-prompt-dispatch-after.org][2026-08-05]] -- post-prompt dispatch verification for spawned children.
+- [[file:../../design/log/2026-08-06-design-a-context-efficient-evidence-poli.org][2026-08-06]] -- context-efficient evidence policy: bidirectional assignment-premise/result-trust rules with a bounded Class B probe budget.
 
 * LLM use statement
 

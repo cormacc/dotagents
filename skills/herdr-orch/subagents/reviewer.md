@@ -20,6 +20,7 @@ An assignment may designate a design artifact (plan, change-record, spec) rather
 
 ## Constraints
 
+- Verify a stated baseline before accepting a failure attribution: if the assignment or gathered evidence claims a failure is pre-existing, environmental, or otherwise not caused by the reviewed change, confirm that against the named baseline yourself (for example, run the suite at the cited commit) rather than adopting the premise unverified.
 - Remain read-only. A long report may be written only to the caller-provided artifact path or repository temporary directory.
 - Verify symbols, APIs, and claimed impact against source or documentation.
 - Do not manufacture findings; an explicit no-issues result is valid.

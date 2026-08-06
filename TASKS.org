@@ -20,17 +20,28 @@
 
 * Explorations
 
-** TODO Evaluate using a dedicated persistent auditor to hand off claim validation
+** DONE Design a context-efficient evidence policy for subagent claims :skill:herdr_orch:
+CLOSED: [2026-08-06 Thu 15:47]
 :PROPERTIES:
 :CUSTOM_ID: f5621a90-e497-451d-b154-e1995b3c264e
 :CREATED: [2026-08-06 Thu 11:48]
+:STARTED: [2026-08-06 Thu 15:05]
 :END:
 :LOGBOOK:
 - Created [2026-08-06 Thu 11:48]
+- State "STARTED" from "TODO" [2026-08-06 Thu 15:05]
+- State "DONE" from "STARTED" [2026-08-06 Thu 15:47]
 :END:
-Successive retros have introduced guidance that the orchestrator should verify claims made by spawned subagents when publishing their results.
-This seems to be bloating orchestrator context, as it drives the orchestrator to ingest files already processed/summarised by the subagent, subverting the efficacy of the subagent strategy for context management in longer sessions. Consider whether this verification advice should be rolled back, or alternatively whether the orchestrator should spin up a dedicated/persistent auditor subagent that it hands envelopes off to for review.
-Alternatively would updating the publication gate instructions for the subagent to do a verification pass have the same effect without bloating parent context?
+#+IMPORT: [[plan:2026-08-06-design-a-context-efficient-evidence-poli.org]]
+Successive retros introduced bidirectional evidence guidance: the orchestrator should verify claims made by spawned subagents before publishing or acting on them, while parent-supplied premises and user-facing causal claims should likewise be measured rather than asserted. This task absorbs [[archive:b8a7727c-1234-474c-aa3d-7c79a7877cb9][subagent assignments: never assert an unverified baseline or attribution]] so the two directions are designed as one coherent policy rather than independently producing contradictory or overly expensive guidance. Detailed scope, decisions, and acceptance criteria live in the linked change-record.
+
+The current child-result advice can bloat orchestrator context by making the parent ingest files already processed and summarised by the child, subverting delegation as a context-management strategy in longer sessions. Evaluate a risk-based policy that preserves justified trust boundaries without requiring universal duplicate verification.
+
+Evidence from the absorbed task:
+- A reviewer assignment asserted that some of 15 suite failures were "pre-existing/environmental (e.g. hardware integration tests)". The named base commit was fully green, so every failure was refactor-caused; the child first had to refute the parent's premise.
+- When ot doctor flagged a dangling :BLOCKED-BY+: reference, the agent reported it as its own editing error without checking; the user had deleted the task manually.
+
+Both incidents were avoidable by one measurement before asserting a cause, but the resulting policy must not turn every delegated result into a full duplicate investigation by the parent.
 
 ** TODO Determine whether pi allows automatic anthropic prompt caching :pi:
 :PROPERTIES:
@@ -406,27 +417,6 @@ find-skills is vendored, so the body must not be edited locally. Resolve by one 
 Acceptance criteria:
 - The wrong read-only claim no longer reaches an agent following the skill.
 - Whatever route is taken, no local edit is left sitting in a lockfile-managed vendored body.
-
-** TODO subagent assignments: never assert an unverified baseline or attribution :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: b8a7727c-1234-474c-aa3d-7c79a7877cb9
-:CREATED: [2026-07-31 Fri 20:54]
-:END:
-:LOGBOOK:
-- Created [2026-07-31 Fri 20:54]
-:END:
-A parent assignment must not state a baseline, failure attribution, or suspected-cause framing that the parent has not measured. Either establish it first, or mark it explicitly unverified and instruct the child to establish it empirically before accepting the framing. The same rule applies to causal claims the agent reports to the user: assert a cause only after checking it, since a confident wrong attribution is more expensive than an admitted unknown.
-
-The existing herdr-orch "Trusting a result" section covers verifying a child's claims; this is the reciprocal direction — the parent's own claims flowing into an assignment or a report.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: connect/portal @ firmware-asset-check
-- timestamp: [2026-07-31 Fri 21:00]
-- sender: agent
-
-Evidence:
-Two instances in one session. (1) A reviewer assignment asserted that some of 15 suite failures were "pre-existing/environmental (e.g. hardware integration tests)". The named base commit was in fact fully green, so every failure was refactor-caused; the whole attribution table depended on the child refuting the parent, and it reported the wrong premise as its top process candidate. (2) When ot doctor flagged a dangling :BLOCKED-BY+: reference, the agent reported it to the user as its own editing error without checking; the user had in fact deleted the task manually. Both were avoidable by one measurement before asserting.
 
 ** TODO herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
 :PROPERTIES:

@@ -1,7 +1,12 @@
 # General
 - CRITICAL: Always verify symbols, function names, config options, module
   paths, variable names, CLI flags, and API fields against actual source code or
-  documentation.
+  documentation. This identifier check is unconditional and independent of any
+  claim's consequence class or probe budget (see `herdr-orch` § Trusting a result).
+- State a factual or causal claim only when it is measured, attributed to its
+  source, or explicitly presented as uncertain -- never asserted as settled fact
+  on confidence alone. This applies to both a baseline/attribution composed into
+  an assignment and a claim reported to the user.
 - When asked a question, just answer the question -- don't start coding.
   Use tools and write scripts only to obtain additional required information.
 - An empty result is not evidence of absence. A wrong field name, path or source
