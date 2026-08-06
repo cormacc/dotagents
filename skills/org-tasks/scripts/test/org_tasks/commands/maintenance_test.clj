@@ -181,6 +181,39 @@
         (is (= 1 (count dangling)) "only the missing path dangles")
         (is (str/includes? (:message (first dangling)) "design/missing.org"))))))
 
+(deftest doctor-inline-path-citation-resolution-through-cli
+  ;; The doctor stays pure: the command resolves candidate paths through the
+  ;; root sandbox and supplies the resulting existence maps.
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (let [wrong "skills/org-tasks/scripts/src/org_tasks/test_runner.clj"
+            valid "skills/org-tasks/scripts/test/org_tasks/test_runner.clj"
+            valid-path (fs/path root valid)
+            plan-path (str (fs/path root "design" "log" "linked-plan.org"))]
+        (fs/create-dirs (fs/parent valid-path))
+        (spit (str valid-path) "fixture\n")
+        (spit plan-path
+              (str "* Summary\n"
+                   "- Wrong: `" wrong "`\n"
+                   "- Valid: =" valid "=\n"
+                   "- Illustrative: `example/path.clj`\n"
+                   "* Plan\n"
+                   "** TODO Work\n"
+                   ":PROPERTIES:\n"
+                   ":CUSTOM_ID: bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb\n"
+                   ":END:\n"
+                   "* Implementation\n"))
+        (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "doctor")
+              r (parse-json-result out)
+              findings (filter #(= "inline-path-dangling" (:code %)) (:findings r))]
+          (is (zero? exit))
+          (is (= 1 (count findings)))
+          (is (= "warn" (:severity (first findings))))
+          (is (= plan-path (get-in (first findings) [:location :file])))
+          (is (= 2 (get-in (first findings) [:location :line])))
+          (is (str/includes? (:message (first findings)) wrong)))))))
+
 ;; ── section ───────────────────────────────────────────
 
 (deftest section-returns-found-body

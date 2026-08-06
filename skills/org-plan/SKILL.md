@@ -264,7 +264,7 @@ When a non-goal would be easy to violate by accident, capture it as an anti-crit
 
 ### Body discipline
 
-Each plan task's body is the criteria list plus, at most, one pointer or non-obvious constraint. Prefer a stable symbol reference (file path plus function or var name) to a similar existing pattern -- never a bare line number or range, which drifts between planning and execution -- or an inline code sketch when no reference fits. Skipping examples leads to workers reporting back for clarification -- spend the 30 seconds now.
+Each plan task's body is the criteria list plus, at most, one pointer or non-obvious constraint. Prefer a stable symbol reference (file path plus function or var name) to a similar existing pattern -- never a bare line number or range, which drifts between planning and execution -- or an inline code sketch when no reference fits. For a repo-relative file pointer, use a single inline-code token such as `skills/org-tasks/SKILL.md`; `ot doctor` advises when a constrained citation under an existing root does not resolve. Skipping examples leads to workers reporting back for clarification -- spend the 30 seconds now.
 
 ## Plan task metadata and status
 
@@ -324,7 +324,7 @@ Refresh:
 1. Refresh `* Summary` so the effort line, `** Scope`, `** Shipped`, and `** Gotchas` reflect what actually landed. Compare `#+SPEC:` with actual `ADDED` / `MODIFIED` / `REMOVED` shipped bullets; include any discovered contract impact that was missed during planning.
 2. Verify each item in `** Acceptance` (the consolidated ISC) and every anti-criterion. If a `* Validation` section exists, refresh it to match what actually ran; drop it if it has decayed to just "the suites pass" (an implicit pre-merge requirement).
 3. Ensure every `#+SPEC:` path was reviewed and updated when needed, or explain why the spec was relevant but unchanged -- update the impacted spec files themselves (not just the declaration) to reflect the change scope before marking `DONE`.
-4. Ensure newly discovered follow-up work exists as TODO tasks rather than buried prose.
+4. Ensure newly discovered follow-up work exists as TODO tasks rather than buried prose. Do not hand-delete a plan subtree to tidy closure: use `ot remove --dry-run <id>` then `--yes` only for an eligible non-top-level subtree after reviewing unchecked criteria and inbound blockers; protocol roots still close through lifecycle plus archive.
 5. If Summary is missing, generate it from promoted Context, completed plan tasks, and Implementation notes before closing.
 
 Prune:

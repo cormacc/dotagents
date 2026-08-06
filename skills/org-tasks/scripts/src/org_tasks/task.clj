@@ -66,8 +66,9 @@
 (defn- resolve-id-candidate
   "Resolve `raw-id` against `candidates`.
 
-  Exact full-UUID matches win first. Otherwise, prefixes of at least
-  four characters are matched against `:CUSTOM_ID:` values; shorter
+  A unique exact `:CUSTOM_ID:` match wins first; duplicate exact
+  matches are ambiguous. Otherwise, prefixes of at least four characters
+  are matched against `:CUSTOM_ID:` values; shorter
   inputs return `{:none true}` so accidental one-character selections
   never bind to a graph-dependent task.
 
@@ -83,21 +84,24 @@
       {:none true}
 
       :else
-      (if-let [exact (some #(when (= raw-id (parser/get-task-id %)) %) candidates)]
-        {:match exact}
-        (if (< (count raw-id) min-id-prefix-length)
-          {:none true}
-          (let [matches (vec (filter #(id-prefix-match? raw-id %) candidates))]
-            (case (count matches)
-              0 {:none true}
-              1 {:match (first matches)}
-              {:ambiguous matches})))))))
+      (let [exact (vec (filter #(= raw-id (parser/get-task-id %)) candidates))]
+        (case (count exact)
+          0 (if (< (count raw-id) min-id-prefix-length)
+              {:none true}
+              (let [matches (vec (filter #(id-prefix-match? raw-id %) candidates))]
+                (case (count matches)
+                  0 {:none true}
+                  1 {:match (first matches)}
+                  {:ambiguous matches})))
+          1 {:match (first exact)}
+          {:ambiguous exact})))))
 
 (defn find-by-id-or-prefix
   "Resolve `raw-id` anywhere in the task graph.
 
-  Walks both `:children` and `:import-children`. Exact `:CUSTOM_ID:`
-  matches win before prefix matching; prefix matches require at least
+  Walks both `:children` and `:import-children`. A unique exact
+  `:CUSTOM_ID:` match wins before prefix matching; duplicate exact matches
+  are ambiguous. Prefix matches require at least
   four characters. Returns `{:match task}`, `{:ambiguous [task ...]}`,
   or `{:none true}`."
   [tasks raw-id]

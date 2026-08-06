@@ -17,6 +17,32 @@
           {:id "c" :summary "Sibling" :status "DONE" :level 1 :local true
            :linkedIssues ["[[jira:ABC-1]]"]}]})
 
+(def removal-parent-id "11111111-1111-4111-8111-111111111111")
+(def removal-child-id "22222222-2222-4222-8222-222222222222")
+(def removal-other-child-id "33333333-3333-4333-8333-333333333333")
+(def removal-referrer-id "44444444-4444-4444-8444-444444444444")
+
+(defn- removal-task-block [level summary id & [body]]
+  (str (apply str (repeat level "*")) " TODO " summary "\n"
+       ":PROPERTIES:\n:CUSTOM_ID: " id "\n:END:\n"
+       (or body "")))
+
+(defn- bootstrap-removal-tui-graph! [root]
+  (spit (str root "/TASKS.setup.org") test-util/setup-org-preamble)
+  (spit (str root "/TASKS.org")
+        (str test-util/tasks-org-preamble
+             "* Improvements\n"
+             (removal-task-block 2 "Parent" removal-parent-id)
+             (removal-task-block 3 "Remove me" removal-child-id "- [ ] finish removal\n")
+             (removal-task-block 3 "Other child" removal-other-child-id)
+             (removal-task-block 2 "Referrer" removal-referrer-id
+                                 (str ":PROPERTIES:\n:BLOCKED-BY: task:"
+                                      removal-child-id "\n:END:\n"))))
+  (spit (str root "/TASKS.local.org") "#+SELECTED:\n"))
+
+(defn- removal-tui-state [opts]
+  (tasks/initial-state (tasks/load-tasks opts)))
+
 (deftest initial-state-expands-selected-path
   (let [state (tasks/initial-state sample-result)]
     (is (= "b" (:selected-id state)))
@@ -304,6 +330,79 @@
             (is (= "Beta" (:summary (tasks/cursor-task after))) "cursor stays on Beta after select")
             (is (= "bbbbbbbb-1111-4111-8111-111111111111" (:selected-id after)))))
         (finally (fs/delete-tree dir))))))
+
+(deftest removal-first-press-previews-without-writing-and-arms-the-cursor-task
+  (let [dir (str (fs/create-temp-dir {:prefix "ot-tui-remove"}))]
+    (try
+      (bootstrap-removal-tui-graph! dir)
+      (let [opts {:root dir}
+            before (slurp (str dir "/TASKS.org"))
+            state (feed-keys opts (removal-tui-state opts)
+                             [(msg/key-press :enter) (msg/key-press :down)])
+            [after _] (tui/update-fn opts state (msg/key-press "D"))]
+        (is (contains? dispatch/command-fns :remove) "remove handler comes from the registry")
+        (is (= removal-child-id (get-in after [:remove-confirmation :task-id])))
+        (is (str/includes? (:message after) "subtree 1"))
+        (is (str/includes? (:message after) "unchecked criteria 1"))
+        (is (str/includes? (:message after) "inbound blockers 1"))
+        (is (str/includes? (:message after) "blockers will be pruned"))
+        (is (= before (slurp (str dir "/TASKS.org"))) "dry-run does not write"))
+      (finally (fs/delete-tree dir)))))
+
+(deftest removal-second-press-deletes-prunes-and-refreshes-the-cursor
+  (let [dir (str (fs/create-temp-dir {:prefix "ot-tui-remove"}))]
+    (try
+      (bootstrap-removal-tui-graph! dir)
+      (let [opts {:root dir}
+            state (feed-keys opts (removal-tui-state opts)
+                             [(msg/key-press :enter) (msg/key-press :down)])
+            after (feed-keys opts state [(msg/key-press "D") (msg/key-press "D")])
+            source (slurp (str dir "/TASKS.org"))]
+        (is (not (str/includes? source removal-child-id)))
+        (is (not (str/includes? source (str "task:" removal-child-id))))
+        (is (nil? (:remove-confirmation after)))
+        (is (some? (tasks/cursor-task after)) "cursor remains valid after reload")
+        (is (not= removal-child-id (tasks/cursor-id after)))
+        (is (<= 0 (:cursor after) (dec (count (:visible-tasks after)))))
+        (is (<= 0 (:tree-scroll after) (:cursor after)) "tree scroll remains valid"))
+      (finally (fs/delete-tree dir)))))
+
+(deftest removal-confirmation-clears-on-movement-and-replaces-for-another-task
+  (let [dir (str (fs/create-temp-dir {:prefix "ot-tui-remove"}))]
+    (try
+      (bootstrap-removal-tui-graph! dir)
+      (let [opts {:root dir}
+            child-state (feed-keys opts (removal-tui-state opts)
+                                   [(msg/key-press :enter) (msg/key-press :down)])
+            armed (first (tui/update-fn opts child-state (msg/key-press "D")))
+            prompting (first (tui/update-fn opts armed (msg/key-press "n")))
+            mutated (first (tui/update-fn opts armed (msg/key-press :right)))
+            moved (first (tui/update-fn opts armed (msg/key-press :down)))
+            [rearmed _] (tui/update-fn opts moved (msg/key-press "D"))]
+        (is (= removal-child-id (get-in armed [:remove-confirmation :task-id])))
+        (is (nil? (:remove-confirmation prompting)) "entering create mode disarms deletion")
+        (is (nil? (:remove-confirmation mutated)) "task mutation disarms deletion")
+        (is (nil? (:remove-confirmation moved)) "cursor movement disarms deletion")
+        (doseq [action [:tree/toggle-expansion :task/edit :task/plan :task/open-issues]
+                :let [assoc-action (first ((get-in dispatch/nexus [:nexus/actions action]) armed))
+                      assoc-values (apply hash-map (rest assoc-action))]]
+          (is (and (= :state/assoc (first assoc-action))
+                   (contains? assoc-values :remove-confirmation)
+                   (nil? (:remove-confirmation assoc-values)))
+              (str action " mode transition disarms deletion before its effect")))
+        (is (= removal-other-child-id (get-in rearmed [:remove-confirmation :task-id]))
+            "D on another task replaces, never confirms, an old arm"))
+      (finally (fs/delete-tree dir)))))
+
+(deftest removal-refuses-a-top-level-root-without-arming
+  (let [dir (str (fs/create-temp-dir {:prefix "ot-tui-remove"}))]
+    (try
+      (bootstrap-removal-tui-graph! dir)
+      (let [opts {:root dir}
+            [after _] (tui/update-fn opts (removal-tui-state opts) (msg/key-press "D"))]
+        (is (nil? (:remove-confirmation after)))
+        (is (str/includes? (:message after) "Cannot remove a protocol top-level root")))
+      (finally (fs/delete-tree dir)))))
 
 (deftest multiline-details-stay-inside-right-pane
   (let [state (assoc (tasks/initial-state

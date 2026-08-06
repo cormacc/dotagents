@@ -56,7 +56,9 @@
       (is (str/includes? out "Commands:"))
       (is (str/includes? out "list"))
       (is (str/includes? out "doctor"))
-      (is (str/includes? out "tag add")))))
+      (is (str/includes? out "tag add"))
+      (is (str/includes? out "remove"))
+      (is (str/includes? out "blocker prune")))))
 
 (deftest command-help-shows-command-options
   (testing "ot list --help prints list-specific options plus globals"
@@ -80,6 +82,13 @@
     (let [{:keys [out exit]} (capture #(apply cli/-main ["tag" "add" "--help"]))]
       (is (zero? exit))
       (is (str/includes? out "ot tag add"))))
+  (testing "selection repair and removal options are registry-derived"
+    (let [{select-out :out select-exit :exit} (capture #(apply cli/-main ["select" "--help"]))
+          {remove-out :out remove-exit :exit} (capture #(apply cli/-main ["remove" "--help"]))]
+      (is (zero? select-exit))
+      (is (zero? remove-exit))
+      (is (str/includes? select-out "--clear-stale"))
+      (is (str/includes? remove-out "--prune-blockers"))))
   (testing "ot help list routes to command help too"
     (let [{:keys [out exit]} (capture #(apply cli/-main ["help" "list"]))]
       (is (zero? exit))

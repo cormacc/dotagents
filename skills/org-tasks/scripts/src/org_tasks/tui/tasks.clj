@@ -71,6 +71,15 @@
       {:ok? true :result (:result envelope)}
       {:ok? false :message (error-message envelope)})))
 
+(defn removal-impact-message
+  "Concise standalone-TUI confirmation text for an `ot remove` dry-run
+  result. The actual preview and write remain in the command handler."
+  [{:keys [subtree uncheckedCriteria inboundBlockers]}]
+  (str "Remove armed: subtree " (count subtree)
+       ", unchecked criteria " (count uncheckedCriteria)
+       ", inbound blockers " (count inboundBlockers)
+       "; inbound blockers will be pruned. Press D again to remove."))
+
 ;; ── Tree / state model ─────────────────────────────────────────────
 
 (defn- tasks-by-id [tasks]
@@ -140,7 +149,8 @@
                  :height 30
                  :tree-scroll 0
                  :color? true
-                 :new-task nil})]
+                 :new-task nil
+                 :remove-confirmation nil})]
     ;; The cursor indexes *visible* tasks; the selected task is always visible
     ;; because its ancestors start expanded.
     (assoc state :cursor
@@ -200,7 +210,8 @@
                   (assoc :tasks tasks
                          :depths (task-depths tasks)
                          :selected-id (:selectedId result)
-                         :details-scroll 0)
+                         :details-scroll 0
+                         :remove-confirmation nil)
                   with-visible-tasks)
         idx (task-index-by-id (:visible-tasks state) prev-id)]
     (assoc state :cursor (or idx (:cursor state 0)))))

@@ -27,7 +27,15 @@
       (is (= "Child A" (:summary (:match r))))))
   (testing "unique prefixes can resolve imported children"
     (let [r (task/find-by-id-or-prefix roots "cafe")]
-      (is (= "Imported A" (:summary (:match r)))))))
+      (is (= "Imported A" (:summary (:match r))))))
+  (testing "a unique exact UUID beats a longer ID sharing its prefix"
+    (let [id "abcd1111-2222-4333-8444-555555555551"
+          r (task/find-by-id-or-prefix
+             [(t (str id "-stale-copy") "Longer prefix match")
+              (t id "Exact")]
+             id)]
+      (is (= "Exact" (:summary (:match r))))
+      (is (nil? (:ambiguous r))))))
 
 (deftest find-by-id-or-prefix-reports-none-and-ambiguity
   (testing "short prefixes never match"
@@ -36,7 +44,12 @@
     (is (= {:none true} (task/find-by-id-or-prefix roots "deadbeef"))))
   (testing "shared prefixes report every ambiguous match"
     (let [r (task/find-by-id-or-prefix roots "abcd")]
-      (is (= ["Root A" "Root B"] (mapv :summary (:ambiguous r)))))))
+      (is (= ["Root A" "Root B"] (mapv :summary (:ambiguous r))))))
+  (testing "duplicate exact UUID matches are ambiguous"
+    (let [id "dead1111-2222-4333-8444-555555555554"
+          r (task/find-by-id-or-prefix [(t id "First") (t id "Second")] id)]
+      (is (= ["First" "Second"] (mapv :summary (:ambiguous r))))
+      (is (nil? (:match r))))))
 
 (deftest find-top-level-by-id-or-prefix-only-considers-roots
   (testing "top-level resolver finds roots"

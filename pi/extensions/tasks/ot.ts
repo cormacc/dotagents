@@ -324,6 +324,25 @@ export function otArchiveTask(id: string, opts: RunOtOptions = {}): Promise<unkn
   return runOtResult(["archive", id, "--yes"], opts);
 }
 
+/** Build the vector passed to `ot remove`; no shell construction is used. */
+export function buildOtRemoveArgs(id: string, pruneBlockers: boolean): string[] {
+  return ["remove", id, ...(pruneBlockers ? ["--prune-blockers"] : [])];
+}
+
+/**
+ * Preview or remove a task subtree through the core CLI. The caller controls
+ * `--dry-run`; inbound pruning is always an explicit vector argument.
+ */
+export function otRemoveTask(
+  id: string,
+  options: RunOtOptions & { pruneBlockers?: boolean } = {},
+): Promise<OtRemoveResult> {
+  const { pruneBlockers = false, ...opts } = options;
+  const cmd = buildOtRemoveArgs(id, pruneBlockers);
+  if (!opts.dryRun) cmd.push("--yes");
+  return runOtResult<OtRemoveResult>(cmd, opts);
+}
+
 export function otPublishTask(id: string, opts: RunOtOptions = {}): Promise<unknown> {
   return runOtResult(["publish", id], opts);
 }
@@ -334,6 +353,46 @@ export function otUnpublishTask(id: string, opts: RunOtOptions = {}): Promise<un
 
 export function otDoctor<TFinding = unknown>(opts: RunOtOptions = {}): Promise<OtDoctorResult<TFinding>> {
   return runOtResult<OtDoctorResult<TFinding>>(["doctor"], opts);
+}
+
+export interface OtRemoveTask {
+  id: string;
+  summary: string;
+  status: string;
+  sourcePath: string;
+}
+
+export interface OtUncheckedCriterion {
+  taskId: string;
+  taskSummary: string;
+  sourcePath: string;
+  taskLine: number;
+  criterion: string;
+}
+
+export interface OtBlocker {
+  raw: string;
+  kind: string;
+  ref: string;
+}
+
+export interface OtInboundBlocker {
+  taskId: string;
+  taskSummary: string;
+  sourcePath: string;
+  blocker: OtBlocker;
+}
+
+/** Compact `ot remove` preview and completed-result payload. */
+export interface OtRemoveResult {
+  targetId: string;
+  subtree: OtRemoveTask[];
+  uncheckedCriteria: OtUncheckedCriterion[];
+  inboundBlockers: OtInboundBlocker[];
+  affectedFiles: string[];
+  selection: { selectedId: string | null; cleared: boolean };
+  prunedBlockers: OtInboundBlocker[];
+  dryRun: boolean;
 }
 
 export interface OtBackfillResult {

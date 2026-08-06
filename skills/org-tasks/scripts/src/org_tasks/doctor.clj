@@ -29,6 +29,7 @@
     :spec-untouched
     :spec-value-malformed
     :spec-path-dangling
+    :inline-path-dangling
     :spec-citation-untested
     :spec-stale"
   (:require [clojure.string :as str]
@@ -399,6 +400,93 @@
          :location {:file src}}))
     (record-content-index tasks record-exclude-paths))))
 
+;; ── Inline path citation checks ───────────────────────────────────
+
+(def ^:private markdown-inline-code-re #"(?<!`)`([^`\s]+)`(?!`)")
+(def ^:private org-verbatim-re #"(?<![\p{Alnum}_])=([^=\s]+)=(?![\p{Alnum}_])")
+(def ^:private org-block-start-re #"(?i)^\s*#\+BEGIN_(?:SRC|EXAMPLE)\b")
+(def ^:private org-block-end-re #"(?i)^\s*#\+END_(?:SRC|EXAMPLE)\b")
+(def ^:private inline-path-extension-re #"\.[A-Za-z0-9][A-Za-z0-9_-]*$")
+(def ^:private inline-path-excluded-char-re #"[\\*?\[\]{}<>$%]")
+
+(defn- inline-path-candidate?
+  "True for the deliberately narrow repo-relative inline-code grammar.
+  Existing first path segments are supplied separately by the command layer."
+  [path]
+  (let [segments (str/split path #"/")]
+    (and (not (str/blank? path))
+         (= path (str/trim path))
+         (not (str/starts-with? path "/"))
+         (not (str/starts-with? path "~"))
+         (not (str/includes? path ":"))
+         (not (re-find inline-path-excluded-char-re path))
+         (not (str/includes? path "\\"))
+         (every? #(and (not (str/blank? %))
+                       (not (#{"." ".."} %)))
+                 segments)
+         (> (count segments) 1)
+         (re-find inline-path-extension-re (last segments)))))
+
+(defn- inline-code-tokens [line]
+  (concat (map second (re-seq markdown-inline-code-re line))
+          (map second (re-seq org-verbatim-re line))))
+
+(defn extract-inline-code-path-candidates
+  "Purely extract distinct safe inline-code repo-path candidates from an Org
+  change-record. Returns `{:path path :line one-indexed-line}` maps in source
+  order. Markdown single-backtick and Org verbatim tokens are considered;
+  source/example blocks are shielded. With `existing-first-segments`, retain
+  only candidates whose first segment occurs in that supplied set."
+  ([content]
+   (extract-inline-code-path-candidates content nil))
+  ([content existing-first-segments]
+   (loop [lines (str/split (or content "") #"\n" -1)
+          line-number 1
+          in-block? false
+          seen #{}
+          out []]
+     (if (empty? lines)
+       out
+       (let [line (first lines)]
+         (cond
+           (re-find org-block-start-re line)
+           (recur (rest lines) (inc line-number) true seen out)
+
+           (re-find org-block-end-re line)
+           (recur (rest lines) (inc line-number) false seen out)
+
+           in-block?
+           (recur (rest lines) (inc line-number) true seen out)
+
+           :else
+           (let [candidates (->> (inline-code-tokens line)
+                                 (filter inline-path-candidate?)
+                                 (filter #(or (nil? existing-first-segments)
+                                              (contains? existing-first-segments
+                                                         (first (str/split % #"/")))))
+                                 (remove seen)
+                                 vec)]
+             (recur (rest lines)
+                    (inc line-number)
+                    false
+                    (into seen candidates)
+                    (into out (map #(hash-map :path % :line line-number) candidates))))))))))
+
+(defn- check-inline-path-citations
+  [tasks record-exclude-paths citation-first-segment-exists citation-path-exists]
+  (when (and citation-first-segment-exists citation-path-exists)
+    (vec
+     (mapcat
+      (fn [[src content]]
+        (for [{:keys [path line]}
+              (extract-inline-code-path-candidates content citation-first-segment-exists)
+              :when (false? (get citation-path-exists path))]
+          {:code :inline-path-dangling
+           :severity :warn
+           :message (str "Inline path citation `" path "` does not resolve on disk")
+           :location {:file src :line line}}))
+      (record-content-index tasks record-exclude-paths)))))
+
 (defn- check-spec-declarations
   "`#+SPEC:` checks over TASKS.org content: malformed values always;
   dangling (non-resolving) paths only when `spec-path-exists` (a
@@ -445,6 +533,12 @@
 (defn- check-spec-declarations-input [{:keys [protocol-files spec-path-exists]}]
   (or (check-spec-declarations protocol-files spec-path-exists) []))
 
+(defn- check-inline-path-citations-input
+  [{:keys [tasks record-exclude-paths citation-first-segment-exists citation-path-exists]}]
+  (or (check-inline-path-citations tasks record-exclude-paths
+                                   citation-first-segment-exists citation-path-exists)
+      []))
+
 (defn- check-spec-citations-input [{:keys [tasks record-exclude-paths]}]
   (check-spec-citations tasks record-exclude-paths))
 
@@ -467,7 +561,8 @@
     [{:code :selected-not-found
       :severity :error
       :message (str "TASKS.local.org #+SELECTED: " selected-id
-                    " does not match any :CUSTOM_ID: in the loaded task graph")
+                    " does not match any :CUSTOM_ID: in the loaded task graph; "
+                    "run `ot select --clear-stale` to repair it")
       :location (cond-> {} selected-source-path (assoc :file selected-source-path))}]))
 
 (defn- check-task [by-id task]
@@ -578,6 +673,7 @@
    check-record-structure-input
    check-spec-input
    check-spec-declarations-input
+   check-inline-path-citations-input
    check-spec-link-invalid
    check-spec-citations-input
    check-spec-stale-input
@@ -606,6 +702,12 @@
                              computed by the CLI layer via
                              org-tasks.spec/linked-paths-from, for the
                              spec-stale declared-but-stale advisory
+    :citation-first-segment-exists
+                           - optional set of candidate first path segments
+                             resolved by the CLI layer from the repo root
+    :citation-path-exists  - optional {inline-path -> bool} map, resolved by
+                             the CLI layer from the repo root for the
+                             inline-path-dangling advisory
     :spec-link-warnings    - malformed transitive link diagnostics from the
                              safe spec traversal"
   [{:keys [tasks] :as input}]
@@ -630,7 +732,8 @@
    :missing-link-template :misordered-link-template
    :missing-local-setupfile :misordered-setupfile
    :missing-record-section :empty-validation-section
-   :spec-untouched :spec-value-malformed :spec-path-dangling :spec-link-invalid
+   :spec-untouched :spec-value-malformed :spec-path-dangling :inline-path-dangling
+   :spec-link-invalid
    :spec-citation-untested :spec-stale])
 
 (defn format-findings-report [findings]

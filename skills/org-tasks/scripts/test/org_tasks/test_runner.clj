@@ -22,8 +22,10 @@
   concurrency-safe) must be marked `^:serial` in an opted-in namespace."
   (:require [babashka.classpath :as cp]
             [babashka.fs :as fs]
+            [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.test :as t])
+            [clojure.test :as t]
+            [edamame.core :as edamame])
   (:import [java.io StringWriter]
            [java.util.concurrent Callable Executors ExecutorService]))
 
@@ -60,6 +62,77 @@
 (defn- test-var? [v] (boolean (:test (meta v))))
 (defn- serial-var? [v] (boolean (:serial (meta v))))
 
+(def ^:private unsafe-global-var-mutators
+  "The deliberately narrow set of definite global-var mutation forms."
+  '#{with-redefs with-redefs-fn alter-var-root})
+
+(def ^:private edamame-reader-options
+  ;; `:var`, `:deref`, `:fn`, and `:regex` accept ordinary test syntax; :bb
+  ;; selects the Babashka branch of reader conditionals and preserves metadata.
+  {:read-cond :allow :features #{:bb}
+   :var true :deref true :fn true :regex true})
+
+(defn- namespace-source
+  "Return an opted-in namespace's source text and stable display path."
+  [ns-obj]
+  (let [source-file (:file (meta ns-obj))
+        resource-name (str (-> (str (ns-name ns-obj))
+                               (str/replace "-" "_")
+                               (str/replace "." "/"))
+                           ".clj")
+        resource (or (some-> source-file io/resource)
+                     (io/resource resource-name))]
+    (cond
+      (and source-file (fs/exists? source-file))
+      {:path (str (fs/canonicalize (fs/path source-file)))
+       :text (slurp source-file)}
+
+      resource
+      {:path (str resource)
+       :text (slurp resource)}
+
+      :else
+      (throw (ex-info "cannot locate source for parallel-tests namespace"
+                      {:ns (ns-name ns-obj) :file source-file
+                       :resource resource-name})))))
+
+(defn- unqualified-symbol [x]
+  (when (symbol? x) (symbol (name x))))
+
+(defn- deftest-form? [form]
+  (and (seq? form) (= 'deftest (unqualified-symbol (first form)))))
+
+(defn- unsafe-call [test-form]
+  (some (fn [form]
+          (when (and (seq? form)
+                     (contains? unsafe-global-var-mutators
+                                (unqualified-symbol (first form))))
+            form))
+        (tree-seq coll? seq (drop 2 test-form))))
+
+(defn- assert-serial-global-var-mutations!
+  "Reject untagged tests that definitely mutate global vars before pooling."
+  [ns-obj]
+  (let [{:keys [path text]} (namespace-source ns-obj)
+        forms (edamame/parse-string-all text edamame-reader-options)]
+    (doseq [form forms
+            :when (deftest-form? form)
+            :let [test-name (second form)
+                  call (unsafe-call form)]
+            :when (and call (not (:serial (meta test-name))))]
+      (let [mutator (first call)
+            {:keys [row col]} (meta mutator)
+            location (str path ":" row ":" col)]
+        (throw (ex-info (str "parallel test " (ns-name ns-obj) "/" test-name
+                             " at " location " uses " mutator
+                             " and must be tagged ^:serial")
+                        {:ns (ns-name ns-obj)
+                         :test test-name
+                         :source path
+                         :line row
+                         :column col
+                         :mutator mutator}))))))
+
 (defn- run-var-isolated
   "Runs one deftest var with its own bound *report-counters* ref and a
   private *test-out* buffer, returning {:output :counts}. Used for the
@@ -83,7 +156,7 @@
             (::t/each-fixtures (meta ns-obj))
             (find-var (symbol (str (ns-name ns-obj)) "test-ns-hook")))
     (throw (ex-info "parallel-tests namespace uses fixtures or test-ns-hook, which run-parallel-ns does not support"
-                     {:ns (ns-name ns-obj)}))))
+                    {:ns (ns-name ns-obj)}))))
 
 (defn- run-parallel-ns
   "Runs every deftest var in ns-sym, which carries `^{:parallel-tests
@@ -97,6 +170,7 @@
   [ns-sym ^ExecutorService pool]
   (let [ns-obj (the-ns ns-sym)
         _ (assert-supported! ns-obj)
+        _ (assert-serial-global-var-mutations! ns-obj)
         vars (->> (ns-interns ns-obj) vals (filter test-var?))
         serial-vars (filter serial-var? vars)
         parallel-vars (remove serial-var? vars)]

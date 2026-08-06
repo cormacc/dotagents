@@ -11,6 +11,7 @@ import {
   type TUI,
 } from "@earendil-works/pi-tui";
 import type { LinkedIssue, Task } from "./parser.ts";
+import { refreshedCursorIndex } from "./removal.ts";
 import {
   parseLinkTemplates,
   getTaskBlockers,
@@ -113,6 +114,8 @@ export class TasksOverlay {
       task: Task,
       direction: "forward" | "back",
     ) => Promise<{ tasks: Task[] } | null>,
+    /** Request removal after closing so Pi's confirmation dialog can focus. */
+    private onRemove?: (task: Task, cursorId: string | null) => void,
   ) {
     this.theme = theme;
     this.done = done;
@@ -162,6 +165,15 @@ export class TasksOverlay {
 
     this.invalidate();
     this.tui.requestRender();
+  }
+
+  /** Focus a refreshed task by UUID when it remains visible. */
+  focusTaskId(id: string | null): void {
+    const index = refreshedCursorIndex(this.rows, id, (row) => getTaskId(row.task));
+    if (index < 0) return;
+    this.cursor = index;
+    this.descScrollOffset = 0;
+    this.invalidate();
   }
 
   // ── Flatten visible rows ────────────────────────────────────────────
@@ -346,6 +358,13 @@ export class TasksOverlay {
       return "archive";
     }
 
+    // Remove a non-top-level task subtree through the core `ot remove` flow.
+    // Uppercase D is scoped to this focused overlay, never a global shortcut.
+    if (matchesKey(data, "shift+d")) {
+      this.remove();
+      return "remove";
+    }
+
     // Publish local task → TASKS.org  (shift-P, local tasks only)
     if (matchesKey(data, "shift+p")) {
       this.publish();
@@ -501,6 +520,16 @@ export class TasksOverlay {
     const topLevel = this.findTopLevelRoot(row.task);
     if (!topLevel) return;
     this.onArchive(topLevel);
+    this.done(undefined);
+  }
+
+  private remove(): void {
+    const row = this.rows[this.cursor];
+    if (!row || !this.onRemove) return;
+    // Prefer the parent after deletion; for an imported root this is the
+    // importer, and for other roots it is null so the refreshed overlay uses
+    // its normal sensible fallback.
+    this.onRemove(row.task, row.parent ? getTaskId(row.parent) : null);
     this.done(undefined);
   }
 
@@ -971,7 +1000,7 @@ export class TasksOverlay {
     lines.push(th.fg("borderMuted", hBar(width)));
     const helpText = th.fg(
       "dim",
-      " ↑↓/jk nav • ←→/hl status • ⇧←→ priority • Enter toggle • s select • e edit • p plan • n new • N subtask • A archive • P publish • U unpublish • Ctrl-d/u scroll • Esc/Alt-t close",
+      " ↑↓/jk nav • ←→/hl status • ⇧←→ priority • Enter toggle • s select • e edit • p plan • n new • N subtask • D remove • A archive • P publish • U unpublish • Ctrl-d/u scroll • Esc/Alt-t close",
     );
     lines.push(truncateToWidth(pad(helpText, width), width));
     lines.push(th.fg("border", hBar(width)));

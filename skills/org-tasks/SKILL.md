@@ -48,7 +48,8 @@ ot create "New task" --section Improvements --body 'Description text' --tag myta
 ot move <id> --parent <dest-id>   # reparent an existing subtree in place (--section <name> lifts it back to top level)
 ot status <id> STARTED   # also works for tasks inside linked plan files
 ot priority <id> B       # set/cycle/clear the priority cookie (--cycle forward|back, --clear)
-ot select <id>        # or: ot select --clear
+ot select <id>        # or: ot select --clear / ot select --clear-stale
+ot remove <id> --yes  # non-top-level subtree only; preview with --dry-run
 ot archive <id> --yes
 ot unarchive <id> --section Improvements  # restores an archived subtree; does not reopen its status
 ot publish <id>       # TASKS.local.org -> TASKS.org
@@ -62,6 +63,7 @@ ot record create <id>
 ot record create <id> --mode retrospective
 ot issue list|add|remove|urls <id> [...]
 ot blocker list|add|remove <id> [...]
+ot blocker prune --dry-run  # remove dangling task blockers only with --yes
 ot ready <id>
 ot handoff get|set|clear <id> [...]
 ot uuid --count 3
@@ -84,7 +86,8 @@ Install and local development: `scripts/README.md`.
 - Regroup existing tasks with `ot move <id> --parent <dest-id>` / `--section <name>` rather than hand-editing or scripting org surgery; it preserves IDs, lifecycle metadata, descendants, and file locality. Moves are in-file only -- use `ot publish`/`ot unpublish` to change locality and `ot unarchive` before moving an archived task.
 - Keep `TASKS.org` high-level. Put detailed checklists, implementation history, and acceptance criteria in linked change-records.
 - Add discovered work as new `TODO` tasks rather than burying it in prose.
-- Select local active work with `ot select <id>` or clear with `ot select --clear`.
+- Select local active work with `ot select <id>` or clear with `ot select --clear`. Repair a stale native-archive pointer only with `ot select --clear-stale`; it leaves valid and absent selections byte-identical.
+- Remove only an eligible non-top-level subtree with `ot remove <id> --yes`; start with `--dry-run`, review unchecked criteria and inbound blockers, and pass `--prune-blockers` only when the reported references should be removed too. Protocol top-level roots remain lifecycle plus archive history.
 - Local drafts may live in `TASKS.local.org`; publish with `ot publish` when they should become shared.
 
 Bootstrap new projects with `ot init`. If `ot` is unavailable, use `references/bootstrap.md` as the manual fallback.
@@ -93,7 +96,7 @@ Bootstrap new projects with `ot init`. If `ot` is unavailable, use `references/b
 
 Bare `ot` on an interactive terminal opens a standalone task-browser TUI: task tree with status/priority colouring, a details pane (beside the tree, or stacked below it on narrow/portrait terminals), and keybindings for all the common mutations. On exit it prints the selected-task envelope to stdout. Full key map and behaviour: `references/ot-cli.md` § Interactive TUI.
 
-The TUI needs no harness integration -- it is the interactive surface for humans and for agents/harnesses without a dedicated extension. The pi tasks extension is a pi-specific overlay with the same key map and semantics; both dispatch mutations through the same `ot` commands, so either surface can be used interchangeably.
+The TUI needs no harness integration -- it is the interactive surface for humans and for agents/harnesses without a dedicated extension. Both task UIs bind `D` to removal through `ot remove`: the standalone TUI previews impact and arms a second `D` on the same cursor task, while the pi overlay uses its modal confirmation. The `D` flow prunes reported inbound blockers on confirmed removal; neither UI has a separate blocker-prune key.
 
 ## Status discipline
 
@@ -122,7 +125,7 @@ Treat org files as durable memory and conversation as ephemeral. Load eagerly on
 
 Resume checklist:
 
-1. Run `ot selected --format json` -- not `ot show selected`, which is strict and exits non-zero when nothing is selected. A `null` `selected` with a `null` `selectedId` means no selection: use `ot list --status-filter STARTED --format json` to find active work or ask the user. A `null` `selected` with a *non-null* `selectedId` is a stale pointer to a task that no longer exists (`ot doctor` reports `selected-not-found`); repair or re-select rather than treating it as an empty selection.
+1. Run `ot selected --format json` -- not `ot show selected`, which is strict and exits non-zero when nothing is selected. A `null` `selected` with a `null` `selectedId` means no selection: use `ot list --status-filter STARTED --format json` to find active work or ask the user. A `null` `selected` with a *non-null* `selectedId` is a stale pointer to a task that no longer exists (`ot doctor` reports `selected-not-found`); run `ot select --clear-stale` or re-select rather than treating it as an empty selection.
 2. Use the returned `task` + `ancestors` for subtree, properties, body, LOGBOOK, handoff, blockers, and linked issues.
 3. If `record.path` is present, read `ot section <path> Summary --format json`; read `Context` only when `record.hasContext` is true.
 4. Surface handoff notes and open questions immediately; use `record.hasOpenQuestions` as the cheap signal before reading that section.
@@ -140,4 +143,4 @@ Persist accurate task status and handoff information before any session-learning
 
 Only top-level `DONE`/`CANCELLED` tasks are archived. Use `ot archive <id> --yes`. The archive move preserves the subtree, `:CUSTOM_ID:`, content, LOGBOOK, and import link; adds `:ARCHIVED:`, plus the source section in `:ARCHIVE_OLPATH:` for roots archived from shared `TASKS.org` (roots archived from a file-level `#+IMPORT:` record get no `:ARCHIVE_OLPATH:` and need an explicit `--section` to restore); writes to project-root `TASKS.archive.org`; and rewrites linked change-record parent links from `task:` to `archive:` when possible. `ot unarchive <id>` resolves only against `TASKS.archive.org`, restores it under `--section` or `:ARCHIVE_OLPATH:`, removes those archive properties, reverses the parent link, and deliberately preserves status/CLOSED/LOGBOOK; use `ot status` to reopen afterward.
 
-Native Emacs `org-archive-subtree` remains compatible because `#+ARCHIVE:` and TODO/logging settings match the protocol, but `ot archive` is the headless/agent path.
+Native Emacs `org-archive-subtree` remains compatible because `#+ARCHIVE:` and TODO/logging settings match the protocol, but it cannot update the gitignored `TASKS.local.org` selection: if it archives the selected subtree, `ot selected`/`ot doctor` report the stale pointer and `ot select --clear-stale` repairs it. `ot archive` is the headless/agent path and continues to clear a selection inside its archived subtree directly.

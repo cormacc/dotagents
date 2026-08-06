@@ -131,7 +131,8 @@
                    :selected-source-path "/tmp/TASKS.local.org"})
         f (first (filter #(= :selected-not-found (:code %)) findings))]
     (is (= 1 (count-of findings :selected-not-found)))
-    (is (= "/tmp/TASKS.local.org" (get-in f [:location :file])))))
+    (is (= "/tmp/TASKS.local.org" (get-in f [:location :file])))
+    (is (str/includes? (:message f) "ot select --clear-stale"))))
 
 (deftest selected-found-no-finding
   (let [{:keys [tasks]}
@@ -699,9 +700,52 @@
   (let [findings [{:code :duplicate-id :severity :error
                    :message "x" :location {:file "/a" :line 1}}
                   {:code :waiting-without-blocker :severity :warn
-                   :message "y" :location {:file "/b" :line 2}}]
+                   :message "y" :location {:file "/b" :line 2}}
+                  {:code :inline-path-dangling :severity :warn
+                   :message "z" :location {:file "/c" :line 3}}]
         report (doctor/format-findings-report findings)]
-    (is (str/includes? report "2 findings"))
+    (is (str/includes? report "3 findings"))
     (let [dup-idx (str/index-of report "duplicate-id")
-          warn-idx (str/index-of report "waiting-without-blocker")]
-      (is (< dup-idx warn-idx)))))
+          warn-idx (str/index-of report "waiting-without-blocker")
+          citation-idx (str/index-of report "inline-path-dangling")]
+      (is (< dup-idx warn-idx citation-idx)))))
+
+(deftest inline-path-citation-dangling-is-reported
+  (let [wrong "skills/org-tasks/scripts/src/org_tasks/test_runner.clj"
+        valid "skills/org-tasks/scripts/test/org_tasks/test_runner.clj"
+        content (str "* Summary\n"
+                     "- Wrong citation: `" wrong "`\n"
+                     "- Valid citation: =" valid "=\n"
+                     "- Duplicate wrong citation: =" wrong "=\n"
+                     "- URL: `https://example.test/src/file.clj`\n"
+                     "- Absolute: `/tmp/file.clj`\n"
+                     "- Glob: `skills/**/*.clj`\n"
+                     "- Placeholder: `skills/<name>.clj`\n"
+                     "- Basename: `file.clj`\n"
+                     "- Illustrative root: `example/path.clj`\n"
+                     "- Bare prose: " wrong "\n"
+                     "- Double backticks: ``" wrong "``\n"
+                     "#+BEGIN_SRC clojure\n"
+                     "`" wrong "`\n"
+                     "#+END_SRC\n"
+                     "#+BEGIN_EXAMPLE\n"
+                     "=" wrong "=\n"
+                     "#+END_EXAMPLE\n"
+                     "* Plan\n"
+                     "** TODO Work\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 33333333-2222-4333-8444-555555555555\n"
+                     ":END:\n")
+        candidates (doctor/extract-inline-code-path-candidates content #{"skills"})
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/design/log/work.org"
+                                                     :source-content content})
+        findings (doctor/run-doctor
+                  {:tasks tasks
+                   :selected-id nil
+                   :citation-first-segment-exists #{"skills"}
+                   :citation-path-exists {wrong false valid true}})
+        f (first (filter #(= :inline-path-dangling (:code %)) findings))]
+    (is (= [{:path wrong :line 2} {:path valid :line 3}] candidates))
+    (is (= 1 (count-of findings :inline-path-dangling)))
+    (is (= :warn (:severity f)))
+    (is (= {:file "/repo/design/log/work.org" :line 2} (:location f)))))

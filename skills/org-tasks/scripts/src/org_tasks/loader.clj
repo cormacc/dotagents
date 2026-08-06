@@ -150,6 +150,7 @@
         selected-id (some-> local-data :content parser/parse-selected-keyword)]
     {:tasks with-imports
      :selected-id selected-id
+     :selected-content (some-> local-data :content)
      :files protocol-files}))
 
 ;; ── Writing ────────────────────────────────────────────────────────
@@ -178,26 +179,42 @@
 
 (defn write-selected-id
   "Atomic write of `#+SELECTED:` to `local-path`. Pass nil to deselect;
-  only the `#+SELECTED:` line is touched — existing task headings,
-  imports, and other keywords are preserved."
-  [^String local-path id-or-nil]
-  (let [existing (or (safe-slurp local-path) "")
-        selected-line (when id-or-nil (str "#+SELECTED: " id-or-nil))
-        updated
-        (cond
-          (and selected-line
-               (re-find #"(?im)^#\+SELECTED:" existing))
-          (str/replace existing #"(?im)^#\+SELECTED:.*$" selected-line)
+  only the `#+SELECTED:` line is touched -- existing task headings,
+  imports, and other keywords are preserved.
 
-          selected-line
-          (if (seq existing)
-            (str selected-line "\n" existing)
-            (str selected-line "\n"))
+  The three-argument arity checks `baseline` immediately before the atomic
+  replacement. It is for graph mutators that must not clear a selection a
+  concurrent editor has changed since graph load."
+  ([^String local-path id-or-nil]
+   (write-selected-id local-path id-or-nil ::unchecked))
+  ([^String local-path id-or-nil baseline]
+   (let [existing (or (safe-slurp local-path) "")
+         selected-line (when id-or-nil (str "#+SELECTED: " id-or-nil))
+         updated
+         (cond
+           (and selected-line
+                (re-find #"(?im)^#\+SELECTED:" existing))
+           (str/replace existing #"(?im)^#\+SELECTED:.*$" selected-line)
 
-          :else
-          (str/replace existing #"(?im)^#\+SELECTED:.*(?:\r?\n)?" ""))]
-    (fs/create-dirs (fs/parent local-path))
-    (atomic-write local-path updated)))
+           selected-line
+           (if (seq existing)
+             (str selected-line "\n" existing)
+             (str selected-line "\n"))
+
+           :else
+           (str/replace existing #"(?im)^#\+SELECTED:.*(?:\r?\n)?" ""))]
+     (when-not (= baseline ::unchecked)
+       (assert-unchanged! local-path baseline))
+     (fs/create-dirs (fs/parent local-path))
+     (atomic-write local-path updated))))
+
+(defn preflight-baselines!
+  "Check every `path -> load-time-content-or-nil` baseline before a mutator
+  performs its first write. This is not a filesystem transaction, but avoids
+  a known later conflict leaving an earlier affected file already rewritten."
+  [baselines]
+  (doseq [[path baseline] baselines]
+    (assert-unchanged! path baseline)))
 
 (defn- collect-file-roots-by-source
   "Walk the full task graph (including `:children` and
@@ -243,14 +260,23 @@
    ;; would have no entry in `by-file` and would never be rewritten to
    ;; drop the stale heading.
    (let [by-file (collect-file-roots-by-source tasks)
-         all-paths (into (set (keys by-file)) (keys known-baselines))]
-     (doseq [src all-paths]
-       (let [roots (get by-file src [])
-             baseline (if (contains? known-baselines src)
-                        (get known-baselines src)
-                        (some :source-content roots))
-             original (or baseline "")
-             updated  (parser/serialize-tasks-preserving-file original roots)]
-         (when (not= updated original)
-           (assert-unchanged! src baseline)
-           (atomic-write src updated)))))))
+         all-paths (into (set (keys by-file)) (keys known-baselines))
+         updates (keep (fn [src]
+                         (let [roots (get by-file src [])
+                               baseline (if (contains? known-baselines src)
+                                          (get known-baselines src)
+                                          (some :source-content roots))
+                               original (or baseline "")
+                               updated (parser/serialize-tasks-preserving-file original roots)]
+                           (when (not= updated original)
+                             {:path src :baseline baseline :content updated})))
+                       all-paths)
+         ;; Known baselines include files that can be reduced to zero roots;
+         ;; check them all before the first write, then check every actual
+         ;; update too. A later atomic rename still cannot be rolled back,
+         ;; but no already-detectable conflict can cause a partial write.
+         preflight (merge (into {} (map (juxt :path :baseline) updates))
+                          known-baselines)]
+     (preflight-baselines! preflight)
+     (doseq [{:keys [path content]} updates]
+       (atomic-write path content)))))

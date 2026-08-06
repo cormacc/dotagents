@@ -53,7 +53,9 @@
             :as (if (= kind :child) :child :sibling)})))
 
 (defn- cmd-run [cmd-key cmd-opts ok-message]
-  [[:command/run cmd-key cmd-opts ok-message]])
+  ;; Any durable mutation invalidates a pending destructive confirmation.
+  [[:state/assoc :remove-confirmation nil]
+   [:command/run cmd-key cmd-opts ok-message]])
 
 (defn- cmd-run-for-cursor [state cmd-key cmd-opts ok-message]
   (when-let [id (tasks/cursor-id state)]
@@ -81,6 +83,15 @@
            [[:state/assoc :message ok-message]
             [:tree/reload]]
            [[:state/assoc :message (tasks/error-message envelope)]]))))
+
+    :remove/preview
+    (fn [{{:keys [opts]} :dispatch-data} {:keys [!store]} id]
+      (let [{:keys [ok? result message]}
+            (tasks/call-result (command-fns :remove)
+                               (merge opts {:id id :dry-run true :prune-blockers true}))]
+        (swap! !store assoc
+               :remove-confirmation (when ok? {:task-id id})
+               :message (if ok? (tasks/removal-impact-message result) message))))
 
     :state/reload
     (fn [{{:keys [opts]} :dispatch-data} {:keys [!store]}]
@@ -126,7 +137,9 @@
 
     :tree/move-cursor
     (fn [{:keys [cursor]} delta]
-      [[:state/assoc :cursor (+ (or cursor 0) delta) :details-scroll 0]
+      [[:state/assoc :cursor (+ (or cursor 0) delta)
+        :details-scroll 0
+        :remove-confirmation nil]
        [:tree/clamp-cursor]
        [:tree/scroll-to-cursor]])
 
@@ -135,7 +148,8 @@
       (when-let [id (tasks/cursor-id state)]
         [[:state/assoc :expanded (if (contains? expanded id)
                                    (disj expanded id)
-                                   (conj expanded id))]
+                                   (conj expanded id))
+          :remove-confirmation nil]
          [:tree/refresh]]))
 
     :tree/refresh
@@ -178,6 +192,15 @@
       (when-let [id (tasks/cursor-id state)]
         (cmd-run :select (if (= id selected-id) {:clear true} {:id id}) "Selection updated.")))
 
+    :task/remove
+    (fn [state]
+      (when-let [id (tasks/cursor-id state)]
+        (if (= id (get-in state [:remove-confirmation :task-id]))
+          (cmd-run :remove {:id id :yes true :prune-blockers true}
+                   "Removed subtree and pruned inbound blockers.")
+          [[:state/assoc :remove-confirmation nil]
+           [:remove/preview id]])))
+
     :task/archive
     (fn [state]
       (cmd-run-for-cursor state :archive {:yes true} "Archived."))
@@ -194,20 +217,23 @@
     (fn [state]
       (when-let [{:keys [id sourcePath line]} (tasks/cursor-task state)]
         (when id
-          [[:editor/open sourcePath line "Editor launched."]])))
+          [[:state/assoc :remove-confirmation nil]
+           [:editor/open sourcePath line "Editor launched."]])))
 
     :task/plan
     (fn [state]
       (when-let [{:keys [id importPath]} (tasks/cursor-task state)]
         (when id
           (if importPath
-            [[:plan/open id]]
+            [[:state/assoc :remove-confirmation nil]
+             [:plan/open id]]
             (cmd-run :record-create {:id id} "Plan created.")))))
 
     :task/open-issues
     (fn [state]
       (when-let [id (tasks/cursor-id state)]
-        [[:issues/open-linked id]]))
+        [[:state/assoc :remove-confirmation nil]
+         [:issues/open-linked id]]))
 
     :new-task/start
     (fn [state kind]
@@ -219,10 +245,12 @@
                     (= kind :child) "New child task"
                     :else           "New sibling task")]
         [[:state/assoc :new-task {:kind kind :label label :input ""}
-          :message nil]]))
+          :message nil
+          :remove-confirmation nil]]))
 
     :new-task/cancel
-    (fn [_] [[:state/assoc :new-task nil :message "Create cancelled."]])
+    (fn [_] [[:state/assoc :new-task nil :message "Create cancelled."
+              :remove-confirmation nil]])
 
     :new-task/backspace
     (fn [state]

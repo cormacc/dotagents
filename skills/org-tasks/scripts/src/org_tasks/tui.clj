@@ -183,7 +183,7 @@
     (styled state (str label ": " input "█") :fg message-color :bold true)))
 
 (def ^:private footer
-  "↑↓/jk move  ←→/hl status  ⇧←→ priority  Enter/Space/Tab collapse  s select  e edit  p plan  n/N new  A archive  P publish  U unpublish  J issues  Esc/Alt-t quit")
+  "↑↓/jk move  ←→/hl status  ⇧←→ priority  Enter/Space/Tab collapse  s select  D remove  e edit  p plan  n/N new  A archive  P publish  U unpublish  J issues  Esc/Alt-t quit")
 
 (defn- view-dimensions [state]
   (let [width (max 20 (:width state 100))
@@ -291,6 +291,7 @@
     (or (msg/key-match? m "l") (msg/key-match? m :right)) [[:task/cycle-status 1]]
     (or (msg/key-match? m "h") (msg/key-match? m :left)) [[:task/cycle-status -1]]
     (msg/key-match? m "s") [[:task/select]]
+    (msg/key-match? m "D") [[:task/remove]]
     (msg/key-match? m "A") [[:task/archive]]
     (msg/key-match? m "P") [[:task/publish]]
     (msg/key-match? m "U") [[:task/unpublish]]

@@ -138,7 +138,10 @@
       (is (= "* SUMMARY :memory:" (:heading r))))
     (let [r (section/read-section content "Plan")]
       (is (true? (:found r)))
-      (is (= "* plan :wip:foo:" (:heading r))))))
+      (is (= "* plan :wip:foo:" (:heading r)))))
+  (testing "shared parser stripping preserves expanded section-tag syntax"
+    (is (= ["Summary"]
+           (section/list-sections "* Summary :wip-foo:\n")))))
 
 (deftest level-2-summary-not-matched
   (let [content (str/join "\n"

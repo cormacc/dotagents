@@ -316,6 +316,32 @@
           (map (fn [p] [p (spec/linked-paths-from fs p)]))
           (declared-spec-paths-across-graph tasks))))
 
+(defn- citation-path-existence-data
+  "Return pure-doctor input for constrained inline change-record path citations.
+  Every candidate is resolved through the project-root sandbox before statting,
+  so a syntax-valid citation cannot escape via an absolute path or symlink."
+  [project-root tasks record-exclude-paths]
+  (let [excluded (set record-exclude-paths)
+        candidates (->> (tree/all-tasks tasks)
+                        (remove #(contains? excluded (:source-path %)))
+                        (keep :source-content)
+                        distinct
+                        (mapcat doctor/extract-inline-code-path-candidates)
+                        (map :path)
+                        distinct
+                        vec)
+        first-segments (->> candidates
+                            (map #(first (str/split % #"/")))
+                            distinct
+                            vec)
+        exists? (fn [candidate]
+                  (boolean
+                   (when-let [resolved (paths/resolve-project-path
+                                        project-root project-root candidate)]
+                     (fs/exists? resolved))))]
+    {:citation-first-segment-exists (into #{} (filter exists?) first-segments)
+     :citation-path-exists (into {} (map (fn [path] [path (exists? path)])) candidates)}))
+
 (defn- spec-path-exists-map
   "Resolve declared `#+SPEC:` paths from TASKS.org content against
   disk; `{repo-relative-path -> bool}`. Malformed values are skipped
@@ -341,6 +367,7 @@
         record-exclude-paths (->> [setup-path (:tasks files) (:local files) (:archive files)]
                                   (remove nil?)
                                   set)
+        citation-path-data (citation-path-existence-data project-root tasks record-exclude-paths)
         spec-report (spec/discover-report (cspec/real-fs project-root)
                                           (:content (:tasks protocol-files))
                                           cspec/skills-dir-candidates)
@@ -351,6 +378,8 @@
                     :protocol-files protocol-files
                     :changed-paths (changed-git-paths project-root)
                     :record-exclude-paths record-exclude-paths
+                    :citation-first-segment-exists (:citation-first-segment-exists citation-path-data)
+                    :citation-path-exists (:citation-path-exists citation-path-data)
                     :spec-path-exists (spec-path-exists-map
                                         project-root
                                         (:content (:tasks protocol-files)))

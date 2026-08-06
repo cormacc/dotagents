@@ -848,7 +848,7 @@ in place. Same node, same writer.
 Cancellation note: can't reproduce.
 
 * Improvements
-** CANCELLED [#D] Implement vulpea tasks UI for emacs         :org:emacs:ui:
+** CANCELLED [#D] Implement vulpea tasks UI for emacs :org:emacs:ui:
 CLOSED: [2026-08-05 Wed 22:42]
 :PROPERTIES:
 :CUSTOM_ID: 92d3a8d9-a01f-4f93-bc3a-90f24d12a4e5
@@ -2281,3 +2281,19 @@ CLOSED: [2026-08-05 Wed 19:58]
 - State "DONE" from "STARTED" [2026-08-05 Wed 19:58]
 :END:
 #+IMPORT: [[plan:2026-04-28-create-self-improvement-skill.org]]
+
+** DONE org-tasks housekeeping :skill:org_tasks:
+CLOSED: [2026-08-06 Thu 10:18]
+:PROPERTIES:
+:CUSTOM_ID: f340a142-4ef5-4b86-adb8-977b291b07ce
+:CREATED: [2026-08-06 Thu 00:39]
+:STARTED: [2026-08-06 Thu 07:47]
+:ARCHIVED: [2026-08-06 Thu 10:18]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 00:39]
+- State "STARTED" from "TODO" [2026-08-06 Thu 07:47]
+- State "DONE" from "STARTED" [2026-08-06 Thu 10:18]
+:END:
+#+IMPORT: [[plan:2026-08-06-org-tasks-housekeeping.org]]

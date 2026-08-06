@@ -145,16 +145,6 @@ Re-examine the self-improvement skill against the org-memory protocol (org-tasks
 - Created [2026-05-22 Fri 00:06]
 :END:
 
-** TODO ot: parser facade split + residual dupes (dedicated parser-only session) :skill:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: 6781dbd0-677a-46a2-a874-4380b3c336af
-:CREATED: [2026-07-03 Fri 12:22]
-:END:
-:LOGBOOK:
-- Created [2026-07-03 Fri 12:22]
-:END:
-Split `parser.clj` (772 LOC) internals behind the existing `org-tasks.parser` facade: scanner + serializer stay together; relocate property accessors, file-keyword/link helpers, linked issues, timestamps. Shared private regexes are the coupling point. Then finish the parser-blocked residue of the 2026-07-03 dedup pass: `closed-statuses` → `lifecycle` (avoiding a parser↔lifecycle cycle), single parser-owned trailing-tag strip. Requires: byte-identical round-trip fixtures after each relocation group. Context: [[plan:2026-07-03-ot-deduplication-and-simplification-pass.org][dedup pass record]] (cancelled tasks 658e60ba, dddd6cf0).
-
 ** TODO ot move: TUI/pi-overlay exposure and --before/--after ordering :skill:org_tasks:
 :PROPERTIES:
 :CUSTOM_ID: da7350ac-60c6-4336-9b7e-e0cbce51658c
@@ -177,22 +167,6 @@ Currently we assume babashka is available, and the skill calls the ot cli tool u
 It would be nice to do a bootstrap check on initial skill activation...
 - if babashka not found in path, offer to install it via an appropriate method
 - if ot not found in path, offer to install it also (maybe using bbin?)
-
-** TODO [#C] Guard ^:serial tagging of state-mutating deftests in parallel namespaces :skill:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: f8e76842-6fe5-468a-a9da-95d2c8796556
-:CREATED: [2026-07-31 Fri 09:52]
-:END:
-:LOGBOOK:
-- Created [2026-07-31 Fri 09:52]
-:END:
-A deftest that uses `with-redefs` (or otherwise mutates in-process state) inside a `^{:parallel-tests true}` namespace must carry `^:serial`, but nothing enforces it — a future test that forgets the tag would race silently rather than fail.
-
-Deferred from 2fe1ce2a (see [[file:design/log/2026-07-30-optimise-test-build.org][Optimise test build]]): the advisor flagged a static/source-level meta-test as a real regression-safety net, but parsing form-level metadata via `clojure.core/read` was judged too fragile to add under that task's budget.
-
-- Find a robust way to detect `with-redefs`/state mutation in deftest forms of an opted-in namespace
-- Fail the suite when such a deftest lacks `^:serial`
-- Prefer a reliable narrow check over a broad fragile one
 
 ** TODO [#D] Pin OT_TEST_PARALLELISM in CI if parallel test timing proves tight :skill:org_tasks:
 :PROPERTIES:
@@ -291,29 +265,6 @@ Spike, not a patch. Known interactions to resolve first:
 - Merge and cleanup burden moves to the parent.
 
 If validated, cite it in SKILL.md as the escape hatch for the overlapping-file-set rule. Source: design review of herdr-orch against upstream docs (herdr 0.7.5, protocol 18).
-
-** TODO ot doctor: warn on dangling file paths cited in change-record prose :skill:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: 88f30aea-14a3-4107-b587-911f7748c14c
-:CREATED: [2026-07-31 Fri 10:02]
-:END:
-:LOGBOOK:
-- Created [2026-07-31 Fri 10:02]
-:END:
-Change-records cite repo-relative source paths in prose (`** Scope`, plan-task bodies, `** Shipped`). Nothing validates them, so a wrong path survives planning, sign-off, and delegation. `ot doctor` already validates `#+SPEC:` link targets for dangling paths — extend that check to prose-cited paths so the same class of error is caught for the rest of the record.
-
-- Detect repo-relative source-path-looking tokens in record prose
-- Warn (never block) when the path does not exist, consistent with existing advisory findings
-- Tolerate paths inside src/example blocks and deliberately illustrative paths without excessive false positives
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: cormacc/dotagents @ main
-- timestamp: [2026-07-31 Fri 09:54]
-- sender: agent
-
-Evidence:
-In design/log/2026-07-30-optimise-test-build.org the planner wrote `skills/org-tasks/scripts/src/org_tasks/test_runner.clj` in `** Scope`; the runner actually lives under `scripts/test/`. The path passed record review and was propagated verbatim into a worker assignment; only the implementing worker caught it, by failing to find the file. `ot doctor` reported no issues throughout.
 
 ** TODO [#B] Skill vendoring improvements :project_convention:
 :PROPERTIES:
@@ -465,27 +416,6 @@ Origin:
 Evidence:
 Two instances in one session. (1) A reviewer assignment asserted that some of 15 suite failures were "pre-existing/environmental (e.g. hardware integration tests)". The named base commit was in fact fully green, so every failure was refactor-caused; the whole attribution table depended on the child refuting the parent, and it reported the wrong premise as its top process candidate. (2) When ot doctor flagged a dangling :BLOCKED-BY+: reference, the agent reported it to the user as its own editing error without checking; the user had in fact deleted the task manually. Both were avoidable by one measurement before asserting.
 
-** TODO ot: support task removal and inbound-reference integrity :skill:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: a0ac3d39-adb1-407e-a782-cb9bbceb3339
-:CREATED: [2026-08-01 Sat 00:02]
-:END:
-:LOGBOOK:
-- Created [2026-08-01 Sat 00:02]
-:END:
-Pruning an obsolete plan task is unsupported. The `ot` vocabulary is move/archive/publish/status -- there is no removal command -- so obsolete tasks get hand-deleted out of band. Nothing then checks (a) inbound `:BLOCKED-BY:` / `:BLOCKED-BY+:` references to the deleted id, or (b) whether the deleted task still had unchecked acceptance criteria. `ot doctor` catches the dangling reference as `invalid-task-blocker`, but only if someone runs it, and it cannot catch the second class at all.
-
-Desired outcome: a supported removal path that reports what the deletion would orphan before doing it, plus a `blocker prune`-style repair for references to ids that no longer resolve.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: connect/portal @ firmware-asset-check
-- timestamp: [2026-07-31 Fri 22:30]
-- sender: agent
-
-Evidence:
-In one change-record, four plan tasks were hand-deleted. One left a dangling `:BLOCKED-BY+:` that surfaced two turns later; clearing it required three separate `ot blocker remove` calls against a now-nonexistent id. Two of the four still had live scope -- verified against source after the fact: one had had only half its fix applied (an ArityException on a recovery path remained), and one had met 1 of 4 acceptance criteria. Neither would have been noticed without an unprompted re-check.
-
 ** TODO herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 22f68a11-eeef-43e9-81d3-79341842ca84
@@ -538,26 +468,3 @@ Origin:
 
 Evidence:
 A reviewer subagent's preliminary rebase validation repeated a delimiter error in a complex bb -e form once per locale, then initially double-escaped a Clojure regex literal so re-matches failed. The current Clojure skill already warns that multi-line bb -e is fragile, but does not require a one-input smoke test before looping or explicit positive/negative regex examples.
-
-** TODO ot/org-tasks: native org-archive strands the #+SELECTED: pointer :skill:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: e3360ced-b3ae-43f6-89a3-3d18882069f9
-:CREATED: [2026-08-05 Wed 20:03]
-:END:
-:LOGBOOK:
-- Created [2026-08-05 Wed 20:03]
-:END:
-`ot archive` clears `#+SELECTED:` when the archived task is the selected one, but native Emacs `org-archive-subtree` -- documented as a compatible archive path in the org-tasks skill -- does not, because it moves the subtree to TASKS.archive.org and never touches gitignored TASKS.local.org. The result is a dangling selection pointer, reported by `ot doctor` as error `selected-not-found`, with no repair affordance beyond a manual `ot select --clear`.
-
-Desired outcome: either make the dangling pointer self-healing (an `ot doctor` repair flag, or resolving a selection that now points at an archived task as cleared), or state the exception where native archiving is documented as compatible, so the user knows a re-select is needed afterwards.
-
-Consider folding into task a0ac3d39 (ot: support task removal and inbound-reference integrity), which asks for a `blocker prune`-style repair for references to ids that no longer resolve. This is the same class of problem for `#+SELECTED:` rather than `:BLOCKED-BY:`.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-05 Wed 20:02]
-- sender: human+agent
-
-Evidence:
-Hit this session: after task 36ff3ca4 was archived out of TASKS.org, `ot doctor` reported `selected-not-found` for `#+SELECTED: 36ff3ca4-...` in TASKS.local.org. `ot archive` was verified not to be the culprit -- in a scratch root, selecting then archiving a DONE task cleared `#+SELECTED:` both in a bare `ot init` tree and in one carrying extra local keyword overrides. The user confirmed archiving those tasks manually in Emacs, so the stranded pointer came through the native `org-archive-subtree` path.

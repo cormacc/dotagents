@@ -1,21 +1,62 @@
 (ns org-tasks.parser
-  "Org-mode parser/serializer for the `ot` CLI.
+  "Stable public facade for the `ot` org parser.
 
-  Owns:
+  Owns the stateful task scanner, task-tag operations, and serializers. Its
+  public helpers remain available here while focused `org-tasks.parser.*`
+  namespaces own timestamps, drawer properties, links, and linked issues."
+  (:require [clojure.string :as str]
+            [org-tasks.lifecycle :as lifecycle]
+            [org-tasks.parser.issues :as issues]
+            [org-tasks.parser.links :as links]
+            [org-tasks.parser.properties :as properties]
+            [org-tasks.parser.timestamps :as timestamps]))
 
-    - heading + drawer + LOGBOOK + CLOSED parsing
-    - `#+IMPORT:` extraction (task body + file root)
-    - file-level `#+KEYWORD:` accessors and `#+LINK:` template parsing
-    - typed-link expansion (`plan:`, `jira:`, `task:`, `archive:`, …)
-    - serialization preserving non-task org content around task subtrees
-    - drawer property accessors (single + multi-valued) and the
-      tracker-agnostic `:LINKED_ISSUES:` / `:BLOCKED-BY:` / `:HANDOFF:`
-      helpers built on top of them
+;; ── Stable helper facade ───────────────────────────────────────────
 
-  Task records are plain maps with kebab-case keys; the CLI's JSON
-  layer rewraps them into the camelCase contract documented in
-  `skills/org-tasks/scripts/docs/contract.md`."
-  (:require [clojure.string :as str]))
+(defmacro ^:private def-facade-alias
+  "Define a facade var whose value and public API metadata mirror `target`."
+  [name target]
+  `(do
+     (def ~name ~target)
+     (alter-meta! (var ~name) merge
+                  (select-keys (meta (var ~target))
+                               [:doc :arglists :added :deprecated]))))
+
+(def-facade-alias format-org-timestamp timestamps/format-org-timestamp)
+(def-facade-alias format-org-date timestamps/format-org-date)
+(def-facade-alias created-log-entry timestamps/created-log-entry)
+(def-facade-alias state-log-entry timestamps/state-log-entry)
+(def-facade-alias append-created-log timestamps/append-created-log)
+(def-facade-alias append-state-log timestamps/append-state-log)
+
+(def-facade-alias get-task-id properties/get-task-id)
+(def-facade-alias task-has-id? properties/task-has-id?)
+(def-facade-alias get-task-started properties/get-task-started)
+(def-facade-alias task-has-started-property? properties/task-has-started-property?)
+(def-facade-alias get-drawer-property properties/get-drawer-property)
+(def-facade-alias set-drawer-property properties/set-drawer-property)
+(def-facade-alias get-drawer-property-values properties/get-drawer-property-values)
+(def-facade-alias set-drawer-property-values properties/set-drawer-property-values)
+(def-facade-alias parse-blocker properties/parse-blocker)
+(def-facade-alias get-task-blockers properties/get-task-blockers)
+(def-facade-alias set-task-blockers properties/set-task-blockers)
+(def-facade-alias get-task-handoff properties/get-task-handoff)
+(def-facade-alias set-task-handoff properties/set-task-handoff)
+
+(def-facade-alias extract-org-link-target links/extract-org-link-target)
+(def-facade-alias extract-org-link links/extract-org-link)
+(def-facade-alias escape-regex links/escape-regex)
+(def-facade-alias get-file-keywords links/get-file-keywords)
+(def-facade-alias get-file-keyword links/get-file-keyword)
+(def-facade-alias parse-selected-keyword links/parse-selected-keyword)
+(def-facade-alias get-plan-parent-ref links/get-plan-parent-ref)
+(def-facade-alias get-plan-parent-id links/get-plan-parent-id)
+(def-facade-alias rewrite-parent-link-kind links/rewrite-parent-link-kind)
+(def-facade-alias parse-link-templates links/parse-link-templates)
+(def-facade-alias expand-org-link-target links/expand-org-link-target)
+
+(def-facade-alias get-linked-issues issues/get-linked-issues)
+(def-facade-alias set-linked-issues issues/set-linked-issues)
 
 ;; ── Regexes ────────────────────────────────────────────────────────
 
@@ -31,100 +72,33 @@
   #"(?i)^\s*:END:\s*$")
 (def ^:private import-keyword-re
   #"(?i)^\s*#\+IMPORT:\s*(.*?)\s*$")
-(def ^:private id-property-re
-  #"(?i)^\s*:CUSTOM_ID:\s*(\S+)\s*$")
-(def ^:private started-property-re
-  #"(?i)^\s*:STARTED:\s*\[([^\]]+)\]\s*$")
 (def ^:private closed-re
   #"^\s*CLOSED:\s*\[([^\]]+)\]\s*$")
-(def ^:private trailing-tags-re
+(def ^:private trailing-task-tags-re
   #"\s+:([\w:]+):\s*$")
+(def ^:private trailing-section-tags-re
+  #"\s+:([A-Za-z0-9_@#%:-]+):\s*$")
 (def ^:private tag-token-re
   #"^[A-Za-z0-9_]+$")
-(def ^:private selected-keyword-re
-  #"(?im)^#\+SELECTED:\s*(\S+)\s*$")
-(def ^:private property-line-re
-  #"^\s*:([A-Za-z][A-Za-z0-9_-]*):\s*(.*?)\s*$")
-(def ^:private property-or-continuation-line-re
-  #"^\s*:([A-Za-z][A-Za-z0-9_-]*)(\+)?:\s*(.*?)\s*$")
-(def ^:private org-link-target-re
-  #"^\[\[(?:file:)?([^\]]+?)\](?:\[[^\]]*\])?\]$")
-(def ^:private org-link-full-re
-  #"^\[\[(?:file:)?([^\]]+?)\](?:\[([^\]]*)\])?\]$")
-
-(def ^:private day-abbr
-  ["Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat"])
-
-;; ── Org-link helpers ───────────────────────────────────────────────
-
-(defn extract-org-link-target
-  "Return the target slot of an org link expression, or nil for
-  non-link text. Strips a `file:` prefix on file links."
-  [^String value]
-  (when value
-    (let [trimmed (str/trim value)]
-      (when-let [m (re-matches org-link-target-re trimmed)]
-        (let [t (str/trim (m 1))]
-          (when-not (empty? t) t))))))
-
-(defn extract-org-link
-  "Parse an org link expression into `{:target, :description}` or nil."
-  [^String value]
-  (when value
-    (let [trimmed (str/trim value)]
-      (when-let [m (re-matches org-link-full-re trimmed)]
-        (let [target (str/trim (m 1))
-              desc   (some-> (m 2) str/trim)]
-          (when (seq target)
-            {:target target
-             :description (when (and desc (seq desc)) desc)}))))))
-
-;; ── Timestamps ─────────────────────────────────────────────────────
-
-(defn format-org-timestamp
-  "Format a `java.time.LocalDateTime` (or `now`) as an org timestamp body,
-  e.g. `2026-04-24 Fri 14:30`."
-  ([] (format-org-timestamp (java.time.LocalDateTime/now)))
-  ([^java.time.LocalDateTime ts]
-   (let [y  (.getYear ts)
-         mo (.getMonthValue ts)
-         d  (.getDayOfMonth ts)
-         h  (.getHour ts)
-         mi (.getMinute ts)
-         ;; java.time.DayOfWeek: MONDAY=1 .. SUNDAY=7. We want Sun=0..Sat=6.
-         dow (let [v (.getValue (.getDayOfWeek ts))] (if (= v 7) 0 v))]
-     (format "%04d-%02d-%02d %s %02d:%02d" y mo d (nth day-abbr dow) h mi))))
-
-(defn format-org-date
-  "Format a `java.time.LocalDate` (or today) as `YYYY-MM-DD Day` for
-  `#+DATE:` headers where time-of-day is not meaningful."
-  ([] (format-org-date (java.time.LocalDate/now)))
-  ([^java.time.LocalDate d]
-   (let [y  (.getYear d)
-         mo (.getMonthValue d)
-         dd (.getDayOfMonth d)
-         dow (let [v (.getValue (.getDayOfWeek d))] (if (= v 7) 0 v))]
-     (format "%04d-%02d-%02d %s" y mo dd (nth day-abbr dow)))))
-
-(defn created-log-entry [^String timestamp]
-  (str "- Created [" timestamp "]"))
-
-(defn state-log-entry [^String new-status ^String old-status ^String timestamp]
-  (str "- State \"" new-status "\" from \"" old-status "\" [" timestamp "]"))
 
 ;; ── Heading helpers ────────────────────────────────────────────────
 
-(defn- strip-trailing-tags
-  "Strip a trailing `:tag1:tag2:` suffix from a heading text body.
-  Returns `[base-summary, tags-vec]`."
-  [^String text]
-  (if-let [m (re-find trailing-tags-re text)]
-    (let [match-str (first m)
-          tag-str   (second m)
-          base      (subs text 0 (- (count text) (count match-str)))
-          tags      (filterv seq (str/split tag-str #":"))]
-      [(str/trimr base) tags])
-    [(str/trimr text) []]))
+(defn strip-trailing-task-tags
+  "Strip trailing heading tags, returning `[base-summary, tags-vec]`.
+
+  The one-argument form preserves task-scanner syntax. With `section?` true,
+  it accepts the broader historical section-heading tag syntax."
+  ([^String text]
+   (strip-trailing-task-tags text false))
+  ([^String text section?]
+   (let [tag-re (if section? trailing-section-tags-re trailing-task-tags-re)]
+     (if-let [m (re-find tag-re text)]
+       (let [match-str (first m)
+             tag-str   (second m)
+             base      (subs text 0 (- (count text) (count match-str)))
+             tags      (filterv seq (str/split tag-str #":"))]
+         [(str/trimr base) tags])
+       [(str/trimr text) []]))))
 
 (defn normalise-task-tag
   "Return a canonical Org tag token, or nil when `tag` cannot safely be
@@ -171,7 +145,7 @@
   "Parse a task heading line. Returns nil for non-task headings."
   [^String line]
   (when-let [m (re-matches heading-re line)]
-    (let [[summary tags] (strip-trailing-tags (m 4))]
+    (let [[summary tags] (strip-trailing-task-tags (m 4))]
       {:level    (count (m 1))
        :status   (m 2)
        :priority (m 3)
@@ -284,12 +258,12 @@
              (cond
                (>= j line-count)
                (throw (ex-info
-                        (str "Unterminated drawer"
-                             (when source-path (str " in " source-path))
-                             " starting at line " start-idx)
-                        {:code :unterminated-drawer
-                         :file source-path
-                         :line start-idx}))
+                       (str "Unterminated drawer"
+                            (when source-path (str " in " source-path))
+                            " starting at line " start-idx)
+                       {:code :unterminated-drawer
+                        :file source-path
+                        :line start-idx}))
 
                (re-matches drawer-end-re (nth lines j))
                (do (update-current! update field (fnil into []) collected)
@@ -349,115 +323,7 @@
 
      {:tasks @roots :file-imports @file-imports})))
 
-;; ── Property accessors ────────────────────────────────────────────
-
-(defn get-task-id [task]
-  (some (fn [^String line]
-          (when-let [m (re-matches id-property-re line)]
-            (str/trim (m 1))))
-        (:property-lines task)))
-
-(defn task-has-id? [task]
-  (some? (get-task-id task)))
-
-(defn get-task-started [task]
-  (some (fn [^String line]
-          (when-let [m (re-matches started-property-re line)]
-            (str/trim (m 1))))
-        (:property-lines task)))
-
-(defn task-has-started-property? [task]
-  (some? (get-task-started task)))
-
-(defn get-drawer-property
-  "Return the value of an arbitrary drawer property by name (case-insensitive)."
-  [task ^String name]
-  (let [target (str/upper-case name)]
-    (some (fn [^String line]
-            (when-let [m (re-matches property-line-re line)]
-              (when (= target (str/upper-case (m 1)))
-                (str/trim (m 2)))))
-          (:property-lines task))))
-
-(defn set-drawer-property
-  "Set or clear a drawer property. `value` nil removes the line."
-  [task ^String name value]
-  (let [target (str/upper-case name)
-        replaced? (volatile! false)
-        new-lines (reduce
-                    (fn [acc ^String line]
-                      (let [m (re-matches property-line-re line)]
-                        (cond
-                          (and m (= target (str/upper-case (m 1))))
-                          (do (vreset! replaced? true)
-                              (if (nil? value) acc
-                                  (conj acc (str ":" (m 1) ": " value))))
-                          :else (conj acc line))))
-                    []
-                    (:property-lines task))]
-    (assoc task :property-lines
-           (if (and (not @replaced?) (some? value))
-             (conj new-lines (str ":" name ": " value))
-             new-lines))))
-
-(defn get-drawer-property-values
-  "Collect all values for `name` and any `name+:` continuation lines
-  in declaration order."
-  [task ^String name]
-  (let [target (str/upper-case name)]
-    (reduce (fn [acc ^String line]
-              (if-let [m (re-matches property-or-continuation-line-re line)]
-                (if (= target (str/upper-case (m 1)))
-                  (conj acc (str/trim (m 3)))
-                  acc)
-                acc))
-            []
-            (:property-lines task))))
-
-(defn set-drawer-property-values
-  "Replace every `:NAME:` / `:NAME+:` line with new values; empty
-  `values` clears the property entirely."
-  [task ^String name values]
-  (let [target  (str/upper-case name)
-        stripped (filterv (fn [^String line]
-                            (let [m (re-matches property-or-continuation-line-re line)]
-                              (not (and m (= target (str/upper-case (m 1)))))))
-                          (:property-lines task))
-        emitted (map-indexed
-                  (fn [i v] (str ":" name (if (zero? i) "" "+") ": " v))
-                  values)]
-    (assoc task :property-lines (vec (concat stripped emitted)))))
-
-;; ── Blockers / handoff / linked issues ────────────────────────────
-
-(def ^:private full-uuid-re
-  #"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-
-(defn parse-blocker
-  "Parse a single `:BLOCKED-BY:` token into a structured form.
-  Bare full UUIDs are legacy task references; all other bare values stay
-  opaque so free-form human blockers never become graph lookups."
-  [^String raw]
-  (let [trimmed (str/trim raw)]
-    (if-let [m (re-matches #"(?i)^(task|url|human|jira):(.*)$" trimmed)]
-      {:raw trimmed
-       :kind (keyword (str/lower-case (m 1)))
-       :ref (str/trim (m 2))}
-      {:raw trimmed
-       :kind (if (re-matches full-uuid-re trimmed) :task :other)
-       :ref trimmed})))
-
-(defn get-task-blockers [task]
-  (mapv parse-blocker (get-drawer-property-values task "BLOCKED-BY")))
-
-(defn set-task-blockers
-  "Replace blockers. Accepts a seq of raw tokens or `TaskBlocker` maps."
-  [task blockers]
-  (set-drawer-property-values
-    task "BLOCKED-BY"
-    (mapv #(if (string? %) % (:raw %)) blockers)))
-
-(def ^:private closed-statuses #{"DONE" "CANCELLED"})
+;; ── Readiness ─────────────────────────────────────────────────────
 
 (defn is-task-ready
   "Return a readiness report `{:ready bool, :gating [{:blocker, :reason}]}`.
@@ -465,252 +331,23 @@
   [task resolve-task-by-id]
   (let [gating
         (reduce
-          (fn [acc blocker]
-            (case (:kind blocker)
-              :task
-              (let [dep (resolve-task-by-id (:ref blocker))]
-                (cond
-                  (nil? dep) (conj acc {:blocker blocker :reason :missing-task})
-                  (not (closed-statuses (:status dep)))
+         (fn [acc blocker]
+           (case (:kind blocker)
+             :task
+             (let [dep (resolve-task-by-id (:ref blocker))]
+               (cond
+                 (nil? dep) (conj acc {:blocker blocker :reason :missing-task})
+                 (not (lifecycle/closed-statuses (:status dep)))
                   ;; The dependency was resolved; surface its actual open
                   ;; status so callers can distinguish an open imported task
                   ;; from a missing task reference.
-                  (conj acc {:blocker blocker :reason (:status dep)})
-                  :else acc))
+                 (conj acc {:blocker blocker :reason (:status dep)})
+                 :else acc))
               ;; default: opaque
-              (conj acc {:blocker blocker :reason :opaque})))
-          []
-          (get-task-blockers task))]
+             (conj acc {:blocker blocker :reason :opaque})))
+         []
+         (properties/get-task-blockers task))]
     {:ready (empty? gating) :gating gating}))
-
-(defn get-task-handoff [task]
-  (let [v (get-drawer-property task "HANDOFF")]
-    (when (and v (seq v)) v)))
-
-(defn set-task-handoff [task value]
-  (set-drawer-property task "HANDOFF" (when (and value (seq value)) value)))
-
-;; ── File-level keyword + #+LINK helpers ────────────────────────────
-
-(defn escape-regex [^String s]
-  (str/replace s #"[.*+?^${}()|\[\]\\]" "\\\\$0"))
-
-(defn get-file-keywords
-  "Return every value of a file-level `#+KEYWORD:` declaration in
-  declaration order (empty when absent). Case-insensitive name match."
-  [^String content ^String name]
-  (let [re (re-pattern
-             (str "(?im)^[\\t ]*#\\+" (escape-regex name)
-                  "[\\t ]*:[\\t ]*(.*?)[\\t ]*$"))]
-    (->> (re-seq re content)
-         (mapv (fn [m] (or (second m) ""))))))
-
-(defn get-file-keyword
-  "First value of `#+KEYWORD:` or nil."
-  [^String content ^String name]
-  (first (get-file-keywords content name)))
-
-(defn parse-selected-keyword
-  "Extract the `#+SELECTED:` UUID from TASKS.local.org content, or nil."
-  [^String content]
-  (some-> (re-find selected-keyword-re content) second str/trim))
-
-;; ── #+PARENT link helpers (change-record parent pointer) ───────────
-
-(defn get-plan-parent-ref
-  "Extract the parent task reference from a navigable `#+PARENT:` org
-  link. Returns `{:kind, :uuid, :summary}` or nil."
-  [^String content]
-  (when-let [raw (get-file-keyword content "PARENT")]
-    (when-let [link (extract-org-link raw)]
-      (when-let [m (re-matches #"(?i)^(task|archive):([^\s#\]]+)$" (:target link))]
-        {:kind (keyword (str/lower-case (m 1)))
-         :uuid (str/trim (m 2))
-         :summary (:description link)}))))
-
-(defn get-plan-parent-id
-  "Extract the parent task UUID from a navigable `#+PARENT:` org link."
-  [^String content]
-  (:uuid (get-plan-parent-ref content)))
-
-(defn rewrite-parent-link-kind
-  "Rewrite only the link kind (`task:` ↔ `archive:`) on the `#+PARENT:`
-  line referencing `parent-id`. Other matching links elsewhere in the
-  file are left untouched."
-  [^String content ^String parent-id new-kind]
-  (let [parent-line-re #"(?im)^([\t ]*#\+PARENT[\t ]*:[\t ]*)(.*)$"
-        link-target-re (re-pattern
-                         (str "(\\[\\[)(task|archive):" (escape-regex parent-id)
-                              "(\\](?:\\[[^\\]]*\\])?\\])"))
-        ;; Track whether any line actually changed.
-        changed? (volatile! false)
-        lines (str/split-lines content)
-        next-lines
-        (mapv
-          (fn [^String line]
-            (if-let [pm (re-matches parent-line-re line)]
-              (let [prefix (pm 1)
-                    rest-of-line (pm 2)
-                    rewritten (str/replace rest-of-line link-target-re
-                                           (str "$1" (name new-kind) ":" parent-id "$3"))]
-                (when (not= rewritten rest-of-line)
-                  (vreset! changed? true))
-                (str prefix rewritten))
-              line))
-          lines)]
-    (if @changed?
-      (str (str/join "\n" next-lines)
-           (when (str/ends-with? content "\n") "\n"))
-      content)))
-
-(defn parse-link-templates
-  "Parse all `#+LINK: prefix template` declarations in content into a
-  map keyed by prefix. First declaration wins (matches Emacs)."
-  [^String content]
-  (let [re #"(?im)^[\t ]*#\+LINK[\t ]*:[\t ]*(\S+)[\t ]+(.+?)[\t ]*$"]
-    (reduce
-      (fn [m match]
-        (let [prefix   (some-> (second match) str/trim)
-              template (some-> (nth match 2) str/trim)]
-          (if (and prefix template (seq prefix) (seq template)
-                   (not (contains? m prefix)))
-            (assoc m prefix template)
-            m)))
-      {}
-      (re-seq re content))))
-
-(defn- url-encode [^String s]
-  (java.net.URLEncoder/encode s "UTF-8"))
-
-(defn- resolve-link-template
-  "Substitute KEY into TEMPLATE's `%s` placeholder. Keys are
-  URL-encoded for URL-shaped templates and left literal for `file:`
-  templates."
-  [^String template ^String key]
-  (let [replacement (if (str/starts-with? template "file:") key (url-encode key))]
-    (if (str/includes? template "%s")
-      (str/replace template "%s" (str/re-quote-replacement replacement))
-      (str template replacement))))
-
-(defn- typed-link-parts
-  "Return `{:prefix, :key}` for a typed target like `plan:foo.org`, or
-  nil for plain paths and URLs."
-  [^String target]
-  (when (and target
-             (not (re-matches #"(?i)^https?://.*" target)))
-    (when-let [m (re-matches #"^([A-Za-z][A-Za-z0-9+.-]*):(.+)$" target)]
-      {:prefix (m 1) :key (m 2)})))
-
-(defn expand-org-link-target
-  "Expand a typed link target through a `#+LINK:` abbreviation table.
-
-  Returns `{:target string, :from-project-root bool}`. Plain paths,
-  `file:` targets, and URLs pass through unchanged.
-
-  The second argument is either a string of org content (templates
-  parsed inline) or a pre-parsed template map."
-  [^String target content-or-templates]
-  (let [result {:target target :from-project-root false}]
-    (if (or (nil? target) (empty? target))
-      result
-      (let [typed (typed-link-parts target)]
-        (if (or (nil? typed) (= "file" (:prefix typed)))
-          result
-          (let [templates (if (string? content-or-templates)
-                            (parse-link-templates content-or-templates)
-                            (or content-or-templates {}))
-                template  (get templates (:prefix typed))]
-            (if-not template
-              result
-              (let [expanded (resolve-link-template template (:key typed))]
-                (if (str/starts-with? expanded "file:")
-                  {:target (subs expanded (count "file:")) :from-project-root true}
-                  {:target expanded :from-project-root false})))))))))
-
-;; ── Linked issues ──────────────────────────────────────────────────
-
-(defn- split-linked-issue-tokens
-  "Split a `:LINKED_ISSUES:` value into `[[..]]` blobs and bare tokens
-  on whitespace."
-  [^String value]
-  (loop [i 0
-         tokens []]
-    (let [n (count value)]
-      (cond
-        (>= i n) tokens
-
-        (Character/isWhitespace (.charAt value i))
-        (recur (inc i) tokens)
-
-        (and (< (+ i 1) n)
-             (= \[ (.charAt value i))
-             (= \[ (.charAt value (inc i))))
-        (let [end (str/index-of value "]]" (+ i 2))]
-          (if end
-            (recur (+ end 2) (conj tokens (subs value i (+ end 2))))
-            (let [j (loop [j i]
-                      (if (or (>= j n) (Character/isWhitespace (.charAt value j)))
-                        j (recur (inc j))))]
-              (recur j (conj tokens (subs value i j))))))
-
-        :else
-        (let [j (loop [j i]
-                  (if (or (>= j n) (Character/isWhitespace (.charAt value j)))
-                    j (recur (inc j))))]
-          (recur j (conj tokens (subs value i j))))))))
-
-(defn get-linked-issues
-  "Resolve `:LINKED_ISSUES:` for a task. Returns a vector of
-  `{:url, :label, :raw-token, :error?}` maps."
-  [task content-or-templates]
-  (let [value (get-drawer-property task "LINKED_ISSUES")]
-    (if-not (and value (seq value))
-      []
-      (let [templates (if (string? content-or-templates)
-                        (parse-link-templates content-or-templates)
-                        (or content-or-templates {}))]
-        (mapv
-          (fn [raw-token]
-            (let [link (extract-org-link raw-token)]
-              (if-not link
-                {:url nil :label raw-token :raw-token raw-token
-                 :error "LINKED_ISSUES token is not an org link"}
-                (let [typed (typed-link-parts (:target link))]
-                  (if typed
-                    (let [template (get templates (:prefix typed))]
-                      (if-not template
-                        {:url nil
-                         :label (or (:description link) (:key typed))
-                         :raw-token raw-token
-                         :error (str "Missing #+LINK declaration for prefix "
-                                     (:prefix typed))}
-                        {:url (resolve-link-template template (:key typed))
-                         :label (or (:description link) (:key typed))
-                         :raw-token raw-token}))
-                    {:url (:target link)
-                     :label (or (:description link) (:target link))
-                     :raw-token raw-token})))))
-          (split-linked-issue-tokens value))))))
-
-(defn set-linked-issues
-  "Replace `:LINKED_ISSUES:` with whitespace-joined tokens. Empty
-  collection clears the property."
-  [task tokens]
-  (if (empty? tokens)
-    (set-drawer-property task "LINKED_ISSUES" nil)
-    (set-drawer-property task "LINKED_ISSUES" (str/join " " tokens))))
-
-;; ── LOGBOOK helpers ────────────────────────────────────────────────
-
-(defn append-created-log [task ^String timestamp]
-  (update task :logbook-lines (fnil conj []) (created-log-entry timestamp)))
-
-(defn append-state-log
-  ([task new-status old-status]
-   (append-state-log task new-status old-status (format-org-timestamp)))
-  ([task new-status old-status timestamp]
-   (update task :logbook-lines (fnil conj [])
-           (state-log-entry new-status old-status timestamp))))
 
 ;; ── Serialization ─────────────────────────────────────────────────
 
@@ -749,10 +386,10 @@
   are separated by a single blank line for readability."
   [tasks]
   (let [parts (map-indexed
-                (fn [i t]
-                  (let [block (str/join "\n" (serialize-task-lines t))]
-                    (if (zero? i) block (str "\n" block))))
-                tasks)]
+               (fn [i t]
+                 (let [block (str/join "\n" (serialize-task-lines t))]
+                   (if (zero? i) block (str "\n" block))))
+               tasks)]
     (str (str/join "\n" parts) "\n")))
 
 (defn- task-range
@@ -813,19 +450,19 @@
                           original-roots)
         ;; Apply bottom-up so earlier offsets remain stable.
         after-edits (reduce
-                      (fn [lns {:keys [start end replacement]}]
-                        (vec (concat (subvec lns 0 start) replacement (subvec lns end))))
-                      lines
-                      (sort-by :start > edits))
+                     (fn [lns {:keys [start end replacement]}]
+                       (vec (concat (subvec lns 0 start) replacement (subvec lns end))))
+                     lines
+                     (sort-by :start > edits))
         with-new    (reduce
-                      (fn [lns t]
-                        (let [trimmed (loop [v lns]
-                                        (if (and (seq v) (= "" (peek v)))
-                                          (recur (pop v))
-                                          v))
-                              prefix  (if (seq trimmed) [""] [])]
-                          (vec (concat trimmed prefix (serialize-task-lines t)))))
-                      after-edits
-                      new-roots)
+                     (fn [lns t]
+                       (let [trimmed (loop [v lns]
+                                       (if (and (seq v) (= "" (peek v)))
+                                         (recur (pop v))
+                                         v))
+                             prefix  (if (seq trimmed) [""] [])]
+                         (vec (concat trimmed prefix (serialize-task-lines t)))))
+                     after-edits
+                     new-roots)
         joined      (str/join "\n" with-new)]
     (str (str/replace joined #"\n*$" "") "\n")))

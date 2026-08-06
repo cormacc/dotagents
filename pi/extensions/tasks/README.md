@@ -119,11 +119,27 @@ The expanded UI is a centered split pane — task tree on the left, details for 
 | `p`                       | Edit the task's linked plan in Emacs, or start agent-assisted plan creation |
 | `n`                       | Create a new sibling task          |
 | `N`                       | Create a new child task            |
+| `D` (shift-d)             | Preview and remove the current non-top-level task subtree |
 | `A` (shift-a)             | Archive the top-level task (must be `DONE` or `CANCELLED`) |
 | `P` (shift-p)             | Publish local task → `TASKS.org` (local tasks only)        |
 | `U` (shift-u)             | Unpublish task → `TASKS.local.org` (top-level shared tasks only) |
 | `J` (shift-j)             | Open linked-issue URLs in the browser (see *Linked external issues* below) |
 | `Esc` / `Alt+T`           | Close (Alt+T toggles)              |
+
+### Task removal
+
+Pressing `D` is available only while the expanded tasks overlay has focus; it
+is not a global pi shortcut. The overlay closes temporarily, runs
+`ot remove <id> --dry-run --prune-blockers`, and presents Pi's standard
+confirmation dialog with the target subtree/statuses, unchecked criteria,
+inbound blockers, selection effect, and affected files. Confirming delegates
+the write to `ot remove <id> --yes --prune-blockers`; the extension performs
+no Org editing itself. Cancelling or a core error reopens a refreshed overlay,
+and a successful removal refreshes the graph and selection before reopening.
+
+`ot` refuses protocol top-level roots. Inbound task blockers are explicitly
+pruned as part of this one preflighted core operation, never by a separate UI
+write.
 
 ### Local tasks
 

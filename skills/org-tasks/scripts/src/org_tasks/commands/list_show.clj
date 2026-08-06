@@ -11,7 +11,7 @@
             [org-tasks.task :as task]
             [org-tasks.tree :as tree]
             [org-tasks.commands.util :refer [positional-arg load-context
-                                             resolve-required-id]]))
+                                             resolve-required-id guard-write!]]))
 
 ;; ── ot list ─────────────────────────────────────────────────────────
 
@@ -213,16 +213,45 @@
 
 ;; ── ot select / ot selected ────────────────────────────────────────
 
+(defn- clear-stale-selection-cmd [opts tasks selected-id selected-content files]
+  (let [state (cond
+                (nil? selected-id) "absent"
+                (task/find-by-id tasks selected-id) "valid"
+                :else "cleared-stale")
+        result {:selectionState state
+                :selectedId (when (= state "valid") selected-id)
+                :previousId selected-id
+                :file (:local files)
+                :dryRun (boolean (:dry-run opts))}]
+    ;; Valid and absent pointers are intentionally not rewritten: this keeps
+    ;; their local file bytes intact and makes repair idempotent.
+    (when (and (= state "cleared-stale") (not (:dry-run opts)))
+      (guard-write! opts
+                    #(loader/write-selected-id (:local files) nil selected-content)))
+    (out/emit-result opts
+                     (assoc result :text/lines
+                            [(case state
+                               "absent" "No selection to repair."
+                               "valid" "Selection is valid; unchanged."
+                               "Cleared stale selection.")]))))
+
 (defn select-cmd [{:keys [opts] :as result}]
-  (let [{:keys [tasks selected-id files]} (load-context opts)
+  (let [{:keys [tasks selected-id selected-content files]} (load-context opts)
         clear? (:clear opts)
-        id     (when-not clear?
-                 (positional-arg result :id))]
+        clear-stale? (:clear-stale opts)
+        id (when-not (or clear? clear-stale?) (positional-arg result :id))]
     (cond
+      (and clear? clear-stale?)
+      (out/emit-error opts {:code "argument-error"
+                            :message "ot select accepts either --clear or --clear-stale, not both."})
+
+      clear-stale?
+      (clear-stale-selection-cmd opts tasks selected-id selected-content files)
+
       (and (not clear?) (nil? id))
       (out/emit-error opts
                       {:code "argument-error"
-                       :message "ot select requires an id (or --clear)."})
+                       :message "ot select requires an id (or --clear / --clear-stale)."})
 
       :else
       (let [target (when-not clear? (resolve-required-id tasks id opts))

@@ -22,6 +22,7 @@
             [org-tasks.commands.maintenance :as maintenance]
             [org-tasks.commands.move :as move]
             [org-tasks.commands.record :as record]
+            [org-tasks.commands.removal :as removal]
             [org-tasks.commands.spec :as spec]
             [org-tasks.commands.status :as status]))
 
@@ -154,7 +155,12 @@
              :ref "<name>"}})
 
 (def ^:private select-spec
-  {:clear {:desc "Clear the current selection" :coerce :boolean}})
+  {:clear {:desc "Clear the current selection" :coerce :boolean}
+   :clear-stale {:desc "Clear only an unresolved #+SELECTED: pointer" :coerce :boolean}})
+
+(def ^:private remove-spec
+  {:prune-blockers {:desc "Remove inbound task blockers that resolve into the deleted subtree"
+                    :coerce :boolean}})
 
 (def ^:private record-spec
   {:path {:desc "Override the change-record path"
@@ -203,6 +209,11 @@
     :spec (merge move-spec include-content-spec) :args->opts [:id]
     :summary ["<id> (--parent <id> | --section <name>)"
               "Move an existing task subtree under another task or back to a section"]}
+   {:cmds ["remove"]             :fn removal/remove-cmd
+    :spec remove-spec :args->opts [:id]
+    :tui-key :remove
+    :summary ["<id> [--prune-blockers] --yes"
+              "Preview or remove an eligible non-top-level task subtree"]}
    {:cmds ["status"]             :fn status/status-cmd
     :spec (merge status-spec include-content-spec) :args->opts [:id :new-status]
     :tui-key :status
@@ -280,6 +291,8 @@
    {:cmds ["blocker" "remove"]   :fn links/blocker-remove-cmd
     :spec {} :args->opts [:id :token]
     :summary ["<id> <token>" "Remove a :BLOCKED-BY: entry"]}
+   {:cmds ["blocker" "prune"]    :fn removal/blocker-prune-cmd
+    :spec {} :summary ["[--yes]" "Preview or prune unresolved task blockers"]}
    {:cmds ["ready"]              :fn links/ready-cmd
     :spec {} :args->opts [:id]
     :summary ["<id>" "Report whether a task is ready to start"]}

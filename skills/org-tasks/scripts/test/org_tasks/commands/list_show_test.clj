@@ -339,4 +339,61 @@
         (is (nil? (:selected r)))
         (is (= "deadbeef-0000-4000-8000-000000000000" (:selectedId r)))))))
 
+(deftest clear-stale-selection-is-idempotent-and-never-rewrites-valid-or-absent-state
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [local-path (str (fs/path root "TASKS.local.org"))]
+        (testing "a stale pointer is previewed, then cleared with a compact result"
+          (spit local-path "#+SELECTED: deadbeef-0000-4000-8000-000000000000\n# local note\n")
+          (let [before (slurp local-path)
+                {:keys [out exit]} (run-cli! "--root" root "--format" "json" "--dry-run"
+                                              "select" "--clear-stale")
+                preview (parse-json-result out)]
+            (is (zero? exit))
+            (is (= "cleared-stale" (:selectionState preview)))
+            (is (true? (:dryRun preview)))
+            (is (= before (slurp local-path))))
+          (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "select" "--clear-stale")
+                repaired (parse-json-result out)]
+            (is (zero? exit))
+            (is (= "cleared-stale" (:selectionState repaired)))
+            (is (not (re-find #"(?im)^#\+SELECTED:" (slurp local-path)))))
+          (let [{:keys [out]} (run-cli! "--root" root "--format" "json" "select" "--clear-stale")]
+            (is (= "absent" (:selectionState (parse-json-result out))))))
+        (testing "valid and absent selections remain byte-identical"
+          (spit local-path "#+SELECTED: 11111111-2222-4333-8444-555555555551\n# local note\n")
+          (let [before (slurp local-path)
+                {:keys [out exit]} (run-cli! "--root" root "--format" "json" "select" "--clear-stale")]
+            (is (zero? exit))
+            (is (= "valid" (:selectionState (parse-json-result out))))
+            (is (= before (slurp local-path))))
+          (spit local-path "# local note only\n")
+          (let [before (slurp local-path)
+                {:keys [out]} (run-cli! "--root" root "--format" "json" "select" "--clear-stale")]
+            (is (= "absent" (:selectionState (parse-json-result out))))
+            (is (= before (slurp local-path)))))))))
+
+(deftest native-archive-style-removal-leaves-a-read-only-stale-selection-for-explicit-repair
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [tasks-path (str (fs/path root "TASKS.org"))
+            local-path (str (fs/path root "TASKS.local.org"))
+            selected-id "11111111-2222-4333-8444-555555555551"]
+        ;; Native `org-archive-subtree` removes this active subtree without
+        ;; touching the gitignored local selection file.
+        (spit tasks-path
+              (str "* Improvements\n** STARTED Second\n:PROPERTIES:\n:CUSTOM_ID: "
+                   "22229999-2222-4333-8444-555555555552\n:END:\n"))
+        (spit local-path (str "#+SELECTED: " selected-id "\n"))
+        (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "selected")]
+          (is (zero? exit))
+          (is (= selected-id (:selectedId (parse-json-result out))))
+          (is (str/includes? (slurp local-path) selected-id)))
+        (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "select" "--clear-stale")]
+          (is (zero? exit))
+          (is (= "cleared-stale" (:selectionState (parse-json-result out))))
+          (is (not (re-find #"(?im)^#\+SELECTED:" (slurp local-path)))))))))
+
 ;; ── status ──────────────────────────────────────────────────────

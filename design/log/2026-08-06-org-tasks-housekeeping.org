@@ -1,0 +1,191 @@
+#+TITLE: org-tasks housekeeping
+#+DATE: 2026-08-06 Thu
+#+PARENT: [[archive:f340a142-4ef5-4b86-adb8-977b291b07ce][org-tasks housekeeping]]
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+#+SPEC: [[proj:skills/org-tasks/references/ot-cli.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/boundary.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/DESIGN.org]]
+#+SPEC: [[proj:skills/org-plan/SKILL.md]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Intent
+
+Harden org-tasks maintenance and destructive workflows without weakening its round-trip, read-only query, or cross-surface parity guarantees. Consolidate the accumulated parser, test-runner, doctor, stale-reference, and task-removal work into one bounded production change.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+** Scope
+
+*** In scope
+- Split non-scanner concerns out of =org-tasks.parser= behind its existing public facade while retaining scanner/serializer ownership, removing the duplicate closed-status set, and making trailing task-tag stripping parser-owned.
+- Enforce =^:serial= on tests that mutate global vars inside =^{:parallel-tests true}= namespaces using a narrow source-level check.
+- Add an advisory doctor finding for dangling repo-relative file citations written as inline code in change-record prose.
+- Add explicit stale-reference repair with =ot blocker prune= and =ot select --clear-stale=; keep doctor and selected-task queries read-only.
+- Add safe removal of non-top-level task subtrees through =ot remove=, including impact reporting, unchecked-criterion visibility, inbound-blocker handling, selection cleanup, optimistic-concurrency preflight, and standalone-TUI/pi-overlay parity.
+- Update the declared org-tasks/org-plan contracts, architecture map, command schemas, finding documentation, and UI key maps.
+
+*** Out of scope
+- =ot move= TUI/pi-overlay exposure or =--before=/=--after= ordering (task =da7350ac=).
+- Babashka/=ot= installation bootstrap (task =ca95bb66=).
+- CI parallelism pinning without observed CI flakes (task =6fcafd18=).
+- Generic =ot doctor --fix= mutation, automatic repair during reads, or arbitrary natural-language path linting.
+- Removal of top-level active task roots; lifecycle closure plus archive remains the supported history-preserving path.
+- Broad static detection of every possible state mutation in tests; local atom/ref mutation is not classified as globally unsafe by this change.
+
+** Shipped
+- MODIFIED =org-tasks.parser= into a stable facade over focused parser modules, with canonical lifecycle statuses and task-tag stripping.
+- ADDED an Edamame-backed parallel-test safety guard and constrained =inline-path-dangling= doctor diagnostics.
+- ADDED explicit =ot select --clear-stale= and =ot blocker prune= repair commands without making read commands mutate.
+- ADDED preview-first =ot remove= with unchecked-work reporting, inbound-reference handling, multi-file preflight, selection cleanup, and duplicate-ID refusal.
+- MODIFIED the standalone TUI and pi overlay with core-backed =D= removal flows, plus the org-tasks/org-plan contracts and architecture documentation.
+
+** Gotchas
+- Cross-file removal preflights every known baseline but remains a sequence of per-file atomic replacements, not a filesystem transaction.
+- Inline citation diagnostics are deliberately advisory and existence-only; unusual syntax and not-yet-created files can remain outside the heuristic.
+- Exact duplicate UUIDs now resolve as ambiguous before mutation; a unique exact UUID still wins over unrelated prefix matches.
+
+** Acceptance
+
+*** Core functionality
+- [X] Existing callers continue to resolve the =org-tasks.parser= public vars with no namespace churn, while extracted modules own timestamps, drawer properties, file keywords/links, and linked issues.
+- [X] Parser and serializer round-trip fixtures remain byte-identical, and =lifecycle/closed-statuses= plus one parser-owned trailing-tag stripper replace the duplicated definitions.
+- [X] The test runner rejects a parallel-namespace =deftest= containing =with-redefs=, =with-redefs-fn=, or =alter-var-root= unless the test var carries =^:serial=.
+- [X] =ot doctor= emits an ordered advisory finding for a missing repo-relative file cited in Markdown backticks or Org verbatim markup inside a change-record.
+- [X] =ot select --clear-stale= clears a non-null unresolved =#+SELECTED:= pointer and leaves a valid or absent selection unchanged.
+- [X] =ot blocker prune= reports unresolved task blockers without writing in dry-run mode and removes only those blockers after explicit destructive confirmation.
+- [X] =ot remove= reports the complete target subtree, task statuses, unchecked checklist criteria, inbound task blockers, source files, and selection impact before any write.
+- [X] =ot remove --yes= deletes an eligible non-top-level subtree; inbound blockers prevent deletion unless =--prune-blockers= is supplied, and a selected task inside the removed subtree is cleared.
+- [X] Removal is available as documented =D= behavior in both task UIs; the pi overlay uses its confirmation prompt and the standalone TUI uses an armed second press, with both dispatching the same core command.
+- [X] JSON/EDN envelopes, error codes, doctor finding order, command help, and documentation match the implemented behavior.
+
+*** Edge cases
+- [X] Removal and blocker pruning persist through the owning =TASKS.org=, =TASKS.local.org=, or imported change-record file without duplicating a UUID or rewriting an import into the parent file.
+- [X] Blockers originating inside the removed subtree are not treated as orphaned inbound references; valid task blockers and human blockers survive pruning unchanged.
+- [X] Every affected file baseline is checked before the first removal/prune write, so a detected concurrent edit leaves all files unchanged.
+- [X] Path citation checking ignores valid paths, URLs, absolute paths, globs/placeholders, basename-only tokens, source/example blocks, and illustrative roots whose first path segment does not exist.
+- [X] The serial guard accepts correctly tagged tests, reader comments/conditionals supported by Babashka's reader, and ordinary local =atom=/=ref= use.
+- [X] Native Emacs archive followed by =ot select --clear-stale= repairs the observed stale pointer; normal =ot archive= continues clearing a selected archived subtree directly.
+
+*** Anti-criteria
+- [X] Must not: let =ot remove= delete a top-level task root or bypass =--yes=.
+- [X] Must not: mutate task memory from =ot doctor=, =ot selected=, or any other documented read command.
+- [X] Must not: add a new parser/test-reader dependency or require JVM Clojure rather than Babashka.
+- [X] Must not: warn on unconstrained slash-like prose or promise that a path citation refers to a semantically correct file; the check is existence-only.
+- [X] Must not: change task wire fields, lifecycle cycle orders, link sandboxing, or serializer normalization behavior.
+
+** Decisions
+- Keep =org-tasks.parser= as a stable facade :: extract implementation into =org-tasks.parser.*= namespaces and make =lifecycle= depend on the extracted timestamp/property functions, allowing the facade to consume canonical =lifecycle/closed-statuses= without a cycle.
+  Rejected:
+  - Update every caller to new namespaces: unnecessary API churn for an internal housekeeping refactor.
+  - Leave parser monolithic: preserves the 831-line coupling and the duplicate status/tag logic this task exists to remove.
+- Use Babashka's bundled Edamame reader for the serial guard :: it preserves form metadata and source locations and was smoke-verified against =deftest ^:serial= syntax; the unsafe symbol set stays limited to definite global-var mutation.
+  Rejected:
+  - =clojure.core/read= over ad-hoc forms: the original issue already identified metadata/reader fragility.
+  - clj-kondo or a new lint dependency: disproportionate setup for one repository-local invariant.
+  - Flag =reset!=/=swap!= indiscriminately: local test-owned atoms are concurrency-safe and would create false positives.
+- Validate constrained inline-code citations only :: extract single-token Markdown-backtick and Org-verbatim paths, require a slash and file extension under an existing first path segment, and ignore fenced source/example regions plus URL/glob/placeholder forms.
+  Rejected:
+  - Scan arbitrary prose: false-positive surface is unbounded.
+  - Validate only =[[proj:...]]= links: misses the concrete failure that created the issue.
+- Use explicit repair commands rather than read-side healing :: =blocker prune= and =select --clear-stale= are observable mutations; doctor findings point to them but remain advisory.
+  Rejected:
+  - =ot doctor --fix=: turns a diagnostic command family into a broad mutation framework before more than two repair cases justify it.
+  - Auto-clear from =ot selected=: violates the read-query contract and hides the stale-pointer diagnosis.
+- Make removal preview-first and integrity-preserving :: bare/dry-run removal computes the impact, =--yes= acknowledges destructive deletion, =--prune-blockers= opts into repairing inbound blockers in the same preflighted write set, and protocol top-level roots are refused.
+  Rejected:
+  - Silent hand-delete semantics: recreates the dangling-reference and incomplete-work failures in the issue evidence.
+  - Force-delete top-level roots: bypasses CANCELLED/DONE plus archive history.
+  - Delete first, prune later: deliberately creates an invalid intermediate graph.
+- Keep removal parity across surfaces :: =D= is the common key; pi owns its normal modal confirmation, while the standalone TUI performs an impact dry-run then requires a second =D= before passing =--yes=.
+  Rejected:
+  - CLI-only removal: conflicts with the project parity rule for user-visible mutations.
+
+* Plan
+
+** DONE Split parser internals behind the stable facade :skill:org_tasks:
+CLOSED: [2026-08-06 Thu 08:08]
+:PROPERTIES:
+:CUSTOM_ID: 6781dbd0-677a-46a2-a874-4380b3c336af
+:CREATED: [2026-07-03 Fri 12:22]
+:STARTED: [2026-08-06 Thu 07:47]
+:END:
+:LOGBOOK:
+- Created [2026-07-03 Fri 12:22]
+- State "STARTED" from "TODO" [2026-08-06 Thu 07:47]
+- State "DONE" from "STARTED" [2026-08-06 Thu 08:08]
+:END:
+Result: Parser helpers were extracted behind the unchanged facade; round-trip and metadata-compatibility tests pass.
+
+** DONE [#C] Enforce serial metadata for global-var-mutating parallel tests :skill:org_tasks:
+CLOSED: [2026-08-06 Thu 08:08]
+:PROPERTIES:
+:CUSTOM_ID: f8e76842-6fe5-468a-a9da-95d2c8796556
+:CREATED: [2026-07-31 Fri 09:52]
+:STARTED: [2026-08-06 Thu 07:47]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 09:52]
+- State "STARTED" from "TODO" [2026-08-06 Thu 07:47]
+- State "DONE" from "STARTED" [2026-08-06 Thu 08:08]
+:END:
+Result: Parallel namespaces now fail fast on untagged definite global-var mutation while accepting serial tests and local state.
+
+** DONE Warn on dangling inline file citations in change-records :skill:org_tasks:
+CLOSED: [2026-08-06 Thu 08:08]
+:PROPERTIES:
+:CUSTOM_ID: 88f30aea-14a3-4107-b587-911f7748c14c
+:CREATED: [2026-07-31 Fri 10:02]
+:STARTED: [2026-08-06 Thu 07:55]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 10:02]
+- State "STARTED" from "TODO" [2026-08-06 Thu 07:55]
+- State "DONE" from "STARTED" [2026-08-06 Thu 08:08]
+:END:
+Result: Doctor now reports ordered, constrained dangling inline-path citations without broad prose scanning.
+
+** DONE Add explicit stale-selection repair for native archive :skill:org_tasks:
+CLOSED: [2026-08-06 Thu 08:28]
+:PROPERTIES:
+:CUSTOM_ID: e3360ced-b3ae-43f6-89a3-3d18882069f9
+:CREATED: [2026-08-05 Wed 20:03]
+:STARTED: [2026-08-06 Thu 08:09]
+:END:
+:LOGBOOK:
+- Created [2026-08-05 Wed 20:03]
+- State "STARTED" from "TODO" [2026-08-06 Thu 08:09]
+- State "DONE" from "STARTED" [2026-08-06 Thu 08:28]
+:END:
+Result: Explicit stale-selection repair landed; valid/absent selections and all read commands remain non-mutating.
+
+** DONE Add safe task removal and inbound-reference pruning :skill:org_tasks:
+CLOSED: [2026-08-06 Thu 10:16]
+:PROPERTIES:
+:CUSTOM_ID: a0ac3d39-adb1-407e-a782-cb9bbceb3339
+:CREATED: [2026-08-01 Sat 00:02]
+:STARTED: [2026-08-06 Thu 08:09]
+:END:
+:LOGBOOK:
+- Created [2026-08-01 Sat 00:02]
+- State "STARTED" from "TODO" [2026-08-06 Thu 08:09]
+- State "DONE" from "STARTED" [2026-08-06 Thu 10:16]
+:END:
+Result: Preview-first removal, explicit blocker pruning, conflict preflight, duplicate-ID refusal, and both =D= UI flows landed through the core command.
+
+* Implementation
+
+- Parser consumers kept the facade while implementation moved into focused namespaces; exported alias metadata is preserved for compatibility.
+- Destructive commands share the loader's owning-file persistence and baseline preflight rather than introducing a second Org writer.
+- Final review found that ID-only tree deletion could remove multiple duplicate UUID occurrences after previewing one. Exact duplicate resolution now returns =ambiguous-id= before any mutator can write, with a cross-owner regression fixture.
+- UI integrations delegate preview and execution to =ot remove=; neither surface edits Org text directly.
+
+* Validation
+
+- Focused integrated Clojure suite: 117 tests, 458 assertions, 0 failures.
+- Full =bb test=: 457 tests, 2678 assertions, with only the nine known macOS =/var= versus =/private/var= Herdr path failures reproduced from a clean archive.
+- Pi overlay removal tests: 22 passed; TypeScript language-server diagnostics are clean for the changed extension files.
+- The full pi extension runner remains non-green in this checkout because existing import-dependent tests cannot resolve the installed pi package and the existing RPC harness times out; the new removal tests and dependency-aware =ot= wrapper tests pass.
+- =ot doctor= reports no issues and =git diff --check= passes.

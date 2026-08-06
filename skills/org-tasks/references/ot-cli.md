@@ -55,7 +55,9 @@ ot status <id> --cycle forward   # or: --cycle back (order owned by ot)
 ot priority <id> B               # set the priority cookie (A|B|C|D)
 ot priority <id> --cycle forward # unset → A → B → C → D → unset; back reverses (unset → D)
 ot priority <id> --clear
-ot select <id>        # or: ot select --clear
+ot select <id>        # or: ot select --clear / ot select --clear-stale
+ot remove <id> --yes  # non-top-level subtree only; preview with --dry-run
+                        # pass --prune-blockers only to remove reported inbound task blockers
 ot archive <id> --yes
 ot unarchive <id> [--section <name>]
 ot publish <id>       # TASKS.local.org -> TASKS.org
@@ -70,6 +72,7 @@ ot record create <id>
 ot record create <id> --mode retrospective
 ot issue list|add|remove|urls <id> [...]
 ot blocker list|add|remove <id> [...]
+ot blocker prune --dry-run  # actual pruning requires --yes
 ot tag add|remove <id> <tag>
 ot ready <id>
 ot handoff get|set|clear <id> [...]
@@ -93,9 +96,17 @@ The subtree's source lines move verbatim apart from heading stars, so `:CUSTOM_I
 
 `move` is in-file only. Locality changes belong to `ot publish` / `ot unpublish` and the archive to `ot archive` / `ot unarchive`, so a destination in another file is refused rather than silently creating a second writable node for a UUID. It also refuses an archived source, a destination that is the task itself or one of its descendants, an unknown `--section`, and supplying both or neither destination. `--dry-run` runs every preflight and reports the proposed move without writing.
 
+## Removing a task subtree and pruning blockers
+
+`ot remove <id>` is preview-first: `--dry-run` returns the complete subtree (ids, summaries, statuses), unchecked `- [ ]` criteria with source context, inbound task blockers outside the subtree, affected files, selection impact, and `dryRun: true` without writing. A non-dry-run call requires `--yes`; otherwise it returns a `confirmation-required` error carrying the same impact. Protocol top-level graph roots are refused (`top-level-root`) so use `CANCELLED`/`DONE` plus `ot archive` for history-preserving lifecycle closure.
+
+Inbound task blockers prevent removal with `inbound-blockers`. Pass `--prune-blockers --yes` only after reviewing the projection: it removes exactly blockers that resolve into the target subtree in the same preflighted source-root write. A selected target or descendant is cleared. Imported and local nested tasks persist to their own owning file. Every known affected baseline is checked before the first write, then each file is atomically replaced; this is optimistic concurrency, not a filesystem transaction.
+
+`ot blocker prune --dry-run` reports unresolved explicit `task:` and legacy bare-full-UUID blockers across the active graph. `ot blocker prune --yes` removes only those entries; valid or ambiguous task references and human, URL, Jira, and other blockers remain. Both commands use compact `org-tasks/v1` envelopes and the global `--dry-run`.
+
 ## Interactive TUI
 
-Bare `ot` on an interactive terminal launches the standalone task browser. It is harness-agnostic: any human or agent with a TTY can use it -- no pi extension required. The pi tasks extension is a pi-specific overlay with the same key map; both surfaces dispatch every mutation through the same `ot` commands (`status --cycle`, `priority --cycle`, `select`, `archive`, …), so semantics never diverge.
+Bare `ot` on an interactive terminal launches the standalone task browser. It is harness-agnostic: any human or agent with a TTY can use it -- no pi extension required. The pi tasks extension is a pi-specific overlay with the same currently-exposed key map; both surfaces dispatch their exposed mutations through the same `ot` commands (`status --cycle`, `priority --cycle`, `select`, `archive`, …). Both expose removal on `D`: the standalone TUI previews the impact and requires a second `D` on the same cursor task, while pi uses its modal confirmation. Confirmed `D` removal requests inbound-blocker pruning; neither UI exposes a separate blocker-prune key.
 
 Layout: task tree (status, id prefix, priority, summary) plus a details pane. The details pane renders beside the tree on landscape terminals and stacks below it when the terminal is narrow (< 80 columns) or portrait (width < height × 2, correcting for the ~1:2 cell aspect). Colours are shared with `ot list` via `styling/palette-256`.
 
@@ -108,6 +119,7 @@ Key map:
 | `⇧←` `⇧→` | cycle priority (unset→A forward, unset→D back) |
 | `Enter` / `Space` / `Tab` | collapse/expand subtree |
 | `s` | select / deselect task |
+| `D` | preview removal; press `D` again on the same task to remove and prune reported inbound blockers |
 | `n` / `N` | new sibling / child task |
 | `e` / `p` | edit task / edit linked plan |
 | `A` | archive (closed top-level tasks) |
@@ -115,6 +127,8 @@ Key map:
 | `J` | open linked-issue URLs |
 | `Ctrl-d` / `Ctrl-u` | scroll details pane |
 | `Esc` / `Alt-t` | quit |
+
+Native Emacs `org-archive-subtree` may leave `#+SELECTED:` pointing at the archived active subtree because that local keyword is outside the archived file. Queries stay read-only: use `ot selected`/`ot doctor` to observe it, then `ot select --clear-stale` to atomically clear only an unresolved pointer. Normal `ot archive` already clears a selected archived subtree itself.
 
 `ot unarchive <id>` resolves exact IDs and unique prefixes from `TASKS.archive.org` only. It restores the archived subtree into an existing shared `TASKS.org` level-1 section, preferring explicit `--section` over the `:ARCHIVE_OLPATH:` stamped by `ot archive`; legacy entries and roots archived from a file-level `#+IMPORT:` record carry no `:ARCHIVE_OLPATH:`, so they require `--section` rather than being guessed. It removes `:ARCHIVED:` / `:ARCHIVE_OLPATH:`, reverses a matching linked record parent from `archive:` to `task:`, and does not change status, `CLOSED:`, or LOGBOOK. `--dry-run` reports the source, destination, section, and proposed parent rewrite without writing.
 
@@ -171,10 +185,11 @@ Use `#+NO_SPEC: true` when the project has no durable contract layer, the task i
 
 `ot spec list` (alias `ot spec discover`) is a read-only report of the org-plan discovery traversal (see org-plan SKILL.md § Spec discovery): `#+SPEC:` roots declared in TASKS.org, or the default root `./design/SPEC.org` when none are declared; implicit specs (root `README.*`, `AGENTS.md`, the skills directory); folder roots expanded recursively; org `[[file:...]]`/`[[proj:...]]` links, Markdown `[text](path)` links, and org `#+INCLUDE:` directives all followed transitively with a visited-set cycle guard (external `http`/`https` targets are never followed). Complete segments `.git`, `.direnv`, `.devenv`, `.cache`, `node_modules`, `target`, `build`, `dist`, and `.next` are excluded; candidates with a NUL byte are omitted. Invalid control-data targets yield non-fatal `spec-link-invalid` warnings with source and raw target, and `ot doctor` emits the same ordered warning finding. Prints the discovered path set with root provenance (e.g. `#+SPEC: ...`, `default root: ...`, `implicit: ...`, `link from ...`).
 
-`ot doctor` emits these spec findings:
+`ot doctor` emits these change-record and spec findings:
 
 - `spec-untouched` -- a `#+SPEC:` path declared in a record has not been touched in the current git working tree/index. A nudge, not a gate; it cannot infer omitted specs that were never declared.
 - `spec-value-malformed` -- a `#+SPEC:` value is not a bare `[[proj:PATH]]` link: a plain path, the labelled `[[proj:PATH][label]]` form, or a path that is absolute, escapes the repo root (`..`), or is whitespace-padded.
 - `spec-path-dangling` -- a `#+SPEC:` link in TASKS.org points at a path that does not resolve on disk (file or folder).
+- `inline-path-dangling` -- a single-token Markdown-backtick or Org-verbatim repo-relative path citation in a change-record has an existing first path segment but does not resolve on disk. The check ignores URLs, absolute paths, globs/placeholders, basename-only tokens, source/example blocks, and illustrative roots; it is advisory and existence-only.
 - `spec-citation-untested` -- an `** Acceptance` criterion cites `spec:` (see org-plan SKILL.md § Spec/test citation on acceptance criteria) but no `test:` evidence, and is not under `*** Anti-criteria` (which is its own evidence). A nudge only; a criterion with no citation at all produces no finding.
 - `spec-stale` ("declared-but-stale") -- a `#+SPEC:` path declared in a record is unchanged in the current git working tree/index while code it transitively links to (per the `ot spec list` traversal) did change. A lightweight local echo of SOTA drift gates -- still advisory, never blocking; does not fire when the spec itself also changed, or when nothing it links to changed.

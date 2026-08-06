@@ -104,12 +104,8 @@
 
 (defn- section-heading? [^String line ^String section]
   (when-let [m (re-matches #"^\*\s+(.+?)\s*$" line)]
-    (let [text (m 1)
-          ;; Strip trailing `:tag1:tag2:`
-          stripped (if-let [tm (re-find #"\s+:[\w@:]+:\s*$" text)]
-                     (str/trimr (subs text 0 (- (count text) (count tm))))
-                     (str/trimr text))]
-      (= (str/trim stripped) (str/trim section)))))
+    (= (str/trim (first (parser/strip-trailing-task-tags (m 1) true)))
+       (str/trim section))))
 
 (defn- next-top-level-heading-idx [lines ^long from]
   (some (fn [i]

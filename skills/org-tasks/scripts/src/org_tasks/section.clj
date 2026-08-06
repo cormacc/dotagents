@@ -11,12 +11,12 @@
 
   Heading match is case-insensitive and tolerates a trailing org tag
   suffix on the heading line (e.g. `* Summary :memory:`)."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [org-tasks.parser :as parser]))
 
 (def default-section "Summary")
 
 (def ^:private level-1-heading-re #"^\* (.+?)\s*$")
-(def ^:private trailing-tags-re #"^(.*?)\s+(:[A-Za-z0-9_@#%:-]+:)\s*$")
 (def ^:private block-open-re #"(?i)^\s*#\+BEGIN_(\w+)\b")
 (def ^:private block-close-re #"(?i)^\s*#\+END_(\w+)\s*$")
 
@@ -25,11 +25,7 @@
   nil if not a column-0 single-asterisk heading."
   [^String line]
   (when-let [m (re-matches level-1-heading-re line)]
-    (let [raw (m 1)]
-      (str/trim
-        (if-let [tm (re-matches trailing-tags-re raw)]
-          (tm 1)
-          raw)))))
+    (str/trim (first (parser/strip-trailing-task-tags (m 1) true)))))
 
 (defn list-sections
   "Return top-level section names in `content` in source order."

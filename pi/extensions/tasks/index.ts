@@ -42,6 +42,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { ensureEmacsServer } from "../emacsclient/emacsclient.ts";
 import { TasksOverlay } from "./overlay.ts";
+import { cursorAfterRemoval, runOverlayRemoval } from "./removal.ts";
 import {
   otArchiveTask,
   otBackfill,
@@ -49,6 +50,7 @@ import {
   otDoctor,
   otList,
   otPublishTask,
+  otRemoveTask,
   otSelectTask,
   otCyclePriority,
   otCycleStatus,
@@ -770,6 +772,7 @@ export default function (pi: ExtensionAPI) {
         | { type: "create"; anchor: Task | null; relation: "sibling" | "child" }
         | { type: "edit"; task: Task }
         | { type: "plan"; task: Task }
+        | { type: "remove"; task: Task; cursorId: string | null }
         | { type: "publish"; task: Task }
         | { type: "summaryRefresh"; task: Task; reason: SummaryRefreshReason; absPlan: string }
         | { type: "unpublish"; task: Task };
@@ -778,6 +781,7 @@ export default function (pi: ExtensionAPI) {
       let loaded = await loadTasks(ctx.cwd);
       let tasks = loaded.tasks;
       let selectedId: string | null = await readSelectedId(loaded.files.local);
+      let preferredCursorId: string | null = null;
       while (reopen) {
         isOverlayActive = true;
         clearCompactWidget(ctx);
@@ -801,6 +805,10 @@ export default function (pi: ExtensionAPI) {
 
         const onNewTask = (anchor: Task | null, relation: "sibling" | "child") => {
           workflow.request = { type: "create", anchor, relation };
+        };
+
+        const onRemove = (task: Task, cursorId: string | null) => {
+          workflow.request = { type: "remove", task, cursorId };
         };
 
         const onPublish = (task: Task) => {
@@ -966,7 +974,10 @@ export default function (pi: ExtensionAPI) {
               onNotify,
               onCycleStatus,
               onCyclePriority,
+              onRemove,
             );
+            overlay.focusTaskId(preferredCursorId);
+            preferredCursorId = null;
             activeOverlayInstance = overlay;
             return overlay;
           },
@@ -1025,6 +1036,44 @@ export default function (pi: ExtensionAPI) {
           if (fresh) await archiveTopLevel(ctx, tasks, fresh);
           loaded = await loadTasks(ctx.cwd);
           tasks = loaded.tasks;
+          reopen = true;
+        } else if (request.type === "remove") {
+          let nextCursorId = request.cursorId;
+          const fresh = await reloadAndResolve(request.task, "remove");
+          if (fresh) {
+            const id = getTaskId(fresh);
+            if (!id) {
+              ctx.ui.notify("Cannot remove task without a :CUSTOM_ID:.", "error");
+            } else {
+              const outcome = await runOverlayRemoval({
+                id,
+                preview: (taskId, pruneBlockers) => otRemoveTask(taskId, {
+                  cwd: ctx.cwd,
+                  dryRun: true,
+                  pruneBlockers,
+                }),
+                confirm: (title, message) => ctx.ui.confirm(title, message),
+                remove: (taskId, pruneBlockers) => otRemoveTask(taskId, {
+                  cwd: ctx.cwd,
+                  pruneBlockers,
+                }),
+              });
+              nextCursorId = cursorAfterRemoval(outcome, id, request.cursorId);
+              if (outcome.kind === "removed") {
+                const pruned = outcome.result.prunedBlockers.length;
+                ctx.ui.notify(
+                  `Removed ${outcome.result.subtree.length} task${outcome.result.subtree.length === 1 ? "" : "s"}; pruned ${pruned} inbound blocker${pruned === 1 ? "" : "s"}.`,
+                  "info",
+                );
+              } else if (outcome.kind === "error") {
+                ctx.ui.notify(`Task removal failed: ${outcome.error.message}`, "error");
+              }
+            }
+          }
+          loaded = await loadTasks(ctx.cwd);
+          tasks = loaded.tasks;
+          selectedId = await readSelectedId(loaded.files.local);
+          preferredCursorId = nextCursorId;
           reopen = true;
         } else if (request.type === "publish") {
           const fresh = await reloadAndResolve(request.task, "publish");

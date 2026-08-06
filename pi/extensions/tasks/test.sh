@@ -107,6 +107,13 @@ else
   npx --yes tsx ./scan.test.ts || CODE=1
 fi
 
+echo "# Running expanded-overlay removal unit tests..."
+if command -v tsx >/dev/null 2>&1; then
+  tsx ./removal.test.ts || CODE=1
+else
+  npx --yes tsx ./removal.test.ts || CODE=1
+fi
+
 printf "# Running ot wrapper integration smoke tests...\n"
 if command -v tsx >/dev/null 2>&1; then
   tsx ./ot.test.ts || CODE=1

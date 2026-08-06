@@ -8,7 +8,8 @@
 
   Side-effecting concerns (file IO, parent walks, file watchers) live
   one level up in `org-tasks.commands.status`."
-  (:require [org-tasks.parser :as parser]))
+  (:require [org-tasks.parser.properties :as properties]
+            [org-tasks.parser.timestamps :as timestamps]))
 
 (def closed-statuses #{"DONE" "CANCELLED"})
 
@@ -59,12 +60,12 @@
   Returns `{:task <updated>, :prev-status, :status, :was-closed,
   :is-closed, :timestamp}`."
   ([task ^String status]
-   (apply-status-transition task status (parser/format-org-timestamp)))
+   (apply-status-transition task status (timestamps/format-org-timestamp)))
   ([task ^String status ^String timestamp]
    (let [prev-status (:status task)
          updated     (-> task
                          (assoc :status status)
-                         (parser/append-state-log status prev-status timestamp))
+                         (timestamps/append-state-log status prev-status timestamp))
          was-closed  (contains? closed-statuses prev-status)
          is-closed   (contains? closed-statuses status)
          updated     (cond
@@ -77,7 +78,7 @@
 
                        :else updated)
          updated     (if (and (= status "STARTED")
-                              (not (parser/task-has-started-property? updated)))
+                              (not (properties/task-has-started-property? updated)))
                        (update updated :property-lines
                                (fnil conj []) (str ":STARTED: [" timestamp "]"))
                        updated)]

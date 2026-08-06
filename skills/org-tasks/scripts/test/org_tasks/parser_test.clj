@@ -6,7 +6,12 @@
   `skills/org-tasks/scripts/test/fixtures/round-trip/`."
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [org-tasks.parser :as p]))
+            [org-tasks.lifecycle :as lifecycle]
+            [org-tasks.parser :as p]
+            [org-tasks.parser.issues :as issues]
+            [org-tasks.parser.links :as links]
+            [org-tasks.parser.properties :as properties]
+            [org-tasks.parser.timestamps :as timestamps]))
 
 (def ^:private fixture-root
   "skills/org-tasks/scripts/test/fixtures/round-trip")
@@ -35,6 +40,40 @@
         (is (nil?    (:priority t)))
         (is (= "Some task" (:summary t)))
         (is (= [] (:tags t)))))))
+
+(deftest stable-facade-reexports-extracted-helpers
+  (testing "every pre-extraction public var remains available from org-tasks.parser"
+    (is (every? #(ns-resolve 'org-tasks.parser %)
+                '[add-task-tag append-created-log append-state-log created-log-entry
+                  escape-regex expand-org-link-target extract-org-link
+                  extract-org-link-target format-org-date format-org-timestamp
+                  get-drawer-property get-drawer-property-values get-file-keyword
+                  get-file-keywords get-linked-issues get-plan-parent-id
+                  get-plan-parent-ref get-task-blockers get-task-handoff get-task-id
+                  get-task-started is-task-ready normalise-task-tag
+                  parse-blocker parse-link-templates parse-selected-keyword parse-tasks
+                  remove-task-tag rewrite-parent-link-kind serialize-tasks
+                  serialize-tasks-preserving-file set-drawer-property
+                  set-drawer-property-values set-linked-issues set-task-blockers
+                  set-task-handoff state-log-entry task-has-id?
+                  task-has-started-property?])))
+  (testing "facade functions delegate without dropping public var metadata"
+    (is (identical? p/format-org-timestamp timestamps/format-org-timestamp))
+    (is (identical? p/get-drawer-property properties/get-drawer-property))
+    (is (identical? p/parse-link-templates links/parse-link-templates))
+    (is (identical? p/get-linked-issues issues/get-linked-issues))
+    (is (= (select-keys (meta #'timestamps/format-org-timestamp) [:doc :arglists])
+           (select-keys (meta #'p/format-org-timestamp) [:doc :arglists]))))
+  (testing "readiness consumes lifecycle's canonical closed-statuses"
+    (is (nil? (ns-resolve 'org-tasks.parser 'closed-statuses)))
+    (is (= {:ready true :gating []}
+           (p/is-task-ready {:property-lines [":BLOCKED-BY: task:done"]}
+                            (constantly {:status (first lifecycle/closed-statuses)})))))
+  (testing "the shared tag stripper keeps scanner and section grammars distinct"
+    (is (= ["Task" ["one" "two"]]
+           (p/strip-trailing-task-tags "Task :one:two:")))
+    (is (= ["Section" ["wip-foo"]]
+           (p/strip-trailing-task-tags "Section :wip-foo:" true)))))
 
 ;; ── CLOSED + properties + LOGBOOK ─────────────────────────────────
 
@@ -141,9 +180,9 @@
 (deftest linked-issues-missing-template
   (let [{:keys [tasks]}
         (p/parse-tasks
-          (str "* TODO Bare\n"
-               ":PROPERTIES:\n:CUSTOM_ID: x\n"
-               ":LINKED_ISSUES: [[jira:MBFW-123]]\n:END:\n"))
+         (str "* TODO Bare\n"
+              ":PROPERTIES:\n:CUSTOM_ID: x\n"
+              ":LINKED_ISSUES: [[jira:MBFW-123]]\n:END:\n"))
         issues (p/get-linked-issues (first tasks) "")]
     (is (= 1 (count issues)))
     (is (nil? (:url (first issues))))
@@ -154,7 +193,7 @@
 
 (deftest link-template-parse
   (let [t (p/parse-link-templates
-            "#+LINK: jira https://example.atlassian.net/browse/%s\n#+LINK: gh https://github.com/%s\n")]
+           "#+LINK: jira https://example.atlassian.net/browse/%s\n#+LINK: gh https://github.com/%s\n")]
     (is (= "https://example.atlassian.net/browse/%s" (get t "jira")))
     (is (= "https://github.com/%s" (get t "gh")))))
 
@@ -199,15 +238,15 @@
             :summary "Parent"}
            (p/get-plan-parent-ref content)))
     (is (nil? (p/get-plan-parent-id
-                "#+PARENT: [[file:../../TASKS.org::#80ea589b][Parent]]\n")))))
+               "#+PARENT: [[file:../../TASKS.org::#80ea589b][Parent]]\n")))))
 
 (deftest rewrite-parent-link-kind
   (let [content (str "#+PARENT: [[task:80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]\n"
                      "[[task:other][Other]]\n")
         rewritten (p/rewrite-parent-link-kind
-                    content "80ea589b-501c-42d9-86e7-4d414c0c314e" :archive)]
+                   content "80ea589b-501c-42d9-86e7-4d414c0c314e" :archive)]
     (is (str/includes? rewritten
-          "#+PARENT: [[archive:80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]"))
+                       "#+PARENT: [[archive:80ea589b-501c-42d9-86e7-4d414c0c314e][Parent]]"))
     (testing "non-#+PARENT lines referencing the same task: kind not rewritten"
       (is (str/includes? rewritten "[[task:other][Other]]")))))
 
@@ -215,11 +254,11 @@
 
 (deftest drawer-property-get-set
   (let [t (first (:tasks (p/parse-tasks
-                           (str "* TODO Subject\n"
-                                ":PROPERTIES:\n"
-                                ":CUSTOM_ID: 11111111-2222-4333-8444-555555555555\n"
-                                ":FOO_BAZ: original\n"
-                                ":END:\n"))))]
+                          (str "* TODO Subject\n"
+                               ":PROPERTIES:\n"
+                               ":CUSTOM_ID: 11111111-2222-4333-8444-555555555555\n"
+                               ":FOO_BAZ: original\n"
+                               ":END:\n"))))]
     (is (= "original" (p/get-drawer-property t "FOO_BAZ")))
     (is (= "original" (p/get-drawer-property t "foo_baz")))
     (is (nil? (p/get-drawer-property t "MISSING")))
@@ -235,13 +274,13 @@
 
 (deftest multi-valued-blocked-by
   (let [t (first (:tasks (p/parse-tasks
-                           (str "* TODO Multi\n"
-                                ":PROPERTIES:\n"
-                                ":CUSTOM_ID: x\n"
-                                ":BLOCKED-BY: task:dep-1\n"
-                                ":BLOCKED-BY+: url:https://x\n"
-                                ":BLOCKED-BY+: human: waiting\n"
-                                ":END:\n"))))
+                          (str "* TODO Multi\n"
+                               ":PROPERTIES:\n"
+                               ":CUSTOM_ID: x\n"
+                               ":BLOCKED-BY: task:dep-1\n"
+                               ":BLOCKED-BY+: url:https://x\n"
+                               ":BLOCKED-BY+: human: waiting\n"
+                               ":END:\n"))))
         blockers (p/get-task-blockers t)]
     (is (= 3 (count blockers)))
     (is (= :task  (-> blockers (nth 0) :kind)))
@@ -265,10 +304,10 @@
 
 (deftest task-handoff
   (let [t (first (:tasks (p/parse-tasks
-                           (str "* TODO With handoff\n"
-                                ":PROPERTIES:\n:CUSTOM_ID: x\n"
-                                ":HANDOFF: Start at the parser delimiter.\n"
-                                ":END:\n"))))]
+                          (str "* TODO With handoff\n"
+                               ":PROPERTIES:\n:CUSTOM_ID: x\n"
+                               ":HANDOFF: Start at the parser delimiter.\n"
+                               ":END:\n"))))]
     (is (= "Start at the parser delimiter." (p/get-task-handoff t)))
     (let [cleared (p/set-task-handoff t nil)]
       (is (nil? (p/get-task-handoff cleared))))))
@@ -314,5 +353,5 @@
         tasks (:tasks (p/parse-tasks input))
         out   (p/serialize-tasks tasks)]
     (is (str/includes? out
-          "* DONE Below\nCLOSED: [2026-04-25 Sat 12:00]\n:PROPERTIES:\n:CUSTOM_ID: x\n:END:\n"))
+                       "* DONE Below\nCLOSED: [2026-04-25 Sat 12:00]\n:PROPERTIES:\n:CUSTOM_ID: x\n:END:\n"))
     (is (= 1 (count (re-seq #"(?m)^CLOSED:" out))))))

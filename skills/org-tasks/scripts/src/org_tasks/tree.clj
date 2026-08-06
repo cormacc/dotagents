@@ -29,6 +29,29 @@
               :else (some #(walk (conj ancestors task) %) (children task))))]
     (or (some #(walk [] %) tasks) [])))
 
+(defn subtree
+  "Return `task` and every reachable descendant in depth-first order."
+  [task]
+  (vec (all-tasks [task])))
+
+(defn subtree-ids
+  "Return the non-nil :CUSTOM_ID: values reachable from `task`."
+  [task]
+  (set (keep parser/get-task-id (subtree task))))
+
+(defn remove-by-id
+  "Return `tasks` with the first matching task subtree removed.
+
+  Walks ordinary and import children, preserving the remaining graph shape."
+  [tasks id]
+  (->> tasks
+       (keep (fn [task]
+               (when-not (= id (parser/get-task-id task))
+                 (cond-> (update task :children #(remove-by-id (or % []) id))
+                   (:import-children task)
+                   (update :import-children #(remove-by-id (or % []) id))))))
+       vec))
+
 (defn update-by-id
   "Replace the first task with `:CUSTOM_ID:` = `id` using `(f task)`."
   [tasks id f]
@@ -37,8 +60,8 @@
       (if (= id (parser/get-task-id t))
         (f t)
         (-> t
-            (update :children #(update-by-id % id f))
+            (update :children #(update-by-id (or % []) id f))
             (cond->
               (:import-children t)
-              (update :import-children #(update-by-id % id f))))))
+              (update :import-children #(update-by-id (or % []) id f))))))
     tasks))

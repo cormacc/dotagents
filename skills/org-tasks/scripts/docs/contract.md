@@ -44,7 +44,7 @@ This document pins the JSON / EDN contract every machine-readable `ot` command e
 }
 ```
 
-- `code` is a stable kebab-case identifier (`section-not-found`, `unknown-task`, `ambiguous-id`, `path-outside-project`, `duplicate-linked-issue`, `validation`, `invalid-status`, `out-of-root`, `unreadable`, `git-unavailable`, `empty-summary`, `conflict`, `unterminated-drawer`).
+- `code` is a stable kebab-case identifier (`section-not-found`, `unknown-task`, `ambiguous-id`, `path-outside-project`, `duplicate-linked-issue`, `validation`, `invalid-status`, `out-of-root`, `unreadable`, `git-unavailable`, `empty-summary`, `conflict`, `unterminated-drawer`, `confirmation-required`, `top-level-root`, `inbound-blockers`).
 - `message` is a single-line human-readable summary.
 - `file` and `line` are populated when locatable; otherwise `null`.
 - `details` may carry command-specific extra context.
@@ -52,7 +52,7 @@ This document pins the JSON / EDN contract every machine-readable `ot` command e
 
 #### `conflict`
 
-Write-time optimistic-concurrency check: a mutator (`status`, `priority`, `move`, `archive`, `publish`, `unpublish`, `create`, `record create`, `issue`/ `blocker`/`handoff` mutations, `backfill`) detects that a target file's on-disk bytes no longer match the snapshot it loaded at the start of the command -- e.g. another `ot` process or an editor wrote to it in between. The command aborts without writing:
+Write-time optimistic-concurrency check: a mutator (`status`, `priority`, `move`, `remove`, `archive`, `publish`, `unpublish`, `create`, `record create`, `issue`/ `blocker`/`handoff` mutations, `backfill`) detects that a target file's on-disk bytes no longer match the snapshot it loaded at the start of the command -- e.g. another `ot` process or an editor wrote to it in between. The command aborts without writing:
 
 ```json
 {
@@ -132,6 +132,7 @@ Tree form additionally carries `"children": [Task]` and an `"importChildren": [T
 - Bare `ot --format json` also emits the selected-task envelope and never starts interactive rendering.
 - During an interactive session, terminal rendering/control sequences are written to stderr or the controlling terminal. Stdout is reserved for exactly one final `org-tasks/v1` selected-task envelope after the TUI exits.
 - The final envelope reflects the persisted `#+SELECTED:` value. Moving the cursor is not selection; press `s` to persist a new selected task, or `s` again on the selected row to clear it.
+- In the standalone TUI, `D` first calls `ot remove --dry-run --prune-blockers`, displays the impact, and arms only that cursor task. A second `D` on the same task calls `ot remove --yes --prune-blockers`; cursor movement, mutations, mode changes, or a different task disarm it. The pi overlay exposes the same removal through its modal confirmation. Neither UI has a separate blocker-prune key.
 
 ## Per-command results
 
@@ -259,11 +260,40 @@ Sets the priority cookie explicitly (`<level>`, case-insensitive), cycles it wit
 }
 ```
 
-Pass `--clear` (or omit the id) to deselect.
+Pass `--clear` to deselect. `ot select --clear-stale` is the explicit repair path for a stale pointer and returns:
+
+```json
+"result": {
+  "selectionState": "absent | valid | cleared-stale",
+  "selectedId": "uuid | null",
+  "previousId": "uuid | null",
+  "file": "/repo/TASKS.local.org",
+  "dryRun": false
+}
+```
+
+It writes only for `cleared-stale`; valid and absent local files remain byte-identical. `--dry-run` returns the same result with `dryRun: true` and never writes.
 
 ### `ot selected`
 
 Same payload as `ot show <selectedId>`, or `{"selected": null, "selectedId": ...}` with exit 0 when the selection cannot be shown. `selectedId` discriminates the two reasons: `null` means nothing is selected, while a non-null value is a stale `#+SELECTED:` pointer to a task that no longer exists (`ot doctor` reports `selected-not-found`).
+
+### `ot remove <id> [--prune-blockers] --yes`
+
+```json
+"result": {
+  "targetId": "uuid",
+  "subtree": [{ "id": "uuid", "summary": "Child", "status": "TODO", "sourcePath": "/repo/design/log/plan.org" }],
+  "uncheckedCriteria": [{ "taskId": "uuid", "taskSummary": "Child", "sourcePath": "/repo/design/log/plan.org", "taskLine": 42, "criterion": "Verify migration" }],
+  "inboundBlockers": [{ "taskId": "uuid", "taskSummary": "Other", "sourcePath": "/repo/TASKS.org", "blocker": { "raw": "task:uuid", "kind": "task", "ref": "uuid" } }],
+  "affectedFiles": ["/repo/TASKS.org", "/repo/design/log/plan.org"],
+  "selection": { "selectedId": "uuid | null", "cleared": true },
+  "prunedBlockers": [],
+  "dryRun": false
+}
+```
+
+Targets must have an active graph parent or import owner; protocol top-level roots fail with `top-level-root`. `--dry-run` returns the projection without writing. A non-dry-run call without `--yes` fails with `confirmation-required` and carries the same projection in `error.details`; inbound blockers similarly fail with `inbound-blockers` unless `--prune-blockers` is explicit. With pruning, only task blockers resolving into the subtree are removed. Target, blocker-owner, and affected selection baselines are checked before the first atomic source-root write; imported/local owners retain their own files.
 
 ### `ot archive <id>`
 
@@ -322,6 +352,8 @@ Restores only an archive-resolved exact UUID or unique prefix. It refuses unknow
   "counts": { "error": 0, "warn": 0 }
 }
 ```
+
+`selected-not-found` is read-only guidance: it names `ot select --clear-stale`, which atomically repairs only an unresolved local pointer. `inline-path-dangling` is an advisory doctor finding for a missing constrained inline file citation in a change-record. Its `location.file` and `location.line` identify the first occurrence of each distinct candidate; valid or excluded token forms produce no finding.
 
 ### `ot section <file> [<section>]`
 
@@ -404,6 +436,17 @@ Errors: `out-of-root`, `unreadable`. Not-found is a non-error result with `"foun
   ]
 }
 ```
+
+### `ot blocker prune [--yes]`
+
+```json
+"result": {
+  "pruned": [{ "taskId": "uuid", "taskSummary": "Blocked task", "sourcePath": "/repo/TASKS.org", "blocker": { "raw": "task:missing", "kind": "task", "ref": "missing" } }],
+  "dryRun": false
+}
+```
+
+`--dry-run` reports unresolved explicit or bare-full-UUID task blockers without writing. A non-empty actual prune requires `--yes`; valid/ambiguous task references and every non-task blocker are preserved.
 
 ### `ot blocker list <id>`
 

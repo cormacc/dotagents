@@ -17,12 +17,13 @@ flowchart TD
     end
     subgraph Commands
         REG["commands/registry.clj\nspecs + handlers + summaries"]
-        FAM["commands/{list_show,create,move,status,\narchive_publish,record,links,maintenance}.clj"]
+        FAM["commands/{list_show,create,move,removal,status,\narchive_publish,record,links,maintenance}.clj"]
         UTIL["commands/util.clj\ncontext + id resolution"]
     end
     subgraph Core
         LOADER["loader.clj\ngraph load/save, atomic IO"]
-        PARSER["parser.clj\norg parse/serialize (round-trip)"]
+        PARSER["parser.clj\nstable facade + scanner/serializers"]
+        PARSERINT["parser/{timestamps,properties,links,issues}.clj\nfocused parser helpers"]
         EFF["effective.clj\n#+SETUPFILE: chains"]
         LINKS["links.clj\nimport/link target resolution"]
         TREE["tree.clj\nchildren + import-children walks"]
@@ -46,6 +47,9 @@ flowchart TD
     FAM --> TREE
     FAM --> TASK
     LOADER --> PARSER
+    PARSER --> PARSERINT
+    PARSER --> LIFE
+    LIFE --> PARSERINT
     LOADER --> EFF
     LOADER --> LINKS --> PATHS
     FAM --> OUT
@@ -83,9 +87,9 @@ flowchart LR
 
 Key properties:
 
-- The parser is a stateful line scanner with round-trip guarantees: unknown keywords, drawers, and body content are preserved byte-identically (fixtures under =test/fixtures/round-trip/=). An unterminated =:PROPERTIES:=/=:LOGBOOK:= drawer (no =:END:= before EOF) is a hard parse error (=unterminated-drawer=, naming file + line) rather than silently swallowing the rest of the file.
+- =org-tasks.parser= is the stable public facade: it owns the stateful line scanner, task-tag operations, and serializers, while =parser.timestamps=, =parser.properties=, =parser.links=, and =parser.issues= own focused helpers. =lifecycle= consumes timestamp/property helpers directly, so its =closed-statuses= is canonical without a parser cycle. The scanner retains round-trip guarantees: unknown keywords, drawers, and body content are preserved byte-identically (fixtures under =test/fixtures/round-trip/=). An unterminated =:PROPERTIES:=/=:LOGBOOK:= drawer (no =:END:= before EOF) is a hard parse error (=unterminated-drawer=, naming file + line) rather than silently swallowing the rest of the file.
 - Each UUID has one canonical writable node: mutations on imported plan tasks persist to the task's own source file via =loader/save-source-roots=, never to a copy. =archive=/=publish=/=unpublish= re-stamp a task's =:source-path= and hand the whole graph to =save-source-roots=, so it works uniformly whether the task's original root lived in =TASKS.org=, =TASKS.local.org=, or a file-level =#+IMPORT:= plan file -- it is never left behind in one file while appearing in another. =unarchive= is the guarded inverse: it resolves only the archive file, preflights active/archive/record baselines, restores into the explicit or stamped level-1 section, and leaves lifecycle state untouched.
-- =save-source-roots= is an optimistic-concurrency writer: before rewriting a file it compares the current on-disk bytes against the load-time snapshot (=:source-content=, or the caller-supplied baseline for files that may end up with zero roots) and aborts with a =conflict= error, file untouched, on a mismatch. Every file write goes through =loader/atomic-write= (unique per-call tmp name, then rename).
+- =save-source-roots= is an optimistic-concurrency writer: before the first rewrite it preflights every known affected baseline against the load-time snapshot (=:source-content=, or a caller-supplied baseline for files that may end up with zero roots), then atomically replaces each changed source. A detected conflict aborts before any write; a race after preflight remains outside the filesystem-transaction boundary. Every file write goes through =loader/atomic-write= (unique per-call tmp name, then rename).
 - =loader/safe-slurp= only returns =nil= for a genuinely missing file; a read failure on an existing file (e.g. a broken =TASKS.archive.org=) throws =unreadable= instead of being treated as empty.
 - All import/link resolution flows through =org-tasks.links= into =paths.clj= sandboxing (realpath, traversal rejection) -- one audit point for path escapes. The TUI's plan-open action reuses this same resolution (via =ot show='s record-path lookup) instead of opening a raw =plan:foo.org= link token as a literal path.
 
@@ -114,7 +118,7 @@ sequenceDiagram
 
 =move= is the one structural mutator that bypasses the serializer: relocating a subtree changes nothing but heading depth, so =commands/move.clj= cuts the subtree's exact source lines, restars its headings, and splices them at the destination (reusing =insert/insert-subtree-into-section= for a =--section= target). That keeps drawers, LOGBOOK, bodies, descendant order, *and* intra-subtree blank lines byte-identical, and leaves every unrelated region of the file untouched rather than putting it through =serialize-tasks-preserving-file='s blank-line normalisation. It is in-file only by construction -- source and destination must share one =:source-path= -- so no UUID can gain a second writable node; locality and archive transitions stay with =publish=/=unpublish= and =archive=/=unarchive=.
 
-The same shape applies to =priority=, =select=, =archive=, =publish=, and the property commands (=handoff= / =blocker= / =issue=, generated from a per-property data map in =commands/links.clj=). Cycle orders (status, priority incl. the unset slot) live in =lifecycle.clj=; both UIs pass only a direction.
+The same shape applies to =priority=, =select=, =remove=, =archive=, =publish=, and the property commands (=handoff= / =blocker= / =issue=, generated from a per-property data map in =commands/links.clj=). =commands/removal.clj= computes pure subtree/inbound-blocker impact before confirmation, then uses =tree/remove-by-id= and source-root saving; it never lets a protocol top-level root bypass lifecycle plus archive history. Cycle orders (status, priority incl. the unset slot) live in =lifecycle.clj=; both UIs pass only a direction.
 
 * TUI design
 
@@ -135,7 +139,8 @@ skills/org-tasks/scripts/
     cli.clj                     # entry point; dispatch/help derived from registry
     commands/                   # registry.clj + command family namespaces + util.clj
     tui.clj  tui/               # charm view/glue; tasks.clj bridge; dispatch.clj actions
-    parser.clj                  # org parse/serialize (round-trip preserving)
+    parser.clj                  # stable facade; scanner/serializers (round-trip preserving)
+    parser/                     # timestamps, properties, links, linked issues
     loader.clj effective.clj    # graph IO; setupfile chains
     links.clj paths.clj root.clj# link/import resolution; sandbox; project root
     tree.clj task.clj           # traversal; wire projection

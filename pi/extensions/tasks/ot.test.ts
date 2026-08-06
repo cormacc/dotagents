@@ -6,11 +6,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  buildOtRemoveArgs,
   clearOtBinaryCache,
   otCreateTask,
   otCyclePriority,
   otCycleStatus,
   otList,
+  otRemoveTask,
   resolveOtBinary,
   runOt,
 } from "./ot.ts";
@@ -105,6 +107,12 @@ async function main(): Promise<void> {
     );
     writeFileSync(join(cdir, "TASKS.local.org"), "#+SELECTED:\n", "utf-8");
 
+    ok(
+      JSON.stringify(buildOtRemoveArgs(childId, true)) === JSON.stringify(["remove", childId, "--prune-blockers"]),
+      "ot remove wrapper builds a vector argv with inbound pruning",
+      buildOtRemoveArgs(childId, true),
+    );
+
     const cycled = await otCycleStatus(parentId, "forward", { cwd: cdir });
     ok(cycled.prevStatus === "TODO" && cycled.status === "STARTED",
        "otCycleStatus forward TODO -> STARTED", cycled);
@@ -143,6 +151,13 @@ async function main(): Promise<void> {
     const kidRow = rows.find((r) => r.summary === "Rel child");
     ok(sibRow?.level === 3, "sibling lands at the anchor's level (3)", sibRow);
     ok(kidRow?.level === 3 && !!kid.id, "child nests under the parent (level 3)", kidRow);
+
+    const preview = await otRemoveTask(childId, { cwd: cdir, dryRun: true, pruneBlockers: true });
+    ok(preview.dryRun && preview.targetId === childId, "otRemoveTask previews without writing", preview);
+    const removed = await otRemoveTask(childId, { cwd: cdir, pruneBlockers: true });
+    ok(!removed.dryRun && removed.targetId === childId, "otRemoveTask writes only with --yes", removed);
+    const afterRemoval = await otList({ cwd: cdir });
+    ok(!JSON.stringify(afterRemoval.tree).includes(childId), "confirmed removal deletes the target subtree", afterRemoval.tree);
   } finally {
     rmSync(cdir, { recursive: true, force: true });
   }
