@@ -229,7 +229,6 @@ Deferred from 2fe1ce2a (see [[file:design/log/2026-07-30-optimise-test-build.org
 :PROPERTIES:
 :CUSTOM_ID: 9c17f4b7-9bae-4a83-9f19-5346e463832e
 :CREATED: [2026-08-06 Thu 22:29]
-:BLOCKED-BY: task:4957d0e5-5bda-4532-aa20-631fbde1983b
 :END:
 :LOGBOOK:
 - Created [2026-08-06 Thu 22:29]
@@ -249,7 +248,7 @@ Scope:
 - Persist `:kind` and the resolved `:model` in the ledger entry and echo them in the spawn result envelope, so a wrong harness is visible at spawn instead of discovered later, and so this premise becomes measurable next time.
 - Delete the defensive prose that exists only because `--kind` sits beside `--model`: the SKILL.md kind/model routing rule and its "never pass --kind to mean the same harness as me" paragraph, `contract.md:69` and `:88`, and the Subagents bullet in both AGENTS.md copies. This is the token-saving half of the change.
 
-Depends on the close/continue lifecycle work landing first ([[task:4957d0e5-5bda-4532-aa20-631fbde1983b]]): that change is actively rewriting `cli.clj`, the ledger schema, and the same four documents.
+Dependency discharged 2026-08-07: the close/continue lifecycle work (`4957d0e5-5bda-4532-aa20-631fbde1983b`, now closed and archived) has landed, so `cli.clj`, the ledger schema, and the four documents this touches are no longer moving under it. Re-read them before starting -- the line numbers cited above predate that change and several of those files were substantially rewritten.
 
 ** TODO org-tasks: bb test runner should validate its arguments and explain itself :tooling:
 :PROPERTIES:
@@ -577,35 +576,3 @@ Origin:
 
 Evidence:
 Closing summary asserted a namespace still hard-coded a parameter it had resolved at call sites, which the refactor completed minutes earlier had removed; user challenged and it was retracted. Same session also misattributed a change-record edit to the user based on an Emacs lock plus timing rather than checking.
-
-** STARTED herdr-orch: support resident reviewers for incremental review rounds :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 4957d0e5-5bda-4532-aa20-631fbde1983b
-:CREATED: [2026-08-06 Thu 17:48]
-:STARTED: [2026-08-06 Thu 21:42]
-:END:
-:LOGBOOK:
-- Created [2026-08-06 Thu 17:48]
-- State "STARTED" from "TODO" [2026-08-06 Thu 21:42]
-- State "DONE" from "STARTED" [2026-08-06 Thu 23:27]
-- State "STARTED" from "DONE" [2026-08-07 Fri 00:39]
-:END:
-#+IMPORT: [[plan:2026-08-06-herdr-orch-support-resident-reviewers-fo.org]]
-Design explicit resident lifecycle support for correlated incremental reviews. A parent should be able to opt a reviewer into residency at spawn time, or retain/promote it at capture time before automatic pane closure, then assign a fresh task/result while preserving the same verified persona, name, pane, and context. Publication may recommend retention through NEXT metadata, but the child must not choose its own lifecycle. Keep a fresh ephemeral reviewer available for final Class C approval so incremental context does not become self-confirming.
-
-Required design constraints:
-- Resident reuse requires the live name and pane ID to match the ledger, previous result captured/validated, settled idle/done state, same persona, and no active task.
-- Retained reviewer context is a snapshot: each revision-round assignment identifies the new revision or diff and requires revalidation of prior findings and mutable baselines before restating them. The broader summary/handoff rule remains tracked by [[task:aaea2185-f6be-4260-8a9c-207b3a834866][Re-verify state claims before restating them in a summary]].
-- COMPLETE/FAILED remains one-shot per task; reuse allocates a new task/result instead of republishing.
-- BLOCKED retains its current genuine-dependency meaning and must not be abused as a keepalive.
-- Parent control is explicit, likely via spawn-time --resident and/or collect --retain; no retention inferred automatically from result prose.
-- Compare context savings against anchoring risk and pane/model occupancy; use a fresh reviewer for final high-consequence closure.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-06 Thu 16:26]
-- sender: human
-
-Evidence:
-This session ran multiple incremental reviews of one evolving change-record and implementation. Ephemeral reviewers rebuilt repository and artifact context each round; citing previous reports reduced duplicate findings but did not remove re-ingestion. Current source has no resident ledger field or CLI flag, and maybe-close! automatically closes settled COMPLETE/FAILED children after capture. The skill describes resident policy, but the task protocol provides no supported conversion or reuse operation.

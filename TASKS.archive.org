@@ -2547,3 +2547,39 @@ Evidence:
 - pi/settings.json HEAD: packages[], theme, hideThinkingBlock, defaultThinkingLevel.
 - Session dirty diff: lastChangelogVersion="0.76.0", defaultProvider="anthropic", defaultModel="claude-opus-4-7".
 - Filter wrapper exists at ./install-git-filter.sh; was not active on this clone.
+
+** DONE herdr-orch: support resident reviewers for incremental review rounds :skill:herdr_orch:
+CLOSED: [2026-08-07 Fri 16:41]
+:PROPERTIES:
+:CUSTOM_ID: 4957d0e5-5bda-4532-aa20-631fbde1983b
+:CREATED: [2026-08-06 Thu 17:48]
+:STARTED: [2026-08-06 Thu 21:42]
+:ARCHIVED: [2026-08-07 Fri 16:41]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 17:48]
+- State "STARTED" from "TODO" [2026-08-06 Thu 21:42]
+- State "DONE" from "STARTED" [2026-08-06 Thu 23:27]
+- State "STARTED" from "DONE" [2026-08-07 Fri 00:39]
+- State "DONE" from "STARTED" [2026-08-07 Fri 16:41]
+:END:
+#+IMPORT: [[plan:2026-08-06-herdr-orch-support-resident-reviewers-fo.org]]
+Design explicit resident lifecycle support for correlated incremental reviews. A parent should be able to opt a reviewer into residency at spawn time, or retain/promote it at capture time before automatic pane closure, then assign a fresh task/result while preserving the same verified persona, name, pane, and context. Publication may recommend retention through NEXT metadata, but the child must not choose its own lifecycle. Keep a fresh ephemeral reviewer available for final Class C approval so incremental context does not become self-confirming.
+
+Required design constraints:
+- Resident reuse requires the live name and pane ID to match the ledger, previous result captured/validated, settled idle/done state, same persona, and no active task.
+- Retained reviewer context is a snapshot: each revision-round assignment identifies the new revision or diff and requires revalidation of prior findings and mutable baselines before restating them. The broader summary/handoff rule remains tracked by [[task:aaea2185-f6be-4260-8a9c-207b3a834866][Re-verify state claims before restating them in a summary]].
+- COMPLETE/FAILED remains one-shot per task; reuse allocates a new task/result instead of republishing.
+- BLOCKED retains its current genuine-dependency meaning and must not be abused as a keepalive.
+- Parent control is explicit, likely via spawn-time --resident and/or collect --retain; no retention inferred automatically from result prose.
+- Compare context savings against anchoring risk and pane/model occupancy; use a fresh reviewer for final high-consequence closure.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-06 Thu 16:26]
+- sender: human
+
+Evidence:
+This session ran multiple incremental reviews of one evolving change-record and implementation. Ephemeral reviewers rebuilt repository and artifact context each round; citing previous reports reduced duplicate findings but did not remove re-ingestion. Current source has no resident ledger field or CLI flag, and maybe-close! automatically closes settled COMPLETE/FAILED children after capture. The skill describes resident policy, but the task protocol provides no supported conversion or reuse operation.
