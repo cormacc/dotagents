@@ -2707,3 +2707,28 @@ Sequencing: this rewrites the completion contract and wants its own change-recor
 Caveat on this analysis: `continue`'s guards were assessed from `contract.md` and code read during the originating session. A real migration design needs a deliberate pass over `newest-rounds`, `any-candidates`, and the close/prune/compact guards, which all key on entry identity; those have not been audited for cursor compatibility and that gap should not be inherited as settled.
 
 Related: the sibling exploration on leveraging pi `/fork` for subagents -- both concern how flexible a spawned child's lifecycle should be.
+
+** DONE Evaluate recent babashka CLI updates
+CLOSED: [2026-08-08 Sat 00:31]
+:PROPERTIES:
+:CUSTOM_ID: e2dca74f-b3d2-4f65-b3ae-3444c8b40936
+:CREATED: [2026-08-07 Fri 22:04]
+:STARTED: [2026-08-08 Sat 00:20]
+:ARCHIVED: [2026-08-08 Sat 00:31]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-08-07 Fri 22:04]
+- State "STARTED" from "TODO" [2026-08-08 Sat 00:20]
+- State "DONE" from "STARTED" [2026-08-08 Sat 00:31]
+:END:
+A recent babashka release included some improvements around CLI documentation.
+See https://blog.michielborkent.nl/babashka-tasks-cli.html
+Evaluate whether this drives improvement/simplification of org-tasks or herdr-orch cli tools
+
+Outcome: no material simplification for either CLI; closed with no implementation work. Evaluated 2026-08-08 by a delegated researcher, with the code and version claims below re-verified directly.
+
+- Inapplicable by shape :: the blog's feature is =bb.edn= =:tasks= gaining =:exec-fn= / =:cmd= / =:cli= so a task auto-dispatches through =babashka.cli=. It targets projects with many small tasks mapped to annotated functions. Both =ot= and =oh= are one opaque task forwarding argv into a single =-main= with its own dispatch, and are usually invoked via =bbin= / =-m=, bypassing =bb.edn= =:tasks= entirely. Babashka CHANGELOG 1.13.219 (2026-07-27) also marks these task keys experimental and subject to change.
+- =ot= :: already on =babashka.cli= (=cli/dispatch= at =org_tasks/cli.clj:142=, =cli/format-opts= at :47/:67/:70). Bumping the pinned =org.babashka/cli 0.12.75= would add only =:positional= / =:restrict-args= (0.12.76), ordered =:enum= plus vector =:doc= / =:epilog= (0.12.80), and dispatch auto-help (0.12.85). Not free: =:enum='s default error wording differs from ot's custom message, which flows verbatim into ot's JSON error envelope.
+- =oh= :: =herdr_orch/cli.clj= (1918 lines) requires no =babashka.cli=; it hand-rolls the =usage= string and =one= / =require-positionals=. Adopting dispatch would shrink mechanical parsing boilerplate, but cross-field validation (e.g. mutually exclusive =--match= / =--regex=) stays in leaf code, most of =usage= is narrative semantics that would not shrink, and its help text and JSON envelope are documented, tested contracts (=skills/herdr-orch/scripts/docs/contract.md=, =scripts/test/=). Cost and risk exceed the benefit.
+- =registry/dispatch-coerce= (open question, resolved) :: the map is entirely load-bearing, and its behaviour is identical across =org.babashka/cli= 0.7.53, 0.8.61, 0.11.73, 0.12.75 and 0.12.85 under bb v1.13.219, so it is stable library behaviour rather than a version-specific workaround. Dropping the spec-derived aggregation fails ~111 tests with =No matching clause: json=. The real mechanism: =dispatch= parses options that /precede/ the subcommand before it has resolved which entry to run, so no entry =:spec= is in scope for them and only the top-level map applies -- =ot --format json show <id>= yields the string "json" without it, while =ot show <id> --format json= is coerced by the entry spec alone. Separately, =:id :string= stops an =:args->opts= positional being number-coerced, so an all-digit or scientific-notation-shaped =:CUSTOM_ID:= prefix survives. The docstring previously gave the rationale as "per-spec =:coerce= is ignored by =dispatch=", which is wrong as stated; corrected in =registry.clj= on 2026-08-08.

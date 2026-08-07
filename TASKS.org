@@ -20,18 +20,6 @@
 
 * Explorations
 
-** TODO Evaluate recent babashka CLI updates
-:PROPERTIES:
-:CUSTOM_ID: e2dca74f-b3d2-4f65-b3ae-3444c8b40936
-:CREATED: [2026-08-07 Fri 22:04]
-:END:
-:LOGBOOK:
-- Created [2026-08-07 Fri 22:04]
-:END:
-A recent babashka release included some improvements around CLI documentation.
-See https://blog.michielborkent.nl/babashka-tasks-cli.html
-Evaluate whether this drives improvement/simplification of org-tasks or herdr-orch cli tools
-
 ** TODO Consider leveraging pi /fork for subagents
 :PROPERTIES:
 :CUSTOM_ID: 84653126-cd7e-412a-9761-d43eaad7f97f

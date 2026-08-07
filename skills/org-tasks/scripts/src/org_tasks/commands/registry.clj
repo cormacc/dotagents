@@ -317,10 +317,24 @@
 
 (def dispatch-coerce
   "Top-level :coerce passed to `babashka.cli/dispatch`, derived from
-  `global-spec` plus every command spec. Per-spec `:coerce` is honoured by
-  `parse-opts` but ignored by `dispatch`, so expose the same coercions here.
+  `global-spec` plus every command spec.
+
+  Required because `dispatch` parses options that *precede* the subcommand
+  before it has resolved which entry to run, so no entry `:spec` is in scope
+  for them and only this top-level map applies. `ot --format json show <id>`
+  therefore yields the string \"json\" without the aggregate entry, while
+  `ot show <id> --format json` is coerced to `:json` by the entry spec alone.
+  Duplicating every command's coercions here keeps both orders equivalent.
+
   Positional id mappings use this aggregate entry without adding a synthetic
-  `--id` option to their per-command help."
+  `--id` option to their per-command help; `:id :string` also stops an
+  all-digit or scientific-notation-shaped `:CUSTOM_ID:` prefix being
+  number-coerced.
+
+  Measured identical across org.babashka/cli 0.7.53, 0.8.61, 0.11.73, 0.12.75
+  and 0.12.85 (bb v1.13.219, 2026-08-08): this is stable library behaviour,
+  not a version-specific workaround. Dropping the aggregation fails ~111
+  tests with `No matching clause: json`."
   (let [spec-coerce (into {}
                           (keep (fn [[k spec]]
                                   (when (contains? spec :coerce)
