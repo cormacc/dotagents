@@ -81,16 +81,17 @@
 (defn continue-leg! [kind model]
   (let [token (str "continuity-" (subs (str (java.util.UUID/randomUUID)) 0 8))
         first-round (-> (cli/execute (smoke-task-args "scout" kind model
-                                                      (str "Run the guarded continuation smoke, round one. Hold this token for the rest of this session: "
+                                                      (str "Run the guarded continuation smoke, round one. Hold this token in context for the rest of this session: "
                                                            token
-                                                           ". Do not write it to any file. Publish COMPLETE with a one-line summary that does NOT contain the token.")))
+                                                           ". Do not write it to any file, and keep it out of this round's summary. That restriction exists so a later round can prove same-pane recall rather than reading it back off disk; it is not a confidentiality guard, and a later round will ask you to produce the token deliberately. Publish COMPLETE with a one-line summary that does NOT contain the token.")))
                         complete!)
         first-entry (entry! first-round)
         _ (when (str/includes? (str (:summary first-round)) token)
             (throw (ex-info "continuation smoke round one leaked the token into its summary, so round two proves nothing"
                             {:task (:task first-round)})))
         second-round (-> (cli/execute ["task" "continue" (:task first-round) "--wait" "--task"
-                                       (str "Round two of the guarded continuation smoke. Publish COMPLETE whose summary is exactly the token you were given in round one, and nothing else. "
+                                       (str "Round two of the guarded continuation smoke. Round one's restriction on the token covered scratch files and round one's own summary only, and it is now lifted for this round's summary -- reproducing the token here is the entire point of the test, not a violation of that instruction. "
+                                            "Publish COMPLETE whose summary is exactly the token you were given in round one, and nothing else. "
                                             "It is not in this assignment and not on disk: recall it from your own earlier turn. If you cannot recall it, publish FAILED rather than guessing.")])
                          complete!)
         second-entry (entry! second-round)]
@@ -117,13 +118,32 @@
           _ (when-not (re-matches #"scout-[0-9]+(?:-.+)?" (:label root-entry)) (throw (ex-info "root smoke label is invalid" {:label (:label root-entry)})))
           ;; The nested child is the planner's own, not this root's: its ledger entry records
           ;; the planner's `:parent-session`, so `close` here would refuse it and a root
-          ;; `close --settled` correctly skips it. Whoever spawns a child closes it, so the
-          ;; planner is told to -- and the assertion below makes a skipped close loud instead
-          ;; of leaking one grandchild pane per smoke run.
-          nested (-> (cli/execute (smoke-task-args "planner" kind model (str "Run the guarded nested smoke. Spawn exactly one blocking scout with the injected launcher using model " model "; ask it to verify its injected identity and publish COMPLETE. Wait for its result and require that it completed. Then close that child's pane with `\"$HERDR_ORCH_BIN\" task close <its full task uuid>` and require the outcome status to be `closed`: capturing a result never closes a pane, so a child you spawned is yours to close. Only then publish your own COMPLETE result."))) complete!)
+          ;; `close --settled` correctly skips it. Whoever spawns a child closes it -- and that
+          ;; is now the publish-side guard's job, not this assignment's: a planner that still
+          ;; owns an open round *cannot* publish, so its COMPLETE result below is itself the
+          ;; evidence the grandchild was dealt with. The leg therefore no longer instructs the
+          ;; close, which was an LLM-compliance dependency the ledger could already answer.
+          nested (-> (cli/execute (smoke-task-args "planner" kind model (str "Run the guarded nested smoke. Spawn exactly one blocking scout with the injected launcher using model " model "; ask it to verify its injected identity and publish COMPLETE. Wait for its result and require that it completed. Then publish your own COMPLETE result."))) complete!)
           planner-entry (entry! nested)
           prefix (core/nested-prefix (:label planner-entry) "planner")
-          child-entry (some #(when (str/starts-with? (:label %) (str prefix "/scout-")) %) (ledger/entries))
+          ;; Identify the grandchild by the *session link*, not by its label. A label is only
+          ;; unique within one parent session -- the index is per-session and per-persona --
+          ;; so `planner-2/scout-1-light` recurs across runs, and this scan walks the shared
+          ;; ledger, which deliberately keeps every prior session's entries. Matching on the
+          ;; label alone therefore returned a *previous* run's never-closed entry and failed
+          ;; the close assertion below while this run's grandchild had in fact been closed
+          ;; correctly -- a false negative on the one gate that guards closeout. The
+          ;; grandchild's `:parent-session` is exactly its planner's `:child-session`, which
+          ;; is unique per run, so that is the identity to key on; the label is then asserted
+          ;; separately, keeping the nested-label contract pinned without conflating the two.
+          planner-session (get-in planner-entry [:child-session :value])
+          _ (when-not planner-session
+              (throw (ex-info "nested smoke planner entry has no :child-session to attribute its grandchild to"
+                              {:task (:task planner-entry) :label (:label planner-entry)})))
+          child-entry (some #(when (= planner-session (:parent-session %)) %) (ledger/entries))
+          _ (when (and child-entry (not (str/starts-with? (str (:label child-entry)) (str prefix "/scout-"))))
+              (throw (ex-info "nested smoke grandchild label does not carry its planner's nested prefix"
+                              {:expected-prefix (str prefix "/scout-") :actual (:label child-entry) :task (:task child-entry)})))
           ;; Runs before the retro leg's branch so both branches report it, and after the
           ;; nested leg so a failure here is never confused with a spawn or fan-in failure.
           continuation (continue-leg! kind model)]
@@ -133,8 +153,11 @@
       ;; to close is one leaked pane; throwing first would leak all three.
       (close! (:task root) "root")
       (close! (:task nested) "nested")
-      ;; Read after the planner published, so its close (if it made one) is already recorded.
-      ;; Naming the pane in the failure keeps the manual cleanup one command away.
+      ;; Read after the planner published, so its close is already recorded. The publish guard
+      ;; makes a *published* planner proof that no open round of its own remained, but it
+      ;; discharges a round whose child has vanished without closing anything, so this still
+      ;; pins the stronger fact: the pane was actually taken. Naming it keeps cleanup one
+      ;; command away.
       (when-not (:closed-at child-entry)
         (throw (ex-info "nested smoke child was never closed by its own parent; close its pane manually"
                         {:task (:task child-entry) :child (:child child-entry) :pane-id (:pane-id child-entry)})))

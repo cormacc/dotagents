@@ -232,6 +232,7 @@
     (is (str/includes? prompt "You may spawn at most one blocking scout or researcher or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."))
     (is (not (str/includes? prompt "mandates")))))
 
+
 (deftest worker-spawn-policy-narrows-to-a-leaf
   (testing "--spawns none forces a leaf"
     (let [{:keys [env dir prompt-file]} (fake-env {})
@@ -337,8 +338,10 @@
     (is (= (injected-env split-env-file "HERDR_ORCH_SPAWNS")
            (injected-env tab-env-file "HERDR_ORCH_SPAWNS")))))
 
-;; `--tab` places the child in a new unfocused tab of the caller's workspace instead of
-;; a split, but every other contract (env, label, ledger, collect, closure) is identical.
+;; `--tab` places the child in a new tab of the caller's workspace instead of a split, but
+;; every other contract (env, label, ledger, collect, closure) is identical. This is a root
+;; spawn, so the shipped `:defaults :focus true` also applies: the tab is focused, not
+;; `--no-focus` (task 8869bd4f).
 (deftest tab-placement-contract
   (let [{:keys [env log env-file dir]} (fake-env {}) proc (call! env "task" "run" "worker" "--tab" "--task" "tab placement" "--timeout" "20")
         argv (calls log)
@@ -350,7 +353,8 @@
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (some? tab-create))
     (is (= ["tab" "create" "--workspace"] (subvec (vec tab-create) 0 3)))
-    (is (some #{"--no-focus"} tab-create))
+    (is (some #{"--focus"} tab-create))
+    (is (not-any? #{"--no-focus"} tab-create))
     (is (some #{"--label"} tab-create))
     ;; No split command at all for a tab-placed spawn.
     (is (not-any? #(= ["pane" "split"] (vec (take 2 %))) argv))
@@ -365,6 +369,7 @@
     (is (nil? (injected "HERDR_ORCH_WAITING_POLICY")))
     (is (= "blocking" (:waiting-policy entry)))
     (is (= "tab" (:placement entry)))
+    (is (true? (:focus entry)))
     (is (= "w:tab" (:tab-id entry)))
     (is (= "w:child" (:pane-id entry)))))
 
@@ -380,7 +385,12 @@
       (is (= "COMPLETE" (get-in (result proc) [:result :status])))
       (is (not-any? #(= ["pane" "split"] (vec (take 2 %))) (calls log)))
       (is (= "tab" (:placement entry)))
-      (is (= "w:tab" (:tab-id entry)))))
+      (is (= "w:tab" (:tab-id entry)))
+      ;; Shipped `:defaults :focus true` (task 8869bd4f): a root spawn focuses its child.
+      (is (true? (:focus entry)))
+      (let [tab-create (first (filter #(= ["tab" "create"] (vec (take 2 %))) (calls log)))]
+        (is (some #{"--focus"} tab-create))
+        (is (not-any? #{"--no-focus"} tab-create)))))
   (testing "below root: split"
     (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"
                                            "FAKE_PARENT_LABEL" "worker-1-light"})
@@ -389,7 +399,13 @@
           task (get-in (result proc) [:result :task]) entry (ledger-entry* dir task)]
       (is (not-any? #(= ["tab" "create"] (vec (take 2 %))) (calls log)))
       (is (= "split" (:placement entry)))
-      (is (nil? (:tab-id entry)))))
+      (is (nil? (:tab-id entry)))
+      ;; A below-root spawn never focuses, gated on the same `:below-root?` predicate
+      ;; `continue`'s root-only guard tests (task 8869bd4f).
+      (is (false? (:focus entry)))
+      (let [split (first (filter #(= ["pane" "split"] (vec (take 2 %))) (calls log)))]
+        (is (some #{"--no-focus"} split))
+        (is (not-any? #{"--focus"} split)))))
   (testing "--split overrides the configured default and issues no tab command"
     (let [{:keys [env log dir]} (fake-env {}) proc (call! env "task" "run" "worker" "--split" "--task" "forced split" "--timeout" "20")
           task (get-in (result proc) [:result :task]) entry (ledger-entry* dir task)]
@@ -540,6 +556,55 @@
     (is (= "tab" (preview env)))
     (is (= "split" (preview (merge env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"}))))
     (is (= "split" (preview env "--split")))))
+
+;; task 8869bd4f: focus is a `--focus`/`--no-focus` value-less flag pair, mirroring
+;; `--tab`/`--split`, and gated on the same `:below-root?` predicate as `enforce-spawns!`
+;; and `continue`'s root-only guard -- not a second depth notion.
+(deftest focus-flags-and-preview-contract
+  (testing "--focus and --no-focus are mutually exclusive before ledger allocation or mutation"
+    (let [{:keys [env log dir]} (fake-env {})
+          proc (call! env "task" "start" "worker" "--focus" "--no-focus" "--task" "conflicting focus")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"--focus and --no-focus are mutually exclusive" (:out proc)))
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
+      (is (not-any? mutating? (calls log)))))
+  ;; The unflagged root row is the shipped `:defaults :focus true` default resolving at root;
+  ;; below root the flag is accepted but silently inert, never a fail-fast refusal, exactly
+  ;; as an explicit below-root `--tab`/`--split` still resolves rather than erroring.
+  (testing "--print-prompt reports the resolved focus"
+    (doseq [[env-overrides flag expected]
+            [[{} [] true] [{} ["--focus"] true] [{} ["--no-focus"] false]
+             [{"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"} [] false]
+             [{"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"} ["--focus"] false]]]
+      (let [{:keys [env]} (fake-env env-overrides)
+            proc (apply call! env (concat ["task" "run" "worker"] flag ["--task" "focus preview" "--print-prompt"]))]
+        (is (zero? (:exit proc)) (:err proc))
+        (is (= expected (get-in (result proc) [:result :focus])) (str env-overrides flag))))))
+
+(deftest configured-focus-default-flows-through-cli
+  (let [{:keys [env log dir]} (fake-env {})
+        project-config (fs/path dir ".agents" "subagents" "config.edn")
+        preview (fn [env & flags]
+                  (let [proc (apply call! env (concat ["task" "run" "worker"] flags ["--task" "configured focus" "--print-prompt"]))]
+                    (is (zero? (:exit proc)) (:err proc))
+                    (get-in (result proc) [:result :focus])))]
+    (fs/create-dirs (fs/parent project-config))
+    (spit (str project-config) "{:defaults {:focus false}}")
+    (is (false? (preview env)))
+    ;; An explicit flag still overrides the configured default at root.
+    (is (true? (preview env "--focus")))
+    ;; Below root the configured default is irrelevant: focus is always false.
+    (is (false? (preview (merge env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"}))))
+    (let [proc (call! env "task" "start" "worker" "--task" "configured no-focus")
+          task (get-in (result proc) [:result :task])
+          entry (ledger-entry* dir task)
+          tab-create (first (filter #(= ["tab" "create"] (vec (take 2 %))) (calls log)))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (false? (:focus entry)))
+      (is (some #{"--no-focus"} tab-create))
+      (is (not-any? #{"--focus"} tab-create)))
+    (spit (str project-config) "{:defaults {:focus true}}")
+    (is (true? (preview env)))))
 
 (deftest configured-harness-extra-args-reach-agent-start
   ;; A permission bypass is opt-in configuration, never a shipped default: the same spawn
@@ -1029,9 +1094,11 @@
     (is (zero? (:exit proc)) (:err proc))
     (is (str/includes? (slurp prompt-file) "assignment from stdin"))))
 
-;; The implicit ten-minute capture budget.
+;; The implicit ten-minute capture budget, which is now the *last* source in the chain:
+;; deliberately spawned as `scout`, a persona that declares no `timeout:` frontmatter, so
+;; this still measures the shipped default rather than a persona's own declaration.
 (deftest default-collect-budget
-  (let [{:keys [env log]} (fake-env {}) proc (call! env "task" "run" "worker" "--task" "default budget")
+  (let [{:keys [env log]} (fake-env {}) proc (call! env "task" "run" "scout" "--task" "default budget")
         wait (first (filter #(= ["agent" "wait"] (vec (take 2 %))) (calls log)))
         budget (parse-long (second (drop-while #(not= "--timeout" %) wait)))]
     (is (zero? (:exit proc)) (:err proc))
@@ -1286,6 +1353,12 @@
 (defn- closed-panes [log]
   (set (keep #(when (= ["pane" "close"] (vec (take 2 %))) (nth % 2 nil))
              (calls log))))
+;; The `close` return hook (task 8869bd4f): every `agent focus` call in the fixture log,
+;; in order, so a test can pin both the target (always the caller's own pane, `w:p` in
+;; every fixture env) and the count (at most once per single close, and at most once total
+;; for a `--settled`/`orphans --close` sweep regardless of how many children it took).
+(defn- agent-focus-targets [log]
+  (mapv #(nth % 2 nil) (filter #(= ["agent" "focus"] (vec (take 2 %))) (calls log))))
 
 ;; --- `prune` --------------------------------------------------------------------
 ;; Remedies the one documented `collect --any` gap: a `run`/`start` killed between
@@ -1868,7 +1941,11 @@
       (is (= 2 (count (parent-gets log))) status)
       (is (empty? (parent-waits log)) status)
       ;; The operator toast is retained alongside the push.
-      (is (some #(= ["notification" "show"] (vec (take 2 %))) (calls log)) status))))
+      (is (some #(= ["notification" "show"] (vec (take 2 %))) (calls log)) status)
+      ;; `publish` is never a focus return hook (task 8869bd4f, decision "close, never
+      ;; publish"): a publishing child's parent routinely reads unsettled or
+      ;; session-mismatched, exactly the theft the anti-criterion forbids.
+      (is (empty? (agent-focus-targets log)) status))))
 
 ;; Under `blocking` the parent is already in its own wait loop: no probe, no push at all.
 (deftest blocking-publish-never-probes-or-pushes-to-the-parent
@@ -2229,6 +2306,47 @@
     (is (not (str/includes? prompt "continue")))
     (is (not (str/includes? prompt "resident")))))
 
+;; Closeout fix (P2): `assert-children-discharged!` refuses `publish` mechanically while a
+;; caller still owns an open child round, yet `delegation-guidance` went on instructing every
+;; delegating child to close its children before publishing -- a guard shipped while its now
+;; redundant prose shipped alongside it, which is exactly what phase 2 existed to prevent.
+;; The sentence is deleted; this pins its absence from the *rendered* prompt on every path
+;; that renders one, which is the half no test covered. `core-test`'s
+;; `delegation-guidance-and-smoke-success-contract` pins the composing function itself; a
+;; unit pin alone would not have caught the same words re-entering via `prompt-text`,
+;; `retro-instruction`, `progress-instruction`, or `continuation-prompt`.
+(def ^:private banned-close-before-publish-phrases
+  ["Capturing its result closes nothing" "close it yourself"
+   "nobody else can close a child you own" "before you publish"])
+(deftest close-before-publish-guidance-is-not-restated-in-any-rendered-prompt
+  (testing "root spawn of a delegating persona"
+    (let [{:keys [env prompt-file]} (fake-env {})
+          proc (call! env "task" "start" "worker" "--task" "delegating root child")
+          prompt (slurp prompt-file)]
+      (is (zero? (:exit proc)) (:err proc))
+      ;; The prompt really is the delegating variant, so the absence below is meaningful.
+      (is (str/includes? prompt "You may spawn at most one blocking"))
+      (doseq [banned banned-close-before-publish-phrases]
+        (is (not (str/includes? prompt banned)) banned))))
+  (testing "below-root spawn (leaf variant)"
+    (let [{:keys [env prompt-file]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"
+                                               "FAKE_PARENT_LABEL" "worker-1-light"})
+          proc (call! env "task" "start" "scout" "--task" "leaf grandchild")
+          prompt (slurp prompt-file)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (str/includes? prompt "You are a leaf"))
+      (doseq [banned banned-close-before-publish-phrases]
+        (is (not (str/includes? prompt banned)) banned))))
+  (testing "continuation round"
+    (let [{:keys [env dir prompt-file]} (fake-env {})
+          prior (capture-entry! dir (start-child! env dir "round one"))
+          {:keys [proc]} (continue! env dir prior "--task" "round two")
+          prompt (slurp prompt-file)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (str/includes? prompt "Follow-on round"))
+      (doseq [banned banned-close-before-publish-phrases]
+        (is (not (str/includes? prompt banned)) banned)))))
+
 ;; `--wait` blocks like `run`, the default is non-blocking like `start`, and the round's own
 ;; policy -- not the spawn's -- drives both the prompt's progress clause and `publish!`.
 (deftest continue-round-policy-governs-the-prompt-and-the-publish-path
@@ -2482,7 +2600,49 @@
     (is (= (str cli/default-settle-close-ms) (argv-flag (first waits) "--timeout")))
     (is (not-any? #{"--until"} (first waits)))
     ;; The captured status is untouched: `:closed-at` is a marker, not a lifecycle state.
-    (is (= "COMPLETE" (:status (closed-entry dir entry))))))
+    (is (= "COMPLETE" (:status (closed-entry dir entry))))
+    ;; The return hook (task 8869bd4f): a successful close focuses the caller's own pane,
+    ;; never the child's.
+    (is (= ["w:p"] (agent-focus-targets log)))))
+
+;; Closeout fix (both validators, P1): the return hook is root-only, gated on the same
+;; `:below-root?` predicate the spawn path uses -- otherwise the publish guard, which
+;; forces every delegating child to close its grandchildren before it may publish, would
+;; make every nested delegation end in a child-initiated `agent focus`. Unpinned in either
+;; direction before this round.
+(deftest close-return-focus-is-gated-to-root
+  (testing "root: close focuses"
+    (let [{:keys [env log dir]} (fake-env {})
+          entry (capture-entry! dir (start-child! env dir "root close still focuses"))
+          proc (call! env "task" "close" (:task entry))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "closed" (get-in (result proc) [:result :status])))
+      (is (= ["w:p"] (agent-focus-targets log)))))
+  (testing "below root: close never focuses"
+    (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"
+                                           "FAKE_PARENT_LABEL" "worker-1-light"})
+          spawn-proc (call! env "task" "start" "scout" "--task" "grandchild for below-root close")
+          _ (is (zero? (:exit spawn-proc)) (:err spawn-proc))
+          entry (capture-entry! dir (ledger-entry* dir (get-in (result spawn-proc) [:result :task])))
+          proc (call! env "task" "close" (:task entry))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "closed" (get-in (result proc) [:result :status])))
+      (is (empty? (agent-focus-targets log)))))
+  ;; The sweep hook shares `focus-caller!`, so it cannot diverge from single close by
+  ;; construction -- but "cannot diverge" is an argument, not a test, and three of this
+  ;; round's defects existed precisely because a guard shipped with no test that could see
+  ;; it fail. `orphans --close` needs no equivalent: it is refused outright below root.
+  (testing "below root: close --settled closes but never focuses"
+    (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"
+                                           "FAKE_PARENT_LABEL" "worker-1-light"})
+          spawn-proc (call! env "task" "start" "scout" "--task" "grandchild for below-root sweep")
+          _ (is (zero? (:exit spawn-proc)) (:err spawn-proc))
+          entry (capture-entry! dir (ledger-entry* dir (get-in (result spawn-proc) [:result :task])))
+          proc (call! env "task" "close" "--settled")]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= ["closed"] (mapv :status (:result (result proc)))))
+      (is (= #{(:pane-id entry)} (closed-panes log)))
+      (is (empty? (agent-focus-targets log))))))
 
 (deftest close-refuses-an-uncaptured-entry
   (let [{:keys [env log dir]} (fake-env {})
@@ -2559,7 +2719,9 @@
       (is (= "gone" (:status res)))
       (is (= "child-absent" (:reason res)))
       (is (empty? (closed-panes log)))
-      (is (nil? (:closed-at (closed-entry dir entry)))))))
+      (is (nil? (:closed-at (closed-entry dir entry))))
+      ;; Nothing closed, so the return hook never fires.
+      (is (empty? (agent-focus-targets log))))))
 
 (deftest close-refuses-when-the-recorded-pane-is-not-the-childs-pane
   (let [{:keys [env log dir state]} (fake-env {})
@@ -2583,13 +2745,16 @@
       (is (= "unsettled" (:reason res)))
       (is (= "working" (:agent-status res)))
       (is (empty? (closed-panes log)))
-      (is (nil? (:closed-at (closed-entry dir entry)))))
+      (is (nil? (:closed-at (closed-entry dir entry))))
+      ;; `retained` is not a close, so the return hook stays quiet on the failed attempt.
+      (is (empty? (agent-focus-targets log))))
     ;; Retryable: nothing about the refusal is recorded, so a settled retry closes.
     (child-state! state entry "settle-to" "idle")
     (let [proc (call! env "task" "close" (:task entry))]
       (is (zero? (:exit proc)) (:err proc))
       (is (= "closed" (get-in (result proc) [:result :status])))
-      (is (= #{(:pane-id entry)} (closed-panes log))))))
+      (is (= #{(:pane-id entry)} (closed-panes log)))
+      (is (= ["w:p"] (agent-focus-targets log))))))
 
 (deftest close-refuses-an-already-closed-round
   (let [{:keys [env log dir]} (fake-env {})
@@ -2639,7 +2804,10 @@
     (is (= 1 (count (child-waits log (:child a-first)))))
     (is (some? (:closed-at (closed-entry dir a-second))))
     (is (nil? (:closed-at (closed-entry dir a-first))))
-    (is (nil? (:closed-at (closed-entry dir uncaptured))))))
+    (is (nil? (:closed-at (closed-entry dir uncaptured))))
+    ;; The return hook fires once for the whole sweep, never once per child it closed
+    ;; (task 8869bd4f): two closures here, one `agent focus` on the caller's own pane.
+    (is (= ["w:p"] (agent-focus-targets log)))))
 
 ;; A per-child refusal is reported in the array rather than abandoning the rest of the
 ;; sweep, and it mutates nothing.
@@ -2671,7 +2839,9 @@
     (is (empty? (:result (result proc))))
     (is (empty? (closed-panes log)))
     (is (nil? (:closed-at (closed-entry dir first-round))))
-    (is (nil? (:closed-at (closed-entry dir second-round))))))
+    (is (nil? (:closed-at (closed-entry dir second-round))))
+    ;; An empty sweep closes nothing, so the return hook never fires.
+    (is (empty? (agent-focus-targets log)))))
 
 ;; An `invalid` capture means the envelope needs manual intervention, so the sweep must
 ;; leave the operator the pane they would use to deal with it -- while still closing every
@@ -2832,7 +3002,8 @@
     (is (= "--model" (get-in config [:harnesses :pi :model-flag])))
     (is (= "--model" (get-in config [:harnesses :claude :model-flag])))
     (is (= "--model" (get-in config [:harnesses :codex :model-flag])))
-    (is (= {:placement :tab-split} (:defaults config)))
+    ;; task 8869bd4f: the shipped default flips `:focus` to true alongside `:tab-split`.
+    (is (= {:placement :tab-split :focus true} (:defaults config)))
     (is (= 7 (count (:models config))) "shipped :models has exactly 7 canonical rows")
     (is (= 18 (count (:aliases config))) "shipped :aliases has exactly 18 entries")
     (testing "argv preservation: every pre-migration ID translates identically for every kind, except feather+claude"
@@ -2917,6 +3088,47 @@
     (testing "the ledger fields this lifecycle introduced are documented"
       (doseq [field [":continues" ":closed-at" ":waiting-policy"]]
         (is (str/includes? contract field) field)))
+    (testing "phase 2: a rule the CLI now enforces is deleted from SKILL.md, not restated beside its guard"
+      ;; Each banned string is the exact instruction a phase-2 guard or verb replaced. A
+      ;; guard whose prose survives is the failure mode this pins: the caller keeps paying
+      ;; the ceremony the CLI was changed to absorb, and the two drift independently.
+      (doseq [[phrase mechanism]
+              [["must close its own children before publishing" "publish's unclosed-children guard"]
+               ["Give review and implementation work an explicit `--timeout`" "persona `timeout:` frontmatter"]
+               ["then `oh pane close <pane-id>`" "the `orphans` verb"]
+               ["scope a candidate harvest by session" "the `harvest` verb"]]]
+        (is (not (str/includes? skill phrase))
+            (str "SKILL.md still instructs \"" phrase "\", now enforced by " mechanism)))
+      (doseq [verb ["`orphans`" "`compact`" "`harvest`" "`collect --close`"]]
+        (is (str/includes? skill verb)
+            (str "SKILL.md never names " verb ", so the ceremony it removes is undiscoverable")))
+      ;; The dead-owner paragraph in contract.md § Close outlived the verb that replaced its
+      ;; remedy, leaving § Close prescribing the bare `pane close` that § Orphans documents
+      ;; itself as rejecting. Adding a verb is not done until the text it obsoletes is found:
+      ;; grep the *old remedy*, not just the new section.
+      (is (str/includes? contract "\n## Orphans\n"))
+      (is (str/includes? contract "§ Orphans is the verb for it")
+          "contract.md § Close must route dead-owner cleanup to § Orphans, not to a bare `pane close`"))
+    ;; Renamed by root at closeout: this guard was called "net prose shrank" while its
+    ;; assertion permits 3500 words against a 3348-word baseline, so a reader of a passing
+    ;; `bb test` was told prose shrank while SKILL.md had in fact grown ~4%. Phase 2's shrink
+    ;; is a historical measurement (3348 -> 3338), recorded in the change-record; what this
+    ;; test actually enforces, and all it has ever enforced, is a ceiling.
+    (testing "SKILL.md stays under its prose ceiling: ceremony lives in the CLI, not documented twice"
+      ;; Measured against baseline 846733f (3348 words), the commit before phase 2; phase 2
+      ;; alone landed at 3338, ten words under that ceiling. Task 8869bd4f's own documentation
+      ;; criterion (§ Invocation policy's new Focus bullet, the corrected Placement/`oh spawn`
+      ;; prose, and the `--no-focus` sentence) is real new user-facing behaviour, not ceremony
+      ;; migrating between docs, so the ceiling moves with it (3482 words at that point) rather
+      ;; than the new content being trimmed to fit a budget calibrated for a different change.
+      ;; The guard still means something: a future edit that pushes well past this without a
+      ;; comparable behaviour change is the regression this test exists to catch.
+      ;; Closeout round 6c8845c3 then corrected the Focus bullet (root-gated return hook) and
+      ;; the orphans paragraph *within* this ceiling -- 3497 words -- by tightening the same
+      ;; prose rather than raising the number a second time. Raising it once per round is how
+      ;; a ceiling stops being one; if a future change genuinely cannot fit, move the number
+      ;; deliberately and say so here, as the paragraph above does.
+      (is (< (count (str/split skill #"\s+")) 3500)))
     (testing "no document asserts the behaviour the code no longer has"
       (doseq [rel lifecycle-docs
               ;; The last pins the specific claim that survived in README.org: a banned
@@ -3291,3 +3503,609 @@
       (is (re-find #"(?i)advisory" pushed))
       ;; The envelope keeps the child's declared list verbatim.
       (is (str/includes? (slurp (:result entry)) "broken")))))
+;; --- phase 2: agent-facing output -----------------------------------------------------
+;; The measured cost this replaces: every capture returned the parsed fields *and* a
+;; byte-for-byte `text` repeat of them beside them, and `list` emitted a full envelope --
+;; findings and process included -- for every historical round. Both are now opt-in, and
+;; both verbs render lines under `--format text`.
+
+(deftest collect-omits-the-raw-envelope-unless-raw-is-requested
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "raw envelope is opt-in")]
+    (publish-child! entry)
+    (let [default (:result (result (call! env "task" "collect" (:task entry))))]
+      (is (= "COMPLETE" (:status default)))
+      (is (= "fan-in child" (:summary default)))
+      (is (not (contains? default :text)) "the duplicate envelope blob is not emitted by default"))
+    ;; Collection is not memoised, so a re-collect re-reads and re-validates the same file.
+    (let [raw (:result (result (call! env "task" "collect" (:task entry) "--raw")))]
+      (is (= (slurp (:result entry)) (:text raw))))))
+
+(deftest status-and-list-omit-the-stored-envelope-text-unless-raw
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "stored envelope text is opt-in")]
+    (publish-child! entry)
+    (call! env "task" "collect" (:task entry))
+    (is (string? (get-in (ledger-entry* dir (:task entry)) [:envelope :text]))
+        "the blob stays recorded on the entry, so --raw can still reproduce it")
+    (doseq [argv [["task" "status" (:task entry)] ["task" "status"] ["task" "list"]]]
+      (let [res (:result (result (apply call! env argv)))
+            entries (if (sequential? res) res [res])]
+        (is (every? #(nil? (get-in % [:envelope :text])) entries) (str argv))
+        (is (some #(= "COMPLETE" (get-in % [:envelope :status])) entries)
+            (str argv " must still carry the parsed envelope"))))
+    (is (= (slurp (:result entry))
+           (get-in (result (call! env "task" "status" (:task entry) "--raw")) [:result :envelope :text])))))
+
+(deftest list-format-text-is-one-line-per-child
+  (let [{:keys [env dir]} (fake-env {})
+        a (start-child! env dir "text list child one")
+        b (start-child! env dir "text list child two")
+        proc (call! env "task" "list" "--format" "text")
+        lines (str/split-lines (str/trim (:out proc)))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (not (str/includes? (:out proc) "\"ok\"")) "text format is not a JSON envelope")
+    (is (= 2 (count lines)))
+    (doseq [[entry line] (map vector [a b] lines)]
+      (is (= [(:task entry) (:child entry) (:pane-id entry) "prompted" "uncaptured" "open"]
+             (str/split line #"\t"))))))
+
+(deftest collect-and-status-render-lines-under-format-text
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "text capture")]
+    (publish-child! entry)
+    (let [out (str/trim (:out (call! env "task" "collect" (:task entry) "--format" "text")))]
+      (is (str/starts-with? out "STATUS: COMPLETE"))
+      (is (str/includes? out (str "TASK: " (:task entry))))
+      (is (str/includes? out "SUMMARY: fan-in child"))
+      (is (not (str/includes? out "--- HERDR RESULT"))))
+    (let [out (str/trim (:out (call! env "task" "status" (:task entry) "--format" "text")))]
+      (is (= 1 (count (str/split-lines out))))
+      (is (str/starts-with? out (:task entry)))
+      (is (str/ends-with? out "captured\topen")))))
+
+(deftest an-unknown-output-format-fails-loudly-and-an-empty-listing-says-none
+  (let [{:keys [env]} (fake-env {})
+        proc (call! env "task" "list" "--format" "yaml")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"--format must be json or text" (:out proc)))
+    ;; An empty text rendering is indistinguishable from a failed one, so it says "none".
+    (is (= "none" (str/trim (:out (call! env "task" "list" "--format" "text")))))))
+
+;; --- phase 2: `collect --close` -------------------------------------------------------
+;; One call for the case where the close decision was already known at spawn. Closure keeps
+;; every `close` guard and never degrades the capture that preceded it.
+
+(deftest collect-close-captures-and-closes-in-one-call
+  (let [{:keys [env log dir]} (fake-env {})
+        entry (start-child! env dir "capture then close")]
+    (publish-child! entry)
+    (let [res (:result (result (call! env "task" "collect" (:task entry) "--close")))]
+      (is (= "COMPLETE" (:status res)) "the capture is unchanged by the flag")
+      (is (= "fan-in child" (:summary res)))
+      (is (= "closed" (get-in res [:close :status])))
+      (is (= #{(:pane-id entry)} (closed-panes log)))
+      (is (some? (:closed-at (ledger-entry* dir (:task entry)))))
+      ;; `collect --close` runs closure through `close-task!` unchanged, so it inherits
+      ;; the return hook too (task 8869bd4f).
+      (is (= ["w:p"] (agent-focus-targets log))))))
+
+(deftest collect-any-close-closes-the-child-it-captured
+  (let [{:keys [env log dir]} (fake-env {})
+        entry (start-child! env dir "fan-in then close")]
+    (publish-child! entry)
+    (let [res (:result (result (call! env "task" "collect" "--any" "--close")))]
+      (is (= "COMPLETE" (:status res)))
+      (is (= (:task entry) (:task res)))
+      (is (= "closed" (get-in res [:close :status])))
+      (is (= #{(:pane-id entry)} (closed-panes log))))))
+
+;; The criterion the flag exists to keep: a refused closure still returns the validated
+;; result. A foreign owner is the cheapest refusal that leaves the capture entirely valid.
+(deftest collect-close-returns-the-validated-result-when-closure-refuses
+  (let [{:keys [env log dir]} (fake-env {})
+        entry (patch-entry! dir (start-child! env dir "foreign owner") :parent-session "another-session")]
+    (publish-child! entry)
+    (let [res (:result (result (call! env "task" "collect" (:task entry) "--close")))]
+      (is (= "COMPLETE" (:status res)))
+      (is (true? (:pane-retained res)))
+      (is (= "refused" (get-in res [:close :status])))
+      (is (re-find #"does not own this ledger entry" (get-in res [:close :reason])))
+      (is (empty? (closed-panes log)))
+      (is (nil? (:closed-at (ledger-entry* dir (:task entry))))))))
+
+(deftest collect-close-closes-nothing-without-a-validated-capture
+  (testing "a pending capture closed nothing to begin with"
+    (let [{:keys [env log dir]} (fake-env {})
+          entry (start-child! env dir "never published")
+          res (:result (result (call! env "task" "collect" (:task entry) "--close")))]
+      (is (= "pending" (:status res)))
+      (is (= "skipped" (get-in res [:close :status])))
+      (is (= "nothing-captured" (get-in res [:close :reason])))
+      (is (empty? (closed-panes log)))))
+  ;; An `invalid` capture is excluded for the same reason the `--settled` sweep excludes it:
+  ;; the envelope needs manual intervention, and the pane is what an operator would use.
+  (testing "an invalid capture keeps its pane"
+    (let [{:keys [env log dir]} (fake-env {})
+          entry (start-child! env dir "invalid envelope")]
+      (spit (:result entry) "not an envelope at all\n")
+      (let [res (:result (result (call! env "task" "collect" (:task entry) "--close")))]
+        (is (= "invalid" (:status res)))
+        (is (= "skipped" (get-in res [:close :status])))
+        (is (= "invalid-capture" (get-in res [:close :reason])))
+        (is (empty? (closed-panes log)))
+        (is (nil? (:closed-at (ledger-entry* dir (:task entry)))))))))
+
+;; --- phase 2: publish-side ownership discharge ----------------------------------------
+;; "Whoever spawns a child closes it" is now a guard rather than prose. Every test here
+;; must make the publisher's *own* identity resolvable first: the fixture's child `agent
+;; get` reports no `agent_session` and no `pane_id` by default, so a publisher's
+;; `:parent-session` is nil and the guard cannot fire at all -- which is precisely how a
+;; guard over an external-world property passes vacuously. `FAKE_SESSION_FROM=get` plus
+;; `FAKE_SESSION_VALUE` is what gives the publishing child an identity a ledger entry can
+;; record, and the released-child test asserts on the discharge itself rather than on a
+;; bare success, so an inert guard cannot satisfy either direction.
+(def ^:private publisher-session "publishing-child-session")
+(defn- owning-publish-env [env entry]
+  (merge (child-publish-env env entry)
+         {"FAKE_SESSION_FROM" "get" "FAKE_SESSION_VALUE" publisher-session}))
+;; A round owned by the publishing child: the grandchild whose pane leaked in the live smoke.
+(defn- owned-round! [dir name & kvs]
+  (let [task (str (java.util.UUID/randomUUID))
+        entry (merge {:task task
+                      :result (str (fs/path dir ".tmp" "herdr-orch" (str task "-grandchild.result")))
+                      :child name :pane-id "w:grandchild" :label "worker-1/scout-1" :index 1
+                      :parent-session publisher-session :parent-pane "w:child"
+                      :waiting-policy "blocking" :status "prompted" :created-at "2026-01-01T00:00:00Z"}
+                     (apply hash-map kvs))]
+    (spit (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json"))) (json/generate-string entry))
+    entry))
+
+(deftest publish-refuses-a-caller-that-still-owns-an-open-child
+  (testing "an uncaptured child: the remedy is collect (or prune), and the result is unwritten"
+    (let [{:keys [env dir]} (fake-env {})
+          publisher (start-child! env dir "owns an uncaptured child")
+          grandchild (owned-round! dir "scout-uncaptured")
+          proc (call! (owning-publish-env env publisher) "task" "publish" "--status" "COMPLETE" "--summary" "done")
+          err (:data (:error (result proc)))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"publish refused: you still own 1 open child assignment" (:out proc)))
+      (is (re-find #"task close <full-task-uuid>" (:out proc)) "the refusal names the fix")
+      (is (= [(:task grandchild)] (mapv :task (:children err))))
+      (is (= ["uncaptured"] (mapv :state (:children err))))
+      (is (not (fs/exists? (:result publisher))) "refused before the one-shot write, so a retry is possible")))
+  (testing "a captured child whose agent is still live: the remedy is close"
+    (let [{:keys [env dir state]} (fake-env {})
+          publisher (start-child! env dir "owns a captured, unclosed child")
+          grandchild (owned-round! dir "scout-captured" :captured-at "2026-01-01T00:00:00Z" :status "COMPLETE")
+          _ (fake-child! state (:child grandchild) (:pane-id grandchild))
+          proc (call! (owning-publish-env env publisher) "task" "publish" "--status" "COMPLETE" "--summary" "done")
+          err (:data (:error (result proc)))]
+      (is (= 1 (:exit proc)))
+      (is (= [(:task grandchild)] (mapv :task (:children err))))
+      (is (= ["captured-unclosed"] (mapv :state (:children err))))
+      (is (not (fs/exists? (:result publisher)))))))
+
+(deftest publish-succeeds-once-the-caller-has-closed-its-children
+  (let [{:keys [env dir state]} (fake-env {})
+        publisher (start-child! env dir "closed its child")
+        grandchild (owned-round! dir "scout-closed" :captured-at "2026-01-01T00:00:00Z" :status "COMPLETE"
+                                 :closed-at "2026-01-01T00:01:00Z")
+        _ (fake-child! state (:child grandchild) (:pane-id grandchild))
+        proc (call! (owning-publish-env env publisher) "task" "publish" "--status" "COMPLETE" "--summary" "done")
+        res (:result (result proc))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= "COMPLETE" (:status res)))
+    (is (nil? (:released-children res)))
+    (is (fs/exists? (:result publisher)))))
+
+;; A terminal `failed` round is not an open claim, and an older round of a child whose
+;; newest round was closed carries no `:closed-at` of its own -- both would otherwise block
+;; every future publication by this caller permanently.
+(deftest publish-is-not-blocked-by-a-retired-or-superseded-round
+  (let [{:keys [env dir state]} (fake-env {})
+        publisher (start-child! env dir "retired and superseded rounds")
+        _ (owned-round! dir "scout-dead" :status "failed" :failure-phase "start")
+        first-round (owned-round! dir "scout-rounds" :captured-at "2026-01-01T00:00:00Z" :status "COMPLETE")
+        _ (owned-round! dir "scout-rounds" :captured-at "2026-01-02T00:00:00Z" :status "COMPLETE"
+                        :closed-at "2026-01-02T00:01:00Z" :continues (:task first-round)
+                        :created-at "2026-01-02T00:00:00Z")
+        _ (fake-child! state "scout-rounds" "w:grandchild")
+        proc (call! (owning-publish-env env publisher) "task" "publish" "--status" "COMPLETE" "--summary" "done")]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (fs/exists? (:result publisher)))))
+
+;; A captured round whose child has vanished can be closed by no verb at all, so blocking on
+;; it would strand a finished result. It is discharged -- and reported, because the pane it
+;; left behind is real.
+(deftest publish-discharges-a-captured-child-that-has-vanished-and-says-so
+  (let [{:keys [env dir state]} (fake-env {})
+        publisher (start-child! env dir "child vanished after capture")
+        grandchild (owned-round! dir "scout-gone" :captured-at "2026-01-01T00:00:00Z" :status "COMPLETE")
+        _ (fake-child! state (:child grandchild) (:pane-id grandchild))
+        _ (child-state! state grandchild "gone" "")
+        proc (call! (owning-publish-env env publisher) "task" "publish" "--status" "COMPLETE" "--summary" "done")
+        res (:result (result proc))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= "COMPLETE" (:status res)))
+    (is (= [(:task grandchild)] (:released-children res))
+        "the discharge is reported, so this cannot pass by the guard being inert")
+    ;; An uncaptured vanished round is *not* discharged: `prune` is the remedy for that one.
+    (let [{env2 :env dir2 :dir state2 :state} (fake-env {})
+          publisher2 (start-child! env2 dir2 "uncaptured child vanished")
+          orphan (owned-round! dir2 "scout-killed")
+          _ (fake-child! state2 (:child orphan) (:pane-id orphan))
+          _ (child-state! state2 orphan "gone" "")
+          proc2 (call! (owning-publish-env env2 publisher2) "task" "publish" "--status" "COMPLETE" "--summary" "done")]
+      (is (= 1 (:exit proc2)))
+      (is (re-find #"task prune" (:out proc2))))))
+
+;; The publisher every delegation actually has: a leaf child with no children of its own,
+;; and a caller whose identity cannot be resolved at all. Neither may be blocked -- the
+;; guard's open direction, since publication is one-shot and the sole completion signal.
+(deftest a-childless-or-unidentifiable-publisher-is-never-blocked
+  (testing "a leaf publisher with a resolvable identity and no children"
+    (let [{:keys [env dir]} (fake-env {})
+          publisher (start-child! env dir "leaf worker")
+          proc (call! (owning-publish-env env publisher) "task" "publish" "--status" "COMPLETE" "--summary" "done")]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= "COMPLETE" (:status (:result (result proc)))))))
+  (testing "an unresolvable caller identity owns nothing, even with an open entry present"
+    (let [{:keys [env dir]} (fake-env {"FAKE_FAIL_CHILD_GET" "1"})
+          publisher (start-child! env dir "unidentifiable publisher")]
+      (owned-round! dir "scout-unattributable")
+      (let [proc (call! (child-publish-env env publisher) "task" "publish" "--status" "COMPLETE" "--summary" "done")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (fs/exists? (:result publisher)))))))
+
+;; An entry naming the publisher's own child is its own round, never a child of it: without
+;; that exclusion a continued round would block the very publication it was allocated for.
+(deftest a-publisher-is-never-blocked-by-its-own-round
+  (let [{:keys [env dir]} (fake-env {})
+        publisher (start-child! env dir "self-owned round")
+        ;; Same child name, and owned by the publisher's own resolved session.
+        _ (owned-round! dir (:child publisher))
+        proc (call! (owning-publish-env env publisher) "task" "publish" "--status" "COMPLETE" "--summary" "done")]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (fs/exists? (:result publisher)))))
+
+;; --- phase 2: orphan cleanup ----------------------------------------------------------
+;; Replaces the documented two-step manual recipe, whose `pane close <pane-id>` step closed
+;; on a recorded pane id alone. This verb applies `close`'s own evidence bar instead, with
+;; the operator supplying the authority ownership cannot infer.
+(defn- foreign! [dir entry] (patch-entry! dir entry :parent-session "another-session"))
+
+(deftest orphans-lists-only-captured-rounds-owned-by-another-session
+  (let [{:keys [env log dir]} (fake-env {})
+        orphan (foreign! dir (capture-entry! dir (start-child! env dir "foreign captured child")))
+        _ (foreign! dir (start-child! env dir "foreign but uncaptured"))
+        _ (capture-entry! dir (start-child! env dir "this session's own child"))
+        res (:result (result (call! env "task" "orphans")))]
+    (is (= [(:task orphan)] (mapv :task res)))
+    (is (= ["another-session"] (mapv :parent-session res)))
+    ;; Listing is read-only: no settle wait, no listing call, and certainly no closure.
+    (is (empty? (closed-panes log)))
+    (is (zero? (agent-list-count log)))))
+
+(deftest orphans-close-closes-only-on-a-live-child-and-pane-match
+  (testing "a live child at the recorded pane is closed and recorded"
+    (let [{:keys [env log dir]} (fake-env {})
+          orphan (foreign! dir (capture-entry! dir (start-child! env dir "closable orphan")))
+          res (:result (result (call! env "task" "orphans" "--close")))]
+      (is (= ["closed"] (mapv :status res)))
+      (is (= #{(:pane-id orphan)} (closed-panes log)))
+      (is (some? (:closed-at (ledger-entry* dir (:task orphan)))))
+      ;; `orphans --close` shares the same once-per-sweep return hook as `close --settled`.
+      (is (= ["w:p"] (agent-focus-targets log)))))
+  (testing "name absence closes nothing: the pane may host something else entirely"
+    (let [{:keys [env log dir state]} (fake-env {})
+          orphan (foreign! dir (capture-entry! dir (start-child! env dir "vanished orphan")))]
+      (child-state! state orphan "gone" "")
+      (let [res (:result (result (call! env "task" "orphans" "--close")))]
+        (is (= ["gone"] (mapv :status res)))
+        (is (= ["child-absent"] (mapv :reason res)))
+        (is (empty? (closed-panes log)))
+        (is (nil? (:closed-at (ledger-entry* dir (:task orphan)))))
+        (is (empty? (agent-focus-targets log))))))
+  (testing "a pane the child no longer occupies is a refusal, not a close"
+    (let [{:keys [env log dir]} (fake-env {})
+          orphan (patch-entry! dir (foreign! dir (capture-entry! dir (start-child! env dir "moved orphan")))
+                               :pane-id "w:somewhere-else")
+          res (:result (result (call! env "task" "orphans" "--close")))]
+      (is (= ["refused"] (mapv :status res)))
+      (is (re-find #"not this child's pane" (:reason (first res))))
+      (is (empty? (closed-panes log)))
+      (is (nil? (:closed-at (ledger-entry* dir (:task orphan)))))))
+  (testing "an unsettled orphan is retained and the sweep stays retryable"
+    (let [{:keys [env log dir state]} (fake-env {})
+          orphan (foreign! dir (capture-entry! dir (start-child! env dir "busy orphan")))]
+      (child-state! state orphan "status" "working")
+      (child-state! state orphan "settle-to" "working")
+      (let [res (:result (result (call! env "task" "orphans" "--close")))]
+        (is (= ["retained"] (mapv :status res)))
+        (is (empty? (closed-panes log)))))))
+
+;; A sweep whose own identity is unresolvable cannot tell foreign from own, so it would
+;; consider every captured round in a shared ledger -- including its own caller's.
+(deftest orphans-close-refuses-an-unresolvable-caller-before-touching-anything
+  (let [{:keys [env log dir]} (fake-env {})
+        orphan (foreign! dir (capture-entry! dir (start-child! env dir "orphan with a blind caller")))
+        proc (call! (merge env {"FAKE_FAIL_AGENT_GET" "w:p"}) "task" "orphans" "--close")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"caller session is unresolvable" (:out proc)))
+    (is (empty? (closed-panes log)))
+    (is (nil? (:closed-at (ledger-entry* dir (:task orphan)))))))
+
+;; Closeout fix (P3): the *listing* refuses a nil caller too, not only `--close`. With
+;; `caller` nil the candidate filter's `(not= caller (:parent-session %))` matches every
+;; entry that records an owner -- including the caller's own captured children -- so a
+;; degraded listing presents them as orphans, and the contract has the operator take
+;; closing authority straight from that list.
+(deftest orphans-listing-refuses-an-unresolvable-caller
+  (let [{:keys [env log dir]} (fake-env {})
+        mine (capture-entry! dir (start-child! env dir "the caller's own child"))
+        proc (call! (merge env {"FAKE_FAIL_AGENT_GET" "w:p"}) "task" "orphans")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"caller session is unresolvable" (:out proc)))
+    ;; Nothing is listed at all -- in particular not `mine`, which a nil caller would have
+    ;; rendered as somebody else's orphan.
+    (is (nil? (:result (result proc))))
+    (is (not (str/includes? (:out proc) (:task mine))))
+    (is (empty? (closed-panes log)))))
+
+;; Closeout fix (P1): root-only, like `continue`. A delegated child has HERDR_ORCH_PERSONA
+;; set, so root's children and every sibling's look equally foreign to it -- it could
+;; otherwise sweep and close any captured, settled sibling whose child name and pane id
+;; still match. Refused before the listing and before any mutation, so both forms are
+;; covered and neither reads the ledger.
+(deftest orphans-is-root-only
+  (doseq [argv [["task" "orphans"] ["task" "orphans" "--close"]]]
+    (let [{:keys [env log dir]} (fake-env {})
+          orphan (foreign! dir (capture-entry! dir (start-child! env dir "sibling a child must not touch")))
+          below (merge env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"})
+          before (closed-panes log)
+          proc (apply call! below argv)]
+      (is (= 1 (:exit proc)) (str argv))
+      (is (re-find #"orphans is root-only" (:out proc)) (str argv))
+      (is (= before (closed-panes log)) (str argv))
+      (is (nil? (:closed-at (ledger-entry* dir (:task orphan)))) (str argv))
+      ;; Refused before the ledger is read at all, so no `agent list` and no settle wait.
+      (is (zero? (agent-list-count log)) (str argv)))))
+
+(deftest orphans-rejects-a-task-positional
+  (let [{:keys [env]} (fake-env {})
+        proc (call! env "task" "orphans" "some-task")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"task orphans requires 0 arguments" (:out proc)))))
+
+;; --- phase 2: retention ---------------------------------------------------------------
+;; Bulk is retired, not entries: the one unbounded field goes and everything a cited task
+;; uuid resolves through stays. Measured justification is in `compact!`'s comment.
+(defn- closed-round! [dir entry]
+  (patch-entry! dir entry :captured-at "2026-01-01T00:00:00Z" :status "COMPLETE"
+                :closed-at "2026-01-01T00:01:00Z"))
+
+(deftest compact-drops-the-raw-envelope-and-keeps-the-audit-trail
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "compact a closed round")]
+    (publish-child! entry)
+    (call! env "task" "collect" (:task entry))
+    (call! env "task" "close" (:task entry))
+    (let [before (ledger-entry* dir (:task entry))
+          res (:result (result (call! env "task" "compact" (:task entry))))
+          after (ledger-entry* dir (:task entry))]
+      (is (string? (get-in before [:envelope :text])) "the fixture must start with the bulk present")
+      (is (= "compacted" (:status res)))
+      (is (pos? (:reclaimed-bytes res)))
+      (is (nil? (get-in after [:envelope :text])) "the one unbounded field is gone")
+      (testing "everything a cited task uuid resolves through survives"
+        (doseq [field [:task :child :pane-id :label :result :parent-session :child-session
+                       :captured-at :closed-at :persona-path]]
+          (is (= (get before field) (get after field)) (str field))))
+      (testing "the parsed envelope fields survive: the dropped text was their duplicate"
+        (is (= (dissoc (:envelope before) :text) (:envelope after))))
+      (testing "and the RESULT file it duplicated is untouched, so --raw still reproduces it"
+        (is (fs/exists? (:result entry)))
+        (is (= (slurp (:result entry))
+               (:text (:result (result (call! env "task" "collect" (:task entry) "--raw")))))))
+      ;; Closeout fix (P1): that `--raw` re-collect is exactly the path that used to restore
+      ;; the dropped bulk to the *ledger* -- compaction stripped `:envelope :text` above, but
+      ;; `capture!` is not memoised and previously rewrote `:envelope` unconditionally on
+      ;; every collect, undoing the retention while leaving `:compacted-at` set, so `compact`
+      ;; could never run again. The prior assertions never re-read the ledger after a
+      ;; post-compaction collect, so they could not see this.
+      (testing "a re-collect after compaction never restores the bulk to the ledger entry"
+        (let [reread (ledger-entry* dir (:task entry))]
+          (is (nil? (get-in reread [:envelope :text])))
+          (is (= (dissoc (:envelope before) :text) (:envelope reread)))
+          (is (some? (:compacted-at reread)))))
+      (is (some? (:compacted-at after)))
+      ;; Idempotence is a loud refusal, not a silent rewrite.
+      (let [again (call! env "task" "compact" (:task entry))]
+        (is (= 1 (:exit again)))
+        (is (re-find #"already compacted" (:out again)))))))
+
+(deftest compact-refuses-a-foreign-owner-and-a-round-still-in-play
+  (testing "a shared assignment root means one session's cleanup never touches another's"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (foreign! dir (closed-round! dir (start-child! env dir "foreign closed round")))
+          proc (call! env "task" "compact" (:task entry))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"does not own this ledger entry" (:out proc)))
+      (is (nil? (:compacted-at (ledger-entry* dir (:task entry)))))))
+  (testing "an unresolvable caller identity owns nothing, exactly as prune requires"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (closed-round! dir (start-child! env dir "closed but blind caller"))
+          proc (call! (merge env {"FAKE_FAIL_AGENT_GET" "w:p"}) "task" "compact" (:task entry))]
+      (is (= 1 (:exit proc)))
+      (is (nil? (:compacted-at (ledger-entry* dir (:task entry)))))))
+  (testing "a captured but unclosed round is still in play"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (capture-entry! dir (start-child! env dir "captured, pane still standing"))
+          proc (call! env "task" "compact" (:task entry))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"still in play" (:out proc)))
+      (is (nil? (:compacted-at (ledger-entry* dir (:task entry)))))))
+  (testing "a live uncaptured round is refused too"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (start-child! env dir "still working")
+          proc (call! env "task" "compact" (:task entry))]
+      (is (= 1 (:exit proc)))
+      (is (nil? (:compacted-at (ledger-entry* dir (:task entry))))))))
+
+(deftest compact-closed-sweeps-only-the-callers-own-retired-rounds
+  (let [{:keys [env dir]} (fake-env {})
+        closed (closed-round! dir (start-child! env dir "own closed round"))
+        retired (patch-entry! dir (start-child! env dir "own dead spawn") :status "failed" :failure-phase "start")
+        open (capture-entry! dir (start-child! env dir "own open round"))
+        foreign (foreign! dir (closed-round! dir (start-child! env dir "foreign closed round")))
+        res (:result (result (call! env "task" "compact" "--closed")))]
+    (is (= #{(:task closed) (:task retired)} (set (mapv :task res))))
+    (is (every? #(= "compacted" (:status %)) res))
+    (is (nil? (:compacted-at (ledger-entry* dir (:task open)))))
+    (is (nil? (:compacted-at (ledger-entry* dir (:task foreign)))))
+    ;; A second sweep finds nothing: compaction is not repeatable on the same round.
+    (is (empty? (:result (result (call! env "task" "compact" "--closed")))))))
+
+(deftest compact-argument-arity
+  (let [{:keys [env]} (fake-env {})]
+    (let [proc (call! env "task" "compact")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"requires a full task uuid" (:out proc))))
+    (let [proc (call! env "task" "compact" "--closed" "some-task")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"takes no task argument" (:out proc))))))
+
+;; --- phase 2: persona `timeout:` frontmatter -------------------------------------------
+;; A per-persona constant that used to be a standing instruction to every caller. Resolution
+;; mirrors `model:` and `retro:`: explicit flag > frontmatter > shipped default.
+(def ^:private timeout-roster
+  {"budgeted" "---\nname: budgeted\ndescription: fixture with a declared budget\nkind: pi\nmodel: anthropic/claude-sonnet-5\ntimeout: 1234000\nretro: false\n---\nFixture.\n"
+   "unbudgeted" "---\nname: unbudgeted\ndescription: fixture without one\nkind: pi\nmodel: anthropic/claude-sonnet-5\nretro: false\n---\nFixture.\n"
+   "misbudgeted" "---\nname: misbudgeted\ndescription: fixture with a bad budget\nkind: pi\nmodel: anthropic/claude-sonnet-5\ntimeout: soon\nretro: false\n---\nFixture.\n"})
+(defn- run-wait-budget [log]
+  (parse-long (argv-flag (first (filter #(= ["agent" "wait"] (vec (take 2 %))) (calls log))) "--timeout")))
+
+(deftest persona-timeout-frontmatter-resolves-flag-then-frontmatter-then-default
+  (testing "the persona's own declaration is the wait budget, with no flag at the call site"
+    (let [{:keys [env log dir]} (fake-env {} timeout-roster)
+          proc (call! env "task" "run" "budgeted" "--task" "declared budget")]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (<= 1233000 (run-wait-budget log) 1234000))
+      (let [entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+        (is (= 1234000 (:timeout entry)))
+        (is (= "frontmatter" (:timeout-source entry))))))
+  (testing "an explicit --timeout still wins, and is recorded as such"
+    (let [{:keys [env log dir]} (fake-env {} timeout-roster)
+          proc (call! env "task" "run" "budgeted" "--task" "flag wins" "--timeout" "7000")]
+      (is (<= 6000 (run-wait-budget log) 7000))
+      (let [entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+        (is (= 7000 (:timeout entry)))
+        (is (= "flag" (:timeout-source entry))))))
+  (testing "a persona declaring none falls back to the shipped default"
+    (let [{:keys [env dir]} (fake-env {} timeout-roster)
+          proc (call! env "task" "start" "unbudgeted" "--task" "no declaration")
+          entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+      (is (= core/default-timeout-ms (:timeout entry)))
+      (is (= "default" (:timeout-source entry)))))
+  (testing "--print-prompt reports the resolved budget and its source"
+    (let [{:keys [env]} (fake-env {} timeout-roster)
+          res (:result (result (call! env "task" "run" "budgeted" "--task" "x" "--print-prompt")))]
+      (is (= 1234000 (:timeout res)))
+      (is (= "frontmatter" (:timeout-source res))))))
+
+;; An unparseable declaration must fail fast at spawn rather than silently degrading to the
+;; default, exactly as an invalid `retro:` does -- a silent fallback hides the typo forever.
+(deftest an-invalid-timeout-declaration-or-flag-fails-before-any-mutation
+  (let [{:keys [env log dir]} (fake-env {} timeout-roster)]
+    (doseq [[argv pattern] {["task" "run" "misbudgeted" "--task" "bad frontmatter"]
+                            #"persona frontmatter `timeout` must be a positive integer"
+                            ["task" "run" "unbudgeted" "--task" "bad flag" "--timeout" "soon"]
+                            #"--timeout must be a positive integer"
+                            ["task" "run" "unbudgeted" "--task" "zero flag" "--timeout" "0"]
+                            #"--timeout must be a positive integer"}]
+      (let [proc (apply call! env argv)]
+        (is (= 1 (:exit proc)) (str argv))
+        (is (re-find pattern (:out proc)) (:out proc))))
+    (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))) "no allocation, no pane")
+    (is (empty? (filter mutating? (calls log))))))
+
+;; The declaration has to survive the spawn, or deleting the standing "--timeout" instruction
+;; would be a lie for every `start` + `collect --wait` and every continued round.
+(deftest a-recorded-budget-is-inherited-by-collect-wait-and-by-a-continued-round
+  (testing "collect --wait with no flag uses the entry's recorded budget"
+    (let [{:keys [env log dir]} (fake-env {} timeout-roster)
+          entry (ledger-entry* dir (get-in (result (call! env "task" "start" "budgeted" "--task" "start then collect")) [:result :task]))]
+      ;; Deliberately unpublished, so the capture actually enters the wait loop and the
+      ;; budget reaches `agent wait` (the fixture publishes from that call).
+      (is (= "COMPLETE" (get-in (result (call! env "task" "collect" (:task entry) "--wait")) [:result :status])))
+      (let [waits (child-waits log (:child entry))]
+        (is (seq waits))
+        (is (<= 1233000 (parse-long (argv-flag (last waits) "--timeout")) 1234000)))))
+  (testing "a continued round inherits it too"
+    (let [{:keys [env dir]} (fake-env {} timeout-roster)
+          first-round (capture-entry! dir (ledger-entry* dir (get-in (result (call! env "task" "start" "budgeted" "--task" "round one")) [:result :task])))
+          {:keys [proc entry]} (continue! env dir first-round "--task" "round two")]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= 1234000 (:timeout entry)))
+      (is (= "frontmatter" (:timeout-source entry))))))
+
+;; --- phase 2: retro candidate harvest --------------------------------------------------
+;; Sixteen candidates across six children in one session were tracked only by re-reading six
+;; captures. The ledger held every one; this is the read that replaces the re-reading.
+(defn- with-process! [dir entry & items]
+  (patch-entry! dir entry :captured-at "2026-01-01T00:00:00Z" :status "COMPLETE"
+                :envelope {:status "COMPLETE" :summary "done" :process (vec items)
+                           :findings [] :artifacts [] :next "none" :text "raw envelope"}))
+
+(deftest harvest-returns-this-sessions-candidates-deduplicated-with-their-sources
+  (let [{:keys [env dir]} (fake-env {})
+        a (with-process! dir (start-child! env dir "first child")
+                         "wrong flag → guardrail → verify flags first"
+                         "shared signal → behavioral → do the other thing")
+        b (with-process! dir (start-child! env dir "second child")
+                         "shared signal → behavioral → do the other thing")
+        ;; Another session's testimony is not this retro's input.
+        _ (foreign! dir (with-process! dir (start-child! env dir "foreign child")
+                                       "foreign signal → guardrail → not mine to read"))
+        ;; A child that published no candidates contributes nothing, silently.
+        _ (capture-entry! dir (start-child! env dir "quiet child"))
+        res (:result (result (call! env "task" "harvest")))]
+    (is (= ["wrong flag → guardrail → verify flags first"
+            "shared signal → behavioral → do the other thing"]
+           (mapv :candidate res))
+        "deduplicated, in spawn order, and scoped to this session")
+    (is (= [[{:child (:child a) :task (:task a)}]
+            [{:child (:child a) :task (:task a)} {:child (:child b) :task (:task b)}]]
+           (mapv :sources res))
+        "every child that raised a candidate survives dedup: two independent sources is a stronger signal")
+    (is (not-any? :truncated res))
+    (testing "an entry whose section overflowed the cap is flagged as knowably incomplete"
+      (let [{env2 :env dir2 :dir} (fake-env {})
+            over (patch-entry! dir2 (with-process! dir2 (start-child! env2 dir2 "overflowing child") "s → c → r")
+                               :process-overflow true)
+            res2 (:result (result (call! env2 "task" "harvest")))]
+        (is (= [(:task over)] (mapv (comp :task first :sources) res2)))
+        (is (every? :truncated res2))))))
+
+(deftest harvest-is-read-only-and-usable-as-direct-retro-input
+  (let [{:keys [env log dir]} (fake-env {})
+        entry (with-process! dir (start-child! env dir "candidate source") "wrong flag → guardrail → verify flags first")
+        before (ledger-entry* dir (:task entry))
+        text (str/trim (:out (call! env "task" "harvest" "--format" "text")))]
+    (is (= (str "- wrong flag → guardrail → verify flags first [" (:child entry) " " (:task entry) "]") text))
+    (is (= before (ledger-entry* dir (:task entry))) "nothing is routed, persisted, or mutated")
+    (is (empty? (closed-panes log)))
+    (is (not-any? #(= ["notification" "show"] (vec (take 2 %))) (calls log)))))
+
+(deftest harvest-refuses-an-unresolvable-caller-and-says-none-when-empty
+  (let [{:keys [env dir]} (fake-env {})]
+    (with-process! dir (start-child! env dir "candidate source") "s → c → r")
+    (let [proc (call! (merge env {"FAKE_FAIL_AGENT_GET" "w:p"}) "task" "harvest")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"caller session is unresolvable" (:out proc))))
+    (let [{env2 :env} (fake-env {})]
+      (is (= "none" (str/trim (:out (call! env2 "task" "harvest" "--format" "text"))))))
+    (let [proc (call! env "task" "harvest" "some-task")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"task harvest requires 0 arguments" (:out proc))))))

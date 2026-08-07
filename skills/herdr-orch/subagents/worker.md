@@ -2,6 +2,7 @@
 name: worker
 description: Default worker - implements a scoped task with minimal production-quality changes, verifies acceptance criteria, and reports concrete changes and test evidence
 model: light
+timeout: 1800000
 spawns: scout researcher advisor
 ---
 

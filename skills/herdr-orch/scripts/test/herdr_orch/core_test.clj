@@ -157,7 +157,8 @@
   (testing "invalid defaults fail in parse-config with their path, before merge-with can run"
     (doseq [[label text message] [["non-map defaults" "{:defaults :split}" #"defaults must be a map"]
                                   ["unknown defaults key" "{:defaults {:unknown :split}}" #"defaults has unknown key"]
-                                  ["unknown placement" "{:defaults {:placement :sideways}}" #"placement must be" ]]]
+                                  ["unknown placement" "{:defaults {:placement :sideways}}" #"placement must be" ]
+                                  ["non-boolean focus" "{:defaults {:focus :yes}}" #"focus must be true or false"]]]
       (is (try
             (core/parse-config "/tmp/defaults.edn" text)
             false
@@ -167,8 +168,8 @@
             (catch Throwable _ false))
           label)))
   (testing "merge is row-level replacement, defaults merge per key, and later configs win"
-    ;; `parse-config` admits only :placement in :defaults; synthetic keys isolate the
-    ;; generic merge primitive's per-key behavior from the closed input schema.
+    ;; `parse-config` admits only :placement and :focus in :defaults; synthetic keys
+    ;; isolate the generic merge primitive's per-key behavior from the closed input schema.
     (let [default {:harnesses {:pi {:model-flag "--model"} :claude {:model-flag "--model"}}
                    :models {"a" {:pi "pa" :claude "ca"} "b" {:pi "pb"}}
                    :defaults {:placement :split :preserved :default}
@@ -232,6 +233,23 @@
              ["split" :tab-split false "split"] ["split" :tab-split true "split"]]]
       (is (= expected
              (core/resolve-placement {:flag flag :configured configured :below-root? below-root?}))
+          (str {:flag flag :configured configured :below-root? below-root?})))))
+
+;; task 8869bd4f: depth is the absolute gate for focus, unlike placement's -- below root
+;; `resolve-focus` ignores both the flag and the configured default outright, so every
+;; below-root row below is `false` regardless of what flag/configured say.
+(deftest focus-resolution-contract
+  (testing "every flag/configuration/depth combination"
+    (doseq [[flag configured below-root? expected]
+            [[nil nil false true] [nil nil true false]
+             [nil true false true] [nil true true false]
+             [nil false false false] [nil false true false]
+             [true nil false true] [true nil true false]
+             [true false false true] [true false true false]
+             [false nil false false] [false nil true false]
+             [false true false false] [false true true false]]]
+      (is (= expected
+             (core/resolve-focus {:flag flag :configured configured :below-root? below-root?}))
           (str {:flag flag :configured configured :below-root? below-root?})))))
 
 ;; Pane labels use `model-basename`, independent of roster translation: a canonical bare
@@ -335,14 +353,18 @@
   (is (.endsWith (cli/launcher-bin) "/skills/herdr-orch/scripts/oh"))
   ;; The prompt text is intentionally pinned. One gap-only trigger covers factual research
   ;; and discretionary judgment consults alike, while preserving the blocking, one-child
-  ;; leaf bound. There is deliberately no mandated-consult variant. The closing sentence is
-  ;; the one lifecycle rule the CLI cannot enforce -- only an entry's owner may close it --
-  ;; so it is composed here once rather than repeated in every delegating persona.
-  (is (= (str "You may spawn at most one blocking scout or researcher only when a factual gap or material judgment blocks progress; that child must remain a leaf."
-              " Capturing its result closes nothing, so close it yourself with `$HERDR_ORCH_BIN task close <its full task uuid>` before you publish: nobody else can close a child you own.")
+  ;; leaf bound. There is deliberately no mandated-consult variant.
+  ;;
+  ;; Closeout fix (P2): the close-before-publish sentence this used to append is *deleted*.
+  ;; `assert-children-discharged!` now refuses `publish` mechanically while a caller still
+  ;; owns an open child round, and that refusal names the exact remedy at the one moment it
+  ;; is actionable -- so restating it as standing advice a child may ignore is precisely the
+  ;; guard-plus-surviving-prose failure phase 2 existed to prevent. These equalities are the
+  ;; positive pin; `close-before-publish-guidance-is-not-restated-in-any-prompt` below pins
+  ;; its absence from the *rendered* prompt, which no test covered before this round.
+  (is (= "You may spawn at most one blocking scout or researcher only when a factual gap or material judgment blocks progress; that child must remain a leaf."
          (cli/delegation-guidance ["scout" "researcher"])))
-  (is (= (str "You may spawn at most one blocking scout or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."
-              " Capturing its result closes nothing, so close it yourself with `$HERDR_ORCH_BIN task close <its full task uuid>` before you publish: nobody else can close a child you own.")
+  (is (= "You may spawn at most one blocking scout or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."
          (cli/delegation-guidance ["scout" "advisor"])))
   ;; Leaf guidance remains the default for an empty resolved policy; the live roster
   ;; grants planner and worker, while scout and researcher remain leaves.
@@ -350,10 +372,12 @@
   (is (= "You are a leaf: do not spawn subagents." (cli/delegation-guidance nil)))
   ;; An advisor in the allow-list is covered by that same gap-only clause: the retired
   ;; mandate variant must not reappear, and the function takes exactly one argument.
-  (is (= (str "You may spawn at most one blocking scout or researcher or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."
-              " Capturing its result closes nothing, so close it yourself with `$HERDR_ORCH_BIN task close <its full task uuid>` before you publish: nobody else can close a child you own.")
+  (is (= "You may spawn at most one blocking scout or researcher or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."
          (cli/delegation-guidance ["scout" "researcher" "advisor"])))
   (is (not (str/includes? (cli/delegation-guidance ["scout" "researcher" "advisor"]) "mandates")))
+  (doseq [banned ["Capturing its result closes nothing" "close it yourself"
+                  "nobody else can close a child you own" "before you publish"]]
+    (is (not (str/includes? (cli/delegation-guidance ["scout" "researcher" "advisor"]) banned)) banned))
   (is (thrown? clojure.lang.ArityException (cli/delegation-guidance ["scout"] ["advisor"])))
   (is (= {:status "COMPLETE"} (smoke/complete! {:status "COMPLETE"})))
   ;; An unset selector preserves today's Pi-default argv; an explicit selector is

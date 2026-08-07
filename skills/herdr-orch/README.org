@@ -144,7 +144,7 @@ Upstream support is required at *both* ends of a delegation, which is stricter t
 - *As a child*, the kind must be startable: =oh= spawns via =herdr agent start --kind=, which not only launches the executable but verifies it was *detected* in the pane. A harness absent from the enum cannot be spawned however it is configured, and shadowing a supported kind's executable on =PATH= does not work -- detection fails rather than mis-registering.
 - *As the orchestrator*, the kind must be registered too. Every caller-identity command (=task run=/=start=, =collect --any=, =prune=) runs =agent get= on =$HERDR_PANE_ID=; from a pane hosting an unrecognised process that fails with =agent_not_found=, so an unsupported harness cannot drive delegation at all, only be driven.
 
-What does survive without registration is publication and capture: =task publish= takes its identity purely from the injected =HERDR_ORCH_*= variables and makes no Herdr agent call, and =task collect <full-task-uuid>= reads the result file, which closes nothing for any child. So an unsupported harness can be hand-launched into a =pane split --env …= pane and still return a valid result. Treat that as a manual fallback, not a supported path: such a child is invisible to =agent list=, so it is excluded from =collect --any= and, more dangerously, satisfies =prune='s staleness proof while still working.
+What survives without registration, but no longer without a Herdr call, is publication and capture. =task publish= resolves its own caller identity the same way (=parent-identity=, one =agent get=) for the publish-side guard that refuses a caller still owning an open child (=assert-children-discharged!=), and may additionally call =agent list= once when it does own outstanding children, to tell a released round from a blocking one. A pane hosting an unrecognised process makes that identity unresolvable, but publication does not fail on it the way =task run=/=start=, =collect --any=, and =prune= do: an unresolvable caller owns nothing, so the guard degrades open rather than refusing. =task collect <full-task-uuid>= reads the result file for its completion signal, and makes one =agent get= of its own (=caller-owns?=) plus, on an owned capture whose =:child-session= is still missing, a second on the child -- but every one of those is swallowed, so an unresolvable identity downgrades the capture to ="ownership": "foreign-parent-session"= rather than failing it, and no capture closes anything for any child. So an unsupported harness can be hand-launched into a =pane split --env …= pane and still return a valid, publishable result. Treat that as a manual fallback, not a supported path: such a child is invisible to =agent list=, so it is excluded from =collect --any= and, more dangerously, satisfies =prune='s staleness proof while still working.
 
 ** Child placement
 
@@ -153,8 +153,10 @@ What does survive without registration is publication and capture: =task publish
 | Value | At root | Below root (spawner has =HERDR_ORCH_PERSONA=) |
 |---+---+---|
 | =:split= | split the caller's pane | split the caller's pane |
-| =:tab= | new unfocused tab in the caller's workspace | new unfocused tab in the caller's workspace |
-| =:tab-split= | new unfocused tab | split the caller's pane |
+| =:tab= | new tab in the caller's workspace | new tab in the caller's workspace |
+| =:tab-split= | new tab | split the caller's pane |
+
+Each of those root-row tabs is focused by default (=:defaults :focus=, shipped =true=); a below-root spawn -- =:tab= or =:tab-split='s split row alike -- never focuses (task 8869bd4f). See [[file:scripts/docs/contract.md][contract.md]] § Focus for the flag, the depth gate, and the =close= return hook.
 
 Resolution order, highest first:
 

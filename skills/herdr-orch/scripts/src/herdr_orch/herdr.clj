@@ -75,9 +75,12 @@
   (let [pane (System/getenv "HERDR_PANE_ID") layout (value! ["pane" "layout" "--pane" pane])
         panes (get-in layout [:result :layout :panes]) match (some #(when (= pane (:pane_id %)) %) panes)]
     (or (:rect match) (throw (ex-info "caller pane absent from Herdr layout" {:pane pane :panes panes})))))
-(defn split! [{:keys [direction cwd env]}]
+(defn split! [{:keys [direction cwd env focus]}]
   (let [pane (System/getenv "HERDR_PANE_ID")]
-    (get-in (value! (into ["pane" "split" "--pane" pane "--direction" direction "--cwd" cwd "--no-focus"] (env-args env))) [:result :pane])))
+    (get-in (value! (into (cond-> ["pane" "split" "--pane" pane "--direction" direction "--cwd" cwd]
+                            focus (conj "--focus")
+                            (not focus) (conj "--no-focus"))
+                          (env-args env))) [:result :pane])))
 ;; The child pane is `.result.root_pane`, not `.result.pane` (tab creation also returns
 ;; `.result.tab`); `--label` here sets the *tab's* label, distinct from the pane label
 ;; the existing rename! flow applies afterward.

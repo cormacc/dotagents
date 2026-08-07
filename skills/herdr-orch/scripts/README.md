@@ -24,6 +24,8 @@ The value-bearing `--spawns` flag overrides the persona's frontmatter `spawns:` 
 
 The value-less flags `--tab` and `--split` explicitly select tab or split placement and are mutually exclusive. See [docs/contract.md](docs/contract.md) § Placement for precedence, the `:tab-split` resolution, and what tab placement does and does not change.
 
+The value-less flags `--focus` and `--no-focus` explicitly select whether that placement call also moves the UI to the new child, overriding configured `:defaults :focus` (shipped `true`); a below-root spawn never focuses regardless of either. A **root** `close` returns focus to the caller's own pane once it actually closes a child -- `collect --close` inherits this -- and `close --settled`/`orphans --close` do it once after the whole sweep, never once per child; a below-root `close` never returns focus, under the same depth gate the spawn side uses, and `publish` never touches focus at all. See [docs/contract.md](docs/contract.md) § Focus for precedence, the depth gate, and the return-hook rationale.
+
 The value-less flag `--any` on `collect` takes no task argument; it captures the *first* in-flight child of the caller's own session to publish a valid result, instead of waiting on one named task -- the read/capture primitive behind bounded-concurrency fan-out. See [docs/contract.md](docs/contract.md) § Fan-in for candidacy, poll structure, and outcomes.
 
 The value-bearing `--notify-timeout` flag on `publish` bounds the settle wait before the advisory parent push under the non-blocking waiting policy -- which is read from the publishing round's ledger entry, never from the environment (default 30000 ms). See [docs/contract.md](docs/contract.md) § Parent push for the push gates and outcome table.
