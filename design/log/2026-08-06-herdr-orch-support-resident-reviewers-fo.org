@@ -28,6 +28,7 @@ Phase 2 pays down the cost of that explicitness. Making the parent decide after 
 - contract.md and SKILL.md rewritten for the new lifecycle; sweep of packaged persona texts and cross-references asserting auto-close.
 - `bb test` coverage for all of the above plus a continue-round live-smoke variant.
 - Phase 2 (ceremony reduction) :: agent-facing output formats, a publish-side guard for a caller's own unclosed children, an orphan-cleanup verb, a `PROCESS`-candidate harvest, `collect --close`, and per-persona timeouts.
+- Phase 2 (attendability) :: a second axis, not ceremony reduction -- focus follows the newest child on creation and returns to the parent when that child ends, reversing the shipped unfocused-spawn convention now that `:tab-split` gives each first-level child its own tab.
 
 *** Out of scope
 
@@ -87,13 +88,15 @@ Phase 2 pays down the cost of that explicitness. Making the parent decide after 
 
 *** Ceremony reduction (phase 2)
 
-- [ ] Delegation verbs (`collect`, `status`, `list`) accept `--format text` and stop emitting the parsed envelope *and* a duplicate raw `text` blob in the same payload; the raw envelope is opt-in.
-- [ ] `publish` refuses, or loudly warns, when the caller still owns an uncaptured or unclosed child in the ledger -- the rule SKILL.md currently states only in prose.
-- [ ] An orphan-cleanup verb replaces the documented two-step `agent list` then `pane close` recipe, applying the same live child+pane match with operator-supplied authority.
-- [ ] A verb harvests this session's `PROCESS` candidates from the ledger, deduplicated, so a retro does not depend on re-reading every capture.
-- [ ] `collect --close` performs capture and closure in one call without weakening the explicit close-or-continue decision.
-- [ ] Persona frontmatter carries `timeout:`, replacing the standing "give review and implementation work an explicit `--timeout`" instruction.
-- [ ] Every rule these changes make mechanical is *deleted* from SKILL.md, not merely restated alongside the guard. Net prose must shrink.
+- [X] Delegation verbs (`collect`, `status`, `list`) accept `--format text` and stop emitting the parsed envelope *and* a duplicate raw `text` blob in the same payload; the raw envelope is opt-in.
+- [X] `publish` refuses, or loudly warns, when the caller still owns an uncaptured or unclosed child in the ledger -- the rule SKILL.md currently states only in prose.
+- [X] An orphan-cleanup verb replaces the documented two-step `agent list` then `pane close` recipe, applying the same live child+pane match with operator-supplied authority.
+- [X] A verb harvests this session's `PROCESS` candidates from the ledger, deduplicated, so a retro does not depend on re-reading every capture.
+- [X] `collect --close` performs capture and closure in one call without weakening the explicit close-or-continue decision.
+- [X] Persona frontmatter carries `timeout:`, replacing the standing "give review and implementation work an explicit `--timeout`" instruction.
+- [X] Ledger growth is bounded by an ownership-aware retention path, without destroying the post-closure transcript references that make an old entry worth keeping.
+- [X] Spawning focuses the new child, focus returns to the parent when that child ends, both are configurable, and every document asserting unfocused spawning is corrected.
+- [X] Every rule these changes make mechanical is *deleted* from SKILL.md, not merely restated alongside the guard. Net prose must shrink. Measured: 3348 -> 3338 words, with four instructions deleted (close-before-publish, explicit `--timeout`, the two-step orphan recipe, harvest-by-session) against one added clause naming `collect --close`; `lifecycle-documentation-contract` pins both the deletions and the word-count ceiling.
 
 *** Anti-criteria
 
@@ -227,21 +230,33 @@ CLOSED: [2026-08-06 Thu 22:38]
 :END:
 Landed. `continue-leg!` proves same-pane context by round-two recall of a random token never written to disk, then asserts `:continues`, inherited identity, and a `closed` outcome. First green run: `.tmp/smoke-continue.log`, exit 0.
 
-** TODO Agent-facing output: `--format text` and no duplicated envelope
+** DONE Agent-facing output: `--format text` and no duplicated envelope
+CLOSED: [2026-08-07 Fri 01:15]
 :PROPERTIES:
 :CUSTOM_ID: f6cc6df4-660e-4da9-8971-35a54771e129
 :CREATED: [2026-08-07 Fri 00:40]
+:STARTED: [2026-08-07 Fri 01:10]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 01:10]
+- State "DONE" from "STARTED" [2026-08-07 Fri 01:15]
 :END:
 Highest token cost measured in live use: every capture returned `summary`/`findings`/`process`/`artifacts` *and* a `text` blob repeating all of it, and each of six collects was piped through ad-hoc Python purely to strip the duplicate. `oh task list` is worse -- it emits full envelopes, findings and process included, for every historical entry.
 Acceptance criteria:
 - `collect`, `status`, and `list` accept `--format text`; `--format` currently exists only on `pane read`/`agent read` (`cli.clj:1021`, `:1040`).
 - The raw envelope `text` is opt-in (`--raw`) rather than always present beside the parsed fields.
-- `list --format text` is one line per child: child, pane, status, captured, closed.
+- `list --format text` is one line per ledger *entry* -- that is, one per round: task, child, pane, status, captured/uncaptured, closed/open. (Corrected 2026-08-07 at closeout, from "one line per child", which the delivered code never matched and which was wrong as a criterion: a continued child holds one entry per round, and collapsing its rounds onto one line would hide exactly the history `continue` exists to create. The code and contract.md are correct as they stand; only this line was inaccurate. The task id leads because it is the only field a caller can act on.)
 
-** TODO Guard a publishing child's own unclosed children
+** DONE Guard a publishing child's own unclosed children
+CLOSED: [2026-08-07 Fri 01:34]
 :PROPERTIES:
 :CUSTOM_ID: 4f29615a-ddfe-47c6-ab6b-28c0623c94bf
 :CREATED: [2026-08-07 Fri 00:40]
+:STARTED: [2026-08-07 Fri 01:22]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 01:22]
+- State "DONE" from "STARTED" [2026-08-07 Fri 01:34]
 :END:
 SKILL.md states "a delegating persona must close its own children before publishing" as prose only; no such check exists in `cli.clj`. Measured consequence: the live smoke leaked a grandchild pane, and the fix was to *instruct* a planner child to close its scout plus assert on the outcome -- an LLM-compliance dependency where the ledger already holds the answer.
 Acceptance criteria:
@@ -249,10 +264,16 @@ Acceptance criteria:
 - The smoke's nested leg relies on that guard rather than on its planner child obeying an instruction.
 - The prose rule is deleted from SKILL.md once the guard exists.
 
-** TODO Orphan-cleanup verb
+** DONE Orphan-cleanup verb
+CLOSED: [2026-08-07 Fri 01:41]
 :PROPERTIES:
 :CUSTOM_ID: d39fa580-ff6e-4f97-89cc-2398fa7c26e1
 :CREATED: [2026-08-07 Fri 00:40]
+:STARTED: [2026-08-07 Fri 01:34]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 01:34]
+- State "DONE" from "STARTED" [2026-08-07 Fri 01:41]
 :END:
 SKILL.md documents a two-step manual recipe (`oh agent list`, then `oh pane close <pane-id>`) for a child whose owning session ended. Ownership is absolute by design and gains no dead-owner exception; the operator supplies the authority the protocol cannot infer.
 Acceptance criteria:
@@ -260,10 +281,16 @@ Acceptance criteria:
 - It never closes on name-absence alone, and never on a pane-id mismatch.
 - The prose recipe is replaced by the verb in SKILL.md.
 
-** TODO Harvest `PROCESS` candidates from the ledger
+** DONE Harvest `PROCESS` candidates from the ledger
+CLOSED: [2026-08-07 Fri 02:14]
 :PROPERTIES:
 :CUSTOM_ID: 7afb2c33-d916-4a65-a67f-6478e8ae05d0
 :CREATED: [2026-08-07 Fri 00:40]
+:STARTED: [2026-08-07 Fri 02:05]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 02:05]
+- State "DONE" from "STARTED" [2026-08-07 Fri 02:14]
 :END:
 Sixteen candidates accumulated across six children in one session, tracked only by re-reading capture output. The ledger holds every one, and SKILL.md warns they die with the session unless a retro routes them.
 Acceptance criteria:
@@ -271,10 +298,16 @@ Acceptance criteria:
 - Output is usable as direct retro input without re-reading captures.
 Must not: route, persist, or act on candidates -- the parent still owns verification, deduplication, and approval.
 
-** TODO `collect --close`
+** DONE `collect --close`
+CLOSED: [2026-08-07 Fri 01:22]
 :PROPERTIES:
 :CUSTOM_ID: 339bd67e-0359-4fc8-9aff-dea3c4afa7a9
 :CREATED: [2026-08-07 Fri 00:40]
+:STARTED: [2026-08-07 Fri 01:15]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 01:15]
+- State "DONE" from "STARTED" [2026-08-07 Fri 01:22]
 :END:
 Capture-then-close was two calls, six times, in one session. The redesign's insight was that the *retain* decision needs the result first -- but for an ephemeral scout or reviewer the close decision is known at spawn.
 Acceptance criteria:
@@ -282,19 +315,91 @@ Acceptance criteria:
 - A capture whose closure refuses still returns the validated result; the flag never suppresses or degrades the capture.
 Must not: make closure implicit anywhere else, or reintroduce capture-time auto-close by default.
 
-** TODO Persona `timeout:` frontmatter
+** DONE Persona `timeout:` frontmatter
+CLOSED: [2026-08-07 Fri 02:05]
 :PROPERTIES:
 :CUSTOM_ID: 343f80c8-3734-49de-9e4e-8573c4f8e819
 :CREATED: [2026-08-07 Fri 00:40]
+:STARTED: [2026-08-07 Fri 01:51]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 01:51]
+- State "DONE" from "STARTED" [2026-08-07 Fri 02:05]
 :END:
 "Give review and implementation work an explicit `--timeout`" is a per-persona constant expressed as a standing instruction to every caller.
 Acceptance criteria:
 - Persona frontmatter accepts `timeout:`, resolving as explicit `--timeout` > frontmatter > shipped default, mirroring how `model:` and `retro:` already resolve.
 - Review and implementation personas declare one; the SKILL.md instruction is deleted.
 
+** DONE Bound ledger growth without losing the audit trail
+CLOSED: [2026-08-07 Fri 01:51]
+:PROPERTIES:
+:CUSTOM_ID: ac65f6ae-7796-4e29-ab4b-5ecfee14d287
+:CREATED: [2026-08-07 Fri 01:00]
+:STARTED: [2026-08-07 Fri 01:41]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 01:41]
+- State "DONE" from "STARTED" [2026-08-07 Fri 01:51]
+:END:
+Nothing in the CLI ever retires a ledger entry: measured 2026-08-07, 31 entries across 5 distinct parent sessions in one assignment root, all `COMPLETE`, none removable by any verb. `prune` only retires an entry proved *stale* (uncaptured, no result, child absent), so a captured entry lives forever.
+
+The design tension is the point of the task, not an obstacle to it: an old entry is exactly what holds `:child-session`, the only route to a finished child's transcript once its pane is gone, and a task UUID cited in a commit, record, or task body resolves nowhere without it. Deletion and audit trail pull in opposite directions -- resolve that explicitly rather than picking a TTL.
+
+Acceptance criteria:
+- Retention refuses entries owned by another `:parent-session`, exactly as `prune` and `close` do; a shared assignment root means one session's cleanup must never touch another's state.
+- The chosen mechanism is justified against the audit-trail role -- compaction (keep task, child, `:child-session`, artifacts; drop envelope bulk) and age-plus-closed deletion are both admissible, but the choice is argued, not assumed.
+- Whatever is retired stays discoverable enough that a UUID cited elsewhere does not become a dangling reference, or the criterion above is consciously traded away and said so in contract.md.
+- SKILL.md's "never bulk-delete the ledger" rule is updated to name the supported path rather than only forbidding the unsupported one.
+Must not: introduce an automatic sweep on spawn, capture, or session end; retirement stays an explicit operator or parent action, like every other destructive verb here.
+
+** DONE Focus follows the newest child, and returns when it ends
+CLOSED: [2026-08-07 Fri 09:18]
+:PROPERTIES:
+:CUSTOM_ID: 8869bd4f-91b5-49c2-bf7f-13118591b329
+:CREATED: [2026-08-07 Fri 01:08]
+:STARTED: [2026-08-07 Fri 08:38]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 08:38]
+- State "DONE" from "STARTED" [2026-08-07 Fri 09:18]
+:END:
+Reverses a shipped convention deliberately. Delegated spawning hardcodes `--no-focus` (`herdr.clj:80`), and SKILL.md recommends it (`:92`) alongside "new unfocused tab" in the placement bullet and `oh spawn` description. That default made sense when every child split the caller's pane; with `:tab-split` a first-level child owns a tab, so moving to it is how you watch or intervene, and moving back is how you resume. The focus verbs already exist (`tab-focus!`, `agent-focus!`, `workspace-focus!`), as do `--focus`/`--no-focus` on the raw wrappers.
+
+Acceptance criteria:
+- A delegated spawn *by root* focuses the new child's tab or pane; the hardcoded `--no-focus` at `herdr.clj:80` becomes the non-default branch. A below-root spawn still never focuses, gated on the existing `:below-root?` predicate rather than a new depth notion, and that is pinned by a test.
+- `close` returns focus to the caller's own pane **only when the caller is root**, and `collect --close` inherits it; `publish` never moves focus. `close --settled` and `orphans --close` return focus once after the sweep, not once per child. The root gate is not optional here: the publish guard forces every delegating child to close its grandchildren before publishing, so an ungated return hook makes every nested delegation end in a child-initiated focus steal -- which is exactly what the Depth decision forbids, and which breaks the "focus moves only on a root-initiated action" invariant. Both closeout validators found this independently; it was underspecified in the first statement of this criterion, not in the decision it implements.
+- Focus behaviour is configurable in the shape `:defaults :placement` already established -- a `:defaults` key with explicit `--focus`/`--no-focus` overriding it -- so an unattended or scripted run can keep today's behaviour.
+- Focus is best-effort: a failed focus call never fails a spawn, a publish, or a close, and never alters a result field. Same discipline as the operator toast and the parent push.
+- Focus is only ever *set*, never read to make a decision. SKILL.md's rule against depending on focused UI state stays exactly as it is.
+- Every document asserting unfocused spawning is corrected: SKILL.md's placement bullet, its `oh spawn` description, `:92`'s `--no-focus` recommendation, `skills/herdr-orch/scripts/README.md`, and contract.md. A stale claim here is a finding at the same severity as a code defect.
+
+Both questions are now decided (root, 2026-08-07, after phase 2 landed). Implement to these; do not reopen them without new evidence.
+
+- **Depth :: root-level only.** Focus is the human's attention, so only an action the human or their direct proxy initiated may move it. A root spawn is that proxy: the operator asked for the child. A below-root spawn is not -- it is initiated by an autonomous worker at a moment the operator cannot predict, which is exactly the mid-read theft the anti-criterion forbids. There is also nothing to gain: a below-root spawn is blocking and one-at-a-time, so the grandchild's progress is visible from its parent's pane anyway. Express the guard as a property of the *spawner*, not a depth counter: `cli.clj:207` already computes `:below-root?` as `(some? (System/getenv "HERDR_ORCH_PERSONA"))`, and `continue`'s root-only guard (`cli.clj:1107`) tests the same variable. Since nesting is one level absolutely, "spawner is root" and "child is depth 1" coincide -- reuse the existing tested predicate rather than adding a second notion of depth that can drift from it.
+
+- **Return hook :: `close`, and therefore `collect --close`. Not `publish`.** Five reasons, in descending force:
+  1. `close` runs in the *parent's* process, so the pane to focus is the caller's own `$HERDR_PANE_ID` -- no ledger lookup, no session-match gate, nothing to get wrong.
+  2. `close` already proves the child is finished: captured, newest round, live child-name-and-pane-id match in `idle`/`done`. At publish the child is still alive, and its pane is often the thing you actually want to keep reading.
+  3. Under fan-out, closes are serialised by the parent's own turn -- one focus change, at a moment the parent chose. Publishes arrive independently, so N children would yank focus N times from wherever the operator is.
+  4. It yields a clean invariant: **focus moves only on a root-initiated action.** Root's spawn takes it; root's close returns it. Publish is child-initiated and would break that symmetry, leaving no single place to reason about who moved the focus.
+  5. Decisive against publish: `push-decision` (`cli.clj:491`) shows a publishing child routinely finds its parent `working`, `blocked`, or session-mismatched. Focusing then is precisely the theft the anti-criterion forbids. Worse, publication is already committed before `notify-parent!` runs, and that function's stated contract is that every outcome is *only reported* and may never change the publish status or exit code -- a UI mutation does not belong on the one path that must never fail.
+
+  The timeliness argument for publish-time return is already served, by the existing advisory parent push: it is gated, session-matched, and handles an unsettled parent. Adding focus there would duplicate a solved problem with a worse mechanism.
+
+  Sweeps return focus **once, after the sweep** -- `close --settled` and `orphans --close` must not focus per child.
+
+Evidence from this session for reason 5: the crash orphaned a live child whose ledger `:parent-session` named a dead root, so its publish push was skipped as `session-mismatch` while the pane stayed live and idle. A publish-time focus hook would have had to decide what to do with that case; the `close` hook never encounters it.
+
+Must not: steal focus from a pane the user is typing in more often than the value justifies -- if the fan-out case proves to thrash, make the return hook opt-in rather than shipping a default that fights the user.
+
 * Implementation
 
-`bb test`: 457 tests / 2680 assertions at baseline, 483 / 2908 at first delivery, 487 / 2943 after the post-merge review round; 0 failures throughout. Live smoke green twice, the second run after the follow-up fixes, exercising the changed continuation-prompt and close paths and confirming the grandchild-leak fix (no pane left behind).
+`bb test`: 457 tests / 2680 assertions at baseline, 483 / 2908 at first delivery, 487 / 2943 after the post-merge review round, 516 / 3133 after phase 2, 520 / 3199 after the focus round; 0 failures throughout.
+
+One caveat on the phase-2 prose criterion, recorded because the number alone is misleading. Phase 2 met "net prose must shrink" on the instruments that can detect it -- SKILL.md 3348 -> 3338 words, 22289 -> 22248 bytes -- but only by 0.3%, because three per-task criteria *required* naming the new verbs in SKILL.md, so mandated additions offset the deletions. Line count cannot measure this file at all: it is paragraph-per-line, and 38 of its 114 lines exceed 200 characters, so deleting a sentence never moves it. The focus round then added 144 net words of genuinely new user-facing documentation, leaving SKILL.md at 3482 words -- **above** the 3348 baseline. That is the right trade (new behaviour needs documenting; ceremony does not), but it means the end state of this record is a larger SKILL.md than it started with, and the shrink claim belongs to phase 2 in isolation rather than to the record as a whole.
+
+The guard for it is a ceiling, not a ratchet: `lifecycle-documentation-contract` asserts SKILL.md stays under 3500 words. It was briefly mis-named "net prose shrank" while asserting only that ceiling, which would have told a reader of a passing suite that prose shrank when it had grown; renamed at closeout. Its shape is still open to question -- an absolute word ceiling calibrated to one refactor's savings blocks a later feature's required documentation, and a delta or percentage against a moving baseline would survive that better. Live smoke green twice, the second run after the follow-up fixes, exercising the changed continuation-prompt and close paths and confirming the grandchild-leak fix (no pane left behind).
 
 Delivered in two commits: the lifecycle itself, then a follow-up round closing four defects a post-merge parallel review found -- the `--task` result-path burn, a BLOCKED/FAILED instruction missing its round task, an unretirable `"continuing"` status, and a persona telling a below-root spawner to retain a grandchild `continue` can never resume.
 
