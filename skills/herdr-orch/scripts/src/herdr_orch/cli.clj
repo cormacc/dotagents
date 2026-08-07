@@ -8,7 +8,7 @@
   (:import [java.nio.file Files FileAlreadyExistsException Paths]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task progress --summary TEXT [--task UUID]\n  oh task prune <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--focus/--no-focus overrides the configured :defaults :focus (default true) for that placement call; a root-level spawn focuses its new child by default, a below-root spawn never focuses regardless of the flag or config.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to ORCH_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncontinue assigns a settled, captured child another round in its existing context: root-only, guarded by the same live child+pane match close uses, allocating a fresh task and result and writing a new ledger entry with :continues. --wait blocks like run; the default is non-blocking like start.\nharvest returns this session's PROCESS candidates from the ledger, deduplicated, with every child and task that raised each one; it is read-only and routes, persists, and acts on nothing.\ncompact retires bulk rather than entries: it drops the raw envelope text (a duplicate of the parsed fields and of the retained RESULT file) from a closed or terminal round the caller owns, keeping the task, child, :child-session, and artifact links a cited uuid resolves through. --closed sweeps the caller's own such rounds.\norphans lists, and under --close closes, captured rounds owned by a session other than this one, applying close's own live child+pane match; a foreign session is not a dead one, so the authority is the operator's and the list is the default. Root-only, like continue: a delegated child is refused before any listing or mutation, because every sibling and ancestor session looks equally foreign to it.\nclose is the only path that closes a *spawned* child's pane: no capture does, and the only other closure is spawn-failure cleanup taking a pane the child never worked in. It acts on a captured entry that is the newest round for its child, and only on a live observation matching both that entry's child name and its pane id in idle/done; --settled sweeps the caller's own captured children, newest round only, at most one attempt each. On a successful close by *root* it also returns focus to the caller's own pane (best-effort, never reported, never affects the outcome); a below-root close never moves focus. --settled and orphans --close do this once after the sweep, not once per child.\ncollect, status, close, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; no prefix is ever resolved.\ncollect, status, and list accept --format text for a compact line rendering, and emit the raw result envelope beside the parsed fields only under --raw.\ncollect --close captures and then closes in one call, under every close guard, reporting that outcome under :close without ever degrading the capture.\nOpaque assignment input is --task, --task-file, or stdin. Run `oh --help` for contract details.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task progress --summary TEXT [--task UUID]\n  oh task prune <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--focus/--no-focus overrides the configured :defaults :focus (default true) for that placement call; a root-level spawn focuses its new child by default, a below-root spawn never focuses regardless of the flag or config.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to ORCH_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncontinue assigns a settled, captured child another round in its existing context: root-only, guarded by the same live child+pane match close uses, allocating a fresh task and result and writing a new ledger entry with :continues. --wait blocks like run; the default is non-blocking like start.\nharvest returns this session's PROCESS candidates from the ledger, deduplicated, with every child and task that raised each one; it is read-only and routes, persists, and acts on nothing.\ncompact retires bulk rather than entries: it drops the raw envelope text (a duplicate of the parsed fields and of the retained RESULT file) from a closed or terminal round the caller owns, keeping the task, child, :child-session, and artifact links a cited uuid resolves through. --closed sweeps the caller's own such rounds.\norphans lists, and under --close closes, captured rounds owned by a session other than this one, applying close's own live child+pane match; a foreign session is not a dead one, so the authority is the operator's and the list is the default. Root-only, like continue: a delegated child is refused before any listing or mutation, because every sibling and ancestor session looks equally foreign to it.\nclose is the only path that closes a *spawned* child's pane: no capture does, and the only other closure is spawn-failure cleanup taking a pane the child never worked in. It acts on a captured entry that is the newest round for its child, and only on a live observation matching that entry's child name and pane id in idle/done -- or, when the name has been released (a resumed process), a live pane whose recorded shell_pid still matches and whose foreground is not busy; --settled sweeps the caller's own captured children, newest round only, at most one attempt each. On a successful close by *root* it also returns focus to the caller's own pane (best-effort, never reported, never affects the outcome); a below-root close never moves focus. --settled and orphans --close do this once after the sweep, not once per child.\ncollect, status, close, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; no prefix is ever resolved.\ncollect, status, and list accept --format text for a compact line rendering, and emit the raw result envelope beside the parsed fields only under --raw.\ncollect --close captures and then closes in one call, under every close guard, reporting that outcome under :close without ever degrading the capture.\nOpaque assignment input is --task, --task-file, or stdin. Run `oh --help` for contract details.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -334,26 +334,40 @@
 ;; session that crashed). Last-write-wins would trade one wrong reference for another in
 ;; the other direction, discarding whichever session held real work. So this compares
 ;; instead of merely backfilling: an unset `:child-session` is still simply set (unchanged
-;; from before), an observation matching the current one is a no-op (no ledger write), and
-;; a genuinely different observation replaces `:child-session` while the superseded value
-;; moves onto `:child-session-history` -- appended only if not already present, so a
-;; session that is observed again after another has intervened is not duplicated. Nothing
-;; is ever discarded, and every existing reader (`compact`, the live smoke, contract.md)
-;; keeps resolving the *newest* observation through the same stable `:child-session` key
-;; it always has; only a reader that has actually seen a mismatch need consult the history.
+;; from before), an observation matching the current one is a no-op, and a genuinely
+;; different observation replaces `:child-session` while the superseded value moves onto
+;; `:child-session-history` -- appended only if not already present, so a session that is
+;; observed again after another has intervened is not duplicated. Nothing is ever discarded,
+;; and every existing reader (`compact`, the live smoke, contract.md) keeps resolving the
+;; *newest* observation through the same stable `:child-session` key it always has; only a
+;; reader that has actually seen a mismatch need consult the history.
+;;
+;; The no-op case is checked *before* `ledger/update!`, not merely inside the function it
+;; runs: `ledger/update!` (`ledger.clj:43`) writes its `f`'s return value unconditionally,
+;; even when that value is the entry unchanged, so an equal-observation branch living only
+;; inside `f` still performed an atomic rewrite on every call -- on every wait tick, for a
+;; settled child polled repeatedly. The pre-check here is what makes "no ledger write at
+;; all" (contract.md § Ledger and completion) true, and it also removes the no-op case from
+;; the documented read-modify-write lost-update race entirely rather than merely returning
+;; the same value from inside it; the genuinely different-observation branch still runs the
+;; race, unchanged. The `cond` retained inside `f` is the safety net for the race window
+;; between this read and `update!`'s own: a session that arrived there in between changes
+;; nothing about correctness, only which write count wins.
 (defn record-session! [task session]
   (when (and task (map? session) (seq session))
-    (try (ledger/update! task
-                         (fn [entry]
-                           (let [current (:child-session entry)]
-                             (cond
-                               (nil? current) (assoc entry :child-session session)
-                               (= current session) entry
-                               :else (-> entry
-                                        (update :child-session-history
-                                                (fn [history] (vec (distinct (conj (vec history) current)))))
-                                        (assoc :child-session session))))))
-         (catch Exception _ nil))))
+    (try
+      (when-not (= session (:child-session (ledger/read! task)))
+        (ledger/update! task
+                       (fn [entry]
+                         (let [current (:child-session entry)]
+                           (cond
+                             (nil? current) (assoc entry :child-session session)
+                             (= current session) entry
+                             :else (-> entry
+                                      (update :child-session-history
+                                              (fn [history] (vec (distinct (conj (vec history) current)))))
+                                      (assoc :child-session session)))))))
+      (catch Exception _ nil))))
 ;; --- post-prompt dispatch verification ---------------------------------------------
 ;; `agent prompt` submits atomically, but a harness TUI still finishing startup can swallow
 ;; the Enter and leave the composed prompt sitting unsubmitted in the child's composer: of
@@ -406,13 +420,18 @@
 ;; What remains is bookkeeping: the ledger is repo-wide, so a capture from a session that
 ;; does not own the entry still reports that fact (an unresolvable caller identity is
 ;; non-owning), and an owned capture backfills the child's transcript reference while Herdr
-;; still knows the agent. The probe is made only when that reference is still missing --
-;; with no close to decide, an already-recorded session needs no `agent get` at all.
+;; still knows the agent. The probe is made unconditionally, one `agent get` per owned
+;; capture -- a bare `collect` of an already-published result is otherwise the one path that
+;; never re-observes the child at all, so a crash-and-resume between spawn and this capture
+;; left `:child-session` naming the dead session forever (task ecb85350's actual defect: the
+;; `collect --wait` coverage that shipped for it only ever exercised the wait-loop hook,
+;; whose `agent wait` outcome happens to carry the newer session first). `record-session!`
+;; is itself the no-op guard for the common case -- an observation matching what is already
+;; recorded costs a call but no ledger write.
 (defn finish-capture! [entry parsed owned?]
   (if-not owned?
     (assoc parsed :pane-retained true :ownership "foreign-parent-session")
-    (do (when-not (:child-session entry)
-          (record-session! (:task entry) (:agent_session (try (herdr/agent! (:child entry)) (catch Exception _ nil)))))
+    (do (record-session! (:task entry) (:agent_session (try (herdr/agent! (:child entry)) (catch Exception _ nil))))
         parsed)))
 (defn wait-and-capture! [entry timeout owned?]
   (let [deadline (+ (System/currentTimeMillis) timeout)]
@@ -764,6 +783,10 @@
 ;; `live-agents` is defined below (it belongs next to `any-candidates`/`collect-any!`,
 ;; its only other caller); this forward declaration lets `prune!` reuse it unchanged.
 (declare live-agents)
+;; `pane-alive?`/`pane-shell-pid!` are defined below, next to `released-name-close`, their
+;; other caller; forward-declared so `assert-children-discharged!`'s release classification
+;; (below) can share `close`'s own evidence for a name-absent round instead of a weaker one.
+(declare pane-alive? pane-shell-pid!)
 (defn prune! [task]
   (when-not task (fail "prune requires a full task uuid" {}))
   (let [entry (ledger/read! task)
@@ -860,11 +883,16 @@
 ;;
 ;; Outstanding means the round is still actionable *by this caller*: uncaptured (collect it,
 ;; or `prune` it if the spawn died), or captured with a pane and no `:closed-at`. A captured
-;; round whose child has vanished from a positively-usable listing is instead *released*: no
-;; verb can close it -- `close` reports `gone` and mutates nothing, and `prune` refuses a
-;; captured entry -- so blocking on it would be a dead end rather than a lever. That
-;; discharge is reported, not silent, because a released round means a pane was left behind.
-;; An unusable listing proves nothing, so nothing is discharged from one.
+;; round whose child has vanished from a positively-usable listing is *released* only when
+;; `close`'s own fallback could not reclaim it either: the pane itself is gone, or its
+;; `:shell-pid` no longer matches -- `close` then reports `gone` and mutates nothing, and
+;; `prune` refuses a captured entry, so no verb can close it and blocking on it would be a
+;; dead end rather than a lever. A round whose pane is still live and whose `:shell-pid`
+;; still matches is instead classified *blocking*, exactly as `close`'s shell_pid fallback
+;; (task ca6fecef) would still reclaim it: publishing past it would recreate the leak this
+;; guard exists to prevent. That discharge is reported, not silent, because a released round
+;; means a pane was left behind. An unusable listing proves nothing, so nothing is
+;; discharged from one.
 (defn- bin-hint [] (try (launcher-bin) (catch Exception _ "oh")))
 (defn- outstanding-children [caller own-child entries]
   (filterv (fn [entry]
@@ -873,10 +901,19 @@
                   (or (nil? (:captured-at entry))
                       (and (:pane-id entry) (nil? (:closed-at entry))))))
            (newest-rounds entries)))
+;; The same evidence `close`'s shell_pid fallback (task ca6fecef) uses for a name-absent
+;; round: a live pane whose recorded `:shell-pid` still matches is a round `close` could
+;; still reclaim, so it is never released here either -- see `released-name-close`.
+(defn- pane-reclaimable? [entry]
+  (boolean (and (:pane-id entry) (pane-alive? (:pane-id entry))
+               (let [recorded (:shell-pid entry) live (pane-shell-pid! (:pane-id entry))]
+                 (and recorded live (= recorded live))))))
 (defn assert-children-discharged! [own-child]
   (when-let [outstanding (seq (outstanding-children (caller-parent-session) own-child (ledger/entries)))]
     (let [index (live-agents)
-          released (when index (filterv #(and (:captured-at %) (not (contains? index (:child %)))) outstanding))
+          released (when index (filterv #(and (:captured-at %) (not (contains? index (:child %)))
+                                              (not (pane-reclaimable? %)))
+                                        outstanding))
           blocking (vec (remove (set released) outstanding))]
       (when (seq blocking)
         (fail (str "publish refused: you still own " (count blocking) " open child assignment(s). Capture each with `"
@@ -917,7 +954,22 @@
                                   (assoc current :closed-at (now))))]
     {:status "closed" :task task :child child :pane-id pane-id :closed-at (:closed-at updated)}))
 (defn- pane-alive? [pane] (try (boolean (herdr/pane! pane)) (catch Exception _ false)))
-(defn- pane-shell-pid! [pane] (try (:shell_pid (herdr/process-info! pane)) (catch Exception _ nil)))
+(defn- pane-process-info! [pane] (try (herdr/process-info! pane) (catch Exception _ nil)))
+(defn- pane-shell-pid! [pane] (:shell_pid (pane-process-info! pane)))
+;; A foreground process group that differs from the pane's own shell means something is
+;; actively running there *right now* -- an operator's build, tail, or REPL, invisible to
+;; `agent list`, which only ever knows agents. Measured directly (herdr 0.8.0): an idle
+;; pane's `process_info` reports `foreground_process_group_id` equal to `shell_pid` (the
+;; shell itself is the foreground process); a busy one reports the running command's own
+;; group. Without this check, a crashed child's pane with no listed occupant at all -- the
+;; non-agent foreground process is invisible to `agent list`, so `occupant` below is `nil`
+;; -- and a `:shell-pid` that still matches (the shell never changed) would fall straight
+;; through to `close-mutation!` and take a pane the operator is actively using: the
+;; destructive regression this guards against. It costs no extra Herdr call: `info` below
+;; is the same `process_info` read the shell_pid witness already made.
+(defn- pane-busy-foreground? [info]
+  (let [shell (:shell_pid info) fg (:foreground_process_group_id info)]
+    (boolean (and shell fg (not= shell fg)))))
 ;; A resumed process releases its herdr agent name, so the ordinary name-and-pane match
 ;; can never see it again -- `agent list` shows, at best, a bare re-started agent at the
 ;; same pane, under no name at all or a different one. `gone` used to conflate two facts
@@ -934,17 +986,20 @@
     (if-not (pane-alive? pane)
       {:status "gone" :reason "pane-absent" :task task :child child :pane-id pane}
       (let [occupant (some #(when (= pane (:pane_id %)) %) agents)]
-        (cond
-          (and occupant (not (contains? #{"idle" "done"} (:agent_status occupant))))
+        (if (and occupant (not (contains? #{"idle" "done"} (:agent_status occupant))))
           {:status "retained" :reason "unsettled" :task task :child child :pane-id pane :agent-status (:agent_status occupant)}
-          (let [recorded (:shell-pid entry) live (pane-shell-pid! pane)]
-            (and recorded live (= recorded live)))
-          (close-mutation! task child pane)
-          :else
-          {:status "gone" :reason "name-released" :task task :child child :pane-id pane
-           :remedy (str "the agent name was released and the pane's shell no longer matches what this round provisioned, "
-                        "so neither `close` nor `orphans --close` can confirm it; inspect the pane manually "
-                        "(`herdr pane get " pane "`) before deciding whether to close it directly")})))))
+          (let [info (pane-process-info! pane)]
+            (cond
+              (pane-busy-foreground? info)
+              {:status "retained" :reason "unsettled" :task task :child child :pane-id pane}
+              (let [recorded (:shell-pid entry) live (:shell_pid info)]
+                (and recorded live (= recorded live)))
+              (close-mutation! task child pane)
+              :else
+              {:status "gone" :reason "name-released" :task task :child child :pane-id pane
+               :remedy (str "the agent name was released and the pane's shell no longer matches what this round provisioned, "
+                            "so neither `close` nor `orphans --close` can confirm it; inspect the pane manually "
+                            "(`herdr pane get " pane "`) before deciding whether to close it directly")})))))))
 (defn- close-observed! [entry {:keys [index agents]}]
   (let [task (:task entry) child (:child entry) agent (get index child)]
     (cond
@@ -1428,9 +1483,12 @@
                       :else (let [remaining (- deadline (System/currentTimeMillis))]
                               (if (<= remaining 0) {:status "pending" :reason "timeout"}
                                   (do (Thread/sleep (min (poll-interval-ms) remaining)) (recur)))))))))))))))
+;; `agent!` is made unconditionally regardless of whether `:child-session` is already
+;; recorded, so gating `record-session!` on its absence discarded an observation this call
+;; already paid for, for free -- see `finish-capture!`'s identical fix.
 (defn live [entry]
   (let [agent (try (herdr/agent! (:child entry)) (catch Exception _ nil))
-        entry (or (when-not (:child-session entry) (record-session! (:task entry) (:agent_session agent))) entry)]
+        entry (or (record-session! (:task entry) (:agent_session agent)) entry)]
     (assoc entry :live-agent agent)))
 ;; --- agent-facing output shaping ----------------------------------------------------
 ;; Two independent knobs on the read verbs (`collect`, `status`, `list`, `harvest`), because

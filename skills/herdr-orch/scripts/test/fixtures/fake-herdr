@@ -182,7 +182,15 @@ case "${1:-}" in
         fi
         shell_pid_file="$(state_dir)/panes/$target/shell-pid"
         if [ -f "$shell_pid_file" ]; then shell_pid="$(cat "$shell_pid_file")"; else shell_pid="${FAKE_SHELL_PID:-9000}"; fi
-        printf '{"result":{"process_info":{"pane_id":"%s","shell_pid":%s}}}\n' "$target" "$shell_pid" ;;
+        # `foreground_process_group_id`, task ca6fecef's busy-foreground guard on the close
+        # shell_pid fallback: a per-pane `foreground-pgid` file lets a test model a busy,
+        # non-agent foreground process (build/tail/REPL) invisible to `agent list`; absent,
+        # it defaults to `shell_pid` itself, matching root's measurement that an idle pane's
+        # foreground *is* its own shell -- so every existing shell_pid-fallback test, which
+        # sets no such file, stays idle/unaffected.
+        fg_pgid_file="$(state_dir)/panes/$target/foreground-pgid"
+        if [ -f "$fg_pgid_file" ]; then fg_pgid="$(cat "$fg_pgid_file")"; else fg_pgid="$shell_pid"; fi
+        printf '{"result":{"process_info":{"pane_id":"%s","shell_pid":%s,"foreground_process_group_id":%s}}}\n' "$target" "$shell_pid" "$fg_pgid" ;;
       split) shift 2; pane="$(capture_env "$@")"; printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "$pane" ;;
       rename) printf '{"result":{"pane":{"pane_id":"%s","label":"%s"}}}\n' "${3:-}" "${4:-}" ;;
       close) echo '{"result":{}}' ;;

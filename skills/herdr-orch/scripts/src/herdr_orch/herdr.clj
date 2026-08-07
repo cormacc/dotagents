@@ -99,7 +99,12 @@
 ;; name, which Herdr releases on process exit. `.result.process_info.shell_pid` is the
 ;; exact field (measured directly against a live pane hosting a running agent, herdr
 ;; 0.8.0: `{"result":{"process_info":{... "shell_pid":9438}}}`); `:process_info` is
-;; unwrapped here so callers never repeat the nesting.
+;; unwrapped here so callers never repeat the nesting. The same map's
+;; `foreground_process_group_id` (and `foreground_processes`) names whatever is currently
+;; running in the pane's foreground, distinct from `shell_pid` only while something is:
+;; measured equal to `shell_pid` on an idle pane, and to the running command's own group on
+;; a busy one -- the signal `cli.clj`'s `pane-busy-foreground?` reads to keep the `close`
+;; shell_pid fallback (task ca6fecef) from taking a pane an operator is actively using.
 (defn process-info! [pane] (get-in (value! ["pane" "process-info" "--pane" pane]) [:result :process_info]))
 (defn close! [pane]
   (let [caller (current-pane!)]

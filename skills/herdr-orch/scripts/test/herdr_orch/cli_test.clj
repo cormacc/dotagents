@@ -913,6 +913,74 @@
       ;; history entry: the second `agent wait` tick (post-publish) also reports B.
       (is (= 1 (count (:child-session-history entry)))))))
 
+;; ecb85350's own criterion, delivered on the *mainline* path: `finish-capture!` used to
+;; probe the child only `when-not (:child-session entry)`, so a bare `collect` of an
+;; already-published result kept naming a session that had crashed by the time collect
+;; runs -- the coverage above only ever exercised `collect --wait`, where `agent wait`
+;; happens to supply the newer session first regardless of this gate.
+(deftest bare-collect-refreshes-a-stale-child-session-after-a-crash-and-resume
+  (let [{:keys [env env-file dir]} (fake-env {"FAKE_SESSION_FROM" "start" "FAKE_SESSION_VALUE" "/tmp/session-A.jsonl"})
+        start (call! env "task" "start" "worker" "--task" "crashed and resumed before a bare collect")
+        task (get-in (result start) [:result :task])
+        values (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
+    (is (zero? (:exit start)) (:err start))
+    (is (= "/tmp/session-A.jsonl" (get-in (ledger-entry dir task) [:child-session :value])))
+    ;; Publishes by hand, as the fixture's own BLOCKED case above does: the child's
+    ;; `RESULT` is already on disk when `collect` runs, so no wait loop is ever entered.
+    (spit (values "HERDR_ORCH_RESULT")
+          (core/envelope {:child (values "HERDR_ORCH_CHILD") :task task :result (values "HERDR_ORCH_RESULT")
+                          :status "COMPLETE" :summary "already published before collect" :artifacts [] :findings [] :next nil}))
+    (let [proc (call! (merge env {"FAKE_SESSION_FROM" "get" "FAKE_SESSION_VALUE" "/tmp/session-B.jsonl"}) "task" "collect" task)
+          entry (ledger-entry dir task)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+      (is (= "/tmp/session-B.jsonl" (get-in entry [:child-session :value])))
+      (is (= [{:agent "pi" :kind "path" :source "pi" :value "/tmp/session-A.jsonl"}]
+             (:child-session-history entry))))))
+
+;; The same fix for the read-only side: `live` (behind `status`/`list`) already made its
+;; `agent get` unconditionally, but gated `record-session!` on `:child-session` already
+;; being set, so a `status` call after a crash-and-resume never observed the replacement
+;; session at all.
+(deftest status-refreshes-a-stale-child-session-after-a-crash-and-resume
+  (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "start" "FAKE_SESSION_VALUE" "/tmp/session-A.jsonl"})
+        start (call! env "task" "start" "worker" "--task" "crashed and resumed before status")
+        task (get-in (result start) [:result :task])]
+    (is (zero? (:exit start)) (:err start))
+    (is (= "/tmp/session-A.jsonl" (get-in (ledger-entry dir task) [:child-session :value])))
+    (let [proc (call! (merge env {"FAKE_SESSION_FROM" "get" "FAKE_SESSION_VALUE" "/tmp/session-B.jsonl"}) "task" "status" task)
+          entry (ledger-entry dir task)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "/tmp/session-B.jsonl" (get-in entry [:child-session :value])))
+      (is (= [{:agent "pi" :kind "path" :source "pi" :value "/tmp/session-A.jsonl"}]
+             (:child-session-history entry))))))
+
+;; contract.md claimed an equal-observation branch performs "no ledger write at all", but
+;; `ledger/update!` (`ledger.clj:43`) writes its function's return value unconditionally --
+;; even the entry, unchanged -- so that branch living only inside the function still
+;; rewrote the file on every call. Pinned by inode identity rather than mtime: a ledger
+;; write is always an atomic rename onto the entry's path (`ledger.clj:31`), which always
+;; allocates the destination path a fresh inode, unlike mtime this is never coincidentally
+;; unchanged by a real write.
+(defn- ledger-inode [dir task]
+  (java.nio.file.Files/getAttribute
+    (java.nio.file.Paths/get (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json"))) (make-array String 0))
+    "unix:ino" (make-array java.nio.file.LinkOption 0)))
+(deftest record-session-no-op-observation-writes-nothing-to-the-ledger
+  (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "start" "FAKE_SESSION_VALUE" "/tmp/session-stable.jsonl"})
+        start (call! env "task" "start" "worker" "--task" "session observed twice, unchanged")
+        task (get-in (result start) [:result :task])
+        before (ledger-inode dir task)]
+    (is (zero? (:exit start)) (:err start))
+    (is (= "/tmp/session-stable.jsonl" (get-in (ledger-entry dir task) [:child-session :value])))
+    ;; `status` -> `live` makes an unconditional `agent get` and an unconditional
+    ;; `record-session!` call reporting the identical session -- exactly the no-op branch
+    ;; under test.
+    (let [status (call! (merge env {"FAKE_SESSION_FROM" "get"}) "task" "status" task)]
+      (is (zero? (:exit status)) (:err status))
+      (is (= before (ledger-inode dir task))
+          "an unchanged session observation must not rewrite the ledger file"))))
+
 (defn- start-call-count [log] (count (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))
 (defn- split-call-count [log] (count (filter #(= ["pane" "split"] (vec (take 2 %))) (calls log))))
 
@@ -2809,6 +2877,23 @@
       (is (= "unsettled" (:reason res)))
       (is (empty? (closed-panes log))))))
 
+;; P1: a non-agent foreground process in the crashed child's pane -- an operator's build,
+;; tail, or REPL -- is invisible to `agent list`, so `occupant` is `nil` and the unsettled
+;; branch above never fires for it. Without the busy-foreground check, a matching
+;; `:shell-pid` alone would fall straight through to `close-mutation!` and take that pane.
+;; No replacement occupant is modelled at all here -- that is exactly the invisible case.
+(deftest close-shell-pid-fallback-retains-a-pane-with-a-busy-non-agent-foreground
+  (let [{:keys [env log dir state]} (fake-env {})
+        entry (capture-entry! dir (start-child! env dir "crashed; operator now running a build"))]
+    (child-state! state entry "gone" "")
+    (pane-state! state (:pane-id entry) "foreground-pgid" "424242")
+    (let [proc (call! env "task" "close" (:task entry))
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "retained" (:status res)))
+      (is (= "unsettled" (:reason res)))
+      (is (empty? (closed-panes log))))))
+
 ;; A pane that is truly gone -- not merely a released name -- is a distinct, clean
 ;; refusal-to-close outcome, never an exception, and never falls through to the shell_pid
 ;; probe at all (there is no pane left to probe).
@@ -3248,7 +3333,13 @@
                       "closed its pane automatically"
                       "pane-close-on-completion"
                       "unknown-ledger-entry"
-                      "Every capture path settle-waits"]]
+                      "Every capture path settle-waits"
+                      ;; Task ca6fecef's shell_pid fallback (§ Close) can close on a
+                      ;; released name and a live, matching pane -- so "only ever both
+                      ;; the name and the pane id" is no longer true of `close` as a
+                      ;; whole; it is true only of the primary, name-present path.
+                      "matching both the"
+                      "matching both that"]]
         (is (not (str/includes? (read-doc rel) phrase))
             (str rel " still says \"" phrase "\""))))))
 
@@ -3822,9 +3913,11 @@
     (is (zero? (:exit proc)) (:out proc))
     (is (fs/exists? (:result publisher)))))
 
-;; A captured round whose child has vanished can be closed by no verb at all, so blocking on
-;; it would strand a finished result. It is discharged -- and reported, because the pane it
-;; left behind is real.
+;; A captured round whose child has vanished can be closed by no verb at all -- neither the
+;; ordinary name-and-pane match nor `close`'s own shell_pid fallback (task ca6fecef) can
+;; reclaim it, because `owned-round!` supplies no `:shell-pid` witness here, so the pane's
+;; shell can never be confirmed to match -- so blocking on it would strand a finished
+;; result. It is discharged -- and reported, because the pane it left behind is real.
 (deftest publish-discharges-a-captured-child-that-has-vanished-and-says-so
   (let [{:keys [env dir state]} (fake-env {})
         publisher (start-child! env dir "child vanished after capture")
@@ -3846,6 +3939,26 @@
           proc2 (call! (owning-publish-env env2 publisher2) "task" "publish" "--status" "COMPLETE" "--summary" "done")]
       (is (= 1 (:exit proc2)))
       (is (re-find #"task prune" (:out proc2))))))
+
+;; The regression this guard was added to prevent, recreated by a name-vs-evidence
+;; mismatch between it and `close`: a vanished child's round with a recorded `:shell-pid`
+;; that still matches its live pane is exactly the round `close`'s own shell_pid fallback
+;; (task ca6fecef) can still reclaim -- so `assert-children-discharged!` must classify it
+;; blocking, not released, or a delegating child could publish while still owning a live,
+;; protocol-reclaimable pane.
+(deftest publish-is-blocked-by-a-vanished-child-whose-pane-is-still-reclaimable-by-shell-pid
+  (let [{:keys [env dir state]} (fake-env {})
+        publisher (start-child! env dir "owns a resumable vanished child")
+        grandchild (owned-round! dir "scout-resumable" :captured-at "2026-01-01T00:00:00Z" :status "COMPLETE" :shell-pid 9000)
+        _ (fake-child! state (:child grandchild) (:pane-id grandchild))
+        _ (child-state! state grandchild "gone" "")
+        proc (call! (owning-publish-env env publisher) "task" "publish" "--status" "COMPLETE" "--summary" "done")
+        err (:data (:error (result proc)))]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"publish refused: you still own 1 open child assignment" (:out proc)))
+    (is (= [(:task grandchild)] (mapv :task (:children err))))
+    (is (= ["captured-unclosed"] (mapv :state (:children err))))
+    (is (not (fs/exists? (:result publisher))) "refused before the one-shot write, so a retry is possible")))
 
 ;; The publisher every delegation actually has: a leaf child with no children of its own,
 ;; and a caller whose identity cannot be resolved at all. Neither may be blocked -- the
