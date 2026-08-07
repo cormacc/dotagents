@@ -89,7 +89,7 @@ Phase 2 pays down the cost of that explicitness. Making the parent decide after 
 
 *** Ceremony reduction (phase 2)
 
-- [X] Delegation verbs (`collect`, `status`, `list`) accept `--format text` and stop emitting the parsed envelope *and* a duplicate raw `text` blob in the same payload; the raw envelope is opt-in.
+- [X] Delegation verbs (`collect`, `status`, `list`) accept `--format text` and stop emitting the parsed envelope *and* a duplicate raw `text` blob in the same payload; the raw envelope is opt-in. `list --format text` renders one line per ledger *entry* -- that is, one per round: task, child, pane, status, captured/uncaptured, closed/open, task id first because it is the only field a caller can act on. (Corrected 2026-08-07 at closeout from "one line per child", which the delivered code never matched and which was wrong as a criterion: a continued child holds one entry per round, and collapsing its rounds onto one line would hide exactly the history `continue` exists to create. Code and contract.md were correct as they stood; only the criterion was inaccurate.)
 - [X] `publish` refuses, or loudly warns, when the caller still owns an uncaptured or unclosed child in the ledger -- the rule SKILL.md currently states only in prose.
 - [X] An orphan-cleanup verb replaces the documented two-step `agent list` then `pane close` recipe, applying the same live child+pane match with operator-supplied authority.
 - [X] A verb harvests this session's `PROCESS` candidates from the ledger, deduplicated, so a retro does not depend on re-reading every capture.
@@ -127,6 +127,12 @@ Phase 2 pays down the cost of that explicitness. Making the parent decide after 
 - `continue` doubles as the blocked-resumption verb: resuming a captured `BLOCKED` envelope requires a fresh task anyway; envelope-status `BLOCKED` is distinct from agent-status `blocked`, and the `idle`/`done` delivery guard prevents typing into an approval UI.
 - Constitution note: this change rewrites the skill's own documented lifecycle contract (SKILL.md + contract.md); that is the point of the change, not silent divergence.
 - Class C must be rewritten, not retained verbatim :: `SKILL.md:98` says only "the root or an ephemeral reviewer" and never says *fresh*; it inherits that meaning from the adjacent "ephemeral by default" lifecycle default at `SKILL.md:50`, which this change removes. Preserving the sentence byte-identically would therefore silently drop the freshness guarantee, letting a long-resident reviewer reaffirm its own earlier review at feature closeout -- exactly what parent task `4957d0e5` forbids for high-consequence closure.
+- Focus moves only on a root-initiated action :: two decisions taken together, and the invariant is the point of both. **Depth:** only a root spawn focuses its child; a below-root spawn never does, gated on the existing `:below-root?` predicate (`HERDR_ORCH_PERSONA`) rather than a second notion of depth that could drift from it. A root spawn is the operator's proxy -- they asked for the child; a below-root spawn happens at a moment no human chose, and its blocking, one-at-a-time grandchild is visible from its parent's pane anyway. **Return hook:** `close` returns focus and `collect --close` inherits it; `publish` never moves focus. `close` runs in the parent's own process, so the pane is its own `$HERDR_PANE_ID`; it has already proven the child finished; and under fan-out closes are serialised by the parent's turn where publishes arrive independently and would each yank the screen. Sweeps focus once, after the sweep, never per child.
+  Rejected:
+  - Publish-time return: a publishing child routinely finds its parent `working`, `blocked`, or session-mismatched (`push-decision`), which is precisely the mid-read theft the anti-criterion forbids; and publication is already committed before `notify-parent!` runs, whose contract is that every outcome is *only reported*. A UI mutation does not belong on the one path that must never fail. Timeliness is already served by the advisory push.
+  - Literal "most recently spawned": lets a worker's own consult steal the screen mid-read.
+  Corrected at closeout: the return hook shipped ungated, and because the publish guard *forces* a delegating child to close its grandchildren before publishing, every nested delegation ended in a child-initiated focus steal. Both closeout validators found it independently. The criterion, not the decision, was underspecified.
+- Closure gained a second witness rather than an operator override :: a restarted process releases its Herdr agent name, so the name-and-pane match can never see it again and every close path reported `gone` forever, stranding a live pane outside the protocol. The route the plan anticipated -- reading `HERDR_ORCH_TASK` back from the pane -- was measured impossible: Herdr exposes no pane environment, and Darwin yields none from a pid. A pane's `shell_pid` works instead, because the shell is the *parent* of whatever agent occupies the pane and therefore survives the agent restarting in place. It is strictly a fallback: it never fires when the name is present, never relaxes the ownership or newest-round guards, and refuses a pane whose foreground process group differs from its shell, since that means an operator is using it. Rejected: a new operator-authorised override verb -- the witness covers the case it existed for, and the residual (no recorded value, a mismatched shell, genuine pane-id reuse) is reported as `name-released` with a remedy rather than given a verb that closes on weaker evidence.
 - Revised after design review (`.tmp/herdr-orch/40fcdfe3-100a-4975-a956-b07e4c087af4-design-review.md`, verdict NEEDS CHANGES) :: close-safety, waiting-policy relocation, the Class C rewrite, dead-owner recovery, plan serialisation, and the `prune!` reference were all corrected here; the record returned to `Review` for sign-off.
 
 ** Gotchas
@@ -157,7 +163,6 @@ CLOSED: [2026-08-06 Thu 22:21]
 - State "STARTED" from "TODO" [2026-08-06 Thu 22:11]
 - State "DONE" from "STARTED" [2026-08-06 Thu 22:21]
 :END:
-Landed. `maybe-close!` keeps only session backfill and foreign/owned reporting; `settle-close-ms` moved to `close`/`continue`.
 
 ** DONE Add `oh task close` with `--settled` sweep
 CLOSED: [2026-08-06 Thu 21:59]
@@ -171,7 +176,6 @@ CLOSED: [2026-08-06 Thu 21:59]
 - State "STARTED" from "TODO" [2026-08-06 Thu 21:51]
 - State "DONE" from "STARTED" [2026-08-06 Thu 21:59]
 :END:
-Landed, minus dead-owner recovery (removed -- see Gotchas). Outcomes: `closed`, `gone`, `retained`; `--settled` sweeps newest-round-per-child.
 
 ** DONE Add `--task` identity override to `publish` and `progress`
 CLOSED: [2026-08-06 Thu 21:51]
@@ -184,7 +188,6 @@ CLOSED: [2026-08-06 Thu 21:51]
 - State "STARTED" from "TODO" [2026-08-06 Thu 21:42]
 - State "DONE" from "STARTED" [2026-08-06 Thu 21:51]
 :END:
-Landed. `HERDR_ORCH_WAITING_POLICY` deleted outright; policy resolves from the entry, and a ledger-less publish is silent.
 
 ** DONE Add `oh task continue` for follow-on rounds
 CLOSED: [2026-08-06 Thu 22:11]
@@ -199,7 +202,6 @@ CLOSED: [2026-08-06 Thu 22:11]
 - State "STARTED" from "TODO" [2026-08-06 Thu 21:59]
 - State "DONE" from "STARTED" [2026-08-06 Thu 22:11]
 :END:
-Landed. Root-only, guarded by the same live child+pane match `close` uses; allocates a fresh task/result per round with `:continues`.
 
 ** DONE Rewrite lifecycle docs and sweep auto-close references
 CLOSED: [2026-08-06 Thu 23:02]
@@ -217,7 +219,6 @@ CLOSED: [2026-08-06 Thu 23:02]
 - State "STARTED" from "TODO" [2026-08-06 Thu 22:39]
 - State "DONE" from "STARTED" [2026-08-06 Thu 23:02]
 :END:
-Landed. contract.md gained § Close and § Continue; SKILL.md states close-or-continue and the rewritten Class C; `lifecycle-documentation-contract` pins the prose. The first sweep missed README.org because that file was absent from the test's own file list -- see Gotchas.
 
 ** DONE Live-smoke continue-round variant
 CLOSED: [2026-08-06 Thu 22:38]
@@ -231,7 +232,6 @@ CLOSED: [2026-08-06 Thu 22:38]
 :LOGBOOK:
 - State "DONE" from "TODO" [2026-08-06 Thu 22:38]
 :END:
-Landed. `continue-leg!` proves same-pane context by round-two recall of a random token never written to disk, then asserts `:continues`, inherited identity, and a `closed` outcome. First green run: `.tmp/smoke-continue.log`, exit 0.
 
 ** DONE Agent-facing output: `--format text` and no duplicated envelope
 CLOSED: [2026-08-07 Fri 01:15]
@@ -244,11 +244,6 @@ CLOSED: [2026-08-07 Fri 01:15]
 - State "STARTED" from "TODO" [2026-08-07 Fri 01:10]
 - State "DONE" from "STARTED" [2026-08-07 Fri 01:15]
 :END:
-Highest token cost measured in live use: every capture returned `summary`/`findings`/`process`/`artifacts` *and* a `text` blob repeating all of it, and each of six collects was piped through ad-hoc Python purely to strip the duplicate. `oh task list` is worse -- it emits full envelopes, findings and process included, for every historical entry.
-Acceptance criteria:
-- `collect`, `status`, and `list` accept `--format text`; `--format` currently exists only on `pane read`/`agent read` (`cli.clj:1021`, `:1040`).
-- The raw envelope `text` is opt-in (`--raw`) rather than always present beside the parsed fields.
-- `list --format text` is one line per ledger *entry* -- that is, one per round: task, child, pane, status, captured/uncaptured, closed/open. (Corrected 2026-08-07 at closeout, from "one line per child", which the delivered code never matched and which was wrong as a criterion: a continued child holds one entry per round, and collapsing its rounds onto one line would hide exactly the history `continue` exists to create. The code and contract.md are correct as they stand; only this line was inaccurate. The task id leads because it is the only field a caller can act on.)
 
 ** DONE Guard a publishing child's own unclosed children
 CLOSED: [2026-08-07 Fri 01:34]
@@ -261,11 +256,6 @@ CLOSED: [2026-08-07 Fri 01:34]
 - State "STARTED" from "TODO" [2026-08-07 Fri 01:22]
 - State "DONE" from "STARTED" [2026-08-07 Fri 01:34]
 :END:
-SKILL.md states "a delegating persona must close its own children before publishing" as prose only; no such check exists in `cli.clj`. Measured consequence: the live smoke leaked a grandchild pane, and the fix was to *instruct* a planner child to close its scout plus assert on the outcome -- an LLM-compliance dependency where the ledger already holds the answer.
-Acceptance criteria:
-- `publish` refuses, or loudly warns, when the caller owns an uncaptured or unclosed child.
-- The smoke's nested leg relies on that guard rather than on its planner child obeying an instruction.
-- The prose rule is deleted from SKILL.md once the guard exists.
 
 ** DONE Orphan-cleanup verb
 CLOSED: [2026-08-07 Fri 01:41]
@@ -278,11 +268,6 @@ CLOSED: [2026-08-07 Fri 01:41]
 - State "STARTED" from "TODO" [2026-08-07 Fri 01:34]
 - State "DONE" from "STARTED" [2026-08-07 Fri 01:41]
 :END:
-SKILL.md documents a two-step manual recipe (`oh agent list`, then `oh pane close <pane-id>`) for a child whose owning session ended. Ownership is absolute by design and gains no dead-owner exception; the operator supplies the authority the protocol cannot infer.
-Acceptance criteria:
-- One verb lists, and optionally closes, captured entries whose owning session is no longer this one, applying the same live child+pane match `close` uses.
-- It never closes on name-absence alone, and never on a pane-id mismatch.
-- The prose recipe is replaced by the verb in SKILL.md.
 
 ** DONE Harvest `PROCESS` candidates from the ledger
 CLOSED: [2026-08-07 Fri 02:14]
@@ -295,11 +280,6 @@ CLOSED: [2026-08-07 Fri 02:14]
 - State "STARTED" from "TODO" [2026-08-07 Fri 02:05]
 - State "DONE" from "STARTED" [2026-08-07 Fri 02:14]
 :END:
-Sixteen candidates accumulated across six children in one session, tracked only by re-reading capture output. The ledger holds every one, and SKILL.md warns they die with the session unless a retro routes them.
-Acceptance criteria:
-- A verb returns this session's `PROCESS` candidates from ledger entries, deduplicated, with their originating child and task.
-- Output is usable as direct retro input without re-reading captures.
-Must not: route, persist, or act on candidates -- the parent still owns verification, deduplication, and approval.
 
 ** DONE `collect --close`
 CLOSED: [2026-08-07 Fri 01:22]
@@ -312,11 +292,6 @@ CLOSED: [2026-08-07 Fri 01:22]
 - State "STARTED" from "TODO" [2026-08-07 Fri 01:15]
 - State "DONE" from "STARTED" [2026-08-07 Fri 01:22]
 :END:
-Capture-then-close was two calls, six times, in one session. The redesign's insight was that the *retain* decision needs the result first -- but for an ephemeral scout or reviewer the close decision is known at spawn.
-Acceptance criteria:
-- `collect --close` captures and then closes in one invocation, with closure still subject to every `close` guard and reporting its own outcome (`closed`/`retained`/`gone`).
-- A capture whose closure refuses still returns the validated result; the flag never suppresses or degrades the capture.
-Must not: make closure implicit anywhere else, or reintroduce capture-time auto-close by default.
 
 ** DONE Persona `timeout:` frontmatter
 CLOSED: [2026-08-07 Fri 02:05]
@@ -329,10 +304,6 @@ CLOSED: [2026-08-07 Fri 02:05]
 - State "STARTED" from "TODO" [2026-08-07 Fri 01:51]
 - State "DONE" from "STARTED" [2026-08-07 Fri 02:05]
 :END:
-"Give review and implementation work an explicit `--timeout`" is a per-persona constant expressed as a standing instruction to every caller.
-Acceptance criteria:
-- Persona frontmatter accepts `timeout:`, resolving as explicit `--timeout` > frontmatter > shipped default, mirroring how `model:` and `retro:` already resolve.
-- Review and implementation personas declare one; the SKILL.md instruction is deleted.
 
 ** DONE Bound ledger growth without losing the audit trail
 CLOSED: [2026-08-07 Fri 01:51]
@@ -345,16 +316,6 @@ CLOSED: [2026-08-07 Fri 01:51]
 - State "STARTED" from "TODO" [2026-08-07 Fri 01:41]
 - State "DONE" from "STARTED" [2026-08-07 Fri 01:51]
 :END:
-Nothing in the CLI ever retires a ledger entry: measured 2026-08-07, 31 entries across 5 distinct parent sessions in one assignment root, all `COMPLETE`, none removable by any verb. `prune` only retires an entry proved *stale* (uncaptured, no result, child absent), so a captured entry lives forever.
-
-The design tension is the point of the task, not an obstacle to it: an old entry is exactly what holds `:child-session`, the only route to a finished child's transcript once its pane is gone, and a task UUID cited in a commit, record, or task body resolves nowhere without it. Deletion and audit trail pull in opposite directions -- resolve that explicitly rather than picking a TTL.
-
-Acceptance criteria:
-- Retention refuses entries owned by another `:parent-session`, exactly as `prune` and `close` do; a shared assignment root means one session's cleanup must never touch another's state.
-- The chosen mechanism is justified against the audit-trail role -- compaction (keep task, child, `:child-session`, artifacts; drop envelope bulk) and age-plus-closed deletion are both admissible, but the choice is argued, not assumed.
-- Whatever is retired stays discoverable enough that a UUID cited elsewhere does not become a dangling reference, or the criterion above is consciously traded away and said so in contract.md.
-- SKILL.md's "never bulk-delete the ledger" rule is updated to name the supported path rather than only forbidding the unsupported one.
-Must not: introduce an automatic sweep on spawn, capture, or session end; retirement stays an explicit operator or parent action, like every other destructive verb here.
 
 ** DONE Focus follows the newest child, and returns when it ends
 CLOSED: [2026-08-07 Fri 09:18]
@@ -367,34 +328,6 @@ CLOSED: [2026-08-07 Fri 09:18]
 - State "STARTED" from "TODO" [2026-08-07 Fri 08:38]
 - State "DONE" from "STARTED" [2026-08-07 Fri 09:18]
 :END:
-Reverses a shipped convention deliberately. Delegated spawning hardcodes `--no-focus` (`herdr.clj:80`), and SKILL.md recommends it (`:92`) alongside "new unfocused tab" in the placement bullet and `oh spawn` description. That default made sense when every child split the caller's pane; with `:tab-split` a first-level child owns a tab, so moving to it is how you watch or intervene, and moving back is how you resume. The focus verbs already exist (`tab-focus!`, `agent-focus!`, `workspace-focus!`), as do `--focus`/`--no-focus` on the raw wrappers.
-
-Acceptance criteria:
-- A delegated spawn *by root* focuses the new child's tab or pane; the hardcoded `--no-focus` at `herdr.clj:80` becomes the non-default branch. A below-root spawn still never focuses, gated on the existing `:below-root?` predicate rather than a new depth notion, and that is pinned by a test.
-- `close` returns focus to the caller's own pane **only when the caller is root**, and `collect --close` inherits it; `publish` never moves focus. `close --settled` and `orphans --close` return focus once after the sweep, not once per child. The root gate is not optional here: the publish guard forces every delegating child to close its grandchildren before publishing, so an ungated return hook makes every nested delegation end in a child-initiated focus steal -- which is exactly what the Depth decision forbids, and which breaks the "focus moves only on a root-initiated action" invariant. Both closeout validators found this independently; it was underspecified in the first statement of this criterion, not in the decision it implements.
-- Focus behaviour is configurable in the shape `:defaults :placement` already established -- a `:defaults` key with explicit `--focus`/`--no-focus` overriding it -- so an unattended or scripted run can keep today's behaviour.
-- Focus is best-effort: a failed focus call never fails a spawn, a publish, or a close, and never alters a result field. Same discipline as the operator toast and the parent push.
-- Focus is only ever *set*, never read to make a decision. SKILL.md's rule against depending on focused UI state stays exactly as it is.
-- Every document asserting unfocused spawning is corrected: SKILL.md's placement bullet, its `oh spawn` description, `:92`'s `--no-focus` recommendation, `skills/herdr-orch/scripts/README.md`, and contract.md. A stale claim here is a finding at the same severity as a code defect.
-
-Both questions are now decided (root, 2026-08-07, after phase 2 landed). Implement to these; do not reopen them without new evidence.
-
-- **Depth :: root-level only.** Focus is the human's attention, so only an action the human or their direct proxy initiated may move it. A root spawn is that proxy: the operator asked for the child. A below-root spawn is not -- it is initiated by an autonomous worker at a moment the operator cannot predict, which is exactly the mid-read theft the anti-criterion forbids. There is also nothing to gain: a below-root spawn is blocking and one-at-a-time, so the grandchild's progress is visible from its parent's pane anyway. Express the guard as a property of the *spawner*, not a depth counter: `cli.clj:207` already computes `:below-root?` as `(some? (System/getenv "HERDR_ORCH_PERSONA"))`, and `continue`'s root-only guard (`cli.clj:1107`) tests the same variable. Since nesting is one level absolutely, "spawner is root" and "child is depth 1" coincide -- reuse the existing tested predicate rather than adding a second notion of depth that can drift from it.
-
-- **Return hook :: `close`, and therefore `collect --close`. Not `publish`.** Five reasons, in descending force:
-  1. `close` runs in the *parent's* process, so the pane to focus is the caller's own `$HERDR_PANE_ID` -- no ledger lookup, no session-match gate, nothing to get wrong.
-  2. `close` already proves the child is finished: captured, newest round, live child-name-and-pane-id match in `idle`/`done`. At publish the child is still alive, and its pane is often the thing you actually want to keep reading.
-  3. Under fan-out, closes are serialised by the parent's own turn -- one focus change, at a moment the parent chose. Publishes arrive independently, so N children would yank focus N times from wherever the operator is.
-  4. It yields a clean invariant: **focus moves only on a root-initiated action.** Root's spawn takes it; root's close returns it. Publish is child-initiated and would break that symmetry, leaving no single place to reason about who moved the focus.
-  5. Decisive against publish: `push-decision` (`cli.clj:491`) shows a publishing child routinely finds its parent `working`, `blocked`, or session-mismatched. Focusing then is precisely the theft the anti-criterion forbids. Worse, publication is already committed before `notify-parent!` runs, and that function's stated contract is that every outcome is *only reported* and may never change the publish status or exit code -- a UI mutation does not belong on the one path that must never fail.
-
-  The timeliness argument for publish-time return is already served, by the existing advisory parent push: it is gated, session-matched, and handles an unsettled parent. Adding focus there would duplicate a solved problem with a worse mechanism.
-
-  Sweeps return focus **once, after the sweep** -- `close --settled` and `orphans --close` must not focus per child.
-
-Evidence from this session for reason 5: the crash orphaned a live child whose ledger `:parent-session` named a dead root, so its publish push was skipped as `session-mismatch` while the pane stayed live and idle. A publish-time focus hook would have had to decide what to do with that case; the `close` hook never encounters it.
-
-Must not: steal focus from a pane the user is typing in more often than the value justifies -- if the fan-out case proves to thrash, make the return hook opt-in rather than shipping a default that fights the user.
 
 ** DONE A resumed child is permanently unclosable by the protocol
 CLOSED: [2026-08-07 Fri 14:13]
@@ -407,19 +340,6 @@ CLOSED: [2026-08-07 Fri 14:13]
 - State "STARTED" from "TODO" [2026-08-07 Fri 13:24]
 - State "DONE" from "STARTED" [2026-08-07 Fri 14:13]
 :END:
-Found by dogfooding, not by review. A pi crash killed both root and its worker; the worker was resumed in the same pane, finished the work, and published a valid result. Every closure path then refused it. `close`, `close --settled` and `orphans --close` all require a live observation matching the recorded child *name* and pane id, and restarting the process releases the herdr agent name -- `agent list` showed a bare `pi` where `worker-21f8fbb1` had been. Measured: all 15 orphan candidates returned `gone`/`child-absent`, including the one whose pane was demonstrably still live and idle, and the pane could only be reclaimed with a bare `oh pane close` -- the very fallback contract.md § Close now tells operators not to use.
-
-The root cause is that `gone` conflates two different facts: *the pane is absent or now hosts something else* (leave it alone -- correct) and *the pane is still the one we provisioned, but the name was released* (currently indistinguishable, and wrongly reported as deliberately left alone).
-
-A stronger identity witness already exists and was measured intact: the pane's injected environment survives a resume. All six `HERDR_ORCH_*` variables were still set in the resumed child, because the shell retained them. `HERDR_ORCH_TASK` is per-round and allocated by us, so it proves "this pane is still the pane provisioned for task T" -- which is exactly the granularity a decision to take that pane needs, since the pane is what closure claims.
-
-Acceptance criteria:
-- [X] The `gone` outcome is split so an operator can tell a vanished pane from a live pane whose child name was released; the latter reports its own outcome and names the remedy. Delivered as `"reason":"pane-absent"` (the recorded pane no longer exists) versus `"reason":"name-released"` (live, but not confirmably this round's, carrying a `:remedy` string).
-- [X] Whether Herdr can expose a pane's environment to a caller is established empirically and recorded, before any design depends on it. **Measured this round: it cannot.** `agent get`/`agent list`/`pane get` carry no environment, and the OS route is closed on this platform too -- `ps eww -p <pid>` returns only the header and command line (66 bytes), even for the caller's own process, and there is no `/proc`. Recorded here rather than assumed.
-- [X] WITHDRAWN as written, not delivered as written -- superseded by a stronger witness found in its place, not by the override route this criterion anticipated. Env being unreadable ruled out the `HERDR_ORCH_TASK` fallback this bullet named, but a second identity witness was measured intact instead: a pane's `shell_pid` (`pane process-info --pane <id>`) survives an agent dying and a new one starting in the same pane, because the shell is the *parent* of whatever agent occupies it (measured: same `shell_pid` before, during, and after killing and restarting a pane's foreground process). `:shell-pid` is recorded at spawn and used as exactly the fallback this bullet specified for `HERDR_ORCH_TASK` -- same ownership/newest-round guards, same fallback-never-replacement discipline -- just carried by a different field.
-- [X] WITHDRAWN, not delivered -- the operator-override branch this bullet specified was never built, because the shell_pid witness above covers the case it existed for (a released name on a live pane whose ownership is otherwise established) without needing operator-supplied authority. The residual case where shell_pid itself does not confirm the pane (no recorded value, a live occupant whose shell does not match, or genuine pane-id reuse) still has no automated remedy and is reported as `name-released` with a `:remedy` string pointing at manual inspection -- an operator action, but not a new verb or flag.
-- [X] The dead-owner remedy in contract.md § Close and § Orphans is updated to cover this case, which neither currently mentions. § Close documents the outcome split and the shell_pid fallback in full; § Orphans' outcome-table cross-reference was updated to point there rather than repeating a now-stale "name absence is `gone`" claim.
-Must not: infer that a released name means the process is gone, or close on a recorded pane id alone -- the evidence the `gone` outcome exists to reject. Held: the fallback fires only on a live, matching `shell_pid`, itself gated behind the unchanged ownership and newest-round checks; it never closes on the pane id alone.
 
 ** DONE Capture never corrects a `:child-session` that a resume made stale
 CLOSED: [2026-08-07 Fri 13:56]
@@ -432,18 +352,6 @@ CLOSED: [2026-08-07 Fri 13:56]
 - State "STARTED" from "TODO" [2026-08-07 Fri 13:24]
 - State "DONE" from "STARTED" [2026-08-07 Fri 13:56]
 :END:
-Capture backfills `:child-session` only when the reference is still missing, so a child resumed into a new session keeps the reference recorded at spawn. Measured on this record's own phase-2 round: entry `21f8fbb1` still names session `019fd988`, the session that *crashed*, while every phase-2 task was completed and published from `019fd9c3`. The reference is not merely stale -- it points at the half of the work that did not finish.
-
-That matters because `:child-session` is the only durable route to a child's transcript once its pane closes, and the retention design deliberately preserves it while dropping envelope bulk. A wrong value is therefore worse than an absent one: it resolves, and it resolves to the wrong place.
-
-First-write-wins is wrong, but last-write-wins would be too -- the earlier session holds real work. Both observations are worth keeping.
-
-Acceptance criteria:
-- [X] On capture, the live agent's session is compared with the recorded one, and a mismatch is recorded rather than discarded or overwritten. `record-session!` now compares on every call (spawn start, dispatch verification, each wait tick, capture-time backfill), not only when `:child-session` is unset.
-- [X] The newest observation remains reachable under a stable key, and every distinct earlier observation stays reachable too, in order. `:child-session` stays the newest (the key every existing reader already resolves); `:child-session-history` is the ordered, deduplicated vector of superseded observations.
-- [X] `compact` preserves the full set, exactly as it preserves `:child-session` today -- retention must not undo this. `compacted-entry` only ever drops `:envelope :text`; a mutation check confirmed a hypothetical strip of `:child-session-history` there is caught by `compact-drops-the-raw-envelope-and-keeps-the-audit-trail`.
-- [X] No extra Herdr call on the common path where the session is unchanged; reuse the `agent get` capture already makes. No call-site trigger condition changed -- confirmed by the pre-existing `child-session-is-recorded-by-every-hook` pin (`(<= (child-get-count log) 2)` across four wait iterations), which still passes unchanged; only `record-session!`'s internal write logic changed.
-Must not: overwrite a recorded session in place, which would trade one wrong reference for another. Held: a differing observation is appended to `:child-session-history`, never dropped.
 
 ** DONE The live smoke's retro gate depends on the child's own judgement
 CLOSED: [2026-08-07 Fri 13:44]
@@ -456,18 +364,6 @@ CLOSED: [2026-08-07 Fri 13:44]
 - State "STARTED" from "TODO" [2026-08-07 Fri 13:24]
 - State "DONE" from "STARTED" [2026-08-07 Fri 13:44]
 :END:
-The retro leg plants a deliberately invalid command and then fails the run unless the child emits a `PROCESS` candidate about it. That assertion is a *content* judgement made by an LLM against a threshold, not a mechanical fact, so the gate is nondeterministic by construction: observed passing once and failing once on the same tree, with the failing child being the one that reasoned *correctly* -- it recognised the fault as manufactured and declined to route it.
-
-The attempted fix made it worse and was reverted (`5ffa789`): it wrote a description of the smoke's plant into `skills/retro/SKILL.md`. Production skill text must not carry prose that exists only to make an artificial test condition work. The same objection applies to the pre-existing "Exclude manufactured candidates" bullet in that file, which describes this installation's smoke harness in a general-purpose skill; it predates this record and should go the same way.
-
-The underlying rule the smoke was leaning on -- a child performs steps 1--2 and never pre-filters or routes its own candidates, the parent owns routing -- is already stated in the retro skill on its own merits, and is worth keeping. What is not worth keeping is any sentence that exists to describe the fixture.
-
-Acceptance criteria:
-- [X] The live smoke's retro leg asserts mechanical facts only: that the retro instruction was injected, that `:retro`/`:retro-source` resolved as expected, and that the frontmatter-opted-out leg stays silent. `retro-gated-in!` replaces the mandatory `PROCESS` check, asserting only `:retro true` and `:retro-source "flag"`; `no-process!` on the opt-out leg is unchanged.
-- [X] Whether the retro instruction actually reaches the rendered prompt is proven by a unit test over the rendered prompt, where it is deterministic -- not by a live child's classification. Already covered, unchanged, by the pre-existing `retro-gating-is-resolved-and-recorded` (`cli_test.clj`), which asserts the injected text against `--print-prompt` output.
-- [X] Every sentence in `skills/retro/SKILL.md` that exists to describe the smoke fixture is deleted, and the parent-versus-child scoping that remains is justified on its own terms. The "Exclude manufactured candidates" bullet is removed; the file is otherwise unchanged from `846733f`, and the surviving "scope to this session"/"probe harness-dependent claims" filters stand on their own merits (ledger scope and cross-harness portability), independent of any smoke.
-- [X] The smoke no longer fails a child for behaving correctly. The manufactured-fault prompt (an intentionally wrong `show` invocation) is replaced with an ordinary `task status` check; the leg no longer asks for or grades a `PROCESS` candidate at all.
-Must not: re-introduce fixture description into skill or production text, or weaken the opt-out leg's silence assertion, which is a genuine mechanical fact and the useful half of this gate. Held: `no-process!` is untouched, and `retro/SKILL.md`'s only change is a deletion.
 
 * Implementation
 
