@@ -250,7 +250,18 @@ function scheduleRefresh(): void {
   watchDebounceTimer = setTimeout(() => {
     watchDebounceTimer = null;
     const ctx = activeCtx;
-    if (ctx) void refreshTaskUi(ctx, ctx.cwd);
+    // Watcher-driven refresh is best-effort and MUST NOT reject. It runs from a
+    // timer callback with no caller to await it, so an unhandled rejection here
+    // becomes an `uncaughtException` and takes down the whole pi process -- which
+    // is exactly what a transient `ot list` timeout did under heavy machine load
+    // (see `runOt`'s per-call timer in ot.ts). A stale widget until the next file
+    // event is a far better failure mode than losing the session, and this mirrors
+    // the deliberate swallow around `otBackfill` in `loadTasks`.
+    if (ctx) {
+      refreshTaskUi(ctx, ctx.cwd).catch(() => {
+        // Intentionally silent: the next watcher event retries.
+      });
+    }
   }, 150);
 }
 

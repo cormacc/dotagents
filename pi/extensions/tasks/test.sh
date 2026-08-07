@@ -55,6 +55,18 @@ if ! grep -q "pi.registerCommand" index.ts; then
   exit 1
 fi
 
+# A `void someAsyncCall()` is a floating promise. From a timer or watcher
+# callback there is no caller to await it, so a rejection becomes an
+# `uncaughtException` and kills the entire pi process rather than the one
+# refresh. That is not hypothetical: a transient `ot list` timeout under load
+# did exactly that, via the watcher-debounce refresh in `scheduleRefresh`.
+# Attach `.catch` instead -- the failure belongs to the refresh, not the session.
+if FLOATING="$(grep -nE 'void [a-zA-Z_$][a-zA-Z0-9_$]*\(' index.ts overlay.ts ot.ts)"; then
+  echo "not ok - floating promise(s) found; attach .catch so a rejection cannot kill the pi process:" >&2
+  echo "$FLOATING" | sed 's/^/  /' >&2
+  exit 1
+fi
+
 # ── unit tests ───────────────────────────────────────────────────────
 
 CODE=0
