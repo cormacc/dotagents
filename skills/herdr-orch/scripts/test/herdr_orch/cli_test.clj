@@ -884,6 +884,35 @@
       (is (= "COMPLETE" (get-in (result proc) [:result :status])))
       (is (nil? (:child-session entry))))))
 
+;; A resumed process gets a fresh `agent_session`, so first-write-wins once let the entry
+;; keep naming the session that crashed forever (measured on this record's own phase-2
+;; round: entry `21f8fbb1`). Two separate invocations model the resume realistically: the
+;; spawn observes session A, and a *later* `collect --wait` -- exactly the shape a
+;; resumed root re-issues -- observes a genuinely different session B on its wait ticks.
+(deftest record-session-corrects-a-resume-mismatch-without-discarding-it
+  (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "start" "FAKE_SESSION_VALUE" "/tmp/session-A.jsonl"})
+        start (call! env "task" "start" "worker" "--task" "resumed under a new session")
+        task (get-in (result start) [:result :task])]
+    (is (zero? (:exit start)) (:err start))
+    (is (= "/tmp/session-A.jsonl" (get-in (ledger-entry dir task) [:child-session :value])))
+    (is (nil? (:child-session-history (ledger-entry dir task))))
+    (let [collect (call! (merge env {"FAKE_SESSION_FROM" "wait" "FAKE_SESSION_VALUE" "/tmp/session-B.jsonl"
+                                     "FAKE_WAIT" "idle-then-publish" "FAKE_WAIT_PUBLISH_AFTER" "1" "ORCH_POLL_INTERVAL_MS" "20"})
+                        "task" "collect" task "--wait" "--timeout" "2000")
+          entry (ledger-entry dir task)]
+      (is (zero? (:exit collect)) (:err collect))
+      (is (= "COMPLETE" (get-in (result collect) [:result :status])))
+      ;; The newest observation is reachable under the same stable key every existing
+      ;; reader already resolves through.
+      (is (= "/tmp/session-B.jsonl" (get-in entry [:child-session :value])))
+      ;; The superseded observation is preserved, not discarded -- "last-write-wins would
+      ;; be too" [wrong], per the record: session A held real pre-crash work.
+      (is (= [{:agent "pi" :kind "path" :source "pi" :value "/tmp/session-A.jsonl"}]
+             (:child-session-history entry)))
+      ;; A repeated observation of the now-current session is a no-op, not a duplicate
+      ;; history entry: the second `agent wait` tick (post-publish) also reports B.
+      (is (= 1 (count (:child-session-history entry)))))))
+
 (defn- start-call-count [log] (count (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))
 (defn- split-call-count [log] (count (filter #(= ["pane" "split"] (vec (take 2 %))) (calls log))))
 
@@ -1346,6 +1375,13 @@
                          :status status :summary "fan-in child" :artifacts [] :findings [] :next nil}))))
 (defn- child-state! [state entry file value]
   (let [path (fs/path state "children" (:child entry) file)]
+    (fs/create-dirs (fs/parent path))
+    (spit (str path) value)))
+;; `pane process-info`'s per-pane fixture state (task ca6fecef's shell_pid witness),
+;; addressed by pane id rather than child name -- unlike `child-state!`, this survives a
+;; child being marked `gone`.
+(defn- pane-state! [state pane file value]
+  (let [path (fs/path state "panes" pane file)]
     (fs/create-dirs (fs/parent path))
     (spit (str path) value)))
 (defn- agent-list-count [log]
@@ -2713,14 +2749,80 @@
         entry (capture-entry! dir (start-child! env dir "vanished child"))]
     (child-state! state entry "gone" "")
     (fake-child! state "unrelated-replacement" (:pane-id entry))
+    ;; The shell_pid fallback (task ca6fecef) needs a genuine mismatch modelled here too --
+    ;; without it the default fixture shell_pid is identical at spawn and at close (the
+    ;; ordinary case, where nothing changed), which would now close this pane instead of
+    ;; reporting it. A mismatched shell models the one case the fallback still cannot
+    ;; vouch for: the pane id was reused by a genuinely different shell.
+    (pane-state! state (:pane-id entry) "shell-pid" "99999")
     (let [proc (call! env "task" "close" (:task entry))
           res (:result (result proc))]
       (is (zero? (:exit proc)) (:err proc))
       (is (= "gone" (:status res)))
-      (is (= "child-absent" (:reason res)))
+      (is (= "name-released" (:reason res)))
+      (is (string? (:remedy res)))
       (is (empty? (closed-panes log)))
       (is (nil? (:closed-at (closed-entry dir entry))))
       ;; Nothing closed, so the return hook never fires.
+      (is (empty? (agent-focus-targets log))))))
+
+;; The fix this task exists for: a crash-and-manual-resume releases the child's agent
+;; name, but the pane's shell survives the agent dying and a fresh one starting in the
+;; same pane -- and by default the fixture models exactly that (the same pane's shell_pid
+;; is stable unless a test overrides it), so no extra setup beyond marking the name gone
+;; and placing a nameless occupant at the recorded pane is needed to model the resume.
+(deftest close-falls-back-to-the-shell-pid-witness-for-a-resumed-child
+  (let [{:keys [env log dir state]} (fake-env {})
+        entry (capture-entry! dir (start-child! env dir "resumed after a crash"))]
+    (child-state! state entry "gone" "")
+    ;; Models the real-world observation from the record: a bare, nameless agent at the
+    ;; same pane where the named child used to be.
+    (fake-child! state "resumed-nameless" (:pane-id entry))
+    (fs/create-dirs (fs/path state "children" "resumed-nameless"))
+    (spit (str (fs/path state "children" "resumed-nameless" "nameless")) "")
+    (let [proc (call! env "task" "close" (:task entry))
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "closed" (:status res)))
+      (is (= (:pane-id entry) (:pane-id res)))
+      (is (= #{(:pane-id entry)} (closed-panes log)))
+      (is (some? (:closed-at (closed-entry dir entry))))
+      ;; A successful close still returns focus to the caller, exactly as the ordinary
+      ;; name-and-pane match does -- the fallback is a different evidence path to the
+      ;; same outcome, not a different outcome.
+      (is (= ["w:p"] (agent-focus-targets log))))))
+
+;; An unsettled occupant at the recorded pane must retain, not close, even though the
+;; shell matches -- the fallback never relaxes the settledness bar the ordinary match
+;; applies, so prompt text can never land mid-turn just because the name happened to
+;; disappear.
+(deftest close-shell-pid-fallback-still-requires-a-settled-occupant
+  (let [{:keys [env log dir state]} (fake-env {})
+        entry (capture-entry! dir (start-child! env dir "resumed but still working"))]
+    (child-state! state entry "gone" "")
+    (fake-child! state "resumed-working" (:pane-id entry))
+    (spit (str (fs/path state "children" "resumed-working" "status")) "working")
+    (let [proc (call! env "task" "close" (:task entry))
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "retained" (:status res)))
+      (is (= "unsettled" (:reason res)))
+      (is (empty? (closed-panes log))))))
+
+;; A pane that is truly gone -- not merely a released name -- is a distinct, clean
+;; refusal-to-close outcome, never an exception, and never falls through to the shell_pid
+;; probe at all (there is no pane left to probe).
+(deftest close-reports-pane-absent-for-a-genuinely-vanished-pane
+  (let [{:keys [env log dir state]} (fake-env {})
+        entry (capture-entry! dir (start-child! env dir "pane closed by hand"))]
+    (child-state! state entry "gone" "")
+    (pane-state! state (:pane-id entry) "gone" "")
+    (let [proc (call! env "task" "close" (:task entry))
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "gone" (:status res)))
+      (is (= "pane-absent" (:reason res)))
+      (is (empty? (closed-panes log)))
       (is (empty? (agent-focus-targets log))))))
 
 (deftest close-refuses-when-the-recorded-pane-is-not-the-childs-pane
@@ -2817,12 +2919,17 @@
         moved (capture-entry! dir (start-child! env dir "child whose pane moved"))
         ok (capture-entry! dir (start-child! env dir "child that closes"))]
     (child-state! state gone "gone" "")
+    ;; A pane the shell_pid fallback (task ca6fecef) could otherwise reclaim: mark the
+    ;; pane itself gone too, so this stays the "nothing to close" case the sweep test
+    ;; wants in its mix, distinct from `moved`'s live-but-wrong-pane refusal.
+    (pane-state! state (:pane-id gone) "gone" "")
     (child-state! state moved "pane" "w:somewhere-else")
     (let [proc (call! env "task" "close" "--settled")
           by-task (into {} (map (juxt :task identity)) (:result (result proc)))]
       (is (zero? (:exit proc)) (:err proc))
       (is (= 3 (count by-task)))
       (is (= "gone" (get-in by-task [(:task gone) :status])))
+      (is (= "pane-absent" (get-in by-task [(:task gone) :reason])))
       (is (= "refused" (get-in by-task [(:task moved) :status])))
       (is (re-find #"not this child's pane" (get-in by-task [(:task moved) :reason])))
       (is (= "closed" (get-in by-task [(:task ok) :status])))
@@ -3801,9 +3908,15 @@
     (let [{:keys [env log dir state]} (fake-env {})
           orphan (foreign! dir (capture-entry! dir (start-child! env dir "vanished orphan")))]
       (child-state! state orphan "gone" "")
+      ;; A genuine mismatch (task ca6fecef's shell_pid fallback applies here exactly as it
+      ;; does to `close` -- it is the ledger entry's own recorded witness, not a property
+      ;; of the caller), so this must be modelled explicitly to stay the case neither
+      ;; `close` nor `orphans` can vouch for.
+      (pane-state! state (:pane-id orphan) "shell-pid" "99999")
+      (fake-child! state "unrelated-occupant" (:pane-id orphan))
       (let [res (:result (result (call! env "task" "orphans" "--close")))]
         (is (= ["gone"] (mapv :status res)))
-        (is (= ["child-absent"] (mapv :reason res)))
+        (is (= ["name-released"] (mapv :reason res)))
         (is (empty? (closed-panes log)))
         (is (nil? (:closed-at (ledger-entry* dir (:task orphan)))))
         (is (empty? (agent-focus-targets log))))))
@@ -3884,10 +3997,14 @@
 (defn- closed-round! [dir entry]
   (patch-entry! dir entry :captured-at "2026-01-01T00:00:00Z" :status "COMPLETE"
                 :closed-at "2026-01-01T00:01:00Z"))
-
 (deftest compact-drops-the-raw-envelope-and-keeps-the-audit-trail
   (let [{:keys [env dir]} (fake-env {})
-        entry (start-child! env dir "compact a closed round")]
+        entry (start-child! env dir "compact a closed round")
+        ;; No mismatch happens naturally in this fixture, so the history field is patched
+        ;; in directly to prove retention preserves it exactly as it preserves
+        ;; `:child-session` today -- the same synthetic-state pattern `patch-entry!`
+        ;; already documents for facts no isolated verb produces.
+        entry (patch-entry! dir entry :child-session-history [{:agent "pi" :kind "path" :source "pi" :value "/tmp/superseded-session.jsonl"}])]
     (publish-child! entry)
     (call! env "task" "collect" (:task entry))
     (call! env "task" "close" (:task entry))
@@ -3900,7 +4017,7 @@
       (is (nil? (get-in after [:envelope :text])) "the one unbounded field is gone")
       (testing "everything a cited task uuid resolves through survives"
         (doseq [field [:task :child :pane-id :label :result :parent-session :child-session
-                       :captured-at :closed-at :persona-path]]
+                       :child-session-history :captured-at :closed-at :persona-path]]
           (is (= (get before field) (get after field)) (str field))))
       (testing "the parsed envelope fields survive: the dropped text was their duplicate"
         (is (= (dissoc (:envelope before) :text) (:envelope after))))

@@ -158,7 +158,31 @@ case "${1:-}" in
   pane)
     case "$2" in
       layout) echo '{"result":{"layout":{"area":{"width":113,"height":110},"focused_pane_id":"other","panes":[{"pane_id":"w:other","rect":{"width":200,"height":50}},{"pane_id":"w:p","rect":{"width":113,"height":55}}]}}}' ;;
-      get) printf '{"result":{"pane":{"pane_id":"w:p","label":"%s"}}}\n' "${FAKE_PARENT_LABEL:-planner-1-model}" ;;
+      # $3 is echoed back as the target's own pane_id (real herdr identifies the pane it
+      # was asked about); a per-pane `gone` marker under <state>/panes/<id>/gone models a
+      # pane that no longer exists at all, distinct from a child whose *name* was merely
+      # released -- the two facts task ca6fecef's `close` fallback must tell apart.
+      get)
+        target="${3:-w:p}"
+        if [ -f "$(state_dir)/panes/$target/gone" ]; then
+          echo '{"error":{"code":"pane_not_found","message":"pane not found"}}' >&2; exit 1
+        fi
+        printf '{"result":{"pane":{"pane_id":"%s","label":"%s"}}}\n' "$target" "${FAKE_PARENT_LABEL:-planner-1-model}" ;;
+      # `--pane <id>`, herdr 0.8.0 shape: `.result.process_info.shell_pid`. Same `gone`
+      # marker as `get` above; otherwise a per-pane `shell-pid` file lets a test model a
+      # pane whose shell has genuinely changed (a reused id), defaulting to a fixed value
+      # so an ordinary spawn-then-close round sees the identical shell both times.
+      process-info)
+        shift 2; target=""
+        while [ "$#" -gt 0 ]; do
+          case "$1" in --pane) target="$2"; shift 2 ;; *) shift ;; esac
+        done
+        if [ -f "$(state_dir)/panes/$target/gone" ]; then
+          echo '{"error":{"code":"pane_not_found","message":"pane not found"}}' >&2; exit 1
+        fi
+        shell_pid_file="$(state_dir)/panes/$target/shell-pid"
+        if [ -f "$shell_pid_file" ]; then shell_pid="$(cat "$shell_pid_file")"; else shell_pid="${FAKE_SHELL_PID:-9000}"; fi
+        printf '{"result":{"process_info":{"pane_id":"%s","shell_pid":%s}}}\n' "$target" "$shell_pid" ;;
       split) shift 2; pane="$(capture_env "$@")"; printf '{"result":{"pane":{"pane_id":"%s"}}}\n' "$pane" ;;
       rename) printf '{"result":{"pane":{"pane_id":"%s","label":"%s"}}}\n' "${3:-}" "${4:-}" ;;
       close) echo '{"result":{}}' ;;

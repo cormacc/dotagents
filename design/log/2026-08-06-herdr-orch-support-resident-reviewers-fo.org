@@ -393,10 +393,16 @@ Evidence from this session for reason 5: the crash orphaned a live child whose l
 
 Must not: steal focus from a pane the user is typing in more often than the value justifies -- if the fan-out case proves to thrash, make the return hook opt-in rather than shipping a default that fights the user.
 
-** TODO A resumed child is permanently unclosable by the protocol
+** DONE A resumed child is permanently unclosable by the protocol
+CLOSED: [2026-08-07 Fri 14:13]
 :PROPERTIES:
 :CUSTOM_ID: ca6fecef-7264-4707-af13-d6b51639a8b6
 :CREATED: [2026-08-07 Fri 12:56]
+:STARTED: [2026-08-07 Fri 13:24]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 13:24]
+- State "DONE" from "STARTED" [2026-08-07 Fri 14:13]
 :END:
 Found by dogfooding, not by review. A pi crash killed both root and its worker; the worker was resumed in the same pane, finished the work, and published a valid result. Every closure path then refused it. `close`, `close --settled` and `orphans --close` all require a live observation matching the recorded child *name* and pane id, and restarting the process releases the herdr agent name -- `agent list` showed a bare `pi` where `worker-21f8fbb1` had been. Measured: all 15 orphan candidates returned `gone`/`child-absent`, including the one whose pane was demonstrably still live and idle, and the pane could only be reclaimed with a bare `oh pane close` -- the very fallback contract.md § Close now tells operators not to use.
 
@@ -405,17 +411,23 @@ The root cause is that `gone` conflates two different facts: *the pane is absent
 A stronger identity witness already exists and was measured intact: the pane's injected environment survives a resume. All six `HERDR_ORCH_*` variables were still set in the resumed child, because the shell retained them. `HERDR_ORCH_TASK` is per-round and allocated by us, so it proves "this pane is still the pane provisioned for task T" -- which is exactly the granularity a decision to take that pane needs, since the pane is what closure claims.
 
 Acceptance criteria:
-- The `gone` outcome is split so an operator can tell a vanished pane from a live pane whose child name was released; the latter reports its own outcome and names the remedy.
-- Whether Herdr can expose a pane's environment to a caller is established empirically and recorded, before any design depends on it. If it cannot, say so and take the override route below instead.
-- If pane environment is readable, closure may match on `HERDR_ORCH_TASK` as a fallback witness when the agent name is absent, under the same ownership and newest-round guards as today. It is a *fallback*, never a replacement for the name-and-pane match.
-- If it is not readable, an explicit operator-authorised override exists with a distinct verb or flag, recording that the operator supplied the authority -- strictly better than sending them to a bare `pane close`, which closes on a recorded pane id alone.
-- The dead-owner remedy in contract.md § Close and § Orphans is updated to cover this case, which neither currently mentions.
-Must not: infer that a released name means the process is gone, or close on a recorded pane id alone -- the evidence the `gone` outcome exists to reject.
+- [X] The `gone` outcome is split so an operator can tell a vanished pane from a live pane whose child name was released; the latter reports its own outcome and names the remedy. Delivered as `"reason":"pane-absent"` (the recorded pane no longer exists) versus `"reason":"name-released"` (live, but not confirmably this round's, carrying a `:remedy` string).
+- [X] Whether Herdr can expose a pane's environment to a caller is established empirically and recorded, before any design depends on it. **Measured this round: it cannot.** `agent get`/`agent list`/`pane get` carry no environment, and the OS route is closed on this platform too -- `ps eww -p <pid>` returns only the header and command line (66 bytes), even for the caller's own process, and there is no `/proc`. Recorded here rather than assumed.
+- [X] WITHDRAWN as written, not delivered as written -- superseded by a stronger witness found in its place, not by the override route this criterion anticipated. Env being unreadable ruled out the `HERDR_ORCH_TASK` fallback this bullet named, but a second identity witness was measured intact instead: a pane's `shell_pid` (`pane process-info --pane <id>`) survives an agent dying and a new one starting in the same pane, because the shell is the *parent* of whatever agent occupies it (measured: same `shell_pid` before, during, and after killing and restarting a pane's foreground process). `:shell-pid` is recorded at spawn and used as exactly the fallback this bullet specified for `HERDR_ORCH_TASK` -- same ownership/newest-round guards, same fallback-never-replacement discipline -- just carried by a different field.
+- [X] WITHDRAWN, not delivered -- the operator-override branch this bullet specified was never built, because the shell_pid witness above covers the case it existed for (a released name on a live pane whose ownership is otherwise established) without needing operator-supplied authority. The residual case where shell_pid itself does not confirm the pane (no recorded value, a live occupant whose shell does not match, or genuine pane-id reuse) still has no automated remedy and is reported as `name-released` with a `:remedy` string pointing at manual inspection -- an operator action, but not a new verb or flag.
+- [X] The dead-owner remedy in contract.md § Close and § Orphans is updated to cover this case, which neither currently mentions. § Close documents the outcome split and the shell_pid fallback in full; § Orphans' outcome-table cross-reference was updated to point there rather than repeating a now-stale "name absence is `gone`" claim.
+Must not: infer that a released name means the process is gone, or close on a recorded pane id alone -- the evidence the `gone` outcome exists to reject. Held: the fallback fires only on a live, matching `shell_pid`, itself gated behind the unchanged ownership and newest-round checks; it never closes on the pane id alone.
 
-** TODO Capture never corrects a `:child-session` that a resume made stale
+** DONE Capture never corrects a `:child-session` that a resume made stale
+CLOSED: [2026-08-07 Fri 13:56]
 :PROPERTIES:
 :CUSTOM_ID: ecb85350-5715-4e0b-a454-4ed2fa95703a
 :CREATED: [2026-08-07 Fri 12:56]
+:STARTED: [2026-08-07 Fri 13:24]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 13:24]
+- State "DONE" from "STARTED" [2026-08-07 Fri 13:56]
 :END:
 Capture backfills `:child-session` only when the reference is still missing, so a child resumed into a new session keeps the reference recorded at spawn. Measured on this record's own phase-2 round: entry `21f8fbb1` still names session `019fd988`, the session that *crashed*, while every phase-2 task was completed and published from `019fd9c3`. The reference is not merely stale -- it points at the half of the work that did not finish.
 
@@ -424,16 +436,22 @@ That matters because `:child-session` is the only durable route to a child's tra
 First-write-wins is wrong, but last-write-wins would be too -- the earlier session holds real work. Both observations are worth keeping.
 
 Acceptance criteria:
-- On capture, the live agent's session is compared with the recorded one, and a mismatch is recorded rather than discarded or overwritten.
-- The newest observation remains reachable under a stable key, and every distinct earlier observation stays reachable too, in order.
-- `compact` preserves the full set, exactly as it preserves `:child-session` today -- retention must not undo this.
-- No extra Herdr call on the common path where the session is unchanged; reuse the `agent get` capture already makes.
-Must not: overwrite a recorded session in place, which would trade one wrong reference for another.
+- [X] On capture, the live agent's session is compared with the recorded one, and a mismatch is recorded rather than discarded or overwritten. `record-session!` now compares on every call (spawn start, dispatch verification, each wait tick, capture-time backfill), not only when `:child-session` is unset.
+- [X] The newest observation remains reachable under a stable key, and every distinct earlier observation stays reachable too, in order. `:child-session` stays the newest (the key every existing reader already resolves); `:child-session-history` is the ordered, deduplicated vector of superseded observations.
+- [X] `compact` preserves the full set, exactly as it preserves `:child-session` today -- retention must not undo this. `compacted-entry` only ever drops `:envelope :text`; a mutation check confirmed a hypothetical strip of `:child-session-history` there is caught by `compact-drops-the-raw-envelope-and-keeps-the-audit-trail`.
+- [X] No extra Herdr call on the common path where the session is unchanged; reuse the `agent get` capture already makes. No call-site trigger condition changed -- confirmed by the pre-existing `child-session-is-recorded-by-every-hook` pin (`(<= (child-get-count log) 2)` across four wait iterations), which still passes unchanged; only `record-session!`'s internal write logic changed.
+Must not: overwrite a recorded session in place, which would trade one wrong reference for another. Held: a differing observation is appended to `:child-session-history`, never dropped.
 
-** TODO The live smoke's retro gate depends on the child's own judgement
+** DONE The live smoke's retro gate depends on the child's own judgement
+CLOSED: [2026-08-07 Fri 13:44]
 :PROPERTIES:
 :CUSTOM_ID: 377ad650-603e-46a0-a5ce-ce5473d8367e
 :CREATED: [2026-08-07 Fri 12:56]
+:STARTED: [2026-08-07 Fri 13:24]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 13:24]
+- State "DONE" from "STARTED" [2026-08-07 Fri 13:44]
 :END:
 The retro leg plants a deliberately invalid command and then fails the run unless the child emits a `PROCESS` candidate about it. That assertion is a *content* judgement made by an LLM against a threshold, not a mechanical fact, so the gate is nondeterministic by construction: observed passing once and failing once on the same tree, with the failing child being the one that reasoned *correctly* -- it recognised the fault as manufactured and declined to route it.
 
@@ -442,11 +460,11 @@ The attempted fix made it worse and was reverted (`5ffa789`): it wrote a descrip
 The underlying rule the smoke was leaning on -- a child performs steps 1--2 and never pre-filters or routes its own candidates, the parent owns routing -- is already stated in the retro skill on its own merits, and is worth keeping. What is not worth keeping is any sentence that exists to describe the fixture.
 
 Acceptance criteria:
-- The live smoke's retro leg asserts mechanical facts only: that the retro instruction was injected, that `:retro`/`:retro-source` resolved as expected, and that the frontmatter-opted-out leg stays silent.
-- Whether the retro instruction actually reaches the rendered prompt is proven by a unit test over the rendered prompt, where it is deterministic -- not by a live child's classification.
-- Every sentence in `skills/retro/SKILL.md` that exists to describe the smoke fixture is deleted, and the parent-versus-child scoping that remains is justified on its own terms.
-- The smoke no longer fails a child for behaving correctly.
-Must not: re-introduce fixture description into skill or production text, or weaken the opt-out leg's silence assertion, which is a genuine mechanical fact and the useful half of this gate.
+- [X] The live smoke's retro leg asserts mechanical facts only: that the retro instruction was injected, that `:retro`/`:retro-source` resolved as expected, and that the frontmatter-opted-out leg stays silent. `retro-gated-in!` replaces the mandatory `PROCESS` check, asserting only `:retro true` and `:retro-source "flag"`; `no-process!` on the opt-out leg is unchanged.
+- [X] Whether the retro instruction actually reaches the rendered prompt is proven by a unit test over the rendered prompt, where it is deterministic -- not by a live child's classification. Already covered, unchanged, by the pre-existing `retro-gating-is-resolved-and-recorded` (`cli_test.clj`), which asserts the injected text against `--print-prompt` output.
+- [X] Every sentence in `skills/retro/SKILL.md` that exists to describe the smoke fixture is deleted, and the parent-versus-child scoping that remains is justified on its own terms. The "Exclude manufactured candidates" bullet is removed; the file is otherwise unchanged from `846733f`, and the surviving "scope to this session"/"probe harness-dependent claims" filters stand on their own merits (ledger scope and cross-harness portability), independent of any smoke.
+- [X] The smoke no longer fails a child for behaving correctly. The manufactured-fault prompt (an intentionally wrong `show` invocation) is replaced with an ordinary `task status` check; the leg no longer asks for or grades a `PROCESS` candidate at all.
+Must not: re-introduce fixture description into skill or production text, or weaken the opt-out leg's silence assertion, which is a genuine mechanical fact and the useful half of this gate. Held: `no-process!` is untouched, and `retro/SKILL.md`'s only change is a deletion.
 
 * Implementation
 

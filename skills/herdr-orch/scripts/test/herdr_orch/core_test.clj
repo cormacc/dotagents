@@ -410,11 +410,13 @@
 
 ;; The live smoke is never run by `bb test`, so its assertions are covered here instead.
 (deftest live-smoke-assertions-contract
-  (is (= ["wrong command → guardrail → verify the command list first"]
-         (smoke/process! {:process ["wrong command → guardrail → verify the command list first"]})))
-  ;; Silence on the signal-manufacturing leg is a failure, not a pass.
-  (is (thrown? Exception (smoke/process! {:process []})))
-  (is (thrown? Exception (smoke/process! {:process ["one arrow → only"]})))
+  ;; `retro-gated-in!` checks the mechanical gate only -- never a PROCESS candidate, which
+  ;; is a content judgement `retro`'s own threshold owns (task 377ad650). A gated-in entry
+  ;; whose source is the explicit flag passes unchanged; anything else throws, naming why.
+  (let [gated {:task "t" :retro true :retro-source "flag"}]
+    (is (= gated (smoke/retro-gated-in! gated))))
+  (is (thrown-with-msg? Exception #"not gated in" (smoke/retro-gated-in! {:task "t" :retro false :retro-source "skill-missing"})))
+  (is (thrown-with-msg? Exception #"did not resolve from --retro" (smoke/retro-gated-in! {:task "t" :retro true :retro-source "default"})))
   (is (= {:process []} (smoke/no-process! {:process []})))
   (is (thrown? Exception (smoke/no-process! {:process ["a → b → c"]})))
   (let [file (str (fs/create-temp-file {:prefix "smoke-session-"}))]

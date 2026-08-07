@@ -8,7 +8,7 @@
   #{["workspace" "list"] ["workspace" "create"] ["workspace" "focus"]
     ["tab" "list"] ["tab" "create"] ["tab" "focus"]
     ["pane" "list"] ["pane" "current"] ["pane" "layout"] ["pane" "split"]
-    ["pane" "rename"] ["pane" "get"] ["pane" "run"] ["pane" "read"]
+    ["pane" "rename"] ["pane" "get"] ["pane" "process-info"] ["pane" "run"] ["pane" "read"]
     ["pane" "send-text"] ["pane" "send-keys"] ["pane" "wait-output"] ["pane" "close"]
     ["agent" "list"] ["agent" "get"] ["agent" "start"] ["agent" "prompt"]
     ["agent" "wait"] ["agent" "read"] ["agent" "send-keys"] ["agent" "focus"]
@@ -42,6 +42,7 @@
       (herdr/split! {:direction "right" :cwd "/tmp" :env {}})
       (herdr/rename! "pane" "renamed")
       (herdr/pane! "pane")
+      (herdr/process-info! "pane")
       (herdr/pane-run! "pane" "true")
       (herdr/pane-read! "pane" {})
       (herdr/pane-send-text! "pane" "text")

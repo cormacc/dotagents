@@ -324,10 +324,35 @@
 ;; so it is recorded opportunistically at every point the CLI already holds an
 ;; `AgentInfo`. The whole `agent_session` map is stored because its `value` is
 ;; discriminated by `kind` (a path or an opaque id). Every hook is best-effort: it never
-;; fails a spawn, demotes a captured result, or overwrites an earlier observation.
+;; fails a spawn or demotes a captured result.
+;;
+;; First-write-wins used to mean every later hook merely deferred to whichever observation
+;; got here first, so a session recorded before a crash-and-resume stayed on the entry
+;; forever even once every subsequent hook -- dispatch verification, each wait tick, a
+;; capture-time backfill -- was observing the *new* session the resumed process actually
+;; ran under (measured on this record's own phase-2 round: entry `21f8fbb1` still named the
+;; session that crashed). Last-write-wins would trade one wrong reference for another in
+;; the other direction, discarding whichever session held real work. So this compares
+;; instead of merely backfilling: an unset `:child-session` is still simply set (unchanged
+;; from before), an observation matching the current one is a no-op (no ledger write), and
+;; a genuinely different observation replaces `:child-session` while the superseded value
+;; moves onto `:child-session-history` -- appended only if not already present, so a
+;; session that is observed again after another has intervened is not duplicated. Nothing
+;; is ever discarded, and every existing reader (`compact`, the live smoke, contract.md)
+;; keeps resolving the *newest* observation through the same stable `:child-session` key
+;; it always has; only a reader that has actually seen a mismatch need consult the history.
 (defn record-session! [task session]
   (when (and task (map? session) (seq session))
-    (try (ledger/update! task #(if (:child-session %) % (assoc % :child-session session)))
+    (try (ledger/update! task
+                         (fn [entry]
+                           (let [current (:child-session entry)]
+                             (cond
+                               (nil? current) (assoc entry :child-session session)
+                               (= current session) entry
+                               :else (-> entry
+                                        (update :child-session-history
+                                                (fn [history] (vec (distinct (conj (vec history) current)))))
+                                        (assoc :child-session session))))))
          (catch Exception _ nil))))
 ;; --- post-prompt dispatch verification ---------------------------------------------
 ;; `agent prompt` submits atomically, but a harness TUI still finishing startup can swallow
@@ -462,7 +487,18 @@
                 pane-placement (if (= placement "tab")
                                  (herdr/tab-create! {:cwd (System/getProperty "user.dir") :label label :env env :focus focus})
                                  (herdr/split! {:direction (core/direction (herdr/caller-rect!)) :cwd (System/getProperty "user.dir") :env env :focus focus}))
-                persisted (ledger/update! task assoc :pane-id (:pane_id pane-placement) :tab-id (:tab-id pane-placement) :status "split")]
+                persisted (ledger/update! task assoc :pane-id (:pane_id pane-placement) :tab-id (:tab-id pane-placement) :status "split")
+                ;; Best-effort, exactly like `record-session!`: never fails a spawn. This is
+                ;; the identity witness `close` falls back to when a resume has released the
+                ;; child's agent name (task ca6fecef) -- the pane's shell is the *parent* of
+                ;; whatever agent occupies it, so it survives that agent dying and a fresh
+                ;; one starting in the same pane, unlike the name Herdr releases on exit.
+                ;; Recorded now, on the bare freshly-split shell, rather than after `start!`:
+                ;; the value is identical either way (it is the shell, never the foreground
+                ;; process), so there is no reason to wait.
+                _ (try (when-let [pid (:shell_pid (herdr/process-info! (:pane-id persisted)))]
+                         (ledger/update! task assoc :shell-pid pid))
+                       (catch Exception _ nil))]
             (try
               (let [renamed (herdr/rename! (:pane-id persisted) label)]
                 (when-not (= label (:label renamed)) (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))
@@ -867,28 +903,58 @@
                 "close refused: a newer round exists for this child"
                 "close refused: an uncaptured newer round names this child")
               {:task task :child child :newest (:task newest)})))))
-(defn- close-observed! [entry index]
+(defn- close-mutation! [task child pane-id]
+  ;; The listing can race a further round being written, so the freshest ledger state is
+  ;; re-validated inside the mutation, mirroring `prune!`'s race re-check. `herdr/close!`
+  ;; runs inside it too: `ledger/update!` writes nothing if its function throws, so a
+  ;; failed close can never leave a `:closed-at` recording a closure that never happened.
+  (let [updated (ledger/update! task
+                                (fn [current]
+                                  (when (:closed-at current) (fail "close refused: already closed" {:task task}))
+                                  (when-not (= task (:task (newest-round (ledger/entries) child)))
+                                    (fail "close refused: a newer round appeared during the settle wait" {:task task :child child}))
+                                  (herdr/close! (:pane-id current))
+                                  (assoc current :closed-at (now))))]
+    {:status "closed" :task task :child child :pane-id pane-id :closed-at (:closed-at updated)}))
+(defn- pane-alive? [pane] (try (boolean (herdr/pane! pane)) (catch Exception _ false)))
+(defn- pane-shell-pid! [pane] (try (:shell_pid (herdr/process-info! pane)) (catch Exception _ nil)))
+;; A resumed process releases its herdr agent name, so the ordinary name-and-pane match
+;; can never see it again -- `agent list` shows, at best, a bare re-started agent at the
+;; same pane, under no name at all or a different one. `gone` used to conflate two facts
+;; that need telling apart: the pane is genuinely absent (leave it alone), and the pane is
+;; still live but the name was released (a remedy exists). This is the split: a vanished
+;; pane is reported `pane-absent`; a live one falls back to the shell_pid witness recorded
+;; at spawn (task ca6fecef) -- the pane's shell outlives the agent that occupied it, so a
+;; match means this is still the shell we provisioned for this round, which is exactly the
+;; granularity a decision to take the pane needs. The fallback never relaxes the ownership
+;; or newest-round guards `assert-closable!` already applied before this ever runs, and it
+;; never fires when the name *is* present -- see `close-observed!` below.
+(defn- released-name-close [entry agents]
+  (let [task (:task entry) child (:child entry) pane (:pane-id entry)]
+    (if-not (pane-alive? pane)
+      {:status "gone" :reason "pane-absent" :task task :child child :pane-id pane}
+      (let [occupant (some #(when (= pane (:pane_id %)) %) agents)]
+        (cond
+          (and occupant (not (contains? #{"idle" "done"} (:agent_status occupant))))
+          {:status "retained" :reason "unsettled" :task task :child child :pane-id pane :agent-status (:agent_status occupant)}
+          (let [recorded (:shell-pid entry) live (pane-shell-pid! pane)]
+            (and recorded live (= recorded live)))
+          (close-mutation! task child pane)
+          :else
+          {:status "gone" :reason "name-released" :task task :child child :pane-id pane
+           :remedy (str "the agent name was released and the pane's shell no longer matches what this round provisioned, "
+                        "so neither `close` nor `orphans --close` can confirm it; inspect the pane manually "
+                        "(`herdr pane get " pane "`) before deciding whether to close it directly")})))))
+(defn- close-observed! [entry {:keys [index agents]}]
   (let [task (:task entry) child (:child entry) agent (get index child)]
     (cond
-      (nil? agent) {:status "gone" :reason "child-absent" :task task :child child :pane-id (:pane-id entry)}
+      (nil? agent) (released-name-close entry agents)
       (not= (:pane-id entry) (:pane_id agent))
       (fail "close refused: the recorded pane is not this child's pane"
             {:task task :child child :recorded (:pane-id entry) :observed (:pane_id agent)})
       (not (contains? #{"idle" "done"} (:agent_status agent)))
       {:status "retained" :reason "unsettled" :task task :child child :pane-id (:pane-id entry) :agent-status (:agent_status agent)}
-      :else
-      ;; The listing can race a further round being written, so the freshest ledger state is
-      ;; re-validated inside the mutation, mirroring `prune!`'s race re-check. `herdr/close!`
-      ;; runs inside it too: `ledger/update!` writes nothing if its function throws, so a
-      ;; failed close can never leave a `:closed-at` recording a closure that never happened.
-      (let [updated (ledger/update! task
-                                    (fn [current]
-                                      (when (:closed-at current) (fail "close refused: already closed" {:task task}))
-                                      (when-not (= task (:task (newest-round (ledger/entries) child)))
-                                        (fail "close refused: a newer round appeared during the settle wait" {:task task :child child}))
-                                      (herdr/close! (:pane-id current))
-                                      (assoc current :closed-at (now))))]
-        {:status "closed" :task task :child child :pane-id (:pane-id entry) :closed-at (:closed-at updated)}))))
+      :else (close-mutation! task child (:pane-id entry)))))
 ;; Bounded settle wait, then exactly one positively-usable listing. Shared by `close` and
 ;; `continue` because both act immediately after a capture, where the child is routinely
 ;; still `working` -- the same race that once forced a settle wait into capture itself, and
@@ -896,9 +962,18 @@
 ;; The wait's outcome is never consulted: settled, timed out, or errored, the listing
 ;; decides. Deliberately the bare `herdr/wait!` and not `wait-settled!`, whose `--until idle
 ;; --until done` would burn the whole budget on a blocked child the listing refuses anyway.
+;;
+;; `close`/`continue` need the raw listing too, not merely the name index `live-agents`
+;; builds -- a resumed child can occupy its pane with no name at all (task ca6fecef),
+;; which that name-only index drops entirely -- so both are captured from the one call
+;; this already makes, rather than a second `agent list` just to see nameless entries.
+(defn- agents-snapshot []
+  (try (when-let [agents (herdr/agents)]
+         {:agents agents :index (into {} (keep #(when-let [name (:name %)] [name %])) agents)})
+       (catch Exception _ nil)))
 (defn- settle-and-list! [verb entry]
   (try (herdr/wait! (:child entry) (settle-close-ms)) (catch Exception _ nil))
-  (or (live-agents) (fail (str verb " refused: agent list is unusable; liveness is unknown") {:task (:task entry)})))
+  (or (agents-snapshot) (fail (str verb " refused: agent list is unusable; liveness is unknown") {:task (:task entry)})))
 (defn- settle-then-close! [entry]
   (close-observed! entry (settle-and-list! "close" entry)))
 ;; --- return-hook focus -----------------------------------------------------------------
@@ -1239,7 +1314,7 @@
       ;; Same live evidence bar as `close`: the name and the pane must both match, and the
       ;; child must be settled -- prompt text delivered to a `blocked` agent lands in its
       ;; approval UI rather than starting a round.
-      (let [index (settle-and-list! "continue" entry)
+      (let [{:keys [index]} (settle-and-list! "continue" entry)
             agent (or (get index child) (fail "continue refused: the child is absent from the agent list" {:task prior-task :child child}))]
         (when-not (= (:pane-id entry) (:pane_id agent))
           (fail "continue refused: the recorded pane is not this child's pane"
@@ -1252,7 +1327,7 @@
               ;; belongs to the spawn that created it and has no relation to this round's
               ;; own uuid. Display and policy metadata carry over unchanged; the parent
               ;; fields come from the caller, which owns this round.
-              next-entry (merge (select-keys entry [:child :pane-id :tab-id :label :index :persona-path :retro :retro-source :spawns :spawns-source :timeout :timeout-source :placement])
+              next-entry (merge (select-keys entry [:child :pane-id :tab-id :label :index :persona-path :retro :retro-source :spawns :spawns-source :timeout :timeout-source :placement :shell-pid])
                                 {:task task :result result :continues prior-task
                                  :parent-session caller :parent-pane (:parent-pane ident)
                                  :waiting-policy waiting-policy :status "continuing" :created-at (now)})]

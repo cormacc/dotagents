@@ -12,7 +12,7 @@
   #{["workspace" "list"] ["workspace" "create"] ["workspace" "focus"]
     ["tab" "list"] ["tab" "create"] ["tab" "focus"]
     ["pane" "list"] ["pane" "current"] ["pane" "layout"] ["pane" "split"]
-    ["pane" "rename"] ["pane" "get"] ["pane" "run"] ["pane" "read"]
+    ["pane" "rename"] ["pane" "get"] ["pane" "process-info"] ["pane" "run"] ["pane" "read"]
     ["pane" "send-text"] ["pane" "send-keys"] ["pane" "wait-output"] ["pane" "close"]
     ["agent" "list"] ["agent" "get"] ["agent" "start"] ["agent" "prompt"]
     ["agent" "wait"] ["agent" "read"] ["agent" "send-keys"] ["agent" "focus"]
@@ -94,6 +94,13 @@
 (defn rename! [pane label] (get-in (value! ["pane" "rename" pane label]) [:result :pane]))
 (declare current-pane!)
 (defn pane! [pane] (get-in (value! ["pane" "get" pane]) [:result :pane]))
+;; The pane's shell is the *parent* of whatever foreground agent occupies it, so it
+;; survives that agent dying and a new one starting in the same pane -- unlike the agent
+;; name, which Herdr releases on process exit. `.result.process_info.shell_pid` is the
+;; exact field (measured directly against a live pane hosting a running agent, herdr
+;; 0.8.0: `{"result":{"process_info":{... "shell_pid":9438}}}`); `:process_info` is
+;; unwrapped here so callers never repeat the nesting.
+(defn process-info! [pane] (get-in (value! ["pane" "process-info" "--pane" pane]) [:result :process_info]))
 (defn close! [pane]
   (let [caller (current-pane!)]
     (when (= pane (:pane_id caller))

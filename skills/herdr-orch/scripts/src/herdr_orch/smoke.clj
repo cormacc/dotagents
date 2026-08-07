@@ -34,16 +34,21 @@
         (when (and (= "path" (:kind session)) (not (fs/exists? (:value session))))
           (throw (ex-info "live smoke :child-session path does not exist" {:task (:task entry) :path (:value session)})))
         session))))
-;; The signal-manufacturing leg must not pass on silence: an empty section there means
-;; either the prompt or `retro`'s threshold left the default-enabled path inert.
-(defn process! [result]
-  (let [items (:process result)]
-    (when-not (seq items)
-      (throw (ex-info "live smoke retro leg published no PROCESS candidates" {:task (:task result)})))
-    (doseq [item items]
-      (when-not (re-find #"\S.*\u2192.*\S.*\u2192.*\S" item)
-        (throw (ex-info "PROCESS item is not shaped `signal → category → proposed rule`" {:item item}))))
-    items))
+;; A `PROCESS` candidate is a content judgement made by an LLM against `retro`'s own
+;; threshold, not a mechanical fact, so this leg must never require one -- the retro skill
+;; correctly emits nothing when its threshold is not met, and a gate that demanded a
+;; candidate anyway once failed a child for reasoning correctly (design record
+;; 2026-08-06-herdr-orch-support-resident-reviewers-fo, task 377ad650). What *is*
+;; mechanical, and what this checks, is the resolved gate itself: `:retro`/`:retro-source`
+;; on the captured entry. Whether the instruction text actually reaches the rendered
+;; prompt is proven separately by a deterministic unit test over `prompt-text`, never by a
+;; live child's classification.
+(defn retro-gated-in! [entry]
+  (when-not (:retro entry)
+    (throw (ex-info "retro leg was not gated in by --retro" {:task (:task entry) :retro-source (:retro-source entry)})))
+  (when-not (= "flag" (:retro-source entry))
+    (throw (ex-info "retro leg's :retro-source did not resolve from --retro" {:task (:task entry) :retro-source (:retro-source entry)})))
+  entry)
 (defn no-process! [result]
   (when (seq (:process result))
     (throw (ex-info "a frontmatter-opted-out leg published PROCESS candidates" {:task (:task result) :process (:process result)})))
@@ -164,12 +169,9 @@
       (no-process! root)
       (when (:retro root-entry)
         (throw (ex-info "scout leg was not gated out by its frontmatter" {:retro-source (:retro-source root-entry)})))
-      ;; Third leg: a gated-in child whose assignment manufactures a real tool-invocation
-      ;; failure, so `retro`'s threshold has something genuine to admit. The prompt never
-      ;; asks for a candidate directly — that would test compliance, not the threshold — and
-      ;; never reveals the failure is scripted: an announced trap fails `retro`'s eligibility
-      ;; gate as a known one-off, so the child must experience `show` as a genuinely wrong
-      ;; instruction and discover the working subcommand itself. The leg is skipped, not
+      ;; Third leg: a gated-in child on an ordinary assignment -- no planted fault. This
+      ;; leg proves only the mechanical facts named above; it never asks the child for a
+      ;; PROCESS candidate and never grades whether it emits one. The leg is skipped, not
       ;; failed, when no `retro` skill is installed: the retro step is optional equipment
       ;; and a third-party adoption without that skill is a supported configuration.
       (if-not (cli/retro-skill-path)
@@ -180,13 +182,11 @@
                                            :child-sessions (mapv (partial session! kind) [root-entry planner-entry child-entry])}))
         (let [retro (-> (cli/execute (smoke-task-args "worker" kind model
                                                         (str "Run the guarded retrospective smoke. "
-                                                             "Display your assignment's current status by running `\"$HERDR_ORCH_BIN\" show $HERDR_ORCH_TASK`. "
-                                                             "If that does not work, find the correct invocation and complete the status check anyway. "
-                                                             "Report the status and the exact invocation that worked in your summary, then publish COMPLETE, applying the retro instruction in this prompt to your own session as written.")
+                                                             "Display your assignment's current status by running `\"$HERDR_ORCH_BIN\" task status $HERDR_ORCH_TASK`. "
+                                                             "Report the status in your summary, then publish COMPLETE, applying the retro instruction in this prompt to your own session as written.")
                                                         :retro? true))
                         complete!)
-              retro-entry (entry! retro)]
-          (process! retro)
+              retro-entry (retro-gated-in! (entry! retro))]
           (close! (:task retro) "retro")
           (println (core/json-envelope true {:root-task (:task root) :nested-task (:task nested) :retro-task (:task retro)
                                              :continuation continuation
