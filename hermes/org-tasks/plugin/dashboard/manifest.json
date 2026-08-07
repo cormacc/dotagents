@@ -1,0 +1,12 @@
+{
+  "name": "org-tasks",
+  "label": "Org Tasks",
+  "version": "0.1.0",
+  "description": "Authenticated Desktop API for org-tasks/v1",
+  "entry": "index.js",
+  "api": "plugin_api.py",
+  "tab": {
+    "hidden": true
+  },
+  "slots": []
+}

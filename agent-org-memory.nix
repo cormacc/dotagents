@@ -1,12 +1,13 @@
-# agent-org-memory: pi package + agent-skills bundle for the org-memory
-# task protocol.
+# agent-org-memory: Pi, Hermes Desktop, and agent-skills bundle for the
+# org-memory task protocol.
 #
 # Builds a filtered subtree of `./.` (the dotagents repo root) containing
-# only the org-memory slice: the three packaged pi extensions, their
-# helper modules, the three packaged generic skills, the pi package
-# manifest, and the package README.
+# only the org-memory slice: the three packaged Pi extensions, their
+# helper modules, the Hermes Desktop adapter, the three packaged generic
+# skills, the package manifest, and the package README.
 #
-# Excluded: co-located test files (*.test.ts, test.sh), per-extension
+# Excluded: co-located test files (*.test.ts, test_*.py, *.mjs, test.sh),
+# generated Python bytecode, per-extension
 # build wrappers (default.nix), unrelated extensions/skills (e.g.
 # pi-clojure, term, lsp, ext-dev, …), pi-specific skills, the
 # archive/ tree, owner-facing pi instructions (AGENTS.md), and
@@ -24,6 +25,10 @@ let
   # build wrappers regardless of where in the slice they live.
   isPackagedFile = file:
        !(lib.hasSuffix ".test.ts" file.name)
+    && !(lib.hasPrefix "test_" file.name)
+    && !(lib.hasSuffix ".mjs" file.name)
+    && !(lib.hasSuffix ".pyc" file.name)
+    && !(lib.hasSuffix ".pyo" file.name)
     && file.name != "test.sh"
     && file.name != "default.nix";
 
@@ -41,6 +46,7 @@ let
     (root + "/skills/org-tasks")
     (root + "/skills/org-plan")
     (root + "/skills/org-jira")
+    (root + "/hermes/org-tasks")
   ];
 
   src = lib.fileset.toSource {

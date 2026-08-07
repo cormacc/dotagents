@@ -1,0 +1,119 @@
+#+TITLE: Hermes Desktop Org Tasks Plugin
+#+OPTIONS: toc:2
+
+* Purpose
+
+This directory provides a native Hermes Desktop adapter for the existing =org-tasks/v1= protocol. It does not parse Org files, own another task database, or persist a competing selection. Reads use =ot selected= and =ot list=; selection writes use =ot select=, so Pi, the CLI, and Hermes observe the same state in =TASKS.local.org=.
+
+The initial surface is deliberately narrow:
+
+- a persistent selected-task status item;
+- a searchable native selector dialog;
+- a rebindable =mod+alt+t= action and =Org Tasks: Select task= palette command;
+- a closeable bottom-docked =Task Focus= pane;
+- selection and clear-selection only.
+
+Complex task mutations remain in =ot= and the existing task tools.
+
+* Layout
+
+#+begin_example
+hermes/org-tasks/
+  desktop/plugin.js                 plain uncompiled Desktop ESM
+  plugin/plugin.yaml                backend plugin identity
+  plugin/dashboard/manifest.json    hidden authenticated API namespace
+  plugin/dashboard/plugin_api.py    FastAPI routes and config loading
+  plugin/dashboard/backend.py       root validation and bounded ot adapter
+  tests/                            backend, route, packaging, and ESM tests
+#+end_example
+
+The Desktop file imports only =@hermes/plugin-sdk=, =react=, and =react/jsx-runtime=, as required by Hermes' runtime plugin loader. The Python dashboard plugin exists only to provide =/api/plugins/org-tasks=; its dashboard tab is hidden.
+
+* Configuration
+
+The backend fails closed until at least one read root is configured. Every write root must also be a read root. Roots are canonical project roots containing =TASKS.org=; a request can name that root or a descendant working directory, but the discovered task root must exactly match an allowlisted root.
+
+Configure an absolute =ot= executable and roots. Unknown custom list keys are represented by Hermes as numeric mappings, which this plugin intentionally accepts:
+
+#+begin_src shell
+hermes config set --force dashboard.org_tasks.ot_path "$HOME/.local/bin/ot"
+hermes config set --force dashboard.org_tasks.bb_path /absolute/path/to/bb
+hermes config set --force dashboard.org_tasks.read_roots.0 "$HOME/agents/homelab"
+hermes config set --force dashboard.org_tasks.write_roots.0 "$HOME/agents/homelab"
+#+end_src
+
+Additional roots use indices =1=, =2=, and so on. Omit a root from =write_roots= to expose it read-only. The equivalent process-level overrides are:
+
+#+begin_example
+HERMES_ORG_TASKS_OT=/absolute/path/to/ot
+HERMES_ORG_TASKS_BB=/absolute/path/to/bb
+HERMES_ORG_TASKS_READ_ROOTS=/first/root:/second/root
+HERMES_ORG_TASKS_WRITE_ROOTS=/first/root
+#+end_example
+
+The environment root separator is the platform path separator (=:= on macOS/Linux). The configured =ot= and optional =bb= paths are resolved and must be executable regular files. Configure =bb_path= when =ot= is a source wrapper that invokes =bb= by name. A packaged =ot= whose launcher already embeds its runtime does not require it. The backend never accepts executable paths, shell fragments, or allowlists from renderer requests.
+
+* Installation
+
+Set =package_root= to either a dotagents checkout, an unpacked npm package, or the =agent-org-memory= Nix output. Set =hermes_home= explicitly for a named profile; it defaults to the active default-profile home:
+
+#+begin_src shell
+package_root=/absolute/path/to/package-or-checkout
+hermes_home="${HERMES_HOME:-$HOME/.hermes}"
+mkdir -p "$hermes_home/plugins" "$hermes_home/desktop-plugins/org-tasks"
+ln -sfn "$package_root/hermes/org-tasks/plugin" \
+  "$hermes_home/plugins/org-tasks"
+ln -sfn "$package_root/hermes/org-tasks/desktop/plugin.js" \
+  "$hermes_home/desktop-plugins/org-tasks/plugin.js"
+hermes plugins enable org-tasks
+#+end_src
+
+Restart the gateway/backend after enabling or changing Python/configuration. The Desktop renderer watches =plugin.js= and hot-reloads it; =Reload desktop plugins= in the Command Palette forces a reload.
+
+Named profiles use their own =$HERMES_HOME= beneath =~/.hermes/profiles/<name>=. Export that value before the installation and =hermes config set=/=hermes plugins enable= commands. Install and configure the backend in the same profile to which Desktop is connected.
+
+Production installation should copy or link the packaged =plugin/= and =desktop/plugin.js= from a pinned Nix store source. It must also provide a pinned =ot=/Babashka runtime and explicit writable task checkout. Do not make immutable application source writable and do not use SSH from the Desktop plugin as a task backend.
+
+* Usage
+
+- Click the status item, press =mod+alt+t= (Command-Option-T on macOS), or run =Org Tasks: Select task= from the Command Palette.
+- Type to filter. Matching rows retain their ancestors.
+- Use Up/Down or =j=/=k= outside the search field to navigate.
+- Use Left/Right or Space to fold and unfold a subtree.
+- Press Enter or =s= outside the search field to select. Selecting the current task clears it.
+- Double-clicking a row performs the same selection operation.
+
+The plugin does not register =/tasks= because Hermes already owns that alias for =/agents=.
+
+* Safety boundary
+
+The backend:
+
+- canonicalizes the requested working directory and discovers =TASKS.org= upward;
+- requires the discovered root in the configured read/write allowlist;
+- validates full canonical UUIDs before mutation;
+- rejects a =TASKS.local.org= mutation target that resolves outside the project root;
+- invokes one configured absolute executable with a fixed argument vector and no shell;
+- closes stdin, applies a timeout, bounds captured output, and terminates the process group on timeout;
+- validates the =org-tasks/v1= envelope and revalidates returned source paths;
+- strips raw Org source bodies and internal property data from responses;
+- serializes writes per project root.
+
+Desktop plugins are trusted renderer code with full application authority. Hermes provides crash isolation, not a security sandbox; keep this artifact pinned and reviewed.
+
+* Validation
+
+Run the focused suite:
+
+#+begin_src shell
+bash scripts/check-hermes.sh
+#+end_src
+
+Set =HERMES_PYTHON= to a Hermes runtime Python if FastAPI is not importable from =python3=:
+
+#+begin_src shell
+HERMES_PYTHON="$HOME/.hermes/hermes-agent/venv/bin/python" \
+  bash scripts/check-hermes.sh
+#+end_src
+
+The ESM test loads the uncompiled plugin through Node's VM module linker with mocked Hermes/React shims. It verifies contribution registration and the pure tree/filter/compact policies. Final validation should also load the plugin in Hermes Desktop against a real =ot= checkout.

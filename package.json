@@ -2,8 +2,8 @@
   "name": "@cormacc/agent-org-memory",
   "version": "0.1.0",
   "type": "module",
-  "description": "Org-memory task protocol skills (org-tasks, org-plan, org-jira) plus the pi extensions that implement them (tasks, jira, emacsclient).",
-  "keywords": ["pi-package", "org-mode", "task-management", "agent-skills"],
+  "description": "Org-memory task protocol skills plus native Pi and Hermes Desktop adapters.",
+  "keywords": ["pi-package", "hermes-agent", "org-mode", "task-management", "agent-skills"],
   "license": "MIT",
   "author": "Cormac Cannon",
   "repository": {
@@ -29,6 +29,7 @@
   "scripts": {
     "check": "bash scripts/check.sh",
     "check:extensions": "bash scripts/check-extensions.sh",
+    "check:hermes": "bash scripts/check-hermes.sh",
     "check:metadata": "tsx scripts/check-metadata.ts",
     "check:links": "tsx scripts/check-links.ts",
     "check:nix": "nix flake check --impure --no-build"
@@ -52,6 +53,14 @@
     "skills/org-tasks",
     "skills/org-plan",
     "skills/org-jira",
+    "hermes/org-tasks/desktop",
+    "hermes/org-tasks/plugin/plugin.yaml",
+    "hermes/org-tasks/plugin/__init__.py",
+    "hermes/org-tasks/plugin/dashboard/backend.py",
+    "hermes/org-tasks/plugin/dashboard/plugin_api.py",
+    "hermes/org-tasks/plugin/dashboard/manifest.json",
+    "hermes/org-tasks/plugin/dashboard/index.js",
+    "hermes/org-tasks/README.org",
     "README.md"
   ]
 }

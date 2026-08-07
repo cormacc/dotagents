@@ -15,6 +15,9 @@ npm --prefix pi/extensions/pi-clojure ci --ignore-scripts
 printf '\n==> active extension tests\n'
 npm run check:extensions
 
+printf '\n==> Hermes adapters\n'
+npm run check:hermes
+
 printf '\n==> Babashka task tooling\n'
 bb test
 

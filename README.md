@@ -1,8 +1,8 @@
 # dotagents
 
-Agent skills, pi extensions, prompts, custom subagents, and packaging metadata used by multiple coding harnesses. The repository is both an editable source tree and the source of the narrower **`@cormacc/agent-org-memory`** pi package.
+Agent skills, Pi extensions, Hermes Desktop plugins, prompts, custom subagents, and packaging metadata used by multiple coding harnesses. The repository is both an editable source tree and the source of the narrower **`@cormacc/agent-org-memory`** package.
 
-The package bundle contains the org-mode task-memory protocol (`org-tasks`, `org-plan`, `org-jira`) and its pi implementations (`tasks`, `jira`, `emacsclient`). Everything else remains available through the source/submodule routes described below, not through that package slice.
+The package bundle contains the org-mode task-memory protocol (`org-tasks`, `org-plan`, `org-jira`), its Pi implementations (`tasks`, `jira`, `emacsclient`), and its native Hermes Desktop adapter. Everything else remains available through the source/submodule routes described below, not through that package slice.
 
 ## Repository layout
 
@@ -18,6 +18,7 @@ dotagents/
 │   └── herdr-orch/subagents/ # packaged Herdr persona defaults
 ├── prompts/init.md           # tracked prompt template
 ├── emacs/                    # native org-mode protocol companion
+├── hermes/org-tasks/         # native Desktop renderer + authenticated backend
 ├── design/log/               # durable change-records
 ├── mcp.json                  # tracked generic MCP server configuration
 ├── dirge/                    # Dirge config and prompt set
@@ -48,12 +49,13 @@ npx skills add cormacc/dotagents --skill org-tasks --agent claude-code
 
 `~/.agents/skills/` is a cross-agent convention used by this setup. Pi also discovers it. Pi-specific skills under `pi/skills/` assume matching pi extensions and are not part of the generic skill route.
 
-### Org-memory pi package
+### Org-memory package
 
-The root `package.json` exposes exactly three pi extensions and three skills:
+The root `package.json` exposes exactly three Pi extensions, three skills, and the Hermes adapter:
 
 - `pi/extensions/{tasks,jira,emacsclient}`
 - `skills/{org-tasks,org-plan,org-jira}`
+- `hermes/org-tasks/{desktop,plugin}`
 
 Install from git or a checkout:
 
@@ -62,9 +64,9 @@ pi install git:github.com/cormacc/dotagents
 pi install /absolute/path/to/dotagents
 ```
 
-The npm name is reserved but not currently published. The package route does **not** install custom agents, prompts, `pi/skills`, `pi/settings.json`, `mcp.json`, Dirge files, `ot` as a shell command, or unrelated extensions. Package-only users who need the CLI must install `ot` separately (for example through `bbin`) and must install any omitted extension/runtime explicitly.
+The npm name is reserved but not currently published. The package route does **not** activate the Hermes plugin, configure task roots, install custom agents, prompts, `pi/skills`, `pi/settings.json`, `mcp.json`, Dirge files, `ot` as a shell command, or unrelated extensions. Package-only users must install `ot` separately (for example through `bbin`) and install/link the two Hermes artifacts as documented in [`hermes/org-tasks/README.org`](hermes/org-tasks/README.org).
 
-The npm `files` allowlist includes the selected source directories. Pi loads only manifest-declared entry points. The Nix derivation applies an additional package-slice filter that removes co-located `*.test.ts`, `test.sh`, and `default.nix`; do not generalize that test-exclusion claim to every install route or every test asset.
+The npm `files` allowlist includes the selected source directories. Pi loads only manifest-declared entry points. The Nix derivation applies an additional package-slice filter that removes co-located `*.test.ts`, `test_*.py`, `*.mjs`, `test.sh`, and `default.nix`; do not generalize that test-exclusion claim to every install route or every test asset.
 
 Pi records package installs in settings. Existing unpinned git checkouts advance when `pi update --extensions` or `pi update --all` runs; startup only reinstalls missing packages. A configured tag/commit remains pinned until the install spec is changed.
 
@@ -124,7 +126,7 @@ Install declared validation dependencies and run the single root check:
 npm run check
 ```
 
-The command uses the tracked locks (`npm ci`), runs every active extension test runner, the Babashka task suite, subagent-definition frontmatter validation, skill metadata/inventory and GitLab routing checks, active relative-link and command/tool collision checks, clean skill-creator validation/packaging, and `nix flake check --impure --no-build` for the native system.
+The command uses the tracked locks (`npm ci`), runs every active extension test runner, the Hermes org-tasks adapter tests, the Babashka task suite, subagent-definition frontmatter validation, skill metadata/inventory and GitLab routing checks, active relative-link and command/tool collision checks, clean skill-creator validation/packaging, and `nix flake check --impure --no-build` for the native system.
 
 It requires Node/npm, `bb`, Python 3 with venv support, Nix, Emacs, pi on `PATH`, and network access for clean npm/Python dependency installs.
 

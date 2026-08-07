@@ -1,0 +1,4 @@
+name: org-tasks
+version: "0.1.0"
+description: "Hermes Desktop bridge for the org-tasks/v1 task protocol."
+author: "Cormac Cannon"
