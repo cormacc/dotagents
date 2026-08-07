@@ -30,6 +30,8 @@ Errors use:
 
 Field-level examples live in `scripts/docs/contract.md`.
 
+The envelope is shared; the `result` payload is per command, so never infer one command's shape from another's. `show`/`selected`/`status` return a task object under `result.task`, while `create` returns a *locator* -- `{"id", "file", "line", "sectionCreated"}` -- with no task object at all. Two consequences for scripted callers: reading `result.task` from a `create` response raises rather than returning nil, and that raised parse error says nothing about whether the mutation happened. It did. Re-running the command on a parse failure creates a duplicate, and a duplicate top-level task cannot be withdrawn with `ot remove` (which refuses protocol roots) -- it needs `ot status <id> CANCELLED` plus `ot archive <id> --yes`.
+
 ## Common commands
 
 ```shell

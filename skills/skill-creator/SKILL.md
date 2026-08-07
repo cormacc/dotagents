@@ -94,6 +94,15 @@ relying on heavy-handed MUSTs — modern agents have good theory of mind and
 respond to reasoning more reliably than to rigid rules. Drafting once and
 re-reading with fresh eyes catches a lot.
 
+Be most ruthless with prose that explains a *non*-decision — a choice the
+reader no longer makes, or a mistake the design has made impossible. It does
+not merely cost tokens: it signals that a decision is live, and invites the
+reader to verify it. Observed cost: a 159-word passage explaining that one
+property was *not* selectable at call time led an agent to spend five tool
+calls re-deriving that rule — having implemented it itself an hour earlier.
+State such a rule imperatively in a line or two and move the rationale to a
+reference or contract that is read only when someone is changing it.
+
 Define output formats by example:
 
 ```markdown

@@ -120,39 +120,6 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 :END:
 #+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
 
-** STARTED Consider an append-only publish model with a parent read cursor :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 43e7c65c-2682-40fc-8ad1-170a794b0c2a
-:CREATED: [2026-08-07 Fri 13:14]
-:STARTED: [2026-08-07 Fri 18:47]
-:END:
-:LOGBOOK:
-- Created [2026-08-07 Fri 13:14]
-- State "STARTED" from "TODO" [2026-08-07 Fri 18:47]
-:END:
-#+IMPORT: [[plan:2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org]]
-Proposal: replace one-shot publish with an append-only result stream plus a parent-side read cursor. Flow becomes spawn -> prompt -> child publishes -> parent consumes latest and advances its cursor -> parent closes OR re-prompts. A variant lets the child keep publishing without a new prompt, making it a monitor.
-
-Closer to what exists than it first appears. Rounds are already append-only at the *entry* level: `continue` allocates a fresh task, fresh RESULT path, and a new ledger entry carrying `:continues <prior-task>`. The read cursor also exists in weaker form as `:captured-at` per entry, with `collect --any` scanning for uncaptured ones -- a boolean rather than an index, but the same shape. Ephemeral-or-retained is likewise already the parent's per-round decision (`close` vs `continue`).
-
-What is genuinely new is the child publishing again *without* the parent issuing a round. That is impossible today and is the whole value of the proposal.
-
-What it buys:
-- Monitor/watcher children, which cannot exist under one-shot publish.
-- Incremental reporting that is a real result, rather than `progress` -- deliberately weak: one latest snapshot, throttled, explicitly never a completion signal.
-- Correct `:child-session` by construction. Each append carries the session observed at publish time, so transcript history is inherent rather than backfilled. This dissolves `ecb85350-5715-4e0b-a454-4ed2fa95703a` rather than working around it.
-
-What it must not lose:
-- **Mechanical terminality.** One-shot publish is load-bearing: a validated RESULT is final for its round and cannot be retracted or overwritten. Appends must keep `COMPLETE`/`FAILED`/`BLOCKED` terminal and add a distinct non-terminal status, or "is it done?" degrades into a parent judgement -- the one guarantee phase 1 exists to provide. `progress` then naturally becomes the non-terminal append, which is a simplification.
-- **`continue`'s preconditions**, which are all expressed over round identity: prior round captured with a validated terminal envelope, no other round open, newest round, live child-and-pane match in `idle`/`done`. Under one entry per child with a cursor, every one needs re-expressing. This is a migration of the machinery phase 1 just stabilised, not an additive change.
-- **The settle assumption.** `continue` requires `idle`/`done` and the advisory parent push gates on a settled parent, but a monitor is never settled. Monitor mode is therefore a distinct lifecycle -- parent reads while child runs, closure becomes a stop signal -- not a free consequence of the append log. Design it as its own mode.
-
-Sequencing: this rewrites the completion contract and wants its own change-record, opened after `4957d0e5-5bda-4532-aa20-631fbde1983b` closes. Shape `ecb85350` so it does not foreclose this -- recording session observations as an ordered append is a miniature of the same idea, so they align rather than compete.
-
-Caveat on this analysis: `continue`'s guards were assessed from `contract.md` and code read during the originating session. A real migration design needs a deliberate pass over `newest-rounds`, `any-candidates`, and the close/prune/compact guards, which all key on entry identity; those have not been audited for cursor compatibility and that gap should not be inherited as settled.
-
-Related: the sibling exploration on leveraging pi `/fork` for subagents -- both concern how flexible a spawned child's lifecycle should be.
-
 * Improvements
 
 ** TODO [#B] Evaluate whether herdr-orch could/should leverage ai-behaviors for composable subagent behaviour...
@@ -570,3 +537,28 @@ Origin:
 
 Evidence:
 Closing summary asserted a namespace still hard-coded a parameter it had resolved at call sites, which the refactor completed minutes earlier had removed; user challenged and it was retracted. Same session also misattributed a change-record edit to the user based on an Emacs lock plus timing rather than checking.
+
+** TODO org-tasks: ot create --parent cannot target a change-record plan task :skill:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: 009c6056-684a-43c8-b1d7-21ea939d7396
+:CREATED: [2026-08-08 Sat 00:14]
+:END:
+:LOGBOOK:
+- Created [2026-08-08 Sat 00:14]
+:END:
+`ot create --parent <id>` does not resolve tasks that live inside an `#+IMPORT:`-linked change-record, though `ot show`, `ot status`, and the other mutators do.
+
+Measured: `ot create "probe child" --parent 6eb0f653 --format json` returns `{"code": "unknown-task", "message": "Parent task not found: 6eb0f653", "details": {"reason": "parent-not-found"}}`, while `ot show 6eb0f653` and `ot status 6eb0f653 DONE` both resolve the same id inside `design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org`.
+
+Consequence: new plan-only tasks cannot be created under a record's `* Plan` with the guaranteed CLI, so they have to be hand-authored with `ot uuid` plus a manual heading. `org-plan` § "Plan task metadata and status" currently says fresh plan-only tasks get UUIDs via `ot uuid` or `ot create`, which reads as though either works.
+
+Two candidate resolutions, needing a judgement this task should make rather than assume:
+- Extend `create --parent` (and `--after`) to resolve imported plan files, matching the mutator set documented in `org-tasks` § Compatibility policy. This is the consistent option but widens which file `create` may write.
+- Keep `create` scoped to `TASKS.org` deliberately and state the limitation in both `org-plan` and `references/ot-cli.md`, so the hand-authored route is the documented one.
+
+Raised as a `PROCESS` candidate by a planner subagent during the herdr-orch stream-model work; the parent probed it and found the CLI inconsistency above, which is broader than the documentation gap the child reported.
+
+Origin:
+- cwd: /Users/cormacc/dotfiles/agents
+- git: cormacc/dotagents @ main
+- sender: agent

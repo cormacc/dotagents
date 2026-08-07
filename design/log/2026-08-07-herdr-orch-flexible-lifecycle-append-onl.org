@@ -1,6 +1,6 @@
 #+TITLE: herdr-orch: Flexible lifecycle -- append-only publish stream per round
 #+DATE: 2026-08-07 Fri
-#+PARENT: [[task:43e7c65c-2682-40fc-8ad1-170a794b0c2a][herdr-orch: Flexible lifecycle -  append-only publish model with a parent read cursor]]
+#+PARENT: [[archive:43e7c65c-2682-40fc-8ad1-170a794b0c2a][herdr-orch: Flexible lifecycle -  append-only publish model with a parent read cursor]]
 #+STATUS: Accepted
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
 #+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
@@ -36,28 +36,28 @@ Replace the one-shot publish with an append-only stream of immutable result item
 ** Acceptance
 
 *** Core functionality
-- [ ] A round accepts multiple published items; each is its own immutable one-shot file via `Files.createLink`, and no verb overwrites or deletes one.
-- [ ] `STATUS: WAITING` validates as non-terminal; `COMPLETE`/`FAILED`/`BLOCKED` remain the only terminal statuses.
-- [ ] `publish` refuses a new item once a validated terminal item exists for the round.
-- [ ] `publish` refuses items on a round carrying `:closed-at`.
-- [ ] `publish` refuses items on a round superseded by a newer round for the same child.
-- [ ] `collect` returns the oldest unconsumed item and records per-item capture state on the entry.
-- [ ] `collect --any` candidacy is "round with unconsumed items"; the `failed` exclusion is preserved.
-- [ ] `run --wait` and `collect --wait` return on the first unconsumed item, terminal or not.
-- [ ] A capture result states terminality explicitly, so a WAITING capture is unambiguously non-final.
-- [ ] `close` and `continue` require every published item captured, plus the unchanged ownership/newest-round/liveness/settle guards.
-- [ ] A round whose only item is terminal behaves as today across `run`/`collect`/`close`/`continue`/`prune`/`compact`.
-- [ ] `oh task progress` is removed: verb, `:progress` ledger field, composed-prompt clause, contract.md § Progress, SKILL.md references.
-- [ ] The renamed publish throttle applies to WAITING items only; a terminal item is never throttled.
-- [ ] A WAITING publish emits the operator toast only -- no advisory parent push; terminal publish side-effects are unchanged.
-- [ ] Existing personas and the manual-fallback publish need no change: a single terminal envelope with no `WAITING` anywhere remains fully valid.
+- [X] A round accepts multiple published items; each is its own immutable one-shot file via `Files.createLink`, and no verb overwrites or deletes one.
+- [X] `STATUS: WAITING` validates as non-terminal; `COMPLETE`/`FAILED`/`BLOCKED` remain the only terminal statuses.
+- [X] `publish` refuses a new item once a validated terminal item exists for the round.
+- [X] `publish` refuses items on a round carrying `:closed-at`.
+- [X] `publish` refuses items on a round superseded by a newer round for the same child.
+- [X] `collect` returns the oldest unconsumed item and records per-item capture state on the entry.
+- [X] `collect --any` splits capture candidacy ("round with unconsumed items") from wait candidacy (a live round that has published nothing is still polled), so `--any --wait` keeps blocking until a child publishes; the `failed` exclusion is preserved. Amended during implementation -- the original single-noun wording was read as governing both, and shipped a regression that stopped fan-in waiting.
+- [X] `run --wait` and `collect --wait` return on the first unconsumed item, terminal or not.
+- [X] A capture result states terminality explicitly, so a WAITING capture is unambiguously non-final.
+- [X] `close` and `continue` require every published item captured, plus the unchanged ownership/newest-round/liveness/settle guards.
+- [X] A round whose only item is terminal behaves as today across `run`/`collect`/`close`/`continue`/`prune`/`compact`.
+- [X] `oh task progress` is removed: verb, `:progress` ledger field, composed-prompt clause, contract.md § Progress, SKILL.md references.
+- [X] The renamed publish throttle applies to WAITING items only; a terminal item is never throttled.
+- [X] A WAITING publish emits the operator toast only -- no advisory parent push; terminal publish side-effects are unchanged.
+- [X] Existing personas and the manual-fallback publish need no change: a single terminal envelope with no `WAITING` anywhere remains fully valid.
 
 *** Edge cases
-- [ ] An item failing validation records `invalid` but does not seal the stream; a subsequent valid item captures normally.
-- [ ] The publish discharge guard treats an unsealed live child round as open: a delegating parent cannot publish past its own monitor.
-- [ ] `compact` drops raw envelope text for every item of the round, not only the newest.
-- [ ] `prune`'s staleness proof generalises to "no items on disk".
-- [ ] A pre-change ledger entry (single `RESULT`, no item records) reads correctly as a stream of length 1.
+- [X] An item failing validation records `invalid` but does not seal the stream; a subsequent valid item captures normally.
+- [X] The publish discharge guard treats an unsealed live child round as open: a delegating parent cannot publish past its own monitor.
+- [X] `compact` drops raw envelope text for every item of the round, not only the newest.
+- [X] `prune`'s staleness proof generalises to "no items on disk".
+- [X] A pre-change ledger entry (single `RESULT`, no item records) reads correctly as a stream of length 1.
 
 *** Anti-criteria
 - Must not: allow any verb or status to retract, replace, or reopen a validated terminal item.
@@ -80,6 +80,16 @@ Replace the one-shot publish with an append-only stream of immutable result item
 - Ledger head stays stable :: `:status`/`:envelope` keep reflecting the newest captured item (the `record-session!` newest-under-stable-key precedent), with per-item records beside them, so existing readers (`status`, `list`, resume tooling) keep resolving through the same keys.
 - Blocking waits return on the first unconsumed item :: one primitive, no policy in the tool; an early WAITING return is the parent's cue that it spawned a streaming child.
 - WAITING side-effects are toast-only and throttled :: a chatty monitor must not prompt-spam the parent agent; the parent polls or collects when it cares. Terminal side-effects (toast + advisory push under non-blocking) are unchanged.
+
+** Shipped
+- MODIFIED `scripts/docs/contract.md` :: § Ledger and completion rewritten around item streams, sealing, and the refusal rules; § Progress deleted; § Fan-in, § Close, § Continue, § Retention updated.
+- MODIFIED `SKILL.md`, `scripts/README.md`, `README.org`, and the `worker`/`planner` personas :: stream model, the WAITING reporting convention, and "validated terminal result" wherever the wording denoted completion.
+- ADDED `ORCH_WAITING_INTERVAL_MIN_MS` and `ORCH_MAX_STREAM_ITEMS`; REMOVED `ORCH_PROGRESS_INTERVAL_MS`.
+- REMOVED `oh task progress` and the `:progress` ledger field, with no alias or shim.
+- Delivered in commit 4ad5c99. The documentation set was contracted alongside the rewrite rather than after it: contract.md fell from 13433 to 7532 words, SKILL.md from 3433 to 2966.
+
+** Follow-ups
+- `b96cb5da` -- serialise `publish` against `close`/`continue`. Carries the accepted race below.
 
 ** Risks
 - A busy monitor is unclosable until it settles: `close` still requires `idle`/`done`, so a child mid-event-loop is `retained`. Accepted -- monitors are a low-priority corner; the remedy is prompt-a-stop then close.

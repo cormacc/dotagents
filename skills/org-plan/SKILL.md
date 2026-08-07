@@ -255,6 +255,7 @@ Before committing a criterion, scan it:
 - Contains "and" / "with" / "including"? → split into two.
 - Can part A pass while part B fails? → separate them.
 - Contains "all" / "every" / "complete"? → enumerate what "all" means.
+- Names a *set* ("candidates", "members", "the sealed items")? → say which operation it scopes. A single noun that governs two consumers is the criterion an implementer will collapse into one: "candidacy is rounds with unconsumed items" was read as governing both what may be captured *and* what is worth waiting for, and the resulting implementation stopped waiting entirely. Where one word could govern two behaviours, write both or split the criterion.
 
 Splitting acts on criteria, not on edit sites: work that must edit the same function or form belongs in one task even when its criteria are separately observable, since separate tasks cannot then be executed concurrently.
 
