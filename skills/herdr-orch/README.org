@@ -7,7 +7,7 @@ Where things live:
 | This file | What the skill is, how to configure it, and why it is built this way |
 | [[file:SKILL.md][SKILL.md]] | The delegation, trust, and pane-safety policy an agent loads at runtime |
 | [[file:scripts/README.md][scripts/README.md]] | CLI invocation, tests, and smoke entry points |
-| [[file:scripts/docs/contract.md][scripts/docs/contract.md]] | Every mechanical contract: CLI, JSON, environment, ledger, envelope, model resolution, retro/spawn gating, placement, fan-in, pruning, progress, parent push, artifact links, labels, and geometry |
+| [[file:scripts/docs/contract.md][scripts/docs/contract.md]] | Every mechanical contract: CLI, JSON, environment, ledger, envelope, model resolution, retro/spawn gating, placement, fan-in, pruning, append-only publishing, parent push, artifact links, labels, and geometry |
 
 * Table of Contents                                       :TOC_1_gh:noexport:
 - [[#what-is-this][What is this?]]
@@ -103,13 +103,13 @@ A weight name is an =:aliases= key, never a =:models= key. The same key in both 
 A home override pinning the =heavy= tier to a specific Claude release, making claude-kind children usable unattended, and giving every child its own tab:
 
 #+begin_src clojure
-  {:aliases  {"heavy" "anthropic/claude-fable-5-20260714"}   ; one line retargets the tier
-   :models   {"anthropic/claude-fable-5-20260714"            ; a new canonical ID needs a row
+  {:aliases  {"heavy" "anthropic/claude-fable-5-20260714"}
+   :models   {"anthropic/claude-fable-5-20260714"
               {:claude "claude-fable-5-20260714"             ; pinned, not the floating alias
                :codex "gpt-5.6-sol"}}                        ; cross-provider equivalent
    ;; Override the default permissions for more autonomous operation
    ;; We intentionally don't do this by default - it should be opt in
-   :harnesses {:claude {:model-flag "--model"                ; mandatory even when unchanged
+   :harnesses {:claude {:model-flag "--model"
                         :extra-args ["--permission-mode" "auto"]}
                :codex {:model-flag "--model"
                         :extra-args ["--ask-for-approval" "never"
@@ -144,7 +144,7 @@ Upstream support is required at *both* ends of a delegation, which is stricter t
 - *As a child*, the kind must be startable: =oh= spawns via =herdr agent start --kind=, which not only launches the executable but verifies it was *detected* in the pane. A harness absent from the enum cannot be spawned however it is configured, and shadowing a supported kind's executable on =PATH= does not work -- detection fails rather than mis-registering.
 - *As the orchestrator*, the kind must be registered too. Every caller-identity command (=task run=/=start=, =collect --any=, =prune=) runs =agent get= on =$HERDR_PANE_ID=; from a pane hosting an unrecognised process that fails with =agent_not_found=, so an unsupported harness cannot drive delegation at all, only be driven.
 
-What survives without registration, but no longer without a Herdr call, is publication and capture. =task publish= resolves its own caller identity the same way (=parent-identity=, one =agent get=) for the publish-side guard that refuses a caller still owning an open child (=assert-children-discharged!=), and may additionally call =agent list= once when it does own outstanding children, to tell a released round from a blocking one. A pane hosting an unrecognised process makes that identity unresolvable, but publication does not fail on it the way =task run=/=start=, =collect --any=, and =prune= do: an unresolvable caller owns nothing, so the guard degrades open rather than refusing. =task collect <full-task-uuid>= reads the result file for its completion signal, and makes one =agent get= of its own (=caller-owns?=) plus, on an owned capture whose =:child-session= is still missing, a second on the child -- but every one of those is swallowed, so an unresolvable identity downgrades the capture to ="ownership": "foreign-parent-session"= rather than failing it, and no capture closes anything for any child. So an unsupported harness can be hand-launched into a =pane split --env …= pane and still return a valid, publishable result. Treat that as a manual fallback, not a supported path: such a child is invisible to =agent list=, so it is excluded from =collect --any= and, more dangerously, satisfies =prune='s staleness proof while still working.
+What survives without registration is publication and capture: =task publish= degrades open rather than refusing, because an unresolvable caller owns nothing, and =task collect <full-task-uuid>= swallows its own identity probes, downgrading the capture to ="ownership": "foreign-parent-session"= rather than failing it. [[file:scripts/docs/contract.md][contract.md]] § Preconditions enumerates which commands resolve caller identity and how each degrades. So an unsupported harness can be hand-launched into a =pane split --env …= pane and still return a valid, publishable result. Treat that as a manual fallback, not a supported path: such a child is invisible to =agent list=, so it is excluded from =collect --any= and, more dangerously, satisfies =prune='s staleness proof while still working.
 
 ** Child placement
 
@@ -285,7 +285,8 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 
 - The CLI implements one child per invocation for =run=/=start=; multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] -- no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself.
 - =task close= settle-waits (bounded by =ORCH_SETTLE_CLOSE_MS=, default 45 s) before its single close attempt, but a child that never settles inside that budget still retains its pane -- closure is one attempt, never retried. Capture never closes anything.
-- An orphaned child whose owning session has ended cannot be closed through the protocol at all: =close= refuses a foreign or unresolvable parent identity, and dead-owner recovery was deliberately not built, because absence from one =agent list= proves only current detachment and a weaker ownership test would let a live foreign caller close another parent's pane. Clear those panes manually.
+- =close= refuses a foreign or unresolvable parent identity, so an orphaned child whose owning session has ended is not closable through it. =oh task orphans= lists such panes and =oh task orphans --close= sweeps them, under the same live child+pane match =close= uses (see [[file:scripts/docs/contract.md][contract.md]] § Orphans); both forms are root-only and the operator supplies the judgement that a foreign session is a dead one.
+- The advisor-tier convention holds only for a worker that consults through =oh task run advisor=. A worker that hand-rolls a consult with raw =herdr agent start= silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so ledger consult counts and advisor costs are a floor rather than the truth.
 - =oh task prune= refuses any entry owned by another session, which is correct but leaves no command for the common case of a stale entry from an ended session; clear those by deleting the ledger JSON.
 - =HERDR_ORCH_BIN= intentionally carries the deployed absolute path rather than a canonical repository path; launcher-matrix coverage is its guard.
 

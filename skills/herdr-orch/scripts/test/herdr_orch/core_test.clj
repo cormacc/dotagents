@@ -437,6 +437,13 @@
   (is (= 1000 (cli/parse-poll-interval "abc")))
   (is (= 250 (cli/parse-poll-interval "250"))))
 
+(deftest waiting-interval-min-parsing
+  (is (= 250 (cli/parse-waiting-interval-min "250")))
+  (doseq [raw [nil "" "   " "soon" "0" "-5"]]
+    (is (= cli/default-waiting-interval-min-ms
+           (cli/parse-waiting-interval-min raw))
+        (pr-str raw))))
+
 (deftest findings-limit-boundary
   (let [ledger {:child "child" :task "task" :result "/tmp/result"}
         mk (fn [n] (core/envelope (assoc ledger :status "COMPLETE" :summary "s" :artifacts []
@@ -660,3 +667,52 @@
   (let [line "/tmp/a — b.md"]
     (is (= "/tmp/a" (core/artifact-path line)))
     (is (= "[/tmp/a](file:///tmp/a) — b.md" (core/artifact-link line)))))
+
+(defn- stream-entry [result]
+  {:child "child" :task "task" :result result})
+
+(deftest stream-state-contract
+  (let [dir (fs/create-temp-dir {:prefix "herdr-orch-stream-state-"})
+        result (str (fs/path dir "round.result"))
+        entry (stream-entry result)
+        item (fn [n status]
+               {:item n :result (ledger/item-path result n) :captured-at "2026-08-07T00:00:00Z"
+                :status status :envelope {:status status}})]
+    (testing "empty streams have no published or captured items and are unsealed"
+      (is (= {:published [] :captured [] :sealed? false} (cli/stream-state entry))))
+    (testing "a pre-change terminal entry with only the bare RESULT reads as one item"
+      (spit result "terminal")
+      (let [legacy (assoc entry :captured-at "2026-08-07T00:00:00Z" :status "COMPLETE"
+                          :envelope {:status "COMPLETE"})
+            state (cli/stream-state legacy)]
+        (is (= [1] (mapv :item (:published state))))
+        (is (= [1] (mapv :item (:captured state))))
+        (is (true? (:sealed? state)))))
+    (testing "WAITING followed by a terminal item retains both captures and seals mechanically"
+      (spit (ledger/item-path result 2) "terminal")
+      (let [state (cli/stream-state (assoc entry :items [(item 1 "WAITING") (item 2 "COMPLETE")]))]
+        (is (= [1 2] (mapv :item (:published state))))
+        (is (= [1 2] (mapv :item (:captured state))))
+        (is (true? (:sealed? state)))))
+    (testing "the ledger head stays on the newest captured item while item records retain both"
+      (let [captured (-> entry
+                         (cli/record-item-capture {:item 1 :result result} (dissoc (item 1 "WAITING") :item :result))
+                         (cli/record-item-capture {:item 2 :result (ledger/item-path result 2)} (dissoc (item 2 "COMPLETE") :item :result)))]
+        (is (= [1 2] (mapv :item (:items captured))))
+        (is (= "COMPLETE" (:status captured)))
+        (is (= "COMPLETE" (get-in captured [:envelope :status])))))
+    (testing "a malformed item is captured for audit but never seals"
+      (spit (ledger/item-path result 3) "not an envelope")
+      (is (thrown? Exception (core/validate-envelope entry (slurp (ledger/item-path result 3)))))
+      (let [state (cli/stream-state (assoc entry :items [(assoc (item 1 "invalid") :envelope nil)]))]
+        (is (= [1 2 3] (mapv :item (:published state))))
+        (is (= [1] (mapv :item (:captured state))))
+        (is (false? (:sealed? state)))))))
+
+(deftest waiting-status-is-valid-and-non-terminal
+  (let [ledger {:child "child" :task "task" :result "/tmp/result"}
+        text (core/envelope (assoc ledger :status "WAITING" :summary "still working" :artifacts [] :findings [] :next nil))]
+    (is (= "WAITING" (:status (core/validate-envelope ledger text))))
+    (is (false? (core/terminal-status? "WAITING")))
+    (doseq [status ["COMPLETE" "FAILED" "BLOCKED"]]
+      (is (true? (core/terminal-status? status)) status))))

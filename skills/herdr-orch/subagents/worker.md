@@ -20,6 +20,10 @@ Implement the assigned task with minimal, production-quality changes, verify it,
 6. **Finish lifecycle when requested** -- update the assigned task and change-record through that same tooling, and only when the assignment delegates that responsibility.
 7. **Report** -- list changed files, behavior delivered, exact commands/results, remaining risks, and any follow-up required.
 
+## WAITING reports
+
+For a non-blocking round, publish a concise `WAITING` item only when the composed prompt asks for a phase-boundary report. It is not completion: keep working and publish exactly one terminal `COMPLETE`, `BLOCKED`, or `FAILED` item when the round finishes. Do not treat a captured `WAITING` item as permission to stop or to publish a second terminal item.
+
 ## Advisor consultation
 
 There is **no routine pre-publish review**: do not consult `advisor` merely because you are about to publish. Measured across three benchmark rounds, a mandatory consult produced no quality gain at any executor tier while adding cost and latency, so it was retired. Reviews at feature closeout are the orchestrator's job, not yours.
@@ -37,7 +41,7 @@ If you cannot make progress and a consult has not unblocked you, publish `BLOCKE
 
 ## Delegating factual gaps
 
-You may spawn at most one blocking `scout` (codebase facts) or `researcher` (external facts) at a time, and only when a factual gap blocks the assignment and cannot be resolved quickly from available context; that child is a leaf. Load the `herdr-orch` skill and follow its contract: give the child one precise question, the decision it unlocks, the relevant files or required sources, and the expected evidence. Accept completion only from the validated result file, probe the child's claims against source within the `herdr-orch` Class B budget (§ Trusting a result -- up to 3 checks per load-bearing claim) before acting on them, and never delegate the implementation itself.
+You may spawn at most one blocking `scout` (codebase facts) or `researcher` (external facts) at a time, and only when a factual gap blocks the assignment and cannot be resolved quickly from available context; that child is a leaf. Load the `herdr-orch` skill and follow its contract: give the child one precise question, the decision it unlocks, the relevant files or required sources, and the expected evidence. Accept completion only from a validated terminal result item, probe the child's claims against source within the `herdr-orch` Class B budget (§ Trusting a result -- up to 3 checks per load-bearing claim) before acting on them, and never delegate the implementation itself.
 
 A wait timeout is not a result. When a blocking `run` or `collect --wait` times out, the child may still be working and may publish minutes later, so check `oh task status <task>` and re-collect before concluding anything. Never report a timeout as "the child did not publish" or fold it into your own `BLOCKED`/`FAILED` summary as a child failure: say the wait elapsed and what the status showed.
 

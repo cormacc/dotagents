@@ -1,14 +1,17 @@
 (ns herdr-orch.cli
   (:require [babashka.fs :as fs]
             [cheshire.core :as json]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [herdr-orch.core :as core]
             [herdr-orch.herdr :as herdr]
             [herdr-orch.ledger :as ledger])
-  (:import [java.nio.file Files FileAlreadyExistsException Paths]
+  (:import [java.io ByteArrayOutputStream]
+           [java.nio.charset StandardCharsets]
+           [java.nio.file Files FileAlreadyExistsException Paths]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task progress --summary TEXT [--task UUID]\n  oh task prune <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--focus/--no-focus overrides the configured :defaults :focus (default true) for that placement call; a root-level spawn focuses its new child by default, a below-root spawn never focuses regardless of the flag or config.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\nprogress stores one latest advisory snapshot for the injected child/task identity, throttled to ORCH_PROGRESS_INTERVAL_MS (default 60000 ms); it never signals completion.\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncontinue assigns a settled, captured child another round in its existing context: root-only, guarded by the same live child+pane match close uses, allocating a fresh task and result and writing a new ledger entry with :continues. --wait blocks like run; the default is non-blocking like start.\nharvest returns this session's PROCESS candidates from the ledger, deduplicated, with every child and task that raised each one; it is read-only and routes, persists, and acts on nothing.\ncompact retires bulk rather than entries: it drops the raw envelope text (a duplicate of the parsed fields and of the retained RESULT file) from a closed or terminal round the caller owns, keeping the task, child, :child-session, and artifact links a cited uuid resolves through. --closed sweeps the caller's own such rounds.\norphans lists, and under --close closes, captured rounds owned by a session other than this one, applying close's own live child+pane match; a foreign session is not a dead one, so the authority is the operator's and the list is the default. Root-only, like continue: a delegated child is refused before any listing or mutation, because every sibling and ancestor session looks equally foreign to it.\nclose is the only path that closes a *spawned* child's pane: no capture does, and the only other closure is spawn-failure cleanup taking a pane the child never worked in. It acts on a captured entry that is the newest round for its child, and only on a live observation matching that entry's child name and pane id in idle/done -- or, when the name has been released (a resumed process), a live pane whose recorded shell_pid still matches and whose foreground is not busy; --settled sweeps the caller's own captured children, newest round only, at most one attempt each. On a successful close by *root* it also returns focus to the caller's own pane (best-effort, never reported, never affects the outcome); a below-root close never moves focus. --settled and orphans --close do this once after the sweep, not once per child.\ncollect, status, close, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; no prefix is ever resolved.\ncollect, status, and list accept --format text for a compact line rendering, and emit the raw result envelope beside the parsed fields only under --raw.\ncollect --close captures and then closes in one call, under every close guard, reporting that outcome under :close without ever degrading the capture.\nOpaque assignment input is --task, --task-file, or stdin. Run `oh --help` for contract details.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--focus/--no-focus overrides the configured :defaults :focus (default true) for that placement call; a root-level spawn focuses its new child by default, a below-root spawn never focuses regardless of the flag or config.\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncontinue assigns a settled, captured child another round in its existing context: root-only, guarded by the same live child+pane match close uses, allocating a fresh task and result and writing a new ledger entry with :continues. --wait blocks like run; the default is non-blocking like start.\nharvest returns this session's PROCESS candidates from the ledger, deduplicated, with every child and task that raised each one; it is read-only and routes, persists, and acts on nothing.\ncompact retires bulk rather than entries: it drops the raw envelope text (a duplicate of the parsed fields and of the retained RESULT file) from a closed or terminal round the caller owns, keeping the task, child, :child-session, and artifact links a cited uuid resolves through. --closed sweeps the caller's own such rounds.\norphans lists, and under --close closes, captured rounds owned by a session other than this one, applying close's own live child+pane match; a foreign session is not a dead one, so the authority is the operator's and the list is the default. Root-only, like continue: a delegated child is refused before any listing or mutation, because every sibling and ancestor session looks equally foreign to it.\nclose is the only path that closes a *spawned* child's pane: no capture does, and the only other closure is spawn-failure cleanup taking a pane the child never worked in. It acts on a captured entry that is the newest round for its child, and only on a live observation matching that entry's child name and pane id in idle/done -- or, when the name has been released (a resumed process), a live pane whose recorded shell_pid still matches and whose foreground is not busy; --settled sweeps the caller's own captured children, newest round only, at most one attempt each. On a successful close by *root* it also returns focus to the caller's own pane (best-effort, never reported, never affects the outcome); a below-root close never moves focus. --settled and orphans --close do this once after the sweep, not once per child.\ncollect, status, close, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; no prefix is ever resolved.\ncollect, status, and list accept --format text for a compact line rendering, and emit the raw result envelope beside the parsed fields only under --raw.\ncollect --close captures and then closes in one call, under every close guard, reporting that outcome under :close without ever degrading the capture.\nOpaque assignment input is --task, --task-file, or stdin. Run `oh --help` for contract details.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -23,16 +26,31 @@
 (defn parse-notify-timeout [raw]
   (let [n (some-> raw str/trim not-empty parse-long)]
     (if (and n (pos? n)) n default-notify-timeout-ms)))
-;; Throttle floor for `progress --summary`; same non-positive/unparseable/blank ->
+;; Throttle floor for WAITING result items; same non-positive/unparseable/blank ->
 ;; default discipline as parse-poll-interval/parse-notify-timeout.
-(def default-progress-interval-ms 60000)
-(defn parse-progress-interval [raw]
+(def default-waiting-interval-min-ms 60000)
+(defn parse-waiting-interval-min [raw]
   (let [n (some-> raw str/trim not-empty parse-long)]
-    (if (and n (pos? n)) n default-progress-interval-ms)))
-(defn progress-interval-ms [] (parse-progress-interval (System/getenv "ORCH_PROGRESS_INTERVAL_MS")))
+    (if (and n (pos? n)) n default-waiting-interval-min-ms)))
+(defn waiting-interval-min-ms []
+  (parse-waiting-interval-min (System/getenv "ORCH_WAITING_INTERVAL_MIN_MS")))
+;; Each stream snapshot reads at most this many immutable item files and this many bytes per
+;; file. Over-limit streams refuse rather than treating an unseen terminal as unsealed.
+(def default-max-stream-items 1000)
+(defn parse-max-stream-items [raw]
+  (let [n (some-> raw str/trim not-empty parse-long)]
+    (if (and n (pos? n)) n default-max-stream-items)))
+(defn max-stream-items []
+  (parse-max-stream-items (System/getenv "ORCH_MAX_STREAM_ITEMS")))
+(def default-max-envelope-bytes 65536)
+(defn parse-max-envelope-bytes [raw]
+  (let [n (some-> raw str/trim not-empty parse-long)]
+    (if (and n (pos? n)) n default-max-envelope-bytes)))
+(defn max-envelope-bytes []
+  (parse-max-envelope-bytes (System/getenv "ORCH_MAX_ENVELOPE_BYTES")))
 ;; Bounds the settle wait `close` and `continue` make before reading liveness (see
 ;; `settle-and-list!`); same non-positive/unparseable/blank -> default discipline as
-;; parse-poll-interval/parse-notify-timeout/parse-progress-interval. Capture makes no such
+;; parse-poll-interval/parse-notify-timeout. Capture makes no such
 ;; wait at all any more, so this budget is spent only by a verb an operator invoked.
 ;; The default is deliberately larger than `default-notify-timeout-ms`: a non-blocking
 ;; child publishing while its parent sits inside a collect reads `working` for that entire
@@ -164,23 +182,20 @@
          "\nDo not choose a destination, load `self-improvement`, run `ot`, or edit any instruction file: the parent owns approval and persistence.")))
 ;; Advisory only, and only worth asking for when there is nobody blocking on this child
 ;; already: a `blocking` run's parent is already waiting and gets nothing extra to poll.
-;; `task` is supplied only for a continued round, whose injected `HERDR_ORCH_TASK` names an
-;; earlier round: the identity is written into the command rather than left to the child to
-;; work out. A spawn's environment is already correct, so it passes none.
-(defn progress-instruction
-  ([waiting-policy] (progress-instruction waiting-policy nil))
-  ([waiting-policy task]
-   (when (= waiting-policy "non-blocking")
-     (str "\nReport concise phase-boundary progress with `$HERDR_ORCH_BIN task progress"
-          (when task (str " --task " task))
-          " --summary \"...\"` at most once per ORCH_PROGRESS_INTERVAL_MS (default 60000 ms); never include draft findings or result content, and never treat it as completion."))))
+;; Every round's task is written into the command, including a spawn: a child cannot publish
+;; against a task it does not know, and a continued child still has its original task in env.
+(defn waiting-instruction [waiting-policy task]
+  (when (= waiting-policy "non-blocking")
+    (str "\nReport concise phase-boundary status with `$HERDR_ORCH_BIN task publish --task " task
+         " --status WAITING --summary \"...\"` at most once per ORCH_WAITING_INTERVAL_MIN_MS "
+         "(default 60000 ms); never include draft findings or terminal result content.")))
 (defn prompt-text [{:keys [spawns persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
   (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
        (delegation-guidance spawns) " Herdr assigned TASK=" task " and RESULT=" result ". "
        "When finished, publish exactly once with `$HERDR_ORCH_BIN task publish --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
        (retro-instruction retro-skill)
-       (progress-instruction waiting-policy)
+       (waiting-instruction waiting-policy task)
        (when prompt-extra (str "\nAdditional constraints: " prompt-extra))))
 ;; Kind is a deployment property: a persona declares `kind:` once, or the child inherits the
 ;; harness Herdr measured for the parent. `--kind` is refused rather than ignored, because
@@ -278,57 +293,155 @@
      :persona-path (str path) :kind kind :model model :model-canonical (core/canonical-model config model) :model-args (core/model-args config kind model) :placement placement :focus focus :retro (:retro retro) :retro-source (:retro-source retro)
      :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)
      :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)}))
-;; A published result is immutable, so a result that fails validation can never become
-;; valid. Record it as the non-final `invalid` status (pane retained, needs manual
-;; intervention) instead of throwing out of the wait loop and making the assignment
-;; permanently uncollectable.
-(defn capture! [entry]
-  (let [result (:result entry)]
-    (when (fs/exists? result)
-      (try
-        (let [parsed (core/validate-envelope entry (slurp result)) artifacts (:artifacts parsed)]
+;; A stream's item records are append-only by item identity. Pre-stream ledger entries retain
+;; their historical stable head only, so expose that head as item 1 while readers migrate; no
+;; ledger rewrite is needed just to read an old round.
+(defn captured-items [entry]
+  (if (contains? entry :items)
+    (vec (:items entry))
+    (cond-> []
+      (:captured-at entry)
+      (conj (select-keys (assoc entry :item 1) [:item :result :captured-at :status :envelope :artifacts :artifact-links :process-overflow :invalid-reason :invalid-data])))))
+
+;; This is the single stream predicate used by later capture and lifecycle operations: published
+;; items come from immutable files, captured items from the ledger, and only a validated terminal
+;; item seals the round. An invalid record carries no envelope and therefore can never seal it.
+;;
+;; Sealing is a property of the *published* stream, never of capture (closeout finding: a seal
+;; computed from captured items alone let a child publish WAITING past its own terminal item
+;; before the parent collected, so the ledger head read WAITING on a completed round). The seal
+;; depends only on the immutable envelope and its ledger identity; artifact existence is mutable
+;; and belongs solely to capture-time validation. An unreadable item is indeterminate rather than
+;; unsealed, so publication refuses instead of reopening a round on an IO failure.
+(defn- read-envelope! [{:keys [item result]}]
+  (let [limit (max-envelope-bytes)
+        bytes (try
+                (with-open [input (io/input-stream result)]
+                  (let [output (ByteArrayOutputStream.)
+                        buffer (byte-array 8192)]
+                    (loop [read-total 0]
+                      (let [remaining (inc (- limit read-total))
+                            read (.read input buffer 0 (int (min (alength buffer) remaining)))]
+                        (cond
+                          (= -1 read) (.toByteArray output)
+                          (< limit (+ read-total read))
+                          (fail "result envelope exceeds byte limit" {:item item :result result :limit limit})
+                          :else (do (.write output buffer 0 read)
+                                    (recur (+ read-total read))))))))
+                (catch Exception e
+                  (fail "result item cannot be read" {:item item :result result}))) ]
+    (String. ^bytes bytes StandardCharsets/UTF_8)))
+(defn- validated-item [entry item]
+  ;; An unreadable item is distinct from an immutable malformed envelope: capture records the
+  ;; former as invalid, while publish refuses it rather than treating it as an unsealed stream.
+  (try
+    (let [text (read-envelope! item)]
+      (try {:parsed (core/validate-envelope entry text)}
+           (catch Exception e {:error e})))
+    (catch Exception e {:read-error e})))
+(defn- bounded-result-items [result]
+  (let [items (ledger/result-items result)
+        limit (max-stream-items)]
+    (when (< limit (count items))
+      (fail "result stream exceeds item limit" {:result result :limit limit :count (count items)}))
+    items))
+(defn- stream-state* [entry]
+  (let [published (bounded-result-items (:result entry))
+        captured (captured-items entry)
+        consumed (into #{} (map :item) captured)
+        validations (into {} (for [item published :when (not (contains? consumed (:item item)))]
+                               [(:item item) (validated-item entry item)]))]
+    {:published published
+     :captured captured
+     :validations validations
+     :read-errors (->> validations
+                       (keep (fn [[item validation]]
+                               (when-let [error (:read-error validation)]
+                                 {:item item :error error})))
+                       vec)
+     :sealed? (boolean (or (some #(and (map? (:envelope %))
+                                       (core/terminal-status? (get-in % [:envelope :status])))
+                                 captured)
+                           (some #(some-> (get-in validations [(:item %) :parsed :status])
+                                          core/terminal-status?)
+                                 published)))}))
+(defn stream-state [entry]
+  (select-keys (stream-state* entry) [:published :captured :sealed?]))
+
+;; Capture means the parent has consumed at least one immutable item and every item currently
+;; on disk has a capture record. The non-empty capture requirement preserves the old refusal
+;; for a round that has published nothing, while legacy captured entries remain readable even
+;; if their scratch RESULT has since disappeared.
+(defn stream-captured? [{:keys [published captured]}]
+  (let [consumed (into #{} (map :item) captured)]
+    (and (seq captured)
+         (every? #(contains? consumed (:item %)) published))))
+
+(defn- unconsumed-stream-items [{:keys [published captured]}]
+  (let [consumed (into #{} (map :item) captured)]
+    (filterv #(not (contains? consumed (:item %))) published)))
+(defn unconsumed-items [entry]
+  (unconsumed-stream-items (stream-state entry)))
+
+;; Keep status/envelope as the stable latest-capture head while preserving an item-level audit
+;; record beside it. Re-capturing an existing item replaces only that item's record; a newer
+;; capture remains the head, mirroring `record-session!`'s stable-key/history approach without
+;; making existing readers discover a new key.
+(defn record-item-capture [entry item capture]
+  (let [record (cond-> (merge capture item)
+                 (:compacted-at entry) (update :envelope #(some-> % (dissoc :text))))
+        records (conj (vec (remove #(= (:item item) (:item %)) (captured-items entry))) record)
+        head (last records)
+        stable-keys [:status :captured-at :envelope :artifacts :artifact-links :process-overflow :invalid-reason :invalid-data]]
+    (-> (apply dissoc entry stable-keys)
+        (assoc :items records)
+        (merge (select-keys head stable-keys)))))
+
+(defn record-item-capture! [task item capture]
+  (ledger/update! task record-item-capture item capture))
+
+;; A published item is immutable, so a result that fails validation cannot become valid.
+;; Recording it as non-final `invalid` consumes that item without sealing the stream: the
+;; child can publish a corrected successor and the next collect will capture that item.
+(defn capture!
+  ([entry] (capture! entry (stream-state* entry)))
+  ([entry state]
+   (when-let [item (first (unconsumed-stream-items state))]
+     (let [result (:result item)
+           captured (fn [parsed] (assoc parsed :item (:item item) :item-result result
+                                        :terminal? (core/terminal-status? (:status parsed))))]
+       (try
+         (let [parsed (or (get-in state [:validations (:item item) :parsed])
+                          (or (get-in state [:validations (:item item) :error])
+                              (get-in state [:validations (:item item) :read-error])))
+               artifacts (:artifacts parsed)]
           (doseq [artifact artifacts]
             (let [path (core/artifact-path artifact)]
-              (when-not (fs/exists? path) (fail "result artifact does not exist" {:artifact artifact :path path}))))
+              (when-not (fs/exists? path)
+                (fail "result artifact does not exist" {:artifact artifact :path path}))))
           ;; Rendered only after every artifact passed the existence check above, so a
           ;; collected link is evidence in a way a publish-time advisory link is not. The
           ;; parent surfaces these to the user once the child pane is gone. `cond->`, not
           ;; an empty vector: absent is not the same claim as validated-empty.
           (let [links (when (seq artifacts) (mapv core/artifact-link artifacts))]
             ;; An over-length PROCESS section is degraded, not fatal: record the fact on the
-            ;; entry and keep the envelope's own status.
-            ;;
-            ;; Closeout fix (P1): capture is not memoised (`collect --raw` on a closed round
-            ;; is exactly the documented inspection path, and every wait-loop tick re-collects
-            ;; too), so an unconditional `:envelope parsed` would restore the raw `:text` blob
-            ;; `compact` already dropped -- permanently, since `compactable?` gates on
-            ;; `(nil? :compacted-at)`, which stays *set* the whole time, so `compact` then
-            ;; refuses to run again on an entry that is once more full of the bulk it retired.
-            ;; Preserving compaction here (over making `compact` repeat-safe) keeps the
-            ;; invariant a single place: once compacted, an entry's `:envelope` never grows
-            ;; `:text` back, under any verb, forever -- rather than depending on every future
-            ;; caller of a compacted round to notice and re-run `compact`. Every other parsed
-            ;; field (status, summary, findings, artifacts, links, process) still refreshes
-            ;; normally: only the redundant raw-text duplicate stays retired. The value
-            ;; returned to *this* caller is unaffected -- `--raw` on this very call still
-            ;; shows the text freshly parsed from the still-intact `RESULT` file.
-            (ledger/update! (:task entry)
-                            (fn [current]
-                              (cond-> (assoc current :status (:status parsed) :captured-at (now)
-                                             :envelope (if (:compacted-at current) (dissoc parsed :text) parsed)
-                                             :artifacts artifacts)
-                                links (assoc :artifact-links links)
-                                (:process-overflow parsed) (assoc :process-overflow true))))
-            (cond-> parsed links (assoc :artifact-links links))))
+            ;; entry and keep the envelope's own status. A compacted entry keeps its raw text
+            ;; retired, while this capture still returns the freshly parsed item text.
+            (record-item-capture! (:task entry) item
+                                  (cond-> {:status (:status parsed) :captured-at (now)
+                                           :envelope parsed :artifacts artifacts}
+                                    links (assoc :artifact-links links)
+                                    (:process-overflow parsed) (assoc :process-overflow true)))
+            (captured (cond-> parsed links (assoc :artifact-links links)))))
         (catch Exception e
-          ;; `ledger/update!` rewrites the whole entry, so an earlier successful capture's
-          ;; `:artifact-links` must be actively dropped: a re-collect whose artifact has
-          ;; since been deleted is `invalid`, and an `invalid` entry may never advertise
-          ;; existence-validated links.
-          (ledger/update! (:task entry) #(-> (dissoc % :artifact-links)
-                                             (assoc :status "invalid" :captured-at (now) :invalid-reason (.getMessage e) :invalid-data (ex-data e))))
-          {:status "invalid" :task (:task entry) :pane-id (:pane-id entry) :result result
-           :reason (.getMessage e) :detail (ex-data e) :pane-retained true})))))
+          ;; The stable head follows this invalid item, so stale artifact links or an
+          ;; envelope from an earlier item never masquerade as this item's validation.
+          (record-item-capture! (:task entry) item
+                                {:status "invalid" :captured-at (now)
+                                 :invalid-reason (.getMessage e) :invalid-data (ex-data e)})
+           {:status "invalid" :task (:task entry) :pane-id (:pane-id entry) :item (:item item)
+            :item-result result :terminal? false :reason (.getMessage e) :detail (ex-data e)
+            :pane-retained true}))))))
 ;; The child's transcript reference is only reachable while Herdr still knows the agent,
 ;; so it is recorded opportunistically at every point the CLI already holds an
 ;; `AgentInfo`. The whole `agent_session` map is stored because its `value` is
@@ -447,14 +560,16 @@
     (loop []
       (if-let [parsed (capture! entry)] (finish-capture! entry parsed owned?)
           (let [remaining (- deadline (System/currentTimeMillis))]
-            (if (<= remaining 0) {:status "pending" :reason "timeout" :task (:task entry) :pane-id (:pane-id entry)}
+            (if (<= remaining 0) {:status "pending" :terminal? false :reason "timeout"
+                                  :task (:task entry) :pane-id (:pane-id entry)}
                 (let [outcome (herdr/wait! (:child entry) remaining)
                       ;; The wait outcome already carries the AgentInfo: no extra Herdr call.
                       _ (record-session! (:task entry) (get-in outcome [:value :result :agent :agent_session]))
                       current (capture! entry)]
                   (if current (finish-capture! entry current owned?)
                       (if (and (:ok outcome) (= "blocked" (get-in outcome [:value :result :agent :agent_status])))
-                        {:status "blocked" :task (:task entry) :pane-id (:pane-id entry)}
+                        {:status "blocked" :terminal? false :task (:task entry)
+                         :pane-id (:pane-id entry)}
                         (let [remaining* (- deadline (System/currentTimeMillis))]
                           (when (pos? remaining*) (Thread/sleep (min (poll-interval-ms) remaining*)))
                           (recur)))))))))))
@@ -658,121 +773,121 @@
   (let [env #(System/getenv %)]
     {:child (or (env "HERDR_ORCH_CHILD") (fail "missing HERDR_ORCH_CHILD" {}))
      :task (or (one opts :task) (env "HERDR_ORCH_TASK") (fail "missing HERDR_ORCH_TASK" {}))}))
-;; A child continued into a new round whose environment still names an earlier round's task
-;; publishes into an existing RESULT. The remedy is mechanical and unambiguous exactly when
-;; one uncaptured entry names this child, so the failure names it -- but never resolves it,
-;; which would reintroduce the implicit re-targeting this design forbids.
-;; Defined with the ledger rules it shares with `close --settled` (`newest-rounds`), and
-;; forward-declared here for the same reason `prune!` forward-declares `live-agents`.
-(declare assert-children-discharged!)
-(defn- stale-identity-hint [child task]
+;; Forward declarations for the ledger rules `publish!` shares with `close --settled`
+;; (`newest-rounds`), for the same reason `prune!` forward-declares `live-agents`. The
+;; `stale-identity-hint` that lived here died with the one-shot publish: a stale identity now
+;; surfaces as the superseded-round refusal, which names the successor itself (`:newer-task`
+;; in `assert-publishable!`), so the hint's remedy is expressed by the refusal it precedes.
+(declare assert-children-discharged! newest-round)
+(defn- link-publication! [result item text]
+  (let [target (ledger/item-path result item)
+        temp (str target "." (UUID/randomUUID) ".tmp")]
+    (fs/create-dirs (fs/parent target))
+    (try
+      (spit temp text)
+      (Files/createLink (Paths/get target (make-array String 0))
+                        (Paths/get temp (make-array String 0)))
+      {:item item :result target}
+      (finally (fs/delete-if-exists temp)))))
+(defn- append-publication! [result text]
+  (let [items (bounded-result-items result)
+        limit (max-stream-items)]
+    (when (<= limit (count items))
+      (fail "result stream exceeds item limit" {:result result :limit limit :count (count items)}))
+    (loop [item (inc (or (some->> items (map :item) seq (apply max)) 0))]
+      (let [outcome (try {:published (link-publication! result item text)}
+                         (catch FileAlreadyExistsException _ {:exists true}))]
+        (if (:exists outcome) (recur (inc item)) (:published outcome))))))
+(defn- waiting-elapsed-ms [item]
   (try
-    (let [open (filterv #(and (= child (:child %)) (nil? (:captured-at %)) (not= task (:task %))) (ledger/entries))]
-      (when (= 1 (count open)) (str " Retry with `--task " (:task (first open)) "`.")))
+    (let [elapsed (- (System/currentTimeMillis)
+                     (.toMillis (fs/last-modified-time (:result item))))]
+      (when (<= 0 elapsed) elapsed))
     (catch Exception _ nil)))
-(defn publish! [opts]
+(defn- assert-publishable! [entry]
+  (when entry
+    (let [state (stream-state* entry)
+          newest (newest-round (ledger/entries) (:child entry))]
+      ;; Superseded wins over sealed: a stale identity's own round is usually sealed too
+      ;; (its terminal item is what allowed the continuation), and only the superseded
+      ;; refusal carries the actionable remedy -- retry with `--task <:newer-task>`.
+      (when (and newest (not= (:task entry) (:task newest)))
+        (fail "publish refused: round is superseded" {:task (:task entry) :newer-task (:task newest)}))
+      (when-let [{:keys [item error]} (first (:read-errors state))]
+        (fail "publish refused: result item cannot be read"
+              {:task (:task entry) :item item :cause (.getMessage error)}))
+      (when (:sealed? state)
+        (fail "publish refused: round is sealed" {:task (:task entry)}))
+      (when (:closed-at entry)
+        (fail "publish refused: round is closed" {:task (:task entry) :closed-at (:closed-at entry)}))
+      state)))
+(defn- throttled-waiting [entry status state]
+  (when (and entry (= "WAITING" status))
+    (let [previous (last (:published state))
+          elapsed (some-> previous waiting-elapsed-ms)
+          interval (waiting-interval-min-ms)]
+      (when (and elapsed (< elapsed interval))
+        {:status "throttled" :task (:task entry) :result (:result entry)
+         :previous-item (:item previous) :retry-after-ms (- interval elapsed)}))))
+;; Closeout restoration: the pre-stream publish raised a best-effort "Subagent publish failed"
+;; operator toast on every failed publication, and the stream rewrite dropped it without a
+;; recorded decision -- leaving a refusal (sealed, superseded, closed, undischarged children,
+;; validation) visible only inside the child's own pane. It is restored here, at the single
+;; wrapper every ledger-backed and manual publish shares; the toast is best-effort and never
+;; masks or changes the underlying failure.
+(defn- publish-failure-toast! [child task e]
+  (try (herdr/notify! "Subagent publish failed"
+                      (str "child=" child " pane=" (or (System/getenv "HERDR_PANE_ID") "unknown")
+                           " task=" task " error=" (.getMessage e)))
+       (catch Exception _ nil)))
+(defn- publish-round! [opts child task]
   (let [env #(System/getenv %)
-        {:keys [child task]} (task-identity opts)
-        ;; A hand-driven publish (SKILL.md § Manual fallback) has no entry at all: it still
-        ;; writes its RESULT, but with no entry there is no policy, no parent, and hence no
-        ;; toast and no push. One uniform rule, not a special case.
         entry (try (ledger/read! task) (catch Exception _ nil))
-        ;; ...but only when the identity came from the injected environment. An explicit
-        ;; `--task` naming no entry is a caller error, and falling through to it would be
-        ;; destructive rather than merely wrong: `result` would resolve to env
-        ;; `HERDR_ORCH_RESULT` -- this child's *original* round path -- so the envelope
-        ;; lands under a foreign `TASK:` and, publication being one-shot, that round can
-        ;; never publish again. Refuse before the write. This is also what makes the
-        ;; identity claim above true: a mistyped `--task` reaches nothing at all, and a
-        ;; correctly typed one is still bounded to the caller's own child by the check below.
         _ (when (and (one opts :task) (nil? entry))
             (fail "--task names no ledger entry" {:task task :child child}))
         _ (when (and entry (not= child (:child entry)))
-            (fail "child identity mismatch: the named assignment belongs to another child" {:task task :child child :entry-child (:child entry)}))
-        ;; Refused before the one-shot write, so a caller that still owns an open child can
-        ;; retry the identical publish once it has closed them.
-        released-children (assert-children-discharged! child)
-        ;; The entry owns the result path and the waiting policy; env supplies the result
-        ;; only where there is no entry to derive it from, and the policy has no env home
-        ;; at all, so a stale one cannot be represented.
-        result (or (:result entry) (env "HERDR_ORCH_RESULT") (fail "missing HERDR_ORCH_RESULT" {}))
+            (fail "child identity mismatch: the named assignment belongs to another child"
+                  {:task task :child child :entry-child (:child entry)}))
+        result (or (:result entry) (env "HERDR_ORCH_RESULT")
+                   (fail "missing HERDR_ORCH_RESULT" {}))
         policy (:waiting-policy entry)
         body (publication-body opts)
-        ;; Publication is exactly-once and immutable, so a relative artifact path must fail
-        ;; before the write, not only at collect (core/artifact-path is the same check
-        ;; there): a child could otherwise never repair a COMPLETE-but-invalid envelope.
-        ;; Checked on the raw --artifact/--from-file values, before any path is rewritten.
-        ;; `str` guards a non-string --from-file artifact entry: without it a nil/numeric
-        ;; JSON value would NPE before reaching artifact-path's own clean error.
         _ (doseq [artifact (:artifacts body)] (core/artifact-path (str artifact)))
-        text (core/envelope (merge {:child child :task task :result result} body)) target (fs/path result) temp (fs/path (str result "." (UUID/randomUUID) ".tmp"))]
-    (fs/create-dirs (fs/parent target))
-    (try
-      (spit (str temp) text) (Files/createLink (Paths/get (str target) (make-array String 0)) (Paths/get (str temp) (make-array String 0))) (fs/delete-if-exists temp)
-      ;; Result publication is committed before notification. Notification failure is observable but never turns it into a retryable failure.
-      (let [notification (when (= policy "non-blocking") (try (herdr/notify! (str "Subagent " child " published") (str "child=" child " task=" task " result=" result)) (catch Exception e {:notification-error (.getMessage e)})))
-            ;; The operator toast is retained; the push is additional. Both are gated on the
-            ;; entry's own policy, so a ledger-less publish is silent by construction.
-            push (when (= policy "non-blocking")
-                   (notify-parent! entry {:child child :task task :status (:status body)
-                                          :artifacts (:artifacts body)
-                                          :timeout (parse-notify-timeout (one opts :notify-timeout))}))]
-        (cond-> {:task task :result result :status (:status body)}
-          notification (assoc :notification notification)
-          push (assoc :parent-push push)
-          ;; Only when something was actually discharged: a released round means this caller
-          ;; left a pane standing that no verb in the protocol can now take.
-          (seq released-children) (assoc :released-children released-children)))
-      (catch FileAlreadyExistsException e
-        (fs/delete-if-exists temp) (try (herdr/notify! "Subagent publish failed" (str "child=" child " pane=" (or (env "HERDR_PANE_ID") "unknown") " task=" task " error=RESULT already exists")) (catch Exception _))
-        (throw (ex-info (str "RESULT already exists; publication is exactly once." (stale-identity-hint child task)) {:result result :task task} e)))
-      (catch Exception e
-        (fs/delete-if-exists temp) (try (herdr/notify! "Subagent publish failed" (str "child=" child " pane=" (or (env "HERDR_PANE_ID") "unknown") " task=" task " error=" (.getMessage e))) (catch Exception _)) (throw e)))))
+        text (core/envelope (merge {:child child :task task :result result} body))
+        state (assert-publishable! entry)]
+    (if-let [throttled (throttled-waiting entry (:status body) state)]
+      throttled
+      (let [released-children (assert-children-discharged! child)
+            item (if entry
+                   (append-publication! result text)
+                   (link-publication! result 1 text))]
+        ;; Publication is committed before notification. Notification failure is observable
+        ;; but never turns it into a retryable failure.
+        (let [notification (when (= policy "non-blocking")
+                             (try (herdr/notify! (str "Subagent " child " published")
+                                                (str "child=" child " task=" task " result=" (:result item)))
+                                  (catch Exception e {:notification-error (.getMessage e)})))
+              ;; WAITING reports are intentionally toast-only. Terminal reports retain the
+              ;; existing non-blocking advisory push; ledger-less fallback stays silent.
+              push (when (and (= policy "non-blocking")
+                              (core/terminal-status? (:status body)))
+                     (notify-parent! entry {:child child :task task :status (:status body)
+                                            :artifacts (:artifacts body)
+                                            :timeout (parse-notify-timeout (one opts :notify-timeout))}))]
+          (cond-> {:task task :result (:result item) :status (:status body) :item (:item item)}
+            notification (assoc :notification notification)
+            push (assoc :parent-push push)
+            (seq released-children) (assoc :released-children released-children)))))))
+(defn publish! [opts]
+  (let [{:keys [child task]} (task-identity opts)]
+    (try (publish-round! opts child task)
+         (catch Exception e (publish-failure-toast! child task e) (throw e)))))
 (defn collect! [task opts]
   (let [entry (ledger/read! task) owned? (caller-owns? entry)]
     (if (:wait opts) (wait-and-capture! entry (round-timeout entry opts) owned?)
-        (if-let [parsed (capture! entry)] (finish-capture! entry parsed owned?) {:status "pending" :task task :pane-id (:pane-id entry)}))))
-;; --- advisory progress reporting ---------------------------------------------------
-;; A latest-only snapshot for the injected child identity, never a second transcript:
-;; `status`/`list` already return the raw ledger entry (see `live`), so a `:progress`
-;; key needs no further plumbing there. Identity and lifecycle are all checked before
-;; the throttle, so a foreign, post-publish, captured, or terminal assignment can never
-;; be perturbed by a stray or malicious `progress` call.
-(defn- progress-elapsed-ms [reported-at]
-  ;; Defensive: a hand-edited or foreign-format :reported-at must degrade to "treat as
-  ;; stale" (rewrite), never hard-fail an advisory command. A negative value (backward
-  ;; clock step) is treated the same way rather than throttling until the clock catches up.
-  (try (let [elapsed (- (System/currentTimeMillis) (.toEpochMilli (java.time.Instant/parse reported-at)))]
-         (when (<= 0 elapsed) elapsed))
-       (catch Exception _ nil)))
-(defn progress! [opts]
-  (let [{:keys [child task]} (task-identity opts)
-        summary (or (one opts :summary) (fail "provide --summary" {}))
-        entry (ledger/read! task)]
-    ;; Wrong or missing child identity must never update another assignment's entry,
-    ;; silently or otherwise — checked first, ahead of every lifecycle rejection below.
-    (when-not (= child (:child entry))
-      (fail "child identity mismatch: cannot update another assignment's progress" {:task task}))
-    ;; The entry's own :result is the completion signal capture! checks (cli.clj's
-    ;; `capture!`), not the injected env value: a mismatched env can never bypass this.
-    (when (fs/exists? (:result entry))
-      (fail "cannot report progress: RESULT already published" {:task task}))
-    (when (:captured-at entry)
-      (fail "cannot report progress: assignment already captured" {:task task}))
-    ;; "invalid" is defence-in-depth, not load-bearing: capture!'s invalid branch always
-    ;; sets :captured-at too, so the guard above already excludes it. "failed" (spawn-
-    ;; failure cleanup) sets no :captured-at and is the one this check actually protects.
-    (when (contains? #{"failed" "invalid"} (:status entry))
-      (fail "cannot report progress: assignment is terminal" {:task task :status (:status entry)}))
-    (let [previous (:progress entry)
-          elapsed-ms (some-> (:reported-at previous) progress-elapsed-ms)]
-      ;; Throttled is a non-error, non-final outcome: the stored snapshot is left
-      ;; byte-identical (no `ledger/update!` call at all on this branch).
-      (if (and elapsed-ms (< elapsed-ms (progress-interval-ms)))
-        {:status "throttled" :task task :progress previous}
-        (let [snapshot {:summary summary :reported-at (now)}]
-          (ledger/update! task assoc :progress snapshot)
-          {:status "recorded" :task task :progress snapshot})))))
+        (if-let [parsed (capture! entry)]
+          (finish-capture! entry parsed owned?)
+          {:status "pending" :terminal? false :task task :pane-id (:pane-id entry)}))))
 ;; --- explicit stale-entry pruning ---------------------------------------------------
 ;; Remedies the one known `collect --any` gap (contract.md § Fan-in "Known limitation"):
 ;; a `run`/`start` killed between `ledger/write!` and its cleanup leaves a same-session,
@@ -811,8 +926,8 @@
       (fail "prune refused: assignment already captured" {:task task}))
     (when (contains? #{"failed" "invalid"} (:status entry))
       (fail "prune refused: assignment is already terminal" {:task task :status (:status entry)}))
-    (when (fs/exists? (:result entry))
-      (fail "prune refused: RESULT already exists" {:task task}))
+    (when (seq (:published (stream-state entry)))
+      (fail "prune refused: a published RESULT item already exists" {:task task}))
     ;; Reuses `live-agents` (same name-keyed classification `--any` uses) rather than a
     ;; second liveness scan: `nil` means the listing itself is unusable, so liveness is
     ;; unknown and a prune must never proceed — only a listing that positively omits this
@@ -830,7 +945,7 @@
     ;; appeared during the check. Never closes `:pane-id` — it may be stale, reused, or
     ;; already gone; this command only ever touches the ledger JSON.
     (ledger/update! task (fn [current]
-                           (if (or (:captured-at current) (fs/exists? (:result current)))
+                           (if (or (:captured-at current) (seq (:published (stream-state current))))
                              (fail "prune refused: assignment was captured or published during the liveness check" {:task task})
                              (assoc current :status "failed" :failure-phase "orphaned" :pruned-at (now) :prune-reason "missing-agent"))))))
 ;; --- explicit pane closure -----------------------------------------------------------
@@ -885,7 +1000,7 @@
 ;;
 ;; "Own" is the same both-non-nil rule `prune` and `close` use, so an unresolvable caller
 ;; identity owns nothing and this guard cannot fire on it. That is deliberately the open
-;; direction: publication is the sole completion signal and is one-shot, so a guard that
+;; direction: a validated terminal item is the sole completion signal, so a guard that
 ;; cannot attribute a child must not be able to strand a finished result. The caller's own
 ;; child name is excluded too -- an entry naming this very child is its own round, never a
 ;; child of it.
@@ -905,10 +1020,14 @@
 (defn- bin-hint [] (try (launcher-bin) (catch Exception _ "oh")))
 (defn- outstanding-children [caller own-child entries]
   (filterv (fn [entry]
-             (and caller (:parent-session entry) (= caller (:parent-session entry))
-                  (not= own-child (:child entry))
-                  (or (nil? (:captured-at entry))
-                      (and (:pane-id entry) (nil? (:closed-at entry))))))
+             (let [state (stream-state entry)]
+               (and caller (:parent-session entry) (= caller (:parent-session entry))
+                    (not= own-child (:child entry))
+                    (or (not (stream-captured? state))
+                        ;; A closed round is no longer live, but an unsealed resident child
+                        ;; remains open even after each published WAITING item was captured.
+                        (and (nil? (:closed-at entry))
+                             (or (not (:sealed? state)) (:pane-id entry)))))))
            (newest-rounds entries)))
 ;; The same evidence `close`'s shell_pid fallback (task ca6fecef) uses for a name-absent
 ;; round: a live pane whose recorded `:shell-pid` still matches is a round `close` could
@@ -920,7 +1039,12 @@
 (defn assert-children-discharged! [own-child]
   (when-let [outstanding (seq (outstanding-children (caller-parent-session) own-child (ledger/entries)))]
     (let [index (live-agents)
-          released (when index (filterv #(and (:captured-at %) (not (contains? index (:child %)))
+          ;; `stream-captured?`, never the `:captured-at` head (closeout finding: the head is
+          ;; set by *any* capture, so a vanished child with a captured WAITING item and an
+          ;; unconsumed terminal item read as discharged while that terminal sat unconsumed).
+          ;; A partially consumed stream stays blocking: `collect` needs no live child.
+          released (when index (filterv #(and (stream-captured? (stream-state %))
+                                              (not (contains? index (:child %)))
                                               (not (pane-reclaimable? %)))
                                         outstanding))
           blocking (vec (remove (set released) outstanding))]
@@ -929,7 +1053,7 @@
                    (bin-hint) " task collect <full-task-uuid>` and then close it with `" (bin-hint)
                    " task close <full-task-uuid>` (or `" (bin-hint) " task prune <full-task-uuid>` for a spawn that never started) before publishing.")
               {:children (mapv (fn [entry] {:task (:task entry) :child (:child entry) :pane-id (:pane-id entry)
-                                            :state (if (:captured-at entry) "captured-unclosed" "uncaptured")})
+                                            :state (if (stream-captured? (stream-state entry)) "captured-unclosed" "uncaptured")})
                                blocking)}))
       (when (seq released) (mapv :task released)))))
 (defn- assert-closable! [entry entries]
@@ -937,7 +1061,7 @@
         caller (caller-parent-session) recorded (:parent-session entry)]
     (when-not (and caller recorded (= caller recorded))
       (fail "close refused: caller session does not own this ledger entry" {:task task}))
-    (when-not (:captured-at entry)
+    (when-not (stream-captured? (stream-state entry))
       (fail "close refused: assignment is not captured" {:task task}))
     (when (:closed-at entry)
       (fail "close refused: this round's pane was already closed" {:task task :closed-at (:closed-at entry)}))
@@ -954,9 +1078,14 @@
   ;; re-validated inside the mutation, mirroring `prune!`'s race re-check. `herdr/close!`
   ;; runs inside it too: `ledger/update!` writes nothing if its function throws, so a
   ;; failed close can never leave a `:closed-at` recording a closure that never happened.
+  ;; The unconsumed-items re-check closes the time-of-check/time-of-use window the settle
+  ;; wait opens (closeout finding): `assert-closable!` proved every item captured *before*
+  ;; the wait, and an item published during it would otherwise be closed past and stranded.
   (let [updated (ledger/update! task
                                 (fn [current]
                                   (when (:closed-at current) (fail "close refused: already closed" {:task task}))
+                                  (when (seq (unconsumed-items current))
+                                    (fail "close refused: an item was published during the settle wait" {:task task}))
                                   (when-not (= task (:task (newest-round (ledger/entries) child)))
                                     (fail "close refused: a newer round appeared during the settle wait" {:task task :child child}))
                                   (herdr/close! (:pane-id current))
@@ -1101,7 +1230,8 @@
          ;; a child whose current round is uncaptured, foreign, or already closed drops out
          ;; entirely rather than falling back to an older round that names the same pane.
          newest-rounds
-         (filter #(and (= caller (:parent-session %)) (:captured-at %) (:pane-id %)
+         (filter #(and (= caller (:parent-session %))
+                       (stream-captured? (stream-state %)) (:pane-id %)
                        (nil? (:closed-at %)) (not= "invalid" (:status %))))
          (sort-by :created-at)
          ;; One refusal must not abandon the rest of the sweep, so each child's outcome --
@@ -1192,8 +1322,9 @@
         caller (or (caller-parent-session) (fail "orphans refused: caller session is unresolvable" {}))
         candidates (->> (ledger/entries)
                         newest-rounds
-                        (filter #(and (:captured-at %) (:pane-id %) (nil? (:closed-at %))
-                                      (:parent-session %) (not= caller (:parent-session %))))
+                        (filter #(and (stream-captured? (stream-state %)) (:pane-id %)
+                                      (nil? (:closed-at %)) (:parent-session %)
+                                      (not= caller (:parent-session %))))
                         (sort-by :created-at)
                         vec)]
     (if-not close?
@@ -1225,8 +1356,9 @@
 ;; Nothing durable is lost. The dropped text is a duplicate of two things that both survive:
 ;; the parsed envelope fields beside it (status, summary, findings, process, artifacts, next)
 ;; and the `RESULT` file it was parsed from, which no verb deletes -- all 32 captured entries'
-;; result files were still on disk when this was measured, and capture is not memoised, so
-;; `collect --raw` re-reads and re-renders the blob from that file. The one honest caveat is
+;; result files were still on disk when this was measured. `collect` never re-returns a
+;; consumed item (a fully-consumed round reports `pending`), so post-compaction the raw text
+;; is read from those retained item files directly. The one honest caveat is
 ;; that `RESULT` lives in gitignored scratch (`.tmp/`): an operator who clears that tree loses
 ;; the raw text for good, while every parsed field on the entry remains. Recorded in
 ;; contract.md § Retention rather than traded away silently.
@@ -1247,7 +1379,13 @@
        (or (:closed-at entry) (= "failed" (:status entry)))))
 (defn- compacted-entry [entry]
   (cond-> (assoc entry :compacted-at (now))
-    (map? (:envelope entry)) (update :envelope dissoc :text)))
+    (map? (:envelope entry)) (update :envelope dissoc :text)
+    (seq (:items entry)) (update :items
+                                 #(mapv (fn [item]
+                                          (cond-> item
+                                            (map? (:envelope item))
+                                            (update :envelope dissoc :text)))
+                                        %))))
 (defn- entry-bytes [entry] (count (json/generate-string entry)))
 (defn- compact-entry! [entry]
   (let [task (:task entry) before (entry-bytes entry)]
@@ -1322,7 +1460,7 @@
 ;;
 ;; The prompt carries assignment content and that command -- nothing the CLI could have
 ;; guaranteed itself. The round's identity is interpolated (never "publish under your new
-;; task"), the round's policy decides the progress clause mechanically, and `publish!` reads
+;; task"), the round's policy decides the WAITING clause mechanically, and `publish!` reads
 ;; the same policy off the same entry, so prompt wording cannot diverge from behaviour.
 ;;
 ;; The revalidation clause is the one instruction that cannot be mechanised: a long
@@ -1338,7 +1476,7 @@
        ;; original, already-published round, so a bare `--status BLOCKED` cannot publish at
        ;; all -- the failure path would break exactly when it is needed.
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--task " task " --status BLOCKED` (dependency) or `--task " task " --status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering."
-       (progress-instruction waiting-policy task)))
+       (waiting-instruction waiting-policy task)))
 (defn continue! [prior-task opts]
   (when-not prior-task (fail "continue requires a full task uuid" {}))
   ;; Root-only, and refused before preflight, ledger allocation, and any pane mutation: a
@@ -1361,7 +1499,8 @@
       ;; continue. `invalid`, `failed`, pruned, and uncaptured entries all fall out of this
       ;; one check; `BLOCKED` is admitted deliberately -- resuming a blocked child needs a
       ;; fresh task anyway, and this is that verb.
-      (when-not (and (:captured-at entry) (contains? #{"COMPLETE" "FAILED" "BLOCKED"} (:status entry)))
+      (when-not (and (stream-captured? (stream-state entry))
+                     (not (contains? #{"failed" "invalid"} (:status entry))))
         (fail "continue refused: the prior round is not captured with a validated envelope"
               {:task prior-task :status (:status entry)}))
       (when (:closed-at entry)
@@ -1369,7 +1508,10 @@
       ;; `live-round?` excludes a terminal `failed` round here for the same reason
       ;; `newest-round` does: a continuation whose prompt threw is retired, not open, and
       ;; must not block the retry that recovers from it.
-      (when-let [open (seq (filter #(and (= child (:child %)) (nil? (:captured-at %)) (live-round? %)) entries))]
+      (when-let [open (seq (filter #(and (= child (:child %))
+                                          (not (stream-captured? (stream-state %)))
+                                          (live-round? %))
+                                   entries))]
         (fail "continue refused: an uncaptured round already names this child"
               {:task prior-task :child child :open (mapv :task open)}))
       (when-not (= prior-task (:task (newest-round entries child)))
@@ -1385,6 +1527,13 @@
                 {:task prior-task :child child :recorded (:pane-id entry) :observed (:pane_id agent)}))
         (when-not (contains? #{"idle" "done"} (:agent_status agent))
           (fail "continue refused: the child is not settled" {:task prior-task :child child :agent-status (:agent_status agent)}))
+        ;; The all-items-captured guard above ran before the settle wait, so an item published
+        ;; *during* that wait -- the same time-of-check/time-of-use window `close-mutation!`
+        ;; re-checks (closeout finding) -- would be continued past and left unconsumed on a
+        ;; superseded round. Re-read the freshest entry after the wait and refuse instead,
+        ;; before any allocation: the raced item stays ordinarily collectable.
+        (when (seq (unconsumed-items (ledger/read! prior-task)))
+          (fail "continue refused: an item was published during the settle wait" {:task prior-task}))
         (let [task (ledger/fresh-task)
               result (ledger/fresh-result task)
               ;; `:child` is inherited, never re-derived: a continued round's child name
@@ -1418,24 +1567,38 @@
             (if (one opts :wait)
               (wait-and-capture! written (round-timeout written opts) true)
               written)))))))
-;; Fan-in candidacy: same `:parent-session` as the caller, not yet captured, and not a
-;; terminal spawn failure. The ledger is repo-wide, so the session scope is what makes
-;; `--any` safe to run alongside another parent. The `failed` exclusion is load-bearing
-;; rather than tidiness: `safe-cleanup!` marks a dead spawn `failed` *without* a
-;; `:captured-at`, so an uncaptured-only predicate would keep that entry a candidate
-;; forever and make both `no-candidates` and the all-blocked short-circuit unreachable.
-;; `invalid` entries need no exclusion — `capture!` sets `:captured-at` on that branch too.
+;; Capture candidacy is deliberately narrower than wait candidacy: a round is capturable
+;; only with an unconsumed item, while a live unsealed round with no item is still worth
+;; polling. Both sets stay session-scoped and exclude terminal spawn failures.
 ;; `ledger/entries` is sorted by `:created-at`, so poll order is spawn order.
 ;; `parent-session` is a loop invariant, so it is checked by the caller rather than per
 ;; entry: an unresolvable caller identity must not slurp and parse every ledger file for a
 ;; guaranteed-empty result.
-(defn any-candidates [parent-session]
-  (vec (filter #(and (= parent-session (:parent-session %))
-                     (nil? (:captured-at %))
+(defn- stream-snapshot [entries parent-session]
+  (->> entries
+       (filter #(= parent-session (:parent-session %)))
+       (mapv #(assoc % :stream-state (stream-state* %)))))
+(defn- any-candidates [snapshot]
+  (vec (filter #(and (seq (unconsumed-stream-items (:stream-state %)))
                      (not= "failed" (:status %)))
-               (ledger/entries))))
+               snapshot)))
+(defn- wait-candidates [snapshot]
+  (vec (filter #(and (not= "failed" (:status %))
+                     (nil? (:closed-at %))
+                     (not (:sealed? (:stream-state %))))
+               snapshot)))
 (defn- capture-first [candidates]
-  (some (fn [entry] (when-let [parsed (capture! entry)] [entry parsed])) candidates))
+  (some (fn [entry]
+          (when-let [parsed (capture! entry (:stream-state entry))]
+            [entry parsed]))
+        candidates))
+(defn- remaining-candidates [candidates captured-entry parsed]
+  (count (filter (fn [entry]
+                   (let [items (unconsumed-stream-items (:stream-state entry))]
+                     (if (= (:task entry) (:task captured-entry))
+                       (some #(not= (:item parsed) (:item %)) items)
+                       (seq items))))
+                 candidates)))
 ;; One `agent list` per tick classifies every candidate's liveness, instead of one
 ;; `agent get` per child. `nil` means the listing itself failed: liveness is unknown, so
 ;; neither short-circuit may fire and the loop keeps polling to its budget. Agents are
@@ -1467,31 +1630,38 @@
     (if-not session
       {:status "pending" :reason "unknown-caller"}
       (loop []
-        (let [candidates (any-candidates session)
-              ;; `remaining` is a function of capture and candidacy alone: the candidate set
-              ;; observed at capture, never anything the closure path might later do.
-              captured (fn [[entry parsed]]
-                         (assoc (finish-capture! entry parsed true) :remaining (dec (count candidates))))]
-          (if (empty? candidates)
+        (let [entries (ledger/entries)
+              ;; Preserve the no-entry fast path: nothing can be a candidate until this
+              ;; session owns an entry, so no liveness subprocess is useful yet.
+              scoped? (some #(= session (:parent-session %)) entries)]
+          (if-not scoped?
             {:status "pending" :reason "no-candidates"}
-            (if-let [hit (capture-first candidates)]
-              (captured hit)
-              (let [index (live-agents)
-                    ;; Re-scan before any terminal short-circuit: a child can publish and
-                    ;; exit inside the `agent list` subprocess window, and `blocked` /
-                    ;; `no-live-children` must never discard a valid envelope already on
-                    ;; disk. The first scan stays as the fast path.
-                    hit (capture-first candidates)]
-                (if hit
+            ;; `agent list` is the liveness boundary. The one snapshot taken immediately
+            ;; afterward carries both candidate sets and capture decisions for this tick.
+            (let [index (live-agents)
+                  snapshot (stream-snapshot entries session)
+                  candidates (any-candidates snapshot)
+                  waiters (wait-candidates snapshot)
+                  captured (fn [[entry parsed]]
+                             (assoc (finish-capture! entry parsed true)
+                                    :remaining (remaining-candidates candidates entry parsed)))]
+              (if (and (empty? candidates) (empty? waiters))
+                {:status "pending" :reason "no-candidates"}
+                (if-let [hit (capture-first candidates)]
                   (captured hit)
-                  (let [live (when index (filterv #(contains? index (:child %)) candidates))
-                        blocked (when index (filterv #(= "blocked" (:agent_status (get index (:child %)))) live))]
+                  (let [live (when index (filterv #(contains? index (:child %)) waiters))
+                        blocked (when index
+                                  (filterv #(= "blocked" (:agent_status (get index (:child %)))) live))]
                     (cond
                       (and index (empty? live)) {:status "pending" :reason "no-live-children"}
-                      (and index (seq live) (= (count live) (count blocked))) {:status "blocked" :tasks (mapv :task blocked)}
+                      (and index (seq live) (= (count live) (count blocked)))
+                      {:status "blocked" :tasks (mapv :task blocked)}
                       :else (let [remaining (- deadline (System/currentTimeMillis))]
-                              (if (<= remaining 0) {:status "pending" :reason "timeout"}
-                                  (do (Thread/sleep (min (poll-interval-ms) remaining)) (recur)))))))))))))))
+                              (if (<= remaining 0)
+                                {:status "pending" :reason "timeout"}
+                                (do (Thread/sleep (min (poll-interval-ms) remaining))
+                                    (recur))))))))))))
+)))
 ;; `agent!` is made unconditionally regardless of whether `:child-session` is already
 ;; recorded, so gating `record-session!` on its absence discarded an observation this call
 ;; already paid for, for free -- see `finish-capture!`'s identical fix.
@@ -1527,9 +1697,13 @@
 (defn- text-lines [& parts] (str/join "\n" (remove nil? parts)))
 ;; A capture and its non-final outcomes (`pending`, `blocked`, `invalid`) alike: the fields a
 ;; parent acts on, in envelope order. Existence-validated `:artifact-links` are preferred
-;; over the declared paths, exactly as the JSON form's weighting does.
+;; over the declared paths, exactly as the JSON form's weighting does. TERMINAL renders the
+;; JSON `:terminal?` (closeout finding: the acceptance criterion "the capture result states
+;; terminality explicitly" was met for JSON only), so a WAITING capture is unambiguously
+;; non-final in this rendering too.
 (defn capture-text [result]
   (text-lines (text-field "STATUS" (:status result))
+              (text-field "TERMINAL" (:terminal? result))
               (text-field "TASK" (:task result))
               (text-field "CHILD" (:child result))
               (text-field "REASON" (:reason result))
@@ -1606,8 +1780,7 @@
            "collect --any [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
            "status [full-task-uuid] [--format json|text] [--raw]"
            "list [--format json|text] [--raw]"
-           "publish --status COMPLETE|BLOCKED|FAILED --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--from-file PATH] [--task UUID] [--notify-timeout MS]"
-           "progress --summary TEXT [--task UUID]"
+           "publish --status COMPLETE|BLOCKED|FAILED|WAITING --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--from-file PATH] [--task UUID] [--notify-timeout MS]"
            "prune <full-task-uuid>"
            "continue <full-task-uuid> (--task TEXT | --task-file PATH | stdin) [--wait] [--timeout MS]"
            "close <full-task-uuid>"
@@ -1711,7 +1884,6 @@
     "status" (present opts (if-let [task (first positional)] (live (ledger/read! task)) (mapv live (ledger/entries))) ledger-text)
     "list" (present opts (mapv live (ledger/entries)) entries-text)
     "publish" (publish! opts)
-    "progress" (progress! opts)
     "prune" (prune! (first positional))
     "continue" (continue! (first positional) opts)
     "orphans" (do (require-positionals positional 0 "task orphans") (orphans! opts))

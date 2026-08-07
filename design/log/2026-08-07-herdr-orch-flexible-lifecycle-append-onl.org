@@ -1,0 +1,232 @@
+#+TITLE: herdr-orch: Flexible lifecycle -- append-only publish stream per round
+#+DATE: 2026-08-07 Fri
+#+PARENT: [[task:43e7c65c-2682-40fc-8ad1-170a794b0c2a][herdr-orch: Flexible lifecycle -  append-only publish model with a parent read cursor]]
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SETUPFILE: ../../TASKS.setup.org
+
+* Intent
+
+Replace the one-shot publish with an append-only stream of immutable result items per round: a child publishes as many results as its work produces -- interim reports and monitor observations included -- through the single `publish` verb, and the terminal statuses keep sealing a round mechanically. The child stays lifecycle-agnostic; on receipt of any item the parent decides close, retain, or continue. `progress` is deleted as a redundant second message type.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+** Scope
+
+*** In scope
+- Envelope STATUS gains the non-terminal value `WAITING`; `COMPLETE`/`FAILED`/`BLOCKED` remain the only terminal statuses.
+- Item storage as numbered immutable files (bare `RESULT` path is item 1, `.N` suffixes append), each created one-shot via the existing `Files.createLink` primitive.
+- Publish refusal rules replacing the physical one-shot protection: sealed round (a validated terminal item exists among the *published* items, captured or not), closed round (`:closed-at`), superseded round (newer round names the child). Refusal precedence is superseded > sealed > closed, so the `:newer-task` remedy survives.
+- Per-item consumption: `collect`/`collect --any`/`run --wait`/`collect --wait` return the oldest unconsumed item; per-item capture state on the ledger entry.
+- Guard generalisation through one shared stream-state function (published/captured/sealed) consumed by `close`, `close --settled`, `orphans`, `continue`, `prune`, `compact`, `collect --any` candidacy, and the publish discharge guard.
+- Deletion of `oh task progress`: verb, `:progress` ledger field, prompt clause, contract.md § Progress, SKILL.md and persona references; throttle env var renamed and repointed at WAITING publishes.
+- Docs: contract.md, SKILL.md, scripts/README.md, CLI usage string, packaged persona guidance.
+- Tests: `bb test` matrix over single-item and multi-item rounds; fake-herdr scenarios; smoke update.
+
+*** Out of scope
+- One-entry-per-child ledger model and any explicit parent cursor field (rejected -- see Decisions).
+- A monitor stop-signal verb: closing a child that never settles stays a manual prompt-then-close (see Risks, Open questions).
+- The pi `/fork` sibling exploration.
+- Spawn, kind/model resolution, placement, focus, retro gating, and orphans semantics beyond consuming the shared stream-state predicate.
+- Ledger migration tooling: pre-change entries are scratch state and must merely remain readable.
+
+** Acceptance
+
+*** Core functionality
+- [ ] A round accepts multiple published items; each is its own immutable one-shot file via `Files.createLink`, and no verb overwrites or deletes one.
+- [ ] `STATUS: WAITING` validates as non-terminal; `COMPLETE`/`FAILED`/`BLOCKED` remain the only terminal statuses.
+- [ ] `publish` refuses a new item once a validated terminal item exists for the round.
+- [ ] `publish` refuses items on a round carrying `:closed-at`.
+- [ ] `publish` refuses items on a round superseded by a newer round for the same child.
+- [ ] `collect` returns the oldest unconsumed item and records per-item capture state on the entry.
+- [ ] `collect --any` candidacy is "round with unconsumed items"; the `failed` exclusion is preserved.
+- [ ] `run --wait` and `collect --wait` return on the first unconsumed item, terminal or not.
+- [ ] A capture result states terminality explicitly, so a WAITING capture is unambiguously non-final.
+- [ ] `close` and `continue` require every published item captured, plus the unchanged ownership/newest-round/liveness/settle guards.
+- [ ] A round whose only item is terminal behaves as today across `run`/`collect`/`close`/`continue`/`prune`/`compact`.
+- [ ] `oh task progress` is removed: verb, `:progress` ledger field, composed-prompt clause, contract.md § Progress, SKILL.md references.
+- [ ] The renamed publish throttle applies to WAITING items only; a terminal item is never throttled.
+- [ ] A WAITING publish emits the operator toast only -- no advisory parent push; terminal publish side-effects are unchanged.
+- [ ] Existing personas and the manual-fallback publish need no change: a single terminal envelope with no `WAITING` anywhere remains fully valid.
+
+*** Edge cases
+- [ ] An item failing validation records `invalid` but does not seal the stream; a subsequent valid item captures normally.
+- [ ] The publish discharge guard treats an unsealed live child round as open: a delegating parent cannot publish past its own monitor.
+- [ ] `compact` drops raw envelope text for every item of the round, not only the newest.
+- [ ] `prune`'s staleness proof generalises to "no items on disk".
+- [ ] A pre-change ledger entry (single `RESULT`, no item records) reads correctly as a stream of length 1.
+
+*** Anti-criteria
+- Must not: allow any verb or status to retract, replace, or reopen a validated terminal item.
+- Must not: make terminality a parent judgement -- it stays derivable from the newest validated item's status alone.
+- Must not: change the one-entry-per-round ledger identity model (`newest-round`, ownership, `:continues` lineage all survive).
+- Must not: retain a `progress` alias or compatibility shim.
+- Must not: reintroduce child-side ledger writes.
+
+** Decisions
+- Chose stream-per-round generalisation :: rounds, `:continues` lineage, and every identity-keyed guard survive; today's model becomes the special case "stream of length 1", so single-item rounds are regression-testable against current behaviour.
+  Rejected:
+  - One-entry-per-child plus parent read cursor (the task body's proposal): audited at HEAD, it re-expresses ~9 load-bearing guards that all key on per-round entry identity plus the single RESULT file -- `any-candidates` (boolean `:captured-at`), `newest-round`/`newest-rounds` (shared by close, sweeps, continue, discharge), `capture!` (unmemoised single-file re-read), `prune!` ("no RESULT on disk" staleness proof), `publish!` (one-shot `createLink`, `stale-identity-hint`), `assert-children-discharged!`, `progress!`, `compact!`, and the settle assumption. A migration of machinery phase 1 just stabilised, for no capability the stream model does not deliver.
+  - `DONE:` marker orthogonal to STATUS: a status/done cross-product to reason about; STATUS alone carries terminality (user: keep simple).
+  - `progress` deprecation alias: preserves the two-message-type confusion this change removes; nothing outside this repo consumes the verb.
+- `WAITING` is the sole non-terminal status :: apt for resident/monitor semantics; terminality keys on the status set exactly as today, so mechanical terminality is unchanged in kind.
+- `invalid` is no longer terminal for the round :: today's terminality of `invalid` was an artifact of the one-file design (the file could never become valid) and permanently wedged a round over a typo. A malformed item never seals; the child publishes a corrected item next. The invalid item stays recorded for audit.
+- Child-side ledger writes are eliminated :: `progress` was the only child-side ledger mutation and carried the one documented lost-update race (progress vs capture). Post-change the child only ever creates immutable item files; every ledger write is parent-side, and the contract.md race note is deleted rather than re-expressed.
+- Sealing is stream finality, never pane lifecycle :: a terminal item ends the *round's* stream and nothing else; capture still closes nothing, the child stays resident after publishing `COMPLETE`, and the parent may -- often should -- retain it and `continue` with a follow-up round rather than rebuild the same context in a fresh spawn.
+- Close does not require a sealed stream :: it requires all published items captured plus the existing liveness/settle guards, so a monitor idle between WAITING reports is closable without a terminal item. Terminality governs the stream's finality, not closability.
+- Ledger head stays stable :: `:status`/`:envelope` keep reflecting the newest captured item (the `record-session!` newest-under-stable-key precedent), with per-item records beside them, so existing readers (`status`, `list`, resume tooling) keep resolving through the same keys.
+- Blocking waits return on the first unconsumed item :: one primitive, no policy in the tool; an early WAITING return is the parent's cue that it spawned a streaming child.
+- WAITING side-effects are toast-only and throttled :: a chatty monitor must not prompt-spam the parent agent; the parent polls or collects when it cares. Terminal side-effects (toast + advisory push under non-blocking) are unchanged.
+
+** Risks
+- A busy monitor is unclosable until it settles: `close` still requires `idle`/`done`, so a child mid-event-loop is `retained`. Accepted -- monitors are a low-priority corner; the remedy is prompt-a-stop then close.
+- WAITING capture mistaken for completion by an orchestrating parent. Mitigated: explicit terminality on the capture result plus SKILL.md/persona rewording from "validated result" to "validated terminal result".
+- Guard drift while generalising ~9 predicates. Mitigated: single shared stream-state function and a test matrix that pins single-item-round behaviour to today's.
+- Unbounded stream bulk from a chatty child. Accepted with bounds: the throttle caps rate, `ORCH_MAX_STREAM_ITEMS` and the envelope byte limit cap a single snapshot, and `compact` retires every item's raw text.
+- Publication is not serialised against `close`/`continue`. Accepted, with a follow-up task. The settle-wait rechecks narrow the window but cannot close it: `publish` creates its item file independently of `ledger/update!`, so an item can still be created after the recheck and before `herdr/close!` records `:closed-at`, or before a `continue` successor entry is written. Closing it needs interprocess exclusion shared by publish and the lifecycle verbs, which is larger than this record's scope; the pre-change design carried a comparable publish-versus-close race, so this is not a regression introduced here. Identified by the third closeout review (`.tmp/reviewer-868b1e34-closeout.md`).
+
+* Plan
+
+** DONE Stream-state core: item files, shared predicate, ledger head
+CLOSED: [2026-08-07 Fri 18:30]
+:PROPERTIES:
+:CUSTOM_ID: 6eb0f653-0b6c-44e0-a897-bb56a4a26ab4
+:CREATED: [2026-08-07 Fri 17:57]
+:STARTED: [2026-08-07 Fri 18:20]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 18:20]
+- State "DONE" from "STARTED" [2026-08-07 Fri 18:30]
+:END:
+Acceptance criteria:
+- Item enumeration exists: the bare `:result` path is item 1 and `.N` suffixes are items N; enumeration returns items in order.
+- A shared stream-state function reports published items, captured items, and sealed? for an entry. `sealed?` derives from the immutable files on disk, not merely from ledger captures: a terminal item seals the round the moment it is published, or a child could append `WAITING` in the window before collection and leave the ledger head non-terminal on a completed round.
+- Per-item capture records live on the ledger entry while `:status`/`:envelope` keep reflecting the newest captured item (stable head).
+- A pre-change entry (single `RESULT`, no item records) reads as a stream of length 1 through the same function.
+- `STATUS: WAITING` parses as valid and non-terminal in `core/validate-envelope`; `COMPLETE`/`FAILED`/`BLOCKED` remain the only terminal statuses.
+- Unit tests cover empty, single-terminal, WAITING-then-terminal, and malformed-item streams.
+Pointer: model on `record-session!`'s newest-under-stable-key + history precedent (`skills/herdr-orch/scripts/src/herdr_orch/cli.clj`).
+
+** DONE Publish appends: WAITING, seal and refusal rules, throttle
+CLOSED: [2026-08-07 Fri 18:55]
+:PROPERTIES:
+:CUSTOM_ID: a54c9af6-7ba9-4485-8f60-2d873d09673c
+:CREATED: [2026-08-07 Fri 17:57]
+:BLOCKED-BY: [[task:6eb0f653-0b6c-44e0-a897-bb56a4a26ab4]]
+:STARTED: [2026-08-07 Fri 18:47]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 18:47]
+- State "DONE" from "STARTED" [2026-08-07 Fri 18:55]
+:END:
+Acceptance criteria:
+- `publish` writes the next free item file via `Files.createLink`; an existing file at that index is never overwritten.
+- `publish` refuses when the round is sealed, carries `:closed-at`, or is superseded by a newer round for the same child.
+- A WAITING publish inside `ORCH_WAITING_INTERVAL_MIN_MS` of the previous item is refused non-destructively (no file created); a terminal item is never throttled.
+- A WAITING publish emits the operator toast only -- no advisory parent push; terminal side-effects (toast + push under `non-blocking`) are unchanged.
+- The manual-fallback publish (no ledger entry) still writes exactly one file and stays silent.
+Pointer: `publish!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; the one-shot `FileAlreadyExistsException` branch becomes the per-item primitive.
+
+** DONE Per-item capture: collect, fan-in, and wait semantics
+CLOSED: [2026-08-07 Fri 19:33]
+:PROPERTIES:
+:CUSTOM_ID: 0f2d47ea-445c-42b8-85b7-361d1b6e02c5
+:CREATED: [2026-08-07 Fri 17:57]
+:BLOCKED-BY: [[task:6eb0f653-0b6c-44e0-a897-bb56a4a26ab4]]
+:STARTED: [2026-08-07 Fri 18:57]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 18:57]
+- State "DONE" from "STARTED" [2026-08-07 Fri 19:14]
+- State "STARTED" from "DONE" [2026-08-07 Fri 19:17]
+- State "DONE" from "STARTED" [2026-08-07 Fri 19:18]
+- State "STARTED" from "DONE" [2026-08-07 Fri 19:26]
+- State "STARTED" from "STARTED" [2026-08-07 Fri 19:27]
+- State "DONE" from "STARTED" [2026-08-07 Fri 19:33]
+:END:
+Acceptance criteria:
+- `collect` returns the oldest unconsumed item and records its capture; a second `collect` returns the next item or `pending`.
+- The capture result states terminality explicitly (a WAITING capture is unambiguously non-final).
+- `collect --any` splits candidacy in two: *capture* candidacy is "round with unconsumed items", while *wait* candidacy is broader -- a live round that has published nothing is still polled -- so `--any --wait` keeps blocking until one child publishes. `no-candidates` is returned only when both sets are empty, and the `failed` exclusion, session scope, and the existing blocked / no-live-children / listing-race outcomes are all preserved.
+- `run --wait` and `collect --wait` return on the first unconsumed item, terminal or not.
+- An item failing validation records `invalid` without sealing; a subsequent valid item captures normally.
+- `--raw` re-renders the captured item's own file, per item.
+Pointer: `capture!`, `wait-and-capture!`, `any-candidates`, `collect-any!` in `cli.clj`.
+
+** DONE Lifecycle guard generalisation over stream state
+CLOSED: [2026-08-07 Fri 19:47]
+:PROPERTIES:
+:CUSTOM_ID: 44691266-9de5-4fc0-8016-48cb728bf1f4
+:CREATED: [2026-08-07 Fri 17:57]
+:BLOCKED-BY: [[task:0f2d47ea-445c-42b8-85b7-361d1b6e02c5]]
+:STARTED: [2026-08-07 Fri 19:35]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 19:35]
+- State "DONE" from "STARTED" [2026-08-07 Fri 19:47]
+:END:
+Acceptance criteria:
+- `close` and `continue` require every published item captured (not a sealed stream), plus the unchanged ownership/newest-round/liveness/settle guards.
+- `close --settled` and `orphans` candidacy read the shared stream-state function.
+- The publish discharge guard treats an unsealed live child round as open.
+- `prune`'s staleness proof is "no items on disk".
+- `compact` drops raw envelope text for every item of a round.
+- A round whose only item is terminal behaves as today across `run`/`collect`/`close`/`continue`/`prune`/`compact` (regression matrix pins this).
+Pointer: `assert-closable!`, `continue!`, `prune!`, `compact!`, `assert-children-discharged!`, `close-settled!`, `orphans!` in `cli.clj`.
+
+** DONE Remove progress; rework prompts and throttle variable
+CLOSED: [2026-08-07 Fri 19:56]
+:PROPERTIES:
+:CUSTOM_ID: 13cb5337-4c4f-4f26-acb3-fc0599a751e6
+:CREATED: [2026-08-07 Fri 17:57]
+:BLOCKED-BY: [[task:a54c9af6-7ba9-4485-8f60-2d873d09673c]]
+:STARTED: [2026-08-07 Fri 19:48]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 19:48]
+- State "DONE" from "STARTED" [2026-08-07 Fri 19:56]
+:END:
+Acceptance criteria:
+- `oh task progress` and the `:progress` ledger field are removed; the CLI usage string no longer mentions them.
+- Composed prompts (spawn and continuation) instruct WAITING publishes for phase-boundary reporting, interpolating the round's task id, under the `non-blocking` policy only.
+- `ORCH_PROGRESS_INTERVAL_MS` is gone; `ORCH_WAITING_INTERVAL_MIN_MS` is documented in contract.md's environment table with the same fallback discipline.
+- `rg 'task progress'` and `rg 'ORCH_PROGRESS'` over the repo find no live references (excluding archives and this record's history).
+Anti-criteria: Must not: leave a deprecation alias or compat shim.
+
+** DONE Docs sweep and smoke coverage for the stream model
+CLOSED: [2026-08-07 Fri 20:14]
+:PROPERTIES:
+:CUSTOM_ID: ee666c65-f426-4b2a-a72e-625e8b8e9616
+:CREATED: [2026-08-07 Fri 17:57]
+:BLOCKED-BY: [[task:44691266-9de5-4fc0-8016-48cb728bf1f4]] [[task:13cb5337-4c4f-4f26-acb3-fc0599a751e6]]
+:STARTED: [2026-08-07 Fri 19:58]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-07 Fri 19:58]
+- State "DONE" from "STARTED" [2026-08-07 Fri 20:14]
+:END:
+Acceptance criteria:
+- contract.md rewrites § Ledger and completion (item streams, seal, refusal rules), deletes § Progress, and updates § Fan-in, § Close, § Continue, § Retention accordingly.
+- SKILL.md and scripts/README.md describe the stream model; completion wording is "validated terminal result" everywhere it was "validated result".
+- Packaged persona guidance reflects the WAITING reporting convention.
+- The fake-herdr test suite exercises a multi-item round end to end (WAITING then terminal); the live smoke gains or updates a stream scenario.
+- `bb test` passes.
+Pointer: `skills/herdr-orch/scripts/docs/contract.md`, `skills/herdr-orch/SKILL.md`, `skills/herdr-orch/scripts/src/herdr_orch/smoke.clj`, `test/fixtures/fake-herdr`.
+
+* Implementation
+
+* Open questions
+
+** DECIDED Does a later change want an explicit monitor stop signal?
+:PROPERTIES:
+:DECIDED: [2026-08-07 Fri 18:04]
+:END:
+Decision: prompt-then-close is the model -- the parent instructs the monitor to wind down (or the assignment carries its own stop condition), waits for `idle`/`done`, then closes. No forced-stop verb: taking a pane mid-turn is exactly the evidence-free closure the `gone`/`retained` outcomes exist to refuse.
+** DECIDED Exact rename for the throttle env var
+:PROPERTIES:
+:DECIDED: [2026-08-07 Fri 17:57]
+:END:
+Decision: `ORCH_WAITING_INTERVAL_MIN_MS` -- names what it throttles (WAITING items) and that it is a minimum interval; terminal items are never throttled. Nothing external consumes the old name.

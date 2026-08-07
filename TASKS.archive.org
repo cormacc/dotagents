@@ -2635,3 +2635,38 @@ Anti-criteria:
 - Must not: remove or gate `--kind` on raw `oh agent start`.
 - Must not: let a model ID or weight alias select a harness.
 - Must not: accept and ignore `--kind` on `task run|start`.
+
+** DONE [#B] Setup hermes instance as home network monitor :hermes:
+CLOSED: [2026-08-07 Fri 17:20]
+:PROPERTIES:
+:CUSTOM_ID: cb8b91db-552c-4d3b-9668-2b420ed7d3ea
+:CREATED: [2026-05-28 Thu 23:54]
+:STARTED: [2026-08-07 Fri 17:20]
+:ARCHIVED: [2026-08-07 Fri 17:20]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-05-28 Thu 23:54]
+- State "STARTED" from "TODO" [2026-08-07 Fri 17:20]
+- State "WAITING" from "STARTED" [2026-08-07 Fri 17:20]
+- State "DONE" from "WAITING" [2026-08-07 Fri 17:20]
+:END:
+Let hermes learn about my home network setup. It should be able to discover and monitor network infrastructure, and communicate with pi to make recommendations re. maintenance and improvements. I.e. hermes owns observability and operates relatively autonomously, pi owns ops admin and operates with my approval.
+
+** CANCELLED herdr-orch: serialise publish against close and continue :herdr_orch:
+CLOSED: [2026-08-07 Fri 23:19]
+:PROPERTIES:
+:CUSTOM_ID: 5ba26363-5850-419e-b493-4583edb738fb
+:CREATED: [2026-08-07 Fri 23:18]
+:ARCHIVED: [2026-08-07 Fri 23:19]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-07 Fri 23:18]
+- State "CANCELLED" from "TODO" [2026-08-07 Fri 23:19]
+:END:
+`publish` is not serialised against `close`/`continue`. The settle-wait rechecks added during the append-only stream work narrow the race but cannot close it: `publish` creates its item file through `Files.createLink`, independently of `ledger/update!`, so an item can be created after the lifecycle verb's recheck and before `herdr/close!` records `:closed-at`, or before a `continue` successor entry is written. Consequences: `close` can take a pane and record `:closed-at` with an unconsumed item on the round; `continue` can supersede a round while a publication that passed the old check is still committing.
+
+Not a regression from the stream change -- the pre-change design carried a comparable publish-versus-close race -- and deliberately left open there, because a fix needs interprocess exclusion shared by `publish` and the lifecycle verbs (a lock file, or an equivalent atomic state transition), which was larger than that record's scope. A final check after closing is too late: closure is irreversible.
+
+Identified and reproduced by the third closeout review of `43e7c65c`; full analysis in that review's artifact, and the accepted-risk entry is in `design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org` under `** Risks`. Relevant symbols as of that work: `close-mutation!` and `continue!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`, plus `assert-publishable!` and the `createLink` publication path.

@@ -29,6 +29,28 @@
   (fs/create-dirs (result-directory))
   (loop [] (let [path (fs/path (result-directory) (str task "-" (UUID/randomUUID) ".result"))]
              (if (fs/exists? path) (recur) (str path)))))
+;; A round's item 1 keeps the original RESULT path. Later immutable publications append a
+;; canonical positive-integer suffix; `result-items` intentionally ignores every other
+;; sibling, including interrupted publication temp files.
+(defn item-path [result item]
+  (when-not (and (integer? item) (pos? item))
+    (throw (ex-info "result item must be a positive integer" {:result result :item item})))
+  (str result (when (< 1 item) (str "." item))))
+(defn result-items [result]
+  (let [target (fs/path result)
+        parent (fs/parent target)
+        base (str (fs/file-name target))
+        suffix (re-pattern (str "\\A" (java.util.regex.Pattern/quote base) "\\.([1-9][0-9]*)\\z"))
+        numbered (if (fs/directory? parent)
+                   (keep (fn [path]
+                           (when (fs/regular-file? path)
+                             (when-let [[_ raw] (re-matches suffix (str (fs/file-name path)))]
+                               (when-let [item (parse-long raw)] item))))
+                         (fs/list-dir parent))
+                   [])
+        items (cond-> (set numbered)
+                (fs/regular-file? target) (conj 1))]
+    (mapv (fn [item] {:item item :result (item-path result item)}) (sort items))))
 (defn write! [entry]
   (let [path (assignment-path (:task entry)) temp (fs/path (str path "." (UUID/randomUUID) ".tmp"))]
     (spit (str temp) (json/generate-string entry))

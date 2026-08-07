@@ -111,6 +111,27 @@
       {:first-task (:task first-round) :second-task (:task second-round)
        :child (:child second-entry) :pane-id (:pane-id second-entry)
        :closed-at (:closed-at closed)})))
+;; A non-blocking stream must retain the item order across real agent waits: the first
+;; capture is a report, not completion, and the terminal capture follows from the same pane.
+(defn stream-leg! [model]
+  (let [entry (cli/execute ["task" "start" "scout" "--model" model "--task"
+                            "Run the guarded stream smoke. First publish a concise WAITING item with the injected launcher. Then, without waiting for a parent response, publish exactly one COMPLETE item with the injected launcher. Do not publish any other status."])
+        task (:task entry)
+        waiting (cli/execute ["task" "collect" task "--wait"])
+        terminal (cli/execute ["task" "collect" task "--wait"])
+        recorded (entry! terminal)]
+    (when-not (and (= "WAITING" (:status waiting)) (= 1 (:item waiting))
+                   (false? (:terminal? waiting)))
+      (throw (ex-info "live smoke did not capture WAITING as the first non-terminal stream item"
+                      {:task task :capture waiting})))
+    (complete! terminal)
+    (when-not (and (= 2 (:item terminal)) (true? (:terminal? terminal))
+                   (= ["WAITING" "COMPLETE"] (mapv :status (:items recorded))))
+      (throw (ex-info "live smoke did not retain the WAITING then terminal stream"
+                      {:task task :capture terminal :items (:items recorded)})))
+    (let [closed (close! task "stream")]
+      {:task task :items (mapv :item (:items recorded)) :closed-at (:closed-at closed)})))
+
 ;; A cross-harness run is enabled by *generating personas that declare the kind*, not by a
 ;; production override: `oh` has no spawn-time kind selector, so the smoke drives the same
 ;; frontmatter tier an operator would. The copies keep the shipped bodies, so only the
@@ -164,7 +185,8 @@
                             {:expected-prefix (str prefix "/scout-") :actual (:label child-entry) :task (:task child-entry)})))
         ;; Runs before the retro leg's branch so both branches report it, and after the
         ;; nested leg so a failure here is never confused with a spawn or fan-in failure.
-        continuation (continue-leg! model)]
+        continuation (continue-leg! model)
+        stream (stream-leg! model)]
     (when-not child-entry (throw (ex-info "nested smoke did not record a planner-prefixed scout label" {:planner-label (:label planner-entry)})))
     ;; This root owns the two children it spawned directly, so it closes them itself --
     ;; before the nested-close assertion below, not after. A grandchild the planner failed
@@ -189,7 +211,7 @@
     ;; and a third-party adoption without that skill is a supported configuration.
     (if-not (cli/retro-skill-path)
       (println (core/json-envelope true {:root-task (:task root) :nested-task (:task nested)
-                                         :continuation continuation
+                                         :continuation continuation :stream stream
                                          :retro-leg "skipped: no retro skill installed"
                                          :root-label (:label root-entry) :nested-label (:label child-entry)
                                          :child-sessions (mapv (partial session! kind) [root-entry planner-entry child-entry])}))
@@ -202,7 +224,7 @@
             retro-entry (retro-gated-in! (entry! retro))]
         (close! (:task retro) "retro")
         (println (core/json-envelope true {:root-task (:task root) :nested-task (:task nested) :retro-task (:task retro)
-                                           :continuation continuation
+                                           :continuation continuation :stream stream
                                            :root-label (:label root-entry) :nested-label (:label child-entry)
                                            :retro-source (:retro-source retro-entry) :process (:process retro)
                                            :child-sessions (mapv (partial session! kind) [root-entry planner-entry child-entry retro-entry])}))))))

@@ -98,8 +98,8 @@ start_busy_gate() {
 }
 # publish_result [child-name]: publishes from the named child's captured env when it is
 # known, otherwise from the single-child FAKE_HERDR_ENV_FILE (unchanged behaviour).
-# Publication is exactly once and immutable in the real protocol (`publish` refuses an
-# existing RESULT), so an already-published child is never re-published here either: a
+# Each published item file is immutable in the real protocol (`publish` never overwrites
+# an existing item), so an already-written item is never re-published here either: a
 # second wait on the same child must not clobber an envelope a test wrote by hand.
 publish_result() {
   local env_file="${FAKE_HERDR_ENV_FILE:-}" per_child status
@@ -108,15 +108,28 @@ publish_result() {
     [ -f "$per_child" ] && env_file="$per_child"
   fi
   [ -n "$env_file" ] && [ -f "$env_file" ] || return 0
-  local result child task
-  result="$(grep '^HERDR_ORCH_RESULT=' "$env_file" | head -1 | cut -d= -f2-)"
-  [ -n "$result" ] && [ -f "$result" ] && return 0
+  local base_result result child task status item=1 count_file="" count=0
+  base_result="$(grep '^HERDR_ORCH_RESULT=' "$env_file" | head -1 | cut -d= -f2-)"
   child="$(grep '^HERDR_ORCH_CHILD=' "$env_file" | head -1 | cut -d= -f2-)"
   task="$(grep '^HERDR_ORCH_TASK=' "$env_file" | head -1 | cut -d= -f2-)"
   status="${FAKE_PUBLISH_STATUS:-COMPLETE}"
   if [ -n "$child" ] && [ -f "$(state_dir)/children/$child/publish-status" ]; then
     status="$(cat "$(state_dir)/children/$child/publish-status")"
   fi
+  # An optional sequence makes repeated child waits publish immutable stream items. Without
+  # it, preserve the historic one-result fixture behaviour exactly.
+  if [ -n "${FAKE_PUBLISH_STATUSES:-}" ]; then
+    local -a statuses
+    read -r -a statuses <<<"$FAKE_PUBLISH_STATUSES"
+    count_file="$(state_dir)/children/${child:-default}/publish-count"
+    [ -f "$count_file" ] && count="$(cat "$count_file")"
+    [ "$count" -lt "${#statuses[@]}" ] || return 0
+    status="${statuses[$count]}"
+    item=$((count + 1))
+  fi
+  result="$base_result"
+  [ "$item" -gt 1 ] && result="$base_result.$item"
+  [ -n "$result" ] && [ -f "$result" ] && return 0
   [ "${FAKE_BAD_ENVELOPE:-}" = 1 ] && task=wrong
   local process_section=""
   if [ -n "${FAKE_PUBLISH_PROCESS:-}" ]; then
@@ -129,7 +142,7 @@ publish_result() {
 --- HERDR RESULT v1 ---
 CHILD: $child
 TASK: $task
-RESULT: $result
+RESULT: $base_result
 STATUS: $status
 SUMMARY: fake completed
 ARTIFACTS:
@@ -139,6 +152,9 @@ FINDINGS:
 NEXT: none
 ${process_section}--- END HERDR RESULT ---
 EOF
+  if [ -n "$count_file" ]; then
+    printf '%s' "$item" >"$count_file"
+  fi
 }
 # Each `agent list` publishes the first child named in <state>/publish-queue and consumes
 # that line, modelling children that publish while a parent polls in `collect --any`.

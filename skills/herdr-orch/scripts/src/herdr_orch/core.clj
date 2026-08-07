@@ -5,7 +5,9 @@
             [cheshire.core :as json]))
 
 (def schema "herdr-orch/v1")
-(def statuses #{"COMPLETE" "BLOCKED" "FAILED"})
+(def statuses #{"COMPLETE" "BLOCKED" "FAILED" "WAITING"})
+(def terminal-statuses #{"COMPLETE" "BLOCKED" "FAILED"})
+(defn terminal-status? [status] (contains? terminal-statuses status))
 (def policies #{"blocking" "non-blocking"})
 (def max-findings 5)
 (defn findings-limit! [findings]
