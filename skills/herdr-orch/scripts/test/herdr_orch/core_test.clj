@@ -28,8 +28,10 @@
     (is (nil? (core/resolve-persona #{} directories "unknown"))))
   (is (= "right" (core/direction {:width 160 :height 80})))
   (is (= "down" (core/direction {:width 113 :height 110})))
-  (is (= "pi" (core/resolve-kind {:requested nil :frontmatter {:kind "pi"} :parent-kind "claude"})))
-  (is (= "codex" (core/resolve-kind {:requested "codex" :frontmatter {:kind "pi"} :parent-kind "claude"})))
+  ;; Two tiers, and nothing above them: a definition's `kind:`, else the parent's.
+  (is (= "claude" (core/resolve-kind {:frontmatter {} :parent-kind "claude"})))
+  (is (= "pi" (core/resolve-kind {:frontmatter {:kind "pi"} :parent-kind "claude"})))
+  (is (thrown? Exception (core/resolve-kind {:frontmatter {} :parent-kind nil})))
   ;; A requested model still wins over every frontmatter and parent-model value.
   (is (= "m" (core/resolve-model {:requested "m" :resolved-kind "pi" :frontmatter {:kind "pi" :model "f"} :parent-kind "pi" :parent-model "p"})))
   ;; A definition model now survives a kind override instead of being dropped: it is
@@ -380,18 +382,14 @@
     (is (not (str/includes? (cli/delegation-guidance ["scout" "researcher" "advisor"]) banned)) banned))
   (is (thrown? clojure.lang.ArityException (cli/delegation-guidance ["scout"] ["advisor"])))
   (is (= {:status "COMPLETE"} (smoke/complete! {:status "COMPLETE"})))
-  ;; An unset selector preserves today's Pi-default argv; an explicit selector is
-  ;; forwarded independently of the model, so the roster translates that kind's column.
+  ;; The smoke carries no harness selector in its argv: a cross-harness run generates
+  ;; personas that declare the kind (`with-personas`), which is the only tier there is.
   (is (= ["task" "run" "scout" "--model" "light" "--task" "smoke"]
-         (smoke/smoke-task-args "scout" nil "light" "smoke")))
-  (is (= ["task" "run" "scout" "--kind" "claude" "--model" "light" "--task" "smoke"]
-         (smoke/smoke-task-args "scout" "claude" "light" "smoke")))
+         (smoke/smoke-task-args "scout" "light" "smoke")))
   ;; The worker retro leg is deliberately explicit, retaining the original flag
   ;; semantics rather than relying on the default retro policy.
   (is (= ["task" "run" "worker" "--retro" "--model" "light" "--task" "smoke"]
-         (smoke/smoke-task-args "worker" nil "light" "smoke" :retro? true)))
-  (is (= ["task" "run" "worker" "--retro" "--kind" "claude" "--model" "light" "--task" "smoke"]
-         (smoke/smoke-task-args "worker" "claude" "light" "smoke" :retro? true)))
+         (smoke/smoke-task-args "worker" "light" "smoke" :retro? true)))
   (testing "session! tolerates only the kinds herdr does not track"
     ;; claude: herdr reports no `agent_session`, so absence is reported rather than fatal.
     ;; This is the assertion that failed a claude smoke whose every leg published COMPLETE.

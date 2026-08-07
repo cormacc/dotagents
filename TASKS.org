@@ -225,31 +225,6 @@ Deferred from 2fe1ce2a (see [[file:design/log/2026-07-30-optimise-test-build.org
 - Only act if CI actually demonstrates timing flakiness
 - Pin `OT_TEST_PARALLELISM` to the container CPU limit in the CI invocation
 
-** TODO herdr-orch: make kind a deployment property, not a spawn-time flag :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 9c17f4b7-9bae-4a83-9f19-5346e463832e
-:CREATED: [2026-08-06 Thu 22:29]
-:END:
-:LOGBOOK:
-- Created [2026-08-06 Thu 22:29]
-:END:
-Collapse harness-kind resolution from three tiers to two: persona frontmatter `kind:` overrides an inherited parent kind, and `--kind` is removed from `oh task run|start`. Model stays a per-assignment dial (`--model` > frontmatter > same-kind parent inheritance), unchanged. Rationale: kind is a deployment property (which CLI, which approval model, which sandbox) decided once per persona/machine; model is a cost/quality dial chosen per task. Conflating them on adjacent flags is what makes the current surface error-prone.
-
-Origin: this session I spawned a worker from the phrase "claude-opus worker" and passed `--kind claude`, reading a harness name out of what is only a model alias (`config.edn:49` maps `claude-opus` -> `anthropic/claude-opus-5`). The CLI behaved exactly as specified -- explicit request beat inheritance -- so this is a surface-design problem, not a resolution bug. The user reports regularly wanting a spawn-time model override and essentially never a kind override.
-
-Measured while assessing this:
-- `core.clj:110-112`: `resolve-kind` is `(or requested (:kind frontmatter) parent-kind)`.
-- No persona in `skills/herdr-orch/subagents/*.md` or `~/.agents/subagents/*.md` declares `kind:` -- the frontmatter tier has never fired. The tier this change keeps is currently unused; the tier it removes is the one in use. Framing it as "collapse and relocate", not "keep the useful tier".
-- The ledger entry written at `cli.clj:391` records no `:kind` and no resolved `:model`. Across 15 historical entries the only `"kind"` is the path/id discriminator inside `:child-session`. Harness usage is therefore unmeasurable from the ledger, and the "we override model, not kind" premise is currently testimony rather than measurement.
-
-Scope:
-- Remove `--kind` from `oh task run|start` only. Raw `oh agent start --kind` stays: it is a Herdr passthrough (`cli.clj:1069`) with no persona resolution in play.
-- Keep a benchmarking escape hatch as an env var (`ORCH_FORCE_KIND`, or generalise the existing `ORCH_LIVE_SMOKE_KIND` at `contract.md:39`). Load-bearing: `smoke.clj:51-55` passes `--kind`, and the cross-harness smoke is what established that Herdr reports `agent_session` for pi but not for claude (`smoke.clj:18-28`). An env var cannot be produced by misreading a natural-language phrase; a flag can.
-- Persist `:kind` and the resolved `:model` in the ledger entry and echo them in the spawn result envelope, so a wrong harness is visible at spawn instead of discovered later, and so this premise becomes measurable next time.
-- Delete the defensive prose that exists only because `--kind` sits beside `--model`: the SKILL.md kind/model routing rule and its "never pass --kind to mean the same harness as me" paragraph, `contract.md:69` and `:88`, and the Subagents bullet in both AGENTS.md copies. This is the token-saving half of the change.
-
-Dependency discharged 2026-08-07: the close/continue lifecycle work (`4957d0e5-5bda-4532-aa20-631fbde1983b`, now closed and archived) has landed, so `cli.clj`, the ledger schema, and the four documents this touches are no longer moving under it. Re-read them before starting -- the line numbers cited above predate that change and several of those files were substantially rewritten.
-
 ** TODO org-tasks: bb test runner should validate its arguments and explain itself :tooling:
 :PROPERTIES:
 :CUSTOM_ID: 8fcbb2fb-30bd-4fb9-aa54-95b4a315b91a

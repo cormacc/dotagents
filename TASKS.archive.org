@@ -2583,3 +2583,55 @@ Origin:
 
 Evidence:
 This session ran multiple incremental reviews of one evolving change-record and implementation. Ephemeral reviewers rebuilt repository and artifact context each round; citing previous reports reduced duplicate findings but did not remove re-ingestion. Current source has no resident ledger field or CLI flag, and maybe-close! automatically closes settled COMPLETE/FAILED children after capture. The skill describes resident policy, but the task protocol provides no supported conversion or reuse operation.
+
+** DONE herdr-orch: make kind a deployment property, not a spawn-time flag :skill:herdr_orch:
+CLOSED: [2026-08-07 Fri 17:17]
+:PROPERTIES:
+:CUSTOM_ID: 9c17f4b7-9bae-4a83-9f19-5346e463832e
+:CREATED: [2026-08-06 Thu 22:29]
+:STARTED: [2026-08-07 Fri 16:52]
+:ARCHIVED: [2026-08-07 Fri 17:17]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 22:29]
+- State "STARTED" from "TODO" [2026-08-07 Fri 16:52]
+- State "DONE" from "STARTED" [2026-08-07 Fri 16:58]
+- State "STARTED" from "DONE" [2026-08-07 Fri 17:01]
+- State "DONE" from "STARTED" [2026-08-07 Fri 17:17]
+:END:
+Collapse harness-kind resolution from three tiers to two: persona frontmatter `kind:` overrides an inherited parent kind, and `--kind` is removed from `oh task run|start`. Model stays a per-assignment dial (`--model` > frontmatter > same-kind parent inheritance), unchanged. Rationale: kind is a deployment property (which CLI, which approval model, which sandbox) decided once per persona/machine; model is a cost/quality dial chosen per task. Conflating them on adjacent flags is what makes the current surface error-prone.
+
+Origin: this session I spawned a worker from the phrase "claude-opus worker" and passed `--kind claude`, reading a harness name out of what is only a model alias (`config.edn:49` maps `claude-opus` -> `anthropic/claude-opus-5`). The CLI behaved exactly as specified -- explicit request beat inheritance -- so this is a surface-design problem, not a resolution bug. The user reports regularly wanting a spawn-time model override and essentially never a kind override.
+
+Measured while assessing this:
+- `core.clj:110-112`: `resolve-kind` is `(or requested (:kind frontmatter) parent-kind)`.
+- No persona in `skills/herdr-orch/subagents/*.md` or `~/.agents/subagents/*.md` declares `kind:` -- the frontmatter tier has never fired. The tier this change keeps is currently unused; the tier it removes is the one in use. Framing it as "collapse and relocate", not "keep the useful tier".
+- The ledger entry written at `cli.clj:391` records no `:kind` and no resolved `:model`. Across 15 historical entries the only `"kind"` is the path/id discriminator inside `:child-session`. Harness usage is therefore unmeasurable from the ledger, and the "we override model, not kind" premise is currently testimony rather than measurement.
+
+Scope:
+- Remove `--kind` from `oh task run|start` only. Raw `oh agent start --kind` stays: it is a Herdr passthrough (`cli.clj:1069`) with no persona resolution in play.
+- Keep a benchmarking escape hatch as an env var (`ORCH_FORCE_KIND`, or generalise the existing `ORCH_LIVE_SMOKE_KIND` at `contract.md:39`). Load-bearing: `smoke.clj:51-55` passes `--kind`, and the cross-harness smoke is what established that Herdr reports `agent_session` for pi but not for claude (`smoke.clj:18-28`). An env var cannot be produced by misreading a natural-language phrase; a flag can.
+- Persist `:kind` and the resolved `:model` in the ledger entry and echo them in the spawn result envelope, so a wrong harness is visible at spawn instead of discovered later, and so this premise becomes measurable next time.
+- Delete the defensive prose that exists only because `--kind` sits beside `--model`: the SKILL.md kind/model routing rule and its "never pass --kind to mean the same harness as me" paragraph, `contract.md:69` and `:88`, and the Subagents bullet in both AGENTS.md copies. This is the token-saving half of the change.
+
+Dependency discharged 2026-08-07: the close/continue lifecycle work (`4957d0e5-5bda-4532-aa20-631fbde1983b`, now closed and archived) has landed, so `cli.clj`, the ledger schema, and the four documents this touches are no longer moving under it. Re-read them before starting -- the line numbers cited above predate that change and several of those files were substantially rewritten.
+
+Inline plan (agreed approach, no change-record):
+- One env var, not two: `ORCH_LIVE_SMOKE_KIND` is generalised into `ORCH_FORCE_KIND`, read at the `cli` spawn boundary so it applies to every `task run|start` in that process. `smoke.clj` stops passing `--kind` and reads the same variable only to decide `session!` tolerance (Herdr tracks `agent_session` for pi, not claude). Nested children keep inheriting the parent kind Herdr measured, so the variable needs no injection into the child pane.
+- `--kind` on `task run|start` is refused loudly with an actionable message naming persona frontmatter `kind:` and `ORCH_FORCE_KIND`. Flags parse open-endedly (`option-map`), so silence would otherwise be the default behaviour and the misuse this task is about would become invisible instead of impossible.
+- `core/resolve-kind`'s first tier is renamed `:requested` -> `:forced`, so the remaining tier cannot be re-wired to a flag by accident.
+- The spawn ledger entry gains `:kind` and `:model` (resolved, pre-alias); `continue` inherits both with the rest of the display/policy metadata. `task start` returns the entry, so echoing is the same change.
+
+Acceptance criteria:
+- [X] `oh task run|start --kind X` exits non-zero with a message naming both `kind:` frontmatter and `ORCH_FORCE_KIND`.
+- [X] `ORCH_FORCE_KIND=claude oh task start <persona>` reaches `herdr agent start --kind claude`.
+- [X] Persona frontmatter `kind:` still beats the inherited parent kind.
+- [X] A spawn ledger entry records `:kind` and the resolved `:model`, and a continued round inherits both.
+- [X] `bb test` green (534 tests, 3321 assertions, 0 failures).
+- [X] `rg -- '--kind'` over SKILL.md, contract.md, README.org, and both AGENTS.md copies returns only raw-Herdr `agent start` references.
+
+Anti-criteria:
+- Must not: remove or gate `--kind` on raw `oh agent start`.
+- Must not: let a model ID or weight alias select a harness.
+- Must not: accept and ignore `--kind` on `task run|start`.

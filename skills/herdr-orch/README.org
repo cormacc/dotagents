@@ -77,7 +77,7 @@ retro: false        # omit to use the installation default
 <the persona's instructions>
 #+end_src
 
-All four keys are optional. Omitting =kind= is usually right: the child then inherits the harness Herdr measured for the parent, rather than one you assumed.
+All four keys are optional. Omitting =kind= is usually right: the child then inherits the harness Herdr measured for the parent. =kind= is the *only* place a harness is chosen -- no flag, no env var -- because which CLI a child runs is a deployment property, not a per-assignment dial like =model=. A cross-harness comparison is a definition declaring the other harness.
 
 ** Model configuration
 
@@ -277,7 +277,7 @@ Publication identity comes from injected =HERDR_ORCH_*= variables rather than th
 
 =agents.nix= deploys =~/.agents/skills= as a directory symlink, which includes this skill's packaged =subagents/= directory. Launcher canonicalisation must therefore use physical paths when locating the repository configuration while retaining the absolute deployed launcher path injected into the child. Do not project packaged definitions into =~/.agents/subagents/=: that path is deliberately unmanaged and reserved for genuine home overrides; project overrides remain =<git-root>/.agents/subagents/=.
 
-=bb smoke-subagent= is billable and guarded by =HERDR_ENV=1=, =ORCH_LIVE_SMOKE=1=, and =ORCH_LIVE_SMOKE_MODEL= (with optional =ORCH_LIVE_SMOKE_KIND= to exercise a non-default harness). It calls =cli/execute= in-process and therefore cannot validate the Bash launcher. Launcher changes need a separate deployed-path smoke from a scratch project. The retrospective leg deliberately lets the child encounter an unannounced invalid command: announcing the trap turns it into a known one-off that the =retro= eligibility gate correctly rejects.
+=bb smoke-subagent= is billable and guarded by =HERDR_ENV=1=, =ORCH_LIVE_SMOKE=1=, and =ORCH_LIVE_SMOKE_MODEL= (with optional =ORCH_LIVE_SMOKE_KIND=, applied by generating =kind:=-declaring persona copies). It calls =cli/execute= in-process and therefore cannot validate the Bash launcher. Launcher changes need a separate deployed-path smoke from a scratch project. The retrospective leg deliberately lets the child encounter an unannounced invalid command: announcing the trap turns it into a known one-off that the =retro= eligibility gate correctly rejects.
 
 Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, and are indistinguishable from genuine ones in the collected envelope. Never route them to =self-improvement= or report them as durable findings.
 

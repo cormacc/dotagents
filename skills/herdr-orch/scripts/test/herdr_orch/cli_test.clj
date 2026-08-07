@@ -215,6 +215,34 @@
     (is (= ["pane" "rename" "w:child" "worker-1/scout-1-light"] (vec rename)))
     (is (= {:spawns [] :spawns-source "depth"} (select-keys entry [:spawns :spawns-source])))))
 
+;; Kind is a deployment property: no spawn-time flag, and the resolution that did run is
+;; recorded rather than left to be inferred from argv.
+(deftest spawn-kind-is-not-a-flag-and-is-recorded
+  (let [{:keys [env log dir]} (fake-env {})
+        refused (call! env "task" "start" "worker" "--kind" "claude" "--task" "forbidden flag")]
+    (is (= 1 (:exit refused)))
+    (is (re-find #"--kind is not a spawn-time flag" (:out refused)))
+    (is (not-any? mutating? (calls log)))
+    ;; Inherited from the parent kind the fake herdr reports, with the resolved model.
+    (let [proc (call! env "task" "start" "worker" "--model" "heavy" "--task" "recorded")
+          entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= {:kind "pi" :model "heavy"} (select-keys entry [:kind :model])))
+      (is (= {:kind "pi" :model "heavy"} (select-keys (get-in (result proc) [:result]) [:kind :model])))))
+  ;; The two remaining tiers, each on its own: a definition that declares a harness, and a
+  ;; definition that declares none under a non-pi parent.
+  (let [{:keys [env dir]} (fake-env {} {"declared" "---\nname: declared\ndescription: fixture\nkind: claude\n---\nFixture.\n"
+                                        "inheriting" "---\nname: inheriting\ndescription: fixture\n---\nFixture.\n"})
+        kind-of (fn [persona] (let [proc (call! env "task" "start" persona "--task" "kind tiers")]
+                                (is (zero? (:exit proc)) (:err proc))
+                                (:kind (ledger-entry* dir (get-in (result proc) [:result :task])))))]
+    (is (= "claude" (kind-of "declared")))
+    (is (= "pi" (kind-of "inheriting"))))
+  (let [{:keys [env dir]} (fake-env {"FAKE_PARENT_AGENT" "codex"} {"inheriting" "---\nname: inheriting\ndescription: fixture\n---\nFixture.\n"})
+        proc (call! env "task" "start" "inheriting" "--task" "inherits a non-pi parent")]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "codex" (:kind (ledger-entry* dir (get-in (result proc) [:result :task])))))))
+
 (deftest root-worker-spawn-records-and-injects-frontmatter-policy
   (let [{:keys [env env-file dir prompt-file]} (fake-env {})
         proc (call! env "task" "start" "worker" "--task" "root worker policy")
@@ -469,10 +497,10 @@
     (is (str/includes? (slurp prompt-file) "Additional constraints: stay read-only")))
   ;; Also covers the nested planner label end-to-end: the injected persona gates it.
   ;; Below root the spawn gate requires the target in the injected allow-list.
-  (let [{:keys [env log]} (fake-env {"HERDR_ORCH_PERSONA" "planner" "HERDR_ORCH_SPAWNS" "worker"})
+  (let [{:keys [env log]} (fake-env {"HERDR_ORCH_PERSONA" "planner" "HERDR_ORCH_SPAWNS" "worker" "FAKE_PARENT_AGENT" "claude"})
         persona-path (str root "/skills/herdr-orch/subagents/worker.md")
         persona-body (slurp persona-path)
-        claude-proc (call! env "task" "start" "worker" "--kind" "claude" "--model" "sonnet" "--task" "claude persona")
+        claude-proc (call! env "task" "start" "worker" "--model" "sonnet" "--task" "claude persona")
         claude-start (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log)))
         rename (first (filter #(= ["pane" "rename"] (vec (take 2 %))) (calls log)))]
     (is (zero? (:exit claude-proc)))
@@ -615,13 +643,15 @@
         start-argv (fn [] (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))]
     (fs/create-dirs (fs/parent project-config))
     ;; No override: nothing resembling a permission flag reaches `agent start`.
-    (let [proc (call! env "task" "start" "worker" "--kind" "claude" "--model" "sonnet" "--task" "default permissions")]
+    (let [proc (call! (assoc env "FAKE_PARENT_AGENT" "claude") "task" "start" "worker" "--model" "sonnet" "--task" "default permissions")]
       (is (zero? (:exit proc)) (:err proc))
       (is (not-any? #{"--permission-mode" "bypassPermissions" "--dangerously-bypass-approvals-and-sandbox"} (start-argv))))
     (let [{:keys [env log dir]} (fake-env {})
           config (fs/path dir ".agents" "subagents" "config.edn")
           argv-for (fn [kind]
-                     (let [proc (call! env "task" "start" "worker" "--kind" kind "--model" "sonnet" "--task" "bypass permissions")]
+                     ;; The child inherits the harness Herdr reports for its caller, which
+                     ;; is how a kind reaches `agent start` now that no flag can name one.
+                     (let [proc (call! (assoc env "FAKE_PARENT_AGENT" kind) "task" "start" "worker" "--model" "sonnet" "--task" "bypass permissions")]
                        (is (zero? (:exit proc)) (:err proc))
                        (vec (last (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))))]
       (fs/create-dirs (fs/parent config))
@@ -2371,6 +2401,7 @@
     (is (= (:pane-id prior) (:pane-id entry)))
     (is (= (:label prior) (:label entry)))
     (is (= (:persona-path prior) (:persona-path entry)))
+    (is (= (select-keys prior [:kind :model]) (select-keys entry [:kind :model])))
     (is (not= (:result prior) (:result entry)))
     (is (not (fs/exists? (:result entry))))
     (is (nil? (:captured-at entry)))
@@ -3427,25 +3458,25 @@
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"missing shipped default config" (cli/config home-dir)))))))
 
 (def roster-model-personas
-  {"canonical-worker" "---\nname: canonical-worker\ndescription: fixture canonical-id persona\nkind: pi\nmodel: claude-opus-5\n---\nFixture canonical worker.\n"
+  {"canonical-worker" "---\nname: canonical-worker\ndescription: fixture canonical-id persona\nkind: claude\nmodel: claude-opus-5\n---\nFixture canonical worker.\n"
    "kindless-worker" "---\nname: kindless-worker\ndescription: fixture kindless canonical-id persona\nmodel: claude-opus-5\n---\nFixture kindless worker.\n"})
 (defn- start-native-args [log]
   (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))
 (defn- flag-value [argv flag] (second (drop-while #(not= flag %) argv)))
 
-;; Acceptance: a definition model survives a kind override instead of being dropped (the
-;; retired paired kind+model rule), and is translated for the resolved kind.
-(deftest kind-override-retains-and-translates-the-definition-model
+;; Acceptance: a definition model is retained rather than dropped (the retired paired
+;; kind+model rule) and is translated for the kind that definition declares.
+(deftest definition-model-is-translated-for-the-declared-kind
   (let [{:keys [env log]} (fake-env {} roster-model-personas)
-        proc (call! env "task" "start" "canonical-worker" "--kind" "claude" "--task" "kind override retains model")]
+        proc (call! env "task" "start" "canonical-worker" "--task" "declared kind retains model")]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "opus" (flag-value (start-native-args log) "--model")))))
 
 ;; Acceptance: a kindless roster model is now honoured for any resolved kind, not only
 ;; pi (the retired pi-only kindless guard).
 (deftest kindless-model-is-honoured-for-any-resolved-kind
-  (let [{:keys [env log]} (fake-env {} roster-model-personas)
-        proc (call! env "task" "start" "kindless-worker" "--kind" "claude" "--task" "kindless model non-pi kind")]
+  (let [{:keys [env log]} (fake-env {"FAKE_PARENT_AGENT" "claude"} roster-model-personas)
+        proc (call! env "task" "start" "kindless-worker" "--task" "kindless model non-pi kind")]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "opus" (flag-value (start-native-args log) "--model")))))
 
@@ -3453,7 +3484,7 @@
 ;; canonical resolved model and the effective translated native model args.
 (deftest preview-shows-canonical-and-translated-model
   (let [{:keys [env]} (fake-env {} roster-model-personas)
-        proc (call! env "task" "run" "canonical-worker" "--kind" "claude" "--task" "preview translation" "--print-prompt")]
+        proc (call! env "task" "run" "canonical-worker" "--task" "preview translation" "--print-prompt")]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "claude-opus-5" (get-in (result proc) [:result :model])))
     (is (= ["--model" "opus"] (get-in (result proc) [:result :model-args])))))
@@ -3464,7 +3495,7 @@
 (deftest relocated-assignment-root-resolves-project-config-override
   (let [{:keys [env dir]} (fake-env {} roster-model-personas)]
     (spit (str (fs/path dir ".agents" "subagents" "config.edn")) "{:models {\"anthropic/claude-opus-5\" {:claude \"opus-relocated\"}}}")
-    (let [proc (call! env "task" "run" "canonical-worker" "--kind" "claude" "--task" "relocated override" "--print-prompt")]
+    (let [proc (call! env "task" "run" "canonical-worker" "--task" "relocated override" "--print-prompt")]
       (is (zero? (:exit proc)) (:err proc))
       (is (= ["--model" "opus-relocated"] (get-in (result proc) [:result :model-args]))))))
 
@@ -3491,7 +3522,7 @@
 (deftest preview-reports-post-alias-canonical-model
   (let [{:keys [env dir]} (fake-env {} roster-model-personas)]
     (spit (str (fs/path dir ".agents" "subagents" "config.edn")) "{:aliases {\"fixture-heavy\" \"anthropic/claude-opus-5\"}}")
-    (let [proc (call! env "task" "run" "canonical-worker" "--kind" "claude" "--model" "fixture-heavy" "--task" "alias preview" "--print-prompt")]
+    (let [proc (call! env "task" "run" "canonical-worker" "--model" "fixture-heavy" "--task" "alias preview" "--print-prompt")]
       (is (zero? (:exit proc)) (:err proc))
       (is (= "fixture-heavy" (get-in (result proc) [:result :model])))
       (is (= "anthropic/claude-opus-5" (get-in (result proc) [:result :model-canonical])))

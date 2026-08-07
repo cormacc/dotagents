@@ -182,6 +182,15 @@
        (retro-instruction retro-skill)
        (progress-instruction waiting-policy)
        (when prompt-extra (str "\nAdditional constraints: " prompt-extra))))
+;; Kind is a deployment property: a persona declares `kind:` once, or the child inherits the
+;; harness Herdr measured for the parent. `--kind` is refused rather than ignored, because
+;; `option-map` accepts any `--x value` pair and a dropped flag would spawn the wrong harness
+;; silently. Raw `oh agent start --kind` is untouched.
+(defn kind-policy [opts frontmatter parent-kind]
+  (when (one opts :kind)
+    (fail "--kind is not a spawn-time flag: declare `kind:` in the persona definition"
+          {:requested (one opts :kind)}))
+  (core/resolve-kind {:frontmatter frontmatter :parent-kind parent-kind}))
 (defn retro-flag [opts]
   (let [on (boolean (one opts :retro)) off (boolean (one opts :no-retro))]
     (when (and on off) (fail "--retro and --no-retro are mutually exclusive" {}))
@@ -254,7 +263,7 @@
 (defn preview! [persona opts waiting-policy]
   (herdr/preflight!)
   (let [path (roster persona) frontmatter (core/parse-frontmatter (slurp (str path))) ident (parent-identity)
-        kind (core/resolve-kind {:requested (one opts :kind) :frontmatter frontmatter :parent-kind (:parent-kind ident)})
+        kind (kind-policy opts frontmatter (:parent-kind ident))
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
         config (config)
         placement (placement-policy opts config)
@@ -461,7 +470,7 @@
       (let [path (roster persona)
             frontmatter (core/parse-frontmatter (slurp (str path)))
             ident (parent-identity)
-            kind (core/resolve-kind {:requested (one opts :kind) :frontmatter frontmatter :parent-kind (:parent-kind ident)})
+            kind (kind-policy opts frontmatter (:parent-kind ident))
             model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
             ;; Loaded and schema-validated here, before `ledger/fresh-result`'s
             ;; `fs/create-dirs` and every later ledger/pane mutation: malformed config
@@ -486,7 +495,7 @@
             assignment (task-text opts)
             bin (launcher-bin)
             name (child-name persona task)
-            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :timeout (:timeout timeout) :timeout-source (:timeout-source timeout) :placement placement :focus focus :status "allocating" :created-at (now)}]
+            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :kind kind :model model :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :timeout (:timeout timeout) :timeout-source (:timeout-source timeout) :placement placement :focus focus :status "allocating" :created-at (now)}]
         ;; Persist before the first pane mutation, so every partial failure is recoverable.
         (ledger/write! entry)
         (try
@@ -1382,7 +1391,7 @@
               ;; belongs to the spawn that created it and has no relation to this round's
               ;; own uuid. Display and policy metadata carry over unchanged; the parent
               ;; fields come from the caller, which owns this round.
-              next-entry (merge (select-keys entry [:child :pane-id :tab-id :label :index :persona-path :retro :retro-source :spawns :spawns-source :timeout :timeout-source :placement :shell-pid])
+              next-entry (merge (select-keys entry [:child :pane-id :tab-id :label :index :persona-path :kind :model :retro :retro-source :spawns :spawns-source :timeout :timeout-source :placement :shell-pid])
                                 {:task task :result result :continues prior-task
                                  :parent-session caller :parent-pane (:parent-pane ident)
                                  :waiting-policy waiting-policy :status "continuing" :created-at (now)})]
@@ -1591,7 +1600,7 @@
             "rename <target> (<name> | --clear)"
             "list"
             "get <target>"]
-   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--kind KIND] [--model MODEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--prompt-extra TEXT] [--print-prompt]"
+   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--model MODEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--prompt-extra TEXT] [--print-prompt]"
            "start <persona> (--task TEXT | --task-file PATH | stdin) [same options as run]"
            "collect <full-task-uuid> [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
            "collect --any [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"

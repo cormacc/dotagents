@@ -132,8 +132,13 @@
 (defn direction [{:keys [width height]}]
   (if (and (>= width 80) (>= width (* 2 height))) "right" "down"))
 (defn model-basename [model] (some-> model (str/split #"/") last))
-(defn resolve-kind [{:keys [requested frontmatter parent-kind]}]
-  (or requested (:kind frontmatter) parent-kind
+;; Two tiers, and no third. Kind is a deployment property -- which CLI, which approval
+;; model, which sandbox -- declared once in a persona's `kind:` or inherited from the
+;; harness Herdr measured for the parent. Nothing per-assignment selects it: not a flag,
+;; not an env var. A caller wanting a different harness writes a definition that declares
+;; one, which is the same mechanism a benchmark uses.
+(defn resolve-kind [{:keys [frontmatter parent-kind]}]
+  (or (:kind frontmatter) parent-kind
       (throw (ex-info "could not resolve agent kind" {}))))
 (defn resolve-model [{:keys [requested resolved-kind frontmatter parent-kind parent-model]}]
   (cond requested requested

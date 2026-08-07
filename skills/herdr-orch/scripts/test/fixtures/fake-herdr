@@ -210,7 +210,9 @@ case "${1:-}" in
         if [ "${FAKE_FAIL_CHILD_GET:-}" = 1 ] && [ "${3:-}" != w:p ]; then echo '{"error":"agent get"}' >&2; exit 1; fi
         # The parent pane. FAKE_PARENT_STATUS / FAKE_PARENT_SESSION drive the advisory
         # push gates at publish time; their defaults keep the historical shape exactly.
-        if [ "${3:-}" = w:p ]; then printf '{"result":{"agent":{"agent":"pi","pane_id":"w:p","agent_session":{"value":"%s"},"agent_status":"%s"}}}\n' "${FAKE_PARENT_SESSION:-session}" "${FAKE_PARENT_STATUS:-idle}"; else
+        # FAKE_PARENT_AGENT is the harness Herdr reports for the caller, which is the tier
+        # a child inherits its kind from when its definition declares none.
+        if [ "${3:-}" = w:p ]; then printf '{"result":{"agent":{"agent":"%s","pane_id":"w:p","agent_session":{"value":"%s"},"agent_status":"%s"}}}\n' "${FAKE_PARENT_AGENT:-pi}" "${FAKE_PARENT_SESSION:-session}" "${FAKE_PARENT_STATUS:-idle}"; else
           # A `gone` marker models a vanished child: `agent get` fails as it does when
           # Herdr no longer knows the agent name.
           if [ -f "$(state_dir)/children/${3:-}/gone" ]; then
