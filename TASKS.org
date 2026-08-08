@@ -224,31 +224,7 @@ Identified and reproduced by the third closeout review of `43e7c65c`; full analy
 
 * Agent feedback
 
-** TODO subagent: safer concurrent shared-file writes across parallel workers :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 3fa0b8dd-193a-4177-beac-17cdf14cda32
-:CREATED: [2026-07-30 Thu 14:47]
-:END:
-:LOGBOOK:
-- Created [2026-07-30 Thu 14:47]
-:END:
-Two parallel workers editing the same repo (disjoint per-file anchors, no shared state) can still race on a genuinely shared file: one workers own uncommitted append to `cli_test.clj` was silently clobbered by a siblings stale-read write during this sessions parallel progress/artifact-links wave. Both workers self-detected via a failing `bb test` and re-verified before publishing, so no data was permanently lost, but nothing in the mechanism prevents it. A partial mitigation already landed (worker.md/skilled-worker.md: re-read and confirm your own edit survived before publishing when a concurrent sibling is named), but that is a per-worker habit, not a structural guarantee.
-
-Consider a more systemic fix: e.g. the orchestrator applying all edits to files two or more concurrent workers might touch itself (serializing just those hunks) rather than delegating shared-file edits to both workers directly, or a lightweight advisory lock file per touched path that a worker checks before and after writing.
-
-*EDIT* An alternative strategy would be to embed some orchestration guidance in a new section of the herdr-orch skill (OR a new orchestration skill? Though probably the former). When planning implementation, parallel workers should be used only for completely orthogonal tasks. Consider whether some consideration for orchestration should be included in the org-plan workflow and/or planner subagent -- as the context required for these decisions has likely already been built during planning? Evaluate the viability of using git worktrees for parallel workers -- either across the board, or just when some risk of overlap has been flagged.
-
-*EDIT 2* [2026-07-31 Fri] Part of the strategy above landed via the test-build retro, as a second prevention-side partial mitigation: herdr-orch § Invocation policy (Cardinality) now states that concurrency is bounded by edit targets as well as by N and forbids fanning out siblings whose file sets overlap, and org-plan § Splitting test now keeps work that must edit the same function or form in one task. Both are orchestrator/planner habits, so the structural guarantee this task asks for is still open. Remaining: the git-worktree-per-worker evaluation, whether the `planner` persona itself should carry overlap analysis (its plan for [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]] split one edit to one `fake-env` map across two nominally independent tasks, which forced the orchestrator to re-serialise them), and orchestrator-applied or advisory-locked shared-file writes.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-07-30 Thu 15:05]
-- sender: agent
-
-Evidence:
-design/log/2026-07-29-subagent-comms-housekeeping.org, Implementation § Portable Markdown artifact links (task 41a5c747): "this workers own append to cli_test.clj was silently clobbered by the concurrent sibling workers stale-read write... a herdr-orch follow-up on safer concurrent file writes across parallel workers may be worth filing separately from this record."
-*** TODO Spike worktree-backed herdr-orch fan-out :skill:herdr_orch:
+*** TODO herdr-orch: worktree-backed fan-out  :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: e28067af-282f-47bd-b8fe-809663925f7b
 :CREATED: [2026-08-04 Tue 20:29]
@@ -256,7 +232,10 @@ design/log/2026-07-29-subagent-comms-housekeeping.org, Implementation § Portabl
 :LOGBOOK:
 - Created [2026-08-04 Tue 20:29]
 :END:
-Upstream Herdr 0.7.5 ships `herdr worktree create|open|remove` (git worktree-backed workspaces, grouped with the parent repo workspace). This could lift the SKILL.md constraint that children share one worktree, so siblings whose file sets overlap must be sequenced or merged into one assignment -- each child would get its own checkout and edits would reconcile as ordinary branch merges.
+
+Parallel workers editing the same repo can race on a shared file.
+
+Upstream Herdr ships `herdr worktree list|create|open|remove` (git worktree-backed workspaces, grouped with the parent repo workspace); verified present in herdr 0.8.0. This could lift the SKILL.md constraint that children share one worktree, so siblings whose file sets overlap must be sequenced or merged into one assignment -- each child would get its own checkout and edits would reconcile as ordinary branch merges.
 
 Spike, not a patch. Known interactions to resolve first:
 - The ledger/assignment root resolves per git root, so a child in a different checkout resolves a *different* assignment root unless `ORCH_ASSIGNMENT_ROOT` is injected (today injected only when overridden).
@@ -264,7 +243,9 @@ Spike, not a patch. Known interactions to resolve first:
 - Result paths must stay in the parent root -- `ORCH_ASSIGNMENT_ROOT` injection already achieves this.
 - Merge and cleanup burden moves to the parent.
 
-If validated, cite it in SKILL.md as the escape hatch for the overlapping-file-set rule. Source: design review of herdr-orch against upstream docs (herdr 0.7.5, protocol 18).
+If validated, cite it in SKILL.md as the escape hatch for the overlapping-file-set rule. Source: design review of herdr-orch against upstream docs (herdr 0.7.5, protocol 18); the `ORCH_ASSIGNMENT_ROOT` caveat above re-verified against cli.clj:622 on [2026-08-08], which still injects it only when it is already set in the parent env.
+
+*EDIT* [2026-07-31 Fri] Part of the strategy above landed via the test-build retro, as a second prevention-side partial mitigation: herdr-orch § Invocation policy (Cardinality) now states that concurrency is bounded by edit targets as well as by N and forbids fanning out siblings whose file sets overlap, and org-plan § Splitting test now keeps work that must edit the same function or form in one task. Both are orchestrator/planner habits, so the structural guarantee this task asks for is still open. Remaining: the git-worktree-per-worker evaluation, whether the `planner` persona itself should carry overlap analysis (its plan for [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]] split one edit to one `fake-env` map across two nominally independent tasks, which forced the orchestrator to re-serialise them), and orchestrator-applied or advisory-locked shared-file writes.
 
 ** TODO [#B] Skill vendoring improvements :project_convention:
 :PROPERTIES:
@@ -406,17 +387,19 @@ Acceptance criteria:
 A harness absent from herdr's `agent start --kind` enum (e.g. dirge) cannot participate in delegation at all today, even though most of the protocol does not actually depend on agent registration. Adding the kind upstream is the clean fix; this task is the local workaround.
 
 What already works without registration (verified):
-- `task publish` takes identity purely from the injected HERDR_ORCH_* env vars and makes no herdr agent call (cli.clj:443).
+- `task publish` takes identity purely from the injected HERDR_ORCH_* env vars and makes no herdr agent call (`publish!` cli.clj:881, `publish-round!` cli.clj:843). The result-item stream added a parent toast, but that is `notification show` (herdr.clj:243), not an agent call, so this still holds.
 - `task collect <full-task-uuid>` captures and validates the result file, and closes no pane on any path (`finish-capture!`; `maybe-close!` was removed with the explicit close/continue lifecycle in 436cbe2). The only agent call left in capture is a best-effort `agent get` that backfills the child's session reference, and a failed lookup there is swallowed, so an unregistered child still captures cleanly.
-- `pane split --env KEY=VALUE` can inject the protocol variables (cli.clj:755 -> herdr.clj:89). Note `oh spawn` cannot -- it hardcodes :env {} (cli.clj:827).
+- `pane split --env KEY=VALUE` can inject the protocol variables (cli.clj:1821 -> `herdr/split!` herdr.clj:78 -> `env-args` herdr.clj:73). Note `oh spawn` cannot -- it hardcodes :env {} (cli.clj:1900).
 
 What is blocked:
-- Spawning: spawn! calls herdr/start! with the kind (cli.clj:339), and `agent start` additionally verifies the expected agent was *detected*, so PATH-shadowing a supported kind fails rather than mis-registering.
-- Orchestrating: parent-identity (cli.clj:122) runs `agent get` on $HERDR_PANE_ID, so an unsupported harness cannot drive `task run`/`start`, `collect --any`, or `prune` either. Verified empirically: from a bare pane, `oh task run scout --task x --print-prompt` fails with agent_not_found.
+- Spawning: spawn! (cli.clj:579) calls herdr/start! with the kind (cli.clj:652), and `agent start` additionally verifies the expected agent was *detected*, so PATH-shadowing a supported kind fails rather than mis-registering.
+- Orchestrating: parent-identity (cli.clj:156) runs `herdr/agent!` on $HERDR_PANE_ID, so an unsupported harness cannot drive `task run`/`start`, `collect --any`, or `prune` either. Verified empirically: from a bare pane, `oh task run scout --task x --print-prompt` fails with agent_not_found.
 
 Desired outcome: let a :harnesses entry declare itself launch-by-command (a command template plus e.g. :managed false). spawn! then uses `pane split` + `pane run` instead of `agent start` and flags the ledger entry as unmanaged.
 
 Load-bearing safety requirement: for an unmanaged entry, `prune` and `collect --any` must treat absence from `agent list` as *unknown*, never as proof of death. Today absence is part of prune's staleness proof, so an unmanaged child that is alive and working satisfies the whole proof (uncaptured, non-terminal, no RESULT yet, absent from the listing) and can be pruned mid-flight. Shipping the launch path without this would build that hazard into the tool.
+
+*EDIT* [2026-08-08] Citations above re-verified against current source; every line number in the original body had drifted and is corrected here, while every substantive claim still holds. Two things have since moved toward this task: `prune!` (cli.clj:914) now refuses outright with "prune refused: agent list is unusable; liveness is unknown", which is exactly the unknown-liveness distinction the safety requirement needs, generalised from the listing being unreadable to the child being unlistable; and making harness kind a deployment property (dabca39) reshaped the `:harnesses` config surface a `:managed false` entry would live in, so re-read that before designing the flag.
 
 Accepted degradation for unmanaged kinds: no lifecycle states, no :child-session, no auto-close, no agent prompt/wait/read, excluded from fan-in, and no ability to spawn grandchildren. The result file remains the completion signal, which is the part that matters.
 
@@ -448,7 +431,7 @@ Origin:
 Evidence:
 A reviewer subagent's preliminary rebase validation repeated a delimiter error in a complex bb -e form once per locale, then initially double-escaped a Clojure regex literal so re-matches failed. The current Clojure skill already warns that multi-line bb -e is fragile, but does not require a one-input smoke test before looping or explicit positive/negative regex examples.
 
-** TODO herdr-orch: recover incomplete child completion states :skill:herdr_orch:
+** TODO herdr-orch: recover a settled child that never published :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: f61dab75-0f20-4b24-8b95-7f43ad8610ba
 :CREATED: [2026-08-06 Thu 10:24]
@@ -456,7 +439,11 @@ A reviewer subagent's preliminary rebase validation repeated a delimiter error i
 :LOGBOOK:
 - Created [2026-08-06 Thu 10:24]
 :END:
-Herdr orchestration leaves two completion edge cases to manual pane intervention: a settled child may finish without publishing its RESULT, while a child with a validated COMPLETE result may remain reported as working and therefore evade automatic pane closure. Add a safe, parent-owned recovery path that distinguishes these states, preserves result validation and ownership checks, and avoids requiring ad-hoc prompts or terminal keys.
+A settled child may finish its work without ever publishing a result, leaving its ledger entry `prompted` with no RESULT file while the work itself may be complete. Recovery today is entirely manual: the parent must read the pane and hand-write a re-prompt asking the child to publish with the injected launcher. Add a safe, parent-owned recovery verb for that state, preserving result validation and ownership checks and avoiding ad-hoc prompts or terminal keys.
+
+What already mitigates this, short of a verb: SKILL.md § Completion and pane safety instructs the parent to re-prompt rather than respawn, since respawning discards completed work; and `:dispatch` verification (cli.clj:522/530) separates a prompt that never left the composer (`unconfirmed`, so the work may never have begun) from one that did (`dispatched`), which is the first thing a recovery verb would need to branch on. Both are guidance and diagnosis, not recovery.
+
+*EDIT* [2026-08-08] Originally filed as two edge cases; the second is now obsolete and has been dropped. It described a child with a validated COMPLETE result remaining reported as working and thereby "evading automatic pane closure" -- but automatic closure no longer exists. `436cbe2` made the close/continue lifecycle explicit and removed `maybe-close!` (no longer present anywhere in the source), so no capture closes a pane. That condition now surfaces as an explicit, retryable `{:status "retained" :reason "unsettled"}` from `close` (cli.clj:1128/1132/1149) after a bounded `ORCH_SETTLE_CLOSE_MS` wait (cli.clj:64), which is a reported outcome rather than a silent failure to close. The scope above is what survives.
 
 Origin:
 - cwd: /Users/cormacc/dotfiles/agents
@@ -465,7 +452,7 @@ Origin:
 - sender: agent
 
 Evidence:
-One worker settled idle after completing the requested fix but omitted publication and required a targeted publish prompt. Another had a validated COMPLETE result but remained working long after collection; it required Ctrl-D to exit and explicit closure of the parent-created pane.
+One worker settled idle after completing the requested fix but omitted publication and required a targeted publish prompt. (A second observation, of a COMPLETE child that stayed working and needed Ctrl-D plus explicit pane closure, belonged to the dropped edge case above and predates the explicit-close lifecycle.)
 
 ** TODO Review how ot CLI surfaces archived tasks :skill:org_tasks:
 :PROPERTIES:
