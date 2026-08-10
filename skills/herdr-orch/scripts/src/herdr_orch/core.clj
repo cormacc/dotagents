@@ -48,6 +48,7 @@
           (let [path (str directory "/" persona ".md")]
             (when (exists? path) path)))
         directories))
+
 ;; Skills resolve like the roster, plus a bare `<root>/skills/` probe because a skill
 ;; repository holds its own skills there rather than under `.agents/skills/`.
 (defn skill-path [exists? project-root home skill]

@@ -5,7 +5,8 @@
             [clojure.string :as str]
             [herdr-orch.core :as core]
             [herdr-orch.herdr :as herdr]
-            [herdr-orch.ledger :as ledger])
+            [herdr-orch.ledger :as ledger]
+            [herdr-orch.traits :as traits])
   (:import [java.io ByteArrayOutputStream]
            [java.nio.charset StandardCharsets]
            [java.nio.file Files FileAlreadyExistsException Paths]
@@ -127,6 +128,39 @@
   (let [path (core/resolve-persona (fn [path] (fs/exists? path)) (persona-directories) persona)]
     (or (some-> path fs/path)
         (fail "persona not found in project, home, or packaged roster" {:persona persona :available (available-personas)}))))
+(defn trait-directories []
+  (traits/trait-directories (ledger/assignment-root) (home-directory) (skill-directory)))
+(defn- interpolation-failure! [message trait directories]
+  (fail (str "trait `" trait "` " message "; searched layers: "
+             (str/join ", " (map #(str (:source %) "=" (:directory %)) directories))
+             "; write it as code or fix the trait name")
+        {:trait trait
+         :searched-layers (mapv :source directories)
+         :searched-paths (vec (mapcat #(traits/trait-candidate-paths % trait) directories))}))
+(defn- trait-interpolation [path persona-text]
+  (let [directories (trait-directories)
+        result (traits/interpolate {:text persona-text
+                                    :directories directories
+                                    :exists? #(fs/exists? %)
+                                    :read-text slurp})]
+    (when-let [trait (first (filter #(< 2 (count %)) (:unknowns result)))]
+      (interpolation-failure! "was not found in the searched layers" trait directories))
+    (when-let [trait (first (:repeats result))]
+      (interpolation-failure! "appears more than once in the persona body" trait directories))
+    (let [sources (mapv #(select-keys % [:trait :source :path]) (:resolved result))]
+      (cond-> {:persona-path (str path)
+               :traits (mapv :trait sources)
+               :trait-sources sources}
+        (seq sources) (assoc :composed-content (:text result))))))
+(defn composed-persona-path [task persona]
+  (str (fs/path (ledger/assignment-root) ".tmp" "herdr-orch" "composed" (str task "-" persona ".md"))))
+(defn materialize-persona! [composition task persona]
+  (if-let [content (:composed-content composition)]
+    (let [path (composed-persona-path task persona)]
+      (fs/create-dirs (fs/parent path))
+      (spit path content)
+      (-> composition (assoc :persona-path path) (dissoc :composed-content)))
+    composition))
 (defn child-name [persona task] (str persona "-" (subs task 0 8)))
 (defn launcher-bin []
   (or (System/getenv "HERDR_ORCH_BIN")
@@ -189,11 +223,16 @@
     (str "\nReport concise phase-boundary status with `$HERDR_ORCH_BIN task publish --task " task
          " --status WAITING --summary \"...\"` at most once per ORCH_WAITING_INTERVAL_MIN_MS "
          "(default 60000 ms); never include draft findings or terminal result content.")))
+;; Universal result-inbox routing belongs to the wrapper, which knows every child has one;
+;; persona-local output sections keep only the role-specific definition of a key finding.
+(def ^:private publication-guidance
+  "Write long findings to the assignment-provided report path (fall back to `.tmp/`). Pass the report with `--artifact` and each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result.")
 (defn prompt-text [{:keys [spawns persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
   (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
        (delegation-guidance spawns) " Herdr assigned TASK=" task " and RESULT=" result ". "
        "When finished, publish exactly once with `$HERDR_ORCH_BIN task publish --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
+       publication-guidance
        (retro-instruction retro-skill)
        (waiting-instruction waiting-policy task)
        (when prompt-extra (str "\nAdditional constraints: " prompt-extra))))
@@ -277,7 +316,12 @@
       resolved)))
 (defn preview! [persona opts waiting-policy]
   (herdr/preflight!)
-  (let [path (roster persona) frontmatter (core/parse-frontmatter (slurp (str path))) ident (parent-identity)
+  (let [path (roster persona)
+        persona-text (slurp (str path))
+        frontmatter (core/parse-frontmatter persona-text)
+        composition (trait-interpolation path persona-text)
+        prompt-persona-path (if (:composed-content composition) "<composed-persona-path>" path)
+        ident (parent-identity)
         kind (kind-policy opts frontmatter (:parent-kind ident))
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
         config (config)
@@ -286,11 +330,12 @@
         retro (retro-policy persona opts frontmatter)
         spawns (spawns-policy persona opts frontmatter)
         timeout (timeout-policy persona opts frontmatter)]
-    {:preview (prompt-text {:spawns (:spawns spawns) :persona-path path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
+    {:preview (prompt-text {:spawns (:spawns spawns) :persona-path prompt-persona-path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
      ;; :model is the resolved (pre-alias) ID; :model-canonical is that ID after the
      ;; single-hop `:aliases` translation; :model-args is the effective translated
      ;; native spelling (e.g. `["--model" "opus"]`) from the merged roster config.
-     :persona-path (str path) :kind kind :model model :model-canonical (core/canonical-model config model) :model-args (core/model-args config kind model) :placement placement :focus focus :retro (:retro retro) :retro-source (:retro-source retro)
+     :persona-path (str path) :traits (:traits composition) :trait-sources (:trait-sources composition)
+     :kind kind :model model :model-canonical (core/canonical-model config model) :model-args (core/model-args config kind model) :placement placement :focus focus :retro (:retro retro) :retro-source (:retro-source retro)
      :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)
      :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)}))
 ;; A stream's item records are append-only by item identity. Pre-stream ledger entries retain
@@ -583,7 +628,11 @@
     (do
       (herdr/preflight!)
       (let [path (roster persona)
-            frontmatter (core/parse-frontmatter (slurp (str path)))
+            persona-text (slurp (str path))
+            frontmatter (core/parse-frontmatter persona-text)
+            ;; Trait interpolation and its failure policy run before parent identity,
+            ;; config loading, task allocation, and every pane/ledger mutation.
+            composition (trait-interpolation path persona-text)
             ident (parent-identity)
             kind (kind-policy opts frontmatter (:parent-kind ident))
             model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
@@ -599,6 +648,8 @@
             ;; fast exactly like an invalid `retro:` or an unresolvable `spawns:` name.
             timeout (timeout-policy persona opts frontmatter)
             task (ledger/fresh-task)
+            composition (materialize-persona! composition task persona)
+            persona-path (:persona-path composition)
             result (ledger/fresh-result task)
             index (ledger/allocate-index! (:parent-session ident) persona)
             ;; Nested labels compose for any spawning persona, gated on the spawner's
@@ -610,7 +661,8 @@
             assignment (task-text opts)
             bin (launcher-bin)
             name (child-name persona task)
-            entry {:task task :result result :child name :pane-id nil :label label :index index :persona-path (str path) :kind kind :model model :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :timeout (:timeout timeout) :timeout-source (:timeout-source timeout) :placement placement :focus focus :status "allocating" :created-at (now)}]
+            entry {:task task :result result :child name :pane-id nil :label label :index index
+                   :persona-path persona-path :kind kind :model model :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :timeout (:timeout timeout) :timeout-source (:timeout-source timeout) :placement placement :focus focus :status "allocating" :created-at (now)}]
         ;; Persist before the first pane mutation, so every partial failure is recoverable.
         (ledger/write! entry)
         (try
@@ -648,9 +700,9 @@
                 (ledger/update! task assoc :status "renamed")
                 (let [native (concat (core/model-args config kind model)
                                      (core/harness-extra-args config kind)
-                                     (core/persona-args kind (str path)))]
+                                     (core/persona-args kind persona-path))]
                   (record-session! task (:agent_session (herdr/start! name kind (:pane-id persisted) native)))
-                  (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path path :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})]
+                  (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path persona-path :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})]
                     (ledger/update! task assoc :status "started" :started-at (now))
                     (herdr/prompt! name prompt)
                     ;; `:prompted-at` timestamps the submission *attempt*, never the moment
@@ -1475,7 +1527,8 @@
        ;; COMPLETE one: a continued child's injected `HERDR_ORCH_TASK` still names its
        ;; original, already-published round, so a bare `--status BLOCKED` cannot publish at
        ;; all -- the failure path would break exactly when it is needed.
-       "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--task " task " --status BLOCKED` (dependency) or `--task " task " --status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering."
+       "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--task " task " --status BLOCKED` (dependency) or `--task " task " --status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
+       publication-guidance
        (waiting-instruction waiting-policy task)))
 (defn continue! [prior-task opts]
   (when-not prior-task (fail "continue requires a full task uuid" {}))

@@ -46,8 +46,6 @@ Use repository-native discovery tools: `rg --files` for file lists, `rg` for tex
 
 ## Output
 
-Write long findings to the caller-provided report path (or `.tmp/`) and keep the summary concise. When publication uses the `herdr-orch` result inbox, pass the report path with `--artifact` and each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Otherwise end with a final pane summary stating the exact report path.
-
 **Content template:**
 
 ```markdown
@@ -78,8 +76,9 @@ Only include sections that have substance. Skip empty ones.
 
 ## Constraints
 
-- **Read-only** -- Do NOT edit or modify any files (long findings may be written to a report file)
-- **No delegation** -- Do not spawn further subagents
+%read-only
+
 - **No builds or tests** -- Leave that for the worker
 - **No implementation decisions** -- Leave that for the planner
-- **Stay focused** -- Only explore what's relevant to the task at hand
+
+%focused

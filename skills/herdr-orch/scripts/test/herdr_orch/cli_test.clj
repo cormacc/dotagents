@@ -134,7 +134,9 @@
                          (:available (ex-data e)))))))))
   ;; This must follow the resolved launcher location, not the assignment root or cwd.
   (with-redefs [cli/launcher-bin (constantly "/opt/installed/herdr-orch/scripts/oh")]
-    (is (= "/opt/installed/herdr-orch/subagents" (cli/packaged-personas-directory)))))
+    (is (= "/opt/installed/herdr-orch/subagents" (cli/packaged-personas-directory)))
+    (is (= "/opt/installed/herdr-orch/traits"
+           (:directory (last (cli/trait-directories)))))))
 
 ;; Mutates global with-redefs state (ledger/assignment-root, cli/home-directory,
 ;; cli/packaged-personas-directory) -- must run serially.

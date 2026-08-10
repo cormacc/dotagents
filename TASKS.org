@@ -110,17 +110,26 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 
 * Improvements
 
-** TODO [#B] Evaluate whether herdr-orch could/should leverage ai-behaviors for composable subagent behaviour...
+** STARTED [#B] herdr-orch: Subagent composition and extension
 :PROPERTIES:
 :CUSTOM_ID: 71fdf100-1681-4634-a12f-b2fc8ce0129b
 :CREATED: [2026-08-05 Wed 22:49]
+:STARTED: [2026-08-08 Sat 10:02]
 :END:
 :LOGBOOK:
 - Created [2026-08-05 Wed 22:49]
+- State "STARTED" from "TODO" [2026-08-08 Sat 10:02]
 :END:
-See https://github.com/xificurC/ai-behaviors
+#+IMPORT: [[plan:2026-08-08-herdr-orch-subagent-composition-and-exte.org]]
+Goal: make subagent definitions composable and extensible, so a shared directive is stated once rather than restated per persona. The motivation is repetition across the persona set, not any particular mechanism.
 
-This skill defines a hashtag-based system for composable LLM behaviours. Could conceivably be leveraged by herdr-orch subagents at definition level and/or at spawn time. Think this through....
+Measured duplication across the 7 packaged personas [2026-08-08]: there is no literal copy-paste -- no identical line of 40 characters or more appears in two persona files. What recurs is the same *concept*, spelled differently each time, which is worse: the wording drifts silently. Counts by file: read-only 5 (scout, researcher, worker, reviewer, advisor), artifact/report-path convention 5 (scout, researcher, reviewer, advisor, visual-tester), no-delegation 4 (scout, researcher, advisor, visual-tester), verify-claims-against-source 3 (worker, reviewer, advisor), stay-scoped 3 (scout, researcher, advisor), do-not-manufacture-findings 2 (reviewer, advisor).
+
+Design consideration found while measuring: no-delegation is already enforced mechanically, since the CLI checks the `spawns:` allow-list before any ledger or pane mutation. Its prose restatement in 4 personas is belt-and-braces rather than the guarantee. That suggests the first question is not "what composition mechanism?" but "which of these belongs in the injected wrapper (`cli.clj/prompt-text`, line 192, which already carries the delegation, identity, publication and retro instructions), which belongs in a shared fragment, and which is genuinely per-persona?" A mechanism chosen before that split is settled will encode the wrong boundary.
+
+Option space, not yet decided: move universal rules into `prompt-text`; a `traits:`/`extends:` frontmatter key resolving named fragments through the same project > home > packaged chain personas already use; an include directive in the persona body; or convention plus `--prompt-extra` with no code change at all. Note `core.clj/parse-frontmatter` (line 32) already ignores unknown keys, so a new key is additive rather than breaking, and the existing list-frontmatter precedent is bare space-separated words (`spawns: scout researcher`).
+
+*EDIT* [2026-08-08] Originally filed as "evaluate whether herdr-orch could/should leverage ai-behaviors" (https://github.com/xificurC/ai-behaviors), proposing hashtag behaviours at spawn time or `:behaviours [...]` in persona frontmatter. That candidate was researched and *declined*; the task has been retitled to the underlying goal. ai-behaviors (MIT, 34 stars, last pushed 2026-04-30) is a hook symlinked into Claude Code / ECA config: it matches hashtags on each interactive prompt and injects sticky context that persists across turns until replaced. Its value depends on many turns in one session, whereas a herdr-orch child gets one composed initial prompt and runs to publish, and there is no cross-harness equivalent of that hook across the kind roster. Definition-time behaviours also collide with the existing model that a persona *is* the behaviour bundle. Keep it as prior art for the vocabulary idea, not as a dependency or a design to port.
 
 ** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:
 :PROPERTIES:
@@ -224,7 +233,7 @@ Identified and reproduced by the third closeout review of `43e7c65c`; full analy
 
 * Agent feedback
 
-*** TODO herdr-orch: worktree-backed fan-out  :skill:herdr_orch:
+*** TODO herdr-orch: worktree-backed fan-out :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: e28067af-282f-47bd-b8fe-809663925f7b
 :CREATED: [2026-08-04 Tue 20:29]
@@ -232,7 +241,6 @@ Identified and reproduced by the third closeout review of `43e7c65c`; full analy
 :LOGBOOK:
 - Created [2026-08-04 Tue 20:29]
 :END:
-
 Parallel workers editing the same repo can race on a shared file.
 
 Upstream Herdr ships `herdr worktree list|create|open|remove` (git worktree-backed workspaces, grouped with the parent repo workspace); verified present in herdr 0.8.0. This could lift the SKILL.md constraint that children share one worktree, so siblings whose file sets overlap must be sequenced or merged into one assignment -- each child would get its own checkout and edits would reconcile as ordinary branch merges.

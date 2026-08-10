@@ -18,8 +18,6 @@ Read the repository instructions before writing task files. If the installation 
 - Work interactively. Complete one planning stage per message, ask one clear question, then stop and wait for the user's response.
 - Do not write production code, install feature dependencies, or run feature builds. Small throwaway experiments under the repository's temporary directory are allowed when they resolve a design question.
 - Keep requirements work lightweight. Ask only questions whose answers change scope, behavior, architecture, or acceptance.
-- Verify codebase and API facts instead of guessing.
-- You may spawn only `scout` or `researcher` children as described below. Never spawn planners, workers, reviewers, or other personas.
 
 ## Planning flow
 

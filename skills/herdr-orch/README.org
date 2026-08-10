@@ -79,6 +79,50 @@ retro: false        # omit to use the installation default
 
 All four keys are optional. Omitting =kind= is usually right: the child then inherits the harness Herdr measured for the parent. =kind= is the *only* place a harness is chosen -- no flag, no env var -- because which CLI a child runs is a deployment property, not a per-assignment dial like =model=. A cross-harness comparison is a definition declaring the other harness.
 
+** Shared directives: traits
+
+Several personas need the same directive -- stay read-only, answer only what was asked, do not manufacture findings. Stating it once per persona means seven near-copies whose wording drifts apart. A *trait* is that directive written once, in one file, and referenced from the personas that need it.
+
+A trait is a Markdown fragment with optional frontmatter:
+
+#+begin_src markdown
+---
+name: read-only
+description: Write boundary
+---
+
+Do not create, modify, or delete repository files. Consume the worktree; never mutate it.
+
+- You may write only to a caller-provided artifact/report path and =.tmp/=; nothing written there ships.
+- Do not run commands that mutate the repository tree.
+#+end_src
+
+A persona references it with a =%<name>= token placed where the directive belongs:
+
+#+begin_src markdown
+## Constraints
+
+%read-only
+
+- Do not broaden the design or replace the caller's implementation work.
+#+end_src
+
+At spawn the CLI substitutes each token in place, writes the composed persona beside the round's result file, and hands the child *that* path. Placement is the point: a directive lands in the section it governs rather than as an appendix the persona's own prose never mentions.
+
+Resolution mirrors personas exactly -- =<git-root>/.agents/traits/= then =~/.agents/traits/= then =<skill>/traits/=, first match wins, accepting =<name>.md= or =<name>/prompt.md=. So a project can override a shipped trait by name, the same way it overrides a persona.
+
+Rules worth knowing before you write one:
+
+- An unknown token of three or more characters *fails the spawn*, naming the searched layers, so a typo cannot silently ship a persona missing a directive. A one or two character candidate is inert unless it resolves, which is what lets =%s= and =%h= pass through untouched in prose.
+- A repeated token fails too; personas are curated files and a repeat silently doubles a child's context.
+- Code spans, fenced blocks, indented blocks, and YAML frontmatter are never scanned.
+- Substitution is single-pass: text inserted from a fragment is not rescanned, so fragments cannot reference each other.
+- A persona with no tokens is untouched -- no composed file, and its own path is passed through.
+
+A trait is not free. Every child carrying one reads it in full, so the bar is a directive genuinely shared by two or more personas, not a stylistic preference. Worth testing that a directive changes behaviour before shipping it: two of the three traits here failed an adversarial check on first writing, and had to be rewritten to address the *cause* of the unwanted behaviour rather than restate the prohibition.
+
+The idea is borrowed from [[https://github.com/xificurC/ai-behaviors][ai-behaviors]] (MIT), which composes hashtag-referenced behaviour fragments into interactive Claude Code and ECA sessions. Its mechanism -- a =UserPromptSubmit= hook injecting sticky per-turn context -- does not transfer to one-shot delegated children, and its taxonomy of modes, qualities and methods is more structure than a three-fragment store needs. What transfers is the shape: small named fragments, layered override directories, and composition at the point of use. The fragment layout here deliberately also accepts =<name>/prompt.md=, so an ai-behaviors library can drop in as a base layer unchanged.
+
 ** Model configuration
 
 =config.edn= carries two levels, plus harness invocation and spawn defaults:
