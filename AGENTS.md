@@ -12,6 +12,9 @@
 - An empty result is not evidence of absence. A wrong field name, path or source
   returns nothing rather than failing, so confirm the query matched at all before
   reporting that nothing did.
+- Check the `ok`/status field of a structured CLI envelope before reading result fields. A nil field inside an error envelope is indistinguishable from a real empty result: an `oh` response was read as a trait-resolution failure when it was actually `{"ok":false}` from a version mismatch.
+- Ask one decision per question. Bundling two independent choices into one option set means the answer settles only one of them, and the other carries forward unconfirmed while looking decided.
+- A behavioural directive in an instruction file is unverified until something adversarial tests it. Before shipping one, check that it changes behaviour; when it fails, fix the incentive producing the unwanted behaviour rather than restating the prohibition. Two of three shipped trait directives failed such a check on first writing, and identically before the rewrite -- the prose they replaced had never worked either.
 - When a matched skill owns a domain, read it before issuing exploratory
   commands in that domain -- don't parallelise the skill load with domain probes.
 
@@ -29,6 +32,8 @@
 # File operations
 - Use `rg` for file and content searches.
 - Verify a flag means what you assume before trusting output: `rg -r` is `--replace`, not recursive (rg recurses by default), `rg -E` is `--encoding` and swallows a pattern passed as its value (use `-e`), and Rust-regex escaping differs from POSIX (`\+` matches a literal plus), so a wrong flag or pattern usually yields confident wrong output rather than an error. Never fold `-r` into a flag cluster: `rg -rn 'pattern'` consumes `n` as the replacement template and prints every match rewritten to `n`, which looks like real evidence.
+- A search pattern taken from data can itself begin with `-` and be consumed as options: `grep -qxF "$line"` breaks on a line starting `---` or `- `, printing a usage error per line while the loop treats each as a mismatch. Pass such a pattern as `grep -e "$pat"`, or after `--`. Because it only breaks for some inputs, a successful spot-check does not clear it, and the remaining misreads look like real findings.
+- Verify a rename in both directions before calling it complete. BSD `sed` (macOS) does not support `\b` and silently matches nothing, and a pattern that is a prefix of other tokens rewrites those too -- one rename both missed two call sites and rewrote an unrelated `%focusx`. Prefer Babashka, whose Java regex honours `\b` on every platform: count first with `(re-seq #"%focus\b" text)`, rewrite with `str/replace`, then re-grep the old name.
 - A word boundary after a non-word character never matches: `\bname!\b` finds nothing, because `\b` after `!` requires a following word character. When renaming an identifier ending in `!`, `?`, or `-`, drop the trailing `\b` and re-grep the old name before running tests -- a bulk rename can otherwise miss most call sites silently.
 - Single-quote shell search patterns containing backticks or `$` (common with markdown-derived text); double quotes invite command substitution.
 - Prose passed as a CLI argument (a task body, commit message, or assignment) belongs in a quoted heredoc written to a file, then passed as `"$(cat file)"`. Apostrophes terminate a single-quoted argument, and the remainder is then executed as shell -- observed truncating an `ot create --body` and handing its tail to bash. Substitution output is not re-scanned, so backticks inside the file are safe.
@@ -36,8 +41,10 @@
 - Prefer available structured read/edit tools over ad-hoc scripts for routine file inspection and modification.
 - When scripting is necessary, prefer Babashka to Python for repository-local automation. Use Python when invoking an existing Python tool or when its ecosystem is materially better suited.
 - For scripted transformations, write a candidate under `<repository-root>/.tmp/`, inspect its diff, and only then replace the source; do not perform unverified in-place rewrites.
+- Produce any artifact claimed "verbatim except for listed edits" by copying the source and applying targeted edits, then diff-verify before stating that claim. A hand-retyped persona rewrite drifted two full stops while its six copy-then-edit siblings stayed byte-identical, and the identity claim was asserted before anything checked it.
 - A human may be editing the same file. Before replacing one wholesale, check for a live editor lock (an Emacs `.#<basename>` sibling naming a running PID) and prefer targeted edits, which fail loudly on stale text instead of silently discarding unsaved work. Re-read immediately before editing any file the user has touched this session.
 - Redirect long-running or expensive command output to a file under `<repository-root>/.tmp/` and read slices from it. Piping through `head`/`tail` discards the rest and often forces a costly re-run.
+- Never state a diagnostic tool's verdict from a truncated view. `ot doctor | tail -3` printed a clean-looking tail twice while two ERRORs sat above the cut, and the record was reported as well-formed on that basis. Read the finding-count summary line, or the whole report, before claiming health.
 - Do not author unicode dashes in prose. Write `--` (org converts it on export) or use an org descriptive list `- Term :: detail`; literal em-dashes have been emitted as `\uXXXX` escapes and committed as mojibake. Where a format makes one significant syntax -- the herdr-orch `ARTIFACTS` item splits on a literal ` — ` -- leave it alone.
 
 # Temporary files

@@ -314,6 +314,8 @@ Update the record when implementation reveals durable work or rationale: prerequ
 
 For discovered prerequisites that are tasks elsewhere in the graph, express the dependency via `:BLOCKED-BY:` / `:BLOCKED-BY+:`; see `org-tasks` for ready-task semantics.
 
+When amending an accepted record, re-scan `** Decisions` and `** Scope`'s out-of-scope list for premises the amendment invalidates, and surface them yourself. An amendment that changes the mechanism usually falsifies a rejection or an exclusion recorded against the old one, and those entries read as still-current until someone notices.
+
 ## Closure-time refresh and prune
 
 Before transitioning a top-level task to `DONE`, walk the record end-to-end with two questions: does each section still earn its place, and does it follow the density rules above?

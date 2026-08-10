@@ -545,3 +545,18 @@ Origin:
 - cwd: /Users/cormacc/dotfiles/agents
 - git: cormacc/dotagents @ main
 - sender: agent
+
+** TODO herdr-orch: document test-fixture environment requirements :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 67518ea0-90b6-46b3-b19a-3326dd577f21
+:CREATED: [2026-08-10 Mon 16:15]
+:END:
+:LOGBOOK:
+- Created [2026-08-10 Mon 16:15]
+:END:
+Two herdr-orch test-fixture facts surfaced during trait implementation, both costing a delegated child repeated failed attempts before it diagnosed them. They belong in the scripts' own test documentation, not in a general instruction file.
+
+- A standalone fixture smoke command inherits the live nested pane identity: it must explicitly set `HERDR_PANE_ID` and a persona-matching `FAKE_PARENT_LABEL`, or fixture topology checks fail against the real pane tree.
+- A delegated child intentionally simulating a *root* caller must clear the injected `HERDR_ORCH_PERSONA`, `HERDR_ORCH_SPAWNS`, `HERDR_ORCH_TASK`, `HERDR_ORCH_RESULT` and `HERDR_ORCH_CHILD` variables first, or the CLI classifies it as below-root and refuses the call.
+
+Both are reported by child agents rather than reproduced by the parent; confirm each against the current fixtures before documenting, and put them wherever the scripts' testing guidance lives (`skills/herdr-orch/scripts/README.md` or a test-specific reference).
