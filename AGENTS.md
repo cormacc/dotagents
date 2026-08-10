@@ -7,6 +7,7 @@
 - Ask one decision per question. Bundling two independent choices into one option set means the answer settles only one of them, and the other carries forward unconfirmed while looking decided.
 - A behavioural directive in an instruction file is unverified until something adversarial tests it. Before shipping one, check that it changes behaviour; when it fails, fix the incentive producing the unwanted behaviour rather than restating the prohibition. Two of three shipped trait directives failed such a check on first writing, and identically before the rewrite -- the prose they replaced had never worked either.
 - When a matched skill owns a domain, read it before issuing exploratory commands in that domain -- don't parallelise the skill load with domain probes.
+- A guard or ad-hoc verifier you have only ever seen pass is unverified. Trigger it deliberately with known-bad input before trusting it, and treat uniform all-pass or all-fail output as more likely a broken check than a broken system.
 
 # Subagents
 - Reusable Herdr subagent definitions resolve `<git-root>/.agents/subagents/` (project override) > `~/.agents/subagents/` (home override) > `skills/herdr-orch/subagents/` (packaged default). The home path is this repo's `subagents/`, symlinked by the dotfiles `agents.nix`; edit it here rather than under `~`. To delegate work inside Herdr, use the `herdr-orch` skill.
@@ -29,6 +30,7 @@
 - Prose passed as a CLI argument (a task body, commit message, or assignment) belongs in a quoted heredoc written to a file, then passed as `"$(cat file)"`. Apostrophes terminate a single-quoted argument, and the remainder is then executed as shell -- observed truncating an `ot create --body` and handing its tail to bash. Substitution output is not re-scanned, so backticks inside the file are safe.
 - Cap test-failure output (`head -c`) when an asserted value can embed a file's contents or a captured log; `grep -A` on such an assertion has dumped ~10k tokens to report one boolean. The assertion line alone locates the failure.
 - Prefer available structured read/edit tools over ad-hoc scripts for routine file inspection and modification.
+- Never add keys outside a structured tool's declared schema. An unknown field may be accepted silently and alter the payload rather than erroring -- an extra key inside an `edits[]` entry has truncated the replacement text and written a half-finished form.
 - When scripting is necessary, prefer Babashka to Python for repository-local automation. Use Python when invoking an existing Python tool or when its ecosystem is materially better suited.
 - For scripted transformations, write a candidate under `<repository-root>/.tmp/`, inspect its diff, and only then replace the source; do not perform unverified in-place rewrites.
 - Produce any artifact claimed "verbatim except for listed edits" by copying the source and applying targeted edits, then diff-verify before stating that claim. A hand-retyped persona rewrite drifted two full stops while its six copy-then-edit siblings stayed byte-identical, and the identity claim was asserted before anything checked it.

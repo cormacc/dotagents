@@ -108,6 +108,8 @@ Mechanical validation proves identity and envelope shape, never content truth. W
 
 One validator's approval is weak evidence on a subtle surface: two reviewers of this skill's own lifecycle rewrite returned opposite verdicts on an identical assignment (measurement in [`design/log/2026-08-06-herdr-orch-support-resident-reviewers-fo.org`](../../design/log/2026-08-06-herdr-orch-support-resident-reviewers-fo.org)). For a Class C closeout, prefer two independent validators and expect disjoint findings; treat a lone APPROVED as unfalsified rather than validated.
 
+When a child's finding contradicts existing curated documentation, the contradiction is itself the signal to probe, whichever way it points. Do not overwrite the document to match: a child's inference from filesystem layout or naming is weaker evidence than a curated statement, and "the doc is stale" is a conclusion to earn against the authoritative source rather than a premise. A subagent has derived a device-support matrix from a data folder listing, called the existing spec stale, and been wrong -- the folder held an extra development-only entry.
+
 Child self-verification helps in every class but is never independent validation -- only a probe or separate validator is. An identifier the parent uses in an edit, command, or persisted text is checked at point of use regardless of class; AGENTS.md's CRITICAL rule is unconditional and outside this probe budget.
 
 ## Manual fallback
