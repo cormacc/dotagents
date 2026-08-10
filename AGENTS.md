@@ -1,22 +1,12 @@
 # General
-- CRITICAL: Always verify symbols, function names, config options, module
-  paths, variable names, CLI flags, and API fields against actual source code or
-  documentation. This identifier check is unconditional and independent of any
-  claim's consequence class or probe budget (see `herdr-orch` § Trusting a result).
-- State a factual or causal claim only when it is measured, attributed to its
-  source, or explicitly presented as uncertain -- never asserted as settled fact
-  on confidence alone. This applies to both a baseline/attribution composed into
-  an assignment and a claim reported to the user.
-- When asked a question, just answer the question -- don't start coding.
-  Use tools and write scripts only to obtain additional required information.
-- An empty result is not evidence of absence. A wrong field name, path or source
-  returns nothing rather than failing, so confirm the query matched at all before
-  reporting that nothing did.
+- CRITICAL: Always verify symbols, function names, config options, module paths, variable names, CLI flags, and API fields against actual source code or documentation. This identifier check is unconditional and independent of any claim's consequence class or probe budget (see `herdr-orch` § Trusting a result).
+- State a factual or causal claim only when it is measured, attributed to its source, or explicitly presented as uncertain -- never asserted as settled fact on confidence alone. This applies to both a baseline/attribution composed into an assignment and a claim reported to the user.
+- When asked a question, just answer the question -- don't start coding. Use tools and write scripts only to obtain additional required information.
+- An empty result is not evidence of absence. A wrong field name, path or source returns nothing rather than failing, so confirm the query matched at all before reporting that nothing did.
 - Check the `ok`/status field of a structured CLI envelope before reading result fields. A nil field inside an error envelope is indistinguishable from a real empty result: an `oh` response was read as a trait-resolution failure when it was actually `{"ok":false}` from a version mismatch.
 - Ask one decision per question. Bundling two independent choices into one option set means the answer settles only one of them, and the other carries forward unconfirmed while looking decided.
 - A behavioural directive in an instruction file is unverified until something adversarial tests it. Before shipping one, check that it changes behaviour; when it fails, fix the incentive producing the unwanted behaviour rather than restating the prohibition. Two of three shipped trait directives failed such a check on first writing, and identically before the rewrite -- the prose they replaced had never worked either.
-- When a matched skill owns a domain, read it before issuing exploratory
-  commands in that domain -- don't parallelise the skill load with domain probes.
+- When a matched skill owns a domain, read it before issuing exploratory commands in that domain -- don't parallelise the skill load with domain probes.
 
 # Subagents
 - Reusable Herdr subagent definitions resolve `<git-root>/.agents/subagents/` (project override) > `~/.agents/subagents/` (home override) > `skills/herdr-orch/subagents/` (packaged default). The home path is this repo's `subagents/`, symlinked by the dotfiles `agents.nix`; edit it here rather than under `~`. To delegate work inside Herdr, use the `herdr-orch` skill.
@@ -45,14 +35,10 @@
 - A human may be editing the same file. Before replacing one wholesale, check for a live editor lock (an Emacs `.#<basename>` sibling naming a running PID) and prefer targeted edits, which fail loudly on stale text instead of silently discarding unsaved work. Re-read immediately before editing any file the user has touched this session.
 - Redirect long-running or expensive command output to a file under `<repository-root>/.tmp/` and read slices from it. Piping through `head`/`tail` discards the rest and often forces a costly re-run.
 - Never state a diagnostic tool's verdict from a truncated view. `ot doctor | tail -3` printed a clean-looking tail twice while two ERRORs sat above the cut, and the record was reported as well-formed on that basis. Read the finding-count summary line, or the whole report, before claiming health.
+- Soft-wrap prose this repository owns: one logical line per paragraph and per list item, in `AGENTS.md`, skill bodies and their references, and the org files `org-tasks` manages. Never reflow a vendored skill (`skills/README.org` § Vendored names them) -- the edit is lost on the next sync and inflates the diff against upstream.
 - Do not author unicode dashes in prose. Write `--` (org converts it on export) or use an org descriptive list `- Term :: detail`; literal em-dashes have been emitted as `\uXXXX` escapes and committed as mojibake. Where a format makes one significant syntax -- the herdr-orch `ARTIFACTS` item splits on a literal ` — ` -- leave it alone.
 
 # Temporary files
-Resolve the repository root with `git rev-parse --show-toplevel`, then use
-`<repository-root>/.tmp/` for scripts, data, experiments, testing, and other
-ad-hoc work. Do not assume `$PROJECT_ROOT` is defined.
+Resolve the repository root with `git rev-parse --show-toplevel`, then use `<repository-root>/.tmp/` for scripts, data, experiments, testing, and other ad-hoc work. Do not assume `$PROJECT_ROOT` is defined.
 
-Never put transient state under `.agents/`: that tree is durable agent configuration,
-and some harnesses (codex under `--sandbox workspace-write`) deliberately mount it
-read-only so an agent cannot rewrite its own instructions mid-task. A scratch or result
-path inside it fails to write for those children.
+Never put transient state under `.agents/`: that tree is durable agent configuration, and some harnesses (codex under `--sandbox workspace-write`) deliberately mount it read-only so an agent cannot rewrite its own instructions mid-task. A scratch or result path inside it fails to write for those children.
