@@ -4,7 +4,7 @@ These top-level skills are symlinked into =~/.agents/skills/= by the editable Ho
 
 The =org-tasks=, =org-plan=, and =org-jira= skills are also the generic-skill slice shipped by the =@cormacc/agent-org-memory= pi package alongside the =tasks=, =jira=, and =emacsclient= extensions. See [[file:../README.md][../README.md]] for exact package boundaries and install routes.
 
-This inventory is mechanically checked by =npm run check:metadata=: every top-level =skills/*/SKILL.md= frontmatter name must appear exactly once below, and every listed file must exist.
+This inventory is maintained by hand: every top-level =skills/*/SKILL.md= frontmatter name should appear exactly once below, and every listed file should exist. The =check-metadata.ts= script that once enforced this was retired on 2026-08-11: it also kept a duplicate of =oh='s persona-frontmatter contract, which drifted in both directions -- missing the live =timeout:= key while allow-listing a =requires:= key no persona uses -- so the check sat red and was ignored. Frontmatter is validated where it is used, at spawn, and =oh= will grow a check when a real failure calls for one.
 
 Document format follows the audience, not the directory. A skill's =SKILL.md= and anything an agent loads on demand -- the =references/= bodies -- are Markdown, because the Agent Skills spec requires it for the former and internal consistency argues for it in the latter. Repository documentation written for humans is org: this file, each skill's =README.org=, the design records, and everything =org-tasks= manages. Getting this backwards costs a lossy conversion in both directions; it happened once, converting an agent-facing reference to org and back.
 

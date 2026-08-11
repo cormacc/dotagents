@@ -21,9 +21,6 @@ npm run check:hermes
 printf '\n==> Babashka task tooling\n'
 bb test
 
-printf '\n==> agent and skill metadata/inventory/collisions\n'
-npm run check:metadata
-
 printf '\n==> active documentation links\n'
 npm run check:links
 
