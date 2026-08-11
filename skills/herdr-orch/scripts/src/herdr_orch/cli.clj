@@ -137,16 +137,46 @@
         {:trait trait
          :searched-layers (mapv :source directories)
          :searched-paths (vec (mapcat #(traits/trait-candidate-paths % trait) directories))}))
+(defn- incompatible-trait-failure! [message remediation declaring-trait incompatible-trait directories]
+  (fail (str "trait `" declaring-trait "` declares incompatible trait `" incompatible-trait "` " message
+             "; searched layers: "
+             (str/join ", " (map #(str (:source %) "=" (:directory %)) directories))
+             "; " remediation)
+        {:trait incompatible-trait
+         :declaring-trait declaring-trait
+         :incompatible-trait incompatible-trait
+         :searched-layers (mapv :source directories)
+         :searched-paths (vec (mapcat #(traits/trait-candidate-paths % incompatible-trait) directories))}))
+(defn- incompatibility-declarations [result]
+  (for [{:keys [trait]} (:resolved result)
+        incompatible-trait (get (:incompatibilities result) trait)]
+    {:declaring-trait trait :incompatible-trait incompatible-trait}))
 (defn- trait-interpolation [path persona-text]
   (let [directories (trait-directories)
         result (traits/interpolate {:text persona-text
                                     :directories directories
                                     :exists? #(fs/exists? %)
-                                    :read-text slurp})]
+                                    :read-text slurp})
+        declarations (incompatibility-declarations result)]
     (when-let [trait (first (filter #(< 2 (count %)) (:unknowns result)))]
       (interpolation-failure! "was not found in the searched layers" trait directories))
     (when-let [trait (first (:repeats result))]
       (interpolation-failure! "appears more than once in the persona body" trait directories))
+    (when-let [{:keys [declaring-trait incompatible-trait]}
+               (first (remove #(traits/resolve-trait (fn [candidate] (fs/exists? candidate))
+                                                    directories
+                                                    (:incompatible-trait %))
+                              declarations))]
+      (incompatible-trait-failure! "was not found in the searched layers"
+                                  (str "fix the name in `incompatible-with:` on trait `" declaring-trait "`")
+                                  declaring-trait incompatible-trait directories))
+    (let [resolved-traits (set (map :trait (:resolved result)))]
+      (when-let [{:keys [declaring-trait incompatible-trait]}
+                 (first (filter #(contains? resolved-traits (:incompatible-trait %)) declarations))]
+        (incompatible-trait-failure! "also resolves in the persona body"
+                                    (str "remove `%" declaring-trait "` or `%" incompatible-trait
+                                         "` from the persona body: these directives state opposing rules and must not compose")
+                                    declaring-trait incompatible-trait directories)))
     (let [sources (mapv #(select-keys % [:trait :source :path]) (:resolved result))]
       (cond-> {:persona-path (str path)
                :traits (mapv :trait sources)

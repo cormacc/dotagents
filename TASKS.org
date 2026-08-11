@@ -110,7 +110,8 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 
 * Improvements
 
-** STARTED [#B] herdr-orch: Subagent composition and extension
+** DONE [#B] herdr-orch: Subagent composition and extension
+CLOSED: [2026-08-11 Tue 15:57]
 :PROPERTIES:
 :CUSTOM_ID: 71fdf100-1681-4634-a12f-b2fc8ce0129b
 :CREATED: [2026-08-05 Wed 22:49]
@@ -119,6 +120,7 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 :LOGBOOK:
 - Created [2026-08-05 Wed 22:49]
 - State "STARTED" from "TODO" [2026-08-08 Sat 10:02]
+- State "DONE" from "STARTED" [2026-08-11 Tue 15:57]
 :END:
 #+IMPORT: [[plan:2026-08-08-herdr-orch-subagent-composition-and-exte.org]]
 Goal: make subagent definitions composable and extensible, so a shared directive is stated once rather than restated per persona. The motivation is repetition across the persona set, not any particular mechanism.
@@ -226,6 +228,74 @@ Origin: reported independently by two subagents as a process candidate, 2026-08-
 Not a regression from the stream change -- the pre-change design carried a comparable publish-versus-close race -- and deliberately left open there, because a fix needs interprocess exclusion shared by `publish` and the lifecycle verbs (a lock file, or an equivalent atomic state transition), which was larger than that record's scope. A final check after closing is too late: closure is irreversible.
 
 Identified and reproduced by the third closeout review of `43e7c65c`; full analysis in that review's artifact, and the accepted-risk entry is in `design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org` under `** Risks`. Relevant symbols as of that work: `close-mutation!` and `continue!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`, plus `assert-publishable!` and the `createLink` publication path.
+
+** TODO [#B] herdr-orch: eliminate delegation-driven focus changes
+:PROPERTIES:
+:CUSTOM_ID: 97863e4a-3e91-470b-ad53-13857ef1201c
+:CREATED: [2026-08-10 Mon 20:09]
+:END:
+:LOGBOOK:
+- Created [2026-08-10 Mon 20:09]
+:END:
+Observed friction: a root spawn from a workspace other than the active one steals focus across workspaces. =cli.clj= passes =:focus= into =herdr/tab-create!=, which focuses the new tab in the caller's workspace regardless of where the operator actually is. Unattended delegation makes it worse -- every root spawn in a multi-child run yanks the operator once.
+
+Proposal (user, 2026-08-10): eliminate delegation-driven focus entirely rather than gate it on the active workspace. Tab creation and the herdr agents panel already signal that a subagent exists, so the focus rules add machinery around a subjective preference.
+
+Why elimination beats gating, in order of weight:
+- Gating breaks the invariant that currently makes focus safe. =SKILL.md= states "Focus is only ever set, never read to decide anything." Gating on the active workspace requires reading workspace state to decide, and that read is racy: the operator can switch workspaces between the check and the =tab create= call. It also adds a third conditional axis on top of the existing depth gate and the flag > configured > default precedence.
+- Elimination deletes a bug class rather than guarding it. =SKILL.md= already records that the depth gate is load-bearing "since =publish= makes every delegating child close its grandchildren, so an ungated hook would end every nested delegation in a focus steal". That is an admission that focus-on-close is a footgun needing a guard; with no focus there is nothing to guard. The depth gate remains for placement, where depth is a genuine distinction.
+- The close-side focus return is arguably worse than the spawn-side one. If the operator never left, returning focus is a no-op; if they deliberately moved away, it pulls them back. It mainly exists to undo the other half of the feature.
+
+Removal surface: =core/resolve-focus=; the =--focus= / =--no-focus= flags including their mutual-exclusion check, their =boolean-flags= entries, and their usage text; =:defaults :focus= in =subagents/config.edn= and the comment justifying it; the =:focus= argument threaded into =tab-create!= and =split!= at spawn; the best-effort focus return on root =close=, =collect --close=, =close --settled=, and =orphans --close=; the =:focus= field in ledger entries; and the Focus bullet in =SKILL.md= plus its counterparts in =README.org=, =scripts/README.md=, and =scripts/docs/contract.md=.
+
+Explicitly out of scope: the raw passthrough verbs =oh tab create --focus=, =oh ws focus=, =oh tab focus=, and =oh agent focus=. Those are operator actions, not delegation side effects, and upstream Herdr owns their semantics.
+
+Acceptance criteria:
+- No delegation path sets focus: spawn, close, =collect --close=, both sweeps. Verified by spawning from a non-active workspace and observing that focus does not move.
+- Confirm before removing, rather than assuming: that the herdr agents panel does surface a newly created subagent, since that is the premise the removal rests on. If it does not, elimination trades a focus steal for a lost child and the proposal needs revisiting.
+- =:defaults= keeps =:placement= and is validated as a closed map with the =:focus= key gone; a config still declaring =:focus= fails with its file path rather than being silently ignored.
+- Existing focus assertions in =cli_test.clj=, =core_test.clj=, and =herdr_test.clj= are removed or inverted to assert that no focus call is made, rather than deleted wholesale leaving the behaviour unpinned.
+- =bb test= and =ot doctor= stay clean.
+
+Not measured: how often auto-focus is actually wanted. The evidence is one session of unattended multi-child delegation where it was pure noise, plus the reported cross-workspace steal.
+
+** TODO [#C] AGENTS.md: state that repo-root =scripts/= is Babashka-first, existing members predate the rule
+:PROPERTIES:
+:CUSTOM_ID: 511e335b-9c05-45c9-87da-09df1f48d827
+:CREATED: [2026-08-11 Tue 12:12]
+:END:
+:LOGBOOK:
+- Created [2026-08-11 Tue 12:12]
+:END:
+=AGENTS.md= says to prefer Babashka for repository-local automation, but every pre-existing file in repo-root =scripts/= is =.sh= or =.ts= (=check.sh=, =check-extensions.sh=, =check-hermes.sh=, =check-links.ts=, =check-metadata.ts=). A delegated worker building =scripts/run-trait-gate.bb= followed the on-disk precedent first and wrote Bash, and had to be corrected. Confirmed with the user 2026-08-11: the existing scripts predate the rule.
+
+The precedent on disk therefore contradicts the written rule, and precedent wins by default for anyone who looks at the directory before reading =AGENTS.md=.
+
+Acceptance criteria:
+- =AGENTS.md= states that repo-root =scripts/= is Babashka-first for new work, and that the existing =.sh= / =.ts= members predate the rule and are not a precedent to follow.
+- No existing script is rewritten as part of this task. Churn for consistency's sake is not the goal; the goal is that the next new script is Babashka without needing a correction.
+- If a future script genuinely needs Bash or TypeScript (a thin wrapper, or a Node-ecosystem check), the rule names that exemption rather than being silently violated.
+Must not: rewrite =check.sh=, =check-extensions.sh=, =check-hermes.sh=, =check-links.ts=, or =check-metadata.ts=; add a lint that fails on existing members.
+
+** TODO [#C] traits: re-probe every fragment against synthetic, non-decaying scenarios
+:PROPERTIES:
+:CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
+:CREATED: [2026-08-11 Tue 12:23]
+:END:
+:LOGBOOK:
+- Created [2026-08-11 Tue 12:23]
+:END:
+No trait fragment holds a probe result valid for the current repository state. Every scenario written so far takes this repository as its subject, so each decays as the repository documents itself: =read-only= baited a typo fix in our worktree, =focused= baited an audit of our =pi/extensions=, =no-bullshit= reviewed our own clean git range, and =%prune= asked about our own trait store. =%prune= is simply the one that was re-run and watched lapse (2026-08-11), which is how the decay was discovered.
+
+Requiring a passing probe was abandoned the same day precisely because of this, so nothing is blocked on this task. It is the durable fix rather than the workaround: a synthetic subject does not decay, and observations may then be stored beside the scaffold without becoming an answer key for the next control arm.
+
+Acceptance criteria:
+- Each of =read-only=, =focused=, =no-bullshit=, and =prune= gets a scenario whose artifact under review is synthetic and self-contained -- invented for the probe, not drawn from this repository -- with its flaw documented nowhere the child can read.
+- Each probe runs treated and control at the same persona and tier through =scripts/run-trait-gate.bb=, with the condition pre-registered before the run, and records the outcome in =traits/<name>/gate.md= including =did not discriminate= where that is what happened.
+- Fragments still flat (=traits/focused.md=, =traits/no-bullshit.md=, =traits/read-only.md=) convert to the directory form when they gain a =gate.md=.
+- Redundancy is triaged before wording: =AGENTS.md= loads in every pi session and already carries directives adjacent to =%no-bullshit= (claims stated only when measured or attributed; an empty result is not evidence of absence; a guard only ever seen pass is unverified). A fragment that shows no marginal effect over that baseline is a deletion candidate, not a rewording candidate -- =%challenge= was removed on exactly that reasoning.
+- Where a probe cannot be made to discriminate, say so and say why, rather than reporting an unexplained negative or quietly dropping the fragment.
+Must not: weaken a recorded condition to make a run agree; reuse a repo-referential subject; treat a passing probe as a precondition for the fragment staying in the store.
 
 * Fixes
 

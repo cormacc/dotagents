@@ -18,7 +18,8 @@
  :bbin/bin {ot {:main-opts ["-m" "org-tasks.cli"]}}
  :tasks
  {:requires [[clojure.string :as str]
-             [babashka.fs :as fs]]
+             [babashka.fs :as fs]
+             [babashka.process :as process]]
 
   ;; ── ot CLI ───────────────────────────────────────────────────────
   ot   {:doc  "Run the in-tree ot CLI (org-tasks.cli/-main)"
@@ -29,13 +30,25 @@
             :task (apply (requiring-resolve 'herdr-orch.cli/-main)
                          *command-line-args*)}
 
-  test {:doc  "Run the org-tasks and herdr-orch test suites"
-        :task (do (require 'babashka.classpath)
-                  (doseq [path ["skills/org-tasks/scripts/test"
-                                "skills/herdr-orch/scripts/test"]]
-                    ((requiring-resolve 'babashka.classpath/add-classpath) path))
-                  (apply (requiring-resolve 'org-tasks.test-runner/run)
-                         *command-line-args*))}
+  traits {:doc "Run the trait interpolator CLI (herdr-orch.traits-cli/-main)"
+          :task (apply (requiring-resolve 'herdr-orch.traits-cli/-main)
+                       *command-line-args*)}
+
+  test-clojure {:doc  "Run the org-tasks and herdr-orch Clojure test suites"
+                :task (do (require 'babashka.classpath)
+                          (doseq [path ["skills/org-tasks/scripts/test"
+                                        "skills/herdr-orch/scripts/test"]]
+                            ((requiring-resolve 'babashka.classpath/add-classpath) path))
+                          (apply (requiring-resolve 'org-tasks.test-runner/run)
+                                 *command-line-args*))}
+
+  test {:doc  "Run all Clojure and repository script tests"
+        :task (do (process/check
+                    (process/process (into ["bb" "test-clojure"] *command-line-args*)
+                                     {:inherit true}))
+                  (process/check
+                    (process/process ["bb" "scripts/test-run-trait-gate.bb"]
+                                     {:inherit true})))}
 
   smoke-subagent {:doc "Run explicitly guarded live Herdr subagent smoke (set ORCH_LIVE_SMOKE_KIND=claude to exercise Claude)"
                   :task (apply (requiring-resolve 'herdr-orch.smoke/-main)

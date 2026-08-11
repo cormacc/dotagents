@@ -6,6 +6,7 @@ Where things live:
 |---+---|
 | This file | What the skill is, how to configure it, and why it is built this way |
 | [[file:SKILL.md][SKILL.md]] | The delegation, trust, and pane-safety policy an agent loads at runtime |
+| [[file:references/traits.md][references/traits.md]] | Trait store, admission bar, probing protocol, and the measured rationale behind them |
 | [[file:scripts/README.md][scripts/README.md]] | CLI invocation, tests, and smoke entry points |
 | [[file:scripts/docs/contract.md][scripts/docs/contract.md]] | Every mechanical contract: CLI, JSON, environment, ledger, envelope, model resolution, retro/spawn gating, placement, fan-in, pruning, append-only publishing, parent push, artifact links, labels, and geometry |
 

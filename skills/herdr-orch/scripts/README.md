@@ -11,8 +11,12 @@ From the repository root (the repo `bb.edn` provides the `test` task; `bb test` 
 ./skills/herdr-orch/scripts/oh agent --help    # every signature in one group
 ./skills/herdr-orch/scripts/oh agent prompt --help  # one command, with its positional arity
 bb run subagent --help
+printf '%s' 'Review this %focused' | ./skills/herdr-orch/scripts/traits --layer home="$HOME/.agents/traits"
+bb traits --layer home="$HOME/.agents/traits" --plain < prompt.md
 bb test
 ```
+
+The `traits` launcher and root `bb.edn` task expose the shared interpolator to non-Clojure callers. Input comes from stdin or `--file`; repeat `--layer SOURCE=DIR` in precedence order; use `--plain` for transformed text rather than the default `herdr-orch/v1` JSON envelope. Unknowns and repeats are report data, not CLI failures. The full output and failure contract is in [docs/contract.md](docs/contract.md) section Standalone trait interpolator CLI.
 
 The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/skills` is a *directory* symlink), uses the repository `bb.edn` when present, and falls back to `bb --deps-root <scripts> -Sdeps '{:paths ["src"]}'` for a bare skill subtree. It never `cd`s before `exec`, so the CLI's working directory is always the caller's -- that value becomes the child pane's `--cwd` and drives assignment-root/roster resolution. It has no additional Maven dependencies.
 
