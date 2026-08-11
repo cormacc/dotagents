@@ -9,6 +9,7 @@
 - When a matched skill owns a domain, read it before issuing exploratory commands in that domain -- don't parallelise the skill load with domain probes.
 - A suite's green says nothing about files it does not execute. `bb test` reported 556 passing while the file just broken sat in a standalone script the suite never ran, and that green was cited as coverage. Before offering a suite as evidence for a change, confirm it actually executes the changed file.
 - A guard or ad-hoc verifier you have only ever seen pass is unverified. Trigger it deliberately with known-bad input before trusting it, and treat uniform all-pass or all-fail output as more likely a broken check than a broken system.
+- When a probe of already-shipped behaviour returns a surprising result, suspect the probe before the system -- above all any key, parameter or path name you supplied without checking it against the consumer. A render probe passing `:locale` where the code reads `:language` silently fell back to one locale and looked like a localisation defect; reporting a phantom bug is worse than not probing.
 
 # Subagents
 - Reusable Herdr subagent definitions resolve `<git-root>/.agents/subagents/` (project override) > `~/.agents/subagents/` (home override) > `skills/herdr-orch/subagents/` (packaged default). The home path is this repo's `subagents/`, symlinked by the dotfiles `agents.nix`; edit it here rather than under `~`. To delegate work inside Herdr, use the `herdr-orch` skill.
