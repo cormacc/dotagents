@@ -12,7 +12,7 @@
  *   option-list navigation and free-text ("Type something…") paths without
  *   a real terminal.
  *
- * Run directly with `tsx` (registered as part of pi/scripts/check-extensions.sh).
+ * Run directly with `tsx pi/extensions/test/question.test.ts`.
  */
 
 import question from "../question.ts";

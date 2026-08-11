@@ -103,17 +103,17 @@ Desktop plugins are trusted renderer code with full application authority. Herme
 
 * Validation
 
-Run the focused suite:
+Run the focused suite directly. The =check-hermes.sh= wrapper was retired on 2026-08-11; run the area you touched rather than an aggregate.
 
 #+begin_src shell
-bash scripts/check-hermes.sh
+python3 -m unittest hermes/org-tasks/tests/test_backend.py hermes/org-tasks/tests/test_packaging.py -v
+node --no-warnings --experimental-vm-modules hermes/org-tasks/tests/test_desktop.mjs
 #+end_src
 
-Set =HERMES_PYTHON= to a Hermes runtime Python if FastAPI is not importable from =python3=:
+The FastAPI route tests need a Python with FastAPI importable; use the Hermes runtime venv when =python3= lacks it:
 
 #+begin_src shell
-HERMES_PYTHON="$HOME/.hermes/hermes-agent/venv/bin/python" \
-  bash scripts/check-hermes.sh
+PYTHONWARNINGS=ignore "$HOME/.hermes/hermes-agent/venv/bin/python" -m unittest hermes/org-tasks/tests/test_plugin_api.py -v
 #+end_src
 
 The ESM test loads the uncompiled plugin through Node's VM module linker with mocked Hermes/React shims. It verifies contribution registration and the pure tree/filter/compact policies. Final validation should also load the plugin in Hermes Desktop against a real =ot= checkout.

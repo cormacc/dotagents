@@ -267,15 +267,17 @@ Not measured: how often auto-focus is actually wanted. The evidence is one sessi
 :LOGBOOK:
 - Created [2026-08-11 Tue 12:12]
 :END:
-=AGENTS.md= says to prefer Babashka for repository-local automation, but every pre-existing file in repo-root =scripts/= is =.sh= or =.ts= (=check.sh=, =check-extensions.sh=, =check-hermes.sh=, =check-links.ts=, =check-metadata.ts=). A delegated worker building =scripts/run-trait-gate.bb= followed the on-disk precedent first and wrote Bash, and had to be corrected. Confirmed with the user 2026-08-11: the existing scripts predate the rule.
+=AGENTS.md= says to prefer Babashka for repository-local automation. When this was filed, every pre-existing file in repo-root =scripts/= was =.sh= or =.ts=, so a delegated worker building =scripts/run-trait-gate.bb= followed the on-disk precedent first and wrote Bash, and had to be corrected. Confirmed with the user 2026-08-11: the existing scripts predate the rule.
 
 The precedent on disk therefore contradicts the written rule, and precedent wins by default for anyone who looks at the directory before reading =AGENTS.md=.
+
+*EDIT* [2026-08-11] Mostly self-resolved: retiring =check-metadata.ts=, =check-extensions.sh=, =check-hermes.sh= and =check-links.ts= left =scripts/= holding =check.sh= alongside two =.bb= files, so Babashka is now the majority and the misleading precedent is largely gone. What remains is worth one line so it does not drift back; consider closing this if that line lands elsewhere first.
 
 Acceptance criteria:
 - =AGENTS.md= states that repo-root =scripts/= is Babashka-first for new work, and that the existing =.sh= / =.ts= members predate the rule and are not a precedent to follow.
 - No existing script is rewritten as part of this task. Churn for consistency's sake is not the goal; the goal is that the next new script is Babashka without needing a correction.
 - If a future script genuinely needs Bash or TypeScript (a thin wrapper, or a Node-ecosystem check), the rule names that exemption rather than being silently violated.
-Must not: rewrite =check.sh=, =check-extensions.sh=, =check-hermes.sh=, or =check-links.ts=; add a lint that fails on existing members.
+Must not: rewrite =check.sh=, the sole remaining non-Babashka member; add a lint that fails on existing members.
 
 ** TODO [#C] traits: re-probe every fragment against synthetic, non-decaying scenarios
 :PROPERTIES:

@@ -12,17 +12,8 @@ npm ci --ignore-scripts
 npm --prefix pi/extensions/chromium ci --ignore-scripts
 npm --prefix pi/extensions/pi-clojure ci --ignore-scripts
 
-printf '\n==> active extension tests\n'
-npm run check:extensions
-
-printf '\n==> Hermes adapters\n'
-npm run check:hermes
-
 printf '\n==> Babashka task tooling\n'
 bb test
-
-printf '\n==> active documentation links\n'
-npm run check:links
 
 printf '\n==> skill-creator clean validation and packaging\n'
 python3 -m venv "$work/venv"

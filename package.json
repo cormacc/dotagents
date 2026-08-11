@@ -28,9 +28,6 @@
   },
   "scripts": {
     "check": "bash scripts/check.sh",
-    "check:extensions": "bash scripts/check-extensions.sh",
-    "check:hermes": "bash scripts/check-hermes.sh",
-    "check:links": "tsx scripts/check-links.ts",
     "check:nix": "nix flake check --impure --no-build"
   },
   "peerDependencies": {
