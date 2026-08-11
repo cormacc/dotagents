@@ -6,6 +6,8 @@ The =org-tasks=, =org-plan=, and =org-jira= skills are also the generic-skill sl
 
 This inventory is mechanically checked by =npm run check:metadata=: every top-level =skills/*/SKILL.md= frontmatter name must appear exactly once below, and every listed file must exist.
 
+Document format follows the audience, not the directory. A skill's =SKILL.md= and anything an agent loads on demand -- the =references/= bodies -- are Markdown, because the Agent Skills spec requires it for the former and internal consistency argues for it in the latter. Repository documentation written for humans is org: this file, each skill's =README.org=, the design records, and everything =org-tasks= manages. Getting this backwards costs a lossy conversion in both directions; it happened once, converting an agent-facing reference to org and back.
+
 * Skills
 
 ** First-party

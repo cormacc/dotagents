@@ -62,6 +62,13 @@ Match codebase conventions; default to community idiom otherwise. The short list
 
 See [references/idioms.md](references/idioms.md) for threading-macro, control-flow, data-structure, error-handling, testing, and anti-pattern detail.
 
+## Babashka script gotchas
+
+Both verified by probe, not inference:
+
+- A bare script runs in `user`, where `clojure.repl` is already referred. `(def source ...)` fails with "source already refers to #'clojure.repl/source"; the same applies to `doc` and `dir`. Use a specific name such as `source-path`.
+- Core `slurp`/`spit` reject a `babashka.fs` path object: "Cannot open <UnixPath ...> as an InputStream". Wrap `fs/path` values in `str` before passing them.
+
 ## Failure recovery
 
 If REPL eval, namespace load, or a test fails:
