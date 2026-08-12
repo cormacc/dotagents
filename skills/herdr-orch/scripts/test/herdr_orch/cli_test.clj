@@ -4411,3 +4411,33 @@
     (let [proc (call! env "task" "harvest" "some-task")]
       (is (= 1 (:exit proc)))
       (is (re-find #"task harvest requires 0 arguments" (:out proc))))))
+
+;; Model inheritance is one level at every depth, and both hops share one mechanism: a
+;; spawn reads its immediate parent's model and injects its own for the next spawn. Only a
+;; roster persona that declares no `model:` reaches this tier -- every packaged persona
+;; declares one, so frontmatter answers first and inheritance never fires for them.
+(def ^:private modelless-persona "---\nname: helper\ndescription: fixture\n---\nFixture persona with no model.\n")
+(defn- spawned-model [{:keys [env dir]} & argv]
+  (let [proc (apply call! env "task" "start" argv)]
+    (is (zero? (:exit proc)) (:out proc))
+    (when (zero? (:exit proc))
+      (:model (ledger-entry* dir (get-in (result proc) [:result :task]))))))
+(deftest model-is-inherited-one-level-from-the-spawning-agent
+  (testing "root -> child: the pi root's own model, with no HERDR_ORCH_MODEL to read"
+    (let [fixture (fake-env {"PI_PROVIDER" "anthropic" "PI_MODEL" "claude-opus-5"} {"helper" modelless-persona})]
+      (is (= "anthropic/claude-opus-5" (spawned-model fixture "helper" "--task" "inherit from root")))
+      ;; and it hands that same value on, so the next hop is identical to this one
+      (is (= "anthropic/claude-opus-5" (injected-env (:env-file fixture) "HERDR_ORCH_MODEL")))))
+  (testing "child -> grandchild: the injected value, not the harness environment"
+    (is (= "light" (spawned-model (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "helper"
+                                             "FAKE_PARENT_LABEL" "worker-1-light" "HERDR_ORCH_MODEL" "light"
+                                             "PI_PROVIDER" "anthropic" "PI_MODEL" "claude-opus-5"}
+                                            {"helper" modelless-persona})
+                                  "helper" "--task" "inherit from child" "--spawns" "none"))))
+  (testing "a declared model: still wins -- inheritance is the fallback, never an override"
+    (is (= "light" (spawned-model (fake-env {"PI_PROVIDER" "anthropic" "PI_MODEL" "claude-opus-5"} {})
+                                  "worker" "--task" "frontmatter wins"))))
+  (testing "a non-pi root does not inherit a stray PI_MODEL from its shell"
+    (is (nil? (spawned-model (fake-env {"FAKE_PARENT_AGENT" "claude" "PI_PROVIDER" "anthropic" "PI_MODEL" "claude-opus-5"}
+                                       {"helper" modelless-persona})
+                             "helper" "--task" "no stray inheritance")))))

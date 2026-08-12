@@ -226,9 +226,23 @@
        (or (config-file default-path) (fail "missing shipped default config" {:path default-path}))
        (or (config-file home-path) {})
        (or (config-file project-path) {}))))))
+;; The spawning agent's own model, feeding `resolve-model`'s same-kind inheritance tier.
+;; `oh` injects HERDR_ORCH_MODEL into every child it spawns, so a child spawning a
+;; grandchild reads back the model it was itself started with; at the root, where nothing
+;; injected it, fall back to the harness's own environment. Inheritance is one level at
+;; every depth because each spawn only ever reads its immediate parent's value.
+;; Only pi's variables are read, and only when the parent actually is pi: claude and codex
+;; expose no verified equivalent, and an unrelated PI_MODEL left in the shell of a
+;; claude/codex root would otherwise be inherited as if it were that root's model.
+(defn parent-model [parent-kind]
+  (or (System/getenv "HERDR_ORCH_MODEL")
+      (when (= "pi" parent-kind)
+        (when-let [model (System/getenv "PI_MODEL")]
+          (if-let [provider (System/getenv "PI_PROVIDER")] (str provider "/" model) model)))))
 (defn parent-identity []
   (let [agent (herdr/agent! (System/getenv "HERDR_PANE_ID"))]
-    {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent)) :parent-kind (:agent agent) :parent-pane (:pane_id agent)}))
+    {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent)) :parent-kind (:agent agent) :parent-pane (:pane_id agent)
+     :parent-model (parent-model (:agent agent))}))
 ;; Composed from the resolved spawn policy, not the persona name: any persona whose
 ;; policy is non-empty gets the delegation sentence, everyone else the leaf sentence.
 ;; The closing sentence is the one lifecycle rule a child must be *told*, because it is the
@@ -349,7 +363,7 @@
         prompt-persona-path (if (:composed-content composition) "<composed-persona-path>" path)
         ident (parent-identity)
         kind (kind-policy opts frontmatter (:parent-kind ident))
-        model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
+        model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
         config (config)
         placement (placement-policy opts config)
         retro (retro-policy persona opts frontmatter)
@@ -660,7 +674,7 @@
             composition (trait-interpolation path persona-text)
             ident (parent-identity)
             kind (kind-policy opts frontmatter (:parent-kind ident))
-            model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (one opts :parent-model)})
+            model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
             ;; Loaded and schema-validated here, before `ledger/fresh-result`'s
             ;; `fs/create-dirs` and every later ledger/pane mutation: malformed config
             ;; must fail fast, never after allocation has begun.
@@ -695,7 +709,11 @@
           ;; its spawn-time policy. Nothing lifecycle-related reaches the child's env.
           (let [env (cond-> {"HERDR_ORCH_CHILD" name "HERDR_ORCH_TASK" task "HERDR_ORCH_RESULT" result "HERDR_ORCH_BIN" bin "HERDR_ORCH_PERSONA" persona "HERDR_ORCH_SPAWNS" (str/join " " (:spawns spawns))}
                       ;; Keep a relocated assignment root in force for any nested delegation.
-                      (System/getenv "ORCH_ASSIGNMENT_ROOT") (assoc "ORCH_ASSIGNMENT_ROOT" (ledger/assignment-root)))
+                      (System/getenv "ORCH_ASSIGNMENT_ROOT") (assoc "ORCH_ASSIGNMENT_ROOT" (ledger/assignment-root))
+                      ;; This child's own model, so its grandchildren inherit from it exactly
+                      ;; as it inherited from here (`parent-model`). Absent when unresolved,
+                      ;; leaving a grandchild on the harness default rather than a stale value.
+                      model (assoc "HERDR_ORCH_MODEL" model))
                 ;; Tab placement skips caller-rect!/direction entirely: a tab needs neither.
                 pane-placement (if (= placement "tab")
                                  (herdr/tab-create! {:cwd (System/getProperty "user.dir") :label label :env env :focus false})

@@ -54,6 +54,7 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 | `HERDR_ORCH_BIN` | child | Absolute launcher path for `publish`. |
 | `HERDR_ORCH_PERSONA` | child | The child's own persona. When set it marks the CLI's own spawns as below-root: nested labels compose from it and spawn enforcement reads `HERDR_ORCH_SPAWNS` (see § Spawn gating). An agent started outside `oh` has neither unless the variable is set. |
 | `HERDR_ORCH_SPAWNS` | child | Space-joined spawn allow-list resolved by the parent (see § Spawn gating). Blank and unset both mean leaf; a below-root spawn always injects an empty value. |
+| `HERDR_ORCH_MODEL` | child | The child's own resolved model, so its own spawns can inherit from it (see § Model resolution). Omitted entirely when the model is unresolved, which leaves a grandchild on the harness default rather than a stale value. |
 
 Every `ORCH_*_MS` variable falls back to its stated default when unset, blank, unparseable, zero, or negative.
 
@@ -101,7 +102,7 @@ A `:harnesses` entry may carry `:extra-args`, a vector of non-blank strings appe
 
 `resolve-kind` has exactly two tiers: frontmatter `kind:`, else the inherited parent kind, failing when neither resolves. Nothing per-assignment selects a harness -- no flag (`task run`/`start` rejects `--kind` rather than ignoring it), no env var, and nothing in the model layer below. Raw `oh agent start --kind` is an unrelated Herdr passthrough and keeps its flag.
 
-`resolve-model` precedence is requested > frontmatter model > same-kind parent inheritance > nil. The resolved value is translated at the `model-args` boundary, the single choke point for frontmatter models, explicit `--model` flags, and same-kind parent inheritance alike.
+`resolve-model` precedence is requested > frontmatter model > same-kind parent inheritance > nil. Inheritance is exactly one level at every depth, by one mechanism: a spawn reads its immediate parent's model and injects its own as `HERDR_ORCH_MODEL` for the next. A child reads back what its parent injected; a root, which nothing injected into, falls back to its harness's own environment -- `PI_MODEL`/`PI_PROVIDER`, and only when the root really is pi, since claude and codex expose no verified equivalent and a stray `PI_MODEL` must not be read as a claude root's model. Only a persona declaring no `model:` reaches this tier at all; every packaged persona declares one. The resolved value is translated at the `model-args` boundary, the single choke point for frontmatter models, explicit `--model` flags, and same-kind parent inheritance alike.
 
 The model table is in external EDN, in two levels, alongside optional spawn defaults: `{:defaults {:placement :tab-split} :harnesses {:<kind> {:model-flag "…"} …} :aliases {"<short-name>" "<canonical-id>" …} :models {"<canonical-id>" {:<kind> "…" …} …}}`. `:aliases` maps a short or weight name to a canonical, pi-style `provider/model` ID; `:models` maps that canonical ID to a sparse row of per-kind native spellings. Resolution is: an alias hop through `:aliases` (or pass-through if the value is not an alias key), then a `:models` row/column lookup by that canonical ID, consulted only after kind resolution. `:harnesses` keeps the kind set open -- a resolved kind absent from it yields no model args, and herdr alone validates which kinds exist.
 
