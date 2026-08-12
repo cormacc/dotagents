@@ -673,7 +673,7 @@
     (let [{:keys [env log dir]} (fake-env {})
           proc (apply call! env "task" "run" argv)]
       (is (= 1 (:exit proc)) label)
-      (is (re-find #"unknown task option" (:out proc)) label)
+      (is (re-find #"unknown option" (:out proc)) label)
       (is (re-find #"--bogus" (:out proc)) label)
       (is (empty? (calls log)) label)
       (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))) label))))

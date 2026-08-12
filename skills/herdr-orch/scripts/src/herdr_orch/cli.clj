@@ -84,26 +84,14 @@
 (defn boolean-flags-for [group op]
   (cond-> boolean-flags
     (and (#{"tab" "ws"} group) (= "create" op)) (conj "--focus")))
-(def known-options
-  {"pane" #{:direction :cwd :env :source :lines :format :match :regex :timeout :raw :workspace}
-   "tab" #{:workspace :cwd :label :env}
-   "ws" #{:cwd :label :env}
-   "agent" #{:kind :pane :timeout :until :source :lines :format :clear}
-   "task" #{:task :task-file :model :parent-model :kind :timeout :tab :split :spawns :retro :no-retro
-             :prompt-extra :print-prompt :any :wait :close :format :raw :status :summary :artifact
-             :finding :next :process :from-file :notify-timeout :settled :closed}
-   "spawn" #{:cwd :label}})
-(defn known-options-for [group op]
-  (cond-> (get known-options group #{})
-    (and (#{"tab" "ws"} group) (= "create" op)) (conj :focus)))
-(defn option-map [args flags known group]
+(defn option-map [args flags known]
   (loop [xs args out {}]
     (if-let [x (first xs)]
       (cond (= "--" x) (assoc out :native (vec (next xs)))
             (str/starts-with? x "--")
             (let [key (keyword (subs x 2))]
               (when-not (known key)
-                (fail (str "unknown " group " option") {:option x}))
+                (fail "unknown option" {:option x}))
               (if (flags x)
                 (recur (next xs) (assoc out key true))
                 (let [value (second xs)]
@@ -1833,6 +1821,12 @@
            "compact --closed"
            "harvest [--format json|text]"]
    "spawn" ["spawn \"<shell command>\""]})
+;; Derived from the signatures above rather than restated, so help and validation cannot
+;; disagree. Flat on purpose: it exists to catch typos, and per-group scoping would
+;; reintroduce a second list to keep in step. Boolean-ness is *not* derivable here
+;; (`[--format text|ansi]` reads the same as a value-less flag), so `boolean-flags` stays.
+(def known-options
+  (set (map #(keyword (subs % 2)) (re-seq #"--[a-z][a-z0-9-]*" (str/join " " (mapcat val signatures))))))
 (defn help-text
   "Global usage, one group's signatures, or a single command's signature."
   [group op]
@@ -1948,7 +1942,7 @@
     (if (help-request? group op args)
       (help-text group op)
       (let [parse-args (if (= "spawn" group) (cons op args) args)
-            opts (option-map parse-args (boolean-flags-for group op) (known-options-for group op) group)
+            opts (option-map parse-args (boolean-flags-for group op) known-options)
             positional (:_ opts)]
         (case group
           "pane" (raw-pane! op opts positional)
