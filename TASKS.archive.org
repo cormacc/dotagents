@@ -2906,3 +2906,117 @@ Shipped:
 - Docs corrected: =references/traits.md= now scopes the packaged store against the user layer and records why the symlink arrangement was replaced; =contract.md= lost the sentence describing the packaged directory as a skill-local relative symlink; the =agents.nix= comment describes a real directory. The planning note that =contract.md= would need no change was wrong -- only the layer-order half of that line had been read, and the worker caught the stale tail against an explicit instruction to skip it.
 
 Follow-up left open deliberately: =scripts/run-trait-gate.bb= still resolves a gate only at =<root>/traits/<trait>/gate.md=, so a gate authored for a packaged fragment would not resolve. Nothing breaks today because =prune= is the only gated trait and it stays in the user layer.
+
+** DONE herdr-orch housekeeping :skill:herdr_orch:
+CLOSED: [2026-08-12 Wed 23:12]
+:PROPERTIES:
+:CUSTOM_ID: 1f5040e8-40d7-4b59-afeb-0edb63b0bda8
+:CREATED: [2026-08-12 Wed 21:50]
+:STARTED: [2026-08-12 Wed 21:59]
+:ARCHIVED: [2026-08-12 Wed 23:12]
+:ARCHIVE_OLPATH: Housekeeping
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 21:50]
+- State "STARTED" from "TODO" [2026-08-12 Wed 21:59]
+- State "DONE" from "STARTED" [2026-08-12 Wed 23:12]
+:END:
+Inline plan (no change-record): a container for small, independent herdr-orch corrections -- three documentation / prompt-text fixes and one bounded CLI argument-validation fix. Each subtask keeps its own detailed body and citations; this task carries the shared approach and the closure bar.
+
+*Level:* production · *Tests:* smoke · *Docs:* inline
+
+Acceptance criteria:
+- [X] =publication-guidance= states the single-line SUMMARY constraint and points multi-line detail at =--finding= / the report artifact (262a8379).
+- [X] =oh= rejects an unknown =task= option with an =unknown option= error instead of parsing and ignoring it (b0eb67fc).
+- [X] That rejection is triggered deliberately with known-bad input, in final argv position as well as mid-argv, before the subtask is called done (b0eb67fc).
+- [X] A test in the herdr-orch scripts suite fails if an unknown =task= option is accepted again (b0eb67fc).
+- [X] What =oh pane wait-output= searches is measured against a pane holding a marker already in scrollback, and the result is documented in =scripts/README.md= § Raw passthrough (1fdcee79).
+- [X] Both test-fixture environment facts are confirmed against the current fixtures and documented where the scripts' testing guidance lives (67518ea0) -- one confirmed, and the second *did not reproduce*: clearing =HERDR_ORCH_PERSONA= alone is what marks a caller below-root, not the five variables the task body claimed, so the README records the correction rather than the report.
+
+Closure note [2026-08-12 Wed]: the option-validation fix grew a second pass after review. The per-group option table it introduced immediately drifted from the built-in help in both directions (=--native= documented but rejected, =--parent-model= accepted but documented nowhere), so the table was deleted and the accepted set is now derived from =signatures=, making the two incapable of disagreeing. Removing =--parent-model= then exposed that =resolve-model='s same-kind inheritance tier had no producer at all; it now has one (=HERDR_ORCH_MODEL= injected per spawn, harness env at the root), one level at every depth. That tier is reachable only by a roster persona declaring no =model:=, which no packaged persona does -- see the persona-less subagent follow-up.
+
+Anti-criteria:
+- Must not: state an unreproduced report as fact -- measure it, attribute it, or drop it.
+- Must not: probe option validation with an invocation that can succeed and spawn a real billable child.
+- Must not: let a subtask grow into change-record scope; one that turns out to need design work is lifted back to top level with =ot move --section= and planned on its own.
+*** DONE herdr-orch: injected publication guidance omits the single-line SUMMARY constraint :skill:herdr_orch:
+CLOSED: [2026-08-12 Wed 22:01]
+:PROPERTIES:
+:CUSTOM_ID: 262a8379-2270-4faa-a49e-030158e6d0a8
+:CREATED: [2026-08-12 Wed 11:33]
+:STARTED: [2026-08-12 Wed 21:59]
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 11:33]
+- State "STARTED" from "TODO" [2026-08-12 Wed 21:59]
+- State "DONE" from "STARTED" [2026-08-12 Wed 22:01]
+:END:
+The injected child prompt never states that a published SUMMARY must be a single line, so children discover the constraint by having a publish rejected mid-run.
+
+=scripts/docs/contract.md= § Ledger and completion specifies =SUMMARY: <single line>=, and =core.clj/parse-result= reads the envelope line-wise via =field-labels=. But =cli.clj/publication-guidance= -- the only publication text a child actually receives, since a child never reads contract.md -- covers report paths, =--artifact=, =--finding=, and "never treat pane text as the result", and says nothing about line shape.
+
+Outcome (56d03f9): =publication-guidance= now states the single-line constraint and routes multi-line detail to =--finding= / the report artifact, pinned by =publication-guidance-is-exact-and-unconditional=. Raised as a PROCESS candidate by reviewer-c42a8132 after its own multiline summary was rejected.
+*** DONE herdr-orch: oh silently accepts unknown task options
+CLOSED: [2026-08-12 Wed 22:10]
+:PROPERTIES:
+:CUSTOM_ID: b0eb67fc-c1f1-467b-9b01-7e45f5807d74
+:CREATED: [2026-08-12 Wed 10:46]
+:STARTED: [2026-08-12 Wed 22:01]
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 10:46]
+- State "STARTED" from "TODO" [2026-08-12 Wed 22:01]
+- State "DONE" from "STARTED" [2026-08-12 Wed 22:10]
+:END:
+=oh= silently accepts unknown =task= options. Discovered 2026-08-11 while probing the focus removal (task 97863e4a): =oh task run worker --task x --bogus y= did not fail -- it parsed =--bogus= as a value-taking option, ignored it, and spawned a real billable child that had to be closed by hand.
+
+=option-map= in =skills/herdr-orch/scripts/src/herdr_orch/cli.clj= collects any =--foo value= into the opts map, and nothing downstream validates the key set for the =task= group. Two distinct failure shapes follow:
+- A typo with a value is silently ignored, so an operator believes a flag took effect when it did not. This is how a mistyped =--timout 600000= would spawn at the default timeout with no warning.
+- A typo in final argv position fails with "option requires a value", which reads as though the flag exists and merely needs an argument.
+
+Worse, an unknown value-taking option swallows the *next* token: =--bogus --task x= consumes =--task=, after which =task-text= finds no assignment, falls through to its stdin branch, and blocks on =slurp *in*= forever in a non-interactive context. That is a hang, not an error -- observed hanging =bb test= for 900 s when a test lost the guard that had been masking it.
+
+Outcome: shipped first as the per-group known-options table proposed here (0a214da), which drifted from the built-in help in both directions on that very commit -- =--native= was documented but rejected, =--parent-model= accepted but documented nowhere and passed by nothing. The table was then deleted and the accepted set derived from =signatures= instead, so help and validation cannot disagree; it is flat rather than per-group because it exists to catch typos, and scoping would restore a second list to keep in step. =unknown-task-options-are-rejected-before-value-parsing= covers mid-argv, final-argv, and =--bogus= swallowing =--task=.
+
+Not in scope for 97863e4a, which deliberately removed the special-case =--focus=/=--no-focus= rejection rather than retaining legacy support for retired flags; this task is the general check that would have covered it for free.
+*** DONE herdr-orch: verify and document what oh pane wait-output searches :skill:herdr_orch:
+CLOSED: [2026-08-12 Wed 22:13]
+:PROPERTIES:
+:CUSTOM_ID: 1fdcee79-9515-4aaa-839e-53001fbb24b2
+:CREATED: [2026-08-12 Wed 11:34]
+:STARTED: [2026-08-12 Wed 22:10]
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 11:34]
+- State "STARTED" from "TODO" [2026-08-12 Wed 22:10]
+- State "DONE" from "STARTED" [2026-08-12 Wed 22:13]
+:END:
+Determine what window =oh pane wait-output= actually searches, then document it in =scripts/README.md= § Raw passthrough alongside the existing wrapper-vs-upstream default differences.
+
+Reported by worker-89073d9a (task 89073d9a-7208-4cc0-8cef-a386f81f71c6): =wait-output= twice timed out on markers that a =--source recent-unwrapped= read showed immediately. Filed unverified, pending the live pane experiment that later settled it.
+
+Why it is plausible: =herdr.clj/pane-wait-output!= passes =--source= only when the caller supplies one, so an unqualified =wait-output= takes the upstream default, while =scripts/README.md= records that the *read* family is defaulted by the wrapper to =recent-unwrapped= (upstream: =recent=). If the two verbs search different windows, a marker already in scrollback can be visible to one and invisible to the other -- which reads as "the process never emitted it" rather than "I searched the wrong window".
+
+Outcome (25fed47): the report reproduced. A marker followed by 250 lines of output was found by =pane read --lines 300= and by =wait-output --source recent-unwrapped --lines 300=, while the unqualified wait timed out. =pane-wait-output!= now defaults its source to =recent-unwrapped=, matching the read family, and § Raw passthrough records that default plus the remaining snapshot-depth caveat. Originally a child PROCESS candidate from worker-89073d9a.
+*** DONE herdr-orch: document test-fixture environment requirements :skill:herdr_orch:
+CLOSED: [2026-08-12 Wed 22:16]
+:PROPERTIES:
+:CUSTOM_ID: 67518ea0-90b6-46b3-b19a-3326dd577f21
+:CREATED: [2026-08-10 Mon 16:15]
+:STARTED: [2026-08-12 Wed 22:13]
+:END:
+:LOGBOOK:
+- Created [2026-08-10 Mon 16:15]
+- State "STARTED" from "TODO" [2026-08-12 Wed 22:13]
+- State "DONE" from "STARTED" [2026-08-12 Wed 22:16]
+:END:
+Two herdr-orch test-fixture facts surfaced during trait implementation, both costing a delegated child repeated failed attempts before it diagnosed them. They belong in the scripts' own test documentation, not in a general instruction file.
+
+- A standalone fixture smoke command inherits the live nested pane identity: it must explicitly set `HERDR_PANE_ID` and a persona-matching `FAKE_PARENT_LABEL`, or fixture topology checks fail against the real pane tree.
+- A delegated child intentionally simulating a *root* caller must clear the injected `HERDR_ORCH_PERSONA`, `HERDR_ORCH_SPAWNS`, `HERDR_ORCH_TASK`, `HERDR_ORCH_RESULT` and `HERDR_ORCH_CHILD` variables first, or the CLI classifies it as below-root and refuses the call.
+
+Both were reported by child agents rather than reproduced by the parent, so each was confirmed against the current fixtures before being documented in the scripts' own testing guidance.
+
+Measurement [2026-08-12 Wed]: the nested-fixture requirement reproduced. With the live delegated pane id, =fake-herdr= did not return the parent identity expected by the fixture; overriding =HERDR_PANE_ID=w:p= then exposed the default =planner-1-model= label mismatch, and adding a =worker-= prefixed =FAKE_PARENT_LABEL= made the nested scout spawn succeed.
+
+The five-variable root-simulation claim did not reproduce. A fixture call carrying all five inherited variables was refused as below-root, but clearing only =HERDR_ORCH_PERSONA= made the root worker spawn succeed while =HERDR_ORCH_SPAWNS=, =HERDR_ORCH_TASK=, =HERDR_ORCH_RESULT=, and =HERDR_ORCH_CHILD= remained set. Current =enforce-spawns!= and =placement-policy= likewise use =HERDR_ORCH_PERSONA= as the depth discriminator, so the scripts README documents that narrower confirmed requirement instead of the original report.
