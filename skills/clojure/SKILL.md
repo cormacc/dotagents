@@ -29,6 +29,8 @@ Ask for clarification when requirements are ambiguous, when materially different
 
 A ClojureScript nREPL evaluates against a connected JS runtime -- usually a browser tab (shadow-cljs `:browser` / `:browser-repl`, figwheel), occasionally Node or a self-hosted runtime. Before evaluating `.cljs`, confirm a runtime is attached. For the browser case use the `chromium` skill to open a tab against the dev server URL. A `.cljs` eval that hangs or returns `nil` with no effect is the classic disconnected-runtime symptom -- check the runtime before debugging the form.
 
+Share a test fixture between JVM and CLJS by loading it from the classpath at *compile* time. CLJS has no runtime file access outside Node, and `js/require "fs"` compiles under every target while working under one, so the break surfaces at runtime in a browser build rather than at compile time. `shadow.resource/inline` is the ready-made macro; for one call that works on both platforms, wrap the `shadow.resource/slurp-resource` *function* (pass it `&env`) in a `.cljc` macro branching on `(:ns &env)`, which slurps on the JVM and inlines under CLJS. Inlined bytes ship in the JS bundle, so keep shared fixtures small -- and never paste a fixture's contents into source instead.
+
 ## Tools
 
 | Capability     | pi-clojure (preferred)    | CLI fallback                                              |
