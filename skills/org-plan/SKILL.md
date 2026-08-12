@@ -189,7 +189,7 @@ This preserves the rejected paths when re-litigation happens later.
 
 ### The project constitution
 
-This repo has no separate constitution/steering file (Spec Kit's `constitution.md`, Kiro's steering docs) -- that role belongs to the already-canonical `AGENTS.md` plus the skills under `skills/` (or `.agents/skills`). They are the durable, agent-and-human-readable rules the project already holds itself to; naming them "the constitution" is a label for premortem/decision checks, not a new artifact. Do not create a constitution file or template section -- reuse these.
+This repo has no separate constitution/steering file (Spec Kit's `constitution.md`, Kiro's steering docs) -- that role belongs to the already-canonical `AGENTS.md` plus the skills under `skills/` (or `.agents/skills`). Where a project separates portable agent rules from its own project rules, both `AGENTS.md` files are constitutional -- in this repository, `home/AGENTS.md` and the repo-root one. They are the durable, agent-and-human-readable rules the project already holds itself to; naming them "the constitution" is a label for premortem/decision checks, not a new artifact. Do not create a constitution file or template section -- reuse these.
 
 ### Premortem
 

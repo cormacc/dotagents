@@ -8,7 +8,10 @@ The package bundle contains the org-mode task-memory protocol (`org-tasks`, `org
 
 ```text
 dotagents/
-├── AGENTS.md                 # pi-side operating instructions
+├── AGENTS.md                 # this repo's own project rules (maintenance specifics)
+├── home/                     # portable agent rules, projected to each harness
+│   ├── AGENTS.md             # -> ~/.pi/agent/AGENTS.md
+│   └── CLAUDE.md             # -> ~/.claude/CLAUDE.md (one-line import of the above)
 ├── README.md
 ├── TASKS*.org                # repository task memory
 ├── package.json              # agent-org-memory manifest + root checks
@@ -98,10 +101,11 @@ The consuming `agents.nix` links:
 
 - `skills/` → `~/.agents/skills` (including `skills/herdr-orch/subagents/` packaged persona defaults)
 - `skills/org-tasks/scripts/ot` → `~/.local/bin/ot`
-- `AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, and `pi/settings.json` → `~/.pi/agent/...`
+- `home/AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, and `pi/settings.json` → `~/.pi/agent/...`. The repo-root `AGENTS.md` is deliberately *not* projected: it is this repository's project file, picked up by ordinary cwd discovery when working here.
+- `home/CLAUDE.md` → `~/.claude/CLAUDE.md` (imports `home/AGENTS.md`, so claude and pi share one set of portable rules)
 - `mcp.json` → `~/.config/mcp/mcp.json`
 
-Herdr persona definitions resolve project (`<git-root>/.agents/subagents/`) > home (`~/.agents/subagents/`) > packaged (`skills/herdr-orch/subagents/`). Home Manager deliberately does not manage `~/.agents/subagents/`: it is reserved for genuine home overrides. The parallel `config.edn` chain replaces complete model-ID rows in the same precedence order and never uses a model or weight alias to select kind. The packaged weights are `heavy`, `middle`, `light`, and `feather`; their per-kind values are enumerated once, in `skills/herdr-orch/scripts/docs/contract.md` § Model resolution.
+Herdr persona definitions resolve project (`<git-root>/.agents/subagents/`) > home (`~/.agents/subagents/`) > packaged (`skills/herdr-orch/subagents/`). Home Manager manages `~/.agents/subagents/` (out-of-store, from this repo's `subagents/`) so the harness permission overrides ship to every host; it holds home overrides only, never the packaged persona defaults. The parallel `config.edn` chain replaces complete model-ID rows in the same precedence order and never uses a model or weight alias to select kind. The packaged weights are `heavy`, `middle`, `light`, and `feather`; their per-kind values are enumerated once, in `skills/herdr-orch/scripts/docs/contract.md` § Model resolution.
 
 Activation fails early when the submodule is uninitialized. It installs local npm dependencies for chromium, pi-clojure, and dataspex when their manifests change. Chromium and pi-clojure now carry exact direct versions plus tracked lockfiles; the root check exercises those locks with `npm ci`.
 

@@ -2805,3 +2805,55 @@ Acceptance criteria:
 - =bb test= and =ot doctor= stay clean.
 
 Not measured: how often auto-focus is actually wanted. The evidence is one session of unattended multi-child delegation where it was pure noise, plus the reported cross-workspace steal.
+
+** DONE Split AGENTS.md into global home/ preferences and dotagents project rules :agents_md:
+CLOSED: [2026-08-12 Wed 14:47]
+:PROPERTIES:
+:CUSTOM_ID: ba214eca-087e-4814-9036-6e77994c5302
+:CREATED: [2026-08-12 Wed 13:41]
+:STARTED: [2026-08-12 Wed 13:41]
+:ARCHIVED: [2026-08-12 Wed 14:47]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 13:41]
+- State "STARTED" from "TODO" [2026-08-12 Wed 13:41]
+- State "DONE" from "STARTED" [2026-08-12 Wed 14:47]
+:END:
+Split the repo-root =AGENTS.md= so global user preferences and dotagents-project maintenance rules stop sharing one file. Symlinked as =~/.pi/agent/AGENTS.md= (=agents.nix=), the single file is injected twice in any session inside this repo -- once as global preferences, once as the project file, byte-identical, 2127 words each -- while exporting this repo's org/soft-wrap/=pi/settings.json= trivia to every unrelated project.
+
+Note the premise correction found while scoping: =~/.agents/AGENTS.md= does not exist and nothing reads it. "Global" today means pi-global via =~/.pi/agent/AGENTS.md=; =~/.claude/CLAUDE.md= and =~/.codex/AGENTS.md= are absent, so a future non-pi harness needs its own link.
+
+Agreed approach (inline flow, no change record; 2026-08-12):
+- =home/AGENTS.md= holds the portable rules and is what =agents.nix= projects to =~/.pi/agent/AGENTS.md=. Repo-root =AGENTS.md= becomes the dotagents project file, discovered by ordinary cwd resolution. Only the project file must sit at the root, so the global one moves into a subdirectory rather than the reverse. Precedent for a nested scoped guide already exists at =skills/org-tasks/scripts/AGENTS.md=.
+- A claim-by-claim duplication test drove the partition rather than topic sorting. The whole =# Subagents= section (233 words) was deleted, not split: every claim already exists in =skills/herdr-orch/SKILL.md= (resolution precedence, kind-as-deployment-property, weights), =scripts/docs/contract.md= (=:models=/=:aliases= merge semantics, pi pass-through), =README.org=, and the =subagents/config.edn= header comment. Only one clause was unique -- that this repo supplies the home override layer and it must be edited here, not under =~= -- and that is a maintenance fact for the project file.
+- =# File operations= stays global almost intact: no skill owns general shell/CLI hygiene, so the rg/grep/sed/printf/argv corpus has no other home. Contrary to the initial expectation that it would be the most recoverable from skills, it was the least.
+- Bullets that other files actively cite are retained verbatim: =herdr-orch= § Trusting a result defers to "AGENTS.md's CRITICAL rule is unconditional and outside this probe budget", and § Assignment premises specialises the measured-claims rule. Deleting either would break a live reference.
+- New global rule added, not migrated: prefer Babashka to both shell and Python, with a checkable threshold (a loop, a conditional, string manipulation, or a second pipe earns a =.tmp/*.clj= script; single commands stay shell). Nothing previously stated a preference over bash.
+
+Sequencing matters because =agents.nix= changing a symlink *source path* needs a Home Manager switch, unlike content edits which are live. Order chosen so no window exists where the global rules are absent: create =home/AGENTS.md= and repoint =agents.nix= while root stays intact (brief duplication), switch, verify, then trim root. The reverse order would drop the rules until the switch ran.
+
+Done so far:
+- =home/AGENTS.md= created by copy-then-trim from root and diff-verified: the only differences are the four planned removals and the Babashka replacement. 1803 words, no repo-relative paths remaining (query confirmed working against the root file first).
+- =agents.nix= repointed to =${agentsRoot}/home/AGENTS.md= with a comment explaining why root is deliberately not projected. =nix eval= of =homeConfigurations.default.activationPackage.drvPath= succeeds.
+- =dotfiles/AGENTS.md= subagents bullet trimmed from 11 lines to 6, deferring merge semantics to contract.md; hard-wrap convention preserved. Uncommitted in that repo.
+
+Shipped:
+- =home/AGENTS.md= (1803 words, 37 bullets) holds the portable rules and is projected to =~/.pi/agent/AGENTS.md=; repo-root =AGENTS.md= (294 words, 4 bullets) is now the dotagents project file, discovered by cwd. The two share no bullet, and every original bullet survives in one of them except the three deliberately deleted =# Subagents= duplicates and the superseded Babashka bullet. Retained bullets were lifted by line number and checked byte-identical rather than retyped.
+- Claude reached parity with pi: =home/CLAUDE.md= is a one-line =@= import of =home/AGENTS.md=, symlinked to =~/.claude/CLAUDE.md=. The import is written absolute because the file is reached through a symlink and a relative =@AGENTS.md= would resolve differently depending on whether Claude takes the dirname before or after resolving the link; the absolute form is correct either way. Repo-root =CLAUDE.md= stays a bare =@AGENTS.md= so an in-repo claude session does not load the portable rules twice.
+- =README.md= tree and symlink list updated. One claim there was stale rather than merely duplicated and was corrected: it said Home Manager "deliberately does not manage =~/.agents/subagents/=", while =agents.nix= records that the path is now managed so the harness permission overrides ship to every host. The persona-resolution paragraph was deliberately kept -- duplication is acceptable there as human orientation.
+- =org-plan= § The project constitution now names both AGENTS.md files as constitutional; =self-improvement= routing now asks whether a finding holds in every project before choosing between them.
+
+Open at closure: =~/.claude/CLAUDE.md= is wired but unverified until the next =home-manager switch=, since the symlink does not exist before activation. The pi side was verified live (=realpath= resolved into =home/=) before the root file was trimmed.
+
+Acceptance criteria:
+- A session in an unrelated repo loads only portable rules; no org soft-wrap, =pi/settings.json=, or herdr-orch maintenance content reaches it.
+- A session in this repo loads global plus project with no duplicated bullet.
+- =realpath ~/.pi/agent/AGENTS.md= resolves into =home/=.
+- No rule is lost in the move: root plus home together still contain every bullet the original had, except the deliberately deleted =# Subagents= duplicates.
+
+Anti-criteria:
+- Must not restate herdr-orch skill or contract content in either AGENTS.md.
+- Must not reword migrated bullets while moving them; the move stays diff-verifiable.
+- Must not strip the concrete evidence anchors from rules -- =bb= and =ot= are in =home.packages=, so those examples resolve on this machine everywhere.
+- Must not hard-wrap =home/AGENTS.md= (this repo soft-wraps) or soft-wrap =dotfiles/AGENTS.md= (that repo hard-wraps at ~78).
