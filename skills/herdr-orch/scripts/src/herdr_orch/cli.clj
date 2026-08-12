@@ -84,17 +84,33 @@
 (defn boolean-flags-for [group op]
   (cond-> boolean-flags
     (and (#{"tab" "ws"} group) (= "create" op)) (conj "--focus")))
-(defn option-map
-  ([args] (option-map args boolean-flags))
-  ([args flags]
-   (loop [xs args out {}]
-     (if-let [x (first xs)]
-       (cond (= "--" x) (assoc out :native (vec (next xs)))
-             (flags x) (recur (next xs) (assoc out (keyword (subs x 2)) true))
-             (str/starts-with? x "--") (let [key (keyword (subs x 2)) value (second xs)]
-                                           (when-not value (fail "option requires a value" {:option x}))
-                                           (recur (nnext xs) (update out key (fnil conj []) value)))
-             :else (recur (next xs) (update out :_ (fnil conj []) x))) out))))
+(def known-options
+  {"pane" #{:direction :cwd :env :source :lines :format :match :regex :timeout :raw :workspace}
+   "tab" #{:workspace :cwd :label :env}
+   "ws" #{:cwd :label :env}
+   "agent" #{:kind :pane :timeout :until :source :lines :format :clear}
+   "task" #{:task :task-file :model :parent-model :kind :timeout :tab :split :spawns :retro :no-retro
+             :prompt-extra :print-prompt :any :wait :close :format :raw :status :summary :artifact
+             :finding :next :process :from-file :notify-timeout :settled :closed}
+   "spawn" #{:cwd :label}})
+(defn known-options-for [group op]
+  (cond-> (get known-options group #{})
+    (and (#{"tab" "ws"} group) (= "create" op)) (conj :focus)))
+(defn option-map [args flags known group]
+  (loop [xs args out {}]
+    (if-let [x (first xs)]
+      (cond (= "--" x) (assoc out :native (vec (next xs)))
+            (str/starts-with? x "--")
+            (let [key (keyword (subs x 2))]
+              (when-not (known key)
+                (fail (str "unknown " group " option") {:option x}))
+              (if (flags x)
+                (recur (next xs) (assoc out key true))
+                (let [value (second xs)]
+                  (when-not value (fail "option requires a value" {:option x}))
+                  (recur (nnext xs) (update out key (fnil conj []) value)))))
+            :else (recur (next xs) (update out :_ (fnil conj []) x)))
+      out)))
 (defn one [opts k] (let [value (get opts k)] (if (sequential? value) (last value) value)))
 (defn all [opts k] (get opts k []))
 (defn task-text [opts]
@@ -1931,14 +1947,16 @@
   (let [[group op & args] argv]
     (if (help-request? group op args)
       (help-text group op)
-      (let [opts (option-map args (boolean-flags-for group op)) positional (:_ opts)]
+      (let [parse-args (if (= "spawn" group) (cons op args) args)
+            opts (option-map parse-args (boolean-flags-for group op) (known-options-for group op) group)
+            positional (:_ opts)]
         (case group
           "pane" (raw-pane! op opts positional)
           "tab" (raw-tab! op opts positional)
           "ws" (raw-workspace! op opts positional)
           "agent" (raw-agent! op opts positional)
           "task" (task! op opts positional)
-          "spawn" (spawn-command! (option-map (cons op args)) (:_ (option-map (cons op args))))
+          "spawn" (spawn-command! opts positional)
           (fail "unknown oh command" {:command group}))))))
 (defn -main [& argv]
   (try (let [result (execute argv)] (println (if (string? result) result (core/json-envelope true result))))

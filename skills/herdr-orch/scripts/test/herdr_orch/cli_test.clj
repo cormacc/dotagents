@@ -666,6 +666,18 @@
       (is (zero? (:exit proc)) (:err proc))
       (is (str/includes? (slurp from-file-target) "SUMMARY: published from file")))))
 
+(deftest unknown-task-options-are-rejected-before-value-parsing
+  (doseq [[label argv] [["mid-argv" ["worker" "--task" "x" "--bogus" "value" "--print-prompt"]]
+                        ["final argv" ["worker" "--task" "x" "--print-prompt" "--bogus"]]
+                        ["before assignment" ["worker" "--bogus" "--task" "x" "--print-prompt"]]]]
+    (let [{:keys [env log dir]} (fake-env {})
+          proc (apply call! env "task" "run" argv)]
+      (is (= 1 (:exit proc)) label)
+      (is (re-find #"unknown task option" (:out proc)) label)
+      (is (re-find #"--bogus" (:out proc)) label)
+      (is (empty? (calls log)) label)
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))) label))))
+
 ;; The failure-publication instruction is invariant across personas: without it a child
 ;; that cannot finish stops silently and the parent blocks to its full budget
 ;; (task 0365cc41). It must name both non-COMPLETE statuses, carry the unrecoverable/
