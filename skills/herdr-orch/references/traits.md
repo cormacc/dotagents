@@ -22,7 +22,7 @@ A *passing* probe is not required. Requiring current passing evidence would mean
 
 What is required:
 
-- Name the consumer and its real workflow before designing the fragment. A reusable-looking directive with no consumer does not belong in the store.
+- Name the consumer and its real workflow before designing the fragment. A consumer is a persona body *or* interactive use against a live session, and a fragment carried only by the latter is fully admitted rather than unfinished (§ Why the bar is not a consumer count); `%prune` is the standing example. A reusable-looking directive with neither kind of consumer does not belong in the store.
 - Run at least one probe and record what happened -- including `did not discriminate`, `failed`, or `lapsed`. An unprobed fragment is not admissible; an honestly-failing one is.
 - Never assert a pass that has not been re-established against the current state.
 

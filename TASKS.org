@@ -636,3 +636,28 @@ Origin:
 - cwd: /Users/cormacc/dotfiles/agents
 - git: cormacc/dotagents @ main
 - sender: agent
+
+** TODO herdr-orch: document test-authoring hazards for the scripts suite :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 8e83a6bb-093c-44ee-bb33-38f3e7ea2dde
+:CREATED: [2026-08-12 Wed 23:31]
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 23:31]
+:END:
+The herdr-orch scripts suite has two recurring test-authoring hazards, both of which have now cost real time twice, and neither is written down where a test author would look (=skills/herdr-orch/scripts/README.md= § Tests and smoke, or a scripts-local AGENTS.md alongside the one org-tasks already has).
+
+Reading a produced file before asserting the producer succeeded. A new test dereferenced the ledger path straight from a spawn result, so a refused spawn surfaced as =FileNotFoundException: .../ledger/.json= and hid the actual error (a nested spawn rejected for a missing =FAKE_PARENT_LABEL=). =home/AGENTS.md= already carries this exact rule, with this exact FileNotFoundException example, and it was violated anyway -- so the fix is not to restate the prohibition but to remove the incentive: a small spawn helper that asserts =(zero? (:exit proc))= and only then reads the entry, used by every spawn-shaped test. One such helper (=spawned-model=) now exists in =cli_test.clj=; the work is to make that the documented default and note why.
+
+Running an expected-hang probe inside the whole namespace. Reported by worker-fbb7a3fa: a hang-regression probe run as part of the full namespace stalled it for 300 s. Independently corroborated by task b0eb67fc's own body, which records =bb test= hanging for 900 s when the guard masking that path lapsed. Desired outcome: document that a probe whose expected outcome is a hang runs behind a per-call timeout or against a stub, never bare inside the suite.
+
+Both are documentation of an existing convention plus one small test helper, not a behaviour change to the CLI.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-12 Wed 23:40]
+- sender: agent
+
+Evidence:
+Session retro after the herdr-orch housekeeping task (archived). The first hazard was hit by the parent while writing the model-inheritance test; the second arrived as a child PROCESS candidate via =oh task harvest= and was corroborated against b0eb67fc rather than adopted on the child's word.
