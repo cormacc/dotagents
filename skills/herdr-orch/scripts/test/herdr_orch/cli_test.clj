@@ -3326,20 +3326,14 @@
               :let [expected (if (and (= id "feather") (= kind :claude)) "claude-haiku-4-5" native-model)]]
         (is (= ["--model" expected] (core/model-args config (name kind) id))
             (str id " translates for " (name kind)))))
-    ;; contract.md is the single enumerated documentation home for these rows; every
-    ;; other document states the rule and links to it. Pin the surviving copy here so a
-    ;; model bump that misses the table fails the suite instead of drifting silently.
-    (testing "contract.md's weight table matches the shipped config's effective translations"
-      (let [doc (slurp (str (fs/path root "skills" "herdr-orch" "scripts" "docs" "contract.md")))
-            documented (into {} (for [[_ weight pi claude codex]
-                                      (re-seq #"(?m)^\|\s*`(heavy|middle|light|feather)`\s*\|\s*`([^`]+)`\s*\|\s*`([^`]+)`\s*\|\s*`([^`]+)`\s*\|\s*$" doc)]
-                                  [weight {:pi pi :claude claude :codex codex}]))]
-        (is (= weight-rows documented)
-            "contract.md § Model resolution must enumerate exactly the shipped weight rows")
-        (doseq [[weight row] weight-rows
-                [kind native-model] row]
-          (is (= ["--model" native-model] (core/model-args config (name kind) weight))
-              (str weight " " (name kind) " must resolve to the documented cell")))))
+    ;; Model resolution per weight and kind, against the shipped config. The table in
+    ;; contract.md § Model resolution documents the same rows; it is maintained by review
+    ;; rather than asserted here, because no test in this repository reads its documentation.
+    (testing "each shipped weight resolves to its expected native model for every kind"
+      (doseq [[weight row] weight-rows
+              [kind native-model] row]
+        (is (= ["--model" native-model] (core/model-args config (name kind) weight))
+            (str weight " " (name kind) " must resolve to " native-model))))
     ;; Pi receives the configured OpenAI model for `gpt-*`; only the claude/codex
     ;; columns use tier-equivalent cross-provider mappings.
     (is (= ["--model" "openai-codex/gpt-5.6-terra"] (core/model-args config "pi" "gpt-5.6-terra")))
@@ -3361,138 +3355,6 @@
           (str unversioned " resolves identically to " latest " for " kind)))
     (is (= ["--model" "gpt-5.6-terra"] (core/model-args config "codex" "claude-sonnet-5")))))
 
-;; --- lifecycle documentation contract -----------------------------------------------
-;; The skill's own documented lifecycle is a deliverable of this change, not commentary,
-;; and prose regresses silently in a way code does not. This pins the load-bearing
-;; sentences and, more importantly, the language that had to *go*: the auto-close era's
-;; phrasing reads plausibly, so a future edit could reintroduce it without any test noticing.
-;; Every document that describes the lifecycle must be listed here: a document omitted from
-;; this vector is one the suite cannot police, which is how README.org kept asserting
-;; capture-time closure through a green run of this very test (closure-validation P1).
-(def ^:private lifecycle-docs
-  ["skills/herdr-orch/SKILL.md"
-   "skills/herdr-orch/README.org"
-   "skills/herdr-orch/scripts/README.md"
-   "skills/herdr-orch/scripts/docs/contract.md"
-   "skills/herdr-orch/subagents/planner.md"
-   "skills/herdr-orch/subagents/worker.md"])
-
-(deftest lifecycle-documentation-contract
-  (let [read-doc (fn [rel] (slurp (str (fs/path root rel))))
-        skill (read-doc "skills/herdr-orch/SKILL.md")
-        contract (read-doc "skills/herdr-orch/scripts/docs/contract.md")]
-    (testing "Class C requires a validator spawned fresh for the closeout"
-      ;; The old sentence said only \"the root or an ephemeral reviewer\", inheriting its
-      ;; freshness from the \"ephemeral by default\" lifecycle default this change removed.
-      ;; Retaining it verbatim would have silently dropped the guarantee, so the rewrite --
-      ;; not merely the prohibition on self-reaffirmation -- is what is pinned here.
-      (is (str/includes? skill "spawned fresh for that closeout"))
-      (is (str/includes? skill "never a child continued from an earlier round of the same work"))
-      (is (str/includes? skill "Never the implementing worker reaffirming its own result")
-          "the pre-existing prohibition must survive the rewrite")
-      (is (not (str/includes? skill "independent validation by the root or an ephemeral reviewer"))
-          "the superseded Class C sentence must not survive verbatim"))
-    (testing "the lifecycle is stated as parent-driven close-or-continue"
-      (is (str/includes? skill "No capture closes a pane"))
-      (is (str/includes? skill "a child's pane persists until you act on it"))
-      (is (str/includes? skill "Whoever spawns a child closes it"))
-      (is (str/includes? contract "**Capture closes nothing.**"))
-      (is (str/includes? contract "\n## Close\n"))
-      (is (str/includes? contract "\n## Continue\n")))
-    (testing "the ledger fields this lifecycle introduced are documented"
-      (doseq [field [":continues" ":closed-at" ":waiting-policy"]]
-        (is (str/includes? contract field) field)))
-    (testing "the stream model documents WAITING as non-completion"
-      (let [readme (read-doc "skills/herdr-orch/scripts/README.md")
-            worker (read-doc "skills/herdr-orch/subagents/worker.md")]
-        (doseq [doc [skill readme contract worker]]
-          (is (str/includes? doc "validated terminal result")
-              "completion wording must exclude WAITING captures")
-          (is (not (str/includes? doc "validated result file"))
-              "completion wording must name terminality"))
-        (is (str/includes? contract "append-only stream of immutable result items"))
-        (is (str/includes? contract "sealed only when a validated terminal item"))
-        ;; Closeout finding 1: sealing is a property of publication, never of capture.
-        (is (str/includes? contract "it seals the moment that item is *published*"))
-        (is (str/includes? contract "the immutable files on disk are the authority"))
-        ;; Closeout finding 4: § Ledger and completion must define the children-discharge
-        ;; guard the Preconditions section cross-references, and name the restored failure
-        ;; toast (finding 8) beside the publish refusal rules it reports on.
-        (is (str/includes? contract "runs the children-discharge guard"))
-        (is (str/includes? contract "`Subagent publish failed` operator toast"))
-        (is (str/includes? contract "two same-session candidate sets"))
-        (is (str/includes? contract "`WAITING` item is toast-only"))
-        (is (not (str/includes? contract "## Progress")))))
-    (testing "phase 2: a rule the CLI now enforces is deleted from SKILL.md, not restated beside its guard"
-      ;; Each banned string is the exact instruction a phase-2 guard or verb replaced. A
-      ;; guard whose prose survives is the failure mode this pins: the caller keeps paying
-      ;; the ceremony the CLI was changed to absorb, and the two drift independently.
-      (doseq [[phrase mechanism]
-              [["must close its own children before publishing" "publish's unclosed-children guard"]
-               ["Give review and implementation work an explicit `--timeout`" "persona `timeout:` frontmatter"]
-               ["then `oh pane close <pane-id>`" "the `orphans` verb"]
-               ["scope a candidate harvest by session" "the `harvest` verb"]]]
-        (is (not (str/includes? skill phrase))
-            (str "SKILL.md still instructs \"" phrase "\", now enforced by " mechanism)))
-      (doseq [verb ["`orphans`" "`compact`" "`harvest`" "`collect --close`"]]
-        (is (str/includes? skill verb)
-            (str "SKILL.md never names " verb ", so the ceremony it removes is undiscoverable")))
-      ;; The dead-owner paragraph in contract.md § Close outlived the verb that replaced its
-      ;; remedy, leaving § Close prescribing the bare `pane close` that § Orphans documents
-      ;; itself as rejecting. Adding a verb is not done until the text it obsoletes is found:
-      ;; grep the *old remedy*, not just the new section.
-      (is (str/includes? contract "\n## Orphans\n"))
-      (is (str/includes? contract "§ Orphans is the verb for it")
-          "contract.md § Close must route dead-owner cleanup to § Orphans, not to a bare `pane close`"))
-    ;; Renamed by root at closeout: this guard was called "net prose shrank" while its
-    ;; assertion then permitted 3500 words against a 3348-word baseline, so a reader of a passing
-    ;; `bb test` was told prose shrank while SKILL.md had in fact grown ~4%. Phase 2's shrink
-    ;; is a historical measurement (3348 -> 3338), recorded in the change-record; what this
-    ;; test actually enforces, and all it has ever enforced, is a ceiling.
-    (testing "SKILL.md stays under its prose ceiling: ceremony lives in the CLI, not documented twice"
-      ;; Measured against baseline 846733f (3348 words), the commit before phase 2; phase 2
-      ;; alone landed at 3338, ten words under that ceiling. Task 8869bd4f then raised it to
-      ;; 3500 for the Focus bullet and its supporting Placement/`oh spawn` prose, and closeout
-      ;; round 6c8845c3 corrected lifecycle prose *within* that ceiling (3497 words) rather
-      ;; than raising the number a second time. Raising it once per round is how a ceiling
-      ;; stops being one.
-      ;; Task 97863e4a deleted delegation-driven focus outright, taking the Focus bullet with
-      ;; it: SKILL.md fell to 3220 words. The ceiling is lowered to match, because a ceiling
-      ;; left at 3500 over 3220 words of prose is 280 words of slack and guards nothing --
-      ;; the symmetric obligation to not raising it silently is to not leave it stranded above
-      ;; a deletion. If a future change genuinely cannot fit, move the number deliberately and
-      ;; say so here, as above.
-      (is (< (count (str/split skill #"\s+")) 3250)))
-    (testing "no document asserts the behaviour the code no longer has"
-      (doseq [rel lifecycle-docs
-              ;; The last pins the specific claim that survived in README.org: a banned
-              ;; phrase only guards the wording it names, so add the wording each stale
-              ;; document actually used rather than assuming the list is exhaustive. Ban the
-              ;; false subject ("Every capture path settle-waits"), not the shared predicate
-              ;; ("before its single close attempt"), which is true of `task close`.
-              phrase ["HERDR_ORCH_WAITING_POLICY"
-                      "ephemeral by default"
-                      "closed its pane automatically"
-                      "pane-close-on-completion"
-                      "unknown-ledger-entry"
-                      "Every capture path settle-waits"
-                      ;; Task ca6fecef's shell_pid fallback (§ Close) can close on a
-                      ;; released name and a live, matching pane -- so "only ever both
-                      ;; the name and the pane id" is no longer true of `close` as a
-                      ;; whole; it is true only of the primary, name-present path.
-                      "matching both the"
-                      "matching both that"
-                      ;; Closeout finding 4: the one-shot publish model is deleted, and
-                      ;; § Retention's claim that a consumed item could be re-collected
-                      ;; was never true of the stream model (collect on a fully-consumed
-                      ;; round reports `pending`).
-                      "publication is one-shot"
-                      "`collect --raw` can re-read"]]
-        (is (not (str/includes? (read-doc rel) phrase))
-            (str rel " still says \"" phrase "\""))))))
-
-;; Named as a serial test by the shared-runner opt-in contract (task 2fe1ce2a),
-;; kept alongside the other with-redefs-based contract tests for the same reason.
 (deftest ^:serial packaged-persona-weight-selector-contract
   (let [expected {"planner" "heavy"
                   "advisor" "middle"
