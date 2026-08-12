@@ -86,7 +86,7 @@
     updated))
 
 (def expected-publication-guidance
-  "Write long findings to the assignment-provided report path (fall back to `.tmp/`). Pass the report with `--artifact` and each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result.")
+  "Published `SUMMARY` must be a single line. Write multi-line detail to the assignment-provided report path (fall back to `.tmp/`), pass the report with `--artifact`, and emit each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result.")
 (defn- occurrence-count [text needle]
   (loop [from 0 n 0]
     (let [at (.indexOf ^String text ^String needle from)]
