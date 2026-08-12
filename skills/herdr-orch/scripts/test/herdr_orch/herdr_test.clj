@@ -61,20 +61,13 @@
       (is (= expected-operations
              (set/intersection expected-operations (set (map #(vec (take 2 %)) @calls))))))))
 
-;; task 8869bd4f: `split!`'s hardcoded `--no-focus` became a resolved `:focus` param,
-;; mirroring `tab-create!`'s own existing support.
-(deftest split-focus-argv
+(deftest split-always-uses-no-focus
   (let [calls (atom [])]
     (with-redefs [herdr/invoke (fn [argv] (swap! calls conj argv) {:ok true :value {:result {:pane {:pane_id "p"}}} :out ""})]
-      (herdr/split! {:direction "right" :cwd "/tmp" :env {}})
-      (is (some #{"--no-focus"} (last @calls)))
-      (is (not-any? #{"--focus"} (last @calls)))
-      (herdr/split! {:direction "right" :cwd "/tmp" :env {} :focus true})
-      (is (some #{"--focus"} (last @calls)))
-      (is (not-any? #{"--no-focus"} (last @calls)))
-      (herdr/split! {:direction "right" :cwd "/tmp" :env {} :focus false})
-      (is (some #{"--no-focus"} (last @calls)))
-      (is (not-any? #{"--focus"} (last @calls))))))
+      (doseq [extra [{} {:focus true} {:focus false}]]
+        (herdr/split! (merge {:direction "right" :cwd "/tmp" :env {}} extra))
+        (is (some #{"--no-focus"} (last @calls)))
+        (is (not-any? #{"--focus"} (last @calls)))))))
 
 (deftest self-close-is-refused
   (with-redefs [herdr/current-pane! (constantly {:pane_id "self"})]

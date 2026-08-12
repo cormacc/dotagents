@@ -1,6 +1,6 @@
 #+TITLE: herdr-orch: Subagent composition and extension
 #+DATE: 2026-08-08 Sat
-#+PARENT: [[task:71fdf100-1681-4634-a12f-b2fc8ce0129b][herdr-orch: Subagent composition and extension]]
+#+PARENT: [[archive:71fdf100-1681-4634-a12f-b2fc8ce0129b][herdr-orch: Subagent composition and extension]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]

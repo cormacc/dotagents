@@ -160,7 +160,7 @@
     (doseq [[label text message] [["non-map defaults" "{:defaults :split}" #"defaults must be a map"]
                                   ["unknown defaults key" "{:defaults {:unknown :split}}" #"defaults has unknown key"]
                                   ["unknown placement" "{:defaults {:placement :sideways}}" #"placement must be" ]
-                                  ["non-boolean focus" "{:defaults {:focus :yes}}" #"focus must be true or false"]]]
+                                  ["removed focus default" "{:defaults {:focus true}}" #"defaults has unknown key"]]]
       (is (try
             (core/parse-config "/tmp/defaults.edn" text)
             false
@@ -170,8 +170,8 @@
             (catch Throwable _ false))
           label)))
   (testing "merge is row-level replacement, defaults merge per key, and later configs win"
-    ;; `parse-config` admits only :placement and :focus in :defaults; synthetic keys
-    ;; isolate the generic merge primitive's per-key behavior from the closed input schema.
+    ;; `parse-config` admits only :placement in :defaults; synthetic keys isolate the
+    ;; generic merge primitive's per-key behavior from the closed input schema.
     (let [default {:harnesses {:pi {:model-flag "--model"} :claude {:model-flag "--model"}}
                    :models {"a" {:pi "pa" :claude "ca"} "b" {:pi "pb"}}
                    :defaults {:placement :split :preserved :default}
@@ -235,23 +235,6 @@
              ["split" :tab-split false "split"] ["split" :tab-split true "split"]]]
       (is (= expected
              (core/resolve-placement {:flag flag :configured configured :below-root? below-root?}))
-          (str {:flag flag :configured configured :below-root? below-root?})))))
-
-;; task 8869bd4f: depth is the absolute gate for focus, unlike placement's -- below root
-;; `resolve-focus` ignores both the flag and the configured default outright, so every
-;; below-root row below is `false` regardless of what flag/configured say.
-(deftest focus-resolution-contract
-  (testing "every flag/configuration/depth combination"
-    (doseq [[flag configured below-root? expected]
-            [[nil nil false true] [nil nil true false]
-             [nil true false true] [nil true true false]
-             [nil false false false] [nil false true false]
-             [true nil false true] [true nil true false]
-             [true false false true] [true false true false]
-             [false nil false false] [false nil true false]
-             [false true false false] [false true true false]]]
-      (is (= expected
-             (core/resolve-focus {:flag flag :configured configured :below-root? below-root?}))
           (str {:flag flag :configured configured :below-root? below-root?})))))
 
 ;; Pane labels use `model-basename`, independent of roster translation: a canonical bare

@@ -33,19 +33,10 @@
 ;; `resolve-placement`'s own fallback stays "split" deliberately -- it fires only for a
 ;; config declaring no :placement at all, which this (mandatory) file always does.
 ;;
-;; `:focus` is true or false and gates only the *spawn's own* placement call (`tab create`
-;; or `pane split`, whichever `:placement` resolved to). The shipped value is true: with
-;; `:tab-split`, a root-level child owns a tab of its own, and moving to it is how you
-;; watch or intervene, and moving back (`close`) is how you resume. Depth is the absolute
-;; gate, never the configured value or the flag: a below-root spawn never focuses, exactly
-;; as `resolve-focus` enforces on the same `HERDR_ORCH_PERSONA` predicate `:tab-split`
-;; reads for depth. `resolve-focus`'s own fallback stays `true` deliberately, mirroring
-;; `resolve-placement`'s "split" note -- it fires only for a config declaring no :focus at
-;; all, which this (mandatory) file always does.
 ;; Override chain (project wins): this file (default) ← ~/.agents/subagents/config.edn
 ;; ← <assignment-root>/.agents/subagents/config.edn. `:models` rows and `:harnesses`
 ;; entries replace wholesale; `:aliases` and `:defaults` merge per key.
-{:defaults {:placement :tab-split :focus true}
+{:defaults {:placement :tab-split}
  :harnesses {:pi     {:model-flag "--model"}
              :claude {:model-flag "--model"}
              :codex  {:model-flag "--model"}}

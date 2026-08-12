@@ -201,8 +201,6 @@ What survives without registration is publication and capture: =task publish= de
 | =:tab= | new tab in the caller's workspace | new tab in the caller's workspace |
 | =:tab-split= | new tab | split the caller's pane |
 
-Each of those root-row tabs is focused by default (=:defaults :focus=, shipped =true=); a below-root spawn -- =:tab= or =:tab-split='s split row alike -- never focuses (task 8869bd4f). See [[file:scripts/docs/contract.md][contract.md]] § Focus for the flag, the depth gate, and the =close= return hook.
-
 Resolution order, highest first:
 
 1. An explicit =--tab= or =--split= flag on =task run=/=task start= (supplying both fails).

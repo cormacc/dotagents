@@ -368,9 +368,8 @@
            (injected-env tab-env-file "HERDR_ORCH_SPAWNS")))))
 
 ;; `--tab` places the child in a new tab of the caller's workspace instead of a split, but
-;; every other contract (env, label, ledger, collect, closure) is identical. This is a root
-;; spawn, so the shipped `:defaults :focus true` also applies: the tab is focused, not
-;; `--no-focus` (task 8869bd4f).
+;; every other contract (env, label, ledger, collect, closure) is identical. Delegation
+;; always creates the tab without focusing it.
 (deftest tab-placement-contract
   (let [{:keys [env log env-file dir]} (fake-env {}) proc (call! env "task" "run" "worker" "--tab" "--task" "tab placement" "--timeout" "20")
         argv (calls log)
@@ -382,8 +381,8 @@
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (some? tab-create))
     (is (= ["tab" "create" "--workspace"] (subvec (vec tab-create) 0 3)))
-    (is (some #{"--focus"} tab-create))
-    (is (not-any? #{"--no-focus"} tab-create))
+    (is (some #{"--no-focus"} tab-create))
+    (is (not-any? #{"--focus"} tab-create))
     (is (some #{"--label"} tab-create))
     ;; No split command at all for a tab-placed spawn.
     (is (not-any? #(= ["pane" "split"] (vec (take 2 %))) argv))
@@ -398,7 +397,7 @@
     (is (nil? (injected "HERDR_ORCH_WAITING_POLICY")))
     (is (= "blocking" (:waiting-policy entry)))
     (is (= "tab" (:placement entry)))
-    (is (true? (:focus entry)))
+    (is (not (contains? entry :focus)))
     (is (= "w:tab" (:tab-id entry)))
     (is (= "w:child" (:pane-id entry)))))
 
@@ -415,11 +414,10 @@
       (is (not-any? #(= ["pane" "split"] (vec (take 2 %))) (calls log)))
       (is (= "tab" (:placement entry)))
       (is (= "w:tab" (:tab-id entry)))
-      ;; Shipped `:defaults :focus true` (task 8869bd4f): a root spawn focuses its child.
-      (is (true? (:focus entry)))
+      (is (not (contains? entry :focus)))
       (let [tab-create (first (filter #(= ["tab" "create"] (vec (take 2 %))) (calls log)))]
-        (is (some #{"--focus"} tab-create))
-        (is (not-any? #{"--no-focus"} tab-create)))))
+        (is (some #{"--no-focus"} tab-create))
+        (is (not-any? #{"--focus"} tab-create)))))
   (testing "below root: split"
     (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"
                                            "FAKE_PARENT_LABEL" "worker-1-light"})
@@ -429,9 +427,7 @@
       (is (not-any? #(= ["tab" "create"] (vec (take 2 %))) (calls log)))
       (is (= "split" (:placement entry)))
       (is (nil? (:tab-id entry)))
-      ;; A below-root spawn never focuses, gated on the same `:below-root?` predicate
-      ;; `continue`'s root-only guard tests (task 8869bd4f).
-      (is (false? (:focus entry)))
+      (is (not (contains? entry :focus)))
       (let [split (first (filter #(= ["pane" "split"] (vec (take 2 %))) (calls log)))]
         (is (some #{"--no-focus"} split))
         (is (not-any? #{"--focus"} split)))))
@@ -565,7 +561,8 @@
       (let [{:keys [env]} (fake-env {})
             proc (apply call! env (concat ["task" "run" "worker"] flag ["--task" "placement preview" "--print-prompt"]))]
         (is (zero? (:exit proc)) (:err proc))
-        (is (= expected (get-in (result proc) [:result :placement])) (str flag))))))
+        (is (= expected (get-in (result proc) [:result :placement])) (str flag))
+        (is (not (contains? (get-in (result proc) [:result]) :focus)))))))
 
 (deftest configured-placement-defaults-flow-through-cli
   (let [{:keys [env log dir]} (fake-env {})
@@ -588,55 +585,6 @@
     (is (= "tab" (preview env)))
     (is (= "split" (preview (merge env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"}))))
     (is (= "split" (preview env "--split")))))
-
-;; task 8869bd4f: focus is a `--focus`/`--no-focus` value-less flag pair, mirroring
-;; `--tab`/`--split`, and gated on the same `:below-root?` predicate as `enforce-spawns!`
-;; and `continue`'s root-only guard -- not a second depth notion.
-(deftest focus-flags-and-preview-contract
-  (testing "--focus and --no-focus are mutually exclusive before ledger allocation or mutation"
-    (let [{:keys [env log dir]} (fake-env {})
-          proc (call! env "task" "start" "worker" "--focus" "--no-focus" "--task" "conflicting focus")]
-      (is (= 1 (:exit proc)))
-      (is (re-find #"--focus and --no-focus are mutually exclusive" (:out proc)))
-      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
-      (is (not-any? mutating? (calls log)))))
-  ;; The unflagged root row is the shipped `:defaults :focus true` default resolving at root;
-  ;; below root the flag is accepted but silently inert, never a fail-fast refusal, exactly
-  ;; as an explicit below-root `--tab`/`--split` still resolves rather than erroring.
-  (testing "--print-prompt reports the resolved focus"
-    (doseq [[env-overrides flag expected]
-            [[{} [] true] [{} ["--focus"] true] [{} ["--no-focus"] false]
-             [{"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"} [] false]
-             [{"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"} ["--focus"] false]]]
-      (let [{:keys [env]} (fake-env env-overrides)
-            proc (apply call! env (concat ["task" "run" "worker"] flag ["--task" "focus preview" "--print-prompt"]))]
-        (is (zero? (:exit proc)) (:err proc))
-        (is (= expected (get-in (result proc) [:result :focus])) (str env-overrides flag))))))
-
-(deftest configured-focus-default-flows-through-cli
-  (let [{:keys [env log dir]} (fake-env {})
-        project-config (fs/path dir ".agents" "subagents" "config.edn")
-        preview (fn [env & flags]
-                  (let [proc (apply call! env (concat ["task" "run" "worker"] flags ["--task" "configured focus" "--print-prompt"]))]
-                    (is (zero? (:exit proc)) (:err proc))
-                    (get-in (result proc) [:result :focus])))]
-    (fs/create-dirs (fs/parent project-config))
-    (spit (str project-config) "{:defaults {:focus false}}")
-    (is (false? (preview env)))
-    ;; An explicit flag still overrides the configured default at root.
-    (is (true? (preview env "--focus")))
-    ;; Below root the configured default is irrelevant: focus is always false.
-    (is (false? (preview (merge env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "worker"}))))
-    (let [proc (call! env "task" "start" "worker" "--task" "configured no-focus")
-          task (get-in (result proc) [:result :task])
-          entry (ledger-entry* dir task)
-          tab-create (first (filter #(= ["tab" "create"] (vec (take 2 %))) (calls log)))]
-      (is (zero? (:exit proc)) (:err proc))
-      (is (false? (:focus entry)))
-      (is (some #{"--no-focus"} tab-create))
-      (is (not-any? #{"--focus"} tab-create)))
-    (spit (str project-config) "{:defaults {:focus true}}")
-    (is (true? (preview env)))))
 
 (deftest configured-harness-extra-args-reach-agent-start
   ;; A permission bypass is opt-in configuration, never a shipped default: the same spawn
@@ -1364,10 +1312,8 @@
 (defn- closed-panes [log]
   (set (keep #(when (= ["pane" "close"] (vec (take 2 %))) (nth % 2 nil))
              (calls log))))
-;; The `close` return hook (task 8869bd4f): every `agent focus` call in the fixture log,
-;; in order, so a test can pin both the target (always the caller's own pane, `w:p` in
-;; every fixture env) and the count (at most once per single close, and at most once total
-;; for a `--settled`/`orphans --close` sweep regardless of how many children it took).
+;; Delegation must never call `agent focus`; raw passthrough coverage below still exercises
+;; the explicit operator verb.
 (defn- agent-focus-targets [log]
   (mapv #(nth % 2 nil) (filter #(= ["agent" "focus"] (vec (take 2 %))) (calls log))))
 
@@ -1955,9 +1901,6 @@
       (is (empty? (parent-waits log)) status)
       ;; The operator toast is retained alongside the push.
       (is (some #(= ["notification" "show"] (vec (take 2 %))) (calls log)) status)
-      ;; `publish` is never a focus return hook (task 8869bd4f, decision "close, never
-      ;; publish"): a publishing child's parent routinely reads unsettled or
-      ;; session-mismatched, exactly the theft the anti-criterion forbids.
       (is (empty? (agent-focus-targets log)) status))))
 
 ;; Under `blocking` the parent is already in its own wait loop: no probe, no push at all.
@@ -2803,24 +2746,17 @@
     (is (not-any? #{"--until"} (first waits)))
     ;; The captured status is untouched: `:closed-at` is a marker, not a lifecycle state.
     (is (= "COMPLETE" (:status (closed-entry dir entry))))
-    ;; The return hook (task 8869bd4f): a successful close focuses the caller's own pane,
-    ;; never the child's.
-    (is (= ["w:p"] (agent-focus-targets log)))))
+    (is (empty? (agent-focus-targets log)))))
 
-;; Closeout fix (both validators, P1): the return hook is root-only, gated on the same
-;; `:below-root?` predicate the spawn path uses -- otherwise the publish guard, which
-;; forces every delegating child to close its grandchildren before it may publish, would
-;; make every nested delegation end in a child-initiated `agent focus`. Unpinned in either
-;; direction before this round.
-(deftest close-return-focus-is-gated-to-root
-  (testing "root: close focuses"
+(deftest close-never-focuses-caller
+  (testing "root close"
     (let [{:keys [env log dir]} (fake-env {})
-          entry (capture-entry! dir (start-child! env dir "root close still focuses"))
+          entry (capture-entry! dir (start-child! env dir "root close stays unfocused"))
           proc (call! env "task" "close" (:task entry))]
       (is (zero? (:exit proc)) (:err proc))
       (is (= "closed" (get-in (result proc) [:result :status])))
-      (is (= ["w:p"] (agent-focus-targets log)))))
-  (testing "below root: close never focuses"
+      (is (empty? (agent-focus-targets log)))))
+  (testing "below-root close"
     (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"
                                            "FAKE_PARENT_LABEL" "worker-1-light"})
           spawn-proc (call! env "task" "start" "scout" "--task" "grandchild for below-root close")
@@ -2830,11 +2766,7 @@
       (is (zero? (:exit proc)) (:err proc))
       (is (= "closed" (get-in (result proc) [:result :status])))
       (is (empty? (agent-focus-targets log)))))
-  ;; The sweep hook shares `focus-caller!`, so it cannot diverge from single close by
-  ;; construction -- but "cannot diverge" is an argument, not a test, and three of this
-  ;; round's defects existed precisely because a guard shipped with no test that could see
-  ;; it fail. `orphans --close` needs no equivalent: it is refused outright below root.
-  (testing "below root: close --settled closes but never focuses"
+  (testing "below-root close --settled"
     (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"
                                            "FAKE_PARENT_LABEL" "worker-1-light"})
           spawn-proc (call! env "task" "start" "scout" "--task" "grandchild for below-root sweep")
@@ -3029,7 +2961,6 @@
       (is (string? (:remedy res)))
       (is (empty? (closed-panes log)))
       (is (nil? (:closed-at (closed-entry dir entry))))
-      ;; Nothing closed, so the return hook never fires.
       (is (empty? (agent-focus-targets log))))))
 
 ;; The fix this task exists for: a crash-and-manual-resume releases the child's agent
@@ -3053,10 +2984,7 @@
       (is (= (:pane-id entry) (:pane-id res)))
       (is (= #{(:pane-id entry)} (closed-panes log)))
       (is (some? (:closed-at (closed-entry dir entry))))
-      ;; A successful close still returns focus to the caller, exactly as the ordinary
-      ;; name-and-pane match does -- the fallback is a different evidence path to the
-      ;; same outcome, not a different outcome.
-      (is (= ["w:p"] (agent-focus-targets log))))))
+      (is (empty? (agent-focus-targets log))))))
 
 ;; An unsettled occupant at the recorded pane must retain, not close, even though the
 ;; shell matches -- the fallback never relaxes the settledness bar the ordinary match
@@ -3131,7 +3059,6 @@
       (is (= "working" (:agent-status res)))
       (is (empty? (closed-panes log)))
       (is (nil? (:closed-at (closed-entry dir entry))))
-      ;; `retained` is not a close, so the return hook stays quiet on the failed attempt.
       (is (empty? (agent-focus-targets log))))
     ;; Retryable: nothing about the refusal is recorded, so a settled retry closes.
     (child-state! state entry "settle-to" "idle")
@@ -3139,7 +3066,7 @@
       (is (zero? (:exit proc)) (:err proc))
       (is (= "closed" (get-in (result proc) [:result :status])))
       (is (= #{(:pane-id entry)} (closed-panes log)))
-      (is (= ["w:p"] (agent-focus-targets log))))))
+      (is (empty? (agent-focus-targets log))))))
 
 (deftest close-refuses-an-already-closed-round
   (let [{:keys [env log dir]} (fake-env {})
@@ -3190,9 +3117,7 @@
     (is (some? (:closed-at (closed-entry dir a-second))))
     (is (nil? (:closed-at (closed-entry dir a-first))))
     (is (nil? (:closed-at (closed-entry dir uncaptured))))
-    ;; The return hook fires once for the whole sweep, never once per child it closed
-    ;; (task 8869bd4f): two closures here, one `agent focus` on the caller's own pane.
-    (is (= ["w:p"] (agent-focus-targets log)))))
+    (is (empty? (agent-focus-targets log)))))
 
 ;; A per-child refusal is reported in the array rather than abandoning the rest of the
 ;; sweep, and it mutates nothing.
@@ -3230,7 +3155,6 @@
     (is (empty? (closed-panes log)))
     (is (nil? (:closed-at (closed-entry dir first-round))))
     (is (nil? (:closed-at (closed-entry dir second-round))))
-    ;; An empty sweep closes nothing, so the return hook never fires.
     (is (empty? (agent-focus-targets log)))))
 
 ;; An `invalid` capture means the envelope needs manual intervention, so the sweep must
@@ -3301,8 +3225,8 @@
                     ["pane" "wait-output" "p" "--match" "ready"] ["pane" "send-text" "p" "text"]
                     ["pane" "send-keys" "p" "enter"] ["pane" "close" "p"] ["pane" "list"]
                     ["pane" "current"] ["pane" "get" "p"] ["pane" "layout" "p"] ["pane" "rename" "p" "label"]
-                    ["tab" "create" "--label" "tab"] ["tab" "list"] ["tab" "focus" "tab"]
-                    ["ws" "create" "--label" "ws"] ["ws" "list"] ["ws" "focus" "ws"]
+                    ["tab" "create" "--label" "tab" "--focus"] ["tab" "list"] ["tab" "focus" "tab"]
+                    ["ws" "create" "--label" "ws" "--focus"] ["ws" "list"] ["ws" "focus" "ws"]
                     ["agent" "start" "worker" "--kind" "pi" "--pane" "p" "--" "--model" "light"]
                     ["agent" "prompt" "worker" "hello"] ["agent" "wait" "worker" "--until" "done"]
                     ["agent" "read" "worker"] ["agent" "send-keys" "worker" "enter"]
@@ -3312,7 +3236,9 @@
       (is (= #{:pane/split :pane/run :pane/read :pane/wait-output :pane/send-text :pane/send-keys :pane/close :pane/list :pane/current :pane/get :pane/layout :pane/rename
                :tab/create :tab/list :tab/focus :ws/create :ws/list :ws/focus
                :agent/start :agent/prompt :agent/wait :agent/read :agent/send-keys :agent/focus :agent/rename :agent/list :agent/get}
-             (set (map first @calls)))))))
+             (set (map first @calls))))
+      (is (true? (get-in (first (filter #(= :tab/create (first %)) @calls)) [1 :focus])))
+      (is (true? (get-in (first (filter #(= :ws/create (first %)) @calls)) [1 :focus]))))))
 
 (deftest spawn-creates-a-tab-and-rejects-personas
   (let [{:keys [env log]} (fake-env {})
@@ -3391,8 +3317,7 @@
     (is (= "--model" (get-in config [:harnesses :pi :model-flag])))
     (is (= "--model" (get-in config [:harnesses :claude :model-flag])))
     (is (= "--model" (get-in config [:harnesses :codex :model-flag])))
-    ;; task 8869bd4f: the shipped default flips `:focus` to true alongside `:tab-split`.
-    (is (= {:placement :tab-split :focus true} (:defaults config)))
+    (is (= {:placement :tab-split} (:defaults config)))
     (is (= 7 (count (:models config))) "shipped :models has exactly 7 canonical rows")
     (is (= 18 (count (:aliases config))) "shipped :aliases has exactly 18 entries")
     (testing "argv preservation: every pre-migration ID translates identically for every kind, except feather+claude"
@@ -3520,25 +3445,24 @@
       (is (str/includes? contract "§ Orphans is the verb for it")
           "contract.md § Close must route dead-owner cleanup to § Orphans, not to a bare `pane close`"))
     ;; Renamed by root at closeout: this guard was called "net prose shrank" while its
-    ;; assertion permits 3500 words against a 3348-word baseline, so a reader of a passing
+    ;; assertion then permitted 3500 words against a 3348-word baseline, so a reader of a passing
     ;; `bb test` was told prose shrank while SKILL.md had in fact grown ~4%. Phase 2's shrink
     ;; is a historical measurement (3348 -> 3338), recorded in the change-record; what this
     ;; test actually enforces, and all it has ever enforced, is a ceiling.
     (testing "SKILL.md stays under its prose ceiling: ceremony lives in the CLI, not documented twice"
       ;; Measured against baseline 846733f (3348 words), the commit before phase 2; phase 2
-      ;; alone landed at 3338, ten words under that ceiling. Task 8869bd4f's own documentation
-      ;; criterion (§ Invocation policy's new Focus bullet, the corrected Placement/`oh spawn`
-      ;; prose, and the `--no-focus` sentence) is real new user-facing behaviour, not ceremony
-      ;; migrating between docs, so the ceiling moves with it (3482 words at that point) rather
-      ;; than the new content being trimmed to fit a budget calibrated for a different change.
-      ;; The guard still means something: a future edit that pushes well past this without a
-      ;; comparable behaviour change is the regression this test exists to catch.
-      ;; Closeout round 6c8845c3 then corrected the Focus bullet (root-gated return hook) and
-      ;; the orphans paragraph *within* this ceiling -- 3497 words -- by tightening the same
-      ;; prose rather than raising the number a second time. Raising it once per round is how
-      ;; a ceiling stops being one; if a future change genuinely cannot fit, move the number
-      ;; deliberately and say so here, as the paragraph above does.
-      (is (< (count (str/split skill #"\s+")) 3500)))
+      ;; alone landed at 3338, ten words under that ceiling. Task 8869bd4f then raised it to
+      ;; 3500 for the Focus bullet and its supporting Placement/`oh spawn` prose, and closeout
+      ;; round 6c8845c3 corrected lifecycle prose *within* that ceiling (3497 words) rather
+      ;; than raising the number a second time. Raising it once per round is how a ceiling
+      ;; stops being one.
+      ;; Task 97863e4a deleted delegation-driven focus outright, taking the Focus bullet with
+      ;; it: SKILL.md fell to 3220 words. The ceiling is lowered to match, because a ceiling
+      ;; left at 3500 over 3220 words of prose is 280 words of slack and guards nothing --
+      ;; the symmetric obligation to not raising it silently is to not leave it stranded above
+      ;; a deletion. If a future change genuinely cannot fit, move the number deliberately and
+      ;; say so here, as above.
+      (is (< (count (str/split skill #"\s+")) 3250)))
     (testing "no document asserts the behaviour the code no longer has"
       (doseq [rel lifecycle-docs
               ;; The last pins the specific claim that survived in README.org: a banned
@@ -4022,9 +3946,7 @@
       (is (= "closed" (get-in res [:close :status])))
       (is (= #{(:pane-id entry)} (closed-panes log)))
       (is (some? (:closed-at (ledger-entry* dir (:task entry)))))
-      ;; `collect --close` runs closure through `close-task!` unchanged, so it inherits
-      ;; the return hook too (task 8869bd4f).
-      (is (= ["w:p"] (agent-focus-targets log))))))
+      (is (empty? (agent-focus-targets log))))))
 
 (deftest collect-any-close-closes-the-child-it-captured
   (let [{:keys [env log dir]} (fake-env {})
@@ -4282,8 +4204,7 @@
       (is (= ["closed"] (mapv :status res)))
       (is (= #{(:pane-id orphan)} (closed-panes log)))
       (is (some? (:closed-at (ledger-entry* dir (:task orphan)))))
-      ;; `orphans --close` shares the same once-per-sweep return hook as `close --settled`.
-      (is (= ["w:p"] (agent-focus-targets log)))))
+      (is (empty? (agent-focus-targets log)))))
   (testing "name absence closes nothing: the pane may host something else entirely"
     (let [{:keys [env log dir state]} (fake-env {})
           orphan (foreign! dir (capture-entry! dir (start-child! env dir "vanished orphan")))]

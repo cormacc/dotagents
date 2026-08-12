@@ -218,16 +218,12 @@
     (when (contains? config :defaults)
       (let [defaults (:defaults config)]
         (when-not (map? defaults) (throw (ex-info "config :defaults must be a map" {:path path :value defaults})))
-        (when-not (every? #{:placement :focus} (keys defaults))
+        (when-not (every? #{:placement} (keys defaults))
           (throw (ex-info "config :defaults has unknown key" {:path path :defaults defaults})))
         (when (contains? defaults :placement)
           (when-not (#{:split :tab :tab-split} (:placement defaults))
             (throw (ex-info "config :defaults :placement must be :split, :tab, or :tab-split"
-                            {:path path :placement (:placement defaults)}))))
-        (when (contains? defaults :focus)
-          (when-not (boolean? (:focus defaults))
-            (throw (ex-info "config :defaults :focus must be true or false"
-                            {:path path :focus (:focus defaults)})))))))
+                            {:path path :placement (:placement defaults)})))))))
   config)
 ;; Parse is pure given text: `parse-config` never touches disk (file IO — `fs/exists?`,
 ;; `slurp` — stays at the cli.clj boundary), mirroring `parse-frontmatter`.
@@ -265,17 +261,6 @@
       :tab "tab"
       :tab-split (if below-root? "split" "tab")
       "split")))
-;; Depth is the absolute gate, unlike placement's: a below-root spawn never focuses,
-;; full stop, so `below-root?` is checked first and short-circuits both the flag and the
-;; configured default -- there is no flag spelling that can re-open it. At root, the same
-;; flag > configured > default precedence `resolve-placement` uses applies, with `true`
-;; the code fallback for a config declaring no `:focus` at all (the shipped config always
-;; does, mirroring `resolve-placement`'s own "split" fallback note).
-(defn resolve-focus [{:keys [flag configured below-root?]}]
-  (boolean (and (not below-root?)
-                (cond (some? flag) flag
-                      (some? configured) configured
-                      :else true))))
 ;; Claude Code 2.1.220 accepts this file transport. Intentionally no runtime version
 ;; probe or body-text fallback: unsupported versions fail loudly at startup.
 (defn persona-args [kind path]

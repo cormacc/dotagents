@@ -121,29 +121,6 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 
 * Improvements
 
-** DONE [#B] herdr-orch: Subagent composition and extension
-CLOSED: [2026-08-11 Tue 15:57]
-:PROPERTIES:
-:CUSTOM_ID: 71fdf100-1681-4634-a12f-b2fc8ce0129b
-:CREATED: [2026-08-05 Wed 22:49]
-:STARTED: [2026-08-08 Sat 10:02]
-:END:
-:LOGBOOK:
-- Created [2026-08-05 Wed 22:49]
-- State "STARTED" from "TODO" [2026-08-08 Sat 10:02]
-- State "DONE" from "STARTED" [2026-08-11 Tue 15:57]
-:END:
-#+IMPORT: [[plan:2026-08-08-herdr-orch-subagent-composition-and-exte.org]]
-Goal: make subagent definitions composable and extensible, so a shared directive is stated once rather than restated per persona. The motivation is repetition across the persona set, not any particular mechanism.
-
-Measured duplication across the 7 packaged personas [2026-08-08]: there is no literal copy-paste -- no identical line of 40 characters or more appears in two persona files. What recurs is the same *concept*, spelled differently each time, which is worse: the wording drifts silently. Counts by file: read-only 5 (scout, researcher, worker, reviewer, advisor), artifact/report-path convention 5 (scout, researcher, reviewer, advisor, visual-tester), no-delegation 4 (scout, researcher, advisor, visual-tester), verify-claims-against-source 3 (worker, reviewer, advisor), stay-scoped 3 (scout, researcher, advisor), do-not-manufacture-findings 2 (reviewer, advisor).
-
-Design consideration found while measuring: no-delegation is already enforced mechanically, since the CLI checks the `spawns:` allow-list before any ledger or pane mutation. Its prose restatement in 4 personas is belt-and-braces rather than the guarantee. That suggests the first question is not "what composition mechanism?" but "which of these belongs in the injected wrapper (`cli.clj/prompt-text`, line 192, which already carries the delegation, identity, publication and retro instructions), which belongs in a shared fragment, and which is genuinely per-persona?" A mechanism chosen before that split is settled will encode the wrong boundary.
-
-Option space, not yet decided: move universal rules into `prompt-text`; a `traits:`/`extends:` frontmatter key resolving named fragments through the same project > home > packaged chain personas already use; an include directive in the persona body; or convention plus `--prompt-extra` with no code change at all. Note `core.clj/parse-frontmatter` (line 32) already ignores unknown keys, so a new key is additive rather than breaking, and the existing list-frontmatter precedent is bare space-separated words (`spawns: scout researcher`).
-
-*EDIT* [2026-08-08] Originally filed as "evaluate whether herdr-orch could/should leverage ai-behaviors" (https://github.com/xificurC/ai-behaviors), proposing hashtag behaviours at spawn time or `:behaviours [...]` in persona frontmatter. That candidate was researched and *declined*; the task has been retitled to the underlying goal. ai-behaviors (MIT, 34 stars, last pushed 2026-04-30) is a hook symlinked into Claude Code / ECA config: it matches hashtags on each interactive prompt and injects sticky context that persists across turns until replaced. Its value depends on many turns in one session, whereas a herdr-orch child gets one composed initial prompt and runs to publish, and there is no cross-harness equivalent of that hook across the kind roster. Definition-time behaviours also collide with the existing model that a persona *is* the behaviour bundle. Keep it as prior art for the vocabulary idea, not as a dependency or a design to port.
-
 ** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:
 :PROPERTIES:
 :CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
@@ -240,36 +217,6 @@ Not a regression from the stream change -- the pre-change design carried a compa
 
 Identified and reproduced by the third closeout review of `43e7c65c`; full analysis in that review's artifact, and the accepted-risk entry is in `design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org` under `** Risks`. Relevant symbols as of that work: `close-mutation!` and `continue!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`, plus `assert-publishable!` and the `createLink` publication path.
 
-** TODO [#B] herdr-orch: eliminate delegation-driven focus changes
-:PROPERTIES:
-:CUSTOM_ID: 97863e4a-3e91-470b-ad53-13857ef1201c
-:CREATED: [2026-08-10 Mon 20:09]
-:END:
-:LOGBOOK:
-- Created [2026-08-10 Mon 20:09]
-:END:
-Observed friction: a root spawn from a workspace other than the active one steals focus across workspaces. =cli.clj= passes =:focus= into =herdr/tab-create!=, which focuses the new tab in the caller's workspace regardless of where the operator actually is. Unattended delegation makes it worse -- every root spawn in a multi-child run yanks the operator once.
-
-Proposal (user, 2026-08-10): eliminate delegation-driven focus entirely rather than gate it on the active workspace. Tab creation and the herdr agents panel already signal that a subagent exists, so the focus rules add machinery around a subjective preference.
-
-Why elimination beats gating, in order of weight:
-- Gating breaks the invariant that currently makes focus safe. =SKILL.md= states "Focus is only ever set, never read to decide anything." Gating on the active workspace requires reading workspace state to decide, and that read is racy: the operator can switch workspaces between the check and the =tab create= call. It also adds a third conditional axis on top of the existing depth gate and the flag > configured > default precedence.
-- Elimination deletes a bug class rather than guarding it. =SKILL.md= already records that the depth gate is load-bearing "since =publish= makes every delegating child close its grandchildren, so an ungated hook would end every nested delegation in a focus steal". That is an admission that focus-on-close is a footgun needing a guard; with no focus there is nothing to guard. The depth gate remains for placement, where depth is a genuine distinction.
-- The close-side focus return is arguably worse than the spawn-side one. If the operator never left, returning focus is a no-op; if they deliberately moved away, it pulls them back. It mainly exists to undo the other half of the feature.
-
-Removal surface: =core/resolve-focus=; the =--focus= / =--no-focus= flags including their mutual-exclusion check, their =boolean-flags= entries, and their usage text; =:defaults :focus= in =subagents/config.edn= and the comment justifying it; the =:focus= argument threaded into =tab-create!= and =split!= at spawn; the best-effort focus return on root =close=, =collect --close=, =close --settled=, and =orphans --close=; the =:focus= field in ledger entries; and the Focus bullet in =SKILL.md= plus its counterparts in =README.org=, =scripts/README.md=, and =scripts/docs/contract.md=.
-
-Explicitly out of scope: the raw passthrough verbs =oh tab create --focus=, =oh ws focus=, =oh tab focus=, and =oh agent focus=. Those are operator actions, not delegation side effects, and upstream Herdr owns their semantics.
-
-Acceptance criteria:
-- No delegation path sets focus: spawn, close, =collect --close=, both sweeps. Verified by spawning from a non-active workspace and observing that focus does not move.
-- Confirm before removing, rather than assuming: that the herdr agents panel does surface a newly created subagent, since that is the premise the removal rests on. If it does not, elimination trades a focus steal for a lost child and the proposal needs revisiting.
-- =:defaults= keeps =:placement= and is validated as a closed map with the =:focus= key gone; a config still declaring =:focus= fails with its file path rather than being silently ignored.
-- Existing focus assertions in =cli_test.clj=, =core_test.clj=, and =herdr_test.clj= are removed or inverted to assert that no focus call is made, rather than deleted wholesale leaving the behaviour unpinned.
-- =bb test= and =ot doctor= stay clean.
-
-Not measured: how often auto-focus is actually wanted. The evidence is one session of unattended multi-child delegation where it was pure noise, plus the reported cross-workspace steal.
-
 ** TODO [#C] AGENTS.md: state that repo-root =scripts/= is Babashka-first, existing members predate the rule
 :PROPERTIES:
 :CUSTOM_ID: 511e335b-9c05-45c9-87da-09df1f48d827
@@ -347,6 +294,26 @@ Acceptance criteria:
 - A stale =working= status alone never authorises closing a pane that still has a live occupant.
 - Reproduce the observed state before fixing, and trigger the new path deliberately rather than only observing it pass.
 Must not: weaken the ownership guard; make =pane close= the documented route for a spawned child.
+
+** TODO herdr-orch: oh silently accepts unknown task options
+:PROPERTIES:
+:CUSTOM_ID: b0eb67fc-c1f1-467b-9b01-7e45f5807d74
+:CREATED: [2026-08-12 Wed 10:46]
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 10:46]
+:END:
+=oh= silently accepts unknown =task= options. Discovered 2026-08-11 while probing the focus removal (task 97863e4a): =oh task run worker --task x --bogus y= did not fail -- it parsed =--bogus= as a value-taking option, ignored it, and spawned a real billable child that had to be closed by hand.
+
+=option-map= in =skills/herdr-orch/scripts/src/herdr_orch/cli.clj= collects any =--foo value= into the opts map, and nothing downstream validates the key set for the =task= group. Two distinct failure shapes follow:
+- A typo with a value is silently ignored, so an operator believes a flag took effect when it did not. This is how a mistyped =--timout 600000= would spawn at the default timeout with no warning.
+- A typo in final argv position fails with "option requires a value", which reads as though the flag exists and merely needs an argument.
+
+Worse, an unknown value-taking option swallows the *next* token: =--bogus --task x= consumes =--task=, after which =task-text= finds no assignment, falls through to its stdin branch, and blocks on =slurp *in*= forever in a non-interactive context. That is a hang, not an error -- observed hanging =bb test= for 900 s when a test lost the guard that had been masking it.
+
+Fix direction (not yet decided): validate the resolved option keys against a per-group known set and fail with =unknown option=, the way =require-positionals= already bounds positional arity. The value-less flag set is already group-scoped by =boolean-flags-for=, so the same shape extends to a known-options set.
+
+Not in scope for 97863e4a, which deliberately removed the special-case =--focus=/=--no-focus= rejection rather than retaining legacy support for retired flags; this task is the general check that would have covered it for free.
 
 * Fixes
 
@@ -683,3 +650,51 @@ Two herdr-orch test-fixture facts surfaced during trait implementation, both cos
 - A delegated child intentionally simulating a *root* caller must clear the injected `HERDR_ORCH_PERSONA`, `HERDR_ORCH_SPAWNS`, `HERDR_ORCH_TASK`, `HERDR_ORCH_RESULT` and `HERDR_ORCH_CHILD` variables first, or the CLI classifies it as below-root and refuses the call.
 
 Both are reported by child agents rather than reproduced by the parent; confirm each against the current fixtures before documenting, and put them wherever the scripts' testing guidance lives (`skills/herdr-orch/scripts/README.md` or a test-specific reference).
+
+** TODO herdr-orch: injected publication guidance omits the single-line SUMMARY constraint :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 262a8379-2270-4faa-a49e-030158e6d0a8
+:CREATED: [2026-08-12 Wed 11:33]
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 11:33]
+:END:
+The injected child prompt never states that a published SUMMARY must be a single line, so children discover the constraint by having a publish rejected mid-run.
+
+=scripts/docs/contract.md= line 149 specifies =SUMMARY: <single line>=, and =core.clj/parse-result= reads the envelope line-wise via =field-labels=. But =cli.clj/publication-guidance= -- the only publication text a child actually receives, since a child never reads contract.md -- covers report paths, =--artifact=, =--finding=, and "never treat pane text as the result", and says nothing about line shape.
+
+Desired outcome: =publication-guidance= states the single-line constraint and points multi-line detail at =--finding= / the report artifact. Check whether a prompt-text test pins that string before editing, and whether the persona bodies restate it.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: dotagents @ master
+- timestamp: [2026-08-12 Wed 11:30]
+- sender: agent
+
+Evidence:
+Raised as a PROCESS candidate by reviewer-c42a8132 (task c42a8132-dfd7-40a7-bce4-e4fec6884f4a) after its own multiline summary was rejected. Confirmed by reading contract.md:149 and the =publication-guidance= string; the gap is real, not the child misreading the contract.
+
+** TODO herdr-orch: verify and document what oh pane wait-output searches :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 1fdcee79-9515-4aaa-839e-53001fbb24b2
+:CREATED: [2026-08-12 Wed 11:34]
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 11:34]
+:END:
+Determine what window =oh pane wait-output= actually searches, then document it in =scripts/README.md= § Raw passthrough alongside the existing wrapper-vs-upstream default differences.
+
+Unverified report, attributed not adopted: worker-89073d9a (task 89073d9a-7208-4cc0-8cef-a386f81f71c6) reported that =wait-output= twice timed out on markers that a =--source recent-unwrapped= read showed immediately. Settling it needs a live pane experiment, which this session did not run.
+
+Why it is plausible: =herdr.clj/pane-wait-output!= passes =--source= only when the caller supplies one, so an unqualified =wait-output= takes the upstream default, while =scripts/README.md= records that the *read* family is defaulted by the wrapper to =recent-unwrapped= (upstream: =recent=). If the two verbs search different windows, a marker already in scrollback can be visible to one and invisible to the other -- which reads as "the process never emitted it" rather than "I searched the wrong window".
+
+Desired outcome: measure both verbs against the same pane with a marker already in scrollback; document the result, and if the defaults do diverge, either align the wrapper or state the divergence in § Raw passthrough. Do not document the claim as fact before measuring it.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: dotagents @ master
+- timestamp: [2026-08-12 Wed 11:30]
+- sender: agent
+
+Evidence:
+Child PROCESS candidate, harvested via =oh task harvest=. Probed as far as reading =pane-wait-output!= and the README default note; not reproduced.

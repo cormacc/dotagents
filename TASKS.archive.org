@@ -2732,3 +2732,76 @@ Outcome: no material simplification for either CLI; closed with no implementatio
 - =ot= :: already on =babashka.cli= (=cli/dispatch= at =org_tasks/cli.clj:142=, =cli/format-opts= at :47/:67/:70). Bumping the pinned =org.babashka/cli 0.12.75= would add only =:positional= / =:restrict-args= (0.12.76), ordered =:enum= plus vector =:doc= / =:epilog= (0.12.80), and dispatch auto-help (0.12.85). Not free: =:enum='s default error wording differs from ot's custom message, which flows verbatim into ot's JSON error envelope.
 - =oh= :: =herdr_orch/cli.clj= (1918 lines) requires no =babashka.cli=; it hand-rolls the =usage= string and =one= / =require-positionals=. Adopting dispatch would shrink mechanical parsing boilerplate, but cross-field validation (e.g. mutually exclusive =--match= / =--regex=) stays in leaf code, most of =usage= is narrative semantics that would not shrink, and its help text and JSON envelope are documented, tested contracts (=skills/herdr-orch/scripts/docs/contract.md=, =scripts/test/=). Cost and risk exceed the benefit.
 - =registry/dispatch-coerce= (open question, resolved) :: the map is entirely load-bearing, and its behaviour is identical across =org.babashka/cli= 0.7.53, 0.8.61, 0.11.73, 0.12.75 and 0.12.85 under bb v1.13.219, so it is stable library behaviour rather than a version-specific workaround. Dropping the spec-derived aggregation fails ~111 tests with =No matching clause: json=. The real mechanism: =dispatch= parses options that /precede/ the subcommand before it has resolved which entry to run, so no entry =:spec= is in scope for them and only the top-level map applies -- =ot --format json show <id>= yields the string "json" without it, while =ot show <id> --format json= is coerced by the entry spec alone. Separately, =:id :string= stops an =:args->opts= positional being number-coerced, so an all-digit or scientific-notation-shaped =:CUSTOM_ID:= prefix survives. The docstring previously gave the rationale as "per-spec =:coerce= is ignored by =dispatch=", which is wrong as stated; corrected in =registry.clj= on 2026-08-08.
+
+** DONE [#B] herdr-orch: Subagent composition and extension
+CLOSED: [2026-08-11 Tue 15:57]
+:PROPERTIES:
+:CUSTOM_ID: 71fdf100-1681-4634-a12f-b2fc8ce0129b
+:CREATED: [2026-08-05 Wed 22:49]
+:STARTED: [2026-08-08 Sat 10:02]
+:ARCHIVED: [2026-08-11 Tue 15:57]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-05 Wed 22:49]
+- State "STARTED" from "TODO" [2026-08-08 Sat 10:02]
+- State "DONE" from "STARTED" [2026-08-11 Tue 15:57]
+:END:
+#+IMPORT: [[plan:2026-08-08-herdr-orch-subagent-composition-and-exte.org]]
+Goal: make subagent definitions composable and extensible, so a shared directive is stated once rather than restated per persona. The motivation is repetition across the persona set, not any particular mechanism.
+
+Measured duplication across the 7 packaged personas [2026-08-08]: there is no literal copy-paste -- no identical line of 40 characters or more appears in two persona files. What recurs is the same *concept*, spelled differently each time, which is worse: the wording drifts silently. Counts by file: read-only 5 (scout, researcher, worker, reviewer, advisor), artifact/report-path convention 5 (scout, researcher, reviewer, advisor, visual-tester), no-delegation 4 (scout, researcher, advisor, visual-tester), verify-claims-against-source 3 (worker, reviewer, advisor), stay-scoped 3 (scout, researcher, advisor), do-not-manufacture-findings 2 (reviewer, advisor).
+
+Design consideration found while measuring: no-delegation is already enforced mechanically, since the CLI checks the `spawns:` allow-list before any ledger or pane mutation. Its prose restatement in 4 personas is belt-and-braces rather than the guarantee. That suggests the first question is not "what composition mechanism?" but "which of these belongs in the injected wrapper (`cli.clj/prompt-text`, line 192, which already carries the delegation, identity, publication and retro instructions), which belongs in a shared fragment, and which is genuinely per-persona?" A mechanism chosen before that split is settled will encode the wrong boundary.
+
+Option space, not yet decided: move universal rules into `prompt-text`; a `traits:`/`extends:` frontmatter key resolving named fragments through the same project > home > packaged chain personas already use; an include directive in the persona body; or convention plus `--prompt-extra` with no code change at all. Note `core.clj/parse-frontmatter` (line 32) already ignores unknown keys, so a new key is additive rather than breaking, and the existing list-frontmatter precedent is bare space-separated words (`spawns: scout researcher`).
+
+*EDIT* [2026-08-08] Originally filed as "evaluate whether herdr-orch could/should leverage ai-behaviors" (https://github.com/xificurC/ai-behaviors), proposing hashtag behaviours at spawn time or `:behaviours [...]` in persona frontmatter. That candidate was researched and *declined*; the task has been retitled to the underlying goal. ai-behaviors (MIT, 34 stars, last pushed 2026-04-30) is a hook symlinked into Claude Code / ECA config: it matches hashtags on each interactive prompt and injects sticky context that persists across turns until replaced. Its value depends on many turns in one session, whereas a herdr-orch child gets one composed initial prompt and runs to publish, and there is no cross-harness equivalent of that hook across the kind roster. Definition-time behaviours also collide with the existing model that a persona *is* the behaviour bundle. Keep it as prior art for the vocabulary idea, not as a dependency or a design to port.
+
+** DONE [#B] herdr-orch: eliminate delegation-driven focus changes
+CLOSED: [2026-08-12 Wed 11:19]
+:PROPERTIES:
+:CUSTOM_ID: 97863e4a-3e91-470b-ad53-13857ef1201c
+:CREATED: [2026-08-10 Mon 20:09]
+:STARTED: [2026-08-11 Tue 18:17]
+:ARCHIVED: [2026-08-12 Wed 11:19]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-10 Mon 20:09]
+- State "STARTED" from "TODO" [2026-08-11 Tue 18:17]
+- State "DONE" from "STARTED" [2026-08-12 Wed 11:19]
+:END:
+Observed friction: a root spawn from a workspace other than the active one steals focus across workspaces. =cli.clj= passes =:focus= into =herdr/tab-create!=, which focuses the new tab in the caller's workspace regardless of where the operator actually is. Unattended delegation makes it worse -- every root spawn in a multi-child run yanks the operator once.
+
+Proposal (user, 2026-08-10): eliminate delegation-driven focus entirely rather than gate it on the active workspace. Tab creation and the herdr agents panel already signal that a subagent exists, so the focus rules add machinery around a subjective preference.
+
+Why elimination beats gating, in order of weight:
+- Gating breaks the invariant that currently makes focus safe. =SKILL.md= states "Focus is only ever set, never read to decide anything." Gating on the active workspace requires reading workspace state to decide, and that read is racy: the operator can switch workspaces between the check and the =tab create= call. It also adds a third conditional axis on top of the existing depth gate and the flag > configured > default precedence.
+- Elimination deletes a bug class rather than guarding it. =SKILL.md= already records that the depth gate is load-bearing "since =publish= makes every delegating child close its grandchildren, so an ungated hook would end every nested delegation in a focus steal". That is an admission that focus-on-close is a footgun needing a guard; with no focus there is nothing to guard. The depth gate remains for placement, where depth is a genuine distinction.
+- The close-side focus return is arguably worse than the spawn-side one. If the operator never left, returning focus is a no-op; if they deliberately moved away, it pulls them back. It mainly exists to undo the other half of the feature.
+
+Removal surface: =core/resolve-focus=; the =--focus= / =--no-focus= flags including their mutual-exclusion check, their =boolean-flags= entries, and their usage text; =:defaults :focus= in =subagents/config.edn= and the comment justifying it; the =:focus= argument threaded into =tab-create!= and =split!= at spawn; the best-effort focus return on root =close=, =collect --close=, =close --settled=, and =orphans --close=; the =:focus= field in ledger entries; and the Focus bullet in =SKILL.md= plus its counterparts in =README.org=, =scripts/README.md=, and =scripts/docs/contract.md=.
+
+Explicitly out of scope: the raw passthrough verbs =oh tab create --focus=, =oh ws focus=, =oh tab focus=, and =oh agent focus=. Those are operator actions, not delegation side effects, and upstream Herdr owns their semantics.
+
+Agreed approach (inline flow, no external change record; 2026-08-11):
+- Premise confirmed before removal, per the criterion below: the operator reports that a newly spawned subagent appears in the Herdr agents panel immediately, from any workspace. Corroborating but weaker evidence: Herdr 0.8.0 carries =ui::sidebar::agent_panel_entries= / =collect_agent_panel_entries_with_runtimes= over all =Workspace= values, an =agent_panel_sort= of =spaces=/=priority=, and a legacy-marked =agent_panel_scope=; =oh agent list= reports agents across every workspace. Attributed to the operator, not independently observed by the agent.
+- =split!= loses its =:focus= parameter and returns to passing =--no-focus= unconditionally, as it did before task 8869bd4f. Its only remaining caller is the raw =oh pane split= passthrough, which never passed =:focus= and exposes no =--focus= flag.
+- =tab-create!= and =workspace-create!= keep their =:focus= parameter -- raw =oh tab create --focus= / =oh ws create --focus= are the out-of-scope operator verbs. The delegation spawn passes =:focus false=, matching the call =oh spawn= already makes.
+- =:defaults= becomes a closed map of =#{:placement}=; the existing "config :defaults has unknown key" error already carries =:path=, so a config still declaring =:focus= fails with its file path for free.
+- =SKILL.md='s "never focused UI state, which the Focus rules above only ever /set/" clause is reworded, since the Focus bullet it cross-references is being deleted.
+
+Anti-criteria:
+- Must not touch the =%focused= trait token or its machinery in =references/traits.md=, =traits_test.clj=, =traits_cli_test.clj=, or =contract.md='s trait-scanning grammar. Same substring, unrelated feature -- most =focus= matches in the tree are these.
+- Must not rewrite historical =design/log/= records (notably task 8869bd4f's) to erase the feature; they are durable history.
+- Must not change the raw passthrough verbs =oh tab create --focus=, =oh ws focus=, =oh tab focus=, or =oh agent focus=.
+
+Acceptance criteria:
+- No delegation path sets focus: spawn, close, =collect --close=, both sweeps. Verified by spawning from a non-active workspace and observing that focus does not move.
+- Confirm before removing, rather than assuming: that the herdr agents panel does surface a newly created subagent, since that is the premise the removal rests on. If it does not, elimination trades a focus steal for a lost child and the proposal needs revisiting.
+- =:defaults= keeps =:placement= and is validated as a closed map with the =:focus= key gone; a config still declaring =:focus= fails with its file path rather than being silently ignored.
+- Existing focus assertions in =cli_test.clj=, =core_test.clj=, and =herdr_test.clj= are removed or inverted to assert that no focus call is made, rather than deleted wholesale leaving the behaviour unpinned.
+- =bb test= and =ot doctor= stay clean.
+
+Not measured: how often auto-focus is actually wanted. The evidence is one session of unattended multi-child delegation where it was pure noise, plus the reported cross-workspace steal.
