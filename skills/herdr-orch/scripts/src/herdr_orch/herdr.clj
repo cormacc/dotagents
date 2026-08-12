@@ -174,8 +174,9 @@
 (defn pane-send-text! [pane text] (value! ["pane" "send-text" pane text]))
 (defn pane-send-keys! [pane keys] (value! (into ["pane" "send-keys" pane] keys)))
 (defn pane-wait-output! [pane {:keys [match regex source lines timeout raw]}]
-  (let [args (cond-> ["pane" "wait-output" pane (if regex "--regex" "--match") (or regex match)]
-               source (into ["--source" source]) lines (into ["--lines" (str lines)])
+  (let [args (cond-> ["pane" "wait-output" pane (if regex "--regex" "--match") (or regex match)
+                      "--source" (or source "recent-unwrapped")]
+               lines (into ["--lines" (str lines)])
                timeout (into ["--timeout" (str timeout)]) raw (conj "--raw"))
         result (get-in (value! args) [:result])
         output (or (get-in result [:read :text]) (:matched_line result) "")]
