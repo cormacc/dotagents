@@ -2857,3 +2857,52 @@ Anti-criteria:
 - Must not reword migrated bullets while moving them; the move stays diff-verifiable.
 - Must not strip the concrete evidence anchors from rules -- =bb= and =ot= are in =home.packages=, so those examples resolve on this machine everywhere.
 - Must not hard-wrap =home/AGENTS.md= (this repo soft-wraps) or soft-wrap =dotfiles/AGENTS.md= (that repo hard-wraps at ~78).
+
+** DONE herdr-orch: ship bundled subagent traits with the skill, not the user store :skill:herdr_orch:
+CLOSED: [2026-08-12 Wed 21:25]
+:PROPERTIES:
+:CUSTOM_ID: ca75cd6d-6c35-4a16-a2ac-3bb44c010a01
+:CREATED: [2026-08-12 Wed 20:43]
+:STARTED: [2026-08-12 Wed 20:44]
+:ARCHIVED: [2026-08-12 Wed 21:25]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 20:43]
+- State "STARTED" from "TODO" [2026-08-12 Wed 20:44]
+- State "DONE" from "STARTED" [2026-08-12 Wed 21:25]
+:END:
+Bundled subagent traits live in the repo-root user store rather than with the skill, so they only resolve because =skills/herdr-orch/traits= is a tracked relative symlink (mode 120000) to =../../traits=. Copy =skills/herdr-orch/= anywhere outside this repository -- a genuine install, a vendored copy, =npx skills add= -- and that link dangles, taking =%focused=, =%no-bullshit= and =%read-only= with it. Because substitution is fail-fast, five of the seven bundled personas would then refuse to spawn rather than degrade.
+
+Measured state (2026-08-12): =traits/= holds =focused.md=, =no-bullshit.md=, =read-only.md= and =prune/{gate.md,prompt.md}=. Bundled personas reference only the first three (=advisor=, =researcher=, =reviewer=, =scout=, =visual-tester=); =prune= has no persona consumer and is gate-only. Both the home layer (=~/.agents/traits=, via =agents.nix=) and the packaged layer (=<skill-dir>/traits=, via the symlink) therefore resolve to one identical directory today, so the packaged layer has never actually been exercised in this deployment.
+
+Already correct, needing verification rather than change: resolution is =project= > =home= > =packaged= in =traits/trait-directories= (=traits.clj=), documented at =contract.md= line 76, and covered for all three layers by =traits_test.clj=. That matches the subagent-definition chain, so the third requirement is a check, not an implementation.
+
+Agreed approach (inline flow, no change record; single gpt-5.6-sol worker, one shot):
+- Replace the =skills/herdr-orch/traits= symlink with a real directory and =git mv= =focused.md=, =no-bullshit.md=, =read-only.md= into it. Use =git mv= so history follows, and delete the symlink as its own tracked entry.
+- Repo-root =traits/= stays a real directory and keeps =prune/=, so it is non-empty and the =agents.nix= =~/.agents/traits= home-layer symlink stays exactly as it is. No Home Manager change and no switch required.
+- Update the =agents.nix= comment, which currently describes the packaged layer as "a relative symlink into the submodule's top-level traits/" -- that arrangement is what this task removes.
+- Update =references/traits.md=, which calls =traits/= "the canonical repository trait store". After the move the canonical home for skill-required fragments is the packaged layer; =traits/= is the user layer for local additions and gate-only fragments.
+
+Out of scope, recorded so it is not discovered as a surprise: =scripts/run-trait-gate.bb= resolves a gate at =<root>/traits/<trait>/gate.md=. Only =prune= has a gate and it stays put, so nothing breaks now, but a gate for a moved trait would not resolve. Left as a follow-up rather than widened into this task.
+
+Acceptance criteria:
+- =skills/herdr-orch/traits= is a real directory, not a symlink; =git ls-files -s= reports mode 100644 for the three fragments and no 120000 entry for the directory.
+- The three fragments are tracked under the skill; =traits/= retains =prune/= and remains tracked.
+- A spawn resolving =%focused=, =%no-bullshit= and =%read-only= still succeeds with the home layer absent, proving the packaged layer is genuinely load-bearing rather than shadowed. Demonstrate it, do not assume it.
+- Project and home layers still override a packaged fragment of the same name.
+- =bb test= and =ot doctor= stay clean, and =oh task run <persona> --print-prompt= composes for each of the five token-bearing personas.
+
+Anti-criteria:
+- Must not remove or repoint the =agents.nix= =~/.agents/traits= symlink, and must not require a Home Manager switch.
+- Must not change =traits/trait-directories=, the documented layer order, or the trait grammar -- resolution is already correct; verify it rather than rewrite it.
+- Must not move =prune/=, which has no persona consumer and whose gate runner expects the root path.
+- Must not copy the fragments, leaving two divergent sources of the same trait text.
+
+Shipped:
+- =skills/herdr-orch/traits/= is a real directory holding =focused.md=, =no-bullshit.md= and =read-only.md=, moved with =git mv= so git records renames rather than add/delete. The tracked 120000 symlink entry is gone. Root =traits/= keeps =prune/= and the =agents.nix= =~/.agents/traits= declaration is untouched, so no Home Manager switch was needed.
+- The packaged layer was proven load-bearing rather than shadowed: with the directory removed a spawn fail-fasts listing all three layers' candidate paths, and all five token-bearing personas compose while the projected home store contains only =prune=. Layer precedence re-verified end to end -- the same token resolved project, then home, then the packaged body as layers were dropped.
+- Resolution code, layer order and trait grammar were not touched, as planned: =traits/trait-directories= already returned project > home > packaged and =traits_test.clj= already covered all three layers.
+- Docs corrected: =references/traits.md= now scopes the packaged store against the user layer and records why the symlink arrangement was replaced; =contract.md= lost the sentence describing the packaged directory as a skill-local relative symlink; the =agents.nix= comment describes a real directory. The planning note that =contract.md= would need no change was wrong -- only the layer-order half of that line had been read, and the worker caught the stale tail against an explicit instruction to skip it.
+
+Follow-up left open deliberately: =scripts/run-trait-gate.bb= still resolves a gate only at =<root>/traits/<trait>/gate.md=, so a gate authored for a packaged fragment would not resolve. Nothing breaks today because =prune= is the only gated trait and it stays in the user layer.

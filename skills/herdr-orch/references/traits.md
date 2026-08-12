@@ -2,7 +2,7 @@
 
 Second-level reference for `herdr-orch`. The runtime summary is in [SKILL.md](../SKILL.md); the mechanics -- token grammar, resolution, frontmatter, `incompatible-with:` enforcement -- are in [scripts/docs/contract.md](../scripts/docs/contract.md) section Trait composition.
 
-This reference covers the canonical repository trait store at `traits/` and the admission rules for its fragments. A trait is a small reusable directive, named by its store file and inserted at a `%<name>` token by a consumer.
+This reference covers the packaged trait store at `skills/herdr-orch/traits/`, the repository user-layer store at `traits/`, and the admission rules for their fragments. Skill-required fragments belong in the packaged store; the user layer holds local additions and gate-only fragments. A trait is a small reusable directive, named by its store file and inserted at a `%<name>` token by a consumer.
 
 Rationale, measured probe history, and provenance conventions are in the second half of this file.
 
@@ -83,28 +83,28 @@ Keep unknown tokens fail-fast rather than treating missing trait text as an empt
 
 ## What is this?
 
-The canonical trait store is `traits/` at the repository
-root. A trait is a small reusable directive, named by its store file,
-inserted at a `%<name>` token by a consumer. Two consumers
+The canonical home for fragments required by the shipped skill is
+`skills/herdr-orch/traits/`. The repository-root `traits/`
+directory is the user-layer store for local additions and gate-only
+fragments. A trait is a small reusable directive, named by its store
+file, inserted at a `%<name>` token by a consumer. Two consumers
 exist: `oh` substitutes tokens in subagent persona bodies at
 spawn, and (once built) a pi extension expands tokens in interactively
 typed prompts.
 
-This skill owns the store and the rules for admitting a fragment. It
-deliberately owns no code. The interpolator stays at
+The skill owns its packaged fragments, their admission rules, and the
+interpolator at
 `skills/herdr-orch/scripts/src/herdr_orch/traits.clj`,
-consumed in-process by `oh`.
+which `oh` consumes in-process. The repository user layer remains
+installation-local.
 
-That split was contested and settled on 2026-08-10. Moving the
-implementation here would have required a subprocess boundary, an
-availability probe, an install-instructions path, a degraded mode, and a
-three-registry classpath update -- all of it to handle \"traits
-installed, herdr-orch not\". That permutation cannot occur:
-`agents.nix` line 180 symlinks the whole `skills/`
-tree as a single out-of-store unit. Ownership is expressed by where the
-store and the admission rules live, which needs no code move. If the
-skill ever ships independently, moving a pure function and its tests is
-a mechanical refactor, cheaper than carrying the gate for it now.
+The original 2026-08-10 arrangement kept every fragment in the
+repository user store and exposed it to the packaged layer through a
+relative symlink. That worked while `agents.nix` linked the whole
+`skills/` tree from this checkout, but the link dangled when the skill
+was installed or copied independently. Skill-required fragments now
+ship beside the implementation and personas; local additions and
+gate-only fragments stay in the user layer.
 
 ## Why the bar is not a consumer count
 
