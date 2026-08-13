@@ -253,6 +253,39 @@
       (when (contains? aliases v)
         (throw (ex-info "config :aliases value is itself an :aliases key; multi-hop alias chains are not supported" {:key v})))))
   config)
+(defn worktree-branch [task]
+  (str "orch/" (subs task 0 8)))
+;; Trigger resolution is trait-token based, reusing whatever `%worktree`/`%no-worktree`
+;; already resolved in the persona body (see `cli/trait-interpolation`) rather than a
+;; second scan. `flag` is the raw `--worktree` boolean; `traits` the resolved trait names.
+;; Forcing (`--worktree` or `%worktree`) and suppressing (`%no-worktree`) on one spawn is a
+;; spawn-time validation error, fired here before task allocation or any pane/ledger
+;; mutation, exactly like an unknown or incompatible trait. The default -- an extra
+;; checkout when another round of the same parent session is already in flight -- never
+;; applies to a read-only persona (`%read-only` resolved), which gets no implicit
+;; worktree. `:trigger` is always recorded, auditable rather than inferred: `flag`/`trait`
+;; force one, `suppressed` records an opt-out that fired (whether or not the default would
+;; otherwise have applied), `default` is the in-flight checkout, and `none` is an ordinary
+;; shared-tree spawn.
+(defn worktree-forced? [flag traits] (boolean (or flag ((set traits) "worktree"))))
+(defn worktree-suppressed? [traits] (boolean ((set traits) "no-worktree")))
+;; `in-flight?` is expected to already be short-circuited by the caller (`false`, never a
+;; ledger read) whenever `flag`/`traits` alone are forced or suppressed: the ledger read
+;; behind an actual in-flight check is a side effect (it creates the ledger directory --
+;; see `cli/worktree-in-flight?`), and a spawn that is about to fail this function's own
+;; conflict check, or one whose decision the flag/trait already settled, must not pay for
+;; or trigger that side effect first.
+(defn resolve-worktree [{:keys [flag traits in-flight? read-only?]}]
+  (let [forced? (worktree-forced? flag traits)
+        suppressed? (worktree-suppressed? traits)]
+    (when (and forced? suppressed?)
+      (throw (ex-info "worktree trigger conflict: --worktree/%worktree and %no-worktree cannot both apply to one spawn"
+                      {:flag (boolean flag) :traits (vec (set traits))})))
+    (cond
+      forced? {:create? true :trigger (if flag "flag" "trait")}
+      suppressed? {:create? false :trigger "suppressed"}
+      (and in-flight? (not read-only?)) {:create? true :trigger "default"}
+      :else {:create? false :trigger "none"})))
 (defn resolve-placement [{:keys [flag configured below-root?]}]
   (case flag
     "tab" "tab"

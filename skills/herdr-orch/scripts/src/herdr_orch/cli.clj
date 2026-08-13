@@ -1,5 +1,6 @@
 (ns herdr-orch.cli
   (:require [babashka.fs :as fs]
+            [babashka.process :as process]
             [cheshire.core :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]
@@ -80,7 +81,7 @@
 ;; Single source of truth for delegation value-less flags. The raw tab/workspace create
 ;; `--focus` operator flag is scoped to those commands by `boolean-flags-for`; both argv
 ;; consumers use the same resolved set so no value-less flag swallows the next element.
-(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon"})
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon" "--worktree"})
 (defn boolean-flags-for [group op]
   (cond-> boolean-flags
     (and (#{"tab" "ws"} group) (= "create" op)) (conj "--focus")))
@@ -319,6 +320,7 @@
   (or (some->> (one opts :timeout) (core/timeout-value! "--timeout" nil))
       (:timeout entry)
       core/default-timeout-ms))
+(defn worktree-flag [opts] (boolean (one opts :worktree)))
 (defn placement-flag [opts]
   (let [tab? (boolean (one opts :tab)) split? (boolean (one opts :split))]
     (when (and tab? split?) (fail "--tab and --split are mutually exclusive" {}))
@@ -660,6 +662,43 @@
 (defn safe-cleanup! [entry phase]
   (ledger/update! (:task entry) assoc :status "failed" :failed-at (now) :failure-phase (name phase))
   (when (and (:pane-id entry) (#{"split" "rename" "start"} (name phase))) (try (herdr/close! (:pane-id entry)) (catch Exception _))) )
+;; --- worktree checkout creation ------------------------------------------------------
+;; "In flight" means genuinely unfinished, not merely unclosed: a round whose newest item
+;; is a validated terminal result (COMPLETE/BLOCKED/FAILED) is done even if its pane was
+;; never explicitly closed ("capture closes nothing" -- see `stream-state`), and the
+;; publish-side discharge guard's own `outstanding-children` deliberately still counts that
+;; case as outstanding *for closing purposes*. Reusing it here would match almost every
+;; completed prior spawn of the same session as "in flight", which is not what a worker
+;; concurrent with active work means. `newest-rounds` (defined below) keeps this to each
+;; child lineage's current round, exactly as the discharge guard does. Must be called
+;; before the new entry is written, or the new entry itself (unsealed, no `:closed-at`)
+;; would immediately satisfy its own check.
+(declare newest-rounds)
+(defn- worktree-in-flight? [parent-session]
+  (boolean (and parent-session
+                (some #(and (= parent-session (:parent-session %))
+                            (nil? (:closed-at %))
+                            (not (:sealed? (stream-state %))))
+                      (newest-rounds (ledger/entries))))))
+(defn source-cwd [] (System/getProperty "user.dir"))
+;; Every worktree git call targets the *source* cwd, never `ledger/assignment-root`: the
+;; actual repository is wherever `oh` was launched from, and an `ORCH_ASSIGNMENT_ROOT`
+;; override relocates only the ledger/RESULT/checkout *destination*, never which repository
+;; HEAD, `status --porcelain`, and `worktree add` read from (task f49a63f5's constraint).
+(defn- git! [dir & argv]
+  (let [{:keys [exit out err]} @(process/process (into ["git"] argv) {:dir dir :out :string :err :string})]
+    (if (zero? exit) (str/trim out)
+        (fail (str "git " (str/join " " argv) " failed") {:dir dir :argv (vec argv) :exit exit :stderr (str/trim err)}))))
+(defn head-sha [dir] (git! dir "rev-parse" "HEAD"))
+;; One line per changed path, exactly as `git status --porcelain` emits it (status code
+;; plus path); recorded verbatim on the ledger entry and surfaced in spawn output.
+(defn dirty-paths [dir] (vec (remove str/blank? (str/split-lines (git! dir "status" "--porcelain")))))
+;; Destination resolves under the assignment root, alongside every other per-task path
+;; (`ledger/composed-persona-path`, `ledger/fresh-result`), never under the source cwd.
+(defn worktree-checkout-path [task] (str (fs/path (ledger/assignment-root) ".tmp" "herdr-orch" "worktrees" task)))
+(defn create-worktree! [dir path branch base]
+  (fs/create-dirs (fs/parent (fs/path path)))
+  (git! dir "worktree" "add" "-b" branch path base))
 (defn spawn! [persona opts waiting-policy]
   (enforce-spawns! persona opts)
   (if (one opts :print-prompt)
@@ -685,6 +724,20 @@
             ;; Resolved before allocation, so an unparseable `timeout:` or `--timeout` fails
             ;; fast exactly like an invalid `retro:` or an unresolvable `spawns:` name.
             timeout (timeout-policy persona opts frontmatter)
+            ;; Reuses whatever the trait scan above already resolved rather than a second
+            ;; scan (task f49a63f5's constraint): `%worktree`/`%no-worktree`/`%read-only`
+            ;; are read off `(:traits composition)`, and the in-flight check is the same
+            ;; open-round predicate `publish` already applies to this parent session. Placed
+            ;; after every other spawn-time validation above (kind/config/placement/retro/
+            ;; spawns/timeout) so its own conflict check still fails before allocation or
+            ;; mutation. `in-flight?` is short-circuited to `false` -- never evaluated, so
+            ;; `ledger/entries`'s directory-creating side effect never runs -- whenever the
+            ;; flag/trait already forces or suppresses the decision on their own.
+            forced-or-suppressed? (or (core/worktree-forced? (worktree-flag opts) (:traits composition))
+                                      (core/worktree-suppressed? (:traits composition)))
+            worktree-decision (core/resolve-worktree {:flag (worktree-flag opts) :traits (:traits composition)
+                                                       :in-flight? (and (not forced-or-suppressed?) (worktree-in-flight? (:parent-session ident)))
+                                                       :read-only? (contains? (set (:traits composition)) "read-only")})
             task (ledger/fresh-task)
             composition (materialize-persona! composition task persona)
             persona-path (:persona-path composition)
@@ -699,25 +752,43 @@
             assignment (task-text opts)
             bin (launcher-bin)
             name (child-name persona task)
-            entry {:task task :result result :child name :pane-id nil :label label :index index
-                   :persona-path persona-path :kind kind :model model :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :timeout (:timeout timeout) :timeout-source (:timeout-source timeout) :placement placement :status "allocating" :created-at (now)}]
+            ;; Computed and included on `entry` before it is ever written, so the ledger
+            ;; worktree fields exist before `git worktree add` runs: a crash between the
+            ;; write below and the checkout call leaves a recoverable record, never an
+            ;; orphaned checkout with no trace.
+            worktree (when (:create? worktree-decision)
+                       (let [source (source-cwd)]
+                         {:path (worktree-checkout-path task) :branch (core/worktree-branch task)
+                          :base (head-sha source) :parent-dirty (dirty-paths source)}))
+            entry (cond-> {:task task :result result :child name :pane-id nil :label label :index index
+                           :persona-path persona-path :kind kind :model model :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :timeout (:timeout timeout) :timeout-source (:timeout-source timeout) :placement placement :worktree-trigger (:trigger worktree-decision) :status "allocating" :created-at (now)}
+                    worktree (assoc :worktree worktree))]
         ;; Persist before the first pane mutation, so every partial failure is recoverable.
         (ledger/write! entry)
         (try
+          ;; The checkout is created (and, on failure, labelled and left recoverable)
+          ;; before any pane mutation, mirroring the entry-before-mutation ordering above.
+          (when worktree
+            (try (create-worktree! (source-cwd) (:path worktree) (:branch worktree) (:base worktree))
+                 (catch Exception e (safe-cleanup! (ledger/read! task) :worktree) (throw e))))
           ;; No waiting policy is injected: it lives on the ledger entry alone (see
           ;; `publish!`), so a child continued into another round can never publish under
           ;; its spawn-time policy. Nothing lifecycle-related reaches the child's env.
-          (let [env (cond-> {"HERDR_ORCH_CHILD" name "HERDR_ORCH_TASK" task "HERDR_ORCH_RESULT" result "HERDR_ORCH_BIN" bin "HERDR_ORCH_PERSONA" persona "HERDR_ORCH_SPAWNS" (str/join " " (:spawns spawns))}
-                      ;; Keep a relocated assignment root in force for any nested delegation.
-                      (System/getenv "ORCH_ASSIGNMENT_ROOT") (assoc "ORCH_ASSIGNMENT_ROOT" (ledger/assignment-root))
+          (let [child-cwd (or (:path worktree) (System/getProperty "user.dir"))
+                env (cond-> {"HERDR_ORCH_CHILD" name "HERDR_ORCH_TASK" task "HERDR_ORCH_RESULT" result "HERDR_ORCH_BIN" bin "HERDR_ORCH_PERSONA" persona "HERDR_ORCH_SPAWNS" (str/join " " (:spawns spawns))}
+                      ;; Keep a relocated assignment root in force for any nested delegation,
+                      ;; and always pin it for a worktree child: its own cwd is a *different*
+                      ;; git worktree whose own `git rev-parse --show-toplevel` would resolve
+                      ;; to the checkout itself, never the parent's assignment root.
+                      (or worktree (System/getenv "ORCH_ASSIGNMENT_ROOT")) (assoc "ORCH_ASSIGNMENT_ROOT" (ledger/assignment-root))
                       ;; This child's own model, so its grandchildren inherit from it exactly
                       ;; as it inherited from here (`parent-model`). Absent when unresolved,
                       ;; leaving a grandchild on the harness default rather than a stale value.
                       model (assoc "HERDR_ORCH_MODEL" model))
                 ;; Tab placement skips caller-rect!/direction entirely: a tab needs neither.
                 pane-placement (if (= placement "tab")
-                                 (herdr/tab-create! {:cwd (System/getProperty "user.dir") :label label :env env :focus false})
-                                 (herdr/split! {:direction (core/direction (herdr/caller-rect!)) :cwd (System/getProperty "user.dir") :env env}))
+                                 (herdr/tab-create! {:cwd child-cwd :label label :env env :focus false})
+                                 (herdr/split! {:direction (core/direction (herdr/caller-rect!)) :cwd child-cwd :env env}))
                 persisted (ledger/update! task assoc :pane-id (:pane_id pane-placement) :tab-id (:tab-id pane-placement) :status "split")
                 ;; Best-effort, exactly like `record-session!`: never fails a spawn. This is
                 ;; the identity witness `close` falls back to when a resume has released the
@@ -1836,7 +1907,7 @@
             "rename <target> (<name> | --clear)"
             "list"
             "get <target>"]
-   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--model MODEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--prompt-extra TEXT] [--print-prompt]"
+   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--model MODEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--prompt-extra TEXT] [--print-prompt] [--worktree]"
            "start <persona> (--task TEXT | --task-file PATH | stdin) [same options as run]"
            "collect <full-task-uuid> [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
            "collect --any [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"

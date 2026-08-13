@@ -125,11 +125,17 @@ Acceptance criteria:
 
 Constraint: admission per `skills/herdr-orch/references/traits.md` § Admission bar and § Probing; runner is `scripts/run-trait-gate.bb`.
 
-** TODO Core spawn plumbing: triggers, checkout creation, placement
+** DONE Core spawn plumbing: triggers, checkout creation, placement
+CLOSED: [2026-08-13 Thu 19:02]
 :PROPERTIES:
 :CUSTOM_ID: f49a63f5-89c7-4d22-ab12-01939515d27e
 :CREATED: [2026-08-13 Thu 15:29]
 :BLOCKED-BY: task:2538b80c-52a7-4a58-b80e-020fa3494b7f
+:STARTED: [2026-08-13 Thu 19:00]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-13 Thu 19:00]
+- State "DONE" from "STARTED" [2026-08-13 Thu 19:02]
 :END:
 Acceptance criteria:
 - [ ] `oh task run|start <persona> --worktree` creates a checkout from the parent's current HEAD with `git worktree add -b <branch> <path> <head-sha>` under `<parent-root>/.tmp/herdr-orch/worktrees/<task>`, spawns the child with its cwd inside it, and records path, branch, and base commit on the ledger entry.
@@ -208,3 +214,5 @@ Acceptance criteria:
 - [ ] contract.md documents lineage-owned worktree identity, `continue!` carry-forward, the reconciliation object, teardown guards, and orphaned-checkout operator cleanup including `git worktree prune` after a cleared `.tmp/`.
 
 * Implementation
+
+- Branch naming :: ~orch/<task-prefix>~, where ~<task-prefix>~ is the ledger task UUID's first eight characters (~(subs task 0 8)~), matching ~child-name~'s own existing prefix convention -- a checkout's branch is therefore recognisable from its ledger task id at a glance without a lookup, and collisions are as unlikely as a ledger task-id collision itself.
