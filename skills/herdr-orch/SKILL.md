@@ -24,7 +24,7 @@ An assignment never silently contradicts its persona's declared interaction mode
 
 Definitions are `<name>.md` files discovered in descending precedence: `<git-root>/.agents/subagents/` (project override), then `~/.agents/subagents/` (home override), then the installed skill's `skills/herdr-orch/subagents/` (packaged default). The project copy wins; read the selected definition. The packaged directory is never projected into `~/.agents/subagents/`, which holds only home-layer overrides.
 
-**Harness is a deployment property; `--model` is the only per-assignment dial.** The child runs its definition's `kind:`, else the harness Herdr measured for the parent -- read that with `oh agent get "$HERDR_PANE_ID"`, never from the harness you believe you are. A `pi` parent read as `claude` declared a requested model unreachable. The four shipped weights are `heavy`, `middle`, `light`, and `feather`; `--model light` is the portable way to ask for a tier. Everything about how a weight translates lives in the [contract](scripts/docs/contract.md) § Model resolution -- read it when authoring or debugging an override, never when delegating.
+**Harness is a deployment property; `--model` is the only per-assignment dial.** The child runs its definition's `kind:`, else the harness Herdr measured for the parent -- read that with `oh agent get "$HERDR_PANE_ID"`, never from the harness you believe you are. A `pi` parent read as `claude` declared a requested model unreachable. The four shipped weights are `heavy`, `middle`, `light`, and `feather`; `--model light` is the portable way to ask for a tier. Everything about how a weight translates lives in the [contract](scripts/docs/contract.md) § Model resolution -- read it when authoring or debugging an override. When delegating, *run* the resolution instead of predicting it: pass the model and spawn, or preview with `--print-prompt`. Config is validated before any ledger or pane mutation, so a wrong model fails loudly and costs nothing, while hand-simulating the alias hop and per-kind column lookup has produced a confident wrong answer, a refused spawn, and a routing question escalated to the user that the CLI would have settled. The same holds for every other mechanically-resolved choice -- kind, placement, the `spawns:` allow-list: invoke the resolver rather than reasoning about what it will decide.
 
 Unknown personas require listing the roster and asking, not improvising.
 
@@ -74,6 +74,8 @@ A validated terminal item in the parent-chosen `RESULT` stream is the only compl
 ```
 
 A child that cannot finish is instructed to publish once with `BLOCKED` (genuine blocking dependency, resumable) or `FAILED` (unrecoverable after reasonable retries) carrying a partial account of completed vs remaining work -- read that summary before re-prompting or respawning.
+
+A spawn-capable child cannot publish at all while it owns an open child round: the children-discharge guard refuses *any* publish, `WAITING` heartbeats included, until that round is captured and closed. So publish before spawning, or after capture and close -- an assignment that asks for phase-boundary heartbeats and delegation in the same phase is asking for something the CLI will refuse.
 
 A child that publishes *nothing* is a separate case: its ledger entry stays `prompted` with no `RESULT` file even though the work may be finished. When such a child has settled, re-prompt it to publish with the injected launcher before considering a respawn -- respawning discards completed work and pays for it twice.
 

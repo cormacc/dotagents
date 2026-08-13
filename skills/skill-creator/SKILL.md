@@ -234,6 +234,12 @@ Package it the same way (the optional second argument selects an output director
 
 The packager validates first and emits `<skill-name>.skill`. If `present_files` is available, present that artifact; otherwise report its path.
 
+### After any bulk edit to a SKILL.md
+
+A reflow, reformat, or scripted rewrite must end by confirming the frontmatter still parses: opening `---` alone on line 1, `name:` and `description:` on their own lines, closing `---`. Re-read those four lines, or re-run the validator, rather than diffing the file's content.
+
+Content-preservation checks do not cover this. A whole-file soft-wrap conversion joined `---`, `name:` and `description:` into one line and removed a production-safety skill from discovery, while a token-stream diff plus code-fence, table and heading checks all reported the file unchanged -- every token survived, and the structure that gave them meaning did not. Frontmatter damage is silent: the skill simply stops being offered, so nothing fails until an agent works without a contract it should have loaded. When the file is committed, verify the frontmatter in the committed blob (`git show HEAD:<path> | head -4`), not the worktree.
+
 ---
 
 ## Reference files

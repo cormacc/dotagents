@@ -717,3 +717,24 @@ Origin:
 
 Evidence:
 Session retro after the herdr-orch housekeeping task (archived). The first hazard was hit by the parent while writing the model-inheritance test; the second arrived as a child PROCESS candidate via =oh task harvest= and was corroborated against b0eb67fc rather than adopted on the child's word.
+
+** TODO org-tasks: ot create cannot insert plan tasks into a linked change-record's * Plan :skill:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: 71dc6ec3-4db7-450c-9dbe-3923156f5d5f
+:CREATED: [2026-08-13 Thu 15:26]
+:END:
+:LOGBOOK:
+- Created [2026-08-13 Thu 15:26]
+:END:
+`ot create` reportedly cannot place a plan task inside a change-record's `* Plan` section: `--parent` / `--relative-to` against a task carrying `#+IMPORT:` routes the new task into TASKS.org instead, so plan tasks must be hand-authored with `ot uuid`. Either support insertion into the linked record, or document the hand-authored path as canonical in org-plan/org-tasks so it stops being rediscovered.
+
+Status: UNVERIFIED. Raised by a delegated planner subagent and confirmed by the user in that session; the parent did not probe it, because a probe mutates the task graph and a documentation search settled nothing either way. Verify before acting.
+
+Origin:
+- cwd: /home/cormacc/nmd/infra/playbooks
+- git: git@git.nmd.ie:infrastructure/playbooks @ master
+- timestamp: [2026-08-13 Thu 13:20]
+- sender: agent
+
+Evidence:
+Two change-records were planned this session; both needed their `* Plan` tasks hand-authored with `ot uuid` after `--parent` routed to TASKS.org. Records: design/log/2026-08-13-move-to-on-demand-gitlab-runners-on-aws.org and design/log/2026-08-13-migrate-docker-host-from-amazon-linux-1.org.
