@@ -197,18 +197,24 @@ Acceptance criteria:
 
 Constraint: ownership and nil-vs-nil reasoning follow `prune!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`.
 
-** TODO Handoff reuse: `--worktree-from`
+** DONE Handoff reuse: `--worktree-from`
+CLOSED: [2026-08-13 Thu 21:18]
 :PROPERTIES:
 :CUSTOM_ID: e76180b9-8c33-4bcc-aafe-26a5668a43e1
 :CREATED: [2026-08-13 Thu 15:29]
 :BLOCKED-BY: task:f49a63f5-89c7-4d22-ab12-01939515d27e
 :BLOCKED-BY+: task:4962846f-6690-4618-a5d9-9891962565ae
+:STARTED: [2026-08-13 Thu 21:17]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-13 Thu 21:17]
+- State "DONE" from "STARTED" [2026-08-13 Thu 21:18]
 :END:
 Acceptance criteria:
-- [ ] `--worktree-from <task>` refuses unless the caller's `:parent-session` and the source entry's are both non-nil and equal, checked before any pane or ledger mutation; ledger reads cross sessions, so a foreign entry is otherwise reachable. Same rule `oh worktree remove` already carries.
-- [ ] `oh task run|start <persona> --worktree-from <task>` places the new child inside the recorded existing checkout, records the same worktree identity on the new lineage, and cuts no new checkout.
-- [ ] Legal for read-only personas.
-- [ ] Refused while a live unsettled round still references the checkout.
+- [X] `--worktree-from <task>` refuses unless the caller's `:parent-session` and the source entry's are both non-nil and equal, checked before any pane or ledger mutation; ledger reads cross sessions, so a foreign entry is otherwise reachable. Same rule `oh worktree remove` already carries.
+- [X] `oh task run|start <persona> --worktree-from <task>` places the new child inside the recorded existing checkout, records the same worktree identity on the new lineage, and cuts no new checkout.
+- [X] Legal for read-only personas.
+- [X] Refused while a live unsettled round still references the checkout.
 
 Constraint: edits `spawn!` again, hence the blocker; the live-reference predicate is shared with `oh worktree remove`.
 
@@ -228,3 +234,4 @@ Acceptance criteria:
 * Implementation
 
 - Branch naming :: ~orch/<task-prefix>~, where ~<task-prefix>~ is the ledger task UUID's first eight characters (~(subs task 0 8)~), matching ~child-name~'s own existing prefix convention -- a checkout's branch is therefore recognisable from its ledger task id at a glance without a lookup, and collisions are as unlikely as a ledger task-id collision itself.
+- ~--worktree-from~'s liveness question is the same as teardown's, not forked (task e76180b9) :: ~worktree-referenced-by-live-round?~ (unclosed-and-unsealed, scoped by checkout path) is reused unchanged for both verbs. Reuse needs to know whether anyone is still genuinely working in the checkout before placing a second child inside it; teardown needs to know the same thing before deleting it. Both questions are "is this checkout still live", never "has this round been explicitly closed" -- closing and reuse/teardown are independent actions by the same design record's own Decisions. Ownership is shared too (~assert-worktree-owned!~, parameterised on an explicit caller rather than re-resolving one), but for a different reason: `spawn!`'s caller identity is already resolved, live, and non-nil by the time this guard runs (kind/model/label/pane placement all depend on it unguarded, earlier in the same function), so the shared predicate's "caller unresolvable" half is structurally unreachable from `--worktree-from`, unlike from `oh worktree remove`, which resolves the caller through the guarded, exception-catching `caller-parent-session` with no such earlier dependency forcing success. What remains reachable and is exercised is the *recorded* side being nil or foreign, both refused correctly by the identical expression.

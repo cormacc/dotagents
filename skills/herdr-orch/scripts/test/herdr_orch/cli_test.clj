@@ -5168,3 +5168,107 @@
     (is (nil? (spawned-model (fake-env {"FAKE_PARENT_AGENT" "claude" "PI_PROVIDER" "anthropic" "PI_MODEL" "claude-opus-5"}
                                        {"helper" modelless-persona})
                              "helper" "--task" "no stray inheritance")))))
+
+;; --- handoff reuse: `--worktree-from` (task e76180b9) ---------------------------------
+;; Deliberately reuses `oh worktree remove`'s exact ownership rule and its exact
+;; unclosed-and-unsealed liveness predicate (`worktree-referenced-by-live-round?`, scoped
+;; by checkout path) rather than forking either: the change-record's Decision is that a
+;; checkout may outlive the lineage that created it and be handed to a new child
+;; (test-writer -> worker -> reviewer), and reuse needs the identical "is anyone still
+;; genuinely working in this checkout" question teardown already answers -- one predicate,
+;; not two to keep in step.
+
+(deftest worktree-from-reuses-the-recorded-checkout-and-cuts-no-second-one
+  (let [{:keys [env log dir]} (fake-env {})
+        source (spawn-worktree! env dir "worker cuts the checkout")]
+    (publish-child! source)
+    (let [before (git-worktree-list dir)
+          proc (call! env "task" "start" "worker" "--worktree-from" (:task source) "--task" "reuses the checkout")
+          reuse (ledger-entry* dir (get-in (result proc) [:result :task]))
+          argv (calls log)]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "reuse" (:worktree-trigger reuse)))
+      (is (= (:worktree source) (:worktree reuse)) "identical identity: same path, branch, base, parent-dirty")
+      (is (= before (git-worktree-list dir)) "no second `git worktree add` ever ran")
+      (is (str/includes? (str/join " " (first (filter #(= ["tab" "create"] (vec (take 2 %))) argv)))
+                          (get-in source [:worktree :path]))))))
+
+;; A reviewer/scout inspecting a worker's checkout is the motivating case; unlike the
+;; implicit in-flight default (which a `%read-only` persona never gets), `--worktree-from`
+;; is explicit and must not be gated on write-enablement.
+(deftest worktree-from-is-legal-for-a-read-only-persona
+  (let [{:keys [env dir]} (fake-env {})
+        source (spawn-worktree! env dir "worker cuts the checkout")]
+    (publish-child! source)
+    ;; `scout` is a real packaged persona carrying the packaged `%read-only` trait.
+    (let [proc (call! env "task" "start" "scout" "--worktree-from" (:task source) "--task" "reviews the checkout")
+          reuse (ledger-entry* dir (get-in (result proc) [:result :task]))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= (:worktree source) (:worktree reuse))))))
+
+;; Deliberately triggered with known-bad input: never published, so the round is
+;; genuinely unfinished (unsealed and unclosed) -- the exact case
+;; `worktree-referenced-by-live-round?` refuses for `oh worktree remove`, reused here.
+(deftest worktree-from-refuses-while-a-live-round-still-references-the-checkout
+  (let [{:keys [env dir]} (fake-env {})
+        source (spawn-worktree! env dir "still working, never published")]
+    (let [proc (call! env "task" "start" "worker" "--worktree-from" (:task source) "--task" "attempted handoff")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"live round" (:out proc)))
+      ;; `fs/list-dir` on this directory also holds the sibling `indices` subtree, so
+      ;; count only the ledger's own `*.json` entries.
+      (is (= 1 (count (fs/glob (fs/path dir ".tmp" "herdr-orch" "ledger") "*.json")))
+          "no second entry was ever allocated"))))
+
+(deftest worktree-from-refuses-a-task-with-no-recorded-worktree
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "never a worktree round")
+        proc (call! env "task" "start" "worker" "--worktree-from" (:task entry) "--task" "no checkout to reuse")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"no worktree" (:out proc)))))
+
+;; Deliberately triggered with known-bad input: `--worktree` and `--worktree-from` naming
+;; both a fresh and an existing checkout on one spawn. Caught before either checkout is
+;; touched, so exactly one `git worktree` command -- the fixture's own creation of
+;; `source` -- has run by the time this assertion reads the listing.
+(deftest worktree-from-conflicts-with-worktree-flag-before-any-mutation
+  (let [{:keys [env dir]} (fake-env {})
+        source (spawn-worktree! env dir "worker cuts the checkout")]
+    (publish-child! source)
+    (let [before (git-worktree-list dir)
+          proc (call! env "task" "start" "worker" "--worktree" "--worktree-from" (:task source) "--task" "conflicting triggers")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"worktree-from refused" (:out proc)))
+      (is (= before (git-worktree-list dir))))))
+
+;; The realistic "does not own" refusal: a source entry recorded against a genuinely
+;; different, resolvable `:parent-session`. `ident`'s own `:parent-session` is guaranteed
+;; non-nil whenever `spawn!` reaches this guard at all (kind/model/label/pane placement
+;; above all depend on it unguarded), so the true both-nil coincidence the shared
+;; predicate also guards against -- exercised directly against `worktree-of`/
+;; `assert-worktree-owned!` by the existing `worktree-remove` suite via the guarded,
+;; exception-catching `caller-parent-session` -- cannot be constructed through this verb;
+;; see this task's own COMPLETE finding for that structural difference. What remains
+;; reachable here, and is exercised by the two tests below, is a mismatched non-nil caller
+;; and a nil *recorded* side, both refused by the identical `(and caller recorded (= caller
+;; recorded))` expression.
+(deftest worktree-from-refuses-a-foreign-parent-session
+  (let [{:keys [env dir]} (fake-env {})
+        source (foreign! dir (spawn-worktree! env dir "someone else's checkout"))]
+    (publish-child! source)
+    (let [proc (call! env "task" "start" "worker" "--worktree-from" (:task source) "--task" "attempted handoff")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"own" (:out proc))))))
+
+;; A corrupted or legacy-format source entry whose own `:parent-session` was never
+;; recorded: refused by the same `(and caller recorded ...)` expression, from its other
+;; side (caller resolves fine; `recorded` is nil).
+(deftest worktree-from-refuses-a-source-entry-with-no-recorded-parent-session
+  (let [{:keys [env dir]} (fake-env {})
+        source (spawn-worktree! env dir "nil recorded parent-session")
+        corrupted (dissoc source :parent-session)]
+    (spit (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str (:task source) ".json"))) (json/generate-string corrupted))
+    (publish-child! corrupted)
+    (let [proc (call! env "task" "start" "worker" "--worktree-from" (:task source) "--task" "attempted handoff")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"own" (:out proc))))))

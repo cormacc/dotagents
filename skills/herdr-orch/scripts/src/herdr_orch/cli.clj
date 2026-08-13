@@ -13,7 +13,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncontinue assigns a settled, captured child another round in its existing context: root-only, guarded by the same live child+pane match close uses, allocating a fresh task and result and writing a new ledger entry with :continues. --wait blocks like run; the default is non-blocking like start.\nharvest returns this session's PROCESS candidates from the ledger, deduplicated, with every child and task that raised each one; it is read-only and routes, persists, and acts on nothing.\ncompact retires bulk rather than entries: it drops the raw envelope text (a duplicate of the parsed fields and of the retained RESULT file) from a closed or terminal round the caller owns, keeping the task, child, :child-session, and artifact links a cited uuid resolves through. --closed sweeps the caller's own such rounds.\norphans lists, and under --close closes, captured rounds owned by a session other than this one, applying close's own live child+pane match; a foreign session is not a dead one, so the authority is the operator's and the list is the default. Root-only, like continue: a delegated child is refused before any listing or mutation, because every sibling and ancestor session looks equally foreign to it.\nclose is the only path that closes a *spawned* child's pane: no capture does, and the only other closure is spawn-failure cleanup taking a pane the child never worked in. It acts on a captured entry that is the newest round for its child, and only on a live observation matching that entry's child name and pane id in idle/done -- or, when the name has been released (a resumed process), a live pane whose recorded shell_pid still matches and whose foreground is not busy; --settled sweeps the caller's own captured children, newest round only, at most one attempt each.\ncollect, status, close, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; no prefix is ever resolved.\ncollect, status, and list accept --format text for a compact line rendering, and emit the raw result envelope beside the parsed fields only under --raw.\ncollect --close captures and then closes in one call, under every close guard, reporting that outcome under :close without ever degrading the capture.\nworktree list enumerates this session's recorded checkouts (one per child lineage, current round only) with the same reconciliation object collect/status report; worktree remove takes the checkout and never the branch -- `git worktree remove` leaves the branch and its commits intact, so removing a checkout can never destroy committed work, and deleting the branch remains the parent's own act. It applies prune/close's own ownership rule (both :parent-session non-nil and equal), refuses a dirty checkout by naming the dirty paths, refuses while any live round of the session still references the checkout, and reports tip ancestry against the parent's live HEAD as information only, never a gate. close, prune, orphans, and collect --close never touch a checkout; teardown is only ever these two verbs.\nOpaque assignment input is --task, --task-file, or stdin. Run `oh --help` for contract details.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--worktree-from <full-task-uuid> (on task run/start) places the new child inside an existing recorded checkout instead of cutting a new one, carrying the same worktree identity onto the new lineage; legal for a read-only persona. It applies worktree remove's own ownership rule (both :parent-session non-nil and equal) and its own unclosed-and-unsealed live-reference guard against the same checkout path, and refuses if --worktree or a resolved %worktree also applies to the same spawn.\n\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncontinue assigns a settled, captured child another round in its existing context: root-only, guarded by the same live child+pane match close uses, allocating a fresh task and result and writing a new ledger entry with :continues. --wait blocks like run; the default is non-blocking like start.\nharvest returns this session's PROCESS candidates from the ledger, deduplicated, with every child and task that raised each one; it is read-only and routes, persists, and acts on nothing.\ncompact retires bulk rather than entries: it drops the raw envelope text (a duplicate of the parsed fields and of the retained RESULT file) from a closed or terminal round the caller owns, keeping the task, child, :child-session, and artifact links a cited uuid resolves through. --closed sweeps the caller's own such rounds.\norphans lists, and under --close closes, captured rounds owned by a session other than this one, applying close's own live child+pane match; a foreign session is not a dead one, so the authority is the operator's and the list is the default. Root-only, like continue: a delegated child is refused before any listing or mutation, because every sibling and ancestor session looks equally foreign to it.\nclose is the only path that closes a *spawned* child's pane: no capture does, and the only other closure is spawn-failure cleanup taking a pane the child never worked in. It acts on a captured entry that is the newest round for its child, and only on a live observation matching that entry's child name and pane id in idle/done -- or, when the name has been released (a resumed process), a live pane whose recorded shell_pid still matches and whose foreground is not busy; --settled sweeps the caller's own captured children, newest round only, at most one attempt each.\ncollect, status, close, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; no prefix is ever resolved.\ncollect, status, and list accept --format text for a compact line rendering, and emit the raw result envelope beside the parsed fields only under --raw.\ncollect --close captures and then closes in one call, under every close guard, reporting that outcome under :close without ever degrading the capture.\nworktree list enumerates this session's recorded checkouts (one per child lineage, current round only) with the same reconciliation object collect/status report; worktree remove takes the checkout and never the branch -- `git worktree remove` leaves the branch and its commits intact, so removing a checkout can never destroy committed work, and deleting the branch remains the parent's own act. It applies prune/close's own ownership rule (both :parent-session non-nil and equal), refuses a dirty checkout by naming the dirty paths, refuses while any live round of the session still references the checkout, and reports tip ancestry against the parent's live HEAD as information only, never a gate. close, prune, orphans, and collect --close never touch a checkout; teardown is only ever these two verbs.\n--worktree-from <full-task-uuid> (on task run/start) places the new child inside an existing recorded checkout instead of cutting a new one, carrying the same worktree identity (path, branch, base) onto the new lineage; legal for a read-only persona. It applies worktree remove's own ownership rule and its own unclosed-and-unsealed live-reference guard against the same checkout path, and refuses if --worktree or a resolved %worktree also applies to the same spawn, since that would claim both a reused and a freshly-cut checkout on one entry.\nOpaque assignment input is --task, --task-file, or stdin. Run `oh --help` for contract details.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -674,6 +674,10 @@
 ;; before the new entry is written, or the new entry itself (unsealed, no `:closed-at`)
 ;; would immediately satisfy its own check.
 (declare newest-rounds)
+;; Forward-declared for `spawn!`'s own `--worktree-from` handoff (task e76180b9): both are
+;; defined later, next to `worktree-remove!`, their other caller, and reused unchanged --
+;; ownership and "references the checkout" are one predicate each, never forked per verb.
+(declare assert-worktree-owned! worktree-of worktree-referenced-by-live-round?)
 (defn- worktree-in-flight? [parent-session]
   (boolean (and parent-session
                 (some #(and (= parent-session (:parent-session %))
@@ -760,11 +764,39 @@
             ;; mutation. `in-flight?` is short-circuited to `false` -- never evaluated, so
             ;; `ledger/entries`'s directory-creating side effect never runs -- whenever the
             ;; flag/trait already forces or suppresses the decision on their own.
-            forced-or-suppressed? (or (core/worktree-forced? (worktree-flag opts) (:traits composition))
-                                      (core/worktree-suppressed? (:traits composition)))
-            worktree-decision (core/resolve-worktree {:flag (worktree-flag opts) :traits (:traits composition)
-                                                       :in-flight? (and (not forced-or-suppressed?) (worktree-in-flight? (:parent-session ident)))
-                                                       :read-only? (contains? (set (:traits composition)) "read-only")})
+            forced? (core/worktree-forced? (worktree-flag opts) (:traits composition))
+            suppressed? (core/worktree-suppressed? (:traits composition))
+            worktree-from (one opts :worktree-from)
+            ;; Handoff reuse (task e76180b9): ownership, then presence of a recorded
+            ;; checkout, then liveness -- resolved and validated before task allocation or
+            ;; any pane/ledger mutation, exactly like every guard above. Ownership reuses
+            ;; `assert-worktree-owned!` unchanged, `oh worktree remove`'s identical rule
+            ;; (both `:parent-session`s non-nil and equal); the caller side is `ident`'s own
+            ;; already-resolved value, never a second `agent get` -- `ident` must already be
+            ;; a live, non-nil identity for this spawn to have reached this point at all
+            ;; (kind/model/label/pane placement all depend on it unguarded, above), so the
+            ;; "caller unresolvable" half of that rule cannot fire from here; only a
+            ;; corrupted or foreign *recorded* side can, and still refuses correctly.
+            ;; Liveness reuses `worktree-referenced-by-live-round?` unchanged too, the same
+            ;; unclosed-and-unsealed predicate `worktree-in-flight?` uses for the spawn-time
+            ;; default just below -- one "is anyone still genuinely working in this
+            ;; checkout" question, shared rather than forked per verb. `--worktree-from`
+            ;; composing with `--worktree`/a resolved `%worktree` would leave the entry
+            ;; claiming both a reused and a freshly-cut checkout, so that conflict is
+            ;; refused here too, before either checkout is touched.
+            source-entry (when worktree-from (ledger/read! worktree-from))
+            _ (when worktree-from
+                (when forced? (fail "worktree-from refused: --worktree/%worktree also applies to this spawn; use one or the other" {:worktree-from worktree-from}))
+                (assert-worktree-owned! "worktree-from" (:parent-session ident) source-entry))
+            source-worktree (when worktree-from (worktree-of "worktree-from" source-entry))
+            _ (when (and worktree-from (worktree-referenced-by-live-round? (:path source-worktree) (ledger/entries)))
+                (fail "worktree-from refused: a live round of this session still references the checkout" {:worktree-from worktree-from :path (:path source-worktree)}))
+            forced-or-suppressed? (or worktree-from forced? suppressed?)
+            worktree-decision (if worktree-from
+                                 {:create? false :trigger "reuse"}
+                                 (core/resolve-worktree {:flag (worktree-flag opts) :traits (:traits composition)
+                                                          :in-flight? (and (not forced-or-suppressed?) (worktree-in-flight? (:parent-session ident)))
+                                                          :read-only? (contains? (set (:traits composition)) "read-only")}))
             task (ledger/fresh-task)
             composition (materialize-persona! composition task persona)
             persona-path (:persona-path composition)
@@ -782,11 +814,16 @@
             ;; Computed and included on `entry` before it is ever written, so the ledger
             ;; worktree fields exist before `git worktree add` runs: a crash between the
             ;; write below and the checkout call leaves a recoverable record, never an
-            ;; orphaned checkout with no trace.
-            worktree (when (:create? worktree-decision)
-                       (let [source (source-cwd)]
-                         {:path (worktree-checkout-path task) :branch (core/worktree-branch task)
-                          :base (head-sha source) :parent-dirty (dirty-paths source)}))
+            ;; orphaned checkout with no trace. A reuse round's identity is instead copied
+            ;; verbatim from `source-worktree` -- same path, branch, base, and parent-dirty
+            ;; -- because nothing is cut for it; `:create?` (below) is what actually decides
+            ;; whether `git worktree add` runs, never mere presence of this map.
+            worktree (cond
+                       worktree-from source-worktree
+                       (:create? worktree-decision) (let [source (source-cwd)]
+                                                        {:path (worktree-checkout-path task) :branch (core/worktree-branch task)
+                                                         :base (head-sha source) :parent-dirty (dirty-paths source)})
+                       :else nil)
             entry (cond-> {:task task :result result :child name :pane-id nil :label label :index index
                            :persona-path persona-path :kind kind :model model :parent-session (:parent-session ident) :parent-pane (:parent-pane ident) :waiting-policy waiting-policy :retro (:retro retro) :retro-source (:retro-source retro) :spawns (:spawns spawns) :spawns-source (:spawns-source spawns) :timeout (:timeout timeout) :timeout-source (:timeout-source timeout) :placement placement :worktree-trigger (:trigger worktree-decision) :status "allocating" :created-at (now)}
                     worktree (assoc :worktree worktree))]
@@ -795,7 +832,9 @@
         (try
           ;; The checkout is created (and, on failure, labelled and left recoverable)
           ;; before any pane mutation, mirroring the entry-before-mutation ordering above.
-          (when worktree
+          ;; Gated on `:create?`, never on `worktree` alone: a reuse round carries a
+          ;; non-nil `worktree` map too, and must cut no new checkout for it.
+          (when (:create? worktree-decision)
             (try (create-worktree! (source-cwd) (:path worktree) (:branch worktree) (:base worktree))
                  (catch Exception e (safe-cleanup! (ledger/read! task) :worktree) (throw e))))
           ;; No waiting policy is injected: it lives on the ledger entry alone (see
@@ -1508,12 +1547,18 @@
 ;; exactly -- both `:parent-session`s non-nil and equal -- so an unresolvable caller owns
 ;; nothing, and a hand-edited or legacy-format entry whose own `:parent-session` is nil is
 ;; never granted ownership by a nil-vs-nil coincidence.
-(defn- assert-worktree-owned! [verb entry]
-  (let [task (:task entry) caller (caller-parent-session) recorded (:parent-session entry)]
+;; `caller` is passed in rather than resolved here, so `--worktree-from` (task e76180b9)
+;; can supply `spawn!`'s own already-resolved parent identity instead of paying for (and
+;; needing to survive) a second, independent `agent get`; `worktree-remove!`, below, has
+;; no other identity to reuse and passes a fresh `(caller-parent-session)` of its own.
+(defn- assert-worktree-owned! [verb caller entry]
+  (let [task (:task entry) recorded (:parent-session entry)]
     (when-not (and caller recorded (= caller recorded))
       (fail (str verb " refused: caller session does not own this ledger entry") {:task task}))))
-(defn- worktree-of [entry]
-  (or (:worktree entry) (fail "worktree remove refused: this task recorded no worktree" {:task (:task entry)})))
+;; `verb` names the refusal for its caller (`worktree remove` vs. `worktree-from`), so one
+;; predicate serves both without either message pretending to be the other's.
+(defn- worktree-of [verb entry]
+  (or (:worktree entry) (fail (str verb " refused: this task recorded no worktree") {:task (:task entry)})))
 ;; "References the checkout" reuses `worktree-in-flight?`'s own "genuinely unfinished, not
 ;; merely unclosed" predicate (see its comment above), scoped by checkout path instead of
 ;; parent-session: unclosed *and* unsealed. A round whose stream already carries a
@@ -1564,8 +1609,8 @@
 (defn worktree-remove! [task]
   (when-not task (fail "worktree remove requires a full task uuid" {}))
   (let [entry (ledger/read! task)]
-    (assert-worktree-owned! "worktree remove" entry)
-    (let [{:keys [path branch base]} (worktree-of entry)]
+    (assert-worktree-owned! "worktree remove" (caller-parent-session) entry)
+    (let [{:keys [path branch base]} (worktree-of "worktree remove" entry)]
       (when (worktree-referenced-by-live-round? path (ledger/entries))
         (fail "worktree remove refused: a live round of this session still references the checkout" {:task task :path path}))
       (if-not (fs/exists? path)
@@ -2033,7 +2078,7 @@
             "rename <target> (<name> | --clear)"
             "list"
             "get <target>"]
-   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--model MODEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--prompt-extra TEXT] [--print-prompt] [--worktree]"
+   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--model MODEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--prompt-extra TEXT] [--print-prompt] [--worktree] [--worktree-from <full-task-uuid>]"
            "start <persona> (--task TEXT | --task-file PATH | stdin) [same options as run]"
            "collect <full-task-uuid> [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
            "collect --any [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
