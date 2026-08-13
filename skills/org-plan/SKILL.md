@@ -197,7 +197,8 @@ Before drafting `* Plan`, assume the plan has failed. Work backwards:
 
 1. *Riskiest assumptions* -- 2--5 untested + load-bearing + implicit assumptions. For each: what happens if it is wrong?
 2. *Failure modes* -- 2--5 realistic ways this fails (built the wrong thing; works locally, breaks in prod; blocked by dependency).
-3. *Constitution conformance* -- does the plan conflict with anything in AGENTS.md or the relevant skills (the project constitution)? If so, treat it as a failure mode: resolve it or record the conflict explicitly.
+3. *Staged-plan entry requirements* -- when the plan advances through stages (version stops, migrations, environments), check what each stage *requires on entry*, especially the last one. Establishing a requirement at the first stage and generalising it across the plan is a distinctive way to be confidently wrong: an upgrade plan verified that its starting version's database requirement was satisfied, recorded "no database work in this plan", and missed that the final stop refused to start without a major database upgrade obtainable only at the second-to-last stop.
+4. *Constitution conformance* -- does the plan conflict with anything in AGENTS.md or the relevant skills (the project constitution)? If so, treat it as a failure mode: resolve it or record the conflict explicitly.
 
 Triage: mitigate the high-impact ones (turn into plan tasks); accept the rest and capture under `** Risks`. Skip the premortem for trivial changes (single file, easy rollback, pure exploration).
 
