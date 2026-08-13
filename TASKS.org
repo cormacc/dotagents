@@ -342,17 +342,41 @@ Verified [2026-08-12 Wed] against cli.clj at 6a89b0f plus the housekeeping commi
 :LOGBOOK:
 - Created [2026-08-04 Tue 20:29]
 :END:
-Parallel workers editing the same repo can race on a shared file.
+Parallel workers editing the same repo can race on a shared file, and disjoint edit sets do not give disjoint measurements (2026-08-11 edit below). Upstream Herdr ships `herdr worktree list|create|open|remove`, re-verified present in herdr 0.8.0 on [2026-08-13]; `oh` wraps none of it.
 
-Upstream Herdr ships `herdr worktree list|create|open|remove` (git worktree-backed workspaces, grouped with the parent repo workspace); verified present in herdr 0.8.0. This could lift the SKILL.md constraint that children share one worktree, so siblings whose file sets overlap must be sequenced or merged into one assignment -- each child would get its own checkout and edits would reconcile as ordinary branch merges.
+Scope decided [2026-08-13 Thu]: `oh task run|start` gains `--worktree`, which creates the checkout, spawns the child with its cwd inside it, and records it on the ledger entry. Reconciliation state rides on the envelopes the parent already reads. Teardown is explicit and guarded. `oh` never merges.
 
-Spike, not a patch. Known interactions to resolve first:
-- The ledger/assignment root resolves per git root, so a child in a different checkout resolves a *different* assignment root unless `ORCH_ASSIGNMENT_ROOT` is injected (today injected only when overridden, in `spawn!`'s child `env` map).
-- Placement currently targets the caller workspace (`tab create --workspace $HERDR_WORKSPACE_ID`) or a pane split; a worktree child needs a third placement mode.
-- Result paths must stay in the parent root -- `ORCH_ASSIGNMENT_ROOT` injection already achieves this.
-- Merge and cleanup burden moves to the parent.
+Two shapes were considered and rejected. A worktree for every write-enabled child: the write-enabled set is `worker` and `planner`, and for `planner` it is actively wrong, since it writes org change-records that belong in the shared tree, so isolation manufactures a merge for work that should have landed directly; it also puts merge-and-cleanup on the common single-child delegation, which carries no contamination risk at all. A worktree only when the CLI detects parallelism: spawn is one child per invocation, so parallelism is created later by a second spawn and is not knowable at spawn time, and detecting it from outstanding rounds would isolate only the second child while the first still shares a tree with the parent -- asymmetric, timing-dependent, and it fails to eliminate the contamination it exists to prevent.
 
-If validated, cite it in SKILL.md as the escape hatch for the overlapping-file-set rule. Source: design review of herdr-orch against upstream docs (herdr 0.7.5, protocol 18); the `ORCH_ASSIGNMENT_ROOT` caveat above re-verified on [2026-08-12], where `spawn!`'s `env` map still injects it only when it is already set in the parent env.
+The tool owns creation rather than the operator composing `herdr worktree create` with a cwd override, for two reasons beyond ergonomics. An orchestrator doing it by hand pays roughly three tool calls and an output parse per child before any work begins, and each hand-assembled step is one it can get wrong -- omitting `ORCH_ASSIGNMENT_ROOT` silently sends the child's ledger and result files into its own checkout. Owning creation also lets the tool guarantee the base commit, which closes the persona/trait divergence hazard below by construction. A general `--cwd` stays unexposed until a second use case wants it; the internal plumbing is identical either way.
+
+What `oh` does not do is merge. Reconciliation carries conflict resolution, the parent already knows ordinary git, and a failed automatic merge would strand the parent's tree mid-merge in a state the tool would then have to own. Removal is explicit and refuses a checkout with uncommitted changes or an unmerged branch rather than destroying work -- the same guard-first shape as `close --abandon`.
+
+Mechanics to resolve:
+- Inject `ORCH_ASSIGNMENT_ROOT` unconditionally for a worktree child, so ledger and result paths stay in the parent root. Today `spawn!`'s child `env` map injects it only when it is already set in the parent env.
+- `spawn!` hardcodes `(System/getProperty "user.dir")` for both tab and split placement; that becomes the resolved child cwd. No third placement mode is needed -- the geometry is unchanged, only the directory.
+- Record worktree path, branch, and base commit on the ledger entry, so `collect`/`status` report reconciliation state without the parent making an extra call.
+- Merge and cleanup burden moves to the parent, and stays there.
+
+Acceptance criteria:
+- [ ] `oh task run|start worker --worktree` creates a checkout from the parent's current HEAD, spawns the child with its cwd inside it, and records path, branch, and base commit on the ledger entry.
+- [ ] A worktree child's ledger entry and RESULT file are written in the parent's assignment root, never in its own checkout.
+- [ ] `collect` and `status` report a worktree child's branch, base, and changed files, adding no tool call the parent was not already making.
+- [ ] Teardown refuses a checkout with uncommitted changes or an unmerged branch, naming which of the two it found.
+- [ ] A spawn without `--worktree` behaves exactly as today, and read-only personas are unaffected.
+- [ ] SKILL.md § Invocation policy (Cardinality) cites `--worktree` as the escape hatch for the overlapping-file-set rule, and keeps the parent-side re-measure.
+
+Anti-criteria:
+- Must not: merge, rebase, or commit on the parent's behalf.
+- Must not: remove a checkout holding unmerged or uncommitted work.
+- Must not: add a third placement mode, a config key, or automatic parallelism detection.
+- Must not: retire the parent-side re-measure -- a merged tree is one no child measured.
+
+Verify before implementing:
+- Project-layer persona and trait overrides resolve from `<git-root>/.agents/`, so a checkout at a different commit could compose a different persona or fragment than the parent intended, and silently: trait substitution fails fast on unresolved tokens, not on divergent ones. Creating from the parent's HEAD should make this unreachable; confirm that, then decide whether a non-HEAD base is refused or merely warned.
+- Whether `herdr worktree create` or plain `git worktree add` is the better primitive. Herdr's also creates a workspace, which is more than a delegated child needs, and workspace placement is not what this task is changing.
+
+Source: design review of herdr-orch against upstream docs (herdr 0.7.5, protocol 18). The `ORCH_ASSIGNMENT_ROOT` and hardcoded-cwd claims above were re-verified against `spawn!` on [2026-08-13].
 
 *EDIT* [2026-07-31 Fri] Part of the strategy above landed via the test-build retro, as a second prevention-side partial mitigation: herdr-orch § Invocation policy (Cardinality) now states that concurrency is bounded by edit targets as well as by N and forbids fanning out siblings whose file sets overlap, and org-plan § Splitting test now keeps work that must edit the same function or form in one task. Both are orchestrator/planner habits, so the structural guarantee this task asks for is still open. Remaining: the git-worktree-per-worker evaluation, whether the `planner` persona itself should carry overlap analysis (its plan for [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]] split one edit to one `fake-env` map across two nominally independent tasks, which forced the orchestrator to re-serialise them), and orchestrator-applied or advisory-locked shared-file writes.
 
