@@ -651,13 +651,15 @@ Origin:
 - git: cormacc/dotagents @ main
 - sender: agent
 
-** TODO herdr-orch: document test-authoring hazards for the scripts suite :skill:herdr_orch:
+** DONE herdr-orch: document test-authoring hazards for the scripts suite :skill:herdr_orch:
+CLOSED: [2026-08-13 Thu 02:18]
 :PROPERTIES:
 :CUSTOM_ID: 8e83a6bb-093c-44ee-bb33-38f3e7ea2dde
 :CREATED: [2026-08-12 Wed 23:31]
 :END:
 :LOGBOOK:
 - Created [2026-08-12 Wed 23:31]
+- State "DONE" from "TODO" [2026-08-13 Thu 02:18]
 :END:
 The herdr-orch scripts suite has two recurring test-authoring hazards, both of which have now cost real time twice, and neither is written down where a test author would look (=skills/herdr-orch/scripts/README.md= § Tests and smoke, or a scripts-local AGENTS.md alongside the one org-tasks already has).
 
