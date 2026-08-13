@@ -173,21 +173,27 @@ Acceptance criteria:
 
 Constraint: the whitelist is the `select-keys` in `continue!` (`skills/herdr-orch/scripts/src/herdr_orch/cli.clj`); prefer one `:worktree` map field over several flat keys so the whitelist gains one entry.
 
-** TODO Teardown verbs: `oh worktree list|remove`
+** DONE Teardown verbs: `oh worktree list|remove`
+CLOSED: [2026-08-13 Thu 20:39]
 :PROPERTIES:
 :CUSTOM_ID: 4962846f-6690-4618-a5d9-9891962565ae
 :CREATED: [2026-08-13 Thu 15:29]
 :BLOCKED-BY: task:f49a63f5-89c7-4d22-ab12-01939515d27e
 :BLOCKED-BY+: task:47005e8f-f232-43a4-b18b-d2f7a5719707
+:STARTED: [2026-08-13 Thu 20:39]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-13 Thu 20:39]
+- State "DONE" from "STARTED" [2026-08-13 Thu 20:39]
 :END:
 Acceptance criteria:
-- [ ] `oh worktree list` enumerates the session's recorded checkouts with their reconciliation state.
-- [ ] `oh worktree remove <task>` removes the newest lineage round's checkout, retains the branch, and reports tip ancestry against parent HEAD as information only.
-- [ ] Removal refuses a dirty checkout, naming the dirty paths.
-- [ ] Removal refuses while any live round of the session references the checkout.
-- [ ] Ownership is `close`/`prune`'s rule: both parent-sessions non-nil and equal.
-- [ ] A spawn failure after checkout creation leaves a ledger state `oh worktree remove` recovers.
-- [ ] `close`, `prune`, `orphans`, and `collect --close` never touch a checkout.
+- [X] `oh worktree list` enumerates the session's recorded checkouts with their reconciliation state.
+- [X] `oh worktree remove <task>` removes the newest lineage round's checkout, retains the branch, and reports tip ancestry against parent HEAD as information only.
+- [X] Removal refuses a dirty checkout, naming the dirty paths.
+- [X] Removal refuses while any live round of the session references the checkout.
+- [X] Ownership is `close`/`prune`'s rule: both parent-sessions non-nil and equal.
+- [X] A spawn failure after checkout creation leaves a ledger state `oh worktree remove` recovers.
+- [X] `close`, `prune`, `orphans`, and `collect --close` never touch a checkout.
 
 Constraint: ownership and nil-vs-nil reasoning follow `prune!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`.
 

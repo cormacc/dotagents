@@ -2166,6 +2166,237 @@
         (is (some #(str/includes? % "dirty-work") (:dirty reconciliation)))
         (is (not-any? #(str/includes? % "committed-work") (:dirty reconciliation)))))))
 
+;; --- explicit teardown: `oh worktree list|remove` (task 4962846f) --------------------
+(defn- git-branch-exists? [dir branch]
+  (not (str/blank? (git-in! dir "branch" "--list" branch))))
+(defn- spawn-worktree! [env dir assignment]
+  (let [proc (call! env "task" "start" "worker" "--worktree" "--task" assignment)]
+    (when-not (zero? (:exit proc)) (throw (ex-info "fixture worktree spawn failed" {:out (:out proc) :err (:err proc)})))
+    (ledger-entry* dir (get-in (result proc) [:result :task]))))
+
+(deftest worktree-list-enumerates-recorded-checkouts-with-reconciliation
+  (let [{:keys [env dir]} (fake-env {})
+        a (spawn-worktree! env dir "checkout one")
+        b (spawn-worktree! env dir "checkout two")
+        ;; Sealed before the plain spawn below: an unsealed sibling round would otherwise
+        ;; trigger the in-flight default and give the plain worker an implicit checkout
+        ;; too, which is not what this test means by "no worktree at all".
+        _ (publish-child! a)
+        _ (publish-child! b)
+        _ (start-child! env dir "no worktree at all")
+        proc (call! env "worktree" "list")
+        res (:result (result proc))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= #{(:task a) (:task b)} (set (map :task res))))
+    (doseq [entry res]
+      (is (= "present" (get-in entry [:reconciliation :checkout-state])))
+      (is (some? (:worktree entry))))
+    ;; A task-derived field, distinct by construction, never merely usually distinct: two
+    ;; sibling checkouts cut from the identical fixture HEAD would share a `:base` and a
+    ;; `:tip`, but never a `:branch` (`orch/<task-prefix>`).
+    (is (not= (get-in (first (filter #(= (:task a) (:task %)) res)) [:worktree :branch])
+              (get-in (first (filter #(= (:task b) (:task %)) res)) [:worktree :branch])))))
+
+;; Sealing (a real published terminal RESULT, via `publish-child!`) is deliberately never
+;; paired with `task collect` in the tests below: closing a pane and tearing down its
+;; checkout are independent actions, so every happy-path removal here seals a round
+;; without ever capturing or closing it, to prove removal never needed either.
+(deftest worktree-remove-removes-the-checkout-retains-the-branch-and-reports-ancestry-as-information
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "removed without ever closing")
+        {:keys [path branch base]} (:worktree entry)]
+    (publish-child! entry)
+    (is (fs/exists? path))
+    (is (str/includes? (git-worktree-list dir) path))
+    (let [proc (call! env "worktree" "remove" (:task entry))
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "removed" (:status res)))
+      (is (= path (:path res)))
+      (is (= branch (:branch res)))
+      (is (= base (:base res)))
+      ;; No commits were ever made on the branch, so its tip is `base`, an ancestor of the
+      ;; parent's own (unmoved) HEAD -- trivially true, and reported rather than gating.
+      (is (true? (:tip-is-ancestor-of-parent-head res)))
+      (is (not (fs/exists? path)))
+      (is (not (str/includes? (git-worktree-list dir) path)))
+      ;; The branch survives: removal takes the checkout, never the branch.
+      (is (git-branch-exists? dir branch))
+      ;; The round was never closed -- proof that removal did not require it.
+      (is (nil? (:closed-at (ledger-entry* dir (:task entry))))))))
+
+(deftest worktree-remove-reports-false-ancestry-when-the-child-branch-diverged
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "diverges from parent")
+        path (get-in entry [:worktree :path])]
+    (spit (str (fs/path path "child-work")) "child\n")
+    (git-in! path "add" "child-work")
+    (git-in! path "commit" "-q" "-m" "child commits its own work")
+    ;; Parent moves on independently after the cut, so the child's tip is a sibling commit
+    ;; rather than an ancestor of the parent's new HEAD.
+    (spit (str (fs/path dir "parent-work")) "parent\n")
+    (git-in! dir "add" "parent-work")
+    (git-in! dir "commit" "-q" "-m" "parent moves on independently")
+    (publish-child! entry)
+    (let [proc (call! env "worktree" "remove" (:task entry))
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "removed" (:status res)))
+      (is (false? (:tip-is-ancestor-of-parent-head res))))))
+
+;; `--worktree-from` (task e76180b9) needs this exact nuance: `:worktree` identity is the
+;; lineage's, not the round's, so a stale round's own task id must still resolve to the
+;; one still-current checkout.
+(deftest worktree-remove-resolves-the-lineages-single-checkout-from-either-rounds-task-id
+  (let [{:keys [env dir]} (fake-env {})
+        round1 (capture-entry! dir (spawn-worktree! env dir "worktree round one"))
+        round2-proc (call! env "task" "continue" (:task round1) "--task" "worktree round two")
+        _ (is (zero? (:exit round2-proc)) (:err round2-proc))
+        round2 (ledger-entry* dir (get-in (result round2-proc) [:result :task]))
+        checkout (get-in round1 [:worktree :path])]
+    (is (= checkout (get-in round2 [:worktree :path])))
+    (publish-child! round2)
+    (let [proc (call! env "worktree" "remove" (:task round1))
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "removed" (:status res)))
+      (is (not (fs/exists? checkout))))))
+
+;; Deliberately triggered with known-bad input: a real uncommitted file inside a sealed
+;; (published, so the liveness guard cannot be what refuses this) checkout.
+(deftest worktree-remove-refuses-a-dirty-checkout-and-names-the-dirty-paths
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "dirty checkout")
+        path (get-in entry [:worktree :path])]
+    (publish-child! entry)
+    (spit (str (fs/path path "work-in-progress")) "uncommitted\n")
+    (let [proc (call! env "worktree" "remove" (:task entry))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"dirty" (:out proc)))
+      (is (some #(str/includes? % "work-in-progress") (get-in (result proc) [:error :data :dirty])))
+      (is (fs/exists? path))
+      (is (str/includes? (git-worktree-list dir) path)))))
+
+;; Deliberately triggered with known-bad input: never published, so the round is
+;; genuinely unfinished (unsealed and unclosed) -- the exact "in flight" case
+;; `worktree-in-flight?` reasons about for the spawn-time default, reused here by path.
+(deftest worktree-remove-refuses-while-a-live-round-still-references-the-checkout
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "still working, never published")
+        path (get-in entry [:worktree :path])]
+    (let [proc (call! env "worktree" "remove" (:task entry))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"live round" (:out proc)))
+      (is (fs/exists? path))
+      (is (str/includes? (git-worktree-list dir) path)))))
+
+;; A bare `not=` would let an unresolvable caller (nil) own an entry whose own
+;; `:parent-session` is also nil -- a hand-edited or legacy-format ledger file -- since nil
+;; equals nil. Mirrors `prune-refuses-when-recorded-and-caller-identity-are-both-unresolvable`.
+(deftest worktree-remove-refuses-when-recorded-and-caller-identity-are-both-unresolvable
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "nil recorded parent-session")
+        path (get-in entry [:worktree :path])
+        corrupted (dissoc entry :parent-session)]
+    (spit (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str (:task entry) ".json"))) (json/generate-string corrupted))
+    (publish-child! corrupted)
+    (let [proc (call! (merge env {"FAKE_FAIL_AGENT_GET" "w:p"}) "worktree" "remove" (:task entry))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"own" (:out proc)))
+      (is (fs/exists? path)))))
+
+;; The recovery path task f49a63f5 built for: worktree fields (and the real checkout) are
+;; written/created before `git worktree add`'s later steps can fail, so a spawn failure
+;; that strikes after the checkout is cut (here, `agent start`) leaves a real, removable
+;; checkout behind rather than an orphaned, untraceable one.
+(deftest worktree-remove-recovers-a-checkout-orphaned-by-a-spawn-failure-after-creation
+  (let [{:keys [env dir]} (fake-env {"FAKE_FAIL_START" "1"})
+        proc (call! env "task" "start" "worker" "--worktree" "--task" "start fails after the checkout is cut")
+        ;; The failed `start` exits non-zero without printing the task id, so recover the
+        ;; single entry file directly (mirrors `prune-refuses-an-already-terminal-entry`).
+        entry (first (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
+                           :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
+                       (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))
+        path (get-in entry [:worktree :path]) branch (get-in entry [:worktree :branch])]
+    (is (= 1 (:exit proc)))
+    (is (= "failed" (:status entry)))
+    (is (= "start" (:failure-phase entry)))
+    (is (fs/exists? path) "the checkout survives a failure that struck after it was created")
+    (is (str/includes? (git-worktree-list dir) path))
+    (let [remove-proc (call! env "worktree" "remove" (:task entry))
+          res (:result (result remove-proc))]
+      (is (zero? (:exit remove-proc)) (:err remove-proc))
+      (is (= "removed" (:status res)))
+      (is (not (fs/exists? path)))
+      (is (git-branch-exists? dir branch)))))
+
+;; Teardown is only ever `oh worktree remove`: `close`, `prune`, `orphans --close`, and
+;; `collect --close` must never touch a checkout, each verified directly against a
+;; worktree round rather than assumed from their own (unrelated) passing tests above.
+(deftest close-never-touches-a-worktree-checkout
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "closed round keeps its checkout")
+        path (get-in entry [:worktree :path])]
+    (publish-child! entry)
+    (is (zero? (:exit (call! env "task" "collect" (:task entry)))))
+    (let [proc (call! env "task" "close" (:task entry))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "closed" (get-in (result proc) [:result :status])))
+      (is (fs/exists? path))
+      (is (str/includes? (git-worktree-list dir) path)))))
+
+(deftest prune-never-touches-a-worktree-checkout
+  (let [{:keys [env dir state]} (fake-env {})
+        entry (spawn-worktree! env dir "pruned round keeps its checkout")
+        path (get-in entry [:worktree :path])]
+    (child-state! state entry "gone" "")
+    (let [proc (call! env "task" "prune" (:task entry))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "failed" (get-in (result proc) [:result :status])))
+      (is (fs/exists? path))
+      (is (str/includes? (git-worktree-list dir) path)))))
+
+(deftest collect-close-never-touches-a-worktree-checkout
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "collect --close keeps its checkout")
+        path (get-in entry [:worktree :path])]
+    (publish-child! entry)
+    (let [proc (call! env "task" "collect" (:task entry) "--close")]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "closed" (get-in (result proc) [:result :close :status])))
+      (is (fs/exists? path))
+      (is (str/includes? (git-worktree-list dir) path)))))
+
+(deftest worktree-remove-requires-a-task-positional
+  (let [{:keys [env]} (fake-env {})
+        proc (call! env "worktree" "remove")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"full task uuid" (:out proc)))))
+
+(deftest worktree-remove-refuses-a-task-with-no-recorded-worktree
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "never a worktree round")
+        proc (call! env "worktree" "remove" (:task entry))]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"no worktree" (:out proc)))))
+
+;; An operator clearing `.tmp/` (or any removal outside this verb) must be reported as
+;; data, never an error -- the same guarantee `reconciliation` already gives `collect`/
+;; `status`.
+(deftest worktree-remove-reports-missing-without-erroring-when-the-checkout-is-already-gone
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "checkout manually cleared")
+        {:keys [path branch base]} (:worktree entry)]
+    (publish-child! entry)
+    (fs/delete-tree path)
+    (let [proc (call! env "worktree" "remove" (:task entry))
+          res (:result (result proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "missing" (:status res)))
+      (is (= path (:path res)))
+      (is (= branch (:branch res)))
+      (is (= base (:base res))))))
+
 ;; --- capture never closes a pane ----------------------------------------------------
 ;; Capture used to make a bounded settle wait and one close attempt on every COMPLETE or
 ;; FAILED envelope. Both are gone: a pane persists until `close` or `continue` acts on it,
@@ -4517,6 +4748,42 @@
 ;; on a recorded pane id alone. This verb applies `close`'s own evidence bar instead, with
 ;; the operator supplying the authority ownership cannot infer.
 (defn- foreign! [dir entry] (patch-entry! dir entry :parent-session "another-session"))
+
+;; --- explicit teardown continued: `foreign!`-dependent worktree tests (task 4962846f) --
+;; Placed here, after `foreign!` is defined, rather than beside the rest of the worktree
+;; teardown suite above: a `deftest` calling a helper defined later in this namespace
+;; fails at *load* time, because the namespace compiles top-to-bottom.
+(deftest worktree-list-scopes-to-the-callers-own-session
+  (let [{:keys [env dir]} (fake-env {})
+        mine (spawn-worktree! env dir "my own checkout")
+        _ (foreign! dir (spawn-worktree! env dir "someone else's checkout"))
+        res (:result (result (call! env "worktree" "list")))]
+    (is (= [(:task mine)] (mapv :task res)))))
+
+;; Deliberately triggered with known-bad input: a foreign `:parent-session`, the exact
+;; `foreign!` patch `orphans`'s own tests use.
+(deftest worktree-remove-refuses-a-foreign-parent-session
+  (let [{:keys [env dir]} (fake-env {})
+        entry (foreign! dir (spawn-worktree! env dir "foreign checkout"))
+        path (get-in entry [:worktree :path])]
+    (publish-child! entry)
+    (let [proc (call! env "worktree" "remove" (:task entry))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"own" (:out proc)))
+      (is (fs/exists? path)))))
+
+(deftest orphans-close-never-touches-a-worktree-checkout
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "orphaned round keeps its checkout")
+        path (get-in entry [:worktree :path])]
+    (publish-child! entry)
+    (is (zero? (:exit (call! env "task" "collect" (:task entry)))))
+    (foreign! dir (ledger-entry* dir (:task entry)))
+    (let [proc (call! env "task" "orphans" "--close")]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= ["closed"] (mapv :status (:result (result proc)))))
+      (is (fs/exists? path))
+      (is (str/includes? (git-worktree-list dir) path)))))
 
 (deftest orphans-lists-only-captured-rounds-owned-by-another-session
   (let [{:keys [env log dir]} (fake-env {})
