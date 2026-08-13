@@ -1,0 +1,204 @@
+#+TITLE: herdr-orch: worktree-backed fan-out
+#+DATE: 2026-08-13 Thu
+#+PARENT: [[task:e28067af-282f-47bd-b8fe-809663925f7b][herdr-orch: worktree-backed fan-out]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/references/traits.md]]
+#+SPEC: [[proj:skills/herdr-orch/subagents/worker.md]]
+
+* Intent
+
+Give `oh` first-class git-worktree isolation for concurrent write-enabled subagents: an additional concurrent worker (or any spawn carrying `%worktree`) gets its own checkout cut from the parent's HEAD, works and commits on its own branch, and every lifecycle verb carries the reconciliation state the parent needs to merge -- which `oh` itself never does. This is the structural fix for cross-worker build and measurement contamination that the file-set-overlap rule cannot provide (2026-08-11 evidence in the parent task).
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+** Scope
+
+*** In scope
+
+- Spawn-time checkout creation: `git worktree add -b <branch> <path> <head-sha>` under `<parent-root>/.tmp/herdr-orch/worktrees/<task>`, child cwd inside it, `ORCH_ASSIGNMENT_ROOT` pinned to the parent root for worktree children.
+- Trigger surface: `--worktree` flag on `oh task run|start`, `%worktree` trait token (persona body or interactive prompt), default-on for a worker spawned while another round of the same session is in flight, `%no-worktree` opt-out of that default.
+- Ledger worktree identity (path, branch, base commit, parent dirty paths at cut) written before creation, inherited across `continue!` rounds.
+- One reconciliation object on single `collect`, `collect --any`, and `status`.
+- Explicit teardown: `oh worktree list|remove`, checkout-only removal, branch retained.
+- Handoff/reuse: `--worktree-from <task>` places a new child (including a read-only persona) in an existing recorded checkout.
+- Trait fragments `%worktree` / `%no-worktree` admitted per traits.md: `prompt.md`, `gate.md`, one recorded probe attempt each, mutual `incompatible-with:`.
+- Documentation: SKILL.md § Invocation policy (Cardinality) escape hatch, dirty-tree prompt guidance, contract.md lifecycle/teardown/retention updates, operator remedy for a cleared `.tmp/` (`git worktree prune`).
+
+*** Out of scope
+
+- Merging, rebasing, or committing on the parent's behalf -- reconciliation stays with the parent.
+- A worktree for every write-enabled child (rejected in the parent task; `planner` writes belong in the shared tree).
+- A general `--cwd` option, a third placement mode, config keys, or automatic parallelism detection.
+- `herdr worktree create` integration (workspace-oriented; the child stays in the caller's workspace).
+- Branch deletion by `oh` -- teardown removes checkouts only; branch lifecycle is ordinary git in the parent's hands.
+- Rebuilding existing trait probe scenarios (tracked as `d669edf5`).
+
+** Acceptance
+
+*** Core functionality
+
+- [ ] `oh task run|start <persona> --worktree` creates a checkout from the parent's current HEAD with `git worktree add -b`, spawns the child with its cwd inside it, and records path, branch, and base commit on the ledger entry.
+- [ ] A resolved `%worktree` token triggers a checkout from a persona definition and from an interactive prompt alike, and forces one for a spawn that would otherwise share the tree.
+- [ ] An initial or single worker spawns into the shared tree; a worker spawned while another round of the same session is in flight gets its own checkout, and the ledger records which it got.
+- [ ] A resolved `%no-worktree` token suppresses the default checkout for an additional concurrent worker.
+- [ ] `%worktree` and `%no-worktree` on the same spawn fail at spawn rather than one silently winning.
+- [ ] The checkout is created with `-b`, and the injected fragment tells the child to commit its work on that branch.
+- [ ] A worktree child's ledger entry and RESULT file are written in the parent's assignment root, never in its own checkout.
+- [ ] The parent's dirty paths at cut time (from `git status --porcelain`) are recorded on the ledger entry and surfaced in spawn output.
+- [ ] The ledger worktree fields are written before `git worktree add` runs, so a mid-creation or post-creation spawn failure leaves a discoverable entry.
+- [ ] `continue!` carries the worktree fields to the new round, added to its `select-keys` whitelist (`cli.clj` `continue!`).
+- [ ] Single `collect`, `collect --any`, and `status` report the same reconciliation object: recorded base, branch, current tip, checkout state (`present`/`missing`), committed paths base→tip (`git diff --name-status`), dirty paths (staged + unstaged + untracked), with no tool call the parent was not already making.
+- [ ] `oh worktree list` enumerates the session's recorded checkouts with their reconciliation state.
+- [ ] `oh worktree remove <task>` removes the newest lineage round's checkout, retains the branch, and reports whether the tip is an ancestor of parent HEAD as information only.
+- [ ] `oh worktree remove` refuses a dirty checkout, naming the dirty paths.
+- [ ] `oh worktree remove` refuses while any live round of the session references the checkout.
+- [ ] `oh worktree remove` uses `close`/`prune`'s ownership rule: both parent-sessions non-nil and equal; an orphaned checkout is documented operator cleanup in contract.md.
+- [ ] `oh task run|start <persona> --worktree-from <task>` places the new child inside the recorded existing checkout, records the same worktree identity on the new lineage, and cuts no new checkout.
+- [ ] `--worktree-from` is legal for read-only personas.
+- [ ] `--worktree-from` is refused while a live unsettled round still references the checkout.
+- [ ] The child lands in the caller's own herdr workspace under the existing placement rules, with no new placement mode and no `worktree` passthrough group.
+- [ ] `skills/herdr-orch/traits/worktree/prompt.md` and the `%no-worktree` fragment exist with a named consumer, a `gate.md` each, and one recorded probe attempt each per traits.md § Admission bar → spec:[[proj:skills/herdr-orch/references/traits.md]]
+- [ ] The two fragments declare mutual `incompatible-with:`.
+- [ ] SKILL.md § Invocation policy (Cardinality) cites the worktree path as the escape hatch for the overlapping-file-set rule, keeps the parent-side re-measure, and instructs the orchestrator to prompt the operator about committing when the dirty-path set at spawn is non-empty → spec:[[proj:skills/herdr-orch/SKILL.md]]
+
+*** Edge cases
+
+- [ ] A missing checkout directory (e.g. cleared `.tmp/`) is reported as `missing` in the reconciliation object rather than erroring `collect`/`status`.
+- [ ] A spawn failure after checkout creation leaves a ledger state `oh worktree remove` can recover.
+- [ ] `--print-prompt` combined with `--worktree` remains mutation-free: no checkout, no branch, no ledger write.
+- [ ] The parent's HEAD moving after spawn changes nothing in `collect`/`status` output, which reports against the recorded base.
+
+*** Anti-criteria
+
+- Must not: merge, rebase, or commit on the parent's behalf.
+- Must not: remove a checkout with uncommitted changes.
+- Must not: delete the child branch on teardown. *(Revision, 2026-08-13, user-approved: replaces the parent task's "refuses ... an unmerged branch" guard -- see Decisions.)*
+- Must not: add a third placement mode, a config key, or automatic parallelism detection.
+- Must not: retire the parent-side re-measure -- a merged tree is one no child measured.
+- Must not: touch a checkout from `close`, `prune`, `orphans`, or `collect --close`.
+
+** Decisions
+
+Settled in the parent task before this record and taken as given: HEAD-only base with no guard flag (source root / assignment root / launcher root are three separately-resolved things -- verified against `persona-directories` / `trait-directories` / `skill-directory` in cli.clj); explicit `-b` branch creation (plain `add` yields detached HEAD, measured); child must commit on its branch (a linked worktree shares the object store, so a committed branch survives checkout deletion while uncommitted `.tmp/` work is a real loss path); plain `git worktree add`, not `herdr worktree create`; checkout under `.tmp/herdr-orch/worktrees/`; `oh` never merges.
+
+- Dirty parent tree at cut: report, don't gate :: `oh` records the parent's dirty paths on the ledger entry and in spawn output; SKILL.md guidance tells the orchestrator to prompt the operator about committing first when the set is non-empty. Rejected: refuse-when-dirty with `--allow-dirty` -- the tree is dirty almost continuously here, so a hard gate trains a reflexive override flag, and `oh` cannot judge overlap with the child's assignment anyway.
+- Teardown: checkout-only removal, branch always retained, dirty-only guard :: ancestry of the tip against parent HEAD is reported as information, never gated. Rejected: the parent task's two-part guard ("uncommitted changes or an unmerged branch") -- an unmerged gate needs an ancestry predicate against a moving parent ref, and squash/cherry-pick integration never satisfies it, so it refuses forever after normal integration. Reviewer-probed: `git worktree remove` leaves the branch and its commits intact, so checkout removal never destroys committed work. This deliberately revises the parent task's teardown acceptance criterion and the "unmerged" half of its anti-criterion.
+- Worktree identity belongs to the child lineage, not the round :: fields are written at creation and inherited through `continue!`'s whitelist (verified: `select-keys` over a fixed field list at `cli.clj` `continue!`; new fields are dropped unless added). `close`, `prune`, `orphans`, and `collect --close` stay pane/ledger-only; teardown is only ever the named verb.
+- Reconciliation object: committed and dirty sets kept distinct, union = "changed files" :: the parent's action differs per set (merge the branch vs rescue/re-prompt), and dirty state marks exactly the blocked/crashed/non-compliant child cases. Rejected: committed-only (blind in the failure and handoff cases); status-only (misses committed work).
+- Handoff/reuse in scope :: a checkout may outlive its creating lineage and be handed to a new child (test-writer → worker → reviewer). Only the spawner sets a pane's cwd, so reuse needs tool support: `--worktree-from <task>`. Rejected: deferring to a follow-up -- teardown's multi-lineage guard would need retrofitting.
+- `%no-worktree` opt-out trait :: mirrors `%worktree`; suppresses the default for an additional concurrent worker; the pair on one spawn is an error.
+- Trait fragments and their probe attempts are in this record :: unknown tokens fail fast at spawn, so the fragments are on the feature's critical path, and traits.md admits no unprobed fragment. Probe conditions scope to the fragment's *directive* (commit-on-branch behaviour); checkout creation is CLI behaviour covered by ordinary tests. Rejected: probe as follow-up (open admission-bar debt).
+
+** Risks
+
+- Dirty-path reporting is noisy in this repository (TASKS.org and records churn constantly), so the operator prompt guidance may become nagging; accepted -- the orchestrator judges overlap with the child's assignment.
+- An operator clearing `.tmp/` deletes a live checkout outside any guard; mitigated by the commit requirement (branch and objects survive) and by `missing` state in the reconciliation object; residual loss is uncommitted work of a blocked/crashed child, accepted and visible via dirty-path reporting while the checkout lives.
+- A cleared `.tmp/` leaves stale `git worktree` metadata in the parent repo; documented operator remedy is `git worktree prune`.
+- Retained branches accumulate; accepted -- branch deletion is deliberately the parent's, and a predictable branch naming scheme (decided at implementation) keeps them identifiable.
+- The trait probes may show no effect; per the admission bar that is a recordable honest outcome, not a blocker.
+
+* Plan
+
+** TODO Trait fragments and admission: `%worktree` / `%no-worktree`
+:PROPERTIES:
+:CUSTOM_ID: 2538b80c-52a7-4a58-b80e-020fa3494b7f
+:CREATED: [2026-08-13 Thu 15:29]
+:END:
+Acceptance criteria:
+- [ ] `skills/herdr-orch/traits/worktree/prompt.md` exists and its directive requires the child to commit its work on its worktree branch.
+- [ ] A `%no-worktree` fragment exists in the packaged store (minimal marker text; its effect is spawn-time suppression).
+- [ ] `expandTraits` in `pi/extensions/traits/index.ts` passes a packaged layer resolved from the installed skill, so a packaged fragment expands in interactive input as well as at spawn, and `pi/extensions/traits/README.md` no longer states that the interactive consumer has no packaged layer. A default, not an option. Without it a `%worktree` typed interactively passes through unexpanded, because the interpolator injects no layers of its own and that consumer passes only project and home.
+- [ ] The two fragments declare mutual `incompatible-with:`.
+- [ ] Each fragment has a `gate.md` and one recorded probe attempt with the outcome stated honestly (a non-pass is admissible); scenarios are synthetic, not repo-referential.
+- [ ] Each probe's pre-registered condition scopes the fragment's *directive* only, not checkout creation (CLI behaviour is covered by ordinary tests in the other plan tasks).
+
+Constraint: admission per `skills/herdr-orch/references/traits.md` § Admission bar and § Probing; runner is `scripts/run-trait-gate.bb`.
+
+** TODO Core spawn plumbing: triggers, checkout creation, placement
+:PROPERTIES:
+:CUSTOM_ID: f49a63f5-89c7-4d22-ab12-01939515d27e
+:CREATED: [2026-08-13 Thu 15:29]
+:BLOCKED-BY: task:2538b80c-52a7-4a58-b80e-020fa3494b7f
+:END:
+Acceptance criteria:
+- [ ] `oh task run|start <persona> --worktree` creates a checkout from the parent's current HEAD with `git worktree add -b <branch> <path> <head-sha>` under `<parent-root>/.tmp/herdr-orch/worktrees/<task>`, spawns the child with its cwd inside it, and records path, branch, and base commit on the ledger entry.
+- [ ] A resolved `%worktree` token forces a checkout from a persona definition and from an interactive prompt alike.
+- [ ] An initial or single worker spawns into the shared tree; a worker spawned while another round of the same session is in flight gets its own checkout by default, and the ledger records which it got.
+- [ ] A resolved `%no-worktree` token suppresses that default; `%worktree` and `%no-worktree` on one spawn fail at spawn.
+- [ ] `ORCH_ASSIGNMENT_ROOT` is injected pinned to the parent root for a worktree child; its ledger entry and RESULT file land in the parent's assignment root, never in the checkout.
+- [ ] The parent's dirty paths at cut (`git status --porcelain`) are recorded on the ledger entry and surfaced in spawn output.
+- [ ] The ledger worktree fields are written before `git worktree add` runs.
+- [ ] `--print-prompt` with `--worktree` is mutation-free: no checkout, no branch, no ledger write.
+- [ ] The child lands in the caller's workspace under the existing placement rules; no new placement mode, no `worktree` passthrough group.
+- [ ] A spawn without any worktree trigger behaves exactly as today, and read-only personas get no implicit worktree.
+- [ ] With the assignment root relocated away from the source cwd, git state (HEAD, `status --porcelain`, the checkout itself) is read from the source cwd while ledger entry, RESULT, and worktree paths resolve under the assignment root -- the three roots are exercised apart, not only where they coincide.
+- [ ] A worktree child spawned from inside an existing checkout resolves the same parent assignment root as one spawned from the source tree.
+
+Constraint: `spawn!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` hardcodes `(System/getProperty "user.dir")` for both placements and injects `ORCH_ASSIGNMENT_ROOT` only when already set in the parent env -- both change here, scoped to worktree children. Pick a predictable branch naming scheme (e.g. `orch/<task-prefix>`) and record it in the record's Implementation section.
+
+** TODO Lifecycle carry-forward and the reconciliation object
+:PROPERTIES:
+:CUSTOM_ID: 47005e8f-f232-43a4-b18b-d2f7a5719707
+:CREATED: [2026-08-13 Thu 15:29]
+:BLOCKED-BY: task:f49a63f5-89c7-4d22-ab12-01939515d27e
+:END:
+Acceptance criteria:
+- [ ] `continue!` carries the worktree fields to the new round (added to its `select-keys` whitelist).
+- [ ] Single `collect`, `collect --any`, and `status` report one identical reconciliation object: recorded base, branch, current tip, checkout state (`present`/`missing`), committed paths base→tip (`git diff --name-status`), dirty paths (staged + unstaged + untracked); no tool call the parent was not already making.
+- [ ] A missing checkout directory is reported as `missing` rather than erroring the verb.
+- [ ] Parent HEAD moving after spawn changes nothing: reporting is against the recorded base.
+
+Constraint: the whitelist is the `select-keys` in `continue!` (`skills/herdr-orch/scripts/src/herdr_orch/cli.clj`); prefer one `:worktree` map field over several flat keys so the whitelist gains one entry.
+
+** TODO Teardown verbs: `oh worktree list|remove`
+:PROPERTIES:
+:CUSTOM_ID: 4962846f-6690-4618-a5d9-9891962565ae
+:CREATED: [2026-08-13 Thu 15:29]
+:BLOCKED-BY: task:f49a63f5-89c7-4d22-ab12-01939515d27e
+:BLOCKED-BY+: task:47005e8f-f232-43a4-b18b-d2f7a5719707
+:END:
+Acceptance criteria:
+- [ ] `oh worktree list` enumerates the session's recorded checkouts with their reconciliation state.
+- [ ] `oh worktree remove <task>` removes the newest lineage round's checkout, retains the branch, and reports tip ancestry against parent HEAD as information only.
+- [ ] Removal refuses a dirty checkout, naming the dirty paths.
+- [ ] Removal refuses while any live round of the session references the checkout.
+- [ ] Ownership is `close`/`prune`'s rule: both parent-sessions non-nil and equal.
+- [ ] A spawn failure after checkout creation leaves a ledger state `oh worktree remove` recovers.
+- [ ] `close`, `prune`, `orphans`, and `collect --close` never touch a checkout.
+
+Constraint: ownership and nil-vs-nil reasoning follow `prune!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`.
+
+** TODO Handoff reuse: `--worktree-from`
+:PROPERTIES:
+:CUSTOM_ID: e76180b9-8c33-4bcc-aafe-26a5668a43e1
+:CREATED: [2026-08-13 Thu 15:29]
+:BLOCKED-BY: task:f49a63f5-89c7-4d22-ab12-01939515d27e
+:BLOCKED-BY+: task:4962846f-6690-4618-a5d9-9891962565ae
+:END:
+Acceptance criteria:
+- [ ] `--worktree-from <task>` refuses unless the caller's `:parent-session` and the source entry's are both non-nil and equal, checked before any pane or ledger mutation; ledger reads cross sessions, so a foreign entry is otherwise reachable. Same rule `oh worktree remove` already carries.
+- [ ] `oh task run|start <persona> --worktree-from <task>` places the new child inside the recorded existing checkout, records the same worktree identity on the new lineage, and cuts no new checkout.
+- [ ] Legal for read-only personas.
+- [ ] Refused while a live unsettled round still references the checkout.
+
+Constraint: edits `spawn!` again, hence the blocker; the live-reference predicate is shared with `oh worktree remove`.
+
+** TODO Documentation: SKILL.md and contract.md
+:PROPERTIES:
+:CUSTOM_ID: abe04a23-4b9a-4422-8044-80e9440efcce
+:CREATED: [2026-08-13 Thu 15:29]
+:BLOCKED-BY: task:47005e8f-f232-43a4-b18b-d2f7a5719707
+:BLOCKED-BY+: task:4962846f-6690-4618-a5d9-9891962565ae
+:BLOCKED-BY+: task:e76180b9-8c33-4bcc-aafe-26a5668a43e1
+:END:
+Acceptance criteria:
+- [ ] SKILL.md § Invocation policy (Cardinality) cites the worktree path as the escape hatch for the overlapping-file-set rule and keeps the parent-side re-measure.
+- [ ] SKILL.md instructs the orchestrator to prompt the operator about committing when the dirty-path set at spawn is non-empty.
+- [ ] contract.md documents lineage-owned worktree identity, `continue!` carry-forward, the reconciliation object, teardown guards, and orphaned-checkout operator cleanup including `git worktree prune` after a cleared `.tmp/`.
+
+* Implementation

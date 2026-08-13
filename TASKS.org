@@ -342,48 +342,10 @@ Verified [2026-08-12 Wed] against cli.clj at 6a89b0f plus the housekeeping commi
 :LOGBOOK:
 - Created [2026-08-04 Tue 20:29]
 :END:
+#+IMPORT: [[plan:2026-08-13-herdr-orch-worktree-backed-fan-out.org]]
 Parallel workers editing the same repo can race on a shared file, and disjoint edit sets do not give disjoint measurements (2026-08-11 edit below). Upstream Herdr ships `herdr worktree list|create|open|remove`, re-verified present in herdr 0.8.0 on [2026-08-13]; `oh` wraps none of it.
 
-Scope decided [2026-08-13 Thu], revised after design review: an initial or single worker spawns into the shared tree exactly as today, and each *additional* concurrent worker gets its own checkout. `oh` creates it, places the child's cwd inside it, and records it on the ledger entry; reconciliation state rides on the envelopes the parent already reads; teardown is explicit and guarded; `oh` never merges. The trigger is the `%worktree` trait token, usable from a subagent definition or an interactive prompt (`spawn a worker to implement the changes. %worktree %focused`); trait resolution already runs before task allocation and pane mutation, so a resolved token is available early enough to drive creation.
-
-Placement must be parent-side, and that is the whole reason this needs tool support rather than a prompt. A child can create a checkout -- `git worktree add` is one command -- but it cannot move into one. Measured [2026-08-13]: a pi tool call does not persist cwd, so every later command restarts at the parent repo root and relative paths resolve there. Isolation would then rest on the child prefixing every command and absolutising every edit for a whole session, which is the prompt-discipline habit this task exists to replace, and it fails at exactly the motivating case, since a bare test run would measure the parent tree. Only the spawner sets a pane's cwd.
-
-One shape stays rejected: a worktree for every write-enabled child. The write-enabled set is `worker` and `planner`, and for `planner` it is actively wrong, since it writes org change-records that belong in the shared tree, so isolation manufactures a merge for work that should have landed directly; it also puts merge-and-cleanup on the common single-child delegation, which carries no contamination risk at all.
-
-An earlier rejection recorded here was wrong and is withdrawn. It claimed parallelism is not knowable at spawn time, conflating *will this become parallel later*, which is genuinely unknowable, with *is a round of this session already in flight*, which the ledger answers directly. The revised default uses the second. The remaining asymmetry is real but benign: with one worker in the shared tree and every other isolated, only one writer touches that tree, so mutual contamination is eliminated rather than merely reduced.
-
-The tool owns creation rather than the operator composing `herdr worktree create` with a cwd override, for two reasons beyond ergonomics. An orchestrator doing it by hand pays roughly three tool calls and an output parse per child before any work begins, and each hand-assembled step is one it can get wrong -- omitting `ORCH_ASSIGNMENT_ROOT` silently sends the child's ledger and result files into its own checkout. Owning creation also lets the tool guarantee the base commit, which closes the persona/trait divergence hazard below by construction. A general `--cwd` stays unexposed until a second use case wants it; the internal plumbing is identical either way.
-
-What `oh` does not do is merge. Reconciliation carries conflict resolution, the parent already knows ordinary git, and a failed automatic merge would strand the parent's tree mid-merge in a state the tool would then have to own. Removal is explicit and refuses a checkout with uncommitted changes or an unmerged branch rather than destroying work -- the same guard-first shape as `close --abandon`.
-
-Mechanics to resolve:
-- Inject `ORCH_ASSIGNMENT_ROOT` unconditionally for a worktree child, so ledger and result paths stay in the parent root. Today `spawn!`'s child `env` map injects it only when it is already set in the parent env.
-- `spawn!` hardcodes `(System/getProperty "user.dir")` for both tab and split placement; that becomes the resolved child cwd. No third placement mode is needed -- the geometry is unchanged, only the directory.
-- Record worktree path, branch, and base commit on the ledger entry, so `collect`/`status` report reconciliation state without the parent making an extra call.
-- Merge and cleanup burden moves to the parent, and stays there.
-
-Acceptance criteria:
-- [ ] `oh task run|start worker --worktree` creates a checkout from the parent's current HEAD with `git worktree add`, spawns the child with its cwd inside it, and records path, branch, and base commit on the ledger entry.
-- [ ] The child lands in the caller's own herdr workspace under the existing placement rules, with no new placement mode and no `worktree` passthrough group.
-- [ ] A worktree child's ledger entry and RESULT file are written in the parent's assignment root, never in its own checkout.
-- [ ] `collect` and `status` report a worktree child's branch, base, and changed files, adding no tool call the parent was not already making.
-- [ ] Teardown refuses a checkout with uncommitted changes or an unmerged branch, naming which of the two it found.
-- [ ] A spawn without `--worktree` behaves exactly as today, and read-only personas are unaffected.
-- [ ] SKILL.md § Invocation policy (Cardinality) cites the worktree path as the escape hatch for the overlapping-file-set rule, and keeps the parent-side re-measure.
-- [ ] An initial or single worker spawns into the shared tree; a worker spawned while another round of the same session is in flight gets its own checkout, and the ledger records which it got.
-- [ ] A resolved `%worktree` token triggers a checkout from a persona definition and from an interactive prompt alike, and forces one for a spawn that would otherwise share the tree.
-- [ ] The checkout is created with `-b`, and the child is told to commit its work on that branch.
-
-Open, from the [2026-08-13] design review (reviewer-b5ddca3a, `gpt-5.6-sol`; artifact in `.tmp/herdr-orch/`):
-- Whether the operator is prompted to commit the parent's uncommitted edits before a checkout is made, or the divergence is merely reported. A worktree is cut from HEAD, so parent and child see different trees from the first moment, and this session's own tree was dirty almost continuously.
-- Lifecycle beyond the spawn round has no contract: worktree metadata is defined only where it is created, `continue!` carries a fixed set of fields forward, and `close`, `prune`, and `orphans` have no teardown behaviour. Attributed to the reviewer and *not* verified here -- three probes of `continue!`'s carry-forward were inconclusive, so confirm it before designing against it.
-- What "changed files" means on `collect`/`status`: committed base-to-tip only, or also staged, unstaged, and untracked worker output. Both states are reachable, and single `collect`, `collect --any`, and `status` need one shape between them.
-
-Anti-criteria:
-- Must not: merge, rebase, or commit on the parent's behalf.
-- Must not: remove a checkout holding unmerged or uncommitted work.
-- Must not: add a third placement mode, a config key, or automatic parallelism detection.
-- Must not: retire the parent-side re-measure -- a merged tree is one no child measured.
+An earlier rejection of CLI-detected parallelism is withdrawn: it conflated *will this become parallel later*, which is unknowable, with *is a round already in flight*, which the ledger answers, and the accepted default uses the latter.
 
 Settled [2026-08-13 Thu], and deliberately not re-opened in code:
 - Always create from the parent's current HEAD, and do not guard it: the implementation cannot produce a non-HEAD base, so no check, flag, or warning is warranted. The divergence rationale first recorded here had the right conclusion for the wrong reason, and the correction matters because it changes what an implementer must keep straight. Verified [2026-08-13]: `persona-directories` and `trait-directories` in cli.clj resolve their project layer from `ledger/assignment-root`, not from the child's git root, and the packaged layer from `skill-directory`, which pins to the launcher path. Since a worktree child has `ORCH_ASSIGNMENT_ROOT` pinned to the parent root, it resolves personas and traits from the *parent* whatever its own checkout contains. Source root, assignment root, and launcher root are three separate things here and must be reasoned about separately.
