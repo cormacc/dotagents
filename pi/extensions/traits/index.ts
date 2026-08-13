@@ -5,7 +5,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export interface ResolvedTrait {
   trait: string;
@@ -33,6 +33,11 @@ export function resolveTraitsBinary(home = homedir()): string {
   return join(home, ".agents", "skills", "herdr-orch", "scripts", "traits");
 }
 
+/** The packaged fragment store ships beside `scripts/` in the installed skill, mirroring `skill-directory` in `cli.clj`. */
+export function resolvePackagedTraits(binary: string): string {
+  return join(dirname(dirname(binary)), "traits");
+}
+
 export interface TraitExpansionOptions {
   binary?: string;
   projectTrusted?: boolean;
@@ -55,6 +60,7 @@ export async function expandTraits(
     args.push("--layer", `project=${join(cwd, ".agents", "traits")}`);
   }
   args.push("--layer", `home=${homeTraits}`);
+  args.push("--layer", `packaged=${resolvePackagedTraits(binary)}`);
 
   return await new Promise<TraitExpansion>((resolve, reject) => {
     const child = spawn(binary, args, { cwd, stdio: ["pipe", "pipe", "pipe"] });

@@ -105,7 +105,8 @@
 (defn interpolate-treated! [gate root trait traits-bin treated-source interpolation-path]
   (let [proc (run-process [traits-bin
                            "--file" treated-source
-                           "--layer" (str "repository=" root "/traits")]
+                           "--layer" (str "repository=" root "/traits")
+                           "--layer" (str "packaged=" root "/skills/herdr-orch/traits")]
                           {:dir root})]
     (when-not (zero? (:exit proc))
       (fail! gate (str "trait interpolation failed: " (str/trim (:err proc)))))

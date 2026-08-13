@@ -104,10 +104,16 @@ Settled in the parent task before this record and taken as given: HEAD-only base
 
 * Plan
 
-** TODO Trait fragments and admission: `%worktree` / `%no-worktree`
+** DONE Trait fragments and admission: `%worktree` / `%no-worktree`
+CLOSED: [2026-08-13 Thu 18:10]
 :PROPERTIES:
 :CUSTOM_ID: 2538b80c-52a7-4a58-b80e-020fa3494b7f
 :CREATED: [2026-08-13 Thu 15:29]
+:STARTED: [2026-08-13 Thu 18:01]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-13 Thu 18:01]
+- State "DONE" from "STARTED" [2026-08-13 Thu 18:10]
 :END:
 Acceptance criteria:
 - [ ] `skills/herdr-orch/traits/worktree/prompt.md` exists and its directive requires the child to commit its work on its worktree branch.

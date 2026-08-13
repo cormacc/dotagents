@@ -27,10 +27,21 @@ try {
   assert(!result.text.includes("MUST NOT APPEAR"), "gate.md must not be concatenated");
   console.log("ok - trusted project traits expand and negative tokens pass through");
 
-  const untrusted = await expandTraits("%focused", root, { homeTraits: emptyHome });
-  assert(untrusted.text === "%focused", `untrusted project trait expanded: ${untrusted.text}`);
+  // A project-only name, distinct from anything packaged, isolates project-layer trust from
+  // the packaged layer asserted below -- `%focused` now resolves via the packaged store
+  // regardless of trust, so it cannot discriminate project exclusion on its own.
+  mkdirSync(join(projectTraits, "projectonly"), { recursive: true });
+  writeFileSync(join(projectTraits, "projectonly", "prompt.md"), "---\nname: projectonly\n---\nExpanded");
+  const untrusted = await expandTraits("%projectonly", root, { homeTraits: emptyHome });
+  assert(untrusted.text === "%projectonly", `untrusted project trait expanded: ${untrusted.text}`);
   assert(untrusted.resolved.length === 0, "untrusted project trait must not resolve");
   console.log("ok - untrusted project traits are excluded from resolution");
+
+  const packaged = await expandTraits("%read-only", root, { homeTraits: emptyHome });
+  assert(packaged.resolved.length === 1 && packaged.resolved[0]?.source === "packaged", "packaged fragment should resolve by default");
+  assert(packaged.resolved[0]?.trait === "read-only", "packaged resolution should name the trait");
+  assert(!packaged.text.includes("%read-only"), `packaged trait did not expand: ${packaged.text}`);
+  console.log("ok - the packaged layer is a default, available without project trust");
 
   const binary = resolveTraitsBinary();
   assert(binary.endsWith("/.agents/skills/herdr-orch/scripts/traits"), `unexpected binary: ${binary}`);
