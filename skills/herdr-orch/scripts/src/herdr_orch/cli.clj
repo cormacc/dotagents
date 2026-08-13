@@ -80,7 +80,7 @@
 ;; Single source of truth for delegation value-less flags. The raw tab/workspace create
 ;; `--focus` operator flag is scoped to those commands by `boolean-flags-for`; both argv
 ;; consumers use the same resolved set so no value-less flag swallows the next element.
-(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed"})
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon"})
 (defn boolean-flags-for [group op]
   (cond-> boolean-flags
     (and (#{"tab" "ws"} group) (= "create" op)) (conj "--focus")))
@@ -1161,7 +1161,7 @@
                 "close refused: a newer round exists for this child"
                 "close refused: an uncaptured newer round names this child")
               {:task task :child child :newest (:task newest)})))))
-(defn- close-mutation! [task child pane-id]
+(defn- close-mutation! [task child pane-id & [{:keys [abandon?]}]]
   ;; The listing can race a further round being written, so the freshest ledger state is
   ;; re-validated inside the mutation, mirroring `prune!`'s race re-check. `herdr/close!`
   ;; runs inside it too: `ledger/update!` writes nothing if its function throws, so a
@@ -1176,9 +1176,11 @@
                                     (fail "close refused: an item was published during the settle wait" {:task task}))
                                   (when-not (= task (:task (newest-round (ledger/entries) child)))
                                     (fail "close refused: a newer round appeared during the settle wait" {:task task :child child}))
-                                  (herdr/close! (:pane-id current))
-                                  (assoc current :closed-at (now))))]
-    {:status "closed" :task task :child child :pane-id pane-id :closed-at (:closed-at updated)}))
+                                  (when-not abandon? (herdr/close! (:pane-id current)))
+                                  (cond-> (assoc current :closed-at (now))
+                                    abandon? (assoc :pane-abandoned true))))]
+    (cond-> {:status (if abandon? "abandoned" "closed") :task task :child child :pane-id pane-id :closed-at (:closed-at updated)}
+      abandon? (assoc :reason "pane-left-to-operator"))))
 (defn- pane-alive? [pane] (try (boolean (herdr/pane! pane)) (catch Exception _ false)))
 (defn- pane-process-info! [pane] (try (herdr/process-info! pane) (catch Exception _ nil)))
 (defn- pane-shell-pid! [pane] (:shell_pid (pane-process-info! pane)))
@@ -1257,11 +1259,20 @@
   (or (agents-snapshot) (fail (str verb " refused: agent list is unusable; liveness is unknown") {:task (:task entry)})))
 (defn- settle-then-close! [entry]
   (close-observed! entry (settle-and-list! "close" entry)))
-(defn close-task! [task]
+;; `--abandon` retires the ledger round for a captured entry whose pane cannot be confirmed
+;; free, and never touches the pane. It runs the whole of `assert-closable!` first, so it
+;; grants no authority the ordinary path lacks -- same ownership, capture, newest-round and
+;; not-already-closed bars -- and skips only the liveness observation, which is precisely
+;; the step that cannot conclude for a stuck round. The pane is the operator's to dispose
+;; of; what this recovers is the entry, which otherwise outlives it in `close --settled`
+;; and `orphans` forever (task c04a4e67).
+(defn close-task! [task opts]
   (when-not task (fail "close requires a full task uuid" {}))
   (let [entry (ledger/read! task)]
     (assert-closable! entry (ledger/entries))
-    (settle-then-close! entry)))
+    (if (one opts :abandon)
+      (close-mutation! (:task entry) (:child entry) (:pane-id entry) {:abandon? true})
+      (settle-then-close! entry))))
 ;; The sweep's candidate filter *is* its guard, and it is the same rule `assert-closable!`
 ;; applies one entry at a time: owned (strictly -- a bulk sweep grants no dead-owner
 ;; recovery), captured, not already closed, with a pane, and the newest round for its child.
@@ -1494,7 +1505,9 @@
   (let [task (:task captured) status (:status captured)]
     (if-not (and task (closable-capture-statuses status))
       {:status "skipped" :reason (if (= "invalid" status) "invalid-capture" "nothing-captured") :task task}
-      (try (close-task! task)
+      ;; Never `--abandon`: retiring a round without taking its pane is an explicit operator
+      ;; decision, not something a capture-time flag may take on the operator's behalf.
+      (try (close-task! task {})
            (catch Exception e {:status "refused" :task task :reason (.getMessage e) :detail (ex-data e)})))))
 (defn- collect-with-closure! [opts captured]
   (cond-> captured
@@ -1832,7 +1845,7 @@
            "publish --status COMPLETE|BLOCKED|FAILED|WAITING --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--from-file PATH] [--task UUID] [--notify-timeout MS]"
            "prune <full-task-uuid>"
            "continue <full-task-uuid> (--task TEXT | --task-file PATH | stdin) [--wait] [--timeout MS]"
-           "close <full-task-uuid>"
+           "close <full-task-uuid> [--abandon]"
            "close --settled"
            "orphans [--close]"
            "compact <full-task-uuid>"
@@ -1946,7 +1959,11 @@
     "harvest" (do (require-positionals positional 0 "task harvest") (present opts (harvest!) harvest-text))
     "close" (let [settled? (boolean (one opts :settled))]
               (when (and settled? (first positional)) (fail "close --settled takes no task argument" {:task (first positional)}))
-              (if settled? (close-settled!) (close-task! (first positional))))
+              ;; Never silently ignored: a sweep that abandoned panes in bulk is authority
+              ;; nobody asked for, and an accepted-but-dropped flag reads as though it acted.
+              (when (and settled? (one opts :abandon))
+                (fail "close --settled does not take --abandon; abandon one round at a time" {}))
+              (if settled? (close-settled!) (close-task! (first positional) opts)))
     (fail "unknown task command" {:command op})))
 (defn spawn-command! [opts positional]
   (let [[command] (require-positionals positional 1 "spawn")]

@@ -2799,6 +2799,56 @@
     (is (empty? (closed-panes log)))
     (is (nil? (:closed-at (closed-entry dir entry))))))
 
+;; A captured round whose pane cannot be confirmed free is otherwise unresolvable: `close`
+;; retains it for as long as the occupant reports a non-settled status, and the operator's
+;; only recourse was raw `pane close`, which takes the pane without ever recording the
+;; round closed -- so the entry outlives the pane and keeps surfacing in `close --settled`
+;; and `orphans` (task c04a4e67). `--abandon` resolves the round and deliberately does not
+;; touch the pane: the liveness guards stay exactly as they are, because the stuck thing is
+;; the ledger entry, not the pane.
+(deftest close-abandon-resolves-a-stuck-round-without-taking-its-pane
+  (let [stuck! (fn [{:keys [env dir state]}]
+                 (let [entry (capture-entry! dir (start-child! env dir "unconfirmable pane"))]
+                   (child-state! state entry "settle-to" "working")
+                   (child-state! state entry "nameless" "")
+                   entry))]
+    (testing "plain close still retains it -- the pane guards are untouched"
+      (let [fixture (fake-env {}) entry (stuck! fixture)
+            res (:result (result (call! (:env fixture) "task" "close" (:task entry))))]
+        (is (= "retained" (:status res)))
+        (is (empty? (closed-panes (:log fixture))))))
+    (testing "--abandon records the round closed and leaves the pane alone"
+      (let [fixture (fake-env {}) entry (stuck! fixture)
+            proc (call! (:env fixture) "task" "close" (:task entry) "--abandon")
+            res (:result (result proc))]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= "abandoned" (:status res)))
+        (is (= (:pane-id entry) (:pane-id res)))
+        ;; the whole point: the pane is never taken
+        (is (empty? (closed-panes (:log fixture))))
+        (let [stored (closed-entry (:dir fixture) entry)]
+          (is (some? (:closed-at stored)))
+          (is (true? (:pane-abandoned stored))))))
+    (testing "it grants no new authority: ownership and capture are still required"
+      (let [fixture (fake-env {}) entry (stuck! fixture)]
+        (patch-entry! (:dir fixture) (ledger-entry* (:dir fixture) (:task entry)) :parent-session "another-session")
+        (let [proc (call! (:env fixture) "task" "close" (:task entry) "--abandon")]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"does not own" (:out proc)))))
+      (let [{:keys [env dir log]} (fake-env {})
+            entry (start-child! env dir "never captured")
+            proc (call! env "task" "close" (:task entry) "--abandon")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"not captured" (:out proc)))
+        (is (empty? (closed-panes log)))
+        (is (nil? (:closed-at (closed-entry dir entry))))))
+    (testing "the sweep refuses it outright rather than accepting and ignoring it"
+      (let [{:keys [env log]} (fake-env {})
+            proc (call! env "task" "close" "--settled" "--abandon")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"does not take --abandon" (:out proc)))
+        (is (empty? (closed-panes log)))))))
+
 (deftest stream-lifecycle-close-requires-every-item-and-allows-an-unsealed-round
   (testing "an unconsumed successor keeps a partially captured round open"
     (let [{:keys [env log dir]} (fake-env {"ORCH_WAITING_INTERVAL_MIN_MS" "1"})
