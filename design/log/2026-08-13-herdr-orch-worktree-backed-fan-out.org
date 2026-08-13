@@ -153,17 +153,23 @@ Acceptance criteria:
 
 Constraint: `spawn!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` hardcodes `(System/getProperty "user.dir")` for both placements and injects `ORCH_ASSIGNMENT_ROOT` only when already set in the parent env -- both change here, scoped to worktree children. Pick a predictable branch naming scheme (e.g. `orch/<task-prefix>`) and record it in the record's Implementation section.
 
-** TODO Lifecycle carry-forward and the reconciliation object
+** DONE Lifecycle carry-forward and the reconciliation object
+CLOSED: [2026-08-13 Thu 20:12]
 :PROPERTIES:
 :CUSTOM_ID: 47005e8f-f232-43a4-b18b-d2f7a5719707
 :CREATED: [2026-08-13 Thu 15:29]
 :BLOCKED-BY: task:f49a63f5-89c7-4d22-ab12-01939515d27e
+:STARTED: [2026-08-13 Thu 19:18]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-13 Thu 19:18]
+- State "DONE" from "STARTED" [2026-08-13 Thu 20:12]
 :END:
 Acceptance criteria:
-- [ ] `continue!` carries the worktree fields to the new round (added to its `select-keys` whitelist).
-- [ ] Single `collect`, `collect --any`, and `status` report one identical reconciliation object: recorded base, branch, current tip, checkout state (`present`/`missing`), committed paths base→tip (`git diff --name-status`), dirty paths (staged + unstaged + untracked); no tool call the parent was not already making.
-- [ ] A missing checkout directory is reported as `missing` rather than erroring the verb.
-- [ ] Parent HEAD moving after spawn changes nothing: reporting is against the recorded base.
+- [X] `continue!` carries the worktree fields to the new round (added to its `select-keys` whitelist).
+- [X] Single `collect`, `collect --any`, and `status` report one identical reconciliation object: recorded base, branch, current tip, checkout state (`present`/`missing`), committed paths base→tip (`git diff --name-status`), dirty paths (staged + unstaged + untracked); no tool call the parent was not already making.
+- [X] A missing checkout directory is reported as `missing` rather than erroring the verb.
+- [X] Parent HEAD moving after spawn changes nothing: reporting is against the recorded base.
 
 Constraint: the whitelist is the `select-keys` in `continue!` (`skills/herdr-orch/scripts/src/herdr_orch/cli.clj`); prefer one `:worktree` map field over several flat keys so the whitelist gains one entry.
 

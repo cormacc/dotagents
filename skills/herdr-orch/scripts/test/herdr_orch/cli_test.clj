@@ -470,6 +470,30 @@
     (is (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger" (str (:task nested-entry) ".json"))))
     (is (not (fs/exists? (fs/path checkout ".tmp"))))))
 
+;; --- lifecycle carry-forward and the reconciliation object (task 47005e8f) -------------
+;; The whitelist test below must prove the whitelist rather than assume it: an unlisted
+;; field must genuinely vanish on `continue`, so a passing assertion that `:worktree`
+;; survives actually demonstrates the mechanism (selection) rather than a coincidence (a
+;; passthrough that would have kept the unlisted field too).
+(deftest continue-carries-worktree-identity-forward-and-drops-an-unlisted-field
+  (let [{:keys [env dir]} (fake-env {})
+        spawn-proc (call! env "task" "start" "worker" "--worktree" "--task" "worktree round one")
+        _ (is (zero? (:exit spawn-proc)) (:err spawn-proc))
+        spawned (ledger-entry* dir (get-in (result spawn-proc) [:result :task]))
+        ;; A field `continue!`'s `select-keys` never names, so it must be dropped exactly
+        ;; like any other unlisted field even though the entry is otherwise identical.
+        prior (patch-entry! dir (capture-entry! dir spawned) :not-carried-forward "sentinel")
+        continue-proc (call! env "task" "continue" (:task prior) "--task" "worktree round two")
+        _ (is (zero? (:exit continue-proc)) (:err continue-proc))
+        continued (ledger-entry* dir (get-in (result continue-proc) [:result :task]))]
+    (is (some? (:worktree prior)))
+    (is (= (:worktree prior) (:worktree continued)))
+    (is (fs/exists? (get-in continued [:worktree :path])))
+    ;; No second checkout was cut: the field rode through unchanged, it was never re-created.
+    (is (= 2 (count (str/split-lines (git-worktree-list dir)))))
+    (is (contains? prior :not-carried-forward))
+    (is (not (contains? continued :not-carried-forward)))))
+
 ;; The below-root policy check precedes preflight, ledger allocation, and all Herdr calls.
 (deftest below-root-disallowed-spawn-is-side-effect-free
   (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout researcher"})
@@ -2033,6 +2057,114 @@
       (is (= "no-live-children" (:reason res)))
       (is (< elapsed 8000) (str "elapsed=" elapsed))
       (is (empty? (closed-panes log))))))
+
+;; --- the reconciliation object (task 47005e8f) --------------------------------------
+;; Anchors `collect`, `collect --any`, and `status` against a `status` call for the *same*
+;; task each, so the shape and values these three verbs report never diverge, then pins the
+;; shared *shape* (key set) across two distinct tasks whose reconciliation values necessarily
+;; differ (different checkouts, different base/branch/tip).
+(deftest reconciliation-object-is-identical-across-collect-collect-any-and-status
+  (let [{:keys [env dir]} (fake-env {})
+        single-proc (call! env "task" "start" "worker" "--worktree" "--task" "single collect round")
+        _ (is (zero? (:exit single-proc)) (:err single-proc))
+        single (ledger-entry* dir (get-in (result single-proc) [:result :task]))
+        _ (publish-child! single)
+        single-collect-proc (call! env "task" "collect" (:task single))
+        single-status-proc (call! env "task" "status" (:task single))
+        any-proc (call! env "task" "start" "worker" "--worktree" "--task" "collect --any round")
+        _ (is (zero? (:exit any-proc)) (:err any-proc))
+        any-entry (ledger-entry* dir (get-in (result any-proc) [:result :task]))
+        _ (publish-child! any-entry)
+        any-collect-proc (call! env "task" "collect" "--any")
+        any-status-proc (call! env "task" "status" (:task any-entry))]
+    (is (zero? (:exit single-collect-proc)) (:err single-collect-proc))
+    (is (zero? (:exit single-status-proc)) (:err single-status-proc))
+    (is (zero? (:exit any-collect-proc)) (:err any-collect-proc))
+    (is (zero? (:exit any-status-proc)) (:err any-status-proc))
+    (let [single-collect (:result (result single-collect-proc))
+          single-status (:result (result single-status-proc))
+          any-collect (:result (result any-collect-proc))
+          any-status (:result (result any-status-proc))]
+      (is (some? (:reconciliation single-collect)))
+      (is (= (:reconciliation single-collect) (:reconciliation single-status)))
+      (is (= (:task any-entry) (:task any-collect)))
+      (is (some? (:reconciliation any-collect)))
+      (is (= (:reconciliation any-collect) (:reconciliation any-status)))
+      ;; Same vocabulary regardless of which task or verb produced it, even though the two
+      ;; tasks' own checkouts necessarily differ (same base -- both cut from the same
+      ;; untouched fixture HEAD -- but distinct branches, one per task).
+      (is (= (set (keys (:reconciliation single-collect))) (set (keys (:reconciliation any-collect)))))
+      (is (not= (:branch (:reconciliation single-collect)) (:branch (:reconciliation any-collect)))))))
+
+;; Deliberately triggers the missing-checkout guard: an operator clearing `.tmp/` (or any
+;; other removal outside `oh`'s own teardown verb) must be reported as data, never an error.
+(deftest reconciliation-reports-a-missing-checkout-without-erroring-the-verb
+  (let [{:keys [env dir]} (fake-env {})
+        proc (call! env "task" "start" "worker" "--worktree" "--task" "checkout later removed")
+        _ (is (zero? (:exit proc)) (:err proc))
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+        checkout (get-in entry [:worktree :path])
+        _ (is (fs/exists? checkout))
+        _ (fs/delete-tree checkout)
+        _ (publish-child! entry)
+        collect-proc (call! env "task" "collect" (:task entry))
+        status-proc (call! env "task" "status" (:task entry))]
+    (is (zero? (:exit collect-proc)) (:err collect-proc))
+    (is (zero? (:exit status-proc)) (:err status-proc))
+    (let [collect-result (:result (result collect-proc))
+          status-result (:result (result status-proc))]
+      (is (= "missing" (get-in collect-result [:reconciliation :checkout-state])))
+      (is (nil? (get-in collect-result [:reconciliation :tip])))
+      (is (nil? (get-in collect-result [:reconciliation :committed])))
+      (is (nil? (get-in collect-result [:reconciliation :dirty])))
+      (is (= (:base (:worktree entry)) (get-in collect-result [:reconciliation :base])))
+      (is (= (:reconciliation collect-result) (:reconciliation status-result))))))
+
+;; The parent's HEAD moving after spawn must change nothing: reporting is against the
+;; recorded base, never a fresh probe of the parent's live HEAD.
+(deftest reconciliation-reports-against-the-recorded-base-not-live-parent-head
+  (let [{:keys [env dir]} (fake-env {})
+        proc (call! env "task" "start" "worker" "--worktree" "--task" "base survives a HEAD move")
+        _ (is (zero? (:exit proc)) (:err proc))
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+        recorded-base (get-in entry [:worktree :base])]
+    (is (= recorded-base (git-head dir)))
+    ;; A commit on the shared tree after the spawn -- the checkout sits on its own `orch/*`
+    ;; branch and is never touched by this.
+    (spit (str (fs/path dir "moved-on")) "parent moved on\n")
+    (git-in! dir "add" "moved-on")
+    (git-in! dir "commit" "-q" "-m" "parent moves on after spawn")
+    (is (not= recorded-base (git-head dir)))
+    (publish-child! entry)
+    (let [collect-proc (call! env "task" "collect" (:task entry))
+          status-proc (call! env "task" "status" (:task entry))]
+      (is (zero? (:exit collect-proc)) (:err collect-proc))
+      (is (zero? (:exit status-proc)) (:err status-proc))
+      (is (= recorded-base (get-in (result collect-proc) [:result :reconciliation :base])))
+      (is (= recorded-base (get-in (result status-proc) [:result :reconciliation :base]))))))
+
+;; Committed and dirty sets stay distinct: the parent's action differs per set (merge the
+;; branch vs rescue a child whose work is uncommitted), so their union ("changed files")
+;; must never collapse into one list.
+(deftest reconciliation-keeps-committed-and-dirty-paths-distinct
+  (let [{:keys [env dir]} (fake-env {})
+        proc (call! env "task" "start" "worker" "--worktree" "--task" "distinguishes committed from dirty")
+        _ (is (zero? (:exit proc)) (:err proc))
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+        checkout (get-in entry [:worktree :path])]
+    (spit (str (fs/path checkout "committed-work")) "done\n")
+    (git-in! checkout "add" "committed-work")
+    (git-in! checkout "commit" "-q" "-m" "child commits its work")
+    (spit (str (fs/path checkout "dirty-work")) "in progress\n")
+    (publish-child! entry)
+    (let [status-proc (call! env "task" "status" (:task entry))]
+      (is (zero? (:exit status-proc)) (:err status-proc))
+      (let [reconciliation (get-in (result status-proc) [:result :reconciliation])]
+        (is (= "present" (:checkout-state reconciliation)))
+        (is (some #(str/includes? % "committed-work") (:committed reconciliation)))
+        (is (not-any? #(str/includes? % "dirty-work") (:committed reconciliation)))
+        (is (some #(str/includes? % "dirty-work") (:dirty reconciliation)))
+        (is (not-any? #(str/includes? % "committed-work") (:dirty reconciliation)))))))
 
 ;; --- capture never closes a pane ----------------------------------------------------
 ;; Capture used to make a bounded settle wait and one close attempt on every COMPLETE or

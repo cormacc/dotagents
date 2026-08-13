@@ -699,6 +699,33 @@
 (defn create-worktree! [dir path branch base]
   (fs/create-dirs (fs/parent (fs/path path)))
   (git! dir "worktree" "add" "-b" branch path base))
+;; --- reconciliation object (task 47005e8f) -----------------------------------------
+;; One identical shape rides on `collect`, `collect --any`, and `status`, because all
+;; three already read the ledger entry a worktree round carries: no new tool call is ever
+;; needed on the parent's side. Reported against the *recorded* `:base`, never the
+;; parent's live HEAD -- the parent's own HEAD moving after spawn must change nothing here
+;; (task f49a63f5/47005e8f's decision). Every git call below targets the *checkout*, not
+;; the parent's source cwd, and is skipped entirely when the checkout directory is gone: a
+;; missing directory (an operator removed it, or cleared `.tmp/`) is reported as `missing`
+;; data, never an error the verb throws.
+(defn- committed-paths [dir base tip]
+  (vec (remove str/blank? (str/split-lines (git! dir "diff" "--name-status" base tip)))))
+(defn reconciliation [entry]
+  (when-let [{:keys [path branch base]} (:worktree entry)]
+    (if-not (fs/exists? path)
+      {:base base :branch branch :tip nil :checkout-state "missing" :committed nil :dirty nil}
+      (let [tip (head-sha path)]
+        ;; Committed and dirty sets stay distinct -- their union is "changed files", but
+        ;; the parent's action differs per set (merge the branch vs rescue/re-prompt a
+        ;; child whose work is uncommitted) -- so they are never collapsed into one list.
+        {:base base :branch branch :tip tip :checkout-state "present"
+         :committed (committed-paths path base tip)
+         :dirty (dirty-paths path)}))))
+;; Attached only when the entry actually carries worktree identity: a shared-tree round
+;; has nothing to reconcile, so its response carries no `:reconciliation` key at all,
+;; exactly as it carries no `:worktree` field on the ledger entry itself.
+(defn- with-reconciliation [entry value]
+  (cond-> value (:worktree entry) (assoc :reconciliation (reconciliation entry))))
 (defn spawn! [persona opts waiting-policy]
   (enforce-spawns! persona opts)
   (if (one opts :print-prompt)
@@ -1043,10 +1070,11 @@
          (catch Exception e (publish-failure-toast! child task e) (throw e)))))
 (defn collect! [task opts]
   (let [entry (ledger/read! task) owned? (caller-owns? entry)]
-    (if (:wait opts) (wait-and-capture! entry (round-timeout entry opts) owned?)
-        (if-let [parsed (capture! entry)]
-          (finish-capture! entry parsed owned?)
-          {:status "pending" :terminal? false :task task :pane-id (:pane-id entry)}))))
+    (with-reconciliation entry
+      (if (:wait opts) (wait-and-capture! entry (round-timeout entry opts) owned?)
+          (if-let [parsed (capture! entry)]
+            (finish-capture! entry parsed owned?)
+            {:status "pending" :terminal? false :task task :pane-id (:pane-id entry)})))))
 ;; --- explicit stale-entry pruning ---------------------------------------------------
 ;; Remedies the one known `collect --any` gap (contract.md § Fan-in "Known limitation"):
 ;; a `run`/`start` killed between `ledger/write!` and its cleanup leaves a same-session,
@@ -1672,7 +1700,13 @@
               ;; belongs to the spawn that created it and has no relation to this round's
               ;; own uuid. Display and policy metadata carry over unchanged; the parent
               ;; fields come from the caller, which owns this round.
-              next-entry (merge (select-keys entry [:child :pane-id :tab-id :label :index :persona-path :kind :model :retro :retro-source :spawns :spawns-source :timeout :timeout-source :placement :shell-pid])
+              ;; `:worktree` is one field, deliberately -- task 47005e8f's decision: worktree
+              ;; identity belongs to the child lineage, not the round, so it rides through
+              ;; this whitelist as a single map entry rather than several flat keys that
+              ;; would each need remembering here. Any field this `select-keys` does not
+              ;; name is silently dropped on the next round; that is exactly the mechanism
+              ;; by which worktree identity would otherwise vanish from a continued child.
+              next-entry (merge (select-keys entry [:child :pane-id :tab-id :label :index :persona-path :kind :model :retro :retro-source :spawns :spawns-source :timeout :timeout-source :placement :shell-pid :worktree])
                                 {:task task :result result :continues prior-task
                                  :parent-session caller :parent-pane (:parent-pane ident)
                                  :waiting-policy waiting-policy :status "continuing" :created-at (now)})]
@@ -1775,8 +1809,9 @@
                   candidates (any-candidates snapshot)
                   waiters (wait-candidates snapshot)
                   captured (fn [[entry parsed]]
-                             (assoc (finish-capture! entry parsed true)
-                                    :remaining (remaining-candidates candidates entry parsed)))]
+                             (with-reconciliation entry
+                               (assoc (finish-capture! entry parsed true)
+                                      :remaining (remaining-candidates candidates entry parsed))))]
               (if (and (empty? candidates) (empty? waiters))
                 {:status "pending" :reason "no-candidates"}
                 (if-let [hit (capture-first candidates)]
@@ -1800,7 +1835,7 @@
 (defn live [entry]
   (let [agent (try (herdr/agent! (:child entry)) (catch Exception _ nil))
         entry (or (record-session! (:task entry) (:agent_session agent)) entry)]
-    (assoc entry :live-agent agent)))
+    (with-reconciliation entry (assoc entry :live-agent agent))))
 ;; --- agent-facing output shaping ----------------------------------------------------
 ;; Two independent knobs on the read verbs (`collect`, `status`, `list`, `harvest`), because
 ;; the parent pays for every byte of them and both defaults were wrong for an agent reader.
