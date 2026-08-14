@@ -255,37 +255,17 @@
   config)
 (defn worktree-branch [task]
   (str "orch/" (subs task 0 8)))
-;; Trigger resolution is trait-token based, reusing whatever `%worktree`/`%no-worktree`
-;; already resolved in the persona body (see `cli/trait-interpolation`) rather than a
-;; second scan. `flag` is the raw `--worktree` boolean; `traits` the resolved trait names.
-;; Forcing (`--worktree` or `%worktree`) and suppressing (`%no-worktree`) on one spawn is a
-;; spawn-time validation error, fired here before task allocation or any pane/ledger
-;; mutation, exactly like an unknown or incompatible trait. The default -- an extra
-;; checkout when another round of the same parent session is already in flight -- never
-;; applies to a read-only persona (`%read-only` resolved), which gets no implicit
-;; worktree. `:trigger` is always recorded, auditable rather than inferred: `flag`/`trait`
-;; force one, `suppressed` records an opt-out that fired (whether or not the default would
-;; otherwise have applied), `default` is the in-flight checkout, and `none` is an ordinary
-;; shared-tree spawn.
-(defn worktree-forced? [flag traits] (boolean (or flag ((set traits) "worktree"))))
-(defn worktree-suppressed? [traits] (boolean ((set traits) "no-worktree")))
-;; `in-flight?` is expected to already be short-circuited by the caller (`false`, never a
-;; ledger read) whenever `flag`/`traits` alone are forced or suppressed: the ledger read
-;; behind an actual in-flight check is a side effect (it creates the ledger directory --
-;; see `cli/worktree-in-flight?`), and a spawn that is about to fail this function's own
-;; conflict check, or one whose decision the flag/trait already settled, must not pay for
-;; or trigger that side effect first.
-(defn resolve-worktree [{:keys [flag traits in-flight? read-only?]}]
-  (let [forced? (worktree-forced? flag traits)
-        suppressed? (worktree-suppressed? traits)]
-    (when (and forced? suppressed?)
-      (throw (ex-info "worktree trigger conflict: --worktree/%worktree and %no-worktree cannot both apply to one spawn"
-                      {:flag (boolean flag) :traits (vec (set traits))})))
-    (cond
-      forced? {:create? true :trigger (if flag "flag" "trait")}
-      suppressed? {:create? false :trigger "suppressed"}
-      (and in-flight? (not read-only?)) {:create? true :trigger "default"}
-      :else {:create? false :trigger "none"})))
+;; Resolve exactly one checkout target. An explicit value answers where: `new` requests a
+;; managed checkout and every other value names an existing checkout. Without a value, only
+;; an additional concurrent write-enabled child receives a managed checkout; read-only and
+;; initial spawns stay in the caller's checkout. Filesystem and git validation belongs at
+;; the CLI boundary, where paths can be canonicalised and repository identity inspected.
+(defn resolve-worktree [{:keys [target source in-flight? read-only?]}]
+  (cond
+    (= "new" target) {:kind :new}
+    (some? target) {:kind :existing :path target}
+    (and in-flight? (not read-only?)) {:kind :new}
+    :else {:kind :shared :path source}))
 (defn resolve-placement [{:keys [flag configured below-root?]}]
   (case flag
     "tab" "tab"
@@ -310,14 +290,16 @@
   (str (when parent-label (str (nested-prefix parent-label parent-persona) "/"))
        (root-label persona index model)))
 
-(defn envelope [{:keys [child task result status summary artifacts findings next process]}]
+(defn envelope [{:keys [child task result status summary checkpoint artifacts findings next process]}]
   (when-not (statuses status) (throw (ex-info "invalid result status" {:status status})))
   (doseq [[k v] [[:child child] [:task task] [:result result] [:summary summary]]]
     (single-line! (name k) v))
+  (when checkpoint (single-line! "checkpoint" checkpoint))
   (findings-limit! findings)
   (process-limit! process)
   (doseq [v (concat artifacts findings process (when next [next]))] (single-line! "envelope item" v))
   (str "--- HERDR RESULT v1 ---\nCHILD: " child "\nTASK: " task "\nRESULT: " result "\nSTATUS: " status "\nSUMMARY: " summary "\n"
+       (when checkpoint (str "CHECKPOINT: " checkpoint "\n"))
        "ARTIFACTS:\n" (if (seq artifacts) (str/join "\n" (map #(str "- " %) artifacts)) "- none") "\n"
        "FINDINGS:\n" (if (seq findings) (str/join "\n" (map #(str "- " %) findings)) "- none") "\n"
        "NEXT: " (or next "none") "\n"
@@ -331,7 +313,7 @@
     (when-not (= 1 (count matches)) (throw (ex-info "result envelope field is missing or repeated" {:field label})))
     (single-line! label (subs (first matches) (+ 2 (count label))))))
 (def ^:private end-marker "--- END HERDR RESULT ---")
-(def ^:private field-labels ["CHILD" "TASK" "RESULT" "STATUS" "SUMMARY" "NEXT"])
+(def ^:private field-labels ["CHILD" "TASK" "RESULT" "STATUS" "SUMMARY" "CHECKPOINT" "NEXT"])
 (def ^:private section-headers ["ARTIFACTS:" "FINDINGS:" "PROCESS:"])
 ;; Sections are delimited structurally — by the next section header, scalar field line, or
 ;; the END marker — never by a value the child chose. Every list item carries a `- `
@@ -365,14 +347,18 @@
                     (mapv #(subs % 2)))]
     (if (= ["none"] values) [] values)))
 (defn parse-envelope [text]
-  (let [lines (str/split-lines text)]
+  (let [lines (str/split-lines text)
+        checkpoint-lines (filter #(str/starts-with? % "CHECKPOINT: ") lines)]
     (when-not (and (= "--- HERDR RESULT v1 ---" (first lines)) (= end-marker (last lines)))
       (throw (ex-info "invalid result envelope markers" {})))
-    {:child (field! lines "CHILD") :task (field! lines "TASK") :result (field! lines "RESULT")
-     :status (field! lines "STATUS") :summary (field! lines "SUMMARY")
-     :artifacts (section-lines lines "ARTIFACTS:")
-     :findings (section-lines lines "FINDINGS:")
-     :next (field! lines "NEXT") :process (process-items lines) :text text}))
+    (when (< 1 (count checkpoint-lines))
+      (throw (ex-info "result envelope field is repeated" {:field "CHECKPOINT"})))
+    (cond-> {:child (field! lines "CHILD") :task (field! lines "TASK") :result (field! lines "RESULT")
+             :status (field! lines "STATUS") :summary (field! lines "SUMMARY")
+             :artifacts (section-lines lines "ARTIFACTS:")
+             :findings (section-lines lines "FINDINGS:")
+             :next (field! lines "NEXT") :process (process-items lines) :text text}
+      (seq checkpoint-lines) (assoc :checkpoint (single-line! "CHECKPOINT" (subs (first checkpoint-lines) 12))))))
 
 ;; An ARTIFACTS item is `<absolute path>[ — <purpose>]`. One splitter owns that delimiter
 ;; so the absoluteness check and the link renderer can never disagree about it.

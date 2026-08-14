@@ -28,6 +28,7 @@ Flag and verb index; [docs/contract.md](docs/contract.md) owns precedence, guard
 |---|---|---|
 | `--retro` / `--no-retro` | override retro gating for one spawn | § Retro gating |
 | `--spawns NAMES` / `none` | override the persona's allow-list; `none` forces a leaf | § Spawn gating |
+| `--worktree <path>` / `new` | use an existing checkout or create one managed target | § Checkout target resolution |
 | `--tab` / `--split` | force placement (mutually exclusive) | § Placement |
 | `--any` (on `collect`) | capture the first same-session child to publish | § Fan-in |
 | `--close` (on `collect`) | capture, then run the guarded close | § Close |

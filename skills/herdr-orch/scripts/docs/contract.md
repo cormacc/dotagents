@@ -38,7 +38,7 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `ORCH_ASSIGNMENT_ROOT` | parent | Overrides the `git rev-parse --show-toplevel` probe behind the assignment root. It relocates the ledger, index markers, `RESULT` paths, project persona/trait/config lookup (`<root>/.agents/subagents/`, `<root>/.agents/traits/`, and `<root>/.agents/subagents/config.edn`) together, because all are per-project notions; the packaged defaults resolve from the installed skill/launcher location instead, never from the assignment root. A blank value is ignored, a relative value is absolutised so `RESULT` stays absolute, and a value that is not an existing directory is rejected. When set, it is injected into the child pane so nested delegation stays in the same root. A worktree child (`--worktree`, a resolved `%worktree` trait, the in-flight default, or `--worktree-from` reusing an existing checkout; the full mechanical contract for checkout creation, trigger resolution, and branch naming is the pending documentation task) injects it unconditionally instead, pinned to the resolved value: its own cwd is a *different* git worktree, whose own `git rev-parse --show-toplevel` would otherwise resolve to the checkout rather than the parent's assignment root. |
+| `ORCH_ASSIGNMENT_ROOT` | parent | Overrides the `git rev-parse --show-toplevel` probe behind the assignment root. It relocates the ledger, index markers, `RESULT` paths, project persona/trait/config lookup (`<root>/.agents/subagents/`, `<root>/.agents/traits/`, and `<root>/.agents/subagents/config.edn`) together, because all are per-project notions; the packaged defaults resolve from the installed skill/launcher location instead, never from the assignment root. A blank value is ignored, a relative value is absolutised so `RESULT` stays absolute, and a value that is not an existing directory is rejected. When set, it is injected into the child pane so nested delegation stays in the same root. A child launched in a non-shared checkout receives the resolved assignment root unconditionally so its nested delegation continues to use the parent's ledger and roster; this carries no topology or commit-permission signal. |
 | `ORCH_LIVE_SMOKE`, `ORCH_LIVE_SMOKE_MODEL` | `bb smoke-subagent` | Guards the live smoke, which also needs `HERDR_ENV=1`. Never CI work. |
 | `ORCH_LIVE_SMOKE_KIND` | `bb smoke-subagent` | Optional harness for the live smoke, applied by generating `kind:`-declaring copies of the personas it spawns -- it overrides no resolution of its own. |
 | `ORCH_DISPATCH_TIMEOUT_MS` | parent | Budget for the post-prompt dispatch check every `run`/`start` spawn and every `continue` round performs (see § Dispatch verification). Default 15000 ms. |
@@ -59,6 +59,14 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 Every `ORCH_*_MS` variable falls back to its stated default when unset, blank, unparseable, zero, or negative.
 
 No lifecycle value reaches the child. There is deliberately no waiting-policy variable: the policy has exactly one home, the ledger entry's own `:waiting-policy`, which `publish` reads for the round it is publishing (§ Ledger and completion). A child therefore cannot read, carry, or contradict its round's policy, and a continued round cannot publish under the policy its *spawn* was given -- a stale policy is not representable rather than merely validated against.
+
+## Checkout target resolution
+
+Every spawn resolves one checkout target before ledger construction and pane placement. `--worktree` is value-taking: `--worktree new` selects a newly managed checkout, while `--worktree <path>` selects an existing checkout. Repeating the singleton option is the only target conflict. Without it, an initial child uses the caller's source cwd; an additional concurrent write-enabled child receives a newly managed checkout; a read-only persona never causes implicit creation. Every child is launched with the resolved target as cwd, including the shared case.
+
+A target canonicalising to the source cwd is shared: no `:worktree` ledger field is written, publication performs no git mutation, and concurrent use remains allowed even when the shared path was explicit. Any other existing target must be an attached checkout root in the same git repository and must not be referenced by a genuinely live round under the same canonical path. Liveness uses the teardown predicate unchanged: an unclosed and unsealed current round refuses reuse, while a sealed terminal, closed, failed, or superseded round does not. Detached HEAD, a path inside rather than at a checkout root, a different repository, a missing path, or a live reference refuses before task allocation, ledger mutation, or checkout mutation. Its branch, current HEAD, and canonical common-git-directory identity are recorded as `:worktree {:path ... :branch ... :base ... :repository ...}`, where `:base` is the target HEAD at assignment time. A managed target uses the same identity shape, writes it recoverably before `git worktree add -b`, and creates the checkout before pane mutation. Existing ledger fields outside this shape remain readable.
+
+Existing targets may be outside the managed root because use is path-addressed. Destruction is not: `worktree remove` continues to resolve and enforce the one central managed-root containment predicate, so an externally supplied checkout is legal to use but cannot be removed by `oh`. `oh` never merges, rebases, pushes, deletes a branch, or removes an external checkout.
 
 ## Persona discovery
 
@@ -148,6 +156,7 @@ TASK: <parent task UUID>
 RESULT: <absolute parent-chosen result path>
 STATUS: WAITING | COMPLETE | BLOCKED | FAILED
 SUMMARY: <single line>
+[CHECKPOINT: <authoritative git ref; worktree publications only>]
 ARTIFACTS:
 - <absolute path — purpose, or none>
 FINDINGS:
@@ -158,7 +167,11 @@ PROCESS:
 --- END HERDR RESULT ---
 ```
 
-`PROCESS:` is optional retro annotation. Its writer emits it after `NEXT:`; validation accepts it anywhere between the markers, truncates more than five items for collection, and records `:process-overflow` without demoting an otherwise valid envelope. `:child-session` is the best-effort durable transcript reference; a changed observed session moves the prior value to `:child-session-history` rather than discarding it. `:waiting-policy`, `:continues`, and `:closed-at` are round lifecycle fields. The ledger is shared across parent sessions: reads are global, while ownership governs close, continue, prune, compact, and fan-in candidacy.
+`CHECKPOINT:` is optional and absent for shared-root publications. `PROCESS:` is optional retro annotation. Its writer emits it after `NEXT:`; validation accepts it anywhere between the markers, truncates more than five items for collection, and records `:process-overflow` without demoting an otherwise valid envelope. `:child-session` is the best-effort durable transcript reference; a changed observed session moves the prior value to `:child-session-history` rather than discarding it. `:waiting-policy`, `:continues`, and `:closed-at` are round lifecycle fields. The ledger is shared across parent sessions: reads are global, while ownership governs close, continue, prune, compact, and fan-in candidacy.
+
+For an entry carrying `:worktree`, publication orders every refusal before git mutation: identity and artifact validation, `assert-publishable!`, WAITING throttle, and undischarged children. It then verifies that the recorded path is a present checkout root, that the recorded base resolves there, and that HEAD is attached to the recorded branch. A read-only entry with dirt refuses with that finding and makes no commit; a clean read-only publication reports the current ref. A write-enabled entry stages tracked and untracked nonignored changes with `git add -A`, commits only when the index differs, obtains HEAD, serialises that authoritative ref as `CHECKPOINT:`, appends the item, then notifies. Ignored files remain uncommitted and visible through reconciliation.
+
+The deterministic commit subject is `herdr-orch checkpoint <task> <status>`. These are mechanical protocol checkpoints, not authored commits: they are exempt from `git-commit` conventions and the parent may squash or rewrite them when integrating. `WAITING` is a checkpoint like every terminal status. Commit-before-append makes a retry safe: after an append failure, a clean retry serialises the current tip even though it creates no further commit; a clean worktree publication likewise always carries its current authoritative ref. A staging, commit, checkout, repository, or branch-attachment failure writes no result item and never resets history.
 
 ## Close
 

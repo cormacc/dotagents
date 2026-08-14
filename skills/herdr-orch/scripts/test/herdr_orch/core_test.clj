@@ -243,36 +243,24 @@
   (is (= (core/worktree-branch "11112222-3333-4444-5555-666677778888")
          (core/worktree-branch "11112222-3333-4444-5555-666677778888"))))
 
-(deftest worktree-trigger-resolution-contract
-  (testing "no trigger at all: ordinary shared-tree spawn"
-    (is (= {:create? false :trigger "none"}
-           (core/resolve-worktree {:flag false :traits [] :in-flight? false :read-only? false}))))
-  (testing "--worktree flag forces a checkout even with nothing in flight"
-    (is (= {:create? true :trigger "flag"}
-           (core/resolve-worktree {:flag true :traits [] :in-flight? false :read-only? false}))))
-  (testing "a resolved %worktree trait forces a checkout identically to the flag"
-    (is (= {:create? true :trigger "trait"}
-           (core/resolve-worktree {:flag false :traits ["worktree"] :in-flight? false :read-only? false}))))
-  (testing "in-flight default: another round of the session is open and the persona is not read-only"
-    (is (= {:create? true :trigger "default"}
-           (core/resolve-worktree {:flag false :traits [] :in-flight? true :read-only? false}))))
-  (testing "read-only personas get no implicit worktree even while another round is in flight"
-    (is (= {:create? false :trigger "none"}
-           (core/resolve-worktree {:flag false :traits ["read-only"] :in-flight? true :read-only? true}))))
-  (testing "%no-worktree suppresses the in-flight default"
-    (is (= {:create? false :trigger "suppressed"}
-           (core/resolve-worktree {:flag false :traits ["no-worktree"] :in-flight? true :read-only? false}))))
-  (testing "%no-worktree is recorded even when nothing would have defaulted in anyway"
-    (is (= {:create? false :trigger "suppressed"}
-           (core/resolve-worktree {:flag false :traits ["no-worktree"] :in-flight? false :read-only? false}))))
-  (testing "--worktree and a resolved %no-worktree conflict and fail before any mutation, naming both"
-    (is (try (core/resolve-worktree {:flag true :traits ["no-worktree"] :in-flight? false :read-only? false}) false
-             (catch clojure.lang.ExceptionInfo e
-               (and (re-find #"worktree trigger conflict" (.getMessage e))
-                    (= {:flag true :traits ["no-worktree"]} (ex-data e)))))))
-  (testing "a resolved %worktree trait and %no-worktree conflict identically to the flag pairing"
-    (is (try (core/resolve-worktree {:flag false :traits ["worktree" "no-worktree"] :in-flight? false :read-only? false}) false
-             (catch clojure.lang.ExceptionInfo _ true)))))
+(deftest worktree-target-resolution-contract
+  (testing "an omitted target resolves to the caller's shared checkout"
+    (is (= {:kind :shared :path "/repo"}
+           (core/resolve-worktree {:target nil :source "/repo" :in-flight? false :read-only? false}))))
+  (testing "an explicit managed target resolves creation without conflating it with permission"
+    (is (= {:kind :new}
+           (core/resolve-worktree {:target "new" :source "/repo" :in-flight? false :read-only? true}))))
+  (testing "an explicit path is an existing target for either read-only or write-enabled personas"
+    (doseq [read-only? [false true]]
+      (is (= {:kind :existing :path "/repo-linked"}
+             (core/resolve-worktree {:target "/repo-linked" :source "/repo"
+                                     :in-flight? false :read-only? read-only?})))))
+  (testing "a concurrent write-enabled sibling gets a managed target implicitly"
+    (is (= {:kind :new}
+           (core/resolve-worktree {:target nil :source "/repo" :in-flight? true :read-only? false}))))
+  (testing "a read-only sibling never triggers implicit creation"
+    (is (= {:kind :shared :path "/repo"}
+           (core/resolve-worktree {:target nil :source "/repo" :in-flight? true :read-only? true})))))
 
 ;; Pane labels use `model-basename`, independent of roster translation: a canonical bare
 ;; ID and its pre-migration pi-syntax equivalent share the same basename, so labels are

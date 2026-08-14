@@ -62,7 +62,7 @@ Give `oh` first-class git-worktree isolation for concurrent write-enabled subage
 - [ ] `--worktree-from` is legal for read-only personas.
 - [ ] `--worktree-from` is refused while a live unsettled round still references the checkout.
 - [ ] The child lands in the caller's own herdr workspace under the existing placement rules, with no new placement mode and no `worktree` passthrough group.
-- [ ] `skills/herdr-orch/traits/worktree/prompt.md` and the `%no-worktree` fragment exist with a named consumer, a `gate.md` each, and one recorded probe attempt each per traits.md § Admission bar → spec:[[proj:skills/herdr-orch/references/traits.md]]
+- [ ] Superseded and deleted by c45b3635: the former skills/herdr-orch/traits/worktree/prompt.md and `%no-worktree` fragment had a named consumer, a `gate.md` each, and one recorded probe attempt each per traits.md § Admission bar → spec:[[proj:skills/herdr-orch/references/traits.md]]
 - [ ] The two fragments declare mutual `incompatible-with:`.
 - [ ] SKILL.md § Invocation policy (Cardinality) cites the worktree path as the escape hatch for the overlapping-file-set rule, keeps the parent-side re-measure, and instructs the orchestrator to prompt the operator about committing when the dirty-path set at spawn is non-empty → spec:[[proj:skills/herdr-orch/SKILL.md]]
 
@@ -232,11 +232,17 @@ Acceptance criteria:
 
 Constraint: edits `spawn!` again, hence the blocker; the live-reference predicate is shared with `oh worktree remove`.
 
-** TODO Separate worktree *use* from worktree *creation*
+** DONE Separate worktree *use* from worktree *creation*
+CLOSED: [2026-08-14 Fri 14:52]
 :PROPERTIES:
 :CUSTOM_ID: c45b3635-b246-4250-b955-0170af246991
 :CREATED: [2026-08-13 Thu 20:05]
 :BLOCKED-BY: task:4962846f-6690-4618-a5d9-9891962565ae
+:STARTED: [2026-08-14 Fri 14:26]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-14 Fri 14:26]
+- State "DONE" from "STARTED" [2026-08-14 Fri 14:52]
 :END:
 One worktree *target* is resolved before spawning, and the child is never told which it got. `--worktree` takes a value: a path, or `new` to cut one, defaulting to the caller's cwd so every spawn has a target. Creation is the parent's business, handled during resolution; the child receives a working directory and nothing else about git topology.
 
@@ -247,15 +253,15 @@ Scoped by construction: commit only when the ledger entry carries `:worktree`, s
 Deletes, rather than adds: `--worktree-from` (subsumed by a value-taking `--worktree`), both marker fragments and their `gate.md` companions, `:create?` and the `reuse`/`suppressed`/`flag`/`default`/`none` trigger strings, `spawn!`'s reuse bypass, one of the two conflict guards, `HERDR_ORCH_WORKTREE`, `worker.md`'s conditional commit rule, and `planner.md`'s `%no-worktree` body token. This discards the artifacts of plan task 2538b80c, whose criteria are annotated as superseded rather than left claiming outputs that no longer exist.
 
 Acceptance criteria:
-- [ ] One resolver returns a target -- the caller's cwd, an existing checkout, or a newly cut one -- and `spawn!` consumes only that. `:create?` and the trigger strings are gone, and the reuse path no longer bypasses the resolver.
-- [ ] One conflict rule, stated once: more than one explicit target requested. Replaces both `core.clj`'s trigger-conflict throw and `cli.clj`'s separate `worktree-from refused` guard.
-- [ ] `--worktree <path>` accepts an existing checkout by path, and a path outside the managed root is refused for *removal* while remaining legal for *use*; containment stays enforced in one place (see 4962846f).
-- [ ] A publication from a child whose entry carries `:worktree` commits any pending change on that checkout's branch and reports the ref in the envelope. `WAITING` publications checkpoint the same way, so an interrupted child leaves its work in git objects rather than only on disk.
-- [ ] The commit runs *before* the result item is written, so a ref named in an envelope always resolves -- the same ordering rule as ledger fields preceding `git worktree add`.
-- [ ] A publication from a child with no `:worktree` commits nothing, and a spawn with no worktree involvement is byte-for-byte unaffected in placement, env, and ledger shape.
-- [ ] A read-only child that has left changes in its checkout has that reported as a finding rather than committed away: dirt from a persona that should not have written is a signal, not a housekeeping task.
-- [ ] Protocol checkpoint commits are documented as such -- not authored commits, exempt from the `git-commit` conventions, squashed or rewritten by the parent on merge -- so they are not later "fixed" into conventional commits.
-- [ ] No persona body references a deleted trait token: `planner.md` loses `%no-worktree` in the same change, since an unresolved 3+ character token fails the spawn before allocation.
+- [X] One resolver returns a target -- the caller's cwd, an existing checkout, or a newly cut one -- and `spawn!` consumes only that. `:create?` and the trigger strings are gone, and the reuse path no longer bypasses the resolver.
+- [X] One conflict rule, stated once: more than one explicit target requested. Replaces both `core.clj`'s trigger-conflict throw and `cli.clj`'s separate `worktree-from refused` guard.
+- [X] `--worktree <path>` accepts an existing checkout by path, and a path outside the managed root is refused for *removal* while remaining legal for *use*; containment stays enforced in one place (see 4962846f).
+- [X] A publication from a child whose entry carries `:worktree` commits any pending change on that checkout's branch and reports the ref in the envelope. `WAITING` publications checkpoint the same way, so an interrupted child leaves its work in git objects rather than only on disk.
+- [X] The commit runs *before* the result item is written, so a ref named in an envelope always resolves -- the same ordering rule as ledger fields preceding `git worktree add`.
+- [X] A publication from a child with no `:worktree` commits nothing, and a spawn with no worktree involvement is byte-for-byte unaffected in placement, env, and ledger shape.
+- [X] A read-only child that has left changes in its checkout has that reported as a finding rather than committed away: dirt from a persona that should not have written is a signal, not a housekeeping task.
+- [X] Protocol checkpoint commits are documented as such -- not authored commits, exempt from the `git-commit` conventions, squashed or rewritten by the parent on merge -- so they are not later "fixed" into conventional commits.
+- [X] No persona body references a deleted trait token: `planner.md` loses `%no-worktree` in the same change, since an unresolved 3+ character token fails the spawn before allocation.
 
 Must not: grant a commit permission by prompt text, in either direction; commit on any branch other than the checkout's own; commit for a shared-root child; treat `git add -A` as capturing everything, since ignored files remain outside it and stay 4962846f's problem.
 

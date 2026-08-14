@@ -236,179 +236,195 @@
     updated))
 (defn- capture-entry! [dir entry] (patch-entry! dir entry :captured-at "2026-01-01T00:00:00Z" :status "COMPLETE"))
 
-;; --- worktree-backed spawn (task f49a63f5) --------------------------------------------
-;; Fixture personas whose bodies carry the packaged `%worktree`/`%no-worktree` trait
-;; tokens verbatim, resolved through the real packaged layer `fake-env` symlinks in
-;; (`skills/herdr-orch/traits/worktree/prompt.md` and `.../no-worktree/prompt.md`), the
-;; same fragments task 2538b80c shipped. No fixture fragment is fabricated here.
-(def worktree-persona-roster
-  {"triggers-worktree" "---\nname: triggers-worktree\ndescription: fixture\n---\nFixture body.\n\n%worktree\n"
-   "triggers-no-worktree" "---\nname: triggers-no-worktree\ndescription: fixture\n---\nFixture body.\n\n%no-worktree\n"
-   "triggers-both" "---\nname: triggers-both\ndescription: fixture\n---\nFixture body.\n\n%worktree\n%no-worktree\n"})
+;; --- one checkout target per spawn (task c45b3635) -----------------------------------
 (defn- git-head [dir] (git-in! dir "rev-parse" "HEAD"))
 (defn- git-worktree-list [dir] (git-in! dir "worktree" "list"))
+(defn- placement-cwd [log]
+  (let [argv (first (filter #(#{["tab" "create"] ["pane" "split"]} (vec (take 2 %))) (calls log)))
+        i (.indexOf (vec argv) "--cwd")]
+    (when-not (neg? i) (nth argv (inc i)))))
+(defn- seal-round! [entry]
+  (spit (:result entry)
+        (core/envelope {:child (:child entry) :task (:task entry) :result (:result entry)
+                        :status "COMPLETE" :summary "sealed fixture round"
+                        :artifacts [] :findings [] :next nil})))
 
-(deftest worktree-flag-creates-checkout-and-places-the-child-inside-it
+(deftest absent-target-with-no-write-sibling-uses-the-shared-checkout-exactly
   (let [{:keys [env log dir env-file]} (fake-env {})
-        proc (call! env "task" "start" "worker" "--worktree" "--task" "flag forces a checkout")
-        task (get-in (result proc) [:result :task])
-        entry (ledger-entry* dir task)
-        checkout (get-in entry [:worktree :path])
-        argv (calls log)]
-    (is (zero? (:exit proc)) (:err proc))
-    (is (= "flag" (:worktree-trigger entry)))
-    (is (= (str (fs/path dir ".tmp" "herdr-orch" "worktrees" task)) checkout))
-    (is (= (str "orch/" (subs task 0 8)) (get-in entry [:worktree :branch])))
-    (is (= (git-head dir) (get-in entry [:worktree :base])))
-    (is (fs/exists? checkout))
-    (is (str/includes? (git-worktree-list dir) checkout))
-    ;; The child pane's own cwd is the checkout, never the shared tree, under the default
-    ;; :tab-split placement's root-level "tab" branch -- worktree changes cwd only.
-    (is (= "tab" (:placement entry)))
-    (is (str/includes? (str/join " " (first (filter #(= ["tab" "create"] (vec (take 2 %))) argv))) checkout))
-    ;; Always injected for a worktree child, unlike the pre-existing conditional rule.
-    (is (= (str dir) (injected-env env-file "ORCH_ASSIGNMENT_ROOT")))
-    ;; The commit-permission signal (task f49a63f5 reopened): the flag trigger is one of
-    ;; the two primary paths the reviewers found delivered no commit directive at all.
-    (is (= "1" (injected-env env-file "HERDR_ORCH_WORKTREE")))))
-
-(deftest worktree-composes-with-explicit-placement-flags-not-a-third-mode
-  (let [{:keys [env log dir]} (fake-env {})
-        proc (call! env "task" "start" "worker" "--worktree" "--split" "--task" "worktree plus explicit split")
-        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
-        argv (calls log)]
-    (is (zero? (:exit proc)) (:err proc))
-    ;; The existing two placements only -- worktree changes cwd, never placement itself.
-    (is (= "split" (:placement entry)))
-    (is (str/includes? (str/join " " (first (filter #(= ["pane" "split"] (vec (take 2 %))) argv)))
-                        (get-in entry [:worktree :path])))))
-
-(deftest worktree-trait-forces-a-checkout-identically-to-the-flag
-  (let [{:keys [env dir env-file]} (fake-env {} worktree-persona-roster)
-        proc (call! env "task" "start" "triggers-worktree" "--task" "trait forces a checkout")
+        proc (call! env "task" "start" "worker" "--task" "shared checkout")
         entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
     (is (zero? (:exit proc)) (:err proc))
-    (is (= "trait" (:worktree-trigger entry)))
-    (is (fs/exists? (get-in entry [:worktree :path])))
-    (is (= "1" (injected-env env-file "HERDR_ORCH_WORKTREE")))))
+    (is (not (contains? entry :worktree)))
+    (is (not (contains? entry :read-only)))
+    (is (= (str dir) (placement-cwd log)))
+    (is (= (str dir) (injected-env env-file "ORCH_ASSIGNMENT_ROOT")))
+    (is (str/includes? (slurp (:persona-path entry))
+                       "Do not commit unless the assignment explicitly requests a commit"))
+    (let [explicit-proc (call! env "task" "start" "worker" "--worktree" (str dir)
+                               "--task" "explicit shared override")]
+      (is (zero? (:exit explicit-proc)) (:err explicit-proc))
+      (let [explicit (ledger-entry* dir (get-in (result explicit-proc) [:result :task]))]
+        (is (not (contains? explicit :worktree)) "an explicit shared target bypasses non-shared reuse isolation")))))
 
-(deftest worktree-default-applies-only-to-an-additional-in-flight-round
-  (let [{:keys [env dir env-file]} (fake-env {})
-        first-proc (call! env "task" "start" "worker" "--task" "first, nothing else in flight")
+(deftest absent-target-with-a-live-write-sibling-creates-one-managed-checkout
+  (let [{:keys [env dir]} (fake-env {})
+        first-proc (call! env "task" "start" "worker" "--task" "first writer")
         first-entry (ledger-entry* dir (get-in (result first-proc) [:result :task]))
-        ;; Read before the second call overwrites the fixture's single `env-file`.
-        first-injected (injected-env env-file "HERDR_ORCH_WORKTREE")
-        second-proc (call! env "task" "start" "worker" "--task" "second, first round still open")
+        before (git-worktree-list dir)
+        second-proc (call! env "task" "start" "worker" "--task" "concurrent writer")
         second-entry (ledger-entry* dir (get-in (result second-proc) [:result :task]))]
     (is (zero? (:exit first-proc)) (:err first-proc))
-    ;; An initial spawn: nothing was in flight yet, so it shares the tree exactly as today.
-    (is (= "none" (:worktree-trigger first-entry)))
-    (is (not (contains? first-entry :worktree)))
-    ;; The default trigger is the other primary path the reviewers found silent: this is
-    ;; the in-flight-default half of the commit-permission-signal criterion.
-    (is (nil? first-injected))
     (is (zero? (:exit second-proc)) (:err second-proc))
-    ;; The first round is a `start` (non-blocking): nothing has published or captured it,
-    ;; so it is still "in flight" for the second spawn of the same session.
-    (is (= "default" (:worktree-trigger second-entry)))
+    (is (not (contains? first-entry :worktree)))
+    (is (contains? second-entry :worktree))
     (is (fs/exists? (get-in second-entry [:worktree :path])))
-    (is (= "1" (injected-env env-file "HERDR_ORCH_WORKTREE")))))
+    (is (not= before (git-worktree-list dir)))
+    (is (= #{:path :branch :base :repository} (set (keys (:worktree second-entry)))))))
 
-(deftest worktree-read-only-persona-gets-no-implicit-checkout-while-another-round-is-open
+(deftest read-only-persona-does-not-trigger-implicit-creation
   (let [{:keys [env dir]} (fake-env {})
-        first-proc (call! env "task" "start" "worker" "--task" "keeps a round open")
-        ;; `scout` is a real packaged persona carrying the packaged `%read-only` trait.
-        scout-proc (call! env "task" "start" "scout" "--task" "read-only sibling")
-        scout-entry (ledger-entry* dir (get-in (result scout-proc) [:result :task]))]
-    (is (zero? (:exit first-proc)) (:err first-proc))
-    (is (zero? (:exit scout-proc)) (:err scout-proc))
-    (is (= "none" (:worktree-trigger scout-entry)))
-    (is (not (contains? scout-entry :worktree)))))
-
-;; Hard boundary (task f49a63f5 reopened): a shared-tree spawn must behave exactly as it
-;; does today. Proven two ways -- no `HERDR_ORCH_WORKTREE` reaches the child's env at all,
-;; and the actual resolved persona file (never a fixture stand-in, and never rewritten:
-;; `worker.md` carries no trait token, so `trait-interpolation` leaves `:composed-content`
-;; nil and `:persona-path` the shipped file itself) still carries the unconditional
-;; prohibition text for the no-signal case.
-(deftest plain-worker-spawn-carries-no-worktree-commit-signal
-  (let [{:keys [env dir env-file]} (fake-env {})
-        proc (call! env "task" "start" "worker" "--task" "shared tree, nothing else in flight")
-        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
-        persona-text (slurp (:persona-path entry))]
-    (is (zero? (:exit proc)) (:err proc))
-    (is (= "none" (:worktree-trigger entry)))
+        first (call! env "task" "start" "worker" "--task" "open writer")
+        before (git-worktree-list dir)
+        scout (call! env "task" "start" "scout" "--task" "read-only sibling")
+        entry (ledger-entry* dir (get-in (result scout) [:result :task]))]
+    (is (zero? (:exit first)) (:err first))
+    (is (zero? (:exit scout)) (:err scout))
     (is (not (contains? entry :worktree)))
-    (is (nil? (injected-env env-file "HERDR_ORCH_WORKTREE")))
-    (is (str/includes? persona-text "HERDR_ORCH_WORKTREE"))
-    (is (str/includes? persona-text "do not commit unless the assignment explicitly requests a commit"))))
+    (is (= before (git-worktree-list dir)))))
 
-;; [P2 fix, task f49a63f5 reopened] `resolve-worktree` keys the in-flight default only on
-;; `%read-only`, so a write-enabled `planner` -- carrying neither that nor, before this
-;; fix, `%no-worktree` -- silently qualified for a default the record's own `** Scope`
-;; rejects: "planner writes belong in the shared tree." `planner.md` now carries the
-;; packaged `%no-worktree` opt-out; exercised here against the real packaged persona.
-(deftest planner-does-not-get-the-in-flight-default-worktree
+(deftest concurrent-write-enabled-planner-follows-the-implicit-managed-policy
   (let [{:keys [env dir]} (fake-env {})
-        first-proc (call! env "task" "start" "worker" "--task" "keeps a round open")
-        planner-proc (call! env "task" "start" "planner" "--task" "concurrent planning, shared tree")
-        planner-entry (ledger-entry* dir (get-in (result planner-proc) [:result :task]))]
-    (is (zero? (:exit first-proc)) (:err first-proc))
-    (is (zero? (:exit planner-proc)) (:err planner-proc))
-    (is (= "suppressed" (:worktree-trigger planner-entry)))
-    (is (not (contains? planner-entry :worktree)))))
+        first (call! env "task" "start" "worker" "--task" "open writer")
+        planner (call! env "task" "start" "planner" "--task" "concurrent planning")
+        entry (ledger-entry* dir (get-in (result planner) [:result :task]))]
+    (is (zero? (:exit first)) (:err first))
+    (is (zero? (:exit planner)) (:err planner))
+    (is (fs/exists? (get-in entry [:worktree :path])))))
 
-(deftest no-worktree-trait-suppresses-the-in-flight-default
-  (let [{:keys [env dir]} (fake-env {} worktree-persona-roster)
-        first-proc (call! env "task" "start" "worker" "--task" "keeps a round open")
-        suppressed-proc (call! env "task" "start" "triggers-no-worktree" "--task" "opts out of the default")
-        suppressed-entry (ledger-entry* dir (get-in (result suppressed-proc) [:result :task]))]
-    (is (zero? (:exit first-proc)) (:err first-proc))
-    (is (zero? (:exit suppressed-proc)) (:err suppressed-proc))
-    (is (= "suppressed" (:worktree-trigger suppressed-entry)))
-    (is (not (contains? suppressed-entry :worktree)))))
+(deftest worktree-new-creates-one-managed-target-and-composes-with-placement
+  (let [{:keys [env log dir env-file]} (fake-env {})
+        before (git-worktree-list dir)
+        proc (call! env "task" "start" "worker" "--worktree" "new" "--split"
+                    "--task" "explicit managed checkout")
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+        checkout (get-in entry [:worktree :path])]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "split" (:placement entry)))
+    (is (= checkout (placement-cwd log)))
+    (is (= (str "orch/" (subs (:task entry) 0 8)) (get-in entry [:worktree :branch])))
+    (is (= (git-head dir) (get-in entry [:worktree :base])))
+    (is (fs/exists? checkout))
+    (is (not= before (git-worktree-list dir)))
+    (is (= (str dir) (injected-env env-file "ORCH_ASSIGNMENT_ROOT")))))
 
-;; The pre-existing generic trait-incompatibility mechanism (task 2538b80c's
-;; `incompatible-with:` declarations) already fails a persona body resolving both
-;; `%worktree` and `%no-worktree`, before this task's own conflict guard ever runs. This
-;; test deliberately exercises the case that mechanism does *not* cover: `--worktree`
-;; (a flag, not a trait) combined with a resolved `%no-worktree` trait -- the conflict
-;; `core/resolve-worktree` itself must catch. It is triggered deliberately here with a
-;; combination that must fail, not merely inspected as passing.
-(deftest worktree-flag-and-no-worktree-trait-conflict-before-any-mutation
-  (let [{:keys [env log dir]} (fake-env {} worktree-persona-roster)
-        proc (call! env "task" "start" "triggers-no-worktree" "--worktree" "--task" "conflicting triggers")]
-    (is (= 1 (:exit proc)))
-    (is (re-find #"worktree trigger conflict" (:out proc)))
-    (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
-    (is (not-any? mutating? (calls log)))))
+(deftest live-existing-target-refuses-before-allocation-or-checkout-mutation
+  (let [{:keys [env dir]} (fake-env {})
+        external (str (fs/create-temp-dir {:prefix "live-linked-checkout-"}))
+        _ (fs/delete-tree external)
+        branch (str "live/" (subs (str (java.util.UUID/randomUUID)) 0 8))]
+    (git-in! dir "worktree" "add" "-b" branch external (git-head dir))
+    (try
+      (let [first-proc (call! env "task" "start" "worker" "--worktree" external "--task" "live owner")]
+        (is (zero? (:exit first-proc)) (:err first-proc))
+        (let [first-entry (ledger-entry* dir (get-in (result first-proc) [:result :task]))
+              ledger-dir (fs/path dir ".tmp" "herdr-orch" "ledger")
+              ledger-before (count (fs/glob ledger-dir "*.json"))
+              worktrees-before (git-worktree-list dir)
+              head-before (git-head external)
+              second-proc (call! env "task" "start" "worker" "--worktree" external
+                                 "--task" "unsafe concurrent writer")]
+          (is (= external (get-in first-entry [:worktree :path])) "positive control: the live round owns the requested path")
+          (is (= 1 (:exit second-proc)))
+          (is (re-find #"live round.*references the checkout" (:out second-proc)))
+          (is (= ledger-before (count (fs/glob ledger-dir "*.json"))) "the refused spawn allocates no task entry")
+          (is (= worktrees-before (git-worktree-list dir)) "the refused spawn changes no worktree registration")
+          (is (= head-before (git-head external)) "the refused spawn changes no checkout history")))
+      (finally
+        (git-in! dir "worktree" "remove" "--force" external)))))
 
-;; The other half of the same criterion, via the mechanism the record itself names: the
-;; two fragments' mutual `incompatible-with:` (task 2538b80c). Deliberately triggered here
-;; for this specific pair, since a mechanism proven only for some other pair is unverified
-;; for this one.
-(deftest worktree-and-no-worktree-traits-in-one-body-conflict-before-any-mutation
-  (let [{:keys [env log dir]} (fake-env {} worktree-persona-roster)
-        proc (call! env "task" "start" "triggers-both" "--task" "both traits in one body")]
-    (is (= 1 (:exit proc)))
-    (is (re-find #"incompatible" (:out proc)))
-    (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
-    (is (not-any? mutating? (calls log)))))
+(deftest sealed-prior-round-allows-existing-target-reuse
+  (let [{:keys [env dir]} (fake-env {})
+        external (str (fs/create-temp-dir {:prefix "external-linked-checkout-"}))
+        _ (fs/delete-tree external)
+        branch (str "external/" (subs (str (java.util.UUID/randomUUID)) 0 8))]
+    (git-in! dir "worktree" "add" "-b" branch external (git-head dir))
+    (try
+      (let [before (git-worktree-list dir)
+            first-proc (call! env "task" "start" "worker" "--worktree" external "--task" "first existing user")]
+        (is (zero? (:exit first-proc)) (:err first-proc))
+        (let [first-entry (ledger-entry* dir (get-in (result first-proc) [:result :task]))
+              _ (seal-round! first-entry)
+              worker-proc (call! env "task" "start" "worker" "--worktree" external "--task" "reuse sealed existing")]
+          (is (zero? (:exit worker-proc)) (:err worker-proc))
+          (let [worker (ledger-entry* dir (get-in (result worker-proc) [:result :task]))
+                _ (seal-round! worker)
+                scout-proc (call! env "task" "start" "scout" "--worktree" external "--task" "inspect after sealed writer")]
+            (is (zero? (:exit scout-proc)) (:err scout-proc))
+            (let [scout (ledger-entry* dir (get-in (result scout-proc) [:result :task]))]
+              (is (= {:path external :branch branch :base (git-head external)}
+                     (select-keys (:worktree worker) [:path :branch :base])))
+              (is (string? (get-in worker [:worktree :repository])))
+              (is (= (:worktree worker) (:worktree scout)))
+              (is (true? (:read-only scout)))
+              (is (not (contains? worker :read-only)))
+              (is (= before (git-worktree-list dir)) "explicit reuse creates no checkout")
+              (let [remove-proc (call! env "worktree" "remove" (:task worker))]
+                (is (= 1 (:exit remove-proc)))
+                (is (re-find #"managed root" (:out remove-proc)))
+                (is (fs/exists? external)))))))
+      (finally
+        (git-in! dir "worktree" "remove" "--force" external)))))
 
-;; Deliberately forces `git worktree add` itself to fail (its destination's parent made
-;; read-only) to prove the ordering claim: the entry's worktree fields, and the base commit
-;; and dirty paths they carry, are already durable on disk by the time that command runs,
-;; so a crash there leaves a recoverable record rather than an untraceable orphan.
-(deftest worktree-fields-are-persisted-before-worktree-add-runs
+(deftest repeated-or-malformed-target-refuses-before-allocation-or-checkout-mutation
+  (doseq [[label argv pattern]
+          [["repeated" ["task" "start" "worker" "--worktree" "new" "--worktree" "." "--task" "two targets"] #"only once"]
+           ["missing value" ["task" "start" "worker" "--task" "missing target" "--worktree"] #"requires a value"]
+           ["missing path" ["task" "start" "worker" "--worktree" "/definitely/missing/checkout" "--task" "bad path"] #"existing directory"]]]
+    (let [{:keys [env dir]} (fake-env {})
+          before (git-worktree-list dir)
+          proc (apply call! env argv)]
+      (is (= 1 (:exit proc)) label)
+      (is (re-find pattern (:out proc)) label)
+      (is (= before (git-worktree-list dir)) label)
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))) label))))
+
+(deftest existing-target-must-be-the-root-of-an-attached-checkout-in-the-same-repository
+  (testing "a directory inside a checkout is not itself a checkout target"
+    (let [{:keys [env dir]} (fake-env {})
+          subdir (str (fs/path dir "nested"))
+          _ (fs/create-dirs subdir)
+          proc (call! env "task" "start" "worker" "--worktree" subdir "--task" "not a root")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"checkout root" (:out proc)))
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))))
+  (testing "an attached checkout of another repository is refused"
+    (let [{:keys [env dir]} (fake-env {})
+          other (fixture-git-repo! "unrelated-worktree-target-")
+          proc (call! env "task" "start" "worker" "--worktree" other "--task" "wrong repository")]
+      (try
+        (is (= 1 (:exit proc)))
+        (is (re-find #"different git repository" (:out proc)))
+        (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
+        (finally (fs/delete-tree other)))))
+  (testing "a detached linked checkout is refused with the git cause"
+    (let [{:keys [env dir]} (fake-env {})
+          detached (str (fs/create-temp-dir {:prefix "detached-linked-checkout-"}))
+          _ (fs/delete-tree detached)]
+      (git-in! dir "worktree" "add" "--detach" detached (git-head dir))
+      (try
+        (let [proc (call! env "task" "start" "worker" "--worktree" detached "--task" "detached")]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"symbolic-ref" (:out proc)))
+          (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger")))))
+        (finally (git-in! dir "worktree" "remove" "--force" detached))))))
+
+(deftest worktree-identity-is-persisted-before-managed-checkout-creation
   (let [{:keys [env dir]} (fake-env {})
         worktrees-dir (fs/path dir ".tmp" "herdr-orch" "worktrees")]
     (fs/create-dirs worktrees-dir)
     (.setWritable (java.io.File. (str worktrees-dir)) false)
     (try
-      (let [proc (call! env "task" "start" "worker" "--worktree" "--task" "forced worktree-add failure")
-            ;; The failed spawn's own stdout carries no task id (see
-            ;; `prune-refuses-an-already-terminal-entry`'s identical recovery), so the
-            ;; single ledger file left behind is read back directly.
+      (let [proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "forced add failure")
             entry (first (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
                                :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
                            (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))]
@@ -416,96 +432,61 @@
         (is (re-find #"worktree add" (:out proc)))
         (is (= "failed" (:status entry)))
         (is (= "worktree" (:failure-phase entry)))
-        ;; The worktree fields -- path, branch, base, dirty paths -- were already written;
-        ;; only their consequence (the actual checkout) never came into being.
-        (is (some? (get-in entry [:worktree :path])))
-        (is (some? (get-in entry [:worktree :branch])))
-        (is (= (git-head dir) (get-in entry [:worktree :base])))
+        (is (= #{:path :branch :base :repository} (set (keys (:worktree entry)))))
         (is (not (fs/exists? (get-in entry [:worktree :path]))))
         (is (nil? (:pane-id entry))))
       (finally (.setWritable (java.io.File. (str worktrees-dir)) true)))))
 
-;; Regression guard: a preview that quietly created a checkout would be a trap for an
-;; orchestrator relying on --print-prompt to stay inspection-only.
-(deftest worktree-print-prompt-is-mutation-free
+(deftest worktree-preview-is-mutation-free
   (let [{:keys [env log dir]} (fake-env {})
-        proc (call! env "task" "run" "worker" "--worktree" "--print-prompt" "--task" "preview only")]
+        proc (call! env "task" "run" "worker" "--worktree" "new" "--print-prompt" "--task" "preview")]
     (is (zero? (:exit proc)) (:err proc))
     (is (contains? (:result (result proc)) :preview))
     (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
     (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "worktrees"))))
     (is (not-any? mutating? (calls log)))
-    ;; No worktree was registered against the fixture's own repository either.
     (is (= 1 (count (str/split-lines (git-worktree-list dir)))))))
 
-;; Exercises the source cwd and the assignment root apart, as the criterion requires: a
-;; real git repository (`source`, the subprocess's own `:dir`) supplies HEAD, dirty paths,
-;; and the checkout itself, while a wholly separate, non-git directory (`assign`) is where
-;; `ORCH_ASSIGNMENT_ROOT` points and where the ledger entry, RESULT, and the checkout's
-;; *destination* path resolve.
-(deftest worktree-exercises-source-and-assignment-roots-apart
+(deftest worktree-source-and-assignment-roots-remain-distinct
   (let [source (fixture-git-repo! "worktree-source-")
         assign (str (fs/create-temp-dir {:prefix "worktree-assign-"}))]
     (try
-      (spit (str (fs/path source "dirty-marker")) "untracked\n")
       (let [{:keys [env]} (fake-env {"ORCH_ASSIGNMENT_ROOT" assign})
-            proc (call-in! source env "task" "start" "worker" "--worktree" "--task" "roots apart")
+            proc (call-in! source env "task" "start" "worker" "--worktree" "new" "--task" "roots apart")
             task (get-in (result proc) [:result :task])
             entry (ledger-entry* assign task)
             checkout (get-in entry [:worktree :path])]
         (is (zero? (:exit proc)) (:err proc))
-        ;; Ledger, RESULT, and the checkout's destination path resolve under `assign`.
-        (is (fs/exists? (fs/path assign ".tmp" "herdr-orch" "ledger" (str task ".json"))))
         (is (str/starts-with? checkout (str assign "/.tmp/herdr-orch/worktrees/")))
-        (is (str/starts-with? (get-in entry [:result]) (str assign "/.tmp/herdr-orch/")))
-        (is (not (fs/exists? (fs/path source ".tmp"))))
-        ;; HEAD, dirty paths, and the checkout itself read from/target `source`.
         (is (= (git-head source) (get-in entry [:worktree :base])))
-        (is (some #(str/includes? % "dirty-marker") (get-in entry [:worktree :parent-dirty])))
-        ;; Surfaced in `task start`'s own JSON output (the full ledger entry), not merely
-        ;; recoverable by re-reading the ledger file afterward.
-        (is (some #(str/includes? % "dirty-marker") (get-in (result proc) [:result :worktree :parent-dirty])))
         (is (str/includes? (git-worktree-list source) checkout))
-        (is (fs/exists? checkout))
+        (is (not (fs/exists? (fs/path source ".tmp"))))
         (git-in! source "worktree" "remove" "--force" checkout))
       (finally
         (fs/delete-tree assign)
         (fs/delete-tree source)))))
 
-;; Confirms the constraint's other half directly: an ordinary (non-worktree) spawn keeps
-;; injecting `ORCH_ASSIGNMENT_ROOT` only when the parent's own env already carried it --
-;; unchanged from today -- while a worktree spawn injects it unconditionally, both resolved
-;; against the same uninjected source repo.
-(deftest ordinary-spawn-keeps-the-conditional-inject-rule-worktree-spawn-does-not
+(deftest assignment-root-injection-depends-on-target-not-a-child-topology-signal
   (let [source (fixture-git-repo! "worktree-noassign-")]
     (try
-      (let [{ordinary-env :env ordinary-file :env-file} (fake-env {})
-            {worktree-env :env worktree-file :env-file} (fake-env {})
-            ordinary-env (dissoc ordinary-env "ORCH_ASSIGNMENT_ROOT")
-            worktree-env (dissoc worktree-env "ORCH_ASSIGNMENT_ROOT")
-            ordinary (call-in! source ordinary-env "task" "start" "worker" "--task" "no override, no worktree")
-            worktree (call-in! source worktree-env "task" "start" "worker" "--worktree" "--task" "no override, but worktree")]
-        (is (zero? (:exit ordinary)) (:err ordinary))
-        (is (zero? (:exit worktree)) (:err worktree))
-        (is (nil? (injected-env ordinary-file "ORCH_ASSIGNMENT_ROOT")))
-        (is (= source (injected-env worktree-file "ORCH_ASSIGNMENT_ROOT")))
-        ;; Both still resolve the same assignment root (`source`, via the ordinary git
-        ;; toplevel probe) -- only the child's own injected env differs.
-        (is (fs/exists? (fs/path source ".tmp" "herdr-orch" "ledger" (str (get-in (result ordinary) [:result :task]) ".json"))))
-        (is (fs/exists? (fs/path source ".tmp" "herdr-orch" "ledger" (str (get-in (result worktree) [:result :task]) ".json")))))
+      (let [{shared-env :env shared-file :env-file} (fake-env {})
+            {managed-env :env managed-file :env-file} (fake-env {})
+            shared (call-in! source (dissoc shared-env "ORCH_ASSIGNMENT_ROOT")
+                             "task" "start" "worker" "--task" "shared")
+            managed (call-in! source (dissoc managed-env "ORCH_ASSIGNMENT_ROOT")
+                              "task" "start" "worker" "--worktree" "new" "--task" "managed")]
+        (is (zero? (:exit shared)) (:err shared))
+        (is (zero? (:exit managed)) (:err managed))
+        (is (nil? (injected-env shared-file "ORCH_ASSIGNMENT_ROOT")))
+        (is (= source (injected-env managed-file "ORCH_ASSIGNMENT_ROOT"))))
       (finally (fs/delete-tree source)))))
 
-;; A grandchild spawned from inside the checkout (its own cwd is a *different* git
-;; worktree, with its own distinct `git rev-parse --show-toplevel`) must still resolve the
-;; same assignment root as its parent, because the checkout's injected `ORCH_ASSIGNMENT_ROOT`
-;; -- not a fresh git probe from the checkout's own cwd -- is what `ledger/assignment-root`
-;; reads back.
 (deftest worktree-child-cwd-still-resolves-the-inherited-assignment-root
   (let [{:keys [env dir]} (fake-env {})
-        first-proc (call! env "task" "start" "worker" "--worktree" "--task" "root spawn")
+        first-proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "root spawn")
         first-entry (ledger-entry* dir (get-in (result first-proc) [:result :task]))
         checkout (get-in first-entry [:worktree :path])
-        nested-proc (call-in! checkout env "task" "start" "worker" "--task" "from inside the checkout")
+        nested-proc (call-in! checkout env "task" "start" "worker" "--task" "inside checkout")
         nested-entry (ledger-entry* dir (get-in (result nested-proc) [:result :task]))]
     (is (zero? (:exit first-proc)) (:err first-proc))
     (is (zero? (:exit nested-proc)) (:err nested-proc))
@@ -520,7 +501,7 @@
 ;; passthrough that would have kept the unlisted field too).
 (deftest continue-carries-worktree-identity-forward-and-drops-an-unlisted-field
   (let [{:keys [env dir]} (fake-env {})
-        spawn-proc (call! env "task" "start" "worker" "--worktree" "--task" "worktree round one")
+        spawn-proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "worktree round one")
         _ (is (zero? (:exit spawn-proc)) (:err spawn-proc))
         spawned (ledger-entry* dir (get-in (result spawn-proc) [:result :task]))
         ;; A field `continue!`'s `select-keys` never names, so it must be dropped exactly
@@ -2108,13 +2089,13 @@
 ;; differ (different checkouts, different base/branch/tip).
 (deftest reconciliation-object-is-identical-across-collect-collect-any-and-status
   (let [{:keys [env dir]} (fake-env {})
-        single-proc (call! env "task" "start" "worker" "--worktree" "--task" "single collect round")
+        single-proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "single collect round")
         _ (is (zero? (:exit single-proc)) (:err single-proc))
         single (ledger-entry* dir (get-in (result single-proc) [:result :task]))
         _ (publish-child! single)
         single-collect-proc (call! env "task" "collect" (:task single))
         single-status-proc (call! env "task" "status" (:task single))
-        any-proc (call! env "task" "start" "worker" "--worktree" "--task" "collect --any round")
+        any-proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "collect --any round")
         _ (is (zero? (:exit any-proc)) (:err any-proc))
         any-entry (ledger-entry* dir (get-in (result any-proc) [:result :task]))
         _ (publish-child! any-entry)
@@ -2143,7 +2124,7 @@
 ;; other removal outside `oh`'s own teardown verb) must be reported as data, never an error.
 (deftest reconciliation-reports-a-missing-checkout-without-erroring-the-verb
   (let [{:keys [env dir]} (fake-env {})
-        proc (call! env "task" "start" "worker" "--worktree" "--task" "checkout later removed")
+        proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "checkout later removed")
         _ (is (zero? (:exit proc)) (:err proc))
         entry (ledger-entry* dir (get-in (result proc) [:result :task]))
         checkout (get-in entry [:worktree :path])
@@ -2167,7 +2148,7 @@
 ;; recorded base, never a fresh probe of the parent's live HEAD.
 (deftest reconciliation-reports-against-the-recorded-base-not-live-parent-head
   (let [{:keys [env dir]} (fake-env {})
-        proc (call! env "task" "start" "worker" "--worktree" "--task" "base survives a HEAD move")
+        proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "base survives a HEAD move")
         _ (is (zero? (:exit proc)) (:err proc))
         entry (ledger-entry* dir (get-in (result proc) [:result :task]))
         recorded-base (get-in entry [:worktree :base])]
@@ -2191,7 +2172,7 @@
 ;; must never collapse into one list.
 (deftest reconciliation-keeps-committed-and-dirty-paths-distinct
   (let [{:keys [env dir]} (fake-env {})
-        proc (call! env "task" "start" "worker" "--worktree" "--task" "distinguishes committed from dirty")
+        proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "distinguishes committed from dirty")
         _ (is (zero? (:exit proc)) (:err proc))
         entry (ledger-entry* dir (get-in (result proc) [:result :task]))
         checkout (get-in entry [:worktree :path])]
@@ -2213,7 +2194,7 @@
 (defn- git-branch-exists? [dir branch]
   (not (str/blank? (git-in! dir "branch" "--list" branch))))
 (defn- spawn-worktree! [env dir assignment]
-  (let [proc (call! env "task" "start" "worker" "--worktree" "--task" assignment)]
+  (let [proc (call! env "task" "start" "worker" "--worktree" "new" "--task" assignment)]
     (when-not (zero? (:exit proc)) (throw (ex-info "fixture worktree spawn failed" {:out (:out proc) :err (:err proc)})))
     (ledger-entry* dir (get-in (result proc) [:result :task]))))
 
@@ -2287,9 +2268,8 @@
       (is (= "removed" (:status res)))
       (is (false? (:tip-is-ancestor-of-parent-head res))))))
 
-;; `--worktree-from` (task e76180b9) needs this exact nuance: `:worktree` identity is the
-;; lineage's, not the round's, so a stale round's own task id must still resolve to the
-;; one still-current checkout.
+;; Worktree identity belongs to the lineage, not one round, so a stale round's task id
+;; still resolves to the current checkout.
 (deftest worktree-remove-resolves-the-lineages-single-checkout-from-either-rounds-task-id
   (let [{:keys [env dir]} (fake-env {})
         round1 (capture-entry! dir (spawn-worktree! env dir "worktree round one"))
@@ -2423,7 +2403,7 @@
 ;; checkout behind rather than an orphaned, untraceable one.
 (deftest worktree-remove-recovers-a-checkout-orphaned-by-a-spawn-failure-after-creation
   (let [{:keys [env dir]} (fake-env {"FAKE_FAIL_START" "1"})
-        proc (call! env "task" "start" "worker" "--worktree" "--task" "start fails after the checkout is cut")
+        proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "start fails after the checkout is cut")
         ;; The failed `start` exits non-zero without printing the task id, so recover the
         ;; single entry file directly (mirrors `prune-refuses-an-already-terminal-entry`).
         entry (first (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
@@ -2631,6 +2611,188 @@
 (defn- parent-waits [log] (parent-calls log ["agent" "wait"]))
 (defn- parent-gets [log] (parent-calls log ["agent" "get"]))
 (defn- flag-value [argv flag] (second (drop-while #(not= flag %) argv)))
+
+;; --- publication checkpoints (task c45b3635) -----------------------------------------
+(deftest shared-checkout-publication-never-stages-or-commits-dirt
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "shared publication")
+        dirty (str (fs/path dir "shared-untracked"))
+        before (git-head dir)]
+    (spit dirty "must stay untracked\n")
+    (let [proc (call! (child-publish-env env entry) "task" "publish"
+                      "--status" "COMPLETE" "--summary" "shared done")
+          parsed (core/parse-envelope (slurp (:result entry)))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= before (git-head dir)))
+      (is (some #(str/includes? % "shared-untracked") (cli/dirty-paths dir)))
+      (is (nil? (:checkpoint parsed)))
+      (is (nil? (get-in (result proc) [:result :checkpoint]))))))
+
+(deftest worktree-publications-commit-on-waiting-and-carry-the-current-ref-on-clean-retry
+  (let [{:keys [env dir]} (fake-env {"ORCH_WAITING_INTERVAL_MIN_MS" "1"})
+        _ (spit (str (fs/path dir ".gitignore")) "checkpoint.ignore\n")
+        _ (git-in! dir "add" ".gitignore")
+        _ (git-in! dir "commit" "-q" "-m" "fixture ignore rule")
+        entry (spawn-worktree! env dir "checkpoint stream")
+        checkout (get-in entry [:worktree :path])
+        base (git-head checkout)]
+    (spit (str (fs/path checkout "tracked-and-untracked")) "checkpoint me\n")
+    (spit (str (fs/path checkout "checkpoint.ignore")) "ignored scratch\n")
+    (let [waiting (call! (child-publish-env env entry) "task" "publish"
+                         "--status" "WAITING" "--summary" "phase boundary")
+          waiting-ref (get-in (result waiting) [:result :checkpoint])
+          waiting-envelope (core/parse-envelope (slurp (:result entry)))]
+      (is (zero? (:exit waiting)) (:err waiting))
+      (is (not= base waiting-ref))
+      (is (= waiting-ref (git-head checkout)))
+      (is (= waiting-ref (:checkpoint waiting-envelope)))
+      (is (= "1" (git-in! checkout "rev-list" "--count" (str base ".." waiting-ref))))
+      (is (empty? (cli/dirty-paths checkout)))
+      (is (= ["!! checkpoint.ignore"] (cli/ignored-paths checkout)))
+      (is (= (str "herdr-orch checkpoint " (:task entry) " WAITING")
+             (git-in! checkout "log" "-1" "--pretty=%s")))
+      (let [terminal (call! (child-publish-env env entry) "task" "publish"
+                            "--status" "COMPLETE" "--summary" "done")
+            terminal-ref (get-in (result terminal) [:result :checkpoint])
+            terminal-envelope (core/parse-envelope
+                               (slurp (ledger/item-path (:result entry) 2)))]
+        (is (zero? (:exit terminal)) (:err terminal))
+        (is (= waiting-ref terminal-ref (:checkpoint terminal-envelope)))
+        (is (= "1" (git-in! checkout "rev-list" "--count" (str base ".." terminal-ref))))))))
+
+(deftest throttled-worktree-publication-mutates-neither-index-nor-history
+  (let [{:keys [env dir]} (fake-env {"ORCH_WAITING_INTERVAL_MIN_MS" "60000"})
+        entry (spawn-worktree! env dir "throttled checkpoint")
+        checkout (get-in entry [:worktree :path])]
+    (spit (str (fs/path checkout "first")) "first\n")
+    (let [first (call! (child-publish-env env entry) "task" "publish"
+                       "--status" "WAITING" "--summary" "first")
+          checkpoint (get-in (result first) [:result :checkpoint])]
+      (is (zero? (:exit first)) (:err first))
+      (spit (str (fs/path checkout "second")) "must remain dirty\n")
+      (let [throttled (call! (child-publish-env env entry) "task" "publish"
+                             "--status" "WAITING" "--summary" "too soon")]
+        (is (zero? (:exit throttled)) (:err throttled))
+        (is (= "throttled" (get-in (result throttled) [:result :status])))
+        (is (= checkpoint (git-head checkout)))
+        (is (some #(str/includes? % "second") (cli/dirty-paths checkout)))
+        (is (not (fs/exists? (ledger/item-path (:result entry) 2))))))))
+
+(deftest append-failure-after-commit-retries-with-the-already-created-ref
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "append retry")
+        checkout (get-in entry [:worktree :path])
+        result-parent (fs/parent (fs/path (:result entry)))
+        base (git-head checkout)]
+    (spit (str (fs/path checkout "survives-append-failure")) "checkpoint first\n")
+    (.setWritable (java.io.File. (str result-parent)) false)
+    (try
+      (let [failed (call! (child-publish-env env entry) "task" "publish"
+                          "--status" "COMPLETE" "--summary" "retry me")
+            committed (git-head checkout)]
+        (is (= 1 (:exit failed)))
+        (is (not= base committed) "the protocol commit happened before append failed")
+        (is (not (fs/exists? (:result entry))))
+        (.setWritable (java.io.File. (str result-parent)) true)
+        (let [retry (call! (child-publish-env env entry) "task" "publish"
+                           "--status" "COMPLETE" "--summary" "retry me")]
+          (is (zero? (:exit retry)) (:err retry))
+          (is (= committed (get-in (result retry) [:result :checkpoint])))
+          (is (= committed (:checkpoint (core/parse-envelope (slurp (:result entry))))))
+          (is (= "1" (git-in! checkout "rev-list" "--count" (str base ".." committed))))))
+      (finally (.setWritable (java.io.File. (str result-parent)) true)))))
+
+(deftest read-only-dirt-refuses-with-a-finding-and-never-commits
+  (let [{:keys [env dir]} (fake-env {})
+        external (str (fs/create-temp-dir {:prefix "read-only-checkpoint-"}))
+        _ (fs/delete-tree external)
+        branch (str "read-only/" (subs (str (java.util.UUID/randomUUID)) 0 8))]
+    (git-in! dir "worktree" "add" "-b" branch external (git-head dir))
+    (try
+      (let [spawn (call! env "task" "start" "scout" "--worktree" external "--task" "read only")
+            entry (ledger-entry* dir (get-in (result spawn) [:result :task]))
+            before (git-head external)
+            dirty (fs/path external "unexpected-write")]
+        (spit (str dirty) "must be reported\n")
+        (let [refused (call! (child-publish-env env entry) "task" "publish"
+                             "--status" "COMPLETE" "--summary" "must refuse")]
+          (is (= 1 (:exit refused)))
+          (is (re-find #"read-only child left changes" (:out refused)))
+          (is (= "read-only child left changes in its checkout"
+                 (get-in (result refused) [:error :data :finding])))
+          (is (= before (git-head external)))
+          (is (not (fs/exists? (:result entry)))))
+        (fs/delete dirty)
+        (let [clean (call! (child-publish-env env entry) "task" "publish"
+                           "--status" "COMPLETE" "--summary" "clean inspection")]
+          (is (zero? (:exit clean)) (:err clean))
+          (is (= before (get-in (result clean) [:result :checkpoint])))))
+      (finally (git-in! dir "worktree" "remove" "--force" external)))))
+
+(deftest publication-checkout-and-git-failures-write-no-result-item
+  (testing "missing checkout"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (spawn-worktree! env dir "missing at publication")
+          checkout (get-in entry [:worktree :path])]
+      (git-in! dir "worktree" "remove" "--force" checkout)
+      (let [proc (call! (child-publish-env env entry) "task" "publish"
+                        "--status" "COMPLETE" "--summary" "missing")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"existing directory" (:out proc)))
+        (is (not (fs/exists? (:result entry)))))))
+  (testing "detached branch"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (spawn-worktree! env dir "detached at publication")
+          checkout (get-in entry [:worktree :path])]
+      (git-in! checkout "checkout" "--detach" "-q")
+      (spit (str (fs/path checkout "dirty")) "never staged\n")
+      (let [proc (call! (child-publish-env env entry) "task" "publish"
+                        "--status" "COMPLETE" "--summary" "detached")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"symbolic-ref" (:out proc)))
+        (is (not (fs/exists? (:result entry)))))))
+  (testing "wrong repository"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (spawn-worktree! env dir "wrong repository at publication")
+          other (fixture-git-repo! "publication-wrong-repo-")
+          corrupted (patch-entry! dir entry :worktree (assoc (:worktree entry) :path other))]
+      (try
+        (let [proc (call! (child-publish-env env corrupted) "task" "publish"
+                          "--status" "COMPLETE" "--summary" "wrong repo")]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"different git repository" (:out proc)))
+          (is (not (fs/exists? (:result entry)))))
+        (finally (fs/delete-tree other)))))
+  (testing "staging failure"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (spawn-worktree! env dir "staging failure")
+          checkout (get-in entry [:worktree :path])
+          index (git-in! checkout "rev-parse" "--git-path" "index")
+          admin (fs/parent (fs/path index))]
+      (spit (str (fs/path checkout "dirty")) "cannot stage\n")
+      (.setWritable (java.io.File. (str admin)) false)
+      (try
+        (let [proc (call! (child-publish-env env entry) "task" "publish"
+                          "--status" "COMPLETE" "--summary" "stage fails")]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"git add -A failed" (:out proc)))
+          (is (not (fs/exists? (:result entry)))))
+        (finally (.setWritable (java.io.File. (str admin)) true)))))
+  (testing "commit failure"
+    (let [{:keys [env dir]} (fake-env {})
+          entry (spawn-worktree! env dir "commit failure")
+          checkout (get-in entry [:worktree :path])
+          hook (fs/path dir ".git" "hooks" "pre-commit")]
+      (spit (str (fs/path checkout "dirty")) "cannot commit\n")
+      (spit (str hook) "#!/bin/sh\nexit 1\n")
+      (.setExecutable (java.io.File. (str hook)) true)
+      (try
+        (let [proc (call! (child-publish-env env entry) "task" "publish"
+                          "--status" "COMPLETE" "--summary" "commit fails")]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"git commit" (:out proc)))
+          (is (not (fs/exists? (:result entry)))))
+        (finally (fs/delete-if-exists hook))))))
 
 (deftest ledger-records-the-parent-pane-at-allocation
   (let [{:keys [env dir]} (fake-env {})
@@ -5280,110 +5442,3 @@
     (is (nil? (spawned-model (fake-env {"FAKE_PARENT_AGENT" "claude" "PI_PROVIDER" "anthropic" "PI_MODEL" "claude-opus-5"}
                                        {"helper" modelless-persona})
                              "helper" "--task" "no stray inheritance")))))
-
-;; --- handoff reuse: `--worktree-from` (task e76180b9) ---------------------------------
-;; Deliberately reuses `oh worktree remove`'s exact ownership rule and its exact
-;; unclosed-and-unsealed liveness predicate (`worktree-referenced-by-live-round?`, scoped
-;; by checkout path) rather than forking either: the change-record's Decision is that a
-;; checkout may outlive the lineage that created it and be handed to a new child
-;; (test-writer -> worker -> reviewer), and reuse needs the identical "is anyone still
-;; genuinely working in this checkout" question teardown already answers -- one predicate,
-;; not two to keep in step.
-
-(deftest worktree-from-reuses-the-recorded-checkout-and-cuts-no-second-one
-  (let [{:keys [env log dir env-file]} (fake-env {})
-        source (spawn-worktree! env dir "worker cuts the checkout")]
-    (publish-child! source)
-    (let [before (git-worktree-list dir)
-          proc (call! env "task" "start" "worker" "--worktree-from" (:task source) "--task" "reuses the checkout")
-          reuse (ledger-entry* dir (get-in (result proc) [:result :task]))
-          argv (calls log)]
-      (is (zero? (:exit proc)) (:err proc))
-      (is (= "reuse" (:worktree-trigger reuse)))
-      (is (= (:worktree source) (:worktree reuse)) "identical identity: same path, branch, base, parent-dirty")
-      (is (= before (git-worktree-list dir)) "no second `git worktree add` ever ran")
-      (is (str/includes? (str/join " " (first (filter #(= ["tab" "create"] (vec (take 2 %))) argv)))
-                          (get-in source [:worktree :path])))
-      ;; A reused checkout is still a worktree child: the commit-permission signal must
-      ;; reach it exactly as it does the create paths (task f49a63f5 reopened).
-      (is (= "1" (injected-env env-file "HERDR_ORCH_WORKTREE"))))))
-
-;; A reviewer/scout inspecting a worker's checkout is the motivating case; unlike the
-;; implicit in-flight default (which a `%read-only` persona never gets), `--worktree-from`
-;; is explicit and must not be gated on write-enablement.
-(deftest worktree-from-is-legal-for-a-read-only-persona
-  (let [{:keys [env dir]} (fake-env {})
-        source (spawn-worktree! env dir "worker cuts the checkout")]
-    (publish-child! source)
-    ;; `scout` is a real packaged persona carrying the packaged `%read-only` trait.
-    (let [proc (call! env "task" "start" "scout" "--worktree-from" (:task source) "--task" "reviews the checkout")
-          reuse (ledger-entry* dir (get-in (result proc) [:result :task]))]
-      (is (zero? (:exit proc)) (:err proc))
-      (is (= (:worktree source) (:worktree reuse))))))
-
-;; Deliberately triggered with known-bad input: never published, so the round is
-;; genuinely unfinished (unsealed and unclosed) -- the exact case
-;; `worktree-referenced-by-live-round?` refuses for `oh worktree remove`, reused here.
-(deftest worktree-from-refuses-while-a-live-round-still-references-the-checkout
-  (let [{:keys [env dir]} (fake-env {})
-        source (spawn-worktree! env dir "still working, never published")]
-    (let [proc (call! env "task" "start" "worker" "--worktree-from" (:task source) "--task" "attempted handoff")]
-      (is (= 1 (:exit proc)))
-      (is (re-find #"live round" (:out proc)))
-      ;; `fs/list-dir` on this directory also holds the sibling `indices` subtree, so
-      ;; count only the ledger's own `*.json` entries.
-      (is (= 1 (count (fs/glob (fs/path dir ".tmp" "herdr-orch" "ledger") "*.json")))
-          "no second entry was ever allocated"))))
-
-(deftest worktree-from-refuses-a-task-with-no-recorded-worktree
-  (let [{:keys [env dir]} (fake-env {})
-        entry (start-child! env dir "never a worktree round")
-        proc (call! env "task" "start" "worker" "--worktree-from" (:task entry) "--task" "no checkout to reuse")]
-    (is (= 1 (:exit proc)))
-    (is (re-find #"no worktree" (:out proc)))))
-
-;; Deliberately triggered with known-bad input: `--worktree` and `--worktree-from` naming
-;; both a fresh and an existing checkout on one spawn. Caught before either checkout is
-;; touched, so exactly one `git worktree` command -- the fixture's own creation of
-;; `source` -- has run by the time this assertion reads the listing.
-(deftest worktree-from-conflicts-with-worktree-flag-before-any-mutation
-  (let [{:keys [env dir]} (fake-env {})
-        source (spawn-worktree! env dir "worker cuts the checkout")]
-    (publish-child! source)
-    (let [before (git-worktree-list dir)
-          proc (call! env "task" "start" "worker" "--worktree" "--worktree-from" (:task source) "--task" "conflicting triggers")]
-      (is (= 1 (:exit proc)))
-      (is (re-find #"worktree-from refused" (:out proc)))
-      (is (= before (git-worktree-list dir))))))
-
-;; The realistic "does not own" refusal: a source entry recorded against a genuinely
-;; different, resolvable `:parent-session`. `ident`'s own `:parent-session` is guaranteed
-;; non-nil whenever `spawn!` reaches this guard at all (kind/model/label/pane placement
-;; above all depend on it unguarded), so the true both-nil coincidence the shared
-;; predicate also guards against -- exercised directly against `worktree-of`/
-;; `assert-worktree-owned!` by the existing `worktree-remove` suite via the guarded,
-;; exception-catching `caller-parent-session` -- cannot be constructed through this verb;
-;; see this task's own COMPLETE finding for that structural difference. What remains
-;; reachable here, and is exercised by the two tests below, is a mismatched non-nil caller
-;; and a nil *recorded* side, both refused by the identical `(and caller recorded (= caller
-;; recorded))` expression.
-(deftest worktree-from-refuses-a-foreign-parent-session
-  (let [{:keys [env dir]} (fake-env {})
-        source (foreign! dir (spawn-worktree! env dir "someone else's checkout"))]
-    (publish-child! source)
-    (let [proc (call! env "task" "start" "worker" "--worktree-from" (:task source) "--task" "attempted handoff")]
-      (is (= 1 (:exit proc)))
-      (is (re-find #"own" (:out proc))))))
-
-;; A corrupted or legacy-format source entry whose own `:parent-session` was never
-;; recorded: refused by the same `(and caller recorded ...)` expression, from its other
-;; side (caller resolves fine; `recorded` is nil).
-(deftest worktree-from-refuses-a-source-entry-with-no-recorded-parent-session
-  (let [{:keys [env dir]} (fake-env {})
-        source (spawn-worktree! env dir "nil recorded parent-session")
-        corrupted (dissoc source :parent-session)]
-    (spit (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str (:task source) ".json"))) (json/generate-string corrupted))
-    (publish-child! corrupted)
-    (let [proc (call! env "task" "start" "worker" "--worktree-from" (:task source) "--task" "attempted handoff")]
-      (is (= 1 (:exit proc)))
-      (is (re-find #"own" (:out proc))))))

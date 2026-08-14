@@ -56,5 +56,3 @@ Close the child after every capture, whatever it returned. `continue` is root-on
 - Be opinionated about tradeoffs while leaving product preferences to the user.
 - Keep the written record terse and declarative even when the conversation is exploratory.
 - Park scope growth rather than quietly expanding the plan.
-
-%no-worktree
