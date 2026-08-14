@@ -780,3 +780,22 @@ Evidence:
 - reviewer-3a2e3cdc process finding (nil scratch target)
 - reviewer-cb0427bb process finding and 4,173-second aborted probe (timeout unit)
 - worker-8271dad0 process finding plus final review P2 (FIFO assumption / production test barrier)
+
+** TODO self-improvement: persist AGENTS metrics comparison script :skill:self_improvement:
+:PROPERTIES:
+:CUSTOM_ID: efb0ea1c-149d-4c8d-83ef-6ce3ca1fd7d8
+:CREATED: [2026-08-14 Fri 21:45]
+:END:
+:LOGBOOK:
+- Created [2026-08-14 Fri 21:45]
+:END:
+Persist a reusable Babashka script that compares instruction files before and after a rewrite. The script must report line counts and Pi token estimates. Use `wc -l` line semantics and Pi's conservative `ceil(characters / 4)` estimate. Support a Git revision and working-tree paths without temporary source copies. Choose a canonical location, preferably a resource or script under `skills/self-improvement/`. Document the invocation and add tests for totals, final newlines, and multiple files. Do not use Node for this workflow.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: cormacc/dotagents @ main
+- timestamp: [2026-08-14 Fri 21:44]
+- sender: human
+
+Evidence:
+A one-off `.tmp/compare-agent-counts.clj` produced the requested comparison. A later Node verification duplicated the calculation and violated the repository's Babashka-first rule. The user identified the comparison as reusable and requested a durable script.
