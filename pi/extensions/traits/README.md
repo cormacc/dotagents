@@ -12,7 +12,7 @@ The canonical trait format, admission rules, and gate protocol live in `skills/h
 
 ## Runtime
 
-The extension invokes `~/.agents/skills/herdr-orch/scripts/traits`, which resolves its symlinked location and runs the repository-root `bb.edn` `traits` task without changing the caller's working directory. It requires Babashka and the co-installed dotagents skills tree; there is no availability probe or alternate implementation.
+The extension invokes the co-installed `herdr-orch` trait launcher. Its path, symlink resolution, and cwd behaviour are owned by `skills/herdr-orch/scripts/docs/contract.md` § Standalone trait interpolator CLI. It requires Babashka and the co-installed dotagents skills tree. There is no availability probe or alternate implementation.
 
 On an interpolation error, the extension shows a warning and sends the original input unchanged. Unknown tokens are not errors: they remain unchanged without a warning.
 

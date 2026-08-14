@@ -8,7 +8,7 @@
 ;;       bbin install io.github.cormacc/dotagents --as ot --latest-sha
 ;;   In-tree dev runs via `bb run ot …` or skills/org-tasks/scripts/ot.
 ;; - :tasks keeps the pre-existing dotagents bb tasks alongside the
-;;   `ot`, `subagent`, and test entries.
+;;   `ot`, `traits`, and test entries.
 {:paths    ["skills/org-tasks/scripts/src"
             "skills/herdr-orch/scripts/src"]
  :deps     {org.babashka/cli {:mvn/version "0.12.75"}
@@ -25,10 +25,6 @@
   ot   {:doc  "Run the in-tree ot CLI (org-tasks.cli/-main)"
         :task (apply (requiring-resolve 'org-tasks.cli/-main)
                      *command-line-args*)}
-
-  subagent {:doc "Run the in-tree subagent CLI (herdr-orch.cli/-main)"
-            :task (apply (requiring-resolve 'herdr-orch.cli/-main)
-                         *command-line-args*)}
 
   traits {:doc "Run the trait interpolator CLI (herdr-orch.traits-cli/-main)"
           :task (apply (requiring-resolve 'herdr-orch.traits-cli/-main)

@@ -1,6 +1,6 @@
 # `oh` -- Herdr delegation CLI
 
-`oh` (the executable formerly named `subagent`; `bb run subagent` remains its Babashka task alias) is the harness-agnostic executable behind the `herdr-orch` skill. It performs the mechanical single-child delegation protocol -- spawn, capture, then an explicit `close` or `continue` -- while the skill retains delegation and safety policy.
+`oh` is the harness-agnostic executable behind the `herdr-orch` skill. It performs the mechanical single-child delegation protocol -- spawn, capture, then an explicit `close` or `continue` -- while the skill retains delegation and safety policy.
 
 ## Run
 
@@ -10,7 +10,6 @@ From the repository root (the repo `bb.edn` provides the `test` task; `bb test` 
 ./skills/herdr-orch/scripts/oh --help          # global command list
 ./skills/herdr-orch/scripts/oh agent --help    # every signature in one group
 ./skills/herdr-orch/scripts/oh agent prompt --help  # one command, with its positional arity
-bb run subagent --help
 printf '%s' 'Review this %focused' | ./skills/herdr-orch/scripts/traits --layer home="$HOME/.agents/traits"
 bb traits --layer home="$HOME/.agents/traits" --plain < prompt.md
 bb test
