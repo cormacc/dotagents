@@ -106,20 +106,8 @@
 
 # File operations
 
-## Search and command-line arguments
-- Use `rg` for file searches and content searches.
-- Use `rg` only for searches. Never pass `-r` or `--replace`.
-- The `-r` flag does not mean recursive. `rg` searches recursively by default.
-- In a short-flag cluster, `-r` consumes the remaining characters as a replacement template.
-- For example, `rg -rn 'pattern'` rewrites every printed match to `n` and exits 0.
-- The command `rg -nr 'pattern'` prints nothing and exits 0.
-- The first result can appear to be evidence. The second result can appear to prove absence.
-- Use Babashka `str/replace` to rewrite text. It is also the preferred tool for renames below.
+## Command-line arguments
 - Verify each flag's meaning before you trust its output.
-- The `rg -E` flag means `--encoding`. It consumes a following pattern as its encoding value.
-- Use `-e` to introduce a pattern.
-- Rust regular-expression escaping differs from POSIX escaping. For example, `\+` matches a literal plus.
-- A wrong flag or pattern usually produces plausible, incorrect output instead of an error.
 - A flag rejection in one argument position does not prove rejection in another position.
 - A removed `--focus` flag produced `unknown task option` before other arguments.
 - In the final position, the same flag produced `option requires a value`.
