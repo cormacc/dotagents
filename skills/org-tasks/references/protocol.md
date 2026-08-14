@@ -16,7 +16,7 @@ Repositories declare shared options in `TASKS.setup.org` and reference it from t
 #+LINK: archive file:../../TASKS.archive.org::#%s
 ```
 
-Setup links resolve from a change-record's own location (`design/log/`), since records pull this file in via `#+SETUPFILE: ../../TASKS.setup.org`. `TASKS.org` and `TASKS.archive.org` declare repo-root-relative overrides before setupfiles (first declaration wins). `plan` is referenced only from the task files, so it lives there, not in setup; `proj` is a generic repo-root path link (`./` from the task file, `../../` from a record):
+Setup links resolve from a change-record's own location (`design/log/`), since records pull this file in via `#+SETUPFILE: ../../TASKS.setup.org`. `TASKS.org` and `TASKS.archive.org` declare repo-root-relative overrides before setupfiles (first declaration wins). `plan` is referenced only from the task files, so it lives there, not in setup. `proj` is a generic repo-root path link (`./` from the task file, `../../` from a record):
 
 ```org
 #+LINK: task file:TASKS.org::#%s
@@ -45,17 +45,17 @@ Optional description text.
 ```
 
 - States: `TODO`, `STARTED`, `WAITING`, `DONE`, `CANCELLED`.
-- Priorities: `[#A]` critical, `[#B]` high, `[#C]` medium, `[#D]` low. `ot priority` is the canonical writer (explicit set, `--cycle forward|back` through unset→A→B→C→D→unset, `--clear`); priority changes do not write LOGBOOK entries.
-- Tags are semantic categories; there are no reserved operational tags.
+- Priorities: `[#A]` critical, `[#B]` high, `[#C]` medium, `[#D]` low. `ot priority` is the canonical writer (explicit set, `--cycle forward|back` through unset→A→B→C→D→unset, `--clear`). Priority changes do not write LOGBOOK entries.
+- Tags are semantic categories. There are no reserved operational tags.
 - Sibling task subtrees are separated by one blank line for readability.
-- `:CUSTOM_ID:` is a UUID v4 and required on every task/subtask. Use `ot create` or `ot uuid`; never invent sequential/shared-prefix IDs.
+- `:CUSTOM_ID:` is a UUID v4 and required on every task/subtask. Use `ot create` or `ot uuid`. Never invent sequential/shared-prefix IDs.
 - `:CREATED:` is set on creation and is not backfilled on existing tasks.
 - `:STARTED:` caches the first STARTED transition; source of truth is the first matching LOGBOOK state entry.
 - `CLOSED:` is the current close timestamp for `DONE`/`CANCELLED`, on its own line between heading and `:PROPERTIES:`. It is cleared on reopen and rewritten on the next close.
 - `:LOGBOOK:` is append-only lifecycle history: one created entry plus one state entry per transition.
-- `:ARCHIVED:` is written by `ot archive`; `:ARCHIVE_OLPATH:` records the source level-1 section so `ot unarchive` can restore without guessing. It is stamped only for roots archived from shared `TASKS.org`, whose level-1 headings are real restore destinations; roots archived from a file-level `#+IMPORT:` record are left without it and need an explicit `--section` on restore. Unarchive removes both archive properties while preserving lifecycle state/history.
-- `#+IMPORT:` links a change-record/imported task file. Canonical plan imports use `[[plan:file.org]]`; file links remain valid for non-plan imports.
-- `design/specs/` is a conventional home for prose-only living contracts; there is no dedicated `spec` link type. Reference specs (and any repo file) from records with `proj` (`[[proj:design/specs/foo.org]]`), and list task-relevant specs with `#+SPEC:` values in the same bare `[[proj:PATH]]` link form (e.g. `[[proj:design/specs/foo.org]]`). For discovery to reach a `design/specs/` folder automatically, declare it in `TASKS.org` (`#+SPEC: [[proj:design/specs/]]`) or link its files from `design/SPEC.org` -- the discovery default root is the file `./design/SPEC.org`, not the folder.
+- `ot archive` writes `:ARCHIVED:`. `:ARCHIVE_OLPATH:` records the source level-1 section so `ot unarchive` can restore without guessing. It is stamped only for roots archived from shared `TASKS.org`, whose level-1 headings are real restore destinations; roots archived from a file-level `#+IMPORT:` record are left without it and need an explicit `--section` on restore. Unarchive removes both archive properties while preserving lifecycle state/history.
+- `#+IMPORT:` links a change-record/imported task file. Canonical plan imports use `[[plan:file.org]]`. File links remain valid for non-plan imports.
+- `design/specs/` is a conventional home for prose-only living contracts. There is no dedicated `spec` link type. Reference specs (and any repo file) from records with `proj` (`[[proj:design/specs/foo.org]]`), and list task-relevant specs with `#+SPEC:` values in the same bare `[[proj:PATH]]` link form (e.g. `[[proj:design/specs/foo.org]]`). For discovery to reach a `design/specs/` folder automatically, declare it in `TASKS.org` (`#+SPEC: [[proj:design/specs/]]`) or link its files from `design/SPEC.org` -- the discovery default root is the file `./design/SPEC.org`, not the folder.
 
 ## Blockers, handoff, and linked issues
 
@@ -87,10 +87,10 @@ Absent file or empty value means no selection. `TASKS.local.org` may also contai
 
 ## Line wrapping
 
-Do not hard-wrap prose in generated or edited org task files. Each paragraph is one logical line; editors should soft-wrap visually. Keep natural line breaks in code/quote/example blocks, tables, drawers, `#+KEYWORD:` lines, and one-list-item-per-line lists. When touching old hard-wrapped prose, unwrap only the paragraph you are already editing.
+Do not hard-wrap prose in generated or edited org task files. Each paragraph is one logical line. Editors should soft-wrap visually. Keep natural line breaks in code/quote/example blocks, tables, drawers, `#+KEYWORD:` lines, and one-list-item-per-line lists. When touching old hard-wrapped prose, unwrap only the paragraph you are already editing.
 
 ## Extension points and non-goals
 
-Unknown `#+` keywords and drawer properties round-trip untouched. Protocol keywords used by change-record/spec coupling are the single `#+SPEC:` keyword (in `TASKS.org` it declares discovery roots; in records it lists task-relevant specs) and the `#+NO_SPEC: true` opt-out; `#+SPEC:` always carries its value as a bare `[[proj:PATH]]` link. Third-party metadata should use an `UPPERCASE_NAMESPACE_` prefix.
+Unknown `#+` keywords and drawer properties round-trip untouched. Protocol keywords used by change-record/spec coupling are the single `#+SPEC:` keyword (in `TASKS.org` it declares discovery roots; in records it lists task-relevant specs) and the `#+NO_SPEC: true` opt-out. `#+SPEC:` always carries its value as a bare `[[proj:PATH]]` link. Third-party metadata should use an `UPPERCASE_NAMESPACE_` prefix.
 
 The core protocol deliberately does not own vendor-specific workflow state, bidirectional external-tracker sync, transcript retention, human-readable aliases replacing UUIDs, or per-task attribution properties. Add those as companion layers when a project needs them.

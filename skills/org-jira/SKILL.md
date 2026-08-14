@@ -1,6 +1,6 @@
 ---
 name: org-jira
-description: "Jira semantics on top of org-tasks. Use for Jira keys (PROJ-123), /jira commands, :LINKED_ISSUES:, #+LINK: jira, #+JIRA_* keywords, Jira epic/issue planning, or Atlassian MCP questions."
+description: "Jira semantics over org-tasks. Use for Jira keys (PROJ-123), /jira commands, :LINKED_ISSUES:, #+LINK: jira, #+JIRA_* keywords, Jira epic/issue planning, or Atlassian MCP questions."
 ---
 
 # Jira integration for org-tasks
@@ -27,7 +27,7 @@ All workflows are agent-driven: the slash command drafts a structured prompt tha
 
 ### Reference (read-only)
 
-No prompt needed. The user adds `[[jira:KEY]]` to `:LINKED_ISSUES:` and sets `#+LINK: jira <base>/browse/%s` once; `tasks` renders badges and `J` opens URLs. Fully offline-safe.
+No prompt needed. The user adds `[[jira:KEY]]` to `:LINKED_ISSUES:` and sets `#+LINK: jira <base>/browse/%s` once. `tasks` renders badges and `J` opens URLs. Fully offline-safe.
 
 ### Planning / resume context
 
@@ -38,8 +38,8 @@ For each Jira-shaped token:
 1. Ensure the MCP is connected; if not, surface the reconnect instruction and proceed without blocking the plan.
 2. Resolve cloudId.
 3. Fetch the parent with `atlassian_getJiraIssue` (summary, status, issue type, priority, assignee, plain-text description, parent key, relevant issue links).
-4. Walk children only while they materially shape scope. Epics use `"parent" = KEY` (or legacy `"Epic Link" = KEY`); Tasks/Stories/Bugs use `parent = KEY`. Stop at done/out-of-scope branches or beyond two levels below the linked issue.
-5. Distil: name each linked parent and why it frames the work; include in-scope children only when they affect the plan; record blockers; surface gaps in `* Open questions`. Do **not** mint Jira issues during this read-only walk. Jira keys are never org `:CUSTOM_ID:` values -- link Jira-derived local tasks via `:LINKED_ISSUES:`.
+4. Walk children only while they materially shape scope. Epics use `"parent" = KEY` (or legacy `"Epic Link" = KEY`). Tasks/Stories/Bugs use `parent = KEY`. Stop at done/out-of-scope branches or beyond two levels below the linked issue.
+5. Distil the walk. Name each linked parent and why it frames the work. Include in-scope children only when they affect the plan. Record blockers. Surface gaps in `* Open questions`. Do **not** mint Jira issues during this read-only walk. Jira keys are never org `:CUSTOM_ID:` values -- link Jira-derived local tasks via `:LINKED_ISSUES:`.
 
 Re-fetch on later sessions rather than caching raw Jira JSON or ADF.
 
@@ -85,7 +85,7 @@ If `tasks:status-changed` events are unavailable, auto-transition blocks until t
 
 ## Question-handling
 
-Follow `org-plan` § *Executing from a change-record*: batch minor ambiguities into `* Open questions`; raise design-affecting questions (extension API, data shape, cross-extension contract) immediately.
+Follow `org-plan` § *Executing from a change-record*. Batch minor ambiguities into `* Open questions`. Raise design-affecting questions (extension API, data shape, cross-extension contract) immediately.
 
 ## Sandbox
 

@@ -35,7 +35,7 @@ The *splitting test*, *anti-criteria*, and *body discipline* blocks below are th
 ## Planning principles
 
 - Prefer plans that can be executed and verified task-by-task. A plan task is useful only when its acceptance criteria are observable. Keep the mechanical fallout of a change in the same task as its cause (renamed references, updated call sites, adjusted fixtures); a task whose acceptance criteria cannot be met until a later task lands is mis-split.
-- Keep `* Summary` (condensed final/current state) and `* Implementation` (detailed tactical ledger) distinct; they serve different readers. Add `* Validation` only when there is non-obvious verification evidence to preserve (see its section).
+- Keep `* Summary` (condensed final/current state) and `* Implementation` (detailed tactical ledger) distinct. They serve different readers. Add `* Validation` only when there is non-obvious verification evidence to preserve (see its section).
 - Capture durable design decisions in `* Summary` or a promoted `* Context` so later sessions do not reverse-engineer them from `git log`.
 - Keep the change-record `.org` file canonical. If durable supporting resources are too verbose or awkward for the record body (research reports, screenshots, transcripts, generated audits), put them in an optional same-stem folder beside the record (for `design/log/YYYY-slug.org`, use `design/log/YYYY-slug/`) and link/summarise them from the record.
 - For non-trivial work with durable behavioural/API/protocol/domain impact, identify the living contract docs up front and record them with `#+SPEC:` before implementation (see *Spec planning*).
@@ -66,7 +66,7 @@ Plans are written for engineers with project context. Optimise for signal densit
 - `** Scope` (required) -- `*** In scope` and `*** Out of scope` lists. Both lists. Out-of-scope items prevent feature creep and feed the premortem ("are we sure we don't need X?").
 - `** Acceptance` -- the consolidated ISC (user-confirmed definition of done), grouped into `*** Core functionality`, `*** Edge cases`, `*** Anti-criteria`. See *Acceptance criteria*.
 - `** Decisions` -- strategic durable design choices that constrain future work, not every tactical coding call. Captures the chosen approach plus rejected alternatives bulleted underneath. When a decision knowingly conflicts with the project constitution (AGENTS.md + skills -- see *The project constitution*), record the conflict and rationale explicitly rather than silently diverging.
-- `** Shipped` -- user-visible / protocol / code outcomes, populated as work lands. When a planned or discovered contract doc changes, prefix bullets with `ADDED`, `MODIFIED`, or `REMOVED` and name the contract doc; this is the post-hoc outcome, not the planning-time `#+SPEC:` declaration.
+- `** Shipped` -- user-visible / protocol / code outcomes, populated as work lands. When a planned or discovered contract doc changes, prefix bullets with `ADDED`, `MODIFIED`, or `REMOVED` and name the contract doc. This is the post-hoc outcome, not the planning-time `#+SPEC:` declaration.
 - `** Gotchas` -- project-side surprises future implementers should not rediscover. Library/API/protocol facts belong in the relevant skill/reference when one exists.
 - `** Risks` -- drafted from premortem; durable risks considered and accepted. Distinct from `** Gotchas` (post-hoc surprise) and `* Open questions` (deferred-not-decided).
 - `** Follow-ups` -- pointers to real TODO tasks rather than burying work in prose.
@@ -284,7 +284,7 @@ New plan-only work units that have no TASKS.org analogue also get fresh UUIDs an
 
 ## Retrospective change-records
 
-Here “retrospective” means an after-the-fact project change-record reconstructed from delivered work and history. It is distinct from the [`retro`](../retro/SKILL.md) end-of-session learning workflow; creating or closing this record does not itself trigger retro.
+Here "retrospective" means an after-the-fact project change-record reconstructed from delivered work and history. It is distinct from the [`retro`](../retro/SKILL.md) end-of-session learning workflow. Creating or closing this record does not itself trigger retro.
 
 When drafting after work has started or completed:
 
@@ -345,4 +345,4 @@ Prune:
 
 `* Intent` itself is not pruned -- it stays as the durable record of what this work was *for*. If Intent and Summary's effort line both still apply, the record passes the closure bar.
 
-Draft summaries on active records may be terse and are expected to evolve; the final summary is written or refreshed at closure.
+Draft summaries on active records may be terse and are expected to evolve. Write or refresh the final summary at closure.

@@ -8,16 +8,16 @@ Rules and workflows for agents modifying the `ot` codebase. For *using* `ot` aga
 - **Round-trip fidelity.** `test/fixtures/round-trip/` must survive parse→serialize byte-identically. Do not "clean up" serializer output.
 - **`serialize-tasks-preserving-file` normalises supplied roots.** It re-emits every supplied root task in serialized form, normalising intra-subtree blank lines -- which is why `nested-subtree.org` is excluded from the `fixture-round-trip` byte-identity set. Changes that relocate or rewrite org structure must be validated against a canonical-spacing fixture (blank separators between siblings *and* between top-level tasks), never a compact one. When validating an append-semantics operation round-trips, derive the witness from current file state (the actual last child / last task in the section) and state the append semantics in the assertion, so a failure can only mean a regression.
 - **`ot doctor` output is order-stable.** Finding order and wording are golden-tested; new checks append to the ordered check vector in `doctor.clj`.
-- **bb-compatible only.** No JVM-only dependencies; everything runs under Babashka. New deps go in the repo-root `bb.edn` *and* the `scripts/ot` wrapper fallback `-Sdeps` (bb.edn is the source of truth).
+- **bb-compatible only.** No JVM-only dependencies. Everything runs under Babashka. New deps go in the repo-root `bb.edn` *and* the `scripts/ot` wrapper fallback `-Sdeps` (bb.edn is the source of truth).
 - **Shared colour palette.** All colours derive from `styling/palette-256` (bling codes pinned by test; TUI builds charm colours from the same map). Never hardcode ANSI codes elsewhere.
 - **Canonical cycle orders** (status, priority) live in `lifecycle.clj`. UIs (TUI, pi overlay) pass only a direction.
 - **Path resolution is sandboxed.** All import/link target resolution goes through `org-tasks.links` → `paths.clj`. Do not re-derive base-dir selection at call sites; do not modify `paths.clj` semantics.
 
 ## Workflows
 
-- **Run every `bb` task from the repo root** (`bb test`, `bb run ot`, …): the only `bb.edn` lives at `<dotagents-root>`; there is none under `scripts/`. To exercise `ot` against a scratch project, prefer `ot --root <dir>` over `cd`-ing into it.
+- **Run every `bb` task from the repo root** (`bb test`, `bb run ot`, and so on): the only `bb.edn` lives at `<dotagents-root>`; there is none under `scripts/`. To exercise `ot` against a scratch project, prefer `ot --root <dir>` over `cd`-ing into it.
 - **Adding a command**: handler in the right `commands/*` family namespace → entry in `commands/registry.clj` (spec, `:args->opts`, `:summary`, optional `:tui-key`) → contract section in `docs/contract.md` → family test in `test/org_tasks/commands/`. Dispatch, `ot --help`, per-command `--help`, `dispatch-coerce`, and TUI exposure are all derived from the registry -- no other wiring.
-- **Adding an option**: extend the command's spec in the registry; coercion and help are derived. Enum options use the `enum-opt` helper.
+- **Adding an option**: extend the command's spec in the registry. Coercion and help are derived. Enum options use the `enum-opt` helper.
 - **Tree traversal**: use `org-tasks.tree` (children + import-children). `insert` intentionally walks parsed-file children only (`{:imports? false}`).
 - **File writes**: use `loader/atomic-write` / `loader/safe-slurp`.
 - **TUI changes**: view/glue in `tui.clj`, state/bridge in `tui/tasks.clj`, nexus actions in `tui/dispatch.clj` (charm-free). Pane geometry rules (`stacked-layout?`, `tree-pane-height`) are shared between rendering and scroll math -- change them together. In the key map, shift+arrow matches must precede bare keyword matches (charm keyword matching ignores modifiers).

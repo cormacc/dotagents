@@ -132,7 +132,7 @@ Tree form additionally carries `"children": [Task]` and an `"importChildren": [T
 - Bare `ot --format json` also emits the selected-task envelope and never starts interactive rendering.
 - During an interactive session, terminal rendering/control sequences are written to stderr or the controlling terminal. Stdout is reserved for exactly one final `org-tasks/v1` selected-task envelope after the TUI exits.
 - The final envelope reflects the persisted `#+SELECTED:` value. Moving the cursor is not selection; press `s` to persist a new selected task, or `s` again on the selected row to clear it.
-- In the standalone TUI, `D` first calls `ot remove --dry-run --prune-blockers`, displays the impact, and arms only that cursor task. A second `D` on the same task calls `ot remove --yes --prune-blockers`; cursor movement, mutations, mode changes, or a different task disarm it. The pi overlay exposes the same removal through its modal confirmation. Neither UI has a separate blocker-prune key.
+- In the standalone TUI, `D` first calls `ot remove --dry-run --prune-blockers`, displays the impact, and arms only that cursor task. A second `D` on the same task calls `ot remove --yes --prune-blockers`. Cursor movement, mutations, mode changes, or a different task disarm it. The pi overlay exposes the same removal through its modal confirmation. Neither UI has a separate blocker-prune key.
 
 ## Per-command results
 
@@ -186,7 +186,7 @@ Options:
 }
 ```
 
-`ot show` is strict about its argument: an id that resolves to nothing fails with `unknown-task` and exit 1, and `ot show selected` on a project with no selection is that same failure (its message names `ot selected`). Use `ot selected` to *query* the selection. `ancestors` is ordered root → parent. `record` is `null` when the task has no resolvable `#+IMPORT:` change-record. `task.children` and `task.importChildren` carry nested task trees. `sourceContent` and `effectiveSourceContent` are omitted unless `--include-content` is passed. Text-mode `show` and `selected` append a non-empty `Task.description` after one blank separator line; the JSON/EDN payload and its `description` field are unchanged.
+`ot show` is strict about its argument: an id that resolves to nothing fails with `unknown-task` and exit 1, and `ot show selected` on a project with no selection is that same failure (its message names `ot selected`). Use `ot selected` to *query* the selection. `ancestors` is ordered root → parent. `record` is `null` when the task has no resolvable `#+IMPORT:` change-record. `task.children` and `task.importChildren` carry nested task trees. `sourceContent` and `effectiveSourceContent` are omitted unless `--include-content` is passed. Text-mode `show` and `selected` append a non-empty `Task.description` after one blank separator line. The JSON/EDN payload and its `description` field are unchanged.
 
 ### `ot create`
 
@@ -217,7 +217,7 @@ Options include `--section`, `--parent`, `--after`, `--priority`, repeated `--ta
 }
 ```
 
-Relocates an *existing* task subtree **within its own file**. Exactly one destination is required: `--parent <id>` appends the subtree as that task's last child (heading depth re-normalised for the whole subtree), `--section <name>` returns it to a level-2 heading at the end of that level-1 section -- the depth `ot create` gives a top-level task. `parentId` is `null` for a `--section` move and `section` is `null` for a `--parent` move. `previousParentId` is `null` when the task was already a root of its file. `movedCount` counts the moved root plus its descendants; `fromLevel`/`toLevel` are the subtree root's heading depth before and after. `task` reflects the post-move `level` and `line`. Like every mutator that returns `Task` (`status`, `priority`, `move`, `archive`, `unarchive`, `publish`, and `unpublish`), its default JSON/EDN projection omits `sourceContent` and `effectiveSourceContent` across the complete task tree. Pass `--include-content` to any of those commands to include both fields; text output is unchanged. This applies equally to `--dry-run` envelopes.
+Relocates an *existing* task subtree **within its own file**. Exactly one destination is required: `--parent <id>` appends the subtree as that task's last child (heading depth re-normalised for the whole subtree), `--section <name>` returns it to a level-2 heading at the end of that level-1 section -- the depth `ot create` gives a top-level task. `parentId` is `null` for a `--section` move and `section` is `null` for a `--parent` move. `previousParentId` is `null` when the task was already a root of its file. `movedCount` counts the moved root plus its descendants. `fromLevel`/`toLevel` are the subtree root's heading depth before and after. `task` reflects the post-move `level` and `line`. Like every mutator that returns `Task` (`status`, `priority`, `move`, `archive`, `unarchive`, `publish`, and `unpublish`), its default JSON/EDN projection omits `sourceContent` and `effectiveSourceContent` across the complete task tree. Pass `--include-content` to any of those commands to include both fields; text output is unchanged. This applies equally to `--dry-run` envelopes.
 
 The subtree's source lines are relocated verbatim apart from heading stars, so `:CUSTOM_ID:`, `:CREATED:` / `:STARTED:`, `CLOSED:`, `:LOGBOOK:`, `#+IMPORT:`, unknown drawer properties, bodies, descendant order, and intra-subtree blank lines are byte-preserved, and every region of the file outside the move is left untouched. Because `:CUSTOM_ID:` never changes, `#+IMPORT:` links and a change-record's `#+PARENT: [[task:<uuid>]]` keep resolving across a move.
 
@@ -272,7 +272,7 @@ Pass `--clear` to deselect. `ot select --clear-stale` is the explicit repair pat
 }
 ```
 
-It writes only for `cleared-stale`; valid and absent local files remain byte-identical. `--dry-run` returns the same result with `dryRun: true` and never writes.
+It writes only for `cleared-stale`. Valid and absent local files remain byte-identical. `--dry-run` returns the same result with `dryRun: true` and never writes.
 
 ### `ot selected`
 
@@ -293,7 +293,7 @@ Same payload as `ot show <selectedId>`, or `{"selected": null, "selectedId": ...
 }
 ```
 
-Targets must have an active graph parent or import owner; protocol top-level roots fail with `top-level-root`. `--dry-run` returns the projection without writing. A non-dry-run call without `--yes` fails with `confirmation-required` and carries the same projection in `error.details`; inbound blockers similarly fail with `inbound-blockers` unless `--prune-blockers` is explicit. With pruning, only task blockers resolving into the subtree are removed. Target, blocker-owner, and affected selection baselines are checked before the first atomic source-root write; imported/local owners retain their own files.
+Targets must have an active graph parent or import owner; protocol top-level roots fail with `top-level-root`. `--dry-run` returns the projection without writing. A non-dry-run call without `--yes` fails with `confirmation-required` and carries the same projection in `error.details`. Inbound blockers similarly fail with `inbound-blockers` unless `--prune-blockers` is explicit. With pruning, only task blockers resolving into the subtree are removed. Target, blocker-owner, and affected selection baselines are checked before the first atomic source-root write; imported/local owners retain their own files.
 
 ### `ot archive <id>`
 
@@ -353,7 +353,7 @@ Restores only an archive-resolved exact UUID or unique prefix. It refuses unknow
 }
 ```
 
-`selected-not-found` is read-only guidance: it names `ot select --clear-stale`, which atomically repairs only an unresolved local pointer. `inline-path-dangling` is an advisory doctor finding for a missing constrained inline file citation in a change-record. Its `location.file` and `location.line` identify the first occurrence of each distinct candidate; valid or excluded token forms produce no finding.
+`selected-not-found` is read-only guidance: it names `ot select --clear-stale`, which atomically repairs only an unresolved local pointer. `inline-path-dangling` is an advisory doctor finding for a missing constrained inline file citation in a change-record. Its `location.file` and `location.line` identify the first occurrence of each distinct candidate. Valid or excluded token forms produce no finding.
 
 ### `ot section <file> [<section>]`
 
@@ -410,7 +410,7 @@ Errors: `out-of-root`, `unreadable`. Not-found is a non-error result with `"foun
 }
 ```
 
-`absorbedSubtasks` is true when a newly-created record absorbed existing child task trees from the parent into its `* Plan` section; the parent keeps the `#+IMPORT:` link and loses those local children so each UUID has one canonical writable location. Existing record files are not modified for migration. `scope.commits` is populated only for `--mode retrospective` (via `git log`). Errors: `unknown-task`, `path-outside-project`, `git-unavailable`.
+`absorbedSubtasks` is true when a newly-created record absorbed existing child task trees from the parent into its `* Plan` section. The parent keeps the `#+IMPORT:` link and loses those local children so each UUID has one canonical writable location. Existing record files are not modified for migration. `scope.commits` is populated only for `--mode retrospective` (via `git log`). Errors: `unknown-task`, `path-outside-project`, `git-unavailable`.
 
 ### `ot record path <id>`
 
@@ -446,7 +446,7 @@ Errors: `out-of-root`, `unreadable`. Not-found is a non-error result with `"foun
 }
 ```
 
-`--dry-run` reports unresolved explicit or bare-full-UUID task blockers without writing. A non-empty actual prune requires `--yes`; valid/ambiguous task references and every non-task blocker are preserved.
+`--dry-run` reports unresolved explicit or bare-full-UUID task blockers without writing. A non-empty actual prune requires `--yes`. Valid/ambiguous task references and every non-task blocker are preserved.
 
 ### `ot blocker list <id>`
 
@@ -470,7 +470,7 @@ Errors: `out-of-root`, `unreadable`. Not-found is a non-error result with `"foun
 }
 ```
 
-Mutates only the target task's trailing heading tags and returns the resulting ordered tag vector. Tags use `[A-Za-z0-9_]+`; surrounding whitespace and one `:tag:` wrapper are normalised, while whitespace within a tag, colons, and other characters fail with `invalid-tag`. `add` does not duplicate a tag and `remove` is a no-op when it is absent. Both commands accept `--dry-run` and then return the same envelope without writing. The normal graph saver writes the owning `TASKS.org`, `TASKS.local.org`, or imported plan file atomically; a changed source fails with `conflict` and remains untouched.
+Mutates only the target task's trailing heading tags and returns the resulting ordered tag vector. Tags use `[A-Za-z0-9_]+`. Surrounding whitespace and one `:tag:` wrapper are normalised, while whitespace within a tag, colons, and other characters fail with `invalid-tag`. `add` does not duplicate a tag and `remove` is a no-op when it is absent. Both commands accept `--dry-run` and then return the same envelope without writing. The normal graph saver writes the owning `TASKS.org`, `TASKS.local.org`, or imported plan file atomically; a changed source fails with `conflict` and remains untouched.
 
 ### `ot ready <id>`
 
@@ -498,7 +498,7 @@ Mutates only the target task's trailing heading tags and returns the resulting o
 
 ### `ot uuid`
 
-Generate one or more UUIDv4 values for use as `:CUSTOM_ID:` on hand-authored task blocks. Prefer this over inventing IDs in prose; sequential / shared-prefix IDs produce ambiguous resolution and are flagged by `ot doctor`'s `:patterned-sibling-ids` check.
+Generate one or more UUIDv4 values for use as `:CUSTOM_ID:` on hand-authored task blocks. Prefer this over inventing IDs in prose. Sequential / shared-prefix IDs produce ambiguous resolution and are flagged by `ot doctor`'s `:patterned-sibling-ids` check.
 
 ```json
 "result": {

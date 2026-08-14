@@ -49,13 +49,13 @@ The protocol engine (`ot`, in Babashka) owns durable org-tasks behaviour and the
 
 Three policies that were previously encoded in both the pi overlay (TypeScript) and the standalone TUI (Clojure) now live solely in `ot`:
 
-- **Status cycle order** -- `ot status --cycle forward|back`. The overlay's `STATUS_CYCLE` constant and the TUI's `cycle-status-value` were removed; both send only a direction.
+- **Status cycle order** -- `ot status --cycle forward|back`. The overlay's `STATUS_CYCLE` constant and the TUI's `cycle-status-value` were removed. Both send only a direction.
 - **Create placement** -- `ot create --relative-to <id> --as sibling|child`. The overlay's `createNewTask`/`createTask` placement maths and the TUI's `create-opts` were reduced to passing the anchor + relation.
-- **Linked-issue URL resolution** -- already emitted by `ot list` (`linkedIssues[].url/label`); the overlay now consumes that wire field and no longer re-resolves via the TypeScript `getLinkedIssues`.
+- **Linked-issue URL resolution** -- already emitted by `ot list` (`linkedIssues[].url/label`). The overlay now consumes that wire field and no longer re-resolves via the TypeScript `getLinkedIssues`.
 
 ## Behaviours that stay in TypeScript (cross-extension)
 
-- `insert.ts` exports `insertTaskIntoFile` as a thin async shim that shells `ot create --linked-issue …` and parses the JSON envelope back into the existing `InsertResult` shape. Keeps `jira_clone_apply` working without a coordinated cutover.
+- `insert.ts` exports `insertTaskIntoFile` as a thin async shim that shells `ot create --linked-issue ...` and parses the JSON envelope back into the existing `InsertResult` shape. Keeps `jira_clone_apply` working without a coordinated cutover.
 - The closure-time `evaluateSummaryRefresh` synchronous check in `summary.ts` stays a regex-based local read (already documented; routing through `ot` would force async on the overlay close path).
 
 ## Behaviours under review

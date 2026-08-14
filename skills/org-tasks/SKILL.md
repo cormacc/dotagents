@@ -103,12 +103,12 @@ The TUI needs no harness integration -- it is the interactive surface for humans
 
 ## Status discipline
 
-- Mark `STARTED` when beginning substantial work; the first transition writes `:STARTED:`.
-- Mark `DONE` only when implemented and verified; `CLOSED:` is written on transition.
-- Use `WAITING` with `:BLOCKED-BY:` for blocked work; `:BLOCKED-BY:` is also valid on `TODO` to express prerequisites without forcing `WAITING`.
+- Mark `STARTED` when beginning substantial work. The first transition writes `:STARTED:`.
+- Mark `DONE` only when implemented and verified. The transition writes `CLOSED:`.
+- Use `WAITING` with `:BLOCKED-BY:` for blocked work. `:BLOCKED-BY:` is also valid on `TODO` to express prerequisites without forcing `WAITING`.
 - Use `CANCELLED` for intentionally abandoned work.
 - Reopening from `DONE`/`CANCELLED` clears current `CLOSED:` but preserves historical LOGBOOK entries.
-- When child plan work advances, parent status should remain meaningful; `ot status` auto-promotes TODO ancestors when a child starts.
+- When child plan work advances, parent status should remain meaningful. `ot status` auto-promotes TODO ancestors when a child starts.
 - Before closing a top-level task, refresh/prune the linked change-record per `org-plan` § Closure-time refresh and prune.
 
 ## Change-records
@@ -118,7 +118,7 @@ A change-record is a separate org file linked from a task via `#+IMPORT:`. Two f
 1. Proactive: created before work begins, usually with `ot record create <id>` or the pi plan flow.
 2. Retrospective: created after work starts/completes with `ot record create <id> --mode retrospective`; `ot` returns the `git log` scope from `:STARTED:`/`CLOSED:` for the prompting layer.
 
-`ot record create` scaffolds required headings, attaches `#+IMPORT:`, and when creating a new record migrates existing child task trees from the parent into the record's `* Plan` section. The parent then keeps only the import link, so each UUID has one canonical writable node. Existing record files are not modified for migration; repair duplicates manually and run `ot doctor`.
+`ot record create` scaffolds required headings, attaches `#+IMPORT:`, and when creating a new record migrates existing child task trees from the parent into the record's `* Plan` section. The parent then keeps only the import link, so each UUID has one canonical writable node. `ot record create` does not modify existing record files for migration. Repair duplicates manually and run `ot doctor`.
 
 Section contract, spec planning, planning methodology, acceptance criteria, closure-time pruning, and subtask authoring conventions are owned by `org-plan`.
 

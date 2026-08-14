@@ -6,7 +6,7 @@ A change-record is an org file linked from a task by `#+IMPORT:`. It starts as a
 
 `* Intent` → `* Summary` → optional `* User story` → optional `* Behavior` → optional `* Context` → `* Plan` → `* Implementation` → optional `* Validation` → optional `* Open questions`.
 
-Required: `* Intent`, `* Summary`, `* Plan`, `* Implementation`. Optional sections marked above. `* Summary` carries the durable record layer (including `** Acceptance`); `* Plan` is the transient plan layer (see org-plan *Two layers in one record*).
+Required: `* Intent`, `* Summary`, `* Plan`, `* Implementation`. Optional sections marked above. `* Summary` carries the durable record layer (including `** Acceptance`). `* Plan` is the transient plan layer (see org-plan *Two layers in one record*).
 
 ## Minimal skeleton
 
@@ -34,7 +34,7 @@ One compact paragraph describing current/final state.
 - Deferred item.
 
 ** Acceptance
-Consolidated ideal-state checklist (ISC) — the user-confirmed definition of done. Durable; verified item-by-item at closure (whether or not a `* Validation` section exists).
+Consolidated ideal-state checklist (ISC) -- the user-confirmed definition of done. Durable; verified item-by-item at closure (whether or not a `* Validation` section exists).
 *** Core functionality
 - [ ] Atomic, one-second yes/no criterion.
 *** Edge cases
@@ -48,7 +48,7 @@ Consolidated ideal-state checklist (ISC) — the user-confirmed definition of do
   - Approach Y: brief reason it lost.
 
 ** Shipped
-- MODIFIED :: `design/specs/example-domain.org` — concise post-hoc outcome.
+- MODIFIED :: `design/specs/example-domain.org` -- concise post-hoc outcome.
 
 ** Gotchas
 - Project-side surprises future implementers should not rediscover.
@@ -124,7 +124,7 @@ Skip for refactors, infra, dev-tooling, observability work.
 - Network failure mid-request: client retries with backoff; server idempotent.
 ```
 
-Include for feature work where the user-facing flow is load-bearing. Drafting-time aid -- at closure, the happy path is in Implementation and edge cases are anti-criteria or `** Gotchas`; prune unless the walkthrough still carries unique value.
+Include for feature work where the user-facing flow is load-bearing. Drafting-time aid -- at closure, the happy path is in Implementation and edge cases are anti-criteria or `** Gotchas`. Prune unless the walkthrough still carries unique value.
 
 Optional Given/When/Then form for an edge case where scenario rigour pays for itself (see org-plan SKILL.md § `* Behavior`):
 
@@ -139,7 +139,7 @@ Background, motivation, alternatives, constraints, trade-offs. **Default to omit
 
 ### Acceptance criteria citation
 
-Optional: cite the spec clause and/or test a criterion depends on with a `→` suffix (`spec:[[proj:PATH]]` and/or `test:REF`); cite tests by file path plus `deftest`/test name (optionally with a short quoted assertion anchor) rather than a bare line number, which drifts. See org-plan SKILL.md § Spec/test citation on acceptance criteria.
+Optional: cite the spec clause and/or test a criterion depends on with a `→` suffix (`spec:[[proj:PATH]]` and/or `test:REF`). Cite tests by file path plus `deftest`/test name (optionally with a short quoted assertion anchor) rather than a bare line number, which drifts. See org-plan SKILL.md § Spec/test citation on acceptance criteria.
 
 ```org
 *** Core functionality
@@ -164,7 +164,7 @@ Opt out with `#+NO_SPEC: true`. See org-plan SKILL.md § Spec planning for when 
 
 ## `#+STATUS:` lifecycle
 
-`#+STATUS:` is advisory only; task-level state remains owned by org-tasks. Advance it manually as the record matures -- `Draft` while planning, `Review` when handing off for sign-off, `Accepted` once approved, `Active` during execution, `Complete` at closure. Nothing enforces these transitions; leaving it at `Draft` is acceptable for solo work.
+`#+STATUS:` is advisory only. Task-level state remains owned by org-tasks. Advance it manually as the record matures -- `Draft` while planning, `Review` when handing off for sign-off, `Accepted` once approved, `Active` during execution, `Complete` at closure. Nothing enforces these transitions. Leaving it at `Draft` is acceptable for solo work.
 
 | Status | Meaning |
 |--------|---------|
@@ -210,6 +210,6 @@ After:
 :END:
 ```
 
-Existing record files are not modified for migration; if a record already exists, move any remaining duplicated subtasks manually and run `ot doctor`.
+`ot record create` does not modify existing record files during migration. If a record already exists, move any remaining duplicated subtasks manually and run `ot doctor`.
 
-Fresh plan-only tasks get new UUIDs via `ot uuid` or `ot create`; never invent UUIDs in prose.
+Fresh plan-only tasks get new UUIDs via `ot uuid` or `ot create`. Never invent UUIDs in prose.

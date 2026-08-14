@@ -18,9 +18,9 @@ Jira keys are stored as typed org links in the generic `:LINKED_ISSUES:` drawer 
 :END:
 ```
 
-- The `jira:` prefix resolves through the file's `#+LINK: jira <base>/browse/%s` declaration (usually inherited from `TASKS.setup.org`). Without that declaration `[[jira:KEY]]` tokens parse but cannot be opened or rendered as badges; the `tasks` extension surfaces a hard error so the missing declaration is caught early.
+- The `jira:` prefix resolves through the file's `#+LINK: jira <base>/browse/%s` declaration (usually inherited from `TASKS.setup.org`). Without that declaration `[[jira:KEY]]` tokens parse but cannot be opened or rendered as badges. The `tasks` extension surfaces a hard error, so it catches the missing declaration early.
 - Link-target key validation regex: `^[A-Z][A-Z0-9_]+-\d+$`.
-- Whitespace-separated org-link tokens; `:LINKED_ISSUES:` is multi-valued.
+- Org-link tokens are whitespace-separated. `:LINKED_ISSUES:` is multi-valued.
 - A single task may link to many issues; mixing Jira typed links with raw URL org-link tokens (e.g. `[[https://github.com/.../issues/42][gh#42]]`) in the same drawer line is supported. Typed `[[jira:KEY]]` keeps the issue key portable across checkouts.
 - Bare `PROJ-NNN` tokens are not part of the protocol (one-time migration sweep complete).
 - The property is created on first link only -- never auto-backfilled on existing tasks (mirrors `:STARTED:` behaviour).
@@ -54,7 +54,7 @@ Jira keys are stored as typed org links in the generic `:LINKED_ISSUES:` drawer 
 1. **Typed Jira link** `[[jira:KEY]]`, where `KEY` matches `/^[A-Z][A-Z0-9_]+-\d+$/` → Jira key.
 2. **Raw org-link token** `[[url][label]]` whose target host matches the base URL derived from `#+LINK: jira .../browse/%s` → Jira key.
 
-Tokens that match neither are silently ignored by Jira workflows -- a task carrying `[[jira:MBFW-123]] [[https://github.com/foo/bar/issues/42][gh#42]]` exposes only `MBFW-123` to `/jira claim`.
+Jira workflows silently ignore tokens that match neither -- a task that carries `[[jira:MBFW-123]] [[https://github.com/foo/bar/issues/42][gh#42]]` exposes only `MBFW-123` to `/jira claim`.
 
 ## cloudId resolution
 
