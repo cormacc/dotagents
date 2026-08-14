@@ -2320,6 +2320,75 @@
       (is (fs/exists? path))
       (is (str/includes? (git-worktree-list dir) path)))))
 
+;; Deliberately triggered with known-bad input: a file matching the tracked fixture
+;; `.gitignore` lives only in the checkout. It must be reported separately from dirty
+;; paths, but is intentionally not a removal refusal.
+(deftest worktree-remove-reports-ignored-files-without-refusing-removal
+  (let [{:keys [env dir]} (fake-env {})
+        _ (spit (str (fs/path dir ".gitignore")) "ignored.cache\n")
+        _ (git-in! dir "add" ".gitignore")
+        _ (git-in! dir "commit" "-q" "-m" "fixture ignore rule")
+        entry (spawn-worktree! env dir "ignored checkout file")
+        path (get-in entry [:worktree :path])]
+    (publish-child! entry)
+    (spit (str (fs/path path "ignored.cache")) "scratch\n")
+    (let [status-proc (call! env "task" "status" (:task entry))
+          reconciliation (get-in (result status-proc) [:result :reconciliation])]
+      (is (zero? (:exit status-proc)) (:err status-proc))
+      (is (empty? (:dirty reconciliation)))
+      (is (= ["!! ignored.cache"] (:ignored reconciliation))))
+    (let [remove-proc (call! env "worktree" "remove" (:task entry))
+          removed (get-in (result remove-proc) [:result :ignored])]
+      (is (zero? (:exit remove-proc)) (:err remove-proc))
+      (is (= ["!! ignored.cache"] removed))
+      (is (not (fs/exists? path))))))
+
+;; Deliberately triggered with known-bad input: the entry is patched to a clean linked
+;; checkout outside the managed root. Its parent shares the managed root's textual prefix,
+;; so a string-prefix containment check would destroy it.
+(deftest worktree-remove-refuses-a-recorded-path-outside-the-managed-root
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "corrupted checkout path")
+        path (get-in entry [:worktree :path])
+        managed-root (str (fs/parent (fs/path path)))
+        external-parent (fs/path (fs/parent (fs/path managed-root)) "worktrees-outside")
+        external (str (fs/path external-parent "checkout"))
+        branch (str "outside/" (subs (:task entry) 0 8))]
+    (publish-child! entry)
+    (fs/create-dirs external-parent)
+    (git-in! dir "worktree" "add" "-b" branch external (git-head dir))
+    (is (str/starts-with? external managed-root))
+    (let [corrupted (patch-entry! dir entry :worktree (assoc (:worktree entry) :path external))
+          proc (call! env "worktree" "remove" (:task corrupted))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"managed root" (:out proc)))
+      (is (fs/exists? external))
+      (is (str/includes? (git-worktree-list dir) external))
+      (is (fs/exists? path)))))
+
+;; A textual path within the managed root can still resolve through a symlink to a linked
+;; checkout outside it. The removal guard must canonicalise it before comparing roots.
+(deftest worktree-remove-resolves-symlinks-before-containment-comparison
+  (let [{:keys [env dir]} (fake-env {})
+        entry (spawn-worktree! env dir "symlinked checkout path")
+        path (get-in entry [:worktree :path])
+        managed-root (fs/parent (fs/path path))
+        external (str (fs/path dir "outside-checkout"))
+        link (str (fs/path managed-root "linked-outside"))
+        branch (str "outside/" (subs (:task entry) 0 8))]
+    (publish-child! entry)
+    (git-in! dir "worktree" "add" "-b" branch external (git-head dir))
+    (fs/create-sym-link link external)
+    (is (str/starts-with? link (str managed-root)))
+    (is (= external (str (fs/real-path link))))
+    (let [corrupted (patch-entry! dir entry :worktree (assoc (:worktree entry) :path link))
+          proc (call! env "worktree" "remove" (:task corrupted))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"managed root" (:out proc)))
+      (is (fs/exists? external))
+      (is (str/includes? (git-worktree-list dir) external))
+      (is (fs/exists? path)))))
+
 ;; Deliberately triggered with known-bad input: never published, so the round is
 ;; genuinely unfinished (unsealed and unclosed) -- the exact "in flight" case
 ;; `worktree-in-flight?` reasons about for the spawn-time default, reused here by path.

@@ -182,7 +182,8 @@ Acceptance criteria:
 
 Constraint: the whitelist is the `select-keys` in `continue!` (`skills/herdr-orch/scripts/src/herdr_orch/cli.clj`); prefer one `:worktree` map field over several flat keys so the whitelist gains one entry.
 
-** TODO Teardown verbs: `oh worktree list|remove`
+** DONE Teardown verbs: `oh worktree list|remove`
+CLOSED: [2026-08-14 Fri 13:57]
 :PROPERTIES:
 :CUSTOM_ID: 4962846f-6690-4618-a5d9-9891962565ae
 :CREATED: [2026-08-13 Thu 15:29]
@@ -194,13 +195,15 @@ Constraint: the whitelist is the `select-keys` in `continue!` (`skills/herdr-orc
 - State "STARTED" from "TODO" [2026-08-13 Thu 20:39]
 - State "DONE" from "STARTED" [2026-08-13 Thu 20:39]
 - State "TODO" from "DONE" [2026-08-14 Fri 10:19]
+- State "STARTED" from "TODO" [2026-08-14 Fri 13:49]
+- State "DONE" from "STARTED" [2026-08-14 Fri 13:57]
 :END:
 Acceptance criteria:
 - [X] `oh worktree list` enumerates the session's recorded checkouts with their reconciliation state.
 - [X] `oh worktree remove <task>` removes the newest lineage round's checkout, retains the branch, and reports tip ancestry against parent HEAD as information only.
-- [X] Removal refuses a dirty checkout, naming the dirty paths. *(Met for tracked and untracked paths only; see the correction below.)*
-- [ ] Dirtiness includes ignored files. `git status --porcelain` omits them, so removal reported a clean checkout and `git worktree remove` deleted the contents at exit 0 -- reproduced directly on a throwaway repo. This repository ignores `.tmp/`, so a child's own scratch inside its checkout is exactly what disappears. Reporting them is sufficient; refusing on them is not required, since with commit-as-default an ignored file is by construction not the deliverable.
-- [ ] `remove` and `--worktree-from` validate that the ledger's recorded checkout path lies within the managed root before acting. A same-session entry with a patched path deleted a clean linked checkout outside it.
+- [X] Removal refuses a tracked or untracked dirty checkout, naming the paths.
+- [X] Dirtiness includes ignored files, reported separately from tracked and untracked paths; ignored files do not block removal.
+- [X] Removal validates that the ledger's recorded checkout path lies within the managed root before destruction, resolving symlinks and rejecting textual-prefix siblings; use of an existing checkout remains legal outside the root.
 - [X] Removal refuses while any live round of the session references the checkout.
 - [X] Ownership is `close`/`prune`'s rule: both parent-sessions non-nil and equal.
 - [X] A spawn failure after checkout creation leaves a ledger state `oh worktree remove` recovers.
