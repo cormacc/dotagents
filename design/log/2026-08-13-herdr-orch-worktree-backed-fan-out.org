@@ -116,12 +116,16 @@ CLOSED: [2026-08-13 Thu 18:10]
 - State "DONE" from "STARTED" [2026-08-13 Thu 18:10]
 :END:
 Acceptance criteria:
-- [ ] `skills/herdr-orch/traits/worktree/prompt.md` exists and its directive requires the child to commit its work on its worktree branch.
-- [ ] A `%no-worktree` fragment exists in the packaged store (minimal marker text; its effect is spawn-time suppression).
-- [ ] `expandTraits` in `pi/extensions/traits/index.ts` passes a packaged layer resolved from the installed skill, so a packaged fragment expands in interactive input as well as at spawn, and `pi/extensions/traits/README.md` no longer states that the interactive consumer has no packaged layer. A default, not an option. Without it a `%worktree` typed interactively passes through unexpanded, because the interpolator injects no layers of its own and that consumer passes only project and home.
-- [ ] The two fragments declare mutual `incompatible-with:`.
-- [ ] Each fragment has a `gate.md` and one recorded probe attempt with the outcome stated honestly (a non-pass is admissible); scenarios are synthetic, not repo-referential.
-- [ ] Each probe's pre-registered condition scopes the fragment's *directive* only, not checkout creation (CLI behaviour is covered by ordinary tests in the other plan tasks).
+- [X] `skills/herdr-orch/traits/worktree/prompt.md` exists and its directive requires the child to commit its work on its worktree branch.
+- [X] A `%no-worktree` fragment exists in the packaged store (minimal marker text; its effect is spawn-time suppression).
+- [X] `expandTraits` in `pi/extensions/traits/index.ts` passes a packaged layer resolved from the installed skill, so a packaged fragment expands in interactive input as well as at spawn, and `pi/extensions/traits/README.md` no longer states that the interactive consumer has no packaged layer. A default, not an option. Without it a `%worktree` typed interactively passes through unexpanded, because the interpolator injects no layers of its own and that consumer passes only project and home.
+- [X] The two fragments declare mutual `incompatible-with:`.
+- [X] Each fragment has a `gate.md` and one recorded probe attempt with the outcome stated honestly (a non-pass is admissible); scenarios are synthetic, not repo-referential.
+- [X] Each probe's pre-registered condition scopes the fragment's *directive* only, not checkout creation (CLI behaviour is covered by ordinary tests in the other plan tasks).
+
+Ticked [2026-08-13], late: this task was closed `DONE` with all six boxes still unchecked, so for a day the record asserted completion while recording none of it, and the evidence lived only in a closed child's published findings. Every criterion was in fact met -- the fragments, their mutual `incompatible-with:`, the gates, and the packaged layer were all verified independently -- but nothing in `ot doctor` flags a `DONE` task with unchecked criteria, and neither did three reviews.
+
+Superseded in part, same day, by `c45b3635`: the artifacts behind the first, second, fourth, fifth and sixth criteria are scheduled for deletion. The fragments turned out to be composition-time prompt text carrying spawn-time configuration -- the conflation this record corrected twice before it was named -- and `%worktree`'s gate is already marked superseded, because `c3e3e8d` moved the directive it probed into `worker.md` and a mechanical commit at the publication gate now replaces that directive outright. What survives is the third criterion, the `expandTraits` packaged layer, kept on its own merits rather than for the interactive `%worktree` case that motivated it.
 
 Constraint: admission per `skills/herdr-orch/references/traits.md` § Admission bar and § Probing; runner is `scripts/run-trait-gate.bb`.
 
@@ -231,19 +235,28 @@ Constraint: edits `spawn!` again, hence the blocker; the live-reference predicat
 :CREATED: [2026-08-13 Thu 20:05]
 :BLOCKED-BY: task:4962846f-6690-4618-a5d9-9891962565ae
 :END:
-Resolve one worktree *target* before spawning, rather than deciding "create or not" and handling reuse as a separate path. A spawn request resolves to the git root, an existing worktree, or a newly cut one; that target is then what spawning consumes.
+One worktree *target* is resolved before spawning, and the child is never told which it got. `--worktree` takes a value: a path, or `new` to cut one, defaulting to the caller's cwd so every spawn has a target. Creation is the parent's business, handled during resolution; the child receives a working directory and nothing else about git topology.
+
+Commit permission stops being an instruction. `worker.md`'s existing prohibition stays exactly as written, and a worktree child's work is committed *mechanically at each publication*, on the checkout's own branch, with the resulting ref carried in the published envelope. That is why this supersedes the design it replaces: an earlier plan granted permission by injecting `HERDR_ORCH_WORKTREE` and conditioning the persona on it, and a later one denied it by auto-applying a `no-commits` trait. Both routed a *behavioural* rule through prompt text, which is the conflation this record has already corrected twice, and the second inverted a fail-safe default into a fail-open one. A mechanical step at the publication gate has no delivery problem and no default to invert.
+
+Scoped by construction: commit only when the ledger entry carries `:worktree`, so a shared-root child is untouched and today's behaviour survives without a conditional anywhere. `publish-round!` already reads its ledger entry, so it locates the checkout and branch authoritatively rather than inferring them from cwd -- which matters, because `ORCH_ASSIGNMENT_ROOT` deliberately points elsewhere.
+
+Deletes, rather than adds: `--worktree-from` (subsumed by a value-taking `--worktree`), both marker fragments and their `gate.md` companions, `:create?` and the `reuse`/`suppressed`/`flag`/`default`/`none` trigger strings, `spawn!`'s reuse bypass, one of the two conflict guards, `HERDR_ORCH_WORKTREE`, `worker.md`'s conditional commit rule, and `planner.md`'s `%no-worktree` body token. This discards the artifacts of plan task 2538b80c, whose criteria are annotated as superseded rather than left claiming outputs that no longer exist.
 
 Acceptance criteria:
-- [ ] One resolver returns a target -- `{:kind :shared}`, `{:kind :existing :from <task>}`, or `{:kind :create}` -- and `spawn!` consumes only that. `:create?` and the `"reuse"`/`"suppressed"` pseudo-triggers are gone.
-- [ ] `--worktree-from` is an input to that resolver, not a bypass of it. Today `spawn!` substitutes a hand-written decision literal instead of calling the resolver, which is why the reuse path needs its own conflict check.
+- [ ] One resolver returns a target -- the caller's cwd, an existing checkout, or a newly cut one -- and `spawn!` consumes only that. `:create?` and the trigger strings are gone, and the reuse path no longer bypasses the resolver.
 - [ ] One conflict rule, stated once: more than one explicit target requested. Replaces both `core.clj`'s trigger-conflict throw and `cli.clj`'s separate `worktree-from refused` guard.
-- [ ] `%no-worktree` suppresses only the *creation default* and never suppresses use, so a persona carrying it can still be handed an existing checkout: `planner --worktree-from <task>` is legal, where today it is refused as a trigger conflict.
-- [ ] `HERDR_ORCH_WORKTREE` injection derives from the target being other than `:shared`, not from a creation flag. Behaviour is unchanged; only its derivation moves.
-- [ ] A spawn with no worktree involvement is byte-for-byte unaffected in placement, env, and ledger shape.
+- [ ] `--worktree <path>` accepts an existing checkout by path, and a path outside the managed root is refused for *removal* while remaining legal for *use*; containment stays enforced in one place (see 4962846f).
+- [ ] A publication from a child whose entry carries `:worktree` commits any pending change on that checkout's branch and reports the ref in the envelope. `WAITING` publications checkpoint the same way, so an interrupted child leaves its work in git objects rather than only on disk.
+- [ ] The commit runs *before* the result item is written, so a ref named in an envelope always resolves -- the same ordering rule as ledger fields preceding `git worktree add`.
+- [ ] A publication from a child with no `:worktree` commits nothing, and a spawn with no worktree involvement is byte-for-byte unaffected in placement, env, and ledger shape.
+- [ ] A read-only child that has left changes in its checkout has that reported as a finding rather than committed away: dirt from a persona that should not have written is a signal, not a housekeeping task.
+- [ ] Protocol checkpoint commits are documented as such -- not authored commits, exempt from the `git-commit` conventions, squashed or rewritten by the parent on merge -- so they are not later "fixed" into conventional commits.
+- [ ] No persona body references a deleted trait token: `planner.md` loses `%no-worktree` in the same change, since an unresolved 3+ character token fails the spawn before allocation.
 
-Must not: add a way to name an arbitrary checkout path -- an existing worktree stays addressed by the task that owns it, so containment and ownership keep one enforcement point.
+Must not: grant a commit permission by prompt text, in either direction; commit on any branch other than the checkout's own; commit for a shared-root child; treat `git add -A` as capturing everything, since ignored files remain outside it and stay 4962846f's problem.
 
-Constraint: `core/resolve-worktree` and `spawn!`'s decision site in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; seven test references to `:create?`/`:trigger` move with it. Sequenced before the documentation task deliberately, so the contract is written against the final model once rather than twice.
+Constraint: `core/resolve-worktree`, `spawn!`'s decision site, and `publish-round!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; seven test references to `:create?`/`:trigger` move with it. The `expandTraits` packaged-layer change stays -- it is harmless and generalises to any packaged trait -- but its stated motivation was interactive `%worktree`, which no longer exists, so update what justifies it rather than deleting it. Sequenced before the documentation task deliberately, so the contract is written once against the final model.
 
 ** TODO Documentation: SKILL.md and contract.md
 :PROPERTIES:
