@@ -38,6 +38,8 @@ Flag and verb index; [docs/contract.md](docs/contract.md) owns precedence, guard
 | `task close` / `--settled` | the only path that closes a spawned child's pane | § Close |
 | `task continue` | root-only further round in the same pane | § Continue |
 
+`--worktree <path>` may name an attached checkout outside the managed root for use, but `oh worktree remove` never removes such a checkout; `--worktree new` is the path that creates a checkout `oh` can later tear down. Worktree publications carry `CHECKPOINT`, while branch integration and deletion remain parent-owned.
+
 A `WAITING` item is not completion -- only a validated terminal result item is.
 
 ```sh
