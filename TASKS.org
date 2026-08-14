@@ -20,6 +20,18 @@
 
 * Explorations
 
+** TODO Evaluate jus
+:PROPERTIES:
+:CUSTOM_ID: a5156b00-08cc-4ab1-b365-ec183af96f40
+:CREATED: [2026-08-13 Thu 17:57]
+:END:
+:LOGBOOK:
+- Created [2026-08-13 Thu 17:57]
+:END:
+This looks like a very nice exploratory/learning tool for Clojure.
+Not sure it has a role here, but just catching the reference for now as an aide memoire....
+https://github.com/paintparty/jus
+
 ** TODO herdr-orch: LLM usage limit fallback :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: c3ae685d-bb3c-4329-b233-cfa0604075bc
@@ -334,32 +346,6 @@ Verified [2026-08-12 Wed] against cli.clj at 6a89b0f plus the housekeeping commi
 * Housekeeping
 * Agent feedback
 
-*** TODO herdr-orch: worktree-backed fan-out :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: e28067af-282f-47bd-b8fe-809663925f7b
-:CREATED: [2026-08-04 Tue 20:29]
-:END:
-:LOGBOOK:
-- Created [2026-08-04 Tue 20:29]
-:END:
-#+IMPORT: [[plan:2026-08-13-herdr-orch-worktree-backed-fan-out.org]]
-Parallel workers editing the same repo can race on a shared file, and disjoint edit sets do not give disjoint measurements (2026-08-11 edit below). Upstream Herdr ships `herdr worktree list|create|open|remove`, re-verified present in herdr 0.8.0 on [2026-08-13]; `oh` wraps none of it.
-
-An earlier rejection of CLI-detected parallelism is withdrawn: it conflated *will this become parallel later*, which is unknowable, with *is a round already in flight*, which the ledger answers, and the accepted default uses the latter.
-
-Settled [2026-08-13 Thu], and deliberately not re-opened in code:
-- Always create from the parent's current HEAD, and do not guard it: the implementation cannot produce a non-HEAD base, so no check, flag, or warning is warranted. The divergence rationale first recorded here had the right conclusion for the wrong reason, and the correction matters because it changes what an implementer must keep straight. Verified [2026-08-13]: `persona-directories` and `trait-directories` in cli.clj resolve their project layer from `ledger/assignment-root`, not from the child's git root, and the packaged layer from `skill-directory`, which pins to the launcher path. Since a worktree child has `ORCH_ASSIGNMENT_ROOT` pinned to the parent root, it resolves personas and traits from the *parent* whatever its own checkout contains. Source root, assignment root, and launcher root are three separate things here and must be reasoned about separately.
-- Create the branch explicitly, with `git worktree add -b <branch>`. Measured [2026-08-13]: plain `git worktree add PATH HEAD` produces a *detached* HEAD, so without `-b` a child's commits belong to no ref and are unreachable by ordinary lookup once the checkout is gone.
-- Require the child to commit its work on that branch, and say so in the `%worktree` fragment, because `worker`'s engineering rules otherwise forbid unrequested commits. This is what makes the `.tmp/` location tolerable: measured [2026-08-13], a linked worktree shares the parent's object store and refs, so a committed branch survives deletion of its checkout directory with ref, object, and content intact, while *uncommitted* work in a cleared `.tmp/` is simply lost. contract.md § Retention states an operator may clear that scratch, so uncommitted-only output there is a real data-loss path rather than a theoretical one.
-- Use plain `git worktree add`, not `herdr worktree create`. The latter also creates a workspace, and a subagent worktree stays in the *same* herdr workspace as the parent session, so placement geometry is untouched: the child still takes a tab in the caller's workspace or a split of the caller's pane, and only its cwd differs. `oh` therefore needs no `worktree` passthrough group and no third placement mode.
-- Put the checkout at `<parent-root>/.tmp/herdr-orch/worktrees/<task>`, matching the repository's scratch convention. Verified [2026-08-13]: `.tmp/` is gitignored, and of 5632 files under it, default `rg` sees none -- so a checkout there stays out of both `git status` and ordinary recursive search, which a sibling copy of every source file would otherwise pollute.
-
-Source: design review of herdr-orch against upstream docs (herdr 0.7.5, protocol 18). The `ORCH_ASSIGNMENT_ROOT` and hardcoded-cwd claims above were re-verified against `spawn!` on [2026-08-13].
-
-*EDIT* [2026-07-31 Fri] Part of the strategy above landed via the test-build retro, as a second prevention-side partial mitigation: herdr-orch § Invocation policy (Cardinality) now states that concurrency is bounded by edit targets as well as by N and forbids fanning out siblings whose file sets overlap, and org-plan § Splitting test now keeps work that must edit the same function or form in one task. Both are orchestrator/planner habits, so the structural guarantee this task asks for is still open. Remaining: the git-worktree-per-worker evaluation, whether the `planner` persona itself should carry overlap analysis (its plan for [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]] split one edit to one `fake-env` map across two nominally independent tasks, which forced the orchestrator to re-serialise them), and orchestrator-applied or advisory-locked shared-file writes.
-
-*EDIT* [2026-08-11 Tue] Further evidence that the prevention-side habits are insufficient, and a dimension not covered above: disjoint *edit* sets do not give disjoint *measurements*. Two workers were fanned out over deliberately non-overlapping files, each naming the other's files as off-limits, and both respected that -- yet one changed a shared test utility's signature, transiently breaking an existing call site, so the sibling's full-suite and lint runs measured a tree neither of them authored. Both reported counts that disagreed with the stated baseline for reasons outside their own change; one correctly attributed the discrepancy to the sibling, which is the only reason it was not read as its own regression. A worktree per worker fixes this where the overlap rule cannot, since the contamination is in the *build*, not in any file either child edited. Until then a parent must re-measure the combined tree itself after all children settle, and treat a child's aggregate suite counts as unattributable.
-
 ** TODO [#B] Skill vendoring improvements :project_convention:
 :PROPERTIES:
 :CUSTOM_ID: 98cf369c-83aa-4961-bf8b-2fa3aca8b2f3
@@ -640,13 +626,13 @@ Closing summary asserted a namespace still hard-coded a parameter it had resolve
 
 Measured: `ot create "probe child" --parent 6eb0f653 --format json` returns `{"code": "unknown-task", "message": "Parent task not found: 6eb0f653", "details": {"reason": "parent-not-found"}}`, while `ot show 6eb0f653` and `ot status 6eb0f653 DONE` both resolve the same id inside `design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org`.
 
-Consequence: new plan-only tasks cannot be created under a record's `* Plan` with the guaranteed CLI, so they have to be hand-authored with `ot uuid` plus a manual heading. `org-plan` § "Plan task metadata and status" currently says fresh plan-only tasks get UUIDs via `ot uuid` or `ot create`, which reads as though either works.
+Consequence: `--parent` cannot create a plan child under an imported record, but `--tasks <record> --section Plan` is an alternative placement route. A 2026-08-14 dry-run against `design/log/2026-08-14-review-and-consolidate-gitlab-configurat.org` returned that record path and section `Plan`; it does not establish the non-dry-run write behaviour. `org-plan` § "Plan task metadata and status" should direct agents to the verified record-targeted form rather than implying that `--parent` works there.
 
 Two candidate resolutions, needing a judgement this task should make rather than assume:
 - Extend `create --parent` (and `--after`) to resolve imported plan files, matching the mutator set documented in `org-tasks` § Compatibility policy. This is the consistent option but widens which file `create` may write.
-- Keep `create` scoped to `TASKS.org` deliberately and state the limitation in both `org-plan` and `references/ot-cli.md`, so the hand-authored route is the documented one.
+- Keep `create --parent` scoped to `TASKS.org` deliberately and document `ot create --tasks <record> --section Plan` as the canonical route for a new top-level plan task in an existing change-record; test its non-dry-run behaviour before relying on it.
 
-Raised as a `PROCESS` candidate by a planner subagent during the herdr-orch stream-model work; the parent probed it and found the CLI inconsistency above, which is broader than the documentation gap the child reported.
+Raised as a `PROCESS` candidate by a planner subagent during the herdr-orch stream-model work; the parent probed it and found the CLI inconsistency above. Expanded 2026-08-14 after another planner candidate established the record-targeted dry-run path.
 
 Origin:
 - cwd: /Users/cormacc/dotfiles/agents
@@ -700,3 +686,97 @@ Origin:
 
 Evidence:
 Two change-records were planned this session; both needed their `* Plan` tasks hand-authored with `ot uuid` after `--parent` routed to TASKS.org. Records: design/log/2026-08-13-move-to-on-demand-gitlab-runners-on-aws.org and design/log/2026-08-13-migrate-docker-host-from-amazon-linux-1.org.
+
+** TODO herdr-orch: trait gate runner discards the Codex auth it refreshes :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: be915a31-f4c1-4319-a478-f096c6b12249
+:CREATED: [2026-08-13 Thu 18:25]
+:END:
+:LOGBOOK:
+- Created [2026-08-13 Thu 18:25]
+:END:
+`scripts/run-trait-gate.bb` copies `~/.codex/auth.json` into a per-run `CODEX_HOME` (`prepare-codex-home!`) and discards that directory after the run, so any token the Codex CLI refreshes during the gate is written to the copy and lost. Every run therefore presents the same refresh token from the source file, which is a replay: two gate runs on 2026-08-13 at 18:04 and 18:06 failed with `401` / `{"code": "refresh_token_reused", "type": "invalid_request_error"}`.
+
+The failure is intermittent and misdiagnoses easily. Two `%prune` gates succeeded at 18:10 and 18:15 on the same credentials, and `codex login status` reported a live session throughout, so the first reading -- an expired local Codex session -- was wrong and was recorded as such in two `gate.md` files before being corrected. `~/.codex/auth.json` had not been written since 2026-07-29 despite 74 gate runs, which is the tell: nothing ever writes back.
+
+Desired outcome: a gate run must not invalidate the credential it borrows. Options include symlinking `auth.json` into the isolated home so a refresh writes through, copying the refreshed file back on exit, or pointing `CODEX_HOME` at the real home and isolating only the config that `--ignore-user-config` already covers. Isolation of *config* is deliberate and should survive whatever is chosen.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-13 Thu 18:25]
+- sender: agent
+
+Evidence:
+Found while re-running the `%worktree` and `%no-worktree` admission gates for plan task 2538b80c. Both had been recorded as lapsed on an auth diagnosis that did not survive checking; after re-authentication both ran, one passing with discrimination and one honestly not discriminating.
+
+** TODO Fix glab-runner instance-listing guidance :skill:gitlab_cli_skills:
+:PROPERTIES:
+:CUSTOM_ID: 7663c8ad-b8fc-4133-80cf-82a37b99e532
+:CREATED: [2026-08-14 Fri 10:13]
+:END:
+:LOGBOOK:
+- Created [2026-08-14 Fri 10:13]
+:END:
+Correct the glab-runner skill's instance-listing flag and add a live-help verification note. The installed glab exposes `glab runner list --instance`; the skill currently documents `--all`, which is rejected as an unknown flag. Also caution that a zero-item list is not evidence without a known runner control, because the failed follow-up probe returned an empty list.
+
+Origin:
+- cwd: /home/cormacc/nmd/infra/playbooks
+- git: git@git.nmd.ie:infrastructure/playbooks @ develop
+- timestamp: [2026-08-14 Fri 10:12]
+- sender: agent
+
+Evidence:
+`glab runner list --all --output json` exited non-zero with `Unknown flag: --all`. Live `glab runner list --help` documents `-i --instance  List all runners available to the user (instance scope).` Direct controlled API probes were needed to confirm runner deletion because the subsequent instance-list probe returned zero rows, including no known-present runner 10.
+
+** TODO org-tasks: ot doctor should flag a DONE task with unchecked criteria :skill:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: 67d5e7af-498b-4562-88bc-45f2c403489b
+:CREATED: [2026-08-14 Fri 13:33]
+:END:
+:LOGBOOK:
+- Created [2026-08-14 Fri 13:33]
+:END:
+`ot doctor` has no check for a task marked `DONE` whose acceptance criteria are still unchecked, so a record can assert completion while recording none of it.
+
+Observed 2026-08-13 in `design/log/2026-08-13-herdr-orch-worktree-backed-fan-out.org`: plan task 2538b80c sat `DONE` for a day with all six of its `- [ ]` criteria unticked. Its evidence existed only in a closed child's published findings, which die with the pane. Three separate reviews of that record -- two code reviews and one direction review -- did not notice, and neither did `ot doctor` at 0 errors. An audit of the other six plan tasks in the same record found every one fully ticked, so this was a single lapsed round rather than a convention nobody follows.
+
+Desired outcome: a warn-level finding naming the task and the count of unchecked criteria when a task is `DONE` (and probably `CANCELLED` too, where the reasoning differs). Warn rather than error: a criterion legitimately reversed at closure is recorded as reversed, and `org-plan` § Closure-time refresh and prune already expects prose beside a box rather than only a tick, so the check should nudge rather than block. Consider also the inverse as a separate question -- a `TODO` task with every criterion ticked -- which is a weaker signal and may not be worth reporting.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-13 Thu 21:05]
+- sender: agent
+
+Evidence:
+Found by hand-auditing checkbox state per plan task while annotating a superseded task, not by any tool. The gap is that closure is asserted by status while completion is recorded in checkboxes, and nothing reconciles the two.
+
+** TODO agent: bound concurrency probes and validate scratch targets :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 6a2d2634-497c-4973-a8a4-53872966846b
+:CREATED: [2026-08-14 Fri 17:37]
+:END:
+:LOGBOOK:
+- Created [2026-08-14 Fri 17:37]
+:END:
+Concurrency and destructive scratch probes need a shared bounded-harness guardrail.
+
+Three independently observed failures in the worktree fan-out review:
+
+- A scratch probe derived a nil checkout path and wrote through it into the caller cwd before cleanup. Assert every derived target is non-nil, absolute, and contained under the intended temporary root before the first write or delete.
+- A `functions.bash` timeout of `120000` was supplied as though milliseconds, but the schema is seconds; the deadlocked probe then ran for 4,173 seconds before manual interruption. Treat tool timeout units as part of identifier verification and wrap each concurrency probe in an independent bounded process timeout with `finally` cleanup.
+- A file-lock test assumed waiter FIFO order. POSIX/JVM file locks promise exclusion, not queue order; assert scheduler-independent one-winner/one-loser invariants or signal actual acquisition entirely from the test harness. Never add a caller-controlled test barrier to the production lock path -- a missing release file blocked every later spawn/continue in review and was rejected as P2.
+
+Desired outcome: add the narrowest durable guidance to the general agent instructions and/or herdr-orch test hazards, with an adversarial example that fails when timeout/containment cleanup is removed. Do not restate existing generic temporary-file rules; target the observed gaps above.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-14 Fri 17:40]
+- sender: agent
+
+Evidence:
+- reviewer-3a2e3cdc process finding (nil scratch target)
+- reviewer-cb0427bb process finding and 4,173-second aborted probe (timeout unit)
+- worker-8271dad0 process finding plus final review P2 (FIFO assumption / production test barrier)

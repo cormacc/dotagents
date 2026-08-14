@@ -3020,3 +3020,35 @@ Both were reported by child agents rather than reproduced by the parent, so each
 Measurement [2026-08-12 Wed]: the nested-fixture requirement reproduced. With the live delegated pane id, =fake-herdr= did not return the parent identity expected by the fixture; overriding =HERDR_PANE_ID=w:p= then exposed the default =planner-1-model= label mismatch, and adding a =worker-= prefixed =FAKE_PARENT_LABEL= made the nested scout spawn succeed.
 
 The five-variable root-simulation claim did not reproduce. A fixture call carrying all five inherited variables was refused as below-root, but clearing only =HERDR_ORCH_PERSONA= made the root worker spawn succeed while =HERDR_ORCH_SPAWNS=, =HERDR_ORCH_TASK=, =HERDR_ORCH_RESULT=, and =HERDR_ORCH_CHILD= remained set. Current =enforce-spawns!= and =placement-policy= likewise use =HERDR_ORCH_PERSONA= as the depth discriminator, so the scripts README documents that narrower confirmed requirement instead of the original report.
+
+*** DONE herdr-orch: worktree-backed fan-out :skill:herdr_orch:
+CLOSED: [2026-08-14 Fri 17:37]
+:PROPERTIES:
+:CUSTOM_ID: e28067af-282f-47bd-b8fe-809663925f7b
+:CREATED: [2026-08-04 Tue 20:29]
+:STARTED: [2026-08-13 Thu 18:01]
+:ARCHIVED: [2026-08-14 Fri 17:37]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-08-04 Tue 20:29]
+- State "STARTED" from "TODO" [2026-08-13 Thu 18:01]
+- State "DONE" from "STARTED" [2026-08-14 Fri 17:37]
+:END:
+#+IMPORT: [[plan:2026-08-13-herdr-orch-worktree-backed-fan-out.org]]
+Parallel workers editing the same repo can race on a shared file, and disjoint edit sets do not give disjoint measurements (2026-08-11 edit below). Upstream Herdr ships `herdr worktree list|create|open|remove`, re-verified present in herdr 0.8.0 on [2026-08-13]; `oh` wraps none of it.
+
+An earlier rejection of CLI-detected parallelism is withdrawn: it conflated *will this become parallel later*, which is unknowable, with *is a round already in flight*, which the ledger answers, and the accepted default uses the latter.
+
+Settled [2026-08-13 Thu], and deliberately not re-opened in code:
+- Always create from the parent's current HEAD, and do not guard it: the implementation cannot produce a non-HEAD base, so no check, flag, or warning is warranted. The divergence rationale first recorded here had the right conclusion for the wrong reason, and the correction matters because it changes what an implementer must keep straight. Verified [2026-08-13]: `persona-directories` and `trait-directories` in cli.clj resolve their project layer from `ledger/assignment-root`, not from the child's git root, and the packaged layer from `skill-directory`, which pins to the launcher path. Since a worktree child has `ORCH_ASSIGNMENT_ROOT` pinned to the parent root, it resolves personas and traits from the *parent* whatever its own checkout contains. Source root, assignment root, and launcher root are three separate things here and must be reasoned about separately.
+- Create the branch explicitly, with `git worktree add -b <branch>`. Measured [2026-08-13]: plain `git worktree add PATH HEAD` produces a *detached* HEAD, so without `-b` a child's commits belong to no ref and are unreachable by ordinary lookup once the checkout is gone.
+- Require the child to commit its work on that branch, and say so in the `%worktree` fragment, because `worker`'s engineering rules otherwise forbid unrequested commits. This is what makes the `.tmp/` location tolerable: measured [2026-08-13], a linked worktree shares the parent's object store and refs, so a committed branch survives deletion of its checkout directory with ref, object, and content intact, while *uncommitted* work in a cleared `.tmp/` is simply lost. contract.md § Retention states an operator may clear that scratch, so uncommitted-only output there is a real data-loss path rather than a theoretical one.
+- Use plain `git worktree add`, not `herdr worktree create`. The latter also creates a workspace, and a subagent worktree stays in the *same* herdr workspace as the parent session, so placement geometry is untouched: the child still takes a tab in the caller's workspace or a split of the caller's pane, and only its cwd differs. `oh` therefore needs no `worktree` passthrough group and no third placement mode.
+- Put the checkout at `<parent-root>/.tmp/herdr-orch/worktrees/<task>`, matching the repository's scratch convention. Verified [2026-08-13]: `.tmp/` is gitignored, and of 5632 files under it, default `rg` sees none -- so a checkout there stays out of both `git status` and ordinary recursive search, which a sibling copy of every source file would otherwise pollute.
+
+Source: design review of herdr-orch against upstream docs (herdr 0.7.5, protocol 18). The `ORCH_ASSIGNMENT_ROOT` and hardcoded-cwd claims above were re-verified against `spawn!` on [2026-08-13].
+
+*EDIT* [2026-07-31 Fri] Part of the strategy above landed via the test-build retro, as a second prevention-side partial mitigation: herdr-orch § Invocation policy (Cardinality) now states that concurrency is bounded by edit targets as well as by N and forbids fanning out siblings whose file sets overlap, and org-plan § Splitting test now keeps work that must edit the same function or form in one task. Both are orchestrator/planner habits, so the structural guarantee this task asks for is still open. Remaining: the git-worktree-per-worker evaluation, whether the `planner` persona itself should carry overlap analysis (its plan for [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]] split one edit to one `fake-env` map across two nominally independent tasks, which forced the orchestrator to re-serialise them), and orchestrator-applied or advisory-locked shared-file writes.
+
+*EDIT* [2026-08-11 Tue] Further evidence that the prevention-side habits are insufficient, and a dimension not covered above: disjoint *edit* sets do not give disjoint *measurements*. Two workers were fanned out over deliberately non-overlapping files, each naming the other's files as off-limits, and both respected that -- yet one changed a shared test utility's signature, transiently breaking an existing call site, so the sibling's full-suite and lint runs measured a tree neither of them authored. Both reported counts that disagreed with the stated baseline for reasons outside their own change; one correctly attributed the discrepancy to the sibling, which is the only reason it was not read as its own regression. A worktree per worker fixes this where the overlap rule cannot, since the contamination is in the *build*, not in any file either child edited. Until then a parent must re-measure the combined tree itself after all children settle, and treat a child's aggregate suite counts as unattributable.

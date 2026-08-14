@@ -1,6 +1,6 @@
 #+TITLE: herdr-orch: worktree-backed fan-out
 #+DATE: 2026-08-13 Thu
-#+PARENT: [[task:e28067af-282f-47bd-b8fe-809663925f7b][herdr-orch: worktree-backed fan-out]]
+#+PARENT: [[archive:e28067af-282f-47bd-b8fe-809663925f7b][herdr-orch: worktree-backed fan-out]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
@@ -95,6 +95,7 @@ Give `oh` first-class checkout isolation for concurrent subagents without changi
 ** Follow-ups
 
 - [[task:67d5e7af-498b-4562-88bc-45f2c403489b][org-tasks: ot doctor should flag a DONE task with unchecked criteria]]
+- [[task:6a2d2634-497c-4973-a8a4-53872966846b][agent: bound concurrency probes and validate scratch targets]]
 
 * Plan
 
