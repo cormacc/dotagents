@@ -4,7 +4,8 @@ Where things live:
 
 | Document | Canonical content |
 |---+---|
-| This file | What the skill is, how to configure it, and why it is built this way |
+| This file | What the skill is and how to use and configure it |
+| [[file:design.org][design.org]] | Why it is built this way, the namespace map, maintenance notes, and change history |
 | [[file:SKILL.md][SKILL.md]] | The delegation, trust, and pane-safety policy an agent loads at runtime |
 | [[file:references/traits.md][references/traits.md]] | Trait store, admission bar, probing protocol, and the measured rationale behind them |
 | [[file:scripts/README.md][scripts/README.md]] | CLI invocation, tests, and smoke entry points |
@@ -13,11 +14,7 @@ Where things live:
 * Table of Contents                                       :TOC_1_gh:noexport:
 - [[#what-is-this][What is this?]]
 - [[#how-do-i-use-it][How do I use it?]]
-- [[#design-rationale][Design rationale]]
-- [[#architecture][Architecture]]
-- [[#review-and-maintenance-notes][Review and maintenance notes]]
 - [[#known-gaps][Known gaps]]
-- [[#history][History]]
 - [[#llm-use-statement][LLM use statement]]
 
 * What is this?
@@ -252,91 +249,6 @@ oh task run scout --task x --model heavy --print-prompt
 
 The preview reports =kind=, the resolved (pre-alias) =model=, its post-alias =model-canonical=, the translated =model-args= the harness will receive, and the resolved =placement=, =retro=/=retro-source=, and =spawns=/=spawns-source=. Read the two model fields together to localise a miss: if =model-canonical= still shows your short name, no =:aliases= entry matched; if it is right but =model-args= repeats it instead of a harness-native ID, the =:models= row has no column for that kind.
 
-* Design rationale
-
-** Harness-neutral roster and CLI
-
-The resolved =kind= selects the child harness, so a parent is not restricted to its own. Keeping orchestration in a pi extension would have broken that property.
-
-Persona definitions and =config.edn= share a precedence order but deliberately not a combination rule: a persona is a whole document that should shadow atomically, while model configuration is tabular and benefits from composition. Hence shadow-by-name for the former, two-level merge for the latter.
-
-The [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24 change-record]] records the implementation choice: Babashka behind a thin launcher was preferred to a harness-specific extension or pure Bash. It provides vector argv, JSON handling, testable protocol logic, and atomic filesystem operations without adding Maven dependencies. Folding delegation into =ot= was rejected because task memory and terminal delegation are separate domains.
-
-** Why mechanics belong in a CLI
-
-The earlier prose-only protocol required the parent to perform label calculation, geometry selection, split/start/prompt operations, bounded waiting, envelope parsing, artifact checks, and pane closure by hand. Besides repeated model round-trips, partial compliance failed silently: identities could be mistyped, visible summaries substituted for result files, and panes closed before capture.
-
-The CLI absorbs those operations behind one spawn/collect interface and returns the validated envelope inline. The =minimum-version= gate converts an unsupported-Herdr state into an actionable error before a pane or ledger assignment is partially created, for one subprocess; the twelve per-command =--help= probes it replaced bought nothing further, since every command and flag the CLI uses shipped in that same minimum version. Exact invocation counts are intentionally not frozen here because lifecycle hooks change; use the fake-Herdr log when evaluating current overhead.
-
-** Optional process retrospectives
-
-The [[file:../../design/log/2026-07-27-subagent-retrospectives.org][2026-07-27 change-record]] added child-side process learning without giving children persistence authority. A gated child scans context it already holds and can attach compact =signal → category → proposed rule= candidates to the durable result. The parent still verifies, deduplicates, routes, and seeks approval, so self-retro remains testimony rather than an automated write path.
-
-=PROCESS:= was added as an optional trailing v1 annotation instead of a separate retro artifact or envelope v2. The position preserves existing v1 readers, omission preserves old output when there are no candidates, and the ledger already persists validated envelopes. =:child-session= complements this with a best-effort transcript reference for thin candidates or crash investigation.
-
-The =retro= skill is optional by design. Project/global skill resolution lets integrated installations enable it by default, while third-party installations without it continue delegating with no injected instruction. Only explicit =--retro= fails when the capability is absent, because an operator request must not silently become a no-op. The live smoke follows the same rule and reports a skipped retro leg when the skill is unavailable.
-
-** Where assignment state lives
-
-Assignment state lives under =<assignment-root>/.tmp/herdr-orch/=, deliberately outside =.agents/=: that tree is durable agent configuration, and codex under =--sandbox workspace-write= mounts it read-only so a child cannot rewrite its own instructions. A =RESULT= path inside it is unwritable, which silently makes publication -- the protocol's only completion signal -- impossible for codex-kind children. The same reasoning applies to any scratch path handed to a child.
-
-** Per-persona spawn capability
-
-The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27 spawn-capability change-record]] replaced the prose-only planner exception with declared roster capability: a frontmatter =spawns:= allow-list resolved once at spawn (flag > frontmatter > default deny), recorded on the ledger as =:spawns=/=:spawns-source=, injected as =HERDR_ORCH_SPAWNS=, and enforced mechanically by the child CLI before preflight, ledger allocation, or pane mutation. Prompt-only enforcement was rejected because its failure modes are billable and pane-creating; child self-resolution from the roster was rejected because it cannot carry a per-spawn flag override and mid-flight roster edits would change a live child's capability. Any below-root spawn injects an empty grandchild policy with source =depth= -- one nesting level absolutely, no depth counter -- so labels stay display-only metadata. Below-root one-at-a-time cardinality deliberately remains prompt-strength doctrine.
-
-* Architecture
-
-| Namespace | Responsibility |
-|---+---|
-| [[file:scripts/src/herdr_orch/core.clj][core.clj]] | Pure protocol logic: roster/skill resolution, kind/model policy, retro and spawn policy, checkout target resolution, geometry, labels, and envelope render/parse/validation. |
-| [[file:scripts/src/herdr_orch/herdr.clj][herdr.clj]] | Vector-argv Herdr adapter, JSON/error decoding, and the minimum-version preflight gate. |
-| [[file:scripts/src/herdr_orch/ledger.clj][ledger.clj]] | Assignment-root resolution, atomic ledger writes, result-path allocation, and exclusive-create monotonic index allocation. |
-| [[file:scripts/src/herdr_orch/cli.clj][cli.clj]] | Command orchestration, prompt composition, spawn-policy enforcement, managed checkout creation, publication and its mechanical checkpoint, capture, worktree reconciliation and teardown, session backfill, ownership-scoped closure, and bounded waiting. |
-| [[file:scripts/src/herdr_orch/smoke.clj][smoke.clj]] | Explicitly guarded billable integration smoke; never loaded by =bb test=. |
-| [[file:scripts/oh][oh]] | Bash launcher selecting repository =bb.edn= or the standalone =-Sdeps= path while preserving caller cwd. |
-
-* Review and maintenance notes
-
-** Known regression boundaries
-
-The regression suite names the important boundaries; preserve the tests rather than duplicating their mechanics here:
-
-- =bounded-poll-timeout-without-result= must fail if the wait-loop sleep is removed.
-- =unknown-state-is-never-nudged= must fail if the post-prompt dispatch check ever sends keys to a child whose state it could not observe, and =dispatched-prompt-is-confirmed-without-touching-the-keyboard= must fail if a healthy spawn starts paying for a poll interval or a second =agent get=.
-- =launcher-matrix-selects-branch-and-preserves-cwd= must fail if launcher path canonicalisation or caller cwd preservation regresses.
-- capture must never close a pane: closure belongs to =task close= alone, and =close=/=close --settled= must refuse a foreign or unresolvable parent identity and a stale non-newest round; a child whose live name and pane id do not both match the ledger entry closes only through the guarded shell_pid fallback for a released name (task ca6fecef), never on weaker evidence.
-- retro tests must remain behavioural at prompt/CLI boundaries: frontmatter values are strings, value-less flags participate in two argv consumers, and optional annotations must not demote a valid result.
-- =default-config-content-contract= pins contract.md's weight table to =config.edn= and pins every pre-two-level model ID to its old argv; keep its expectation matrix hardcoded, or the preservation check becomes circular.
-- live-smoke helper assertions are unit-tested because the billable smoke is never part of the standard suite.
-
-All =herdr= calls in =src/= must remain vector argv. Keep the standalone launcher dependency-free beyond Babashka built-ins. When Herdr changes, =minimum-version= in [[file:scripts/src/herdr_orch/herdr.clj][herdr.clj]] is the single capability declaration -- raise it when the CLI starts depending on a newer command or flag, rather than reintroducing per-command probes.
-
-Configuration examples in this file are not covered by any test, unlike contract.md's weight table. Validate a changed example by parsing it out of the document and running it through =validate-merged-config!= against the shipped table; an example can become executable-wrong rather than merely stale.
-
-** Test isolation caveat
-
-=ORCH_ASSIGNMENT_ROOT= relocates project config lookup and all assignment state into each fixture. The CLI tests symlink both the tracked config and project =skills/= tree into that root. They also set =$HOME=, but Babashka's =System/getProperty("user.home")= comes from the JVM/OS property rather than the subprocess environment, so =$HOME= alone cannot hide the global config or skill probes. Tests of the no-global-skill branch therefore belong at the pure =core= policy boundary unless the process property itself is controlled.
-
-A full =bb test= should create no entries under the repository's live =.tmp/herdr-orch/= tree. When mutation-testing assignment-root or launcher behavior, set an override and inspect that tree afterwards.
-
-Test runs create many fake-Herdr ledger directories under temporary fixture roots. A cross-project audit must discover real ledgers only beneath known assignment roots, or explicitly exclude fake-Herdr/test-fixture paths; never use an unscoped filesystem or =/tmp= search for directories named =ledger=.
-
-=bb test= runs from the repository root; there is no =bb.edn= under =scripts/=.
-
-** Reflexive changes
-
-A child editing =scripts/= is modifying the same launcher used by its own =publish= and the parent's =collect=. Before delegating such work, copy a known-good scripts tree outside this repository and give the child its launcher as a fallback. Put the snapshot where the launcher's repository-root walk cannot rediscover this checkout's =bb.edn=; otherwise the supposed snapshot loads working-tree source.
-
-Publication identity comes from injected =HERDR_ORCH_*= variables rather than the ledger, so an isolated snapshot can publish the assigned result. Verify the fallback before relying on it.
-
-** Deployment and live smoke
-
-=agents.nix= deploys =~/.agents/skills= as a directory symlink, which includes this skill's packaged =subagents/= directory. Launcher canonicalisation must therefore use physical paths when locating the repository configuration while retaining the absolute deployed launcher path injected into the child. Do not project packaged definitions into =~/.agents/subagents/=: that path is deliberately unmanaged and reserved for genuine home overrides; project overrides remain =<git-root>/.agents/subagents/=.
-
-=bb smoke-subagent= is billable and guarded by =HERDR_ENV=1=, =ORCH_LIVE_SMOKE=1=, and =ORCH_LIVE_SMOKE_MODEL= (with optional =ORCH_LIVE_SMOKE_KIND=, applied by generating =kind:=-declaring persona copies). It calls =cli/execute= in-process and therefore cannot validate the Bash launcher. Launcher changes need a separate deployed-path smoke from a scratch project. The retrospective leg deliberately lets the child encounter an unannounced invalid command: announcing the trap turns it into a known one-off that the =retro= eligibility gate correctly rejects.
-
-Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, and are indistinguishable from genuine ones in the collected envelope. Never route them to =self-improvement= or report them as durable findings.
-
 * Known gaps
 
 - The CLI implements one child per invocation for =run=/=start=; multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] -- no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself. Concurrent writers likewise get checkout isolation (§ Subagent lifecycle), but how many run at once remains the parent's decision.
@@ -345,30 +257,6 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 - The advisor-tier convention holds only for a worker that consults through =oh task run advisor=. A worker that hand-rolls a consult with raw =herdr agent start= silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so ledger consult counts and advisor costs are a floor rather than the truth.
 - =oh task prune= refuses any entry owned by another session, which is correct but leaves no command for the common case of a stale entry from an ended session; clear those by deleting the ledger JSON.
 - =HERDR_ORCH_BIN= intentionally carries the deployed absolute path rather than a canonical repository path; launcher-matrix coverage is its guard.
-
-* History
-
-- [[file:../../design/log/2026-07-22-harness-agnostic-subagents.org][2026-07-22]] -- harness-neutral roster and kind/model resolution.
-- [[file:../../design/log/2026-07-23-add-hierarchical-pane-labels-to-herdr-su.org][2026-07-23]] -- hierarchical pane labels.
-- [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07-24]] -- delegation CLI and implementation-review remediations.
-- [[file:../../design/log/2026-07-27-subagent-retrospectives.org][2026-07-27]] -- optional child retrospectives, process annotations, and child-session recording.
-- [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27]] -- per-persona spawn capability replacing the planner-only exception.
-- [[file:../../design/log/2026-07-29-subagent-harness-agnostic-model-resoluti.org][2026-07-29]] -- harness-agnostic model resolution.
-- [[file:../../design/log/2026-07-29-subagent-comms-housekeeping.org][2026-07-29]] -- parent/child communication housekeeping.
-- [[file:../../design/log/2026-07-29-subagent-package-default-example-subagen.org][2026-07-29]] -- packaged default persona roster.
-- [[file:../../design/log/2026-07-29-subagent-implement-the-advisor-strategy.org][2026-07-29]] -- advisor strategy (superseded by 2026-07-31).
-- [[file:../../design/log/2026-07-30-subagents-make-default-spawn-options-con.org][2026-07-30]] -- configurable default spawn options.
-- [[file:../../design/log/2026-07-31-subagents-review-advisor-strategy-defaul.org][2026-07-31]] -- advisor/tier benchmark rounds behind current tier guidance.
-- [[file:../../design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org][2026-07-31]] -- retired the mandatory advisor consult and the frontier-executor persona.
-- [[file:../../design/log/2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org][2026-08-01]] -- absorbed pi-herdr coverage; skill/CLI renamed to =herdr-orch=/=oh=.
-- [[file:../../design/log/2026-08-03-subagent-make-claude-kind-persona-inject.org][2026-08-03]] -- claude-kind persona injection and bounded-permission overrides.
-- [[file:../../design/log/2026-08-04-herdr-orch-simplify-model-aliasing.org][2026-08-04]] -- two-level model table: =:aliases= plus canonical =:models= rows.
-- [[file:../../design/log/2026-08-05-herdr-orch-verify-prompt-dispatch-after.org][2026-08-05]] -- post-prompt dispatch verification for spawned children.
-- [[file:../../design/log/2026-08-06-design-a-context-efficient-evidence-poli.org][2026-08-06]] -- context-efficient evidence policy: bidirectional assignment-premise/result-trust rules with a bounded Class B probe budget.
-- [[file:../../design/log/2026-08-06-herdr-orch-support-resident-reviewers-fo.org][2026-08-06]] -- explicit close/continue lifecycle: capture stops closing panes, =task close=/=task continue= replace auto-close and residency flags, and waiting policy moves to the ledger entry.
-- [[file:../../design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org][2026-08-07]] -- append-only publish stream: many immutable result items per round through one =publish= verb, terminal statuses sealing mechanically.
-- [[file:../../design/log/2026-08-08-herdr-orch-subagent-composition-and-exte.org][2026-08-08]] -- trait fragments composed into personas at spawn and into interactively typed prompts.
-- [[file:../../design/log/2026-08-13-herdr-orch-worktree-backed-fan-out.org][2026-08-13]] -- worktree-backed fan-out: parent-resolved checkout targets, mechanical publication checkpoints, and reconciliation/teardown.
 
 * LLM use statement
 

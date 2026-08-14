@@ -38,7 +38,7 @@ Delegation capability is declared, not assumed: a persona may spawn only what it
 
 **The advisor is opt-in, for a stuck worker only.** There is no routine pre-publish review. A worker consults on a debugging dead end after repeated failed attempts, or on a materially ambiguous high-stakes decision it cannot settle from source; soft cap three consults. The advisor runs at its own `middle` default, and a caller or worker may raise a single high-stakes consult with `--model heavy`.
 
-**Tier guidance:** light is the efficient default for well-specified implementation work. Feather is a false economy for it -- benchmarked head to head it cost more, ran slower, burned more tokens for an identical score, and accounted for every delegation-protocol failure observed. Reserve middle and above for work whose difficulty is genuinely established rather than assumed. Measurements and supersession history are in [README.org](README.org) § History.
+**Tier guidance:** light is the efficient default for well-specified implementation work. Feather is a false economy for it -- benchmarked head to head it cost more, ran slower, burned more tokens for an identical score, and accounted for every delegation-protocol failure observed. Reserve middle and above for work whose difficulty is genuinely established rather than assumed. Measurements and supersession history are in [design.org](design.org) § History.
 
 The advisor-tier override is a convention, not a structured flag: instruct the worker (via `--prompt-extra`) to spawn its consult with `--model <tier>`, and require it to use `oh task run advisor` (see [README.org](README.org) § Known gaps for what a hand-rolled consult costs).
 
