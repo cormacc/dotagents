@@ -226,6 +226,20 @@ in the child's environment, or consulted by that child's own spawns. The ledger 
 records the resolved =:placement= (="split"= or ="tab"=) and =:tab-id= for audit only. See
 [[file:scripts/docs/contract.md][contract.md]] § Placement for the mechanical detail.
 
+** Subagent lifecycle
+
+The parent owns both ends of a round: it decides where the child works, and it owns everything the child produces.
+
+1. *Target.* The parent resolves exactly one checkout before the child exists -- the caller's own checkout, an existing attached checkout in the same repository (=--worktree <path>=), or a managed checkout (=--worktree new=). With no flag, a read-only or first write-enabled child shares the caller's checkout, while an additional concurrent write-enabled child gets a managed one. A managed checkout is created from the source HEAD on branch =orch/<task-prefix>=, before any pane exists.
+2. *Spawn.* =oh task run= blocks for the result; =oh task start= returns immediately. The child's cwd is the resolved checkout, and that cwd is the only child state the target affects: topology is never communicated through the persona, and the child carries no commit permission.
+3. *Publish.* =oh task publish= appends immutable result items to the round's stream -- interim reports and monitor observations included -- and a terminal status (=COMPLETE=, =BLOCKED=, =FAILED=) seals the round. Publication is also the commit gate: from a non-shared checkout it mechanically stages and commits pending nonignored changes and records the resulting tip as =CHECKPOINT=, so recovery never depends on the child having been instructed to commit. From the shared checkout it never touches Git. A read-only child holding dirt is refused, not committed.
+4. *Collect and reconcile.* =oh task collect= captures published items, and =collect --any= takes whichever in-flight child publishes first. For a child with its own checkout, =collect=, =status=, and =oh worktree list= also report base, branch, tip, and checkout state, keeping committed, dirty, and ignored paths as three separate sets, because each calls for a different parent action.
+5. *Close, continue, or tear down.* Capture never closes a pane. =oh task close= closes a settled child's pane, while =oh task continue= assigns the same child another round and carries its checkout identity forward without re-resolving topology. =oh worktree remove= deletes only a managed checkout, and only when it is owned, unreferenced, and clean. The branch always survives.
+
+Integration is the parent's work. =oh= never merges, rebases, pushes, deletes a branch, or commits in the shared checkout. Isolation keeps concurrent writers out of each other's index, but it does not prove their edits compose, so the parent still remeasures the combined tree. Retained =orch/*= branches accumulate until the parent integrates or deletes them.
+
+[[file:scripts/docs/contract.md][contract.md]] owns the mechanics: § Worktree reconciliation and teardown for the reconciliation shape, the removal guards, and recovery when =.tmp/= was cleared before a child published, and § Close for the closure guards.
+
 ** Verifying a configuration change
 
 Config is parsed and shape-validated before any ledger allocation or pane mutation, and every failure names the offending file, so a broken override costs nothing billable. =:defaults= is a closed map -- =:placement= only, valued =:split=, =:tab=, or =:tab-split= -- so a typo fails loudly instead of being ignored.
@@ -274,10 +288,10 @@ The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.
 
 | Namespace | Responsibility |
 |---+---|
-| [[file:scripts/src/herdr_orch/core.clj][core.clj]] | Pure protocol logic: roster/skill resolution, kind/model policy, retro and spawn policy, geometry, labels, and envelope render/parse/validation. |
+| [[file:scripts/src/herdr_orch/core.clj][core.clj]] | Pure protocol logic: roster/skill resolution, kind/model policy, retro and spawn policy, checkout target resolution, geometry, labels, and envelope render/parse/validation. |
 | [[file:scripts/src/herdr_orch/herdr.clj][herdr.clj]] | Vector-argv Herdr adapter, JSON/error decoding, and the minimum-version preflight gate. |
 | [[file:scripts/src/herdr_orch/ledger.clj][ledger.clj]] | Assignment-root resolution, atomic ledger writes, result-path allocation, and exclusive-create monotonic index allocation. |
-| [[file:scripts/src/herdr_orch/cli.clj][cli.clj]] | Command orchestration, prompt composition, spawn-policy enforcement, publication, capture, session backfill, ownership-scoped closure, and bounded waiting. |
+| [[file:scripts/src/herdr_orch/cli.clj][cli.clj]] | Command orchestration, prompt composition, spawn-policy enforcement, managed checkout creation, publication and its mechanical checkpoint, capture, worktree reconciliation and teardown, session backfill, ownership-scoped closure, and bounded waiting. |
 | [[file:scripts/src/herdr_orch/smoke.clj][smoke.clj]] | Explicitly guarded billable integration smoke; never loaded by =bb test=. |
 | [[file:scripts/oh][oh]] | Bash launcher selecting repository =bb.edn= or the standalone =-Sdeps= path while preserving caller cwd. |
 
@@ -291,7 +305,6 @@ The regression suite names the important boundaries; preserve the tests rather t
 - =unknown-state-is-never-nudged= must fail if the post-prompt dispatch check ever sends keys to a child whose state it could not observe, and =dispatched-prompt-is-confirmed-without-touching-the-keyboard= must fail if a healthy spawn starts paying for a poll interval or a second =agent get=.
 - =launcher-matrix-selects-branch-and-preserves-cwd= must fail if launcher path canonicalisation or caller cwd preservation regresses.
 - capture must never close a pane: closure belongs to =task close= alone, and =close=/=close --settled= must refuse a foreign or unresolvable parent identity and a stale non-newest round; a child whose live name and pane id do not both match the ledger entry closes only through the guarded shell_pid fallback for a released name (task ca6fecef), never on weaker evidence.
-- =lifecycle-documentation-contract= must fail if any lifecycle document -- this README included -- reasserts capture-time closure; a document omitted from its file list is a document the suite cannot police.
 - retro tests must remain behavioural at prompt/CLI boundaries: frontmatter values are strings, value-less flags participate in two argv consumers, and optional annotations must not demote a valid result.
 - =default-config-content-contract= pins contract.md's weight table to =config.edn= and pins every pre-two-level model ID to its old argv; keep its expectation matrix hardcoded, or the preservation check becomes circular.
 - live-smoke helper assertions are unit-tested because the billable smoke is never part of the standard suite.
@@ -326,7 +339,7 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 
 * Known gaps
 
-- The CLI implements one child per invocation for =run=/=start=; multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] -- no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself.
+- The CLI implements one child per invocation for =run=/=start=; multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] -- no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself. Concurrent writers likewise get checkout isolation (§ Subagent lifecycle), but how many run at once remains the parent's decision.
 - =task close= settle-waits (bounded by =ORCH_SETTLE_CLOSE_MS=, default 45 s) before its single close attempt, but a child that never settles inside that budget still retains its pane -- closure is one attempt, never retried. Capture never closes anything.
 - =close= refuses a foreign or unresolvable parent identity, so an orphaned child whose owning session has ended is not closable through it. =oh task orphans= lists such panes and =oh task orphans --close= sweeps them, under the same live child+pane match =close= uses (see [[file:scripts/docs/contract.md][contract.md]] § Orphans); both forms are root-only and the operator supplies the judgement that a foreign session is a dead one.
 - The advisor-tier convention holds only for a worker that consults through =oh task run advisor=. A worker that hand-rolls a consult with raw =herdr agent start= silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so ledger consult counts and advisor costs are a floor rather than the truth.
@@ -353,6 +366,9 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 - [[file:../../design/log/2026-08-05-herdr-orch-verify-prompt-dispatch-after.org][2026-08-05]] -- post-prompt dispatch verification for spawned children.
 - [[file:../../design/log/2026-08-06-design-a-context-efficient-evidence-poli.org][2026-08-06]] -- context-efficient evidence policy: bidirectional assignment-premise/result-trust rules with a bounded Class B probe budget.
 - [[file:../../design/log/2026-08-06-herdr-orch-support-resident-reviewers-fo.org][2026-08-06]] -- explicit close/continue lifecycle: capture stops closing panes, =task close=/=task continue= replace auto-close and residency flags, and waiting policy moves to the ledger entry.
+- [[file:../../design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org][2026-08-07]] -- append-only publish stream: many immutable result items per round through one =publish= verb, terminal statuses sealing mechanically.
+- [[file:../../design/log/2026-08-08-herdr-orch-subagent-composition-and-exte.org][2026-08-08]] -- trait fragments composed into personas at spawn and into interactively typed prompts.
+- [[file:../../design/log/2026-08-13-herdr-orch-worktree-backed-fan-out.org][2026-08-13]] -- worktree-backed fan-out: parent-resolved checkout targets, mechanical publication checkpoints, and reconciliation/teardown.
 
 * LLM use statement
 
