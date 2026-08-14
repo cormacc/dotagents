@@ -85,8 +85,8 @@
     (is (= project (flag-value (placement-argv (:log h)) "--cwd")))
     (is (str/starts-with? (get env-map "HERDR_ORCH_RESULT")
                           (str (fs/path project ".tmp" "herdr-orch"))))
-    ;; The override is absent, so it must not be injected either.
-    (is (nil? (get env-map "ORCH_ASSIGNMENT_ROOT")))))
+    ;; The resolved root is uniform routing state even when no override was supplied.
+    (is (= project (get env-map "ORCH_ASSIGNMENT_ROOT")))))
 
 (deftest launcher-matrix-selects-branch-and-preserves-cwd
   (testing "repo-relative invocation"

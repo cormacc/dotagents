@@ -14,7 +14,7 @@ Give `oh` first-class checkout isolation for concurrent subagents without changi
 
 *Level:* production · *Tests:* thorough · *Docs:* full
 
-`oh task run|start` resolves one checkout target before allocation: the caller's checkout, an existing attached same-repository checkout named by `--worktree <path>`, or a new managed checkout named by `--worktree new` or selected automatically for an additional concurrent write-enabled child. Publication from a non-shared checkout mechanically commits pending nonignored changes and adds its authoritative tip as `CHECKPOINT`; shared-root publication never mutates Git, and a read-only child with dirt is refused. Ledger identity follows the child lineage, reconciliation distinguishes committed, dirty, and ignored paths, and teardown removes only guarded managed checkouts while retaining branches for parent-owned integration.
+`oh task run|start` resolves one checkout target before allocation: the caller's checkout, an existing attached same-repository checkout named by `--worktree <path>`, or a new managed checkout named by `--worktree new` or selected automatically for an additional concurrent write-enabled child. Publication from a non-shared checkout mechanically commits pending nonignored changes and adds its authoritative tip as `CHECKPOINT`; shared-root publication never mutates Git, and a read-only existing target with pre-existing dirt is refused before allocation. Target reservation is process-atomic, ledger identity follows the child lineage, reconciliation distinguishes committed, dirty, and ignored paths while failing closed on invalid checkouts, and teardown removes only guarded managed checkouts while retaining branches for parent-owned integration.
 
 ** Scope
 
@@ -56,7 +56,7 @@ Give `oh` first-class checkout isolation for concurrent subagents without changi
 
 *** Anti-criteria
 
-- [X] Must not: communicate topology or commit permission through persona prompt text or a child environment signal.
+- [X] Must not: communicate topology or commit permission through persona prompt text or a dedicated or target-correlated child environment signal; `ORCH_ASSIGNMENT_ROOT` is uniform protocol routing state.
 - [X] Must not: commit in the caller's shared checkout or merge, rebase, push, or delete a branch.
 - [X] Must not: allow two live non-shared rounds to share one checkout.
 - [X] Must not: remove a checkout through close, prune, orphans, or collect-close.
@@ -64,7 +64,7 @@ Give `oh` first-class checkout isolation for concurrent subagents without changi
 
 ** Decisions
 
-- Separate target mechanics from child behaviour :: `--worktree` answers where; the child receives no topology or permission signal. The rejected marker-trait and `HERDR_ORCH_WORKTREE` designs coupled spawn mechanics to prompt composition, and one route demonstrably failed to deliver the directive.
+- Separate target mechanics from child behaviour :: `--worktree` answers where; cwd is the only target-dependent child state, while uniform `ORCH_ASSIGNMENT_ROOT` routes nested protocol state and grants no permission. The rejected marker-trait and `HERDR_ORCH_WORKTREE` designs coupled spawn mechanics to prompt composition, and one route demonstrably failed to deliver the directive.
 - Checkpoint at publication, not in the persona :: `worker.md` retains its fail-safe no-commit default; an accepted worktree publication stages and commits mechanically before writing the envelope. Rejected: auto-applying a `no-commits` trait to the shared root, which makes a missing prohibition fail open.
 - Resolve one target before allocation :: explicit `new`, explicit path, and the in-flight default converge before ledger construction and placement. Existing non-shared paths reuse the teardown liveness predicate; explicit shared-root selection remains the parent's override.
 - Worktree identity belongs to the child lineage :: path, branch, base, and repository witness carry through continuation; round state does not re-resolve topology.
@@ -97,6 +97,25 @@ Give `oh` first-class checkout isolation for concurrent subagents without changi
 - [[task:67d5e7af-498b-4562-88bc-45f2c403489b][org-tasks: ot doctor should flag a DONE task with unchecked criteria]]
 
 * Plan
+
+** DONE Final adversarial-review remediation
+CLOSED: [2026-08-14 Fri 17:30]
+:PROPERTIES:
+:CUSTOM_ID: 303006fc-d371-4c94-bdac-16e77dbf4c76
+:CREATED: [2026-08-14 Fri 15:35]
+:STARTED: [2026-08-14 Fri 15:33]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-14 Fri 15:33]
+- State "DONE" from "STARTED" [2026-08-14 Fri 15:50]
+- State "TODO" from "DONE" [2026-08-14 Fri 16:42]
+- State "STARTED" from "TODO" [2026-08-14 Fri 16:43]
+- State "DONE" from "STARTED" [2026-08-14 Fri 16:53]
+- State "TODO" from "DONE" [2026-08-14 Fri 17:13]
+- State "STARTED" from "TODO" [2026-08-14 Fri 17:16]
+- State "DONE" from "STARTED" [2026-08-14 Fri 17:30]
+:END:
+Result: all seven original adversarial reproductions, all three re-review hardenings, and the final production-lock correction are deterministic temp-repository regressions; each guard was mutation-checked red, the production lock contains no test-only wait, and both independent re-review families approved the corrected diff.
 
 ** DONE Trait fragments and admission: `%worktree` / `%no-worktree`
 CLOSED: [2026-08-13 Thu 18:10]
@@ -208,12 +227,19 @@ Result: SKILL.md, README/help, and contract.md describe the final target, checkp
 * Implementation
 
 - Managed branches use `orch/<task-prefix>` and checkouts use `<assignment-root>/.tmp/herdr-orch/worktrees/<task>`; ledger identity is persisted before creation so partial failure remains discoverable.
-- Existing targets record canonical checkout path, attached branch, assignment-time HEAD as base, and canonical common-Git-directory identity. The current target drives ledger identity, creation, and pane cwd; trigger provenance is intentionally absent.
-- Publication runs all existing refusals before Git mutation, then validates the recorded checkout and branch, stages with `git add -A`, commits only a changed index using `herdr-orch checkpoint <task> <status>`, records HEAD as `CHECKPOINT`, appends, and notifies. Read-only dirt refuses before staging; shared entries never enter this path.
+- Existing targets record canonical checkout path, attached branch, assignment-time HEAD as base, and canonical common-Git-directory identity. Explicit source-root classification compares canonical checkout roots; omitted targets preserve the invocation cwd. The current target drives ledger identity, creation, and pane cwd; trigger provenance is intentionally absent.
+- An assignment-root OS file lock serialises target decision through ledger write across processes and is released before checkout or pane mutation. Assignment input, parent-pane inspection, and launcher resolution happen before the lock; its production critical section contains canonical target decision plus bounded local entry construction and ledger write. Read-only explicit targets with tracked or untracked dirt refuse inside this boundary before task allocation; ignored-only targets remain legal.
+- `continue` performs slow settle and Herdr inspection before taking the same reservation lock, then re-reads mutable ledger state, refuses any other live reference to its checkout, and writes its successor before release. An explicit start and continuation therefore cannot both reserve the path.
+- Publication runs all permanent refusals, including stream capacity and complete repository-witness validation, before Git mutation, then validates the recorded checkout and branch, stages with `git add -A`, commits only a changed index using `herdr-orch checkpoint <task> <status>`, records HEAD as `CHECKPOINT`, appends, and notifies. Transient append failure retains commit-before-append retry semantics; shared entries never enter this path.
+- Reconciliation validates the actual checkout root and recorded repository before Git change probes. Missing paths remain `missing`; present but gutted, corrupt, or wrong-root paths become `invalid` with nil change sets and a bounded diagnostic.
 - Worktree removal validates ownership and canonical managed-root containment before liveness and dirt, reports ignored paths without refusing on them, removes only the checkout, and retains the branch regardless of ancestry.
 
 * Validation
 
+- Final remediation regressions: `explicit-source-root-from-a-nested-cwd-remains-shared-and-never-mutates-git`; `concurrent-explicit-and-implicit-target-reservations-are-process-atomic`; `checkpoint-publication-refuses-an-identity-without-repository-witness`; `stream-capacity-refusal-precedes-checkpoint-mutation`; `assignment-root-routing-env-is-identical-for-shared-and-managed-targets`; `read-only-pre-dirty-existing-target-refuses-before-task-allocation`; and `reconciliation-reports-gutted-corrupt-and-wrong-root-checkouts-as-invalid`. Each guard was removed or bypassed once and its named test failed before restoration.
+- Re-review hardening regressions: `continue-and-explicit-start-serialize-the-same-checkout-under-concurrency`; `spawn-blocking-input-and-external-reads-precede-the-reservation-lock`; and `assignment-root-routing-env-is-uniform-without-parent-override`. The concurrency harness uses only bounded test-side gates, process suspension, polling, and finally cleanup; production lock code exposes no test signal or wait. Bypassing continuation locking made both real contenders succeed and failed the cardinality assertions before restoration.
+- Final full validation: `bb test` ran 611 Clojure tests / 3946 assertions and the trait gate's 3 tests / 38 assertions with zero failures or errors; `ot doctor` reported zero errors and zero warnings.
+- Independent final review: `claude-fable-5` approved the seven fixes and identified three non-blocking lock hardenings; `gpt-5.6-sol` reproduced and rejected the production test barrier, then approved after it was removed and the bounded harness-only regression passed.
 - A throwaway Git probe reproduced ignored-file loss: `status --porcelain` reported clean and `git worktree remove` deleted the checkout; the final test proves `!! ignored.cache` is reported separately while removal remains allowed.
 - Adversarial ledger-path probes pointed removal at a textual-prefix sibling and through a managed-root symlink; both external checkouts survived after canonical containment was added.
 - The explicit-path reuse test was first observed accepting a second live child and creating a ledger entry; the restored shared liveness predicate makes the same test refuse before allocation while allowing reuse after the prior round seals.

@@ -38,7 +38,7 @@ Flag and verb index; [docs/contract.md](docs/contract.md) owns precedence, guard
 | `task close` / `--settled` | the only path that closes a spawned child's pane | § Close |
 | `task continue` | root-only further round in the same pane | § Continue |
 
-`--worktree <path>` may name an attached checkout outside the managed root for use, but `oh worktree remove` never removes such a checkout; `--worktree new` is the path that creates a checkout `oh` can later tear down. Worktree publications carry `CHECKPOINT`, while branch integration and deletion remain parent-owned.
+`--worktree <path>` may name an attached checkout outside the managed root for use, but `oh worktree remove` never removes such a checkout; `--worktree new` is the path that creates a checkout `oh` can later tear down. Concurrent target decision and ledger reservation are serialised across CLI processes, including a continuation racing an explicit start for the inherited checkout. Slow assignment input and Herdr inspection happen before the critical section. A read-only existing target with tracked or untracked dirt refuses before allocation. Worktree publications carry `CHECKPOINT`, require the complete repository witness, and check stream capacity before mutation, while branch integration and deletion remain parent-owned. Reconciliation reports present-but-invalid checkouts as `invalid` without following Git discovery upward.
 
 A `WAITING` item is not completion -- only a validated terminal result item is.
 
