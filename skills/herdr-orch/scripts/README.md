@@ -63,7 +63,7 @@ A child calls the injected absolute launcher path:
 
 `--process` is repeatable, and `--from-file` accepts the same list as a `"process"` array.
 
-Each `--artifact` is also surfaced as a portable Markdown link, `[absolute path](file:///encoded/path) — purpose`: advisory (declared, unvalidated) in the parent push a non-blocking publish sends, and existence-validated as `result.artifact-links` on a successful `collect` / `collect --any`. That is fallback *syntax* only -- the URI is built with `Path.toUri` and no terminal-control escape is ever emitted, so whether it renders as a clickable hyperlink depends on the parent's harness and terminal support. See [docs/contract.md](docs/contract.md) § Artifact links.
+Each `--artifact` is also surfaced as a portable Markdown link, `[absolute path](file:///encoded/path) :: purpose`: advisory (declared, unvalidated) in the parent push a non-blocking publish sends, and existence-validated as `result.artifact-links` on a successful `collect` / `collect --any`. That is fallback *syntax* only -- the URI is built with `Path.toUri` and no terminal-control escape is ever emitted, so whether it renders as a clickable hyperlink depends on the parent's harness and terminal support. See [docs/contract.md](docs/contract.md) § Artifact links.
 
 ## Raw passthrough
 

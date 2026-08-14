@@ -1,56 +1,269 @@
 # General
-- CRITICAL: Always verify symbols, function names, config options, module paths, variable names, CLI flags, and API fields against actual source code or documentation. This identifier check is unconditional and independent of any claim's consequence class or probe budget (see `herdr-orch` § Trusting a result).
-- State a factual or causal claim only when it is measured, attributed to its source, or explicitly presented as uncertain -- never asserted as settled fact on confidence alone. This applies to both a baseline/attribution composed into an assignment and a claim reported to the user.
-- When asked a question, just answer the question -- don't start coding. Use tools and write scripts only to obtain additional required information.
-- Write British English in prose you author: instruction files, records, task bodies, commit messages, code comments, and replies. Prefer -ise/-isation, -our, -re, and doubled consonants (`organise`, `behaviour`, `centre`, `labelled`). This never extends to identifiers, which keep whatever spelling their author used: an sshd file is `authorized_keys`, CSS takes `color`, and an API field, CLI flag, package name, or existing symbol is quoted exactly as it exists -- "correcting" one to British spelling breaks it, and the CRITICAL identifier rule above outranks this one. When both appear together, the prose and the identifier legitimately differ in the same sentence.
-- Use the `asd-ste100` skill for almost all English prose you draft or revise. Before you produce covered prose, read `~/.agents/skills/asd-ste100/SKILL.md` in the current session. Do not infer its rules from this bullet or from memory: prose produced before that read is invalid. Covered prose includes instructions, prompts, task and record text, commit messages, and code comments. It also includes errors, status text, reports, technical documentation, and replies. Use Strict mode for machine-consumed or operational text. Use `STE-flavored` mode for explanatory prose. Do not use it for user-facing documentation that intentionally requires a more informal voice. Do not use it for creative or marketing copy. The exception is about required voice, not audience alone: ordinary user-facing technical prose still uses the skill. Preserve identifiers, factual modality, repository conventions, British spelling, and any tone the user requests.
-- An empty result is not evidence of absence, and confirming that "by hand" does not work: this directive was already in force during a session that then read five separate empty results as absences -- a `jq` filter matching nothing reported as "no tags", file probes issued against refs that did not exist reported as "file removed", a `LIKE 'sent_notification%'` pattern that missed the `p_` prefix reported as "no partitioned table", a paged tree listing reported as "no migrations", and `git lfs ls-files` on a branch holding none reported as "no LFS objects". Carry a positive control in the *same* invocation as any query whose negative result you would report -- fetch a known-present sibling, count the unfiltered rows, assert the ref resolves. In that same session both controlled probes caught their own faults immediately, and every uncontrolled one was caught late or by the user. A control that itself returns nothing is a broken probe, not a negative result: assert the control produced output before reporting the absence, because a control issued against a path that did not exist printed nothing, its silence went unread, and the queried item was reported absent when it was in fact available.
-- A command's own exit status is the authority on whether it worked; plausible output is not. `rsync` exited 23 on all six volumes of a host migration while byte counts and destination sizes matched the source exactly -- 86,150 attribute errors sat under output that looked like success. Reading `$?` through a pipe measures the wrong process: `cmd | tail; echo $?` reports `tail`'s status, which scored three guards as passing when they were exiting 1. Use `${PIPESTATUS[0]}`, or drop the pipe, and treat this as mandatory when the check is that something *fails*.
-- Check the `ok`/status field of a structured CLI envelope before reading result fields. A nil field inside an error envelope is indistinguishable from a real empty result: an `oh` response was read as a trait-resolution failure when it was actually `{"ok":false}` from a version mismatch.
-- Never compose an assertion and the command that verifies it in a single invocation. A commit message asserting "no unresolved acceptance criteria remain" was written into a heredoc in the same call whose own output listed three that remained; the check ran, but the claim had already been written. Read the verification output, then write the claim that depends on it.
-- Ask one decision per question. Bundling two independent choices into one option set means the answer settles only one of them, and the other carries forward unconfirmed while looking decided.
-- A behavioural directive in an instruction file is unverified until something adversarial tests it. Before shipping one, check that it changes behaviour; when it fails, fix the incentive producing the unwanted behaviour rather than restating the prohibition. Two of three shipped trait directives failed such a check on first writing, and identically before the rewrite -- the prose they replaced had never worked either.
-- When a matched skill owns a domain, read it before issuing exploratory commands in that domain -- don't parallelise the skill load with domain probes.
-- A suite's green says nothing about files it does not execute. `bb test` reported 556 passing while the file just broken sat in a standalone script the suite never ran, and that green was cited as coverage. Before offering a suite as evidence for a change, confirm it actually executes the changed file.
-- A guard or ad-hoc verifier you have only ever seen pass is unverified. Trigger it deliberately with known-bad input before trusting it, and treat uniform all-pass or all-fail output as more likely a broken check than a broken system.
-- When a probe of already-shipped behaviour returns a surprising result, suspect the probe before the system -- above all any key, parameter or path name you supplied without checking it against the consumer. A render probe passing `:locale` where the code reads `:language` silently fell back to one locale and looked like a localisation defect; reporting a phantom bug is worse than not probing.
+
+## Identifiers and claims
+- CRITICAL: Always verify each identifier against source or documentation.
+- Identifiers include symbols, function names, configuration options, module paths, variable names, CLI flags, and API fields.
+- This identifier check always applies. It does not depend on consequence class or probe budget.
+- See `herdr-orch` section "Trusting a result" for the related rules.
+- State a factual or causal claim only when at least one of these conditions applies:
+  - You measured the claim.
+  - You attribute the claim to its source.
+  - You explicitly state that the claim is uncertain.
+- Do not present confidence alone as proof.
+- Apply this rule to assignment baselines, assignment attributions, and claims that you report to the user.
+
+## Questions and prose
+- When the user asks a question, answer the question. Do not start coding.
+- Use tools or scripts only when you need more information for the answer.
+- Use British English in prose that you author.
+- This rule applies to instructions, records, task bodies, commit messages, code comments, and replies.
+- Prefer -ise, -isation, -our, -re, and doubled consonants. Examples include `organise`, `behaviour`, `centre`, and `labelled`.
+- Do not change identifiers to British spelling.
+- For example, sshd uses `authorized_keys`, CSS uses `color`, and APIs retain their documented field names.
+- The CRITICAL identifier rule takes priority over the British English rule.
+- Prose and an identifier can use different spellings in the same sentence.
+
+## ASD-STE100
+- Use the `asd-ste100` skill for almost all English prose that you draft or revise.
+- Read `~/.agents/skills/asd-ste100/SKILL.md` before you produce covered prose in the current session.
+- Do not infer the skill rules from this file or from memory.
+- Prose that you write before reading the skill is invalid.
+- Covered prose includes instructions, prompts, task text, record text, commit messages, and code comments.
+- Covered prose also includes errors, status text, reports, technical documentation, and replies.
+- Use Strict mode for machine-consumed or operational text.
+- Use `STE-flavored` mode for explanatory prose.
+- Do not use the skill for user documentation that intentionally requires an informal voice.
+- Do not use the skill for creative or marketing copy.
+- The required voice determines the exception. The audience alone does not determine it.
+- Ordinary user-facing technical prose still requires the skill.
+- Preserve identifiers, factual modality, repository conventions, British spelling, and the user's requested tone.
+
+## Negative results and controls
+- An empty result is not evidence of absence. Manual confirmation is not sufficient.
+- Include a positive control in the same invocation as each query whose negative result you would report.
+- Use a known-present sibling, an unfiltered row count, or an assertion that the reference resolves.
+- Confirm that the positive control produced output. A silent control means that the probe is broken.
+- Report absence only after the control succeeds and the queried result is empty.
+- A recorded session misread five uncontrolled empty results as evidence of absence.
+- A `jq` filter matched nothing, and the report stated "no tags".
+- File probes used references that did not exist, and the report stated "file removed".
+- A `LIKE 'sent_notification%'` pattern missed the `p_` prefix, and the report stated "no partitioned table".
+- A paged tree listing was incomplete, and the report stated "no migrations".
+- `git lfs ls-files` inspected a branch with no LFS objects, and the report stated "no LFS objects".
+- In the same session, two controlled probes detected their own faults immediately.
+- The user or a later check detected every uncontrolled fault.
+- One control used a path that did not exist and printed nothing.
+- Its silence was not detected, and the report incorrectly stated that the queried item was absent.
+
+## Command and verifier results
+- Use a command's exit status to determine whether the command succeeded. Plausible output is not sufficient.
+- During one host migration, `rsync` exited 23 on all six volumes.
+- The byte counts and destination sizes matched the source, but the output contained 86,150 attribute errors.
+- The output appeared successful even though the command failed.
+- Do not read `$?` after a pipeline when you need the first command's status.
+- For example, `cmd | tail; echo $?` reports the status of `tail`.
+- This error marked three guards as passing even though each guard exited 1.
+- Use `${PIPESTATUS[0]}` or remove the pipeline.
+- This method is mandatory when a test checks that a command fails.
+- Check the `ok` or status field in a structured CLI envelope before you read result fields.
+- A nil result field in an error envelope can appear identical to a valid empty result.
+- One `oh` response contained `{"ok":false}` because of a version mismatch.
+- The nil result was incorrectly reported as a trait-resolution failure.
+- Do not compose an assertion and its verification command in the same invocation.
+- First, read the verification output. Then write the claim that depends on that output.
+- One commit message claimed that no unresolved acceptance criteria remained.
+- The same invocation produced output that listed three unresolved criteria.
+- The verification ran, but the claim was already in the heredoc.
+- Ask one decision in each question.
+- Do not combine two independent choices in one option set.
+- Such an answer can confirm one choice while the other choice remains unconfirmed.
+- Adversarially test each behavioural directive before you ship it in an instruction file.
+- Confirm that the directive changes behaviour.
+- If the directive fails, change the incentive that causes the unwanted behaviour.
+- Do not only restate the prohibition.
+- In one recorded test, two of three shipped trait directives failed after their first rewrite.
+- The original directives failed the same test. The original text did not change the behaviour.
+- When a matched skill owns a domain, read that skill before you issue exploratory commands in that domain.
+- Do not run the skill read and the domain probes in parallel.
+- Do not cite a green suite as coverage until you confirm that it executes the changed file.
+- One `bb test` run reported 556 passing tests but did not execute the broken standalone script.
+- The green result was incorrectly cited as coverage for that script.
+- Do not trust a guard or ad-hoc verifier after you observe only passing results.
+- Trigger the verifier deliberately with known-bad input before you trust it.
+- If all inputs pass or all inputs fail, test the verifier before you diagnose the system.
+- When shipped behaviour produces a surprising probe result, inspect the probe before you diagnose the system.
+- First, verify each supplied key, parameter, and path against the consumer.
+- One render probe supplied `:locale`, but the code read `:language`.
+- The code silently used one locale as a fallback, which appeared to be a localisation defect.
+- An incorrect defect report is worse than no probe.
 
 # Git operations
-- When moving files controlled by git, ALWAYS use `git mv` rather than `mv` -- this preserves history.
-- When reverting file changes you made, use git instead of editing the file again.
-- For commit messages, see the `git-commit` skill. Commit bodies should refer to associated design change records rather than restating detail.
+- Use `git mv` when you move files that Git controls. Do not use `mv` for those files.
+- This requirement preserves file history.
+- Use Git to revert file changes that you made. Do not manually edit those files to revert them.
+- Read the `git-commit` skill before you write a commit message.
+- In a commit body, refer to the associated design change record. Do not repeat the record's detail.
 
 # File operations
-- Use `rg` for file and content searches.
-- Treat `rg` as search-only and never pass `-r`/`--replace`. It does not mean recursive (rg recurses by default), and in a short-flag cluster it silently eats the remainder as a replacement template: `rg -rn 'pattern'` prints every match rewritten to `n`, and `rg -nr 'pattern'` prints nothing at all, both at exit 0, so one looks like evidence and the other like absence. Rewrite text with Babashka `str/replace`, already the preferred route for a rename below.
-- Verify a flag means what you assume before trusting output: `rg -E` is `--encoding` and swallows a pattern passed as its value (use `-e`), and Rust-regex escaping differs from POSIX (`\+` matches a literal plus), so a wrong flag or pattern usually yields confident wrong output rather than an error.
-- A flag rejected in one argv position is not evidence about another. Verifying that a removed `--focus` was gone, the same flag reported `unknown task option` before other arguments but `option requires a value` in final position, because an option parser reaches its missing-value branch first when no token follows -- so the friendlier message was reported as the behaviour and two reviewers had to find the other one. Test a flag you expect to be rejected in final position too.
-- Version control is not a safety net for state outside the repository. Remote hosts, cloud resources, databases and registries produce no diff and no revert, so `git status` stays clean while you destroy something. Before an action that replaces or deletes such state, capture the prior state explicitly, and give a newly written destructive tool its first exercise in dry-run or against a throwaway target -- most of all when you wrote that dry-run flag yourself and skipped it. A "test" of an authorised-keys installer against a live host silently cut three keys to one, and was recoverable only because an unrelated earlier step happened to have saved the previous set to a scratch file.
-- `sudo` elevates the command, not the shell that assembled its arguments: globs, redirections and expansions still run as the calling user. `sudo ls /var/lib/docker/volumes/*/_data/*.tar` printed nothing on a root-only path and read as "no archives"; `sudo sh -c 'ls ...'` listed three seconds later. Wrap the whole thing in `sudo sh -c '...'` whenever an expansion touches a path only root can read.
-- Probing a CLI's argument handling *runs the command* whenever parsing succeeds. A probe of `oh tab create --focus` created a real tab, and an invented flag on `oh task run` was silently accepted and spawned a real billable subagent that had to be closed by hand. Probe with a form that cannot succeed, or against a fake/dry-run harness; when a live probe is unavoidable, record what it creates and clean it up in the same step rather than leaving it for a later sweep.
-- A search pattern taken from data can itself begin with `-` and be consumed as options: `grep -qxF "$line"` breaks on a line starting `---` or `- `, printing a usage error per line while the loop treats each as a mismatch. Pass such a pattern as `grep -e "$pat"`, or after `--`. Because it only breaks for some inputs, a successful spot-check does not clear it, and the remaining misreads look like real findings.
-- Verify a rename in both directions before calling it complete. BSD `sed` (macOS) does not support `\b` and silently matches nothing, and a pattern that is a prefix of other tokens rewrites those too -- one rename both missed two call sites and rewrote an unrelated `%focusx`. Prefer Babashka, whose Java regex honours `\b` on every platform: count first with `(re-seq #"%focus\b" text)`, rewrite with `str/replace`, then re-grep the old name.
-- A word boundary after a non-word character never matches: `\bname!\b` finds nothing, because `\b` after `!` requires a following word character. When renaming an identifier ending in `!`, `?`, or `-`, drop the trailing `\b` and re-grep the old name before running tests -- a bulk rename can otherwise miss most call sites silently.
-- When scripting a tool that can prompt, set its non-interactive escape hatch so a missing credential fails fast instead of blocking the user's terminal: `GIT_TERMINAL_PROMPT=0` for git over HTTPS, `ssh -o BatchMode=yes` for SSH. `glab repo clone` hung on a credential prompt twice in one session because the host was configured `git_protocol: https` while the user authenticated by SSH key -- and `BatchMode=yes` had been set on the SSH path only.
-- Inspect a file known to carry credentials with narrow token matches (`grep -o` against explicit patterns), never context flags or a bare `cat`. A `grep -A6` over a registry config printed a live HTTP secret into the session transcript; the surrounding lines were never the point of the query.
-- Single-quote shell search patterns containing backticks or `$` (common with markdown-derived text); double quotes invite command substitution.
-- Never pass text you did not author as `printf`'s format argument. `printf "$text"` silently corrupts any `%` sequence and still exits 0: `"85% coverage"` prints `85overage`, and the trait tokens `%focused` and `%no-bullshit` become `0.000000ocused` and `o-bullshit`. Only `%read-only` and `%prune` fail loudly. Use `printf '%s' "$text"`, a quoted heredoc, or `echo`. Percentages in prose are commoner than trait tokens, so this is not a traits-specific rule.
-- Prose passed as a CLI argument (a task body, commit message, or assignment) belongs in a quoted heredoc written to a file, then passed as `"$(cat file)"`. Apostrophes terminate a single-quoted argument, and the remainder is then executed as shell -- observed truncating an `ot create --body` and handing its tail to bash. Substitution output is not re-scanned, so backticks inside the file are safe.
-- Cap test-failure output (`head -c`) when an asserted value can embed a file's contents or a captured log; `grep -A` on such an assertion has dumped ~10k tokens to report one boolean. The assertion line alone locates the failure.
-- Prefer available structured read/edit tools over ad-hoc scripts for routine file inspection and modification.
-- Build a structured edit's `oldText` from a contiguous read of the file, never from `rg`/`grep` output. Filtered output makes non-adjacent lines look consecutive: criteria lines that a `rg '^- \['` view showed as a block were separated by a paragraph in the file, and the edit composed from that view was rejected. Related: a multi-entry edit is all-or-nothing -- one non-matching entry rejects every other edit in the call -- and each entry needs its target path checked, since an entry aimed at the wrong file fails the whole batch.
-- Never add keys outside a structured tool's declared schema. An unknown field may be accepted silently and alter the payload rather than erroring -- an extra key inside an `edits[]` entry has truncated the replacement text and written a half-finished form.
-- When scripting is necessary, prefer Babashka to both shell and Python for repository-local automation. Use Python only when invoking an existing Python tool or when its ecosystem is materially better suited.
-- `bb` is the scripting language here, not an escape hatch: reach for it as soon as a task needs a loop, a conditional, string manipulation, or more than one pipe, and keep shell for invoking a program and passing its output on. A pipeline that has grown an `awk`, a `sed -n`, or a nested quote has already earned a `.tmp/*.clj` script -- that is the point at which shell starts failing silently rather than loudly. Ordinary single commands (`git status`, `rg pattern`, `ls`) stay shell.
-- For scripted transformations, write a candidate under `<repository-root>/.tmp/`, inspect its diff, and only then replace the source; do not perform unverified in-place rewrites.
-- Replace a long region by that same candidate-then-diff route rather than by one long inline replacement. Long replacement text has silently truncated three times in one session, once landing mid-line so the remainder of the original paragraph ran on after it and the file still looked plausible. Check the tail of any long edit landed, because a truncated replacement fails by looking finished.
-- Produce any artifact claimed "verbatim except for listed edits" by copying the source and applying targeted edits, then diff-verify before stating that claim. A hand-retyped persona rewrite drifted two full stops while its six copy-then-edit siblings stayed byte-identical, and the identity claim was asserted before anything checked it.
-- A human may be editing the same file. Before replacing one wholesale, check for a live editor lock (an Emacs `.#<basename>` sibling naming a running PID) and prefer targeted edits, which fail loudly on stale text instead of silently discarding unsaved work. Re-read immediately before editing any file the user has touched this session.
-- Redirect long-running or expensive command output to a file under `<repository-root>/.tmp/` and read slices from it. Piping through `head`/`tail` discards the rest and often forces a costly re-run.
-- Assert a subprocess succeeded, and that its expected output markers are present, before reading any file it was supposed to produce. A test that dereferenced a derived path first reported `FileNotFoundException` and hid the producer's real parse error, which sent the diagnosis to the wrong layer.
-- Never state a diagnostic tool's verdict from a truncated view. `ot doctor | tail -3` printed a clean-looking tail twice while two ERRORs sat above the cut, and the record was reported as well-formed on that basis. Read the finding-count summary line, or the whole report, before claiming health.
+
+## Search and command-line arguments
+- Use `rg` for file searches and content searches.
+- Use `rg` only for searches. Never pass `-r` or `--replace`.
+- The `-r` flag does not mean recursive. `rg` searches recursively by default.
+- In a short-flag cluster, `-r` consumes the remaining characters as a replacement template.
+- For example, `rg -rn 'pattern'` rewrites every printed match to `n` and exits 0.
+- The command `rg -nr 'pattern'` prints nothing and exits 0.
+- The first result can appear to be evidence. The second result can appear to prove absence.
+- Use Babashka `str/replace` to rewrite text. It is also the preferred tool for renames below.
+- Verify each flag's meaning before you trust its output.
+- The `rg -E` flag means `--encoding`. It consumes a following pattern as its encoding value.
+- Use `-e` to introduce a pattern.
+- Rust regular-expression escaping differs from POSIX escaping. For example, `\+` matches a literal plus.
+- A wrong flag or pattern usually produces plausible, incorrect output instead of an error.
+- A flag rejection in one argument position does not prove rejection in another position.
+- A removed `--focus` flag produced `unknown task option` before other arguments.
+- In the final position, the same flag produced `option requires a value`.
+- The parser entered its missing-value branch because no token followed the flag.
+- The first message was reported as the behaviour. Two reviewers later found the second message.
+- Also test a rejected flag in the final argument position.
+
+## State outside version control
+- Version control cannot restore state outside the repository.
+- Remote hosts, cloud resources, databases, and registries do not produce a Git diff or Git revert.
+- `git status` can remain clean after an action destroys external state.
+- Before you replace or delete external state, record its previous state explicitly.
+- First test a new destructive tool in dry-run mode or against a disposable target.
+- This rule is especially important when you wrote the dry-run flag but did not use it.
+- One authorised-keys installer test used a live host and silently reduced three keys to one.
+- Recovery was possible only because an unrelated earlier step saved the old keys in a scratch file.
+
+## Privilege and live CLI probes
+- `sudo` elevates the command. It does not elevate the shell that prepares the command arguments.
+- The calling user still performs glob expansion, redirection, and other shell expansion.
+- `sudo ls /var/lib/docker/volumes/*/_data/*.tar` printed nothing because the calling user could not read the root-only path.
+- The empty output was read as "no archives".
+- Three seconds later, `sudo sh -c 'ls ...'` listed the archives.
+- Use `sudo sh -c '...'` when shell expansion accesses a path that only root can read.
+- A CLI argument probe runs the command whenever argument parsing succeeds.
+- A probe of `oh tab create --focus` created a real tab.
+- An invented flag on `oh task run` was accepted silently and started a billable subagent.
+- The operator then had to close the subagent manually.
+- Test argument parsing against a fake target or dry-run harness.
+- If neither is possible, use an invocation whose parsing succeeds but whose operation cannot start.
+- If a live probe is unavoidable, record each resource that it creates.
+- Remove each created resource in the same step. Do not postpone the removal.
+
+## Search patterns and renames
+- A search pattern from data can start with `-`, which a command can consume as an option.
+- For example, `grep -qxF "$line"` fails for a line that starts with `---` or `- `.
+- It prints a usage error for each such line, while the loop treats the line as a mismatch.
+- Pass the pattern with `grep -e "$pat"` or after `--`.
+- This defect affects only some inputs. A successful spot-check does not prove that the command is correct.
+- The remaining misreads can appear to be valid findings.
+- Verify every rename in both directions before you declare it complete.
+- BSD `sed` on macOS does not support `\b`, and it can silently match nothing.
+- A pattern that prefixes another token can also rewrite that token.
+- One rename missed two call sites and changed an unrelated `%focusx` token.
+- Prefer Babashka because its Java regular expressions support `\b` on every platform.
+- First count matches with `(re-seq #"%focus\b" text)`.
+- Then rewrite with `str/replace`.
+- Finally, search again for the old name.
+- A word boundary after a non-word character never matches.
+- For example, `\bname!\b` finds nothing because the boundary after `!` requires a following word character.
+- For identifiers that end in `!`, `?`, or `-`, omit the final `\b`.
+- Search again for the old identifier before you run tests.
+- Otherwise, a bulk rename can silently miss most call sites.
+
+## Prompts, credentials, and shell quoting
+- Set a non-interactive option when you script a tool that can request credentials.
+- This option must make a missing credential fail immediately instead of blocking the user's terminal.
+- Use `GIT_TERMINAL_PROMPT=0` for Git over HTTPS.
+- Use `ssh -o BatchMode=yes` for SSH.
+- In one session, `glab repo clone` blocked twice on a credential prompt.
+- The host used `git_protocol: https`, while the user authenticated with an SSH key.
+- The script configured `BatchMode=yes` only for the SSH path.
+- Inspect files that contain credentials with narrow token matches.
+- Use `grep -o` with explicit patterns. Do not use context flags or an unfiltered `cat`.
+- One `grep -A6` command printed a live HTTP secret from a registry configuration into the session transcript.
+- The query did not need the surrounding lines.
+- Single-quote shell search patterns that contain backticks or `$`.
+- Markdown-derived text commonly contains these characters. Double quotes permit command substitution.
+- Never pass text that you did not author as the format argument to `printf`.
+- Use `printf '%s' "$text"`, a quoted heredoc, or `echo`.
+- The command `printf "$text"` can silently corrupt `%` sequences and still exit 0.
+- For example, `"85% coverage"` prints `85overage`.
+- `%focused` prints `0.000000ocused`, and `%no-bullshit` prints `o-bullshit`.
+- Of these examples, only `%read-only` and `%prune` fail with an error.
+- Percentages occur in prose more often than trait tokens. This rule is not specific to traits.
+- Write CLI prose arguments, such as task bodies and assignments, to a file with a quoted heredoc.
+- Pass the file contents as `"$(cat file)"`.
+- An apostrophe terminates a single-quoted argument. Bash can then execute the remaining text.
+- This error truncated one `ot create --body` argument, and Bash executed its remaining text.
+- Shell command substitution does not scan its output again. Backticks inside the file are therefore safe.
+
+## Output and structured edits
+- Limit test-failure output with `head -c` when an asserted value can contain a file or captured log.
+- One `grep -A` assertion printed approximately 10,000 tokens to report one Boolean value.
+- The assertion line alone identified the failure.
+- Prefer available structured read and edit tools for routine file inspection and modification.
+- Build a structured edit's `oldText` from a contiguous file read.
+- Do not build `oldText` from `rg` or `grep` output.
+- Filtered output can make separate source lines appear consecutive.
+- One `rg '^- \['` view displayed criteria lines as one block, although a paragraph separated them.
+- The edit built from that view was rejected.
+- A multi-entry edit is all-or-nothing. One non-matching entry rejects every entry in the call.
+- Check the target path of every edit entry.
+- One entry that targets the wrong file causes the complete edit call to fail.
+- Never add keys that are absent from a structured tool's declared schema.
+- A tool can silently accept an unknown field and change the payload instead of reporting an error.
+- One extra key in an `edits[]` entry truncated replacement text and wrote an incomplete form.
+
+## Scripts and transformations
+- When a script is necessary, prefer Babashka to shell and Python for repository-local automation.
+- Use Python only to invoke an existing Python tool or when its ecosystem is materially more suitable.
+- Use `bb` when a task needs a loop, conditional, string operation, or two or more `|` operators.
+- Use shell for ordinary commands and for passing one command's output to another command.
+- A command with `awk`, `sed -n`, or nested quoting requires a `.tmp/*.clj` script.
+- At that complexity, shell can hide failures instead of reporting them.
+- Use shell for ordinary single commands such as `git status`, `rg pattern`, and `ls`.
+- For a scripted transformation, write a candidate under `<repository-root>/.tmp/`.
+- Inspect the candidate's diff before you replace the source.
+- Do not perform an unverified in-place transformation.
+- Use the same candidate-and-diff process to replace a long region.
+- Do not replace a long region with one long inline replacement.
+- Long replacement text silently truncated three times in one recorded session.
+- One truncation ended in the middle of a line.
+- The original paragraph continued after it, so the file still appeared plausible.
+- Check the end of each long edit after it completes.
+- A truncated replacement can appear complete.
+- To claim "verbatim except for listed edits", copy the source and apply targeted edits to the copy.
+- Inspect the diff before you make the claim.
+- One manually retyped persona changed two full stops.
+- Six personas produced through copy-and-edit remained byte-identical outside the listed edits.
+- The identity claim was made before any verification.
+- A human can edit the same file at the same time.
+- Before a complete replacement, check for an Emacs `.#<basename>` lock that names a running process ID.
+- Prefer targeted edits because stale text makes them fail explicitly.
+- A complete replacement can silently discard unsaved changes.
+- Re-read each file that the user touched in the current session immediately before you edit it.
+- Redirect long-running or expensive command output to `<repository-root>/.tmp/`.
+- Read slices from the saved file.
+- Do not pipe such output through `head` or `tail`.
+- Those commands discard the remaining output and often require an expensive repeat execution.
+- Confirm that a subprocess succeeded before you read a file that it should produce.
+- Also confirm that the expected output markers are present.
+- One test first read a derived path and reported `FileNotFoundException`.
+- That error concealed the producer's parse error and directed the diagnosis to the wrong layer.
+- Never report a diagnostic tool's verdict from a truncated view.
+- `ot doctor | tail -3` displayed a clean tail twice while two ERROR entries were before the displayed section.
+- The record was incorrectly reported as well-formed.
+- Read the finding-count summary or the complete report before you report health.
 
 # Temporary files
-Resolve the repository root with `git rev-parse --show-toplevel`, then use `<repository-root>/.tmp/` for scripts, data, experiments, testing, and other ad-hoc work. Do not assume `$PROJECT_ROOT` is defined.
-
-Never put transient state under `.agents/`: that tree is durable agent configuration, and some harnesses (codex under `--sandbox workspace-write`) deliberately mount it read-only so an agent cannot rewrite its own instructions mid-task. A scratch or result path inside it fails to write for those children.
+- Resolve the repository root with `git rev-parse --show-toplevel`.
+- Use `<repository-root>/.tmp/` for scripts, data, experiments, tests, and other temporary work.
+- Do not assume that `$PROJECT_ROOT` is defined.
+- Never store transient state under `.agents/`. That directory contains durable agent configuration.
+- Some harnesses deliberately mount `.agents/` as read-only so an agent cannot modify its own instructions.
+- Codex under `--sandbox workspace-write` is one such harness.
+- Child agents in those harnesses cannot write a scratch or result file under `.agents/`.

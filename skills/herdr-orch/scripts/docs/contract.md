@@ -160,7 +160,7 @@ STATUS: WAITING | COMPLETE | BLOCKED | FAILED
 SUMMARY: <single line>
 [CHECKPOINT: <authoritative git ref; worktree publications only>]
 ARTIFACTS:
-- <absolute path — purpose, or none>
+- <absolute path :: purpose, or none>
 FINDINGS:
 - <at most five one-line items, or none>
 NEXT: <one parent/user action, or none>
@@ -257,7 +257,7 @@ The advisory push is sent only to an idle or done parent whose observed session 
 
 ## Artifact links
 
-An `ARTIFACTS` item (`<absolute path>[ — <purpose>]`) is additionally rendered as one portable Markdown link, `[escaped absolute path](encoded file:// URI) — escaped purpose`, so a parent that has already closed the child pane can still reach the artifact. The visible label is always the whole absolute path, never a basename: the path itself is the context the parent loses with the pane. One shared renderer (`core/artifact-link`) produces both surfaces below, splitting the item on the same ` — ` delimiter as `core/artifact-path` and enforcing the same absoluteness check itself. A path *containing* ` — ` mis-splits, exactly as it always has for `artifact-path`: the delimiter is envelope grammar, not an escapable value, and the truncated prefix is what the collect-time existence check then rejects.
+An `ARTIFACTS` item (`<absolute path>[ :: <purpose>]`) is also rendered as a portable Markdown link: `[escaped absolute path](encoded file:// URI) :: escaped purpose`. The complete absolute path is the visible label. One shared renderer (`core/artifact-link`) produces both surfaces below. It splits the item on the same ` :: ` delimiter as `core/artifact-path`. It also enforces the same absolute-path check. A path that contains ` :: ` mis-splits because the delimiter is envelope grammar and is not escapable. The collect-time existence check then usually rejects the truncated prefix.
 
 This is **portable fallback syntax, not a clickability guarantee**. No raw OSC 8 (or any other terminal-control) escape sequence is ever emitted into model- or operator-visible text. A harness that renders Markdown may turn the link into a terminal hyperlink when the terminal advertises support, and every other reader still sees the full absolute path plus a usable URL. Whether a link is clickable therefore depends on the harness and terminal, never on this contract.
 

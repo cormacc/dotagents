@@ -360,13 +360,14 @@
              :next (field! lines "NEXT") :process (process-items lines) :text text}
       (seq checkpoint-lines) (assoc :checkpoint (single-line! "CHECKPOINT" (subs (first checkpoint-lines) 12))))))
 
-;; An ARTIFACTS item is `<absolute path>[ — <purpose>]`. One splitter owns that delimiter
-;; so the absoluteness check and the link renderer can never disagree about it.
-;; A path *containing* ` — ` mis-splits, exactly as it always has for `artifact-path`: the
-;; delimiter is envelope grammar, not an escapable value. The truncated prefix then fails
-;; the collect-time existence check in all but pathological cases.
+;; An ARTIFACTS item is `<absolute path>[ :: <purpose>]`. One splitter owns the
+;; delimiter, so the path check and link renderer cannot disagree. A path that contains
+;; ` :: ` mis-splits because the delimiter is envelope grammar and is not escapable.
+(def ^:private artifact-purpose-delimiter " :: ")
+(def ^:private artifact-purpose-pattern
+  (re-pattern (java.util.regex.Pattern/quote artifact-purpose-delimiter)))
 (defn artifact-parts [line]
-  (let [[path purpose] (str/split (str line) #" — " 2)]
+  (let [[path purpose] (str/split (str line) artifact-purpose-pattern 2)]
     {:path path :purpose purpose}))
 (defn artifact-path [line]
   (let [{:keys [path]} (artifact-parts line)]
@@ -406,7 +407,7 @@
         path (artifact-path line)
         purpose (:purpose (artifact-parts line))
         link (str "[" (markdown-escape path) "](" (file-uri path) ")")]
-    (if (str/blank? purpose) link (str link " — " (markdown-escape purpose)))))
+    (if (str/blank? purpose) link (str link artifact-purpose-delimiter (markdown-escape purpose)))))
 (defn validate-envelope [ledger text]
   (let [parsed (parse-envelope text)]
     (doseq [key [:child :task :result]]

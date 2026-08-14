@@ -1672,14 +1672,14 @@
         ;; entry creates the assignment root's own `.tmp/` tree, which is not an orphan.
         tmp-siblings (fn [] (->> (fs/list-dir dir) (filter fs/regular-file?) (map str) (filter #(str/ends-with? % ".tmp"))))]
     (testing "a relative --artifact is rejected before RESULT or a .tmp sibling exist"
-      (let [proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" "relative/report.md — report")]
+      (let [proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" "relative/report.md :: report")]
         (is (= 1 (:exit proc)))
         (is (re-find #"absolute" (:out proc)))
         (is (not (fs/exists? target)))
         (is (empty? (tmp-siblings)))))
     (testing "the same violation via --from-file is rejected identically"
       (let [body (str (fs/path dir "relative-artifact-body.json"))]
-        (spit body (json/generate-string {:status "COMPLETE" :summary "done" :artifacts ["relative/report.md — report"] :findings [] :next nil}))
+        (spit body (json/generate-string {:status "COMPLETE" :summary "done" :artifacts ["relative/report.md :: report"] :findings [] :next nil}))
         (let [proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--from-file" body)]
           (is (= 1 (:exit proc)))
           (is (re-find #"absolute" (:out proc)))
@@ -1687,14 +1687,14 @@
           (is (empty? (tmp-siblings))))))
     (testing "a corrected retry in the same child session then succeeds"
       (let [artifact (str (fs/path dir "report.md"))
-            proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" (str artifact " — report"))]
+            proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" (str artifact " :: report"))]
         (is (zero? (:exit proc)) (:err proc))
         (is (fs/exists? target))
-        (is (str/includes? (slurp target) (str "- " artifact " — report")))
+        (is (str/includes? (slurp target) (str "- " artifact " :: report")))
         (is (empty? (tmp-siblings)))))))
 
 (deftest missing-artifact-is-non-final-and-consumed
-  (let [{:keys [env log]} (fake-env {"FAKE_PUBLISH_ARTIFACT" "/nonexistent/subagent-artifact — missing"})
+  (let [{:keys [env log]} (fake-env {"FAKE_PUBLISH_ARTIFACT" "/nonexistent/subagent-artifact :: missing"})
         proc (call! env "task" "run" "worker" "--task" "bad artifact" "--timeout" "200")
         task (get-in (result proc) [:result :task])]
     (is (zero? (:exit proc)) (:err proc))
@@ -3322,7 +3322,7 @@
         missing (str (fs/path dir "delayed-artifact.md"))
         terminal (call! (child-publish-env env entry) "task" "publish"
                         "--status" "COMPLETE" "--summary" "done"
-                        "--artifact" (str missing " — delayed report"))
+                        "--artifact" (str missing " :: delayed report"))
         waiting (call! (child-publish-env env entry) "task" "publish"
                        "--status" "WAITING" "--summary" "too late")
         _ (spit missing "arrived after publication")
@@ -4892,7 +4892,7 @@
         ;; characters at once, plus a second artifact to pin ordering and multiplicity.
         spaced (artifact-file! dir "a report #1 100% [draft].md")
         plain (artifact-file! dir "notes.md")
-        declared [(str spaced " — the *main* report") plain]]
+        declared [(str spaced " :: the *main* report") plain]]
     (publish-artifacts! entry declared)
     (let [res (:result (result (call! env "task" "collect" (:task entry))))
           links (:artifact-links res)]
@@ -4909,8 +4909,8 @@
         (is (str/includes? (first links) "%25"))
         (is (str/includes? (first links) "%5B")))
       (testing "the purpose survives, escaped, outside the link"
-        (is (str/ends-with? (first links) ") — the \\*main\\* report"))
-        (is (not (str/includes? (second links) " — "))))
+        (is (str/ends-with? (first links) ") :: the \\*main\\* report"))
+        (is (not (str/includes? (second links) " :: "))))
       (testing "no raw OSC 8 escape sequence reaches the parent"
         (is (not-any? #(str/includes? % "\u001b") links))
         (is (not-any? #(str/includes? % "]8;;") links)))
@@ -4932,7 +4932,7 @@
   (testing "an artifact that fails the existence check never becomes a validated link"
     (let [{:keys [env dir]} (fake-env {})
           entry (start-child! env dir "missing artifact")]
-      (publish-artifacts! entry ["/nonexistent/subagent-link-artifact — missing"])
+      (publish-artifacts! entry ["/nonexistent/subagent-link-artifact :: missing"])
       (let [res (:result (result (call! env "task" "collect" (:task entry))))]
         (is (= "invalid" (:status res)))
         (is (not (contains? res :artifact-links)))
@@ -4947,11 +4947,11 @@
         other (start-child! any-env any-dir "links via fan-in collect")
         a (artifact-file! single-dir "one report.md")
         b (artifact-file! any-dir "other report.md")]
-    (publish-artifacts! one [(str a " — single")])
-    (publish-artifacts! other [(str b " — fan-in")])
+    (publish-artifacts! one [(str a " :: single")])
+    (publish-artifacts! other [(str b " :: fan-in")])
     (let [single (:result (result (call! single-env "task" "collect" (:task one))))
           any (:result (result (call! any-env "task" "collect" "--any")))]
-      (is (= [(core/artifact-link (str b " — fan-in"))] (:artifact-links any)))
+      (is (= [(core/artifact-link (str b " :: fan-in"))] (:artifact-links any)))
       (is (= (conj (set (keys single)) :remaining) (set (keys any))))
       (is (= 0 (:remaining any))))))
 
@@ -4964,7 +4964,7 @@
         second-artifact (str (fs/path dir "second.md"))
         proc (call! (merge (child-publish-env env entry) {"FAKE_PARENT_STATUS" "idle"})
                     "task" "publish" "--status" "COMPLETE" "--summary" "done"
-                    "--artifact" (str missing " — pending report")
+                    "--artifact" (str missing " :: pending report")
                     "--artifact" second-artifact)
         res (:result (result proc))
         pushed (slurp prompt-file)]
@@ -4974,7 +4974,7 @@
       (is (re-find #"(?i)advisory" pushed))
       (is (str/includes? pushed "pending validation by `collect`")))
     (testing "each declared artifact appears as a Markdown link with an encoded file URI"
-      (is (str/includes? pushed (str "- " (core/artifact-link (str missing " — pending report")))))
+      (is (str/includes? pushed (str "- " (core/artifact-link (str missing " :: pending report")))))
       (is (str/includes? pushed (str "- " (core/artifact-link second-artifact))))
       (is (str/includes? pushed "(file:///"))
       (is (str/includes? pushed "%20"))
@@ -5007,7 +5007,7 @@
   (let [{:keys [env dir]} (fake-env {})
         entry (start-child! env dir "recollect drops stale links")
         artifact (artifact-file! dir "vanishing report.md")]
-    (publish-artifacts! entry [(str artifact " — the report")])
+    (publish-artifacts! entry [(str artifact " :: the report")])
     (let [first-pass (:result (result (call! env "task" "collect" (:task entry))))]
       (is (= "COMPLETE" (:status first-pass)))
       (is (= 1 (count (:artifact-links first-pass))))
@@ -5029,7 +5029,7 @@
         body (str (fs/path dir "nul-body.json"))]
     ;; Written as a JSON escape so the file itself carries no NUL byte.
     (spit body (str "{\"status\":\"COMPLETE\",\"summary\":\"done\",\"artifacts\":"
-                    "[\"/tmp/nul\\u0000x.md — broken\",\"" good " — fine\"],"
+                    "[\"/tmp/nul\\u0000x.md :: broken\",\"" good " :: fine\"],"
                     "\"findings\":[],\"next\":null}"))
     (let [proc (call! (merge (child-publish-env env entry) {"FAKE_PARENT_STATUS" "idle"})
                       "task" "publish" "--from-file" body)
@@ -5043,7 +5043,7 @@
       (is (str/includes? pushed "1 declared artifact path(s) not renderable"))
       (is (not (str/includes? pushed "/tmp/nul")))
       (is (not (str/includes? pushed "\u0000")))
-      (is (str/includes? pushed (str "- " (core/artifact-link (str good " — fine")))))
+      (is (str/includes? pushed (str "- " (core/artifact-link (str good " :: fine")))))
       (is (re-find #"(?i)advisory" pushed))
       ;; The envelope keeps the child's declared list verbatim.
       (is (str/includes? (slurp (:result entry)) "broken")))))
