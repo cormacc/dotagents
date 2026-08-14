@@ -133,8 +133,11 @@
 ;; A standalone, disposable git repository for a worktree test that needs its own source
 ;; cwd separate from `fake-env`'s own fixture repo -- e.g. the roots-apart test, and the
 ;; ordinary-worker-in-existing-checkout test, both of which stand up a second repository.
+;; Canonicalise the temp path here and at every other site a test compares
+;; against CLI output: macOS $TMPDIR is a symlink (/var -> /private/var) and the
+;; CLI canonicalises each checkout path, so a raw temp path never compares equal.
 (defn- fixture-git-repo! [prefix]
-  (let [dir (str (fs/create-temp-dir {:prefix prefix}))]
+  (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix prefix})))]
     (git-in! dir "init" "-q")
     (git-in! dir "config" "user.email" "fixture@example.com")
     (git-in! dir "config" "user.name" "fixture")
@@ -311,7 +314,7 @@
 (deftest concurrent-explicit-and-implicit-target-reservations-are-process-atomic
   (testing "two explicit starts cannot reserve one non-shared checkout"
     (let [{:keys [env dir]} (fake-env {})
-          external (str (fs/create-temp-dir {:prefix "atomic-explicit-checkout-"}))
+          external (str (fs/canonicalize (fs/create-temp-dir {:prefix "atomic-explicit-checkout-"})))
           _ (fs/delete-tree external)
           branch (str "atomic/" (subs (str (java.util.UUID/randomUUID)) 0 8))
           _ (git-in! dir "worktree" "add" "-b" branch external (git-head dir))
@@ -413,7 +416,7 @@
 
 (deftest live-existing-target-refuses-before-allocation-or-checkout-mutation
   (let [{:keys [env dir]} (fake-env {})
-        external (str (fs/create-temp-dir {:prefix "live-linked-checkout-"}))
+        external (str (fs/canonicalize (fs/create-temp-dir {:prefix "live-linked-checkout-"})))
         _ (fs/delete-tree external)
         branch (str "live/" (subs (str (java.util.UUID/randomUUID)) 0 8))]
     (git-in! dir "worktree" "add" "-b" branch external (git-head dir))
@@ -438,7 +441,7 @@
 
 (deftest sealed-prior-round-allows-existing-target-reuse
   (let [{:keys [env dir]} (fake-env {})
-        external (str (fs/create-temp-dir {:prefix "external-linked-checkout-"}))
+        external (str (fs/canonicalize (fs/create-temp-dir {:prefix "external-linked-checkout-"})))
         _ (fs/delete-tree external)
         branch (str "external/" (subs (str (java.util.UUID/randomUUID)) 0 8))]
     (git-in! dir "worktree" "add" "-b" branch external (git-head dir))
@@ -502,7 +505,7 @@
         (finally (fs/delete-tree other)))))
   (testing "a detached linked checkout is refused with the git cause"
     (let [{:keys [env dir]} (fake-env {})
-          detached (str (fs/create-temp-dir {:prefix "detached-linked-checkout-"}))
+          detached (str (fs/canonicalize (fs/create-temp-dir {:prefix "detached-linked-checkout-"})))
           _ (fs/delete-tree detached)]
       (git-in! dir "worktree" "add" "--detach" detached (git-head dir))
       (try
@@ -543,7 +546,7 @@
 
 (deftest worktree-source-and-assignment-roots-remain-distinct
   (let [source (fixture-git-repo! "worktree-source-")
-        assign (str (fs/create-temp-dir {:prefix "worktree-assign-"}))]
+        assign (str (fs/canonicalize (fs/create-temp-dir {:prefix "worktree-assign-"})))]
     (try
       (let [{:keys [env]} (fake-env {"ORCH_ASSIGNMENT_ROOT" assign})
             proc (call-in! source env "task" "start" "worker" "--worktree" "new" "--task" "roots apart")
@@ -1178,7 +1181,7 @@
         (is (= 1 (:exit proc)))
         (is (re-find #"mutually exclusive" (:out proc)))))
     (testing "an uncoercible frontmatter value fails fast, naming persona and value"
-      (let [solo (fs/create-temp-dir {:prefix "fake-herdr-roster-"})]
+      (let [solo (fs/canonicalize (fs/create-temp-dir {:prefix "fake-herdr-roster-"}))]
         (fs/create-dirs (fs/path solo ".agents" "subagents"))
         (spit (str (fs/path solo ".agents" "subagents" "broken.md")) "---\nname: broken\nkind: pi\nretro: sometimes\n---\nbody")
         (let [proc (call! (merge env {"ORCH_ASSIGNMENT_ROOT" (str solo)}) "task" "run" "broken" "--task" "x" "--print-prompt")]
@@ -2905,7 +2908,7 @@
         _ (spit (str (fs/path dir ".gitignore")) "ignored-only\n")
         _ (git-in! dir "add" ".gitignore")
         _ (git-in! dir "commit" "-q" "-m" "ignore fixture")
-        external (str (fs/create-temp-dir {:prefix "read-only-pre-dirty-"}))
+        external (str (fs/canonicalize (fs/create-temp-dir {:prefix "read-only-pre-dirty-"})))
         _ (fs/delete-tree external)
         branch (str "pre-dirty/" (subs (str (java.util.UUID/randomUUID)) 0 8))
         _ (git-in! dir "worktree" "add" "-b" branch external (git-head dir))
@@ -2931,7 +2934,7 @@
 
 (deftest read-only-dirt-refuses-with-a-finding-and-never-commits
   (let [{:keys [env dir]} (fake-env {})
-        external (str (fs/create-temp-dir {:prefix "read-only-checkpoint-"}))
+        external (str (fs/canonicalize (fs/create-temp-dir {:prefix "read-only-checkpoint-"})))
         _ (fs/delete-tree external)
         branch (str "read-only/" (subs (str (java.util.UUID/randomUUID)) 0 8))]
     (git-in! dir "worktree" "add" "-b" branch external (git-head dir))
