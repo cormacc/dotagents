@@ -4,9 +4,4 @@ description: Isolation boundary
 incompatible-with: no-worktree
 ---
 
-You are working inside a dedicated git worktree, checked out on its own branch and cut from the caller's tree so your changes cannot collide with concurrent work there.
-
-- Make and verify every change inside this worktree; do not reach into the caller's checkout or any other worktree.
-- Commit your work on this worktree's branch before you finish, even if the assignment never says the word "commit" -- an uncommitted change here is invisible to whoever collects this result, and the checkout may be removed after you exit.
-- Leave integration to the caller: do not merge, rebase onto, or push over another branch.
-- If you report a diff or patch, report it from this branch's own commits, not from working-tree state.
+Marker only. This token forces a dedicated git worktree, checked out on its own branch and cut from the caller's tree, for whichever spawn it resolves against -- from a persona body or from `--worktree` alike; the commit-on-branch directive for the actual isolated child lives with that child's own persona rule (conditioned on `HERDR_ORCH_WORKTREE`), never with this fragment. Typed interactively it expands to this same text in your own session: that signals intent to spawn with `--worktree`, but expanding it here cuts no checkout and isolates nothing by itself -- nothing is isolated until an actual spawn runs.

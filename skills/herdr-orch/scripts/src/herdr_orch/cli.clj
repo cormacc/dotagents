@@ -850,7 +850,15 @@
                       ;; This child's own model, so its grandchildren inherit from it exactly
                       ;; as it inherited from here (`parent-model`). Absent when unresolved,
                       ;; leaving a grandchild on the harness default rather than a stale value.
-                      model (assoc "HERDR_ORCH_MODEL" model))
+                      model (assoc "HERDR_ORCH_MODEL" model)
+                      ;; The commit-permission signal for the worktree persona rule
+                      ;; (`worker.md`'s conditional commit bullet): an injected env var
+                      ;; cannot fail to arrive the way a trait fragment reaching the
+                      ;; composed persona body could -- and did not, on the flag and
+                      ;; default triggers, before this fix (task f49a63f5). Present for
+                      ;; both a freshly cut checkout and a reused one, never for a
+                      ;; shared-tree child.
+                      worktree (assoc "HERDR_ORCH_WORKTREE" "1"))
                 ;; Tab placement skips caller-rect!/direction entirely: a tab needs neither.
                 pane-placement (if (= placement "tab")
                                  (herdr/tab-create! {:cwd child-cwd :label label :env env :focus false})

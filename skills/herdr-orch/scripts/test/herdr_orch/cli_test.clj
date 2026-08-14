@@ -267,7 +267,10 @@
     (is (= "tab" (:placement entry)))
     (is (str/includes? (str/join " " (first (filter #(= ["tab" "create"] (vec (take 2 %))) argv))) checkout))
     ;; Always injected for a worktree child, unlike the pre-existing conditional rule.
-    (is (= (str dir) (injected-env env-file "ORCH_ASSIGNMENT_ROOT")))))
+    (is (= (str dir) (injected-env env-file "ORCH_ASSIGNMENT_ROOT")))
+    ;; The commit-permission signal (task f49a63f5 reopened): the flag trigger is one of
+    ;; the two primary paths the reviewers found delivered no commit directive at all.
+    (is (= "1" (injected-env env-file "HERDR_ORCH_WORKTREE")))))
 
 (deftest worktree-composes-with-explicit-placement-flags-not-a-third-mode
   (let [{:keys [env log dir]} (fake-env {})
@@ -281,28 +284,35 @@
                         (get-in entry [:worktree :path])))))
 
 (deftest worktree-trait-forces-a-checkout-identically-to-the-flag
-  (let [{:keys [env dir]} (fake-env {} worktree-persona-roster)
+  (let [{:keys [env dir env-file]} (fake-env {} worktree-persona-roster)
         proc (call! env "task" "start" "triggers-worktree" "--task" "trait forces a checkout")
         entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "trait" (:worktree-trigger entry)))
-    (is (fs/exists? (get-in entry [:worktree :path])))))
+    (is (fs/exists? (get-in entry [:worktree :path])))
+    (is (= "1" (injected-env env-file "HERDR_ORCH_WORKTREE")))))
 
 (deftest worktree-default-applies-only-to-an-additional-in-flight-round
-  (let [{:keys [env dir]} (fake-env {})
+  (let [{:keys [env dir env-file]} (fake-env {})
         first-proc (call! env "task" "start" "worker" "--task" "first, nothing else in flight")
         first-entry (ledger-entry* dir (get-in (result first-proc) [:result :task]))
+        ;; Read before the second call overwrites the fixture's single `env-file`.
+        first-injected (injected-env env-file "HERDR_ORCH_WORKTREE")
         second-proc (call! env "task" "start" "worker" "--task" "second, first round still open")
         second-entry (ledger-entry* dir (get-in (result second-proc) [:result :task]))]
     (is (zero? (:exit first-proc)) (:err first-proc))
     ;; An initial spawn: nothing was in flight yet, so it shares the tree exactly as today.
     (is (= "none" (:worktree-trigger first-entry)))
     (is (not (contains? first-entry :worktree)))
+    ;; The default trigger is the other primary path the reviewers found silent: this is
+    ;; the in-flight-default half of the commit-permission-signal criterion.
+    (is (nil? first-injected))
     (is (zero? (:exit second-proc)) (:err second-proc))
     ;; The first round is a `start` (non-blocking): nothing has published or captured it,
     ;; so it is still "in flight" for the second spawn of the same session.
     (is (= "default" (:worktree-trigger second-entry)))
-    (is (fs/exists? (get-in second-entry [:worktree :path])))))
+    (is (fs/exists? (get-in second-entry [:worktree :path])))
+    (is (= "1" (injected-env env-file "HERDR_ORCH_WORKTREE")))))
 
 (deftest worktree-read-only-persona-gets-no-implicit-checkout-while-another-round-is-open
   (let [{:keys [env dir]} (fake-env {})
@@ -314,6 +324,39 @@
     (is (zero? (:exit scout-proc)) (:err scout-proc))
     (is (= "none" (:worktree-trigger scout-entry)))
     (is (not (contains? scout-entry :worktree)))))
+
+;; Hard boundary (task f49a63f5 reopened): a shared-tree spawn must behave exactly as it
+;; does today. Proven two ways -- no `HERDR_ORCH_WORKTREE` reaches the child's env at all,
+;; and the actual resolved persona file (never a fixture stand-in, and never rewritten:
+;; `worker.md` carries no trait token, so `trait-interpolation` leaves `:composed-content`
+;; nil and `:persona-path` the shipped file itself) still carries the unconditional
+;; prohibition text for the no-signal case.
+(deftest plain-worker-spawn-carries-no-worktree-commit-signal
+  (let [{:keys [env dir env-file]} (fake-env {})
+        proc (call! env "task" "start" "worker" "--task" "shared tree, nothing else in flight")
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+        persona-text (slurp (:persona-path entry))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "none" (:worktree-trigger entry)))
+    (is (not (contains? entry :worktree)))
+    (is (nil? (injected-env env-file "HERDR_ORCH_WORKTREE")))
+    (is (str/includes? persona-text "HERDR_ORCH_WORKTREE"))
+    (is (str/includes? persona-text "do not commit unless the assignment explicitly requests a commit"))))
+
+;; [P2 fix, task f49a63f5 reopened] `resolve-worktree` keys the in-flight default only on
+;; `%read-only`, so a write-enabled `planner` -- carrying neither that nor, before this
+;; fix, `%no-worktree` -- silently qualified for a default the record's own `** Scope`
+;; rejects: "planner writes belong in the shared tree." `planner.md` now carries the
+;; packaged `%no-worktree` opt-out; exercised here against the real packaged persona.
+(deftest planner-does-not-get-the-in-flight-default-worktree
+  (let [{:keys [env dir]} (fake-env {})
+        first-proc (call! env "task" "start" "worker" "--task" "keeps a round open")
+        planner-proc (call! env "task" "start" "planner" "--task" "concurrent planning, shared tree")
+        planner-entry (ledger-entry* dir (get-in (result planner-proc) [:result :task]))]
+    (is (zero? (:exit first-proc)) (:err first-proc))
+    (is (zero? (:exit planner-proc)) (:err planner-proc))
+    (is (= "suppressed" (:worktree-trigger planner-entry)))
+    (is (not (contains? planner-entry :worktree)))))
 
 (deftest no-worktree-trait-suppresses-the-in-flight-default
   (let [{:keys [env dir]} (fake-env {} worktree-persona-roster)
@@ -5179,7 +5222,7 @@
 ;; not two to keep in step.
 
 (deftest worktree-from-reuses-the-recorded-checkout-and-cuts-no-second-one
-  (let [{:keys [env log dir]} (fake-env {})
+  (let [{:keys [env log dir env-file]} (fake-env {})
         source (spawn-worktree! env dir "worker cuts the checkout")]
     (publish-child! source)
     (let [before (git-worktree-list dir)
@@ -5191,7 +5234,10 @@
       (is (= (:worktree source) (:worktree reuse)) "identical identity: same path, branch, base, parent-dirty")
       (is (= before (git-worktree-list dir)) "no second `git worktree add` ever ran")
       (is (str/includes? (str/join " " (first (filter #(= ["tab" "create"] (vec (take 2 %))) argv)))
-                          (get-in source [:worktree :path]))))))
+                          (get-in source [:worktree :path])))
+      ;; A reused checkout is still a worktree child: the commit-permission signal must
+      ;; reach it exactly as it does the create paths (task f49a63f5 reopened).
+      (is (= "1" (injected-env env-file "HERDR_ORCH_WORKTREE"))))))
 
 ;; A reviewer/scout inspecting a worker's checkout is the motivating case; unlike the
 ;; implicit in-flight default (which a `%read-only` persona never gets), `--worktree-from`
