@@ -1593,6 +1593,9 @@
     (is (zero? (:exit proc)))
     (is (= "pending" (get-in (result proc) [:result :status])))
     (is (= "timeout" (get-in (result proc) [:result :reason])))
+    ;; The timeout carries the child's live status, so a caller distinguishes "still
+    ;; working" from "gone" without a second `status` call.
+    (is (= "idle" (get-in (result proc) [:result :child-status])))
     (is (<= (wait-call-count log) 14))))
 
 (deftest bounded-poll-covers-collect-wait
@@ -3843,6 +3846,44 @@
     (is (= 1 (count (filter #(and (fs/regular-file? %) (str/ends-with? (fs/file-name %) ".json"))
                             (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))))))))
 
+;; `poke` re-issues the publication instruction to a settled child that produced no
+;; envelope. It allocates nothing and closes nothing, so its whole contract is the guard
+;; set plus the delivered prompt.
+(deftest poke-reprompts-an-unpublished-round-and-mutates-nothing-else
+  (let [{:keys [env dir log prompt-file]} (fake-env {})
+        entry (start-child! env dir "finished but never published")
+        ledger-before (count (fs/glob (fs/path dir ".tmp" "herdr-orch" "ledger") "*.json"))
+        proc (call! env "task" "poke" (:task entry))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "poked" (get-in (result proc) [:result :status])))
+    (is (= 1 (get-in (result proc) [:result :pokes])))
+    ;; The delivered prompt names the round and the exact publish command.
+    (let [prompt (slurp prompt-file)]
+      (is (str/includes? prompt "Your round is not published"))
+      (is (str/includes? prompt (str "--task " (:task entry))))
+      (is (str/includes? prompt "is not a publication")))
+    (is (= ledger-before (count (fs/glob (fs/path dir ".tmp" "herdr-orch" "ledger") "*.json")))
+        "poke allocates no round")
+    (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)) "poke closes no pane")))
+
+(deftest poke-refuses-a-published-or-unownable-round
+  (let [{:keys [env dir]} (fake-env {})]
+    (testing "a round that already published a validated envelope"
+      (let [entry (capture-entry! dir (start-child! env dir "already published"))
+            proc (call! env "task" "poke" (:task entry))]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"already published a validated envelope" (:out proc)))))
+    (testing "a foreign parent session"
+      (let [entry (patch-entry! dir (start-child! env dir "foreign") :parent-session "/somewhere/else.jsonl")
+            proc (call! env "task" "poke" (:task entry))]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"does not own this ledger entry" (:out proc)))))
+    (testing "a closed pane"
+      (let [entry (patch-entry! dir (start-child! env dir "closed") :closed-at "2026-01-01T00:00:00Z")
+            proc (call! env "task" "poke" (:task entry))]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"pane was already closed" (:out proc)))))))
+
 (deftest continue-refuses-an-unusable-prior-round
   (let [{:keys [env log dir]} (fake-env {})]
     (testing "an uncaptured prior round"
@@ -5357,6 +5398,35 @@
       (is (= ["closed"] (mapv :status (:result (result proc)))))
       (is (fs/exists? path))
       (is (str/includes? (git-worktree-list dir) path)))))
+
+;; `--prune` takes the mirror set of the listing: uncaptured foreign rounds. It replaces a
+;; manual "delete the ledger JSON" recipe whose liveness check was an operator eyeballing
+;; `agent list`, and it applies `prune`'s own staleness proof minus the ownership bar.
+(deftest orphans-prune-retires-a-foreign-stale-round-and-spares-live-and-captured-ones
+  (let [{:keys [env dir state]} (fake-env {})
+        stale (foreign! dir (start-child! env dir "foreign, uncaptured, child gone"))
+        _ (child-state! state stale "gone" "")
+        captured (foreign! dir (capture-entry! dir (start-child! env dir "foreign but captured")))
+        own (start-child! env dir "this session's own uncaptured child")
+        proc (call! env "task" "orphans" "--prune")]
+    (is (zero? (:exit proc)) (:err proc))
+    (let [res (:result (result proc))]
+      ;; Only the uncaptured foreign round is a candidate at all.
+      (is (= [(:task stale)] (mapv :task res)))
+      (is (= ["pruned"] (mapv :status res))))
+    (is (= "failed" (:status (ledger-entry* dir (:task stale)))))
+    (is (= "missing-agent" (:prune-reason (ledger-entry* dir (:task stale)))))
+    (is (= "orphans" (:pruned-by (ledger-entry* dir (:task stale)))))
+    ;; A captured foreign round belongs to --close, and this session's own round is never
+    ;; a candidate for either form.
+    (is (not= "failed" (:status (ledger-entry* dir (:task captured)))))
+    (is (not= "failed" (:status (ledger-entry* dir (:task own)))))))
+
+(deftest orphans-refuses-close-and-prune-together
+  (let [{:keys [env]} (fake-env {})
+        proc (call! env "task" "orphans" "--prune" "--close")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"--close or --prune, not both" (:out proc)))))
 
 (deftest orphans-lists-only-captured-rounds-owned-by-another-session
   (let [{:keys [env log dir]} (fake-env {})

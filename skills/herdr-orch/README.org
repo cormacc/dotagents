@@ -262,7 +262,6 @@ The preview reports =kind=, the resolved (pre-alias) =model=, its post-alias =mo
 - =task close= settle-waits (bounded by =ORCH_SETTLE_CLOSE_MS=, default 45 s) before its single close attempt, but a child that never settles inside that budget still retains its pane -- closure is one attempt, never retried. Capture never closes anything.
 - =close= refuses a foreign or unresolvable parent identity, so an orphaned child whose owning session has ended is not closable through it. =oh task orphans= lists such panes and =oh task orphans --close= sweeps them, under the same live child+pane match =close= uses (see [[file:scripts/docs/contract.md][contract.md]] § Orphans). Both forms are root-only and the operator supplies the judgement that a foreign session is a dead one.
 - The advisor-tier convention holds only for a worker that consults through =oh task run advisor=. A worker that hand-rolls a consult with raw =herdr agent start= silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so ledger consult counts and advisor costs are a floor rather than the truth.
-- =oh task prune= refuses any entry owned by another session, which is correct but leaves no command for the common case of a stale entry from an ended session. Clear those by deleting the ledger JSON.
 - =HERDR_ORCH_BIN= intentionally carries the deployed absolute path rather than a canonical repository path. Launcher-matrix coverage is its guard.
 
 * LLM use statement

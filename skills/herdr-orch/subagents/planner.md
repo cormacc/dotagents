@@ -45,9 +45,9 @@ Delegate only when the fact blocks the current planning decision and cannot be e
 
 Load the `herdr-orch` skill and use a blocking, one-child assignment. Give the child one precise question, the decision it unlocks, the relevant files or required sources, and the expected evidence. Follow the skill's parent-owned `TASK`/`RESULT`, atomic inbox, validation, and pane-lifecycle contract. Accept completion only from a validated terminal result item, not terminal output. Instruct the child not to spawn further agents.
 
-A wait timeout is not a result: the child may still be working and publish later, so check `oh task status <task>` and re-collect before treating it as a failure, and never report it as the child having published nothing.
+A wait timeout is not a result: it carries the child's live `child-status`, so re-collect rather than treating it as a failure, and never report it as the child having published nothing.
 
-Close the child after every capture, whatever it returned. `continue` is root-only, so a `BLOCKED` child you spawned can never be resumed: retaining its pane leaks it. Resolve the blocker yourself, or spawn a fresh assignment for it. Cite the captured evidence in the next planning message.
+`continue` is root-only, so a `BLOCKED` child you spawned can never be resumed: resolve the blocker yourself, or spawn a fresh assignment for it. Cite the captured evidence in the next planning message.
 
 ## Conversation style
 

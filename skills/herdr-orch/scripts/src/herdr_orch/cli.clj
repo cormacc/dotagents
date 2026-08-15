@@ -14,7 +14,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\nprune requires the caller's own :parent-session to own <full-task-uuid> and proves it stale (uncaptured, no RESULT, absent from one `agent list`) before marking it failed.\ncontinue assigns a settled, captured child another round in its existing context: root-only, guarded by the same live child+pane match close uses, allocating a fresh task and result and writing a new ledger entry with :continues. --wait blocks like run; the default is non-blocking like start.\nharvest returns this session's PROCESS candidates from the ledger, deduplicated, with every child and task that raised each one; it is read-only and routes, persists, and acts on nothing.\ncompact retires bulk rather than entries: it drops the raw envelope text (a duplicate of the parsed fields and of the retained RESULT file) from a closed or terminal round the caller owns, keeping the task, child, :child-session, and artifact links a cited uuid resolves through. --closed sweeps the caller's own such rounds.\norphans lists, and under --close closes, captured rounds owned by a session other than this one, applying close's own live child+pane match; a foreign session is not a dead one, so the authority is the operator's and the list is the default. Root-only, like continue: a delegated child is refused before any listing or mutation, because every sibling and ancestor session looks equally foreign to it.\nclose is the only path that closes a *spawned* child's pane: no capture does, and the only other closure is spawn-failure cleanup taking a pane the child never worked in. It acts on a captured entry that is the newest round for its child, and only on a live observation matching that entry's child name and pane id in idle/done -- or, when the name has been released (a resumed process), a live pane whose recorded shell_pid still matches and whose foreground is not busy; --settled sweeps the caller's own captured children, newest round only, at most one attempt each.\ncollect, status, close, and prune all resolve their assignment argument as the exact ledger key emitted by task run/start; no prefix is ever resolved.\ncollect, status, and list accept --format text for a compact line rendering, and emit the raw result envelope beside the parsed fields only under --raw.\ncollect --close captures and then closes in one call, under every close guard, reporting that outcome under :close without ever degrading the capture.\nworktree list enumerates this session's recorded checkouts (one per child lineage, current round only) with the same reconciliation object collect/status report; worktree remove takes the checkout and never the branch -- `git worktree remove` leaves the branch and its commits intact, so removing a checkout can never destroy committed work, and deleting the branch remains the parent's own act. It applies prune/close's own ownership rule (both :parent-session non-nil and equal), refuses a recorded checkout outside its managed root, reports ignored paths separately without refusing on them, refuses a dirty checkout by naming the dirty paths, refuses while any live round of the session still references the checkout, and reports tip ancestry against the parent's live HEAD as information only, never a gate. close, prune, orphans, and collect --close never touch a checkout; teardown is only ever these two verbs.\nProtocol checkpoint commits are mechanical publication artefacts, not authored commits: they use a deterministic task/status message, are exempt from git-commit conventions, and may be squashed or rewritten by the parent during integration. oh never commits in the shared checkout and never merges, rebases, pushes, deletes a branch, or removes an externally supplied checkout.\nOpaque assignment input is --task, --task-file, or stdin. Run `oh --help` for contract details.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -82,7 +82,7 @@
 ;; Single source of truth for delegation value-less flags. The raw tab/workspace create
 ;; `--focus` operator flag is scoped to those commands by `boolean-flags-for`; both argv
 ;; consumers use the same resolved set so no value-less flag swallows the next element.
-(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon"})
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon" "--prune"})
 (defn boolean-flags-for [group op]
   (cond-> boolean-flags
     (and (#{"tab" "ws"} group) (= "create" op)) (conj "--focus")))
@@ -622,7 +622,15 @@
     (loop []
       (if-let [parsed (capture! entry)] (finish-capture! entry parsed owned?)
           (let [remaining (- deadline (System/currentTimeMillis))]
+            ;; A wait timeout is not a result: the child may still be working and publish
+            ;; minutes later. Carry its live status so the caller can tell "still working"
+            ;; from "gone" without a second manual `status` call -- the step whose omission
+            ;; produced respawns that discarded finished work.
             (if (<= remaining 0) {:status "pending" :terminal? false :reason "timeout"
+                                  :child-status (or (:agent_status
+                                                     (try (herdr/agent! (:child entry))
+                                                          (catch Exception _ nil)))
+                                                    "unknown")
                                   :task (:task entry) :pane-id (:pane-id entry)}
                 (let [outcome (herdr/wait! (:child entry) remaining)
                       ;; The wait outcome already carries the AgentInfo: no extra Herdr call.
@@ -1276,6 +1284,31 @@
 ;; other caller; forward-declared so `assert-children-discharged!`'s release classification
 ;; (below) can share `close`'s own evidence for a name-absent round instead of a weaker one.
 (declare pane-alive? pane-shell-pid!)
+;; The staleness proof `prune` applies, shared verbatim with `orphans --prune` so the
+;; foreign-owner path cannot drift into a weaker bar. Ownership is *not* part of it: that
+;; is the one condition `orphans` deliberately overrides, and it is checked separately by
+;; each caller. Returns nil when the entry is provably stale, or a [message data] refusal.
+;;
+;; `index-fn` is a thunk, not a value: the listing must run *after* the cheap ledger checks.
+;; Calling it earlier lets a child that publishes inside the `agent list` window trip the
+;; published-item check here instead of the final re-validation, which reports the race as
+;; an ordinary stale refusal and loses the distinction the mutation guard exists to draw.
+(defn- stale-round-refusal [entry index-fn]
+  (let [task (:task entry)]
+    (cond
+      (:captured-at entry) ["assignment already captured" {:task task}]
+      (contains? #{"failed" "invalid"} (:status entry))
+      ["assignment is already terminal" {:task task :status (:status entry)}]
+      (seq (:published (stream-state entry))) ["a published RESULT item already exists" {:task task}]
+      :else
+      ;; `nil` means the listing itself is unusable, so liveness is unknown: only a listing
+      ;; that positively omits this child's name is proof of absence.
+      (let [index (index-fn)]
+        (cond
+          (nil? index) ["agent list is unusable; liveness is unknown" {:task task}]
+          (contains? index (:child entry)) ["named child is present in agent list" {:task task :child (:child entry)}]
+          :else nil)))))
+
 (defn prune! [task]
   (when-not task (fail "prune requires a full task uuid" {}))
   (let [entry (ledger/read! task)
@@ -1287,21 +1320,10 @@
     ;; destructive, so that nil-vs-nil coincidence must never grant ownership.
     (when-not (and caller recorded (= caller recorded))
       (fail "prune refused: caller session does not own this ledger entry" {:task task}))
-    (when (:captured-at entry)
-      (fail "prune refused: assignment already captured" {:task task}))
-    (when (contains? #{"failed" "invalid"} (:status entry))
-      (fail "prune refused: assignment is already terminal" {:task task :status (:status entry)}))
-    (when (seq (:published (stream-state entry)))
-      (fail "prune refused: a published RESULT item already exists" {:task task}))
     ;; Reuses `live-agents` (same name-keyed classification `--any` uses) rather than a
-    ;; second liveness scan: `nil` means the listing itself is unusable, so liveness is
-    ;; unknown and a prune must never proceed — only a listing that positively omits this
-    ;; child's name is proof of absence.
-    (let [index (live-agents)]
-      (when-not index
-        (fail "prune refused: agent list is unusable; liveness is unknown" {:task task}))
-      (when (contains? index (:child entry))
-        (fail "prune refused: named child is present in agent list" {:task task :child (:child entry)})))
+    ;; second liveness scan.
+    (when-let [[message data] (stale-round-refusal entry live-agents)]
+      (fail (str "prune refused: " message) data))
     ;; The `agent list` call above can itself race a child publishing and exiting inside
     ;; its subprocess window — the same hazard `collect-any!` re-polls to avoid (see its
     ;; comment above `capture-first`). So the final mutation re-validates the *freshest*
@@ -1647,6 +1669,9 @@
   (when-let [persona (System/getenv "HERDR_ORCH_PERSONA")]
     (fail "orphans is root-only: a delegated child cannot manage another session's captured children" {:own-persona persona}))
   (let [close? (boolean (one opts :close))
+        prune? (boolean (one opts :prune))
+        _ (when (and close? prune?)
+            (fail "orphans takes --close or --prune, not both" {}))
         ;; Closeout fix (P3): refused before the first ledger read for *either* form, not
         ;; only `--close`. The plain listing's candidate filter is `(not= caller
         ;; (:parent-session %))`; with `caller` nil (identity unresolvable even at root --
@@ -1657,15 +1682,44 @@
         ;; degradation was the other admissible fix, but a list an operator might act on by
         ;; reading it (with or without `--close`) should not exist misleadingly.
         caller (or (caller-parent-session) (fail "orphans refused: caller session is unresolvable" {}))
+        ;; `--prune` takes the mirror set of the listing/`--close` set: uncaptured rounds
+        ;; rather than captured ones. A foreign session's stale entry was previously an
+        ;; uncontrolled manual recipe (delete the ledger JSON after eyeballing `agent list`),
+        ;; which is the same weak-evidence step `orphans` already replaced for panes.
         candidates (->> (ledger/entries)
                         newest-rounds
-                        (filter #(and (stream-captured? (stream-state %)) (:pane-id %)
+                        (filter #(and (if prune?
+                                        (not (stream-captured? (stream-state %)))
+                                        (and (stream-captured? (stream-state %)) (:pane-id %)))
                                       (nil? (:closed-at %)) (:parent-session %)
                                       (not= caller (:parent-session %))))
                         (sort-by :created-at)
                         vec)]
-    (if-not close?
+    (cond
+      prune?
+      ;; Ownership is the single condition the operator overrides. Every other part of
+      ;; `prune`'s proof applies unchanged, including the final re-validation inside
+      ;; `ledger/update!` that refuses a capture appearing during the listing.
+      (mapv (fn [entry]
+              (let [task (:task entry)]
+                (if-let [[message data] (stale-round-refusal entry live-agents)]
+                  {:status "refused" :task task :child (:child entry) :reason message :detail data}
+                  (do (ledger/update! task
+                                      (fn [current]
+                                        (if (or (:captured-at current) (seq (:published (stream-state current))))
+                                          (fail "orphans --prune refused: assignment was captured or published during the liveness check"
+                                                {:task task})
+                                          (assoc current :status "failed" :failure-phase "orphaned"
+                                                 :pruned-at (now) :prune-reason "missing-agent"
+                                                 :pruned-by "orphans"))))
+                      {:status "pruned" :task task :child (:child entry)
+                       :parent-session (:parent-session entry)}))))
+            candidates)
+
+      (not close?)
       (mapv #(select-keys % [:task :child :pane-id :tab-id :label :status :captured-at :parent-session]) candidates)
+
+      :else
       ;; One refusal must not abandon the rest of the sweep, exactly as in `close --settled`.
       (mapv (fn [entry]
               (try (settle-then-close! entry)
@@ -1925,6 +1979,53 @@
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--task " task " --status BLOCKED` (dependency) or `--task " task " --status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
        publication-guidance
        (waiting-instruction waiting-policy task)))
+
+;; `poke` re-issues the publication instruction to a settled child that finished its work
+;; without publishing, or wrote prose to RESULT instead of an envelope. It is the recovery
+;; verb for the measured case where a parent otherwise adopts unvalidated pane text or pays
+;; twice by respawning. It creates no round, allocates nothing, and touches no pane: the
+;; only mutation is the prompt itself, so a refused poke leaves the round exactly as it was.
+(defn poke-prompt [task result]
+  (str "Your round is not published. Herdr assigned TASK=" task " and RESULT=" result ". "
+       "Publish now with `$HERDR_ORCH_BIN task publish --task " task
+       " --status COMPLETE --summary \"...\"`, or `--status BLOCKED`/`--status FAILED` if you cannot finish. "
+       "A report written to the result path is not a publication: the envelope is the only result the parent reads. "
+       publication-guidance))
+
+(defn poke! [task]
+  (when-not task (fail "poke requires a full task uuid" {}))
+  (let [entry (ledger/read! task)
+        child (:child entry)
+        entries (vec (ledger/entries))]
+    (herdr/preflight!)
+    (let [ident (try (parent-identity) (catch Exception _ nil))
+          caller (:parent-session ident)
+          recorded (:parent-session entry)]
+      (when-not (and caller recorded (= caller recorded))
+        (fail "poke refused: caller session does not own this ledger entry" {:task task}))
+      ;; The mirror image of `continue`: that verb requires a captured stream, this one
+      ;; requires an uncaptured one. A sealed round has already published and needs no poke.
+      (when (stream-captured? (stream-state entry))
+        (fail "poke refused: this round already published a validated envelope"
+              {:task task :status (:status entry)}))
+      (when (:closed-at entry)
+        (fail "poke refused: this child's pane was already closed" {:task task :closed-at (:closed-at entry)}))
+      (when-not (= task (:task (newest-round entries child)))
+        (fail "poke refused: a newer round exists for this child"
+              {:task task :child child :newest (:task (newest-round entries child))}))
+      ;; Same live evidence bar as `close` and `continue`: name and pane must both match and
+      ;; the child must be settled, or the prompt lands in an approval UI instead of a turn.
+      (let [{:keys [index]} (settle-and-list! "poke" entry)
+            agent (or (get index child) (fail "poke refused: the child is absent from the agent list" {:task task :child child}))]
+        (when-not (= (:pane-id entry) (:pane_id agent))
+          (fail "poke refused: the recorded pane is not this child's pane"
+                {:task task :child child :recorded (:pane-id entry) :observed (:pane_id agent)}))
+        (when-not (contains? #{"idle" "done"} (:agent_status agent))
+          (fail "poke refused: the child is not settled" {:task task :child child :agent-status (:agent_status agent)}))
+        (herdr/prompt! child (poke-prompt task (:result entry)))
+        (ledger/update! task update :pokes (fnil inc 0))
+        {:status "poked" :task task :child child :pane-id (:pane-id entry)
+         :pokes (inc (or (:pokes entry) 0))}))))
 
 (defn- reserve-continuation! [prior-task child ident caller waiting-policy]
   (with-assignment-reservation-lock
@@ -2262,10 +2363,11 @@
            "list [--format json|text] [--raw]"
            "publish --status COMPLETE|BLOCKED|FAILED|WAITING --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--from-file PATH] [--task UUID] [--notify-timeout MS]"
            "prune <full-task-uuid>"
+           "poke <full-task-uuid>"
            "continue <full-task-uuid> (--task TEXT | --task-file PATH | stdin) [--wait] [--timeout MS]"
            "close <full-task-uuid> [--abandon]"
            "close --settled"
-           "orphans [--close]"
+           "orphans [--close | --prune]"
            "compact <full-task-uuid>"
            "compact --closed"
            "harvest [--format json|text]"]
@@ -2373,6 +2475,7 @@
     "list" (present opts (mapv live (ledger/entries)) entries-text)
     "publish" (publish! opts)
     "prune" (prune! (first positional))
+    "poke" (poke! (first positional))
     "continue" (continue! (first positional) opts)
     "orphans" (do (require-positionals positional 0 "task orphans") (orphans! opts))
     "compact" (compact! (first positional) opts)
