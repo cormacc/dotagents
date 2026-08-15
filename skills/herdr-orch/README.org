@@ -2,28 +2,49 @@
 
 Where things live:
 
-| Document | Canonical content |
-|---+---|
-| This file | What the skill is and how to use and configure it |
-| [[file:design.org][design.org]] | Why it is built this way, the namespace map, maintenance notes, and change history |
-| [[file:SKILL.md][SKILL.md]] | The delegation, trust, and pane-safety policy an agent loads at runtime |
-| [[file:references/traits.md][references/traits.md]] | Trait store, admission bar, probing protocol, and the measured rationale behind them |
-| [[file:scripts/README.md][scripts/README.md]] | CLI invocation, tests, and smoke entry points |
-| [[file:scripts/docs/contract.md][scripts/docs/contract.md]] | Every mechanical contract: CLI, JSON, environment, ledger, envelope, model resolution, retro/spawn gating, placement, fan-in, pruning, append-only publishing, parent push, artifact links, labels, and geometry |
+| Document                 | Canonical content                                                                    |
+|----------------------+-------------------------------------------------------------------------------------- |
+| This file                | What the skill is and how to use and configure it                                    |
+| [[file:design.org][design.org]]               | Why it is built this way, the namespace map, maintenance notes, and change history   |
+| [[file:SKILL.md][SKILL.md]]                 | The delegation, trust, and pane-safety policy an agent loads at runtime              |
+| [[file:references/traits.md][references/traits.md]]     | Trait store, admission bar, probing protocol, and the measured rationale behind them |
+| [[file:scripts/README.md][scripts/README.md]]        | CLI invocation, tests, and smoke entry points                                        |
+| [[file:scripts/docs/contract.md][scripts/docs/contract.md]] | Every mechanical contract                                                            |
 
 * Table of Contents                                       :TOC_1_gh:noexport:
 - [[#what-is-this][What is this?]]
+- [[#subagent-lifecycle][Subagent lifecycle]]
 - [[#how-do-i-use-it][How do I use it?]]
 - [[#known-gaps][Known gaps]]
 - [[#llm-use-statement][LLM use statement]]
 
 * What is this?
-
 A harness-agnostic orchestration framework for agent-assisted development. Subagent personas and their interactions are defined independently of any one coding harness, so you can evaluate or migrate between harnesses without rebuilding your workflow. The bundled =oh= CLI absorbs the mechanical ceremony of orchestration, which keeps token and tool-call overhead down.
+- define subagents per-project (in =<project-root>/.agents/subagents=) or per-user (in =~/.agents/subagents=)
+- define re-usable prompt snippets (traits) per-project (in =<project-root>/.agents/subagents=) or per-user (in =~/.agents/subagents=)
+- traits can be included in subagent definitions or interactive prompts (the latter for pi only, so far) using the syntax ~%my-trait~
+- spawn parallel workers in independent git worktrees, with the mechanical aspects of worktree creation and reconciliation handled by skill scripts
+
+My own use is predominantly human-in-the-loop and low-fanout -- subagents for context and token-cost management rather than parallel development by swarms. That is preference, not prescription: the skill is written so other orchestration models can be built on top of it with appropriate persona definitions.
 
 Developed primarily against =pi=, and verified against =claude code= and =codex=. Additional harnesses are configurable (§ Harness configuration).
+Scripts written in babashka (clojure).
 
-My own use is human-in-the-loop and low-fanout -- subagents for context and token-cost management rather than parallel development by swarms. That is preference, not prescription: the skill is written so other orchestration models can be built on top of it with appropriate persona definitions.
+
+* Subagent lifecycle
+The parent owns both ends of a round: it decides where the child works, and it owns everything the child produces.
+
+- Target :: The parent resolves exactly one checkout before the child exists -- the caller's own checkout, an existing attached checkout in the same repository (=--worktree <path>=), or a managed checkout (=--worktree new=). With no flag, a read-only or first write-enabled child shares the caller's checkout, while an additional concurrent write-enabled child gets a managed one. A managed checkout is created from the source HEAD on branch =orch/<task-prefix>=, before any pane exists.
+- Spawn :: =oh task run= blocks for the result; =oh task start= returns immediately. The child's cwd is the resolved checkout, and that cwd is the only child state the target affects: topology is never communicated through the persona, and the child carries no commit permission.
+- Publish :: =oh task publish= appends immutable result items to the round's stream -- interim reports and monitor observations included -- and a terminal status (=COMPLETE=, =BLOCKED=, =FAILED=) seals the round. Publication is also the commit gate: from a non-shared checkout it mechanically stages and commits pending nonignored changes and records the resulting tip as =CHECKPOINT=, so recovery never depends on the child having been instructed to commit. From the shared checkout it never touches Git. A read-only child holding dirt is refused, not committed.
+- Collect and reconcile :: =oh task collect= captures published items, and =collect --any= takes whichever in-flight child publishes first. For a child with its own checkout, =collect=, =status=, and =oh worktree list= also report base, branch, tip, and checkout state, keeping committed, dirty, and ignored paths as three separate sets, because each calls for a different parent action.
+- Close, continue, or tear down :: Capture never closes a pane. =oh task close= closes a settled child's pane, while =oh task continue= assigns the same child another round and carries its checkout identity forward without re-resolving topology. =oh worktree remove= deletes only a managed checkout, and only when it is owned, unreferenced, and clean. The branch always survives.
+
+Integration is the parent's work. =oh= never merges, rebases, pushes, deletes a branch, or commits in the shared checkout. Isolation keeps concurrent writers out of each other's index, but it does not prove their edits compose, so the parent still remeasures the combined tree. Retained =orch/*= branches accumulate until the parent integrates or deletes them.
+
+[[file:scripts/docs/contract.md][contract.md]] owns the mechanics: § Worktree reconciliation and teardown for the reconciliation shape, the removal guards, and recovery when =.tmp/= was cleared before a child published, and § Close for the closure guards.
+
+
 
 * How do I use it?
 
@@ -222,20 +243,6 @@ Placement is resolved per spawn and never inherited: it is not persisted per chi
 in the child's environment, or consulted by that child's own spawns. The ledger entry
 records the resolved =:placement= (="split"= or ="tab"=) and =:tab-id= for audit only. See
 [[file:scripts/docs/contract.md][contract.md]] § Placement for the mechanical detail.
-
-** Subagent lifecycle
-
-The parent owns both ends of a round: it decides where the child works, and it owns everything the child produces.
-
-1. *Target.* The parent resolves exactly one checkout before the child exists -- the caller's own checkout, an existing attached checkout in the same repository (=--worktree <path>=), or a managed checkout (=--worktree new=). With no flag, a read-only or first write-enabled child shares the caller's checkout, while an additional concurrent write-enabled child gets a managed one. A managed checkout is created from the source HEAD on branch =orch/<task-prefix>=, before any pane exists.
-2. *Spawn.* =oh task run= blocks for the result; =oh task start= returns immediately. The child's cwd is the resolved checkout, and that cwd is the only child state the target affects: topology is never communicated through the persona, and the child carries no commit permission.
-3. *Publish.* =oh task publish= appends immutable result items to the round's stream -- interim reports and monitor observations included -- and a terminal status (=COMPLETE=, =BLOCKED=, =FAILED=) seals the round. Publication is also the commit gate: from a non-shared checkout it mechanically stages and commits pending nonignored changes and records the resulting tip as =CHECKPOINT=, so recovery never depends on the child having been instructed to commit. From the shared checkout it never touches Git. A read-only child holding dirt is refused, not committed.
-4. *Collect and reconcile.* =oh task collect= captures published items, and =collect --any= takes whichever in-flight child publishes first. For a child with its own checkout, =collect=, =status=, and =oh worktree list= also report base, branch, tip, and checkout state, keeping committed, dirty, and ignored paths as three separate sets, because each calls for a different parent action.
-5. *Close, continue, or tear down.* Capture never closes a pane. =oh task close= closes a settled child's pane, while =oh task continue= assigns the same child another round and carries its checkout identity forward without re-resolving topology. =oh worktree remove= deletes only a managed checkout, and only when it is owned, unreferenced, and clean. The branch always survives.
-
-Integration is the parent's work. =oh= never merges, rebases, pushes, deletes a branch, or commits in the shared checkout. Isolation keeps concurrent writers out of each other's index, but it does not prove their edits compose, so the parent still remeasures the combined tree. Retained =orch/*= branches accumulate until the parent integrates or deletes them.
-
-[[file:scripts/docs/contract.md][contract.md]] owns the mechanics: § Worktree reconciliation and teardown for the reconciliation shape, the removal guards, and recovery when =.tmp/= was cleared before a child published, and § Close for the closure guards.
 
 ** Verifying a configuration change
 
