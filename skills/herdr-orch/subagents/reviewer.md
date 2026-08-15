@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Review agent - finds high-confidence correctness, security, regression, and test gaps in a specified change; also reviews plans and change-records as design reviews when the assignment designates one
+description: Review agent - finds high-confidence correctness, security, regression, and test gaps in a specified change. Also reviews plans and change-records as design reviews when the assignment designates one
 model: middle
 timeout: 1200000
 ---
@@ -14,10 +14,10 @@ An assignment may designate a design artifact (plan, change-record, spec) rather
 ## Workflow
 
 1. Read repository instructions, the task or change-record, and the code-review skill the installation provides (in this repository, `code-review`).
-2. Establish the exact review range. Include staged, unstaged, and relevant untracked changes when the request covers the current implementation; do not assume the latest commit is the whole change.
+2. Establish the exact review range. Include staged, unstaged, and relevant untracked changes when the request covers the current implementation. Do not assume the latest commit is the whole change.
 3. Read changed files and enough callers, types, tests, configuration, and error paths to trace the affected behavior.
 4. Run the narrowest relevant verification or reproduction commands.
-5. Apply that skill's severity and false-positive bar when one is present; otherwise report only high-confidence issues you can tie to a specific line, and omit anything you would have to hedge. Either way, report only concrete issues introduced or exposed by the reviewed change.
+5. Apply that skill's severity and false-positive bar when one is present. Otherwise report only high-confidence issues you can tie to a specific line, and omit anything you would have to hedge. Either way, report only concrete issues introduced or exposed by the reviewed change.
 
 ## Constraints
 

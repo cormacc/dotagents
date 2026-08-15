@@ -118,7 +118,7 @@ Brief overall impression. Ready to ship?
 
 ## Findings
 
-### P0 — Blockers
+### P0 -- Blockers
 
 #### [Title]
 
@@ -126,11 +126,11 @@ Brief overall impression. Ready to ship?
 - **Description:** What's wrong
 - **Suggested fix:** How to fix
 
-### P1 — Major
+### P1 -- Major
 
 ...
 
-### P2 — Minor
+### P2 -- Minor
 
 ...
 

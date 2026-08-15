@@ -22,7 +22,7 @@ The [[file:../../design/log/2026-07-24-herdr-subagent-skill-scripts.org][2026-07
 
 The earlier prose-only protocol required the parent to perform label calculation, geometry selection, split/start/prompt operations, bounded waiting, envelope parsing, artifact checks, and pane closure by hand. Besides repeated model round-trips, partial compliance failed silently: identities could be mistyped, visible summaries substituted for result files, and panes closed before capture.
 
-The CLI absorbs those operations behind one spawn/collect interface and returns the validated envelope inline. The =minimum-version= gate converts an unsupported-Herdr state into an actionable error before a pane or ledger assignment is partially created, for one subprocess; the twelve per-command =--help= probes it replaced bought nothing further, since every command and flag the CLI uses shipped in that same minimum version. Exact invocation counts are intentionally not frozen here because lifecycle hooks change; use the fake-Herdr log when evaluating current overhead.
+The CLI absorbs those operations behind one spawn/collect interface and returns the validated envelope inline. The =minimum-version= gate converts an unsupported-Herdr state into an actionable error before a pane or ledger assignment is partially created, for one subprocess. The twelve per-command =--help= probes it replaced bought nothing further, since every command and flag the CLI uses shipped in that same minimum version. Exact invocation counts are intentionally not frozen here because lifecycle hooks change. Use the fake-Herdr log when evaluating current overhead.
 
 ** Optional process retrospectives
 
@@ -38,7 +38,7 @@ Assignment state lives under =<assignment-root>/.tmp/herdr-orch/=, deliberately 
 
 ** Per-persona spawn capability
 
-The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27 spawn-capability change-record]] replaced the prose-only planner exception with declared roster capability: a frontmatter =spawns:= allow-list resolved once at spawn (flag > frontmatter > default deny), recorded on the ledger as =:spawns=/=:spawns-source=, injected as =HERDR_ORCH_SPAWNS=, and enforced mechanically by the child CLI before preflight, ledger allocation, or pane mutation. Prompt-only enforcement was rejected because its failure modes are billable and pane-creating; child self-resolution from the roster was rejected because it cannot carry a per-spawn flag override and mid-flight roster edits would change a live child's capability. Any below-root spawn injects an empty grandchild policy with source =depth= -- one nesting level absolutely, no depth counter -- so labels stay display-only metadata. Below-root one-at-a-time cardinality deliberately remains prompt-strength doctrine.
+The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.org][2026-07-27 spawn-capability change-record]] replaced the prose-only planner exception with declared roster capability: a frontmatter =spawns:= allow-list resolved once at spawn (flag > frontmatter > default deny), recorded on the ledger as =:spawns=/=:spawns-source=, injected as =HERDR_ORCH_SPAWNS=, and enforced mechanically by the child CLI before preflight, ledger allocation, or pane mutation. Prompt-only enforcement was rejected because its failure modes are billable and pane-creating. Child self-resolution from the roster was rejected because it cannot carry a per-spawn flag override and mid-flight roster edits would change a live child's capability. Any below-root spawn injects an empty grandchild policy with source =depth= -- one nesting level absolutely, no depth counter -- so labels stay display-only metadata. Below-root one-at-a-time cardinality deliberately remains prompt-strength doctrine.
 
 * Architecture
 
@@ -55,19 +55,19 @@ The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.
 
 ** Known regression boundaries
 
-The regression suite names the important boundaries; preserve the tests rather than duplicating their mechanics here:
+The regression suite names the important boundaries. Preserve the tests rather than duplicating their mechanics here:
 
 - =bounded-poll-timeout-without-result= must fail if the wait-loop sleep is removed.
 - =unknown-state-is-never-nudged= must fail if the post-prompt dispatch check ever sends keys to a child whose state it could not observe, and =dispatched-prompt-is-confirmed-without-touching-the-keyboard= must fail if a healthy spawn starts paying for a poll interval or a second =agent get=.
 - =launcher-matrix-selects-branch-and-preserves-cwd= must fail if launcher path canonicalisation or caller cwd preservation regresses.
-- capture must never close a pane: closure belongs to =task close= alone, and =close=/=close --settled= must refuse a foreign or unresolvable parent identity and a stale non-newest round; a child whose live name and pane id do not both match the ledger entry closes only through the guarded shell_pid fallback for a released name (task ca6fecef), never on weaker evidence.
+- capture must never close a pane: closure belongs to =task close= alone, and =close=/=close --settled= must refuse a foreign or unresolvable parent identity and a stale non-newest round. A child whose live name and pane id do not both match the ledger entry closes only through the guarded shell_pid fallback for a released name (task ca6fecef), never on weaker evidence.
 - retro tests must remain behavioural at prompt/CLI boundaries: frontmatter values are strings, value-less flags participate in two argv consumers, and optional annotations must not demote a valid result.
-- =default-config-content-contract= pins contract.md's weight table to =config.edn= and pins every pre-two-level model ID to its old argv; keep its expectation matrix hardcoded, or the preservation check becomes circular.
+- =default-config-content-contract= pins contract.md's weight table to =config.edn= and pins every pre-two-level model ID to its old argv. Keep its expectation matrix hardcoded, or the preservation check becomes circular.
 - live-smoke helper assertions are unit-tested because the billable smoke is never part of the standard suite.
 
 All =herdr= calls in =src/= must remain vector argv. Keep the standalone launcher dependency-free beyond Babashka built-ins. When Herdr changes, =minimum-version= in [[file:scripts/src/herdr_orch/herdr.clj][herdr.clj]] is the single capability declaration -- raise it when the CLI starts depending on a newer command or flag, rather than reintroducing per-command probes.
 
-Configuration examples in this file are not covered by any test, unlike contract.md's weight table. Validate a changed example by parsing it out of the document and running it through =validate-merged-config!= against the shipped table; an example can become executable-wrong rather than merely stale.
+Configuration examples in this file are not covered by any test, unlike contract.md's weight table. Validate a changed example by parsing it out of the document and running it through =validate-merged-config!= against the shipped table. An example can become executable-wrong rather than merely stale.
 
 ** Test isolation caveat
 
@@ -75,19 +75,19 @@ Configuration examples in this file are not covered by any test, unlike contract
 
 A full =bb test= should create no entries under the repository's live =.tmp/herdr-orch/= tree. When mutation-testing assignment-root or launcher behavior, set an override and inspect that tree afterwards.
 
-Test runs create many fake-Herdr ledger directories under temporary fixture roots. A cross-project audit must discover real ledgers only beneath known assignment roots, or explicitly exclude fake-Herdr/test-fixture paths; never use an unscoped filesystem or =/tmp= search for directories named =ledger=.
+Test runs create many fake-Herdr ledger directories under temporary fixture roots. A cross-project audit must discover real ledgers only beneath known assignment roots, or explicitly exclude fake-Herdr/test-fixture paths. Never use an unscoped filesystem or =/tmp= search for directories named =ledger=.
 
-=bb test= runs from the repository root; there is no =bb.edn= under =scripts/=.
+=bb test= runs from the repository root. There is no =bb.edn= under =scripts/=.
 
 ** Reflexive changes
 
-A child editing =scripts/= is modifying the same launcher used by its own =publish= and the parent's =collect=. Before delegating such work, copy a known-good scripts tree outside this repository and give the child its launcher as a fallback. Put the snapshot where the launcher's repository-root walk cannot rediscover this checkout's =bb.edn=; otherwise the supposed snapshot loads working-tree source.
+A child editing =scripts/= is modifying the same launcher used by its own =publish= and the parent's =collect=. Before delegating such work, copy a known-good scripts tree outside this repository and give the child its launcher as a fallback. Put the snapshot where the launcher's repository-root walk cannot rediscover this checkout's =bb.edn=. Otherwise the supposed snapshot loads working-tree source.
 
 Publication identity comes from injected =HERDR_ORCH_*= variables rather than the ledger, so an isolated snapshot can publish the assigned result. Verify the fallback before relying on it.
 
 ** Deployment and live smoke
 
-=agents.nix= deploys =~/.agents/skills= as a directory symlink, which includes this skill's packaged =subagents/= directory. Launcher canonicalisation must therefore use physical paths when locating the repository configuration while retaining the absolute deployed launcher path injected into the child. Do not project packaged definitions into =~/.agents/subagents/=: that path is deliberately unmanaged and reserved for genuine home overrides; project overrides remain =<git-root>/.agents/subagents/=.
+=agents.nix= deploys =~/.agents/skills= as a directory symlink, which includes this skill's packaged =subagents/= directory. Launcher canonicalisation must therefore use physical paths when locating the repository configuration while retaining the absolute deployed launcher path injected into the child. Do not project packaged definitions into =~/.agents/subagents/=: that path is deliberately unmanaged and reserved for genuine home overrides. Project overrides remain =<git-root>/.agents/subagents/=.
 
 =bb smoke-subagent= is billable and guarded by =HERDR_ENV=1=, =ORCH_LIVE_SMOKE=1=, and =ORCH_LIVE_SMOKE_MODEL= (with optional =ORCH_LIVE_SMOKE_KIND=, applied by generating =kind:=-declaring persona copies). It calls =cli/execute= in-process and therefore cannot validate the Bash launcher. Launcher changes need a separate deployed-path smoke from a scratch project. The retrospective leg deliberately lets the child encounter an unannounced invalid command: announcing the trap turns it into a known one-off that the =retro= eligibility gate correctly rejects.
 
@@ -107,7 +107,7 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 - [[file:../../design/log/2026-07-30-subagents-make-default-spawn-options-con.org][2026-07-30]] -- configurable default spawn options.
 - [[file:../../design/log/2026-07-31-subagents-review-advisor-strategy-defaul.org][2026-07-31]] -- advisor/tier benchmark rounds behind current tier guidance.
 - [[file:../../design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org][2026-07-31]] -- retired the mandatory advisor consult and the frontier-executor persona.
-- [[file:../../design/log/2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org][2026-08-01]] -- absorbed pi-herdr coverage; skill/CLI renamed to =herdr-orch=/=oh=.
+- [[file:../../design/log/2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org][2026-08-01]] -- absorbed pi-herdr coverage. Skill/CLI renamed to =herdr-orch=/=oh=.
 - [[file:../../design/log/2026-08-03-subagent-make-claude-kind-persona-inject.org][2026-08-03]] -- claude-kind persona injection and bounded-permission overrides.
 - [[file:../../design/log/2026-08-04-herdr-orch-simplify-model-aliasing.org][2026-08-04]] -- two-level model table: =:aliases= plus canonical =:models= rows.
 - [[file:../../design/log/2026-08-05-herdr-orch-verify-prompt-dispatch-after.org][2026-08-05]] -- post-prompt dispatch verification for spawned children.

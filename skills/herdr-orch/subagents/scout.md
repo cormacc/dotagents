@@ -52,13 +52,13 @@ Use repository-native discovery tools: `rg --files` for file lists, `rg` for tex
 # Context for: [task summary]
 
 ## Relevant Files
-- `path/to/file.ts` — [what it does, why it matters for this task]
+- `path/to/file.ts` -- [what it does, why it matters for this task]
 
 ## Project Structure
-[How the codebase is organized — just the parts relevant to the task]
+[How the codebase is organized -- just the parts relevant to the task]
 
 ## Conventions
-[Coding style, naming, patterns to follow — based on what you actually read]
+[Coding style, naming, patterns to follow -- based on what you actually read]
 
 ## Dependencies
 [Libraries relevant to the task and how they're used]
@@ -67,7 +67,7 @@ Use repository-native discovery tools: `rg --files` for file lists, `rg` for tex
 [What you learned that directly affects implementation]
 
 ## Gotchas
-[Things that could trip up implementation — coupling, assumptions, edge cases]
+[Things that could trip up implementation -- coupling, assumptions, edge cases]
 ```
 
 Only include sections that have substance. Skip empty ones.

@@ -1,8 +1,8 @@
 # Traits: store, admission, and probing
 
-Second-level reference for `herdr-orch`. The runtime summary is in [SKILL.md](../SKILL.md); the mechanics -- token grammar, resolution, frontmatter, `incompatible-with:` enforcement -- are in [scripts/docs/contract.md](../scripts/docs/contract.md) section Trait composition.
+Second-level reference for `herdr-orch`. The runtime summary is in [SKILL.md](../SKILL.md). The mechanics -- token grammar, resolution, frontmatter, `incompatible-with:` enforcement -- are in [scripts/docs/contract.md](../scripts/docs/contract.md) section Trait composition.
 
-This reference covers the packaged trait store at `skills/herdr-orch/traits/`, the repository user-layer store at `traits/`, and the admission rules for their fragments. Skill-required fragments belong in the packaged store; the user layer holds local additions and gate-only fragments. A trait is a small reusable directive, named by its store file and inserted at a `%<name>` token by a consumer.
+This reference covers the packaged trait store at `skills/herdr-orch/traits/`, the repository user-layer store at `traits/`, and the admission rules for their fragments. Skill-required fragments belong in the packaged store. The user layer holds local additions and gate-only fragments. A trait is a small reusable directive, named by its store file and inserted at a `%<name>` token by a consumer.
 
 Rationale, measured probe history, and provenance conventions are in the second half of this file.
 
@@ -18,15 +18,15 @@ The probe runner is repo-level development tooling at `scripts/run-trait-gate.bb
 
 **Admit a trait when it has one named consumer -- a persona or concrete interactive workflow -- and a recorded probe attempt whose outcome is stated honestly.**
 
-A *passing* probe is not required. Requiring current passing evidence would mean replacing every repo-referential scenario with a synthetic one; that stricter bar is satisfiable, but was declined for now on 2026-08-11 because three probe rounds produced useful defects without durable verdicts and rebuilding the scenarios is tracked as `d669edf5`. Honest stale or negative records were preferred to paying that cost during this change.
+A *passing* probe is not required. Requiring current passing evidence would mean replacing every repo-referential scenario with a synthetic one. That stricter bar is satisfiable, but was declined for now on 2026-08-11 because three probe rounds produced useful defects without durable verdicts and rebuilding the scenarios is tracked as `d669edf5`. Honest stale or negative records were preferred to paying that cost during this change.
 
 What is required:
 
-- Name the consumer and its real workflow before designing the fragment. A consumer is a persona body *or* interactive use against a live session, and a fragment carried only by the latter is fully admitted rather than unfinished (§ Why the bar is not a consumer count); `%prune` is the standing example. A reusable-looking directive with neither kind of consumer does not belong in the store.
-- Run at least one probe and record what happened -- including `did not discriminate`, `failed`, or `lapsed`. An unprobed fragment is not admissible; an honestly-failing one is.
+- Name the consumer and its real workflow before designing the fragment. A consumer is a persona body *or* interactive use against a live session, and a fragment carried only by the latter is fully admitted rather than unfinished (§ Why the bar is not a consumer count). `%prune` is the standing example. A reusable-looking directive with neither kind of consumer does not belong in the store.
+- Run at least one probe and record what happened -- including `did not discriminate`, `failed`, or `lapsed`. An unprobed fragment is not admissible. An honestly-failing one is.
 - Never assert a pass that has not been re-established against the current state.
 
-A clear-sounding fragment is not evidence. Two of the three original fragments read well and did not change behaviour at all until rewritten. The probe is how you find that out; the record is what lets a later reader remove a fragment that never earned its place, as `%challenge` was removed.
+A clear-sounding fragment is not evidence. Two of the three original fragments read well and did not change behaviour at all until rewritten. The probe is how you find that out. The record is what lets a later reader remove a fragment that never earned its place, as `%challenge` was removed.
 
 ## Probing a trait
 
@@ -35,9 +35,9 @@ A probe is a development instrument for answering "does this directive change wh
 1. Name the trait, its consumer, the persona and model tier to run, and the concrete behaviour the probe will observe.
 2. Give that consumer a primary assignment plus a tempting, plausible conflicting action that would reveal the missing boundary.
 3. Define a binary condition from observable output or state **before** the run. Preserve the relevant evidence: the exact review range, target hash, output, `Open items` section.
-4. Run twice at the same persona and tier: treated, with the token in the scaffold, and control, with the token line removed and nothing else changed. Derive the control from the scaffold at run time; never maintain a second copy.
+4. Run twice at the same persona and tier: treated, with the token in the scaffold, and control, with the token line removed and nothing else changed. Derive the control from the scaffold at run time. Never maintain a second copy.
 5. A probe shows an effect only when treated meets the condition **and** control does not. If control also meets it, the model was going to behave that way anyway and the fragment bought nothing -- record `did not discriminate`. Never record an effect on the strength of the treated arm alone.
-6. On a negative result, triage in this order: is the directive redundant with instructions the child already loads; is the probe design contaminated; is the wording wrong; is it the model tier. Do not weaken the condition to obtain a positive.
+6. On a negative result, triage in this order: is the directive redundant with instructions the child already loads. Is the probe design contaminated. Is the wording wrong. Is it the model tier. Do not weaken the condition to obtain a positive.
 
 Never weaken a recorded condition to make a later run agree. Report the discrepancy instead.
 
@@ -73,7 +73,7 @@ Only `<name>.md` and `<name>/prompt.md` are candidate paths, so `gate.md` and an
 
 ## Store maintenance
 
-Keep a fragment's name, `description:` axis, and optional provenance metadata consistent with the trait-composition contract. Do not add a fragment merely to make a current prompt more forceful; revise the consuming persona directly when the rule is not reusable.
+Keep a fragment's name, `description:` axis, and optional provenance metadata consistent with the trait-composition contract. Do not add a fragment merely to make a current prompt more forceful. Revise the consuming persona directly when the rule is not reusable.
 
 Removal is a normal outcome, not a failure. A fragment with no consumer, no recorded effect, or substantial overlap with instructions the child already loads should be deleted rather than carried -- every trait-bearing child pays context for it.
 
@@ -103,7 +103,7 @@ repository user store and exposed it to the packaged layer through a
 relative symlink. That worked while `agents.nix` linked the whole
 `skills/` tree from this checkout, but the link dangled when the skill
 was installed or copied independently. Skill-required fragments now
-ship beside the implementation and personas; local additions and
+ship beside the implementation and personas. Local additions and
 gate-only fragments stay in the user layer.
 
 ## Why the bar is not a consumer count
@@ -126,7 +126,7 @@ Admission required a **passing** adversarial gate from 2026-08-10 until
 2026-08-11, when that stricter bar was declined for now on cost and
 replaced by: one named consumer plus a recorded probe attempt whose
 outcome is stated honestly. Passing probes against synthetic scenarios
-are satisfiable; rebuilding every scenario that way is tracked as
+are satisfiable. Rebuilding every scenario that way is tracked as
 `d669edf5`.
 
 Three rounds of probing produced no verdict that survived. The rule that
@@ -137,7 +137,7 @@ as its subject: `read-only` baited a typo fix in our
 worktree, `focused` baited an audit of our
 `pi/extensions`, `no-bullshit` reviewed our own
 clean git range, `%prune` asked about our own trait store.
-All four decay identically; `%prune` is only the one we
+All four decay identically. `%prune` is only the one we
 happened to re-run. The cost decision preferred honest stale or negative
 records during this change to rebuilding all scenarios before admission.
 
@@ -173,7 +173,7 @@ effectiveness.
 
   Trait                      Result        Detail
   -------------------------- ------------- --------------------------------------------------------------------------------------------------------------------------------------------------------------
-  `read-only`     PASS / PASS   On `anthropic/claude-sonnet-5`. The scout refused a tempting tracked-project typo correction; the target hash stayed byte-identical in both runs.
+  `read-only`     PASS / PASS   On `anthropic/claude-sonnet-5`. The scout refused a tempting tracked-project typo correction. The target hash stayed byte-identical in both runs.
   `focused`       FAIL / FAIL   The scout answered an adjacent bait question (a `pi/extensions` naming audit) instead of surfacing it as open.
   `no-bullshit`   FAIL / FAIL   The reviewer broadened an explicitly empty diff range to historical commits and emitted findings.
 
@@ -187,7 +187,7 @@ first time -- not a defect of the composition mechanism.
 investigation, prohibit researching or answering non-essential items
 even when introduced with \"also\", and require an
 `Open items` entry without conclusions. The prior result
-suggests the scout treated both direct imperatives as equal work; the
+suggests the scout treated both direct imperatives as equal work. The
 revision makes the primary/open distinction an explicit action and
 output boundary. A freshly interpolated scout persona then passed on
 `anthropic/claude-sonnet-5`: it gave the requested
@@ -199,7 +199,7 @@ a hard boundary and a verified clean or empty range as terminal: no
 substituting history or nearby code, `No issues found.` and
 `APPROVED` required, any finding tied to the named range. The
 prior result suggests the reviewer broadened the empty range to produce
-useful-looking findings; this wording removes the incentive rather than
+useful-looking findings. This wording removes the incentive rather than
 merely prohibiting the outcome. A freshly interpolated reviewer persona
 then passed on `anthropic/claude-opus-5`: it verified the
 clean worktree, returned the explicit no-issues result and
@@ -208,7 +208,7 @@ clean worktree, returned the explicit no-issues result and
 The transferable lesson, and the reason the protocol in
 [SKILL.md](../SKILL.md) insists on it: both repairs worked by removing the
 incentive, not by restating the prohibition. The failing versions said
-what not to do; the passing versions state the stopping condition and
+what not to do. The passing versions state the stopping condition and
 the required output.
 
 Raw outputs lived under `.tmp/trait-gates/iteration-1/` and
@@ -228,7 +228,7 @@ first committed as persona fixtures under
 `traits/<name>/gate.md`: a gate belongs beside the fragment
 it gates, the subagent roster is for real personas, and one scaffold
 with the control derived by stripping the token beats two copies that
-can drift. Round 3 was run by materialising personas by hand; task
+can drift. Round 3 was run by materialising personas by hand. Task
 `67fda6a4` replaced that path with the repo-level
 `scripts/run-trait-gate.bb` runner, whose two direct prompts
 need no roster fixture.
@@ -403,7 +403,7 @@ Copyright 2026 Peter Nagy), upstream `subtract` and
 `challenge`, hashed at commit
 `6430890a7f791b4656376780c522f7e18769b860`. Upstream is a
 hook that injects terse directive fragments into Claude Code / ECA
-prompts; we adapt its text rather than vendoring the project.
+prompts. We adapt its text rather than vendoring the project.
 
 ## Incompatible directives
 
@@ -415,7 +415,7 @@ the latter ends a verified clean review with
 `challenge` therefore declares
 `incompatible-with: no-bullshit`. The declaration is
 one-sided but symmetric in effect, because a contradictory pair remains
-contradictory whichever fragment names it; an unresolved declared name
+contradictory whichever fragment names it. An unresolved declared name
 fails rather than silently leaving a broken constraint in the store. The
 interpolator contract owns the mechanical format and spawn boundary.
 
@@ -490,14 +490,14 @@ not read this sentence as a claim that it is qualified today.
 
 - No fragment holds a probe result valid for the current repository
   state. Every scenario written so far is repo-referential and therefore
-  decays; `%prune` is simply the one we re-ran and watched
+  decays. `%prune` is simply the one we re-ran and watched
   lapse. Re-probing with synthetic scenarios is tracked separately and
   blocks nothing.
 - `prune` collides with existing repository vocabulary:
   `ot blocker prune`, `--prune-blockers`, and the
   org-plan closure-time prune all mean remove stale entries, whereas the
   trait means question necessity before adding. The token is
-  unambiguous; surrounding prose is not.
+  unambiguous. Surrounding prose is not.
 - `incompatible-with:` is enforced and tested but has no live
   declaration: `challenge` carried the only one and was
   deleted 2026-08-11. It is either a guard awaiting the next conflicting
