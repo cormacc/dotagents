@@ -5,18 +5,6 @@
             [clojure.string :as str]))
 
 (def minimum-version [0 7 5])
-;; The mechanical surface intentionally includes pane rename, which is useful to the
-;; oh launcher even though pi-herdr did not expose it. Keep this set explicit so a
-;; missing wrapper is a test failure rather than an accidental capability regression.
-(def operations
-  #{["workspace" "list"] ["workspace" "create"] ["workspace" "focus"]
-    ["tab" "list"] ["tab" "create"] ["tab" "focus"]
-    ["pane" "list"] ["pane" "current"] ["pane" "layout"] ["pane" "split"]
-    ["pane" "rename"] ["pane" "get"] ["pane" "process-info"] ["pane" "run"] ["pane" "read"]
-    ["pane" "send-text"] ["pane" "send-keys"] ["pane" "wait-output"] ["pane" "close"]
-    ["agent" "list"] ["agent" "get"] ["agent" "start"] ["agent" "prompt"]
-    ["agent" "wait"] ["agent" "read"] ["agent" "send-keys"] ["agent" "focus"]
-    ["agent" "rename"]})
 (def max-output-lines 2000)
 (def max-output-bytes (* 50 1024))
 

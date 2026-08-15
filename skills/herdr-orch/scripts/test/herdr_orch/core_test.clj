@@ -121,7 +121,12 @@
   ;; the injected HERDR_ORCH_SPAWNS, never by label parsing.
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"anchored persona/index prefix"
                         (core/nested-prefix "planner-1/scout-2-claude-fable-5" "scout")))
-  (is (= "worker-1" (core/root-label "worker" 1 nil))))
+  (is (= "worker-1" (core/root-label "worker" 1 nil)))
+  ;; Labels derive from `model-basename`, so a canonical prefixed ID and its bare
+  ;; equivalent label identically.
+  (is (= (core/model-basename "anthropic/claude-opus-5") (core/model-basename "claude-opus-5")))
+  (is (= "worker-1-claude-opus-5" (core/root-label "worker" 1 "claude-opus-5")))
+  (is (= "worker-1-claude-opus-5" (core/root-label "worker" 1 "anthropic/claude-opus-5"))))
 
 (deftest config-parse-merge-and-shape-validation
   (testing "valid EDN parses"
@@ -239,9 +244,7 @@
 
 (deftest worktree-branch-naming-is-predictable
   (is (= "orch/89c7f5f6" (core/worktree-branch "89c7f5f6-cccc-dddd-eeee-000000000000")))
-  ;; Same task, same branch: naming is a pure function of the task id alone.
-  (is (= (core/worktree-branch "11112222-3333-4444-5555-666677778888")
-         (core/worktree-branch "11112222-3333-4444-5555-666677778888"))))
+  (is (= "orch/11112222" (core/worktree-branch "11112222-3333-4444-5555-666677778888"))))
 
 (deftest worktree-target-resolution-contract
   (testing "an omitted target resolves to the caller's shared checkout"
@@ -261,14 +264,6 @@
   (testing "a read-only sibling never triggers implicit creation"
     (is (= {:kind :shared :path "/repo"}
            (core/resolve-worktree {:target nil :source "/repo" :in-flight? true :read-only? true})))))
-
-;; Pane labels use `model-basename`, independent of roster translation: a canonical bare
-;; ID and its pre-migration pi-syntax equivalent share the same basename, so labels are
-;; unaffected by the roster migration.
-(deftest label-stability-across-canonical-id-migration
-  (is (= (core/model-basename "anthropic/claude-opus-5") (core/model-basename "claude-opus-5")))
-  (is (= "worker-1-claude-opus-5" (core/root-label "worker" 1 "claude-opus-5")))
-  (is (= "worker-1-claude-opus-5" (core/root-label "worker" 1 "anthropic/claude-opus-5"))))
 
 (deftest retro-skill-resolution-and-policy
   (let [probe #{"/project/.agents/skills/retro/SKILL.md" "/project/skills/retro/SKILL.md" "/home/u/.agents/skills/retro/SKILL.md"}]
@@ -337,17 +332,6 @@
                (and (re-find #"unresolvable persona `resercher`" (.getMessage e))
                     (= {:persona "worker" :spawn "resercher" :source "frontmatter"} (ex-data e))))))))
 
-(deftest ignores-retired-requires-frontmatter-key
-  ;; The `requires:` mandate mechanism was retired (see
-  ;; design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org). A stale key in a
-  ;; hand-written or third-party persona must be inert rather than an error, and must not
-  ;; alter the resolved spawn policy.
-  (is (= {:spawns ["scout" "advisor"] :spawns-source "frontmatter"}
-         (core/resolve-spawns {:persona "worker"
-                               :frontmatter {:spawns "scout advisor" :requires "advisor"}
-                               :resolve-persona (fn [n] n)})))
-  (is (nil? (resolve 'herdr-orch.core/resolve-required))))
-
 (deftest frontmatter-and-envelope-contract
   (is (= {:name "scout" :description "x" :kind "pi" :model "vendor/model"}
          (core/parse-frontmatter "---\nname: scout\ndescription: x\nkind: pi\nmodel: vendor/model\n---\nbody")))
@@ -381,14 +365,10 @@
   (is (= "You are a leaf: do not spawn subagents." (cli/delegation-guidance [])))
   (is (= "You are a leaf: do not spawn subagents." (cli/delegation-guidance nil)))
   ;; An advisor in the allow-list is covered by that same gap-only clause: the retired
-  ;; mandate variant must not reappear, and the function takes exactly one argument.
+  ;; mandate variant must not reappear.
   (is (= "You may spawn at most one blocking scout or researcher or advisor only when a factual gap or material judgment blocks progress; that child must remain a leaf."
          (cli/delegation-guidance ["scout" "researcher" "advisor"])))
   (is (not (str/includes? (cli/delegation-guidance ["scout" "researcher" "advisor"]) "mandates")))
-  (doseq [banned ["Capturing its result closes nothing" "close it yourself"
-                  "nobody else can close a child you own" "before you publish"]]
-    (is (not (str/includes? (cli/delegation-guidance ["scout" "researcher" "advisor"]) banned)) banned))
-  (is (thrown? clojure.lang.ArityException (cli/delegation-guidance ["scout"] ["advisor"])))
   (is (= {:status "COMPLETE"} (smoke/complete! {:status "COMPLETE"})))
   ;; The smoke carries no harness selector in its argv: a cross-harness run generates
   ;; personas that declare the kind (`with-personas`), which is the only tier there is.

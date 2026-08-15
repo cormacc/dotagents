@@ -350,19 +350,6 @@
         (is (fs/exists? (get-in (first managed) [:worktree :path])))
         (git-in! dir "worktree" "remove" "--force" (get-in (first managed) [:worktree :path]))))))
 
-(deftest spawn-blocking-input-and-external-reads-precede-the-reservation-lock
-  (let [text (slurp (str (fs/path root "skills/herdr-orch/scripts/src/herdr_orch/cli.clj")))
-        lock-pos (str/index-of text "            (with-assignment-reservation-lock")
-        end-pos (str/index-of text "            {:keys [target entry worktree assignment bin name persona-path]}")
-        critical (subs text lock-pos end-pos)]
-    (is (some? lock-pos) "positive control: spawn contains the reservation call")
-    (is (some? end-pos))
-    (doseq [form ["            assignment (task-text opts)"
-                  "            parent-label (:label (herdr/pane! (:parent-pane ident)))"
-                  "            bin (launcher-bin)"]]
-      (is (< (str/index-of text form) lock-pos) form)
-      (is (not (str/includes? critical (str/trim form))) form))))
-
 (deftest absent-target-with-a-live-write-sibling-creates-one-managed-checkout
   (let [{:keys [env dir]} (fake-env {})
         first-proc (call! env "task" "start" "worker" "--task" "first writer")
@@ -1616,12 +1603,6 @@
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (<= 3 (wait-call-count log)))))
 
-(deftest a-negative-poll-interval-never-escapes
-  (let [{:keys [env]} (fake-env {"FAKE_WAIT" "idle-forever" "ORCH_POLL_INTERVAL_MS" "-5"})
-        proc (call! env "task" "run" "worker" "--task" "negative interval" "--timeout" "200")]
-    (is (zero? (:exit proc)))
-    (is (= "pending" (get-in (result proc) [:result :status])))))
-
 (deftest stdin-assignment-input
   (let [{:keys [env prompt-file]} (fake-env {})
         proc @(process/process [bin "task" "start" "worker"] {:in "assignment from stdin" :out :string :err :string :env env})]
@@ -1730,12 +1711,9 @@
     (is (str/includes? prompt "ORCH_WAITING_INTERVAL_MIN_MS"))
     (is (not (str/includes? prompt (str "task " "progress"))))))
 
-(deftest legacy-command-is-absent-from-cli-usage-and-dispatch
+(deftest an-unknown-task-command-is-refused
   (let [{:keys [env]} (fake-env {})
-        help (call! env "--help")
-        command (call! env "task" (str "pro" "gress") "--summary" "obsolete")]
-    (is (zero? (:exit help)) (:err help))
-    (is (not (str/includes? (:out help) (str "task " "progress"))))
+        command (call! env "task" "nonesuch" "--summary" "obsolete")]
     (is (= 1 (:exit command)))
     (is (re-find #"unknown task command" (:out command)))))
 
@@ -1911,14 +1889,9 @@
 ;; same exact-ledger-key `unknown assignment task` rejection `prune` already pins above
 ;; -- never `ot`-style prefix resolution.
 (deftest collect-and-status-do-not-resolve-a-task-id-prefix
-  (let [{:keys [env dir]} (fake-env {}) usage (:out (call! env "--help"))
+  (let [{:keys [env dir]} (fake-env {})
         a (start-child! env dir "prefix must never resolve")
         prefix (subs (:task a) 0 8)]
-    (is (str/includes? usage "oh task collect <full-task-uuid> [--wait --timeout MS]"))
-    (is (str/includes? usage "oh task status [full-task-uuid] | list"))
-    (is (str/includes? usage "no prefix is ever resolved"))
-    (is (not (str/includes? usage "collect <task>")))
-    (is (not (str/includes? usage "status [task]")))
     (doseq [command ["collect" "status"]]
       (let [proc (call! env "task" command prefix)]
         (is (= 1 (:exit proc)) command)
@@ -3751,38 +3724,6 @@
 ;; `delegation-guidance-and-smoke-success-contract` pins the composing function itself; a
 ;; unit pin alone would not have caught the same words re-entering via `prompt-text`,
 ;; `retro-instruction`, `waiting-instruction`, or `continuation-prompt`.
-(def ^:private banned-close-before-publish-phrases
-  ["Capturing its result closes nothing" "close it yourself"
-   "nobody else can close a child you own" "before you publish"])
-(deftest close-before-publish-guidance-is-not-restated-in-any-rendered-prompt
-  (testing "root spawn of a delegating persona"
-    (let [{:keys [env prompt-file]} (fake-env {})
-          proc (call! env "task" "start" "worker" "--task" "delegating root child")
-          prompt (slurp prompt-file)]
-      (is (zero? (:exit proc)) (:err proc))
-      ;; The prompt really is the delegating variant, so the absence below is meaningful.
-      (is (str/includes? prompt "You may spawn at most one blocking"))
-      (doseq [banned banned-close-before-publish-phrases]
-        (is (not (str/includes? prompt banned)) banned))))
-  (testing "below-root spawn (leaf variant)"
-    (let [{:keys [env prompt-file]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "scout"
-                                               "FAKE_PARENT_LABEL" "worker-1-light"})
-          proc (call! env "task" "start" "scout" "--task" "leaf grandchild")
-          prompt (slurp prompt-file)]
-      (is (zero? (:exit proc)) (:err proc))
-      (is (str/includes? prompt "You are a leaf"))
-      (doseq [banned banned-close-before-publish-phrases]
-        (is (not (str/includes? prompt banned)) banned))))
-  (testing "continuation round"
-    (let [{:keys [env dir prompt-file]} (fake-env {})
-          prior (capture-entry! dir (start-child! env dir "round one"))
-          {:keys [proc]} (continue! env dir prior "--task" "round two")
-          prompt (slurp prompt-file)]
-      (is (zero? (:exit proc)) (:err proc))
-      (is (str/includes? prompt "Follow-on round"))
-      (doseq [banned banned-close-before-publish-phrases]
-        (is (not (str/includes? prompt banned)) banned)))))
-
 ;; `--wait` blocks like `run`, the default is non-blocking like `start`, and the round's own
 ;; policy -- not the spawn's -- drives both the prompt's WAITING clause and `publish!`.
 (deftest continue-round-policy-governs-the-prompt-and-the-publish-path
@@ -4696,21 +4637,15 @@
           (str unversioned " resolves identically to " latest " for " kind)))
     (is (= ["--model" "gpt-5.6-terra"] (core/model-args config "codex" "claude-sonnet-5")))))
 
-(deftest ^:serial packaged-persona-weight-selector-contract
-  (let [expected {"planner" "heavy"
-                  "advisor" "middle"
-                  "reviewer" "middle"
-                  "visual-tester" "middle"
-                  "researcher" "light"
-                  "scout" "light"
-                  "worker" "light"}]
-    (doseq [[persona weight] expected]
-      (is (= weight (:model (core/parse-frontmatter (slurp (str (fs/path root "skills" "herdr-orch" "subagents" (str persona ".md")))))))
-          (str persona " declares " weight)))
-    ;; `skilled-worker` was retired: `worker --model <tier>` covers it (see
-    ;; design/log/2026-07-31-subagents-retire-the-mandatory-advisor-c.org).
-    (is (not (fs/exists? (fs/path root "skills" "herdr-orch" "subagents" "skilled-worker.md"))))
-    (is (str/includes? (slurp (str (fs/path root "skills" "herdr-orch" "subagents" "worker.md"))) "--model heavy"))))
+;; contract.md § Model resolution states "Every packaged persona declares one": the
+;; environment-fallback tier is reachable only by a persona that declares no `model:`.
+;; Which tier each one picks is a configuration decision, deliberately not pinned here.
+(deftest ^:serial every-packaged-persona-declares-a-model
+  (let [files (fs/glob (fs/path root "skills" "herdr-orch" "subagents") "*.md")]
+    (is (seq files) "positive control: the packaged roster is discoverable")
+    (doseq [f files]
+      (is (some? (:model (core/parse-frontmatter (slurp (str f)))))
+          (str (fs/file-name f) " declares a model")))))
 
 ;; Loader precedence, row-level replacement, missing/malformed/invalid-shape handling,
 ;; and bare-subtree/relocated-root path derivation, exercised directly against

@@ -228,48 +228,6 @@
       (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))) label)
       (is (not-any? mutating? (calls log)) label))))
 
-(deftest fragment-incompatible-with-metadata-is-parsed-and-optional
-  (let [alpha "/project/.agents/traits/alpha.md"
-        beta "/project/.agents/traits/beta.md"
-        plain "/project/.agents/traits/plain.md"
-        result (interpolate "%alpha %beta %plain"
-                            {alpha "---\nname: alpha\nincompatible-with: beta gamma\n---\nAlpha."
-                             beta "---\nname: beta\n---\nBeta."
-                             plain "---\nname: plain\n---\nPlain."})]
-    (is (= {"alpha" ["beta" "gamma"]} (:incompatibilities result)))
-    (is (= "Alpha. Beta. Plain." (:text result)))))
-
-(deftest incompatible-trait-declarations-fail-before-ledger-or-pane-mutation
-  (doseq [[label body traits expected-declaring expected-incompatible]
-          [["mutually declared pair"
-            "%alpha %beta"
-            [["alpha" "---\nname: alpha\nincompatible-with: beta\n---\nAlpha."]
-             ["beta" "---\nname: beta\nincompatible-with: alpha\n---\nBeta."]]
-            "alpha" "beta"]
-           ["one-sided pair"
-            "%alpha %beta"
-            [["alpha" "---\nname: alpha\nincompatible-with: beta\n---\nAlpha."]
-             ["beta" "---\nname: beta\n---\nBeta."]]
-            "alpha" "beta"]
-           ["unknown name"
-            "%alpha"
-            [["alpha" "---\nname: alpha\nincompatible-with: missing\n---\nAlpha."]]
-            "alpha" "missing"]]]
-    (let [{:keys [dir env log]} (fixture-env)
-          _ (write-persona! dir "broken" (str "---\nname: broken\nkind: pi\n---\n\n" body "\n"))
-          _ (doseq [[name text] traits] (write-trait! dir name :flat text))
-          proc (call! env "task" "start" "broken" "--task" label)
-          failure (output proc)
-          message (get-in failure [:error :message])]
-      (is (= 1 (:exit proc)) label)
-      (is (str/includes? message (str "trait `" expected-declaring "`")) label)
-      (is (str/includes? message (str "trait `" expected-incompatible "`")) label)
-      (is (str/includes? message "incompatible") label)
-      (is (= expected-declaring (get-in failure [:error :data :declaring-trait])) label)
-      (is (= expected-incompatible (get-in failure [:error :data :incompatible-trait])) label)
-      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))) label)
-      (is (not-any? mutating? (calls log)) label))))
-
 (deftest preview-materialization-pass-through-and-continuation-contract
   (let [persona-body "---\nname: composed-fixture\nkind: pi\n---\n\n# Fixture\n\nFirst %alpha then %beta.\n"
         alpha "---\nname: alpha\ndescription: First\n---\nAlpha directive."

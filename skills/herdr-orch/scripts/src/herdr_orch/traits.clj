@@ -39,18 +39,15 @@
 (defn- fragment-content [trait path text]
   (let [{:keys [frontmatter yaml body]} (split-frontmatter text)]
     (if-not frontmatter
-      {:content body :incompatible-with []}
+      {:content body}
       (let [metadata (parse-yaml yaml)
-            actual (:name metadata)
-            incompatible-with (->> (str/split (or (:incompatible-with metadata) "") #"\s+")
-                                   (remove str/blank?)
-                                   vec)]
+            actual (:name metadata)]
         (when-not (= trait actual)
           (throw (ex-info
                   (str "trait fragment `name` mismatch for `" path "`: expected `"
                        trait "`, got `" (or actual "<missing>") "`")
                   {:trait trait :path path :expected trait :actual actual})))
-        {:content body :incompatible-with incompatible-with}))))
+        {:content body}))))
 
 (defn- lowercase-letter? [c]
   (<= (int \a) (int c) (int \z)))
@@ -165,7 +162,6 @@
         unknown-seen (atom #{})
         repeat-seen (atom #{})
         resolved (atom [])
-        incompatibilities (atom {})
         unknowns (atom [])
         repeats (atom [])
         expand (fn [trait]
@@ -192,13 +188,10 @@
                            (swap! repeat-seen conj trait)
                            (swap! repeats conj trait))
                          (do (swap! seen conj trait)
-                             (swap! resolved conj resolution)
-                             (when (seq (:incompatible-with fragment))
-                               (swap! incompatibilities assoc trait (:incompatible-with fragment)))))
+                             (swap! resolved conj resolution)))
                        (:content fragment)))))
         transformed-body (str/join (scan-body body expand))]
     {:text (str (or frontmatter "") transformed-body)
      :resolved @resolved
-     :incompatibilities @incompatibilities
      :unknowns @unknowns
      :repeats @repeats}))
