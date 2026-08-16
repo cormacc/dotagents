@@ -1488,6 +1488,23 @@
 (defn- enter-nudges [log child]
   (filterv #(= ["agent" "send-keys" child "enter"] (vec (take 4 %))) (calls log)))
 
+;; The nudge rule as three values, with no clock: a *persisting* idle is nudged, an
+;; observable state never is, and the cap is absolute. Asserting this through
+;; `verify-dispatch!` would instead measure how many loop iterations fit in the dispatch
+;; budget, which is a property of the machine rather than of the rule.
+(deftest nudge-cap-and-persistence-rule
+  (testing "a first idle reading is never nudged: one reading is not yet persistence"
+    (is (not (cli/nudge? "idle" 0 0))))
+  (testing "a persisting idle is nudged until the cap"
+    (is (cli/nudge? "idle" 1 0))
+    (is (cli/nudge? "idle" 5 (dec cli/max-dispatch-nudges))))
+  (testing "the cap is absolute, however long the child stays idle"
+    (is (not (cli/nudge? "idle" 99 cli/max-dispatch-nudges)))
+    (is (not (cli/nudge? "idle" 99 (inc cli/max-dispatch-nudges)))))
+  (testing "only idle is ever nudged: an observable or unreadable state is left alone"
+    (doseq [status ["working" "blocked" "done" "unknown"]]
+      (is (not (cli/nudge? status 5 0)) status))))
+
 (deftest dispatched-prompt-is-confirmed-without-touching-the-keyboard
   (let [{:keys [env log dir]} (fake-env {"ORCH_POLL_INTERVAL_MS" "20"})
         proc (call! env "task" "start" "worker" "--task" "prompt lands unaided")
@@ -1542,9 +1559,14 @@
     (is (= "pending" (get-in (result proc) [:result :status])))
     (is (= "unconfirmed" (get-in entry [:dispatch :status])))
     (is (= "idle" (get-in entry [:dispatch :state])))
-    ;; Nudged up to the cap and no further, so a misread state cannot burst keys.
-    (is (= cli/max-dispatch-nudges (get-in entry [:dispatch :nudges])))
-    (is (= cli/max-dispatch-nudges (count (enter-nudges log (:child entry)))))
+    ;; How many nudges fit before the deadline is wall-clock dependent, so the cap itself is
+    ;; asserted in `nudge-cap-and-persistence-rule` rather than here. What this test owns is
+    ;; the diagnosis: some nudging happened, none of it burst past the cap, and an
+    ;; undispatched child is neither a spawn failure nor a closed pane.
+    (is (pos? (get-in entry [:dispatch :nudges])))
+    (is (<= (get-in entry [:dispatch :nudges]) cli/max-dispatch-nudges))
+    (is (= (get-in entry [:dispatch :nudges]) (count (enter-nudges log (:child entry))))
+        "every recorded nudge is one real Enter")
     (is (nil? (:dispatched-at entry)))
     (is (= "w:child" (:pane-id entry)))
     (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))

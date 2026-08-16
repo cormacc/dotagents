@@ -570,6 +570,14 @@
 ;; moment. Requiring a second consecutive idle reading costs one poll interval in the held
 ;; case and nothing at all in the healthy one (a dispatched child is already out of `idle`
 ;; on the first probe, so a normal spawn sleeps zero times and makes exactly one call).
+;; Whether this reading earns an Enter. Pure, and deliberately separate from the loop that
+;; calls it: the rule is "a *persisting* idle, capped", which is a statement about three
+;; values and not about elapsed time. Asserting it through the loop instead couples the cap
+;; to how many iterations fit inside `ORCH_DISPATCH_TIMEOUT_MS`, so a loaded machine that
+;; reaches the deadline one nudge early fails a test whose subject it never changed.
+(defn nudge? [status idle-readings nudges]
+  (and (= "idle" status) (pos? idle-readings) (< nudges max-dispatch-nudges)))
+
 (defn verify-dispatch! [task child]
   (let [deadline (+ (System/currentTimeMillis) (dispatch-timeout-ms))]
     (loop [nudges 0 idle-readings 0]
@@ -582,9 +590,9 @@
         (if-not (contains? #{"idle" "unknown"} status)
           (ledger/update! task assoc :dispatched-at (now)
                           :dispatch {:status "dispatched" :state status :nudges nudges})
-          (let [nudge? (and (= "idle" status) (pos? idle-readings) (< nudges max-dispatch-nudges))
-                _ (when nudge? (try (herdr/agent-send-keys! child ["enter"]) (catch Exception _ nil)))
-                nudges (cond-> nudges nudge? inc)
+          (let [nudge-now? (nudge? status idle-readings nudges)
+                _ (when nudge-now? (try (herdr/agent-send-keys! child ["enter"]) (catch Exception _ nil)))
+                nudges (cond-> nudges nudge-now? inc)
                 remaining (- deadline (System/currentTimeMillis))]
             (if (pos? remaining)
               (do (Thread/sleep (min (poll-interval-ms) remaining))
