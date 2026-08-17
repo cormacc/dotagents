@@ -146,6 +146,8 @@ Exit contract: the TUI reserves stdout for a final org-tasks/v1 selected-task en
 
 `ot` resolves the project root from explicit `--root` first. Without `--root`, it starts at the process current working directory and walks parent directories to the nearest `TASKS.org`, falling back to the current directory when none exists. The walk continues to the filesystem root. The nearest ancestor may be outside `$HOME`.
 
+The in-tree, directory-symlink, and bare-skill launchers preserve the caller's working directory. A relative `--root` therefore resolves from that caller directory in every launcher form.
+
 `ot root` prints the resolved absolute project root on one line. Only `--root` changes that value: `--tasks`, `--local`, and `--archive` override protocol file paths exposed by `ot list`, not project-root resolution.
 
 `ot list --format json` returns both the resolved `root` and absolute protocol `files`:
@@ -189,8 +191,9 @@ Use `#+NO_SPEC: true` when the project has no durable contract layer, the task i
 
 `ot spec list` (alias `ot spec discover`) is a read-only report of the org-plan discovery traversal (see org-plan SKILL.md § Spec discovery): `#+SPEC:` roots declared in TASKS.org, or the default root `./design/SPEC.org` when none are declared; implicit specs (root `README.*`, `AGENTS.md`, the skills directory); folder roots expanded recursively; org `[[file:...]]`/`[[proj:...]]` links, Markdown `[text](path)` links, and org `#+INCLUDE:` directives all followed transitively with a visited-set cycle guard (external `http`/`https` targets are never followed). Complete segments `.git`, `.direnv`, `.devenv`, `.cache`, `node_modules`, `target`, `build`, `dist`, and `.next` are excluded. Candidates with a NUL byte are omitted. Invalid control-data targets yield non-fatal `spec-link-invalid` warnings with source and raw target, and `ot doctor` emits the same ordered warning finding. Prints the discovered path set with root provenance (e.g. `#+SPEC: ...`, `default root: ...`, `implicit: ...`, `link from ...`).
 
-`ot doctor` emits these change-record and spec findings:
+`ot doctor` emits these task, change-record, and spec findings:
 
+- `done-with-unchecked-criteria` -- one warn-level finding for each `DONE` task with one or more exact `- [ ] criterion` lines. The message includes the task summary and count. `CANCELLED` and open tasks do not produce this finding.
 - `spec-untouched` -- a `#+SPEC:` path declared in a record has not been touched in the current git working tree/index. A nudge, not a gate; it cannot infer omitted specs that were never declared.
 - `spec-value-malformed` -- a `#+SPEC:` value is not a bare `[[proj:PATH]]` link: a plain path, the labelled `[[proj:PATH][label]]` form, or a path that is absolute, escapes the repo root (`..`), or is whitespace-padded.
 - `spec-path-dangling` -- a `#+SPEC:` link in TASKS.org points at a path that does not resolve on disk (file or folder).

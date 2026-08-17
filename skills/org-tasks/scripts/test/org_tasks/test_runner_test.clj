@@ -1,5 +1,7 @@
 (ns org-tasks.test-runner-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [babashka.process :as process]
+            [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [org-tasks.test-runner :as runner]
             [org-tasks.test-runner-serial-fixture]
             [org-tasks.test-runner-unsafe-fixture])
@@ -7,6 +9,22 @@
 
 (defn- assert-serial-global-var-mutations! [ns-sym]
   (#'runner/assert-serial-global-var-mutations! (find-ns ns-sym)))
+
+(defn- run-test-runner [& args]
+  @(process/process (into ["bb" "test-clojure"] args)
+                    {:out :string :err :string}))
+
+(deftest explicit-namespace-arguments-are-validated-before-loading
+  (testing "a discovered namespace is an explicit whitelist"
+    (let [proc (run-test-runner "org-tasks.doctor-test")]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (str/includes? (:out proc) "Testing org-tasks.doctor-test"))
+      (is (not (str/includes? (:out proc) "Testing org-tasks.root-test")))))
+  (doseq [arg ["--not-a-test-namespace" "org-tasks.unknown-test"]]
+    (let [proc (run-test-runner arg)]
+      (is (= 1 (:exit proc)) (:err proc))
+      (is (str/includes? (:err proc) "Usage: bb test [namespace ...]"))
+      (is (not (str/includes? (:err proc) "Could not locate"))))))
 
 (deftest serial-and-local-mutation-fixture-is-accepted
   (is (nil? (assert-serial-global-var-mutations!

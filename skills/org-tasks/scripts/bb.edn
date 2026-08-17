@@ -1,0 +1,10 @@
+{:tasks
+ {:requires [[babashka.fs :as fs]
+             [babashka.process :as process]]
+  test {:doc "Run the repository-root test task from this scripts directory"
+        :task (let [root (str (fs/canonicalize (fs/path "../../..")))]
+                (process/check
+                 (process/process
+                  (into ["bb" "--config" (str (fs/path root "bb.edn")) "--deps-root" root "test"]
+                        *command-line-args*)
+                  {:inherit true :dir root})))}}}

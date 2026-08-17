@@ -15,6 +15,7 @@
     :selected-not-found
     :waiting-without-blocker
     :closed-without-timestamp
+    :done-with-unchecked-criteria
     :stale-parent-status
     :invalid-task-blocker
     :non-uuid-v4-id
@@ -565,6 +566,13 @@
                     "run `ot select --clear-stale` to repair it")
       :location (cond-> {} selected-source-path (assoc :file selected-source-path))}]))
 
+(defn- unchecked-criteria-count [task]
+  (count
+   (keep (fn [line]
+           (when (re-matches #"^- \[ \] (.+)$" line)
+             line))
+         (str/split-lines (or (:description task) "")))))
+
 (defn- check-task [by-id task]
   (vec
    (concat
@@ -587,6 +595,14 @@
                       " task has no CLOSED: timestamp cache. The next "
                       "tooling-driven status change will repair it.")
         :location (location-for task)}])
+    (when (= "DONE" (:status task))
+      (let [unchecked (unchecked-criteria-count task)]
+        (when (pos? unchecked)
+          [{:code :done-with-unchecked-criteria
+            :severity :warn
+            :message (str "DONE task " (:summary task) " has " unchecked
+                          " unchecked " (if (= unchecked 1) "criterion" "criteria"))
+            :location (location-for task)}])))
     (when (= "TODO" (:status task))
       (let [statuses (child-status-set task)
             relevant (filter #(or (contains? active-child-statuses %)
@@ -727,7 +743,8 @@
 
 (def ^:private finding-order
   [:duplicate-id :selected-not-found :broken-import :invalid-task-blocker
-   :waiting-without-blocker :closed-without-timestamp :stale-parent-status
+   :waiting-without-blocker :closed-without-timestamp :done-with-unchecked-criteria
+   :stale-parent-status
    :non-uuid-v4-id :patterned-sibling-ids :import-child-not-saveable
    :missing-link-template :misordered-link-template
    :missing-local-setupfile :misordered-setupfile

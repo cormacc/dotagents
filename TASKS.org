@@ -181,40 +181,6 @@ It would be nice to do a bootstrap check on initial skill activation...
 - if babashka not found in path, offer to install it via an appropriate method
 - if ot not found in path, offer to install it also (maybe using bbin?)
 
-** TODO [#D] Pin OT_TEST_PARALLELISM in CI if parallel test timing proves tight :skill:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: 6fcafd18-40d8-4247-9c66-3f89c9495632
-:CREATED: [2026-07-31 Fri 09:53]
-:END:
-:LOGBOOK:
-- Created [2026-07-31 Fri 09:53]
-:END:
-The parallel test runner sizes its pool from `Runtime/availableProcessors`, which over-reports inside a cgroup-limited CI container — the host sees all cores while the container is throttled, so wall-clock-bound tests could flake in CI even though they are stable on the dev machine.
-
-Deferred from 2fe1ce2a (see [[file:design/log/2026-07-30-optimise-test-build.org][Optimise test build]]): no flake was reproducible locally at either `OT_TEST_PARALLELISM=2` or `=60` on a 20-thread host, so this is speculative until CI shows it.
-
-- Only act if CI actually demonstrates timing flakiness
-- Pin `OT_TEST_PARALLELISM` to the container CPU limit in the CI invocation
-
-** TODO org-tasks: bb test runner should validate its arguments and explain itself :tooling:
-:PROPERTIES:
-:CUSTOM_ID: 8fcbb2fb-30bd-4fb9-aa54-95b4a315b91a
-:CREATED: [2026-08-07 Fri 00:41]
-:END:
-:LOGBOOK:
-- Created [2026-08-07 Fri 00:41]
-:END:
-The bb test runner accepts only positional namespace symbols and rejects nothing: `bb test --var X` fails with "Could not locate __var.bb ... on classpath" instead of a usage error, so a mistyped selector looks like a classpath problem. Running it from skills/herdr-orch/scripts/ likewise fails with "test (Is a directory)" rather than a useful message.
-
-The second gotcha is currently worked around in prose: it is restated in scripts/README.md, in the herdr-orch skill, and was repeated in four separate subagent assignments this session. A usage error in the runner deletes all of those.
-
-Acceptance:
-- The runner validates positional arguments and prints usage on an unrecognised one.
-- Invocation from a subdirectory either works or fails with an actionable message naming the repository root.
-- The prose warnings are removed once the runner explains itself.
-
-Origin: reported independently by two subagents as a process candidate, 2026-08-06.
-
 ** TODO [#C] AGENTS.md: state that repo-root =scripts/= is Babashka-first, existing members predate the rule
 :PROPERTIES:
 :CUSTOM_ID: 511e335b-9c05-45c9-87da-09df1f48d827
@@ -576,44 +542,6 @@ Origin:
 Evidence:
 A reviewer subagent's preliminary rebase validation repeated a delimiter error in a complex bb -e form once per locale, then initially double-escaped a Clojure regex literal so re-matches failed. The current Clojure skill already warns that multi-line bb -e is fragile, but does not require a one-input smoke test before looping or explicit positive/negative regex examples.
 
-** TODO Review how ot CLI surfaces archived tasks :skill:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: 4c344404-66e2-48fb-b907-544ec41a730f
-:CREATED: [2026-08-06 Thu 13:03]
-:END:
-:LOGBOOK:
-- Created [2026-08-06 Thu 13:03]
-:END:
-`ot show <id>` resolves only the active graph, while archived verification currently requires `ot scan --scope archived`; the two read surfaces return different shapes and the distinction was previously undocumented. Review whether `show` should resolve archived IDs, accept an explicit scope, or remain active-only with a dedicated archive inspection command, then align read-command semantics and errors.
-
-Origin:
-- cwd: /Users/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-06 Thu 13:03]
-- sender: agent
-
-Evidence:
-After `ot archive b3fcc5d9-141f-4589-a2a0-d7a95985092a --yes`, `ot show b3fcc5d9-141f-4589-a2a0-d7a95985092a --format json` returned `unknown-task`; `ot scan --scope archived --format json` found the archived row. Source confirms `show-cmd` loads the active context while `unarchive` resolves `TASKS.archive.org` directly.
-
-** TODO org-tasks: resolve relative --root from caller cwd :skill:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: 9e713d9a-0e1f-4f8e-94b9-d6b99996fcce
-:CREATED: [2026-08-06 Thu 15:18]
-:END:
-:LOGBOOK:
-- Created [2026-08-06 Thu 15:18]
-:END:
-Make the org-tasks script entrypoint preserve the caller working directory when resolving relative --root values, or resolve --root before changing directories. Running the in-skill ot executable with --root . currently targets the scripts directory rather than the caller, contrary to the documented explicit-root behavior.
-
-Origin:
-- cwd: /home/cormacc/nmd/infra/playbooks
-- git: git@git.nmd.ie:infrastructure/playbooks @ master
-- timestamp: [2026-08-06 Thu 15:18]
-- sender: agent
-
-Evidence:
-/home/cormacc/.agents/skills/org-tasks/scripts/ot --root . init reported projectRoot /home/cormacc/dotfiles/agents/skills/org-tasks/scripts and scaffolded TASKS files there; an absolute --root worked correctly.
-
 ** TODO Re-verify state claims before restating them in a summary :agents_md:
 :PROPERTIES:
 :CUSTOM_ID: aaea2185-f6be-4260-8a9c-207b3a834866
@@ -726,29 +654,6 @@ Origin:
 
 Evidence:
 `glab runner list --all --output json` exited non-zero with `Unknown flag: --all`. Live `glab runner list --help` documents `-i --instance  List all runners available to the user (instance scope).` Direct controlled API probes were needed to confirm runner deletion because the subsequent instance-list probe returned zero rows, including no known-present runner 10.
-
-** TODO org-tasks: ot doctor should flag a DONE task with unchecked criteria :skill:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: 67d5e7af-498b-4562-88bc-45f2c403489b
-:CREATED: [2026-08-14 Fri 13:33]
-:END:
-:LOGBOOK:
-- Created [2026-08-14 Fri 13:33]
-:END:
-`ot doctor` has no check for a task marked `DONE` whose acceptance criteria are still unchecked, so a record can assert completion while recording none of it.
-
-Observed 2026-08-13 in `design/log/2026-08-13-herdr-orch-worktree-backed-fan-out.org`: plan task 2538b80c sat `DONE` for a day with all six of its `- [ ]` criteria unticked. Its evidence existed only in a closed child's published findings, which die with the pane. Three separate reviews of that record -- two code reviews and one direction review -- did not notice, and neither did `ot doctor` at 0 errors. An audit of the other six plan tasks in the same record found every one fully ticked, so this was a single lapsed round rather than a convention nobody follows.
-
-Desired outcome: a warn-level finding naming the task and the count of unchecked criteria when a task is `DONE` (and probably `CANCELLED` too, where the reasoning differs). Warn rather than error: a criterion legitimately reversed at closure is recorded as reversed, and `org-plan` § Closure-time refresh and prune already expects prose beside a box rather than only a tick, so the check should nudge rather than block. Consider also the inverse as a separate question -- a `TODO` task with every criterion ticked -- which is a weaker signal and may not be worth reporting.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-13 Thu 21:05]
-- sender: agent
-
-Evidence:
-Found by hand-auditing checkbox state per plan task while annotating a superseded task, not by any tool. The gap is that closure is asserted by status while completion is recorded in checkboxes, and nothing reconciles the two.
 
 ** TODO self-improvement: persist AGENTS metrics comparison script :skill:self_improvement:
 :PROPERTIES:

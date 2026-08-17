@@ -4,7 +4,7 @@
 
 ## Run
 
-From the repository root (the repo `bb.edn` provides the `test` task; `bb test` fails from `scripts/`):
+From the repository root or this scripts directory. The local `bb.edn` delegates `bb test` to the repository-root test task:
 
 ```sh
 ./skills/herdr-orch/scripts/oh --help          # global command list

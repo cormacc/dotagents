@@ -28,7 +28,7 @@ bbin install ./. --local/root . --as ot
 bb run ot --help
 ```
 
-The local shim resolves the dotagents repo root from its own path and invokes `bb --config <repo>/bb.edn --deps-root <repo> -m org-tasks.cli`, so it works regardless of the caller's working directory. Its fallback `-Sdeps` (used when no repo `bb.edn` is present, e.g. standalone skill installs) must stay in sync with `bb.edn` -- `bb.edn` is the source of truth.
+The local shim resolves the dotagents repo root from its own path and invokes `bb --config <repo>/bb.edn --deps-root <repo> -m org-tasks.cli`, so it works regardless of the caller's working directory. All launcher forms preserve that directory. Relative `--root` values therefore resolve from the caller. Its fallback `-Sdeps` (used when no repo `bb.edn` is present, e.g. standalone skill installs) must stay in sync with `bb.edn` -- `bb.edn` is the source of truth.
 
 ## Usage
 
@@ -37,11 +37,14 @@ Run `ot --help` for the command index and `ot <command> --help` for per-command 
 ## Testing
 
 ```sh
-# from the dotagents repository root (there is no bb.edn under scripts/)
+# from the dotagents repository root or this scripts directory
 bb test
+
+# from the repository root, run one discovered Clojure test namespace
+bb test-clojure org-tasks.doctor-test
 ```
 
-Discovers every `*_test.clj` namespace under `skills/org-tasks/scripts/test/` and runs them via `clojure.test`. Exit code is 0 on success, 1 on any failure. Round-trip fixtures under `test/fixtures/round-trip/` must survive parse→serialize byte-identically.
+The local `bb.edn` delegates `bb test` to the repository-root task. The repository-root `bb test-clojure` command accepts only discovered `*_test.clj` namespaces. It rejects option-like and unknown arguments before namespace loading. Exit code is 0 on success, 1 on any test failure. Round-trip fixtures under `test/fixtures/round-trip/` must survive parse→serialize byte-identically.
 
 ## Documentation map
 

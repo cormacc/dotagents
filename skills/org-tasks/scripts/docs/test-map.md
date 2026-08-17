@@ -37,7 +37,7 @@ Lives under `skills/org-tasks/scripts/test/fixtures/round-trip/`. Each fixture i
 
 ## Test harness
 
-- `bb test` invokes `org-tasks.test-runner/run` which uses `clojure.test` and discovers every namespace under `scripts/test/`.
+- `bb test` invokes `org-tasks.test-runner/run` which uses `clojure.test` and discovers every namespace under `scripts/test/`. An explicit namespace argument must be in that discovered set. Option-like and unknown arguments fail before namespace loading.
 - A namespace opts in to parallel deftest execution with `^{:parallel-tests true}` ns metadata (currently only `herdr-orch.cli-test`, whose fixture spawns real `subagent` subprocesses). Every other namespace still runs exactly as before. Before pooling, the runner source-parses opted-in namespaces with Babashka's bundled Edamame reader and rejects an untagged `deftest` containing `with-redefs`, `with-redefs-fn`, or `alter-var-root`. Within an opted-in namespace, vars marked `^:serial` run first, sequentially, before the rest run on a bounded thread pool (default `Runtime/availableProcessors`, override with `OT_TEST_PARALLELISM`).
 - Round-trip tests read fixture content, run `parse-tasks` → `serialize-tasks-preserving-file`, and assert byte equality with the original.
 - Where the TS test directly constructs a `Task` via TS object literal, the Clojure equivalent constructs a `task` map from the same data and asserts serializer output.

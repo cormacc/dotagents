@@ -353,7 +353,7 @@ Restores only an archive-resolved exact UUID or unique prefix. It refuses unknow
 }
 ```
 
-`selected-not-found` is read-only guidance: it names `ot select --clear-stale`, which atomically repairs only an unresolved local pointer. `inline-path-dangling` is an advisory doctor finding for a missing constrained inline file citation in a change-record. Its `location.file` and `location.line` identify the first occurrence of each distinct candidate. Valid or excluded token forms produce no finding.
+`selected-not-found` is read-only guidance: it names `ot select --clear-stale`, which atomically repairs only an unresolved local pointer. `done-with-unchecked-criteria` is a warn-level, read-only finding for each `DONE` task with exact `- [ ] criterion` lines. Its message includes the task summary and unchecked-criterion count. `CANCELLED` and open tasks do not produce this finding. `inline-path-dangling` is an advisory doctor finding for a missing constrained inline file citation in a change-record. Its `location.file` and `location.line` identify the first occurrence of each distinct candidate. Valid or excluded token forms produce no finding.
 
 ### `ot section <file> [<section>]`
 

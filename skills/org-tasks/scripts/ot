@@ -17,23 +17,23 @@ while [ -L "$script_path" ]; do
   link_target="$(readlink "$script_path")"
   case "$link_target" in
     /*) script_path="$link_target" ;;
-    *)  script_path="$(cd "$(dirname "$script_path")" && pwd)/$link_target" ;;
+    *)  script_path="$(cd -P "$(dirname "$script_path")" && pwd)/$link_target" ;;
   esac
 done
 
-script_dir="$(cd "$(dirname "$script_path")" && pwd)"
+script_dir="$(cd -P "$(dirname "$script_path")" && pwd)"
 # scripts/ → org-tasks/ → skills/ → repo root when running from a full
 # dotagents checkout. Home Manager / standalone skill installs may only
 # expose the skill subtree under ~/.agents, so fall back to a source-classpath
 # invocation in that case.
-repo_root="$(cd "$script_dir/../../.." && pwd)"
+repo_root="$(cd -P "$script_dir/../../.." && pwd)"
 
 if [ -f "$repo_root/bb.edn" ]; then
   exec bb --config "$repo_root/bb.edn" --deps-root "$repo_root" \
           -m org-tasks.cli -- "$@"
 else
-  cd "$script_dir"
   # Keep fallback deps in sync with ../../../bb.edn, the source of truth.
-  exec bb -Sdeps '{:paths ["src"] :deps {io.github.paintparty/bling {:mvn/version "0.10.0"} de.timokramer/charm.clj {:mvn/version "0.2.71"} no.cjohansen/nexus {:mvn/version "2026.06.4"}}}' \
+  exec bb --deps-root "$script_dir" \
+          -Sdeps '{:paths ["src"] :deps {io.github.paintparty/bling {:mvn/version "0.10.0"} de.timokramer/charm.clj {:mvn/version "0.2.71"} no.cjohansen/nexus {:mvn/version "2026.06.4"}}}' \
           -m org-tasks.cli -- "$@"
 fi

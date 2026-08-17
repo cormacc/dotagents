@@ -15,7 +15,7 @@ Rules and workflows for agents modifying the `ot` codebase. For *using* `ot` aga
 
 ## Workflows
 
-- **Run every `bb` task from the repo root** (`bb test`, `bb run ot`, and so on): the only `bb.edn` lives at `<dotagents-root>`; there is none under `scripts/`. To exercise `ot` against a scratch project, prefer `ot --root <dir>` over `cd`-ing into it.
+- **Run `bb run ot` from the repo root.** `bb test` from either skill's `scripts/` directory delegates to the repository-root test task. To exercise `ot` against a scratch project, prefer `ot --root <dir>` over `cd`-ing into it.
 - **Adding a command**: handler in the right `commands/*` family namespace → entry in `commands/registry.clj` (spec, `:args->opts`, `:summary`, optional `:tui-key`) → contract section in `docs/contract.md` → family test in `test/org_tasks/commands/`. Dispatch, `ot --help`, per-command `--help`, `dispatch-coerce`, and TUI exposure are all derived from the registry -- no other wiring.
 - **Adding an option**: extend the command's spec in the registry. Coercion and help are derived. Enum options use the `enum-opt` helper.
 - **Tree traversal**: use `org-tasks.tree` (children + import-children). `insert` intentionally walks parsed-file children only (`{:imports? false}`).

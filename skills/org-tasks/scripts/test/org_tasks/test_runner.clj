@@ -50,6 +50,31 @@
                    sort)]
     nses))
 
+(defn- invalid-explicit-namespace
+  "Return an error message when `arg` is not a discovered test namespace."
+  [discovered arg]
+  (cond
+    (str/starts-with? arg "-")
+    (str "option-like test namespace argument: " arg)
+
+    (not (contains? discovered (symbol arg)))
+    (str "unknown test namespace: " arg)))
+
+(defn- validate-explicit-namespaces!
+  "Return explicit test namespace symbols after validation against discovery."
+  [args]
+  (let [discovered (set (discover-test-namespaces))]
+    (doseq [arg args]
+      (when-let [message (invalid-explicit-namespace discovered arg)]
+        (throw (ex-info message {:argument arg}))))
+    (mapv symbol args)))
+
+(defn- usage-error! [error]
+  (binding [*out* *err*]
+    (println "test-runner:" (.getMessage error))
+    (println "Usage: bb test [namespace ...]"))
+  (System/exit 1))
+
 (defn- pool-size
   "Bounded pool size for the parallel batch: strictly positive env override
   via OT_TEST_PARALLELISM, else `Runtime/availableProcessors`. Same
@@ -199,8 +224,12 @@
   Args (parsed positionally):
     [ns-symbol ...] - explicit namespace whitelist (optional)."
   [& args]
-  (let [explicit (seq (map symbol args))
-        nses    (or explicit (discover-test-namespaces))]
+  (let [nses (if (seq args)
+               (try
+                 (validate-explicit-namespaces! args)
+                 (catch clojure.lang.ExceptionInfo error
+                   (usage-error! error)))
+               (discover-test-namespaces))]
     (if (empty? nses)
       (do (binding [*out* *err*]
             (println "test-runner: no test namespaces found"))

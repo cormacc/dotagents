@@ -749,3 +749,47 @@
     (is (= 1 (count-of findings :inline-path-dangling)))
     (is (= :warn (:severity f)))
     (is (= {:file "/repo/design/log/work.org" :line 2} (:location f)))))
+
+(deftest done-with-unchecked-criteria-is-reported-with-exact-syntax-only
+  (let [content (str "* DONE Needs attention\n"
+                     "CLOSED: [2026-08-17 Mon 18:00]\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 6593c6fc-d284-4f9e-b6b5-4c159345cd20\n"
+                     ":END:\n"
+                     "- [ ] First unchecked criterion\n"
+                     "- [ ] Second unchecked criterion\n"
+                     " - [ ] Indented criterion does not count\n"
+                     "- [ ] \n"
+                     "\n"
+                     "* DONE Complete\n"
+                     "CLOSED: [2026-08-17 Mon 18:00]\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 9e2b9765-dd9d-4748-aed3-c3e3af0ea5e4\n"
+                     ":END:\n"
+                     "- [X] Completed criterion\n"
+                     "\n"
+                     "* CANCELLED Cancelled work\n"
+                     "CLOSED: [2026-08-17 Mon 18:00]\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: 1c5f0b32-9b62-4f8e-9b8c-3a6b2c4d0001\n"
+                     ":END:\n"
+                     "- [ ] Unchecked cancelled criterion\n"
+                     "\n"
+                     "* TODO Open work\n"
+                     ":PROPERTIES:\n"
+                     ":CUSTOM_ID: bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb\n"
+                     ":END:\n"
+                     "- [X] Completed open criterion\n")
+        {:keys [tasks]} (parser/parse-tasks content {:source-path "/repo/TASKS.org"})
+        findings (doctor/run-doctor {:tasks tasks :selected-id nil})
+        matches (filter #(= :done-with-unchecked-criteria (:code %)) findings)
+        finding (first matches)
+        report (doctor/format-findings-report findings)]
+    (is (= 1 (count matches)))
+    (when finding
+      (is (= :warn (:severity finding)))
+      (is (= {:file "/repo/TASKS.org" :line 1 :heading "Needs attention"}
+             (:location finding)))
+      (is (str/includes? (:message finding) "Needs attention"))
+      (is (str/includes? (:message finding) "2 unchecked criteria")))
+    (is (str/includes? report "done-with-unchecked-criteria"))))

@@ -87,7 +87,7 @@ A full =bb test= should create no entries under the repository's live =.tmp/herd
 
 Test runs create many fake-Herdr ledger directories under temporary fixture roots. A cross-project audit must discover real ledgers only beneath known assignment roots, or explicitly exclude fake-Herdr/test-fixture paths. Never use an unscoped filesystem or =/tmp= search for directories named =ledger=.
 
-=bb test= runs from the repository root. There is no =bb.edn= under =scripts/=.
+=bb test= runs the repository-root task. Thin =scripts/bb.edn= delegates support invocation from either skill's scripts directory.
 
 ** Reflexive changes
 

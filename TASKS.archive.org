@@ -3081,3 +3081,20 @@ Out of scope:
 - New orchestration features such as usage-limit fallback, persona-less agents, unmanaged harnesses, and session forking.
 - The Herdr plugin wrapper itself.
 - Cross-skill Babashka and `ot` installation design.
+
+** DONE org-tasks housekeeping 260817 :skill:org_tasks:
+CLOSED: [2026-08-17 Mon 18:23]
+:PROPERTIES:
+:CUSTOM_ID: b581bc54-28bd-486e-b40e-b3d55b199f7c
+:CREATED: [2026-08-17 Mon 16:14]
+:STARTED: [2026-08-17 Mon 17:02]
+:ARCHIVED: [2026-08-17 Mon 18:23]
+:ARCHIVE_OLPATH: Housekeeping
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 16:14]
+- State "STARTED" from "TODO" [2026-08-17 Mon 17:02]
+- State "DONE" from "STARTED" [2026-08-17 Mon 18:23]
+:END:
+#+IMPORT: [[plan:2026-08-17-org-tasks-housekeeping-260817.org]]
+Small org-tasks maintenance items grouped on 2026-08-17. Larger changes remain standalone.
