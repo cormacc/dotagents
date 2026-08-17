@@ -11,16 +11,37 @@
 #+ARCHIVE: TASKS.archive.org::* From %s
 
 
-* Table of Contents                                       :TOC_1_gh:noexport:
+* Table of Contents                                       :TOC_2_gh:noexport:
 - [[#explorations][Explorations]]
+  - [[#evaluate-jus][Evaluate jus]]
+  - [[#review-backlogmd-for-org-tasks-inspiration][Review backlog.md for org-tasks inspiration]]
+  - [[#herdr-orch-llm-usage-limit-fallback][herdr-orch: LLM usage limit fallback]]
+  - [[#determine-whether-pi-allows-automatic-anthropic-prompt-caching][Determine whether pi allows automatic anthropic prompt caching]]
+  - [[#evaluate-rpiv-pi-workflow-setup][Evaluate rpiv-pi workflow setup]]
+  - [[#codebase-intelligence-tool-evaluation][Codebase intelligence tool evaluation]]
+  - [[#explore-agent-memory-options][Explore agent memory options]]
 - [[#improvements][Improvements]]
+  - [[#ot-move-tuipi-overlay-exposure-and---before--after-ordering][ot move: TUI/pi-overlay exposure and --before/--after ordering]]
+  - [[#org-tasks-spec-checks-warn-forever-once-a-records-change-is-committed][org-tasks: spec checks warn forever once a record's change is committed]]
+  - [[#herdr-orch-allow-persona-less-subagents][herdr-orch: allow persona-less subagents]]
+  - [[#herdr-plugin-wrapper-for-herdr-orch][herdr plugin wrapper for herdr-orch]]
+  - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
+  - [[#traits-re-probe-every-fragment-against-synthetic-non-decaying-scenarios][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
+  - [[#herdr-orch-an-invalid-capture-records-a-json-encoding-error-instead-of-its-reason][herdr-orch: an invalid capture records a JSON encoding error instead of its reason]]
 - [[#fixes][Fixes]]
 - [[#chores][Chores]]
+  - [[#started-b-simplify-herdr-orch-skill-based-on-upstream-changes][STARTED [#B] Simplify herdr-orch skill based on upstream changes]]
 - [[#agent-feedback][Agent feedback]]
+  - [[#skill-vendoring-improvements][Skill vendoring improvements]]
+  - [[#herdr-orch-support-unmanaged-harness-kinds-herdr-cannot-start-or-detect][herdr-orch: support unmanaged harness kinds herdr cannot start or detect]]
+  - [[#org-tasks-ot-create---parent-cannot-target-a-change-record-plan-task][org-tasks: ot create --parent cannot target a change-record plan task]]
+  - [[#self-improvement-persist-agents-metrics-comparison-script][self-improvement: persist AGENTS metrics comparison script]]
+  - [[#correct-known-agent-guidance-defects][Correct known agent guidance defects]]
+  - [[#probe-the-babashka-default-nrepl-port-before-server-startup][Probe the Babashka default nREPL port before server startup]]
 
 * Explorations
 
-** TODO Evaluate jus
+** TODO [#D] Evaluate jus
 :PROPERTIES:
 :CUSTOM_ID: a5156b00-08cc-4ab1-b365-ec183af96f40
 :CREATED: [2026-08-13 Thu 17:57]
@@ -32,7 +53,7 @@ This looks like a very nice exploratory/learning tool for Clojure.
 Not sure it has a role here, but just catching the reference for now as an aide memoire....
 https://github.com/paintparty/jus
 
-** TODO [#B] Review backlog.md for org-tasks inspiration :skill:org_tasks:org_plan:
+** TODO [#D] Review backlog.md for org-tasks inspiration :skill:org_tasks:org_plan:
 :PROPERTIES:
 :CUSTOM_ID: 19920e17-b7d0-4272-9de2-2a4353271fa9
 :CREATED: [2026-05-22 Fri 00:06]
@@ -42,7 +63,7 @@ https://github.com/paintparty/jus
 :END:
 
 
-** TODO herdr-orch: LLM usage limit fallback :skill:herdr_orch:
+** TODO [#B] herdr-orch: LLM usage limit fallback :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: c3ae685d-bb3c-4329-b233-cfa0604075bc
 :CREATED: [2026-08-11 Tue 17:54]
@@ -53,19 +74,7 @@ https://github.com/paintparty/jus
 It would be useful for sessions to fallback  after hitting session limits (anthropic -> openai -> local, openai -> anthropic -> local)
 Take a look at https://github.com/luongnv89/ccl, which implements a solution for pi, claude and codex. Evaluate whether we can piggyback on this without breaking our model aliasing etc.
 
-** TODO Consider leveraging pi /fork for subagents
-:PROPERTIES:
-:CUSTOM_ID: 84653126-cd7e-412a-9761-d43eaad7f97f
-:CREATED: [2026-08-07 Fri 10:06]
-:END:
-:LOGBOOK:
-- Created [2026-08-07 Fri 10:06]
-:END:
-Depending on scope of use -- using fork rather than spawn might be a good idea for some subagents -- let them inherit the orchestrator context without bloating it.
-This could work via an optional `:fork :true` in the subagent header (default `:fork :false`)
-This should be straightforward using pi. Maybe also using claude/codex? Investigate...
-
-** TODO Determine whether pi allows automatic anthropic prompt caching :pi:
+** TODO [#A] Determine whether pi allows automatic anthropic prompt caching :pi:
 :PROPERTIES:
 :CUSTOM_ID: dfa273c4-1d43-484f-a515-b6666a64fad7
 :CREATED: [2026-07-29 Wed 13:32]
@@ -109,17 +118,11 @@ https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without poll
 
 
 
-** TODO [#D] Evaluate pi-lsp over home-rolled lsp :pi:
-:PROPERTIES:
-:CUSTOM_ID: 0ed56048-9f53-44b4-8a5a-2dbc858e6f04
-:END:
-https://pi.dev/packages/@dreki-gg/pi-lsp
-
 ** TODO [#C] Codebase intelligence tool evaluation :pi:
 :PROPERTIES:
 :CUSTOM_ID: 6d22d6ed-1fd1-46cb-965f-12d355612b53
 :END:
-
+Evaluate codebase-intelligence tools for Pi. Start with pi-lsp: https://pi.dev/packages/@dreki-gg/pi-lsp
 
 ** TODO [#C] Explore agent memory options :org:
 :PROPERTIES:
@@ -140,10 +143,7 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 - Created [2026-05-21 Thu 16:01]
 :END:
 #+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
-
-* Improvements
-
-** TODO [#D] Review self-improvement skill w.r.t. org-memory protocol :org:
+*** TODO [#C] Review self-improvement skill w.r.t. org-memory protocol :org:
 :PROPERTIES:
 :CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
 :CREATED: [2026-05-02 Sat 12:22]
@@ -158,8 +158,9 @@ Re-examine the self-improvement skill against the org-memory protocol (org-tasks
 - whether the skill should integrate with TASKS.org via spawned TODOs vs remain orthogonal
 - whether anything in the dev-agent-backlog HTML summary (design/log/2026-05-01-dev-agent-backlog-review-summary.html) should be borrowed for the self-improvement skill specifically
 
+* Improvements
 
-** TODO ot move: TUI/pi-overlay exposure and --before/--after ordering :skill:org_tasks:
+** TODO [#B] ot move: TUI/pi-overlay exposure and --before/--after ordering :skill:org_tasks:
 :PROPERTIES:
 :CUSTOM_ID: da7350ac-60c6-4336-9b7e-e0cbce51658c
 :CREATED: [2026-07-28 Tue 17:50]
@@ -169,40 +170,7 @@ Re-examine the self-improvement skill against the org-memory protocol (org-tasks
 :END:
 Follow-ups from the initial `ot move` implementation (task 2a2f5aed): expose move in the ot TUI and pi tasks overlay (boundary.md notes the pending parity — needs a key map entry plus a destination picker), and add `--before`/`--after` ordering control so a move is not restricted to append-as-last-child / last-in-section semantics.
 
-** TODO org-tasks, herdr-orch: Automate installation of babashka / ot :skill:org_tasks:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: ca95bb66-6c5c-4037-97cd-75274010b214
-:CREATED: [2026-07-29 Wed 13:03]
-:END:
-:LOGBOOK:
-- Created [2026-07-29 Wed 13:03]
-:END:
-Currently we assume babashka is available, and the skill calls the ot cli tool using absolute path.
-It would be nice to do a bootstrap check on initial skill activation...
-- if babashka not found in path, offer to install it via an appropriate method
-- if ot not found in path, offer to install it also (maybe using bbin?)
-
-** TODO [#C] AGENTS.md: state that repo-root =scripts/= is Babashka-first, existing members predate the rule
-:PROPERTIES:
-:CUSTOM_ID: 511e335b-9c05-45c9-87da-09df1f48d827
-:CREATED: [2026-08-11 Tue 12:12]
-:END:
-:LOGBOOK:
-- Created [2026-08-11 Tue 12:12]
-:END:
-=AGENTS.md= says to prefer Babashka for repository-local automation. When this was filed, every pre-existing file in repo-root =scripts/= was =.sh= or =.ts=, so a delegated worker building =scripts/run-trait-gate.bb= followed the on-disk precedent first and wrote Bash, and had to be corrected. Confirmed with the user 2026-08-11: the existing scripts predate the rule.
-
-The precedent on disk therefore contradicts the written rule, and precedent wins by default for anyone who looks at the directory before reading =AGENTS.md=.
-
-*EDIT* [2026-08-11] Mostly self-resolved: retiring =check-metadata.ts=, =check-extensions.sh=, =check-hermes.sh= and =check-links.ts= left =scripts/= holding =check.sh= alongside two =.bb= files, so Babashka is now the majority and the misleading precedent is largely gone. What remains is worth one line so it does not drift back; consider closing this if that line lands elsewhere first.
-
-Acceptance criteria:
-- =AGENTS.md= states that repo-root =scripts/= is Babashka-first for new work, and that the existing =.sh= / =.ts= members predate the rule and are not a precedent to follow.
-- No existing script is rewritten as part of this task. Churn for consistency's sake is not the goal; the goal is that the next new script is Babashka without needing a correction.
-- If a future script genuinely needs Bash or TypeScript (a thin wrapper, or a Node-ecosystem check), the rule names that exemption rather than being silently violated.
-Must not: rewrite =check.sh=, the sole remaining non-Babashka member; add a lint that fails on existing members.
-
-** TODO [#C] org-tasks: spec checks warn forever once a record's change is committed
+** TODO [#A] org-tasks: spec checks warn forever once a record's change is committed
 :PROPERTIES:
 :CUSTOM_ID: 2b032279-af18-4f98-9bb7-402c519a6f0f
 :CREATED: [2026-08-11 Tue 16:19]
@@ -221,7 +189,7 @@ Acceptance criteria:
 - A closed, committed record with correctly updated specs reports no findings; verify with this repository's own trait-composition record.
 Must not: silence the check for open records; infer specs that were never declared.
 
-** TODO herdr-orch: allow persona-less subagents :skill:herdr_orch:
+** TODO [#B] herdr-orch: allow persona-less subagents :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: bf34e806-3505-4280-9ce0-85602a0c6bd0
 :CREATED: [2026-08-12 Wed 23:12]
@@ -242,8 +210,19 @@ Open questions to settle before implementing:
 - Does =--print-prompt= still make sense as the inspection route.
 
 Verified [2026-08-12 Wed] against cli.clj at 6a89b0f plus the housekeeping commits: the roster failure above is real, all seven packaged personas declare =model:=, and no inline-persona flag exists.
+*** TODO [#B] Consider leveraging pi /fork for subagents
+:PROPERTIES:
+:CUSTOM_ID: 84653126-cd7e-412a-9761-d43eaad7f97f
+:CREATED: [2026-08-07 Fri 10:06]
+:END:
+:LOGBOOK:
+- Created [2026-08-07 Fri 10:06]
+:END:
+Depending on scope of use -- using fork rather than spawn might be a good idea for some subagents -- let them inherit the orchestrator context without bloating it.
+This could work via an optional `:fork :true` in the subagent header (default `:fork :false`)
+This should be straightforward using pi. Maybe also using claude/codex? Investigate...
 
-** TODO herdr plugin wrapper for herdr-orch :herdr_orch:
+** TODO [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 9f667467-a23c-497b-afe8-54afab3b0e5b
 :CREATED: [2026-08-16 Sun 11:02]
@@ -272,7 +251,7 @@ Known constraints and candidate direction:
 - A single source repository can expose separate native package interfaces for Herdr, Pi, and Agent Skills. The Herdr plugin should remain an adapter and distribution surface rather than becoming the canonical implementation.
 - Herdr plugin v1 supports terminal panes, actions, event hooks, runtime context, and socket access. It does not provide arbitrary native non-terminal plugin UI. A session tree therefore belongs in a plugin terminal pane.
 
-** TODO Shared babashka bootstrap helper for bb-dependent skills :herdr_orch:org_tasks:
+** TODO [#A] Shared babashka bootstrap helper for bb-dependent skills :herdr_orch:org_tasks:
 :PROPERTIES:
 :CUSTOM_ID: 41ca2ed9-9eff-47e0-b0ca-294e20f6c334
 :CREATED: [2026-08-16 Sun 11:57]
@@ -280,9 +259,9 @@ Known constraints and candidate direction:
 :LOGBOOK:
 - Created [2026-08-16 Sun 11:57]
 :END:
-Design and ship a shared skill-level helper that bootstraps a local Babashka copy when `bb` is absent. Both `org-tasks` (`ot`) and `herdr-orch` (`oh`, `traits`) depend on `bb`, so the helper belongs at skill level, not inside the Herdr plugin. Open design questions: where the helper lives, how both skills consume it, download and checksum policy, PATH placement, and the update story. Raised during planning of the herdr plugin wrapper ([[plan:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]]); that change ships an install hint only.
+Design and ship a shared skill-level helper that bootstraps a local Babashka copy when `bb` is absent. Both `org-tasks` (`ot`) and `herdr-orch` (`oh`, `traits`) depend on `bb`, so the helper belongs at skill level, not inside the Herdr plugin. Open design questions: where the helper lives, how both skills consume it, download and checksum policy, PATH placement, and the update story. Include the `ot` executable in the bootstrap decision: when `ot` is absent, define whether to install it with bbin or invoke the checked-out launcher. The helper must not assume an absolute user-local `ot` path. Raised during planning of the herdr plugin wrapper ([[plan:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]]); that change ships an install hint only.
 
-** TODO [#C] traits: re-probe every fragment against synthetic, non-decaying scenarios
+** TODO [#B] traits: re-probe every fragment against synthetic, non-decaying scenarios
 :PROPERTIES:
 :CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
 :CREATED: [2026-08-11 Tue 12:23]
@@ -302,7 +281,7 @@ Acceptance criteria:
 - Where a probe cannot be made to discriminate, say so and say why, rather than reporting an unexplained negative or quietly dropping the fragment.
 Must not: weaken a recorded condition to make a run agree; reuse a repo-referential subject; treat a passing probe as a precondition for the fragment staying in the store.
 
-** TODO herdr-orch: an invalid capture records a JSON encoding error instead of its reason :herdr_orch:
+** TODO [#B] herdr-orch: an invalid capture records a JSON encoding error instead of its reason :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 492bca01-d8fc-439d-918c-37ab69ad7cca
 :CREATED: [2026-08-16 Sun 22:18]
@@ -325,7 +304,7 @@ Pointer: `capture!` and `record-item-capture!` in `skills/herdr-orch/scripts/src
 
 * Chores
 
-** STARTED [#C] Simplify herdr-orch skill based on upstream changes
+** STARTED [#B] Simplify herdr-orch skill based on upstream changes
 :PROPERTIES:
 :CUSTOM_ID: cf561004-25e4-46ee-aa4a-5e09b8eecff6
 :CREATED: [2026-08-17 Mon 18:33]
@@ -343,7 +322,7 @@ Prune mechanically enforced lifecycle detail from `skills/herdr-orch/SKILL.md`. 
 
 * Agent feedback
 
-** TODO [#B] Skill vendoring improvements :project_convention:
+** TODO [#A] Skill vendoring improvements :project_convention:
 :PROPERTIES:
 :CUSTOM_ID: 98cf369c-83aa-4961-bf8b-2fa3aca8b2f3
 :CREATED: [2026-07-31 Fri 13:17]
@@ -369,7 +348,7 @@ Origin:
 - git: cormacc/dotagents @ main
 - timestamp: [2026-07-31 Fri 13:40]
 - sender: agent
-*** TODO Establish how npx skills can manage repo-committed vendored skills
+*** TODO [#A] Establish how npx skills can manage repo-committed vendored skills
 :PROPERTIES:
 :CUSTOM_ID: 0a6c3fed-9c9f-4b30-b33e-a916868502e0
 :CREATED: [2026-07-31 Fri 13:17]
@@ -387,7 +366,7 @@ Acceptance criteria:
 - Each question answered with the exact command run and its observed output.
 - A recommended target layout for vendored skills that satisfies both constraints, or an explicit statement that no layout satisfies both and what the tradeoff is.
 - Experiments run in a scratch directory, never against this repo or another project.
-*** TODO Stop republishing vendored skills from the published skills/ tree
+*** TODO [#A] Stop republishing vendored skills from the published skills/ tree
 :PROPERTIES:
 :CUSTOM_ID: 3df8b6a2-27d2-4495-ba32-a3bbb38ee303
 :CREATED: [2026-07-31 Fri 13:17]
@@ -404,7 +383,7 @@ Acceptance criteria:
 - Every vendored skill still resolves under `~/.agents/skills` after a Home Manager switch.
 - `skills/README.org`'s hand-maintained inventory is updated to match the new split (the `check-metadata.ts` script that once enforced it was retired 2026-08-11).
 - No vendored skill body is modified.
-*** TODO Adopt skills-lock.json as the provenance record for vendored skills
+*** TODO [#B] Adopt skills-lock.json as the provenance record for vendored skills
 :PROPERTIES:
 :CUSTOM_ID: 2300b750-ad34-479c-bee4-ef27a1e5d67c
 :CREATED: [2026-07-31 Fri 13:17]
@@ -419,7 +398,7 @@ Acceptance criteria:
 - `npx skills update` runs cleanly against the vendored set and touches only skill bodies plus the lockfile.
 - No vendor header is added to any skill managed this way.
 - herdr keeps its existing header, with its exception rationale stated where the convention is documented.
-*** TODO Backfill provenance for dirge, find-skills and skill-creator
+*** TODO [#B] Backfill provenance for dirge, find-skills and skill-creator
 :PROPERTIES:
 :CUSTOM_ID: 87f1a303-a11c-454b-b9f5-ed57c1b5947d
 :CREATED: [2026-07-31 Fri 13:17]
@@ -435,7 +414,7 @@ Acceptance criteria:
 - Each of the three has a lockfile entry naming its real upstream repo, or is reclassified as adopted-and-modified with the divergence recorded.
 - Any body replaced is byte-identical to upstream at time of sync.
 - skills/README.org reflects the outcome per the documentation subtask.
-*** TODO Document the vendoring convention in skills/README.org
+*** TODO [#B] Document the vendoring convention in skills/README.org
 :PROPERTIES:
 :CUSTOM_ID: 5121483a-1f26-47ec-8424-dadc3e3ee497
 :CREATED: [2026-07-31 Fri 13:18]
@@ -451,7 +430,7 @@ Acceptance criteria:
 - The convention states that vendored bodies stay byte-identical so `npx skills update` keeps working, and that local fixes go upstream or to a non-vendored destination.
 - The herdr row is marked as the standing exception (hand-vendored with an in-file header, because upstream ships SKILL.md at repo root), with the condition for retiring the exception.
 - `skills/README.org`'s inventory still lists every skill exactly once, checked by reading it.
-*** TODO find-skills documents npx skills check as read-only, but it updates
+*** TODO [#A] find-skills documents npx skills check as read-only, but it updates
 :PROPERTIES:
 :CUSTOM_ID: 73b47d41-89ee-4a44-9ac2-db463f31ae93
 :CREATED: [2026-07-31 Fri 13:18]
@@ -472,7 +451,7 @@ Acceptance criteria:
 - The wrong read-only claim no longer reaches an agent following the skill.
 - Whatever route is taken, no local edit is left sitting in a lockfile-managed vendored body.
 
-** TODO herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
+** TODO [#B] herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 22f68a11-eeef-43e9-81d3-79341842ca84
 :CREATED: [2026-08-04 Tue 19:44]
@@ -510,47 +489,7 @@ Origin:
 Evidence:
 `herdr agent start --help` enumerates: pi, claude, codex, gemini, cursor, devin, agy, cline, omp, mastracode, opencode, copilot, kimi, kiro, droid, amp, grok, hermes, kilo, qodercli, maki. dirge is absent but does expose `--model`, so only the launch/detect half is missing. herdr has no local extension point: no agent definitions in config.toml, no plugins subcommand, and no manifest file on disk.
 
-** TODO clojure skill: make ad-hoc validator and regex checks fail fast :skill:clojure:
-:PROPERTIES:
-:CUSTOM_ID: 94cc1d46-63cf-464a-9107-ac21993bfbab
-:CREATED: [2026-08-05 Wed 11:26]
-:END:
-:LOGBOOK:
-- Created [2026-08-05 Wed 11:26]
-:END:
-Strengthen the Clojure skill's guidance for ad-hoc Babashka validation so agents do not repeat a malformed complex form across an input set. Require a complex validator to be proven on one representative input before a per-file/per-locale loop, and retain the existing direction to put multi-line or quote-heavy bb forms in a checked .tmp script. Also require newly authored Clojure regex literals to be evaluated against at least one positive and one negative example before relying on them in validation or matching logic.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-05 Wed 11:26]
-- sender: agent
-
-Evidence:
-A reviewer subagent's preliminary rebase validation repeated a delimiter error in a complex bb -e form once per locale, then initially double-escaped a Clojure regex literal so re-matches failed. The current Clojure skill already warns that multi-line bb -e is fragile, but does not require a one-input smoke test before looping or explicit positive/negative regex examples.
-
-** TODO Re-verify state claims before restating them in a summary :agents_md:
-:PROPERTIES:
-:CUSTOM_ID: aaea2185-f6be-4260-8a9c-207b3a834866
-:CREATED: [2026-08-06 Thu 16:13]
-:END:
-:LOGBOOK:
-- Created [2026-08-06 Thu 16:13]
-- State "CANCELLED" from "TODO" [2026-08-06 Thu 18:30]
-- State "TODO" from "CANCELLED" [2026-08-06 Thu 18:32]
-:END:
-A claim that was true earlier in a session can be falsified by the agent's own later changes. Add a General rule: before restating a load-bearing state claim in a summary or handoff, re-verify it against source -- especially a claim first made before the change that invalidated it. Existing rules cover unverified symbols and empty-result-as-absence, but not stale-but-once-true assertions.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: git@git.nmd.ie:products/connect/portal @ filtgen
-- timestamp: [2026-08-06 Thu 16:13]
-- sender: agent
-
-Evidence:
-Closing summary asserted a namespace still hard-coded a parameter it had resolved at call sites, which the refactor completed minutes earlier had removed; user challenged and it was retracted. Same session also misattributed a change-record edit to the user based on an Emacs lock plus timing rather than checking.
-
-** TODO org-tasks: ot create --parent cannot target a change-record plan task :skill:org_tasks:
+** TODO [#A] org-tasks: ot create --parent cannot target a change-record plan task :skill:org_tasks:
 :PROPERTIES:
 :CUSTOM_ID: 009c6056-684a-43c8-b1d7-21ea939d7396
 :CREATED: [2026-08-08 Sat 00:14]
@@ -570,52 +509,14 @@ Two candidate resolutions, needing a judgement this task should make rather than
 
 Raised as a `PROCESS` candidate by a planner subagent during the herdr-orch stream-model work; the parent probed it and found the CLI inconsistency above. Expanded 2026-08-14 after another planner candidate established the record-targeted dry-run path.
 
+Additional reports came from `design/log/2026-08-13-move-to-on-demand-gitlab-runners-on-aws.org` and `design/log/2026-08-13-migrate-docker-host-from-amazon-linux-1.org`. Both plans needed hand-authored `* Plan` tasks after attempts to route creation through the linked record failed. Treat these reports as supporting evidence, not as a substitute for the measured case above.
+
 Origin:
 - cwd: /Users/cormacc/dotfiles/agents
 - git: cormacc/dotagents @ main
 - sender: agent
 
-** TODO org-tasks: ot create cannot insert plan tasks into a linked change-record's * Plan :skill:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: 71dc6ec3-4db7-450c-9dbe-3923156f5d5f
-:CREATED: [2026-08-13 Thu 15:26]
-:END:
-:LOGBOOK:
-- Created [2026-08-13 Thu 15:26]
-:END:
-`ot create` reportedly cannot place a plan task inside a change-record's `* Plan` section: `--parent` / `--relative-to` against a task carrying `#+IMPORT:` routes the new task into TASKS.org instead, so plan tasks must be hand-authored with `ot uuid`. Either support insertion into the linked record, or document the hand-authored path as canonical in org-plan/org-tasks so it stops being rediscovered.
-
-Status: UNVERIFIED. Raised by a delegated planner subagent and confirmed by the user in that session; the parent did not probe it, because a probe mutates the task graph and a documentation search settled nothing either way. Verify before acting.
-
-Origin:
-- cwd: /home/cormacc/nmd/infra/playbooks
-- git: git@git.nmd.ie:infrastructure/playbooks @ master
-- timestamp: [2026-08-13 Thu 13:20]
-- sender: agent
-
-Evidence:
-Two change-records were planned this session; both needed their `* Plan` tasks hand-authored with `ot uuid` after `--parent` routed to TASKS.org. Records: design/log/2026-08-13-move-to-on-demand-gitlab-runners-on-aws.org and design/log/2026-08-13-migrate-docker-host-from-amazon-linux-1.org.
-
-** TODO Fix glab-runner instance-listing guidance :skill:gitlab_cli_skills:
-:PROPERTIES:
-:CUSTOM_ID: 7663c8ad-b8fc-4133-80cf-82a37b99e532
-:CREATED: [2026-08-14 Fri 10:13]
-:END:
-:LOGBOOK:
-- Created [2026-08-14 Fri 10:13]
-:END:
-Correct the glab-runner skill's instance-listing flag and add a live-help verification note. The installed glab exposes `glab runner list --instance`; the skill currently documents `--all`, which is rejected as an unknown flag. Also caution that a zero-item list is not evidence without a known runner control, because the failed follow-up probe returned an empty list.
-
-Origin:
-- cwd: /home/cormacc/nmd/infra/playbooks
-- git: git@git.nmd.ie:infrastructure/playbooks @ develop
-- timestamp: [2026-08-14 Fri 10:12]
-- sender: agent
-
-Evidence:
-`glab runner list --all --output json` exited non-zero with `Unknown flag: --all`. Live `glab runner list --help` documents `-i --instance  List all runners available to the user (instance scope).` Direct controlled API probes were needed to confirm runner deletion because the subsequent instance-list probe returned zero rows, including no known-present runner 10.
-
-** TODO self-improvement: persist AGENTS metrics comparison script :skill:self_improvement:
+** TODO [#C] self-improvement: persist AGENTS metrics comparison script :skill:self_improvement:
 :PROPERTIES:
 :CUSTOM_ID: efb0ea1c-149d-4c8d-83ef-6ce3ca1fd7d8
 :CREATED: [2026-08-14 Fri 21:45]
@@ -634,7 +535,7 @@ Origin:
 Evidence:
 A one-off `.tmp/compare-agent-counts.clj` produced the requested comparison. A later Node verification duplicated the calculation and violated the repository's Babashka-first rule. The user identified the comparison as reusable and requested a durable script.
 
-** TODO Probe the Babashka default nREPL port before server startup :ext:pi_clojure:skill:clojure:
+** TODO [#A] Probe the Babashka default nREPL port before server startup :ext:pi_clojure:skill:clojure:
 :PROPERTIES:
 :CUSTOM_ID: f8dcf8df-d12f-497a-81bd-7a50b654d6f4
 :CREATED: [2026-08-17 Mon 09:11]
@@ -652,3 +553,88 @@ Origin:
 
 Evidence:
 `clojure_find_nrepl_port` reported no reachable port. The workflow then created a Herdr tab and ran `bb nrepl-server`. That command failed with `java.net.BindException: Address already in use`. A direct `clojure_eval` probe of port 1667 returned `2` for `(+ 1 1)`, which confirmed that an existing Babashka nREPL server was available.
+
+** TODO [#A] Correct known agent guidance defects
+:PROPERTIES:
+:CUSTOM_ID: 1d5667de-dbc6-41d8-be17-65821922ee53
+:CREATED: [2026-08-17 Mon 22:41]
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 22:41]
+:END:
+Correct the four known defects in agent instructions. Keep each correction as a separate subtask so that its source evidence and validation remain local.
+*** TODO [#B] AGENTS.md: state that repo-root =scripts/= is Babashka-first, existing members predate the rule
+:PROPERTIES:
+:CUSTOM_ID: 511e335b-9c05-45c9-87da-09df1f48d827
+:CREATED: [2026-08-11 Tue 12:12]
+:END:
+:LOGBOOK:
+- Created [2026-08-11 Tue 12:12]
+:END:
+=AGENTS.md= says to prefer Babashka for repository-local automation. When this was filed, every pre-existing file in repo-root =scripts/= was =.sh= or =.ts=, so a delegated worker building =scripts/run-trait-gate.bb= followed the on-disk precedent first and wrote Bash, and had to be corrected. Confirmed with the user 2026-08-11: the existing scripts predate the rule.
+
+The precedent on disk therefore contradicts the written rule, and precedent wins by default for anyone who looks at the directory before reading =AGENTS.md=.
+
+*EDIT* [2026-08-11] Mostly self-resolved: retiring =check-metadata.ts=, =check-extensions.sh=, =check-hermes.sh= and =check-links.ts= left =scripts/= holding =check.sh= alongside two =.bb= files, so Babashka is now the majority and the misleading precedent is largely gone. What remains is worth one line so it does not drift back; consider closing this if that line lands elsewhere first.
+
+Acceptance criteria:
+- =AGENTS.md= states that repo-root =scripts/= is Babashka-first for new work, and that the existing =.sh= / =.ts= members predate the rule and are not a precedent to follow.
+- No existing script is rewritten as part of this task. Churn for consistency's sake is not the goal; the goal is that the next new script is Babashka without needing a correction.
+- If a future script genuinely needs Bash or TypeScript (a thin wrapper, or a Node-ecosystem check), the rule names that exemption rather than being silently violated.
+Must not: rewrite =check.sh=, the sole remaining non-Babashka member; add a lint that fails on existing members.
+*** TODO [#A] clojure skill: make ad-hoc validator and regex checks fail fast :skill:clojure:
+:PROPERTIES:
+:CUSTOM_ID: 94cc1d46-63cf-464a-9107-ac21993bfbab
+:CREATED: [2026-08-05 Wed 11:26]
+:END:
+:LOGBOOK:
+- Created [2026-08-05 Wed 11:26]
+:END:
+Strengthen the Clojure skill's guidance for ad-hoc Babashka validation so agents do not repeat a malformed complex form across an input set. Require a complex validator to be proven on one representative input before a per-file/per-locale loop, and retain the existing direction to put multi-line or quote-heavy bb forms in a checked .tmp script. Also require newly authored Clojure regex literals to be evaluated against at least one positive and one negative example before relying on them in validation or matching logic.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-05 Wed 11:26]
+- sender: agent
+
+Evidence:
+A reviewer subagent's preliminary rebase validation repeated a delimiter error in a complex bb -e form once per locale, then initially double-escaped a Clojure regex literal so re-matches failed. The current Clojure skill already warns that multi-line bb -e is fragile, but does not require a one-input smoke test before looping or explicit positive/negative regex examples.
+*** TODO [#A] Re-verify state claims before restating them in a summary :agents_md:
+:PROPERTIES:
+:CUSTOM_ID: aaea2185-f6be-4260-8a9c-207b3a834866
+:CREATED: [2026-08-06 Thu 16:13]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 16:13]
+- State "CANCELLED" from "TODO" [2026-08-06 Thu 18:30]
+- State "TODO" from "CANCELLED" [2026-08-06 Thu 18:32]
+:END:
+A claim that was true earlier in a session can be falsified by the agent's own later changes. Add a General rule: before restating a load-bearing state claim in a summary or handoff, re-verify it against source -- especially a claim first made before the change that invalidated it. Existing rules cover unverified symbols and empty-result-as-absence, but not stale-but-once-true assertions.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@git.nmd.ie:products/connect/portal @ filtgen
+- timestamp: [2026-08-06 Thu 16:13]
+- sender: agent
+
+Evidence:
+Closing summary asserted a namespace still hard-coded a parameter it had resolved at call sites, which the refactor completed minutes earlier had removed; user challenged and it was retracted. Same session also misattributed a change-record edit to the user based on an Emacs lock plus timing rather than checking.
+*** TODO [#B] Fix glab-runner instance-listing guidance :skill:gitlab_cli_skills:
+:PROPERTIES:
+:CUSTOM_ID: 7663c8ad-b8fc-4133-80cf-82a37b99e532
+:CREATED: [2026-08-14 Fri 10:13]
+:END:
+:LOGBOOK:
+- Created [2026-08-14 Fri 10:13]
+:END:
+Correct the glab-runner skill's instance-listing flag and add a live-help verification note. The installed glab exposes `glab runner list --instance`; the skill currently documents `--all`, which is rejected as an unknown flag. Also caution that a zero-item list is not evidence without a known runner control, because the failed follow-up probe returned an empty list.
+
+Origin:
+- cwd: /home/cormacc/nmd/infra/playbooks
+- git: git@git.nmd.ie:infrastructure/playbooks @ develop
+- timestamp: [2026-08-14 Fri 10:12]
+- sender: agent
+
+Evidence:
+`glab runner list --all --output json` exited non-zero with `Unknown flag: --all`. Live `glab runner list --help` documents `-i --instance  List all runners available to the user (instance scope).` Direct controlled API probes were needed to confirm runner deletion because the subsequent instance-list probe returned zero rows, including no known-present runner 10.

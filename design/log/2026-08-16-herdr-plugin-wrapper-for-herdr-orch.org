@@ -91,7 +91,7 @@ Package herdr-orch as a Herdr plugin so `herdr plugin install cormacc/dotagents/
 
 * Plan
 
-** TODO Bump herdr-orch minimum Herdr version to 0.8.0
+** TODO [#B] Bump herdr-orch minimum Herdr version to 0.8.0
 :PROPERTIES:
 :CUSTOM_ID: 3dfd7b75-3a99-4740-83e3-ccea905f06e3
 :CREATED: [2026-08-16 Sun 11:59]
@@ -104,7 +104,7 @@ Acceptance criteria:
 
 Pointer: `minimum-version` and the gate error in `skills/herdr-orch/scripts/src/herdr_orch/herdr.clj`; assertion in `skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` (`0.7.5` literal); fixture default in `skills/herdr-orch/scripts/test/fixtures/fake-herdr`.
 
-** TODO Plugin scaffold and doctor
+** TODO [#B] Plugin scaffold and doctor
 :PROPERTIES:
 :CUSTOM_ID: 29d623ad-e53c-425a-a3e7-b9ee135aa528
 :CREATED: [2026-08-16 Sun 11:59]
@@ -124,7 +124,7 @@ Anti-criteria:
 
 Pointer: the setup entrypoint ships in the follow-on task; the manifest may declare it, with `setup.sh` landing there. Classification states and the consent flow are specified in this record's `** Decisions`.
 
-** TODO Setup action
+** TODO [#B] Setup action
 :PROPERTIES:
 :CUSTOM_ID: 8d27ea0c-a2b6-40ff-baba-a6d80b127aaa
 :CREATED: [2026-08-16 Sun 11:59]
@@ -144,7 +144,7 @@ Anti-criteria:
 - Must not: overwrite or rewrite any link the plugin did not create.
 - Must not: download or install binaries.
 
-** TODO Traits-binary fallback resolution in the Pi extension
+** TODO [#B] Traits-binary fallback resolution in the Pi extension
 :PROPERTIES:
 :CUSTOM_ID: 5b195314-0877-486a-868a-b2acc7554423
 :CREATED: [2026-08-16 Sun 11:59]
@@ -157,7 +157,7 @@ Acceptance criteria:
 
 Pointer: `resolveTraitsBinary` and `expandTraits` in `pi/extensions/traits/index.ts`.
 
-** TODO Manual linked-flow verification
+** TODO [#B] Manual linked-flow verification
 :PROPERTIES:
 :CUSTOM_ID: cec0974e-23bc-45ff-b2b8-55d51dbc8626
 :CREATED: [2026-08-16 Sun 11:59]

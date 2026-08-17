@@ -3160,3 +3160,60 @@ CLOSED: [2026-08-17 Mon 18:23]
 :END:
 #+IMPORT: [[plan:2026-08-17-org-tasks-housekeeping-260817.org]]
 Small org-tasks maintenance items grouped on 2026-08-17. Larger changes remain standalone.
+
+** CANCELLED org-tasks, herdr-orch: Automate installation of babashka / ot :skill:org_tasks:herdr_orch:
+CLOSED: [2026-08-17 Mon 22:41]
+:PROPERTIES:
+:CUSTOM_ID: ca95bb66-6c5c-4037-97cd-75274010b214
+:CREATED: [2026-07-29 Wed 13:03]
+:HANDOFF: Superseded by task 41ca2ed9-9eff-47e0-b0ca-294e20f6c334 after its shared bootstrap scope absorbed the ot installation requirements.
+:ARCHIVED: [2026-08-17 Mon 22:41]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-29 Wed 13:03]
+- State "CANCELLED" from "TODO" [2026-08-17 Mon 22:41]
+:END:
+Currently we assume babashka is available, and the skill calls the ot cli tool using absolute path.
+It would be nice to do a bootstrap check on initial skill activation...
+- if babashka not found in path, offer to install it via an appropriate method
+- if ot not found in path, offer to install it also (maybe using bbin?)
+
+** CANCELLED [#D] Evaluate pi-lsp over home-rolled lsp :pi:
+CLOSED: [2026-08-17 Mon 22:42]
+:PROPERTIES:
+:CUSTOM_ID: 0ed56048-9f53-44b4-8a5a-2dbc858e6f04
+:HANDOFF: Superseded by task 6d22d6ed-1fd1-46cb-965f-12d355612b53, which now includes pi-lsp as its first codebase-intelligence candidate.
+:ARCHIVED: [2026-08-17 Mon 22:42]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- State "CANCELLED" from "TODO" [2026-08-17 Mon 22:42]
+:END:
+https://pi.dev/packages/@dreki-gg/pi-lsp
+
+** CANCELLED org-tasks: ot create cannot insert plan tasks into a linked change-record's * Plan :skill:org_tasks:
+CLOSED: [2026-08-17 Mon 22:42]
+:PROPERTIES:
+:CUSTOM_ID: 71dc6ec3-4db7-450c-9dbe-3923156f5d5f
+:CREATED: [2026-08-13 Thu 15:26]
+:HANDOFF: Superseded by task 009c6056-684a-43c8-b1d7-21ea939d7396 after its measured defect report absorbed this task's supporting evidence.
+:ARCHIVED: [2026-08-17 Mon 22:42]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-08-13 Thu 15:26]
+- State "CANCELLED" from "TODO" [2026-08-17 Mon 22:42]
+:END:
+`ot create` reportedly cannot place a plan task inside a change-record's `* Plan` section: `--parent` / `--relative-to` against a task carrying `#+IMPORT:` routes the new task into TASKS.org instead, so plan tasks must be hand-authored with `ot uuid`. Either support insertion into the linked record, or document the hand-authored path as canonical in org-plan/org-tasks so it stops being rediscovered.
+
+Status: UNVERIFIED. Raised by a delegated planner subagent and confirmed by the user in that session; the parent did not probe it, because a probe mutates the task graph and a documentation search settled nothing either way. Verify before acting.
+
+Origin:
+- cwd: /home/cormacc/nmd/infra/playbooks
+- git: git@git.nmd.ie:infrastructure/playbooks @ master
+- timestamp: [2026-08-13 Thu 13:20]
+- sender: agent
+
+Evidence:
+Two change-records were planned this session; both needed their `* Plan` tasks hand-authored with `ot uuid` after `--parent` routed to TASKS.org. Records: design/log/2026-08-13-move-to-on-demand-gitlab-runners-on-aws.org and design/log/2026-08-13-migrate-docker-host-from-amazon-linux-1.org.
