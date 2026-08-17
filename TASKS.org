@@ -16,7 +16,6 @@
   - [[#evaluate-jus][Evaluate jus]]
   - [[#review-backlogmd-for-org-tasks-inspiration][Review backlog.md for org-tasks inspiration]]
   - [[#herdr-orch-llm-usage-limit-fallback][herdr-orch: LLM usage limit fallback]]
-  - [[#determine-whether-pi-allows-automatic-anthropic-prompt-caching][Determine whether pi allows automatic anthropic prompt caching]]
   - [[#evaluate-rpiv-pi-workflow-setup][Evaluate rpiv-pi workflow setup]]
   - [[#codebase-intelligence-tool-evaluation][Codebase intelligence tool evaluation]]
   - [[#explore-agent-memory-options][Explore agent memory options]]
@@ -73,21 +72,6 @@ https://github.com/paintparty/jus
 :END:
 It would be useful for sessions to fallback  after hitting session limits (anthropic -> openai -> local, openai -> anthropic -> local)
 Take a look at https://github.com/luongnv89/ccl, which implements a solution for pi, claude and codex. Evaluate whether we can piggyback on this without breaking our model aliasing etc.
-
-** TODO [#A] Determine whether pi allows automatic anthropic prompt caching :pi:
-:PROPERTIES:
-:CUSTOM_ID: dfa273c4-1d43-484f-a515-b6666a64fad7
-:CREATED: [2026-07-29 Wed 13:32]
-:END:
-:LOGBOOK:
-- Created [2026-07-29 Wed 13:32]
-:END:
-Failing to cache prefix (system prompt and tools) can run through anthropic usage allowance quickly. See if this is the case for pi.
-
-See the following dirge PRs for context / prior art:
-- https://github.com/dirge-code/dirge/pull/727
-- https://github.com/dirge-code/dirge/pull/726
-- https://github.com/dirge-code/dirge/pull/732
 
 ** TODO [#D] Evaluate rpiv-pi workflow setup :pi:
 :PROPERTIES:

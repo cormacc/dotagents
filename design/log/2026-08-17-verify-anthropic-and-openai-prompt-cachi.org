@@ -1,0 +1,67 @@
+#+TITLE: Verify Anthropic and OpenAI prompt caching in Pi
+#+DATE: 2026-08-17 Mon
+#+PARENT: [[archive:dfa273c4-1d43-484f-a515-b6666a64fad7][Verify Anthropic and OpenAI prompt caching in Pi]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+NO_SPEC: true
+
+* Intent
+Confirm Pi's default prompt-cache behaviour and retain a repeatable cost comparison between Anthropic's five-minute and one-hour retention strategies without exposing session content.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+** Scope
+*** In scope
+- Verify installed Pi 0.84.2 provider behaviour for Anthropic, direct OpenAI, and OpenAI Codex.
+- Analyse recent Anthropic session usage mechanically from JSONL metadata.
+- Provide a root Babashka task with bounded session selection and JSON output.
+- Document the method, privacy boundary, and counterfactual limits.
+*** Out of scope
+- Change Pi's default five-minute Anthropic retention.
+- Claim exact one-hour counterfactuals when session logs do not store prompt-prefix identities.
+- Analyse prompt or response text.
+
+** Acceptance
+*** Core functionality
+- [x] =bb prompt-cache-ttl= compares logged five-minute costs with one-hour no-rescue and optimistic-resume bounds.
+- [x] The task accepts =--root=, =--sessions=, and =--scan-limit=.
+- [x] JSON output separates sessions that already contain one-hour cache writes.
+- [x] Repository documentation explains invocation and interpretation.
+*** Edge cases
+- [x] A 5--60 minute same-model gap is only a resume candidate when the next turn has no cache read, rewrites at least the prior cacheable prefix, and has no intervening compaction.
+- [x] Synthetic tests distinguish continuous activity from a delayed resume.
+- [x] Assistant content does not appear in output.
+*** Anti-criteria
+- [x] Must not change =PI_CACHE_RETENTION= or Pi settings.
+- [x] Must not present the optimistic bound as a measured counterfactual.
+
+** Decisions
+- Keep the five-minute default. The most recent 10-session and 20-session samples remained cheaper even when every mechanically eligible resume was treated as reusable.
+- Expose the analyser as =bb prompt-cache-ttl= and keep its implementation under repository =scripts/=.
+- Retain both one-hour bounds. The no-rescue bound prices all writes at 2x; the optimistic bound converts eligible expiration rewrites to 0.1x reads. Exact prefix identity is unavailable in session logs.
+
+** Shipped
+- ADDED =scripts/analyse-anthropic-cache-ttl.bb= with JSON output and bounded recent-session selection.
+- ADDED =scripts/test-analyse-anthropic-cache-ttl.bb= with active, resumed, one-hour exclusion, help, and content-omission checks.
+- MODIFIED =bb.edn= with =prompt-cache-ttl= and repository-test integration.
+- MODIFIED =scripts/README.md= with the invocation, data boundary, estimates, and limitations.
+
+** Gotchas
+- The most recent 20 Anthropic sessions strongly favoured five-minute retention, but a wider 40-session window contained enough 5--60 minute gaps for the optimistic one-hour bound to become cheaper. That wider result needs at least 69.25% of candidate prefixes to remain exact and reusable; the logs cannot verify that condition.
+
+* Plan
+
+* Implementation
+- Pi 0.84.2 already defaults =cacheRetention= to =short=. Anthropic adds cache-control markers to the system prompt, last tool, and last user content. Direct OpenAI and OpenAI Codex send a session-derived =prompt_cache_key=.
+- Provider references: https://platform.claude.com/docs/en/build-with-claude/prompt-caching and https://platform.openai.com/docs/guides/prompt-caching.
+- Prior-art references: https://github.com/dirge-code/dirge/pull/727, https://github.com/dirge-code/dirge/pull/726, and https://github.com/dirge-code/dirge/pull/732.
+- Recent 10-session sample: 324 turns, $41.73 logged five-minute total, $46.60 optimistic one-hour total (+11.66%).
+- Recent 20-session sample: 1,101 turns, $128.91 logged five-minute total, $145.41 optimistic one-hour total (+12.81%). Even the optimistic bound was $16.51 higher.
+- Wider 40-session sample covering 2026-08-07 through 2026-08-17: 3,025 turns, $654.64 logged five-minute total, $586.51 optimistic one-hour bound (-10.41%), or $808.06 with no added hits (+23.44%). One-hour retention breaks even only if at least 69.25% of candidate resume value is reusable.
+- Input, output, and reasoning costs are held constant. The analyser changes only cache-write/read classification and price.
+
+* Validation
+- =bb scripts/test-analyse-anthropic-cache-ttl.bb=: 3 tests, 14 assertions, 0 failures, 0 errors.
+- =bb test=: 627 Clojure tests with 4,073 assertions; 4 trait-gate tests with 43 assertions; 3 cache-TTL tests with 14 assertions; 0 failures and 0 errors.
+- =bb prompt-cache-ttl --help= and a one-session task smoke run succeeded.
+- The cost classifier was also exercised against synthetic active and ten-minute-resume rows through the existing Babashka nREPL.

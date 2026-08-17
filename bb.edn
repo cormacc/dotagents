@@ -30,6 +30,9 @@
           :task (apply (requiring-resolve 'herdr-orch.traits-cli/-main)
                        *command-line-args*)}
 
+  prompt-cache-ttl {:doc "Compare logged five-minute Anthropic cache costs with one-hour bounds"
+                    :task (load-file "scripts/analyse-anthropic-cache-ttl.bb")}
+
   test-clojure {:doc  "Run the org-tasks and herdr-orch Clojure test suites"
                 :task (do (require 'babashka.classpath)
                           (doseq [path ["skills/org-tasks/scripts/test"
@@ -44,6 +47,9 @@
                                      {:inherit true}))
                   (process/check
                     (process/process ["bb" "scripts/test-run-trait-gate.bb"]
+                                     {:inherit true}))
+                  (process/check
+                    (process/process ["bb" "scripts/test-analyse-anthropic-cache-ttl.bb"]
                                      {:inherit true})))}
 
   smoke-subagent {:doc "Run explicitly guarded live Herdr subagent smoke (set ORCH_LIVE_SMOKE_KIND=claude to exercise Claude)"

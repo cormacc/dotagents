@@ -30,3 +30,23 @@ The repository-wide `bb test` task runs these checks after the org-tasks and her
 ```sh
 scripts/test-run-trait-gate.bb
 ```
+
+## Anthropic prompt-cache TTL analysis
+
+Compare recent five-minute Anthropic prompt-cache costs with one-hour bounds:
+
+```sh
+bb prompt-cache-ttl --sessions 20 --scan-limit 200
+```
+
+The task scans `~/.pi/agent/sessions` by default. Use `--root DIR` for another Pi session root. `--scan-limit` limits the recent JSONL files inspected before the task selects the requested number of files that contain Anthropic assistant responses.
+
+The JSON output reports the logged five-minute total and two one-hour estimates. The no-rescue estimate prices every logged cache write at the one-hour rate. The optimistic estimate also treats a prior cacheable prefix as reusable after a 5--60 minute same-model gap when the next response reported no cache read, rewrote at least that prefix, and had no intervening compaction. Session logs do not store prompt-prefix identities, so the optimistic estimate is a bound rather than a measured counterfactual.
+
+The task extracts only timestamps, model/provider identifiers, usage and cost fields, and compaction events. It does not emit prompt or response content. Sessions with non-zero `cacheWrite1h` are reported separately and excluded from the five-minute baseline comparison.
+
+Run the focused tests with:
+
+```sh
+bb scripts/test-analyse-anthropic-cache-ttl.bb
+```
