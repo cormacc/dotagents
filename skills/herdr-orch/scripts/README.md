@@ -4,7 +4,7 @@
 
 ## Run
 
-From the repository root or this scripts directory. The local `bb.edn` delegates `bb test` to the repository-root test task:
+Run the CLI from the repository root or this scripts directory:
 
 ```sh
 ./skills/herdr-orch/scripts/oh --help          # global command list
@@ -12,30 +12,43 @@ From the repository root or this scripts directory. The local `bb.edn` delegates
 ./skills/herdr-orch/scripts/oh agent prompt --help  # one command, with its positional arity
 printf '%s' 'Review this %focused' | ./skills/herdr-orch/scripts/traits --layer home="$HOME/.agents/traits"
 bb traits --layer home="$HOME/.agents/traits" --plain < prompt.md
-bb test
 ```
 
 The `traits` launcher and root `bb.edn` task expose the shared interpolator to non-Clojure callers. Input comes from stdin or `--file`. Repeat `--layer SOURCE=DIR` in precedence order. Use `--plain` for transformed text rather than the default `herdr-orch/v1` JSON envelope. Unknowns and repeats are report data, not CLI failures. The full output and failure contract is in [docs/contract.md](docs/contract.md) section Standalone trait interpolator CLI.
 
 The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/skills` is a *directory* symlink), uses the repository `bb.edn` when present, and falls back to `bb --deps-root <scripts> -Sdeps '{:paths ["src"]}'` for a bare skill subtree. It never `cd`s before `exec`, so the CLI's working directory is always the caller's -- that value becomes the child pane's `--cwd` and drives assignment-root/roster resolution. It has no additional Maven dependencies.
 
-`task run` and `task start` take opaque assignment text from exactly one of `--task`, `--task-file`, or stdin. `task collect`, `task status`, `task prune`, `task close`, and `task continue` in turn require the complete task UUID that `task run`/`task start` emitted. No prefix is ever resolved. `--prompt-extra` appends exceptional constraints. `--print-prompt` previews the invariant wrapper. The CLI never offers raw prompt mode.
+`task run` and `task start` take assignment text from one source: `--task`, `--task-file`, or stdin. `run` waits for a published item. `start` returns after dispatch, so collect its output later.
 
-Flag and verb index; [docs/contract.md](docs/contract.md) owns precedence, guards, refusal cases, and ledger fields:
+Commands that take a task ID require the complete UUID. This rule includes `collect`, `prune`, `poke`, `close`, `continue`, `compact`, and `worktree remove`. `publish --task` also requires the complete UUID. `task status` accepts a complete UUID or no UUID. No command resolves a UUID prefix.
 
-| Flag / verb | Meaning | Detail |
+`--prompt-extra` appends exceptional constraints. `--print-prompt` previews the invariant wrapper. The CLI never offers raw prompt mode.
+
+Command index. [docs/contract.md](docs/contract.md) owns precedence, guards, refusal cases, and ledger fields:
+
+| Flag or command | Meaning | Detail |
 |---|---|---|
+| `--model MODEL` | select the model for one child | § Model resolution |
+| `--timeout MS` | set the wait budget | § Timeout resolution |
 | `--retro` / `--no-retro` | override retro gating for one spawn | § Retro gating |
-| `--spawns NAMES` / `none` | override the persona's allow-list; `none` forces a leaf | § Spawn gating |
+| `--spawns NAMES` / `none` | override the persona allow-list; `none` forces a leaf | § Spawn gating |
 | `--worktree <path>` / `new` | use an existing checkout or create one managed target | § Checkout target resolution |
-| `--tab` / `--split` | force placement (mutually exclusive) | § Placement |
-| `--any` (on `collect`) | capture the first same-session child to publish | § Fan-in |
-| `--close` (on `collect`) | capture, then run the guarded close | § Close |
-| `--notify-timeout MS` | settle wait before the advisory parent push | § Parent push |
-| `--task UUID` (on `publish`) | publish a continued round | § Ledger and completion |
-| `task prune` | retire one stale, same-session, uncaptured entry | § Pruning |
-| `task close` / `--settled` | the only path that closes a spawned child's pane | § Close |
-| `task continue` | root-only further round in the same pane | § Continue |
+| `--tab` / `--split` | force placement; the flags are mutually exclusive | § Placement |
+| `task status [UUID]` / `task list` | inspect one round or list rounds | § JSON output |
+| `task collect UUID` | capture the next published item | § Ledger and completion |
+| `task collect --any` | capture the first same-session child to publish | § Fan-in |
+| `task collect UUID --close` | capture a terminal item, then request a guarded close | § Close |
+| `task publish` | append an immutable result item | § Ledger and completion |
+| `task poke UUID` | ask a settled child to publish after a missing or invalid result | § Poke |
+| `task prune UUID` | retire a stale uncaptured round after the child disappears | § Pruning |
+| `task close UUID` | use the normal guarded path to close an owned child pane | § Close |
+| `task close UUID --abandon` | retire the round without touching its pane | § Close |
+| `task close --settled` | close eligible captured children owned by this session | § Close |
+| `task continue UUID` | assign a root-owned child another round in the same pane | § Continue |
+| `task orphans` / `--close` | list or close captured rounds whose owner session ended | § Orphans |
+| `task compact UUID` / `--closed` | remove raw envelope bulk while retaining ledger history | § Retention |
+| `task harvest` | list this session's process-retro candidates | [SKILL.md](../SKILL.md) § Process retrospectives |
+| `worktree list` / `worktree remove UUID` | inspect targets or remove an eligible managed checkout | § Worktree reconciliation and teardown |
 
 `--worktree <path>` may name an attached checkout outside the managed root for use, but `oh worktree remove` never removes such a checkout. `--worktree new` is the path that creates a checkout `oh` can later tear down. Concurrent target decision and ledger reservation are serialised across CLI processes, including a continuation racing an explicit start for the inherited checkout. Slow assignment input and Herdr inspection happen before the critical section. A read-only existing target with tracked or untracked dirt refuses before allocation. Worktree publications carry `CHECKPOINT`, require the complete repository witness, and check stream capacity before mutation, while branch integration and deletion remain parent-owned. Reconciliation reports present-but-invalid checkouts as `invalid` without following Git discovery upward.
 
@@ -62,18 +75,12 @@ A child calls the injected absolute launcher path:
 
 `--process` is repeatable, and `--from-file` accepts the same list as a `"process"` array.
 
-Each `--artifact` is also surfaced as a portable Markdown link, `[absolute path](file:///encoded/path) :: purpose`: advisory (declared, unvalidated) in the parent push a non-blocking publish sends, and existence-validated as `result.artifact-links` on a successful `collect` / `collect --any`. That is fallback *syntax* only -- the URI is built with `Path.toUri` and no terminal-control escape is ever emitted, so whether it renders as a clickable hyperlink depends on the parent's harness and terminal support. See [docs/contract.md](docs/contract.md) § Artifact links.
+Each `--artifact` becomes a portable Markdown link. Use `<relative-path>` or `<relative-path> :: <purpose>`. The parent push shows an advisory link before validation. A successful `collect` or `collect --any` returns existence-validated links in `result.artifact-links`. The URI uses `Path.toUri` and contains no terminal-control escape. Clickability depends on the parent harness and terminal. See [docs/contract.md](docs/contract.md) § Artifact links.
 
 ## Raw passthrough
 
 `oh` also wraps the raw Herdr `pane`, `tab`, `ws`, and `agent` verbs. The wrapper is not a transparent mirror: it imposes agent-facing defaults that differ from upstream, so pass the flags explicitly when upstream semantics matter. `oh agent wait` defaults to a 600 s timeout where `herdr` waits indefinitely, and the read family defaults to `--source recent-unwrapped` (upstream: `recent`), falls back to `visible` on empty output, and truncates to 2000 lines / 50 KB. `oh pane wait-output` searches Herdr's selected snapshot immediately, including existing output, and now explicitly uses the same `recent-unwrapped` source default as the wrapper's read family instead of upstream's `recent`. A live probe put a marker into scrollback followed by 250 lines: `oh pane read --lines 300` and `wait-output --source recent-unwrapped --lines 300` found it, while the formerly unqualified wait timed out. Aligning the source default made `wait-output --lines 300` find it too. Snapshot depth still matters, so pass `--source` and `--lines` explicitly when the search window matters. `oh spawn "<shell command>"` runs an ordinary command in a new tab, always unfocused because it never delegates.
 
-## Tests and smoke
+## Development
 
-`bb test` runs unit and fake-process coverage without launching an agent, entirely inside per-test temporary directories (`ORCH_ASSIGNMENT_ROOT`). It must not touch the live `<git-root>/.tmp/herdr-orch/` tree. A standalone `fake-herdr` probe launched from a delegated shell inherits that shell's live identity, so set `HERDR_PANE_ID=w:p`, the parent pane recognized by the fixture. A nested probe must also set `FAKE_PARENT_LABEL` to an anchored `<HERDR_ORCH_PERSONA>-<index>` prefix such as `worker-1-light`, or nested label validation fails. To simulate a root CLI caller from a delegated shell, unset `HERDR_ORCH_PERSONA`, the depth discriminator ([docs/contract.md](docs/contract.md) § Spawn gating). A fixture probe confirmed that leaving `HERDR_ORCH_SPAWNS`, `HERDR_ORCH_TASK`, `HERDR_ORCH_RESULT`, and `HERDR_ORCH_CHILD` set does not by itself classify the call as below-root. Clear them only when the test also requires absent inherited round metadata. The separate `bb smoke-subagent` is intentionally guarded and requires `HERDR_ENV=1`, `ORCH_LIVE_SMOKE=1`, and `ORCH_LIVE_SMOKE_MODEL`. It is never CI work. Maintainer rationale and smoke coverage notes live in [../design.org](../design.org). Output and file contracts live in [docs/contract.md](docs/contract.md).
-
-Three hazards when writing tests here, each of which has cost real time and none of which fails in a way that points at its own cause:
-
-- Assert the subprocess succeeded before reading anything it was supposed to produce. `call!` returns the process map, and 284 of this suite's 364 call sites already check `(:exit proc)` first. Skipping it turns a refused spawn into `FileNotFoundException: .../ledger/.json` -- note the empty uuid, because the task id was never returned -- which sends the diagnosis to the ledger layer instead of the refusal that actually happened.
-- Never run a probe whose expected outcome is a hang bare inside the namespace. Put it behind a per-call timeout or against a stub. One stalled the namespace for 300 s, and the same option-parser path hung `bb test` for 900 s when the guard masking it lapsed (task b0eb67fc).
-- Do not write auto-resolved `::keywords` in a parallel-enabled namespace, which here means `cli_test.clj` (`ns ^{:parallel-tests true}`). Before pooling, `org-tasks.test-runner/assert-serial-global-var-mutations!` parses the namespace source with `edamame/parse-string-all`, which rejects them with "Use `:auto-resolve` + `:current` to resolve current namespace" -- reported against `test_runner.clj`, not against the test that contains the keyword, so the error names the wrong file. Use a plain keyword instead.
+Maintainer test, smoke, and fixture guidance is in [AGENTS.md](AGENTS.md).

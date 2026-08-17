@@ -8,7 +8,8 @@ Where things live:
 | [[file:design.org][design.org]]               | Why it is built this way, the namespace map, maintenance notes, and change history   |
 | [[file:SKILL.md][SKILL.md]]                 | The delegation, trust, and pane-safety policy an agent loads at runtime              |
 | [[file:references/traits.md][references/traits.md]]     | Trait store, admission bar, probing protocol, and the measured rationale behind them |
-| [[file:scripts/README.md][scripts/README.md]]        | CLI invocation, tests, and smoke entry points                                        |
+| [[file:scripts/README.md][scripts/README.md]]        | CLI invocation and raw passthrough                                                    |
+| [[file:scripts/AGENTS.md][scripts/AGENTS.md]]        | Maintainer tests, smoke, fixtures, and test-authoring guardrails                      |
 | [[file:scripts/docs/contract.md][scripts/docs/contract.md]] | Every mechanical contract                                                            |
 
 * Table of Contents                                       :TOC_1_gh:noexport:
@@ -21,7 +22,7 @@ Where things live:
 * What is this?
 A harness-agnostic orchestration framework for agent-assisted development. Subagent personas and their interactions are defined independently of any one coding harness, so you can evaluate or migrate between harnesses without rebuilding your workflow. The bundled =oh= CLI absorbs the mechanical ceremony of orchestration, which keeps token and tool-call overhead down.
 - define subagents per-project (in =<project-root>/.agents/subagents=) or per-user (in =~/.agents/subagents=)
-- define re-usable prompt snippets (traits) per-project (in =<project-root>/.agents/subagents=) or per-user (in =~/.agents/subagents=)
+- define reusable prompt snippets (traits) per-project (in =<project-root>/.agents/traits=) or per-user (in =~/.agents/traits=)
 - traits can be included in subagent definitions or interactive prompts (the latter for pi only, so far) using the syntax ~%my-trait~
 - spawn parallel workers in independent git worktrees, with the mechanical aspects of worktree creation and reconciliation handled by skill scripts
 
@@ -63,14 +64,15 @@ npx skills add https://github.com/cormacc/dotagents/tree/main/skills/herdr-orch
 
 ** Configuration file locations and fallback strategy
 
-Two independent chains, both resolving project > home > packaged:
+Three discovery chains resolve project > home > packaged:
 
 | What | Locations, highest precedence first |
 |---+---|
 | Persona definitions (=<name>.md=) | =<git-root>/.agents/subagents/=, =~/.agents/subagents/=, this skill's =subagents/= |
+| Trait fragments (=<name>.md= or =<name>/prompt.md=) | =<git-root>/.agents/traits/=, =~/.agents/traits/=, this skill's =traits/= |
 | Model and harness config (=config.edn=) | =<git-root>/.agents/subagents/=, =~/.agents/subagents/=, this skill's =subagents/= |
 
-They differ in how they combine. A persona definition *shadows* atomically by name -- the highest-precedence file wins outright. =config.edn= files are *merged* (§ Model configuration).
+They differ in how they combine. A persona definition *shadows* atomically by name -- the highest-precedence file wins outright. A trait also shadows by name; within one layer, =<name>.md= wins over =<name>/prompt.md=. =config.edn= files are *merged* (§ Model configuration).
 
 =~/.agents/subagents/= is reserved for genuine home overrides. Packaged definitions are never projected into it. A missing override file is ignored. A missing packaged =config.edn= is fatal.
 
