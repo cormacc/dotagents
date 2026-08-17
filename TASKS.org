@@ -15,7 +15,7 @@
 - [[#explorations][Explorations]]
 - [[#improvements][Improvements]]
 - [[#fixes][Fixes]]
-- [[#housekeeping][Housekeeping]]
+- [[#chores][Chores]]
 - [[#agent-feedback][Agent feedback]]
 
 * Explorations
@@ -31,6 +31,16 @@
 This looks like a very nice exploratory/learning tool for Clojure.
 Not sure it has a role here, but just catching the reference for now as an aide memoire....
 https://github.com/paintparty/jus
+
+** TODO [#B] Review backlog.md for org-tasks inspiration :skill:org_tasks:org_plan:
+:PROPERTIES:
+:CUSTOM_ID: 19920e17-b7d0-4272-9de2-2a4353271fa9
+:CREATED: [2026-05-22 Fri 00:06]
+:END:
+:LOGBOOK:
+- Created [2026-05-22 Fri 00:06]
+:END:
+
 
 ** TODO herdr-orch: LLM usage limit fallback :skill:herdr_orch:
 :PROPERTIES:
@@ -149,15 +159,6 @@ Re-examine the self-improvement skill against the org-memory protocol (org-tasks
 - whether anything in the dev-agent-backlog HTML summary (design/log/2026-05-01-dev-agent-backlog-review-summary.html) should be borrowed for the self-improvement skill specifically
 
 
-** TODO [#B] Review backlog.md for org-tasks inspiration :skill:org_tasks:org-plan:
-:PROPERTIES:
-:CUSTOM_ID: 19920e17-b7d0-4272-9de2-2a4353271fa9
-:CREATED: [2026-05-22 Fri 00:06]
-:END:
-:LOGBOOK:
-- Created [2026-05-22 Fri 00:06]
-:END:
-
 ** TODO ot move: TUI/pi-overlay exposure and --before/--after ordering :skill:org_tasks:
 :PROPERTIES:
 :CUSTOM_ID: da7350ac-60c6-4336-9b7e-e0cbce51658c
@@ -219,37 +220,6 @@ Acceptance criteria:
 - =references/ot-cli.md= documents the widened basis, replacing "has not been touched in the current git working tree/index".
 - A closed, committed record with correctly updated specs reports no findings; verify with this repository's own trait-composition record.
 Must not: silence the check for open records; infer specs that were never declared.
-
-** DONE [#B] herdr-orch: task close refuses forever when a child exits while last seen working
-CLOSED: [2026-08-13 Thu 02:11]
-:PROPERTIES:
-:CUSTOM_ID: c04a4e67-9b09-4165-8f52-f7dad29b3792
-:CREATED: [2026-08-11 Tue 16:19]
-:STARTED: [2026-08-13 Thu 01:29]
-:END:
-:LOGBOOK:
-- Created [2026-08-11 Tue 16:19]
-- State "STARTED" from "TODO" [2026-08-13 Thu 01:29]
-- State "DONE" from "STARTED" [2026-08-13 Thu 02:11]
-:END:
-=oh task close= refuses indefinitely when a child process has exited while its last observed lifecycle state was =working=. Observed 2026-08-11 on two captured, validated children: =oh agent list= returned no live agents at all, while =task close= reported =status=retained=, =reason=unsettled=, =agent-status=working= on repeated attempts spanning several minutes. The panes had to be closed with raw =oh pane close=, which bypasses the ledger guard entirely.
-
-The guard requires a live observation in =idle= or =done=. A child that vanishes mid-=working= can never produce one, so the entry is unclosable through the supported path. The documented released-name fallback (a live pane whose recorded =shell_pid= still matches and whose foreground is not busy) did not engage, plausibly because the pane's foreground was still the agent's own TUI process.
-
-Acceptance criteria:
-- [X] =close= resolves a captured entry whose agent is absent from =agent list=, rather than reporting =unsettled= forever; the outcome names why it acted (no live occupant) so it is distinguishable from closing a settled agent -- found already satisfied before any change (state A below), and =--abandon= now names its own outcome =pane-left-to-operator=.
-- [X] The existing guards are untouched for the cases they exist for: a live =working= child is still refused, and an entry owned by another session is still refused -- both asserted, and both re-checked by deliberately removing =assert-closable!= (5 failures).
-- [X] A stale =working= status alone never authorises closing a pane that still has a live occupant -- =--abandon= closes no pane at all, so the bar is not merely upheld but unreachable.
-- [X] Reproduce the observed state before fixing, and trigger the new path deliberately rather than only observing it pass -- three candidate states driven before any edit, and the shipped guard sabotaged two ways afterwards.
-Must not: weaken the ownership guard; make =pane close= the documented route for a spawned child.
-
-Measurement [2026-08-13 Thu]: all three candidate states driven against the fake harness. (A) A child genuinely absent from =agent list= *already closes today* -- =released-name-close= finds no occupant, the foreground is idle, the =shell_pid= witness matches, and it takes the pane. So the first acceptance criterion is already satisfied and is not the defect. (B) An occupant present at the pane but reporting a stale =working= reproduces the reported triple exactly (=retained=/=unsettled=/=agent-status=working=), because the occupant branch returns before the foreground and =shell_pid= evidence ever runs. (C) A named, genuinely working child retains correctly.
-
-The report is internally inconsistent, and this blocks a fix rather than merely annoying: =:agent-status= is populated *only* where an occupant was observed, so "=agent list= returned no live agents at all" and "=agent-status=working=" cannot both describe the same moment. Either the listing was non-empty during the close attempts, or the two observations are minutes apart. The body's own guess -- that the fallback did not engage because the pane's foreground was still the agent's TUI -- is wrong: that branch returns a result with no =:agent-status= at all.
-
-Resolved by option (a). `close --abandon` retires the ledger round for a captured entry whose pane cannot be confirmed free, running every `assert-closable!` guard and skipping only the liveness observation; it issues no `pane close`, reports `abandoned`/`pane-left-to-operator`, and records `:pane-abandoned true`. No existing guard moved: a live occupant still holds its pane, `collect --close` never abandons, and `close --settled --abandon` is refused rather than ignored. The pane was never the thing that had to die -- the entry outliving it in `close --settled` and `orphans` was.
-
-Originally blocked on a design decision, not on effort. Making a listed-but-stale occupant closable on foreground evidence was implemented and reverted: it contradicts =close-shell-pid-fallback-still-requires-a-settled-occupant=, whose stated rationale is that prompt text must never land mid-turn just because a name disappeared, and it violates this task's own third criterion, since a listed occupant *is* a live occupant. Options: (a) leave the pane guard alone and add a way to resolve the *entry* without taking the pane, so a stuck round stops blocking =close --settled= and =orphans= while the operator disposes of the pane; (b) let idle-foreground evidence override a reported status, which needs the existing contract renegotiated deliberately; (c) bound it by time as well as foreground. (a) is the only one that touches no existing guard.
 
 ** TODO herdr-orch: allow persona-less subagents :skill:herdr_orch:
 :PROPERTIES:
@@ -353,7 +323,18 @@ Pointer: `capture!` and `record-item-capture!` in `skills/herdr-orch/scripts/src
 
 * Fixes
 
-* Housekeeping
+* Chores
+
+** TODO [#C] Review recent herdr updates for impact to / potential improvements on herdr-orch skill
+:PROPERTIES:
+:CUSTOM_ID: cf561004-25e4-46ee-aa4a-5e09b8eecff6
+:CREATED: [2026-08-17 Mon 18:33]
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 18:33]
+:END:
+I noticed one recent merge titled "fix: reject prompts to blocked agents (#2790)", which could be relevant. Review the commit history for additional breadcrumbs.
+
 * Agent feedback
 
 ** TODO [#B] Skill vendoring improvements :project_convention:
@@ -587,33 +568,6 @@ Origin:
 - cwd: /Users/cormacc/dotfiles/agents
 - git: cormacc/dotagents @ main
 - sender: agent
-
-** DONE herdr-orch: document test-authoring hazards for the scripts suite :skill:herdr_orch:
-CLOSED: [2026-08-13 Thu 02:18]
-:PROPERTIES:
-:CUSTOM_ID: 8e83a6bb-093c-44ee-bb33-38f3e7ea2dde
-:CREATED: [2026-08-12 Wed 23:31]
-:END:
-:LOGBOOK:
-- Created [2026-08-12 Wed 23:31]
-- State "DONE" from "TODO" [2026-08-13 Thu 02:18]
-:END:
-The herdr-orch scripts suite has two recurring test-authoring hazards, both of which have now cost real time twice, and neither is written down where a test author would look (=skills/herdr-orch/scripts/README.md= § Tests and smoke, or a scripts-local AGENTS.md alongside the one org-tasks already has).
-
-Reading a produced file before asserting the producer succeeded. A new test dereferenced the ledger path straight from a spawn result, so a refused spawn surfaced as =FileNotFoundException: .../ledger/.json= and hid the actual error (a nested spawn rejected for a missing =FAKE_PARENT_LABEL=). =home/AGENTS.md= already carries this exact rule, with this exact FileNotFoundException example, and it was violated anyway -- so the fix is not to restate the prohibition but to remove the incentive: a small spawn helper that asserts =(zero? (:exit proc))= and only then reads the entry, used by every spawn-shaped test. One such helper (=spawned-model=) now exists in =cli_test.clj=; the work is to make that the documented default and note why.
-
-Running an expected-hang probe inside the whole namespace. Reported by worker-fbb7a3fa: a hang-regression probe run as part of the full namespace stalled it for 300 s. Independently corroborated by task b0eb67fc's own body, which records =bb test= hanging for 900 s when the guard masking that path lapsed. Desired outcome: document that a probe whose expected outcome is a hang runs behind a per-call timeout or against a stub, never bare inside the suite.
-
-Both are documentation of an existing convention plus one small test helper, not a behaviour change to the CLI.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-12 Wed 23:40]
-- sender: agent
-
-Evidence:
-Session retro after the herdr-orch housekeeping task (archived). The first hazard was hit by the parent while writing the model-inheritance test; the second arrived as a child PROCESS candidate via =oh task harvest= and was corroborated against b0eb67fc rather than adopted on the child's word.
 
 ** TODO org-tasks: ot create cannot insert plan tasks into a linked change-record's * Plan :skill:org_tasks:
 :PROPERTIES:

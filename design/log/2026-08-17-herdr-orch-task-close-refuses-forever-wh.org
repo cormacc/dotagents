@@ -1,0 +1,81 @@
+#+TITLE: herdr-orch: resolve an unconfirmable child round without closing its pane
+#+DATE: 2026-08-17 Mon
+#+PARENT: [[archive:c04a4e67-9b09-4165-8f52-f7dad29b3792][herdr-orch: task close refuses forever when a child exits while last seen working]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+
+* Intent
+Provide a supported way to retire a captured child round when `close` cannot confirm that its pane is free. Preserve pane safety and ownership by leaving pane disposal to the operator.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+`oh task close <full-task-uuid> --abandon` resolves the ledger state without closing the pane. The command keeps the existing ownership and round guards, records explicit abandonment, and leaves pane disposal outside the delegation protocol.
+
+** Scope
+*** In scope
+- Retire one owned, captured, newest round whose pane cannot be confirmed free.
+- Preserve the ordinary `close` liveness checks and pane-closing behaviour.
+- Define the new outcome and ledger fields in `skills/herdr-orch/scripts/docs/contract.md`.
+- Add fake-harness regression coverage for the stuck state and safety guards.
+
+*** Out of scope
+- Close a pane whose occupant reports `working`.
+- Let foreground or elapsed-time evidence override a live occupant's lifecycle state.
+- Add bulk abandonment to `close --settled`.
+- Apply abandonment implicitly through `collect --close`.
+
+** Acceptance
+*** Core functionality
+- [X] `oh task close <full-task-uuid> --abandon` records `:closed-at` on an eligible round. → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `close-abandon-resolves-a-stuck-round-without-taking-its-pane`
+- [X] The same command records `:pane-abandoned true`. → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `close-abandon-resolves-a-stuck-round-without-taking-its-pane`
+- [X] The result reports `abandoned` with reason `pane-left-to-operator`. → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `close-abandon-resolves-a-stuck-round-without-taking-its-pane`
+
+*** Edge cases
+- [X] Plain `close` still retains a pane whose occupant reports `working`. → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `close-shell-pid-fallback-still-requires-a-settled-occupant`
+- [X] `--abandon` refuses a round that another parent session owns. → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `close-abandon-resolves-a-stuck-round-without-taking-its-pane`
+- [X] `--abandon` refuses an uncaptured round. → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `close-abandon-resolves-a-stuck-round-without-taking-its-pane`
+- [X] `close --settled --abandon` fails instead of ignoring the flag. → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `close-abandon-resolves-a-stuck-round-without-taking-its-pane`
+
+*** Anti-criteria
+- [X] Must not: call `herdr pane close` on the abandonment path. → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]]
+- [X] Must not: bypass `assert-closable!`. → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]]
+- [X] Must not: make raw `pane close` the supported child-round lifecycle path. → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]]
+
+** Decisions
+- Chose explicit ledger abandonment :: The unsafe resource was the unresolved ledger entry, not a pane that the protocol could prove safe to close.
+  Rejected:
+  - Let foreground and shell evidence override a listed occupant's `working` state. This would weaken `close-shell-pid-fallback-still-requires-a-settled-occupant` and could close a pane during an active turn.
+  - Add an elapsed-time threshold before overriding `working`. Time does not prove that the pane is free.
+- Kept ordinary released-name closure unchanged :: A name-absent child already closes when the pane, foreground, and recorded shell provide the required evidence.
+- Limited abandonment to one explicit task UUID :: Bulk or capture-time abandonment would hide the operator decision to leave a pane running.
+
+** Shipped
+- ADDED :: `close <full-task-uuid> [--abandon]` retires an eligible ledger round without a pane operation.
+- MODIFIED :: [[proj:skills/herdr-orch/scripts/docs/contract.md]] -- Defines the guards, `abandoned` result, `pane-left-to-operator` reason, and `:pane-abandoned` marker.
+- ADDED :: `close-abandon-resolves-a-stuck-round-without-taking-its-pane` covers the stuck state, ledger result, guard refusals, and bulk-flag refusal.
+
+** Gotchas
+- `released-name-close` adds `:agent-status` only when `agent list` reports an occupant at the recorded pane. Therefore, `agent-status=working` and an empty listing cannot describe one close observation.
+- `--abandon` resolves protocol state only. The operator remains responsible for inspection and disposal of the retained pane.
+
+** Risks
+- An operator can abandon a round and leave its pane running. The explicit single-round command, result reason, and ledger marker make that responsibility visible.
+- Abandonment skips liveness observation. `assert-closable!` still requires ownership, capture, a pane, the newest round, and no prior closure.
+
+** Follow-ups
+- None.
+
+* Plan
+
+* Implementation
+- Commit `a63a97ed91bd7831268ba306a1cc1a96291ec9fb` added the value-less `--abandon` flag, command help, explicit bulk refusal, tests, and contract text.
+- `close-task!` runs `assert-closable!` before it selects ordinary close or abandonment.
+- `close-mutation!` skips `herdr/close!` only when `abandon?` is true. It then writes `:closed-at` and `:pane-abandoned true`.
+- `collect-with-closure!` calls `capture-close!`, which calls `close-task!` with empty options. Therefore, capture cannot select abandonment.
+
+* Validation
+- A fake-harness probe drove three candidate states before the final design. A name-absent child with matching shell evidence closed. A nameless occupant reporting `working` returned `retained` and `unsettled`. A named working child also retained.
+- The original implementation session mutation-tested the focused regression. Making the abandonment path close the pane caused one failure. Removing `assert-closable!` caused five failures.
+- Current verification ran `close-abandon-resolves-a-stuck-round-without-taking-its-pane` at assignment baseline `e9161398c245a024e6aedba60fb720ad96c0f49b`: 1 test, 17 passing assertions, 0 failures, and 0 errors.
