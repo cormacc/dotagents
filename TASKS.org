@@ -307,6 +307,45 @@ Open questions to settle before implementing:
 
 Verified [2026-08-12 Wed] against cli.clj at 6a89b0f plus the housekeeping commits: the roster failure above is real, all seven packaged personas declare =model:=, and no inline-persona flag exists.
 
+** TODO herdr plugin wrapper for herdr-orch :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 9f667467-a23c-497b-afe8-54afab3b0e5b
+:CREATED: [2026-08-16 Sun 11:02]
+:END:
+:LOGBOOK:
+- Created [2026-08-16 Sun 11:02]
+:END:
+#+IMPORT: [[plan:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]]
+Package herdr-orch as a Herdr plugin wrapper without replacing the existing skill as the orchestration core.
+
+Initial scope:
+- Package the herdr-orch skill, its scripts and traits, and the Pi interactive trait-expansion extension.
+- Preserve the current local development flow. `~/.agents/skills/herdr-orch` and `~/.pi/agent/extensions` continue to resolve through the live dotagents checkout. `herdr plugin link` must use that working tree without replacing those links.
+- Separate GitHub-install build work from harness setup. Herdr runs manifest build commands only during GitHub installation. `plugin link` does not run them. Build commands receive no plugin runtime context and must not install or replace global harness configuration.
+- Define a safe activation and diagnostic surface because Herdr does not automatically register packaged skills or Pi extensions.
+
+Likely later scope:
+- Add a Herdr plugin pane that renders a hierarchical tree of orchestration sessions.
+- Derive hierarchy primarily from the herdr-orch ledger and contract. Link `:parent-session` to `:child-session`, group continued rounds with `:continues`, and treat pane labels as display metadata or a diagnostic fallback only.
+- Join ledger nodes to live Herdr pane and agent state for navigation and status.
+- Add Claude Code and Codex `UserPromptSubmit` adapters for interactive trait context injection. Preserve project-trust boundaries when resolving project traits.
+
+Known constraints and candidate direction:
+- The current Pi adapter resolves the interpolator through `~/.agents/skills/herdr-orch/scripts/traits`; packaged resolution must retain that live path and add an explicit or package-relative fallback.
+- herdr-orch currently requires Herdr 0.7.5 or later and Babashka. Its Bash launchers currently imply Linux and macOS support.
+- A single source repository can expose separate native package interfaces for Herdr, Pi, and Agent Skills. The Herdr plugin should remain an adapter and distribution surface rather than becoming the canonical implementation.
+- Herdr plugin v1 supports terminal panes, actions, event hooks, runtime context, and socket access. It does not provide arbitrary native non-terminal plugin UI. A session tree therefore belongs in a plugin terminal pane.
+
+** TODO Shared babashka bootstrap helper for bb-dependent skills :herdr_orch:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: 41ca2ed9-9eff-47e0-b0ca-294e20f6c334
+:CREATED: [2026-08-16 Sun 11:57]
+:END:
+:LOGBOOK:
+- Created [2026-08-16 Sun 11:57]
+:END:
+Design and ship a shared skill-level helper that bootstraps a local Babashka copy when `bb` is absent. Both `org-tasks` (`ot`) and `herdr-orch` (`oh`, `traits`) depend on `bb`, so the helper belongs at skill level, not inside the Herdr plugin. Open design questions: where the helper lives, how both skills consume it, download and checksum policy, PATH placement, and the update story. Raised during planning of the herdr plugin wrapper ([[plan:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]]); that change ships an install hint only.
+
 ** TODO [#C] traits: re-probe every fragment against synthetic, non-decaying scenarios
 :PROPERTIES:
 :CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
@@ -729,3 +768,22 @@ Origin:
 
 Evidence:
 A one-off `.tmp/compare-agent-counts.clj` produced the requested comparison. A later Node verification duplicated the calculation and violated the repository's Babashka-first rule. The user identified the comparison as reusable and requested a durable script.
+
+** TODO Probe the Babashka default nREPL port before server startup :ext:pi_clojure:skill:clojure:
+:PROPERTIES:
+:CUSTOM_ID: f8dcf8df-d12f-497a-81bd-7a50b654d6f4
+:CREATED: [2026-08-17 Mon 09:11]
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 09:11]
+:END:
+Probe Babashka's default nREPL port before a worker creates a new Herdr pane and starts another server. If the default port accepts an evaluation, reuse that server. This check prevents a failed duplicate start and an unnecessary pane.
+
+Origin:
+- cwd: /Users/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-17 Mon 09:11]
+- sender: human
+
+Evidence:
+`clojure_find_nrepl_port` reported no reachable port. The workflow then created a Herdr tab and ran `bb nrepl-server`. That command failed with `java.net.BindException: Address already in use`. A direct `clojure_eval` probe of port 1667 returned `2` for `(+ 1 1)`, which confirmed that an existing Babashka nREPL server was available.
