@@ -1,0 +1,116 @@
+#+TITLE: Simplify herdr-orch skill based on upstream changes
+#+DATE: 2026-08-17 Mon
+#+PARENT: [[task:cf561004-25e4-46ee-aa4a-5e09b8eecff6][Simplify herdr-orch skill based on upstream changes]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+
+* Intent
+
+Reduce the herdr-orch skill to the decisions and recovery actions an orchestrator must know. Remove mechanical guard detail that the `oh` CLI and its contract already own, without changing delegation behaviour.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+** Scope
+
+*** In scope
+
+- Prune `skills/herdr-orch/SKILL.md`, especially `## Invocation policy` and `## Completion and pane safety`.
+- Keep user decisions, non-mechanical policy, completion evidence, and short recovery commands in the skill.
+- Keep guard preconditions, reason codes, race analysis, and implementation detail in `skills/herdr-orch/scripts/docs/contract.md`.
+- Validate that fresh agents still choose the correct normal, timeout, missing-publication, and invalid-publication actions.
+
+*** Out of scope
+
+- Removing the local `agent start` retry or post-prompt dispatch verifier.
+- Changing `oh`, its ledger schema, tests, personas, traits, raw Herdr groups, or the Pi extension.
+- Adding a capability probe, compatibility layer, option, dependency, or new reference file.
+- Updating the dotfiles Herdr flake input.
+
+** Acceptance
+
+*** Core functionality
+
+- [X] `skills/herdr-orch/SKILL.md` retains the `run` versus `start` choice, root fan-out policy, terminal `RESULT` completion rule, explicit close-or-continue decision, and recovery commands for timeout, missing publication, and invalid publication.
+- [X] Mechanically enforced preconditions and refusal detail are removed from the skill when `skills/herdr-orch/scripts/docs/contract.md` already owns them.
+- [X] `## Invocation policy` and `## Completion and pane safety` together contain at most 900 words, down from the measured 1,807 words.
+- [X] The complete skill contains fewer than 3,000 words, down from the measured 3,702 words.
+- [X] The edit adds no behavioural mechanism and changes no CLI, contract, persona, trait, extension, or test file.
+- [X] Skill frontmatter parses after the edit.
+
+*** Edge cases
+
+- [X] A fresh-agent evaluation treats a wait timeout as non-final and continues collection instead of respawning.
+- [X] A fresh-agent evaluation uses `poke` for a settled child with no valid publication and never adopts pane prose as completion evidence.
+- [X] A fresh-agent evaluation captures a terminal item before choosing `close` or `continue`.
+- [X] The pruned skill still tells a parent to surface validated artifact links before it discards pane context.
+
+*** Anti-criteria
+
+- [X] Must not: remove the parent-session, assignment-premise, consequence-class, or independent-closeout validation policies.
+- [X] Must not: state preview-only Herdr behaviour as a stable Herdr v0.8.0 guarantee.
+- [X] Must not: add local handling for upstream `agent_blocked`.
+- [X] Must not: remove the raw `oh pane`, `tab`, `ws`, or `agent` groups while `pi/extensions/herdr-orch/index.ts` uses them.
+
+** Decisions
+
+- Chose a prose-only simplification now :: `/Users/cormacc/dotfiles/flake.lock` pins Herdr at `51b7064`, and the installed Nix source matches that revision. That revision contains upstream readiness and blocked-prompt fixes. However, its binary still reports `0.8.0`, which is indistinguishable from the stable v0.8.0 release that predates those fixes. Rejected:
+  - Remove compatibility code now: would silently weaken the published `Herdr >= 0.7.5` contract for stable v0.8.0 users.
+  - Add a capability probe: adds a new mechanism only to retire temporary compatibility code.
+  - Treat the flake URL as automatically current: `flake.lock` pins one revision until an explicit input update.
+- Keep operational choices in `skills/herdr-orch/SKILL.md` and mechanical proofs in `skills/herdr-orch/scripts/docs/contract.md` :: the skill is loaded for every matched delegation, while the contract is loaded only for debugging or maintenance.
+- Use deletion and short links rather than a new summary reference :: a new file would add another contract surface and navigation decision.
+
+** Shipped
+
+- MODIFIED :: `skills/herdr-orch/SKILL.md` -- reduced mechanically enforced lifecycle prose while retaining parent choices and recovery actions.
+
+** Gotchas
+
+- The dotfiles flake pin can contain post-release Herdr fixes while the binary still reports the earlier stable version. The portable skill cannot use that version string as a capability boundary.
+
+** Follow-ups
+
+- Resume this parent task after Herdr publishes a stable version whose reported version includes readiness commits `7ae4b05` and `37644ca`. Reassess deletion of the local start retry and dispatch verifier.
+
+** Risks
+
+- Over-pruning can remove a recovery cue that the CLI cannot initiate for the parent. Mitigated: old-skill and candidate-skill fresh agents produced the same required recovery decisions.
+- The upstream fixes are present on this machine but remain unreleased under a distinct semantic version. Accepted: defer code deletion until `herdr --version` can enforce the required baseline.
+
+* Plan
+
+** DONE Prune and validate the herdr-orch skill
+CLOSED: [2026-08-17 Mon 22:25]
+:PROPERTIES:
+:CUSTOM_ID: 70080ead-6c88-4256-b579-9f9d2cdc2350
+:CREATED: [2026-08-17 Mon 22:15]
+:STARTED: [2026-08-17 Mon 22:19]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-17 Mon 22:19]
+- State "DONE" from "STARTED" [2026-08-17 Mon 22:25]
+:END:
+Acceptance criteria:
+- The record-level acceptance and anti-criteria all pass.
+- A candidate copy under `.tmp/` shows a deletion-led diff before it replaces `skills/herdr-orch/SKILL.md`.
+- The skill validator passes against the final file.
+- Fresh-agent scenario transcripts preserve the required normal and recovery decisions without relying on the removed prose.
+
+Pointer: `skills/herdr-orch/SKILL.md` sections `Invocation policy` and `Completion and pane safety`. Mechanical detail remains in `skills/herdr-orch/scripts/docs/contract.md`.
+
+* Implementation
+
+- Reduced `## Invocation policy` from 827 to 273 words and `## Completion and pane safety` from 980 to 266 words.
+- Reduced the complete skill from 3,702 to 2,434 words. The diff adds 14 lines and removes 29 lines.
+- Retained waiting, placement, cardinality, isolation, integration, lifecycle, publication recovery, pane safety, ledger retention, artifact, and explicit-ID decisions.
+- Left compatibility code and every non-skill implementation file unchanged.
+
+* Validation
+
+- `quick_validate.py skills/herdr-orch` passed with PyYAML 6.0.2 in an isolated virtual environment.
+- A fresh light worker read the old snapshot as its only protocol guide. A second fresh light worker read the candidate. Both selected collect-again after timeout, `poke` after missing or invalid settled publication, capture before close, and validated collect-time artifact links as evidence.
+- The candidate evaluator's note that no pruning occurred contradicted the measured file. `wc -w`, section counts, and the inspected diff confirmed the pruning, so that note was not adopted.
+- The candidate-to-source copy preserved frontmatter and the file ending. The final diff changes only the two planned skill sections.

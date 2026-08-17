@@ -325,15 +325,21 @@ Pointer: `capture!` and `record-item-capture!` in `skills/herdr-orch/scripts/src
 
 * Chores
 
-** TODO [#C] Review recent herdr updates for impact to / potential improvements on herdr-orch skill
+** STARTED [#C] Simplify herdr-orch skill based on upstream changes
 :PROPERTIES:
 :CUSTOM_ID: cf561004-25e4-46ee-aa4a-5e09b8eecff6
 :CREATED: [2026-08-17 Mon 18:33]
+:STARTED: [2026-08-17 Mon 22:01]
+:HANDOFF: Prose pruning is complete and validated. Keep the parent STARTED. Resume after Herdr publishes a stable version whose reported version includes readiness commits 7ae4b05 and 37644ca, then reassess deletion of the local start retry and dispatch verifier.
 :END:
 :LOGBOOK:
 - Created [2026-08-17 Mon 18:33]
+- State "STARTED" from "TODO" [2026-08-17 Mon 22:01]
+- State "DONE" from "STARTED" [2026-08-17 Mon 22:07]
+- State "STARTED" from "DONE" [2026-08-17 Mon 22:14]
 :END:
-I noticed one recent merge titled "fix: reject prompts to blocked agents (#2790)", which could be relevant. Review the commit history for additional breadcrumbs.
+#+IMPORT: [[plan:2026-08-17-simplify-herdr-orch-skill-based-on-upstr.org]]
+Prune mechanically enforced lifecycle detail from `skills/herdr-orch/SKILL.md`. Keep policy and parent recovery actions in the skill, and keep guard detail in the canonical contract. Defer compatibility-code removal until Herdr publishes a version that distinguishes the upstream readiness fixes from stable v0.8.0.
 
 * Agent feedback
 
