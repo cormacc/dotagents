@@ -122,18 +122,9 @@
                          "' with no unknowns or repeats")))
       (get-in envelope [:result :text]))))
 
-(defn prepare-codex-home! [run-dir]
-  (let [source-home (fs/path (or (System/getenv "CODEX_HOME")
-                                 (str (fs/home) "/.codex")))
-        isolated-home (fs/path run-dir "codex-home")
-        auth-source (fs/path source-home "auth.json")]
-    (fs/create-dirs isolated-home)
-    (fs/set-posix-file-permissions isolated-home "rwx------")
-    (when (fs/regular-file? auth-source)
-      (let [auth-copy (fs/path isolated-home "auth.json")]
-        (fs/copy auth-source auth-copy)
-        (fs/set-posix-file-permissions auth-copy "rw-------")))
-    (str isolated-home)))
+(defn caller-codex-home []
+  (or (System/getenv "CODEX_HOME")
+      (str (fs/path (fs/home) ".codex"))))
 
 (defn run-arm! [gate root model run-dir codex-home arm prompt]
   (let [output (str (fs/path run-dir (str arm ".output.md")))
@@ -185,23 +176,20 @@
       (spit treated-source treated)
       (spit control-prompt control)
       (let [treated-text (interpolate-treated! gate root trait traits-bin treated-source interpolation)
-            codex-home (prepare-codex-home! run-dir)]
+            codex-home (caller-codex-home)]
         (spit treated-prompt treated-text)
-        (try
-          (let [treated-output (run-arm! gate root model run-dir codex-home "treated" treated-text)
-                control-output (run-arm! gate root model run-dir codex-home "control" control)]
-            (println (str "Gate: %" trait))
-            (println (str "Model: " model))
-            (println "Pass condition:")
-            (println (:pass-condition parsed))
-            (println "\n=== TREATED ===")
-            (println treated-output)
-            (println "\n=== CONTROL ===")
-            (println control-output)
-            (println (str "\nOutputs: " run-dir))
-            (println "No verdict emitted; compare both outputs against the pass condition."))
-          (finally
-            (fs/delete-tree codex-home)))))))
+        (let [treated-output (run-arm! gate root model run-dir codex-home "treated" treated-text)
+              control-output (run-arm! gate root model run-dir codex-home "control" control)]
+          (println (str "Gate: %" trait))
+          (println (str "Model: " model))
+          (println "Pass condition:")
+          (println (:pass-condition parsed))
+          (println "\n=== TREATED ===")
+          (println treated-output)
+          (println "\n=== CONTROL ===")
+          (println control-output)
+          (println (str "\nOutputs: " run-dir))
+          (println "No verdict emitted; compare both outputs against the pass condition."))))))
 
 (try
   (let [options (parse-args *command-line-args*)]

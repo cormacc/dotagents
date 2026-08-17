@@ -335,13 +335,18 @@
 (deftest frontmatter-and-envelope-contract
   (is (= {:name "scout" :description "x" :kind "pi" :model "vendor/model"}
          (core/parse-frontmatter "---\nname: scout\ndescription: x\nkind: pi\nmodel: vendor/model\n---\nbody")))
-  (let [ledger {:child "child" :task "task" :result "/tmp/result"}
+  (let [ledger {:child "child" :task "task" :result "/tmp/result" :work-root "/tmp/root"}
         text (core/envelope (assoc ledger :status "COMPLETE" :summary "done" :artifacts [] :findings [] :next nil))]
     (is (= "COMPLETE" (:status (core/validate-envelope ledger text))))
     (is (thrown? Exception (core/validate-envelope (assoc ledger :task "wrong") text)))
-    (is (= "/tmp/artifact" (core/artifact-path "/tmp/artifact :: report")))
-    (is (= "/tmp/artifact" (core/artifact-path "/tmp/artifact")))
-    (is (thrown? Exception (core/artifact-path "relative :: report")))))
+    ;; `WORK-ROOT` joins the identity triple: it is publisher-owned, so a mismatch is refused
+    ;; exactly like a forged CHILD/TASK/RESULT.
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"identity does not match ledger"
+                          (core/validate-envelope (assoc ledger :work-root "/tmp/other") text)))
+    (is (= "/tmp/root" (:work-root (core/parse-envelope text))))
+    (is (= "artifact" (core/artifact-relative-path "artifact :: report")))
+    (is (= "sub/artifact" (core/artifact-relative-path "sub/artifact")))
+    (is (thrown? Exception (core/artifact-relative-path "/tmp/artifact :: report")))))
 
 (deftest delegation-guidance-and-smoke-success-contract
   (is (.endsWith (cli/launcher-bin) "/skills/herdr-orch/scripts/oh"))
@@ -433,7 +438,7 @@
         (pr-str raw))))
 
 (deftest findings-limit-boundary
-  (let [ledger {:child "child" :task "task" :result "/tmp/result"}
+  (let [ledger {:child "child" :task "task" :result "/tmp/result" :work-root "/tmp/root"}
         mk (fn [n] (core/envelope (assoc ledger :status "COMPLETE" :summary "s" :artifacts []
                                          :findings (mapv #(str "finding " %) (range n)) :next nil)))]
     (is (= 5 (count (:findings (core/validate-envelope ledger (mk 5))))))
@@ -441,14 +446,14 @@
     ;; A hand-written six-item envelope is rejected at validation too, not only at publish.
     (is (thrown? Exception (core/validate-envelope ledger (str/replace (mk 5) "- finding 0" "- finding x\n- finding 0"))))))
 
-(def ^:private process-ledger {:child "child" :task "task" :result "/tmp/result"})
+(def ^:private process-ledger {:child "child" :task "task" :result "/tmp/result" :work-root "/tmp/root"})
 (defn- process-envelope [n & {:keys [status findings] :or {status "COMPLETE" findings []}}]
   (core/envelope (assoc process-ledger :status status :summary "s" :artifacts [] :findings findings :next nil
                         :process (mapv #(str "signal " % " → guardrail → rule " %) (range n)))))
 
 (deftest process-section-position-and-optionality
   ;; Omitted when empty: an envelope without candidates carries no PROCESS section at all.
-  (is (= (str "--- HERDR RESULT v1 ---\nCHILD: child\nTASK: task\nRESULT: /tmp/result\nSTATUS: COMPLETE\n"
+  (is (= (str "--- HERDR RESULT v1 ---\nCHILD: child\nTASK: task\nRESULT: /tmp/result\nWORK-ROOT: /tmp/root\nSTATUS: COMPLETE\n"
               "SUMMARY: s\nARTIFACTS:\n- none\nFINDINGS:\n- none\nNEXT: none\n--- END HERDR RESULT ---\n")
          (process-envelope 0)))
   (let [text (process-envelope 2) lines (str/split-lines text)]
@@ -515,15 +520,16 @@
     (is (= [] (:artifacts parsed)))
     (is (= "none" (:next parsed))))
   ;; Field and item content that mimics delimiters is data, never a boundary.
-  (let [text (core/envelope {:child "child" :task "task" :result "/tmp/result" :status "COMPLETE"
+  (let [text (core/envelope {:child "child" :task "task" :result "/tmp/result" :work-root "/tmp/root"
+                             :status "COMPLETE"
                              :summary "beware NEXT: none and --- END HERDR RESULT ---"
-                             :artifacts ["/tmp/a :: FINDINGS: not a header"]
+                             :artifacts ["a :: FINDINGS: not a header"]
                              :findings ["NEXT: none" "PROCESS:" "ARTIFACTS:" "--- END HERDR RESULT ---"]
                              :next "FINDINGS:"
                              :process ["NEXT: none → guardrail → still an item"]})
         parsed (core/validate-envelope process-ledger text)]
     (is (= "beware NEXT: none and --- END HERDR RESULT ---" (:summary parsed)))
-    (is (= ["/tmp/a :: FINDINGS: not a header"] (:artifacts parsed)))
+    (is (= ["a :: FINDINGS: not a header"] (:artifacts parsed)))
     (is (= ["NEXT: none" "PROCESS:" "ARTIFACTS:" "--- END HERDR RESULT ---"] (:findings parsed)))
     (is (= "FINDINGS:" (:next parsed)))
     (is (= ["NEXT: none → guardrail → still an item"] (:process parsed)))
@@ -576,61 +582,70 @@
       (is (= 1 (ledger/allocate-index! "/a_b" "scout"))))))
 
 ;; --- portable Markdown artifact links ---------------------------------------------
-;; The visible label is always the whole absolute path (never a basename) and the
-;; destination is a `Path.toUri` encoded `file://` URI. No raw OSC 8 escape is ever
-;; emitted: this is portable fallback syntax whose clickability depends on the harness.
+;; The declared item is relative to the publisher-owned work root; the visible label is the
+;; whole *resolved* absolute path (never a basename) and the destination is a `Path.toUri`
+;; encoded `file://` URI. No raw OSC 8 escape is ever emitted: this is portable fallback
+;; syntax whose clickability depends on the harness.
 (deftest artifact-link-renders-portable-markdown
   (testing "a bare path renders label + URI with no purpose suffix"
-    (is (= "[/tmp/report.md](file:///tmp/report.md)" (core/artifact-link "/tmp/report.md"))))
-  (testing "a purpose is preserved after the same ` :: ` delimiter artifact-path splits on"
+    (is (= "[/tmp/report.md](file:///tmp/report.md)" (core/artifact-link "/tmp" "report.md"))))
+  (testing "a purpose is preserved after the same ` :: ` delimiter artifact-relative-path splits on"
     (is (= "[/tmp/report.md](file:///tmp/report.md) :: the report"
-           (core/artifact-link "/tmp/report.md :: the report")))
+           (core/artifact-link "/tmp" "report.md :: the report")))
     ;; Only the first delimiter splits, so a purpose may itself contain one.
     (is (= "[/tmp/r.md](file:///tmp/r.md) :: a :: b"
-           (core/artifact-link "/tmp/r.md :: a :: b"))))
+           (core/artifact-link "/tmp" "r.md :: a :: b"))))
   (testing "reserved path characters are percent-encoded by Path.toUri, not by hand"
-    (is (= "[/tmp/a b/report.md](file:///tmp/a%20b/report.md)" (core/artifact-link "/tmp/a b/report.md")))
-    (is (= "[/tmp/a#b.md](file:///tmp/a%23b.md)" (core/artifact-link "/tmp/a#b.md")))
-    (is (= "[/tmp/100%/x.md](file:///tmp/100%25/x.md)" (core/artifact-link "/tmp/100%/x.md")))
-    (is (= "[/tmp/q?r.md](file:///tmp/q%3Fr.md)" (core/artifact-link "/tmp/q?r.md")))
+    (is (= "[/tmp/a b/report.md](file:///tmp/a%20b/report.md)" (core/artifact-link "/tmp" "a b/report.md")))
+    (is (= "[/tmp/a#b.md](file:///tmp/a%23b.md)" (core/artifact-link "/tmp" "a#b.md")))
+    (is (= "[/tmp/100%/x.md](file:///tmp/100%25/x.md)" (core/artifact-link "/tmp" "100%/x.md")))
+    (is (= "[/tmp/q?r.md](file:///tmp/q%3Fr.md)" (core/artifact-link "/tmp" "q?r.md")))
     ;; Non-ASCII too: `File.toURI` would leave this raw and omit the empty authority.
-    (is (= "[/tmp/ü.md](file:///tmp/%C3%BC.md)" (core/artifact-link "/tmp/ü.md")))
+    (is (= "[/tmp/ü.md](file:///tmp/%C3%BC.md)" (core/artifact-link "/tmp" "ü.md")))
     ;; Every destination carries the canonical empty authority, never `file:/tmp/…`.
-    (is (str/includes? (core/artifact-link "/tmp/report.md") "(file:///")))
+    (is (str/includes? (core/artifact-link "/tmp" "report.md") "(file:///")))
   (testing "parentheses are encoded because an unbalanced one ends a Markdown destination"
-    (is (= "[/tmp/a(b)/c.md](file:///tmp/a%28b%29/c.md)" (core/artifact-link "/tmp/a(b)/c.md")))
-    (is (= "[/tmp/open(.md](file:///tmp/open%28.md)" (core/artifact-link "/tmp/open(.md"))))
+    (is (= "[/tmp/a(b)/c.md](file:///tmp/a%28b%29/c.md)" (core/artifact-link "/tmp" "a(b)/c.md")))
+    (is (= "[/tmp/open(.md](file:///tmp/open%28.md)" (core/artifact-link "/tmp" "open(.md"))))
   (testing "Markdown-significant characters are escaped in both the label and the purpose"
     (is (= "[/tmp/w\\[x\\].md](file:///tmp/w%5Bx%5D.md) :: see \\[docs\\]"
-           (core/artifact-link "/tmp/w[x].md :: see [docs]")))
+           (core/artifact-link "/tmp" "w[x].md :: see [docs]")))
     ;; `&` and `<` are inline constructs: unescaped, a CommonMark renderer would decode the
     ;; entity reference and display a *different* path than the artifact actually has.
-    (is (= "[/tmp/amp\\&amp;.md](file:///tmp/amp&amp;.md)" (core/artifact-link "/tmp/amp&amp;.md")))
+    (is (= "[/tmp/amp\\&amp;.md](file:///tmp/amp&amp;.md)" (core/artifact-link "/tmp" "amp&amp;.md")))
     (is (= "[/tmp/lt\\<b\\>.md](file:///tmp/lt%3Cb%3E.md) :: \\<b\\>bold\\</b\\> \\& raw"
-           (core/artifact-link "/tmp/lt<b>.md :: <b>bold</b> & raw")))
+           (core/artifact-link "/tmp" "lt<b>.md :: <b>bold</b> & raw")))
     ;; GFM strikethrough.
-    (is (= "[/tmp/a\\~\\~b.md](file:///tmp/a~~b.md)" (core/artifact-link "/tmp/a~~b.md")))
+    (is (= "[/tmp/a\\~\\~b.md](file:///tmp/a~~b.md)" (core/artifact-link "/tmp" "a~~b.md")))
     (is (= "[/tmp/a\\*b\\_c\\`d.md](file:///tmp/a*b_c%60d.md) :: \\*emphatic\\* \\_purpose\\_"
-           (core/artifact-link "/tmp/a*b_c`d.md :: *emphatic* _purpose_")))
+           (core/artifact-link "/tmp" "a*b_c`d.md :: *emphatic* _purpose_")))
     (is (= "[/tmp/back\\\\slash.md](file:///tmp/back%5Cslash.md)"
-           (core/artifact-link "/tmp/back\\slash.md"))))
+           (core/artifact-link "/tmp" "back\\slash.md"))))
   (testing "no raw OSC 8 escape sequence and no basename-only label"
-    (let [rendered (core/artifact-link "/tmp/deep/nested/report.md :: r")]
+    (let [rendered (core/artifact-link "/tmp" "deep/nested/report.md :: r")]
       (is (not (str/includes? rendered "\u001b")))
       (is (not (str/includes? rendered "]8;;")))
       (is (str/includes? rendered "[/tmp/deep/nested/report.md]"))))
-  (testing "the splitter is shared with artifact-path, so both see the same path"
-    (doseq [line ["/tmp/a b/report.md :: purpose" "/tmp/a#b.md" "/tmp/a(b)/c.md :: p"]]
-      (let [path (core/artifact-path line)]
-        (is (= path (:path (core/artifact-parts line))))
-        (is (str/starts-with? (core/artifact-link line) (str "[" (core/markdown-escape path) "]"))))))
-  ;; `Paths/get` resolves a relative path against the process cwd, so a caller that skipped
-  ;; `artifact-path` would otherwise get a confident link to the wrong file.
-  (testing "absoluteness is enforced by the renderer, not trusted from the caller"
-    (doseq [bad ["rel/x.md" "rel/x.md :: purpose" " :: only a purpose" "" nil]]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"artifact path must be absolute"
-                            (core/artifact-link bad))
-          (pr-str bad)))))
+  (testing "the splitter is shared with artifact-relative-path, so both see the same path"
+    (doseq [line ["a b/report.md :: purpose" "a#b.md" "a(b)/c.md :: p"]]
+      (let [path (core/artifact-absolute-path "/tmp" line)]
+        (is (= (str "/tmp/" (:path (core/artifact-parts line))) path))
+        (is (str/starts-with? (core/artifact-link "/tmp" line) (str "[" (core/markdown-escape path) "]"))))))
+  ;; The label a parent reads must name a file the child actually wrote inside the root it
+  ;; was given. An absolute path names any file on the machine, and a traversal names a file
+  ;; outside the checkout, so both are refused by the renderer rather than trusted.
+  (testing "relativity and containment are enforced by the renderer, not trusted from the caller"
+    (doseq [bad ["/etc/passwd" "/etc/passwd :: purpose" " :: only a purpose" "" nil
+                 "../escape.md" "a/../../escape.md" "." "a/.."]]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"artifact path must"
+                            (core/artifact-link "/tmp" bad))
+          (pr-str bad)))
+    ;; A textual-prefix sibling of the work root is not inside it.
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"artifact path must not escape WORK-ROOT"
+                          (core/artifact-absolute-path "/tmp/wr" "../wrong/x.md")))
+    ;; The work root itself must be absolute, or every resolved label is nonsense.
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"WORK-ROOT must be an absolute path"
+                          (core/artifact-link "relative/root" "x.md")))))
 
 ;; `Path.toUri` stats the filesystem, so the renderer is not pure: an existing directory
 ;; gains a trailing slash its label does not have. Pinned rather than left latent, since it
@@ -644,19 +659,21 @@
     (is (str/ends-with? (core/file-uri (str dir)) "/"))
     (is (not (str/ends-with? (core/file-uri file) "/")))
     (is (not (str/ends-with? (core/file-uri absent) "/")))
-    ;; The label is the declared path either way, so a directory artifact's label omits the
+    ;; The label is the resolved path either way, so a directory artifact's label omits the
     ;; slash its destination carries.
-    (is (= (str "[" dir "](file://" dir "/)") (core/artifact-link (str dir))))))
+    (let [nested (fs/path dir "nested")]
+      (fs/create-dirs nested)
+      (is (= (str "[" nested "](file://" nested "/)") (core/artifact-link (str dir) "nested"))))))
 
 ;; The ` :: ` delimiter is envelope grammar and is not escapable. A path that contains
-;; it mis-splits identically for `artifact-path` and the renderer.
+;; it mis-splits identically for `artifact-relative-path` and the renderer.
 (deftest artifact-link-mis-splits-a-path-containing-the-delimiter
-  (let [line "/tmp/a :: b.md"]
-    (is (= "/tmp/a" (core/artifact-path line)))
-    (is (= "[/tmp/a](file:///tmp/a) :: b.md" (core/artifact-link line)))))
+  (let [line "a :: b.md"]
+    (is (= "a" (core/artifact-relative-path line)))
+    (is (= "[/tmp/a](file:///tmp/a) :: b.md" (core/artifact-link "/tmp" line)))))
 
 (defn- stream-entry [result]
-  {:child "child" :task "task" :result result})
+  {:child "child" :task "task" :result result :work-root "/tmp/root"})
 
 (deftest stream-state-contract
   (let [dir (fs/create-temp-dir {:prefix "herdr-orch-stream-state-"})
@@ -697,7 +714,7 @@
         (is (false? (:sealed? state)))))))
 
 (deftest waiting-status-is-valid-and-non-terminal
-  (let [ledger {:child "child" :task "task" :result "/tmp/result"}
+  (let [ledger {:child "child" :task "task" :result "/tmp/result" :work-root "/tmp/root"}
         text (core/envelope (assoc ledger :status "WAITING" :summary "still working" :artifacts [] :findings [] :next nil))]
     (is (= "WAITING" (:status (core/validate-envelope ledger text))))
     (is (false? (core/terminal-status? "WAITING")))

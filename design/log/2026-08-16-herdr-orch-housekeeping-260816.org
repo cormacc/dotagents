@@ -1,0 +1,233 @@
+#+TITLE: herdr-orch housekeeping 260816
+#+DATE: 2026-08-16 Sun
+#+PARENT: [[archive:ee348a4c-6fdd-4c3d-a6fc-fa9184c7bfb1][herdr-orch housekeeping 260816]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:home/AGENTS.md]]
+
+* Intent
+
+Close the bounded herdr-orch correctness, recovery, and documentation gaps before the Herdr plugin wrapper work starts. The work serialises publication against the lifecycle verbs, moves artefact identity to a publisher-owned work root, adds a parent-owned recovery verb, stops the trait gate from replaying stale Codex credentials, and lands the probe-safety rules and README pass that depend on them.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+** Scope
+
+*** In scope
+
+- Serialise `publish`, `close`, `continue`, and the post-settle phase of `poke` with a per-child OS file lock.
+- Make `WORK-ROOT` publisher-owned identity and require relative `ARTIFACTS` entries.
+- Recover settled children that did not publish, without raw keys or respawn.
+- Run trait gates against the caller's real `CODEX_HOME`.
+- Add concurrency and scratch-probe guardrails to `home/AGENTS.md`.
+- Refresh the herdr-orch README and mechanical contracts.
+
+*** Out of scope
+
+- New orchestration features, the Herdr plugin wrapper, and unmanaged harnesses.
+- Cross-skill Babashka and `ot` installation design.
+- Synthetic trait re-probes, tracked by task `d669edf5`.
+
+** Acceptance
+
+*** Core functionality
+
+- [X] `publish`, `close`, and `continue` mutate a child's round only while holding that child's exclusive lock.
+- [X] `poke` holds the same lock across its final guards, prompt, and `:pokes` update.
+- [X] `close` cannot record `:closed-at` while an unconsumed item exists.
+- [X] `continue` cannot supersede a round while publication commits an item.
+- [X] Result envelopes carry publisher-owned `WORK-ROOT` identity and relative `ARTIFACTS` entries.
+- [X] Publication rejects absolute artefact entries and lexical escapes from `WORK-ROOT`.
+- [X] A settled, dispatched, unpublished child receives the standard publication prompt.
+- [X] Other ledger, dispatch, and settlement states refuse with named reasons.
+- [X] Trait-gate token refreshes write to the caller's real `CODEX_HOME`.
+- [X] `home/AGENTS.md` contains the tested scratch, timeout, and lock-probe guardrails.
+- [X] The README states the final user-facing behaviour without duplicating mechanical contracts.
+
+*** Edge cases
+
+- [X] Lock contention tests assert one-winner/one-loser invariants without assuming acquisition order.
+- [X] An `unconfirmed` dispatch reports without prompting.
+- [X] Publication rejects blank, absolute, traversal, mismatched-root, and unusable artefact entries.
+- [X] Capture rejects a symlinked artefact that resolves outside `WORK-ROOT`.
+- [X] The poke lock-boundary test fails against the unlocked implementation and passes against the fix.
+
+*** Anti-criteria
+
+- [X] Must not: add compatibility for the old absolute-artefact envelope.
+- [X] Must not: add a caller-controlled barrier to a production lock path.
+- [X] Must not: change runtime behaviour in the README pass.
+- [X] Must not: restate generic temporary-file rules in the guardrail additions.
+
+** Decisions
+
+- Key the exclusive `FileChannel.lock` by child, not round :: publication against an old round must contend with successor creation. Closing the channel releases the lock, including after process death.
+  Rejected:
+  - createFile-based locks: require stale-owner recovery.
+  - ledger-only transitions: `ledger/update!` is itself an unserialised read-modify-write.
+- Keep the settle waits outside the child lock :: each verb re-reads mutable state after waiting. `poke` then holds the lock through its final check, prompt, and count update.
+- Make artefact identity publisher-owned :: the ledger supplies `WORK-ROOT`; publication checks lexical containment and capture checks real-path containment.
+- Keep recovery parent-owned :: `poke` uses ownership, round, dispatch, and settlement guards. It never sends raw keys or respawns.
+- Use the real `CODEX_HOME` for trait gates :: `--ephemeral` and `--ignore-user-config` isolate configuration while token refresh persists.
+- Put portable scratch and concurrency rules in `home/AGENTS.md`.
+
+** Shipped
+
+- ADDED per-child exclusion :: `publish`, `close`, `continue`, and post-settle `poke` serialise against publication through `<assignment-root>/.tmp/herdr-orch/ledger/locks/<child>.lock`.
+- ADDED publisher-owned `WORK-ROOT` identity :: the ledger, child environment, and result envelope carry one immutable work root across a child lineage.
+- MODIFIED the result-envelope `ARTIFACTS` grammar :: entries are relative to `WORK-ROOT`; this is a breaking change without compatibility handling.
+- MODIFIED `oh task poke` :: captured `WAITING` and invalid rounds remain recoverable, unconsumed or terminal items refuse, `unconfirmed` dispatch reports, and the final mutation is locked against publication.
+- REMOVED `prepare-codex-home!` :: trait gates use the caller's `CODEX_HOME`, so refreshed credentials persist.
+- MODIFIED `skills/herdr-orch/scripts/docs/contract.md` :: documents the lock boundaries, `WORK-ROOT`, relative artefacts, capture containment, and final poke ordering.
+- MODIFIED `skills/herdr-orch/SKILL.md` :: documents relative artifact declarations and parent-owned publication recovery.
+- MODIFIED `home/AGENTS.md` :: adds scratch-target containment, timeout-unit verification, and scheduler-independent lock-test rules.
+- MODIFIED `skills/herdr-orch/design.org` and `skills/herdr-orch/README.org` :: record the breaking contract evolution and present the final user-facing behaviour.
+
+** Gotchas
+
+- `FileChannel` lock acquisition is not FIFO on macOS. Tests must accept either winner.
+- Real-path containment must resolve both the artefact and work root. Resolving only one rejects valid paths behind symlinked prefixes.
+- Contract-string tests must pin the complete expected string. A matching prefix does not constrain appended guidance.
+
+** Risks
+
+- `publish`, `close`, and `poke` can hold the child lock across untimed Herdr or Git calls. A stuck call blocks that child's competing lifecycle operation until the process exits.
+- The coordinated `WORK-ROOT` envelope change rejects in-flight pre-change assignments.
+- Live ledger entries received inferred `:work-root` values without a before-image. The recorded shared-checkout values matched the observed repository, but the migration cannot be reversed mechanically.
+- Concurrent trait gates share one live Codex credential. Refresh ordering remains the Codex CLI's responsibility.
+
+** Follow-ups
+
+- task `492bca01` -- preserve the real validation error when an invalid capture cannot be JSON encoded.
+- task `d669edf5` -- re-run synthetic trait probes after the skill settles.
+
+* Plan
+** DONE herdr-orch: publish artefacts relative to WORK-ROOT :herdr_orch:
+CLOSED: [2026-08-16 Sun 19:43]
+:PROPERTIES:
+:CUSTOM_ID: ed6d67bf-7db5-48ad-981d-1155a4922b6e
+:CREATED: [2026-08-16 Sun 12:16]
+:BLOCKED-BY: task:b96cb5da-ebc1-4e04-aeed-af9531ffab18
+:STARTED: [2026-08-16 Sun 14:22]
+:END:
+:LOGBOOK:
+- Created [2026-08-16 Sun 12:16]
+- State "STARTED" from "TODO" [2026-08-16 Sun 14:22]
+- State "DONE" from "STARTED" [2026-08-16 Sun 19:43]
+:END:
+** DONE herdr-orch: concise and consistent README pass :herdr_orch:
+CLOSED: [2026-08-17 Mon 00:16]
+:PROPERTIES:
+:CUSTOM_ID: a3f47736-0705-4835-90e2-704132bb7a33
+:CREATED: [2026-08-16 Sun 12:16]
+:BLOCKED-BY: task:ed6d67bf-7db5-48ad-981d-1155a4922b6e
+:BLOCKED-BY+: task:f61dab75-0f20-4b24-8b95-7f43ad8610ba
+:STARTED: [2026-08-17 Mon 00:11]
+:END:
+:LOGBOOK:
+- Created [2026-08-16 Sun 12:16]
+- State "STARTED" from "TODO" [2026-08-17 Mon 00:11]
+- State "DONE" from "STARTED" [2026-08-17 Mon 00:16]
+:END:
+** DONE herdr-orch: resolve closeout review findings :herdr_orch:
+CLOSED: [2026-08-17 Mon 00:57]
+:PROPERTIES:
+:CUSTOM_ID: fdc0cdc4-dcc1-4de7-b207-965c30e87032
+:CREATED: [2026-08-17 Mon 00:42]
+:STARTED: [2026-08-17 Mon 00:43]
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 00:42]
+- State "STARTED" from "TODO" [2026-08-17 Mon 00:43]
+- State "DONE" from "STARTED" [2026-08-17 Mon 00:57]
+:END:
+** DONE herdr-orch: closure-time record refresh and prune :herdr_orch:
+CLOSED: [2026-08-17 Mon 01:22]
+:PROPERTIES:
+:CUSTOM_ID: 2a85f2a9-7312-4e8e-a288-4ac08a43b07c
+:CREATED: [2026-08-17 Mon 01:01]
+:STARTED: [2026-08-17 Mon 01:03]
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 01:01]
+- State "STARTED" from "TODO" [2026-08-17 Mon 01:03]
+- State "DONE" from "STARTED" [2026-08-17 Mon 01:22]
+:END:
+** DONE herdr-orch: correct final lock-contract findings :herdr_orch:
+CLOSED: [2026-08-17 Mon 02:06]
+:PROPERTIES:
+:CUSTOM_ID: 005c58e4-b3f6-446d-a5f5-89501b30e83a
+:CREATED: [2026-08-17 Mon 01:57]
+:STARTED: [2026-08-17 Mon 01:59]
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 01:57]
+- State "STARTED" from "TODO" [2026-08-17 Mon 01:59]
+- State "DONE" from "STARTED" [2026-08-17 Mon 02:06]
+:END:
+** DONE herdr-orch: serialise publish against close and continue :herdr_orch:
+CLOSED: [2026-08-16 Sun 14:17]
+:PROPERTIES:
+:CUSTOM_ID: b96cb5da-ebc1-4e04-aeed-af9531ffab18
+:CREATED: [2026-08-07 Fri 23:18]
+:STARTED: [2026-08-16 Sun 13:09]
+:END:
+:LOGBOOK:
+- Created [2026-08-07 Fri 23:18]
+- State "STARTED" from "TODO" [2026-08-16 Sun 13:09]
+- State "DONE" from "STARTED" [2026-08-16 Sun 14:17]
+:END:
+** DONE herdr-orch: recover a settled child that never published :skill:herdr_orch:
+CLOSED: [2026-08-16 Sun 22:17]
+:PROPERTIES:
+:CUSTOM_ID: f61dab75-0f20-4b24-8b95-7f43ad8610ba
+:CREATED: [2026-08-06 Thu 10:24]
+:STARTED: [2026-08-16 Sun 22:05]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 10:24]
+- State "STARTED" from "TODO" [2026-08-16 Sun 22:05]
+- State "DONE" from "STARTED" [2026-08-16 Sun 22:17]
+:END:
+** DONE herdr-orch: trait gate runner discards the Codex auth it refreshes :skill:herdr_orch:
+CLOSED: [2026-08-16 Sun 22:27]
+:PROPERTIES:
+:CUSTOM_ID: be915a31-f4c1-4319-a478-f096c6b12249
+:CREATED: [2026-08-13 Thu 18:25]
+:STARTED: [2026-08-16 Sun 22:24]
+:END:
+:LOGBOOK:
+- Created [2026-08-13 Thu 18:25]
+- State "STARTED" from "TODO" [2026-08-16 Sun 22:24]
+- State "DONE" from "STARTED" [2026-08-16 Sun 22:27]
+:END:
+** DONE agent: bound concurrency probes and validate scratch targets :skill:herdr_orch:
+CLOSED: [2026-08-16 Sun 23:58]
+:PROPERTIES:
+:CUSTOM_ID: 6a2d2634-497c-4973-a8a4-53872966846b
+:CREATED: [2026-08-14 Fri 17:37]
+:STARTED: [2026-08-16 Sun 22:28]
+:END:
+:LOGBOOK:
+- Created [2026-08-14 Fri 17:37]
+- State "STARTED" from "TODO" [2026-08-16 Sun 22:28]
+- State "DONE" from "STARTED" [2026-08-16 Sun 23:58]
+:END:
+* Implementation
+
+- `with-child-lock` uses the ledger-scoped child name. `publish-round!`, close mutation, continuation reservation, and post-settle poke revalidation use the same exclusion primitive.
+- `publish-round!` links immutable items while locked and releases the lock before notification. Continuation takes the child lock before the assignment reservation lock.
+- `core/envelope` validates relative artefact shape. Capture resolves both the declared artefact and `WORK-ROOT` with `Path.toRealPath` before it renders links.
+- `poke` checks ownership before settling, then re-reads the round under the child lock. The final guard, prompt, and `:pokes` update form one critical section.
+- Trait gates pass the resolved caller `CODEX_HOME` directly to `codex exec`; no credential copy or cleanup remains.
+- Closeout review added symlink-containment coverage, complete publication-guidance assertions, the corrected `orphans --prune` contract, untimed-lock risks, and the poke publication-race fix.
+
+* Validation
+
+- Focused poke verification passed 7 tests and 53 assertions. Its lock-boundary test produced two failures against the old unlocked implementation.
+- Trait-gate verification passed 4 tests and 43 assertions. `git diff --check` passed, and `ot doctor` reported no findings.
+- Two full-suite runs reached 624 tests and 4,046 assertions but each reported one timeout in `continue-and-explicit-start-serialize-the-same-checkout-under-concurrency` while waiting for persona materialisation. The same test passed alone with 5 assertions. No full-suite success is claimed for the final tree.

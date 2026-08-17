@@ -3052,3 +3052,32 @@ Source: design review of herdr-orch against upstream docs (herdr 0.7.5, protocol
 *EDIT* [2026-07-31 Fri] Part of the strategy above landed via the test-build retro, as a second prevention-side partial mitigation: herdr-orch § Invocation policy (Cardinality) now states that concurrency is bounded by edit targets as well as by N and forbids fanning out siblings whose file sets overlap, and org-plan § Splitting test now keeps work that must edit the same function or form in one task. Both are orchestrator/planner habits, so the structural guarantee this task asks for is still open. Remaining: the git-worktree-per-worker evaluation, whether the `planner` persona itself should carry overlap analysis (its plan for [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]] split one edit to one `fake-env` map across two nominally independent tasks, which forced the orchestrator to re-serialise them), and orchestrator-applied or advisory-locked shared-file writes.
 
 *EDIT* [2026-08-11 Tue] Further evidence that the prevention-side habits are insufficient, and a dimension not covered above: disjoint *edit* sets do not give disjoint *measurements*. Two workers were fanned out over deliberately non-overlapping files, each naming the other's files as off-limits, and both respected that -- yet one changed a shared test utility's signature, transiently breaking an existing call site, so the sibling's full-suite and lint runs measured a tree neither of them authored. Both reported counts that disagreed with the stated baseline for reasons outside their own change; one correctly attributed the discrepancy to the sibling, which is the only reason it was not read as its own regression. A worktree per worker fixes this where the overlap rule cannot, since the contamination is in the *build*, not in any file either child edited. Until then a parent must re-measure the combined tree itself after all children settle, and treat a child's aggregate suite counts as unattributable.
+
+
+** DONE herdr-orch housekeeping 260816 :herdr_orch:
+CLOSED: [2026-08-17 Mon 08:51]
+:PROPERTIES:
+:CUSTOM_ID: ee348a4c-6fdd-4c3d-a6fc-fa9184c7bfb1
+:CREATED: [2026-08-16 Sun 12:15]
+:STARTED: [2026-08-16 Sun 13:08]
+:ARCHIVED: [2026-08-17 Mon 08:51]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-16 Sun 12:15]
+- State "STARTED" from "TODO" [2026-08-16 Sun 13:08]
+- State "DONE" from "STARTED" [2026-08-17 Mon 08:51]
+:END:
+#+IMPORT: [[plan:2026-08-16-herdr-orch-housekeeping-260816.org]]
+Consolidate bounded herdr-orch correctness, test, and documentation work before implementation of the Herdr plugin wrapper.
+
+Included themes:
+- Publication and lifecycle correctness.
+- Trait-gate reliability and non-decaying trait probes.
+- Safety guidance for concurrency and scratch probes.
+- A final concise and consistent README pass under the current English prose rules.
+
+Out of scope:
+- New orchestration features such as usage-limit fallback, persona-less agents, unmanaged harnesses, and session forking.
+- The Herdr plugin wrapper itself.
+- Cross-skill Babashka and `ot` installation design.

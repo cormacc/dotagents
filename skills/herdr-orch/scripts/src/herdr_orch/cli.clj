@@ -14,7 +14,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -255,7 +255,7 @@
 ;; Universal result-inbox routing belongs to the wrapper, which knows every child has one;
 ;; persona-local output sections keep only the role-specific definition of a key finding.
 (def ^:private publication-guidance
-  "Published `SUMMARY` must be a single line. Write multi-line detail to the assignment-provided report path (fall back to `.tmp/`), pass the report with `--artifact`, and emit each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result.")
+  "Published `SUMMARY` must be a single line. Write multi-line detail to the assignment-provided report path (fall back to `.tmp/`), pass the report with `--artifact`, and emit each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Each `--artifact` value must be a path relative to your working directory (`$HERDR_ORCH_WORK_ROOT`); an absolute path, or one that escapes that root, is refused.")
 (defn prompt-text [{:keys [spawns persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
   (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
        (delegation-guidance spawns) " Herdr assigned TASK=" task " and RESULT=" result ". "
@@ -476,16 +476,25 @@
          (let [parsed (or (get-in state [:validations (:item item) :parsed])
                           (or (get-in state [:validations (:item item) :error])
                               (get-in state [:validations (:item item) :read-error])))
-               artifacts (:artifacts parsed)]
+               artifacts (:artifacts parsed)
+               ;; The ledger's own `:work-root`, never the envelope's: `validate-envelope`
+               ;; has already proved the two agree, and the ledger copy is the one the
+               ;; parent wrote. A round with no `:work-root` cannot resolve an artifact and
+               ;; records `invalid` -- stale pre-WORK-ROOT state is not a supported input.
+               work-root (:work-root entry)]
           (doseq [artifact artifacts]
-            (let [path (core/artifact-path artifact)]
+            (let [path (core/artifact-absolute-path work-root artifact)]
               (when-not (fs/exists? path)
-                (fail "result artifact does not exist" {:artifact artifact :path path}))))
+                (fail "result artifact does not exist" {:artifact artifact :path path}))
+              ;; Publication containment is lexical, so a symlink inside the work root can
+              ;; still point outside it. The file exists here, so containment is re-checked
+              ;; against the resolved path before the link is rendered as evidence.
+              (core/artifact-real-path! work-root path)))
           ;; Rendered only after every artifact passed the existence check above, so a
           ;; collected link is evidence in a way a publish-time advisory link is not. The
           ;; parent surfaces these to the user once the child pane is gone. `cond->`, not
           ;; an empty vector: absent is not the same claim as validated-empty.
-          (let [links (when (seq artifacts) (mapv core/artifact-link artifacts))]
+          (let [links (when (seq artifacts) (mapv #(core/artifact-link work-root %) artifacts))]
             ;; An over-length PROCESS section is degraded, not fatal: record the fact on the
             ;; entry and keep the envelope's own status. A compacted entry keeps its raw text
             ;; retired, while this capture still returns the freshly parsed item text.
@@ -674,17 +683,43 @@
                       (newest-rounds (ledger/entries))))))
 (defn source-cwd [] (System/getProperty "user.dir"))
 
+(defn- with-file-lock [path f]
+  (fs/create-dirs (fs/parent path))
+  (with-open [channel (FileChannel/open
+                       (Paths/get (str path) (make-array String 0))
+                       (into-array StandardOpenOption
+                                   [StandardOpenOption/CREATE StandardOpenOption/WRITE]))]
+    ;; Closing the channel releases its lock; Babashka exposes FileChannel.close but not
+    ;; FileLock.close. The kernel also releases it if the process exits unexpectedly, so no
+    ;; stale-lock recovery is needed and no lock file is ever deleted.
+    (.lock channel)
+    (f)))
+
 (defn- with-assignment-reservation-lock [f]
-  (let [path (fs/path (ledger/assignment-root) ".tmp" "herdr-orch" "reservation.lock")]
-    (fs/create-dirs (fs/parent path))
-    (with-open [channel (FileChannel/open
-                         (Paths/get (str path) (make-array String 0))
-                         (into-array StandardOpenOption
-                                     [StandardOpenOption/CREATE StandardOpenOption/WRITE]))]
-      ;; Closing the channel releases its lock; Babashka exposes FileChannel.close but not
-      ;; FileLock.close. The kernel also releases it if the process exits unexpectedly.
-      (.lock channel)
-      (f))))
+  (with-file-lock (fs/path (ledger/assignment-root) ".tmp" "herdr-orch" "reservation.lock") f))
+
+;; --- per-child exclusion (task b96cb5da) ---------------------------------------------
+;; `publish` creates its item file with `Files.createLink`, entirely outside `ledger/update!`,
+;; so a check-then-act sequence in a lifecycle verb cannot see it. Without exclusion `close`
+;; could record `:closed-at` (and take the pane) after `publish` passed `assert-publishable!`
+;; but before it linked its item, and `continue` could write a successor round over the same
+;; window. Closure is irreversible, so a re-check after the fact is too late.
+;;
+;; The lock is keyed by *child*, not by round: a publish against an old round and a
+;; `continue` writing that round's successor are exactly the pair that must contend, and they
+;; name different tasks. It lives under the ledger directory tree so an `ORCH_ASSIGNMENT_ROOT`
+;; override relocates the contention set with the ledger it protects.
+;;
+;; Lock order, where two locks are held: child lock outside, assignment reservation lock
+;; inside (`reserve-continuation!` is the only such site). No path takes them in the opposite
+;; order, so the pair cannot deadlock. No path takes the same lock twice in one process, which
+;; would throw `OverlappingFileLockException`.
+(defn child-lock-path [child]
+  (fs/path (ledger/directory) "locks" (str (ledger/safe-id child) ".lock")))
+(defn- with-child-lock [child f]
+  (when (str/blank? (str child))
+    (fail "child lock requires a child name" {:child child}))
+  (with-file-lock (child-lock-path child) f))
 
 ;; Every worktree git call targets the *source* cwd, never `ledger/assignment-root`: the
 ;; actual repository is wherever `oh` was launched from, and an `ORCH_ASSIGNMENT_ROOT`
@@ -901,7 +936,11 @@
                       ;; For existing/new targets this identity is complete before the first
                       ;; ledger write. Checkout and pane mutation happen only after unlock.
                       worktree (:worktree target)
-                      entry (cond-> {:task task :result result :child name :pane-id nil
+                      ;; The pane cwd is the child's work root, recorded before the pane
+                      ;; exists so publication and capture resolve every relative artifact
+                      ;; against the same publisher-owned value (task ed6d67bf).
+                      entry (cond-> {:task task :result result :work-root (:path target)
+                                     :child name :pane-id nil
                                      :label label :index index :persona-path persona-path
                                      :kind kind :model model
                                      :parent-session (:parent-session ident)
@@ -932,9 +971,12 @@
           ;; No waiting policy is injected: it lives on the ledger entry alone (see
           ;; `publish!`), so a child continued into another round can never publish under
           ;; its spawn-time policy. Nothing lifecycle-related reaches the child's env.
-          (let [child-cwd (:path target)
+          (let [child-cwd (:work-root entry)
                 env (cond-> {"HERDR_ORCH_CHILD" name "HERDR_ORCH_TASK" task
                              "HERDR_ORCH_RESULT" result "HERDR_ORCH_BIN" bin
+                             ;; The same immutable value the entry records, so a child can
+                             ;; resolve its own artifact paths without asking the parent.
+                             "HERDR_ORCH_WORK_ROOT" (:work-root entry)
                              "HERDR_ORCH_PERSONA" persona
                              "HERDR_ORCH_SPAWNS" (str/join " " (:spawns spawns))
                              ;; Protocol routing state is uniform. Target selection changes
@@ -1004,14 +1046,16 @@
 ;; explicitly advisory and only `collect`'s existence-validated `artifact-links` are
 ;; evidence. An empty list adds no section at all rather than an empty one.
 ;; Publication is already committed when this renders, so one unrenderable artifact must
-;; never cost the parent its whole notification. `artifact-path` accepts a NUL byte that
-;; `Paths/get` rejects, and such a path cannot be degraded to *raw* text either: the byte
-;; would then reach the `agent prompt` argv and fail the submission itself. So the item is
-;; dropped and counted — the RESULT envelope remains the authoritative declared list.
-(defn artifact-advisory [artifacts]
+;; never cost the parent its whole notification. A declared path that cannot be resolved
+;; against the work root cannot be degraded to *raw* text either: a NUL byte would then reach
+;; the `agent prompt` argv and fail the submission itself. So the item is dropped and
+;; counted — the RESULT envelope remains the authoritative declared list. Each link is
+;; resolved against the publisher-owned work root, so the parent reads an absolute path even
+;; though the child declared a relative one.
+(defn artifact-advisory [work-root artifacts]
   (when (seq artifacts)
     (let [items (keep (fn [artifact]
-                        (try (str "- " (core/artifact-link (str artifact)))
+                        (try (str "- " (core/artifact-link work-root (str artifact)))
                              (catch Exception _ nil)))
                       artifacts)
           dropped (- (count artifacts) (count items))]
@@ -1021,12 +1065,12 @@
                             (conj (str "- (" dropped " declared artifact path(s) not renderable as a link; see the RESULT envelope)"))))))))
 ;; Names the whole remaining sequence, not just the capture: since capture closes nothing,
 ;; a parent told only to `collect` leaves a pane standing every time it acts on this push.
-(defn push-text [bin child task status artifacts]
+(defn push-text [bin child task status work-root artifacts]
   (str "Subagent " child " published a " status " result for task " task
        ". Capture it with `" bin " task collect " task "`, then close or continue it:"
        " `" bin " task close " task "` or `" bin " task continue " task " --task '<next assignment>'`."
        " Advisory only: the validated RESULT file remains the sole completion signal."
-       (artifact-advisory artifacts)))
+       (artifact-advisory work-root artifacts)))
 (defn settled-parent? [status] (contains? #{"idle" "done"} status))
 (defn push-decision [entry agent]
   (cond
@@ -1045,11 +1089,11 @@
 ;; hand-edited ledger file that omits it is not a supported input -- this surface keeps no
 ;; legacy path anywhere -- and degrades to the `push-failed` catch below rather than
 ;; needing a branch of its own.
-(defn notify-parent! [entry {:keys [child task status timeout artifacts]}]
+(defn notify-parent! [entry {:keys [child task status timeout work-root artifacts]}]
   (try
     (let [pane (:parent-pane entry)
           send! (fn [extra]
-                  (try (herdr/prompt! pane (push-text (launcher-bin) child task status artifacts))
+                  (try (herdr/prompt! pane (push-text (launcher-bin) child task status work-root artifacts))
                        (merge {:push "sent" :parent-pane pane} extra)
                        (catch Exception e {:push "error" :parent-pane pane :reason "prompt-failed" :message (.getMessage e)})))
           probe (try {:agent (herdr/agent! pane)} (catch Exception e {:error (.getMessage e)}))]
@@ -1219,45 +1263,75 @@
                   {:task task :child child :entry-child (:child entry)}))
         result (or (:result entry) (env "HERDR_ORCH_RESULT")
                    (fail "missing HERDR_ORCH_RESULT" {}))
+        ;; Publisher-owned, exactly like `:result`: the ledger entry the parent wrote at spawn
+        ;; is authoritative, and the injected variable serves only the ledger-less hand-driven
+        ;; publish. A child cannot author or override it, and every `ARTIFACTS` entry is
+        ;; relative to it (task ed6d67bf).
+        work-root (or (:work-root entry) (env "HERDR_ORCH_WORK_ROOT")
+                      (fail "missing HERDR_ORCH_WORK_ROOT" {}))
         policy (:waiting-policy entry)
         body (publication-body opts)
-        _ (doseq [artifact (:artifacts body)] (core/artifact-path (str artifact)))
         ;; Validate the authored body before any git mutation. The authoritative checkpoint
         ;; is added only after every refusal below passes and the checkout has been inspected.
-        _ (core/envelope (merge {:child child :task task :result result} body))
-        state (assert-publishable! entry)]
-    (if-let [throttled (throttled-waiting entry (:status body) state)]
-      throttled
-      (let [released-children (assert-children-discharged! child)
-            ;; Capacity is a permanent refusal for this stream configuration, so it must
-            ;; precede mechanical checkpoint mutation. `append-publication!` reuses the
-            ;; same predicate to retain its own boundary check.
-            _ (when entry (assert-stream-capacity! result))
-            checkpoint (when (:worktree entry)
-                         (checkpoint-worktree! entry (:status body)))
-            text (core/envelope (cond-> (merge {:child child :task task :result result} body)
-                                  checkpoint (assoc :checkpoint checkpoint)))
-            item (if entry
-                   (append-publication! result text)
-                   (link-publication! result 1 text))]
-        ;; Publication is committed before notification. Notification failure is observable
-        ;; but never turns it into a retryable failure.
-        (let [notification (when (= policy "non-blocking")
-                             (try (herdr/notify! (str "Subagent " child " published")
-                                                (str "child=" child " task=" task " result=" (:result item)))
-                                  (catch Exception e {:notification-error (.getMessage e)})))
-              ;; WAITING reports are intentionally toast-only. Terminal reports retain the
-              ;; existing non-blocking advisory push; ledger-less fallback stays silent.
-              push (when (and (= policy "non-blocking")
-                              (core/terminal-status? (:status body)))
-                     (notify-parent! entry {:child child :task task :status (:status body)
-                                            :artifacts (:artifacts body)
-                                            :timeout (parse-notify-timeout (one opts :notify-timeout))}))]
-          (cond-> {:task task :result (:result item) :status (:status body) :item (:item item)}
-            checkpoint (assoc :checkpoint checkpoint)
-            notification (assoc :notification notification)
-            push (assoc :parent-push push)
-            (seq released-children) (assoc :released-children released-children)))))))
+        ;; `core/envelope` owns artifact shape, so an absolute or escaping entry refuses here.
+        _ (core/envelope (merge {:child child :task task :result result :work-root work-root} body))
+        ;; Every refusal and the item creation are one critical section under this child's
+        ;; lock, so `close` and `continue` cannot interleave between them (task b96cb5da).
+        ;; The entry is re-read inside the lock: the copy read above predates the lock and
+        ;; can already be stale -- a lifecycle verb may have written `:closed-at`, or a
+        ;; successor round, while this process waited. Only `:result`, `:work-root`,
+        ;; `:waiting-policy` and `:parent-pane` are read from the outer copy, and each is
+        ;; immutable for a round.
+        committed (with-child-lock child
+                    (fn []
+                      ;; A ledger-backed round is still ledger-backed inside the lock, so a
+                      ;; failed re-read throws instead of degrading to the bare-item path.
+                      ;; A hand-driven publish had no entry to begin with and gains none here.
+                      (let [entry (when entry (ledger/read! task))
+                            state (assert-publishable! entry)]
+                        (if-let [throttled (throttled-waiting entry (:status body) state)]
+                          throttled
+                          (let [released-children (assert-children-discharged! child)
+                                ;; Capacity is a permanent refusal for this stream configuration, so it must
+                                ;; precede mechanical checkpoint mutation. `append-publication!` reuses the
+                                ;; same predicate to retain its own boundary check.
+                                _ (when entry (assert-stream-capacity! result))
+                                checkpoint (when (:worktree entry)
+                                             (checkpoint-worktree! entry (:status body)))
+                                text (core/envelope (cond-> (merge {:child child :task task :result result :work-root work-root} body)
+                                                      checkpoint (assoc :checkpoint checkpoint)))
+                                item (if entry
+                                       (append-publication! result text)
+                                       (link-publication! result 1 text))]
+                            (cond-> {:published item}
+                              checkpoint (assoc :checkpoint checkpoint)
+                              (seq released-children) (assoc :released-children released-children)))))))]
+    (if-not (:published committed)
+      ;; The WAITING throttle is the one non-refusal outcome the critical section returns
+      ;; unchanged; it publishes nothing, so it needs no post-lock work.
+      committed
+      ;; Publication is committed before notification, and the lock is released first:
+      ;; notification can wait on the parent for the whole notify timeout, and it must not
+      ;; block this child's own lifecycle verbs. Notification failure is observable but
+      ;; never turns a committed publication into a retryable failure.
+      (let [{:keys [checkpoint released-children]} committed
+            item (:published committed)
+            notification (when (= policy "non-blocking")
+                           (try (herdr/notify! (str "Subagent " child " published")
+                                              (str "child=" child " task=" task " result=" (:result item)))
+                                (catch Exception e {:notification-error (.getMessage e)})))
+            ;; WAITING reports are intentionally toast-only. Terminal reports retain the
+            ;; existing non-blocking advisory push; ledger-less fallback stays silent.
+            push (when (and (= policy "non-blocking")
+                            (core/terminal-status? (:status body)))
+                   (notify-parent! entry {:child child :task task :status (:status body)
+                                          :work-root work-root :artifacts (:artifacts body)
+                                          :timeout (parse-notify-timeout (one opts :notify-timeout))}))]
+        (cond-> {:task task :result (:result item) :status (:status body) :item (:item item)}
+          checkpoint (assoc :checkpoint checkpoint)
+          notification (assoc :notification notification)
+          push (assoc :parent-push push)
+          (seq released-children) (assoc :released-children released-children))))))
 (defn publish! [opts]
   (let [{:keys [child task]} (task-identity opts)]
     (try (publish-round! opts child task)
@@ -1476,16 +1550,25 @@
   ;; The unconsumed-items re-check closes the time-of-check/time-of-use window the settle
   ;; wait opens (closeout finding): `assert-closable!` proved every item captured *before*
   ;; the wait, and an item published during it would otherwise be closed past and stranded.
-  (let [updated (ledger/update! task
-                                (fn [current]
-                                  (when (:closed-at current) (fail "close refused: already closed" {:task task}))
-                                  (when (seq (unconsumed-items current))
-                                    (fail "close refused: an item was published during the settle wait" {:task task}))
-                                  (when-not (= task (:task (newest-round (ledger/entries) child)))
-                                    (fail "close refused: a newer round appeared during the settle wait" {:task task :child child}))
-                                  (when-not abandon? (herdr/close! (:pane-id current)))
-                                  (cond-> (assoc current :closed-at (now))
-                                    abandon? (assoc :pane-abandoned true))))]
+  ;; That re-check is only sound under the child lock (task b96cb5da): `publish` links its
+  ;; item outside `ledger/update!`, so without exclusion an item could still be created
+  ;; between this re-check and the `:closed-at` write. The slow settle wait and the agent
+  ;; listing stay outside the lock; only re-validation, `herdr/close!`, and the ledger write
+  ;; are inside it. That hold is not bounded by a timeout: `herdr/invoke` derefs the
+  ;; `herdr pane close` subprocess without one, so a concurrent publish for this child
+  ;; blocks for as long as that call takes.
+  (let [updated (with-child-lock child
+                  (fn []
+                    (ledger/update! task
+                                    (fn [current]
+                                      (when (:closed-at current) (fail "close refused: already closed" {:task task}))
+                                      (when (seq (unconsumed-items current))
+                                        (fail "close refused: an item was published during the settle wait" {:task task}))
+                                      (when-not (= task (:task (newest-round (ledger/entries) child)))
+                                        (fail "close refused: a newer round appeared during the settle wait" {:task task :child child}))
+                                      (when-not abandon? (herdr/close! (:pane-id current)))
+                                      (cond-> (assoc current :closed-at (now))
+                                        abandon? (assoc :pane-abandoned true))))))]
     (cond-> {:status (if abandon? "abandoned" "closed") :task task :child child :pane-id pane-id :closed-at (:closed-at updated)}
       abandon? (assoc :reason "pane-left-to-operator"))))
 (defn- pane-alive? [pane] (try (boolean (herdr/pane! pane)) (catch Exception _ false)))
@@ -2000,44 +2083,85 @@
        "A report written to the result path is not a publication: the envelope is the only result the parent reads. "
        publication-guidance))
 
+;; A round is past recovery once a *terminal* status has been captured for it. Capture alone
+;; is the wrong bar, which is the mirror image of `continue` read too literally: an `invalid`
+;; capture and a captured `WAITING`-only round are both captured and both still unpublished,
+;; and those are two of the three measured cases this verb exists for. Reading the captured
+;; records rather than `stream-state`'s `:sealed?` also covers a pre-stream entry, whose head
+;; carries `:status` with no `:envelope` beside it.
+(defn- terminally-captured? [entry]
+  (boolean (some #(core/terminal-status? (:status %)) (captured-items entry))))
+
+;; Apply every ledger and stream guard before the settle wait. Apply them again after it.
+;; The settle wait stays outside the child lock because it can last 45 seconds.
+;; After the wait, take the child lock and re-read the entry. Keep the lock through the
+;; prompt and poke-count update. This serialises the final check-to-prompt gap with `publish`.
+(defn- assert-pokeable! [entry entries]
+  (let [task (:task entry) child (:child entry)]
+    (when (terminally-captured? entry)
+      (fail "poke refused: this round already published a terminal envelope"
+            {:task task :status (:status entry)}))
+    (when-let [items (seq (unconsumed-items entry))]
+      (fail "poke refused: an item is published but not captured; collect it before you poke"
+            {:task task :items (mapv :item items)}))
+    (when (:closed-at entry)
+      (fail "poke refused: this child's pane was already closed" {:task task :closed-at (:closed-at entry)}))
+    (when-not (= task (:task (newest-round entries child)))
+      (fail "poke refused: a newer round exists for this child"
+            {:task task :child child :newest (:task (newest-round entries child))}))))
+
 (defn poke! [task]
   (when-not task (fail "poke requires a full task uuid" {}))
   (let [entry (ledger/read! task)
-        child (:child entry)
-        entries (vec (ledger/entries))]
+        child (:child entry)]
     (herdr/preflight!)
     (let [ident (try (parent-identity) (catch Exception _ nil))
           caller (:parent-session ident)
           recorded (:parent-session entry)]
       (when-not (and caller recorded (= caller recorded))
         (fail "poke refused: caller session does not own this ledger entry" {:task task}))
-      ;; The mirror image of `continue`: that verb requires a captured stream, this one
-      ;; requires an uncaptured one. A sealed round has already published and needs no poke.
-      (when (stream-captured? (stream-state entry))
-        (fail "poke refused: this round already published a validated envelope"
-              {:task task :status (:status entry)}))
-      (when (:closed-at entry)
-        (fail "poke refused: this child's pane was already closed" {:task task :closed-at (:closed-at entry)}))
-      (when-not (= task (:task (newest-round entries child)))
-        (fail "poke refused: a newer round exists for this child"
-              {:task task :child child :newest (:task (newest-round entries child))}))
+      (assert-pokeable! entry (vec (ledger/entries)))
       ;; Same live evidence bar as `close` and `continue`: name and pane must both match and
       ;; the child must be settled, or the prompt lands in an approval UI instead of a turn.
       (let [{:keys [index]} (settle-and-list! "poke" entry)
             agent (or (get index child) (fail "poke refused: the child is absent from the agent list" {:task task :child child}))]
-        (when-not (= (:pane-id entry) (:pane_id agent))
-          (fail "poke refused: the recorded pane is not this child's pane"
-                {:task task :child child :recorded (:pane-id entry) :observed (:pane_id agent)}))
-        (when-not (contains? #{"idle" "done"} (:agent_status agent))
-          (fail "poke refused: the child is not settled" {:task task :child child :agent-status (:agent_status agent)}))
-        (herdr/prompt! child (poke-prompt task (:result entry)))
-        (ledger/update! task update :pokes (fnil inc 0))
-        {:status "poked" :task task :child child :pane-id (:pane-id entry)
-         :pokes (inc (or (:pokes entry) 0))}))))
+        (with-child-lock
+         child
+         (fn []
+           (let [current (ledger/read! task)]
+             (assert-pokeable! current (vec (ledger/entries)))
+             (when-not (= (:pane-id current) (:pane_id agent))
+               (fail "poke refused: the recorded pane is not this child's pane"
+                     {:task task :child child :recorded (:pane-id current) :observed (:pane_id agent)}))
+             (when-not (contains? #{"idle" "done"} (:agent_status agent))
+               (fail "poke refused: the child is not settled" {:task task :child child :agent-status (:agent_status agent)}))
+             ;; `verify-dispatch!` recorded at spawn whether the prompt actually left the child's
+             ;; composer. `unconfirmed` means the work may never have begun, so a publication
+             ;; re-prompt is the wrong instruction: report it, and leave the operator to read the
+             ;; pane. Poke reads that recorded state and never re-runs the probe, whose nudge
+             ;; sends a raw key. An entry that predates the probe records nothing, and a round
+             ;; with no `:dispatch` is treated as dispatched.
+             (if (= "unconfirmed" (get-in current [:dispatch :status]))
+               {:status "unconfirmed" :task task :child child :pane-id (:pane-id current)
+                :reason "dispatch-unconfirmed"
+                :detail (str "The prompt for this round was never confirmed to leave the child's composer. "
+                             "The work may never have started. Read the pane before you poke again or respawn.")
+                :dispatch (:dispatch current)}
+               (do (herdr/prompt! child (poke-prompt task (:result current)))
+                   (ledger/update! task update :pokes (fnil inc 0))
+                   {:status "poked" :task task :child child :pane-id (:pane-id current)
+                    :pokes (inc (or (:pokes current) 0))})))))))))
 
+;; Two locks: this child's own lock outside (so a concurrent `publish` by this child cannot
+;; interleave with the re-validation below -- task b96cb5da), and the assignment reservation
+;; lock inside (so an explicit existing-target start cannot reserve the same checkout).
+;; The child lock is the outer one deliberately: holding the repository-wide reservation lock
+;; while waiting on one child's publication would stall every unrelated spawn behind it.
 (defn- reserve-continuation! [prior-task child ident caller waiting-policy]
-  (with-assignment-reservation-lock
-    (fn []
+  (with-child-lock child
+   (fn []
+    (with-assignment-reservation-lock
+     (fn []
       (let [entry (ledger/read! prior-task)
             entries (vec (ledger/entries))
             state (stream-state entry)
@@ -2067,17 +2191,20 @@
         (let [task (ledger/fresh-task)
               result (ledger/fresh-result task)
               next-entry (merge
+                          ;; `:work-root` is lineage identity like `:worktree`: the pane never
+                          ;; moves, so every round of this child resolves artifacts against
+                          ;; the one value the spawn selected.
                           (select-keys entry
                                        [:child :pane-id :tab-id :label :index :persona-path
                                         :kind :model :retro :retro-source :spawns :spawns-source
                                         :timeout :timeout-source :placement :shell-pid
-                                        :worktree :read-only])
+                                        :work-root :worktree :read-only])
                           {:task task :result result :continues prior-task
                            :parent-session caller :parent-pane (:parent-pane ident)
                            :waiting-policy waiting-policy :status "continuing"
                            :created-at (now)})]
           (ledger/write! next-entry)
-          next-entry)))))
+          next-entry)))))))
 
 (defn continue! [prior-task opts]
   (when-not prior-task (fail "continue requires a full task uuid" {}))
@@ -2369,7 +2496,7 @@
            "collect --any [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
            "status [full-task-uuid] [--format json|text] [--raw]"
            "list [--format json|text] [--raw]"
-           "publish --status COMPLETE|BLOCKED|FAILED|WAITING --summary TEXT [--artifact PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--from-file PATH] [--task UUID] [--notify-timeout MS]"
+           "publish --status COMPLETE|BLOCKED|FAILED|WAITING --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--from-file PATH] [--task UUID] [--notify-timeout MS]"
            "prune <full-task-uuid>"
            "poke <full-task-uuid>"
            "continue <full-task-uuid> (--task TEXT | --task-file PATH | stdin) [--wait] [--timeout MS]"

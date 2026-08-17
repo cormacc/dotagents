@@ -85,8 +85,11 @@
           (json/generate-string updated))
     updated))
 
+;; The complete shipped string, not a prefix of it: a prefix still occurs exactly once, so
+;; a truncated copy pins nothing about the sentence that follows it. The relative-artifact
+;; sentence is the only channel that tells a child the `ARTIFACTS` grammar and `WORK-ROOT`.
 (def expected-publication-guidance
-  "Published `SUMMARY` must be a single line. Write multi-line detail to the assignment-provided report path (fall back to `.tmp/`), pass the report with `--artifact`, and emit each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result.")
+  "Published `SUMMARY` must be a single line. Write multi-line detail to the assignment-provided report path (fall back to `.tmp/`), pass the report with `--artifact`, and emit each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Each `--artifact` value must be a path relative to your working directory (`$HERDR_ORCH_WORK_ROOT`); an absolute path, or one that escapes that root, is refused.")
 (defn- occurrence-count [text needle]
   (loop [from 0 n 0]
     (let [at (.indexOf ^String text ^String needle from)]

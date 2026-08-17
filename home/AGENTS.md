@@ -255,3 +255,26 @@
 - Some harnesses deliberately mount `.agents/` as read-only so an agent cannot modify its own instructions.
 - Codex under `--sandbox workspace-write` is one such harness.
 - Child agents in those harnesses cannot write a scratch or result file under `.agents/`.
+
+# Concurrency and destructive scratch probes
+
+## Scratch-target containment
+- Assert that a derived scratch target is non-nil, absolute, and inside the intended temporary root.
+- Check this before the first write or delete against that target.
+- A scratch probe once derived a nil checkout path.
+- The probe wrote through that path into the caller's working directory before its own cleanup ran.
+
+## Timeout units for concurrency probes
+- Verify a tool's timeout unit before you supply a value. Treat the unit as an identifier under the identifier-verification rule above.
+- Wrap each concurrency probe in its own bounded process timeout, independent of the probe's internal logic.
+- Attach cleanup to that outer bound, not to the probe's own exit path.
+- One timeout value of `120000` was supplied as milliseconds. The tool's schema read the value as seconds.
+- The deadlocked probe ran for 4,173 seconds before a manual interrupt stopped it.
+
+## Lock-test invariants
+- Assert scheduler-independent one-winner/one-loser invariants in a lock test.
+- Do not assume which waiter acquires the lock first.
+- A POSIX or JVM file lock guarantees exclusion. It does not guarantee acquisition order.
+- Never add a caller-controlled test barrier to a production lock path.
+- One such barrier needed an external release file. The file was missing.
+- Every later spawn and continue call blocked in review until the barrier was removed.

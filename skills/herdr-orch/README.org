@@ -27,15 +27,14 @@ A harness-agnostic orchestration framework for agent-assisted development. Subag
 
 My own use is predominantly human-in-the-loop and low-fanout -- subagents for context and token-cost management rather than parallel development by swarms. That is preference, not prescription: the skill is written so other orchestration models can be built on top of it with appropriate persona definitions.
 
-Developed primarily against =pi=, and verified against =claude code= and =codex=. Additional harnesses are configurable (§ Harness configuration).
-Scripts written in babashka (clojure).
+Developed primarily against =pi=, and verified against =claude code= and =codex=. Additional harnesses are configurable (§ Harness configuration). Scripts written in babashka (clojure).
 
 
 * Subagent lifecycle
 The parent owns both ends of a round: it decides where the child works, and it owns everything the child produces.
 
 - Target :: The parent resolves exactly one checkout before the child exists -- the caller's own checkout, an existing attached checkout in the same repository (=--worktree <path>=), or a managed checkout (=--worktree new=). With no flag, a read-only or first write-enabled child shares the caller's checkout, while an additional concurrent write-enabled child gets a managed one. A managed checkout is created from the source HEAD on branch =orch/<task-prefix>=, before any pane exists.
-- Spawn :: =oh task run= blocks for the result; =oh task start= returns immediately. The child's cwd is the resolved checkout, and that cwd is the only child state the target affects: topology is never communicated through the persona, and the child carries no commit permission.
+- Spawn :: =oh task run= blocks for the result. =oh task start= returns immediately. The child's cwd is the resolved checkout, and that cwd is the only child state the target affects: topology is never communicated through the persona, and the child carries no commit permission.
 - Publish :: =oh task publish= appends immutable result items to the round's stream -- interim reports and monitor observations included -- and a terminal status (=COMPLETE=, =BLOCKED=, =FAILED=) seals the round. Publication is also the commit gate: from a non-shared checkout it mechanically stages and commits pending nonignored changes and records the resulting tip as =CHECKPOINT=, so recovery never depends on the child having been instructed to commit. From the shared checkout it never touches Git. A read-only child holding dirt is refused, not committed.
 - Collect and reconcile :: =oh task collect= captures published items, and =collect --any= takes whichever in-flight child publishes first. For a child with its own checkout, =collect=, =status=, and =oh worktree list= also report base, branch, tip, and checkout state, keeping committed, dirty, and ignored paths as three separate sets, because each calls for a different parent action.
 - Close, continue, or tear down :: Capture never closes a pane. =oh task close= closes a settled child's pane, while =oh task continue= assigns the same child another round and carries its checkout identity forward without re-resolving topology. =oh worktree remove= deletes only a managed checkout, and only when it is owned, unreferenced, and clean. The branch always survives.
@@ -75,7 +74,7 @@ They differ in how they combine. A persona definition *shadows* atomically by na
 
 =~/.agents/subagents/= is reserved for genuine home overrides. Packaged definitions are never projected into it. A missing override file is ignored. A missing packaged =config.edn= is fatal.
 
-Assignment state (ledger, result files) lives under =<assignment-root>/.tmp/herdr-orch/=, never =.agents/= -- see § Where assignment state lives for why that matters.
+Assignment state (ledger, result files) lives under =<assignment-root>/.tmp/herdr-orch/=, never =.agents/= -- see [[file:design.org][design.org]] § Where assignment state lives for why that matters.
 
 ** Defining subagents
 
@@ -225,24 +224,11 @@ Resolution order, highest first:
 2. The merged =:defaults :placement= (project > home > packaged, merged per key).
 3. The code fallback in =resolve-placement=, which is ="split"=.
 
-=:tab-split= is the shipped default. Spawning is cheap and the intended usage is
-promiscuous, so first-level subagents accumulate fast: one tab each stays reviewable and
-recoverable, where splitting every one of them produces an ever-narrowing column nobody can
-read. A grandchild still splits its parent's pane, which keeps a nested unit visually
-together and where the parent can watch it. Depth is discriminated by the spawning CLI's
-own injected =HERDR_ORCH_PERSONA=, never by a label or a counter.
+=:tab-split= is the shipped default. Spawning is cheap and the intended usage is promiscuous, so first-level subagents accumulate fast: one tab each stays reviewable and recoverable, where splitting every one of them produces an ever-narrowing column nobody can read. A grandchild still splits its parent's pane, which keeps a nested unit visually together and where the parent can watch it. Depth is discriminated by the spawning CLI's own injected =HERDR_ORCH_PERSONA=, never by a label or a counter.
 
-The code fallback stays ="split"= deliberately, and is *not* kept in step with the shipped
-value. It fires only for a merged config that declares no =:placement= at all, which the
-packaged file -- mandatory. A missing packaged =config.edn= is fatal -- always does. For
-that degraded case a split is the conservative answer, because it needs no
-=HERDR_WORKSPACE_ID=. Changing the product default is therefore a one-line edit to
-[[file:subagents/config.edn][subagents/config.edn]], not a code change.
+The code fallback stays ="split"= deliberately, and is *not* kept in step with the shipped value. It fires only when the merged config declares no =:placement= at all. The packaged file always declares one, because a missing packaged =config.edn= is fatal. For that degraded case a split is the conservative answer, because it needs no =HERDR_WORKSPACE_ID=. Changing the product default is therefore a one-line edit to [[file:subagents/config.edn][subagents/config.edn]], not a code change.
 
-Placement is resolved per spawn and never inherited: it is not persisted per child, carried
-in the child's environment, or consulted by that child's own spawns. The ledger entry
-records the resolved =:placement= (="split"= or ="tab"=) and =:tab-id= for audit only. See
-[[file:scripts/docs/contract.md][contract.md]] § Placement for the mechanical detail.
+Placement is resolved per spawn and never inherited: it is not persisted per child, carried in the child's environment, or consulted by that child's own spawns. The ledger entry records the resolved =:placement= (="split"= or ="tab"=) and =:tab-id= for audit only. See [[file:scripts/docs/contract.md][contract.md]] § Placement for the mechanical detail.
 
 ** Verifying a configuration change
 

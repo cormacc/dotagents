@@ -10,7 +10,9 @@
             [herdr-orch.cli :as cli]
             [herdr-orch.core :as core]
             [herdr-orch.herdr :as herdr]
-            [herdr-orch.ledger :as ledger]))
+            [herdr-orch.ledger :as ledger])
+  (:import [java.nio.channels FileChannel]
+           [java.nio.file Paths StandardOpenOption]))
 
 (defn- git-toplevel []
   (let [proc @(process/process ["git" "rev-parse" "--show-toplevel"] {:out :string :err :string})]
@@ -270,6 +272,7 @@
 (defn- seal-round! [entry]
   (spit (:result entry)
         (core/envelope {:child (:child entry) :task (:task entry) :result (:result entry)
+                        :work-root (:work-root entry)
                         :status "COMPLETE" :summary "sealed fixture round"
                         :artifacts [] :findings [] :next nil})))
 
@@ -1064,7 +1067,7 @@
   ;; end-to-end: captured, but the pane is never closed.
   (let [{:keys [env env-file log]} (fake-env {}) start (call! env "task" "start" "worker" "--task" "later") task (get-in (result start) [:result :task])
         values (into {} (map #(str/split % #"=" 2) (str/split-lines (slurp env-file))))
-        envelope (core/envelope {:child (values "HERDR_ORCH_CHILD") :task task :result (values "HERDR_ORCH_RESULT") :status "BLOCKED" :summary "later" :artifacts [] :findings [] :next nil})]
+        envelope (core/envelope {:child (values "HERDR_ORCH_CHILD") :task task :result (values "HERDR_ORCH_RESULT") :work-root (values "HERDR_ORCH_WORK_ROOT") :status "BLOCKED" :summary "later" :artifacts [] :findings [] :next nil})]
     (spit (values "HERDR_ORCH_RESULT") envelope)
     (is (= "BLOCKED" (get-in (result (call! env "task" "collect" task)) [:result :status])))
     (is (zero? (:exit (call! env "task" "status" task))))
@@ -1091,7 +1094,8 @@
   ;; A hand-driven publish names a task with no ledger entry, so it has no waiting policy
   ;; and is silent: the RESULT is still written exactly once, but no toast and no push.
   (let [{:keys [env log dir]} (fake-env {}) target (str (fs/path dir "published.result"))
-        publication-env (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task" "HERDR_ORCH_RESULT" target})
+        publication-env (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task" "HERDR_ORCH_RESULT" target
+                                    "HERDR_ORCH_WORK_ROOT" (str dir)})
         ok (call! publication-env "task" "publish" "--status" "COMPLETE" "--summary" "done") second (call! publication-env "task" "publish" "--status" "COMPLETE" "--summary" "again")
         from-file-target (str (fs/path dir "from-file.result")) body (str (fs/path dir "body.json"))]
     (is (zero? (:exit ok))) (is (= 1 (:exit second))) (is (fs/exists? target))
@@ -1203,13 +1207,15 @@
 ;; ledger entry's `:envelope` at capture, and never gating capture or pane closure.
 (deftest process-candidates-publish-and-persist
   (let [{:keys [env dir]} (fake-env {}) target (str (fs/path dir "process.result"))
-        base (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task"})
+        base (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task"
+                         "HERDR_ORCH_WORK_ROOT" (str dir)})
         proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done"
                     "--process" "wrong flag → guardrail → verify flags first"
                     "--process" "repeated probe → behavioral → cache the probe")]
     (is (zero? (:exit proc)) (:err proc))
+    ;; `WORK-ROOT` adds one scalar line before `STATUS`, so the tail starts one line later.
     (is (= ["NEXT: none" "PROCESS:" "- wrong flag → guardrail → verify flags first" "- repeated probe → behavioral → cache the probe" "--- END HERDR RESULT ---"]
-           (vec (drop 10 (str/split-lines (slurp target))))))
+           (vec (drop 11 (str/split-lines (slurp target))))))
     ;; Six candidates are rejected at publish; the result file is never created.
     (let [over (str (fs/path dir "over.result"))
           rejected (apply call! (merge base {"HERDR_ORCH_RESULT" over}) "task" "publish" "--status" "COMPLETE" "--summary" "done"
@@ -1297,6 +1303,7 @@
       (is (nil? (:child-session (ledger-entry dir task))))
       (spit (values "HERDR_ORCH_RESULT")
             (core/envelope {:child (values "HERDR_ORCH_CHILD") :task task :result (values "HERDR_ORCH_RESULT")
+                            :work-root (values "HERDR_ORCH_WORK_ROOT")
                             :status "BLOCKED" :summary "blocked" :artifacts [] :findings [] :next nil}))
       (is (= "BLOCKED" (get-in (result (call! env "task" "collect" task)) [:result :status])))
       (is (= "/tmp/fake-child-session.jsonl" (get-in (ledger-entry dir task) [:child-session :value])))
@@ -1360,6 +1367,7 @@
     ;; `RESULT` is already on disk when `collect` runs, so no wait loop is ever entered.
     (spit (values "HERDR_ORCH_RESULT")
           (core/envelope {:child (values "HERDR_ORCH_CHILD") :task task :result (values "HERDR_ORCH_RESULT")
+                          :work-root (values "HERDR_ORCH_WORK_ROOT")
                           :status "COMPLETE" :summary "already published before collect" :artifacts [] :findings [] :next nil}))
     (let [proc (call! (merge env {"FAKE_SESSION_FROM" "get" "FAKE_SESSION_VALUE" "/tmp/session-B.jsonl"}) "task" "collect" task)
           entry (ledger-entry dir task)]
@@ -1651,7 +1659,7 @@
 (deftest capture-reports-ownership-and-closes-nothing-for-any-caller
   (let [{:keys [env env-file log]} (fake-env {}) start (call! env "task" "start" "worker" "--task" "foreign") task (get-in (result start) [:result :task])
         values (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))
-        envelope (core/envelope {:child (values "HERDR_ORCH_CHILD") :task task :result (values "HERDR_ORCH_RESULT") :status "COMPLETE" :summary "foreign" :artifacts [] :findings [] :next nil})]
+        envelope (core/envelope {:child (values "HERDR_ORCH_CHILD") :task task :result (values "HERDR_ORCH_RESULT") :work-root (values "HERDR_ORCH_WORK_ROOT") :status "COMPLETE" :summary "foreign" :artifacts [] :findings [] :next nil})]
     (doseq [item [1 2 3]]
       (spit (ledger/item-path (values "HERDR_ORCH_RESULT") item) envelope))
     (testing "a different parent session captures and reports the foreign ownership"
@@ -1671,39 +1679,59 @@
         (is (nil? (get-in (result proc) [:result :pane-retained])))))
     (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
 
-;; Publication is exactly-once and immutable, so a relative artifact path must be caught
-;; before the write, not only at collect (core/artifact-path is the same predicate there).
-(deftest relative-artifact-rejected-before-publication
-  (let [{:keys [env dir]} (fake-env {}) base (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task"})
+;; Publication is exactly-once and immutable, so an artifact path the parent cannot resolve
+;; against `WORK-ROOT` must be caught before the write, not only at collect
+;; (`core/artifact-relative-path` is the same predicate there). This replaces the pre-
+;; `WORK-ROOT` guard, which refused a *relative* path and required an absolute one.
+(deftest unresolvable-artifact-rejected-before-publication
+  (let [{:keys [env dir]} (fake-env {})
+        work-root (str (fs/path dir "child-root"))
+        _ (fs/create-dirs work-root)
+        base (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task"
+                         "HERDR_ORCH_WORK_ROOT" work-root})
         target (str (fs/path dir "relative-artifact.result"))
         ;; The orphan this guards against is the `<result>.<uuid>.tmp` *file* publish writes
         ;; before hard-linking. Directories are excluded deliberately: resolving the ledger
         ;; entry creates the assignment root's own `.tmp/` tree, which is not an orphan.
-        tmp-siblings (fn [] (->> (fs/list-dir dir) (filter fs/regular-file?) (map str) (filter #(str/ends-with? % ".tmp"))))]
-    (testing "a relative --artifact is rejected before RESULT or a .tmp sibling exist"
-      (let [proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" "relative/report.md :: report")]
+        tmp-siblings (fn [] (->> (fs/list-dir dir) (filter fs/regular-file?) (map str) (filter #(str/ends-with? % ".tmp"))))
+        publish (fn [& argv] (apply call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" argv))]
+    (testing "each unresolvable --artifact is rejected before RESULT or a .tmp sibling exist"
+      (doseq [[artifact pattern]
+              [["/etc/passwd :: absolute" #"must be relative to WORK-ROOT"]
+               [(str work-root "/report.md :: absolute inside the root") #"must be relative to WORK-ROOT"]
+               ["../outside.md :: traversal" #"must not escape WORK-ROOT"]
+               ["sub/../../outside.md :: normalised traversal" #"must not escape WORK-ROOT"]
+               [". :: names the root itself" #"must name a file inside WORK-ROOT"]]]
+        (let [proc (publish "--status" "COMPLETE" "--summary" "done" "--artifact" artifact)]
+          (is (= 1 (:exit proc)) artifact)
+          (is (re-find pattern (:out proc)) artifact)
+          (is (not (fs/exists? target)) artifact)
+          (is (empty? (tmp-siblings)) artifact))))
+    (testing "a publish with no resolvable work root is refused rather than guessed"
+      (let [proc (apply call! (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task"
+                                          "HERDR_ORCH_RESULT" target})
+                        ["task" "publish" "--status" "COMPLETE" "--summary" "done"])]
         (is (= 1 (:exit proc)))
-        (is (re-find #"absolute" (:out proc)))
-        (is (not (fs/exists? target)))
-        (is (empty? (tmp-siblings)))))
+        (is (re-find #"missing HERDR_ORCH_WORK_ROOT" (:out proc)))
+        (is (not (fs/exists? target)))))
     (testing "the same violation via --from-file is rejected identically"
       (let [body (str (fs/path dir "relative-artifact-body.json"))]
-        (spit body (json/generate-string {:status "COMPLETE" :summary "done" :artifacts ["relative/report.md :: report"] :findings [] :next nil}))
-        (let [proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--from-file" body)]
+        (spit body (json/generate-string {:status "COMPLETE" :summary "done" :artifacts ["/etc/passwd :: report"] :findings [] :next nil}))
+        (let [proc (publish "--from-file" body)]
           (is (= 1 (:exit proc)))
-          (is (re-find #"absolute" (:out proc)))
+          (is (re-find #"must be relative to WORK-ROOT" (:out proc)))
           (is (not (fs/exists? target)))
           (is (empty? (tmp-siblings))))))
     (testing "a corrected retry in the same child session then succeeds"
-      (let [artifact (str (fs/path dir "report.md"))
-            proc (call! (merge base {"HERDR_ORCH_RESULT" target}) "task" "publish" "--status" "COMPLETE" "--summary" "done" "--artifact" (str artifact " :: report"))]
+      (let [proc (publish "--status" "COMPLETE" "--summary" "done" "--artifact" "reports/report.md :: report")]
         (is (zero? (:exit proc)) (:err proc))
         (is (fs/exists? target))
-        (is (str/includes? (slurp target) (str "- " artifact " :: report")))
+        (is (str/includes? (slurp target) (str "WORK-ROOT: " work-root)))
+        (is (str/includes? (slurp target) "- reports/report.md :: report"))
         (is (empty? (tmp-siblings)))))))
 
 (deftest missing-artifact-is-non-final-and-consumed
-  (let [{:keys [env log]} (fake-env {"FAKE_PUBLISH_ARTIFACT" "/nonexistent/subagent-artifact :: missing"})
+  (let [{:keys [env log]} (fake-env {"FAKE_PUBLISH_ARTIFACT" "nonexistent/subagent-artifact :: missing"})
         proc (call! env "task" "run" "worker" "--task" "bad artifact" "--timeout" "200")
         task (get-in (result proc) [:result :task])]
     (is (zero? (:exit proc)) (:err proc))
@@ -1754,6 +1782,7 @@
   ([entry status]
    (spit (:result entry)
          (core/envelope {:child (:child entry) :task (:task entry) :result (:result entry)
+                         :work-root (:work-root entry)
                          :status status :summary "fan-in child" :artifacts [] :findings [] :next nil}))))
 (defn- publish-stream! [env entry & statuses]
   (doseq [status statuses]
@@ -3214,7 +3243,7 @@
     (let [{:keys [env log dir]} (fake-env {})
           target (str (fs/path dir "orphan.result"))
           proc (call! (merge env {"HERDR_ORCH_CHILD" "child" "HERDR_ORCH_TASK" "task"
-                                  "HERDR_ORCH_RESULT" target})
+                                  "HERDR_ORCH_RESULT" target "HERDR_ORCH_WORK_ROOT" (str dir)})
                       "task" "publish" "--status" "COMPLETE" "--summary" "done")
           res (:result (result proc))]
       (is (zero? (:exit proc)) (:err proc))
@@ -3320,10 +3349,10 @@
 (deftest terminal-with-a-later-artifact-still-seals-before-collection
   (let [{:keys [env dir]} (fake-env {"ORCH_WAITING_INTERVAL_MIN_MS" "1"})
         entry (start-child! env dir "terminal with delayed artifact")
-        missing (str (fs/path dir "delayed-artifact.md"))
+        missing (str (fs/path (:work-root entry) "delayed-artifact.md"))
         terminal (call! (child-publish-env env entry) "task" "publish"
                         "--status" "COMPLETE" "--summary" "done"
-                        "--artifact" (str missing " :: delayed report"))
+                        "--artifact" "delayed-artifact.md :: delayed report")
         waiting (call! (child-publish-env env entry) "task" "publish"
                        "--status" "WAITING" "--summary" "too late")
         _ (spit missing "arrived after publication")
@@ -3501,14 +3530,18 @@
 (deftest a-hand-driven-publish-with-no-ledger-entry-still-writes-its-result
   (let [{:keys [env log dir]} (fake-env {})
         result-path (str (fs/path dir "hand-driven.result"))
+        ;; No ledger entry means no publisher-owned `:work-root`, so the injected variable is
+        ;; the only source. It is still parent-supplied, exactly as `HERDR_ORCH_RESULT` is.
         proc (call! (merge env {"HERDR_ORCH_CHILD" "hand-driven-child"
                                 "HERDR_ORCH_TASK" (str (java.util.UUID/randomUUID))
-                                "HERDR_ORCH_RESULT" result-path})
+                                "HERDR_ORCH_RESULT" result-path
+                                "HERDR_ORCH_WORK_ROOT" (str dir)})
                     "task" "publish" "--status" "COMPLETE" "--summary" "by hand")
         res (:result (result proc))]
     (is (zero? (:exit proc)) (:out proc))
     (is (= result-path (:result res)))
     (is (fs/exists? result-path))
+    (is (str/includes? (slurp result-path) (str "WORK-ROOT: " dir)))
     (is (nil? (:parent-push res)))
     (is (nil? (:notification res)))
     (is (empty? (parent-prompts log)))))
@@ -3870,11 +3903,15 @@
 
 ;; `poke` re-issues the publication instruction to a settled child that produced no
 ;; envelope. It allocates nothing and closes nothing, so its whole contract is the guard
-;; set plus the delivered prompt.
+;; set plus the delivered prompt. `FAKE_WAIT idle` settles the child without publishing for
+;; it: the fixture's default settle wait publishes an item, which is the raced case below
+;; rather than the recovery case this verb exists for.
 (deftest poke-reprompts-an-unpublished-round-and-mutates-nothing-else
-  (let [{:keys [env dir log prompt-file]} (fake-env {})
+  (let [{:keys [env dir log prompt-file]} (fake-env {"FAKE_WAIT" "idle"})
         entry (start-child! env dir "finished but never published")
         ledger-before (count (fs/glob (fs/path dir ".tmp" "herdr-orch" "ledger") "*.json"))
+        keys-before (count (filter #(= ["agent" "send-keys"] (vec (take 2 %))) (calls log)))
+        starts-before (count (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log)))
         proc (call! env "task" "poke" (:task entry))]
     (is (zero? (:exit proc)) (:err proc))
     (is (= "poked" (get-in (result proc) [:result :status])))
@@ -3886,15 +3923,52 @@
       (is (str/includes? prompt "is not a publication")))
     (is (= ledger-before (count (fs/glob (fs/path dir ".tmp" "herdr-orch" "ledger") "*.json")))
         "poke allocates no round")
-    (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)) "poke closes no pane")))
+    (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)) "poke closes no pane")
+    (is (= keys-before (count (filter #(= ["agent" "send-keys"] (vec (take 2 %))) (calls log))))
+        "poke sends no raw terminal keys")
+    (is (= starts-before (count (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))
+        "poke never respawns the child")))
+
+;; A captured round is not a published one. An `invalid` capture and a captured
+;; `WAITING`-only round are both still unpublished, and both are cases this verb exists for,
+;; so the refusal bar is a captured *terminal* status rather than capture itself.
+(deftest poke-reprompts-a-captured-waiting-only-round
+  (let [{:keys [env dir]} (fake-env {"FAKE_WAIT" "idle"})
+        entry (start-child! env dir "heartbeat only")]
+    (publish-stream! env entry "WAITING")
+    (is (= "WAITING" (get-in (result (call! env "task" "collect" (:task entry))) [:result :status])))
+    (let [proc (call! env "task" "poke" (:task entry))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "poked" (get-in (result proc) [:result :status]))))))
 
 (deftest poke-refuses-a-published-or-unownable-round
-  (let [{:keys [env dir]} (fake-env {})]
-    (testing "a round that already published a validated envelope"
+  (let [{:keys [env dir]} (fake-env {"FAKE_WAIT" "idle"})]
+    (testing "a round whose captured head carries a terminal status"
       (let [entry (capture-entry! dir (start-child! env dir "already published"))
             proc (call! env "task" "poke" (:task entry))]
         (is (= 1 (:exit proc)))
-        (is (re-find #"already published a validated envelope" (:out proc)))))
+        (is (re-find #"already published a terminal envelope" (:out proc)))))
+    (testing "a round with a captured terminal envelope"
+      (let [entry (start-child! env dir "published and collected")]
+        (publish-stream! env entry "COMPLETE")
+        (is (= "COMPLETE" (get-in (result (call! env "task" "collect" (:task entry))) [:result :status])))
+        (let [proc (call! env "task" "poke" (:task entry))]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"already published a terminal envelope" (:out proc))))))
+    (testing "an item published but not captured"
+      (let [entry (start-child! env dir "published, uncollected")]
+        (publish-stream! env entry "WAITING")
+        (let [proc (call! env "task" "poke" (:task entry))]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"published but not captured" (:out proc))))))
+    (testing "a superseded round"
+      (let [prior (start-child! env dir "superseded")]
+        (publish-stream! env prior "WAITING")
+        (is (= "WAITING" (get-in (result (call! env "task" "collect" (:task prior))) [:result :status])))
+        (is (zero? (:exit (call! env "task" "continue" (:task prior) "--task" "round two"))))
+        (let [proc (call! env "task" "poke" (:task prior))]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"a newer round exists for this child" (:out proc))))))
     (testing "a foreign parent session"
       (let [entry (patch-entry! dir (start-child! env dir "foreign") :parent-session "/somewhere/else.jsonl")
             proc (call! env "task" "poke" (:task entry))]
@@ -3905,6 +3979,90 @@
             proc (call! env "task" "poke" (:task entry))]
         (is (= 1 (:exit proc)))
         (is (re-find #"pane was already closed" (:out proc)))))))
+
+;; The live evidence bar. `poke` has no released-name fallback, so an unobservable child is
+;; a refusal rather than a `gone` report.
+(deftest poke-refuses-a-child-it-cannot-observe-as-settled
+  (let [{:keys [env dir state]} (fake-env {"FAKE_WAIT" "idle"})]
+    (testing "a vanished child name"
+      (let [entry (start-child! env dir "vanished")]
+        (child-state! state entry "gone" "")
+        (let [proc (call! env "task" "poke" (:task entry))]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"absent from the agent list" (:out proc))))))
+    (testing "a child that no longer occupies the recorded pane"
+      (let [entry (patch-entry! dir (start-child! env dir "moved") :pane-id "w:elsewhere")
+            proc (call! env "task" "poke" (:task entry))]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"recorded pane is not this child's pane" (:out proc))))))
+  (testing "a child that is not settled"
+    (let [{:keys [env dir]} (fake-env {"FAKE_WAIT" "blocked"})
+          entry (start-child! env dir "still blocked")
+          proc (call! env "task" "poke" (:task entry))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"the child is not settled" (:out proc))))))
+
+;; The same time-of-check/time-of-use window `close` re-checks. The fixture's default settle
+;; wait publishes for the child, so this needs no extra configuration: the item appears
+;; between the first guard pass and the prompt, and the second pass must catch it.
+(deftest poke-refuses-an-item-published-during-the-settle-wait
+  (let [{:keys [env dir log]} (fake-env {})
+        entry (start-child! env dir "publishes during the poke settle wait")
+        prompts-before (count (filter #(= ["agent" "prompt"] (vec (take 2 %))) (calls log)))
+        proc (call! env "task" "poke" (:task entry))]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"published but not captured" (:out proc)))
+    (is (= prompts-before (count (filter #(= ["agent" "prompt"] (vec (take 2 %))) (calls log))))
+        "a refused poke delivers no prompt")
+    (is (nil? (:pokes (ledger-entry* dir (:task entry)))))))
+
+;; The second guard, prompt, and ledger update must share one child-lock hold. A publication
+;; that wins the lock becomes visible to the guard. A publication that loses waits until the
+;; prompt and count update finish. This test checks the complete critical-section boundary.
+(deftest ^:serial poke-holds-child-lock-through-final-check-prompt-and-update
+  (let [task "00000000-0000-4000-8000-000000000000"
+        child "reviewer-lock-boundary"
+        entry {:task task :child child :parent-session "parent" :pane-id "pane"
+               :result "/tmp/result" :dispatch {:status "dispatched"}}
+        held? (atom false)
+        lock-child (atom nil)
+        events (atom [])
+        vars {(ns-resolve 'herdr-orch.ledger 'read!) (fn [_] entry)
+              (ns-resolve 'herdr-orch.ledger 'entries) (fn [] [entry])
+              (ns-resolve 'herdr-orch.ledger 'update!) (fn [& _] (swap! events conj [:update @held?]))
+              (ns-resolve 'herdr-orch.herdr 'preflight!) (fn [] nil)
+              (ns-resolve 'herdr-orch.herdr 'prompt!) (fn [& _] (swap! events conj [:prompt @held?]))
+              (ns-resolve 'herdr-orch.cli 'parent-identity) (fn [] {:parent-session "parent"})
+              (ns-resolve 'herdr-orch.cli 'assert-pokeable!) (fn [& _] (swap! events conj [:guard @held?]))
+              (ns-resolve 'herdr-orch.cli 'settle-and-list!)
+              (fn [& _] {:index {child {:pane_id "pane" :agent_status "idle"}}})
+              (ns-resolve 'herdr-orch.cli 'with-child-lock)
+              (fn [locked-child f]
+                (reset! lock-child locked-child)
+                (reset! held? true)
+                (try (f) (finally (reset! held? false))))}
+        outcome (with-redefs-fn vars #(cli/poke! task))]
+    (is (= child @lock-child))
+    (is (= [[:guard false] [:guard true] [:prompt true] [:update true]] @events))
+    (is (= "poked" (:status outcome)))
+    (is (= 1 (:pokes outcome)))
+    (is (false? @held?) "the child lock is released after poke returns")))
+
+;; `unconfirmed` means the round's prompt may never have left the child's composer, so the
+;; work may never have started. A publication re-prompt would be the wrong instruction.
+(deftest poke-reports-an-unconfirmed-dispatch-without-prompting
+  (let [{:keys [env dir log]} (fake-env {"FAKE_WAIT" "idle"})
+        entry (patch-entry! dir (start-child! env dir "prompt never dispatched")
+                            :dispatch {:status "unconfirmed" :state "idle" :nudges 2})
+        prompts-before (count (filter #(= ["agent" "prompt"] (vec (take 2 %))) (calls log)))
+        proc (call! env "task" "poke" (:task entry))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= "unconfirmed" (get-in (result proc) [:result :status])))
+    (is (= "dispatch-unconfirmed" (get-in (result proc) [:result :reason])))
+    (is (re-find #"may never have started" (get-in (result proc) [:result :detail])))
+    (is (= prompts-before (count (filter #(= ["agent" "prompt"] (vec (take 2 %))) (calls log))))
+        "an unconfirmed dispatch is reported, never re-prompted")
+    (is (nil? (:pokes (ledger-entry* dir (:task entry)))))))
 
 (deftest continue-refuses-an-unusable-prior-round
   (let [{:keys [env log dir]} (fake-env {})]
@@ -4199,6 +4357,138 @@
         "a refused continue allocates no new round")
     (let [captured (:result (result (call! env "task" "collect" (:task entry))))]
       (is (= "COMPLETE" (:status captured)) "the raced item remains ordinarily collectable"))))
+
+;; --- per-child exclusion (task b96cb5da) ---------------------------------------------
+;; `publish` links its item file with `Files.createLink`, entirely outside `ledger/update!`,
+;; so the settle-wait re-checks above narrow the publish-versus-lifecycle race without closing
+;; it: an item can still be created after a lifecycle verb re-checks and before it writes.
+;; The production fix is an exclusive OS file lock keyed by child. These tests take that same
+;; lock from the harness, so acquisition is signalled entirely by the test process and the
+;; production path keeps no caller-controlled barrier.
+(defn- child-lock-file [dir child]
+  (fs/path dir ".tmp" "herdr-orch" "ledger" "locks" (str (ledger/safe-id child) ".lock")))
+(defn- child-lock-channel! [dir child]
+  (let [path (child-lock-file dir child)]
+    (fs/create-dirs (fs/parent path))
+    (doto (FileChannel/open (Paths/get (str path) (make-array String 0))
+                            (into-array StandardOpenOption
+                                        [StandardOpenOption/CREATE StandardOpenOption/WRITE]))
+      (.lock))))
+;; Every probe below runs under an independent bounded timeout with forced cleanup: a probe
+;; that never returns must fail its own test rather than hang the suite.
+(def ^:private lock-probe-hold-ms 2000)
+(def ^:private lock-probe-timeout-ms 60000)
+;; A fully qualified sentinel, never `::timeout`: `org-tasks.test-runner` re-parses an
+;; opted-in namespace's source with edamame, which rejects an auto-resolved keyword.
+(defn- settled-within! [proc timeout-ms]
+  (let [outcome (deref proc timeout-ms :lock-probe/timeout)]
+    (when (= :lock-probe/timeout outcome)
+      (.destroyForcibly (:proc proc))
+      (throw (ex-info "lock probe did not exit within its bound" {:timeout-ms timeout-ms})))
+    outcome))
+;; A captured, unsealed round: closable and continuable, and still open to a further item.
+(defn- unsealed-captured-round! [env dir assignment]
+  (let [entry (start-child! env dir assignment)]
+    (publish-stream! env entry "WAITING")
+    (is (= "WAITING" (get-in (result (call! env "task" "collect" (:task entry))) [:result :status])))
+    entry))
+
+;; The one-winner/one-loser invariant, asserted from two real processes. Both contenders are
+;; parked on the same lock before either can act, so the kernel -- not the test -- picks the
+;; winner, and no acquisition order is built in. Either order is admissible; both winning is
+;; not. Parking is what makes the close-wins branch reachable at all: close settles before it
+;; reaches the lock, so an unsynchronised race would always hand publish the round.
+(deftest publish-and-close-contend-for-one-child-lock
+  (let [{:keys [env log dir]} (fake-env {"ORCH_SETTLE_CLOSE_MS" "200"})
+        entry (unsealed-captured-round! env dir "publish races close")
+        item-2 (ledger/item-path (:result entry) 2)
+        channel (child-lock-channel! dir (:child entry))
+        publisher (process/process [bin "task" "publish" "--task" (:task entry)
+                                    "--status" "COMPLETE" "--summary" "raced publication"]
+                                   {:out :string :err :string :env (child-publish-env env entry) :dir (str dir)})
+        closer (process/process [bin "task" "close" (:task entry)]
+                                {:out :string :err :string :env env :dir (str dir)})]
+    (try
+      (Thread/sleep lock-probe-hold-ms)
+      (is (.isAlive (:proc publisher)) "publish is parked on the child lock")
+      (is (seq (child-waits log (:child entry)))
+          "close is past its settle wait, so it is parked on the lock and not on Herdr")
+      (is (.isAlive (:proc closer)) "close is parked on the child lock")
+      (finally (.close channel)))
+    (let [published (settled-within! publisher lock-probe-timeout-ms)
+          closed (settled-within! closer lock-probe-timeout-ms)
+          after (ledger-entry* dir (:task entry))]
+      (is (= 1 (count (filter #(zero? (:exit %)) [published closed])))
+          (pr-str {:publish (:out published) :close (:out closed)}))
+      (if (zero? (:exit published))
+        (do (is (= 1 (:exit closed)))
+            (is (re-find #"published during the settle wait" (:out closed)))
+            (is (fs/exists? item-2) "the winning publication committed its item")
+            (is (nil? (:closed-at after)) "a losing close records no closure")
+            (is (empty? (closed-panes log)) "a losing close takes no pane"))
+        (do (is (zero? (:exit closed)) (:err closed))
+            (is (= "closed" (get-in (result closed) [:result :status])))
+            (is (re-find #"round is closed" (:out published)))
+            (is (not (fs/exists? item-2)) "a losing publication commits no item")
+            (is (some? (:closed-at after))))))))
+
+(deftest publish-waits-for-a-held-child-lock
+  (let [{:keys [env dir]} (fake-env {})
+        entry (unsealed-captured-round! env dir "publish waits for the child lock")
+        item-2 (ledger/item-path (:result entry) 2)
+        channel (child-lock-channel! dir (:child entry))
+        proc (process/process [bin "task" "publish" "--task" (:task entry)
+                               "--status" "COMPLETE" "--summary" "held-lock publication"]
+                              {:out :string :err :string :env (child-publish-env env entry) :dir (str dir)})]
+    (try
+      (Thread/sleep lock-probe-hold-ms)
+      (is (.isAlive (:proc proc)) "publish must block until the child lock is free")
+      (is (not (fs/exists? item-2)) "no item is committed while another holder owns the lock")
+      (finally (.close channel)))
+    (let [outcome (settled-within! proc lock-probe-timeout-ms)]
+      (is (zero? (:exit outcome)) (:err outcome))
+      (is (= 2 (get-in (result outcome) [:result :item])))
+      (is (fs/exists? item-2) "the publication commits once the lock is released"))))
+
+(deftest close-waits-for-a-held-child-lock
+  (let [{:keys [env log dir]} (fake-env {"ORCH_SETTLE_CLOSE_MS" "200"})
+        entry (unsealed-captured-round! env dir "close waits for the child lock")
+        channel (child-lock-channel! dir (:child entry))
+        proc (process/process [bin "task" "close" (:task entry)]
+                              {:out :string :err :string :env env :dir (str dir)})]
+    (try
+      (Thread/sleep lock-probe-hold-ms)
+      (is (seq (child-waits log (:child entry)))
+          "close reached its settle wait, which precedes the lock")
+      (is (.isAlive (:proc proc)) "close must block until the child lock is free")
+      (is (nil? (:closed-at (ledger-entry* dir (:task entry))))
+          "no closure is recorded while another holder owns the lock")
+      (is (empty? (closed-panes log)) "no pane is taken while another holder owns the lock")
+      (finally (.close channel)))
+    (let [outcome (settled-within! proc lock-probe-timeout-ms)]
+      (is (zero? (:exit outcome)) (:err outcome))
+      (is (= "closed" (get-in (result outcome) [:result :status])))
+      (is (some? (:closed-at (ledger-entry* dir (:task entry)))))
+      (is (= #{(:pane-id entry)} (closed-panes log))))))
+
+(deftest continue-waits-for-a-held-child-lock
+  (let [{:keys [env dir]} (fake-env {"ORCH_SETTLE_CLOSE_MS" "200"})
+        entry (unsealed-captured-round! env dir "continue waits for the child lock")
+        ledger-dir (fs/path dir ".tmp" "herdr-orch" "ledger")
+        before (count (fs/glob ledger-dir "*.json"))
+        channel (child-lock-channel! dir (:child entry))
+        proc (process/process [bin "task" "continue" (:task entry) "--task" "next phase"]
+                              {:out :string :err :string :env env :dir (str dir)})]
+    (try
+      (Thread/sleep lock-probe-hold-ms)
+      (is (.isAlive (:proc proc)) "continue must block until the child lock is free")
+      (is (= before (count (fs/glob ledger-dir "*.json")))
+          "no successor round is reserved while another holder owns the lock")
+      (finally (.close channel)))
+    (let [outcome (settled-within! proc lock-probe-timeout-ms)]
+      (is (zero? (:exit outcome)) (:err outcome))
+      (is (= (:task entry) (get-in (result outcome) [:result :continues])))
+      (is (= (inc before) (count (fs/glob ledger-dir "*.json")))))))
 
 (deftest lifecycle-sweeps-skip-rounds-with-unconsumed-stream-items
   (testing "close --settled"
@@ -4876,6 +5166,80 @@
       (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log))))))
 
+;; --- publisher-owned WORK-ROOT (task ed6d67bf) --------------------------------------
+;; The parent selects the child's pane cwd, so the parent -- never the child -- owns the base
+;; every declared artifact resolves against. It is recorded on the ledger entry at spawn,
+;; injected once, carried onto every continued round, and serialized into each envelope.
+(deftest work-root-is-the-pane-cwd-recorded-and-injected
+  (testing "a shared checkout records and injects the caller's own cwd"
+    (let [{:keys [env log dir env-file]} (fake-env {})
+          entry (start-child! env dir "shared work root")]
+      (is (= (str dir) (:work-root entry)))
+      (is (= (str dir) (placement-cwd log)))
+      (is (= (str dir) (injected-env env-file "HERDR_ORCH_WORK_ROOT")))))
+  (testing "a managed checkout records and injects that checkout, not the caller's cwd"
+    (let [{:keys [env log dir env-file]} (fake-env {})
+          entry (spawn-worktree! env dir "managed work root")
+          checkout (get-in entry [:worktree :path])]
+      (is (= checkout (:work-root entry)))
+      (is (not= (str dir) (:work-root entry)))
+      (is (= checkout (placement-cwd log)))
+      (is (= checkout (injected-env env-file "HERDR_ORCH_WORK_ROOT")))
+      (git-in! (str dir) "worktree" "remove" "--force" checkout))))
+
+;; A continued round is a new immutable entry in the same pane, so it inherits the work root
+;; rather than re-deriving it. The child's injected environment never changes, so a successor
+;; that resolved artifacts against anything else would contradict what the child was told.
+(deftest work-root-is-immutable-across-a-continued-round
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "work root survives a continue")]
+    (publish-stream! env entry "WAITING")
+    (call! env "task" "collect" (:task entry))
+    (let [proc (call! env "task" "continue" (:task entry) "--task" "second round")
+          successor (ledger-entry* dir (get-in (result proc) [:result :task]))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= (:work-root entry) (:work-root successor)))
+      (let [published (call! (child-publish-env env successor) "task" "publish" "--task" (:task successor)
+                             "--status" "COMPLETE" "--summary" "second round done")]
+        (is (zero? (:exit published)) (:err published))
+        (is (str/includes? (slurp (:result successor)) (str "WORK-ROOT: " (:work-root entry))))))))
+
+;; Publisher-owned means the ledger entry decides. A child that rewrites its own injected
+;; variable, or invents a `--work-root` flag, changes nothing about the envelope it publishes.
+(deftest a-child-cannot-author-or-override-work-root
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "work root is not the child's to choose")
+        forged (str (fs/path dir "forged-root"))
+        _ (fs/create-dirs forged)]
+    (testing "there is no --work-root option to author one with"
+      (let [proc (call! (child-publish-env env entry) "task" "publish" "--work-root" forged
+                        "--status" "COMPLETE" "--summary" "done")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"unknown option" (:out proc)))
+        (is (not (fs/exists? (:result entry))))))
+    (testing "a rewritten injected variable loses to the ledger entry"
+      (let [proc (call! (merge (child-publish-env env entry) {"HERDR_ORCH_WORK_ROOT" forged})
+                        "task" "publish" "--status" "COMPLETE" "--summary" "done")
+            published (slurp (:result entry))]
+        (is (zero? (:exit proc)) (:err proc))
+        (is (str/includes? published (str "WORK-ROOT: " (:work-root entry))))
+        (is (not (str/includes? published forged)))))))
+
+;; The envelope's own `WORK-ROOT` is checked against the ledger exactly like CHILD/TASK/RESULT,
+;; so a hand-written envelope naming another root is captured as `invalid` rather than trusted.
+(deftest capture-refuses-an-envelope-naming-a-different-work-root
+  (let [{:keys [env dir]} (fake-env {})
+        entry (start-child! env dir "forged work root in the envelope")]
+    (spit (:result entry)
+          (core/envelope {:child (:child entry) :task (:task entry) :result (:result entry)
+                          :work-root (str (fs/path dir "elsewhere"))
+                          :status "COMPLETE" :summary "forged" :artifacts [] :findings [] :next nil}))
+    (let [res (:result (result (call! env "task" "collect" (:task entry))))]
+      (is (= "invalid" (:status res)))
+      (is (re-find #"identity does not match ledger" (:reason res)))
+      (is (re-find #":field :work-root" (:reason res)))
+      (is (not (:terminal? res)) "a forged root never seals the round"))))
+
 ;; --- portable Markdown artifact links ---------------------------------------------
 ;; Two link surfaces with deliberately different weight: the publish-time advisory is
 ;; built from the child's *declared* body (unvalidated), while `collect` renders only
@@ -4883,26 +5247,34 @@
 (defn- publish-artifacts! [entry artifacts]
   (spit (:result entry)
         (core/envelope {:child (:child entry) :task (:task entry) :result (:result entry)
+                        :work-root (:work-root entry)
                         :status "COMPLETE" :summary "artifact links" :artifacts artifacts :findings [] :next nil})))
-(defn- artifact-file! [dir name] (let [path (str (fs/path dir name))] (spit path "artifact body") path))
+;; Declared artifacts are relative to the round's own work root, so a fixture writes the file
+;; under that root and hands the publisher the same relative name.
+(defn- artifact-file! [entry name]
+  (let [path (fs/path (:work-root entry) name)]
+    (fs/create-dirs (fs/parent path))
+    (spit (str path) "artifact body")
+    name))
 
 (deftest collect-returns-existence-validated-artifact-links
   (let [{:keys [env dir]} (fake-env {})
         entry (start-child! env dir "collect artifact links")
         ;; One hostile name covering spaces, `#`, `%`, and Markdown-significant label
         ;; characters at once, plus a second artifact to pin ordering and multiplicity.
-        spaced (artifact-file! dir "a report #1 100% [draft].md")
-        plain (artifact-file! dir "notes.md")
-        declared [(str spaced " :: the *main* report") plain]]
+        spaced (artifact-file! entry "a report #1 100% [draft].md")
+        plain (artifact-file! entry "notes.md")
+        declared [(str spaced " :: the *main* report") plain]
+        absolute-spaced (str (fs/path (:work-root entry) spaced))]
     (publish-artifacts! entry declared)
     (let [res (:result (result (call! env "task" "collect" (:task entry))))
           links (:artifact-links res)]
       (is (= "COMPLETE" (:status res)))
       (is (= 2 (count links)))
-      (is (= (mapv core/artifact-link declared) links))
-      (testing "the label is the whole absolute path, escaped, never a basename"
-        (is (str/includes? (first links) (str "[" (str/replace spaced #"([\\`*_\[\]])" "\\\\$1") "]")))
-        (is (str/starts-with? (first links) (str "[" dir))))
+      (is (= (mapv #(core/artifact-link (:work-root entry) %) declared) links))
+      (testing "the label is the whole resolved absolute path, escaped, never a basename"
+        (is (str/includes? (first links) (str "[" (str/replace absolute-spaced #"([\\`*_\[\]])" "\\\\$1") "]")))
+        (is (str/starts-with? (first links) (str "[" (:work-root entry)))))
       (testing "the destination is a canonical, percent-encoded file URI"
         (is (str/includes? (first links) "](file:///"))
         (is (str/includes? (first links) "%20"))
@@ -4933,11 +5305,65 @@
   (testing "an artifact that fails the existence check never becomes a validated link"
     (let [{:keys [env dir]} (fake-env {})
           entry (start-child! env dir "missing artifact")]
-      (publish-artifacts! entry ["/nonexistent/subagent-link-artifact :: missing"])
+      (publish-artifacts! entry ["nonexistent/subagent-link-artifact :: missing"])
       (let [res (:result (result (call! env "task" "collect" (:task entry))))]
         (is (= "invalid" (:status res)))
         (is (not (contains? res :artifact-links)))
         (is (not (contains? (ledger-entry* dir (:task entry)) :artifact-links)))))))
+
+;; Publication containment is lexical, so `link/secret.md` is inside the work root as text
+;; while `link` points outside it. Capture is the first point at which the file must exist,
+;; so it is the first point at which the real path can be resolved and re-checked.
+(deftest collect-refuses-an-artifact-that-escapes-the-work-root-through-a-symlink
+  (let [outside (fs/create-temp-dir {:prefix "subagent-outside-root-"})
+        secret (fs/path outside "secret.md")]
+    (spit (str secret) "outside the work root")
+    (testing "a symlinked directory inside the work root does not widen it"
+      (let [{:keys [env dir]} (fake-env {})
+            entry (start-child! env dir "symlinked artifact escape")]
+        (fs/create-sym-link (fs/path (:work-root entry) "link") (str outside))
+        ;; The lexical guard passes and the file exists, so only the real-path check can
+        ;; refuse this. Both facts are asserted, or a green test would prove nothing.
+        (let [lexical (core/artifact-absolute-path (:work-root entry) "link/secret.md")]
+          (is (str/starts-with? lexical (str (:work-root entry))))
+          (is (fs/exists? lexical)))
+        (publish-artifacts! entry ["link/secret.md :: escaped report"])
+        (let [res (:result (result (call! env "task" "collect" (:task entry))))]
+          (is (= "invalid" (:status res)))
+          (is (str/includes? (:reason res) "escape WORK-ROOT through a symlink"))
+          (is (not (contains? res :artifact-links)))
+          (is (not (contains? (ledger-entry* dir (:task entry)) :artifact-links))))))
+    ;; Positive control on the same capture path: a plain traversal must still be refused,
+    ;; so an `invalid` above cannot be read as a guard that refuses nothing in particular.
+    ;; `core/envelope` refuses a traversal, so the control writes the envelope by hand.
+    (testing "positive control: a lexical traversal is still refused at capture"
+      (let [{:keys [env dir]} (fake-env {})
+            entry (start-child! env dir "traversal artifact refusal control")
+            valid (core/envelope {:child (:child entry) :task (:task entry) :result (:result entry)
+                                  :work-root (:work-root entry) :status "COMPLETE"
+                                  :summary "traversal control" :artifacts ["placeholder.md"]
+                                  :findings [] :next nil})
+            forged (str/replace valid "- placeholder.md" "- ../secret.md :: traversal")]
+        ;; The substitution must have applied, or the control asserts nothing.
+        (is (not= valid forged))
+        (is (str/includes? forged "- ../secret.md :: traversal"))
+        (spit (:result entry) forged)
+        (let [res (:result (result (call! env "task" "collect" (:task entry))))]
+          (is (= "invalid" (:status res)))
+          (is (str/includes? (:reason res) "must not escape WORK-ROOT")))))
+    ;; Negative control: the check must not refuse every symlink, only one that leaves the
+    ;; root. A link to a sibling inside the same root stays a validated artifact.
+    (testing "negative control: a symlink to a file inside the work root still validates"
+      (let [{:keys [env dir]} (fake-env {})
+            entry (start-child! env dir "contained symlink artifact")]
+        (artifact-file! entry "report.md")
+        (fs/create-sym-link (fs/path (:work-root entry) "alias.md")
+                            (str (fs/path (:work-root entry) "report.md")))
+        (publish-artifacts! entry ["alias.md :: contained alias"])
+        (let [res (:result (result (call! env "task" "collect" (:task entry))))]
+          (is (= "COMPLETE" (:status res)))
+          (is (= [(core/artifact-link (:work-root entry) "alias.md :: contained alias")]
+                 (:artifact-links res))))))))
 
 ;; `--any` must remain the single-task shape plus exactly `remaining`: links flow through
 ;; the shared capture path rather than being added by the fan-in branch.
@@ -4946,13 +5372,13 @@
         {any-env :env any-dir :dir} (fake-env {})
         one (start-child! single-env single-dir "links via single-task collect")
         other (start-child! any-env any-dir "links via fan-in collect")
-        a (artifact-file! single-dir "one report.md")
-        b (artifact-file! any-dir "other report.md")]
+        a (artifact-file! one "one report.md")
+        b (artifact-file! other "other report.md")]
     (publish-artifacts! one [(str a " :: single")])
     (publish-artifacts! other [(str b " :: fan-in")])
     (let [single (:result (result (call! single-env "task" "collect" (:task one))))
           any (:result (result (call! any-env "task" "collect" "--any")))]
-      (is (= [(core/artifact-link (str b " :: fan-in"))] (:artifact-links any)))
+      (is (= [(core/artifact-link (:work-root other) (str b " :: fan-in"))] (:artifact-links any)))
       (is (= (conj (set (keys single)) :remaining) (set (keys any))))
       (is (= 0 (:remaining any))))))
 
@@ -4961,8 +5387,8 @@
 (deftest publication-advisory-lists-declared-artifacts-as-pending-validation
   (let [{:keys [env dir prompt-file]} (fake-env {})
         entry (start-child! env dir "advisory artifact links")
-        missing "/nonexistent/subagent advisory #1.md"
-        second-artifact (str (fs/path dir "second.md"))
+        missing "nonexistent/subagent advisory #1.md"
+        second-artifact "second.md"
         proc (call! (merge (child-publish-env env entry) {"FAKE_PARENT_STATUS" "idle"})
                     "task" "publish" "--status" "COMPLETE" "--summary" "done"
                     "--artifact" (str missing " :: pending report")
@@ -4975,8 +5401,10 @@
       (is (re-find #"(?i)advisory" pushed))
       (is (str/includes? pushed "pending validation by `collect`")))
     (testing "each declared artifact appears as a Markdown link with an encoded file URI"
-      (is (str/includes? pushed (str "- " (core/artifact-link (str missing " :: pending report")))))
-      (is (str/includes? pushed (str "- " (core/artifact-link second-artifact))))
+      (is (str/includes? pushed (str "- " (core/artifact-link (:work-root entry) (str missing " :: pending report")))))
+      (is (str/includes? pushed (str "- " (core/artifact-link (:work-root entry) second-artifact))))
+      ;; The child declared a relative path; the parent reads the resolved absolute one.
+      (is (str/includes? pushed (str "[" (:work-root entry) "/nonexistent/subagent advisory #1.md]")))
       (is (str/includes? pushed "(file:///"))
       (is (str/includes? pushed "%20"))
       (is (str/includes? pushed "%23")))
@@ -5007,47 +5435,51 @@
 (deftest a-consumed-item-keeps-its-captured-artifact-links
   (let [{:keys [env dir]} (fake-env {})
         entry (start-child! env dir "recollect drops stale links")
-        artifact (artifact-file! dir "vanishing report.md")]
+        artifact (artifact-file! entry "vanishing report.md")]
     (publish-artifacts! entry [(str artifact " :: the report")])
     (let [first-pass (:result (result (call! env "task" "collect" (:task entry))))]
       (is (= "COMPLETE" (:status first-pass)))
       (is (= 1 (count (:artifact-links first-pass))))
       (is (some? (:artifact-links (ledger-entry* dir (:task entry))))))
-    (fs/delete artifact)
+    (fs/delete (fs/path (:work-root entry) artifact))
     (let [second-pass (:result (result (call! env "task" "collect" (:task entry))))]
       (is (= "pending" (:status second-pass)))
       (is (some? (:artifact-links (ledger-entry* dir (:task entry))))))))
 
-;; Publication is committed before the advisory renders, so one unrenderable artifact must
-;; not cost the parent its notification. A NUL byte is the reachable case: `artifact-path`
-;; accepts it (it only checks the leading `/`) while `Paths/get` rejects it. It cannot travel
-;; through argv at all — which is also why it cannot be degraded to raw text, only dropped —
-;; so it reaches `publish` via `--from-file`.
-(deftest an-unrenderable-declared-artifact-degrades-the-advisory-but-still-pushes
+;; A NUL byte used to be the reachable unrenderable case: the old `artifact-path` accepted it
+;; (it only checked the leading `/`) while `Paths/get` rejects it, so it reached the advisory
+;; and had to be dropped there. Under `WORK-ROOT` the publisher resolves every declared path
+;; through the same `Paths/get`, so the byte is refused at publication instead. The envelope
+;; is never written, and the hazard is removed at source rather than degraded downstream.
+(deftest a-nul-byte-artifact-is-refused-at-publication
   (let [{:keys [env dir prompt-file]} (fake-env {})
         entry (start-child! env dir "unrenderable advisory artifact")
-        good (str (fs/path dir "good.md"))
         body (str (fs/path dir "nul-body.json"))]
-    ;; Written as a JSON escape so the file itself carries no NUL byte.
+    ;; Written as a JSON escape so the file itself carries no NUL byte. It cannot travel
+    ;; through argv at all, so it reaches `publish` only via `--from-file`.
     (spit body (str "{\"status\":\"COMPLETE\",\"summary\":\"done\",\"artifacts\":"
-                    "[\"/tmp/nul\\u0000x.md :: broken\",\"" good " :: fine\"],"
+                    "[\"nul\\u0000x.md :: broken\",\"good.md :: fine\"],"
                     "\"findings\":[],\"next\":null}"))
     (let [proc (call! (merge (child-publish-env env entry) {"FAKE_PARENT_STATUS" "idle"})
-                      "task" "publish" "--from-file" body)
-          res (:result (result proc))
-          pushed (slurp prompt-file)]
-      (is (zero? (:exit proc)) (:err proc))
-      (is (= "COMPLETE" (:status res)))
-      ;; The parent is contacted, not reported as a prompt failure.
-      (is (= "sent" (get-in res [:parent-push :push])))
-      ;; The unrenderable item is dropped and counted; its sibling still links normally.
-      (is (str/includes? pushed "1 declared artifact path(s) not renderable"))
-      (is (not (str/includes? pushed "/tmp/nul")))
-      (is (not (str/includes? pushed "\u0000")))
-      (is (str/includes? pushed (str "- " (core/artifact-link (str good " :: fine")))))
-      (is (re-find #"(?i)advisory" pushed))
-      ;; The envelope keeps the child's declared list verbatim.
-      (is (str/includes? (slurp (:result entry)) "broken")))))
+                      "task" "publish" "--from-file" body)]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"artifact path is not a usable path" (:out proc)))
+      (is (not (fs/exists? (:result entry))))
+      (is (or (not (fs/exists? prompt-file)) (not (str/includes? (slurp prompt-file) "broken")))))))
+
+;; Publication is already committed when the advisory renders, so the renderer must never
+;; throw even though the publisher now refuses every path it could not render. The guard is
+;; retained as defence and exercised directly, because no `publish` input can reach it.
+(deftest the-advisory-drops-and-counts-an-artifact-it-cannot-render
+  (let [rendered (cli/artifact-advisory "/tmp/root" ["good.md :: fine" "nul\u0000x.md :: broken"])]
+    (is (str/includes? rendered "1 declared artifact path(s) not renderable"))
+    (is (not (str/includes? rendered "\u0000")))
+    (is (str/includes? rendered (str "- " (core/artifact-link "/tmp/root" "good.md :: fine"))))
+    (is (re-find #"(?i)advisory" rendered)))
+  (testing "an unusable work root drops every item rather than failing the push"
+    (let [rendered (cli/artifact-advisory nil ["good.md :: fine"])]
+      (is (str/includes? rendered "1 declared artifact path(s) not renderable"))
+      (is (not (str/includes? rendered "(file://"))))))
 ;; --- phase 2: agent-facing output -----------------------------------------------------
 ;; The measured cost this replaces: every capture returned the parsed fields *and* a
 ;; byte-for-byte `text` repeat of them beside them, and `list` emitted a full envelope --
@@ -5214,6 +5646,7 @@
         entry (merge {:task task
                       :result (str (fs/path dir ".tmp" "herdr-orch" (str task "-grandchild.result")))
                       :child name :pane-id "w:grandchild" :label "worker-1/scout-1" :index 1
+                      :work-root (str dir)
                       :parent-session publisher-session :parent-pane "w:child"
                       :waiting-policy "blocking" :status "prompted" :created-at "2026-01-01T00:00:00Z"}
                      (apply hash-map kvs))]
@@ -5330,7 +5763,8 @@
         publisher (start-child! env dir "owns a vanished child with an unread terminal")
         grandchild (owned-round! dir "scout-unread")
         envelope (fn [status] (core/envelope {:child (:child grandchild) :task (:task grandchild)
-                                              :result (:result grandchild) :status status
+                                              :result (:result grandchild)
+                                              :work-root (:work-root grandchild) :status status
                                               :summary (str "stream " status)
                                               :artifacts [] :findings [] :next nil}))]
     (spit (:result grandchild) (envelope "WAITING"))

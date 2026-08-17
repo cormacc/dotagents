@@ -69,6 +69,16 @@ All =herdr= calls in =src/= must remain vector argv. Keep the standalone launche
 
 Configuration examples in this file are not covered by any test, unlike contract.md's weight table. Validate a changed example by parsing it out of the document and running it through =validate-merged-config!= against the shipped table. An example can become executable-wrong rather than merely stale.
 
+** Contract evolution
+
+The delegation protocol is a closed-loop, repository-internal surface. The publisher, envelope renderer and parser, capture path, ledger readers, prompt guidance, tests, and operator renderers ship together. Result files and ledger entries under =.tmp/herdr-orch/= are transient coordination state. They are not durable exchange formats or external APIs.
+
+Change an envelope, ledger field, or internal JSON shape atomically across every producer, consumer, fixture, and document. Do not add dual-read paths, fallback fields, or migration code only to preserve stale =.tmp/herdr-orch/= state. Finish or close live rounds before switching to an incompatible checkout. When a shape change needs diagnosis, bump its schema or marker and reject the old shape clearly instead of supporting both.
+
+For a stable directory assigned as the child pane's cwd at spawn, use =WORK-ROOT= in an envelope, =:work-root= in the ledger, and =HERDR_ORCH_WORK_ROOT= in the child environment. Do not use =ROOT=, which is ambiguous with the assignment root, repository root, source root, and plugin root. Do not call this value =CWD=: a child process can change its current directory, while the parent-assigned work root stays fixed across the child lineage and its continued rounds.
+
+The publisher owns =WORK-ROOT=. It records the absolute parent-selected child cwd and injects that value mechanically; the child does not author or override it. Artefact entries are relative to =WORK-ROOT=. Publication resolves them mechanically for absolute receiver links and rejects paths that escape the root. Update the complete closed loop in one change rather than retaining the absolute-artefact envelope as a compatibility branch.
+
 ** Test isolation caveat
 
 =ORCH_ASSIGNMENT_ROOT= relocates project config lookup and all assignment state into each fixture. The CLI tests symlink both the tracked config and project =skills/= tree into that root. They also set =$HOME=, but Babashka's =System/getProperty("user.home")= comes from the JVM/OS property rather than the subprocess environment, so =$HOME= alone cannot hide the global config or skill probes. Tests of the no-global-skill branch therefore belong at the pure =core= policy boundary unless the process property itself is controlled.

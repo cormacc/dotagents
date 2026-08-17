@@ -47,9 +47,12 @@
         _ (write-fake-codex! temp log-path)
         agents-path (fs/path root ".agents")
         agents-before (file-tree agents-path)
+        fake-codex-home (str (fs/path temp "fake-codex-home"))
+        _ (fs/create-dirs fake-codex-home)
         proc (call! [runner "prune" "--model" "gpt-5.6-terra"]
                     {:dir root :env (assoc (into {} (System/getenv))
-                                           "PATH" (prep-fake-path! temp))})
+                                           "PATH" (prep-fake-path! temp)
+                                           "CODEX_HOME" fake-codex-home)})
         output (:out proc)
         required-markers ["Pass condition, fixed before the run:"
                           "=== TREATED ==="
@@ -90,11 +93,33 @@
           (is (some #{"--ephemeral"} args))
           (is (some #{"--ignore-user-config"} args))
           (is (= "read-only" (second (drop-while #(not= "--sandbox" %) args))))
-          (is (str/starts-with? codex-home (str (fs/path root ".tmp" "trait-gates"))))
-          (is (not (fs/exists? codex-home))
-              "the isolated Codex configuration is removed after the run"))
+          (is (= fake-codex-home codex-home)
+              "the caller's CODEX_HOME is passed straight through, not an isolated copy"))
+        (is (fs/exists? fake-codex-home)
+            "the caller's CODEX_HOME is left in place after the run")
+        (is (not (some #(= "codex-home" (fs/file-name %)) (fs/list-dir run-dir)))
+            "no per-run codex-home copy is created under the run directory")
+        (is (empty? (fs/glob run-dir "**/auth.json"))
+            "no auth.json copy is made anywhere under the run directory")
         (is (= agents-before (file-tree agents-path))
             "the runner does not write durable .agents configuration")))))
+
+(deftest codex-home-defaults-to-the-real-dot-codex-when-unset
+  (let [temp (str (fs/create-temp-dir {:dir (str (fs/path root ".tmp"))
+                                       :prefix "trait-gate-test-"}))
+        log-path (str (fs/path temp "codex.log"))
+        _ (write-fake-codex! temp log-path)
+        expected-default (str (fs/path (fs/home) ".codex"))
+        proc (call! [runner "prune" "--model" "gpt-5.6-terra"]
+                    {:dir root :env (dissoc (assoc (into {} (System/getenv))
+                                                   "PATH" (prep-fake-path! temp))
+                                            "CODEX_HOME")})]
+    (is (zero? (:exit proc)) (:err proc))
+    (let [invocations (mapv read-string (str/split-lines (slurp log-path)))]
+      (is (= 2 (count invocations)))
+      (doseq [{:keys [codex-home]} invocations]
+        (is (= expected-default codex-home)
+            "an unset CODEX_HOME defaults to the caller's real ~/.codex, not an isolated copy")))))
 
 (deftest malformed-gate-fails-with-its-full-path-before-running-an-arm
   (let [temp (str (fs/create-temp-dir {:dir (str (fs/path root ".tmp"))

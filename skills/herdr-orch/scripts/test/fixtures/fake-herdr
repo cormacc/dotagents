@@ -108,8 +108,9 @@ publish_result() {
     [ -f "$per_child" ] && env_file="$per_child"
   fi
   [ -n "$env_file" ] && [ -f "$env_file" ] || return 0
-  local base_result result child task status item=1 count_file="" count=0
+  local base_result result child task status item=1 count_file="" count=0 work_root
   base_result="$(grep '^HERDR_ORCH_RESULT=' "$env_file" | head -1 | cut -d= -f2-)"
+  work_root="$(grep '^HERDR_ORCH_WORK_ROOT=' "$env_file" | head -1 | cut -d= -f2-)"
   child="$(grep '^HERDR_ORCH_CHILD=' "$env_file" | head -1 | cut -d= -f2-)"
   task="$(grep '^HERDR_ORCH_TASK=' "$env_file" | head -1 | cut -d= -f2-)"
   status="${FAKE_PUBLISH_STATUS:-COMPLETE}"
@@ -143,6 +144,7 @@ publish_result() {
 CHILD: $child
 TASK: $task
 RESULT: $base_result
+WORK-ROOT: $work_root
 STATUS: $status
 SUMMARY: fake completed
 ARTIFACTS:

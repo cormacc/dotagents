@@ -290,15 +290,24 @@
   (str (when parent-label (str (nested-prefix parent-label parent-persona) "/"))
        (root-label persona index model)))
 
-(defn envelope [{:keys [child task result status summary checkpoint artifacts findings next process]}]
+;; Artifact grammar lives with the link renderer further down; the serializer is its first
+;; caller, so the two names it needs are declared rather than the whole section moved.
+(declare absolute-work-root! artifact-relative-path)
+;; `work-root` is publisher-owned identity, taken from the ledger entry the parent wrote at
+;; spawn. It is serialized so the parent can resolve every relative `ARTIFACTS` entry
+;; mechanically, and validated here so no publisher can emit an artifact the parent cannot
+;; resolve. Artifact shape is checked at this single point rather than at each caller.
+(defn envelope [{:keys [child task result work-root status summary checkpoint artifacts findings next process]}]
   (when-not (statuses status) (throw (ex-info "invalid result status" {:status status})))
-  (doseq [[k v] [[:child child] [:task task] [:result result] [:summary summary]]]
+  (doseq [[k v] [[:child child] [:task task] [:result result] [:work-root work-root] [:summary summary]]]
     (single-line! (name k) v))
+  (absolute-work-root! work-root)
   (when checkpoint (single-line! "checkpoint" checkpoint))
   (findings-limit! findings)
   (process-limit! process)
   (doseq [v (concat artifacts findings process (when next [next]))] (single-line! "envelope item" v))
-  (str "--- HERDR RESULT v1 ---\nCHILD: " child "\nTASK: " task "\nRESULT: " result "\nSTATUS: " status "\nSUMMARY: " summary "\n"
+  (doseq [artifact artifacts] (artifact-relative-path (str artifact)))
+  (str "--- HERDR RESULT v1 ---\nCHILD: " child "\nTASK: " task "\nRESULT: " result "\nWORK-ROOT: " work-root "\nSTATUS: " status "\nSUMMARY: " summary "\n"
        (when checkpoint (str "CHECKPOINT: " checkpoint "\n"))
        "ARTIFACTS:\n" (if (seq artifacts) (str/join "\n" (map #(str "- " %) artifacts)) "- none") "\n"
        "FINDINGS:\n" (if (seq findings) (str/join "\n" (map #(str "- " %) findings)) "- none") "\n"
@@ -313,7 +322,7 @@
     (when-not (= 1 (count matches)) (throw (ex-info "result envelope field is missing or repeated" {:field label})))
     (single-line! label (subs (first matches) (+ 2 (count label))))))
 (def ^:private end-marker "--- END HERDR RESULT ---")
-(def ^:private field-labels ["CHILD" "TASK" "RESULT" "STATUS" "SUMMARY" "CHECKPOINT" "NEXT"])
+(def ^:private field-labels ["CHILD" "TASK" "RESULT" "WORK-ROOT" "STATUS" "SUMMARY" "CHECKPOINT" "NEXT"])
 (def ^:private section-headers ["ARTIFACTS:" "FINDINGS:" "PROCESS:"])
 ;; Sections are delimited structurally — by the next section header, scalar field line, or
 ;; the END marker — never by a value the child chose. Every list item carries a `- `
@@ -354,13 +363,14 @@
     (when (< 1 (count checkpoint-lines))
       (throw (ex-info "result envelope field is repeated" {:field "CHECKPOINT"})))
     (cond-> {:child (field! lines "CHILD") :task (field! lines "TASK") :result (field! lines "RESULT")
+             :work-root (field! lines "WORK-ROOT")
              :status (field! lines "STATUS") :summary (field! lines "SUMMARY")
              :artifacts (section-lines lines "ARTIFACTS:")
              :findings (section-lines lines "FINDINGS:")
              :next (field! lines "NEXT") :process (process-items lines) :text text}
       (seq checkpoint-lines) (assoc :checkpoint (single-line! "CHECKPOINT" (subs (first checkpoint-lines) 12))))))
 
-;; An ARTIFACTS item is `<absolute path>[ :: <purpose>]`. One splitter owns the
+;; An ARTIFACTS item is `<path relative to WORK-ROOT>[ :: <purpose>]`. One splitter owns the
 ;; delimiter, so the path check and link renderer cannot disagree. A path that contains
 ;; ` :: ` mis-splits because the delimiter is envelope grammar and is not escapable.
 (def ^:private artifact-purpose-delimiter " :: ")
@@ -369,10 +379,69 @@
 (defn artifact-parts [line]
   (let [[path purpose] (str/split (str line) artifact-purpose-pattern 2)]
     {:path path :purpose purpose}))
-(defn artifact-path [line]
-  (let [{:keys [path]} (artifact-parts line)]
-    (when-not (str/starts-with? path "/") (throw (ex-info "artifact path must be absolute" {:artifact line :path path})))
-    path))
+(defn- path! [context value]
+  ;; `Paths/get` rejects a NUL byte, which the old absolute-prefix check accepted and passed
+  ;; through to a link renderer. Report it as a path fault rather than as an opaque throw.
+  (try (java.nio.file.Paths/get (str value) (make-array String 0))
+       (catch Exception e
+         (throw (ex-info "artifact path is not a usable path"
+                         (assoc context :path value :cause (.getMessage e)))))))
+(defn absolute-work-root! [work-root]
+  (let [root (path! {:work-root work-root} work-root)]
+    (when-not (.isAbsolute root)
+      (throw (ex-info "WORK-ROOT must be an absolute path" {:work-root work-root})))
+    root))
+;; The child authors a path relative to the work root the parent gave it, and never an
+;; absolute one: an absolute path is meaningless to a parent whose checkout differs, and it
+;; lets a child name any file on the machine. Normalisation is lexical and deliberate -- a
+;; value that normalises to `..`, to a `../` prefix, or to nothing at all names something
+;; outside the work root (or the work root itself) and is refused before it reaches disk.
+(defn artifact-relative-path [line]
+  (let [{:keys [path]} (artifact-parts line)
+        context {:artifact line}]
+    (when (str/blank? (str path))
+      (throw (ex-info "artifact path must not be blank" context)))
+    (let [relative (path! context path)]
+      (when (.isAbsolute relative)
+        (throw (ex-info "artifact path must be relative to WORK-ROOT" (assoc context :path path))))
+      (let [normalized (str (.normalize relative))]
+        (when (str/blank? normalized)
+          (throw (ex-info "artifact path must name a file inside WORK-ROOT" (assoc context :path path))))
+        (when (or (= ".." normalized) (str/starts-with? normalized "../"))
+          (throw (ex-info "artifact path must not escape WORK-ROOT"
+                          (assoc context :path path :normalized normalized))))
+        normalized))))
+;; The one resolver. Containment is re-checked on the resolved path rather than trusted from
+;; the lexical check above, so a future change to either half cannot silently widen the other.
+(defn artifact-absolute-path [work-root line]
+  (let [root (absolute-work-root! work-root)
+        resolved (.normalize (.resolve root (artifact-relative-path line)))]
+    (when-not (.startsWith resolved root)
+      (throw (ex-info "artifact path must not escape WORK-ROOT"
+                      {:artifact line :work-root (str work-root) :resolved (str resolved)})))
+    (str resolved)))
+;; Lexical containment cannot see a symlink. `link/secret.md` is inside the work root as
+;; text, while `link` points outside it, so `artifact-absolute-path` alone would label a
+;; foreign file as a file in the child's checkout. `toRealPath` needs the file to exist, so
+;; this second check belongs at capture, after the existence check, and never at publication.
+;; The work root is resolved too: a temporary directory is commonly reached through a
+;; symlinked prefix (`/var` -> `/private/var` on macOS), and comparing a resolved artifact
+;; against an unresolved root would refuse every legitimate artifact under such a root.
+(defn artifact-real-path! [work-root path]
+  (let [real (fn [value]
+               (try (.toRealPath (java.nio.file.Paths/get (str value) (make-array String 0))
+                                 (make-array java.nio.file.LinkOption 0))
+                    (catch Exception e
+                      (throw (ex-info "artifact path cannot be resolved on disk"
+                                      {:path (str path) :work-root (str work-root)
+                                       :unresolvable (str value) :cause (.getMessage e)})))))
+        real-root (real (absolute-work-root! work-root))
+        real-path (real path)]
+    (when-not (.startsWith real-path real-root)
+      (throw (ex-info "artifact path must not escape WORK-ROOT through a symlink"
+                      {:path (str path) :work-root (str work-root)
+                       :resolved (str real-path) :resolved-work-root (str real-root)})))
+    (str real-path)))
 ;; Escapes only the characters that change *inline* rendering: the two that could break out
 ;; of a link label (`[`, `]`), the escape character itself, the code/emphasis markers a path
 ;; may legitimately contain, and `&`/`<`/`>`/`~`. Those last four matter because a rendered
@@ -399,23 +468,25 @@
 ;; Markdown links can turn this into a terminal hyperlink, and every other reader still
 ;; sees the full absolute path plus a usable URL. The visible label is always the whole
 ;; absolute path — a basename would discard the context the parent needs after the child
-;; pane is gone. Absoluteness is enforced here rather than trusted from the caller: both
-;; current callers pre-validate, but `Paths/get` resolves a relative path against the
-;; process cwd, so a caller that forgot would emit a confident link to the wrong file.
-(defn artifact-link [artifact]
+;; pane is gone. The declared item is relative, so the label is resolved mechanically
+;; against the publisher-owned work root; `artifact-absolute-path` enforces containment
+;; here rather than trusting it from the caller.
+(defn artifact-link [work-root artifact]
   (let [line (str artifact)
-        path (artifact-path line)
+        path (artifact-absolute-path work-root line)
         purpose (:purpose (artifact-parts line))
         link (str "[" (markdown-escape path) "](" (file-uri path) ")")]
     (if (str/blank? purpose) link (str link artifact-purpose-delimiter (markdown-escape purpose)))))
 (defn validate-envelope [ledger text]
   (let [parsed (parse-envelope text)]
-    (doseq [key [:child :task :result]]
+    ;; `:work-root` joins the identity triple: it is publisher-owned, so an envelope naming a
+    ;; different root is a forged or stale artifact base, not merely a mismatch of metadata.
+    (doseq [key [:child :task :result :work-root]]
       (when-not (= (str (get ledger key)) (get parsed key))
         (throw (ex-info "result envelope identity does not match ledger" {:field key :expected (get ledger key) :actual (get parsed key)}))))
     (when-not (statuses (:status parsed)) (throw (ex-info "invalid envelope status" {:status (:status parsed)})))
     (findings-limit! (:findings parsed))
-    (doseq [artifact (:artifacts parsed)] (artifact-path artifact))
+    (doseq [artifact (:artifacts parsed)] (artifact-relative-path artifact))
     (if (< max-process (count (:process parsed)))
       (assoc parsed :process (vec (take max-process (:process parsed))) :process-overflow true)
       parsed)))

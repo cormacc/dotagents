@@ -215,20 +215,6 @@ Acceptance:
 
 Origin: reported independently by two subagents as a process candidate, 2026-08-06.
 
-** TODO herdr-orch: serialise publish against close and continue :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: b96cb5da-ebc1-4e04-aeed-af9531ffab18
-:CREATED: [2026-08-07 Fri 23:18]
-:END:
-:LOGBOOK:
-- Created [2026-08-07 Fri 23:18]
-:END:
-`publish` is not serialised against `close`/`continue`. The settle-wait rechecks added during the append-only stream work narrow the race but cannot close it: `publish` creates its item file through `Files.createLink`, independently of `ledger/update!`, so an item can be created after the lifecycle verb's recheck and before `herdr/close!` records `:closed-at`, or before a `continue` successor entry is written. Consequences: `close` can take a pane and record `:closed-at` with an unconsumed item on the round; `continue` can supersede a round while a publication that passed the old check is still committing.
-
-Not a regression from the stream change -- the pre-change design carried a comparable publish-versus-close race -- and deliberately left open there, because a fix needs interprocess exclusion shared by `publish` and the lifecycle verbs (a lock file, or an equivalent atomic state transition), which was larger than that record's scope. A final check after closing is too late: closure is irreversible.
-
-Identified and reproduced by the third closeout review of `43e7c65c`; full analysis in that review's artifact, and the accepted-risk entry is in `design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org` under `** Risks`. Relevant symbols as of that work: `close-mutation!` and `continue!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`, plus `assert-publishable!` and the `createLink` publication path.
-
 ** TODO [#C] AGENTS.md: state that repo-root =scripts/= is Babashka-first, existing members predate the rule
 :PROPERTIES:
 :CUSTOM_ID: 511e335b-9c05-45c9-87da-09df1f48d827
@@ -248,26 +234,6 @@ Acceptance criteria:
 - No existing script is rewritten as part of this task. Churn for consistency's sake is not the goal; the goal is that the next new script is Babashka without needing a correction.
 - If a future script genuinely needs Bash or TypeScript (a thin wrapper, or a Node-ecosystem check), the rule names that exemption rather than being silently violated.
 Must not: rewrite =check.sh=, the sole remaining non-Babashka member; add a lint that fails on existing members.
-
-** TODO [#C] traits: re-probe every fragment against synthetic, non-decaying scenarios
-:PROPERTIES:
-:CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
-:CREATED: [2026-08-11 Tue 12:23]
-:END:
-:LOGBOOK:
-- Created [2026-08-11 Tue 12:23]
-:END:
-No trait fragment holds a probe result valid for the current repository state. Every scenario written so far takes this repository as its subject, so each decays as the repository documents itself: =read-only= baited a typo fix in our worktree, =focused= baited an audit of our =pi/extensions=, =no-bullshit= reviewed our own clean git range, and =%prune= asked about our own trait store. =%prune= is simply the one that was re-run and watched lapse (2026-08-11), which is how the decay was discovered.
-
-Requiring a passing probe was abandoned the same day precisely because of this, so nothing is blocked on this task. It is the durable fix rather than the workaround: a synthetic subject does not decay, and observations may then be stored beside the scaffold without becoming an answer key for the next control arm.
-
-Acceptance criteria:
-- Each of =read-only=, =focused=, =no-bullshit=, and =prune= gets a scenario whose artifact under review is synthetic and self-contained -- invented for the probe, not drawn from this repository -- with its flaw documented nowhere the child can read.
-- Each probe runs treated and control at the same persona and tier through =scripts/run-trait-gate.bb=, with the condition pre-registered before the run, and records the outcome in =traits/<name>/gate.md= including =did not discriminate= where that is what happened.
-- Fragments still flat (=traits/focused.md=, =traits/no-bullshit.md=, =traits/read-only.md=) convert to the directory form when they gain a =gate.md=.
-- Redundancy is triaged before wording: =AGENTS.md= loads in every pi session and already carries directives adjacent to =%no-bullshit= (claims stated only when measured or attributed; an empty result is not evidence of absence; a guard only ever seen pass is unverified). A fragment that shows no marginal effect over that baseline is a deletion candidate, not a rewording candidate -- =%challenge= was removed on exactly that reasoning.
-- Where a probe cannot be made to discriminate, say so and say why, rather than reporting an unexplained negative or quietly dropping the fragment.
-Must not: weaken a recorded condition to make a run agree; reuse a repo-referential subject; treat a passing probe as a precondition for the fragment staying in the store.
 
 ** TODO [#C] org-tasks: spec checks warn forever once a record's change is committed
 :PROPERTIES:
@@ -340,6 +306,45 @@ Open questions to settle before implementing:
 - Does =--print-prompt= still make sense as the inspection route.
 
 Verified [2026-08-12 Wed] against cli.clj at 6a89b0f plus the housekeeping commits: the roster failure above is real, all seven packaged personas declare =model:=, and no inline-persona flag exists.
+
+** TODO [#C] traits: re-probe every fragment against synthetic, non-decaying scenarios
+:PROPERTIES:
+:CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
+:CREATED: [2026-08-11 Tue 12:23]
+:END:
+:LOGBOOK:
+- Created [2026-08-11 Tue 12:23]
+:END:
+No trait fragment holds a probe result valid for the current repository state. Every scenario written so far takes this repository as its subject, so each decays as the repository documents itself: =read-only= baited a typo fix in our worktree, =focused= baited an audit of our =pi/extensions=, =no-bullshit= reviewed our own clean git range, and =%prune= asked about our own trait store. =%prune= is simply the one that was re-run and watched lapse (2026-08-11), which is how the decay was discovered.
+
+Requiring a passing probe was abandoned the same day precisely because of this, so nothing is blocked on this task. It is the durable fix rather than the workaround: a synthetic subject does not decay, and observations may then be stored beside the scaffold without becoming an answer key for the next control arm.
+
+Acceptance criteria:
+- Each of =read-only=, =focused=, =no-bullshit=, and =prune= gets a scenario whose artifact under review is synthetic and self-contained -- invented for the probe, not drawn from this repository -- with its flaw documented nowhere the child can read.
+- Each probe runs treated and control at the same persona and tier through =scripts/run-trait-gate.bb=, with the condition pre-registered before the run, and records the outcome in =traits/<name>/gate.md= including =did not discriminate= where that is what happened.
+- Fragments still flat (=traits/focused.md=, =traits/no-bullshit.md=, =traits/read-only.md=) convert to the directory form when they gain a =gate.md=.
+- Redundancy is triaged before wording: =AGENTS.md= loads in every pi session and already carries directives adjacent to =%no-bullshit= (claims stated only when measured or attributed; an empty result is not evidence of absence; a guard only ever seen pass is unverified). A fragment that shows no marginal effect over that baseline is a deletion candidate, not a rewording candidate -- =%challenge= was removed on exactly that reasoning.
+- Where a probe cannot be made to discriminate, say so and say why, rather than reporting an unexplained negative or quietly dropping the fragment.
+Must not: weaken a recorded condition to make a run agree; reuse a repo-referential subject; treat a passing probe as a precondition for the fragment staying in the store.
+
+** TODO herdr-orch: an invalid capture records a JSON encoding error instead of its reason :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 492bca01-d8fc-439d-918c-37ab69ad7cca
+:CREATED: [2026-08-16 Sun 22:18]
+:END:
+:LOGBOOK:
+- Created [2026-08-16 Sun 22:18]
+:END:
+`capture!` binds `parsed` to the exception object when `validate-envelope` throws, so `record-item-capture!` tries to JSON-encode an `ExceptionInfo`. The recorded `:invalid-reason` becomes a cheshire encoding error that only quotes the real reason, and `:invalid-data` is lost.
+
+Found while testing ed6d67bf and deliberately left out of scope there and in f61dab75. `result-edge-and-publication-contract` passes only because the quoted text still contains the word it greps for, so the defect is invisible to the suite today.
+
+Acceptance criteria:
+- An envelope that fails validation records the thrown reason as `:invalid-reason`, not a JSON encoding error that quotes it.
+- `:invalid-data` survives the failed validation.
+- A test asserts the recorded reason exactly, so a re-encoded reason fails it.
+
+Pointer: `capture!` and `record-item-capture!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`.
 
 * Fixes
 
@@ -532,29 +537,6 @@ Origin:
 Evidence:
 A reviewer subagent's preliminary rebase validation repeated a delimiter error in a complex bb -e form once per locale, then initially double-escaped a Clojure regex literal so re-matches failed. The current Clojure skill already warns that multi-line bb -e is fragile, but does not require a one-input smoke test before looping or explicit positive/negative regex examples.
 
-** TODO herdr-orch: recover a settled child that never published :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: f61dab75-0f20-4b24-8b95-7f43ad8610ba
-:CREATED: [2026-08-06 Thu 10:24]
-:END:
-:LOGBOOK:
-- Created [2026-08-06 Thu 10:24]
-:END:
-A settled child may finish its work without ever publishing a result, leaving its ledger entry `prompted` with no RESULT file while the work itself may be complete. Recovery today is entirely manual: the parent must read the pane and hand-write a re-prompt asking the child to publish with the injected launcher. Add a safe, parent-owned recovery verb for that state, preserving result validation and ownership checks and avoiding ad-hoc prompts or terminal keys.
-
-What already mitigates this, short of a verb: SKILL.md § Completion and pane safety instructs the parent to re-prompt rather than respawn, since respawning discards completed work; and `verify-dispatch!` separates a prompt that never left the composer (`unconfirmed`, so the work may never have begun) from one that did (`dispatched`), which is the first thing a recovery verb would need to branch on. Both are guidance and diagnosis, not recovery.
-
-*EDIT* [2026-08-08] Originally filed as two edge cases; the second is now obsolete and has been dropped. It described a child with a validated COMPLETE result remaining reported as working and thereby "evading automatic pane closure" -- but automatic closure no longer exists. `436cbe2` made the close/continue lifecycle explicit and removed `maybe-close!` (no longer present anywhere in the source), so no capture closes a pane. That condition now surfaces as an explicit, retryable `{:status "retained" :reason "unsettled"}` from `close-mutation!` (with `outstanding-children`) after a bounded `ORCH_SETTLE_CLOSE_MS` wait (`settle-close-ms`), which is a reported outcome rather than a silent failure to close. The scope above is what survives.
-
-Origin:
-- cwd: /Users/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-06 Thu 10:23]
-- sender: agent
-
-Evidence:
-One worker settled idle after completing the requested fix but omitted publication and required a targeted publish prompt. (A second observation, of a COMPLETE child that stayed working and needed Ctrl-D plus explicit pane closure, belonged to the dropped edge case above and predates the explicit-close lifecycle.)
-
 ** TODO Review how ot CLI surfaces archived tasks :skill:org_tasks:
 :PROPERTIES:
 :CUSTOM_ID: 4c344404-66e2-48fb-b907-544ec41a730f
@@ -687,29 +669,6 @@ Origin:
 Evidence:
 Two change-records were planned this session; both needed their `* Plan` tasks hand-authored with `ot uuid` after `--parent` routed to TASKS.org. Records: design/log/2026-08-13-move-to-on-demand-gitlab-runners-on-aws.org and design/log/2026-08-13-migrate-docker-host-from-amazon-linux-1.org.
 
-** TODO herdr-orch: trait gate runner discards the Codex auth it refreshes :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: be915a31-f4c1-4319-a478-f096c6b12249
-:CREATED: [2026-08-13 Thu 18:25]
-:END:
-:LOGBOOK:
-- Created [2026-08-13 Thu 18:25]
-:END:
-`scripts/run-trait-gate.bb` copies `~/.codex/auth.json` into a per-run `CODEX_HOME` (`prepare-codex-home!`) and discards that directory after the run, so any token the Codex CLI refreshes during the gate is written to the copy and lost. Every run therefore presents the same refresh token from the source file, which is a replay: two gate runs on 2026-08-13 at 18:04 and 18:06 failed with `401` / `{"code": "refresh_token_reused", "type": "invalid_request_error"}`.
-
-The failure is intermittent and misdiagnoses easily. Two `%prune` gates succeeded at 18:10 and 18:15 on the same credentials, and `codex login status` reported a live session throughout, so the first reading -- an expired local Codex session -- was wrong and was recorded as such in two `gate.md` files before being corrected. `~/.codex/auth.json` had not been written since 2026-07-29 despite 74 gate runs, which is the tell: nothing ever writes back.
-
-Desired outcome: a gate run must not invalidate the credential it borrows. Options include symlinking `auth.json` into the isolated home so a refresh writes through, copying the refreshed file back on exit, or pointing `CODEX_HOME` at the real home and isolating only the config that `--ignore-user-config` already covers. Isolation of *config* is deliberate and should survive whatever is chosen.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-13 Thu 18:25]
-- sender: agent
-
-Evidence:
-Found while re-running the `%worktree` and `%no-worktree` admission gates for plan task 2538b80c. Both had been recorded as lapsed on an auth diagnosis that did not survive checking; after re-authentication both ran, one passing with discrimination and one honestly not discriminating.
-
 ** TODO Fix glab-runner instance-listing guidance :skill:gitlab_cli_skills:
 :PROPERTIES:
 :CUSTOM_ID: 7663c8ad-b8fc-4133-80cf-82a37b99e532
@@ -751,35 +710,6 @@ Origin:
 
 Evidence:
 Found by hand-auditing checkbox state per plan task while annotating a superseded task, not by any tool. The gap is that closure is asserted by status while completion is recorded in checkboxes, and nothing reconciles the two.
-
-** TODO agent: bound concurrency probes and validate scratch targets :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 6a2d2634-497c-4973-a8a4-53872966846b
-:CREATED: [2026-08-14 Fri 17:37]
-:END:
-:LOGBOOK:
-- Created [2026-08-14 Fri 17:37]
-:END:
-Concurrency and destructive scratch probes need a shared bounded-harness guardrail.
-
-Three independently observed failures in the worktree fan-out review:
-
-- A scratch probe derived a nil checkout path and wrote through it into the caller cwd before cleanup. Assert every derived target is non-nil, absolute, and contained under the intended temporary root before the first write or delete.
-- A `functions.bash` timeout of `120000` was supplied as though milliseconds, but the schema is seconds; the deadlocked probe then ran for 4,173 seconds before manual interruption. Treat tool timeout units as part of identifier verification and wrap each concurrency probe in an independent bounded process timeout with `finally` cleanup.
-- A file-lock test assumed waiter FIFO order. POSIX/JVM file locks promise exclusion, not queue order; assert scheduler-independent one-winner/one-loser invariants or signal actual acquisition entirely from the test harness. Never add a caller-controlled test barrier to the production lock path -- a missing release file blocked every later spawn/continue in review and was rejected as P2.
-
-Desired outcome: add the narrowest durable guidance to the general agent instructions and/or herdr-orch test hazards, with an adversarial example that fails when timeout/containment cleanup is removed. Do not restate existing generic temporary-file rules; target the observed gaps above.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-14 Fri 17:40]
-- sender: agent
-
-Evidence:
-- reviewer-3a2e3cdc process finding (nil scratch target)
-- reviewer-cb0427bb process finding and 4,173-second aborted probe (timeout unit)
-- worker-8271dad0 process finding plus final review P2 (FIFO assumption / production test barrier)
 
 ** TODO self-improvement: persist AGENTS metrics comparison script :skill:self_improvement:
 :PROPERTIES:
