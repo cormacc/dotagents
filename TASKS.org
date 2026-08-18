@@ -35,8 +35,8 @@
   - [[#herdr-orch-support-unmanaged-harness-kinds-herdr-cannot-start-or-detect][herdr-orch: support unmanaged harness kinds herdr cannot start or detect]]
   - [[#org-tasks-ot-create---parent-cannot-target-a-change-record-plan-task][org-tasks: ot create --parent cannot target a change-record plan task]]
   - [[#self-improvement-persist-agents-metrics-comparison-script][self-improvement: persist AGENTS metrics comparison script]]
-  - [[#correct-known-agent-guidance-defects][Correct known agent guidance defects]]
   - [[#probe-the-babashka-default-nrepl-port-before-server-startup][Probe the Babashka default nREPL port before server startup]]
+  - [[#correct-known-agent-guidance-defects][Correct known agent guidance defects]]
 
 * Explorations
 
@@ -546,7 +546,7 @@ Evidence:
 :LOGBOOK:
 - Created [2026-08-17 Mon 22:41]
 :END:
-Correct the four known defects in agent instructions. Keep each correction as a separate subtask so that its source evidence and validation remain local.
+Correct the six known defects in agent instructions. Keep each correction as a separate subtask so that its source evidence and validation remain local.
 *** TODO [#B] AGENTS.md: state that repo-root =scripts/= is Babashka-first, existing members predate the rule
 :PROPERTIES:
 :CUSTOM_ID: 511e335b-9c05-45c9-87da-09df1f48d827
@@ -622,3 +622,39 @@ Origin:
 
 Evidence:
 `glab runner list --all --output json` exited non-zero with `Unknown flag: --all`. Live `glab runner list --help` documents `-i --instance  List all runners available to the user (instance scope).` Direct controlled API probes were needed to confirm runner deletion because the subsequent instance-list probe returned zero rows, including no known-present runner 10.
+*** TODO Reserve Herdr RESULT paths for publication envelopes :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 23c72ef3-f550-4ad3-bcc5-452cbcc04e98
+:CREATED: [2026-08-18 Tue 07:38]
+:END:
+:LOGBOOK:
+- Created [2026-08-18 Tue 07:38]
+:END:
+Prevent Herdr children from using the reserved result stream as a report artifact. The generated prompt must state that `HERDR_ORCH_RESULT` is only for `task publish`. Long reports must use a distinct `.tmp/*-report.md` path. Add a prompt regression test that checks this distinction.
+
+Origin:
+- cwd: /Users/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-18 Tue 07:38]
+- sender: agent
+
+Evidence:
+Seven of 12 delegated rounds in one implementation session first produced an invalid capture with `invalid result envelope markers`. Child-session probes confirmed that agents wrote their reports to the injected result path before publication. The current generated guidance names an assignment-provided report path but does not state that the separately injected result path is reserved for the publication envelope.
+*** TODO Require a JSON parser for JSON data :agents_md:
+:PROPERTIES:
+:CUSTOM_ID: b462b1cc-a9ac-4322-b1bd-a2bce9eced70
+:CREATED: [2026-08-18 Tue 07:38]
+:END:
+:LOGBOOK:
+- Created [2026-08-18 Tue 07:38]
+:END:
+Add a portable agent rule for machine-readable JSON. Use `jq` or a JSON parser. Do not parse JSON with the Clojure reader because JSON tokens and Clojure data syntax are not the same contract.
+
+Origin:
+- cwd: /Users/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-18 Tue 07:38]
+- sender: agent
+
+Evidence:
+A delegated reviewer used Clojure `read-string` on an `ot doctor --format json` report and the parse failed. The reviewer then used `jq` on the same report and successfully extracted `ok`, `schema`, counts, and warnings.
