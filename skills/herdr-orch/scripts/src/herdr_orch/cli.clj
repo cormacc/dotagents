@@ -255,7 +255,7 @@
 ;; Universal result-inbox routing belongs to the wrapper, which knows every child has one;
 ;; persona-local output sections keep only the role-specific definition of a key finding.
 (def ^:private publication-guidance
-  "Published `SUMMARY` must be a single line. Write multi-line detail to the assignment-provided report path (fall back to `.tmp/`), pass the report with `--artifact`, and emit each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Each `--artifact` value must be a path relative to your working directory (`$HERDR_ORCH_WORK_ROOT`); an absolute path, or one that escapes that root, is refused.")
+  "Published `SUMMARY` must be a single line. Write multi-line detail to a distinct `.tmp/*-report.md` file, pass the report with `--artifact`, and emit each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Never use `HERDR_ORCH_RESULT` as a report file. Use `HERDR_ORCH_RESULT` only through `task publish`. Each `--artifact` value must be a path relative to your working directory (`$HERDR_ORCH_WORK_ROOT`); an absolute path, or one that escapes that root, is refused.")
 (defn prompt-text [{:keys [spawns persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
   (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
        (delegation-guidance spawns) " Herdr assigned TASK=" task " and RESULT=" result ". "

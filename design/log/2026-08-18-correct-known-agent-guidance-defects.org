@@ -1,0 +1,201 @@
+#+TITLE: Correct known agent guidance defects
+#+DATE: 2026-08-18 Tue
+#+PARENT: [[archive:1d5667de-dbc6-41d8-be17-65821922ee53][Correct known agent guidance defects]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:AGENTS.md]]
+#+SPEC: [[proj:home/AGENTS.md]]
+#+SPEC: [[proj:skills/README.org]]
+#+SPEC: [[proj:skills/clojure/SKILL.md]]
+#+SPEC: [[proj:skills/gitlab-cli-skills/glab-runner/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+
+* Intent
+Correct six verified agent-guidance defects that cause invalid commands, weak evidence, repeated validation failures, or corrupted Herdr result streams. Keep each correction as an independent work unit with local evidence and validation.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+Six focused corrections strengthen the portable agent rules, the Clojure skill, and Herdr's generated publication guidance.
+
+** Scope
+*** In scope
+- Clarify the Babashka-first rule for new repository-root scripts in `home/AGENTS.md`.
+- Add fail-fast validator and regular-expression checks to `skills/clojure/SKILL.md`.
+- Require current-source verification before summaries or handoffs restate load-bearing state claims.
+- Add a local runner-list workaround to `home/AGENTS.md` while keeping the vendored GitLab skill unchanged, and prepare the correction on an upstream branch.
+- Reserve `HERDR_ORCH_RESULT` for `task publish` in generated initial, continuation, and poke prompts.
+- Require a JSON parser for JSON input in `home/AGENTS.md`.
+- Use a targeted adversarial behaviour probe for each corrected directive.
+*** Out of scope
+- Rewrite existing files under `scripts/` or add a script-language lint.
+- Refactor unrelated portable guidance or skill content.
+- Change Herdr result-envelope mechanics beyond generated guidance, its contract, and regression coverage.
+- Invoke authenticated GitLab runner-list or runner-mutation operations during validation.
+- Open the upstream merge request.
+
+** Acceptance
+*** Core functionality
+- [X] New repository-root automation scripts default to Babashka.
+- [X] Existing non-Babashka scripts are pre-rule exceptions, not precedent for new work.
+- [X] Thin shell wrappers remain an explicit exemption from the Babashka default.
+- [X] Node-ecosystem checks remain an explicit exemption from the Babashka default.
+- [X] A complex Babashka validator runs on one representative input before it runs across an input set.
+- [X] A failed representative validator stops before the input-set loop.
+- [X] Multi-line or quote-heavy Babashka validation uses a checked `.tmp/*.clj` script.
+- [X] Each newly authored Clojure regular expression matches one positive example before use.
+- [X] Each newly authored Clojure regular expression rejects one negative example before use.
+- [X] A summary rechecks each load-bearing state claim against current source before it restates the claim.
+- [X] A handoff rechecks each load-bearing state claim against current source before it restates the claim.
+- [X] `home/AGENTS.md` identifies the vendored `glab runner list --all` guidance as invalid.
+- [X] The local workaround uses `glab runner list --instance` only when installed help documents it.
+- [X] `skills/gitlab-cli-skills/glab-runner/SKILL.md` has no local diff.
+- [X] `skills/README.org` continues to classify `gitlab-cli-skills` as vendored.
+- [X] The upstream `fix/glab-runner-instance-flag` branch corrects both invalid `--all` references.
+- [X] Shared `publication-guidance` reserves `HERDR_ORCH_RESULT` for `task publish` → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/traits_test.clj` `publication-guidance-is-exact-and-unconditional`
+- [X] Shared `publication-guidance` sends multi-line reports to a distinct `.tmp/*-report.md` path → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/traits_test.clj` `publication-guidance-is-exact-and-unconditional`
+- [X] Initial prompts include the complete shared publication guidance exactly once → test:`skills/herdr-orch/scripts/test/herdr_orch/traits_test.clj` `publication-guidance-is-exact-and-unconditional`
+- [X] Continuation prompts include the complete shared publication guidance exactly once → test:`skills/herdr-orch/scripts/test/herdr_orch/traits_test.clj` `publication-guidance-is-exact-and-unconditional`
+- [X] Poke prompts include the complete shared publication guidance exactly once → test:`skills/herdr-orch/scripts/test/herdr_orch/traits_test.clj` `publication-guidance-is-exact-and-unconditional`
+- [X] The Herdr environment contract identifies `HERDR_ORCH_RESULT` as the publication-only result path.
+- [X] Machine-readable JSON is parsed with `jq` or a JSON parser.
+- [X] Machine-readable JSON is not parsed with the Clojure reader.
+*** Edge cases
+- [X] No tracked path under `scripts/` changes.
+- [X] Missing or empty runner-list output does not support an absence claim when the known-present control fails.
+- [X] A Herdr multi-line report path differs from `HERDR_ORCH_RESULT`.
+- [X] Each modified skill keeps valid frontmatter.
+*** Anti-criteria
+- [X] Must not: add a lint that rejects existing shell or TypeScript scripts.
+- [X] Must not: modify the vendored glab-runner skill or any unrelated vendored skill body.
+- [X] Must not: use a live GitLab API mutation as validation.
+- [X] Must not: add a production dependency.
+
+** Decisions
+- Preserve the six existing task UUIDs as separate work units :: Each correction has an independent observable outcome and a local validation scenario. The three `home/AGENTS.md` changes target distinct directives.
+  Rejected:
+  - Merge all guidance edits into one task: evidence and failure diagnosis would become coupled.
+  - Add ordering blockers: no correction requires another correction to land first.
+- Use targeted edits plus adversarial behaviour probes :: String or prose inspection confirms wording but does not confirm that an agent follows the directive.
+  Rejected:
+  - Run only structural validators: they cannot detect ineffective guidance.
+  - Build a new repository-wide guidance test framework: six focused probes do not justify that scope.
+- Keep `gitlab-cli-skills` vendored and carry the temporary workaround in `home/AGENTS.md` :: Upstream `main` still documents invalid `--all` guidance, while installed glab accepts `--instance` and rejects `--all`.
+  Rejected:
+  - Reclassify the complete skill for one upstream defect: this creates unnecessary local maintenance.
+  - Edit the vendored body locally: the next vendor refresh would overwrite the correction.
+  - Wait for the upstream merge without a local workaround: agents would continue to receive invalid guidance.
+- Put the Herdr distinction in shared `publication-guidance` and its complete-string regression :: Initial, continuation, and poke prompts consume this shared value.
+  Rejected:
+  - Add persona-specific wording: duplicate guidance can drift.
+  - Change prompt text without a regression test: the measured failure can return silently.
+
+** Shipped
+- MODIFIED `home/AGENTS.md` :: New repository-root automation scripts now default to Babashka, with explicit thin-shell and Node-dependent TypeScript exemptions. Existing scripts do not set precedent.
+- MODIFIED `skills/clojure/SKILL.md` :: Complex validators now fail fast on one representative input, and new regular expressions require positive and negative examples before use.
+- MODIFIED `home/AGENTS.md` :: Summaries and handoffs now recheck load-bearing state claims against current source before restating them.
+- MODIFIED `home/AGENTS.md` :: A temporary workaround rejects the vendored `--all` guidance, requires installed-help verification, and uses `--instance` for instance scope.
+- Pushed `~/dev/skills/gitlab-cli-skills` branch `fix/glab-runner-instance-flag` to the user's fork at commit `ec1bd3c`, with both upstream `--all` references corrected.
+- MODIFIED `skills/herdr-orch/scripts/docs/contract.md` :: `HERDR_ORCH_RESULT` is now explicitly publication-only.
+- Herdr initial, continuation, and poke prompts now direct multi-line detail to a distinct `.tmp/*-report.md` file and reserve `HERDR_ORCH_RESULT` for `task publish`.
+- MODIFIED `home/AGENTS.md` :: Machine-readable JSON now requires `jq` or a JSON parser and prohibits the Clojure reader.
+
+** Gotchas
+- Installed `glab runner list --help` documents `--instance`. It does not document the previous `--all` spelling.
+- Upstream `vince-winkintel/gitlab-cli-skills` commit `261d12e` still documents `--all` in `glab-runner/SKILL.md`; the local vendored copy must remain unchanged until upstream merges a correction.
+
+* Plan
+** DONE [#B] AGENTS.md: state that repo-root =scripts/= is Babashka-first, existing members predate the rule
+CLOSED: [2026-08-18 Tue 08:11]
+:PROPERTIES:
+:CUSTOM_ID: 511e335b-9c05-45c9-87da-09df1f48d827
+:CREATED: [2026-08-11 Tue 12:12]
+:STARTED: [2026-08-18 Tue 08:10]
+:END:
+:LOGBOOK:
+- Created [2026-08-11 Tue 12:12]
+- State "STARTED" from "TODO" [2026-08-18 Tue 08:10]
+- State "DONE" from "STARTED" [2026-08-18 Tue 08:11]
+:END:
+** DONE [#A] clojure skill: make ad-hoc validator and regex checks fail fast :skill:clojure:
+CLOSED: [2026-08-18 Tue 08:13]
+:PROPERTIES:
+:CUSTOM_ID: 94cc1d46-63cf-464a-9107-ac21993bfbab
+:CREATED: [2026-08-05 Wed 11:26]
+:STARTED: [2026-08-18 Tue 08:12]
+:END:
+:LOGBOOK:
+- Created [2026-08-05 Wed 11:26]
+- State "STARTED" from "TODO" [2026-08-18 Tue 08:12]
+- State "DONE" from "STARTED" [2026-08-18 Tue 08:13]
+:END:
+** DONE [#A] Re-verify state claims before restating them in a summary :agents_md:
+CLOSED: [2026-08-18 Tue 08:15]
+:PROPERTIES:
+:CUSTOM_ID: aaea2185-f6be-4260-8a9c-207b3a834866
+:CREATED: [2026-08-06 Thu 16:13]
+:STARTED: [2026-08-18 Tue 08:14]
+:END:
+:LOGBOOK:
+- Created [2026-08-06 Thu 16:13]
+- State "CANCELLED" from "TODO" [2026-08-06 Thu 18:30]
+- State "TODO" from "CANCELLED" [2026-08-06 Thu 18:32]
+- State "STARTED" from "TODO" [2026-08-18 Tue 08:14]
+- State "DONE" from "STARTED" [2026-08-18 Tue 08:15]
+:END:
+** DONE [#B] Fix glab-runner instance-listing guidance :skill:gitlab_cli_skills:
+CLOSED: [2026-08-18 Tue 10:27]
+:PROPERTIES:
+:CUSTOM_ID: 7663c8ad-b8fc-4133-80cf-82a37b99e532
+:CREATED: [2026-08-14 Fri 10:13]
+:STARTED: [2026-08-18 Tue 08:15]
+:END:
+:LOGBOOK:
+- Created [2026-08-14 Fri 10:13]
+- State "STARTED" from "TODO" [2026-08-18 Tue 08:15]
+- State "DONE" from "STARTED" [2026-08-18 Tue 08:17]
+- State "STARTED" from "DONE" [2026-08-18 Tue 10:24]
+- State "DONE" from "STARTED" [2026-08-18 Tue 10:27]
+:END:
+** DONE Reserve Herdr RESULT paths for publication envelopes :skill:herdr_orch:
+CLOSED: [2026-08-18 Tue 08:22]
+:PROPERTIES:
+:CUSTOM_ID: 23c72ef3-f550-4ad3-bcc5-452cbcc04e98
+:CREATED: [2026-08-18 Tue 07:38]
+:STARTED: [2026-08-18 Tue 08:17]
+:END:
+:LOGBOOK:
+- Created [2026-08-18 Tue 07:38]
+- State "STARTED" from "TODO" [2026-08-18 Tue 08:17]
+- State "DONE" from "STARTED" [2026-08-18 Tue 08:22]
+:END:
+** DONE Require a JSON parser for JSON data :agents_md:
+CLOSED: [2026-08-18 Tue 08:24]
+:PROPERTIES:
+:CUSTOM_ID: b462b1cc-a9ac-4322-b1bd-a2bce9eced70
+:CREATED: [2026-08-18 Tue 07:38]
+:STARTED: [2026-08-18 Tue 08:23]
+:END:
+:LOGBOOK:
+- Created [2026-08-18 Tue 07:38]
+- State "STARTED" from "TODO" [2026-08-18 Tue 08:23]
+- State "DONE" from "STARTED" [2026-08-18 Tue 08:24]
+:END:
+* Implementation
+- The Babashka-first rule separates the default from its two named exemptions. A fresh-agent probe chose Babashka despite existing shell and TypeScript scripts.
+- Validator guidance retains the short-form `bb -e` boundary and directs quote-heavy checks to a checked `.tmp/*.clj` script. A fresh-agent probe stopped before the input loop and tested both regular-expression outcomes.
+- Current-state guidance treats an earlier true claim as stale after later changes. A fresh-agent probe refused to reuse a 09:00 status in a 09:30 summary or handoff.
+- The initial local edit to the vendored runner skill and its inventory reclassification were reverted. The workaround now lives in `home/AGENTS.md`, and the upstream correction lives on a separate clone branch.
+- The complete-string regression failed against the old shared prompt for initial, continuation, and poke paths, then passed after the source update. A fresh child wrote a two-line `.tmp/*-report.md` artifact and published one valid terminal envelope without writing report prose to `HERDR_ORCH_RESULT`.
+- A fresh-agent probe rejected Clojure `read-string`, selected Cheshire as a JSON parser, checked `:ok`, and only then accessed the result field.
+
+* Validation
+- The complete-string Herdr regression produced 8 failures against the old prompt and 0 failures after the source change. The final focused run executed 7 tests and 94 assertions.
+- Six fresh adversarial probes followed the corrected directives despite the old temptation in each scenario. The Herdr probe produced one valid terminal envelope and kept its report at a distinct `.tmp/*-report.md` path.
+- The installed `glab runner list --help` output contains `--instance` and omits `--all`. Parser probes in help and final argument positions reject `--all` as an unknown flag.
+- The old-source guidance guard failed on its representative input before the full check loop. The current-source run passed the remaining task markers.
+- `git diff --exit-code` confirms that the local vendored runner skill and its inventory classification match `HEAD`.
+- `quick_validate.py` accepts the modified upstream `glab-runner` skill.
+- A fresh no-tools agent probe selected `glab runner list --instance` and refused the vendored `--all` guidance.
+- Commit `ec1bd3c` changes only `glab-runner/SKILL.md`. The pushed fork branch resolves to the same full commit SHA as the local branch.
+- `ot doctor --format json` reports 0 errors and 6 advisory warnings. Four warnings record intentionally unchanged specs in this record; two belong to the active Herdr simplification record.

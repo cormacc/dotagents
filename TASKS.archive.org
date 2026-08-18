@@ -3253,3 +3253,22 @@ CLOSED: [2026-08-18 Tue 01:28]
 :END:
 #+IMPORT: [[plan:2026-08-17-org-tasks-parser-improvements.org]]
 Simplify the protocol parser without adopting org-parser as a runtime dependency. Preserve Babashka compatibility and byte-identical round-trip guarantees.
+
+** DONE [#A] Correct known agent guidance defects
+CLOSED: [2026-08-18 Tue 10:28]
+:PROPERTIES:
+:CUSTOM_ID: 1d5667de-dbc6-41d8-be17-65821922ee53
+:CREATED: [2026-08-17 Mon 22:41]
+:STARTED: [2026-08-18 Tue 08:10]
+:ARCHIVED: [2026-08-18 Tue 10:28]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 22:41]
+- State "STARTED" from "TODO" [2026-08-18 Tue 08:10]
+- State "DONE" from "STARTED" [2026-08-18 Tue 08:47]
+- State "STARTED" from "DONE" [2026-08-18 Tue 10:23]
+- State "DONE" from "STARTED" [2026-08-18 Tue 10:28]
+:END:
+#+IMPORT: [[plan:2026-08-18-correct-known-agent-guidance-defects.org]]
+Correct the six known defects in agent instructions. Keep each correction as a separate subtask so that its source evidence and validation remain local.

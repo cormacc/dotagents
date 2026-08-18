@@ -11,6 +11,9 @@
   - You explicitly state that the claim is uncertain.
 - Do not present confidence alone as proof.
 - Apply this rule to assignment baselines, assignment attributions, and claims that you report to the user.
+- Before a summary restates a load-bearing state claim, verify the claim against current source.
+- Before a handoff restates a load-bearing state claim, verify the claim against current source.
+- A claim that was true earlier is not current-source evidence after a later change.
 
 ## Questions and prose
 - When the user asks a question, answer the question. Do not start coding.
@@ -66,6 +69,7 @@
 - Use `${PIPESTATUS[0]}` or remove the pipeline.
 - This method is mandatory when a test checks that a command fails.
 - Check the `ok` or status field in a structured CLI envelope before you read result fields.
+- Parse machine-readable JSON with `jq` or a JSON parser. Do not use the Clojure reader for machine-readable JSON.
 - A nil result field in an error envelope can appear identical to a valid empty result.
 - One `oh` response contained `{"ok":false}` because of a version mismatch.
 - The nil result was incorrectly reported as a trait-resolution failure.
@@ -108,6 +112,8 @@
 
 ## Command-line arguments
 - Verify each flag's meaning before you trust its output.
+- Work around the vendored `skills/gitlab-cli-skills/glab-runner/SKILL.md` use of `glab runner list --all`. Installed glab rejects `--all`.
+- Use `glab runner list --instance` for instance scope when installed `glab runner list --help` documents it. Keep the vendored skill unchanged until upstream merges the correction.
 - A flag rejection in one argument position does not prove rejection in another position.
 - A removed `--focus` flag produced `unknown task option` before other arguments.
 - In the final position, the same flag produced `option requires a value`.
@@ -207,6 +213,10 @@
 - One extra key in an `edits[]` entry truncated replacement text and wrote an incomplete form.
 
 ## Scripts and transformations
+- New automation scripts in the repository-root `scripts/` directory must use Babashka by default.
+- Existing non-Babashka scripts in that directory predate this rule. Do not use them as precedent for new scripts.
+- A thin shell wrapper may use shell when shell is the suitable interface.
+- A check that depends on the Node ecosystem may use TypeScript.
 - When a script is necessary, prefer Babashka to shell and Python for repository-local automation.
 - Use Python only to invoke an existing Python tool or when its ecosystem is materially more suitable.
 - Use `bb` when a task needs a loop, conditional, string operation, or two or more `|` operators.

@@ -50,7 +50,7 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 | `ORCH_START_RETRY_BACKOFF_MS` | parent | Sleep between `agent start` retries on a transient `agent_pane_busy` error (see the `start-retry-attempts`/`start!` retry loop). Default 500 ms. Test-only in practice: `bb test`'s fixture sets it low so retry tests run fast. |
 | `HERDR_ORCH_CHILD` | child | Live agent name recorded on the ledger. |
 | `HERDR_ORCH_TASK` | child | Assignment id. |
-| `HERDR_ORCH_RESULT` | child | Exact absolute result path to publish. |
+| `HERDR_ORCH_RESULT` | child | Exact absolute publication path that only `task publish` may use. Do not use it as a report path or write report content to it. |
 | `HERDR_ORCH_WORK_ROOT` | child | The absolute checkout the parent gave the child as its pane cwd, and the base every `ARTIFACTS` entry is relative to (§ Artifact links). It is publisher-owned: the ledger entry's `:work-root` wins, and this variable is read only by a hand-driven publish that has no ledger entry. |
 | `HERDR_ORCH_BIN` | child | Absolute launcher path for `publish`. |
 | `HERDR_ORCH_PERSONA` | child | The child's own persona. When set it marks the CLI's own spawns as below-root: nested labels compose from it and spawn enforcement reads `HERDR_ORCH_SPAWNS` (see § Spawn gating). An agent started outside `oh` has neither unless the variable is set. |

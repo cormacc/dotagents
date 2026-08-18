@@ -284,6 +284,29 @@ Acceptance criteria:
 
 Pointer: `capture!` and `record-item-capture!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`.
 
+** WAITING [#B] Update vendored GitLab CLI skill after upstream PR 83 merges :skill:gitlab_cli_skills:
+:PROPERTIES:
+:CUSTOM_ID: 6c723379-6697-4664-82e2-c70b6bfbb750
+:CREATED: [2026-08-18 Tue 10:44]
+:BLOCKED-BY: human: https://github.com/vince-winkintel/gitlab-cli-skills/pull/83
+:END:
+:LOGBOOK:
+- Created [2026-08-18 Tue 10:44]
+- State "WAITING" from "TODO" [2026-08-18 Tue 10:44]
+:END:
+Upstream fix: https://github.com/vince-winkintel/gitlab-cli-skills/pull/83
+
+After the upstream merge:
+- Refresh the vendored `gitlab-cli-skills` content from the accepted upstream revision.
+- Remove the temporary `glab runner list --all` workaround from `home/AGENTS.md`.
+- Keep `gitlab-cli-skills` classified as vendored in `skills/README.org`.
+
+Acceptance criteria:
+- The vendored `glab-runner/SKILL.md` documents `glab runner list --instance` in both affected locations.
+- The temporary workaround no longer exists in `home/AGENTS.md`.
+- The vendored content matches its recorded upstream revision.
+- Skill validation and `git diff --check` pass.
+
 * Fixes
 
 * Chores
@@ -537,124 +560,3 @@ Origin:
 
 Evidence:
 `clojure_find_nrepl_port` reported no reachable port. The workflow then created a Herdr tab and ran `bb nrepl-server`. That command failed with `java.net.BindException: Address already in use`. A direct `clojure_eval` probe of port 1667 returned `2` for `(+ 1 1)`, which confirmed that an existing Babashka nREPL server was available.
-
-** TODO [#A] Correct known agent guidance defects
-:PROPERTIES:
-:CUSTOM_ID: 1d5667de-dbc6-41d8-be17-65821922ee53
-:CREATED: [2026-08-17 Mon 22:41]
-:END:
-:LOGBOOK:
-- Created [2026-08-17 Mon 22:41]
-:END:
-Correct the six known defects in agent instructions. Keep each correction as a separate subtask so that its source evidence and validation remain local.
-*** TODO [#B] AGENTS.md: state that repo-root =scripts/= is Babashka-first, existing members predate the rule
-:PROPERTIES:
-:CUSTOM_ID: 511e335b-9c05-45c9-87da-09df1f48d827
-:CREATED: [2026-08-11 Tue 12:12]
-:END:
-:LOGBOOK:
-- Created [2026-08-11 Tue 12:12]
-:END:
-=AGENTS.md= says to prefer Babashka for repository-local automation. When this was filed, every pre-existing file in repo-root =scripts/= was =.sh= or =.ts=, so a delegated worker building =scripts/run-trait-gate.bb= followed the on-disk precedent first and wrote Bash, and had to be corrected. Confirmed with the user 2026-08-11: the existing scripts predate the rule.
-
-The precedent on disk therefore contradicts the written rule, and precedent wins by default for anyone who looks at the directory before reading =AGENTS.md=.
-
-*EDIT* [2026-08-11] Mostly self-resolved: retiring =check-metadata.ts=, =check-extensions.sh=, =check-hermes.sh= and =check-links.ts= left =scripts/= holding =check.sh= alongside two =.bb= files, so Babashka is now the majority and the misleading precedent is largely gone. What remains is worth one line so it does not drift back; consider closing this if that line lands elsewhere first.
-
-Acceptance criteria:
-- =AGENTS.md= states that repo-root =scripts/= is Babashka-first for new work, and that the existing =.sh= / =.ts= members predate the rule and are not a precedent to follow.
-- No existing script is rewritten as part of this task. Churn for consistency's sake is not the goal; the goal is that the next new script is Babashka without needing a correction.
-- If a future script genuinely needs Bash or TypeScript (a thin wrapper, or a Node-ecosystem check), the rule names that exemption rather than being silently violated.
-Must not: rewrite =check.sh=, the sole remaining non-Babashka member; add a lint that fails on existing members.
-*** TODO [#A] clojure skill: make ad-hoc validator and regex checks fail fast :skill:clojure:
-:PROPERTIES:
-:CUSTOM_ID: 94cc1d46-63cf-464a-9107-ac21993bfbab
-:CREATED: [2026-08-05 Wed 11:26]
-:END:
-:LOGBOOK:
-- Created [2026-08-05 Wed 11:26]
-:END:
-Strengthen the Clojure skill's guidance for ad-hoc Babashka validation so agents do not repeat a malformed complex form across an input set. Require a complex validator to be proven on one representative input before a per-file/per-locale loop, and retain the existing direction to put multi-line or quote-heavy bb forms in a checked .tmp script. Also require newly authored Clojure regex literals to be evaluated against at least one positive and one negative example before relying on them in validation or matching logic.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-05 Wed 11:26]
-- sender: agent
-
-Evidence:
-A reviewer subagent's preliminary rebase validation repeated a delimiter error in a complex bb -e form once per locale, then initially double-escaped a Clojure regex literal so re-matches failed. The current Clojure skill already warns that multi-line bb -e is fragile, but does not require a one-input smoke test before looping or explicit positive/negative regex examples.
-*** TODO [#A] Re-verify state claims before restating them in a summary :agents_md:
-:PROPERTIES:
-:CUSTOM_ID: aaea2185-f6be-4260-8a9c-207b3a834866
-:CREATED: [2026-08-06 Thu 16:13]
-:END:
-:LOGBOOK:
-- Created [2026-08-06 Thu 16:13]
-- State "CANCELLED" from "TODO" [2026-08-06 Thu 18:30]
-- State "TODO" from "CANCELLED" [2026-08-06 Thu 18:32]
-:END:
-A claim that was true earlier in a session can be falsified by the agent's own later changes. Add a General rule: before restating a load-bearing state claim in a summary or handoff, re-verify it against source -- especially a claim first made before the change that invalidated it. Existing rules cover unverified symbols and empty-result-as-absence, but not stale-but-once-true assertions.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: git@git.nmd.ie:products/connect/portal @ filtgen
-- timestamp: [2026-08-06 Thu 16:13]
-- sender: agent
-
-Evidence:
-Closing summary asserted a namespace still hard-coded a parameter it had resolved at call sites, which the refactor completed minutes earlier had removed; user challenged and it was retracted. Same session also misattributed a change-record edit to the user based on an Emacs lock plus timing rather than checking.
-*** TODO [#B] Fix glab-runner instance-listing guidance :skill:gitlab_cli_skills:
-:PROPERTIES:
-:CUSTOM_ID: 7663c8ad-b8fc-4133-80cf-82a37b99e532
-:CREATED: [2026-08-14 Fri 10:13]
-:END:
-:LOGBOOK:
-- Created [2026-08-14 Fri 10:13]
-:END:
-Correct the glab-runner skill's instance-listing flag and add a live-help verification note. The installed glab exposes `glab runner list --instance`; the skill currently documents `--all`, which is rejected as an unknown flag. Also caution that a zero-item list is not evidence without a known runner control, because the failed follow-up probe returned an empty list.
-
-Origin:
-- cwd: /home/cormacc/nmd/infra/playbooks
-- git: git@git.nmd.ie:infrastructure/playbooks @ develop
-- timestamp: [2026-08-14 Fri 10:12]
-- sender: agent
-
-Evidence:
-`glab runner list --all --output json` exited non-zero with `Unknown flag: --all`. Live `glab runner list --help` documents `-i --instance  List all runners available to the user (instance scope).` Direct controlled API probes were needed to confirm runner deletion because the subsequent instance-list probe returned zero rows, including no known-present runner 10.
-*** TODO Reserve Herdr RESULT paths for publication envelopes :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 23c72ef3-f550-4ad3-bcc5-452cbcc04e98
-:CREATED: [2026-08-18 Tue 07:38]
-:END:
-:LOGBOOK:
-- Created [2026-08-18 Tue 07:38]
-:END:
-Prevent Herdr children from using the reserved result stream as a report artifact. The generated prompt must state that `HERDR_ORCH_RESULT` is only for `task publish`. Long reports must use a distinct `.tmp/*-report.md` path. Add a prompt regression test that checks this distinction.
-
-Origin:
-- cwd: /Users/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-18 Tue 07:38]
-- sender: agent
-
-Evidence:
-Seven of 12 delegated rounds in one implementation session first produced an invalid capture with `invalid result envelope markers`. Child-session probes confirmed that agents wrote their reports to the injected result path before publication. The current generated guidance names an assignment-provided report path but does not state that the separately injected result path is reserved for the publication envelope.
-*** TODO Require a JSON parser for JSON data :agents_md:
-:PROPERTIES:
-:CUSTOM_ID: b462b1cc-a9ac-4322-b1bd-a2bce9eced70
-:CREATED: [2026-08-18 Tue 07:38]
-:END:
-:LOGBOOK:
-- Created [2026-08-18 Tue 07:38]
-:END:
-Add a portable agent rule for machine-readable JSON. Use `jq` or a JSON parser. Do not parse JSON with the Clojure reader because JSON tokens and Clojure data syntax are not the same contract.
-
-Origin:
-- cwd: /Users/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-18 Tue 07:38]
-- sender: agent
-
-Evidence:
-A delegated reviewer used Clojure `read-string` on an `ot doctor --format json` report and the parse failed. The reviewer then used `jq` on the same report and successfully extracted `ok`, `schema`, counts, and warnings.

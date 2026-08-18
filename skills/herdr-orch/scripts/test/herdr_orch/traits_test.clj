@@ -89,7 +89,7 @@
 ;; a truncated copy pins nothing about the sentence that follows it. The relative-artifact
 ;; sentence is the only channel that tells a child the `ARTIFACTS` grammar and `WORK-ROOT`.
 (def expected-publication-guidance
-  "Published `SUMMARY` must be a single line. Write multi-line detail to the assignment-provided report path (fall back to `.tmp/`), pass the report with `--artifact`, and emit each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Each `--artifact` value must be a path relative to your working directory (`$HERDR_ORCH_WORK_ROOT`); an absolute path, or one that escapes that root, is refused.")
+  "Published `SUMMARY` must be a single line. Write multi-line detail to a distinct `.tmp/*-report.md` file, pass the report with `--artifact`, and emit each key finding with `--finding`; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Never use `HERDR_ORCH_RESULT` as a report file. Use `HERDR_ORCH_RESULT` only through `task publish`. Each `--artifact` value must be a path relative to your working directory (`$HERDR_ORCH_WORK_ROOT`); an absolute path, or one that escapes that root, is refused.")
 (defn- occurrence-count [text needle]
   (loop [from 0 n 0]
     (let [at (.indexOf ^String text ^String needle from)]
@@ -104,13 +104,18 @@
         leaf (get-in (output leaf-proc) [:result :preview])
         spawner (get-in (output spawner-proc) [:result :preview])
         continued (cli/continuation-prompt {:assignment "follow on" :task "next-task" :result "/tmp/next.result"
-                                            :waiting-policy "non-blocking"})]
+                                            :waiting-policy "non-blocking"})
+        poked (cli/poke-prompt "poke-task" "/tmp/poke.result")]
     (is (zero? (:exit leaf-proc)) (:err leaf-proc))
     (is (zero? (:exit spawner-proc)) (:err spawner-proc))
     (doseq [[label prompt] [["leaf run preview" leaf]
                             ["spawning start preview" spawner]
+                            ["continuation" continued]
+                            ["poke" poked]]]
+      (is (= 1 (occurrence-count prompt expected-publication-guidance)) label))
+    (doseq [[label prompt] [["leaf run preview" leaf]
+                            ["spawning start preview" spawner]
                             ["continuation" continued]]]
-      (is (= 1 (occurrence-count prompt expected-publication-guidance)) label)
       (is (str/includes? prompt
                          (str "never stop silently or publish a second envelope after recovering. "
                               expected-publication-guidance))

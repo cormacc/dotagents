@@ -83,6 +83,10 @@ If REPL eval, namespace load, or a test fails:
 
 After a large multi-line replacement via a tool that does its own text escaping, run a cheap compile-check (`bb -e '(require (quote project.ns) :reload)'` or equivalent) immediately, before the full test suite -- an extra layer of string-escaping can produce a syntactically balanced but semantically bogus top-level form that a delimiter check alone won't catch.
 
-Keep `bb -e` to a single short form. Multi-line code carrying `$`, regexes, or nested quotes misevaluates silently inside a shell heredoc; write it to `.tmp/*.clj` and run `bb <file>` instead.
+Before a complex validator loops across an input set, run it on one representative input. Check its output and exit status. If this run fails, stop before the loop starts.
+
+Before you use a newly authored Clojure regular expression, evaluate it against one positive example and one negative example. Confirm that it matches the positive example and rejects the negative example.
+
+Keep `bb -e` to a single short form. Multi-line code carrying `$`, regexes, or nested quotes misevaluates silently inside a shell heredoc; write it to a checked `.tmp/*.clj` script and run `bb <file>` instead.
 
 For unbalanced-delimiter / EOF errors, run `clj-paren-repair` (file) or `clojure_paren_repair` (string) instead of editing by hand.
