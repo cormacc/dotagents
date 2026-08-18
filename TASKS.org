@@ -265,25 +265,6 @@ Acceptance criteria:
 - Where a probe cannot be made to discriminate, say so and say why, rather than reporting an unexplained negative or quietly dropping the fragment.
 Must not: weaken a recorded condition to make a run agree; reuse a repo-referential subject; treat a passing probe as a precondition for the fragment staying in the store.
 
-** TODO [#B] herdr-orch: an invalid capture records a JSON encoding error instead of its reason :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 492bca01-d8fc-439d-918c-37ab69ad7cca
-:CREATED: [2026-08-16 Sun 22:18]
-:END:
-:LOGBOOK:
-- Created [2026-08-16 Sun 22:18]
-:END:
-`capture!` binds `parsed` to the exception object when `validate-envelope` throws, so `record-item-capture!` tries to JSON-encode an `ExceptionInfo`. The recorded `:invalid-reason` becomes a cheshire encoding error that only quotes the real reason, and `:invalid-data` is lost.
-
-Found while testing ed6d67bf and deliberately left out of scope there and in f61dab75. `result-edge-and-publication-contract` passes only because the quoted text still contains the word it greps for, so the defect is invisible to the suite today.
-
-Acceptance criteria:
-- An envelope that fails validation records the thrown reason as `:invalid-reason`, not a JSON encoding error that quotes it.
-- `:invalid-data` survives the failed validation.
-- A test asserts the recorded reason exactly, so a re-encoded reason fails it.
-
-Pointer: `capture!` and `record-item-capture!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`.
-
 ** WAITING [#B] Update vendored GitLab CLI skill after upstream PR 83 merges :skill:gitlab_cli_skills:
 :PROPERTIES:
 :CUSTOM_ID: 6c723379-6697-4664-82e2-c70b6bfbb750

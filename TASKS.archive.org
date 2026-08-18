@@ -3272,3 +3272,30 @@ CLOSED: [2026-08-18 Tue 10:28]
 :END:
 #+IMPORT: [[plan:2026-08-18-correct-known-agent-guidance-defects.org]]
 Correct the six known defects in agent instructions. Keep each correction as a separate subtask so that its source evidence and validation remain local.
+
+** DONE [#B] herdr-orch: an invalid capture records a JSON encoding error instead of its reason :herdr_orch:
+CLOSED: [2026-08-18 Tue 11:39]
+:PROPERTIES:
+:CUSTOM_ID: 492bca01-d8fc-439d-918c-37ab69ad7cca
+:CREATED: [2026-08-16 Sun 22:18]
+:STARTED: [2026-08-18 Tue 11:33]
+:ARCHIVED: [2026-08-18 Tue 11:39]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-16 Sun 22:18]
+- State "STARTED" from "TODO" [2026-08-18 Tue 11:33]
+- State "DONE" from "STARTED" [2026-08-18 Tue 11:39]
+:END:
+`capture!` binds `parsed` to the exception object when `validate-envelope` throws, so `record-item-capture!` tries to JSON-encode an `ExceptionInfo`. The recorded `:invalid-reason` becomes a cheshire encoding error that only quotes the real reason, and `:invalid-data` is lost.
+
+Found while testing ed6d67bf and deliberately left out of scope there and in f61dab75. `result-edge-and-publication-contract` passes only because the quoted text still contains the word it greps for, so the defect is invisible to the suite today.
+
+Fix: `validated-item` remains unchanged because `stream-state*` needs validation failures as data. `capture!` retrieves the selected item's validation result and throws its `:error` or `:read-error` before code treats `:parsed` as an envelope. The existing catch records the original message and exception data. `result-edge-and-publication-contract` now asserts the returned reason, recorded `:invalid-reason`, and recorded `:invalid-data` exactly. The work-root identity test now checks structured `:detail` instead of leaked exception formatting.
+
+Acceptance criteria:
+- An envelope that fails validation records the thrown reason as `:invalid-reason`, not a JSON encoding error that quotes it.
+- `:invalid-data` survives the failed validation.
+- A test asserts the recorded reason exactly, so a re-encoded reason fails it.
+
+Pointer: `capture!` and `record-item-capture!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`.

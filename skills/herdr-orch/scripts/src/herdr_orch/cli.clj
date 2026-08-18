@@ -473,9 +473,10 @@
            captured (fn [parsed] (assoc parsed :item (:item item) :item-result result
                                         :terminal? (core/terminal-status? (:status parsed))))]
        (try
-         (let [parsed (or (get-in state [:validations (:item item) :parsed])
-                          (or (get-in state [:validations (:item item) :error])
-                              (get-in state [:validations (:item item) :read-error])))
+         (let [validation (get-in state [:validations (:item item)])
+               parsed (if-let [validation-error (or (:error validation) (:read-error validation))]
+                        (throw validation-error)
+                        (:parsed validation))
                artifacts (:artifacts parsed)
                ;; The ledger's own `:work-root`, never the envelope's: `validate-envelope`
                ;; has already proved the two agree, and the ledger copy is the one the

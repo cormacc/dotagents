@@ -1086,10 +1086,16 @@
     (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log))))
   ;; A published result is immutable, so a mismatched envelope is a non-final `invalid`
   ;; outcome (pane retained, needs manual intervention) rather than a thrown command.
-  (let [{:keys [env log]} (fake-env {"FAKE_WAIT" "publish" "FAKE_BAD_ENVELOPE" "1"}) proc (call! env "task" "run" "worker" "--task" "stale" "--timeout" "20")]
+  (let [{:keys [env log dir]} (fake-env {"FAKE_WAIT" "publish" "FAKE_BAD_ENVELOPE" "1"})
+        proc (call! env "task" "run" "worker" "--task" "stale" "--timeout" "20")
+        response (result proc)
+        task (get-in response [:result :task])
+        entry (ledger-entry* dir task)]
     (is (zero? (:exit proc)))
-    (is (= "invalid" (get-in (result proc) [:result :status])))
-    (is (re-find #"identity" (get-in (result proc) [:result :reason])))
+    (is (= "invalid" (get-in response [:result :status])))
+    (is (= "result envelope identity does not match ledger" (get-in response [:result :reason])))
+    (is (= "result envelope identity does not match ledger" (:invalid-reason entry)))
+    (is (= {:field "task" :expected task :actual "wrong"} (:invalid-data entry)))
     (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log))))
   ;; A hand-driven publish names a task with no ledger entry, so it has no waiting policy
   ;; and is silent: the RESULT is still written exactly once, but no toast and no push.
@@ -5229,15 +5235,17 @@
 ;; so a hand-written envelope naming another root is captured as `invalid` rather than trusted.
 (deftest capture-refuses-an-envelope-naming-a-different-work-root
   (let [{:keys [env dir]} (fake-env {})
-        entry (start-child! env dir "forged work root in the envelope")]
+        entry (start-child! env dir "forged work root in the envelope")
+        forged-work-root (str (fs/path dir "elsewhere"))]
     (spit (:result entry)
           (core/envelope {:child (:child entry) :task (:task entry) :result (:result entry)
-                          :work-root (str (fs/path dir "elsewhere"))
+                          :work-root forged-work-root
                           :status "COMPLETE" :summary "forged" :artifacts [] :findings [] :next nil}))
     (let [res (:result (result (call! env "task" "collect" (:task entry))))]
       (is (= "invalid" (:status res)))
-      (is (re-find #"identity does not match ledger" (:reason res)))
-      (is (re-find #":field :work-root" (:reason res)))
+      (is (= "result envelope identity does not match ledger" (:reason res)))
+      (is (= {:field "work-root" :expected (:work-root entry) :actual forged-work-root}
+             (:detail res)))
       (is (not (:terminal? res)) "a forged root never seals the round"))))
 
 ;; --- portable Markdown artifact links ---------------------------------------------
