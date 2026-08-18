@@ -20,7 +20,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAgentPath } from "../lib/agent-paths.ts";
 
@@ -60,12 +60,18 @@ export function resolveOtBinary(): string {
   // fallbacks.
   const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
   const pathEnv = proc?.env?.PATH ?? "";
-  const pathDirs = pathEnv.split(":");
+  const pathDirs = pathEnv.split(delimiter);
+  const executableNames =
+    process.platform === "win32"
+      ? ["ot.bat", "ot.exe"]
+      : ["ot"];
   for (const dir of pathDirs) {
-    const candidate = join(dir, "ot");
-    if (existsSync(candidate)) {
-      cachedOtBinary = candidate;
-      return candidate;
+    for (const executableName of executableNames) {
+      const candidate = join(dir, executableName);
+      if (existsSync(candidate)) {
+        cachedOtBinary = candidate;
+        return candidate;
+      }
     }
   }
   const skillPathCandidates = [
@@ -152,7 +158,30 @@ export async function runOt<T = unknown>(
   argv.push(...cmd);
 
   return await new Promise<OtEnvelope<T>>((resolve, reject) => {
-    const child = spawn(binary, argv, { cwd: opts.cwd, stdio: ["ignore", "pipe", "pipe"] });
+    const isBbinWindowsWrapper =
+      process.platform === "win32" &&
+      binary.toLowerCase().endsWith(".bat");
+
+    const spawnOptions = {
+      cwd: opts.cwd,
+      stdio: ["ignore", "pipe", "pipe"] as ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        NO_COLOR: "1",
+      },
+    };
+
+    const child = isBbinWindowsWrapper
+      ? spawn(
+          "bb",
+          ["-f", binary.slice(0, -4), "--", ...argv],
+          spawnOptions,
+        )
+      : spawn(
+          binary,
+          argv,
+          spawnOptions,
+        );
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
     const timeout = setTimeout(() => {
@@ -175,19 +204,46 @@ export async function runOt<T = unknown>(
 
     child.on("close", (code: number | null) => {
       clearTimeout(timeout);
-      const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
-      const stderr = Buffer.concat(stderrChunks).toString("utf-8");
-      const raw = stdout.trim().length > 0 ? stdout : stderr;
-      let parsed: OtEnvelope<T> | null = null;
+    const stdout = Buffer.concat(stdoutChunks).toString("utf-8");
+    const stderr = Buffer.concat(stderrChunks).toString("utf-8");
+    const candidates = [stdout, stderr]
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    let parsed: OtEnvelope<T> | null = null;
+    for (const candidate of candidates) {
+      // First try the stream exactly as returned.
       try {
-        parsed = JSON.parse(raw) as OtEnvelope<T>;
+        parsed = JSON.parse(candidate) as OtEnvelope<T>;
+        break;
       } catch {
-        reject(new Error(
-          `ot ${cmd.join(" ")} exited ${code} with non-JSON output:\n${raw.trim()}`,
-        ));
-        return;
+        // Some dependencies may emit diagnostics before/after the
+        // JSON envelope. Recover the envelope itself.
+        const start = candidate.indexOf("{");
+        const end = candidate.lastIndexOf("}");
+
+        if (start >= 0 && end > start) {
+          const jsonCandidate = candidate.slice(start, end + 1);
+
+          try {
+            parsed = JSON.parse(jsonCandidate) as OtEnvelope<T>;
+            break;
+          } catch {
+            // Try the next stream.
+          }
+        }
       }
-      if (!parsed || typeof parsed !== "object" || !("schema" in parsed)) {
+    }
+    if (!parsed) {
+      reject(
+        new Error(
+          `ot ${cmd.join(" ")} exited ${code} with non-JSON output:\n` +
+          `stdout:\n${stdout.trim()}\n` +
+          `stderr:\n${stderr.trim()}`,
+        ),
+      );
+      return;
+    }
+    if (!parsed || typeof parsed !== "object" || !("schema" in parsed)) {
         reject(new Error(`ot ${cmd.join(" ")} produced an unrecognised envelope:\n${raw}`));
         return;
       }
