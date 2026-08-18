@@ -125,6 +125,26 @@
     (is (true? (:found r)))
     (is (= "#+begin_src\n* fake\n#+end_src\n" (:body r)))))
 
+(deftest block-boundaries-shield-section-scans
+  (let [content (str/join "\n"
+                          ["* Summary"
+                           "#+BEGIN_QUOTE"
+                           "* Literal"
+                           "#+END_SRC"
+                           "* Still literal"
+                           "#+END_QUOTE"
+                           "* Plan"
+                           "next"
+                           ""])]
+    (is (= ["Summary" "Plan"] (section/list-sections content)))
+    (is (= (str/join "\n"
+                     ["#+BEGIN_QUOTE"
+                      "* Literal"
+                      "#+END_SRC"
+                      "* Still literal"
+                      "#+END_QUOTE"])
+           (:body (section/read-section content "Summary"))))))
+
 (deftest case-insensitive-heading-with-tags
   (let [content (str/join "\n"
                           ["* SUMMARY :memory:"

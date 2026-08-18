@@ -63,8 +63,8 @@
               ancestors))
           [tree-after []])]
     (when-not (:dry-run opts)
-      (loader/save-source-roots (:project-root (resolve-context opts))
-                                tree-final))
+      (loader/save-source-roots-locality (:project-root (resolve-context opts))
+                                         tree-final))
     (out/emit-result
       opts
       {:task (task/task->wire (task/find-by-id tree-final full-id) nil
@@ -126,8 +126,8 @@
             tree-final (tree/update-by-id tasks full-id
                                           #(assoc % :priority new-prio))]
         (when-not (:dry-run opts)
-          (loader/save-source-roots (:project-root (resolve-context opts))
-                                    tree-final))
+          (loader/save-source-roots-locality (:project-root (resolve-context opts))
+                                             tree-final))
         (out/emit-result
           opts
           {:task (task/task->wire (task/find-by-id tree-final full-id) nil

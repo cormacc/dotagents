@@ -230,7 +230,7 @@
              (map (fn [[src roots]]
                     [src (vec (sort-by #(or (:line-number %) 0) roots))])))))
 
-(defn save-source-roots
+(defn- save-source-roots*
   "Persist a mutated task graph back to disk.
 
   Walks the full graph (top-level tasks + `:children` +
@@ -251,8 +251,9 @@
   it is about to be rewritten from. Optional `known-baselines` (path
   -> load-time content-or-nil) supplies baselines for files that must
   be visited even when they end up with zero current roots."
-  ([^String project-root tasks] (save-source-roots project-root tasks {}))
-  ([^String project-root tasks known-baselines]
+  ([serialize ^String project-root tasks]
+   (save-source-roots* serialize project-root tasks {}))
+  ([serialize ^String project-root tasks known-baselines]
    ;; `known-baselines` (path -> load-time content-or-nil) forces a file
    ;; to be visited even when it ends up with zero current roots —
    ;; e.g. `ot archive`/`ot publish`/`ot unpublish` moving a file's only
@@ -267,7 +268,7 @@
                                           (get known-baselines src)
                                           (some :source-content roots))
                                original (or baseline "")
-                               updated (parser/serialize-tasks-preserving-file original roots)]
+                               updated (serialize original roots)]
                            (when (not= updated original)
                              {:path src :baseline baseline :content updated})))
                        all-paths)
@@ -280,3 +281,19 @@
      (preflight-baselines! preflight)
      (doseq [{:keys [path content]} updates]
        (atomic-write path content)))))
+
+(defn save-source-roots
+  "Persist a mutated task graph with canonical whole-root serialization."
+  ([^String project-root tasks]
+   (save-source-roots project-root tasks {}))
+  ([^String project-root tasks known-baselines]
+   (save-source-roots* parser/serialize-tasks-preserving-file
+                       project-root tasks known-baselines)))
+
+(defn save-source-roots-locality
+  "Persist in-place mutations while retaining unchanged root source bytes."
+  ([^String project-root tasks]
+   (save-source-roots-locality project-root tasks {}))
+  ([^String project-root tasks known-baselines]
+   (save-source-roots* parser/serialize-tasks-preserving-file-locality
+                       project-root tasks known-baselines)))

@@ -750,6 +750,27 @@
     (is (= :warn (:severity f)))
     (is (= {:file "/repo/design/log/work.org" :line 2} (:location f)))))
 
+(deftest inline-path-scan-shields-matched-blocks
+  (let [path "skills/org-tasks/scripts/test/org_tasks/doctor_test.clj"
+        content (str "* Summary\n"
+                     "#+BEGIN_QUOTE\n"
+                     "`" path "`\n"
+                     "#+END_SRC\n"
+                     "`" path "`\n"
+                     "#+END_QUOTE\n"
+                     "`" path "`\n")]
+    (is (= [{:path path :line 7}]
+           (doctor/extract-inline-code-path-candidates content #{"skills"})))))
+
+(deftest inline-path-scan-excludes-recognised-block-boundaries
+  (let [path "skills/org-tasks/scripts/src/org_tasks/parser.clj"
+        content (str "#+BEGIN_SRC clojure `" path "`\n"
+                     "ignored `" path "`\n"
+                     "#+END_SRC\n"
+                     "Real citation: `" path "`\n")]
+    (is (= [{:path path :line 4}]
+           (doctor/extract-inline-code-path-candidates content #{"skills"})))))
+
 (deftest done-with-unchecked-criteria-is-reported-with-exact-syntax-only
   (let [content (str "* DONE Needs attention\n"
                      "CLOSED: [2026-08-17 Mon 18:00]\n"

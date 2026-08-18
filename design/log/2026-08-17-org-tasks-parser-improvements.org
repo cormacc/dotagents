@@ -1,0 +1,164 @@
+#+TITLE: org-tasks parser improvements
+#+DATE: 2026-08-17 Mon
+#+PARENT: [[archive:9c46ee0f-3d19-429d-9e4e-0f397d561da9][org-tasks parser improvements]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/AGENTS.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/DESIGN.org]]
+
+* Intent
+Simplify the `org-tasks` parser and correct its block handling without replacing the protocol-specific model. Preserve Babashka operation, machine contracts, and byte-identical treatment of unrelated Org content.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+The protocol parser now delegates scanning, rendering, and readiness through a stable facade. Shared block state shields literal block content, and in-place mutations patch only changed fields while retaining supported source variants. The linked [[file:2026-08-17-org-tasks-parser-improvements/org-parser-review.md][org-parser adoption review]] records the rejected dependency and the evidence behind this design.
+
+** Scope
+*** In scope
+- Introduce shared block-aware line classification for task parsing, section extraction, and block-aware doctor checks.
+- Split task scanning, task rendering, and readiness evaluation into focused namespaces behind the stable `org-tasks.parser` facade.
+- Derive accepted task statuses from `org-tasks.lifecycle/status-cycle`.
+- Add regression coverage for task-shaped lines inside Org blocks and for mutation locality.
+- Use targeted source patches for in-place mutations only where a regression test proves that whole-root serialisation changes unrelated bytes.
+- Update parser architecture, test-map, and operator documentation where behaviour or ownership changes.
+*** Out of scope
+- Add `org-parser`, Instaparse, a parser pod, or a JVM parser subprocess.
+- Parse the complete Org grammar or expose a general Org AST.
+- Change the `org-tasks/v1` envelope, task-file protocol, lifecycle states, CLI syntax, or TUI behaviour.
+- Replace canonical serializers used to create, archive, restore, publish, or migrate complete task subtrees unless a concrete fidelity defect requires it.
+
+** Acceptance
+*** Core functionality
+- [X] A task-shaped heading inside a matched `#+BEGIN_<kind>` and `#+END_<kind>` block remains body content and never becomes a task.
+- [X] Task parsing, level-1 section extraction, and block-aware doctor scans use one shared block-boundary implementation.
+- [X] The parser accepts exactly the lifecycle states in `org-tasks.lifecycle/status-cycle`.
+- [X] `org-tasks.parser` retains every pre-extraction public identifier with baseline `:doc` and `:arglists` metadata after scanner, renderer, and readiness extraction.
+- [X] A newly inserted canonical `CLOSED:` line follows its heading and precedes body text, existing drawers, and `#+IMPORT:`.
+- [X] In-place property and STARTED mutations retain existing properties and LOGBOOK delimiter bytes, including supported case and whitespace variants.
+- [X] In-place status, priority, property, and linked-issue mutations preserve every unrelated target-task byte.
+- [X] Existing machine envelopes and command results remain unchanged.
+*** Edge cases
+- [X] Block matching is case-insensitive and a mismatched end marker does not terminate shielding for another block kind.
+- [X] An unterminated Org block shields task-shaped body lines through end of file without hiding a pre-existing unterminated drawer error.
+- [X] Existing round-trip fixtures remain byte-identical.
+- [X] Namespace loading and the complete test suite succeed under Babashka.
+*** Anti-criteria
+- [X] Must not: add `org-parser`, Instaparse, ClojureScript, or another parser runtime dependency.
+- [X] Must not: normalise unknown keywords, drawers, bodies, or block content as a side effect of an unrelated mutation.
+- [X] Must not: weaken optimistic-concurrency checks or sandboxed path resolution.
+
+** Decisions
+- Keep a protocol-specific, lossless line scanner behind the stable parser facade :: `ot` needs task graph semantics, source ownership, and controlled mutation rather than a general Org AST.
+  Rejected:
+  - Adopt `org-parser`: its model, writer, Babashka support, packaging, performance, and AGPL-3.0 licence do not fit the runtime requirements; see the linked review.
+  - Invoke a JVM parser process: this adds a process boundary and retains the model and writer mismatch.
+- Share lexical block state instead of sharing a complete parsed document :: this removes the confirmed block-handling inconsistency while keeping body content opaque.
+- Keep canonical whole-subtree serializers for creation and transfer flows :: use source patches only for in-place mutation defects proven by fixtures.
+
+** Shipped
+- ADDED shared block-boundary state for parser, section, and doctor scans.
+- MODIFIED `org-tasks.parser` as a stable facade over scanner, renderer, and readiness namespaces.
+- ADDED locality field patches for in-place status, priority, and property writes. A new `CLOSED:` line follows the heading. Existing properties and LOGBOOK drawer delimiters retain their source bytes while their bodies update.
+- RESTORED and mechanically checked baseline public `:doc` and `:arglists` metadata for every pre-extraction parser facade var.
+- MODIFIED `skills/org-tasks/scripts/docs/DESIGN.org` and `skills/org-tasks/scripts/docs/test-map.md`.
+- REVIEWED `skills/org-tasks/SKILL.md` and `skills/org-tasks/scripts/AGENTS.md`; no change was required because the public workflow and development invariants remain unchanged.
+
+** Gotchas
+- Existing drawer patches must retain their original opening and closing lines. A new `CLOSED:` line must use the heading index rather than the next field index.
+- `lifecycle.clj` depends on focused property and timestamp helpers, so extraction keeps dependency arrows acyclic.
+
+* Plan
+
+** DONE [#A] Add shared block-aware line classification :org_tasks:parser:
+CLOSED: [2026-08-18 Tue 00:34]
+:PROPERTIES:
+:CUSTOM_ID: 563c4eda-0a85-4e26-b1c1-d920d89a38d1
+:CREATED: [2026-08-17 Mon 23:52]
+:STARTED: [2026-08-18 Tue 00:02]
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 23:52]
+- State "STARTED" from "TODO" [2026-08-18 Tue 00:02]
+- State "DONE" from "STARTED" [2026-08-18 Tue 00:06]
+- State "STARTED" from "DONE" [2026-08-18 Tue 00:31]
+- State "STARTED" from "STARTED" [2026-08-18 Tue 00:33]
+- State "DONE" from "STARTED" [2026-08-18 Tue 00:34]
+:END:
+Result: Shared block classification now shields task, section, and doctor scans.
+
+** DONE [#A] Separate parser responsibilities and canonicalise status syntax :org_tasks:parser:
+CLOSED: [2026-08-18 Tue 01:01]
+:PROPERTIES:
+:CUSTOM_ID: 3901cfe1-e4f4-44b6-ad99-0d42f86dda0b
+:CREATED: [2026-08-17 Mon 23:52]
+:STARTED: [2026-08-18 Tue 00:06]
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 23:52]
+- State "STARTED" from "TODO" [2026-08-18 Tue 00:06]
+- State "DONE" from "STARTED" [2026-08-18 Tue 00:09]
+- State "TODO" from "DONE" [2026-08-18 Tue 00:31]
+- State "STARTED" from "TODO" [2026-08-18 Tue 00:34]
+- State "DONE" from "STARTED" [2026-08-18 Tue 00:36]
+- State "STARTED" from "DONE" [2026-08-18 Tue 00:51]
+- State "DONE" from "STARTED" [2026-08-18 Tue 01:01]
+:END:
+Result: Scanner, renderer, and readiness responsibilities now sit behind the compatible parser facade.
+
+** DONE [#B] Tighten in-place mutation source preservation :org_tasks:parser:
+CLOSED: [2026-08-18 Tue 01:18]
+:PROPERTIES:
+:CUSTOM_ID: 872ceb3b-e2fd-4644-a601-5f394c192bec
+:CREATED: [2026-08-17 Mon 23:52]
+:STARTED: [2026-08-18 Tue 00:09]
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 23:52]
+- State "STARTED" from "TODO" [2026-08-18 Tue 00:09]
+- State "DONE" from "STARTED" [2026-08-18 Tue 00:13]
+- State "TODO" from "DONE" [2026-08-18 Tue 00:31]
+- State "STARTED" from "TODO" [2026-08-18 Tue 00:36]
+- State "DONE" from "STARTED" [2026-08-18 Tue 00:40]
+- State "TODO" from "DONE" [2026-08-18 Tue 00:51]
+- State "DONE" from "TODO" [2026-08-18 Tue 01:01]
+- State "STARTED" from "DONE" [2026-08-18 Tue 01:12]
+- State "DONE" from "STARTED" [2026-08-18 Tue 01:18]
+:END:
+Result: In-place commands now use field-level locality edits with source-variant preservation.
+
+** DONE [#B] Refresh parser contracts and run complete validation :org_tasks:parser:
+CLOSED: [2026-08-18 Tue 01:18]
+:PROPERTIES:
+:CUSTOM_ID: 17d86511-87b0-4874-aafa-0388db12145c
+:CREATED: [2026-08-17 Mon 23:52]
+:STARTED: [2026-08-18 Tue 00:13]
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 23:52]
+- State "STARTED" from "TODO" [2026-08-18 Tue 00:13]
+- State "DONE" from "STARTED" [2026-08-18 Tue 00:17]
+- State "STARTED" from "DONE" [2026-08-18 Tue 00:20]
+- State "DONE" from "STARTED" [2026-08-18 Tue 00:21]
+- State "TODO" from "DONE" [2026-08-18 Tue 00:31]
+- State "STARTED" from "TODO" [2026-08-18 Tue 00:40]
+- State "DONE" from "STARTED" [2026-08-18 Tue 00:42]
+- State "TODO" from "DONE" [2026-08-18 Tue 00:51]
+- State "DONE" from "TODO" [2026-08-18 Tue 01:02]
+- State "TODO" from "DONE" [2026-08-18 Tue 01:12]
+- State "DONE" from "TODO" [2026-08-18 Tue 01:18]
+:END:
+Result: Architecture and test documentation match the validated implementation.
+
+* Implementation
+- `parser.lines` owns shared block state and boundary classification.
+- `parser.renderer` retains canonical structural output and applies field-level locality edits for in-place commands.
+- The pre-implementation evidence and rejected-library rationale remain in the [[file:2026-08-17-org-tasks-parser-improvements/org-parser-review.md][org-parser adoption review]].
+
+* Validation
+- Regression tests failed against the prior implementation for block shielding, target-task locality, drawer delimiters, canonical `CLOSED:` placement, doctor boundary scans, and facade metadata.
+- `bb test` ran 637 Clojure tests and 4,148 assertions with no failures or errors. Repository script tests passed with 43 and 14 assertions.
+- A base/current comparison found all 40 baseline public facade vars with unchanged `:doc` and `:arglists` metadata.
+- `ot doctor --format json` returned zero errors and seven advisory spec warnings.
+- Two fresh independent Class C reviewers approved the final implementation with no findings.

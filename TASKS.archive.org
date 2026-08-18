@@ -3236,3 +3236,20 @@ CLOSED: [2026-08-17 Mon 23:29]
 :END:
 #+IMPORT: [[plan:2026-08-17-verify-anthropic-and-openai-prompt-cachi.org]]
 Pi 0.84.2 enables prompt caching by default. The linked record captures provider behaviour, measured session-cost analysis, and the repeatable Babashka task.
+
+** DONE org-tasks parser improvements
+CLOSED: [2026-08-18 Tue 01:28]
+:PROPERTIES:
+:CUSTOM_ID: 9c46ee0f-3d19-429d-9e4e-0f397d561da9
+:CREATED: [2026-08-17 Mon 23:51]
+:STARTED: [2026-08-18 Tue 00:00]
+:ARCHIVED: [2026-08-18 Tue 01:28]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 23:51]
+- State "STARTED" from "TODO" [2026-08-18 Tue 00:00]
+- State "DONE" from "STARTED" [2026-08-18 Tue 01:28]
+:END:
+#+IMPORT: [[plan:2026-08-17-org-tasks-parser-improvements.org]]
+Simplify the protocol parser without adopting org-parser as a runtime dependency. Preserve Babashka compatibility and byte-identical round-trip guarantees.

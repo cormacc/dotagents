@@ -4,13 +4,17 @@
   Mirrors `pi/extensions/tasks/parser.test.ts` and adds byte-identical
   round-trip checks against the fixtures under
   `skills/org-tasks/scripts/test/fixtures/round-trip/`."
-  (:require [clojure.string :as str]
+  (:require [clojure.edn :as edn]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [org-tasks.lifecycle :as lifecycle]
             [org-tasks.parser :as p]
             [org-tasks.parser.issues :as issues]
             [org-tasks.parser.links :as links]
+            [org-tasks.parser.renderer :as renderer]
+            [org-tasks.parser.scanner :as scanner]
             [org-tasks.parser.properties :as properties]
+            [org-tasks.readiness :as readiness]
             [org-tasks.parser.timestamps :as timestamps]))
 
 (def ^:private fixture-root
@@ -18,6 +22,9 @@
 
 (defn- fixture [path]
   (slurp (str fixture-root "/" path)))
+
+(def ^:private baseline-parser-facade-metadata
+  (edn/read-string (slurp "skills/org-tasks/scripts/test/fixtures/parser-facade-metadata.edn")))
 
 ;; ── Heading + tag parsing ─────────────────────────────────────────
 
@@ -41,6 +48,14 @@
         (is (= "Some task" (:summary t)))
         (is (= [] (:tags t)))))))
 
+(deftest heading-states-derive-from-lifecycle-cycle
+  (doseq [status lifecycle/status-cycle]
+    (is (= status (:status (first (:tasks (p/parse-tasks (str "* " status " Task\n"))))))))
+  (with-redefs [lifecycle/status-cycle ["QUEUED"]]
+    (is (= "QUEUED"
+           (:status (first (:tasks (p/parse-tasks "* QUEUED Task\n"))))))
+    (is (empty? (:tasks (p/parse-tasks "* TODO Task\n"))))))
+
 (deftest stable-facade-reexports-extracted-helpers
   (testing "every pre-extraction public var remains available from org-tasks.parser"
     (is (every? #(ns-resolve 'org-tasks.parser %)
@@ -62,8 +77,24 @@
     (is (identical? p/get-drawer-property properties/get-drawer-property))
     (is (identical? p/parse-link-templates links/parse-link-templates))
     (is (identical? p/get-linked-issues issues/get-linked-issues))
-    (is (= (select-keys (meta #'timestamps/format-org-timestamp) [:doc :arglists])
-           (select-keys (meta #'p/format-org-timestamp) [:doc :arglists]))))
+    (is (identical? p/parse-tasks scanner/parse-tasks))
+    (is (identical? p/serialize-tasks renderer/serialize-tasks))
+    (is (identical? p/is-task-ready readiness/is-task-ready))
+    (doseq [[facade target] [[#'p/format-org-timestamp #'timestamps/format-org-timestamp]
+                             [#'p/parse-tasks #'scanner/parse-tasks]
+                             [#'p/serialize-tasks #'renderer/serialize-tasks]
+                             [#'p/is-task-ready #'readiness/is-task-ready]]]
+      (is (= (select-keys (meta target) [:doc :arglists])
+             (select-keys (meta facade) [:doc :arglists]))))
+    (testing "parser facade retains the baseline public metadata contract"
+      (let [baseline-vars (set (keys baseline-parser-facade-metadata))
+            current-metadata (into {}
+                                   (map (fn [var-name]
+                                          [var-name (select-keys (meta (ns-resolve 'org-tasks.parser var-name))
+                                                                 [:doc :arglists])]))
+                                   baseline-vars)]
+        (is (= 40 (count baseline-vars)))
+        (is (= baseline-parser-facade-metadata current-metadata)))))
   (testing "readiness consumes lifecycle's canonical closed-statuses"
     (is (nil? (ns-resolve 'org-tasks.parser 'closed-statuses)))
     (is (= {:ready true :gating []}
@@ -110,7 +141,38 @@
                  (catch clojure.lang.ExceptionInfo e e))]
       (is (some? e))
       (is (= :unterminated-drawer (:code (ex-data e))))
-      (is (= "/repo/TASKS.org" (:file (ex-data e)))))))
+      (is (= "/repo/TASKS.org" (:file (ex-data e))))
+      (is (= 2 (:line (ex-data e)))))))
+
+(deftest blocks-shield-task-shaped-lines
+  (testing "matched markers keep task-shaped lines in their parent body"
+    (let [content (str "* TODO Parent\n"
+                       "#+BEGIN_EXAMPLE\n"
+                       "** TODO Literal\n"
+                       "#+END_EXAMPLE\n"
+                       "** TODO Child\n")
+          parent (first (:tasks (p/parse-tasks content)))]
+      (is (= "Parent" (:summary parent)))
+      (is (= "#+BEGIN_EXAMPLE\n** TODO Literal\n#+END_EXAMPLE" (:description parent)))
+      (is (= ["Child"] (mapv :summary (:children parent))))))
+  (testing "matching is case-insensitive but mismatched markers keep shielding"
+    (let [content (str "* TODO Parent\n"
+                       "#+begin_quote\n"
+                       "** TODO Literal\n"
+                       "#+END_SRC\n"
+                       "** TODO Still literal\n"
+                       "#+end_QUOTE\n"
+                       "** TODO Child\n")
+          parent (first (:tasks (p/parse-tasks content)))]
+      (is (= ["Child"] (mapv :summary (:children parent))))
+      (is (str/includes? (:description parent) "** TODO Still literal"))))
+  (testing "an unterminated block shields through end-of-file"
+    (let [content (str "* TODO Parent\n"
+                       "#+BEGIN_SRC org\n"
+                       "** TODO Literal\n")
+          parent (first (:tasks (p/parse-tasks content)))]
+      (is (empty? (:children parent)))
+      (is (= "#+BEGIN_SRC org\n** TODO Literal" (:description parent))))))
 
 (deftest unterminated-logbook-drawer-mid-file-throws
   (testing "a :LOGBOOK: drawer left open with more content after it also surfaces"
@@ -355,3 +417,24 @@
     (is (str/includes? out
                        "* DONE Below\nCLOSED: [2026-04-25 Sat 12:00]\n:PROPERTIES:\n:CUSTOM_ID: x\n:END:\n"))
     (is (= 1 (count (re-seq #"(?m)^CLOSED:" out))))))
+
+(deftest locality-serializer-inserts-missing-fields-in-canonical-order
+  (let [input "* TODO Target\nBody.\n"
+        task (first (:tasks (p/parse-tasks input)))
+        updated (assoc task
+                       :closed "2026-08-18 Tue 01:00"
+                       :property-lines [":CUSTOM_ID: target"]
+                       :logbook-lines ["- State \"DONE\" from \"TODO\" [2026-08-18 Tue 01:00]"]
+                       :import-path "plan:record.org"
+                       :import-raw "[[plan:record.org]]")]
+    (is (= (str "* TODO Target\n"
+                "CLOSED: [2026-08-18 Tue 01:00]\n"
+                ":PROPERTIES:\n"
+                ":CUSTOM_ID: target\n"
+                ":END:\n"
+                ":LOGBOOK:\n"
+                "- State \"DONE\" from \"TODO\" [2026-08-18 Tue 01:00]\n"
+                ":END:\n"
+                "#+IMPORT: [[plan:record.org]]\n"
+                "Body.\n")
+           (p/serialize-tasks-preserving-file-locality input [updated])))))

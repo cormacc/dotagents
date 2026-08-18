@@ -4,20 +4,21 @@ Source of truth for the migration. Each TS test file maps to a Babashka namespac
 
 | TS file (pi/extensions/tasks/)   | `ot` namespace                                 | Scope                                                                       |
 | -------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------- |
-| `parser.test.ts`                 | `org-tasks.parser-test`                        | Heading / drawer / LOGBOOK / `CLOSED:` parse + round-trip; `#+LINK:` expansion. |
+| `parser.test.ts`                 | `org-tasks.parser-test`                        | Heading / drawer / LOGBOOK / `CLOSED:` parse + round-trip; `#+LINK:` expansion; matched-block task shielding; all pre-extraction facade `:doc` and `:arglists` metadata; lifecycle-derived heading states; canonical insertion of new lifecycle fields. |
 | `effective.test.ts`              | `org-tasks.effective-test`                     | `#+SETUPFILE:` chain resolution with cycle + depth guards.                  |
 | `lifecycle.test.ts`              | `org-tasks.lifecycle-test`                     | Status transitions, LOGBOOK semantics, `:STARTED:` once-only, `CLOSED:` write/clear. |
 | `paths.test.ts`                  | `org-tasks.paths-test`                         | Project-root sandbox: traversal + symlink escape rejection.                  |
-| `doctor.test.ts`                 | `org-tasks.doctor-test`                        | Doctor finding codes and grouping.                                          |
+| `doctor.test.ts`                 | `org-tasks.doctor-test`                        | Doctor finding codes and grouping; matched-block shielding; block-boundary inline-path exclusion. |
 | `memory.test.ts`                 | `org-tasks.memory-test`                        | Cross-file scenario: parent, plan, blockers, summary ordering.              |
 | `summary.test.ts`                | `org-tasks.summary-test`                       | Closure-time `* Summary` refresh detection.                                 |
-| `section.test.ts`                | `org-tasks.section-test`                       | `ot section`: source-block shielding, case-insensitive heading match.       |
+| `section.test.ts`                | `org-tasks.section-test`                       | `ot section`: source-block shielding, mismatched markers, case-insensitive heading match. |
 | `scan.test.ts`                   | `org-tasks.scan-test`                          | `ot scan`: scope, tags, body cap, `hasContext`, plan-task descent.          |
 | `insert.test.ts`                 | `org-tasks.insert-test`                        | `ot create`: priority, tags, drawer ordering, idempotency, splice.          |
 | expanded overlay model tests     | `org-tasks.tui-test`                           | Standalone TUI: selected-path expansion, movement, collapse, detail scroll, status cycle, row/detail affordances. Covers `org-tasks.tui` plus the extracted `org-tasks.tui.tasks` (state model/bridge) and `org-tasks.tui.dispatch` (nexus actions/effects) namespaces. |
 | CLI dispatch smoke               | `org-tasks.cli-test`                           | Help preservation (top-level and per-command `ot <cmd> --help` option rendering), existing subcommand dispatch through command-family namespaces, bare non-TTY selected JSON, bare `--format json` selected JSON. |
 | command integration families      | `org-tasks.commands.{archive-publish,create,links,list-show,maintenance,move,record,status}-test` | Focused `ot` command-family integration tests split to mirror `src/org_tasks/commands/*`; shared temp-project fixtures live in `org-tasks.commands.test-util`. |
 | n/a (new in `ot`)                | `org-tasks.commands.move-test`                  | `ot move`: reparent, section lift, level re-normalisation, dry-run, every preflight refusal, write conflict, change-record link integrity, byte-identical relocation and move → move-back round trip. |
+| n/a (new in `ot`)                | `org-tasks.mutation-locality-test`              | Status, priority, drawer-property, blocker, handoff, and linked-issue writes preserve unrelated target bytes. A new canonical `CLOSED:` line follows the heading before body text, existing drawers, and the import field. Existing properties and LOGBOOK delimiters retain exact case and whitespace on property and STARTED writes. |
 
 ## Golden round-trip fixtures
 

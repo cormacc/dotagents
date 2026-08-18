@@ -35,6 +35,7 @@
     :spec-stale"
   (:require [clojure.string :as str]
             [org-tasks.parser :as parser]
+            [org-tasks.parser.lines :as lines]
             [org-tasks.section :as section]
             [org-tasks.tree :as tree]))
 
@@ -405,8 +406,6 @@
 
 (def ^:private markdown-inline-code-re #"(?<!`)`([^`\s]+)`(?!`)")
 (def ^:private org-verbatim-re #"(?<![\p{Alnum}_])=([^=\s]+)=(?![\p{Alnum}_])")
-(def ^:private org-block-start-re #"(?i)^\s*#\+BEGIN_(?:SRC|EXAMPLE)\b")
-(def ^:private org-block-end-re #"(?i)^\s*#\+END_(?:SRC|EXAMPLE)\b")
 (def ^:private inline-path-extension-re #"\.[A-Za-z0-9][A-Za-z0-9_-]*$")
 (def ^:private inline-path-excluded-char-re #"[\\*?\[\]{}<>$%]")
 
@@ -441,25 +440,18 @@
   ([content]
    (extract-inline-code-path-candidates content nil))
   ([content existing-first-segments]
-   (loop [lines (str/split (or content "") #"\n" -1)
+   (loop [content-lines (str/split (or content "") #"\n" -1)
           line-number 1
-          in-block? false
+          block-kind nil
           seen #{}
           out []]
-     (if (empty? lines)
+     (if (empty? content-lines)
        out
-       (let [line (first lines)]
-         (cond
-           (re-find org-block-start-re line)
-           (recur (rest lines) (inc line-number) true seen out)
-
-           (re-find org-block-end-re line)
-           (recur (rest lines) (inc line-number) false seen out)
-
-           in-block?
-           (recur (rest lines) (inc line-number) true seen out)
-
-           :else
+       (let [line (first content-lines)
+             in-block? (some? block-kind)
+             next-block-kind (lines/next-block-kind block-kind line)]
+         (if (or in-block? (lines/block-boundary? line))
+           (recur (rest content-lines) (inc line-number) next-block-kind seen out)
            (let [candidates (->> (inline-code-tokens line)
                                  (filter inline-path-candidate?)
                                  (filter #(or (nil? existing-first-segments)
@@ -467,9 +459,9 @@
                                                          (first (str/split % #"/")))))
                                  (remove seen)
                                  vec)]
-             (recur (rest lines)
+             (recur (rest content-lines)
                     (inc line-number)
-                    false
+                    next-block-kind
                     (into seen candidates)
                     (into out (map #(hash-map :path % :line line-number) candidates))))))))))
 

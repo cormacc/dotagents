@@ -9,13 +9,19 @@
             [org-tasks.tree :as tree]
             [org-tasks.commands.util :refer [positional-arg load-context
                                              resolve-required-id guard-write!]]))
-(defn- mutate-task-and-save [{:keys [project-root tasks dry-run?]} id f]
+(defn- mutate-task-and-save* [save! {:keys [project-root tasks dry-run?]} id f]
   (when-let [target (task/find-by-id tasks id)]
     (let [updated (f target)
           tree-new (tree/update-by-id tasks id (constantly updated))]
       (when-not dry-run?
-        (loader/save-source-roots project-root tree-new))
+        (save! project-root tree-new))
       [updated tree-new])))
+
+(defn- mutate-task-and-save [ctx id f]
+  (mutate-task-and-save* loader/save-source-roots ctx id f))
+
+(defn- mutate-task-and-save-locality [ctx id f]
+  (mutate-task-and-save* loader/save-source-roots-locality ctx id f))
 (defn- blocker->wire [b]
   {:raw (:raw b) :kind (name (:kind b)) :ref (:ref b)})
 (defn- linked-issue->wire [i]
@@ -95,7 +101,7 @@
       (let [target (resolve-required-id (:tasks ctx) id opts)
             full-id (parser/get-task-id target)
             token' (if (= op :add) ((:normalise cfg identity) token) token)
-            [updated _] (mutate-task-and-save
+            [updated _] (mutate-task-and-save-locality
                           (assoc ctx :dry-run? (:dry-run opts))
                           full-id
                           (fn [t]
@@ -122,7 +128,7 @@
                             :message "ot handoff set requires <id> <text>."})
       (let [target (resolve-required-id (:tasks ctx) id opts)
             full-id (parser/get-task-id target)
-            [updated _] (mutate-task-and-save
+            [updated _] (mutate-task-and-save-locality
                           (assoc ctx :dry-run? (:dry-run opts))
                           full-id #(parser/set-task-handoff % text))]
         (out/emit-result opts {:taskId full-id
@@ -133,8 +139,8 @@
         id (positional-arg result :id)
         target (resolve-required-id (:tasks ctx) id opts)
         full-id (parser/get-task-id target)]
-    (mutate-task-and-save (assoc ctx :dry-run? (:dry-run opts))
-                          full-id #(parser/set-task-handoff % nil))
+    (mutate-task-and-save-locality (assoc ctx :dry-run? (:dry-run opts))
+                                    full-id #(parser/set-task-handoff % nil))
     (out/emit-result opts {:taskId full-id :handoff nil
                            :text/lines ["Cleared handoff."]})))
 (defn blocker-list-cmd [result] (list-property-cmd :blocker result))

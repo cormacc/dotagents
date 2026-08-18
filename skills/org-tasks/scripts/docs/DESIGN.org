@@ -22,8 +22,9 @@ flowchart TD
     end
     subgraph Core
         LOADER["loader.clj\ngraph load/save, atomic IO"]
-        PARSER["parser.clj\nstable facade + scanner/serializers"]
-        PARSERINT["parser/{timestamps,properties,links,issues}.clj\nfocused parser helpers"]
+        PARSER["parser.clj\nstable public facade"]
+        PARSERINT["parser/{scanner,renderer,lines,timestamps,properties,links,issues}.clj\nfocused parser helpers"]
+        READY["readiness.clj\nblocker graph evaluation"]
         EFF["effective.clj\n#+SETUPFILE: chains"]
         LINKS["links.clj\nimport/link target resolution"]
         TREE["tree.clj\nchildren + import-children walks"]
@@ -48,7 +49,9 @@ flowchart TD
     FAM --> TASK
     LOADER --> PARSER
     PARSER --> PARSERINT
-    PARSER --> LIFE
+    PARSER --> READY
+    PARSERINT --> LIFE
+    READY --> LIFE
     LIFE --> PARSERINT
     LOADER --> EFF
     LOADER --> LINKS --> PATHS
@@ -87,7 +90,7 @@ flowchart LR
 
 Key properties:
 
-- =org-tasks.parser= is the stable public facade: it owns the stateful line scanner, task-tag operations, and serializers, while =parser.timestamps=, =parser.properties=, =parser.links=, and =parser.issues= own focused helpers. =lifecycle= consumes timestamp/property helpers directly, so its =closed-statuses= is canonical without a parser cycle. The scanner retains round-trip guarantees: unknown keywords, drawers, and body content are preserved byte-identically (fixtures under =test/fixtures/round-trip/=). An unterminated =:PROPERTIES:=/=:LOGBOOK:= drawer (no =:END:= before EOF) is a hard parse error (=unterminated-drawer=, naming file + line) rather than silently swallowing the rest of the file.
+- =org-tasks.parser= is the stable public facade. =parser.scanner= owns task headings and the lossless task-tree scan. =parser.lines/next-block-kind= and =parser.lines/block-boundary?= provide the shared lexical block-boundary rule for task, section, and doctor scans. =parser.renderer= owns canonical whole-root rendering and locality field patches. The facade retains the baseline =:doc= and =:arglists= metadata for every pre-extraction public var. =readiness= owns blocker graph evaluation. =parser.timestamps=, =parser.properties=, =parser.links=, and =parser.issues= own focused helpers. =lifecycle= consumes timestamp/property helpers directly, so its =closed-statuses= is canonical without a parser cycle. The scanner derives accepted heading states from =lifecycle/status-cycle=. Unknown keywords, drawers, and body content remain byte-identical in unchanged source regions. An unterminated =:PROPERTIES:=/=:LOGBOOK:= drawer (no =:END:= before EOF) is a hard parse error (=unterminated-drawer=, naming file + line) rather than silently swallowing the rest of the file.
 - Each UUID has one canonical writable node: mutations on imported plan tasks persist to the task's own source file via =loader/save-source-roots=, never to a copy. =archive=/=publish=/=unpublish= re-stamp a task's =:source-path= and hand the whole graph to =save-source-roots=, so it works uniformly whether the task's original root lived in =TASKS.org=, =TASKS.local.org=, or a file-level =#+IMPORT:= plan file -- it is never left behind in one file while appearing in another. =unarchive= is the guarded inverse: it resolves only the archive file, preflights active/archive/record baselines, restores into the explicit or stamped level-1 section, and leaves lifecycle state untouched.
 - =save-source-roots= is an optimistic-concurrency writer: before the first rewrite it preflights every known affected baseline against the load-time snapshot (=:source-content=, or a caller-supplied baseline for files that may end up with zero roots), then atomically replaces each changed source. A detected conflict aborts before any write; a race after preflight remains outside the filesystem-transaction boundary. Every file write goes through =loader/atomic-write= (unique per-call tmp name, then rename).
 - =loader/safe-slurp= only returns =nil= for a genuinely missing file; a read failure on an existing file (e.g. a broken =TASKS.archive.org=) throws =unreadable= instead of being treated as empty.
@@ -109,7 +112,7 @@ sequenceDiagram
     H->>L: cycle-status / apply-status-transition
     L-->>H: updated task + LOGBOOK entry
     H->>T: update-by-id (+ ancestor auto-promotion)
-    H->>IO: save-source-roots (atomic tmp+move)
+    H->>IO: save-source-roots-locality (atomic tmp+move)
     H-->>U: org-tasks/v1 envelope
 #+end_src
 
@@ -118,7 +121,7 @@ sequenceDiagram
 
 =move= is the one structural mutator that bypasses the serializer: relocating a subtree changes nothing but heading depth, so =commands/move.clj= cuts the subtree's exact source lines, restars its headings, and splices them at the destination (reusing =insert/insert-subtree-into-section= for a =--section= target). That keeps drawers, LOGBOOK, bodies, descendant order, *and* intra-subtree blank lines byte-identical, and leaves every unrelated region of the file untouched rather than putting it through =serialize-tasks-preserving-file='s blank-line normalisation. It is in-file only by construction -- source and destination must share one =:source-path= -- so no UUID can gain a second writable node; locality and archive transitions stay with =publish=/=unpublish= and =archive=/=unarchive=.
 
-The same shape applies to =priority=, =select=, =remove=, =archive=, =publish=, and the property commands (=handoff= / =blocker= / =issue=, generated from a per-property data map in =commands/links.clj=). =commands/removal.clj= computes pure subtree/inbound-blocker impact before confirmation, then uses =tree/remove-by-id= and source-root saving; it never lets a protocol top-level root bypass lifecycle plus archive history. Cycle orders (status, priority incl. the unset slot) live in =lifecycle.clj=; both UIs pass only a direction.
+In-place =status=, =priority=, and property commands (=handoff= / =blocker= / =issue=) use the locality renderer. It patches changed headings, lifecycle lines, and drawer ranges. New fields use the canonical order: =CLOSED:= after the heading, then =:PROPERTIES:=, =:LOGBOOK:=, and =#+IMPORT:=. Existing field ranges update in place. It retains every other byte in the changed task and all unrelated source bytes. Creation, removal, archive, restore, publish, unpublish, and record migration retain canonical whole-root rendering. Both paths use the same optimistic-concurrency preflight and atomic writes. =commands/removal.clj= computes pure subtree/inbound-blocker impact before confirmation, then uses =tree/remove-by-id= and source-root saving; it never lets a protocol top-level root bypass lifecycle plus archive history. Cycle orders (status, priority including the unset slot) live in =lifecycle.clj=; both UIs pass only a direction.
 
 * TUI design
 
@@ -139,8 +142,9 @@ skills/org-tasks/scripts/
     cli.clj                     # entry point; dispatch/help derived from registry
     commands/                   # registry.clj + command family namespaces + util.clj
     tui.clj  tui/               # charm view/glue; tasks.clj bridge; dispatch.clj actions
-    parser.clj                  # stable facade; scanner/serializers (round-trip preserving)
-    parser/                     # timestamps, properties, links, linked issues
+    parser.clj                  # stable public facade
+    parser/                     # scanner, renderer, lines, timestamps, properties, links, linked issues
+    readiness.clj               # blocker graph evaluation
     loader.clj effective.clj    # graph IO; setupfile chains
     links.clj paths.clj root.clj# link/import resolution; sandbox; project root
     tree.clj task.clj           # traversal; wire projection
