@@ -1,0 +1,46 @@
+{
+  // pi's models.json. `modelOverrides` is the topmost model layer: it applies
+  // after extension-registered providers (provider-composer.js
+  // `composeModelProvider`), so it can correct what the lemonade-pi-plugin
+  // reports without patching the plugin.
+  "providers": {
+    "lemonade": {
+      "modelOverrides": {
+        // Lemonade's /api/v1/models carries no `config` object, so the plugin's
+        // `maxTokens` fallback of 4096 (lib/models.ts) applies to every model.
+        // pi sends that as `max_tokens`, so long turns die with
+        // finish_reason "length" — usually mid-thinking, before any tool call.
+        //
+        // Thinking: this GGUF's chat template defaults `reasoning_effort` to
+        // 'xhigh' whenever `enable_thinking` is not false, accepts only
+        // 'xhigh' | 'medium' | 'low' (and silently promotes 'high' to 'xhigh'),
+        // and raises on anything else. So every level is mapped explicitly,
+        // and the everyday default (settings.json `defaultThinkingLevel:
+        // "high"`) is pinned to 'medium'. Ask for xhigh/max to opt back in.
+        "Qwen3.8-27B-GGUF-Q4_K_M": {
+          "maxTokens": 32768,
+          "reasoning": true,
+          "thinkingLevelMap": {
+            "off": null,
+            "minimal": "low",
+            "low": "low",
+            "medium": "medium",
+            "high": "medium",
+            "xhigh": "xhigh",
+            "max": "xhigh"
+          },
+          "compat": {
+            "thinkingFormat": "chat-template",
+            "chatTemplateKwargs": {
+              "enable_thinking": { "$var": "thinking.enabled" },
+              "reasoning_effort": { "$var": "thinking.effort", "omitWhenOff": true },
+              "preserve_thinking": true
+            },
+            "maxTokensField": "max_tokens",
+            "requiresReasoningContentOnAssistantMessages": true
+          }
+        }
+      }
+    }
+  }
+}
