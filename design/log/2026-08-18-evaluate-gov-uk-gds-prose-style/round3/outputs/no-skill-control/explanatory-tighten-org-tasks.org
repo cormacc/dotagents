@@ -1,0 +1,54 @@
+# Sample source: design/log/2026-05-29-tighten-up-org-tasks-skill-to-improve-us.org (lines 6-56) -- verbatim excerpt. Prose class: explanatory prose (design change-record narrative). First-party record; last repository edit 2026-05-29 (commit e986200), before the ASD-STE100 mandate landed 2026-08-14 (commit 5bad753). Extracted: 2026-08-19.
+
+* Intent
+Make "what's the selected task / its plan?" answerable in one cheap `ot`
+call. Use one call instead of multiple raw file reads. Stop the agent-facing
+surface from carrying context the agent never uses. The surface is both the
+`ot show` output and the extension's registered tools.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README + skill + contract
+
+** Scope
+*** In scope
+- Strip `sourceContent` / `effectiveSourceContent` from `ot show` / `ot selected` JSON.
+- Enrich `ot show` to the documented one-shot resume shape (ancestors + record metadata block).
+- Rewrite the `org-tasks` skill resume path. Lead it with `ot show selected --format json`.
+- Remove the three agent-facing pi tool registrations (`tasks_insert_task`, `org_read_section`, `tasks_scan_summaries`). Keep the JS `insertTaskIntoFile` primitive.
+- Reconcile the `show`/`selected` schema in `scripts/docs/contract.md` with the shipped shape.
+*** Out of scope
+- Changing `ot list` (already content-deduped via `result.sources`) or the extension's overlay/widget data path.
+- Tracker-specific (`jira`) behaviour beyond confirming its JS import still resolves.
+- The tree-sitter org-extension extraction (`f361c429`) itself — only its claim on `org_read_section` is touched here.
+- Backfilling richer `ot show` data into `ot status` / `ot create` payloads.
+
+** Decisions
+- Drop embedded source content from `ot show` entirely. Do not dedup it into a `sources` map ::
+  No internal consumer uses `ot show` (extension uses `otList`; `jira` imports the JS fn).
+  Link templates / linked issues are already pre-resolved into wire fields.
+  Raw content is dead weight.
+  Rejected: mirror `ot list`'s `sources` map — it adds a field no `show` caller needs.
+- Gate any raw-content escape hatch behind opt-in `--include-content` (default off) ::
+  This preserves a path for a hypothetical future consumer. It adds no cost to the common case.
+- #4: eliminate all three registered tools. Rely on `ot <cmd> --format json` via Bash.
+  The skill already documents this ::
+  Biggest persistent-context win (~7KB of tool schema). Added skill bloat is ~zero
+  (commands already in the quick reference). Single source of truth = the CLI.
+  Rejected:
+  - Consolidate into one `tasks` passthrough tool: it still ships a shell-shaped schema and an
+    indirection layer. This layer re-parses args the CLI already parses. Net result is negative vs Bash+`ot`.
+  - Keep as-is: ~7KB persistent tool schema for wrappers the skill already covers.
+
+** Shipped
+- `ot show` / `ot selected` omit raw source strings by default. `--include-content` is the explicit escape hatch.
+- `ot show` now returns `ancestors` plus `record` metadata (`path`, top-level sections, `hasContext`, `hasOpenQuestions` for resolvable change-record imports).
+- `org-tasks` resume guidance now starts from `ot show selected --format json`. It uses `ot section` for the linked record summary/context path.
+- The tasks extension no longer registers `tasks_insert_task`, `org_read_section`, or `tasks_scan_summaries`. The README points agents to `ot create`, `ot section`, and `ot scan`.
+
+** Gotchas
+- `linkedIssues` still resolves without emitted raw content. `task->wire` computes it from internal `:effective-source-content`. It does this before applying the `include-content?` output gate.
+- `insertTaskIntoFile` remains the JS primitive for Jira/direct integrations. Only the agent-facing tool registration was removed.
+- Existing selected work in an imported plan may not carry a `#+IMPORT:` itself. Record metadata is guaranteed for tasks with an import-bearing ancestor in the loaded graph. Top-level roots with imports are the canonical resume path.
+
+** Follow-ups
+- None outstanding (f361c429 coordination decided — see `* Open questions`).

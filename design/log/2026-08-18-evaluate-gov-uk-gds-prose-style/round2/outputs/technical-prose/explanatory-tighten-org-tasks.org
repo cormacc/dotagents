@@ -1,0 +1,55 @@
+# Sample source: design/log/2026-05-29-tighten-up-org-tasks-skill-to-improve-us.org (lines 6-56) -- verbatim excerpt. Prose class: explanatory prose (design change-record narrative). First-party record; last repository edit 2026-05-29 (commit e986200), before the ASD-STE100 mandate landed 2026-08-14 (commit 5bad753). Extracted: 2026-08-19.
+
+* Intent
+Answer "what is the selected task, and what is its plan?" with one cheap `ot`
+call, instead of multiple raw file reads. Also stop the agent-facing surface
+(both `ot show` output and the extension's registered tools) from carrying
+context the agent never uses.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README, skill, and contract
+
+** Scope
+*** In scope
+- Strip `sourceContent` and `effectiveSourceContent` from `ot show` and `ot selected` JSON output.
+- Enrich `ot show` to match the documented one-shot resume shape (ancestors and a record metadata block).
+- Rewrite the `org-tasks` skill's resume path to lead with `ot show selected --format json`.
+- Remove the three agent-facing tool registrations in pi: `tasks_insert_task`, `org_read_section`, and `tasks_scan_summaries`. Keep the JS `insertTaskIntoFile` primitive.
+- Reconcile the `show` and `selected` schema in `scripts/docs/contract.md` with the shipped shape.
+*** Out of scope
+- Changing `ot list` (it already deduplicates content, through `result.sources`) or the extension's overlay and widget data path.
+- Tracker-specific (`jira`) behavior, beyond confirming its JS import still resolves.
+- The tree-sitter org-extension extraction (`f361c429`) itself. This change only touches its claim on `org_read_section`.
+- Backfilling richer `ot show` data into the `ot status` and `ot create` payloads.
+
+** Decisions
+- Drop embedded source content from `ot show` entirely, rather than deduplicate it into a `sources` map ::
+  `ot show` has no internal consumer. The extension uses `otList`, and `jira` imports the JS function directly. Link
+  templates and linked issues are already resolved into wire fields, so raw content serves no purpose here.
+  Rejected: mirror `ot list`'s `sources` map. This would add a field that no `show` caller needs.
+- Put any raw-content option behind an opt-in `--include-content` flag (off by default) ::
+  This keeps a path open for a possible future consumer, without adding cost to the common case.
+- Decision 4: remove all three registered tools. Instead, rely on `ot <cmd> --format json`, run through Bash. The
+  skill already documents this ::
+  This is the biggest reduction in persistent context (about 7 KB of tool schema), and it adds almost no extra
+  skill content, because the commands are already in the quick reference. The CLI becomes the single source of
+  truth.
+  Rejected:
+  - Consolidate into one `tasks` passthrough tool. This still ships a shell-shaped schema, plus an indirection
+    layer that re-parses arguments the CLI already parses. This is worse than using Bash with `ot` directly.
+  - Keep the current tools as-is. This keeps about 7 KB of persistent tool schema, for wrappers the skill already
+    covers.
+
+** Shipped
+- `ot show` and `ot selected` omit raw source strings by default. Use the `--include-content` flag to include them.
+- `ot show` now returns `ancestors`, plus `record` metadata (`path`, top-level sections, `hasContext`, `hasOpenQuestions`), for resolvable change-record imports.
+- `org-tasks` resume guidance now starts from `ot show selected --format json`, and uses `ot section` for the linked record's summary and context.
+- The tasks extension no longer registers `tasks_insert_task`, `org_read_section`, or `tasks_scan_summaries`. The README now points agents to `ot create`, `ot section`, and `ot scan`.
+
+** Gotchas
+- `linkedIssues` still resolves, even without raw content in the output. `task->wire` computes it from the internal `:effective-source-content` field, before the `include-content?` output gate applies.
+- `insertTaskIntoFile` remains the JS primitive for Jira and other direct integrations. Only the agent-facing tool registration was removed.
+- The currently selected task in an imported plan may not itself carry a `#+IMPORT:` tag. Record metadata is guaranteed only for tasks with an import-bearing ancestor in the loaded graph. Top-level roots that carry an import are the canonical resume path.
+
+** Follow-ups
+- No follow-ups remain open. The team decided the `f361c429` coordination question. See `* Open questions`.

@@ -1,0 +1,34 @@
+# Sample source: design/log/2026-08-18-correct-known-agent-guidance-defects.org -- verbatim excerpt. Prose class: record prose (design change-record). Extracted: 2026-08-18.
+
+** Decisions
+- Preserve the six existing task UUIDs as separate work units :: Each correction has an independent observable outcome and a local validation scenario. The three `home/AGENTS.md` changes target distinct directives.
+  Rejected:
+  - Merge all guidance edits into one task. This would couple the evidence and the failure diagnosis.
+  - Add ordering blockers. No correction requires another correction to land first.
+- Use targeted edits and adversarial behaviour probes :: An inspection of the string or the prose confirms the wording. It does not confirm that an agent follows the directive.
+  Rejected:
+  - Run only structural validators. Structural validators cannot detect ineffective guidance.
+  - Build a new repository-wide guidance test framework. Six focused probes do not justify that scope.
+- Keep `gitlab-cli-skills` vendored and carry the temporary workaround in `home/AGENTS.md` :: Upstream `main` still documents invalid `--all` guidance. Installed glab accepts `--instance` and rejects `--all`.
+  Rejected:
+  - Reclassify the complete skill because of one upstream defect. This creates unnecessary local maintenance.
+  - Edit the vendored body locally. The next vendor refresh would overwrite the correction.
+  - Wait for the upstream merge without a local workaround. Agents would continue to receive invalid guidance.
+- Put the Herdr distinction in shared `publication-guidance` and in its complete-string regression :: The initial prompt, the continuation prompt, and the poke prompt consume this shared value.
+  Rejected:
+  - Add persona-specific wording. Duplicate guidance can drift.
+  - Change the prompt text without a regression test. The measured failure can return silently.
+
+** Shipped
+- MODIFIED `home/AGENTS.md` :: New automation scripts in the repository root now use Babashka by default. Explicit exemptions cover a thin shell wrapper and Node-dependent TypeScript. Existing scripts do not set a precedent.
+- MODIFIED `skills/clojure/SKILL.md` :: Complex validators now fail immediately on one representative input. New regular expressions now require a positive example and a negative example before use.
+- MODIFIED `home/AGENTS.md` :: Summaries and handoffs now check load-bearing state claims against current source before they restate those claims.
+- MODIFIED `home/AGENTS.md` :: A temporary workaround rejects the vendored `--all` guidance. The workaround requires verification against the installed help, and it uses `--instance` for instance scope.
+- Pushed branch `fix/glab-runner-instance-flag` in `~/dev/skills/gitlab-cli-skills` to the user's fork at commit `ec1bd3c`. That branch corrects both upstream `--all` references.
+- MODIFIED `skills/herdr-orch/scripts/docs/contract.md` :: `HERDR_ORCH_RESULT` is now explicitly publication-only.
+- The Herdr initial, continuation, and poke prompts now direct multi-line detail to a distinct `.tmp/*-report.md` file. These prompts reserve `HERDR_ORCH_RESULT` for `task publish`.
+- MODIFIED `home/AGENTS.md` :: Machine-readable JSON now requires `jq` or a JSON parser. The rule prohibits the Clojure reader for that data.
+
+** Gotchas
+- Installed `glab runner list --help` documents `--instance`. It does not document the previous `--all` spelling.
+- Upstream `vince-winkintel/gitlab-cli-skills` commit `261d12e` still documents `--all` in `glab-runner/SKILL.md`. The local vendored copy must remain unchanged until upstream merges a correction.

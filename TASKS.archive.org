@@ -3299,3 +3299,32 @@ Acceptance criteria:
 - A test asserts the recorded reason exactly, so a re-encoded reason fails it.
 
 Pointer: `capture!` and `record-item-capture!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`.
+
+** DONE [#B] Evaluate GOV.UK (GDS) prose style
+CLOSED: [2026-08-19 Wed 21:36]
+:PROPERTIES:
+:CUSTOM_ID: 477fc686-7d6e-4c0a-af5f-1b4012e7370a
+:CREATED: [2026-08-18 Tue 12:03]
+:STARTED: [2026-08-18 Tue 19:54]
+:ARCHIVED: [2026-08-19 Wed 21:36]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-08-18 Tue 12:03]
+- State "STARTED" from "TODO" [2026-08-18 Tue 19:54]
+- State "DONE" from "STARTED" [2026-08-19 Wed 21:36]
+:END:
+#+IMPORT: [[plan:2026-08-18-evaluate-gov-uk-gds-prose-style.org]]
+See the following
+- Writing guidelines :: https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/writing-guidelines/
+- Style guides (specifics) :: https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/style-guides/
+- Prior art (derived agent skill) :: https://gist.github.com/fofr/505e225f9bf5e839d30c12ba6bfa0be2
+
+Evaluate the linked skill gist against the online resources -- consider vendoring it, or authoring an owned skill based on the gov.uk references
+
+Evaluate the skill against ASD-STE100 on a couple of sets of reference prose, e.g. an existing SKILL, the herdr-orch README.org and a recent design change record.
+
+Also include a different ASD-STE100 skill for comparison:
+https://github.com/AminBlg/SimpleEnglish/blob/main/skills/simple-english/SKILL.md
+
+This one looks more to the point that what we're using currently, which embeds some context that's not relevant to the agent at runtime.

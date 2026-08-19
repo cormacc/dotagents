@@ -1,0 +1,48 @@
+# Sample source: design/log/2026-06-27-org-tasks-consolidate-policy-into-ot.org (lines 10-48) -- verbatim excerpt. Prose class: explanatory prose (design change-record narrative). First-party record; last repository edit 2026-07-04 (commit d95b37d), before the ASD-STE100 mandate landed 2026-08-14 (commit 5bad753). Extracted: 2026-08-19.
+
+* Intent
+Remove duplicate policy logic between the pi tasks overlay (TypeScript) and the standalone TUI
+(Clojure). Make ~ot~ the sole owner of this logic. Both UIs become thin clients: they send intent
+(a direction, or an anchor plus a relation) and they render the result.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* boundary + README + ot-cli
+
+** Scope
+*** In scope
+- (1) Status cycle order: add ~ot status --cycle forward|back~. Remove the order constant from
+  both UIs.
+- (2) Create placement: add ~ot create --relative-to <id> --as sibling|child~. ~ot~ derives the
+  parent, the after-value, and the local/source fields from the anchor. Remove the placement math
+  from both UIs.
+- (3) Linked-issue URL resolution: the overlay now uses the resolved ~linkedIssues~ field
+  (rawToken, label, url) from ~ot list~. It no longer re-resolves this through the TS
+  ~getLinkedIssues~ function.
+
+*** Out of scope
+- New keybindings. The key map does not change.
+- Combining the editor and Emacs launch. These use different runtimes, so we leave this as is.
+- Opening a browser or a URL. This is an OS launch task, not domain logic.
+
+** Acceptance
+- [ ] ISC-1: ~ot status <id> --cycle forward|back~ returns the resolved transition. The cycle order lives in ~lifecycle/status-cycle~.
+- [ ] ISC-2: ~ot create --relative-to <id> --as sibling~ inserts the new item after the anchor, at the same level. ~--as child~ nests the new item under the anchor. Both cases inherit the local/source fields.
+- [ ] ISC-3: ~ot create --relative-to~, with no ~--as~ flag, defaults to sibling placement.
+- [ ] ISC-4: The TUI and the pi overlay no longer encode the status cycle order or the create-placement math.
+- [ ] ISC-5: The pi overlay renders and opens linked issues from the wire data in ~ot list~. It does not use the TS resolver.
+- [ ] ISC-6: The boundary docs, the README, and the ot-cli docs reflect the new ownership.
+- [ ] ISC-A-1: Must not: change the selected-task JSON schema, or add new keybindings.
+
+** Decisions
+- Put the cycle order in ~lifecycle/status-cycle~, not in ~commands~ :: This sits next to the rest
+  of the lifecycle semantics. ~ot status --cycle~ reuses it directly.
+- Use ~--relative-to~ and ~--as~, instead of passing a resolved parent and after-value from the
+  UIs :: The anchor plus the relation is the real intent. ~ot~ already parses the anchor, so it can
+  derive the placement, and the local/source routing, in one place.
+- Pass only ~--after~ for siblings. Do not pass ~--parent~ plus ~--after~ :: ~insert-task-into-file~
+  treats a set ~parent-id~ as an instruction to create a child (it sets the level to the parent's
+  level plus one). A sibling must get its level from the anchor, through ~--after~ alone. This also
+  fixes a related bug in the old TUI ~create-opts~ code, which set both fields for nested siblings.
+- Delete the overlay's in-process status fallback (~applyStatusTransition~ plus
+  ~persistChange~/~save~) :: This code duplicated lifecycle and serialization logic that ~ot~
+  already owns. It was also dead code in the live pi path.

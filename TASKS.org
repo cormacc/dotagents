@@ -26,7 +26,7 @@
   - [[#herdr-plugin-wrapper-for-herdr-orch][herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#traits-re-probe-every-fragment-against-synthetic-non-decaying-scenarios][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
-  - [[#herdr-orch-an-invalid-capture-records-a-json-encoding-error-instead-of-its-reason][herdr-orch: an invalid capture records a JSON encoding error instead of its reason]]
+  - [[#waiting-b-update-vendored-gitlab-cli-skill-after-upstream-pr-83-merges][WAITING [#B] Update vendored GitLab CLI skill after upstream PR 83 merges]]
 - [[#fixes][Fixes]]
 - [[#chores][Chores]]
   - [[#started-b-simplify-herdr-orch-skill-based-on-upstream-changes][STARTED [#B] Simplify herdr-orch skill based on upstream changes]]
@@ -36,7 +36,6 @@
   - [[#org-tasks-ot-create---parent-cannot-target-a-change-record-plan-task][org-tasks: ot create --parent cannot target a change-record plan task]]
   - [[#self-improvement-persist-agents-metrics-comparison-script][self-improvement: persist AGENTS metrics comparison script]]
   - [[#probe-the-babashka-default-nrepl-port-before-server-startup][Probe the Babashka default nREPL port before server startup]]
-  - [[#correct-known-agent-guidance-defects][Correct known agent guidance defects]]
 
 * Explorations
 
@@ -287,6 +286,28 @@ Acceptance criteria:
 - The temporary workaround no longer exists in `home/AGENTS.md`.
 - The vendored content matches its recorded upstream revision.
 - Skill validation and `git diff --check` pass.
+
+** TODO org-tasks: ot blocker add silently ignores extra positional refs
+:PROPERTIES:
+:CUSTOM_ID: 9a29de9d-d385-4c26-9720-339fc4437fc3
+:CREATED: [2026-08-19 Wed 11:39]
+:END:
+:LOGBOOK:
+- Created [2026-08-19 Wed 11:39]
+:END:
+`ot blocker add <id> <token>` maps exactly two positionals (`:args->opts [:id :token]` in `skills/org-tasks/scripts/src/org_tasks/commands/registry.clj`, the `["blocker" "add"]` entry) and performs no arity check. A call that passes several refs adds only the first and exits 0, so the extra refs are lost silently.
+
+Measured in a contained scratch project: `ot blocker add A task:B task:C task:D` exited 0 and left one blocker on A. A single-ref control call added its blocker correctly.
+
+`ot blocker remove` shares the same `[:id :token]` shape and needs the same check.
+
+The `org-tasks` SKILL.md quick reference writes `ot blocker list|add|remove <id> [...]`, which reads as multi-ref. `ot blocker add --help` correctly documents the singular `<token>`.
+
+Fix direction: reject extra positionals with an `argument-error`, matching how `ot tag` reports a missing positional. Decide separately whether multi-ref should be supported rather than rejected.
+
+Out of scope: a dangling or malformed ref is supported protocol state, handled by `ot blocker prune` and the `ot doctor` dangling-blocker finding. Do not add ref-format validation as part of this task.
+
+Reported by a planner subagent during task 477fc686; verified against source and by behavioural probe before capture.
 
 * Fixes
 

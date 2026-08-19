@@ -1,0 +1,17 @@
+# Sample source: skills/herdr-orch/README.org -- verbatim excerpt. Prose class: explanatory prose (human-read README). Extracted: 2026-08-18.
+
+* Subagent lifecycle
+The parent owns both ends of a round: it decides where the child works, and it owns everything the child produces.
+
+- Target :: The parent resolves exactly one checkout before the child exists -- the caller's own checkout, an existing attached checkout in the same repository (=--worktree <path>=), or a managed checkout (=--worktree new=). With no flag, a read-only or first write-enabled child shares the caller's checkout, while an additional concurrent write-enabled child gets a managed one. A managed checkout is created from the source HEAD on branch =orch/<task-prefix>=, before any pane exists.
+- Spawn :: =oh task run= blocks for the result. =oh task start= returns immediately. The child's cwd is the resolved checkout, and that cwd is the only child state the target affects: topology is never communicated through the persona, and the child carries no commit permission.
+- Publish :: =oh task publish= appends immutable result items to the round's stream -- interim reports and monitor observations included -- and a terminal status (=COMPLETE=, =BLOCKED=, =FAILED=) seals the round. Publication is also the commit gate: from a non-shared checkout it mechanically stages and commits pending nonignored changes and records the resulting tip as =CHECKPOINT=, so recovery never depends on the child having been instructed to commit. From the shared checkout it never touches Git. A read-only child holding dirt is refused, not committed.
+- Collect and reconcile :: =oh task collect= captures published items, and =collect --any= takes whichever in-flight child publishes first. For a child with its own checkout, =collect=, =status=, and =oh worktree list= also report base, branch, tip, and checkout state, keeping committed, dirty, and ignored paths as three separate sets, because each calls for a different parent action.
+- Close, continue, or tear down :: Capture never closes a pane. =oh task close= closes a settled child's pane, while =oh task continue= assigns the same child another round and carries its checkout identity forward without re-resolving topology. =oh worktree remove= deletes only a managed checkout, and only when it is owned, unreferenced, and clean. The branch always survives.
+
+Integration is the parent's work. =oh= never merges, rebases, pushes, deletes a branch, or commits in the shared checkout. Isolation keeps concurrent writers out of each other's index, but it does not prove their edits compose, so the parent still remeasures the combined tree. Retained =orch/*= branches accumulate until the parent integrates or deletes them.
+
+[[file:scripts/docs/contract.md][contract.md]] owns the mechanics: § Worktree reconciliation and teardown for the reconciliation shape, the removal guards, and recovery when =.tmp/= was cleared before a child published, and § Close for the closure guards.
+
+
+

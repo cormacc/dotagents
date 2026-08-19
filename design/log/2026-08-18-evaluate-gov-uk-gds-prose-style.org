@@ -1,0 +1,406 @@
+#+TITLE: Evaluate GOV.UK (GDS) prose style
+#+DATE: 2026-08-18 Tue
+#+PARENT: [[archive:477fc686-7d6e-4c0a-af5f-1b4012e7370a][Evaluate GOV.UK (GDS) prose style]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:home/AGENTS.md]]
+#+SPEC: [[proj:skills/README.org]]
+
+* Intent
+
+Decide which prose-style skill or skills `home/AGENTS.md` mandates, on benchmark evidence. Round 1 compared the govuk-style gist and SimpleEnglish against the incumbent vendored `asd-ste100` and recommended rejection; the user superseded that recommendation with a pivot. The pivoted work authors two owned skills -- `technical-prose`, a runtime-lean refactor of the incumbent, and `simple-prose`, adapted from the GOV.UK references -- and decides the mandate from a round 2 benchmark over four candidates on samples the incumbent mandate never touched.
+
+* Summary
+
+*Level:* MVP · *Tests:* none · *Docs:* inline (this record plus its same-stem artefacts folder)
+
+** Scope
+
+*** In scope
+- A fixed rubric, three fixed reference samples, and one snapshot of each candidate skill under `design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/`.
+- Three isolated evaluation runs, one for each candidate: the govuk-style gist, SimpleEnglish, and the incumbent `asd-ste100`.
+- A skill-artifact audit that answers whether each candidate corrects the runtime-irrelevant-context defect in the incumbent.
+- A comparison report and an adopt / reject / split recommendation in this record.
+- An owned `technical-prose` skill: a refactor of the vendored `asd-ste100` whose body keeps only write-time rules and moves the rest to a secondary references file.
+- An owned `simple-prose` skill: authored from the two gov.uk pages with the gist as prior art, carrying an explicit meaning-preservation rule.
+- A round 2 benchmark over four candidates -- `asd-ste100`, `technical-prose`, `simple-prose`, and the govuk-style gist snapshot -- on samples the incumbent mandate never touched, under the round 1 rubric discipline.
+- The mandate rewire, gated on the confirmed round 2 decision: update the `home/AGENTS.md` mandate and the `skills/README.org` inventory.
+
+*** Out of scope
+- Rewrites of existing repository prose after a mandate change. The new mandate applies to prose written after adoption.
+- Edits to the vendored `skills/asd-ste100` body.
+- Reproduction of the ASD approved-word dictionary in any owned artefact.
+- Blinded scoring. The effort line is MVP; the rubric is fixed before scoring, and that is the rigour bar.
+- SimpleEnglish as a round 2 candidate. It never beat the incumbent, and its Rule 1.14 mandates American spelling against the repository's British English rule.
+- A single dual-voice skill in this record. Two discrete self-contained skills compare more simply; a merge is a post-round-2 open question.
+
+** Acceptance
+
+*** Core functionality
+- [X] The rubric exists in the artefacts folder and is committed before any candidate run starts.
+- [X] The rubric scores three separate dimensions: strict-text output quality, explanatory-prose output quality, and skill-artifact cost.
+- [X] Three reference excerpts of approximately 400 to 600 words each exist in the artefacts folder, taken from `skills/retro/SKILL.md`, `skills/herdr-orch/README.org`, and `design/log/2026-08-18-correct-known-agent-guidance-defects.org`.
+- [X] Each candidate produced rewrites of the same three excerpts in a fresh session that loaded only that candidate.
+- [X] Each evaluation run's transcript or output shows that the session did not read the incumbent skill, except the incumbent's own run.
+- [X] Scores for each candidate on each sample are recorded in the artefacts folder.
+- [X] The skill-artifact audit reports word count and runtime-relevant density for each candidate and states whether each candidate corrects the runtime-context defect.
+- [X] `** Decisions` records an adopt / reject / split recommendation with rationale, confirmed by the user. Resolved [2026-08-19]: the user superseded the round 1 recommendation with the pivot decision rather than confirming it.
+- [X] Met, then superseded [2026-08-19]. The skill was authored with write-time rules equivalent to the vendored incumbent, and the confirmed decision then discarded it. It is retained as evidence at `design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/candidates/technical-prose/SKILL.md`.
+- [ ] The `technical-prose` content that an agent does not need at run time lives in a separate references file, which the body cites as a secondary resource.
+- [X] Met, then superseded [2026-08-19]. The skill was authored from the two gov.uk pages, and the confirmed decision then discarded it. It is retained as evidence at `design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/candidates/simple-prose/SKILL.md`.
+- [ ] The `simple-prose` body carries an explicit meaning-preservation rule.
+- [ ] Both owned skills appear under First-party in `skills/README.org`.
+- [ ] The round 2 rubric is committed before any round 2 run starts.
+- [ ] The round 2 rubric keeps separate strict-text and explanatory-prose dimensions.
+- [ ] Each round 2 sample is prose that the `asd-ste100` mandate never touched, with provenance evidence recorded for each sample.
+- [ ] The round 2 samples cover strict operational text and explanatory prose, so a split mandate stays decidable.
+- [ ] Each of the five round 2 conditions produced rewrites in an isolated fresh session on a harness that was verified before the first run.
+- [ ] The no-skill control ran with no candidate skill available and with the agreed prompt line as its only style instruction.
+- [ ] The round 2 report states whether any skill beat the no-skill control on output quality, and by how much.
+- [ ] Each of the five conditions ran again on the local model `Qwen3.8-27B-GGUF-Q4_K_M`, against the same samples and rubric.
+- [ ] The round 3 report states whether the no-skill control's standing changes on a weaker model, and therefore whether the mandate decision is model-dependent.
+- [X] Measured token and turn cost for every condition in rounds 2 and 3 is recorded, so the cost side of the trade is measured rather than proxied by loaded word counts.
+- [ ] Round 2 scores and a comparison report exist in the artefacts folder.
+- [ ] `** Decisions` records the round 2 mandate decision with rationale, confirmed by the user.
+- [ ] The `home/AGENTS.md` mandate names the skill or skills per the confirmed round 2 decision.
+
+*** Edge cases
+- [X] The samples cover strict operational text, explanatory prose, and record prose, so a split-mandate outcome is decidable from the scores.
+- [X] `home/AGENTS.md` is byte-identical to its pre-evaluation state after the evaluation runs complete.
+- [ ] The round 2 report states whether the govuk-style content drops recurred in the gist run and whether `simple-prose` avoided them.
+
+*** Anti-criteria
+- [X] Must not: modify the vendored `skills/asd-ste100` body.
+- [X] Must not: change the `home/AGENTS.md` prose-style mandate before the decision task completes, except the temporary removal during evaluation runs, which git restores.
+- [X] Must not: reproduce the ASD approved-word dictionary in any owned artefact.
+- [ ] Must not: include any round 2 sample that was written or rewritten under the incumbent mandate.
+
+** Shipped
+- MODIFIED `home/AGENTS.md` :: the § ASD-STE100 block is replaced by § Prose style, which carries the instruction directly instead of pointing at a skill. The mandated line is "Write succinctly. Use Simplified Technical English."
+- REMOVED `skills/asd-ste100/` :: the vendored incumbent is deleted from this repository. Upstream remains at https://github.com/danyuchn/asd-ste100-skill (MIT) if it is ever needed again.
+- REMOVED `skills/technical-prose/` and `skills/simple-prose/` :: neither is a live skill. Both are retained as evaluation evidence under `design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/candidates/`.
+- MODIFIED `skills/README.org` :: both owned rows and the vendored `asd-ste100` row are removed.
+- ADDED `design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/` :: the complete experimental record. Rubrics, samples, candidate skills, 45 rewrites across three rounds, isolation audits, harness notes, scores, reports, and `cost-analysis.md`.
+
+** Decisions
+- Confirmed [2026-08-19]: no prose skill is mandated. `home/AGENTS.md` carries the instruction directly :: across two model tiers the measured quality margin for any skill was at most 1 point, thin and unreplicated, while the measured token cost was 1.8x to 3.4x the instruction alone. The cost is certain and recurring; the benefit is not established. Every candidate prose skill is discarded, including the two authored during this work, and the vendored incumbent is deleted.
+  Known counter-evidence, accepted deliberately: round 3 found the instruction losing 1 point to the skills on strict text on the weaker local model, where round 2 tied. That is one sample, one run, and it is the only signal pointing the other way. If a weaker model is later adopted for prose work, re-measure before assuming this decision still holds.
+  Rejected:
+  - Split by prose class with `simple-prose` for explanatory text: it was the cheapest adoptable skill and matched the incumbent on quality, but its margin over the instruction was the same thin single point, so it does not clear the bar its own evaluation set.
+  - Retain the incumbent: it tied on quality, cost the most of any condition, and still carried the runtime-context defect this work set out to fix.
+- Retain the full experimental setup in the design tree, against usual closure practice [2026-08-19] :: `org-plan` closure would prune this material. It is kept deliberately, so a future exercise of the same kind can reuse the rubric, the samples, the harness notes, and the candidate skills rather than rebuild them, and so the decision above stays auditable against its own evidence. The retained `candidates/technical-prose/` is an MIT derivative of the deleted incumbent; its `LICENSE` and `references/provenance.md` travel with it for that reason.
+- Author an owned GDS skill if the evaluation favours GDS :: an owned skill is lean by construction and repository conventions apply.
+  Rejected:
+  - Vendor the fofr gist: a gist has no `skills/` structure, so the `skills-lock.json` mechanism cannot track it, and the no-local-edits rule for vendored skills blocks the exact fix this task wants.
+  - Defer the choice until after the evaluation: the tradeoffs are already known and do not depend on the scores.
+- Fresh session for each candidate :: each session loads only one candidate, so the incumbent cannot contaminate the other runs.
+  Rejected:
+  - Single-session side-by-side audit: cheaper, but the incumbent is already in the session's mandated context.
+- Contamination control by temporary mandate removal :: remove the `home/AGENTS.md` § ASD-STE100 block for the duration of the evaluation runs and restore it with git afterwards. Prompt-level overrides were rejected as less reliable than removal of the instruction itself.
+- Separate rubric dimensions for each prose class :: an STE-derived rubric structurally favours STE candidates, so strict-text and explanatory-prose scores stay separate and the decision weighs them separately. This is what makes a split mandate decidable.
+- Round 1 recommendation, superseded [2026-08-19] by the pivot decision below: reject both candidates and retain the incumbent `asd-ste100` mandate :: the incumbent won or tied every output dimension (strict 4, explanatory 8 of 10). govuk-style dropped content in two of three samples (a scope qualifier and a whole `** Shipped` item), which caps its scores under the rubric's meaning-preservation rule. SimpleEnglish preserved meaning but scored below the incumbent on explanatory prose, mandates American spelling against the repository's British English rule, and costs ~35% more context words. No split is supported: the would-be explanatory winner is the candidate that dropped content. Full comparison and caveats (one run per candidate; all runs on claude-opus-5): `design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/report.md`. The user superseded this recommendation with the pivot rather than confirming it.
+- Pivot [2026-08-19]: author two owned skills and decide the mandate in a round 2 benchmark :: round 1 showed the incumbent's rules win on output quality while its body carries ~400 runtime-irrelevant words, and showed the govuk voice produces the leanest artefact and the best README rewrite while its two content drops remain unattributed (one run per candidate). Owned skills correct the artefact defects on both sides, and a four-candidate round 2 (`asd-ste100`, `technical-prose`, `simple-prose`, the govuk-style gist snapshot) makes the drops testable: a repeat drop in the gist run alongside a clean `simple-prose` run attributes the defect to the gist; two clean runs point to run variance.
+  Rejected:
+  - Accept the round 1 rejection and stop: leaves the incumbent's measured ~16% runtime-irrelevant body cost uncorrected. That premise was later corrected -- see the artefact-audit correction below -- but the pivot stands on the output-quality and voice grounds in the entry above.
+- Round 1 artefact audit over-counted the incumbent's runtime-irrelevant body [corrected 2026-08-19] :: the audit classified whole sections as provenance and reported ~400 runtime-irrelevant words (~16%). The `technical-prose` refactor found that ~307 of those words are write-time rules embedded in `## Source and Scope` and `## Boundaries`: the no-dictionary-reproduction statement, the plainest-word principle, the word-by-word escape hatch for exact ASD wording, and two will-not bullets that govern what an agent may claim. They stayed in the body. The genuinely extractable figure is ~93 words, measured as the loaded body falling from 2,435 to 2,342 words at equivalent rules. Classify at rule granularity, not section granularity, in any further artefact audit.
+  - Keep SimpleEnglish in round 2: it never beat the incumbent, mandates American spelling against the British English rule, and costs ~35% more context words.
+  - Author one dual-voice skill first: two discrete self-contained skills compare more simply; a merge stays available after round 2 (see `* Open questions`).
+- First `technical-prose` version is a refactor, not a rewrite :: move the content that an agent does not need at run time into a separate references file cited as a secondary resource, and keep the write-time rules equivalent, so the round 2 comparison isolates the artefact cost rather than a rules change.
+- Round 2 extends this record :: the intent (decide the mandate on benchmark evidence) is unchanged and the rubric discipline and artefacts folder carry over. Round 2 artefacts live under `round2/` in the same-stem folder.
+  Rejected:
+  - A follow-on record: it would split the decision evidence across two files.
+- Round 2 samples exclude prose written under the incumbent mandate :: removes the incumbent's home-ground advantage that round 1 accepted. Vendored skill bodies (`skills/README.org` § Vendored) qualify by construction.
+- Round 2 includes a no-skill, prompt-only control [2026-08-19] :: a skill costs context in every session that loads it, and no round so far has tested whether that cost buys anything over a one-line instruction. The control runs the same samples with no candidate skill available and one style line: "Use Simplified Technical English." Its artefact cost is zero loaded words, so it is the floor the four candidates must beat. A control that scores close to the best candidate is evidence that the mandate should be a prompt line rather than a skill.
+  Note: the instruction as first proposed also opened with "Write docstrings, comments and test descriptions succinctly.", which names code artefacts that the prose samples do not contain. That sentence was dropped so the control measures only the instruction that applies to these samples. Restore it if a later round adds a code sample.
+- Cost is measured in tokens, not proxied by loaded words [2026-08-19] :: every earlier round compared artefact cost in loaded words. `cost-analysis.md` extracts actual usage from the retained round 2 and round 3 transcripts, with a parse control and an arithmetic control that reconciles the summed fields against the reported totals. Per session, for identical work, the no-skill control costs 38% of the incumbent's tokens on `claude-sonnet-5` (37,824 against 98,566, and $0.16 against $0.48) and 30% on the local model (18,399 against 61,995). `simple-prose` is the cheapest adoptable skill in both rounds. `technical-prose` and the incumbent land within 0.15% of each other on the local model, which independently confirms that the refactor did not reduce what a session loads.
+  The asymmetry this exposes: measured quality margins are 1 point, thin, and unreplicated, while measured cost differences are 1.8x to 3.4x, stable across two model tiers, two harnesses, and both paid and local runtimes, and recurring on every invocation for as long as a mandate stands.
+- Round 3 repeats the five conditions on a limited local model [2026-08-19] :: round 2 ran on `claude-sonnet-5` and found every skill tied the no-skill control on strict text, with a thin one-point margin on explanatory prose. A capable model may simply not need the rules that a weaker model does, so a mandate decision taken from one strong model can be wrong for the models the mandate actually governs. Round 3 therefore re-runs all five conditions on `Qwen3.8-27B-GGUF-Q4_K_M` through pi's `lemonade` provider on the `strix` host, with the same samples and the same rubric. The user has already validated the model and harness.
+  Hypothesis under test: the value of a prose skill is model-dependent. If the no-skill control loses clearly to the skills on the local model while tying on `claude-sonnet-5`, the skills earn their cost for weaker models and a no-skill mandate is wrong. If the control ties again, option 2 gains the support of a second, independent model tier.
+  The comparison is within round 3. Round 3 scores are not compared against round 2 or round 1 scores, because the model differs in each round.
+- Two-skill merge is not decidable from round 2 scores :: the benchmark decides the mandate, including a split by prose class; merging `technical-prose` and `simple-prose` depends on measured body overlap and routing-trigger clarity, known only after both skills exist. Recorded as an open question with those inputs.
+
+** Risks
+- Round 1 samples were written under the incumbent mandate, so the incumbent had home ground. Accepted for round 1; removed for round 2 by the sample-selection constraint.
+- The gist can drift from the live gov.uk guidance. Mitigated: the `simple-prose` task cites the two gov.uk pages as the source of truth and uses the gist as prior art only.
+- The mandate change amends the constitution (`home/AGENTS.md`). Recorded deliberately; the anti-criterion blocks any permanent change before the round 2 decision lands.
+- `technical-prose` inherits the incumbent's rules, and the strict-text rubric dimension is STE-derived, so that pairing is structurally favoured. Accepted: the per-class dimension split from round 1 keeps the explanatory comparison independent.
+- In-repo strict operational text that the mandate never touched may be scarce. Mitigated: vendored skill bodies are upstream text by construction; the staging task records provenance evidence per sample.
+- One run per candidate remains the MVP bar, so a single defect can decide a score. Accepted, with an escape: the round 2 decide task may order a targeted rerun when the decision hinges on one unreplicated defect.
+- Round 1 ran on `claude -p` because headless `pi --print` was refused, which round 1 misattributed to an account-level block. Resolved [2026-08-19]: the cause was `--no-extensions`, and `pi --print` is the verified round 2 harness (`round2/harness.md`). Round 2 scores still stand alone and are not compared with round 1 scores, because the harness and model differ between rounds.
+- An error message can name a cause that is not the cause. The third-party usage text above described billing while the real fault was a disabled provider extension, and round 1 carried that misreading into a documented plan assumption. Isolate a headless session's tool surface with `--tools <allowlist>` rather than `--no-extensions`, and probe a refusal in a paired invocation before attributing it to an account or a provider.
+- A split mandate makes agents route between two skills by prose class. Mitigated: the rewire task must state the routing rule; the routing-clarity assessment feeds the merge open question.
+- The artefact-cost dimension can no longer separate `technical-prose` from the incumbent, because the refactor moved only ~93 words out of the loaded body (2,342 against 2,435). Accepted: round 2 rests on output quality, and the dimension still separates the lean artefacts from the two STE bodies.
+- Withdrawn [2026-08-19]: a parent estimate that `technical-prose` reaches ~97% runtime-relevant density against the incumbent's ~84%. Round 2 measured ~84% for both, materially unchanged, because the 124-word opening framing paragraph survived the refactor almost intact against the incumbent's 125-word equivalent. The estimate adopted the refactoring child's self-reported residual of ~15 words instead of measuring the paragraph, and it was written into this record as a figure rather than as an estimate. Measure density at rule granularity before recording it.
+
+* Context
+
+Candidate sources:
+- GOV.UK writing guidelines :: https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/writing-guidelines/
+- GOV.UK style guides :: https://guidance.publishing.service.gov.uk/writing-to-gov-uk-standards/style-guides/
+- govuk-style gist (prior art, ~1,100 words) :: https://gist.github.com/fofr/505e225f9bf5e839d30c12ba6bfa0be2
+- SimpleEnglish (ASD-STE100 skill, ~3,000 words) :: https://github.com/AminBlg/SimpleEnglish/blob/main/skills/simple-english/SKILL.md
+
+The two candidates target different problems. SimpleEnglish is a direct incumbent substitute: an operational ASD-STE100 rule catalogue. The govuk-style gist encodes GDS house style: front-loaded content, plain English, and formatting rules for human readers. The evaluation therefore permits a split outcome: GDS for explanatory prose, an STE skill for strict operational text.
+
+Round 2 candidates: the incumbent `skills/asd-ste100`, the owned `skills/technical-prose` and `skills/simple-prose`, and the unchanged round 1 gist snapshot `candidates/govuk-style.md` as the control for the round 1 content drops. SimpleEnglish is dropped.
+
+* Plan
+
+** DONE [#B] Stage evaluation inputs
+CLOSED: [2026-08-18 Tue 19:58]
+:PROPERTIES:
+:CUSTOM_ID: 17a3b057-f862-4232-a589-4019e5d07842
+:CREATED: [2026-08-18 Tue 19:20]
+:STARTED: [2026-08-18 Tue 19:55]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-18 Tue 19:55]
+- State "DONE" from "STARTED" [2026-08-18 Tue 19:58]
+:END:
+Acceptance criteria:
+- `design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/candidates/` holds a local snapshot of the govuk-style gist and of the SimpleEnglish `SKILL.md`, each with a source URL and retrieval date header.
+- `samples/` in the same folder holds three excerpts of approximately 400 to 600 words, one each from `skills/retro/SKILL.md`, `skills/herdr-orch/README.org`, and `design/log/2026-08-18-correct-known-agent-guidance-defects.org`.
+- `rubric.md` in the same folder defines scoring anchors for the three dimensions: strict-text output quality, explanatory-prose output quality, and skill-artifact cost.
+- All of the above are committed before any evaluation run starts.
+
+Pointer: the incumbent needed no snapshot, because it was in-repo at `skills/asd-ste100/` when this task ran. That directory is deleted at closure; upstream is https://github.com/danyuchn/asd-ste100-skill.
+
+** DONE [#B] Run isolated evaluation sessions
+CLOSED: [2026-08-18 Tue 20:12]
+:PROPERTIES:
+:CUSTOM_ID: ca73f97c-2cbc-4f9b-b831-9e71d6824151
+:CREATED: [2026-08-18 Tue 19:20]
+:BLOCKED-BY: task:17a3b057-f862-4232-a589-4019e5d07842
+:STARTED: [2026-08-18 Tue 19:58]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-18 Tue 19:58]
+- State "DONE" from "STARTED" [2026-08-18 Tue 20:12]
+:END:
+Acceptance criteria:
+- The `home/AGENTS.md` § ASD-STE100 block is removed before the first run and git-restored byte-identical after the last run.
+- Each candidate has one fresh session that loads only that candidate's skill text and rewrites the three samples into `outputs/<candidate>/` in the artefacts folder.
+- Each non-incumbent run's output confirms the session did not read `skills/asd-ste100`.
+
+Constraint: each session prompt names only the candidate snapshot path and the sample paths, and instructs the session not to spawn agents.
+
+** DONE [#B] Score, audit, and decide
+CLOSED: [2026-08-19 Wed 11:26]
+:PROPERTIES:
+:CUSTOM_ID: 71a90415-1e08-4725-a70e-dfab3e470cb4
+:CREATED: [2026-08-18 Tue 19:20]
+:BLOCKED-BY: task:ca73f97c-2cbc-4f9b-b831-9e71d6824151
+:STARTED: [2026-08-18 Tue 20:12]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-18 Tue 20:12]
+- State "DONE" from "STARTED" [2026-08-19 Wed 11:26]
+:END:
+Acceptance criteria:
+- Scores for each candidate on each sample on each rubric dimension are recorded in the artefacts folder.
+- The skill-artifact audit records word count and runtime-relevant density for each candidate and states whether each candidate corrects the runtime-context defect.
+- `report.md` in the artefacts folder compares the candidates and recommends adopt, reject, or split.
+- `** Decisions` in this record carries the recommendation and the user's confirmation.
+
+Result: round 1 recommended rejecting both candidates; the user superseded that recommendation with the pivot decision recorded in `** Decisions`.
+
+** DONE [#B] Author the owned technical-prose skill
+CLOSED: [2026-08-19 Wed 12:06]
+:PROPERTIES:
+:CUSTOM_ID: 0246c5f3-c71e-4499-863d-013429cd3ab0
+:CREATED: [2026-08-19 Wed 11:26]
+:STARTED: [2026-08-19 Wed 11:58]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-19 Wed 11:58]
+- State "DONE" from "STARTED" [2026-08-19 Wed 12:06]
+:END:
+Acceptance criteria:
+- The skill exists; the first version is a refactor of the vendored incumbent with equivalent write-time rules. Retained at `design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/candidates/technical-prose/SKILL.md` after the closure decision discarded it.
+- The body carries only rules an agent applies at write time; provenance, standard history, and licensing narrative move to a references file that the body cites as a secondary resource.
+- The skill contains no reproduction of the ASD approved-word dictionary.
+- The vendored `skills/asd-ste100` body is byte-identical before and after this task.
+- The references file carries the upstream MIT notice, the attribution, and the link to `danyuchn/asd-ste100-skill`.
+- `skills/README.org` lists the skill under First-party.
+
+Constraint: follow `skill-creator` for frontmatter and description tuning. Upstream `danyuchn/asd-ste100-skill` declares MIT in its README (fetched 2026-08-19).
+
+** DONE [#B] Author the owned simple-prose skill
+CLOSED: [2026-08-19 Wed 12:17]
+:PROPERTIES:
+:CUSTOM_ID: 167f71a9-ac80-4d2a-93e5-22de4ddb5e1a
+:CREATED: [2026-08-18 Tue 19:20]
+:BLOCKED-BY: task:71a90415-1e08-4725-a70e-dfab3e470cb4
+:STARTED: [2026-08-19 Wed 11:58]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-19 Wed 11:58]
+- State "DONE" from "STARTED" [2026-08-19 Wed 12:17]
+:END:
+Acceptance criteria:
+- The skill exists, authored from the two gov.uk pages in `* Context`, with the gist as prior art only. Retained at `design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/candidates/simple-prose/SKILL.md` after the closure decision discarded it.
+- The body carries only rules an agent applies at write time.
+- The body carries an explicit meaning-preservation rule: a rewrite must not drop a qualifier, a list item, or a hedge.
+- The body mandates British English spelling.
+- The skill contains no reproduction of the ASD approved-word dictionary.
+- `skills/README.org` lists the skill under First-party.
+
+Constraint: follow `skill-creator` for frontmatter and description tuning.
+
+** DONE [#B] Stage round 2 inputs
+CLOSED: [2026-08-19 Wed 12:50]
+:PROPERTIES:
+:CUSTOM_ID: 2b46d2c7-4da7-430f-9406-2b8dc2826974
+:CREATED: [2026-08-19 Wed 11:26]
+:STARTED: [2026-08-19 Wed 12:49]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-19 Wed 12:49]
+- State "DONE" from "STARTED" [2026-08-19 Wed 12:50]
+:END:
+Acceptance criteria:
+- `round2/rubric.md` in the artefacts folder defines scoring anchors, keeps separate strict-text and explanatory-prose dimensions, and is committed before any round 2 run starts.
+- `round2/samples/` holds excerpts of approximately 400 to 600 words; each sample records provenance evidence that the `asd-ste100` mandate never touched its prose.
+- The samples cover strict operational text and explanatory prose.
+- A harness for isolated non-interactive runs is verified with a disposable probe run before the first candidate run, and the verification evidence is recorded.
+
+Pointer: vendored skill bodies (`skills/README.org` § Vendored, for example `skills/herdr/SKILL.md`) are upstream text by construction. Round 1's headless `pi --print` refusal means neither `pi --print` nor the round 1 fallback `claude -p` can be assumed to work.
+
+** DONE [#B] Run round 2 isolated sessions
+CLOSED: [2026-08-19 Wed 13:45]
+:PROPERTIES:
+:CUSTOM_ID: 9882a290-c5ed-4c16-b454-b6f5f716ac0d
+:CREATED: [2026-08-19 Wed 11:26]
+:BLOCKED-BY: task:0246c5f3-c71e-4499-863d-013429cd3ab0
+:BLOCKED-BY+: task:167f71a9-ac80-4d2a-93e5-22de4ddb5e1a
+:BLOCKED-BY+: task:2b46d2c7-4da7-430f-9406-2b8dc2826974
+:STARTED: [2026-08-19 Wed 13:22]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-19 Wed 13:22]
+- State "DONE" from "STARTED" [2026-08-19 Wed 13:45]
+:END:
+Acceptance criteria:
+- The `home/AGENTS.md` § ASD-STE100 block is removed before the first run and git-restored byte-identical after the last run.
+- Each of the four candidates -- `skills/asd-ste100`, `skills/technical-prose`, `skills/simple-prose`, and `candidates/govuk-style.md` -- has one fresh session that loads only that candidate and rewrites the samples into `round2/outputs/<candidate>/`.
+- The no-skill control has one fresh session with no candidate skill available, whose output goes to `round2/outputs/no-skill-control/`.
+- The control session's only style instruction is the verbatim line: "Use Simplified Technical English."
+- The control session's transcript audit shows it read no skill file, with a positive control on the audit probe.
+- Each session's transcript audit shows the session read exactly its candidate plus the samples, with a positive control.
+
+Constraint: each session prompt names only the candidate path and the sample paths, and instructs the session not to spawn agents. The control prompt names only the sample paths and the style line.
+
+** DONE [#B] Score round 2, audit, and decide
+CLOSED: [2026-08-19 Wed 21:35]
+:PROPERTIES:
+:CUSTOM_ID: 8d2a12cc-6876-499b-bc05-ce628807cc0e
+:CREATED: [2026-08-19 Wed 11:26]
+:BLOCKED-BY: task:9882a290-c5ed-4c16-b454-b6f5f716ac0d
+:STARTED: [2026-08-19 Wed 15:40]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-19 Wed 15:40]
+- State "DONE" from "STARTED" [2026-08-19 Wed 21:35]
+:END:
+Acceptance criteria:
+- Scores for each candidate on each sample on each rubric dimension are recorded under `round2/`.
+- The skill-artifact audit reports word count and runtime-relevant density for `technical-prose` and `simple-prose`.
+- `round2/report.md` compares the four candidates and the no-skill control, and recommends the mandate: one skill, a split by prose class, or no skill.
+- The report answers whether each skill earned its per-session context cost against the no-skill control, using the control's own artefact cost of zero loaded words.
+- The report states whether the govuk-style content drops recurred in the gist run and whether `simple-prose` avoided them.
+- The report records the merge inputs: measured body overlap between the two owned skills and a routing-clarity assessment of their descriptions.
+- `** Decisions` in this record carries the round 2 decision and the user's confirmation.
+
+** DONE [#B] Run round 3 on a limited local model
+CLOSED: [2026-08-19 Wed 18:42]
+:PROPERTIES:
+:CUSTOM_ID: 23c1cb07-b4eb-44f9-bba5-3bc157e09a24
+:CREATED: [2026-08-19 Wed 16:18]
+:STARTED: [2026-08-19 Wed 16:14]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-19 Wed 16:14]
+- State "DONE" from "STARTED" [2026-08-19 Wed 18:42]
+:END:
+Acceptance criteria:
+- Each of the five conditions -- `skills/asd-ste100`, `skills/technical-prose`, `skills/simple-prose`, `candidates/govuk-style.md`, and the no-skill control -- has one fresh session on `Qwen3.8-27B-GGUF-Q4_K_M`, writing its three rewrites to `round3/outputs/<condition>/`.
+- The control session loads no skill and carries the verbatim line "Use Simplified Technical English." as its only style instruction.
+- All fifteen runs use the same model and the same invocation, recorded in `round3/harness.md`.
+- Per-session isolation evidence is recorded in `round3/outputs/isolation-check.md`, with a positive control for each negative result.
+- The `home/AGENTS.md` § ASD-STE100 block is restored byte-identical when the runs finish.
+
+Pointer: reuse `round2/samples/` and `round2/rubric.md` unchanged. The verified pi invocation is in `round2/harness.md`; round 3 changes only `--provider lemonade --model Qwen3.8-27B-GGUF-Q4_K_M`. The user has validated the model and harness, so no separate model-capability probe is required.
+
+** DONE [#B] Score round 3 and test the model-dependence hypothesis
+CLOSED: [2026-08-19 Wed 19:01]
+:PROPERTIES:
+:CUSTOM_ID: 3f96cc9c-fd25-4b05-91f1-2c6c587a04b2
+:CREATED: [2026-08-19 Wed 16:18]
+:BLOCKED-BY: task:23c1cb07-b4eb-44f9-bba5-3bc157e09a24
+:STARTED: [2026-08-19 Wed 18:49]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-19 Wed 18:49]
+- State "DONE" from "STARTED" [2026-08-19 Wed 19:01]
+:END:
+Acceptance criteria:
+- `round3/scores.md` scores every condition on every sample on every rubric dimension, against the unchanged `round2/rubric.md`.
+- Meaning preservation is checked with controlled probes on all fifteen rewrites, as in round 2.
+- `round3/report.md` states whether the no-skill control ties, beats, or loses to the skills on this model, and by how much.
+- The report answers the hypothesis directly: is the value of a prose skill model-dependent, and does that change the round 2 recommendation?
+- The report states that round 3 scores are not comparable with round 1 or round 2 scores, because the model differs.
+
+Constraint: do not confirm a mandate decision. The user owns that confirmation.
+
+** DONE [#B] Rewire the prose mandate
+CLOSED: [2026-08-19 Wed 21:35]
+:PROPERTIES:
+:CUSTOM_ID: 1c0d65e6-888c-4812-ae9a-160dbc3a7b15
+:CREATED: [2026-08-18 Tue 19:20]
+:BLOCKED-BY: task:8d2a12cc-6876-499b-bc05-ce628807cc0e
+:BLOCKED-BY+: task:3f96cc9c-fd25-4b05-91f1-2c6c587a04b2
+:END:
+:LOGBOOK:
+- State "DONE" from "TODO" [2026-08-19 Wed 21:35]
+:END:
+Acceptance criteria:
+- The `home/AGENTS.md` § ASD-STE100 block is replaced per the confirmed round 2 decision and names the mandated skill or skills, including the routing rule for any split by prose class.
+- When the round 2 decision retires the incumbent, the `skills/asd-ste100` directory is removed and its `skills/README.org` § Vendored row is deleted.
+- `ot doctor` reports no new errors.
+
+Constraint: cancel this task if the confirmed round 2 decision retains the incumbent mandate unchanged.
+
+* Implementation
+- Staging: candidate snapshots were fetched raw (gist and GitHub main branch) with source URL and retrieval date headers; the three samples are verbatim `awk` range extracts (580, 437, and 428 words) with provenance headers; `rubric.md` was committed with them before any run (commit `f68c150`).
+- Harness: the planned `pi --print` runs failed -- Anthropic refused every new headless pi session with a third-party extra-usage error while `pi auth check` reported `ready` and no other provider was authenticated. Root cause corrected [2026-08-19]: the refusal came from `--no-extensions`, which disabled the `@gotgenes/pi-anthropic-auth` provider extension. It was never an account-level block, although the error text reads like one. A paired parent probe reproduced both sides: the same invocation without the flag returns the requested output at exit 0, and with the flag returns the third-party error at exit 1. Round 1's fallback to `claude -p` was therefore unnecessary. Its scores remain internally consistent, because all three round 1 runs shared one harness and one model. The runs used `claude -p` instead, with flags verified against `claude --help`: `--disable-slash-commands`, `--allowedTools "Read,Write"`, `--disallowedTools "Task,Bash,Glob,Grep,WebFetch,WebSearch"`, `--session-id`, `--output-format json`, prompt on stdin (the variadic tool flags consume a trailing prompt argument, and `--bare` breaks stored auth).
+- Contamination control: the `home/AGENTS.md` § ASD-STE100 block was removed before the first run and git-restored byte-identical after the last run (`git diff -- home/AGENTS.md` empty). Both `~/.pi/agent/AGENTS.md` and the `~/.claude/CLAUDE.md` import resolve to that live file, verified with `readlink -f` and controlled greps during the removal window.
+- Isolation: per-session transcript audits (all `tool_use` calls extracted with `jq`) show each session read exactly its candidate plus the three samples; the `asd-ste100` grep pattern matched 0 calls in both non-incumbent transcripts with the incumbent's own transcript (5 matches) as the positive control. Details: `outputs/isolation-check.md`.
+- Scoring: all nine rewrites were scored against the fixed rubric; both govuk-style content drops were confirmed with controlled probes (item counts and pattern greps against source and sibling rewrites). Scores: `scores.md`; comparison and recommendation: `report.md`.
+- Round 3 scoring: all fifteen rewrites preserved meaning under the same controlled-probe method as round 2 (no drops found, contrary to the round's own stated expectation that a weaker model would drop content more often). The no-skill control's standing split by dimension: it lost by 1 point to all three adoptable skills on strict text (new this round; round 2 tied all five at 4), while the explanatory-prose margin (1 point, same sample, same defect class) replicated round 2 unchanged. `govuk-style` picked up a new structure-fit defect on this model (converted all 23 of one sample's org `~verbatim~` spans to Markdown backticks; round 2's run of the same sample preserved the convention), and its strict-sample score is separately confounded by a self-initiated revision pass that no other condition received. Net reading: thin, direction-consistent evidence for model-dependence on strict text only; the explanatory-prose picture is unchanged from round 2. Full scores and analysis: `round3/scores.md`, `round3/report.md`. Does not confirm a mandate decision.
+- Pivot (2026-08-19): the user superseded the round 1 recommendation; the plan was restructured for two owned skills and a round 2 benchmark. Task `167f71a9` was repurposed from "Author the owned GDS skill" into the `simple-prose` authoring task. Round 2 artefacts live under `round2/` in the same-stem folder.
+- `simple-prose` (commit `ecb42ea`, authored in an isolated worktree and cherry-picked): 908 words authored from the two GOV.UK hub pages, whose rules live in sub-pages (`clear-language/`, `clear-structure/`, `right-tone/`, `add-links/`, and the A to Z guide). The body opens with the meaning-preservation rule that round 1 motivated, and mandates British English. The gist-drift risk is now confirmed by instance: two gist rules had no live counterpart and were omitted -- a 15-to-20-word sentence target, where the live guidance splits over 25, and a ban on exclamation marks, which the A to Z does not contain. The parent confirmed the exclamation-mark absence with an independent live fetch, because a paged negative search is weak evidence on its own.
+- `technical-prose` (commit `f20a2a7`): a three-hunk refactor of the vendored body with the rule tables byte-identical and one cross-reference renamed, so round 2 measures artefact cost rather than a rules change. Provenance, standard history, and licensing narrative moved to `references/provenance.md`, which carries the verbatim upstream MIT notice and the attribution; `LICENSE` was copied because a derived skill is a substantial portion under MIT. The description dropped its plain-language triggers to keep routing disjoint from `simple-prose`.
+
+* Open questions
+
+** DECIDED If the incumbent loses, is the vendored `skills/asd-ste100` directory retired or kept for reference?
+:PROPERTIES:
+:DECIDED: [2026-08-19 Wed 11:49]
+:END:
+Decision: retire the vendored directory when round 2 retires the incumbent mandate. The derived skill keeps the upstream attribution and link in its references file, so provenance survives the removal. Retirement therefore removes the directory and its `skills/README.org` § Vendored row; no `skills-lock.json` entry exists to remove, because that migration is still outstanding and all vendored skills are hand-copied.
+
+Executed [2026-08-19]: `skills/asd-ste100/` and its README row are deleted. The derived skill was itself discarded, so the surviving MIT notice and attribution are the ones inside `candidates/technical-prose/`, retained in the design tree as evaluation evidence.
+
+** DECIDED Where does the upstream attribution live in the owned `technical-prose` skill?
+:PROPERTIES:
+:DECIDED: [2026-08-19 Wed 11:49]
+:END:
+Decision: the secondary references file carries the upstream MIT notice, the attribution, and the link to `danyuchn/asd-ste100-skill`. The `SKILL.md` body carries no licensing narrative. Upstream declares MIT in its README (fetched 2026-08-19), which permits derivation when the notice is preserved.
+
+** DECIDED Merge `technical-prose` and `simple-prose` into one dual-voice skill?
+:PROPERTIES:
+:DECIDED: [2026-08-19 Wed 11:49]
+:END:
+Not decidable from round 2 scores. Decision: out of scope for this record. When round 2 keeps two skills, the merge question becomes a top-level task in `TASKS.org`, decided from measured body overlap, routing-trigger clarity of the two descriptions, and the confirmed mandate shape. Round 2 can also retain one skill only, which closes the question with no follow-on task.
+
+Moot [2026-08-19]: the confirmed decision mandates no skill, so neither skill survives and there is nothing to merge. No follow-on task is created. The measurements the question asked for were taken anyway and are in `round2/report.md` § Merge inputs: roughly 17% body overlap, with mutually cross-referencing descriptions.

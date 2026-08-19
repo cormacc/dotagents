@@ -34,7 +34,6 @@ Maintained upstream and re-synced rather than edited here. Do *not* apply local 
 
 | Skill | Purpose | Source |
 |-------+---------+--------|
-| [[file:asd-ste100/SKILL.md][asd-ste100]] | Simplified Technical English for unambiguous machine-consumed and technical prose. | https://github.com/danyuchn/asd-ste100-skill |
 | [[file:dirge/SKILL.md][dirge]] | Dirge agent plugin, configuration, harness API, and pi/Claude extension-porting guidance. | |
 | [[file:find-skills/SKILL.md][find-skills]] | Discovery and installation of skills from the open skill ecosystem. | |
 | [[file:herdr/SKILL.md][herdr]] | Pane/tab/workspace topology, agent lifecycle, and coordination mechanics (body kept byte-identical to upstream). | https://github.com/ogulcancelik/herdr/blob/master/SKILL.md |

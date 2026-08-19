@@ -26,19 +26,11 @@
 - The CRITICAL identifier rule takes priority over the British English rule.
 - Prose and an identifier can use different spellings in the same sentence.
 
-## ASD-STE100
-- Use the `asd-ste100` skill for almost all English prose that you draft or revise.
-- Read `~/.agents/skills/asd-ste100/SKILL.md` before you produce covered prose in the current session.
-- Do not infer the skill rules from this file or from memory.
-- Prose that you write before reading the skill is invalid.
+## Prose style
+- Write succinctly. Use Simplified Technical English.
 - Covered prose includes instructions, prompts, task text, record text, commit messages, and code comments.
 - Covered prose also includes errors, status text, reports, technical documentation, and replies.
-- Use Strict mode for machine-consumed or operational text.
-- Use `STE-flavored` mode for explanatory prose.
-- Do not use the skill for user documentation that intentionally requires an informal voice.
-- Do not use the skill for creative or marketing copy.
-- The required voice determines the exception. The audience alone does not determine it.
-- Ordinary user-facing technical prose still requires the skill.
+- Do not apply this to creative or marketing copy, or to user documentation that intentionally requires an informal voice.
 - Preserve identifiers, factual modality, repository conventions, British spelling, and the user's requested tone.
 
 ## Negative results and controls
