@@ -46,34 +46,62 @@ Decide which prose-style skill or skills `home/AGENTS.md` mandates, on benchmark
 - [X] The skill-artifact audit reports word count and runtime-relevant density for each candidate and states whether each candidate corrects the runtime-context defect.
 - [X] `** Decisions` records an adopt / reject / split recommendation with rationale, confirmed by the user. Resolved [2026-08-19]: the user superseded the round 1 recommendation with the pivot decision rather than confirming it.
 - [X] Met, then superseded [2026-08-19]. The skill was authored with write-time rules equivalent to the vendored incumbent, and the confirmed decision then discarded it. It is retained as evidence at `design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/candidates/technical-prose/SKILL.md`.
-- [ ] The `technical-prose` content that an agent does not need at run time lives in a separate references file, which the body cites as a secondary resource.
+- [X] The `technical-prose` content that an agent does not need at run time lives in a separate references file, which the body cites as a secondary resource. Partially met: provenance and licensing moved to `references/provenance.md`, cited three times from the body, but round 2 measured the loaded body at ~84% density, materially unchanged, because the framing paragraph survived.
 - [X] Met, then superseded [2026-08-19]. The skill was authored from the two gov.uk pages, and the confirmed decision then discarded it. It is retained as evidence at `design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/candidates/simple-prose/SKILL.md`.
-- [ ] The `simple-prose` body carries an explicit meaning-preservation rule.
-- [ ] Both owned skills appear under First-party in `skills/README.org`.
-- [ ] The round 2 rubric is committed before any round 2 run starts.
-- [ ] The round 2 rubric keeps separate strict-text and explanatory-prose dimensions.
-- [ ] Each round 2 sample is prose that the `asd-ste100` mandate never touched, with provenance evidence recorded for each sample.
-- [ ] The round 2 samples cover strict operational text and explanatory prose, so a split mandate stays decidable.
-- [ ] Each of the five round 2 conditions produced rewrites in an isolated fresh session on a harness that was verified before the first run.
-- [ ] The no-skill control ran with no candidate skill available and with the agreed prompt line as its only style instruction.
-- [ ] The round 2 report states whether any skill beat the no-skill control on output quality, and by how much.
-- [ ] Each of the five conditions ran again on the local model `Qwen3.8-27B-GGUF-Q4_K_M`, against the same samples and rubric.
-- [ ] The round 3 report states whether the no-skill control's standing changes on a weaker model, and therefore whether the mandate decision is model-dependent.
+- [X] The `simple-prose` body carries an explicit meaning-preservation rule.
+- [X] Met, then reversed [2026-08-19]. Both skills were listed under First-party, and the confirmed decision removed both rows along with the skills themselves.
+- [X] The round 2 rubric is committed before any round 2 run starts.
+- [X] The round 2 rubric keeps separate strict-text and explanatory-prose dimensions.
+- [X] Each round 2 sample is prose that the `asd-ste100` mandate never touched, with provenance evidence recorded for each sample. Each sample's last commit predates the mandate commit `5bad753`, recorded per sample in `round2/staging-notes.md`.
+- [X] The round 2 samples cover strict operational text and explanatory prose, so a split mandate stays decidable.
+- [X] Each of the five round 2 conditions produced rewrites in an isolated fresh session on a harness that was verified before the first run.
+- [X] The no-skill control ran with no candidate skill available and with the agreed prompt line as its only style instruction. Confirmed in both rounds' isolation checks: no skill file was read in either control session.
+- [X] The round 2 report states whether any skill beat the no-skill control on output quality, and by how much.
+- [X] Each of the five conditions ran again on the local model `Qwen3.8-27B-GGUF-Q4_K_M`, against the same samples and rubric.
+- [X] The round 3 report states whether the no-skill control's standing changes on a weaker model, and therefore whether the mandate decision is model-dependent.
 - [X] Measured token and turn cost for every condition in rounds 2 and 3 is recorded, so the cost side of the trade is measured rather than proxied by loaded word counts.
-- [ ] Round 2 scores and a comparison report exist in the artefacts folder.
-- [ ] `** Decisions` records the round 2 mandate decision with rationale, confirmed by the user.
-- [ ] The `home/AGENTS.md` mandate names the skill or skills per the confirmed round 2 decision.
+- [X] Round 2 scores and a comparison report exist in the artefacts folder.
+- [X] `** Decisions` records the round 2 mandate decision with rationale, confirmed by the user.
+- [X] Met by reversal [2026-08-19]: the confirmed decision mandates no skill, so `home/AGENTS.md` names an instruction instead of a skill.
 
 *** Edge cases
 - [X] The samples cover strict operational text, explanatory prose, and record prose, so a split-mandate outcome is decidable from the scores.
 - [X] `home/AGENTS.md` is byte-identical to its pre-evaluation state after the evaluation runs complete.
-- [ ] The round 2 report states whether the govuk-style content drops recurred in the gist run and whether `simple-prose` avoided them.
+- [X] The round 2 report states whether the govuk-style content drops recurred in the gist run and whether `simple-prose` avoided them. Neither recurred, in round 2 or round 3.
 
 *** Anti-criteria
 - [X] Must not: modify the vendored `skills/asd-ste100` body.
 - [X] Must not: change the `home/AGENTS.md` prose-style mandate before the decision task completes, except the temporary removal during evaluation runs, which git restores.
 - [X] Must not: reproduce the ASD approved-word dictionary in any owned artefact.
-- [ ] Must not: include any round 2 sample that was written or rewritten under the incumbent mandate.
+- [X] Must not: include any round 2 sample that was written or rewritten under the incumbent mandate. Held: all three samples' last commits predate the mandate commit.
+
+** Artefacts
+
+Everything below is retained deliberately (see `** Decisions`), so a later exercise can reuse the setup instead of rebuilding it. Paths are relative to the same-stem folder [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/]].
+
+Cross-round:
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/cost-analysis.md][cost-analysis.md]] :: measured token and turn cost for every condition in rounds 2 and 3, plus the GDS instruction variant. The only place cost is measured rather than proxied by loaded words.
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/candidates/][candidates/]] :: the four candidate artefacts. `govuk-style.md` and `simple-english.md` are upstream snapshots; `technical-prose/` and `simple-prose/` are the two skills authored and then discarded here. `technical-prose/` carries the upstream MIT notice, because it derives from the deleted incumbent.
+
+Round 1 (`claude-opus-5` through `claude -p`, three candidates, mandate-written samples):
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/rubric.md][rubric.md]], [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/samples/][samples/]], [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/outputs/][outputs/]], [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/scores.md][scores.md]], [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/report.md][report.md]].
+
+Round 2 (`claude-sonnet-5` through `pi --print`, five conditions, mandate-untouched samples):
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/round2/rubric.md][round2/rubric.md]] :: the fixed rubric both later rounds score against.
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/round2/samples/][round2/samples/]] :: the three shared samples, one strict and two explanatory.
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/round2/staging-notes.md][round2/staging-notes.md]] :: per-sample provenance evidence against the mandate commit.
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/round2/harness.md][round2/harness.md]] :: the verified `pi --print` invocation, and why `--no-extensions` must not be added.
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/round2/outputs/][round2/outputs/]] :: 15 rewrites plus `isolation-check.md`.
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/round2/scores.md][round2/scores.md]] and [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/round2/report.md][round2/report.md]].
+
+Round 3 (`Qwen3.8-27B-GGUF-Q4_K_M` through `lemonade`, same five conditions):
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/round3/harness.md][round3/harness.md]] :: the local invocation, and the output-cap fault that produced no usable output until `pi/models.json` corrected it.
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/round3/outputs/][round3/outputs/]] :: 15 rewrites plus `isolation-check.md`.
+- [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/round3/scores.md][round3/scores.md]] and [[proj:design/log/2026-08-18-evaluate-gov-uk-gds-prose-style/round3/report.md][round3/report.md]].
+
+Instruction variant, run after the decision as a counterfactual: `round2/outputs/no-skill-gds/` and `round3/outputs/no-skill-gds/`, measured in `cost-analysis.md` § Instruction variant.
+
+Not committed: the `pi --mode json` transcripts that the isolation audits and the cost figures derive from. They are gitignored scratch under `.tmp/round2run/` and `.tmp/round3run/`, present at closure but not durable, so reproducing those figures from source needs a rerun.
 
 ** Shipped
 - MODIFIED `home/AGENTS.md` :: the § ASD-STE100 block is replaced by § Prose style, which carries the instruction directly instead of pointing at a skill. The mandated line is "Write succinctly. Use Simplified Technical English."

@@ -24,6 +24,7 @@ Two controls:
 | simple-prose | 3 | 6 | 33,583 | 11,517 | 24,787 | 69,893 | 0.3341 |
 | govuk-style | 3 | 6 | 30,064 | 11,169 | 21,350 | 62,589 | 0.2909 |
 | **no-skill-control** | 3 | 6 | 17,889 | 8,686 | 11,243 | **37,824** | **0.1589** |
+| no-skill, GDS instruction | 3 | 6 | 27,539 | 7,659 | 21,411 | 56,615 | 0.2845 |
 
 Relative to the control: `asd-ste100` 2.61x tokens and 3.03x cost, `technical-prose` 2.21x and 2.45x, `simple-prose` 1.85x and 2.10x, `govuk-style` 1.65x and 1.83x. Token and cost ratios differ because cache writes are priced above cache reads.
 
@@ -38,10 +39,28 @@ Bare `input` is 6 tokens for every condition because prompt caching moved the re
 | simple-prose | 3 | 18,956 | 0 | 9,065 | 14,803 | 42,824 | 0 |
 | govuk-style | 5 | 7,366 | 0 | 57,425 | 13,635 | 78,426 | 0 |
 | **no-skill-control** | 3 | 3,774 | 0 | 10,538 | 4,087 | **18,399** | 0 |
+| no-skill, GDS instruction | 3 | 3,786 | 0 | 10,613 | 4,143 | 18,542 | 0 |
 
-Relative to the control: `asd-ste100` 3.37x tokens, `technical-prose` 3.37x, `simple-prose` 2.33x, `govuk-style` 4.26x.
+Relative to the control: `asd-ste100` 3.37x tokens, `technical-prose` 3.37x, `simple-prose` 2.33x, `govuk-style` 1.01x.
 
 The monetary cost is zero because inference is local. That does not make the tokens free: they are latency and occupied context, and local throughput is the binding constraint rather than price.
+
+## Instruction variant: GOV.UK (GDS) house style
+
+Run after the mandate decision, as a counterfactual. Both sessions are the no-skill control with one word changed in the treatment: `Use GOV.UK (GDS) house style for all prose.` replaces `Use Simplified Technical English.` The rest of the prompt is byte-identical to the original control prompt, verified by diff, and the flag set is unchanged.
+
+| Model | STE instruction | GDS instruction | Ratio |
+|---|---|---|---|
+| `claude-sonnet-5` | 37,824 tokens, $0.1589 | 56,615 tokens, $0.2845 | 1.50x tokens, 1.79x cost |
+| `Qwen3.8-27B-GGUF-Q4_K_M` | 18,399 tokens | 18,542 tokens | 1.01x tokens |
+
+The two models diverge. On `claude-sonnet-5` the GDS instruction costs half as much again, and the difference is almost entirely output: 21,411 output tokens against 11,243. The higher cache write follows from that, because each later turn caches the longer conversation. Rewrite length moves the same way, at 763/683/575 words against 705/659/544 for the same three sources. On the local model the two instructions are within 1%, and their rewrites differ by a similar small margin.
+
+A plausible reading, not established by one run each: a capable model treats "GOV.UK house style" as a richer instruction and does more work for it, while the weaker model does not differentiate. This does not change the mandate decision. The GDS instruction still costs well under the cheapest skill on `claude-sonnet-5` (56,615 against `simple-prose`'s 69,893 and the incumbent's 98,566), so the finding is about the price of one instruction against another, not about instructions against skills.
+
+Output quality was not scored for this variant. These are token measurements only.
+
+Contamination control differed from rounds 2 and 3 and is recorded rather than smoothed over. Those rounds removed the `home/AGENTS.md` prose block and passed `--no-context-files`. These runs passed `--no-context-files` alone, without editing `home/AGENTS.md`, which by then carried the newly mandated instruction. Round 2's paired probe established that the flag drops that file, and the per-session audit confirms no skill file was read and exactly the three samples were, so the treatment reached the model uncontaminated.
 
 ## What the numbers show
 
