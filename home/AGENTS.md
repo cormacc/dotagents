@@ -68,8 +68,6 @@
 
 ## Command-line arguments
 - Verify each flag's meaning before you trust its output.
-- Work around the vendored `skills/gitlab-cli-skills/glab-runner/SKILL.md` use of `glab runner list --all`. Installed glab rejects `--all`.
-- Use `glab runner list --instance` for instance scope when installed `glab runner list --help` documents it. Keep the vendored skill unchanged until upstream merges the correction.
 - A flag rejection in one argument position does not prove rejection in another position.
 - Also test a rejected flag in the final argument position.
 
