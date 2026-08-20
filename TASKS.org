@@ -193,6 +193,19 @@ Open questions to settle before implementing:
 - Does =--print-prompt= still make sense as the inspection route.
 
 Verified [2026-08-12 Wed] against cli.clj at 6a89b0f plus the housekeeping commits: the roster failure above is real, all seven packaged personas declare =model:=, and no inline-persona flag exists.
+
+Second shape, added [2026-08-19] from the prose-style evaluation: a *measurement* session, which is a stricter case than the persona-less child above and pulls in the opposite direction on one point. That evaluation ran 45 sessions across three rounds as raw =pi --print= invocations, entirely outside the ledger, because =oh= could not express them. Two reasons, both verified:
+
+- No environment-override surface. =oh task run= and =oh task start= accept only =--model=, =--timeout=, =--tab=/=--split=, =--spawns=, =--retro=/=--no-retro=, =--prompt-extra=, =--print-prompt=, and =--worktree=. The runs needed =--no-skills=, =--no-context-files=, =--skill <one path>=, =--tools read,write=, =--provider lemonade=, a raw model id outside the four weight aliases, and =--mode json=. Grepping contract.md for those terms returns nothing, against a positive control of three =Model resolution= matches.
+- The injected guidance is itself contamination. The persona-less shape above still wants the launcher's delegation, identity, and publication text. A measurement subject must receive only the sample and the instruction under test: the control condition's whole treatment was one sentence, so any wrapper would measure something else. Whatever lands must let a caller opt out of the wrap entirely, not merely skip the persona.
+
+The hard part is the completion signal: the contract requires the child to publish a v1 envelope through the injected launcher, and a bare model rewriting prose cannot. A measurement mode needs a different terminal condition, such as process exit plus the expected output artefact existing. Batching matters too, because 15 sessions per round do not each want a pane.
+
+Cost of the gap, measured: the isolation audit was rebuilt by hand in each round (transcript capture, tool-call extraction, a positive-controlled contamination matrix). As a spawn property it would be derived once.
+
+Two verified =pi= facts any implementation must respect, both of which cost a round when they were assumed rather than checked:
+- =--no-extensions= disables provider-auth extensions. A headless refusal whose message described third-party usage billing was caused by this flag, not by an account limit. Isolate the tool surface with =--tools <allowlist>= instead.
+- =--tools= is case-sensitive and fails silently. =--tools Read= enables no tool and exits 0; =--tools read= works. Probed directly: the capitalised form returned =NO-TOOL= where the lowercase form returned the file's token.
 *** TODO [#B] Consider leveraging pi /fork for subagents
 :PROPERTIES:
 :CUSTOM_ID: 84653126-cd7e-412a-9761-d43eaad7f97f
@@ -460,6 +473,28 @@ Acceptance criteria:
 - The wrong read-only claim no longer reaches an agent following the skill.
 - Whatever route is taken, no local edit is left sitting in a lockfile-managed vendored body.
 
+*** TODO gitlab-cli-skills: glab-schedule create rejects --output json (list supports it) :skill_gitlab_cli_skills:
+:PROPERTIES:
+:CUSTOM_ID: 6d205682-bacc-465a-911f-419a76604e6f
+:CREATED: [2026-08-20 Thu 10:55]
+:END:
+:LOGBOOK:
+- Created [2026-08-20 Thu 10:55]
+:END:
+Verified: the installed `glab schedule create` rejects `--output json`/`-F json` ("Unknown flag: --output"), while `glab schedule list --output json` works correctly. `gitlab-cli-skills/glab-schedule/SKILL.md` documents `--output json`/`-F json` support generically for `glab schedule list` but does not flag that `create` (and likely `update`/`run`/`delete`) lack it -- an agent following the doc's pattern could reasonably expect JSON output from `create` too.
+
+gitlab-cli-skills is vendored third-party content (commit fc86308, "deps: Added gitlab-cli-skills (3rd party)"; no upstream source URL recorded in the commit or README). Per the user: raise this upstream once the source repository is identified, rather than editing the vendored file locally. This task exists so the finding is not lost; resolve by either (a) locating the upstream repo and filing/PRing there, or (b) if no upstream exists / is unreachable, revisit as a local vendored-doc fix under the Skill vendoring improvements work.
+
+Origin:
+- cwd: /home/cormacc/nmd/infra/playbooks
+- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
+- timestamp: [2026-08-20 Thu 10:50]
+- sender: agent
+
+Evidence:
+- `glab schedule create --cron "0 6 * * *" --description "..." --ref develop --output json` -> `Unknown flag: --output.`
+- `glab schedule list --output json` succeeded and returned valid JSON in the same session.
+
 ** TODO [#B] herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 22f68a11-eeef-43e9-81d3-79341842ca84
@@ -562,3 +597,82 @@ Origin:
 
 Evidence:
 `clojure_find_nrepl_port` reported no reachable port. The workflow then created a Herdr tab and ran `bb nrepl-server`. That command failed with `java.net.BindException: Address already in use`. A direct `clojure_eval` probe of port 1667 returned `2` for `(+ 1 1)`, which confirmed that an existing Babashka nREPL server was available.
+
+** TODO herdr-orch: an aborted round cannot be closed or pruned :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 08fba41e-c94c-435d-bb1e-84c757d057cd
+:CREATED: [2026-08-20 Thu 10:36]
+:END:
+:LOGBOOK:
+- Created [2026-08-20 Thu 10:36]
+:END:
+An aborted subagent round has no lifecycle exit. When a continuation round exists and the operator stops the child before it publishes, both exits refuse each other:
+
+- `oh task close <earlier-round>` returns `close refused: an uncaptured newer round names this child`, naming the newer round.
+- `oh task prune <newer-round>` returns `prune refused: named child is present in agent list`, naming the child.
+
+Close requires the newer round to be captured. Prune requires the child to be absent. Neither is reachable for a round that will never publish. `oh task collect` on that round returns `{"status":"pending","terminal?":false}`, so capture cannot settle it either.
+
+The documented escape is `oh task poke`, framed for "a settled child with no valid publication". It cleared the deadlock in practice, but by resuming the agent, which is the opposite of the operator's intent when abandoning a round. It succeeded only because the assignment was still valid.
+
+Desired outcome: a way to abandon a round that will never publish, without resuming the child. Each guard is individually correct, so the defect is in their interaction rather than in either one.
+
+Candidate directions, none chosen:
+- A `--force` or `--abandon` on `prune` for a named round whose child is still alive.
+- Let `close` capture a pending round as invalid and proceed.
+- Document poke-then-collect as the sanctioned abort path, and state its resume side effect.
+
+Also observed: `close` is not addressable by an older round id. After the newer round settled, closing required the newest round's UUID. Worth stating in the contract whichever direction the fix takes.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: github.com/cormacc/dotagents @ main
+- timestamp: [2026-08-19 Wed 19:30]
+- sender: agent
+
+Evidence: reproduced first-hand during the prose-style evaluation. Child `worker-cd1dbbca`, rounds `cd1dbbca-e93c-4e12-b69a-02a093cae122` and `73ec4d3a-8e25-4603-85ac-1e260234af7d`. Exact refusal messages above.
+
+** TODO Edit tool: pre-submit self-check for stray edits[] keys :skill_org_tasks:agents_md:
+:PROPERTIES:
+:CUSTOM_ID: 81a6a750-4187-4f0c-a8c2-2629014e915c
+:CREATED: [2026-08-20 Thu 10:54]
+:END:
+:LOGBOOK:
+- Created [2026-08-20 Thu 10:54]
+:END:
+Twice in one session (nmd/infra/playbooks, secret-management record), a call to the Edit tool included an extra, schema-invalid key (e.g. `newText_unused`) alongside a valid `{oldText, newText}` entry inside `edits[]`. The tool silently tolerated it and applied the edit correctly, but AGENTS.md already prohibits adding keys absent from a declared schema, warning that a tool can silently accept an unknown field and corrupt the payload -- this happened despite that existing rule already being in context, so restating it alone did not prevent recurrence.
+
+Proposed rule addition to home/AGENTS.md (Output and structured edits section): before submitting an Edit call with one or more entries, re-scan every object in `edits[]` and confirm it contains exactly `{oldText, newText}` and no other key.
+
+Origin:
+- cwd: /home/cormacc/nmd/infra/playbooks
+- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
+- timestamp: [2026-08-20 Thu 10:50]
+- sender: agent
+
+Evidence:
+- One instance while editing design/log/2026-08-17-implement-secret-management.org Decisions section (stray `newText_unused` key).
+- A second instance shortly after while editing the same file's Shipped/Gotchas bullets.
+- Neither call errored or was rejected; both edits applied correctly despite the invalid key.
+
+** TODO org-tasks: copy heading state tokens verbatim during bulk newText edits :skill_org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: d53b3498-3764-4ba5-85ea-4c7e40349f12
+:CREATED: [2026-08-20 Thu 10:54]
+:END:
+:LOGBOOK:
+- Created [2026-08-20 Thu 10:54]
+:END:
+While trimming a plan task's body in a change-record (nmd/infra/playbooks, design/log/2026-08-17-implement-secret-management.org), a large hand-composed `newText` block happened to span a heading line containing a TODO-state keyword. The heading was retyped as part of composing the replacement text, and the state keyword was mistyped from `STARTED` to `DONE`. This was caught in review before commit, but org-tasks explicitly forbids hand-editing task lifecycle state outside `ot status` -- this was a near-miss of exactly that violation, caused by manually retyping a heading rather than copying it.
+
+Proposed rule addition to skills/org-tasks/SKILL.md: when composing a large `newText` block that happens to include or span a heading line carrying a TODO-state keyword (TODO/STARTED/WAITING/DONE/CANCELLED), copy that heading token verbatim from the most recent read rather than retyping it from memory.
+
+Origin:
+- cwd: /home/cormacc/nmd/infra/playbooks
+- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
+- timestamp: [2026-08-20 Thu 10:50]
+- sender: agent
+
+Evidence:
+- The mistake was caught immediately after the edit by a grep for the target heading text, then reverted with a follow-up edit before any commit.
+- No incorrect state was ever committed or persisted; the near-miss was purely in an intermediate working-tree edit.

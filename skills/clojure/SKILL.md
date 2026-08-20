@@ -70,6 +70,7 @@ Both verified by probe, not inference:
 
 - A bare script runs in `user`, where `clojure.repl` is already referred. `(def source ...)` fails with "source already refers to #'clojure.repl/source"; the same applies to `doc` and `dir`. Use a specific name such as `source-path`.
 - Core `slurp`/`spit` reject a `babashka.fs` path object: "Cannot open <UnixPath ...> as an InputStream". Wrap `fs/path` values in `str` before passing them.
+- `load-file` and `-e` evaluate a script, so they never syntax-check one. `bb -e '(load-file "driver.bb")'` ran a driver's top-level forms and started a real long-running subprocess that had to be found and killed. Put driver logic behind a function that only the script's own entry point calls, or check syntax by parsing rather than evaluating.
 
 ## Failure recovery
 
