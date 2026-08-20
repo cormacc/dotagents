@@ -66,3 +66,16 @@ Upstream ships a flat collection: a `gitlab-cli-skills/` router directory beside
 The dry run is the default because it builds the candidate under `.tmp/` and prints the added/removed skill list plus a `git diff --stat` against the current tree. `--apply` replaces the vendor tree only after that report.
 
 It aborts rather than guessing when upstream changes shape: a missing router `SKILL.md`, no root-level `glab-*` directories, a router link style that no longer needs rewriting, a remaining parent-relative link, or a router entry that collides with a root entry whose shared files are not byte-identical.
+
+## Skill frontmatter validation
+
+```sh
+scripts/validate-skills.bb --python /path/to/venv/bin/python
+scripts/validate-skills.bb --python python3 --skills-dir .tmp/fixture
+```
+
+Runs `skills/skill-creator/scripts/quick_validate.py` over every `skills/*/SKILL.md` in two tiers. First-party and adopted skills gate the exit code; the vendored set from `skills/README.org` § Vendored only warns, because those bodies follow upstream rather than this repository. `--skills-dir` exists so the gate itself can be tested against a fixture.
+
+`scripts/check.sh` calls it in place of the previous single-skill validation, which checked only `skills/code-review` and so proved the tooling ran without covering the skill set.
+
+The Agent Skills specification defines exactly six frontmatter fields -- `name`, `description`, `license`, `compatibility`, `metadata` and `allowed-tools` -- and nominates `metadata` as the extension slot for client-specific data. Upstream `gitlab-cli-skills` adds top-level `openclaw:` and `requirements:` keys, so it warns on every run; that is upstream's non-conformance to fix, and the warning is the record of it. A hard error is the wrong severity for keys we do not own: Anthropic's own validator rejects the extension fields Claude Code documents (see anthropics/skills issue #394).

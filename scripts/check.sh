@@ -18,7 +18,7 @@ bb test
 printf '\n==> skill-creator clean validation and packaging\n'
 python3 -m venv "$work/venv"
 "$work/venv/bin/python" -m pip install --quiet --disable-pip-version-check -r skills/skill-creator/requirements.txt
-"$work/venv/bin/python" skills/skill-creator/scripts/quick_validate.py skills/code-review
+scripts/validate-skills.bb --python "$work/venv/bin/python"
 "$work/venv/bin/python" skills/skill-creator/scripts/package_skill.py skills/code-review "$work/dist"
 test -s "$work/dist/code-review.skill"
 
