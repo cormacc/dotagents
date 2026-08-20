@@ -32,7 +32,7 @@ glab runner list
 glab runner list --repo owner/project
 
 # List all runners (instance-level, admin only)
-glab runner list --all
+glab runner list --instance
 
 # Output as JSON
 glab runner list --output json
@@ -140,7 +140,7 @@ Do you need the runner gone permanently?
 ## Troubleshooting
 
 **"runner: command not found":**
-- Requires glab v1.87.0+. Check with `glab version`.
+- Requires a current `glab` release. Check with `glab version`.
 
 **"Permission denied" on instance-level runners:**
 - Instance-level runner management requires GitLab admin privileges.
@@ -204,7 +204,7 @@ Commands:
   update    Update runner settings, including pause/unpause
 
 Flags (list):
-  --all          List all runners (instance-level, admin only)
+  --instance     List all runners available to the user (instance scope)
   --output       Format output as: text, json
   --page         Page number
   --per-page     Number of items per page

@@ -19,6 +19,11 @@ glab issue list --state opened
 # View issue details
 glab issue view 123
 
+# View or comment on an issue/work item from a GitLab URL
+glab issue view https://gitlab.com/group/project/-/work_items/123
+
+glab issue note https://gitlab.com/group/project/-/issues/123 -m "Working on this now"
+
 # Add comment
 glab issue note 123 -m "Working on this now"
 
@@ -27,6 +32,16 @@ glab issue close 123
 ```
 
 ## Common workflows
+
+### Issue and work item URL inputs
+
+Issue argument parsing accepts GitLab work item URLs in addition to issue URLs where the `glab issue` subcommand resolves an issue argument. This is URL compatibility for issue-style operations such as `view`, `note`, `update`, `close`, and related commands; use `glab work-items` when you need dedicated work item fields or work-item-specific lifecycle behavior.
+
+```bash
+glab issue view https://gitlab.com/group/project/-/work_items/123
+glab issue note https://gitlab.com/group/project/-/work_items/123 -m "Follow-up note"
+glab issue update https://gitlab.com/group/project/-/work_items/123 --label needs-triage
+```
 
 ### Bug reporting workflow
 
@@ -39,7 +54,7 @@ glab issue close 123
      --assignee @dev-lead
    ```
 
-   If your project keeps reusable issue templates in-repo, `glab` v1.93.0 adds `--template` so you can start from a template file instead of pasting recurring boilerplate:
+   If your project keeps reusable issue templates in-repo, use `--template` to start from a template file instead of pasting recurring boilerplate:
 
    ```bash
    glab issue create \
@@ -80,7 +95,8 @@ glab issue close 123
 
 **Batch labeling:**
 
-For applying labels to multiple issues at once:
+For applying labels to multiple issues at once, use the script bundled with this
+skill under `scripts/` (paths below are relative to the skill's own directory):
 ```bash
 scripts/batch-label-issues.sh "priority::high" 100 101 102
 scripts/batch-label-issues.sh bug 200 201 202 203
@@ -101,7 +117,12 @@ glab issue update 456 --milestone "Sprint 23"
 **Board view:**
 ```bash
 glab issue board view
+
+# Retrieve every project/group board issue instead of only the first API page
+glab issue board view --paginate
 ```
+
+Use `--paginate` for complete board triage when a board can exceed one API page. Without it, the interactive board uses the first page returned by GitLab. The option works for both project and group board issue retrieval and can be combined with `--assignee`, `--labels`, or `--milestone` filters.
 
 ### Linking issues to work
 

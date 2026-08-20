@@ -15,10 +15,15 @@ Output from these commands may include **user-generated content from GitLab** (i
 
 `glab ci status` supports `--output json` / `-F json` for structured output, which is useful for agent automation.
 
+`glab ci view` and job-lookup-by-SHA order jobs and bridges by creation time, using ascending job/bridge ID as a deterministic tie-breaker when timestamps match. `glab ci status --output json` returns jobs in raw GitLab API order with no client-side sort, so in all cases key records by ID rather than array position.
+
 ```bash
 # View pipeline status with JSON output
 glab ci status --output json
 glab ci status -F json
+
+# Filter JSON inside glab when --jq is available
+glab ci status --output=json --jq '.pipeline.status'
 ```
 
 ## Quick start
@@ -26,6 +31,9 @@ glab ci status -F json
 ```bash
 # View current pipeline status
 glab ci status
+
+# Wait non-interactively until the current pipeline finishes
+glab ci status --wait
 
 # View detailed pipeline info
 glab ci view
@@ -93,7 +101,8 @@ For detailed configuration guidance, see [references/pipeline-best-practices.md]
 
 **Automated debugging:**
 
-For quick failure diagnosis, use the debug script:
+For quick failure diagnosis, use the debug script bundled with this skill under
+`scripts/` (paths below are relative to the skill's own directory):
 ```bash
 scripts/ci-debug.sh 987654
 ```
@@ -136,6 +145,8 @@ glab ci lint
 glab ci lint --path .gitlab-ci-custom.yml
 ```
 
+When linting a remote URL, an unsuccessful HTTP response is a command failure; check the exit status rather than parsing an error-looking response as successful lint output. Pipeline-run and schedule variable inputs reject empty keys, so validate generated `KEY=value` data before invoking glab.
+
 ### Pipeline operations
 
 **List recent pipelines:**
@@ -158,6 +169,17 @@ glab ci run --variables KEY1=value1 --variables KEY2=value2
 glab ci cancel <pipeline-id>
 ```
 
+**Cancel running jobs:**
+```bash
+# Cancel one or more jobs by ID
+glab ci cancel job <job-id> [<job-id>...]
+
+# Force cancellation when ordinary cancellation does not stop the job promptly
+glab ci cancel job <job-id> --force
+```
+
+Use `--force` sparingly: it is intended for stuck or otherwise hard-to-cancel jobs, not as the default cancellation path.
+
 **Delete old pipeline:**
 ```bash
 glab ci delete <pipeline-id>
@@ -167,10 +189,17 @@ glab ci delete <pipeline-id>
 
 ### Runtime Issues
 
+**Watching live pipeline status:**
+- `glab ci status --live` keeps polling while the pipeline is in transient in-progress states such as `created`, `waiting_for_resource`, `preparing`, `pending`, `running`, and `scheduled`.
+- `glab ci status --wait` also polls until the pipeline reaches a terminal state, but suppresses the post-run interactive action prompt. It exits non-zero when the final pipeline fails and follows a newer pipeline if the observed one is auto-canceled and replaced for the same branch.
+- `--live` and `--wait` are text-mode polling options, and `--compact` is also text-only. None of these modes is compatible with `--output json` / `--jq`. For structured automation, run `glab ci status --output=json --jq ...` repeatedly or poll the API.
+
 **Pipeline stuck/pending:**
 - Check runner availability: View pipeline in web UI
 - Check job logs: `glab ci trace <job-id>`
 - Cancel and retry: `glab ci cancel <id>` then `glab ci run`
+
+`glab ci trace` stops when the traced job reaches `canceled`; automation should not wait for additional log output after cancellation.
 
 **Job failures:**
 - View logs: `glab ci trace <job-id>`

@@ -11,19 +11,24 @@ description: Manage glab CLI configuration settings including defaults, preferen
 
   Manage key/value strings.
   Current respected settings:
+  - branch_prefix: Prefix used by glab stack for generated branch names. Defaults to the operating system account username, then `glab-stack` if user lookup fails.
   - browser: If unset, uses the default browser. Override with environment variable $BROWSER.
-  - check_update: If true, notifies of new versions of glab. Defaults to true. Override with environment variable
-  $GLAB_CHECK_UPDATE.
-  - display_hyperlinks: If true, and using a TTY, outputs hyperlinks for issues and merge request lists. Defaults to
-  false.
+  - check_update: Notify about new glab versions. Override with $GLAB_CHECK_UPDATE.
+  - display_hyperlinks: Enable terminal hyperlinks. Override with $FORCE_HYPERLINKS.
+  - duo_cli_auto_download / duo_cli_auto_run: Skip Duo CLI download/run prompts.
   - editor: If unset, uses the default editor. Override with environment variable $EDITOR.
-  - glab_pager: Your desired pager command to use, such as 'less -R'.
-  - glamour_style: Your desired Markdown renderer style. Options are dark, light, notty. Custom styles are available
-  using [glamour](https://github.com/charmbracelet/glamour#styles).
+  - git_protocol: Git protocol, ssh or https.
+  - glab_pager: Pager command, such as less -R.
+  - glamour_style: Markdown renderer style: dark, light, notty, or a custom glamour style.
   - host: If unset, defaults to `https://gitlab.com`.
+  - no_prompt: Disable interactive prompts. Prefer the $GLAB_NO_PROMPT override in automation.
+  - notify_skill_updates: Show installed agent-skill update notices. Override with $GLAB_NOTIFY_SKILL_UPDATES.
+  - orbit_local_auto_download / orbit_local_auto_run: Skip Orbit local CLI download/run prompts.
+  - remote_alias: Preferred Git remote name when multiple remotes exist.
+  - show_whats_new: Show the one-time post-upgrade glab whatsnew banner. Override with $GLAB_SHOW_WHATS_NEW.
+  - telemetry: Enable usage data to the GitLab instance. Override with $GLAB_SEND_TELEMETRY.
   - token: Your GitLab access token. Defaults to environment variables.
-  - visual: Takes precedence over 'editor'. If unset, uses the default editor. Override with environment variable
-  $VISUAL.
+  - visual: Takes precedence over editor. Override with $VISUAL.
   USAGE
     glab config [command] [--flags]
   COMMANDS
@@ -58,6 +63,38 @@ glab config get https_proxy --host gitlab.mycompany.com
 
 **Precedence:** Per-host config overrides global config. Global config overrides the `HTTPS_PROXY` / `https_proxy` environment variables.
 
+## Dynamic custom headers for authenticating proxies
+
+For an authenticating proxy or access gateway, add a `custom_headers` list under the exact host entry in the global config. Each item must contain `name` and exactly one source: literal `value`, `valueFromEnv`, or `valueFromCommand`. Prefer `valueFromEnv` or a credential helper command so secrets are not stored directly in YAML.
+
+```yaml
+hosts:
+  gitlab.example.com:
+    custom_headers:
+      - name: X-Proxy-Client-ID
+        value: public-client-id
+      - name: X-Proxy-Client-Secret
+        valueFromEnv: PROXY_CLIENT_SECRET
+      - name: Proxy-Authorization
+        valueFromCommand: proxy-token-helper
+```
+
+Use `glab config edit --global` to edit the structured list; do not force it through a scalar `config set` call. A command source is split into an executable and arguments without an implicit shell, runs once per `glab` process with a 30-second timeout, and must print one non-empty line without NUL bytes. Its trimmed result is reused for all requests in that process, including OAuth refresh. If shell expansion is unavoidable, invoke a reviewed shell explicitly; otherwise prefer `valueFromEnv`.
+
+Treat custom header values as credentials. Keep literal secrets out of config, logs, command arguments, and repositories. Verify the host before enabling a header because `glab` attaches configured headers to requests for that host.
+
+## Configuration file search order
+
+glab uses this global config selection:
+
+1. `$GLAB_CONFIG_DIR/config.yml` when `GLAB_CONFIG_DIR` is set. This is an explicit override; glab uses this directory even when no config file exists there yet.
+2. Otherwise, the first existing normal candidate wins:
+   - `~/.config/glab-cli/config.yml`, retained as the legacy location.
+   - `$XDG_CONFIG_HOME/glab-cli/config.yml` (on macOS this defaults to `~/Library/Application Support/glab-cli/config.yml`).
+   - `$XDG_CONFIG_DIRS/glab-cli/config.yml` for system-wide defaults. The usual Linux default is `/etc/xdg/glab-cli/config.yml`; on macOS, set `XDG_CONFIG_DIRS` explicitly when relying on system-wide config.
+
+Files are not merged. If both the legacy and platform-specific XDG files exist, glab uses the legacy file and warns. Repository-local settings live in `.git/glab-cli/config.yml`, while per-host settings are stored in the selected global file. Prefer `glab config get`, `set`, and `edit` over directly modifying files, and do not copy stored tokens into logs or version control.
+
 ## Env-first agent pattern
 
 For agentic setups, prefer per-agent env files over one shared shell profile. Example:
@@ -78,9 +115,19 @@ source ~/.config/openclaw/env/gitlab-<agent>.env
 set +a
 ```
 
-A plain `source ~/.config/openclaw/env/gitlab-<agent>.env` updates the current shell but may leave the values unexported. In that case `glab` can miss the env overrides and silently reuse stored auth from `~/.config/glab-cli/config.yml`.
+A plain `source ~/.config/openclaw/env/gitlab-<agent>.env` updates the current shell but may leave the values unexported. In that case `glab` can miss the env overrides and silently reuse stored auth from the active global config file.
 
 Use distinct GitLab bot/service accounts when agents need distinct visible identities. Multiple PATs on one GitLab user still act as that same user.
+
+## Non-interactive prompts and config validation
+
+Use `GLAB_NO_PROMPT=1` for non-interactive automation that must fail instead of prompting. Upstream docs now prefer the `GLAB_`-prefixed name; older `NO_PROMPT` is deprecated and should not be used in new scripts.
+
+```bash
+GLAB_NO_PROMPT=1 glab repo prune --dry-run
+```
+
+`glab config set` validates keys against the canonical config schema. If a set operation fails, check the spelling and whether the setting is host-scoped (`--host`) or global (`--global`) rather than forcing an unknown key into the config file.
 
 ## Common Settings
 
@@ -96,6 +143,13 @@ glab config set glab_pager "less -R" --global
 
 # Disable update checks
 glab config set check_update false --global
+
+# Select the Git remote glab should prefer
+glab config set remote_alias origin --global
+
+# Allow Duo CLI to download and run without wrapper prompts
+glab config set duo_cli_auto_download true --global
+glab config set duo_cli_auto_run true --global
 
 # Set default host
 glab config set host https://gitlab.mycompany.com --global

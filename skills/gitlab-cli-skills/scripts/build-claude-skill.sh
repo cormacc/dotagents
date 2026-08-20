@@ -72,7 +72,7 @@ echo "Building merged SKILL.md from $REPO_ROOT..."
 cat >> "$MERGED" <<'FRONTMATTER'
 ---
 name: gitlab-cli-skills
-description: Comprehensive GitLab CLI (glab) command reference and workflows for all GitLab operations. Use when working with merge requests, CI/CD pipelines, issues, releases, repositories, authentication, variables, labels, milestones, snippets, or any glab command. Covers 37+ sub-commands including glab mr, glab ci, glab issue, glab repo, glab release, glab variable, and more.
+description: Comprehensive GitLab CLI (glab) command reference and workflows for all GitLab operations. Use when working with merge requests, CI/CD pipelines, issues, releases, repositories, authentication, variables, labels, milestones, snippets, or any glab command. Covers 40+ sub-commands including glab mr, glab ci, glab issue, glab repo, glab release, glab variable, and more.
 dependencies:
   - glab
 ---
@@ -92,7 +92,7 @@ repositories, and 30+ other glab commands.
 INTRO
 
 # 1. Top-level skill (overview + routing) — strip its frontmatter since we wrote our own
-TOP_LEVEL="$REPO_ROOT/SKILL.md"
+TOP_LEVEL="$REPO_ROOT/gitlab-cli-skills/SKILL.md"
 if [[ -f "$TOP_LEVEL" ]]; then
   echo "## Overview" >> "$MERGED"
   echo "" >> "$MERGED"
@@ -110,6 +110,7 @@ while IFS= read -r skill_file; do
 done < <(
   find "$REPO_ROOT" -mindepth 2 -maxdepth 2 -name "SKILL.md" \
     ! -path "$REPO_ROOT/scripts/*" \
+    ! -path "$REPO_ROOT/gitlab-cli-skills/*" \
     | sort
 )
 

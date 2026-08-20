@@ -50,3 +50,19 @@ Run the focused tests with:
 ```sh
 bb scripts/test-analyse-anthropic-cache-ttl.bb
 ```
+
+## Vendored gitlab-cli-skills sync
+
+Re-sync `skills/gitlab-cli-skills/` from upstream:
+
+```sh
+scripts/sync-gitlab-cli-skills.bb            # dry run: build a candidate and print the diff
+scripts/sync-gitlab-cli-skills.bb --apply    # replace the vendor tree
+scripts/sync-gitlab-cli-skills.bb --ref v2 --repo owner/name
+```
+
+Upstream ships a flat collection: a `gitlab-cli-skills/` router directory beside 47 standalone `glab-*/` directories at the repository root. `npx skills add` installs all of them as siblings, which puts every description into discovery. This repository nests them under the router instead, so the harness discovers one skill. The script reproduces that layout deterministically: it clones the requested ref into `.tmp/`, hoists the router directory's contents to the vendor root, copies the `glab-*/` directories in beside it, rewrites the router's `](../glab-` links to child-relative form, re-applies the local router `description`, and records the upstream commit in `skills/gitlab-cli-skills/.vendor.edn`.
+
+The dry run is the default because it builds the candidate under `.tmp/` and prints the added/removed skill list plus a `git diff --stat` against the current tree. `--apply` replaces the vendor tree only after that report.
+
+It aborts rather than guessing when upstream changes shape: a missing router `SKILL.md`, no root-level `glab-*` directories, a router link style that no longer needs rewriting, a remaining parent-relative link, or a router entry that collides with a root entry whose shared files are not byte-identical.

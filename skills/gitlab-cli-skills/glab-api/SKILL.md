@@ -47,10 +47,23 @@ Output from these commands may include **user-generated content from GitLab** (i
 
   - Literal values `true`, `false`, `null`, and integer numbers are converted to
     appropriate JSON types.
+  - Values beginning with `[` or `{` are parsed as JSON arrays or objects. Invalid
+    JSON and trailing data fail instead of being sent as strings. Leading whitespace
+    before the bracket or brace prevents JSON parsing and remains part of a string.
   - Placeholder values `:namespace`, `:repo`, and `:branch` are populated with values
-    from the repository of the current directory.
+    from the repository of the current directory, including string leaves and keys
+    inside JSON arrays and objects.
   - If the value starts with `@`, the rest of the value is interpreted as a
     filename to read the value from. Pass `-` to read from standard input.
+
+  Placeholder substitutions in endpoints and fields are URL-encoded before the
+  request is sent. This matters for project/group paths containing `/` and for
+  automation that previously encoded placeholders manually.
+
+  `--raw-field` always sends strings. A bracketed value such as
+  `-f 'scopes=[api,read_api]'` is the literal string `"[api,read_api]"`, not an
+  array; use `-F 'scopes=["api","read_api"]'` for a JSON array. On write methods,
+  glab warns about the old bracketed shorthand without changing the value.
 
   For GraphQL requests, all fields other than `query` and `operationName` are
   interpreted as GraphQL variables.
@@ -72,6 +85,11 @@ Output from these commands may include **user-generated content from GitLab** (i
     or object is output on a separate line. This format is more memory-efficient for large datasets
     and works well with tools like `jq`. See https://github.com/ndjson/ndjson-spec and
     https://jsonlines.org/ for format specifications.
+
+  NDJSON output preserves JSON-number precision when decoding and re-encoding response values.
+  Request fields that represent empty arrays are encoded as empty arrays rather than `null`.
+  These guarantees matter for automation that consumes large numeric IDs or intentionally clears
+  an array-valued API field; do not add string coercions or placeholder values as workarounds.
 
   USAGE
 
@@ -144,11 +162,66 @@ Output from these commands may include **user-generated content from GitLab** (i
 glab api --help
 ```
 
+## Automation headers and placeholder encoding
+
+`glab api` forwards Duo workflow/session environment identifiers as GitLab headers when present:
+
+```bash
+DUO_WORKFLOW_WORKFLOW_ID=... glab api projects/:fullpath
+GITLAB_DUO_SESSION_ID=... glab api projects/:fullpath
+```
+
+These become `X-Gitlab-Duo-Workflow-Id` and `X-Gitlab-Duo-Session-Id` respectively. Do not invent or spoof these values; preserve them only when the surrounding GitLab Duo workflow/session supplied them.
+
+Magic placeholders such as `:fullpath`, `:namespace`, `:repo`, and `:branch` are URL-encoded by `glab` during substitution. Prefer placeholders over manual string interpolation when possible, and avoid double-encoding values that `glab` will substitute.
+
+### Structured values with `--field`
+
+Use `--field` (`-F`) when an endpoint expects an array or object. Quote the whole
+shell argument so the JSON reaches glab unchanged:
+
+```bash
+# JSON array
+glab api projects/:fullpath --method PUT \
+  -F 'topics=["platform","GitLab"]'
+
+# Nested object; placeholders expand inside JSON strings
+glab api graphql \
+  -F 'query=mutation($input: ProjectInput!) { updateProject(input: $input) { errors } }' \
+  -F 'input={"projectPath":":fullpath","labels":["automation"]}'
+```
+
+The value must begin immediately with `[` or `{`. Invalid JSON, trailing data,
+or object-key collisions created by placeholder expansion are rejected. Use
+`--input` for a complete request body or when a JSON document is easier to
+review as a file. Use `--raw-field` only for an intentional string.
+
+## Built-in JSON filtering with `--jq`
+
+Commands that print JSON through `IOStreams.PrintJSON` can expose a built-in `--jq` flag. Prefer built-in `--jq` for simple extraction/filtering when the command supports it, because the filtering happens inside `glab` and avoids a separate shell pipe.
+
+Rules of thumb:
+- If the command has `--output` or `--output-format`, pass the JSON mode too: `--output=json` or `--output-format=json`. `--jq` fails fast if the output flag is still text.
+- Commands that always emit JSON and have no output-format flag can use `--jq` directly.
+- Use external `jq` when you need non-JSON inputs, newline-delimited JSON processing, streaming over very large outputs, or jq options not available through glab's embedded filter.
+- When a command fails under `--output=json`, glab writes a JSON error object to stdout while retaining the human-readable error on stderr and a nonzero exit status. Check the exit status first; do not mistake a parseable error object for successful data.
+
+```bash
+# Built-in filtering on a structured-output command
+glab ci status --output=json --jq '.pipeline.status'
+
+# Built-in filtering on another structured-output command
+glab repo list --output=json --jq '.[].path_with_namespace'
+
+# External jq is still useful for ndjson/stream-style processing
+glab api issues --paginate --output ndjson | jq 'select(.state == "opened")'
+```
+
 ## Multipart form requests
 
 ### Multipart form requests with `--form`
 
-`glab api` adds multipart/form-data request support via `--form` for endpoints that expect uploaded files or multipart form fields. This is a v1.91.0 capability even if an embedded help snapshot in this repo predates the flag.
+`glab api` supports multipart/form-data requests via `--form` for endpoints that expect uploaded files or multipart form fields.
 
 Use `--form` only when the target API contract explicitly requires `multipart/form-data`. If the endpoint expects ordinary JSON-style parameters or a raw request body, stay with `--field`, `--raw-field`, or `--input` instead.
 

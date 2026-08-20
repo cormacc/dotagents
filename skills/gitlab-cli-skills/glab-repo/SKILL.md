@@ -13,6 +13,9 @@ Work with GitLab repositories and projects.
 # Clone a repository
 glab repo clone group/project
 
+# Clone the project's wiki repository
+glab repo clone --wiki group/project
+
 # Create new repository
 glab repo create my-new-project --public
 
@@ -21,6 +24,13 @@ glab repo fork upstream/project
 
 # View repository details
 glab repo view
+
+# Add a Git remote from a GitLab project reference
+glab repo remote add group/project --name upstream
+
+# Prune local branches whose MRs have been merged
+glab repo prune --dry-run
+glab repo prune --yes
 
 # Search for repositories
 glab repo search "keyword"
@@ -35,13 +45,30 @@ glab repo search "keyword"
    glab repo create my-project \
      --public \
      --description "My awesome project"
+
+   # Create with README
+   glab repo create my-project \
+     --public \
+     --readme
    ```
 
-2. **Clone locally:**
+   **Note:** `glab repo create --readme` clones the newly created repository instead of using `git init`, ensuring a clean local copy with the initial README.
+
+   A path containing nested groups preserves the complete namespace. For example, `glab repo create group/subgroup/my-project` creates `my-project` under `group/subgroup`, not only the final subgroup.
+
+2. **Clone locally (if not using --readme):**
    ```bash
    glab repo clone my-username/my-project
    cd my-project
    ```
+
+   To clone only the GitLab wiki, pass `--wiki` with one project reference. It cannot be combined with group-wide `--group` cloning, and it fails clearly when the project's wiki is disabled.
+
+   ```bash
+   glab repo clone --wiki group/project
+   ```
+
+   SSH configurations that map `gitlab.com` to the official `altssh.gitlab.com` endpoint are recognized as GitLab.com rather than as a separate self-managed host.
 
 3. **Initialize with content:**
    ```bash
@@ -66,7 +93,15 @@ glab repo search "keyword"
 
 3. **Add upstream remote:**
    ```bash
-   git remote add upstream https://gitlab.com/upstream-group/project.git
+   glab repo remote add upstream-group/project --name upstream
+   ```
+
+   `glab repo remote add <namespace/project>` resolves a GitLab project reference and adds the appropriate Git remote URL. The default remote name is the first path component (`upstream-group` in the example); override it with `--name` / `-n`. Use `--protocol ssh|https` / `-p` to override the `git_protocol` config.
+
+   ```bash
+   glab repo remote add alice/my-project
+   glab repo remote add alice/my-project --name upstream
+   glab repo remote add group/subgroup/my-project --protocol ssh
    ```
 
 4. **Keep fork in sync:**
@@ -77,7 +112,8 @@ glab repo search "keyword"
 
 **Automated sync:**
 
-Use the sync script for one-command fork updates:
+Use the sync script bundled with this skill under `scripts/` for one-command
+fork updates (paths below are relative to the skill's own directory):
 ```bash
 scripts/sync-fork.sh main
 scripts/sync-fork.sh develop upstream
@@ -116,6 +152,29 @@ glab repo transfer my-project --target-namespace new-group
 ```bash
 glab repo delete group/project
 ```
+
+### Local branch pruning
+
+`glab repo prune` deletes **local** Git branches whose GitLab merge requests have been merged. It never deletes remote branches on GitLab, and it skips protected branches, the default branch, and the branch currently checked out.
+
+```bash
+# Preview branches that would be deleted
+glab repo prune --dry-run
+
+# Delete branches after confirmation
+glab repo prune
+
+# Delete without confirmation after reviewing the dry run
+glab repo prune --yes
+
+# Exclude additional branches by exact name or glob; comma-separate or repeat
+glab repo prune --exclude wip-*,demo-branch
+
+# Faster local-Git detection; misses squash/rebase merges that are not fast-forward ancestry
+glab repo prune --merged
+```
+
+Prefer the default GitLab-backed mode for correctness: it queries merge requests for each local branch and handles squash/rebase merge cases better than plain `git branch --merged`. Use `--merged` only when the faster fast-forward-only check is acceptable.
 
 ### Member management
 
@@ -224,4 +283,6 @@ For complete command documentation and all flags, see [references/commands.md](r
 - `contributors` - List contributors
 - `members` - Manage project members
 - `mirror` - Configure repository mirroring
+- `remote` - Manage Git remotes using GitLab project references
+- `prune` - Delete local branches whose GitLab merge requests are merged
 - `publish` - Publish project resources

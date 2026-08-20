@@ -1,6 +1,6 @@
 ---
 name: glab-securefile
-description: "Manage GitLab CI/CD secure files with glab. Use only when GitLab/glab context is explicit: upload, download, list, or delete pipeline secure files."
+description: Manage secure files for CI/CD including upload, update, download, list, and delete operations. Use when storing or replacing sensitive files for pipelines, managing certificates, or handling secure configuration files. Triggers on secure file, CI secrets, certificates, overwrite secure file, secure config.
 ---
 
 # glab securefile
@@ -21,11 +21,12 @@ description: "Manage GitLab CI/CD secure files with glab. Use only when GitLab/g
             
   COMMANDS  
             
-    create <fileName> <inputFilePath>  Create a new project secure file.
-    download <fileID> [--flags]        Download a secure file for a project.
-    get <fileID>                       Get details of a project secure file. (GitLab 18.0 and later)
-    list [--flags]                     List secure files for a project.
-    remove <fileID> [--flags]          Remove a secure file.
+    create <name> <path>                                   Upload a new secure file to a project.
+    download [<id> | --id <id> | --name <name>] [--flags]  Download one or more secure files from a project.
+    get <id> [--flags]                                     Get details of a secure file by ID.
+    list [--flags]                                         List secure files in a project.
+    remove [<id> | --id <id> | --name <name>] [--flags]    Remove a secure file from a project.
+    update <name> <path> [--flags]                         Update a secure file in a project.
          
   FLAGS  
          
@@ -38,6 +39,58 @@ description: "Manage GitLab CI/CD secure files with glab. Use only when GitLab/g
 ```bash
 glab securefile --help
 ```
+
+`glab securefile get` requires GitLab 18.0 or later. On older GitLab instances, list or download by ID/name instead of expecting the details endpoint to work.
+
+## Downloading secure files
+
+Use `--all` to download every secure file across all API pages; it is not limited to the first 100 results. Keep checksum verification enabled unless the user explicitly accepts the risk of `--no-verify` or `--force-download`.
+
+```bash
+# Download every secure file to a controlled directory
+glab securefile download --all --output-dir ./secure-files -R group/project
+
+# Download one file to an absolute path; glab creates missing parents
+glab securefile download 1 --path /tmp/secure/file.txt -R group/project
+
+# Download all files to an absolute directory
+glab securefile download --all --output-dir /tmp/secure-files -R group/project
+```
+
+Treat the destination as sensitive, keep it outside version control, and verify the target project before downloading. Absolute `--path` and `--output-dir` destinations are supported. For `--all`, glab rejects server-provided names that could escape the selected output directory.
+
+## Removing secure files
+
+Secure-file deletion accepts a positional numeric ID, `--id`, or an exact file name via `--name`:
+
+```bash
+# Interactive confirmation
+glab securefile remove 1
+glab securefile remove --id 1
+glab securefile remove --name signing-certificate.p12
+
+# Approved non-interactive deletion
+glab securefile remove --name signing-certificate.p12 --yes
+```
+
+Deletion is permanent. In non-interactive environments, `--yes` / `-y` is required. Resolve and verify the intended project with `-R/--repo` before deleting, and prefer an ID when duplicate or ambiguous naming is possible.
+
+Choose exactly one selector for removal: a positional ID, `--id`, or `--name`. Combining selectors is a hard error, so resolve the intended file first and pass only the one selector you want to use.
+
+## Updating secure files
+
+Update a secure file by its exact stored name and a local replacement path. The command asks for confirmation unless `--yes` / `-y` is set; `overwrite` is an alias.
+
+```bash
+# Interactive update
+glab securefile update signing-certificate.p12 ./replacement.p12
+
+# Approved non-interactive update in an explicit project
+glab securefile update signing-certificate.p12 ./replacement.p12 \
+  -R group/project --yes
+```
+
+No update occurs when the content is unchanged. A successful update changes the secure file's ID, so subsequent workflows should resolve/download it by `--name` or refresh the ID instead of reusing a stale ID. Confirm the target project, file name, and replacement path before bypassing the prompt.
 
 ## Subcommands
 

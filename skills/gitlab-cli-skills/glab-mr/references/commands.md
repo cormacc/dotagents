@@ -174,7 +174,15 @@
 
 ```
 
-  Create a new merge request.
+  Defaults to the current branch as the source branch. Use `--fill`
+  to automatically fill the title and description from the commit history. Use
+  `--draft` to create a draft merge request.
+
+  The `--recover` flag is an experiment: it might be unstable or
+  removed at any time, and is not ready for production use. For more
+  information, see
+  https://docs.gitlab.com/policy/development_stages_support/.
+
 
   USAGE
 
@@ -182,15 +190,34 @@
 
   EXAMPLES
 
-    $ glab mr new
-    $ glab mr create -a username -t "fix annoying bug"
-    $ glab mr create -f --draft --label RFC
-    $ glab mr create --fill --web
-    $ glab mr create --fill --fill-commit-body --yes
+    # Create a merge request interactively from the current branch
+    glab mr new
+
+    # Assign a user and set a title without prompting for description
+    glab mr create -a username -t "fix annoying bug"
+
+    # Fill title and description from commits, mark as draft, add a label
+    glab mr create -f --draft --label RFC
+
+    # Fill from commits and preview the compare page in the browser
+    glab mr create --fill --web
+
+    # Fill from commits, expand each commit body into the description
+    glab mr create --fill --fill-commit-body --yes
+
+    # Use a merge request template for the description
+    glab mr create -t "Fix login bug" --template bug_fix
+    glab mr create -t "Security patch" --template security_fix.md --yes
+
+    # Create against another project without a local clone. All inputs must be passed as flags; no --push, --fill, …
+    glab mr create --repo group/project --source-branch feature-branch --target-branch main --title "Add feature" -…
+
+    # Create a fork merge request from your fork into the upstream project, without a local clone.
+    glab mr create --repo upstream/project --head your-namespace/project --source-branch feature-branch --target-br…
 
   FLAGS
 
-    --allow-collaboration   Allow commits from other members.
+    --allow-collaboration   Allow commits from other members. Set to true/false to override project defaults, or omit to use project settings.
     -a --assignee           Assign merge request to people by their `usernames`. Multiple usernames can be comma-separated or specified by repeating the flag.
     --auto-merge            Set the merge request to merge when all merge checks pass.
     --copy-issue-labels     Copy labels from issue to the merge request. Used with --related-issue.
@@ -207,17 +234,19 @@
     --push                  Push committed changes after creating merge request. Make sure you have committed changes.
     --recover               Save the options to a file if the merge request creation fails. If the file exists, the options are loaded from the recovery file. (EXPERIMENTAL)
     -i --related-issue      Create a merge request for an issue. If --title is not provided, uses the issue title.
-    --remove-source-branch  Remove source branch on merge.
-    -R --repo               Select another repository. Can use either `OWNER/REPO` or `GROUP/NAMESPACE/REPO` format. Also accepts full URL or Git URL.
+    --remove-source-branch  Remove source branch on merge. Set to true/false to override project defaults, or omit to use project settings.
+    -R --repo               Select another repository. You can use either OWNER/REPO or GROUP/NAMESPACE/REPO. The full URL or Git URL is also accepted.
     --reviewer              Request review from users by their `usernames`. Multiple usernames can be comma-separated or specified by repeating the flag.
     --signoff               Append a DCO signoff to the merge request description.
     -s --source-branch      Create a merge request from this branch. Default is the current branch.
-    --squash-before-merge   Squash commits into a single commit when merging.
+    --squash-before-merge   Squash commits into a single commit when merging. Set to true/false to override project defaults, or omit to use project settings.
     -b --target-branch      The target or base branch into which you want your code merged into.
+    --template              Name of a template in '.gitlab/merge_request_templates/' to pre-populate the description. The '.md' extension is optional. Templates are loaded from the local repository only.
     -t --title              Supply a title for the merge request.
     -w --web                Continue merge request creation in a browser.
     --wip                   Mark merge request as a draft. Alternative to --draft.
     -y --yes                Skip submission confirmation prompt. Use --fill to skip all optional prompts.
+
 ```
 
 ## mr delete
@@ -466,6 +495,52 @@ Command "for" is deprecated, use `glab mr create --related-issue <issueID>`
     --unique                                    Don't create a comment or note if it already exists.
 ```
 
+## mr note list
+
+```
+Fetches and displays merge request discussions.
+Human-readable output shows an eight-character prefix for each non-system
+discussion. Use the characters before the ellipsis with
+`glab mr note create --reply`. JSON output preserves the full discussion ID in
+the `id` field of each discussion object. Extract it with:
+`glab mr note list -F json | jq -r '.[].id'`.
+Supports filtering by note type, resolution state, and file path.
+Supports JSON output for scripting.
+
+USAGE
+  glab mr note list [<id> | <branch>] [flags]
+
+EXAMPLES
+  # List all discussions on the current branch's MR
+  glab mr note list
+
+  # List diff comments only
+  glab mr note list --type diff
+
+  # List unresolved discussions
+  glab mr note list --state unresolved
+
+  # List discussions on a specific file
+  glab mr note list --file src/main.go
+
+  # JSON output for scripting
+  glab mr note list -F json | jq '.[].notes[].body'
+
+  # List discussions on MR 123
+  glab mr note list 123
+
+FLAGS
+      --file string    Show only diff notes on this file path.
+  -F, --output string  Format output as: text, json. (default "text")
+      --jq string      Filter JSON output with a jq expression.
+      --state string   Resolution state: all, resolved, unresolved. (default "all")
+  -t, --type string    Note type: all, general, diff, system. (default "all")
+
+INHERITED FLAGS
+  -h, --help           Show help for this command.
+  -R, --repo string    Select another repository. OWNER/REPO, GROUP/NAMESPACE/REPO, full URL, and Git URL are accepted.
+```
+
 ## mr rebase
 
 ```
@@ -670,23 +745,36 @@ Command "for" is deprecated, use `glab mr create --related-issue <issueID>`
 
 ## mr view
 
-```
+> Captured from the checksum-verified glab v1.114.0 macOS arm64 release binary, with only terminal padding and trailing whitespace removed.
 
-  Display the title, body, and other information about a merge request.
+```text
+
+  You can use a branch name or ID. Use `--web` to open in a browser.
+
 
   USAGE
 
-    glab mr view {<id> | <branch>} [--flags]
+    glab mr view [<id | branch>] [--flags]
+
+  EXAMPLES
+
+    glab mr view 123
+    glab mr view branch-name
+    glab mr view 123 --comments
+    glab mr view 123 --web
 
   FLAGS
 
     -c --comments     Show merge request comments and activities.
     -h --help         Show help for this command.
+    --jq              Filter JSON output with a jq expression.
     -F --output       Format output as: text, json. (text)
     -p --page         Page number.
     -P --per-page     Number of items to list per page. (20)
-    -R --repo         Select another repository. Can use either `OWNER/REPO` or `GROUP/NAMESPACE/REPO` format. Also accepts full URL or Git URL.
+    -R --repo         Select another repository. You can use either OWNER/REPO or GROUP/NAMESPACE/REPO. The full URL or Git URL is also accepted.
+    --resolved        Show only resolved discussions (implies --comments).
     -s --system-logs  Show system activities and logs.
+    --unresolved      Show only unresolved discussions (implies --comments).
     -w --web          Open merge request in a browser. Uses default browser or browser specified in BROWSER variable.
 ```
 

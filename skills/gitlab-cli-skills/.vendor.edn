@@ -1,0 +1,7 @@
+{:source "https://github.com/vince-winkintel/gitlab-cli-skills",
+ :ref "main",
+ :commit "70626ac9b97902ab3ed1df91c5fa995cddddac49",
+ :synced "2026-08-20",
+ :layout :nested-router,
+ :local-overrides [:router-description],
+ :sync-command "scripts/sync-gitlab-cli-skills.bb --apply"}

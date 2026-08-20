@@ -29,6 +29,7 @@
     amend [--flags]      Save more changes to a stacked diff. (EXPERIMENTAL)
     create               Create a new stacked diff. (EXPERIMENTAL)
     first                Moves to the first diff in the stack. (EXPERIMENTAL)
+    infer <revision-range>  Add layers to a stack based on a range of commits. (EXPERIMENTAL)
     last                 Moves to the last diff in the stack. (EXPERIMENTAL)
     list                 Lists all entries in the stack. (EXPERIMENTAL)
     move                 Moves to any selected entry in the stack. (EXPERIMENTAL)
@@ -64,15 +65,25 @@
             
   EXAMPLES  
             
-    $ glab stack amend modifiedfile                     
-    $ glab stack amend . -m "fixed a function"          
-    $ glab stack amend newfile -d "forgot to add this"  
+    # Amend diff with currently staged changes
+    $ glab stack amend -m "Fix a function"
+    # Add specified file to staged changes and amend diff
+    $ glab stack amend newfile -m "forgot to add this"
+    # Add all tracked files to staged changes and amend diff
+    $ glab stack amend -a -m "fixed a function in exisiting file"
+    # Add all tracked and untracked files to staged changes and amend diff
+    $ glab stack amend . -m "refactored file into new files"
+    # Reword the commit message without adding any files
+    $ glab stack amend --reword -m "updated commit message"
          
   FLAGS  
          
+    -a --all          Automatically stage modified and deleted tracked files.
     -d --description  A description of the change
     -h --help         Show help for this command.
     -m --message      Alias for the description flag
+       --no-verify    Bypass the pre-commit and commit-msg hooks of git-commit(1).
+       --reword       Only update the commit message without staging any files.
     -R --repo         Select another repository. Can use either `OWNER/REPO` or `GROUP/NAMESPACE/REPO` format. Also accepts full URL or Git URL.
 ```
 
@@ -129,6 +140,44 @@
          
     -h --help  Show help for this command.
     -R --repo  Select another repository. Can use either `OWNER/REPO` or `GROUP/NAMESPACE/REPO` format. Also accepts full URL or Git URL.
+```
+
+## stack infer
+
+```
+
+  Add layers to a stack based on a range of commits.
+  This will append layers to an existing stack, or create a new one if needed.
+
+  This feature is experimental. It might be broken or removed without any prior notice.
+  Read more about what experimental features mean at
+  https://docs.gitlab.com/policy/development_stages_support/
+
+  Use experimental features at your own risk.
+
+  USAGE
+
+    glab stack infer <revision-range> [--flags]
+
+  EXAMPLES
+
+    # Commit range syntax is similar to "git rev-list".
+    # The start of the range must be a branch name (not a relative ref like HEAD~5).
+
+    ## Infer stack from commits between main and current branch
+    $ glab stack infer main..HEAD
+
+    ## Infer stack from commits on a feature branch since it diverged from develop
+    $ glab stack infer develop..HEAD
+
+    ## Create a new stack with a specific name
+    $ glab stack infer --name feature-stack main..HEAD
+
+  FLAGS
+
+    -h --help      Show help for this command.
+    -n --name      Name for the new stack (used when creating a stack)
+    -R --repo      Select another repository. Can use either `OWNER/REPO` or `GROUP/NAMESPACE/REPO` format. Also accepts full URL or Git URL.
 ```
 
 ## stack last
@@ -320,6 +369,7 @@
     -d --description  Description of the change.
     -h --help         Show help for this command.
     -m --message      Alias for the description flag.
+       --no-verify    Bypass the pre-commit and commit-msg hooks of git-commit(1).
     -R --repo         Select another repository. Can use either `OWNER/REPO` or `GROUP/NAMESPACE/REPO` format. Also accepts full URL or Git URL.
 ```
 
@@ -328,7 +378,7 @@
 ```
 
   Switch between stacks to work on another stack created with "glab stack create".                                      
-  To see the list of all stacks, check the `.git/stacked/` directory.                                                   
+  When stack-name is omitted, choose from the list of all stacks.                                                       
                                                                                                                         
   This feature is experimental. It might be broken or removed without any prior notice.                                 
   Read more about what experimental features mean at                                                                    
@@ -339,10 +389,11 @@
          
   USAGE  
          
-    glab stack switch <stack-name> [--flags]  
+    glab stack switch [stack-name] [--flags]  
             
   EXAMPLES  
             
+    $ glab stack switch                       
     $ glab stack switch <stack-name>          
          
   FLAGS  

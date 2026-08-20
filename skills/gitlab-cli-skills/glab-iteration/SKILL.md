@@ -1,16 +1,36 @@
 ---
 name: glab-iteration
-description: List GitLab project iterations with glab. Use only for explicit GitLab/glab iteration or sprint-list requests; the installed command does not create or assign iterations.
+description: Manage GitLab iterations for project planning and sprint management. Use when creating iterations, assigning issues to sprints, or viewing iteration progress. Triggers on iteration, sprint, iteration planning, sprint planning.
 ---
 
 # glab iteration
 
-The verified installed surface is read-only:
+## Overview
+
+```
+
+  Retrieve iteration information.                                                                                       
+         
+  USAGE  
+         
+    glab iteration <command> [command] [--flags]  
+            
+  COMMANDS  
+            
+    list [--flags]  List project iterations
+         
+  FLAGS  
+         
+    -h --help       Show help for this command.
+    -R --repo       Select another repository. Can use either `OWNER/REPO` or `GROUP/NAMESPACE/REPO` format. Also accepts full URL or Git URL.
+```
+
+## Quick start
 
 ```bash
-glab iteration list
-glab iteration list --repo GROUP/PROJECT
 glab iteration --help
 ```
 
-Do not claim `glab iteration create`, edit, assignment, or progress-management commands. For mutations, inspect the GitLab API and route through [`../glab-api/SKILL.md`](../glab-api/SKILL.md).
+## Subcommands
+
+See [references/commands.md](references/commands.md) for full `--help` output.

@@ -1,8 +1,93 @@
-1.13.4
+1.13.24
 
 Release/version change metadata for this skill set lives here, not in individual skill files.
 
 Historical notes consolidated from skill docs:
+- v1.13.24
+  - glab v1.114.0 refresh: added experimental `artifact-registry login --docker` guidance and checksum-verified help, including stored-token requirements, Docker config targeting, registry classification, helper conflicts, and fresh per-request token exchange.
+  - Updated Duo CLI guidance and complete help for interactive and headless `run --goal` modes, wrapper versus installed-binary help, prerequisites, and bounded-agent safety.
+  - Documented dynamic per-host proxy headers from literals, environment variables, or bounded helper commands; source/target branch rendering in `mr view`; and corrected masked/hidden group-variable writes.
+  - Re-captured all affected artifact-registry, Duo, and MR-view help surfaces from the verified binary. Terminal padding was removed, and the renderer's `Gitlab` typo was deliberately normalized to canonical `GitLab` in three Artifact Registry flag descriptions.
+- v1.13.23
+  - Corrected `glab runner list` instance-scope guidance to use the supported `--instance` flag instead of the invalid `--all` flag.
+  - Thanks [@cormacc](https://github.com/cormacc) for identifying and fixing the runner-list command and reference in [PR #83](https://github.com/vince-winkintel/gitlab-cli-skills/pull/83).
+- v1.13.22
+  - glab v1.113.0 refresh: added standalone guidance and checksum-verified help for experimental `glab artifact-registry get-token` and `status`, including token-output handling, duration limits, GitLab EE 19.1 prerequisites, and token-exchange feature-flag requirements.
+  - Updated `glab api --field` guidance for JSON arrays/objects, nested placeholder expansion, invalid/trailing JSON failures, and the corrected literal behavior of bracketed `--raw-field` values.
+  - Documented flag-complete `glab mr create` outside a local Git checkout, the OAuth-environment-token scheme hint, and non-destructive Docker credential-helper registration behavior.
+  - Reviewed OAuth refresh contention, CI rendering, argument-count, and issue/MR behavior fixes; no additional command surface changes were required.
+- v1.13.21
+  - Added standalone guidance and captured help for the beta `glab dependency-firewall` / `glab df` command group, including npm registry configuration, current-working-directory behavior, and CI summary exit codes.
+  - Updated authentication troubleshooting for environment-token precedence warnings and wrapper detection with `type glab`.
+  - Documented that default MR note-list text output includes system notes, and reviewed the MR-close pipeline-status fix and issue-board fetch performance change as behavior fixes requiring no command changes.
+  - Re-captured the new Dependency Firewall and affected auth/MR help from the checksum-verified release binary.
+- v1.13.20
+  - glab v1.111.0 refresh: documented OS-keyring-by-default authentication and `--insecure-storage`, issue-board pagination, wiki cloning, non-interactive title-only MR creation, and discussion-prefix reply targeting.
+  - Documented absolute package/secure-file download destinations, deterministic JSON error objects, nested namespace preservation during project creation, stack username/hook-output behavior, and deterministic CI view/job-lookup tie-breaking on timestamp ties.
+  - Re-captured the affected auth, config, issue-board, repository, package, secure-file, and MR note help from the checksum-verified v1.111.0 release binary.
+- v1.13.19
+  - glab v1.110.0 refresh: documented reliable all-page secure-file downloads, non-interactive auth protocol persistence, and API/CI automation correctness fixes.
+  - Corrected captured help for alias positional placeholders, secure-file pagination, and the group-variable update example; re-synchronized the parent release, repository, and SSH-key command tables with official v1.110.0 help.
+  - Recorded current selector validation for secure-file removal and schedule variable key validation.
+  - Reviewed the internal dependency-firewall proxy/classifier feature; it does not expose a `glab df` command in the v1.110.0 release binary, so no standalone command skill was added.
+- v1.13.18
+  - glab v1.109.0 refresh: added `glab variable import` coverage for restoring project/group variables from export-shaped JSON, including existing-variable and hidden-value caveats.
+  - Added `glab securefile update` / `overwrite` coverage, including confirmation, unchanged-content behavior, and the post-update ID change.
+  - Documented XDG-aware config search precedence and release creation from GitLab CI with `CI_JOB_TOKEN` auto-login versus project/group access tokens.
+  - Reviewed the unauthenticated `glab api` header fix, dependency-firewall foundations, and generated-doc pruning; no additional operational skill changes were needed.
+- v1.13.17
+  - glab v1.108.0 refresh: documented `glab ci status --wait` for non-interactive pipeline completion waits, including the JSON-output incompatibility shared by the polling/compact text modes.
+  - Updated `glab-securefile` for deletion by exact file name via `--name`, with explicit confirmation and non-interactive `--yes` safety guidance.
+  - Updated `glab-mr` for note/discussion IDs and absolute-plus-relative timestamps in `glab mr note list`, including filters and JSON output for stable automation identifiers.
+  - Updated `glab-duo` for the GA Duo CLI path, current prerequisites, auto-run/download settings, and `--update`; refreshed `glab-config` with the complete documented global setting set.
+  - Documented that interactive re-authentication preserves saved API host, SSH host, and container-registry domains unless explicitly overridden. Reviewed issue/MR rendering fixes and experimental security synopsis changes; no additional operational skill changes were needed for those fixes.
+- v1.13.16
+  - glab v1.107.0 refresh: added `glab-security` coverage for experimental `glab security config enable|disable|status <profile>` project security scan profile management, including Maintainer/Owner and explicit `-R/--repo` safety guidance. Reviewed Duo CLI v9 auto-update release note; existing `glab-duo` forward guidance remains current and no content change was needed there.
+- v1.13.15
+  - glab v1.106.0 refresh: updated `glab-packages` for the new `glab packages download` / `dl` and `glab packages delete` / `rm` commands, including checksum verification/overwrite behavior and deletion-by-ID safety guidance. Updated `glab-stack` for `glab stack amend --reword` message-only amendments.
+- v1.13.14
+  - glab v1.105.0 refresh: updated `glab-orbit` for the Orbit remote flag rename from `--format` to `--response-format` on `query` and `graph-status`, and documented the `graph-status --jq` option. Also noted that deprecation warnings now route to stderr, which does not require skill content changes beyond keeping stdout examples parse-safe.
+- v1.13.13
+  - glab v1.104.0 refresh: updated `glab-packages` for the new `glab packages upload` / `ul` command, including required `--name` and `--version`, optional `--filename`, and `-R/--repo` targeting.
+- v1.13.12
+  - Packaging/distribution fix: moved the top-level orchestrator skill into `gitlab-cli-skills/SKILL.md` so `npx skills add` discovers the orchestrator plus all standalone `glab-*` sub-skills instead of stopping at a root `SKILL.md`.
+  - Added relative links from the orchestrator to each sub-skill and bundled referenced helper scripts inside their consuming skill directories so selective installs keep documented `scripts/...` workflows usable.
+  - Updated the Claude.ai build script for the new orchestrator location while preserving the merged single-skill zip artifact.
+- v1.13.11
+  - glab v1.103.0 refresh: added `glab-container-registry` coverage for repository/tag list, view, delete, and bulk tag cleanup; added `glab-packages` coverage for package registry listing/filtering; updated `glab-stack` for interactive `switch` and `--no-verify` on `amend`/`save`.
+- v1.13.10
+  - Corrective release version for ClawHub publication because ClawHub already had an immutable stale `1.13.9` entry before the GitHub v1.13.9 release was published.
+  - Skill content remains the glab v1.102.0 refresh below.
+- glab v1.102.0
+  - `glab-repo`: added `glab repo prune` coverage for deleting local branches whose merge requests are merged, including `--dry-run`, `--yes`, `--exclude`, and `--merged` caveats.
+  - `glab-whatsnew`: added new skill coverage for `glab whatsnew` release-note discovery and post-upgrade review workflows.
+  - `glab-skills`: documented `list` and `update` subcommands plus installed-skill update notifications.
+  - `glab-api`: documented Duo workflow/session environment headers and URL-encoded magic placeholder substitutions.
+  - `glab-config`: documented canonical `config set` validation and `GLAB_NO_PROMPT` replacing deprecated `NO_PROMPT`.
+- glab v1.101.0
+  - `glab-ci`: documented `glab ci cancel job --force` for forced job cancellation.
+  - `glab-mr`: documented `glab mr note create --resolvable=false` for non-blocking automation/status notes.
+  - `glab-orbit`: added `glab orbit setup` guided onboarding coverage and noted current `orbit local` support.
+  - `glab-stack`: documented `glab stack sync --skip-mr-creation`.
+- glab v1.100.0
+  - `glab-stack`: added experimental `glab stack infer <revision-range>` coverage, including branch-name base-range caveat.
+  - `glab-repo`: added `glab repo remote add <namespace/project>` coverage with `--name/-n` and `--protocol/-p` guidance.
+  - JSON output: documented built-in `--jq` filtering for commands that emit JSON through `IOStreams.PrintJSON`, including output-flag requirements and external `jq` fallback cases.
+  - `glab-ci`: clarified `glab ci status --live` polling through transient in-progress pipeline states.
+  - `glab-issue`: documented work item URL compatibility for issue-style commands without overstating dedicated work item behavior.
+  - `glab-check-update`: documented install-aware and agent-aware update nudges.
+- glab v1.99.0
+  - `glab-orbit`: added experimental `glab orbit remote dsl` coverage for the full query DSL JSON Schema while preserving `glab orbit remote tools` as the MCP tool manifest command.
+- glab v1.95.0
+  - `glab-duo`: `glab duo cli` gained `--install` and `--yes` flags.
+  - `glab-skills`: new skill coverage for experimental `glab skills install` command.
+  - `glab-repo`: `glab repo create --readme` now clones instead of using `git init` (fix).
+  - Synopsis improvements across MR, CI, issuable, and experimental subcommands (docs-only change).
+- glab v1.94.0
+  - `glab-workitems`: command spelling updated to `glab work-items`; added `create` and `delete` coverage.
+  - `glab-orbit`: new skill coverage for experimental Knowledge Graph / Orbit remote commands.
+  - `glab-mr`: documented `glab mr note create` as the forward note flow, including `--reply`, `--file`, `--line`, and `--old-line`.
+  - `glab-stack`: `glab stack sync` gained `--reviewer`.
 - glab v1.93.0
   - `glab-mr`: `glab mr create` gained `--template`.
   - `glab-issue`: `glab issue create` gained `--template`.

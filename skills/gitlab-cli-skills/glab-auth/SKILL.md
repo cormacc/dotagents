@@ -35,7 +35,7 @@ glab auth logout
 3. Follow prompts for your GitLab instance
 4. Verify with `glab auth status`
 
-> **v1.90.0+:** `glab auth login` supports a more complete setup flow:
+> `glab auth login` supports a complete setup flow:
 > - `--ssh-hostname` to explicitly set a different SSH endpoint for self-hosted instances
 > - `--web` to skip the login-type prompt and go straight to browser/OAuth auth
 > - `--container-registry-domains` to preconfigure registry / dependency-proxy domains during login
@@ -58,9 +58,40 @@ glab auth login \
   --hostname gitlab.com \
   --web \
   --container-registry-domains "registry.gitlab.com,gitlab.com"
+
+# Explicitly opt out of keyring storage (stores the token as plaintext)
+glab auth login --hostname gitlab.company.com --insecure-storage \
+  --stdin < approved-token-file
 ```
 
-**CI auto-login:** when enabled, token environment variables such as `GITLAB_TOKEN`, `GITLAB_ACCESS_TOKEN`, or `OAUTH_TOKEN` still take precedence over stored credentials and `CI_JOB_TOKEN`.
+### Credential storage
+
+On a normal workstation, `glab auth login` stores credentials in the operating system keyring by default when one is available: macOS Keychain, Windows Credential Manager, or Linux Secret Service. The old `--use-keyring` flag is deprecated because keyring storage is now the default. Re-running login migrates a credential previously stored as plaintext in the config file into the keyring.
+
+Use `--insecure-storage` only when plaintext config-file storage is explicitly required and its risk is accepted. If no keyring backend is available, glab warns and falls back to the config file. In CI (`GITLAB_CI` or `CI` is set), glab defaults to config-file storage because keyrings are usually unavailable or ephemeral; prefer environment credentials rather than persisting a login there.
+
+If a keyring is locked, unavailable, or denies access, glab reports the credential-read failure directly. Fix keyring access or re-authenticate instead of treating the resulting error as an invalid token.
+
+When re-authenticating interactively, `glab` preserves saved per-host values such as a custom API host, SSH host, and container-registry domains unless you explicitly override them with flags or prompts. Verify these values after re-authentication instead of deleting the config preemptively:
+
+```bash
+glab config get api_host --host gitlab.company.com
+glab config get ssh_host --host gitlab.company.com
+glab config get container_registry_domains --host gitlab.company.com
+```
+
+Non-interactive login also persists explicitly supplied `--git-protocol` and `--api-protocol` values in the host configuration. This applies to token/stdin and other prompt-free login paths, so automation can configure the protocols in the same login operation instead of requiring a later config edit. Verify the resulting host entry before relying on it:
+
+```bash
+glab auth login --hostname gitlab.company.com --stdin \
+  --git-protocol ssh --api-protocol https < approved-token-file
+glab config get git_protocol --host gitlab.company.com
+glab config get api_protocol --host gitlab.company.com
+```
+
+Keep token files outside version control and do not print their contents.
+
+**CI auto-login:** `GLAB_ENABLE_CI_AUTOLOGIN=true` lets glab use `CI_JOB_TOKEN` in GitLab CI/CD without a stored login. `GITLAB_TOKEN`, `GITLAB_ACCESS_TOKEN`, and `OAUTH_TOKEN` still take precedence, so leave them unset when the intended credential is `CI_JOB_TOKEN`. Use explicit env tokens instead when a command needs a project, group, or personal access token.
 
 ### Agentic and multi-account setups
 
@@ -90,7 +121,7 @@ set +a
 Why this matters:
 - plain `source` does not necessarily export variables to child processes
 - `glab` only sees env vars that are exported
-- if `glab` cannot see the env token, it may silently fall back to shared stored auth in `~/.config/glab-cli/config.yml`
+- if `glab` cannot see the env token, it may silently fall back to shared stored auth in the active global config file
 - if another env file was sourced earlier in the same shell/session, identity can be sticky in ways that are unsafe for writes unless you deliberately switch and verify
 
 That fallback/shared-auth behavior is convenient for humans, but in multi-agent automation it can cause the wrong GitLab account to post comments, create MRs, or approve work.
@@ -154,6 +185,14 @@ If the wrong-identity write changed state beyond a comment or reply, re-auth as 
    docker pull registry.gitlab.com/group/project/image:tag
    ```
 
+`configure-docker` adds glab only for the configured GitLab registry domains.
+It preserves unrelated Docker credential helpers and refuses to replace a
+different helper already assigned to the same domain. If a domain has legacy
+credentials from `docker login`, glab warns that the helper takes precedence;
+after verifying helper-based access, use the exact suggested `docker logout
+<domain>` command to remove the shadowed entry. Back up and review
+`$DOCKER_CONFIG/config.json` before repairing conflicts manually.
+
 ## Troubleshooting
 
 **"401 Unauthorized" errors:**
@@ -167,10 +206,17 @@ If the wrong-identity write changed state beyond a comment or reply, re-auth as 
 
 **Env-token auth failures:**
 - If `GITLAB_TOKEN`, `GITLAB_ACCESS_TOKEN`, or `OAUTH_TOKEN` is exported, it overrides stored credentials.
-- If auth suddenly fails, check whether an env token is being picked up before assuming your saved login is broken.
+- `GITLAB_TOKEN` and `GITLAB_ACCESS_TOKEN` are treated as personal access tokens independently of a stored OAuth profile, so a temporary PAT does not inherit or refresh saved OAuth state.
+- If the host is configured for OAuth but an environment variable contains an OAuth access token, set `GLAB_IS_OAUTH2=true`; otherwise glab sends the environment token as a personal access token. `glab auth status` reports this scheme mismatch after a 401.
+- If auth suddenly fails, check whether an env token is being picked up before assuming your saved login is broken. `glab auth login` and `glab auth status` warn when this precedence applies.
+- Run `type glab` to distinguish a wrapper that intentionally injects a token (for example, a 1Password shell plugin alias) from a plain executable path. A wrapper can be expected and need no action; a plain path means the token came from the shell profile, current environment, or CI variables.
 - These failures can affect both read operations and writes, not just write pre-flight checks.
 - Verify the active actor and token path with `glab auth status` and `glab api user` before any GitLab write.
 - In multi-agent shells, deliberately re-source the intended env file with `set -a; source ...; set +a` before retrying.
+
+**Self-managed OAuth URL or refresh problems:**
+- Re-authenticate with the full configured host/subfolder; browser OAuth includes the configured subfolder in its authorization URL.
+- A re-authentication response that omits a replacement refresh token preserves the existing refresh token instead of clearing it.
 
 **Multiple instances:**
 - Use `--hostname` flag to specify instance
