@@ -86,6 +86,12 @@ Part of this rule group was removed from =home/AGENTS.md=. Only the preference f
 
 - Codex under =--sandbox workspace-write= mounts =.agents/= as read-only, so child agents in that harness cannot write a scratch or result file under =.agents/=.
 
+** Frontmatter after a bulk edit
+
+Evidence for the rule in [[file:skills/skill-creator/SKILL.md][skill-creator]] § After any bulk edit to a SKILL.md.
+
+- A whole-file soft-wrap conversion joined =---=, =name:= and =description:= into one line and removed a production-safety skill from discovery. A token-stream diff plus code-fence, table and heading checks all reported the file unchanged: every token survived, and the structure that gave them meaning did not.
+
 ** Concurrency and destructive scratch probes
 
 - A scratch probe once derived a nil checkout path. The probe wrote through that path into the caller's working directory before its own cleanup ran.

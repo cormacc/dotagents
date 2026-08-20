@@ -19,7 +19,7 @@ printf '\n==> skill-creator clean validation and packaging\n'
 python3 -m venv "$work/venv"
 "$work/venv/bin/python" -m pip install --quiet --disable-pip-version-check -r skills/skill-creator/requirements.txt
 scripts/validate-skills.bb --python "$work/venv/bin/python"
-"$work/venv/bin/python" skills/skill-creator/scripts/package_skill.py skills/code-review "$work/dist"
+(cd skills/skill-creator && "$work/venv/bin/python" -m scripts.package_skill "$root/skills/code-review" "$work/dist")
 test -s "$work/dist/code-review.skill"
 
 printf '\n==> native-system Nix package evaluation\n'

@@ -17,8 +17,10 @@
          '[babashka.process :refer [shell]]
          '[clojure.string :as str])
 
-;; Mirrors skills/README.org § Vendored. Keep the two in step.
-(def vendored #{"dirge" "find-skills" "gitlab-cli-skills" "herdr" "skill-creator"})
+;; Mirrors skills/README.org § Vendored. Keep the two in step. skill-creator is
+;; not here: it is adopted and locally rewritten, so this repository owns its
+;; frontmatter and it gates like a first-party skill.
+(def vendored #{"dirge" "find-skills" "gitlab-cli-skills" "herdr"})
 
 (defn parse-args [args]
   (loop [a args m {:skills-dir "skills" :python "python3"}]
@@ -30,15 +32,19 @@
           (System/exit 2)))))
 
 (def opts (parse-args *command-line-args*))
-(def validator (str (fs/path "skills" "skill-creator" "scripts" "quick_validate.py")))
+(def skill-creator (fs/path "skills" "skill-creator"))
 
-(when-not (fs/exists? validator)
-  (binding [*out* *err*] (println "error: validator not found at" validator))
+(when-not (fs/exists? (fs/path skill-creator "scripts" "quick_validate.py"))
+  (binding [*out* *err*] (println "error: validator not found under" (str skill-creator)))
   (System/exit 2))
 
+;; skill-creator's scripts run as modules from its own directory, so the target
+;; skill must be absolute. See skills/skill-creator/SKILL.md § Validation and packaging.
 (defn validate [dir]
-  (let [{:keys [exit out err]} (shell {:out :string :err :string :continue true}
-                                      (:python opts) validator (str dir))]
+  (let [{:keys [exit out err]} (shell {:out :string :err :string :continue true
+                                      :dir (str skill-creator)}
+                                     (:python opts) "-m" "scripts.quick_validate"
+                                     (str (fs/absolutize dir)))]
     {:ok (zero? exit) :msg (str/trim (str out err))}))
 
 (let [dirs (->> (fs/list-dir (:skills-dir opts))

@@ -216,21 +216,15 @@ python3 -m venv "$SKILL_CREATOR_VENV"
 "$SKILL_CREATOR_VENV/bin/python" -m pip install -r "$SKILL_CREATOR_DIR/requirements.txt"
 ```
 
-Validate any skill with the script path, not a working-directory-sensitive module invocation:
+Every `scripts/` entry runs as a module from the skill-creator directory, because `run_loop.py`, `run_eval.py`, `improve_description.py` and `package_skill.py` import their siblings as `scripts.<name>`. Pass the target skill as an absolute path, since the working directory is the skill-creator directory rather than yours:
 
 ```bash
-"$SKILL_CREATOR_VENV/bin/python" \
-  "$SKILL_CREATOR_DIR/scripts/quick_validate.py" \
-  <path/to/skill-folder>
+cd "$SKILL_CREATOR_DIR"
+"$SKILL_CREATOR_VENV/bin/python" -m scripts.quick_validate <absolute/path/to/skill-folder>
+"$SKILL_CREATOR_VENV/bin/python" -m scripts.package_skill <absolute/path/to/skill-folder> [output-directory]
 ```
 
-Package it the same way (the optional second argument selects an output directory):
-
-```bash
-"$SKILL_CREATOR_VENV/bin/python" \
-  "$SKILL_CREATOR_DIR/scripts/package_skill.py" \
-  <path/to/skill-folder> [output-directory]
-```
+`eval-viewer/generate_review.py` is the exception: it is outside `scripts/`, imports no sibling, and is invoked by path.
 
 The packager validates first and emits `<skill-name>.skill`. If `present_files` is available, present that artifact; otherwise report its path.
 
@@ -238,7 +232,7 @@ The packager validates first and emits `<skill-name>.skill`. If `present_files` 
 
 A reflow, reformat, or scripted rewrite must end by confirming the frontmatter still parses: opening `---` alone on line 1, `name:` and `description:` on their own lines, closing `---`. Re-read those four lines, or re-run the validator, rather than diffing the file's content.
 
-Content-preservation checks do not cover this. A whole-file soft-wrap conversion joined `---`, `name:` and `description:` into one line and removed a production-safety skill from discovery, while a token-stream diff plus code-fence, table and heading checks all reported the file unchanged -- every token survived, and the structure that gave them meaning did not. Frontmatter damage is silent: the skill simply stops being offered, so nothing fails until an agent works without a contract it should have loaded. When the file is committed, verify the frontmatter in the committed blob (`git show HEAD:<path> | head -4`), not the worktree.
+Content-preservation checks do not cover this: frontmatter damage is silent, so nothing fails until an agent works without a contract it should have loaded. When the file is committed, verify the frontmatter in the committed blob (`git show HEAD:<path> | head -4`), not the worktree.
 
 ---
 
