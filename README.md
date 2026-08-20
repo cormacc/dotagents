@@ -13,6 +13,7 @@ dotagents/
 │   ├── AGENTS.md             # -> ~/.pi/agent/AGENTS.md
 │   └── CLAUDE.md             # -> ~/.claude/CLAUDE.md (one-line import of the above)
 ├── README.md
+├── RETROLOG.org              # retro evidence behind the rules in AGENTS.md
 ├── TASKS*.org                # repository task memory
 ├── package.json              # agent-org-memory manifest + root checks
 ├── package-lock.json         # root validation dependencies

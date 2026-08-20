@@ -1,0 +1,93 @@
+#+TITLE: Retro evidence log
+#+STARTUP: content
+
+Historic evidence for the rules in [[file:home/AGENTS.md][home/AGENTS.md]] and [[file:AGENTS.md][AGENTS.md]]. Each instruction file carries the rule only. The session evidence that produced the rule lives here, because an agent loads the instruction file on every turn but reads this file only when it needs the history.
+
+The [[file:skills/retro/SKILL.md][retro]] skill appends to this file. Group each entry under the rule heading that the evidence supports, and use the rule's own instruction-file heading text so a reader can find the rule.
+
+* 2026-08-20 Thu -- examples culled from home/AGENTS.md
+
+Evidence removed from =home/AGENTS.md= when the file was reorganised and the per-rule example lists were culled.
+
+** Negative results and controls
+
+- A recorded session misread five uncontrolled empty results as evidence of absence.
+- A =jq= filter matched nothing, and the report stated "no tags".
+- File probes used references that did not exist, and the report stated "file removed".
+- A =LIKE 'sent_notification%'= pattern missed the =p_= prefix, and the report stated "no partitioned table".
+- A paged tree listing was incomplete, and the report stated "no migrations".
+- =git lfs ls-files= inspected a branch with no LFS objects, and the report stated "no LFS objects".
+- In the same session, two controlled probes detected their own faults immediately. The user or a later check detected every uncontrolled fault.
+- One control used a path that did not exist and printed nothing. Its silence was not detected, and the report incorrectly stated that the queried item was absent.
+
+** Command and verifier results
+
+- During one host migration, =rsync= exited 23 on all six volumes. The byte counts and destination sizes matched the source, but the output contained 86,150 attribute errors. The output appeared successful even though the command failed.
+- Reading =$?= after a pipeline marked three guards as passing even though each guard exited 1.
+- One =oh= response contained ={"ok":false}= because of a version mismatch. The nil result was incorrectly reported as a trait-resolution failure.
+- One commit message claimed that no unresolved acceptance criteria remained. The same invocation produced output that listed three unresolved criteria. The verification ran, but the claim was already in the heredoc.
+- In one recorded test, two of three shipped trait directives failed after their first rewrite. The original directives failed the same test, so the original text did not change the behaviour.
+- One =bb test= run reported 556 passing tests but did not execute the broken standalone script. The green result was incorrectly cited as coverage for that script.
+- One render probe supplied =:locale=, but the code read =:language=. The code silently used one locale as a fallback, which appeared to be a localisation defect.
+
+** Command-line arguments
+
+- A removed =--focus= flag produced =unknown task option= before other arguments. In the final position, the same flag produced =option requires a value=, because the parser entered its missing-value branch when no token followed the flag. The first message was reported as the behaviour. Two reviewers later found the second message.
+
+** State outside version control
+
+- =git status= can remain clean after an action destroys external state, because remote hosts, cloud resources, databases, and registries produce no Git diff and no Git revert.
+- One authorised-keys installer test used a live host and silently reduced three keys to one. The author wrote the dry-run flag but did not use it. Recovery was possible only because an unrelated earlier step saved the old keys in a scratch file.
+
+** Privilege and live CLI probes
+
+- =sudo ls /var/lib/docker/volumes/*/_data/*.tar= printed nothing because the calling user could not read the root-only path. The empty output was read as "no archives". Three seconds later, =sudo sh -c 'ls ...'= listed the archives.
+- A probe of =oh tab create --focus= created a real tab.
+- An invented flag on =oh task run= was accepted silently and started a billable subagent. The operator then had to close the subagent manually.
+- In one session, =glab repo clone= blocked twice on a credential prompt. The host used =git_protocol: https=, while the user authenticated with an SSH key, and the script configured ~BatchMode=yes~ only for the SSH path.
+
+** Search patterns and renames
+
+This rule group was removed from =home/AGENTS.md=. The evidence is kept for a future rule.
+
+- A search pattern from data can start with =-=, which a command can consume as an option. E.g. =grep -qxF "$line"= fails for a line that starts with =---= or =- =. It prints a usage error for each such line, while the loop treats the line as a mismatch. Pass the pattern with =grep -e "$pat"= or after =--=.
+- This defect affects only some inputs. A successful spot-check does not prove that the command is correct, and the remaining misreads can appear to be valid findings.
+- BSD =sed= on macOS does not support =\b=, and it can silently match nothing. A pattern that prefixes another token can also rewrite that token. One rename missed two call sites and changed an unrelated =%focusx= token.
+- Babashka is preferable because its Java regular expressions support =\b= on every platform. First count matches with =(re-seq #"%focus\b" text)=, then rewrite with =str/replace=, then search again for the old name.
+- A word boundary after a non-word character never matches. E.g. =\bname!\b= finds nothing because the boundary after =!= requires a following word character. For identifiers that end in =!=, =?=, or =-=, omit the final =\b=.
+- Searching again for the old identifier before the tests run prevents a bulk rename that silently misses most call sites.
+
+** Prompts, credentials, and shell quoting
+
+Part of this rule group was removed from =home/AGENTS.md=. Only the narrow-token credential rule remains there.
+
+- One =grep -A6= command printed a live HTTP secret from a registry configuration into the session transcript. The query did not need the surrounding lines.
+- Markdown-derived text commonly contains backticks and =$=, and double quotes permit command substitution, so shell search patterns need single quotes.
+- =printf "$text"= can silently corrupt =%= sequences and still exit 0. E.g. ="85% coverage"= prints =85overage=, =%focused= prints =0.000000ocused=, and =%no-bullshit= prints =o-bullshit=. Of these examples, only =%read-only= and =%prune= fail with an error. Percentages occur in prose more often than trait tokens, so this rule is not specific to traits.
+- An apostrophe terminates a single-quoted argument, and Bash can then execute the remaining text. This error truncated one =ot create --body= argument, and Bash executed its remaining text. Writing the prose to a file with a quoted heredoc and passing ="$(cat file)"= avoids it, because shell command substitution does not scan its output again.
+
+** Output and structured edits
+
+Part of this rule group was removed from =home/AGENTS.md=. Only the preference for structured tools remains there.
+
+- One =grep -A= assertion printed approximately 10,000 tokens to report one Boolean value. The assertion line alone identified the failure. Limit test-failure output with =head -c= when an asserted value can contain a file or captured log.
+- Filtered output can make separate source lines appear consecutive. One =rg '^- \['= view displayed criteria lines as one block, although a paragraph separated them, and the edit built from that view was rejected. Build a structured edit's =oldText= from a contiguous file read.
+- A multi-entry edit is all-or-nothing. One non-matching entry, or one entry that targets the wrong file, rejects every entry in the call.
+- A tool can silently accept a key that is absent from its declared schema and change the payload instead of reporting an error. One extra key in an =edits[]= entry truncated replacement text and wrote an incomplete form.
+
+** Scripts and transformations
+
+- Long replacement text silently truncated three times in one recorded session. One truncation ended in the middle of a line, and the original paragraph continued after it, so the file still appeared plausible.
+- One manually retyped persona changed two full stops. Six personas produced through copy-and-edit remained byte-identical outside the listed edits. The identity claim was made before any verification.
+- One test first read a derived path and reported =FileNotFoundException=. That error concealed the producer's parse error and directed the diagnosis to the wrong layer.
+- =ot doctor | tail -3= displayed a clean tail twice while two ERROR entries were before the displayed section. The record was incorrectly reported as well-formed.
+
+** Temporary files
+
+- Codex under =--sandbox workspace-write= mounts =.agents/= as read-only, so child agents in that harness cannot write a scratch or result file under =.agents/=.
+
+** Concurrency and destructive scratch probes
+
+- A scratch probe once derived a nil checkout path. The probe wrote through that path into the caller's working directory before its own cleanup ran.
+- One timeout value of =120000= was supplied as milliseconds. The tool's schema read the value as seconds. The deadlocked probe ran for 4,173 seconds before a manual interrupt stopped it.
+- Never add a caller-controlled test barrier to a production lock path. One such barrier needed an external release file, the file was missing, and every later spawn and continue call blocked in review until the barrier was removed.

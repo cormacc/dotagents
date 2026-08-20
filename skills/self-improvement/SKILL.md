@@ -80,6 +80,22 @@ Ask once when ownership is ambiguous. If unresolved, use the current project and
 
 Cross-project routing is a direct `ot --root <target> ...` operation. It does not depend on a live target agent session, `pi-intercom`, or optional pi task tools.
 
+## Rule text and evidence
+
+An agent loads an instruction file on every turn, so that file carries the reusable rule and nothing else. A historic example, an incident narrative, a count, and a transcript quotation are evidence, not rules: they cost context on every turn and change no behaviour that the rule does not already state. A per-rule example list is the common failure mode -- each capture appends one more case until the rule is buried.
+
+- Write the imperative rule, plus only the minimum test, replacement invocation, or identifier that makes it actionable.
+- Do not write "one session did X", "in one recorded test", incident counts, or an example list into `AGENTS.md`, a skill body, or a skill reference.
+- One illustration may stay inline when it *is* the rule, such as the verified invocation that replaces a failed one. A second illustration of the same rule is evidence and moves to the log.
+- Put the evidence in the commit body, in `<tier-root>/RETROLOG.org`, or both. Create `RETROLOG.org` at the owning tier's repository root when it is absent.
+- Group each log entry under a dated session heading, then under a sub-heading that repeats the rule's instruction-file heading, so a reader can map evidence back to the rule.
+- Keep evidence for a rule that was later removed or narrowed, and say so in the entry. A later capture then knows the case was already seen.
+- Link the log from an instruction file only when the rule is not actionable without the history. A bare rule needs no link.
+
+Adversarially test each behavioural directive before you ship it in an instruction file. Confirm that the directive changes behaviour, and if it does not, change the incentive that causes the unwanted behaviour rather than restating the prohibition.
+
+When an approved edit tightens an existing bloated rule, move the displaced examples into the log in the same change rather than deleting them. A task body under `Agent feedback` is not an instruction file, so it keeps its evidence inline per § Entry conventions.
+
 ## Entry conventions
 
 Use one or more target tags. The scheme is a **facet plus a name** as two adjacent Org tags, so a facet (`skill`, `ext`, `prompt`) filters independently of its subject -- `:skill:org_tasks:` and `:ext:org_tasks:` both select everything about org-tasks, and `:skill:` alone selects all skill feedback. Standalone categories carry no name:
@@ -112,7 +128,7 @@ When a matching open task exists, do not create a parallel item. Use `ot show <i
 
 ## Verification
 
-Re-read any modified instruction file and run `ot show <id>` for each created or reused task. Confirm that no duplicate or contradictory guidance was introduced, then report changed paths, task UUIDs, and deferred work.
+Re-read any modified instruction file and run `ot show <id>` for each created or reused task. Confirm that no duplicate or contradictory guidance was introduced, and that the edit added the rule only, with no incident narrative, count, or example list. Confirm that each displaced or new piece of evidence is in the commit body or the log file. Then report changed paths, task UUIDs, and deferred work.
 
 ## Relationship to other skills
 

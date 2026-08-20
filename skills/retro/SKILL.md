@@ -55,7 +55,7 @@ Present one review table:
 | # | Signal | Category | Proposed reusable rule/outcome | Destination |
 |---|---|---|---|---|
 
-Synthesize; never store user input verbatim. State the underlying reusable construct, not merely the surface phrase. Include only findings worth keeping.
+Synthesize; never store user input verbatim. State the underlying reusable construct, not merely the surface phrase. Include only findings worth keeping. Write the proposed rule in the form it will take at its destination, so the table shows the rule and not the incident that produced it (see § 5).
 
 Wait for user approval before editing or filing tasks. The user may reject, rewrite, or reclassify each item.
 
@@ -63,8 +63,10 @@ Wait for user approval before editing or filing tasks. The user may reject, rewr
 
 For each approved item, apply `self-improvement`'s tight-loop or TODO-first workflow exactly.
 
+A retro is the main source of instruction-file bloat, because each session arrives with fresh incident detail. Apply `self-improvement` § Rule text and evidence to every instruction edit: the file receives the rule, and the session evidence goes to the commit body or `<tier-root>/RETROLOG.org`.
+
 Do not commit unless the user requested a commit or the active task protocol explicitly includes it.
 
 ## 6. Verify
 
-Verify per `self-improvement` § Verification, then report changed paths, task UUIDs, and any tech debt / backlog findings intentionally left unfiled.
+Verify per `self-improvement` § Verification, then report changed paths, task UUIDs, log entries written, and any tech debt / backlog findings intentionally left unfiled.
