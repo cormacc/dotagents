@@ -13,7 +13,8 @@
 
 * Table of Contents                                       :TOC_2_gh:noexport:
 - [[#explorations][Explorations]]
-  - [[#evaluate-jus][Evaluate jus]]
+  - [[#investigate-worktrunk-for-worktree-management-skillherdr-orch][Investigate worktrunk for worktree management... :skill:herdr-orch:]]
+  - [[#started-d-evaluate-jus][STARTED [#D] Evaluate jus]]
   - [[#review-backlogmd-for-org-tasks-inspiration][Review backlog.md for org-tasks inspiration]]
   - [[#herdr-orch-llm-usage-limit-fallback][herdr-orch: LLM usage limit fallback]]
   - [[#evaluate-rpiv-pi-workflow-setup][Evaluate rpiv-pi workflow setup]]
@@ -26,8 +27,13 @@
   - [[#herdr-plugin-wrapper-for-herdr-orch][herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#traits-re-probe-every-fragment-against-synthetic-non-decaying-scenarios][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
-  - [[#waiting-b-update-vendored-gitlab-cli-skill-after-upstream-pr-83-merges][WAITING [#B] Update vendored GitLab CLI skill after upstream PR 83 merges]]
+  - [[#org-tasks-ot-blocker-add-silently-ignores-extra-positional-refs][org-tasks: ot blocker add silently ignores extra positional refs]]
+  - [[#herdr-orch-check-oh-docs-against-herdr-v082-agent-semantics][herdr-orch: check oh docs against herdr v0.8.2 agent semantics]]
+  - [[#vendored-herdr-carries-no-upstream-license][Vendored herdr carries no upstream LICENSE]]
 - [[#fixes][Fixes]]
+- [[#upstream-issues][Upstream issues]]
+  - [[#find-skills-documents-npx-skills-check-as-read-only-but-it-updates][find-skills documents npx skills check as read-only, but it updates]]
+  - [[#gitlab-cli-skills-glab-schedule-create-rejects---output-json-list-supports-it][gitlab-cli-skills: glab-schedule create rejects --output json (list supports it)]]
 - [[#chores][Chores]]
   - [[#started-b-simplify-herdr-orch-skill-based-on-upstream-changes][STARTED [#B] Simplify herdr-orch skill based on upstream changes]]
 - [[#agent-feedback][Agent feedback]]
@@ -36,16 +42,33 @@
   - [[#org-tasks-ot-create---parent-cannot-target-a-change-record-plan-task][org-tasks: ot create --parent cannot target a change-record plan task]]
   - [[#self-improvement-persist-agents-metrics-comparison-script][self-improvement: persist AGENTS metrics comparison script]]
   - [[#probe-the-babashka-default-nrepl-port-before-server-startup][Probe the Babashka default nREPL port before server startup]]
+  - [[#herdr-orch-an-aborted-round-cannot-be-closed-or-pruned][herdr-orch: an aborted round cannot be closed or pruned]]
+  - [[#edit-tool-pre-submit-self-check-for-stray-edits-keys][Edit tool: pre-submit self-check for stray edits[] keys]]
+  - [[#org-tasks-copy-heading-state-tokens-verbatim-during-bulk-newtext-edits][org-tasks: copy heading state tokens verbatim during bulk newText edits]]
+  - [[#validate-skillsbb-rejects-a-relative---python-path][validate-skills.bb rejects a relative --python path]]
 
 * Explorations
 
-** TODO [#D] Evaluate jus
+** TODO [#B] Investigate worktrunk for worktree management... :skill:herdr-orch:
+:PROPERTIES:
+:CUSTOM_ID: 47f84d9a-bf5d-4bcc-8bc4-f7b3d188ddfa
+:CREATED: [2026-08-21 Fri 15:31]
+:END:
+:LOGBOOK:
+- Created [2026-08-21 Fri 15:31]
+:END:
+This may be useful in the context of herdr-orch subagent management...
+https://github.com/max-sixty/worktrunk
+
+** STARTED [#D] Evaluate jus
 :PROPERTIES:
 :CUSTOM_ID: a5156b00-08cc-4ab1-b365-ec183af96f40
 :CREATED: [2026-08-13 Thu 17:57]
+:STARTED: [2026-08-20 Thu 17:07]
 :END:
 :LOGBOOK:
 - Created [2026-08-13 Thu 17:57]
+- State "STARTED" from "TODO" [2026-08-20 Thu 17:07]
 :END:
 This looks like a very nice exploratory/learning tool for Clojure.
 Not sure it has a role here, but just catching the reference for now as an aide memoire....
@@ -152,6 +175,8 @@ Re-examine the self-improvement skill against the org-memory protocol (org-tasks
 - Created [2026-07-28 Tue 17:50]
 :END:
 Follow-ups from the initial `ot move` implementation (task 2a2f5aed): expose move in the ot TUI and pi tasks overlay (boundary.md notes the pending parity — needs a key map entry plus a destination picker), and add `--before`/`--after` ordering control so a move is not restricted to append-as-last-child / last-in-section semantics.
+
+Also: `ot move <id> --section <name>` fails `section-not-found` when the section heading does not already exist, so introducing a new section is a hand edit. Decide between a `--create-section` flag and documenting the pre-create requirement in the org-tasks skill. Measured in a scratch project: a move to a new section name errored, while the same move into an existing section succeeded.
 
 ** TODO [#A] org-tasks: spec checks warn forever once a record's change is committed
 :PROPERTIES:
@@ -277,29 +302,6 @@ Acceptance criteria:
 - Where a probe cannot be made to discriminate, say so and say why, rather than reporting an unexplained negative or quietly dropping the fragment.
 Must not: weaken a recorded condition to make a run agree; reuse a repo-referential subject; treat a passing probe as a precondition for the fragment staying in the store.
 
-** WAITING [#B] Update vendored GitLab CLI skill after upstream PR 83 merges :skill:gitlab_cli_skills:
-:PROPERTIES:
-:CUSTOM_ID: 6c723379-6697-4664-82e2-c70b6bfbb750
-:CREATED: [2026-08-18 Tue 10:44]
-:BLOCKED-BY: human: https://github.com/vince-winkintel/gitlab-cli-skills/pull/83
-:END:
-:LOGBOOK:
-- Created [2026-08-18 Tue 10:44]
-- State "WAITING" from "TODO" [2026-08-18 Tue 10:44]
-:END:
-Upstream fix: https://github.com/vince-winkintel/gitlab-cli-skills/pull/83
-
-After the upstream merge:
-- Refresh the vendored `gitlab-cli-skills` content from the accepted upstream revision.
-- Remove the temporary `glab runner list --all` workaround from `home/AGENTS.md`.
-- Keep `gitlab-cli-skills` classified as vendored in `skills/README.org`.
-
-Acceptance criteria:
-- The vendored `glab-runner/SKILL.md` documents `glab runner list --instance` in both affected locations.
-- The temporary workaround no longer exists in `home/AGENTS.md`.
-- The vendored content matches its recorded upstream revision.
-- Skill validation and `git diff --check` pass.
-
 ** TODO org-tasks: ot blocker add silently ignores extra positional refs
 :PROPERTIES:
 :CUSTOM_ID: 9a29de9d-d385-4c26-9720-339fc4437fc3
@@ -322,143 +324,58 @@ Out of scope: a dangling or malformed ref is supported protocol state, handled b
 
 Reported by a planner subagent during task 477fc686; verified against source and by behavioural probe before capture.
 
+Two adjacent defects on the same command, measured in a scratch project: `ot blocker add A task:B` run twice stores the ref twice, so the blocker list carries a duplicate; and a multi-ref call with `--format json` prints `Added blocker: task:...` instead of a JSON envelope, so a machine caller cannot parse what happened. Fix these with the arity check rather than separately.
+
+** TODO herdr-orch: check oh docs against herdr v0.8.2 agent semantics :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 9a7f8771-48ad-4ee0-a1f7-25f6b1fdc710
+:CREATED: [2026-08-21 Fri 16:24]
+:END:
+:LOGBOOK:
+- Created [2026-08-21 Fri 16:24]
+:END:
+The herdr skill was refreshed from upstream v0.8.2 (see [[plan:2026-08-21-skill-vendoring-improvements.org]]), which documents two behaviours our 2026-07-22 copy predated: `agent start` can return `agent_not_ready` while keeping the name usable for `agent read` / `agent send-keys`, and `agent prompt` rejects an agent sitting at an approval or question dialog with `agent_blocked` before sending input.
+
+Check whether `herdr-orch` SKILL.md, `scripts/docs/contract.md`, and the `oh` implementation contradict either behaviour -- particularly the dispatch/poke path, which reasons about a child that has not settled.
+
+Acceptance criteria:
+- Each of the two behaviours is either reflected in the oh contract/skill or explicitly recorded as not applicable.
+- Any oh code path that assumes `agent start` success implies readiness is identified.
+
+** TODO Vendored herdr carries no upstream LICENSE :skill:
+:PROPERTIES:
+:CUSTOM_ID: f7692a6c-17c3-4971-b185-2d13ee3db100
+:CREATED: [2026-08-21 Fri 16:46]
+:END:
+:LOGBOOK:
+- Created [2026-08-21 Fri 16:46]
+:END:
+Upstream ships https://raw.githubusercontent.com/ogulcancelik/herdr/master/LICENSE (HTTP 200; `LICENSE.md` 404s), but `gh skill install` copies only the skill directory, so `skills/herdr/` has no licence file. The same applies to any future vendored skill.
+
+Decide and record one route:
+- carry a LICENSE alongside each vendored skill, noting that `gh skill update` will not maintain it;
+- record upstream licences centrally in `skills/README.org` § Vendored beside each Source;
+- establish that the frontmatter `license:` field (which the Agent Skills spec defines) is sufficient, and populate it where upstream leaves it implicit.
+
+Carried over from the original body of "Skill vendoring improvements" (98cf369c), which noted the gap but never addressed it.
+
+Acceptance criteria:
+- skills/README.org states where a vendored skill's licence lives.
+- herdr's upstream licence is either present in the tree or cited from the README.
+- No vendored SKILL.md body is hand-edited to add licence text.
+
 * Fixes
 
-* Chores
-
-** STARTED [#B] Simplify herdr-orch skill based on upstream changes
-:PROPERTIES:
-:CUSTOM_ID: cf561004-25e4-46ee-aa4a-5e09b8eecff6
-:CREATED: [2026-08-17 Mon 18:33]
-:STARTED: [2026-08-17 Mon 22:01]
-:HANDOFF: Prose pruning is complete and validated. Keep the parent STARTED. Resume after Herdr publishes a stable version whose reported version includes readiness commits 7ae4b05 and 37644ca, then reassess deletion of the local start retry and dispatch verifier.
-:END:
-:LOGBOOK:
-- Created [2026-08-17 Mon 18:33]
-- State "STARTED" from "TODO" [2026-08-17 Mon 22:01]
-- State "DONE" from "STARTED" [2026-08-17 Mon 22:07]
-- State "STARTED" from "DONE" [2026-08-17 Mon 22:14]
-:END:
-#+IMPORT: [[plan:2026-08-17-simplify-herdr-orch-skill-based-on-upstr.org]]
-Prune mechanically enforced lifecycle detail from `skills/herdr-orch/SKILL.md`. Keep policy and parent recovery actions in the skill, and keep guard detail in the canonical contract. Defer compatibility-code removal until Herdr publishes a version that distinguishes the upstream readiness fixes from stable v0.8.0.
-
-* Agent feedback
-
-** TODO [#A] Skill vendoring improvements :project_convention:
-:PROPERTIES:
-:CUSTOM_ID: 98cf369c-83aa-4961-bf8b-2fa3aca8b2f3
-:CREATED: [2026-07-31 Fri 13:17]
-:END:
-:LOGBOOK:
-- Created [2026-07-31 Fri 13:17]
-:END:
-Vendored third-party skills (dirge, find-skills, skill-creator, herdr) currently sit hand-copied inside the published `skills/` tree with no recorded provenance. Two constraints shape the fix:
-
-1. Vendored skills must stay manageable by `npx skills` (add/update). That rules out the herdr-style in-file vendor header: any local edit changes the file, so `skills-lock.json` `computedHash` never matches upstream and an update overwrites the header regardless. Provenance therefore has to live outside the skill bodies, in `skills-lock.json`.
-2. Vendored skills must NOT be republished by `npx skills add cormacc/dotagents`, while all agent config stays maintainable within this single repo.
-
-`herdr` is a permanent exception to (1): its `SKILL.md` sits at its repo root, so `npx skills add ogulcancelik/herdr` installs the entire Rust project (Cargo.toml, flake.nix, src/, docs/). It stays hand-vendored with its existing header until upstream packages it under a `skills/` subdirectory.
-
-Verified findings behind this task:
-- `skills-lock.json` (v1) records `source`, `sourceType`, `skillPath`, `computedHash` per skill. `computedHash` is a content hash of the installed skill, confirmed by an update that rewrote only the hashes. This is the correct drift signal and the intended design: it answers "has this skill changed?", which is the only question that matters for a vendored copy. Do NOT track upstream repo commits — a SHA churns on every unrelated commit to the source repo while saying nothing about whether the skill itself moved. The provisional README "Revision" column is therefore wrong and should be dropped rather than backfilled.
-- `npx skills add cormacc/dotagents --list` reports 16 skills, including all 4 vendored ones: they are currently republished to consumers, who get stale copies rather than upstream.
-- `npx skills add` installs into `<project>/.agents/skills/` or `~/.agents/skills/`. Since `agents.nix` symlinks `~/.agents/skills` at this repo's `skills/`, a global install writes straight into the published tree — the likely origin of the current state.
-- Attribution gap: herdr ships a LICENSE upstream that did not come across with its SKILL.md.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: cormacc/dotagents @ main
-- timestamp: [2026-07-31 Fri 13:40]
-- sender: agent
-*** TODO [#A] Establish how npx skills can manage repo-committed vendored skills
-:PROPERTIES:
-:CUSTOM_ID: 0a6c3fed-9c9f-4b30-b33e-a916868502e0
-:CREATED: [2026-07-31 Fri 13:17]
-:END:
-:LOGBOOK:
-- Created [2026-07-31 Fri 13:17]
-:END:
-Blocking research for the rest of this task. Resolve mechanically against the tool, not by inference:
-- Does `npx skills` support publish-side exclusion, so a repo can host vendored skills without offering them via `add <repo>`? Note `--full-depth` implies a root `SKILL.md` suppresses subdirectory discovery by default — check whether that is exploitable without hiding the 16 first-party skills.
-- Do `experimental_install` / `update` work against skills committed in this repo at a non-default path, or do they only manage `.agents/skills/` and `~/.agents/skills/`?
-- Can a project-level `skills-lock.json` drive updates for skills whose install target is a source-controlled directory?
-- How does any of this interact with `~/.agents/skills` being a symlink into this repo (per agents.nix)?
-
-Acceptance criteria:
-- Each question answered with the exact command run and its observed output.
-- A recommended target layout for vendored skills that satisfies both constraints, or an explicit statement that no layout satisfies both and what the tradeoff is.
-- Experiments run in a scratch directory, never against this repo or another project.
-*** TODO [#A] Stop republishing vendored skills from the published skills/ tree
-:PROPERTIES:
-:CUSTOM_ID: 3df8b6a2-27d2-4495-ba32-a3bbb38ee303
-:CREATED: [2026-07-31 Fri 13:17]
-:END:
-:LOGBOOK:
-- Created [2026-07-31 Fri 13:17]
-:END:
-Move the vendored skills (dirge, find-skills, skill-creator, herdr) out of the set that `npx skills add cormacc/dotagents` offers, using the layout chosen by the research subtask, while keeping them present in this repo and resolvable at `~/.agents/skills`.
-
-Depends on the research subtask for the target path. Likely needs a matching `agents.nix` change in the parent dotfiles repo so the relocated skills still reach `~/.agents/skills` — that is cross-repo work; validate the parent flake from its own root.
-
-Acceptance criteria:
-- `npx skills add cormacc/dotagents --list` reports only first-party and adopted-and-modified skills; no vendored skill appears.
-- Every vendored skill still resolves under `~/.agents/skills` after a Home Manager switch.
-- `skills/README.org`'s hand-maintained inventory is updated to match the new split (the `check-metadata.ts` script that once enforced it was retired 2026-08-11).
-- No vendored skill body is modified.
-*** TODO [#B] Adopt skills-lock.json as the provenance record for vendored skills
-:PROPERTIES:
-:CUSTOM_ID: 2300b750-ad34-479c-bee4-ef27a1e5d67c
-:CREATED: [2026-07-31 Fri 13:17]
-:END:
-:LOGBOOK:
-- Created [2026-07-31 Fri 13:17]
-:END:
-Record vendored-skill provenance in a committed `skills-lock.json` written by `npx skills` itself, rather than in-file headers, so bodies stay byte-identical and updatable.
-
-Acceptance criteria:
-- A committed lockfile records `source`, `sourceType`, `skillPath`, and `computedHash` for each vendored skill except herdr.
-- `npx skills update` runs cleanly against the vendored set and touches only skill bodies plus the lockfile.
-- No vendor header is added to any skill managed this way.
-- herdr keeps its existing header, with its exception rationale stated where the convention is documented.
-*** TODO [#B] Backfill provenance for dirge, find-skills and skill-creator
-:PROPERTIES:
-:CUSTOM_ID: 87f1a303-a11c-454b-b9f5-ed57c1b5947d
-:CREATED: [2026-07-31 Fri 13:17]
-:END:
-:LOGBOOK:
-- Created [2026-07-31 Fri 13:17]
-:END:
-These three were hand-copied with no recorded source. Recover provenance by re-adding each through `npx skills` so the tool writes the lockfile entry, then confirm the installed body matches what is already committed.
-
-Do not guess or hand-write a source or SHA. If a body has diverged from upstream, report the diff and stop rather than silently overwriting local changes — a divergence means it is adapted, not vendored, and belongs in the "Adopted or adapted" group instead.
-
-Acceptance criteria:
-- Each of the three has a lockfile entry naming its real upstream repo, or is reclassified as adopted-and-modified with the divergence recorded.
-- Any body replaced is byte-identical to upstream at time of sync.
-- skills/README.org reflects the outcome per the documentation subtask.
-*** TODO [#B] Document the vendoring convention in skills/README.org
-:PROPERTIES:
-:CUSTOM_ID: 5121483a-1f26-47ec-8424-dadc3e3ee497
-:CREATED: [2026-07-31 Fri 13:18]
-:END:
-:LOGBOOK:
-- Created [2026-07-31 Fri 13:18]
-:END:
-Replace the provisional Vendored table columns with ones that reflect the chosen model: content hash is the drift signal, not an upstream revision.
-
-Acceptance criteria:
-- The "Revision" column is removed; no upstream commit SHA is recorded for any lockfile-managed skill.
-- The table names each vendored skill and its upstream `source`, and points at `skills-lock.json` as the authoritative provenance and drift record rather than duplicating hashes into prose (duplication is its own churn).
-- The convention states that vendored bodies stay byte-identical so `npx skills update` keeps working, and that local fixes go upstream or to a non-vendored destination.
-- The herdr row is marked as the standing exception (hand-vendored with an in-file header, because upstream ships SKILL.md at repo root), with the condition for retiring the exception.
-- `skills/README.org`'s inventory still lists every skill exactly once, checked by reading it.
-*** TODO [#A] find-skills documents npx skills check as read-only, but it updates
+* Upstream issues
+** DONE [#A] find-skills documents npx skills check as read-only, but it updates
+CLOSED: [2026-08-21 Fri 15:46]
 :PROPERTIES:
 :CUSTOM_ID: 73b47d41-89ee-4a44-9ac2-db463f31ae93
 :CREATED: [2026-07-31 Fri 13:18]
 :END:
 :LOGBOOK:
 - Created [2026-07-31 Fri 13:18]
+- State "DONE" from "TODO" [2026-08-21 Fri 15:46]
 :END:
 find-skills/SKILL.md § Other useful commands claims "`npx skills check` — list updates available". It actually performs updates: running it in an unrelated project upgraded 3 installed skills and rewrote their `skills-lock.json` hashes. The current `--help` lists no `check` command at all under Updates, only `update`.
 
@@ -473,7 +390,9 @@ Acceptance criteria:
 - The wrong read-only claim no longer reaches an agent following the skill.
 - Whatever route is taken, no local edit is left sitting in a lockfile-managed vendored body.
 
-*** TODO gitlab-cli-skills: glab-schedule create rejects --output json (list supports it) :skill_gitlab_cli_skills:
+Resolved: =skills/find-skills/SKILL.md= no longer documents =npx skills= at all. It was reinstalled from upstream (=9a21d3e2=), then rewritten around =gh skill= (=9d21a6c9=), which also moved it out of the vendored class so local corrections are legitimate. See [[plan:2026-08-21-skill-vendoring-improvements.org]].
+
+** TODO gitlab-cli-skills: glab-schedule create rejects --output json (list supports it) :skill_gitlab_cli_skills:
 :PROPERTIES:
 :CUSTOM_ID: 6d205682-bacc-465a-911f-419a76604e6f
 :CREATED: [2026-08-20 Thu 10:55]
@@ -494,6 +413,26 @@ Origin:
 Evidence:
 - `glab schedule create --cron "0 6 * * *" --description "..." --ref develop --output json` -> `Unknown flag: --output.`
 - `glab schedule list --output json` succeeded and returned valid JSON in the same session.
+
+* Chores
+
+** STARTED [#B] Simplify herdr-orch skill based on upstream changes
+:PROPERTIES:
+:CUSTOM_ID: cf561004-25e4-46ee-aa4a-5e09b8eecff6
+:CREATED: [2026-08-17 Mon 18:33]
+:STARTED: [2026-08-17 Mon 22:01]
+:HANDOFF: Prose pruning is complete and validated. Keep the parent STARTED. Resume after Herdr publishes a stable version whose reported version includes readiness commits 7ae4b05 and 37644ca, then reassess deletion of the local start retry and dispatch verifier.
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 18:33]
+- State "STARTED" from "TODO" [2026-08-17 Mon 22:01]
+- State "DONE" from "STARTED" [2026-08-17 Mon 22:07]
+- State "STARTED" from "DONE" [2026-08-17 Mon 22:14]
+:END:
+#+IMPORT: [[plan:2026-08-17-simplify-herdr-orch-skill-based-on-upstr.org]]
+Prune mechanically enforced lifecycle detail from `skills/herdr-orch/SKILL.md`. Keep policy and parent recovery actions in the skill, and keep guard detail in the canonical contract. Defer compatibility-code removal until Herdr publishes a version that distinguishes the upstream readiness fixes from stable v0.8.0.
+
+* Agent feedback
 
 ** TODO [#B] herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
 :PROPERTIES:
@@ -676,3 +615,28 @@ Origin:
 Evidence:
 - The mistake was caught immediately after the edit by a grep for the target heading text, then reverted with a follow-up edit before any commit.
 - No incorrect state was ever committed or persisted; the near-miss was purely in an intermediate working-tree edit.
+
+** TODO validate-skills.bb rejects a relative --python path :project_convention:
+:PROPERTIES:
+:CUSTOM_ID: 43a9ab20-69e4-43a6-9dbe-6ad6112bcfd7
+:CREATED: [2026-08-26 Wed 10:21]
+:END:
+:LOGBOOK:
+- Created [2026-08-26 Wed 10:21]
+:END:
+scripts/validate-skills.bb shells out to skill-creator's validator with `:dir skills/skill-creator`, so a relative interpreter path passed to `--python` resolves against that directory instead of the caller's cwd and the run dies at scripts/validate-skills.bb:52.
+
+Either absolutise the `--python` value before the shell-out, or reject a relative value with an argument error that names the requirement. scripts/README.md should state whichever holds.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: cormacc/dotagents @ main
+- timestamp: [2026-08-21 Fri 18:02]
+- sender: agent
+
+Evidence:
+Measured: `bb scripts/validate-skills.bb --python .tmp/relpy` exits 1 with the error at line 52; the identical interpreter passed as an absolute path exits 0 with "16 skills checked, 0 gating failure(s)". Surfaced by a reviewer subagent that lost two retries to it.
+
+Acceptance criteria:
+- A relative `--python` value either works or fails with an argument error naming the constraint.
+- scripts/README.md documents the resolved behaviour.

@@ -48,8 +48,8 @@
   - Do not run the skill read and the domain probes in parallel.
 - Do not cite a green suite as coverage until you confirm that it executes the changed file.
 - Do not trust a guard or ad-hoc verifier after you observe only passing results.
-  - Trigger the verifier deliberately with known-bad input before you trust it.
-  - If all inputs pass or all inputs fail, test the verifier before you diagnose the system.
+  - Establish the passing baseline first, then trigger the verifier deliberately with known-bad input.
+  - If all inputs pass or all inputs fail, test the verifier before you diagnose the system. Without the baseline you cannot tell a real finding from a broken harness.
 - When shipped behaviour produces a surprising probe result, inspect the probe before you diagnose the system.
   - First, verify each supplied key, parameter, and path against the consumer.
 

@@ -17,10 +17,12 @@
          '[babashka.process :refer [shell]]
          '[clojure.string :as str])
 
-;; Mirrors skills/README.org § Vendored. Keep the two in step. skill-creator is
-;; not here: it is adopted and locally rewritten, so this repository owns its
-;; frontmatter and it gates like a first-party skill.
-(def vendored #{"dirge" "find-skills" "gitlab-cli-skills" "herdr"})
+;; Mirrors skills/README.org § Vendored. Keep the two in step -- a skill that
+;; leaves the vendored class must leave this set, or its frontmatter silently
+;; stops gating. skill-creator, find-skills and clojure are not here: they are
+;; adopted and locally rewritten, so this repository owns their frontmatter and
+;; they gate like first-party skills. dirge is first-party.
+(def vendored #{"gitlab-cli-skills" "herdr"})
 
 (defn parse-args [args]
   (loop [a args m {:skills-dir "skills" :python "python3"}]

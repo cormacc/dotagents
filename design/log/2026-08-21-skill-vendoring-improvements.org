@@ -1,0 +1,184 @@
+#+TITLE: Skill vendoring improvements
+#+DATE: 2026-08-21 Fri
+#+PARENT: [[archive:98cf369c-83aa-4961-bf8b-2fa3aca8b2f3][Skill vendoring improvements]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/README.org]]
+
+* Intent
+Make the maintenance boundary between first-party, adapted, and vendored skills explicit and checkable: per-class editing rules and classification in =skills/README.org=, and tool-written provenance on every vendored copy, so each one names its upstream, carries a content-hash drift signal, and stays updatable by the tool that installed it.
+
+* Summary
+*Level:* production · *Tests:* smoke · *Docs:* README
+
+** Scope
+*** In scope
+- Classifying every top-level skill as first-party, adapted, or vendored in =skills/README.org=. dirge is first-party; skill-creator and clojure are adapted.
+- Vendoring herdr as a pure upstream copy installed by =gh skill=.
+- Rewriting find-skills around =gh skill=, which makes it adapted rather than vendored.
+- Adopting =gh skill ... --dir skills/= as the manager for the vendored set.
+*** Out of scope
+- Publish-side control of what =npx skills add cormacc/dotagents= offers consumers.
+- Relocating any skill out of =skills/=; any =agents.nix= change in the parent dotfiles repo.
+- The gitlab-cli-skills body and its =.vendor.edn= plus =scripts/sync-gitlab-cli-skills.bb= sync path.
+- The gitlab-cli-skills schedule-create doc gap (=6d205682=, TASKS.org § Upstream issues).
+
+** Acceptance
+*** Core functionality
+- [X] Every top-level skill under =skills/= appears exactly once in =skills/README.org=, in the class matching its actual maintenance status.
+- [X] Every =gh skill=-managed body carries =metadata.github-repo=, =github-path=, =github-ref=, and =github-tree-sha=.
+- [X] =skills/find-skills/SKILL.md= documents =gh skill= only and carries no =metadata.github-*= block.
+- Reversed [2026-08-21]: "find-skills differs from its upstream release only by =gh skill='s own frontmatter". It was met on install, then deliberately reversed -- a skill teaching =npx skills= contradicts the vendoring mechanism this record adopts, so find-skills is now adapted and outside the managed set.
+- [X] dirge is classified first-party, with no =Source= and no injected metadata.
+- [X] herdr is =gh skill=-managed, with no in-file vendor header.
+- [X] =gh skill update --dir skills/ --dry-run= exits 0 and reports the managed set up to date.
+- [X] =gh skill list --dir skills/ --json skillName,sourceURL,version= agrees with the README inventory: 16 entries, =sourceURL= populated for herdr alone. The gitlab-cli-skills row is in the vendored class with a =Source= but is not =gh skill=-managed.
+- [X] The README states the maintenance rule per class: first-party and adapted bodies are editable locally; vendored bodies are never edited locally.
+*** Anti-criteria
+- Must not: edit the gitlab-cli-skills bodies or replace =scripts/sync-gitlab-cli-skills.bb=.
+- Must not: apply repository prose conventions to a =gh skill=-managed body.
+- Must not: hand-write or hand-edit any =metadata.github-*= value; the tool writes them or they are absent.
+- Must not: commit a =skills-lock.json=.
+- Must not: require any change to the parent dotfiles repo.
+
+** Decisions
+- =gh skill= manages the vendored set :: =gh skill install|list|update --dir skills/= operates directly on the committed tree, and provenance is tool-written frontmatter that =update= reads back, so no lockfile is needed. =gh= is flake-pinned, and installs resolve to the latest tagged release. Rejected: =npx skills= plus a committed =skills-lock.json=, which cannot target the committed =skills/= tree, is unpinned, and offers no release pinning. The two are not blendable per skill -- =metadata.github-*= reads as local modification to =npx skills=.
+- Content hash, not upstream SHA, is the drift signal :: =github-tree-sha= hashes the installed skill directory, so it answers "did this skill change" and catches an unchanged tag whose contents moved, where a repo SHA churns on every unrelated upstream commit.
+- The managed set stays unpinned :: =gh skill update= skips a pinned skill, which would suppress that signal. Updates are applied deliberately after a =--dry-run= review.
+- Byte-identity is measured modulo tool metadata :: an install re-serialises the YAML frontmatter and injects =metadata.github-*=, so "vendored" means the prose is upstream's and the only delta is the tool's own block.
+- Classification follows byte-identity :: a deliberately condensed or rewritten body is adapted, takes local conventions, and stays published; only an unmodified copy is vendored.
+- dirge is first-party :: locally authored and owned here, with no upstream to resync from and no injected metadata.
+- find-skills is adapted, not vendored :: its subject is the skill toolchain itself, so an upstream body documenting =npx skills= would teach agents the tool this repository does not use. It keeps the upstream workflow shape, documents =gh skill=, takes local conventions, and leaves the =gh skill=-managed set.
+- gitlab-cli-skills keeps its exception :: upstream ships 48 root-level skills, so =gh skill= would install 48 siblings and flood discovery. =scripts/sync-gitlab-cli-skills.bb= keeps them nested under the router.
+- Republishing is acceptable :: consumers who want a skill install it individually; the goal is internal maintenance separation, not publish control.
+
+** Shipped
+- MODIFIED =skills/find-skills/SKILL.md= :: rewritten around =gh skill= (search, preview, install, placement, pinning, provenance), replacing a body that documented =npx skills=. Adapted, not vendored: no =metadata.github-*=, not tracked by =gh skill update=.
+- MODIFIED =skills/herdr/SKILL.md= :: upstream =v0.8.2=, installed by =gh skill=, replacing a hand-copied body and its in-file vendor header. The refresh brings two behaviour changes: =agent start= can return =agent_not_ready= while keeping the name usable for =agent read= / =agent send-keys=, and =agent prompt= rejects an agent sitting at an approval dialog with =agent_blocked=.
+- MODIFIED =scripts/validate-skills.bb= :: the hardcoded vendored set now holds =gitlab-cli-skills= and =herdr= only, so the frontmatter gate covers dirge and find-skills again after their reclassification.
+- MODIFIED =skills/README.org= :: per-class maintenance rules, =gh skill= as the vendoring mechanism, dirge reclassified first-party, find-skills reclassified adapted, herdr exception retired. The vendored set is now herdr plus the gitlab-cli-skills exception.
+
+** Gotchas
+- =gh skill update --dir skills/= warns once per unmanaged skill ("has no GitHub metadata"), so 15 of our 16 top-level skills produce noise around the single real result. It still exits 0. Filter by =sourceURL= from =gh skill list --json= rather than reading the update output directly.
+- The vendored classification is duplicated in =scripts/validate-skills.bb=, which downgrades a vendored skill's frontmatter failure to a warning. A skill leaving the vendored class must leave that set too, or its frontmatter silently stops gating -- reclassifying dirge and find-skills opened exactly that hole, and a broken frontmatter in either still exited 0 until the set was corrected.
+- =gh skill update= without =--all= stops an interactive terminal at =? Repository for <skill> (owner/repo):= for the first unmanaged skill. Piped or redirected it skips them instead, so a scripted check looks clean while the same command hangs for a human.
+- =gh skill install --pin= takes the ref as an argument (=--pin <tag-or-sha>=); bare =--pin= fails with =flag needs an argument=.
+- =gh skill list --dir= reports every skill in the directory, not only managed ones; a managed skill is identified by a non-empty =sourceURL= / =version=. Nested children under the gitlab-cli-skills router are not listed, so the router counts once.
+- A =gh skill= install needs GitHub API auth. Unauthenticated, a handful of probes exhausts the rate limit and the failure surfaces as =HTTP 403= from the version resolver, not as an auth error.
+
+** Risks
+- =gh skill= is explicitly "in preview and subject to change without notice". Accepted: the frontmatter it writes is plain YAML that survives the tool, and =gh= itself is flake-pinned.
+
+** Follow-ups
+- =6d205682= (gitlab-cli-skills schedule-create doc gap) is independent and stays in TASKS.org § Upstream issues.
+- =f7692a6c= carries the herdr licence gap noted in the parent task's original body: =gh skill= copies only the skill directory, so no upstream LICENSE comes across.
+- =9a7f8771= checks =herdr-orch= and =oh= against the refreshed herdr agent semantics.
+
+Planning subtasks =0a6c3fed= (research), =3df8b6a2= (de-publishing) and =87f1a303= (dirge provenance) were removed rather than closed: the first two were answered or dropped before implementation, and the third was settled by the owner stating dirge is locally authored.
+
+* Plan
+** DONE [#A] Replace the adapted find-skills body with the pure upstream copy
+CLOSED: [2026-08-21 Fri 15:46]
+:PROPERTIES:
+:CUSTOM_ID: 9a21d3e2-1f82-4733-90c5-814117c3774d
+:CREATED: [2026-08-21 Fri 10:11]
+:STARTED: [2026-08-21 Fri 15:46]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-21 Fri 15:46]
+- State "DONE" from "STARTED" [2026-08-21 Fri 15:46]
+:END:
+Installed upstream =v1.5.23= with =gh skill install vercel-labs/skills skills/find-skills --dir skills/=, which closed =73b47d41=. Superseded by =9d21a6c9=, which rewrote the body around =gh skill= and moved find-skills out of the vendored class.
+
+** DONE [#B] Adopt gh skill as the manager for the vendored set
+CLOSED: [2026-08-21 Fri 15:53]
+:PROPERTIES:
+:CUSTOM_ID: 2300b750-ad34-479c-bee4-ef27a1e5d67c
+:CREATED: [2026-07-31 Fri 13:17]
+:BLOCKED-BY: task:9a21d3e2-1f82-4733-90c5-814117c3774d
+:STARTED: [2026-08-21 Fri 15:47]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 13:17]
+- State "STARTED" from "TODO" [2026-08-21 Fri 15:47]
+- State "DONE" from "STARTED" [2026-08-21 Fri 15:53]
+:END:
+Acceptance criteria:
+- =gh skill list --dir skills/ --json skillName,sourceURL,version,pinned,path= identifies the managed set by non-empty =sourceURL=.
+- =gh skill update --dir skills/ --dry-run= exits 0 and reports no pending drift immediately after install.
+- Whether the managed set is release-pinned with =--pin= is decided and recorded, not left implicit.
+- No =skills-lock.json= is committed.
+- Must not: modify the gitlab-cli-skills bodies or its =.vendor.edn= sync path.
+
+** DONE [#B] Document the vendoring convention in skills/README.org
+CLOSED: [2026-08-21 Fri 15:57]
+:PROPERTIES:
+:CUSTOM_ID: 5121483a-1f26-47ec-8424-dadc3e3ee497
+:CREATED: [2026-07-31 Fri 13:18]
+:BLOCKED-BY: task:2300b750-ad34-479c-bee4-ef27a1e5d67c
+:BLOCKED-BY+: task:9a21d3e2-1f82-4733-90c5-814117c3774d
+:BLOCKED-BY+: task:a0cb07d8-8c7f-40d7-b147-46ca9dc6e11f
+:STARTED: [2026-08-21 Fri 15:53]
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 13:18]
+- State "STARTED" from "TODO" [2026-08-21 Fri 15:53]
+- State "DONE" from "STARTED" [2026-08-21 Fri 15:57]
+:END:
+Acceptance criteria:
+- The Vendored table lists only =gh skill=-managed copies and the gitlab-cli-skills exception, each with =Source= filled; adapted skills sit under "Adopted or adapted" with their divergence noted.
+- dirge appears under First-party, described as locally authored, and is removed from the Vendored table.
+- The convention names the maintenance rule per class: first-party and adapted bodies are editable locally; vendored bodies are never edited locally (fix upstream, or reclassify on deliberate divergence).
+- § Vendored names =gh skill install|list|update --dir skills/= as the mechanism, and =metadata.github-*= frontmatter as the authoritative provenance and drift record; no hash or ref is duplicated into prose.
+- The inventory lists every top-level skill exactly once, checked by reading it.
+
+** DONE [#B] Re-test the herdr vendoring exception under gh skill
+CLOSED: [2026-08-21 Fri 15:47]
+:PROPERTIES:
+:CUSTOM_ID: a0cb07d8-8c7f-40d7-b147-46ca9dc6e11f
+:CREATED: [2026-08-21 Fri 15:39]
+:STARTED: [2026-08-21 Fri 15:46]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-21 Fri 15:46]
+- State "DONE" from "STARTED" [2026-08-21 Fri 15:47]
+:END:
+Acceptance criteria:
+- =gh skill install ogulcancelik/herdr herdr --dir <scratch>= is run authenticated, and the installed file set is recorded.
+- If only =SKILL.md= lands: herdr becomes =gh skill=-managed, its vendor header is removed in favour of the tool's metadata, and the README exception is retired.
+- If the whole repository lands: the exception is re-affirmed and the =gh skill= result recorded beside it.
+- The probe runs in a scratch directory, never against =skills/=.
+
+** DONE [#A] Unvendor find-skills and rewrite it around gh skill
+CLOSED: [2026-08-21 Fri 16:12]
+:PROPERTIES:
+:CUSTOM_ID: 9d21a6c9-0976-43b4-822e-15379280c1c7
+:CREATED: [2026-08-21 Fri 16:05]
+:STARTED: [2026-08-21 Fri 16:05]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-21 Fri 16:05]
+- State "DONE" from "STARTED" [2026-08-21 Fri 16:12]
+:END:
+A skill that teaches =npx skills= is wrong for a repository that vendors with =gh skill=, so find-skills becomes adapted rather than vendored.
+
+Acceptance criteria:
+- =skills/find-skills/SKILL.md= documents =gh skill= only, with every command checked against =gh skill --help=.
+- Its frontmatter carries no =metadata.github-*= block, and =gh skill list --dir skills/= no longer reports a =sourceURL= for it.
+- It sits under "Adopted or adapted" in =skills/README.org= with the divergence named.
+- Repository prose conventions apply: one logical line per paragraph and list item, no unicode dashes.
+- Must not: leave a =gh skill update= path that would overwrite the rewrite.
+
+* Implementation
+=gh skill= behaviour, measured 2026-08-21 against gh 2.97.0 (preview), evidence under =.tmp/gh-skill-probe/=:
+- =install --dir=, =list --dir --json= and =update --dir --dry-run= all operate on an arbitrary directory, installing to =<dir>/<skill-name>/SKILL.md=.
+- =install= injects =metadata.github-repo=, =github-path=, =github-ref= and =github-tree-sha= (plus =github-pinned= when pinned); =update= compares the local tree SHA against the remote.
+- Installs resolve to the latest tagged release before default-branch HEAD; =@VERSION= and =--pin= override it.
+- Against the raw upstream file at the same tag, an installed body differs by three hunks: frontmatter re-serialised alphabetically, the metadata block added, one blank line dropped. The prose is untouched.
+- herdr needs no exception because upstream repackaged it: at =v0.8.2= the skill sits at =skills/herdr/SKILL.md= and the repository-root =SKILL.md= is a 404, which is exactly the retirement condition the old exception named. The exact-path form (=... herdr SKILL.md=) is rejected with =skill "SKILL.md" not found=; install by skill name.
+- Discovery on vince-winkintel/gitlab-cli-skills returns 48 root-level skills, so that exception is unchanged by the tool switch.
+
+Repository facts behind the classifications:
+- =skills/dirge/SKILL.md= has one commit here (=fee2327=) and no recorded upstream.
+- =metadata.internal: true= hides a skill from =npx skills add --list= (scratch two-skill probe, "Found 1 skill", visible skill as positive control) if publish-side control is ever wanted.
+- =~/.agents/skills= and =~/.claude/skills= are whole-directory links to this repo's =skills/= (dotfiles =agents.nix=), which is why no relocation is on the table.

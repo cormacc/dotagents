@@ -848,6 +848,32 @@ in place. Same node, same writer.
 Cancellation note: can't reproduce.
 
 * Improvements
+** DONE [#B] Update vendored GitLab CLI skill after upstream PR 83 merges :skill:gitlab_cli_skills:
+CLOSED: [2026-08-20 Thu 17:04]
+:PROPERTIES:
+:CUSTOM_ID: 6c723379-6697-4664-82e2-c70b6bfbb750
+:CREATED: [2026-08-18 Tue 10:44]
+:BLOCKED-BY: human: https://github.com/vince-winkintel/gitlab-cli-skills/pull/83
+:END:
+:LOGBOOK:
+- State "DONE"       from "WAITING"    [2026-08-20 Thu 17:04]
+- Created [2026-08-18 Tue 10:44]
+- State "WAITING" from "TODO" [2026-08-18 Tue 10:44]
+:END:
+Upstream fix: https://github.com/vince-winkintel/gitlab-cli-skills/pull/83
+
+After the upstream merge:
+- Refresh the vendored `gitlab-cli-skills` content from the accepted upstream revision.
+- Remove the temporary `glab runner list --all` workaround from `home/AGENTS.md`.
+- Keep `gitlab-cli-skills` classified as vendored in `skills/README.org`.
+
+Acceptance criteria:
+- The vendored `glab-runner/SKILL.md` documents `glab runner list --instance` in both affected locations.
+- The temporary workaround no longer exists in `home/AGENTS.md`.
+- The vendored content matches its recorded upstream revision.
+- Skill validation and `git diff --check` pass.
+
+
 ** CANCELLED [#D] Implement vulpea tasks UI for emacs :org:emacs:ui:
 CLOSED: [2026-08-05 Wed 22:42]
 :PROPERTIES:
@@ -3328,3 +3354,30 @@ Also include a different ASD-STE100 skill for comparison:
 https://github.com/AminBlg/SimpleEnglish/blob/main/skills/simple-english/SKILL.md
 
 This one looks more to the point that what we're using currently, which embeds some context that's not relevant to the agent at runtime.
+
+** DONE [#A] Skill vendoring improvements :project_convention:
+CLOSED: [2026-08-21 Fri 17:44]
+:PROPERTIES:
+:CUSTOM_ID: 98cf369c-83aa-4961-bf8b-2fa3aca8b2f3
+:CREATED: [2026-07-31 Fri 13:17]
+:STARTED: [2026-08-21 Fri 15:46]
+:ARCHIVED: [2026-08-21 Fri 17:44]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 13:17]
+- State "STARTED" from "TODO" [2026-08-21 Fri 15:46]
+- State "DONE" from "STARTED" [2026-08-21 Fri 17:44]
+:END:
+#+IMPORT: [[plan:2026-08-21-skill-vendoring-improvements.org]]
+Separate the maintenance classes of the skills under `skills/` -- first-party, adapted, vendored -- and give every vendored copy tool-written provenance with a content-hash drift signal, so it names its upstream and stays updatable.
+
+Current state and mechanism live in the linked change-record. In short: `gh skill ... --dir skills/` manages the vendored set and writes `metadata.github-*` into each managed body, so no lockfile exists. Vendored is now herdr plus the gitlab-cli-skills exception; dirge is first-party and find-skills is adapted.
+
+Open point not yet addressed: herdr ships a LICENSE upstream that does not come across with its `SKILL.md`, so the vendored copy carries no licence. Tracked separately.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: cormacc/dotagents @ main
+- timestamp: [2026-07-31 Fri 13:40]
+- sender: agent

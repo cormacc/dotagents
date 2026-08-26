@@ -54,7 +54,7 @@ Integration is the parent's work. =oh= never merges, rebases, pushes, deletes a 
 - The =herdr= binary, and =HERDR_ENV=1= in the environment (i.e. running inside a Herdr pane).
 - Optional: the =org-plan= and =org-tasks= skills in this repository complement it but are not required.
 
-Herdr itself is the authority for direct pane and agent operations. The [[https://github.com/ogulcancelik/herdr/blob/master/SKILL.md][upstream Herdr skill]] is vendored here at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]] for convenience, but the CLI path does not need it, so standalone installs work without it.
+Herdr itself is the authority for direct pane and agent operations. The [[https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md][upstream Herdr skill]] is vendored here at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]] for convenience, but the CLI path does not need it, so standalone installs work without it.
 
 ** Installation
 

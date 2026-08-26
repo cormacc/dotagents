@@ -5,7 +5,7 @@ description: "Delegate work to Herdr subagents with the in-skill `oh` CLI: spawn
 
 # Herdr subagents
 
-Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/SKILL.md) safety rules and verify `HERDR_ENV=1` before delegation. For ordinary one-child delegation use `scripts/oh`. The canonical mechanical CLI, ledger, envelope, and exit-code contract is [`scripts/docs/contract.md`](scripts/docs/contract.md), with invocation and test entry points in [`scripts/README.md`](scripts/README.md).
+Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md) safety rules and verify `HERDR_ENV=1` before delegation. For ordinary one-child delegation use `scripts/oh`. The canonical mechanical CLI, ledger, envelope, and exit-code contract is [`scripts/docs/contract.md`](scripts/docs/contract.md), with invocation and test entry points in [`scripts/README.md`](scripts/README.md).
 
 ```sh
 OH="$HOME/.agents/skills/herdr-orch/scripts/oh"
@@ -109,4 +109,4 @@ Child self-verification helps in every class but is never independent validation
 
 ## Manual fallback
 
-If the script is unavailable, follow the [upstream Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/SKILL.md) mechanically: the config chain, model translation, ledger and result-path allocation, the injected `CHILD`/`TASK`/`RESULT` environment, and the exact [v1 result envelope](scripts/docs/contract.md#ledger-and-completion) are all in contract.md § Environment and § Ledger and completion, which also records that a hand-driven publish with no ledger entry stays silent. Validate and capture before closing only the pane you created. A `BLOCKED` result is resumable in its retained pane. `continue` is the verb for that.
+If the script is unavailable, follow the [upstream Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md) mechanically: the config chain, model translation, ledger and result-path allocation, the injected `CHILD`/`TASK`/`RESULT` environment, and the exact [v1 result envelope](scripts/docs/contract.md#ledger-and-completion) are all in contract.md § Environment and § Ledger and completion, which also records that a hand-driven publish with no ledger entry stays silent. Validate and capture before closing only the pane you created. A `BLOCKED` result is resumable in its retained pane. `continue` is the verb for that.
