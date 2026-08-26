@@ -42,7 +42,6 @@
            "HERDR_PANE_ID" "w:p"
            "HERDR_ORCH_BIN" bin
            "ORCH_ASSIGNMENT_ROOT" (str dir)
-           "ORCH_START_RETRY_BACKOFF_MS" "10"
            "FAKE_HERDR_LOG" log
            "FAKE_HERDR_ENV_FILE" env-file
            "FAKE_HERDR_PROMPT_FILE" prompt-file

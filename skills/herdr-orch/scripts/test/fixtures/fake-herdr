@@ -3,8 +3,7 @@ set -euo pipefail
 printf '%s\037' "$@" >>"${FAKE_HERDR_LOG:?}"
 printf '\n' >>"$FAKE_HERDR_LOG"
 # FAKE_SESSION_FROM names the single hook that reports `agent_session`
-# (start|get|wait|late-get|none); `late-get` withholds it from the first child
-# `agent get` so a later hook has to backfill it.
+# (start|get|wait|none).
 session_json() {
   printf ',"agent_session":{"agent":"pi","kind":"path","source":"pi","value":"%s"}' "${FAKE_SESSION_VALUE:-/tmp/fake-child-session.jsonl}"
 }
@@ -66,34 +65,12 @@ child_status() {
   if [ -f "$file" ]; then cat "$file"; else printf '%s' "${FAKE_AGENT_STATUS:-idle}"; fi
 }
 # Write a child's lifecycle state through, so a later `agent get`/`agent list` agrees with
-# whatever the last hook reported. A dispatched prompt drives a child to `working` and a
-# settled wait drives it back, which is what makes the post-prompt dispatch check
-# observable at all: without the write-through every child would read the default `idle`
-# and look like it was holding its prompt unsubmitted.
+# whatever the last hook reported: a prompt drives a child to `working` and a settled wait
+# drives it back.
 set_child_status() {
   local dir="$(state_dir)/children/${1:-}"
   [ -n "${1:-}" ] && [ -d "$dir" ] || return 0
   printf '%s' "$2" >"$dir/status"
-  return 0
-}
-# FAKE_HELD_PROMPT models the swallowed Enter: `agent prompt` delivers the text but leaves
-# the child unsubmitted (status untouched), so only an explicit `agent send-keys <child>
-# enter` dispatches it. `FAKE_HELD_PROMPT=stuck` never dispatches at all, modelling a child
-# whose prompt is never confirmed within the budget.
-prompt_dispatches() { [ -z "${FAKE_HELD_PROMPT:-}" ]; }
-# FAKE_START_BUSY_COUNT fails that many leading `agent start` calls with
-# `agent_pane_busy`, then succeeds; the counter lives under the test's temp dir so
-# concurrent tests never collide. Absent/zero means no simulated busy pane.
-start_busy_gate() {
-  local n limit="${FAKE_START_BUSY_COUNT:-0}"
-  [ "$limit" -gt 0 ] || return 0
-  local counter="${FAKE_START_BUSY_COUNTER_FILE:-${FAKE_HERDR_LOG}.start-busy-count}"
-  n=0; [ -f "$counter" ] && n="$(cat "$counter")"
-  if [ "$n" -lt "$limit" ]; then
-    echo "$((n + 1))" >"$counter"
-    echo '{"error":{"code":"agent_pane_busy","message":"agent target pane w3:p3W is not an available shell"}}' >&2
-    return 1
-  fi
   return 0
 }
 # publish_result [child-name]: publishes from the named child's captured env when it is
@@ -172,7 +149,7 @@ publish_queue_step() {
   return 0
 }
 case "${1:-}" in
-  --version) echo "herdr ${FAKE_HERDR_VERSION:-0.7.5}" ;;
+  --version) echo "herdr ${FAKE_HERDR_VERSION:-0.8.2}" ;;
   pane)
     case "$2" in
       layout) echo '{"result":{"layout":{"area":{"width":113,"height":110},"focused_pane_id":"other","panes":[{"pane_id":"w:other","rect":{"width":200,"height":50}},{"pane_id":"w:p","rect":{"width":113,"height":55}}]}}}' ;;
@@ -237,12 +214,6 @@ case "${1:-}" in
             echo '{"error":{"code":"agent_not_found","message":"no such agent"}}' >&2; exit 1
           fi
           fragment="$(session_fragment get)"
-          if [ "${FAKE_SESSION_FROM:-}" = late-get ]; then
-            counter="${FAKE_HERDR_LOG}.child-get"
-            n=0; [ -f "$counter" ] && n="$(cat "$counter")"
-            n=$((n + 1)); echo "$n" >"$counter"
-            if [ "$n" -gt 1 ]; then fragment="$(session_json)"; fi
-          fi
           printf '{"result":{"agent":{"agent_status":"%s"%s}}}\n' "$(child_status "${3:-}")" "$fragment"
         fi ;;
       # Reports every placed child that has not been marked `gone`, with its per-child
@@ -289,31 +260,27 @@ case "${1:-}" in
         [ "${FAKE_FAIL_START:-}" = 1 ] && { echo '{"error":"start"}' >&2; exit 1; }
         # FAKE_START_ERROR_CODE fails every `agent start` call with the given herdr
         # error code (real map shape, not the bare-string FAKE_FAIL_START), so a
-        # non-`agent_pane_busy` code can prove first-attempt failure.
+        # mapped-error start failure can be tested distinctly from a bare-string one.
         if [ -n "${FAKE_START_ERROR_CODE:-}" ]; then
           printf '{"error":{"code":"%s","message":"fake non-busy error"}}\n' "$FAKE_START_ERROR_CODE" >&2
           exit 1
         fi
-        start_busy_gate || exit 1
         printf '{"result":{"agent":{"name":"child"%s}}}\n' "$(session_fragment start)" ;;
       # FAKE_FAIL_PROMPT models a submission that fails *after* the parent may already
       # have seen partial text, which is why the CLI names that reason separately.
       prompt)
         [ "${FAKE_FAIL_PROMPT:-}" = 1 ] && { echo '{"error":{"code":"agent_prompt_failed","message":"fake prompt failure"}}' >&2; exit 1; }
         printf '%s' "${4:-}" >"${FAKE_HERDR_PROMPT_FILE:?}"
-        if prompt_dispatches; then set_child_status "${3:-}" working; fi
+        set_child_status "${3:-}" working
         echo '{"result":{"agent":{"agent_status":"working"}}}' ;;
-      # Keys are logged like every other call; the one modelled side effect is that an
-      # `enter` submits a held prompt (unless the child is deliberately stuck), which is how
-      # a nudged spawn becomes observably `working`.
+      # Keys are logged like every other call; an `enter` also sets the child working, which
+      # models a raw passthrough nudge.
       send-keys)
-        if [ "${FAKE_HELD_PROMPT:-}" != stuck ]; then
-          # An `if` guard, not `[ ... ] && ...`: under `set -e` a failing AND-list on the
-          # loop's last iteration would abort the fixture before it answered.
-          for key in "$@"; do
-            if [ "$key" = enter ]; then set_child_status "${3:-}" working; fi
-          done
-        fi
+        # An `if` guard, not `[ ... ] && ...`: under `set -e` a failing AND-list on the
+        # loop's last iteration would abort the fixture before it answered.
+        for key in "$@"; do
+          if [ "$key" = enter ]; then set_child_status "${3:-}" working; fi
+        done
         echo '{"result":{}}' ;;
       # `agent wait <target>` publishes that target's own result, so a multi-child
       # fixture publishes per child rather than clobbering one shared env file.

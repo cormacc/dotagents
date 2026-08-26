@@ -58,33 +58,33 @@ Round one additionally excluded removing the start retry and dispatch verifier a
 
 *** Round two: core functionality
 
-- [ ] `herdr/minimum-version` is `[0 8 2]`.
-- [ ] `preflight!`'s failure message names 0.8.2.
-- [ ] `start!` makes exactly one `agent start` attempt.
-- [ ] `start-retry-attempts`, `default-start-retry-backoff-ms`, `parse-start-retry-backoff`, and `start-retry-backoff-ms` are absent from `herdr.clj`.
-- [ ] `verify-dispatch!`, `nudge?`, `max-dispatch-nudges`, `default-dispatch-timeout-ms`, `parse-dispatch-timeout`, and `dispatch-timeout-ms` are absent from `cli.clj`.
-- [ ] The spawn path writes no `:dispatch` or `:dispatched-at` ledger field.
-- [ ] `continue` writes no `:dispatch` or `:dispatched-at` ledger field.
-- [ ] `poke` has no `dispatch-unconfirmed` refusal.
-- [ ] `skills/herdr-orch/SKILL.md` no longer mentions `dispatch-unconfirmed`.
-- [ ] `skills/herdr-orch/SKILL.md` does not describe `start` as returning after dispatch.
-- [ ] `scripts/README.md` does not describe `task start` as returning after dispatch.
-- [ ] `docs/contract.md` states the Herdr >= 0.8.2 gate.
-- [ ] `docs/contract.md` records the accepted compatibility break for portable stable-0.8.0 users and why the gate is 0.8.2 although the fixes first shipped in 0.8.1.
-- [ ] `docs/contract.md` no longer documents dispatch verification, `ORCH_DISPATCH_TIMEOUT_MS`, or `ORCH_START_RETRY_BACKOFF_MS`.
-- [ ] `bb test` passes with the retry tests, dispatch tests, and `FAKE_HELD_PROMPT`/`agent_pane_busy` fixture machinery removed.
+- [X] `herdr/minimum-version` is `[0 8 2]`.
+- [X] `preflight!`'s failure message names 0.8.2.
+- [X] `start!` makes exactly one `agent start` attempt.
+- [X] `start-retry-attempts`, `default-start-retry-backoff-ms`, `parse-start-retry-backoff`, and `start-retry-backoff-ms` are absent from `herdr.clj`.
+- [X] `verify-dispatch!`, `nudge?`, `max-dispatch-nudges`, `default-dispatch-timeout-ms`, `parse-dispatch-timeout`, and `dispatch-timeout-ms` are absent from `cli.clj`.
+- [X] The spawn path writes no `:dispatch` or `:dispatched-at` ledger field.
+- [X] `continue` writes no `:dispatch` or `:dispatched-at` ledger field.
+- [X] `poke` has no `dispatch-unconfirmed` refusal.
+- [X] `skills/herdr-orch/SKILL.md` no longer mentions `dispatch-unconfirmed`.
+- [X] `skills/herdr-orch/SKILL.md` does not describe `start` as returning after dispatch.
+- [X] `scripts/README.md` does not describe `task start` as returning after dispatch.
+- [X] `docs/contract.md` states the Herdr >= 0.8.2 gate.
+- [X] `docs/contract.md` records the accepted compatibility break for portable stable-0.8.0 users and why the gate is 0.8.2 although the fixes first shipped in 0.8.1.
+- [X] `docs/contract.md` no longer documents dispatch verification, `ORCH_DISPATCH_TIMEOUT_MS`, or `ORCH_START_RETRY_BACKOFF_MS`.
+- [X] `bb test` passes with the retry tests, dispatch tests, and `FAKE_HELD_PROMPT`/`agent_pane_busy` fixture machinery removed.
 
 *** Round two: edge cases
 
-- [ ] A ledger entry carrying `:dispatch` with status `unconfirmed` still parses and `poke` treats it as dispatched.
-- [ ] A first-attempt `agent start` failure with a non-`agent_pane_busy` error still fails the spawn cleanly.
-- [ ] The spawn-time, wait-outcome, and capture-time `record-session!` backfills are unchanged.
+- [X] A ledger entry carrying `:dispatch` with status `unconfirmed` still parses and `poke` treats it as dispatched.
+- [X] A first-attempt `agent start` failure with a non-`agent_pane_busy` error still fails the spawn cleanly.
+- [X] The spawn-time, wait-outcome, and capture-time `record-session!` backfills are unchanged.
 
 *** Round two: anti-criteria
 
-- [ ] Must not: add a capability probe, compatibility layer, or replacement post-prompt probe.
-- [ ] Must not: add local handling for upstream `agent_blocked`.
-- [ ] Must not: change personas, traits, the Pi extension, or the parsing of existing ledger entries.
+- [X] Must not: add a capability probe, compatibility layer, or replacement post-prompt probe.
+- [X] Must not: add local handling for upstream `agent_blocked`.
+- [X] Must not: change personas, traits, the Pi extension, or the parsing of existing ledger entries.
 
 ** Decisions
 
@@ -106,7 +106,11 @@ Round one additionally excluded removing the start retry and dispatch verifier a
 
 ** Shipped
 
-- MODIFIED :: `skills/herdr-orch/SKILL.md` -- reduced mechanically enforced lifecycle prose while retaining parent choices and recovery actions.
+- MODIFIED :: `skills/herdr-orch/SKILL.md` -- reduced mechanically enforced lifecycle prose while retaining parent choices and recovery actions; round two dropped the `dispatch-unconfirmed` recovery path and the claim that `start` returns after dispatch.
+- REMOVED :: the `agent_pane_busy` start-retry loop and the post-prompt dispatch verifier, with their environment knobs `ORCH_START_RETRY_BACKOFF_MS` and `ORCH_DISPATCH_TIMEOUT_MS`. `oh` now makes one `agent start` attempt and one `agent prompt` call, and writes no `:dispatch` or `:dispatched-at` ledger field.
+- MODIFIED :: `skills/herdr-orch/scripts/docs/contract.md` -- preflight requires Herdr >= 0.8.2, records why the gate is 0.8.2 rather than the 0.8.1 that first carried the fixes, and states the accepted stable-0.8.0 compatibility break. Section Dispatch verification is gone.
+- MODIFIED :: `skills/herdr-orch/scripts/README.md` and `skills/herdr-orch/design.org` -- `task start` no longer described as returning after dispatch; the regression-boundary bullet naming two deleted dispatch tests removed.
+- MODIFIED :: `design/log/2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org` and the `TASKS.org` constraint for task 9f667467 -- the plugin plan's Herdr floor moves 0.8.0 to 0.8.2, and its gate-bump task `3dfd7b75` is CANCELLED as obsolete. Discovered by closeout validation: left live, that task would have lowered the gate and re-exposed the readiness bugs.
 
 ** Gotchas
 
@@ -117,6 +121,7 @@ Round one additionally excluded removing the start retry and dispatch verifier a
 ** Follow-ups
 
 - Discharged [2026-08-26 Wed]: Herdr 0.8.2 is released and contains readiness commits `7ae4b05` and `37644ca`; the reassessment became the round-two plan tasks below.
+- The single Herdr floor is now `[0 8 2]` in `herdr.clj` and 0.8.2 in the plugin plan's manifest target. A future gate change must move both, or the plugin loads on a Herdr its own bundled `oh` refuses.
 
 ** Risks
 
@@ -146,10 +151,16 @@ Acceptance criteria:
 
 Pointer: `skills/herdr-orch/SKILL.md` sections `Invocation policy` and `Completion and pane safety`. Mechanical detail remains in `skills/herdr-orch/scripts/docs/contract.md`.
 
-** TODO Raise the Herdr version gate to 0.8.2
+** DONE Raise the Herdr version gate to 0.8.2
+CLOSED: [2026-08-26 Wed 18:54]
 :PROPERTIES:
 :CUSTOM_ID: b242bfda-8dc5-4c9a-aee5-6379efaa4115
 :CREATED: [2026-08-26 Wed 14:22]
+:STARTED: [2026-08-26 Wed 18:52]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-26 Wed 18:52]
+- State "DONE" from "STARTED" [2026-08-26 Wed 18:54]
 :END:
 Acceptance criteria:
 - `herdr/minimum-version` is `[0 8 2]` and `preflight!` throws "Herdr 0.8.2 or newer is required".
@@ -163,11 +174,17 @@ Acceptance criteria:
 
 Pointer: `skills/herdr-orch/scripts/src/herdr_orch/herdr.clj` `preflight!`; the fixture default is the `--version` branch of `test/fixtures/fake-herdr`.
 
-** TODO Delete the agent_pane_busy start retry
+** DONE Delete the agent_pane_busy start retry
+CLOSED: [2026-08-26 Wed 18:59]
 :PROPERTIES:
 :CUSTOM_ID: 3bc67729-ecee-41c3-bc5f-f9209eb1ee42
 :CREATED: [2026-08-26 Wed 14:22]
 :BLOCKED-BY: task:b242bfda-8dc5-4c9a-aee5-6379efaa4115
+:STARTED: [2026-08-26 Wed 18:54]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-26 Wed 18:54]
+- State "DONE" from "STARTED" [2026-08-26 Wed 18:59]
 :END:
 Acceptance criteria:
 - `start!` in `herdr.clj` makes exactly one `agent start` attempt; `start-retry-attempts`, `default-start-retry-backoff-ms`, `parse-start-retry-backoff`, and `start-retry-backoff-ms` are absent.
@@ -180,11 +197,17 @@ Acceptance criteria:
 
 Pointer: `skills/herdr-orch/scripts/src/herdr_orch/herdr.clj` `start!`.
 
-** TODO Delete the dispatch verifier and the dispatch-unconfirmed path
+** DONE Delete the dispatch verifier and the dispatch-unconfirmed path
+CLOSED: [2026-08-26 Wed 19:17]
 :PROPERTIES:
 :CUSTOM_ID: 7d27edde-1c78-4fd5-83f7-859c9d191cc0
 :CREATED: [2026-08-26 Wed 14:22]
 :BLOCKED-BY: task:b242bfda-8dc5-4c9a-aee5-6379efaa4115
+:STARTED: [2026-08-26 Wed 18:59]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-08-26 Wed 18:59]
+- State "DONE" from "STARTED" [2026-08-26 Wed 19:17]
 :END:
 Acceptance criteria:
 - `cli.clj` no longer defines `verify-dispatch!`, `nudge?`, `max-dispatch-nudges`, `default-dispatch-timeout-ms`, `parse-dispatch-timeout`, or `dispatch-timeout-ms`; the spawn path and `continue` prompt without post-prompt verification and write no `:dispatch` or `:dispatched-at`.
@@ -205,6 +228,15 @@ Pointer: `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` `verify-dispatch!` a
 
 * Implementation
 
+Round two (Herdr 0.8.2):
+
+- The deletion is 82 insertions against 374 deletions across ten files. `cli.clj` loses 90 lines, `cli_test.clj` 222.
+- `verify-dispatch!` also drove one `record-session!` observation. Four call sites survive it -- spawn from `start!`'s return, each `agent wait` outcome, every owned capture, and the `status`/`list` live refresh -- so `:child-session` recording is unchanged in production. `child-session-is-recorded-by-every-hook` was adapted rather than trimmed: its post-prompt subcase became a capture-time subcase and the `child-get-count` bound dropped from 2 to 1.
+- Two deleted tests were replaced by renamed successors that assert the surviving edge case directly: `agent-start-mapped-error-fails-on-first-attempt` and `poke-treats-a-legacy-unconfirmed-dispatch-field-as-dispatched`. A legacy entry carrying `:dispatch {:status "unconfirmed"}` still parses and is poked normally.
+- The `FAKE_SESSION_FROM=late-get` fixture mode went with the verifier: it existed only to model the post-prompt probe consuming the first child `agent get`.
+
+Round one:
+
 - Reduced `## Invocation policy` from 827 to 273 words and `## Completion and pane safety` from 980 to 266 words.
 - Reduced the complete skill from 3,702 to 2,434 words. The diff adds 14 lines and removes 29 lines.
 - Retained waiting, placement, cardinality, isolation, integration, lifecycle, publication recovery, pane safety, ledger retention, artifact, and explicit-ID decisions.
@@ -216,3 +248,9 @@ Pointer: `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` `verify-dispatch!` a
 - A fresh light worker read the old snapshot as its only protocol guide. A second fresh light worker read the candidate. Both selected collect-again after timeout, `poke` after missing or invalid settled publication, capture before close, and validated collect-time artifact links as evidence.
 - The candidate evaluator's note that no pruning occurred contradicted the measured file. `wc -w`, section counts, and the inspected diff confirmed the pruning, so that note was not adopted.
 - The candidate-to-source copy preserved frontmatter and the file ending. The final diff changes only the two planned skill sections.
+
+Round two:
+
+- `bb test` exits 0 at every step: 637/4151 before, 634/4128 after the retry deletion, 627/4067 after the verifier deletion, unchanged by the fixture cleanup. That total is repository-wide -- `bb test-clojure` runs the org-tasks and herdr-orch suites together; herdr-orch's own share is 317 deftests, down from 327. A `deftest` name-set diff against the base ref accounted for the whole drop as deliberate deletions plus two renames, so no test silently stopped running.
+- A design review of the plan before implementation found the task footprints incomplete: simulated deletion against the green baseline showed the gate bump failing `preflight-fails-before-ledger-or-mutation` on a literal `0.7.5`, and the verifier deletion failing `child-session-is-recorded-by-every-hook` and `continue-allocates-a-fresh-round-inheriting-the-childs-identity`. Those anchors went into the plan tasks before any code changed.
+- Two validators spawned fresh for the closeout, at different tiers, independently verified all round-two criteria as met. They overlapped on exactly one finding -- the live 0.8.0/0.7.5 constraints in the plugin plan and `TASKS.org` -- and rated it advisory and blocking respectively. It was real: the fix is recorded in `** Shipped`. The higher-tier validator uniquely caught the stale `minimum-version` code comment, the dead `late-get` fixture mode, and the repository-wide scope of the test totals.

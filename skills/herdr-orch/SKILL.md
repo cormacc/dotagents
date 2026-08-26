@@ -46,7 +46,7 @@ The advisor-tier override is a convention, not a structured flag: instruct the w
 
 Choose explicitly:
 
-- **Waiting:** `run` blocks for one published item. `start` returns after dispatch for later `collect`, or `collect --any` during fan-in. A wait timeout is non-final. Read its `child-status`, then collect again instead of concluding failure or respawning.
+- **Waiting:** `run` blocks for one published item. `start` returns once the prompt is submitted, for later `collect`, or `collect --any` during fan-in. A wait timeout is non-final. Read its `child-status`, then collect again instead of concluding failure or respawning.
 - **Placement:** explicit `--tab` or `--split` overrides configured placement. The shipped `:tab-split` default gives a root child its own tab and splits a below-root child from its parent. See the [contract](scripts/docs/contract.md) § Placement for resolution details.
 - **Cardinality:** keep at most N root children in flight (default 2). Fan in with `collect --any --wait`, then replace each captured child as capacity opens. Below root, run one blocking leaf child at a time. Its spawner captures and closes it. Run one representative child before a fan-out that shares one design or benchmark premise.
 - **Isolation:** use `--worktree <path>` for an existing checkout or `--worktree new` for a managed checkout. Automatic isolation does not make overlapping edits compose safely. Keep sibling edit sets disjoint, name unavoidable overlap, and re-measure the combined parent tree after integration.
@@ -73,7 +73,7 @@ A validated terminal item in the parent-chosen `RESULT` stream is the only compl
 
 `BLOCKED` means a genuine resumable dependency. `FAILED` means the child could not recover after reasonable retries. Read the published summary before you re-prompt or respawn.
 
-For a settled child with no valid publication, use `oh task poke <full-task-uuid>` before you respawn. If `poke` reports `dispatch-unconfirmed`, read the pane because the work may not have started. If an `invalid` capture arrives while the child is still `working`, let it settle and collect again. If a settled child's `RESULT` contains prose, capture it as invalid, then use `poke`. Never adopt that prose as the result.
+For a settled child with no valid publication, use `oh task poke <full-task-uuid>` before you respawn. If an `invalid` capture arrives while the child is still `working`, let it settle and collect again. If a settled child's `RESULT` contains prose, capture it as invalid, then use `poke`. Never adopt that prose as the result.
 
 Capture before you close or continue. Never close user or other-agent panes, kill a parent, or stop the Herdr server. Use `orphans` only for children whose owning parent session has ended. Read per-child outcomes from bulk close commands instead of trusting their aggregate exit status. Guard and reason details are in the [contract](scripts/docs/contract.md) § Close and § Poke.
 

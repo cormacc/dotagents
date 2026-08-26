@@ -82,10 +82,7 @@
      {:dir dir :log log :env-file env-file :prompt-file prompt-file :roster (str roster) :skills (str skills) :state (str (fs/path dir "state"))
       :env (merge {"PATH" (str dir ":" (System/getenv "PATH")) "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p" "HERDR_ORCH_BIN" bin "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file "FAKE_HERDR_PROMPT_FILE" prompt-file "FAKE_HERDR_STATE_DIR" (str (fs/path dir "state"))
                    "HOME" (str home) "ORCH_ASSIGNMENT_ROOT" (str dir)
-                   "CLJ_CACHE" @shared-clj-cache "CLJ_CONFIG" @shared-clj-cache
-                   ;; Fast-by-default retry backoff: keeps the two `agent-start-retr*` tests
-                   ;; under 500ms without changing the unconfigured production default (500).
-                   "ORCH_START_RETRY_BACKOFF_MS" "10"}
+                   "CLJ_CACHE" @shared-clj-cache "CLJ_CONFIG" @shared-clj-cache}
                   overrides)})))
 
 (def advisor-strategy-roster
@@ -914,8 +911,7 @@
     (is (= 1 (:exit proc)))
     (is (some #(= ["tab" "create"] (vec (take 2 %))) argv))
     (is (some #(= ["pane" "close" "w:child"] (vec (take 3 %))) argv))
-    ;; `FAKE_FAIL_START` returns a bare-string error, not a mapped `{"error":{"code":…}}`:
-    ;; a non-`agent_pane_busy` error code fails on the first attempt, so no retry.
+    ;; `agent start` is never retried, so exactly one call is made regardless of failure shape.
     (is (= 1 (count (filter #(= ["agent" "start"] (vec (take 2 %))) argv))))
     (is (= "failed" (:status entry)))
     (is (= "start" (:failure-phase entry)))
@@ -970,9 +966,9 @@
         (is (= prompt (slurp prompt-file)))))))
 
 (deftest preflight-fails-before-ledger-or-mutation
-  (let [{:keys [env log]} (fake-env {"FAKE_HERDR_VERSION" "0.7.4"}) proc (call! env "task" "start" "worker" "--task" "x")]
+  (let [{:keys [env log]} (fake-env {"FAKE_HERDR_VERSION" "0.8.1"}) proc (call! env "task" "start" "worker" "--task" "x")]
     (is (= 1 (:exit proc)))
-    (is (str/includes? (str (:out proc) (:err proc)) "0.7.5"))
+    (is (str/includes? (str (:out proc) (:err proc)) "0.8.2"))
     (is (not-any? mutating? (calls log)))))
 
 (deftest preview-is-side-effect-free
@@ -1278,11 +1274,11 @@
       ;; Recorded from the `agent start` return, so it is on the entry before any later
       ;; probe could supply it -- and before the pane is closed, whenever that happens.
       (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
-  (testing "a session absent at start is backfilled by the post-prompt agent get"
+  (testing "a session absent at start is backfilled by the capture-time agent get"
     (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "get"})
-          proc (call! env "task" "start" "worker" "--task" "session after prompt")
+          proc (call! env "task" "run" "worker" "--task" "session after prompt" "--timeout" "200")
           entry (ledger-entry dir (get-in (result proc) [:result :task]))]
-      (is (zero? (:exit proc)) (:err proc))
+      (is (= "COMPLETE" (get-in (result proc) [:result :status])))
       (is (= "path" (get-in entry [:child-session :kind])))
       (is (= "/tmp/fake-child-session.jsonl" (get-in entry [:child-session :value])))))
   (testing "a wait outcome backfills without adding a Herdr call to the loop"
@@ -1291,18 +1287,18 @@
           entry (ledger-entry dir (get-in (result proc) [:result :task]))]
       (is (= "COMPLETE" (get-in (result proc) [:result :status])))
       (is (= "/tmp/fake-child-session.jsonl" (get-in entry [:child-session :value])))
-      ;; Four wait iterations, but only the post-prompt probe and the capture-time session
-      ;; backfill may issue `agent get`; the loop itself adds none.
-      (is (<= (child-get-count log) 2))))
+      ;; Four wait iterations, but only the capture-time session backfill issues `agent get`;
+      ;; the loop itself adds none, and the wait-outcome hook reuses the `agent wait` response.
+      (is (<= (child-get-count log) 1))))
   (testing "live (status/list) backfills while the child is alive"
-    (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "late-get"})
+    (let [{:keys [env dir]} (fake-env {"FAKE_SESSION_FROM" "get"})
           start (call! env "task" "start" "worker" "--task" "session via status")
           task (get-in (result start) [:result :task])]
       (is (nil? (:child-session (ledger-entry dir task))))
       (is (zero? (:exit (call! env "task" "status" task))))
       (is (= "/tmp/fake-child-session.jsonl" (get-in (ledger-entry dir task) [:child-session :value])))))
   (testing "capture backfills the session of a BLOCKED owned entry, whose pane is retained"
-    (let [{:keys [env env-file dir log]} (fake-env {"FAKE_SESSION_FROM" "late-get"})
+    (let [{:keys [env env-file dir log]} (fake-env {"FAKE_SESSION_FROM" "get"})
           start (call! env "task" "start" "worker" "--task" "blocked session")
           task (get-in (result start) [:result :task])
           values (into {} (map #(vec (str/split % #"=" 2)) (str/split-lines (slurp env-file))))]
@@ -1427,184 +1423,16 @@
           "an unchanged session observation must not rewrite the ledger file"))))
 
 (defn- start-call-count [log] (count (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))
-(defn- split-call-count [log] (count (filter #(= ["pane" "split"] (vec (take 2 %))) (calls log))))
 
-;; `agent_pane_busy` is the one herdr mutation error `agent start` retries; a
-;; busy-then-available pane spawns successfully with no duplicate pane or ledger entry.
-(deftest agent-start-retries-transient-pane-busy-then-succeeds
-  (let [{:keys [env log dir]} (fake-env {"FAKE_START_BUSY_COUNT" "2"})
-        ;; `--split` pins the placement this test counts (`split-call-count`); the retry
-        ;; behaviour under test is identical for either placement.
-        proc (call! env "task" "start" "worker" "--split" "--task" "busy then available")
-        task (get-in (result proc) [:result :task])
-        entry (ledger-entry* dir task)]
-    (is (zero? (:exit proc)) (:err proc))
-    (is (nil? (:failure-phase entry)))
-    (is (= "prompted" (:status entry)))
-    (is (= "w:child" (:pane-id entry)))
-    ;; Two simulated `agent_pane_busy` failures plus the eventual success.
-    (is (= 3 (start-call-count log)))
-    (is (= 1 (split-call-count log)))
-    ;; The retry never triggers cleanup: no pane is ever closed.
-    (is (not (some #(= ["pane" "close"] (vec (take 2 %))) (calls log))))
-    ;; exactly one ledger entry
-    (is (= 1 (count (filter #(and (fs/regular-file? %) (str/ends-with? (fs/file-name %) ".json"))
-                            (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))))))))
-
-;; A mapped-but-different error code (real `{"error":{"code":...}}` shape, not the
-;; bare-string FAKE_FAIL_START) proves code discrimination, not just nil-safety: only
-;; `agent_pane_busy` is retried, so this fails on the first attempt.
-(deftest agent-start-other-error-code-fails-on-first-attempt
+;; A mapped-error start failure (real `{"error":{"code":...}}` shape, not the bare-string
+;; FAKE_FAIL_START) still fails the spawn cleanly on the first attempt: `agent start` is
+;; never retried, whatever error code herdr reports.
+(deftest agent-start-mapped-error-fails-on-first-attempt
   (let [{:keys [env log]} (fake-env {"FAKE_START_ERROR_CODE" "agent_pane_unavailable"})
         proc (call! env "task" "start" "worker" "--task" "non-busy code")]
     (is (= 1 (:exit proc)))
     (is (= 1 (start-call-count log)))
     (is (some #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
-
-;; Budget exhaustion (every attempt busy) still yields the existing `:start`-phase
-;; cleanup: one ledger entry, failed status, and a closed child pane.
-(deftest agent-start-retry-budget-exhaustion-fails-cleanly
-  (let [{:keys [env log dir]} (fake-env {"FAKE_START_BUSY_COUNT" "99"})
-        ;; `--split` pins the placement this test counts (`split-call-count`); cleanup is
-        ;; identical for either placement.
-        proc (call! env "task" "start" "worker" "--split" "--task" "always busy")
-        entry (first (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
-                           :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
-                       (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))]
-    (is (= 1 (:exit proc)))
-    (is (= "failed" (:status entry)))
-    (is (= "start" (:failure-phase entry)))
-    (is (some #(= ["pane" "close" "w:child"] (vec (take 3 %))) (calls log)))
-    (is (= herdr/start-retry-attempts (start-call-count log)))
-    (is (= 1 (split-call-count log)))
-    (is (= 1 (count (filter #(and (fs/regular-file? %) (str/ends-with? (fs/file-name %) ".json"))
-                            (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))))))))
-
-;; Zero is truthy in Clojure and Thread/sleep rejects negatives, so both must fall back;
-;; same discipline as `poll-interval-parsing` for `cli/parse-poll-interval`. This is the
-;; only place the unconfigured 500ms default is exercised: `fake-env` sets the env override
-;; for every other test in this namespace.
-(deftest start-retry-backoff-parsing
-  (is (= 500 (herdr/parse-start-retry-backoff nil)))
-  (is (= 500 (herdr/parse-start-retry-backoff "")))
-  (is (= 500 (herdr/parse-start-retry-backoff "   ")))
-  (is (= 500 (herdr/parse-start-retry-backoff "0")))
-  (is (= 500 (herdr/parse-start-retry-backoff "-5")))
-  (is (= 500 (herdr/parse-start-retry-backoff "abc")))
-  (is (= 500 herdr/default-start-retry-backoff-ms))
-  (is (= 10 (herdr/parse-start-retry-backoff "10"))))
-
-;; --- post-prompt dispatch verification --------------------------------------------
-;; `agent prompt` submits atomically, but a swallowed Enter leaves the composed prompt in
-;; the child's composer, which burned a pane and the parent's whole timeout budget while the
-;; ledger read `prompted`. The fixture models both outcomes: a dispatched prompt drives the
-;; child to `working`, while FAKE_HELD_PROMPT leaves it `idle` until an explicit `enter`.
-(defn- enter-nudges [log child]
-  (filterv #(= ["agent" "send-keys" child "enter"] (vec (take 4 %))) (calls log)))
-
-;; The nudge rule as three values, with no clock: a *persisting* idle is nudged, an
-;; observable state never is, and the cap is absolute. Asserting this through
-;; `verify-dispatch!` would instead measure how many loop iterations fit in the dispatch
-;; budget, which is a property of the machine rather than of the rule.
-(deftest nudge-cap-and-persistence-rule
-  (testing "a first idle reading is never nudged: one reading is not yet persistence"
-    (is (not (cli/nudge? "idle" 0 0))))
-  (testing "a persisting idle is nudged until the cap"
-    (is (cli/nudge? "idle" 1 0))
-    (is (cli/nudge? "idle" 5 (dec cli/max-dispatch-nudges))))
-  (testing "the cap is absolute, however long the child stays idle"
-    (is (not (cli/nudge? "idle" 99 cli/max-dispatch-nudges)))
-    (is (not (cli/nudge? "idle" 99 (inc cli/max-dispatch-nudges)))))
-  (testing "only idle is ever nudged: an observable or unreadable state is left alone"
-    (doseq [status ["working" "blocked" "done" "unknown"]]
-      (is (not (cli/nudge? status 5 0)) status))))
-
-(deftest dispatched-prompt-is-confirmed-without-touching-the-keyboard
-  (let [{:keys [env log dir]} (fake-env {"ORCH_POLL_INTERVAL_MS" "20"})
-        proc (call! env "task" "start" "worker" "--task" "prompt lands unaided")
-        entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
-    (is (zero? (:exit proc)) (:err proc))
-    (is (= "dispatched" (get-in entry [:dispatch :status])))
-    (is (= "working" (get-in entry [:dispatch :state])))
-    (is (= 0 (get-in entry [:dispatch :nudges])))
-    (is (string? (:dispatched-at entry)))
-    ;; The confirming probe is the same `agent get` that backfills `:child-session`: the
-    ;; check adds no Herdr call of its own to a healthy spawn.
-    (is (= 1 (child-get-count log)))
-    (is (empty? (enter-nudges log (:child entry))))))
-
-(deftest held-prompt-is-nudged-once-and-then-confirmed
-  (let [{:keys [env log dir]} (fake-env {"FAKE_HELD_PROMPT" "1" "ORCH_POLL_INTERVAL_MS" "20"})
-        proc (call! env "task" "start" "worker" "--task" "prompt held unsubmitted")
-        entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
-    (is (zero? (:exit proc)) (:err proc))
-    (is (= "dispatched" (get-in entry [:dispatch :status])))
-    (is (= 1 (get-in entry [:dispatch :nudges])))
-    (is (string? (:dispatched-at entry)))
-    ;; Exactly one Enter: the nudge is not repeated once the child is observably working.
-    (is (= 1 (count (enter-nudges log (:child entry)))))))
-
-;; An unobservable child must never be guessed at: Enter on a state we could not read risks
-;; submitting stray empty input into whatever the pane actually holds.
-(deftest unknown-state-is-never-nudged
-  (doseq [[label overrides] {"unknown status" {"FAKE_AGENT_STATUS" "unknown"}
-                             "failing agent get" {"FAKE_FAIL_CHILD_GET" "1"}}]
-    (let [{:keys [env log dir]} (fake-env (merge {"FAKE_HELD_PROMPT" "stuck" "ORCH_POLL_INTERVAL_MS" "20"
-                                                  "ORCH_DISPATCH_TIMEOUT_MS" "120"}
-                                                 overrides))
-          proc (call! env "task" "start" "worker" "--task" (str "unobservable child: " label))
-          task (get-in (result proc) [:result :task])
-          entry (ledger-entry* dir task)]
-      (is (zero? (:exit proc)) (str label " " (:err proc)))
-      (is (= "unconfirmed" (get-in entry [:dispatch :status])) label)
-      (is (= 0 (get-in entry [:dispatch :nudges])) label)
-      (is (nil? (:dispatched-at entry)) label)
-      (is (empty? (enter-nudges log (:child entry))) label))))
-
-;; A child that never dispatches is a diagnosis, not a spawn failure: the pane is kept and
-;; the ordinary wait/collect path still runs, so `run` reports its usual `pending` timeout.
-(deftest unconfirmed-dispatch-neither-fails-the-spawn-nor-closes-the-pane
-  (let [{:keys [env log dir]} (fake-env {"FAKE_HELD_PROMPT" "stuck" "ORCH_POLL_INTERVAL_MS" "20"
-                                         "ORCH_DISPATCH_TIMEOUT_MS" "150" "FAKE_WAIT" "idle-forever"})
-        proc (call! env "task" "run" "worker" "--task" "prompt never dispatches" "--timeout" "150")
-        task (get-in (result proc) [:result :task])
-        entry (ledger-entry* dir task)]
-    (is (zero? (:exit proc)) (:err proc))
-    (is (= "pending" (get-in (result proc) [:result :status])))
-    (is (= "unconfirmed" (get-in entry [:dispatch :status])))
-    (is (= "idle" (get-in entry [:dispatch :state])))
-    ;; How many nudges fit before the deadline is wall-clock dependent, so the cap itself is
-    ;; asserted in `nudge-cap-and-persistence-rule` rather than here. What this test owns is
-    ;; the diagnosis: some nudging happened, none of it burst past the cap, and an
-    ;; undispatched child is neither a spawn failure nor a closed pane.
-    (is (pos? (get-in entry [:dispatch :nudges])))
-    (is (<= (get-in entry [:dispatch :nudges]) cli/max-dispatch-nudges))
-    (is (= (get-in entry [:dispatch :nudges]) (count (enter-nudges log (:child entry))))
-        "every recorded nudge is one real Enter")
-    (is (nil? (:dispatched-at entry)))
-    (is (= "w:child" (:pane-id entry)))
-    (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) (calls log)))))
-
-;; A child that settled before the first probe has plainly dispatched; only `idle` and
-;; `unknown` are ambiguous.
-(deftest already-settled-child-counts-as-dispatched
-  (doseq [state ["done" "blocked"]]
-    (let [{:keys [env log dir]} (fake-env {"FAKE_AGENT_STATUS" state "FAKE_HELD_PROMPT" "stuck"
-                                           "ORCH_POLL_INTERVAL_MS" "20" "ORCH_DISPATCH_TIMEOUT_MS" "120"})
-          proc (call! env "task" "start" "worker" "--task" (str "settled at " state))
-          entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
-      (is (zero? (:exit proc)) (str state " " (:err proc)))
-      (is (= "dispatched" (get-in entry [:dispatch :status])) state)
-      (is (= state (get-in entry [:dispatch :state])) state)
-      (is (empty? (enter-nudges log (:child entry))) state))))
-
-;; Same non-positive/unparseable/blank discipline as every other ORCH_* budget.
-(deftest dispatch-timeout-parsing
-  (is (= 15000 cli/default-dispatch-timeout-ms))
-  (is (= 2 cli/max-dispatch-nudges))
-  (is (= 1234 (cli/parse-dispatch-timeout "1234")))
-  (doseq [raw [nil "" "   " "soon" "0" "-5"]]
-    (is (= cli/default-dispatch-timeout-ms (cli/parse-dispatch-timeout raw)) (pr-str raw))))
 
 (defn- wait-call-count [log]
   (count (filter #(= ["agent" "wait"] (vec (take 2 %))) (calls log))))
@@ -3747,7 +3575,6 @@
     ;; special case for it.
     (is (= "prompted" (:status entry)))
     (is (some? (:prompted-at entry)))
-    (is (= "dispatched" (get-in entry [:dispatch :status])))
     ;; Prompted in place: the existing pane, no new placement of any kind, no new agent.
     (is (some #(= ["agent" "prompt" (:child prior)] (vec (take 3 %))) (calls log)))
     (is (= 1 (count (filter #(#{["pane" "split"] ["tab" "create"]} (vec (take 2 %))) (calls log)))))
@@ -4054,21 +3881,20 @@
     (is (= 1 (:pokes outcome)))
     (is (false? @held?) "the child lock is released after poke returns")))
 
-;; `unconfirmed` means the round's prompt may never have left the child's composer, so the
-;; work may never have started. A publication re-prompt would be the wrong instruction.
-(deftest poke-reports-an-unconfirmed-dispatch-without-prompting
+;; An entry that predates the removal of dispatch verification can still carry a stale
+;; `:dispatch {:status "unconfirmed" ...}` field. `poke` no longer reads it: the field
+;; parses without error and the round is poked exactly as any other settled child would be.
+(deftest poke-treats-a-legacy-unconfirmed-dispatch-field-as-dispatched
   (let [{:keys [env dir log]} (fake-env {"FAKE_WAIT" "idle"})
         entry (patch-entry! dir (start-child! env dir "prompt never dispatched")
                             :dispatch {:status "unconfirmed" :state "idle" :nudges 2})
         prompts-before (count (filter #(= ["agent" "prompt"] (vec (take 2 %))) (calls log)))
         proc (call! env "task" "poke" (:task entry))]
     (is (zero? (:exit proc)) (:err proc))
-    (is (= "unconfirmed" (get-in (result proc) [:result :status])))
-    (is (= "dispatch-unconfirmed" (get-in (result proc) [:result :reason])))
-    (is (re-find #"may never have started" (get-in (result proc) [:result :detail])))
-    (is (= prompts-before (count (filter #(= ["agent" "prompt"] (vec (take 2 %))) (calls log))))
-        "an unconfirmed dispatch is reported, never re-prompted")
-    (is (nil? (:pokes (ledger-entry* dir (:task entry)))))))
+    (is (= "poked" (get-in (result proc) [:result :status])))
+    (is (= (inc prompts-before) (count (filter #(= ["agent" "prompt"] (vec (take 2 %))) (calls log))))
+        "a legacy unconfirmed-dispatch entry is poked, not refused")
+    (is (= 1 (:pokes (ledger-entry* dir (:task entry)))))))
 
 (deftest continue-refuses-an-unusable-prior-round
   (let [{:keys [env log dir]} (fake-env {})]

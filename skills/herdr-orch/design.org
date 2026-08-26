@@ -58,7 +58,6 @@ The [[file:../../design/log/2026-07-27-subagent-per-persona-spawn-capability-re.
 The regression suite names the important boundaries. Preserve the tests rather than duplicating their mechanics here:
 
 - =bounded-poll-timeout-without-result= must fail if the wait-loop sleep is removed.
-- =unknown-state-is-never-nudged= must fail if the post-prompt dispatch check ever sends keys to a child whose state it could not observe, and =dispatched-prompt-is-confirmed-without-touching-the-keyboard= must fail if a healthy spawn starts paying for a poll interval or a second =agent get=.
 - =launcher-matrix-selects-branch-and-preserves-cwd= must fail if launcher path canonicalisation or caller cwd preservation regresses.
 - capture must never close a pane: closure belongs to =task close= alone, and =close=/=close --settled= must refuse a foreign or unresolvable parent identity and a stale non-newest round. A child whose live name and pane id do not both match the ledger entry closes only through the guarded shell_pid fallback for a released name (task ca6fecef), never on weaker evidence.
 - retro tests must remain behavioural at prompt/CLI boundaries: frontmatter values are strings, value-less flags participate in two argv consumers, and optional annotations must not demote a valid result.

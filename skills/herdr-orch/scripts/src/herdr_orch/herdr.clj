@@ -1,10 +1,10 @@
 (ns herdr-orch.herdr
-  "Safe argv adapter for Herdr 0.7.5. No command text is passed to a shell."
+  "Safe argv adapter for Herdr 0.8.2. No command text is passed to a shell."
   (:require [babashka.process :as process]
             [cheshire.core :as json]
             [clojure.string :as str]))
 
-(def minimum-version [0 7 5])
+(def minimum-version [0 8 2])
 (def max-output-lines 2000)
 (def max-output-bytes (* 50 1024))
 
@@ -47,7 +47,7 @@
     (if (and (zero? exit) found) found (throw (ex-info "unable to determine Herdr version" {:exit exit :stderr err})))))
 (defn at-least? [actual expected] (not (neg? (compare actual expected))))
 ;; The version gate is the whole capability check. Every command and flag the CLI uses
-;; shipped in `minimum-version`, so per-command `--help` probing (12 extra subprocesses on
+;; shipped well before `minimum-version`, so per-command `--help` probing (12 extra subprocesses on
 ;; every spawn, matched by substring against help text) could only have caught a binary
 ;; that misreports its own version -- while costing a probe table, a help parser, and a
 ;; help-shape emulation the test fixture had to keep in sync. A socket-protocol check via
@@ -56,7 +56,7 @@
 (defn preflight! []
   (when-not (= "1" (System/getenv "HERDR_ENV")) (throw (ex-info "oh requires HERDR_ENV=1; run inside a Herdr pane" {:kind :environment})))
   (let [actual (version)]
-    (when-not (at-least? actual minimum-version) (throw (ex-info "Herdr 0.7.5 or newer is required" {:actual actual :minimum minimum-version}))))
+    (when-not (at-least? actual minimum-version) (throw (ex-info "Herdr 0.8.2 or newer is required" {:actual actual :minimum minimum-version}))))
   true)
 (defn- env-args [env] (mapcat (fn [[k v]] ["--env" (str k "=" v)]) env))
 (defn caller-rect! []
@@ -193,29 +193,11 @@
 (defn render-agents [items] (if (seq items) (str/join "\n" (map summarize-agent items)) "No agents."))
 (defn render-panes [items current-pane-id] (if (seq items) (str/join "\n" (map #(summarize-pane % current-pane-id) items)) "No panes."))
 
-;; A freshly split pane's shell can lag behind its interactive prompt, and herdr reports
-;; that startup race as `agent_pane_busy`. A single immediate rerun cleared it on the
-;; live smoke run that motivated this (no duration was measured), so the budget below is
-;; deliberately small and hard-coded rather than tuned to an observed race length: three
-;; retries at 500ms (~1.5s of backoff) trades a modest, bounded delay against burning the
-;; whole spawn allocation. Retry over `invoke` (not `value!`) so no `ex-info` has to be
-;; caught and re-thrown; every other error code fails on the first attempt, and no other
-;; mutation (`pane split`, `agent prompt`, `pane rename`) is retried.
-(def start-retry-attempts 4)
-(def default-start-retry-backoff-ms 500)
-(defn parse-start-retry-backoff [raw]
-  (let [n (some-> raw str/trim not-empty parse-long)]
-    (if (and n (pos? n)) n default-start-retry-backoff-ms)))
-(defn start-retry-backoff-ms [] (parse-start-retry-backoff (System/getenv "ORCH_START_RETRY_BACKOFF_MS")))
 (defn start! [name kind pane native-args]
-  (let [argv (into ["agent" "start" name "--kind" kind "--pane" pane] (when (seq native-args) (into ["--"] native-args)))]
-    (loop [attempt 1]
-      (let [outcome (invoke argv)]
-        (cond
-          (:ok outcome) (get-in (:value outcome) [:result :agent])
-          (and (< attempt start-retry-attempts) (= "agent_pane_busy" (get-in outcome [:error :response :error :code])))
-          (do (Thread/sleep (start-retry-backoff-ms)) (recur (inc attempt)))
-          :else (let [error (:error outcome)] (throw (ex-info (:message error) error))))))))
+  (let [argv (into ["agent" "start" name "--kind" kind "--pane" pane] (when (seq native-args) (into ["--"] native-args)))
+        outcome (invoke argv)]
+    (if (:ok outcome) (get-in (:value outcome) [:result :agent])
+        (let [error (:error outcome)] (throw (ex-info (:message error) error))))))
 (defn prompt! [target text] (value! ["agent" "prompt" target text]))
 (defn agent-wait! [target timeout until]
   (invoke (into ["agent" "wait" target "--timeout" (str timeout)]

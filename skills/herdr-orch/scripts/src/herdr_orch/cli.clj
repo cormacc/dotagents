@@ -65,20 +65,6 @@
   (let [n (some-> raw str/trim not-empty parse-long)]
     (if (and n (pos? n)) n default-settle-close-ms)))
 (defn settle-close-ms [] (parse-settle-close (System/getenv "ORCH_SETTLE_CLOSE_MS")))
-;; Bounds the post-prompt dispatch check (`verify-dispatch!`); same non-positive/
-;; unparseable/blank -> default discipline as the knobs above. The cadence inside that
-;; budget is the shared `ORCH_POLL_INTERVAL_MS`, so verifying a spawn adds no second
-;; interval knob. The default is sized against the 25.6-46.6 s submit delays observed
-;; when the Enter was swallowed: it does not have to outlast them, only to notice the
-;; held prompt and clear it, and the healthy path exits on the first observation.
-(def default-dispatch-timeout-ms 15000)
-(defn parse-dispatch-timeout [raw]
-  (let [n (some-> raw str/trim not-empty parse-long)]
-    (if (and n (pos? n)) n default-dispatch-timeout-ms)))
-(defn dispatch-timeout-ms [] (parse-dispatch-timeout (System/getenv "ORCH_DISPATCH_TIMEOUT_MS")))
-;; Capped independently of the budget: a misread state must cost at most a couple of
-;; stray keys, never a burst for the whole budget.
-(def max-dispatch-nudges 2)
 ;; Single source of truth for delegation value-less flags. The raw tab/workspace create
 ;; `--focus` operator flag is scoped to those commands by `boolean-flags-for`; both argv
 ;; consumers use the same resolved set so no value-less flag swallows the next element.
@@ -522,7 +508,7 @@
 ;;
 ;; First-write-wins used to mean every later hook merely deferred to whichever observation
 ;; got here first, so a session recorded before a crash-and-resume stayed on the entry
-;; forever even once every subsequent hook -- dispatch verification, each wait tick, a
+;; forever even once every subsequent hook -- each wait tick, then a
 ;; capture-time backfill -- was observing the *new* session the resumed process actually
 ;; ran under (measured on this record's own phase-2 round: entry `21f8fbb1` still named the
 ;; session that crashed). Last-write-wins would trade one wrong reference for another in
@@ -562,52 +548,6 @@
                                               (fn [history] (vec (distinct (conj (vec history) current)))))
                                       (assoc :child-session session)))))))
       (catch Exception _ nil))))
-;; --- post-prompt dispatch verification ---------------------------------------------
-;; `agent prompt` submits atomically, but a harness TUI still finishing startup can swallow
-;; the Enter and leave the composed prompt sitting unsubmitted in the child's composer: of
-;; nine spawns in the session that motivated this, seven needed a manual Enter and two
-;; dispatched unaided, so this must tolerate a prompt that already landed. A dispatched
-;; prompt drives the child out of `idle`, so a definite `idle` is the held-prompt signal and
-;; one `enter` clears it. The nudge is gated on that *definite* reading: `unknown` means only
-;; that the agent could not be observed, and a guessed Enter there submits stray empty input.
-;; Failing to confirm is not a spawn failure -- the child may simply be slow, the pane is
-;; kept, and the ordinary wait/collect path is unchanged -- so every Herdr call here is
-;; best-effort and the outcome is recorded rather than thrown. The probe doubles as the
-;; post-prompt `:child-session` backfill, so it adds no `agent get` of its own.
-;;
-;; Only a *persisting* idle is nudged: `agent prompt` returns once the keystrokes are
-;; delivered, so a child that simply has not begun its turn yet also reads `idle` for a
-;; moment. Requiring a second consecutive idle reading costs one poll interval in the held
-;; case and nothing at all in the healthy one (a dispatched child is already out of `idle`
-;; on the first probe, so a normal spawn sleeps zero times and makes exactly one call).
-;; Whether this reading earns an Enter. Pure, and deliberately separate from the loop that
-;; calls it: the rule is "a *persisting* idle, capped", which is a statement about three
-;; values and not about elapsed time. Asserting it through the loop instead couples the cap
-;; to how many iterations fit inside `ORCH_DISPATCH_TIMEOUT_MS`, so a loaded machine that
-;; reaches the deadline one nudge early fails a test whose subject it never changed.
-(defn nudge? [status idle-readings nudges]
-  (and (= "idle" status) (pos? idle-readings) (< nudges max-dispatch-nudges)))
-
-(defn verify-dispatch! [task child]
-  (let [deadline (+ (System/currentTimeMillis) (dispatch-timeout-ms))]
-    (loop [nudges 0 idle-readings 0]
-      (let [agent (try (herdr/agent! child) (catch Exception _ nil))
-            ;; Nested at `[:result :agent :agent_status]`, already unwrapped by
-            ;; `herdr/agent!`. Reading it one level too shallow yields `unknown` for every
-            ;; child, which the `unknown` gate turns into a silently inert check.
-            status (or (:agent_status agent) "unknown")]
-        (record-session! task (:agent_session agent))
-        (if-not (contains? #{"idle" "unknown"} status)
-          (ledger/update! task assoc :dispatched-at (now)
-                          :dispatch {:status "dispatched" :state status :nudges nudges})
-          (let [nudge-now? (nudge? status idle-readings nudges)
-                _ (when nudge-now? (try (herdr/agent-send-keys! child ["enter"]) (catch Exception _ nil)))
-                nudges (cond-> nudges nudge-now? inc)
-                remaining (- deadline (System/currentTimeMillis))]
-            (if (pos? remaining)
-              (do (Thread/sleep (min (poll-interval-ms) remaining))
-                  (recur nudges (if (= "idle" status) (inc idle-readings) 0)))
-              (ledger/update! task assoc :dispatch {:status "unconfirmed" :state status :nudges nudges}))))))))
 (defn caller-owns? [entry]
   (boolean (when-let [recorded (:parent-session entry)]
              (= recorded (try (:parent-session (parent-identity)) (catch Exception _ nil))))))
@@ -1014,12 +954,7 @@
                   (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path persona-path :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})]
                     (ledger/update! task assoc :status "started" :started-at (now))
                     (herdr/prompt! name prompt)
-                    ;; `:prompted-at` timestamps the submission *attempt*, never the moment
-                    ;; the child began the turn: the two differ by however long a swallowed
-                    ;; Enter held the prompt. `verify-dispatch!` records `:dispatched-at` for
-                    ;; that, and also backfills the session a read at `start` usually misses.
-                    (ledger/update! task assoc :status "prompted" :prompted-at (now))
-                    (verify-dispatch! task name))))
+                    (ledger/update! task assoc :status "prompted" :prompted-at (now)))))
               (catch Exception e
                 (safe-cleanup! (ledger/read! task) :start)
                 (throw e))))
@@ -2136,22 +2071,10 @@
                      {:task task :child child :recorded (:pane-id current) :observed (:pane_id agent)}))
              (when-not (contains? #{"idle" "done"} (:agent_status agent))
                (fail "poke refused: the child is not settled" {:task task :child child :agent-status (:agent_status agent)}))
-             ;; `verify-dispatch!` recorded at spawn whether the prompt actually left the child's
-             ;; composer. `unconfirmed` means the work may never have begun, so a publication
-             ;; re-prompt is the wrong instruction: report it, and leave the operator to read the
-             ;; pane. Poke reads that recorded state and never re-runs the probe, whose nudge
-             ;; sends a raw key. An entry that predates the probe records nothing, and a round
-             ;; with no `:dispatch` is treated as dispatched.
-             (if (= "unconfirmed" (get-in current [:dispatch :status]))
-               {:status "unconfirmed" :task task :child child :pane-id (:pane-id current)
-                :reason "dispatch-unconfirmed"
-                :detail (str "The prompt for this round was never confirmed to leave the child's composer. "
-                             "The work may never have started. Read the pane before you poke again or respawn.")
-                :dispatch (:dispatch current)}
-               (do (herdr/prompt! child (poke-prompt task (:result current)))
-                   (ledger/update! task update :pokes (fnil inc 0))
-                   {:status "poked" :task task :child child :pane-id (:pane-id current)
-                    :pokes (inc (or (:pokes current) 0))})))))))))
+             (herdr/prompt! child (poke-prompt task (:result current)))
+             (ledger/update! task update :pokes (fnil inc 0))
+             {:status "poked" :task task :child child :pane-id (:pane-id current)
+              :pokes (inc (or (:pokes current) 0))})))))))
 
 ;; Two locks: this child's own lock outside (so a concurrent `publish` by this child cannot
 ;; interleave with the re-validation below -- task b96cb5da), and the assignment reservation
@@ -2276,7 +2199,6 @@
               (ledger/update! task assoc :status "failed" :failed-at (now) :failure-phase "continue-prompt")
               (throw e)))
           (ledger/update! task assoc :status "prompted" :prompted-at (now))
-          (verify-dispatch! task child)
           (let [written (ledger/read! task)]
             (if (one opts :wait)
               (wait-and-capture! written (round-timeout written opts) true)

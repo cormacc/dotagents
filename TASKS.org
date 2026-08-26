@@ -268,7 +268,7 @@ Likely later scope:
 
 Known constraints and candidate direction:
 - The current Pi adapter resolves the interpolator through `~/.agents/skills/herdr-orch/scripts/traits`; packaged resolution must retain that live path and add an explicit or package-relative fallback.
-- herdr-orch currently requires Herdr 0.7.5 or later and Babashka. Its Bash launchers currently imply Linux and macOS support.
+- herdr-orch currently requires Herdr 0.8.2 or later and Babashka. Its Bash launchers currently imply Linux and macOS support.
 - A single source repository can expose separate native package interfaces for Herdr, Pi, and Agent Skills. The Herdr plugin should remain an adapter and distribution surface rather than becoming the canonical implementation.
 - Herdr plugin v1 supports terminal panes, actions, event hooks, runtime context, and socket access. It does not provide arbitrary native non-terminal plugin UI. A session tree therefore belongs in a plugin terminal pane.
 
@@ -416,18 +416,19 @@ Evidence:
 
 * Chores
 
-** STARTED [#B] Simplify herdr-orch skill based on upstream changes
+** DONE [#B] Simplify herdr-orch skill based on upstream changes
+CLOSED: [2026-08-26 Wed 20:01]
 :PROPERTIES:
 :CUSTOM_ID: cf561004-25e4-46ee-aa4a-5e09b8eecff6
 :CREATED: [2026-08-17 Mon 18:33]
 :STARTED: [2026-08-17 Mon 22:01]
-:HANDOFF: Round-two plan accepted [2026-08-26 Wed]: gate oh on Herdr >= 0.8.2 and delete both readiness workarounds. Execute record plan tasks b242bfda (version gate), then 3bc67729 (start retry) and 7d27edde (dispatch verifier), both blocked by b242bfda.
 :END:
 :LOGBOOK:
 - Created [2026-08-17 Mon 18:33]
 - State "STARTED" from "TODO" [2026-08-17 Mon 22:01]
 - State "DONE" from "STARTED" [2026-08-17 Mon 22:07]
 - State "STARTED" from "DONE" [2026-08-17 Mon 22:14]
+- State "DONE" from "STARTED" [2026-08-26 Wed 20:01]
 :END:
 #+IMPORT: [[plan:2026-08-17-simplify-herdr-orch-skill-based-on-upstr.org]]
 Prune mechanically enforced lifecycle detail from `skills/herdr-orch/SKILL.md`. Keep policy and parent recovery actions in the skill, and keep guard detail in the canonical contract. Defer compatibility-code removal until Herdr publishes a version that distinguishes the upstream readiness fixes from stable v0.8.0.
