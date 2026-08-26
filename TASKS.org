@@ -421,7 +421,7 @@ Evidence:
 :CUSTOM_ID: cf561004-25e4-46ee-aa4a-5e09b8eecff6
 :CREATED: [2026-08-17 Mon 18:33]
 :STARTED: [2026-08-17 Mon 22:01]
-:HANDOFF: Prose pruning is complete and validated. Keep the parent STARTED. Resume after Herdr publishes a stable version whose reported version includes readiness commits 7ae4b05 and 37644ca, then reassess deletion of the local start retry and dispatch verifier.
+:HANDOFF: Round-two plan accepted [2026-08-26 Wed]: gate oh on Herdr >= 0.8.2 and delete both readiness workarounds. Execute record plan tasks b242bfda (version gate), then 3bc67729 (start retry) and 7d27edde (dispatch verifier), both blocked by b242bfda.
 :END:
 :LOGBOOK:
 - Created [2026-08-17 Mon 18:33]

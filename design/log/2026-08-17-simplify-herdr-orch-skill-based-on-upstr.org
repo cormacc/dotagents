@@ -21,47 +21,88 @@ Reduce the herdr-orch skill to the decisions and recovery actions an orchestrato
 - Keep user decisions, non-mechanical policy, completion evidence, and short recovery commands in the skill.
 - Keep guard preconditions, reason codes, race analysis, and implementation detail in `skills/herdr-orch/scripts/docs/contract.md`.
 - Validate that fresh agents still choose the correct normal, timeout, missing-publication, and invalid-publication actions.
+- Round two (Herdr 0.8.2): raise the `oh` preflight gate to Herdr >= 0.8.2 in `skills/herdr-orch/scripts/src/herdr_orch/herdr.clj`.
+- Round two: delete the `agent_pane_busy` start-retry loop and the post-prompt dispatch verifier, with their contract, README, skill, test, and fixture surface.
 
 *** Out of scope
 
-- Removing the local `agent start` retry or post-prompt dispatch verifier.
-- Changing `oh`, its ledger schema, tests, personas, traits, raw Herdr groups, or the Pi extension.
+- Changing personas, traits, raw Herdr verb groups, the Pi extension, or ledger parsing of existing entries. Round two only ceases writing `:dispatch` and `:dispatched-at`; old entries still parse.
 - Adding a capability probe, compatibility layer, option, dependency, or new reference file.
-- Updating the dotfiles Herdr flake input.
+
+Round one additionally excluded removing the start retry and dispatch verifier and updating the dotfiles Herdr flake input; the first exclusion is superseded by round two (see Decisions), and the flake bump landed independently in dotfiles commit `7f3a219`.
 
 ** Acceptance
 
-*** Core functionality
+*** Round one: core functionality
 
 - [X] `skills/herdr-orch/SKILL.md` retains the `run` versus `start` choice, root fan-out policy, terminal `RESULT` completion rule, explicit close-or-continue decision, and recovery commands for timeout, missing publication, and invalid publication.
 - [X] Mechanically enforced preconditions and refusal detail are removed from the skill when `skills/herdr-orch/scripts/docs/contract.md` already owns them.
 - [X] `## Invocation policy` and `## Completion and pane safety` together contain at most 900 words, down from the measured 1,807 words.
 - [X] The complete skill contains fewer than 3,000 words, down from the measured 3,702 words.
-- [X] The edit adds no behavioural mechanism and changes no CLI, contract, persona, trait, extension, or test file.
+- [X] The round-one prose edit adds no behavioural mechanism and changes no CLI, contract, persona, trait, extension, or test file. Scoped to round one, which was prose-only; round two deliberately deletes CLI code, contract prose, and tests that upstream Herdr 0.8.2 made obsolete.
 - [X] Skill frontmatter parses after the edit.
 
-*** Edge cases
+*** Round one: edge cases
 
 - [X] A fresh-agent evaluation treats a wait timeout as non-final and continues collection instead of respawning.
 - [X] A fresh-agent evaluation uses `poke` for a settled child with no valid publication and never adopts pane prose as completion evidence.
 - [X] A fresh-agent evaluation captures a terminal item before choosing `close` or `continue`.
 - [X] The pruned skill still tells a parent to surface validated artifact links before it discards pane context.
 
-*** Anti-criteria
+*** Round one: anti-criteria
 
 - [X] Must not: remove the parent-session, assignment-premise, consequence-class, or independent-closeout validation policies.
 - [X] Must not: state preview-only Herdr behaviour as a stable Herdr v0.8.0 guarantee.
 - [X] Must not: add local handling for upstream `agent_blocked`.
 - [X] Must not: remove the raw `oh pane`, `tab`, `ws`, or `agent` groups while `pi/extensions/herdr-orch/index.ts` uses them.
 
+*** Round two: core functionality
+
+- [ ] `herdr/minimum-version` is `[0 8 2]`.
+- [ ] `preflight!`'s failure message names 0.8.2.
+- [ ] `start!` makes exactly one `agent start` attempt.
+- [ ] `start-retry-attempts`, `default-start-retry-backoff-ms`, `parse-start-retry-backoff`, and `start-retry-backoff-ms` are absent from `herdr.clj`.
+- [ ] `verify-dispatch!`, `nudge?`, `max-dispatch-nudges`, `default-dispatch-timeout-ms`, `parse-dispatch-timeout`, and `dispatch-timeout-ms` are absent from `cli.clj`.
+- [ ] The spawn path writes no `:dispatch` or `:dispatched-at` ledger field.
+- [ ] `continue` writes no `:dispatch` or `:dispatched-at` ledger field.
+- [ ] `poke` has no `dispatch-unconfirmed` refusal.
+- [ ] `skills/herdr-orch/SKILL.md` no longer mentions `dispatch-unconfirmed`.
+- [ ] `skills/herdr-orch/SKILL.md` does not describe `start` as returning after dispatch.
+- [ ] `scripts/README.md` does not describe `task start` as returning after dispatch.
+- [ ] `docs/contract.md` states the Herdr >= 0.8.2 gate.
+- [ ] `docs/contract.md` records the accepted compatibility break for portable stable-0.8.0 users and why the gate is 0.8.2 although the fixes first shipped in 0.8.1.
+- [ ] `docs/contract.md` no longer documents dispatch verification, `ORCH_DISPATCH_TIMEOUT_MS`, or `ORCH_START_RETRY_BACKOFF_MS`.
+- [ ] `bb test` passes with the retry tests, dispatch tests, and `FAKE_HELD_PROMPT`/`agent_pane_busy` fixture machinery removed.
+
+*** Round two: edge cases
+
+- [ ] A ledger entry carrying `:dispatch` with status `unconfirmed` still parses and `poke` treats it as dispatched.
+- [ ] A first-attempt `agent start` failure with a non-`agent_pane_busy` error still fails the spawn cleanly.
+- [ ] The spawn-time, wait-outcome, and capture-time `record-session!` backfills are unchanged.
+
+*** Round two: anti-criteria
+
+- [ ] Must not: add a capability probe, compatibility layer, or replacement post-prompt probe.
+- [ ] Must not: add local handling for upstream `agent_blocked`.
+- [ ] Must not: change personas, traits, the Pi extension, or the parsing of existing ledger entries.
+
 ** Decisions
 
-- Chose a prose-only simplification now :: `/Users/cormacc/dotfiles/flake.lock` pins Herdr at `51b7064`, and the installed Nix source matches that revision. That revision contains upstream readiness and blocked-prompt fixes. However, its binary still reports `0.8.0`, which is indistinguishable from the stable v0.8.0 release that predates those fixes. Rejected:
+- Chose a prose-only simplification now (superseded [2026-08-26 Wed]) :: Superseded: Herdr 0.8.2 is released and its reported version distinguishes the readiness fixes from stable v0.8.0, falsifying the premise below; see the round-two decisions. Original rationale, preserved: `/Users/cormacc/dotfiles/flake.lock` pins Herdr at `51b7064`, and the installed Nix source matches that revision. That revision contains upstream readiness and blocked-prompt fixes. However, its binary still reports `0.8.0`, which is indistinguishable from the stable v0.8.0 release that predates those fixes. Rejected:
   - Remove compatibility code now: would silently weaken the published `Herdr >= 0.7.5` contract for stable v0.8.0 users.
   - Add a capability probe: adds a new mechanism only to retire temporary compatibility code.
   - Treat the flake URL as automatically current: `flake.lock` pins one revision until an explicit input update.
 - Keep operational choices in `skills/herdr-orch/SKILL.md` and mechanical proofs in `skills/herdr-orch/scripts/docs/contract.md` :: the skill is loaded for every matched delegation, while the contract is loaded only for debugging or maintenance.
 - Use deletion and short links rather than a new summary reference :: a new file would add another contract surface and navigation decision.
+- Round two: gate `oh` on Herdr >= 0.8.2 :: `herdr --version` reports 0.8.2 and the dotfiles flake pins `d79fd74`, a descendant of tag `v0.8.2`. GitHub compare confirms readiness fixes `7ae4b05` (agent prompt readiness, #2537) and `37644ca` (pane shell readiness, #2774) are absent from tag `v0.8.0` and present in the 0.8.1 release commit `09b2554d` and tag `v0.8.2`. Raising the gate breaks portable users on stable 0.8.0; accepted. Rejected:
+  - Gate `[0 8 1]` (earliest capable release): user chose the released version actually in use; there is no `v0.8.1` git tag to verify against.
+  - Keep `[0 7 5]`: deleting the workarounds under the old gate would silently break stable-0.8.0 users.
+- Round two: delete both workarounds outright, including `verify-dispatch!`'s session backfill :: `:child-session` is contractually best-effort; it is still recorded at spawn from `start!`'s return, from every `agent wait` outcome in `wait-and-capture!`, and unconditionally on every owned capture in `finish-capture!` (the actual fix for the ecb85350 stale-session defect). Every measured consumer (smoke tests, resume-after-collect) collects before reading the session. Rejected:
+  - Replace the verifier with a single post-prompt probe: insurance with no consumer; the loss window is crash-before-first-collect on a best-effort field.
+  - Retain the dispatch verifier wholesale: the upstream fix covers the failure mode it guarded.
+- Round two: remove the `dispatch-unconfirmed` recovery path entirely :: contract.md already treats an absent `:dispatch` as dispatched, and ledgers are transient `.tmp` state; old `unconfirmed` entries degrade to that same rule. Rejected: keep `poke`'s guard as a degraded reader for old entries -- dead code guarding transient state.
+- Round two: extend this record rather than open a new one :: the Intent is unchanged, the Follow-ups section held exactly this resume condition, and the round-one work is not separable from the deferred deletion it explicitly parked. Rejected: new change-record -- would split one intent across two records.
+- Round two: no further 0.8.x features leveraged :: the 0.8.2 release notes were reviewed; beyond the two readiness fixes, `agent prompt`'s `agent_blocked` rejection (#2788) needs no local handling (existing anti-criterion retained) and the calling-pane resolution fixes (#2297, #2298) need no local change rather than being irrelevant: the layout, split, process-info, and `agent start` calls all pass an explicit `--pane`, while `current-pane!` deliberately does not -- it invokes `pane current --current` for `close!`'s self-close guard and consumes the upstream resolution directly.
 
 ** Shipped
 
@@ -69,16 +110,20 @@ Reduce the herdr-orch skill to the decisions and recovery actions an orchestrato
 
 ** Gotchas
 
-- The dotfiles flake pin can contain post-release Herdr fixes while the binary still reports the earlier stable version. The portable skill cannot use that version string as a capability boundary.
+- The dotfiles flake pin can contain post-release Herdr fixes while the binary still reports the earlier stable version. Between 2026-08-17 and the 0.8.2 release this made the version string unusable as a capability boundary; since Herdr 0.8.2 (>= 0.8.1 at the earliest) the reported version does distinguish the readiness fixes, and round two gates on it. The general lesson stands: a flake pin can outrun the reported version.
+- `test/fixtures/fake-herdr` reports a default version of 0.7.5; any `minimum-version` bump must move that default in the same change or every test fails preflight.
+- Deleting the readiness workarounds breaks tests that are not named after them. Measured [2026-08-26 Wed] by simulated deletion against a green `bb test` baseline: bumping only the gate fails `preflight-fails-before-ledger-or-mutation` on its literal `0.7.5` assertion, and removing only the two `verify-dispatch!` calls fails `child-session-is-recorded-by-every-hook` (its post-prompt, `status`, and capture subcases) and `continue-allocates-a-fresh-round-inheriting-the-childs-identity` (missing `:dispatch`). Grep the symbol names, not the feature names.
 
 ** Follow-ups
 
-- Resume this parent task after Herdr publishes a stable version whose reported version includes readiness commits `7ae4b05` and `37644ca`. Reassess deletion of the local start retry and dispatch verifier.
+- Discharged [2026-08-26 Wed]: Herdr 0.8.2 is released and contains readiness commits `7ae4b05` and `37644ca`; the reassessment became the round-two plan tasks below.
 
 ** Risks
 
 - Over-pruning can remove a recovery cue that the CLI cannot initiate for the parent. Mitigated: old-skill and candidate-skill fresh agents produced the same required recovery decisions.
-- The upstream fixes are present on this machine but remain unreleased under a distinct semantic version. Accepted: defer code deletion until `herdr --version` can enforce the required baseline.
+- The upstream fixes are present on this machine but remain unreleased under a distinct semantic version. Resolved by the 0.8.2 release; round two enforces the baseline through preflight.
+- Deleting the verifier removes the only post-prompt, pre-collect `:child-session` refresh. Accepted: the field is best-effort and every measured consumer collects before reading it.
+- Prose that describes `task start` as returning "after dispatch" drifts once the verifier is gone. Mitigated: doc-alignment criteria in the round-two plan tasks.
 
 * Plan
 
@@ -100,6 +145,63 @@ Acceptance criteria:
 - Fresh-agent scenario transcripts preserve the required normal and recovery decisions without relying on the removed prose.
 
 Pointer: `skills/herdr-orch/SKILL.md` sections `Invocation policy` and `Completion and pane safety`. Mechanical detail remains in `skills/herdr-orch/scripts/docs/contract.md`.
+
+** TODO Raise the Herdr version gate to 0.8.2
+:PROPERTIES:
+:CUSTOM_ID: b242bfda-8dc5-4c9a-aee5-6379efaa4115
+:CREATED: [2026-08-26 Wed 14:22]
+:END:
+Acceptance criteria:
+- `herdr/minimum-version` is `[0 8 2]` and `preflight!` throws "Herdr 0.8.2 or newer is required".
+- The `herdr.clj` ns docstring and the version-gate comment no longer cite 0.7.5 as the baseline.
+- `docs/contract.md`'s preflight and version-gate paragraphs state Herdr >= 0.8.2 and record why: readiness fixes `7ae4b05`/`37644ca` shipped in 0.8.1; the gate is the released version in use.
+- `docs/contract.md` states that portable users on stable 0.8.0 lose support, as an accepted consequence rather than an omission.
+- `test/fixtures/fake-herdr` reports a default version that passes the new gate.
+- `cli_test.clj`'s `preflight-fails-before-ledger-or-mutation` no longer asserts the literal string `0.7.5`, and its below-minimum fixture version is still below the new gate.
+- `bb test` passes.
+- Must not: add a capability probe or per-command help probing.
+
+Pointer: `skills/herdr-orch/scripts/src/herdr_orch/herdr.clj` `preflight!`; the fixture default is the `--version` branch of `test/fixtures/fake-herdr`.
+
+** TODO Delete the agent_pane_busy start retry
+:PROPERTIES:
+:CUSTOM_ID: 3bc67729-ecee-41c3-bc5f-f9209eb1ee42
+:CREATED: [2026-08-26 Wed 14:22]
+:BLOCKED-BY: task:b242bfda-8dc5-4c9a-aee5-6379efaa4115
+:END:
+Acceptance criteria:
+- `start!` in `herdr.clj` makes exactly one `agent start` attempt; `start-retry-attempts`, `default-start-retry-backoff-ms`, `parse-start-retry-backoff`, and `start-retry-backoff-ms` are absent.
+- `docs/contract.md` no longer documents `ORCH_START_RETRY_BACKOFF_MS` or the retry loop.
+- The retry tests in `test/herdr_orch/cli_test.clj`, the `ORCH_START_RETRY_BACKOFF_MS` row in the `traits_test.clj` fixture env, and the `agent_pane_busy` modelling in `test/fixtures/fake-herdr` are removed.
+- The shared `ORCH_START_RETRY_BACKOFF_MS` row in `cli_test.clj`'s `fake-env` helper, and the fast-backoff comment above it, are removed.
+- The `FAKE_FAIL_START` test's comment no longer explains itself by reference to a retry path that no longer exists.
+- A first-attempt `agent start` failure still fails the spawn cleanly, asserted by a retained or adapted test.
+- `bb test` passes.
+
+Pointer: `skills/herdr-orch/scripts/src/herdr_orch/herdr.clj` `start!`.
+
+** TODO Delete the dispatch verifier and the dispatch-unconfirmed path
+:PROPERTIES:
+:CUSTOM_ID: 7d27edde-1c78-4fd5-83f7-859c9d191cc0
+:CREATED: [2026-08-26 Wed 14:22]
+:BLOCKED-BY: task:b242bfda-8dc5-4c9a-aee5-6379efaa4115
+:END:
+Acceptance criteria:
+- `cli.clj` no longer defines `verify-dispatch!`, `nudge?`, `max-dispatch-nudges`, `default-dispatch-timeout-ms`, `parse-dispatch-timeout`, or `dispatch-timeout-ms`; the spawn path and `continue` prompt without post-prompt verification and write no `:dispatch` or `:dispatched-at`.
+- `poke` has no `dispatch-unconfirmed` refusal; a ledger entry carrying `:dispatch` with status `unconfirmed` still parses and is poked normally.
+- `skills/herdr-orch/SKILL.md` no longer mentions `dispatch-unconfirmed`.
+- `skills/herdr-orch/SKILL.md`'s Waiting bullet no longer says `start` "returns after dispatch".
+- `docs/contract.md` § Dispatch verification is removed; § Poke, the `ORCH_DISPATCH_TIMEOUT_MS` row, the `ORCH_POLL_INTERVAL_MS` row's dispatch mention, the locking paragraph, and the ledger-field prose no longer reference dispatch verification.
+- `scripts/README.md` no longer describes `task start` as returning "after dispatch".
+- The dispatch and nudge tests in `cli_test.clj` and the `FAKE_HELD_PROMPT` machinery in `test/fixtures/fake-herdr` are removed.
+- `cli_test.clj`'s `child-session-is-recorded-by-every-hook` asserts the backfill through the surviving spawn, wait-outcome, and capture hooks only; its post-prompt-probe subtest and the `child-get-count` bound that counts that probe are adapted, not deleted wholesale.
+- `cli_test.clj`'s `continue-allocates-a-fresh-round-inheriting-the-childs-identity` no longer asserts a `:dispatch` status.
+- The `record-session!` hook-inventory comment in `cli.clj` no longer lists dispatch verification among the observing hooks.
+- The spawn-time, wait-outcome, and capture-time `record-session!` call sites are unchanged.
+- `bb test` passes.
+- Must not: add a replacement post-prompt probe or local `agent_blocked` handling.
+
+Pointer: `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` `verify-dispatch!` and `poke`'s `:dispatch` guard.
 
 * Implementation
 
