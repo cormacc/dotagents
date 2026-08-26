@@ -23,6 +23,7 @@
   - Apply this rule to assignment baselines, assignment attributions, and claims that you report to the user.
 - Before a summary or handoff restates a load-bearing state claim, verify the claim against current source.
   - A claim that was true earlier is not current-source evidence after a later change.
+- To decide whether a commit is in a release, make a blobless bare clone with `git clone --bare --filter=blob:none <url>` and use `git merge-base --is-ancestor <commit> <tag>`. Do not rely on release notes or a search summary.
 
 ## Negative results and controls
 - An empty result is not evidence of absence. Manual confirmation is not sufficient.
@@ -46,7 +47,8 @@
   - Such an answer can confirm one choice while the other choice remains unconfirmed.
 - When a matched skill owns a domain, read that skill before you issue exploratory commands in that domain.
   - Do not run the skill read and the domain probes in parallel.
-- Do not cite a green suite as coverage until you confirm that it executes the changed file.
+- Do not cite a green suite as coverage until you confirm that it executes the changed file. Confirm which namespaces the test task runs before you attribute its total to one component.
+- Run `date` before you write a new timestamp into a file. Do not infer the current date from surrounding context.
 - Do not trust a guard or ad-hoc verifier after you observe only passing results.
   - Establish the passing baseline first, then trigger the verifier deliberately with known-bad input.
   - If all inputs pass or all inputs fail, test the verifier before you diagnose the system. Without the baseline you cannot tell a real finding from a broken harness.
@@ -65,6 +67,7 @@
 - Use `<repository-root>/.tmp/` for scripts, data, experiments, tests, and other temporary work.
 - Never store transient state under `.agents/`. That directory contains durable agent configuration.
   - Some harnesses deliberately mount `.agents/` as read-only so an agent cannot modify its own instructions.
+- Scope a repository reference sweep to tracked files with `git ls-files -z | xargs -0 grep`. A bare recursive grep also matches scratch copies under `.tmp/`.
 
 ## Command-line arguments
 - Verify each flag's meaning before you trust its output.
@@ -104,6 +107,7 @@
   - Do not perform an unverified in-place transformation.
   - Use the same candidate-and-diff process to replace a long region. Do not replace a long region with one long inline replacement.
   - Check the end of each long edit after it completes. A truncated replacement can appear complete.
+  - When an edit call containing several edits returns an error, treat the whole call as not applied. Verify with `grep` or `diff` before you reissue.
 - To claim "verbatim except for listed edits", copy the source and apply targeted edits to the copy.
   - Inspect the diff before you make the claim.
 - A human can edit the same file at the same time.

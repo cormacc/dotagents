@@ -130,3 +130,29 @@ No rule change: [[file:skills/herdr-orch/SKILL.md][herdr-orch]] § Trusting a re
 
 - A structured CLI envelope was read by field path without checking its =ok= field first, producing a phantom "creation failed" for a task that had in fact been created. [[file:home/AGENTS.md][home/AGENTS.md]] § Verification discipline already requires the check.
 - An exit status was read after a =| head= pipeline during an =ot= probe, reporting the status of =head=. The same file already prohibits this.
+
+* 2026-08-26 Wed -- Herdr 0.8.2 simplification of herdr-orch
+
+Session delegated a planner, a plan reviewer, an implementation worker, and two closeout validators through =herdr-orch=. Rules below were added or tightened in =home/AGENTS.md= from that session's signals; three of the four originated as child =PROCESS:= candidates and were probed in the parent's own harness before adoption.
+
+** Verification discipline
+
+Green-suite scope. =bb test= run from =skills/herdr-orch/scripts= delegates to the repository-root task, whose docstring reads "Run the org-tasks and herdr-orch Clojure test suites". Its 627-test total was reported three times in sequence -- by the planner, by the implementing worker, and twice by the parent -- as though it measured the herdr-orch suite alone. The herdr-orch share was 317 deftests, down from 327. A fresh closeout validator caught the misattribution. The existing rule already required confirming that a suite executes the changed file; it did not require confirming which namespaces the task runs, which is the distinct failure here.
+
+Timestamp inference. The planner stamped supersession dates inferred from assignment context and corrected them after running =date=.
+
+** Temporary files
+
+Sweep scoping. A repo-wide grep for a deleted identifier returned roughly 1500 lines dominated by prior subagents' scratch copies of the same source files under =.tmp/=, forcing a re-run. Measured at closeout: 42 files under =.tmp/= matched =verify-dispatch= against 3 tracked files, a 14x noise ratio. =.tmp/reviewer-plan-probe/= was a full repository copy, so it matched every pattern in the review range.
+
+** Scripts and transformations
+
+Edit-call atomicity. A worker reported that a multi-edit call with one malformed entry returned a validation error and applied none of the edits, including the valid ones, and that it went undetected until a later grep. Probed in the parent harness on a scratch file: with =edits[0]= matching exactly and =edits[1]= not present, the call errored and the file was byte-identical afterwards. Atomic-on-failure is the actual behaviour; the hazard is assuming the valid entries landed.
+
+** Identifiers and claims
+
+Commit ancestry. A general search returned unrelated releases for an exact commit-ancestry claim. A reviewer proposed the GitHub compare API instead; the rule adopted the blobless clone after a weight comparison, because a full bare clone was rejected as heavyweight on review. Measured: compare API 1.56 s and one request; =git clone --bare --filter=blob:none= 1.07 s and 2.1 MB; full bare clone 2.18 s and 38 MB. The blobless clone is both faster and host-agnostic, and =git merge-base --is-ancestor= avoids the compare API's direction-of-=status= ambiguity.
+
+** Not adopted
+
+Validator severity. The parent was ready to treat the change as clean after its own verification; a second validator at a different tier rated the cross-record conflict blocking and was right. No new rule: =herdr-orch= already mandates two independent validators for a Class C closeout, and following that rule is what caught it.
