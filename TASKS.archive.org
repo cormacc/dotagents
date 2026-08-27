@@ -3381,3 +3381,93 @@ Origin:
 - git: cormacc/dotagents @ main
 - timestamp: [2026-07-31 Fri 13:40]
 - sender: agent
+
+** DONE [#B] Simplify herdr-orch skill based on upstream changes
+CLOSED: [2026-08-26 Wed 20:01]
+:PROPERTIES:
+:CUSTOM_ID: cf561004-25e4-46ee-aa4a-5e09b8eecff6
+:CREATED: [2026-08-17 Mon 18:33]
+:STARTED: [2026-08-17 Mon 22:01]
+:ARCHIVED: [2026-08-26 Wed 20:01]
+:ARCHIVE_OLPATH: Chores
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 18:33]
+- State "STARTED" from "TODO" [2026-08-17 Mon 22:01]
+- State "DONE" from "STARTED" [2026-08-17 Mon 22:07]
+- State "STARTED" from "DONE" [2026-08-17 Mon 22:14]
+- State "DONE" from "STARTED" [2026-08-26 Wed 20:01]
+:END:
+#+IMPORT: [[plan:2026-08-17-simplify-herdr-orch-skill-based-on-upstr.org]]
+Prune mechanically enforced lifecycle detail from `skills/herdr-orch/SKILL.md`. Keep policy and parent recovery actions in the skill, and keep guard detail in the canonical contract. Defer compatibility-code removal until Herdr publishes a version that distinguishes the upstream readiness fixes from stable v0.8.0.
+
+** DONE [#A] find-skills documents npx skills check as read-only, but it updates
+CLOSED: [2026-08-21 Fri 15:46]
+:PROPERTIES:
+:CUSTOM_ID: 73b47d41-89ee-4a44-9ac2-db463f31ae93
+:CREATED: [2026-07-31 Fri 13:18]
+:ARCHIVED: [2026-08-21 Fri 15:46]
+:ARCHIVE_OLPATH: Upstream issues
+:END:
+:LOGBOOK:
+- Created [2026-07-31 Fri 13:18]
+- State "DONE" from "TODO" [2026-08-21 Fri 15:46]
+:END:
+find-skills/SKILL.md § Other useful commands claims "`npx skills check` — list updates available". It actually performs updates: running it in an unrelated project upgraded 3 installed skills and rewrote their `skills-lock.json` hashes. The current `--help` lists no `check` command at all under Updates, only `update`.
+
+This is a live foot-gun: an agent following the skill mutates a project it was only inspecting.
+
+find-skills is vendored, so the body must not be edited locally. Resolve by one of:
+- fixing it upstream and re-syncing;
+- correcting the documented command set at a non-vendored destination if find-skills is reclassified as adapted;
+- retiring the stale command reference as part of the backfill subtask, if upstream has already dropped `check`.
+
+Acceptance criteria:
+- The wrong read-only claim no longer reaches an agent following the skill.
+- Whatever route is taken, no local edit is left sitting in a lockfile-managed vendored body.
+
+Resolved: =skills/find-skills/SKILL.md= no longer documents =npx skills= at all. It was reinstalled from upstream (=9a21d3e2=), then rewritten around =gh skill= (=9d21a6c9=), which also moved it out of the vendored class so local corrections are legitimate. See [[plan:2026-08-21-skill-vendoring-improvements.org]].
+
+** CANCELLED [#D] Review backlog.md for org-tasks inspiration :skill:org_tasks:org_plan:
+CLOSED: [2026-08-27 Thu 14:21]
+:PROPERTIES:
+:CUSTOM_ID: 19920e17-b7d0-4272-9de2-2a4353271fa9
+:CREATED: [2026-05-22 Fri 00:06]
+:ARCHIVED: [2026-08-27 Thu 14:21]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-05-22 Fri 00:06]
+- State "CANCELLED" from "TODO" [2026-08-27 Thu 14:21]
+:END:
+
+** CANCELLED [#C] Codebase intelligence tool evaluation :pi:
+CLOSED: [2026-08-27 Thu 14:21]
+:PROPERTIES:
+:CUSTOM_ID: 6d22d6ed-1fd1-46cb-965f-12d355612b53
+:ARCHIVED: [2026-08-27 Thu 14:21]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- State "CANCELLED" from "TODO" [2026-08-27 Thu 14:21]
+:END:
+Evaluate codebase-intelligence tools for Pi. Start with pi-lsp: https://pi.dev/packages/@dreki-gg/pi-lsp
+
+** CANCELLED [#D] Evaluate jus
+CLOSED: [2026-08-27 Thu 14:21]
+:PROPERTIES:
+:CUSTOM_ID: a5156b00-08cc-4ab1-b365-ec183af96f40
+:CREATED: [2026-08-13 Thu 17:57]
+:STARTED: [2026-08-20 Thu 17:07]
+:ARCHIVED: [2026-08-27 Thu 14:21]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-08-13 Thu 17:57]
+- State "STARTED" from "TODO" [2026-08-20 Thu 17:07]
+- State "TODO" from "STARTED" [2026-08-27 Thu 12:05]
+- State "CANCELLED" from "TODO" [2026-08-27 Thu 14:21]
+:END:
+This looks like a very nice exploratory/learning tool for Clojure.
+Not sure it has a role here, but just catching the reference for now as an aide memoire....
+https://github.com/paintparty/jus

@@ -93,21 +93,29 @@ Why now: the project already has the =org-tasks= / =org-plan= protocol for expli
 
 * Plan
 
-** TODO [#C] Hands-on trial with conservative config
+** CANCELLED [#C] Hands-on trial with conservative config
+CLOSED: [2026-08-27 Thu 14:21]
 :PROPERTIES:
 :CUSTOM_ID: 7a9e1f3c-2b54-4d6e-9c11-1b3e8f4d2a76
 :CREATED: [2026-05-21 Thu]
+:END:
+:LOGBOOK:
+- State "CANCELLED" from "TODO" [2026-08-27 Thu 14:21]
 :END:
 Acceptance criteria:
 - Extension installed in a sandbox =pi= session (not the daily-driver agent) with the conservative config in =* Summary=.
 - Two weeks of real use across at least three distinct projects.
 - Captured: token-spend delta (rough), false-positive rate on secret/threat scanner, value of failure-memory recall, any split-brain incidents between =TASKS.org= and hermes memory.
 
-** TODO [#C] Decide adopt / reject / fork
+** CANCELLED [#C] Decide adopt / reject / fork
+CLOSED: [2026-08-27 Thu 14:21]
 :PROPERTIES:
 :CUSTOM_ID: 4c8d6b27-5f31-49a8-bd62-9e7c1a8f3d54
 :CREATED: [2026-05-21 Thu]
 :BLOCKED-BY: 7a9e1f3c-2b54-4d6e-9c11-1b3e8f4d2a76
+:END:
+:LOGBOOK:
+- State "CANCELLED" from "TODO" [2026-08-27 Thu 14:21]
 :END:
 Acceptance criteria:
 - Decision recorded under =** Decisions= in =* Summary=, with rationale citing trial data.

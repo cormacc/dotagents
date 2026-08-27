@@ -60,30 +60,6 @@
 This may be useful in the context of herdr-orch subagent management...
 https://github.com/max-sixty/worktrunk
 
-** STARTED [#D] Evaluate jus
-:PROPERTIES:
-:CUSTOM_ID: a5156b00-08cc-4ab1-b365-ec183af96f40
-:CREATED: [2026-08-13 Thu 17:57]
-:STARTED: [2026-08-20 Thu 17:07]
-:END:
-:LOGBOOK:
-- Created [2026-08-13 Thu 17:57]
-- State "STARTED" from "TODO" [2026-08-20 Thu 17:07]
-:END:
-This looks like a very nice exploratory/learning tool for Clojure.
-Not sure it has a role here, but just catching the reference for now as an aide memoire....
-https://github.com/paintparty/jus
-
-** TODO [#D] Review backlog.md for org-tasks inspiration :skill:org_tasks:org_plan:
-:PROPERTIES:
-:CUSTOM_ID: 19920e17-b7d0-4272-9de2-2a4353271fa9
-:CREATED: [2026-05-22 Fri 00:06]
-:END:
-:LOGBOOK:
-- Created [2026-05-22 Fri 00:06]
-:END:
-
-
 ** TODO [#B] herdr-orch: LLM usage limit fallback :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: c3ae685d-bb3c-4329-b233-cfa0604075bc
@@ -107,15 +83,6 @@ An interesting-looking / opinionated workflow setup for pi.
 Likely to be some clashes with my own setup, but worth evaluating for (partial?) adoption.
 - https://github.com/juicesharp/rpiv-mono
 - https://rpiv-pi.com/
-*** TODO [#D] Check out rpiv-todo overlay for ideas :org:
-:PROPERTIES:
-:CUSTOM_ID: 60e8eff5-26a9-4d4b-8c1a-3c70321beccd
-:END:
-:LOGBOOK:
-- State "CANCELLED"      from "TODO"      [2026-05-08 Fri 07:41]
-- State "TODO"      from "CANCELLED"      [2026-05-08 Fri 07:41]
-:END:
-https://pi.dev/packages/@juicesharp/rpiv-todo Haven't checked it out yet, but might be a nicer overlay, with a different underlying task store.
 *** TODO [#D] Check out rpiv-btw :pi:
 :PROPERTIES:
 :CUSTOM_ID: ec8e6eb3-dcfc-4124-ad1c-17e88d8562b6
@@ -123,12 +90,6 @@ https://pi.dev/packages/@juicesharp/rpiv-todo Haven't checked it out yet, but mi
 https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without polluting context... sounds useful
 
 
-
-** TODO [#C] Codebase intelligence tool evaluation :pi:
-:PROPERTIES:
-:CUSTOM_ID: 6d22d6ed-1fd1-46cb-965f-12d355612b53
-:END:
-Evaluate codebase-intelligence tools for Pi. Start with pi-lsp: https://pi.dev/packages/@dreki-gg/pi-lsp
 
 ** TODO [#C] Explore agent memory options :org:
 :PROPERTIES:
@@ -140,13 +101,15 @@ Identify a lower layer more immediately useful to the agent. This is a crowded/i
 Hindsight gets some good press -- see this guy's extension: https://pi.dev/packages/@noctuid/epimetheus?name=hindsight
 
 Here's one https://github.com/elpapi42/pi-observational-memory
-**** TODO [#C] Evaluate pi-hermes-memory plugin :pi:memory:
+**** CANCELLED [#C] Evaluate pi-hermes-memory plugin :pi:memory:
+CLOSED: [2026-08-27 Thu 14:21]
 :PROPERTIES:
 :CUSTOM_ID: 5d36628d-818d-4823-a8b4-723b8e3145e9
 :CREATED: [2026-05-21 Thu 16:01]
 :END:
 :LOGBOOK:
 - Created [2026-05-21 Thu 16:01]
+- State "CANCELLED" from "TODO" [2026-08-27 Thu 14:21]
 :END:
 #+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
 *** TODO [#C] Review self-improvement skill w.r.t. org-memory protocol :org:
@@ -196,52 +159,6 @@ Acceptance criteria:
 - =references/ot-cli.md= documents the widened basis, replacing "has not been touched in the current git working tree/index".
 - A closed, committed record with correctly updated specs reports no findings; verify with this repository's own trait-composition record.
 Must not: silence the check for open records; infer specs that were never declared.
-
-** TODO [#B] herdr-orch: allow persona-less subagents :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: bf34e806-3505-4280-9ce0-85602a0c6bd0
-:CREATED: [2026-08-12 Wed 23:12]
-:END:
-:LOGBOOK:
-- Created [2026-08-12 Wed 23:12]
-:END:
-A persona is mandatory today: =oh task run --task 'write a readme'= fails with "persona not found in project, home, or packaged roster" and lists the seven packaged names. There is no =--persona-file=, no inline persona argument, and no runtime trait-only construction -- =roster= (cli.clj) resolves =<name>.md= through project > home > packaged and fails when nothing matches. So the two natural throwaway delegations ("spawn a subagent to write a readme", "spawn a subagent to check the scripts folder contents") cannot be expressed without first authoring a definition file.
-
-Desired outcome: a spawn with no persona, and/or a light persona composed at runtime from traits, without adding a definition to the roster. Both shapes want the same thing -- an assignment-only child that still gets the delegation, identity, and publication guidance the launcher injects.
-
-Why this matters beyond convenience: =resolve-model='s same-kind inheritance tier fires only for a persona declaring no =model:=, and every packaged persona declares one. A persona-less child is the case that makes inheritance the normal path rather than an extension-point affordance. The producer side already exists -- =HERDR_ORCH_MODEL= is injected per spawn and a pi root falls back to its own =PI_MODEL=/=PI_PROVIDER= (contract.md § Model resolution, § Environment) -- so this task is the consumer that gives it routine use.
-
-Open questions to settle before implementing:
-- Where does the persona text come from when none is named: a minimal built-in body, or the assignment alone plus injected guidance?
-- What are =kind=, =spawns=, =retro=, and =timeout= for a persona-less child? =spawns= almost certainly =none= (leaf), but the rest have no frontmatter to read and today every policy resolves through =*-policy= functions that expect one.
-- Does a runtime trait-composed persona need a name for the ledger label and the child name (=child-label= composes =<persona>-<index>-<model>=), and if so what is it?
-- Does =--print-prompt= still make sense as the inspection route.
-
-Verified [2026-08-12 Wed] against cli.clj at 6a89b0f plus the housekeeping commits: the roster failure above is real, all seven packaged personas declare =model:=, and no inline-persona flag exists.
-
-Second shape, added [2026-08-19] from the prose-style evaluation: a *measurement* session, which is a stricter case than the persona-less child above and pulls in the opposite direction on one point. That evaluation ran 45 sessions across three rounds as raw =pi --print= invocations, entirely outside the ledger, because =oh= could not express them. Two reasons, both verified:
-
-- No environment-override surface. =oh task run= and =oh task start= accept only =--model=, =--timeout=, =--tab=/=--split=, =--spawns=, =--retro=/=--no-retro=, =--prompt-extra=, =--print-prompt=, and =--worktree=. The runs needed =--no-skills=, =--no-context-files=, =--skill <one path>=, =--tools read,write=, =--provider lemonade=, a raw model id outside the four weight aliases, and =--mode json=. Grepping contract.md for those terms returns nothing, against a positive control of three =Model resolution= matches.
-- The injected guidance is itself contamination. The persona-less shape above still wants the launcher's delegation, identity, and publication text. A measurement subject must receive only the sample and the instruction under test: the control condition's whole treatment was one sentence, so any wrapper would measure something else. Whatever lands must let a caller opt out of the wrap entirely, not merely skip the persona.
-
-The hard part is the completion signal: the contract requires the child to publish a v1 envelope through the injected launcher, and a bare model rewriting prose cannot. A measurement mode needs a different terminal condition, such as process exit plus the expected output artefact existing. Batching matters too, because 15 sessions per round do not each want a pane.
-
-Cost of the gap, measured: the isolation audit was rebuilt by hand in each round (transcript capture, tool-call extraction, a positive-controlled contamination matrix). As a spawn property it would be derived once.
-
-Two verified =pi= facts any implementation must respect, both of which cost a round when they were assumed rather than checked:
-- =--no-extensions= disables provider-auth extensions. A headless refusal whose message described third-party usage billing was caused by this flag, not by an account limit. Isolate the tool surface with =--tools <allowlist>= instead.
-- =--tools= is case-sensitive and fails silently. =--tools Read= enables no tool and exits 0; =--tools read= works. Probed directly: the capitalised form returned =NO-TOOL= where the lowercase form returned the file's token.
-*** TODO [#B] Consider leveraging pi /fork for subagents
-:PROPERTIES:
-:CUSTOM_ID: 84653126-cd7e-412a-9761-d43eaad7f97f
-:CREATED: [2026-08-07 Fri 10:06]
-:END:
-:LOGBOOK:
-- Created [2026-08-07 Fri 10:06]
-:END:
-Depending on scope of use -- using fork rather than spawn might be a good idea for some subagents -- let them inherit the orchestrator context without bloating it.
-This could work via an optional `:fork :true` in the subagent header (default `:fork :false`)
-This should be straightforward using pi. Maybe also using claude/codex? Investigate...
 
 ** TODO [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
 :PROPERTIES:
@@ -302,31 +219,65 @@ Acceptance criteria:
 - Where a probe cannot be made to discriminate, say so and say why, rather than reporting an unexplained negative or quietly dropping the fragment.
 Must not: weaken a recorded condition to make a run agree; reuse a repo-referential subject; treat a passing probe as a precondition for the fragment staying in the store.
 
-** TODO org-tasks: ot blocker add silently ignores extra positional refs
+** TODO herdr-orch housekeeping :skill:herdr_orch:
 :PROPERTIES:
-:CUSTOM_ID: 9a29de9d-d385-4c26-9720-339fc4437fc3
-:CREATED: [2026-08-19 Wed 11:39]
+:CUSTOM_ID: c8364040-b7bd-41ea-b892-2b53d80cc37e
+:CREATED: [2026-08-27 Thu 14:21]
 :END:
 :LOGBOOK:
-- Created [2026-08-19 Wed 11:39]
+- Created [2026-08-27 Thu 14:21]
 :END:
-`ot blocker add <id> <token>` maps exactly two positionals (`:args->opts [:id :token]` in `skills/org-tasks/scripts/src/org_tasks/commands/registry.clj`, the `["blocker" "add"]` entry) and performs no arity check. A call that passes several refs adds only the first and exits 0, so the extra refs are lost silently.
+Umbrella for the accumulated `oh` defects and gaps that are individually small but share one surface: the spawn path, the round lifecycle, and the contract that documents them. Each child carries its own measured evidence and acceptance criteria; this parent exists so one session can triage them together rather than reopening the same source (`scripts/src/herdr_orch/cli.clj`, `scripts/docs/contract.md`) once per task.
 
-Measured in a contained scratch project: `ot blocker add A task:B task:C task:D` exited 0 and left one blocker on A. A single-ref control call added its blocker correctly.
+Grouped 2026-08-27. Deliberately excluded: the two Explorations (worktrunk, LLM usage-limit fallback) stay top-level, as do the herdr plugin wrapper and the shared Babashka bootstrap, which are project work rather than housekeeping.
+*** TODO [#B] herdr-orch: allow persona-less subagents :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: bf34e806-3505-4280-9ce0-85602a0c6bd0
+:CREATED: [2026-08-12 Wed 23:12]
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 23:12]
+:END:
+A persona is mandatory today: =oh task run --task 'write a readme'= fails with "persona not found in project, home, or packaged roster" and lists the seven packaged names. There is no =--persona-file=, no inline persona argument, and no runtime trait-only construction -- =roster= (cli.clj) resolves =<name>.md= through project > home > packaged and fails when nothing matches. So the two natural throwaway delegations ("spawn a subagent to write a readme", "spawn a subagent to check the scripts folder contents") cannot be expressed without first authoring a definition file.
 
-`ot blocker remove` shares the same `[:id :token]` shape and needs the same check.
+Desired outcome: a spawn with no persona, and/or a light persona composed at runtime from traits, without adding a definition to the roster. Both shapes want the same thing -- an assignment-only child that still gets the delegation, identity, and publication guidance the launcher injects.
 
-The `org-tasks` SKILL.md quick reference writes `ot blocker list|add|remove <id> [...]`, which reads as multi-ref. `ot blocker add --help` correctly documents the singular `<token>`.
+Why this matters beyond convenience: =resolve-model='s same-kind inheritance tier fires only for a persona declaring no =model:=, and every packaged persona declares one. A persona-less child is the case that makes inheritance the normal path rather than an extension-point affordance. The producer side already exists -- =HERDR_ORCH_MODEL= is injected per spawn and a pi root falls back to its own =PI_MODEL=/=PI_PROVIDER= (contract.md § Model resolution, § Environment) -- so this task is the consumer that gives it routine use.
 
-Fix direction: reject extra positionals with an `argument-error`, matching how `ot tag` reports a missing positional. Decide separately whether multi-ref should be supported rather than rejected.
+Open questions to settle before implementing:
+- Where does the persona text come from when none is named: a minimal built-in body, or the assignment alone plus injected guidance?
+- What are =kind=, =spawns=, =retro=, and =timeout= for a persona-less child? =spawns= almost certainly =none= (leaf), but the rest have no frontmatter to read and today every policy resolves through =*-policy= functions that expect one.
+- Does a runtime trait-composed persona need a name for the ledger label and the child name (=child-label= composes =<persona>-<index>-<model>=), and if so what is it?
+- Does =--print-prompt= still make sense as the inspection route.
 
-Out of scope: a dangling or malformed ref is supported protocol state, handled by `ot blocker prune` and the `ot doctor` dangling-blocker finding. Do not add ref-format validation as part of this task.
+Verified [2026-08-12 Wed] against cli.clj at 6a89b0f plus the housekeeping commits: the roster failure above is real, all seven packaged personas declare =model:=, and no inline-persona flag exists.
 
-Reported by a planner subagent during task 477fc686; verified against source and by behavioural probe before capture.
+Second shape, added [2026-08-19] from the prose-style evaluation: a *measurement* session, which is a stricter case than the persona-less child above and pulls in the opposite direction on one point. That evaluation ran 45 sessions across three rounds as raw =pi --print= invocations, entirely outside the ledger, because =oh= could not express them. Two reasons, both verified:
 
-Two adjacent defects on the same command, measured in a scratch project: `ot blocker add A task:B` run twice stores the ref twice, so the blocker list carries a duplicate; and a multi-ref call with `--format json` prints `Added blocker: task:...` instead of a JSON envelope, so a machine caller cannot parse what happened. Fix these with the arity check rather than separately.
+- No environment-override surface. =oh task run= and =oh task start= accept only =--model=, =--timeout=, =--tab=/=--split=, =--spawns=, =--retro=/=--no-retro=, =--prompt-extra=, =--print-prompt=, and =--worktree=. The runs needed =--no-skills=, =--no-context-files=, =--skill <one path>=, =--tools read,write=, =--provider lemonade=, a raw model id outside the four weight aliases, and =--mode json=. Grepping contract.md for those terms returns nothing, against a positive control of three =Model resolution= matches.
+- The injected guidance is itself contamination. The persona-less shape above still wants the launcher's delegation, identity, and publication text. A measurement subject must receive only the sample and the instruction under test: the control condition's whole treatment was one sentence, so any wrapper would measure something else. Whatever lands must let a caller opt out of the wrap entirely, not merely skip the persona.
 
-** TODO herdr-orch: check oh docs against herdr v0.8.2 agent semantics :skill:herdr_orch:
+The hard part is the completion signal: the contract requires the child to publish a v1 envelope through the injected launcher, and a bare model rewriting prose cannot. A measurement mode needs a different terminal condition, such as process exit plus the expected output artefact existing. Batching matters too, because 15 sessions per round do not each want a pane.
+
+Cost of the gap, measured: the isolation audit was rebuilt by hand in each round (transcript capture, tool-call extraction, a positive-controlled contamination matrix). As a spawn property it would be derived once.
+
+Two verified =pi= facts any implementation must respect, both of which cost a round when they were assumed rather than checked:
+- =--no-extensions= disables provider-auth extensions. A headless refusal whose message described third-party usage billing was caused by this flag, not by an account limit. Isolate the tool surface with =--tools <allowlist>= instead.
+- =--tools= is case-sensitive and fails silently. =--tools Read= enables no tool and exits 0; =--tools read= works. Probed directly: the capitalised form returned =NO-TOOL= where the lowercase form returned the file's token.
+
+*EDIT* [2026-08-27 Thu] The gap itself re-confirmed: no =--persona-file= and no inline persona flag exist anywhere under =scripts/src/= (control: 93 =persona= matches in =cli.clj=). The reasoning above is not re-verified, and its snapshot is stale -- =6a89b0f= (2026-08-12) precedes =4741d59= and 20 further commits to =cli.clj=/=herdr.clj=, among them =d757aa7= "give same-kind model inheritance a producer", which is exactly the =resolve-model= tier this task cites as its motivation, and =bc9c38e=, which now derives accepted options from the help signatures and therefore changes how a new flag is added. Re-read =resolve-model= and the option surface before designing; the packaged personas' =model:= declarations also need re-counting rather than restating the seven-of-seven figure.
+**** TODO [#B] Consider leveraging pi /fork for subagents
+:PROPERTIES:
+:CUSTOM_ID: 84653126-cd7e-412a-9761-d43eaad7f97f
+:CREATED: [2026-08-07 Fri 10:06]
+:END:
+:LOGBOOK:
+- Created [2026-08-07 Fri 10:06]
+:END:
+Depending on scope of use -- using fork rather than spawn might be a good idea for some subagents -- let them inherit the orchestrator context without bloating it.
+This could work via an optional `:fork :true` in the subagent header (default `:fork :false`)
+This should be straightforward using pi. Maybe also using claude/codex? Investigate...
+*** TODO herdr-orch: check oh docs against herdr v0.8.2 agent semantics :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 9a7f8771-48ad-4ee0-a1f7-25f6b1fdc710
 :CREATED: [2026-08-21 Fri 16:24]
@@ -342,100 +293,10 @@ Acceptance criteria:
 - Each of the two behaviours is either reflected in the oh contract/skill or explicitly recorded as not applicable.
 - Any oh code path that assumes `agent start` success implies readiness is identified.
 
-** TODO Vendored herdr carries no upstream LICENSE :skill:
-:PROPERTIES:
-:CUSTOM_ID: f7692a6c-17c3-4971-b185-2d13ee3db100
-:CREATED: [2026-08-21 Fri 16:46]
-:END:
-:LOGBOOK:
-- Created [2026-08-21 Fri 16:46]
-:END:
-Upstream ships https://raw.githubusercontent.com/ogulcancelik/herdr/master/LICENSE (HTTP 200; `LICENSE.md` 404s), but `gh skill install` copies only the skill directory, so `skills/herdr/` has no licence file. The same applies to any future vendored skill.
+*EDIT* [2026-08-27 Thu] Re-scoped. The dispatch/poke premise above is gone: commit =4741d59= (2026-08-26, an ancestor of HEAD) deleted the =agent_pane_busy= start retry, the post-prompt dispatch verifier, poke's dispatch-unconfirmed refusal, and the =:dispatch= ledger field, and moved preflight to refuse Herdr below 0.8.2. =oh= now makes one =agent start= attempt and one =agent prompt= call, so the second criterion has no remaining code path to identify -- close it as satisfied by that commit rather than auditing for it.
 
-Decide and record one route:
-- carry a LICENSE alongside each vendored skill, noting that `gh skill update` will not maintain it;
-- record upstream licences centrally in `skills/README.org` § Vendored beside each Source;
-- establish that the frontmatter `license:` field (which the Agent Skills spec defines) is sufficient, and populate it where upstream leaves it implicit.
-
-Carried over from the original body of "Skill vendoring improvements" (98cf369c), which noted the gap but never addressed it.
-
-Acceptance criteria:
-- skills/README.org states where a vendored skill's licence lives.
-- herdr's upstream licence is either present in the tree or cited from the README.
-- No vendored SKILL.md body is hand-edited to add licence text.
-
-* Fixes
-
-* Upstream issues
-** DONE [#A] find-skills documents npx skills check as read-only, but it updates
-CLOSED: [2026-08-21 Fri 15:46]
-:PROPERTIES:
-:CUSTOM_ID: 73b47d41-89ee-4a44-9ac2-db463f31ae93
-:CREATED: [2026-07-31 Fri 13:18]
-:END:
-:LOGBOOK:
-- Created [2026-07-31 Fri 13:18]
-- State "DONE" from "TODO" [2026-08-21 Fri 15:46]
-:END:
-find-skills/SKILL.md § Other useful commands claims "`npx skills check` — list updates available". It actually performs updates: running it in an unrelated project upgraded 3 installed skills and rewrote their `skills-lock.json` hashes. The current `--help` lists no `check` command at all under Updates, only `update`.
-
-This is a live foot-gun: an agent following the skill mutates a project it was only inspecting.
-
-find-skills is vendored, so the body must not be edited locally. Resolve by one of:
-- fixing it upstream and re-syncing;
-- correcting the documented command set at a non-vendored destination if find-skills is reclassified as adapted;
-- retiring the stale command reference as part of the backfill subtask, if upstream has already dropped `check`.
-
-Acceptance criteria:
-- The wrong read-only claim no longer reaches an agent following the skill.
-- Whatever route is taken, no local edit is left sitting in a lockfile-managed vendored body.
-
-Resolved: =skills/find-skills/SKILL.md= no longer documents =npx skills= at all. It was reinstalled from upstream (=9a21d3e2=), then rewritten around =gh skill= (=9d21a6c9=), which also moved it out of the vendored class so local corrections are legitimate. See [[plan:2026-08-21-skill-vendoring-improvements.org]].
-
-** TODO gitlab-cli-skills: glab-schedule create rejects --output json (list supports it) :skill_gitlab_cli_skills:
-:PROPERTIES:
-:CUSTOM_ID: 6d205682-bacc-465a-911f-419a76604e6f
-:CREATED: [2026-08-20 Thu 10:55]
-:END:
-:LOGBOOK:
-- Created [2026-08-20 Thu 10:55]
-:END:
-Verified: the installed `glab schedule create` rejects `--output json`/`-F json` ("Unknown flag: --output"), while `glab schedule list --output json` works correctly. `gitlab-cli-skills/glab-schedule/SKILL.md` documents `--output json`/`-F json` support generically for `glab schedule list` but does not flag that `create` (and likely `update`/`run`/`delete`) lack it -- an agent following the doc's pattern could reasonably expect JSON output from `create` too.
-
-gitlab-cli-skills is vendored third-party content (commit fc86308, "deps: Added gitlab-cli-skills (3rd party)"; no upstream source URL recorded in the commit or README). Per the user: raise this upstream once the source repository is identified, rather than editing the vendored file locally. This task exists so the finding is not lost; resolve by either (a) locating the upstream repo and filing/PRing there, or (b) if no upstream exists / is unreachable, revisit as a local vendored-doc fix under the Skill vendoring improvements work.
-
-Origin:
-- cwd: /home/cormacc/nmd/infra/playbooks
-- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
-- timestamp: [2026-08-20 Thu 10:50]
-- sender: agent
-
-Evidence:
-- `glab schedule create --cron "0 6 * * *" --description "..." --ref develop --output json` -> `Unknown flag: --output.`
-- `glab schedule list --output json` succeeded and returned valid JSON in the same session.
-
-* Chores
-
-** DONE [#B] Simplify herdr-orch skill based on upstream changes
-CLOSED: [2026-08-26 Wed 20:01]
-:PROPERTIES:
-:CUSTOM_ID: cf561004-25e4-46ee-aa4a-5e09b8eecff6
-:CREATED: [2026-08-17 Mon 18:33]
-:STARTED: [2026-08-17 Mon 22:01]
-:END:
-:LOGBOOK:
-- Created [2026-08-17 Mon 18:33]
-- State "STARTED" from "TODO" [2026-08-17 Mon 22:01]
-- State "DONE" from "STARTED" [2026-08-17 Mon 22:07]
-- State "STARTED" from "DONE" [2026-08-17 Mon 22:14]
-- State "DONE" from "STARTED" [2026-08-26 Wed 20:01]
-:END:
-#+IMPORT: [[plan:2026-08-17-simplify-herdr-orch-skill-based-on-upstr.org]]
-Prune mechanically enforced lifecycle detail from `skills/herdr-orch/SKILL.md`. Keep policy and parent recovery actions in the skill, and keep guard detail in the canonical contract. Defer compatibility-code removal until Herdr publishes a version that distinguishes the upstream readiness fixes from stable v0.8.0.
-
-* Agent feedback
-
-** TODO [#B] herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
+The first criterion is still unmet, and is now the whole task: neither =agent_not_ready= nor =agent_blocked= appears anywhere in =skills/herdr-orch/SKILL.md=, =scripts/docs/contract.md=, or =scripts/src/= (control: =contract.md= carries three mentions of =0.8.2=). Locally installed Herdr is 0.8.2, matching the floor. Reduced scope: record both behaviours in =contract.md= where it describes start and prompt, or record why each is not applicable now that no workaround reasons about an unsettled child.
+*** TODO [#B] herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 22f68a11-eeef-43e9-81d3-79341842ca84
 :CREATED: [2026-08-04 Tue 19:44]
@@ -462,6 +323,8 @@ Load-bearing safety requirement: for an unmanaged entry, `prune` and `collect --
 
 *EDIT* [2026-08-12 Wed] Every line number had drifted a second time, one of them past the end of `herdr.clj`, so the citations above are now by symbol only. Substantive claims re-verified unchanged: `spawn-command!` still hardcodes `:env {}`, and `publish`/`collect` still make no blocking agent call.
 
+*EDIT* [2026-08-27 Thu] Spot-check only, not a full re-verification: =parent-identity=, =publish-round!=, =spawn-command!= and the hardcoded =:env {}= are all still present in =cli.clj=. Treat the rest as unverified -- 21 commits have touched =cli.clj= or =herdr.clj= since the 2026-08-12 pass, including =4741d59= (readiness workarounds and the =:dispatch= field deleted, Herdr floor raised to 0.8.2), =dec9230= (assignment lifecycle protocol hardened), the worktree series, and =bc9c38e= (accepted options derived from help signatures, which is the option surface a =:managed false= flag would join). Re-read the spawn and prune paths before designing, and expect the =:harnesses= surface to have moved again. The =agent start --kind= enum still omits dirge, per the herdr MCP tool schema exposed to this session.
+
 Accepted degradation for unmanaged kinds: no lifecycle states, no :child-session, no auto-close, no agent prompt/wait/read, excluded from fan-in, and no ability to spawn grandchildren. The result file remains the completion signal, which is the part that matters.
 
 Origin:
@@ -472,8 +335,133 @@ Origin:
 
 Evidence:
 `herdr agent start --help` enumerates: pi, claude, codex, gemini, cursor, devin, agy, cline, omp, mastracode, opencode, copilot, kimi, kiro, droid, amp, grok, hermes, kilo, qodercli, maki. dirge is absent but does expose `--model`, so only the launch/detect half is missing. herdr has no local extension point: no agent definitions in config.toml, no plugins subcommand, and no manifest file on disk.
+*** TODO herdr-orch: an aborted round cannot be closed or pruned :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 08fba41e-c94c-435d-bb1e-84c757d057cd
+:CREATED: [2026-08-20 Thu 10:36]
+:END:
+:LOGBOOK:
+- Created [2026-08-20 Thu 10:36]
+:END:
+An aborted subagent round has no lifecycle exit. When a continuation round exists and the operator stops the child before it publishes, both exits refuse each other:
 
-** TODO [#A] org-tasks: ot create --parent cannot target a change-record plan task :skill:org_tasks:
+- `oh task close <earlier-round>` returns `close refused: an uncaptured newer round names this child`, naming the newer round.
+- `oh task prune <newer-round>` returns `prune refused: named child is present in agent list`, naming the child.
+
+Close requires the newer round to be captured. Prune requires the child to be absent. Neither is reachable for a round that will never publish. `oh task collect` on that round returns `{"status":"pending","terminal?":false}`, so capture cannot settle it either.
+
+The documented escape is `oh task poke`, framed for "a settled child with no valid publication". It cleared the deadlock in practice, but by resuming the agent, which is the opposite of the operator's intent when abandoning a round. It succeeded only because the assignment was still valid.
+
+Desired outcome: a way to abandon a round that will never publish, without resuming the child. Each guard is individually correct, so the defect is in their interaction rather than in either one.
+
+Candidate directions, none chosen:
+- A `--force` or `--abandon` on `prune` for a named round whose child is still alive.
+- Let `close` capture a pending round as invalid and proceed.
+- Document poke-then-collect as the sanctioned abort path, and state its resume side effect.
+
+Also observed: `close` is not addressable by an older round id. After the newer round settled, closing required the newest round's UUID. Worth stating in the contract whichever direction the fix takes.
+
+*EDIT* [2026-08-27 Thu] Adjacent prior art exists and does *not* resolve this: `a63a97e` (2026-08-13) added `oh task close <uuid> --abandon`, which retires a ledger round without touching the pane. It does not apply here, because contract.md § close records that it runs every `assert-closable!` guard first -- ownership, *capture*, newest round, no `:closed-at` -- and skips only the liveness observation. This task's round is precisely the uncaptured one, and `collect` returns `{"status":"pending"}` for it, so the capture guard can never be satisfied. Read `--abandon` as the shape a fix should follow rather than as the fix: it establishes that retiring an entry while leaving the pane to the operator is already sanctioned, so what is missing is the same treatment for a round that will never publish.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: github.com/cormacc/dotagents @ main
+- timestamp: [2026-08-19 Wed 19:30]
+- sender: agent
+
+Evidence: reproduced first-hand during the prose-style evaluation. Child `worker-cd1dbbca`, rounds `cd1dbbca-e93c-4e12-b69a-02a093cae122` and `73ec4d3a-8e25-4603-85ac-1e260234af7d`. Exact refusal messages above.
+
+** TODO Vendored skill hygiene :skill:
+:PROPERTIES:
+:CUSTOM_ID: 65e49f0b-d805-4974-9511-75901d9992b6
+:CREATED: [2026-08-27 Thu 14:22]
+:END:
+:LOGBOOK:
+- Created [2026-08-27 Thu 14:22]
+:END:
+Two open findings about third-party skills that this repository vendors rather than authors, both of which resolve by recording a decision in `skills/README.org` § Vendored rather than by editing a vendored body. Their predecessor task, "Skill vendoring improvements", is archived, so they need a live home.
+
+Grouped 2026-08-27.
+*** TODO Vendored herdr carries no upstream LICENSE :skill:
+:PROPERTIES:
+:CUSTOM_ID: f7692a6c-17c3-4971-b185-2d13ee3db100
+:CREATED: [2026-08-21 Fri 16:46]
+:END:
+:LOGBOOK:
+- Created [2026-08-21 Fri 16:46]
+:END:
+Upstream ships https://raw.githubusercontent.com/ogulcancelik/herdr/master/LICENSE (HTTP 200; `LICENSE.md` 404s), but `gh skill install` copies only the skill directory, so `skills/herdr/` has no licence file. The same applies to any future vendored skill.
+
+Decide and record one route:
+- carry a LICENSE alongside each vendored skill, noting that `gh skill update` will not maintain it;
+- record upstream licences centrally in `skills/README.org` § Vendored beside each Source;
+- establish that the frontmatter `license:` field (which the Agent Skills spec defines) is sufficient, and populate it where upstream leaves it implicit.
+
+Carried over from the original body of "Skill vendoring improvements" (98cf369c), which noted the gap but never addressed it.
+
+Acceptance criteria:
+- skills/README.org states where a vendored skill's licence lives.
+- herdr's upstream licence is either present in the tree or cited from the README.
+- No vendored SKILL.md body is hand-edited to add licence text.
+*** TODO gitlab-cli-skills: glab-schedule create rejects --output json (list supports it) :skill_gitlab_cli_skills:
+:PROPERTIES:
+:CUSTOM_ID: 6d205682-bacc-465a-911f-419a76604e6f
+:CREATED: [2026-08-20 Thu 10:55]
+:END:
+:LOGBOOK:
+- Created [2026-08-20 Thu 10:55]
+:END:
+Verified: the installed `glab schedule create` rejects `--output json`/`-F json` ("Unknown flag: --output"), while `glab schedule list --output json` works correctly. `gitlab-cli-skills/glab-schedule/SKILL.md` documents `--output json`/`-F json` support generically for `glab schedule list` but does not flag that `create` (and likely `update`/`run`/`delete`) lack it -- an agent following the doc's pattern could reasonably expect JSON output from `create` too.
+
+gitlab-cli-skills is vendored third-party content (commit fc86308, "deps: Added gitlab-cli-skills (3rd party)"). Per the user: raise this upstream rather than editing the vendored file locally.
+
+*EDIT* [2026-08-27 Thu] The original body said no upstream source URL was recorded in the commit or the README, and route (a) was "locate the upstream repo". That is no longer true and the search step is done: `skills/README.org` § Vendored names https://github.com/vince-winkintel/gitlab-cli-skills as the source, and `gitlab-cli-skills/.vendor.edn` records the upstream commit that `scripts/sync-gitlab-cli-skills.bb` installed. Remaining work is only to file the report or a PR there against `glab-schedule/SKILL.md`, and to record the issue link here. Keep the local-fix fallback for the case where upstream is unresponsive, noting that a local edit reclassifies the skill out of the vendored set per README.org § Vendored.
+
+Origin:
+- cwd: /home/cormacc/nmd/infra/playbooks
+- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
+- timestamp: [2026-08-20 Thu 10:50]
+- sender: agent
+
+Evidence:
+- `glab schedule create --cron "0 6 * * *" --description "..." --ref develop --output json` -> `Unknown flag: --output.`
+- `glab schedule list --output json` succeeded and returned valid JSON in the same session.
+
+** TODO ot CLI surface consistency :skill_org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: 76553bc5-a6ef-4b26-8948-f9869cdd5b12
+:CREATED: [2026-08-27 Thu 14:22]
+:END:
+:LOGBOOK:
+- Created [2026-08-27 Thu 14:22]
+:END:
+Two measured cases where an `ot` command rejects or silently drops input that its own documentation implies is accepted. Both are argument-resolution defects in the command layer rather than protocol defects, so they share a fix site and a test shape.
+
+Grouped 2026-08-27.
+*** TODO org-tasks: ot blocker add silently ignores extra positional refs
+:PROPERTIES:
+:CUSTOM_ID: 9a29de9d-d385-4c26-9720-339fc4437fc3
+:CREATED: [2026-08-19 Wed 11:39]
+:END:
+:LOGBOOK:
+- Created [2026-08-19 Wed 11:39]
+:END:
+`ot blocker add <id> <token>` maps exactly two positionals (`:args->opts [:id :token]` in `skills/org-tasks/scripts/src/org_tasks/commands/registry.clj`, the `["blocker" "add"]` entry) and performs no arity check. A call that passes several refs adds only the first and exits 0, so the extra refs are lost silently.
+
+Measured in a contained scratch project: `ot blocker add A task:B task:C task:D` exited 0 and left one blocker on A. A single-ref control call added its blocker correctly.
+
+`ot blocker remove` shares the same `[:id :token]` shape and needs the same check.
+
+The `org-tasks` SKILL.md quick reference writes `ot blocker list|add|remove <id> [...]`, which reads as multi-ref. `ot blocker add --help` correctly documents the singular `<token>`.
+
+Fix direction: reject extra positionals with an `argument-error`, matching how `ot tag` reports a missing positional. Decide separately whether multi-ref should be supported rather than rejected.
+
+Out of scope: a dangling or malformed ref is supported protocol state, handled by `ot blocker prune` and the `ot doctor` dangling-blocker finding. Do not add ref-format validation as part of this task.
+
+Reported by a planner subagent during task 477fc686; verified against source and by behavioural probe before capture.
+
+Two adjacent defects on the same command, measured in a scratch project: `ot blocker add A task:B` run twice stores the ref twice, so the blocker list carries a duplicate; and a multi-ref call with `--format json` prints `Added blocker: task:...` instead of a JSON envelope, so a machine caller cannot parse what happened. Fix these with the arity check rather than separately.
+*** TODO [#A] org-tasks: ot create --parent cannot target a change-record plan task :skill:org_tasks:
 :PROPERTIES:
 :CUSTOM_ID: 009c6056-684a-43c8-b1d7-21ea939d7396
 :CREATED: [2026-08-08 Sat 00:14]
@@ -499,6 +487,14 @@ Origin:
 - cwd: /Users/cormacc/dotfiles/agents
 - git: cormacc/dotagents @ main
 - sender: agent
+
+* Fixes
+
+* Upstream issues
+
+* Chores
+
+* Agent feedback
 
 ** TODO [#C] self-improvement: persist AGENTS metrics comparison script :skill:self_improvement:
 :PROPERTIES:
@@ -538,84 +534,7 @@ Origin:
 Evidence:
 `clojure_find_nrepl_port` reported no reachable port. The workflow then created a Herdr tab and ran `bb nrepl-server`. That command failed with `java.net.BindException: Address already in use`. A direct `clojure_eval` probe of port 1667 returned `2` for `(+ 1 1)`, which confirmed that an existing Babashka nREPL server was available.
 
-** TODO herdr-orch: an aborted round cannot be closed or pruned :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 08fba41e-c94c-435d-bb1e-84c757d057cd
-:CREATED: [2026-08-20 Thu 10:36]
-:END:
-:LOGBOOK:
-- Created [2026-08-20 Thu 10:36]
-:END:
-An aborted subagent round has no lifecycle exit. When a continuation round exists and the operator stops the child before it publishes, both exits refuse each other:
-
-- `oh task close <earlier-round>` returns `close refused: an uncaptured newer round names this child`, naming the newer round.
-- `oh task prune <newer-round>` returns `prune refused: named child is present in agent list`, naming the child.
-
-Close requires the newer round to be captured. Prune requires the child to be absent. Neither is reachable for a round that will never publish. `oh task collect` on that round returns `{"status":"pending","terminal?":false}`, so capture cannot settle it either.
-
-The documented escape is `oh task poke`, framed for "a settled child with no valid publication". It cleared the deadlock in practice, but by resuming the agent, which is the opposite of the operator's intent when abandoning a round. It succeeded only because the assignment was still valid.
-
-Desired outcome: a way to abandon a round that will never publish, without resuming the child. Each guard is individually correct, so the defect is in their interaction rather than in either one.
-
-Candidate directions, none chosen:
-- A `--force` or `--abandon` on `prune` for a named round whose child is still alive.
-- Let `close` capture a pending round as invalid and proceed.
-- Document poke-then-collect as the sanctioned abort path, and state its resume side effect.
-
-Also observed: `close` is not addressable by an older round id. After the newer round settled, closing required the newest round's UUID. Worth stating in the contract whichever direction the fix takes.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com/cormacc/dotagents @ main
-- timestamp: [2026-08-19 Wed 19:30]
-- sender: agent
-
-Evidence: reproduced first-hand during the prose-style evaluation. Child `worker-cd1dbbca`, rounds `cd1dbbca-e93c-4e12-b69a-02a093cae122` and `73ec4d3a-8e25-4603-85ac-1e260234af7d`. Exact refusal messages above.
-
-** TODO Edit tool: pre-submit self-check for stray edits[] keys :skill_org_tasks:agents_md:
-:PROPERTIES:
-:CUSTOM_ID: 81a6a750-4187-4f0c-a8c2-2629014e915c
-:CREATED: [2026-08-20 Thu 10:54]
-:END:
-:LOGBOOK:
-- Created [2026-08-20 Thu 10:54]
-:END:
-Twice in one session (nmd/infra/playbooks, secret-management record), a call to the Edit tool included an extra, schema-invalid key (e.g. `newText_unused`) alongside a valid `{oldText, newText}` entry inside `edits[]`. The tool silently tolerated it and applied the edit correctly, but AGENTS.md already prohibits adding keys absent from a declared schema, warning that a tool can silently accept an unknown field and corrupt the payload -- this happened despite that existing rule already being in context, so restating it alone did not prevent recurrence.
-
-Proposed rule addition to home/AGENTS.md (Output and structured edits section): before submitting an Edit call with one or more entries, re-scan every object in `edits[]` and confirm it contains exactly `{oldText, newText}` and no other key.
-
-Origin:
-- cwd: /home/cormacc/nmd/infra/playbooks
-- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
-- timestamp: [2026-08-20 Thu 10:50]
-- sender: agent
-
-Evidence:
-- One instance while editing design/log/2026-08-17-implement-secret-management.org Decisions section (stray `newText_unused` key).
-- A second instance shortly after while editing the same file's Shipped/Gotchas bullets.
-- Neither call errored or was rejected; both edits applied correctly despite the invalid key.
-
-** TODO org-tasks: copy heading state tokens verbatim during bulk newText edits :skill_org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: d53b3498-3764-4ba5-85ea-4c7e40349f12
-:CREATED: [2026-08-20 Thu 10:54]
-:END:
-:LOGBOOK:
-- Created [2026-08-20 Thu 10:54]
-:END:
-While trimming a plan task's body in a change-record (nmd/infra/playbooks, design/log/2026-08-17-implement-secret-management.org), a large hand-composed `newText` block happened to span a heading line containing a TODO-state keyword. The heading was retyped as part of composing the replacement text, and the state keyword was mistyped from `STARTED` to `DONE`. This was caught in review before commit, but org-tasks explicitly forbids hand-editing task lifecycle state outside `ot status` -- this was a near-miss of exactly that violation, caused by manually retyping a heading rather than copying it.
-
-Proposed rule addition to skills/org-tasks/SKILL.md: when composing a large `newText` block that happens to include or span a heading line carrying a TODO-state keyword (TODO/STARTED/WAITING/DONE/CANCELLED), copy that heading token verbatim from the most recent read rather than retyping it from memory.
-
-Origin:
-- cwd: /home/cormacc/nmd/infra/playbooks
-- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
-- timestamp: [2026-08-20 Thu 10:50]
-- sender: agent
-
-Evidence:
-- The mistake was caught immediately after the edit by a grep for the target heading text, then reverted with a follow-up edit before any commit.
-- No incorrect state was ever committed or persisted; the near-miss was purely in an intermediate working-tree edit.
+*EDIT* [2026-08-27 Thu] Partly overtaken, so the remaining scope is narrower than the heading. `skills/clojure/SKILL.md` § REPL-driven workflow now instructs: "If `bb nrepl-server` fails with address-in-use, an nREPL is already listening on the default port without a discoverable port file -- probe that port with an eval and reuse it instead of retrying startup." That covers the recovery path and removes the retry loop, but it is reactive: the wasted pane and the failed start still happen once. What is left is the pre-start check -- probe the default port before creating a pane and starting a server -- plus a decision on where it belongs, since `clojure_find_nrepl_port` reads port files only and is the component that reported no reachable port. Close this instead if the reactive guidance is judged sufficient.
 
 ** TODO validate-skills.bb rejects a relative --python path :project_convention:
 :PROPERTIES:
@@ -641,3 +560,58 @@ Measured: `bb scripts/validate-skills.bb --python .tmp/relpy` exits 1 with the e
 Acceptance criteria:
 - A relative `--python` value either works or fails with an argument error naming the constraint.
 - scripts/README.md documents the resolved behaviour.
+
+** TODO Hand-composed edit hazards: instruction rule additions :agents_md:
+:PROPERTIES:
+:CUSTOM_ID: fd2acfc6-e7be-4487-985f-9176ce9e5b94
+:CREATED: [2026-08-27 Thu 14:22]
+:END:
+:LOGBOOK:
+- Created [2026-08-27 Thu 14:22]
+:END:
+Two near-misses from the same session both trace to one cause: a large hand-composed `newText` block was typed from memory rather than copied. Each child proposes a rule addition to a different instruction file, and both should land together so the pair is reviewed as one policy rather than two isolated warnings.
+
+Verified 2026-08-27 that neither rule is in place: `home/AGENTS.md` contains no `edits[]` occurrence (control: 55 list items present), and `skills/org-tasks/SKILL.md` contains no `newText` occurrence (control: 30 "org" matches).
+*** TODO Edit tool: pre-submit self-check for stray edits[] keys :skill_org_tasks:agents_md:
+:PROPERTIES:
+:CUSTOM_ID: 81a6a750-4187-4f0c-a8c2-2629014e915c
+:CREATED: [2026-08-20 Thu 10:54]
+:END:
+:LOGBOOK:
+- Created [2026-08-20 Thu 10:54]
+:END:
+Twice in one session (nmd/infra/playbooks, secret-management record), a call to the Edit tool included an extra, schema-invalid key (e.g. `newText_unused`) alongside a valid `{oldText, newText}` entry inside `edits[]`. The tool silently tolerated it and applied the edit correctly, but AGENTS.md already prohibits adding keys absent from a declared schema, warning that a tool can silently accept an unknown field and corrupt the payload -- this happened despite that existing rule already being in context, so restating it alone did not prevent recurrence.
+
+Proposed rule addition to home/AGENTS.md (Output and structured edits section): before submitting an Edit call with one or more entries, re-scan every object in `edits[]` and confirm it contains exactly `{oldText, newText}` and no other key.
+
+Origin:
+- cwd: /home/cormacc/nmd/infra/playbooks
+- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
+- timestamp: [2026-08-20 Thu 10:50]
+- sender: agent
+
+Evidence:
+- One instance while editing design/log/2026-08-17-implement-secret-management.org Decisions section (stray `newText_unused` key).
+- A second instance shortly after while editing the same file's Shipped/Gotchas bullets.
+- Neither call errored or was rejected; both edits applied correctly despite the invalid key.
+*** TODO org-tasks: copy heading state tokens verbatim during bulk newText edits :skill_org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: d53b3498-3764-4ba5-85ea-4c7e40349f12
+:CREATED: [2026-08-20 Thu 10:54]
+:END:
+:LOGBOOK:
+- Created [2026-08-20 Thu 10:54]
+:END:
+While trimming a plan task's body in a change-record (nmd/infra/playbooks, design/log/2026-08-17-implement-secret-management.org), a large hand-composed `newText` block happened to span a heading line containing a TODO-state keyword. The heading was retyped as part of composing the replacement text, and the state keyword was mistyped from `STARTED` to `DONE`. This was caught in review before commit, but org-tasks explicitly forbids hand-editing task lifecycle state outside `ot status` -- this was a near-miss of exactly that violation, caused by manually retyping a heading rather than copying it.
+
+Proposed rule addition to skills/org-tasks/SKILL.md: when composing a large `newText` block that happens to include or span a heading line carrying a TODO-state keyword (TODO/STARTED/WAITING/DONE/CANCELLED), copy that heading token verbatim from the most recent read rather than retyping it from memory.
+
+Origin:
+- cwd: /home/cormacc/nmd/infra/playbooks
+- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
+- timestamp: [2026-08-20 Thu 10:50]
+- sender: agent
+
+Evidence:
+- The mistake was caught immediately after the edit by a grep for the target heading text, then reverted with a follow-up edit before any commit.
+- No incorrect state was ever committed or persisted; the near-miss was purely in an intermediate working-tree edit.

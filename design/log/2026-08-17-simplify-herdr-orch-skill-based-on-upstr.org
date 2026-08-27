@@ -1,6 +1,6 @@
 #+TITLE: Simplify herdr-orch skill based on upstream changes
 #+DATE: 2026-08-17 Mon
-#+PARENT: [[task:cf561004-25e4-46ee-aa4a-5e09b8eecff6][Simplify herdr-orch skill based on upstream changes]]
+#+PARENT: [[archive:cf561004-25e4-46ee-aa4a-5e09b8eecff6][Simplify herdr-orch skill based on upstream changes]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
 #+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
