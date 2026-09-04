@@ -40,25 +40,25 @@
  :harnesses {:pi     {:model-flag "--model"}
              :claude {:model-flag "--model"}
              :codex  {:model-flag "--model"}}
- :models {"anthropic/claude-fable-5"   {:claude "fable"            :codex "gpt-5.6-sol"}
+ :models {"anthropic/claude-fable-5-1"   {:claude "fable"            :codex "gpt-5.6-sol"}
           "anthropic/claude-opus-5"    {:claude "opus"             :codex "gpt-5.6-sol"}
           "anthropic/claude-sonnet-5"  {:claude "sonnet"           :codex "gpt-5.6-terra"}
           "anthropic/claude-haiku-4-5" {:claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
           "openai-codex/gpt-5.6-sol"   {:claude "opus"             :codex "gpt-5.6-sol"}
           "openai-codex/gpt-5.6-terra" {:claude "sonnet"           :codex "gpt-5.6-terra"}
           "openai-codex/gpt-5.6-luna"  {:claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}}
- :aliases {"heavy"            "anthropic/claude-fable-5"
+ :aliases {"heavy"            "anthropic/claude-fable-5-1"
            "middle"           "anthropic/claude-opus-5"
            "light"            "anthropic/claude-sonnet-5"
            "feather"          "anthropic/claude-haiku-4-5"
-           "claude-fable"     "anthropic/claude-fable-5"
+           "claude-fable"     "anthropic/claude-fable-5-1"
            "claude-opus"      "anthropic/claude-opus-5"
            "claude-sonnet"    "anthropic/claude-sonnet-5"
            "claude-haiku"     "anthropic/claude-haiku-4-5"
            "gpt-sol"          "openai-codex/gpt-5.6-sol"
            "gpt-terra"        "openai-codex/gpt-5.6-terra"
            "gpt-luna"         "openai-codex/gpt-5.6-luna"
-           "claude-fable-5"   "anthropic/claude-fable-5"
+           "claude-fable-5-1"   "anthropic/claude-fable-5-1"
            "claude-opus-5"    "anthropic/claude-opus-5"
            "claude-sonnet-5"  "anthropic/claude-sonnet-5"
            "claude-haiku-4-5" "anthropic/claude-haiku-4-5"
