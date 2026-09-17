@@ -15,6 +15,15 @@ npm --prefix pi/extensions/pi-clojure ci --ignore-scripts
 printf '\n==> Babashka task tooling\n'
 bb test
 
+# Each extension owns a `test.sh` that runs its own tsx suites. Until this loop existed,
+# no aggregate runner executed any TypeScript at all, so a regression in an extension test
+# passed the repository check green (reviewer finding P3).
+printf '\n==> Pi extension TypeScript suites\n'
+for suite in pi/extensions/*/test.sh; do
+  printf -- '--> %s\n' "$suite"
+  bash "$suite"
+done
+
 printf '\n==> skill-creator clean validation and packaging\n'
 python3 -m venv "$work/venv"
 "$work/venv/bin/python" -m pip install --quiet --disable-pip-version-check -r skills/skill-creator/requirements.txt
