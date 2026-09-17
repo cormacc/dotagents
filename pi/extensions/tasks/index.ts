@@ -58,6 +58,7 @@ import {
   type OtSourceContent,
 } from "./ot.ts";
 import {
+  CLOSED_STATUSES,
   expandOrgLinkTarget,
   getTaskId,
   getTaskStarted,
@@ -87,7 +88,6 @@ const TODO_PREAMBLE = "#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANC
 const STARTUP_PREAMBLE = "#+STARTUP: logdone logdrawer";
 const ARCHIVE_PREAMBLE = "#+ARCHIVE: TASKS.archive.org::* From %s";
 const DEFAULT_PLANS_DIR = "./design/log";
-const CLOSED_STATUSES = new Set<string>(["DONE", "CANCELLED"]);
 /** Hard cap so the compact selected-task widget never dominates the screen. */
 const MAX_COMPACT_LINES = 6;
 const COMPACT_WIDGET_ID = "tasks:selected";

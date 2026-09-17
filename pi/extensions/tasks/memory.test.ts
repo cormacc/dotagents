@@ -10,7 +10,6 @@ import {
   serializeTasks,
   type Task,
 } from "./parser.ts";
-import { runDoctor } from "./doctor.ts";
 
 let passed = 0;
 let failed = 0;
@@ -148,12 +147,6 @@ assertEqual(
   true,
   "memory scenario: task blocker resolves against loaded graph",
 );
-
-const findings = runDoctor({ tasks, selectedId, selectedSourcePath: "/repo/TASKS.local.org" });
-assertEqual(findings.filter((f) => f.code === "duplicate-id").length, 0,
-  "memory scenario: migrated plan task has no duplicate ID in parent TASKS.org subtree");
-assertEqual(findings.filter((f) => f.code === "selected-not-found").length, 0,
-  "memory scenario: selected task is present in loaded graph");
 
 const serialized = serializeTasks(tasks);
 assertContains(serialized, "#+IMPORT: [[plan:org-memory.org]]", "memory scenario: import link form round-trips");

@@ -453,8 +453,8 @@ export interface ReadinessReport {
   }>;
 }
 
-/** Org statuses considered "closed" for readiness gating. */
-const CLOSED_STATUSES = new Set(["DONE", "CANCELLED"]);
+/** Org statuses considered "closed" for readiness gating and lifecycle checks. */
+export const CLOSED_STATUSES: ReadonlySet<string> = new Set(["DONE", "CANCELLED"]);
 
 /**
  * Compute whether a task is ready to start. A task is ready when every

@@ -71,46 +71,11 @@ fi
 
 CODE=0
 
-echo "# Running parser/scaffold unit tests..."
-"$TSX" ./parser.test.ts || CODE=1
-
-echo "# Running insert helper unit tests..."
-"$TSX" ./insert.test.ts || CODE=1
-
-echo "# Running SETUPFILE expansion unit tests..."
-"$TSX" ./effective.test.ts || CODE=1
-
-echo "# Running lifecycle unit tests..."
-"$TSX" ./lifecycle.test.ts || CODE=1
-
-echo "# Running path sandbox unit tests..."
-"$TSX" ./paths.test.ts || CODE=1
-
-echo "# Running global agent-directory path tests..."
-"$TSX" ../lib/agent-paths.test.ts || CODE=1
-
-echo "# Running doctor unit tests..."
-"$TSX" ./doctor.test.ts || CODE=1
-
-echo "# Running agent-memory scenario tests..."
-"$TSX" ./memory.test.ts || CODE=1
-
-echo "# Running closure-time summary unit tests..."
-"$TSX" ./summary.test.ts || CODE=1
-
-echo "# Running section reader unit tests..."
-"$TSX" ./section.test.ts || CODE=1
-
-echo "# Running scan-summaries unit tests..."
-"$TSX" ./scan.test.ts || CODE=1
-
-echo "# Running expanded-overlay removal unit tests..."
-"$TSX" ./removal.test.ts || CODE=1
-
-printf "# Running ot wrapper integration smoke tests...\n"
-"$TSX" ./ot.test.ts || CODE=1
-
-echo "# Running /tasks mode-boundary RPC integration tests..."
-"$TSX" ./pi-integration.test.ts || CODE=1
+# Every *.test.ts beside this runner, plus the shared lib test. Globbed rather
+# than listed so a new test file cannot be added without being run.
+for t in ./*.test.ts ../lib/agent-paths.test.ts; do
+  echo "# Running $t..."
+  "$TSX" "$t" || CODE=1
+done
 
 exit "$CODE"
