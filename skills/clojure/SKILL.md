@@ -7,6 +7,8 @@ description: Clojure, ClojureScript, EDN, and Babashka development with runtime 
 
 Follow the project's `AGENTS.md`, commands, and conventions. Use the local [style digest](references/idioms.md) when the project does not specify a style; no web lookup is needed.
 
+For error handling, JVM/CLJS portability, Java interop or test design, read the [runtime and testing cautions](references/runtime-testing.md). They preserve concrete failure modes and local findings without expanding the core workflow.
+
 ## Workflow
 
 1. Read the target code, namespace dependencies, and callers. Use `lsp` for symbol definitions and references.
