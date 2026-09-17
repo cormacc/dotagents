@@ -34,10 +34,7 @@ dotagents/
     │   ├── chromium, dataspex, pi-clojure, lsp
     │   ├── ext-dev/, herdr-agent-state.ts, question.ts, systemprompt.ts
     │   └── lib/              # shared code, not an extension entry point
-    └── archive/              # inactive historical extensions/skills
 ```
-
-`pi/archive/` is deliberately retained history. Pi does not discover it from the editable `~/.pi/agent/extensions`/`skills` links, and package manifests do not include it.
 
 ## Installation routes
 
