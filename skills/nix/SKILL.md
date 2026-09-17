@@ -24,6 +24,8 @@ Every Nix task is gather → change → eval-validate:
 4. **Eval-validate before claiming success.** See *Validation*. A Nix edit that parses is not necessarily one that evaluates; one that evaluates is not necessarily one that builds.
 5. **Reload / rebuild only when asked.** `nixos-rebuild switch`, `home-manager switch`, `darwin-rebuild switch` are destructive; the `*-rebuild build` variants are not.
 
+Quote every flake installable in docs, scripts, and CI: `nix build '.#pkg'`. Unquoted, zsh with `extended_glob` treats `#` as a glob operator and fails before nix runs.
+
 Ask for clarification when an edit changes user-visible state, when the option taxonomy is ambiguous (system vs. user, NixOS vs. nix-darwin), or when pinning a new input.
 
 ## Option-first refactor checklist
