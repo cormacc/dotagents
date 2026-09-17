@@ -27,32 +27,13 @@ const DirectionEnum = StringEnum(["right", "down"] as const, {
   description: "Split direction. When omitted, the tool chooses from the source pane geometry.",
 });
 
-const AgentKindEnum = StringEnum(
-  [
-    "pi",
-    "claude",
-    "codex",
-    "gemini",
-    "cursor",
-    "devin",
-    "agy",
-    "cline",
-    "omp",
-    "mastracode",
-    "opencode",
-    "copilot",
-    "kimi",
-    "kiro",
-    "droid",
-    "amp",
-    "grok",
-    "hermes",
-    "kilo",
-    "qodercli",
-    "maki",
-  ] as const,
-  { description: "Supported coding agent kind and canonical executable" },
-);
+// Installed Herdr owns the kind set (`herdr agent start --help` prints the live enum), so
+// this is a nonblank string rather than a local allow-list that would refuse a kind the
+// runtime accepts. A blank kind is rejected here, before oh is invoked.
+const AgentKind = Type.String({
+  minLength: 1,
+  description: "Coding agent kind and canonical executable, as accepted by the installed Herdr (for example pi, claude, codex, qwen, letta, muse)",
+});
 
 const LayoutParams = Type.Object({
   action: StringEnum(
@@ -108,7 +89,7 @@ const AgentParams = Type.Object({
       description: "Unique agent name for start or replacement name for rename",
     }),
   ),
-  kind: Type.Optional(AgentKindEnum),
+  kind: Type.Optional(AgentKind),
   agentArgs: Type.Optional(Type.Array(Type.String(), { description: "Native agent arguments passed unchanged after -- for start" })),
   prompt: Type.Optional(Type.String({ description: "Prompt text submitted atomically with Enter" })),
   wait: Type.Optional(Type.Boolean({ description: "Wait for lifecycle settlement after prompt. Defaults to true." })),
@@ -185,7 +166,7 @@ export default function (pi: ExtensionAPI) {
     name: "herdr_layout",
     label: "Herdr Layout",
     description:
-      "Create and inspect Herdr terminal topology. Workspaces contain tabs; tabs contain panes. Creating a workspace or tab also creates a root pane, while splitting creates another pane. Layout actions never start an agent or ordinary command. Read pane IDs from results and pass them to herdr_pane or herdr_agent. Creation defaults to the caller's cwd and preserves UI focus. pane_split defaults to the caller's pane and chooses right or down from its geometry.",
+      "Create and inspect Herdr terminal topology. Workspaces contain tabs; tabs contain panes. Creating a workspace or tab also creates a root pane, while splitting creates another pane. Layout actions never start an agent or ordinary command. Read pane IDs from results and pass them to herdr_pane or herdr_agent. Creation defaults to the caller's cwd and preserves UI focus. pane_split splits the named pane (default: the caller's), chooses right or down from that pane's geometry when direction is omitted, and requests focus only when focus is true.",
     promptSnippet: "Inspect or create Herdr workspaces, tabs, and pane topology",
     promptGuidelines: [
       "Use herdr_layout, herdr_pane, and herdr_agent only when the user explicitly mentions Herdr or asks to inspect or control Herdr.",
@@ -234,6 +215,7 @@ export default function (pi: ExtensionAPI) {
         }
         case "pane_split": {
           const args = ["pane", "split"];
+          option(args, "--pane", params.pane);
           option(args, "--direction", params.direction);
           option(args, "--cwd", params.cwd);
           if (params.focus) args.push("--focus");
@@ -291,7 +273,7 @@ export default function (pi: ExtensionAPI) {
     name: "herdr_agent",
     label: "Herdr Agent",
     description:
-      "Control a recognized coding agent occupying an existing Herdr pane. Starting requires an available interactive shell pane created through herdr_layout and never creates or changes layout. Agent targets are unique live names or the pane ID currently hosting the agent, never terminal IDs or bare kind labels. Use prompt, wait, read, and send_keys instead of raw pane input. Lifecycle states are working, blocked, done, idle, and unknown; prompt and wait default to the first settled idle, done, or blocked state. Read output is truncated to 2000 lines or 50KB.",
+      "Control a recognized coding agent occupying an existing Herdr pane. Starting requires an available interactive shell pane created through herdr_layout and never creates or changes layout. Agent targets are unique live names or the pane ID currently hosting the agent, never terminal IDs or bare kind labels. Use prompt, wait, read, and send_keys instead of raw pane input. Lifecycle states are working, blocked, done, idle, and unknown; prompt waits by default (wait=true) on the same operation and, like wait, settles on the first idle, done, or blocked state; until and timeout require wait, and an omitted timeout waits indefinitely. The kind for start is any kind the installed Herdr accepts. Read output is truncated to 2000 lines or 50KB.",
     promptSnippet: "Start, prompt, wait for, read, and interact with coding agents in Herdr",
     promptGuidelines: [
       "Use herdr_agent for recognized coding agents. Use herdr_layout to create an available shell pane first; herdr_agent start never creates or moves terminal layout.",
@@ -307,14 +289,29 @@ export default function (pi: ExtensionAPI) {
         case "get":
           return execute(["agent", "get", ...(params.target ? [params.target] : [])], signal);
         case "start": {
+          if (params.kind !== undefined && !params.kind.trim()) throw new Error("herdr_agent start requires a nonblank kind");
           const args = ["agent", "start", ...(params.name ? [params.name] : [])];
           option(args, "--kind", params.kind);
           option(args, "--pane", params.pane);
           if (params.agentArgs?.length) args.push("--", ...params.agentArgs);
           return execute(args, signal);
         }
-        case "prompt":
-          return execute(["agent", "prompt", ...(params.target ? [params.target] : []), ...(params.prompt ? [params.prompt] : [])], signal);
+        case "prompt": {
+          // Waiting is the default and rides the same `agent prompt` call; a later standalone
+          // `agent wait` would miss the settlement Herdr observes at submission. Wait-only
+          // options with wait=false are refused rather than dropped or silently promoted.
+          const wait = params.wait ?? true;
+          if (!wait && (params.until?.length || params.timeout !== undefined)) {
+            throw new Error("herdr_agent prompt: until and timeout require wait (omit wait or set it to true)");
+          }
+          const args = ["agent", "prompt", ...(params.target ? [params.target] : []), ...(params.prompt ? [params.prompt] : [])];
+          if (wait) {
+            args.push("--wait");
+            for (const status of params.until ?? []) option(args, "--until", status);
+            option(args, "--timeout", params.timeout);
+          }
+          return execute(args, signal);
+        }
         case "wait": {
           const args = ["agent", "wait", ...(params.target ? [params.target] : [])];
           for (const status of params.until ?? []) option(args, "--until", status);
