@@ -1,0 +1,287 @@
+#+TITLE: Adapt ponytail for use with herdr-orch/traits
+#+DATE: 2026-09-17 Thu
+#+PARENT: [[task:1feac5ff-84b8-4a40-b15e-1de84d6c40b6][Adapt ponytail for use with herdr-orch/traits]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/references/traits.md]]
+#+SPEC: [[proj:skills/herdr-orch/README.org]]
+#+SPEC: [[proj:pi/extensions/traits/README.md]]
+#+SPEC: [[proj:skills/README.org]]
+#+SPEC: [[proj:README.md]]
+
+* Intent
+Make engineering simplicity a default constraint in foreman-led delegation, without weakening accepted scope or verification. Give context management and engineering simplicity equal weight through explicit, harness-independent persona composition rather than incidental inheritance of an interactive Ponytail mode.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+Agreed direction: one-level persona inheritance, additive metadata/per-spawn traits appended after the persona body, a read-only base analyst, and a compact simplicity default. Migrate only trailing trait blocks; preserve embedded placement. Incrementally replace Ponytail with the hybrid persona/trait/skill system, retaining upstream material for reference/comparison where useful. Keep the existing CLI authoritative; defer a Pi task interface.
+
+Execution waits for [[task:561270b1-e372-47a7-9173-bd966c4204ae][herdr-orch improvements 260917]], including its integrated validation. Recheck this plan against that delivered baseline before starting; the original planning observations below are not a post-maintenance baseline.
+
+** Scope
+*** In scope
+- Composition: one-level =extends=, =traits: [name, ...]=, explicit per-spawn trait selection, deterministic preview, retained launch provenance, and pre-mutation validation. Metadata/per-spawn fragments follow the complete persona body.
+- Roster: migrate only standalone trailing trait blocks to metadata; keep other inline tokens in place. Add base-analyst. Preserve each role's authority, interaction, validation and reporting duties.
+- Policy: add a compact simple trait for worker, planner, advisor and base-analyst; let the foreman load the same canonical guidance when making engineering decisions. Refine prune for explicit scope/design challenge. Extract a useful candidate set from existing personas and Ponytail skills; reuse existing traits before admitting new ones.
+- Workflow: one on-demand complexity-review skill for a named diff or explicitly requested wider scope, usable by base-analyst. Preserve upstream attribution and licence notices for adapted material.
+- Activation: replace automatic Ponytail policy incrementally as the hybrid guidance/workflows become usable. Retain upstream skills as reference/comparison material where useful, without duplicate automatic activation. Permanent full-mode opt-in is not a delivery requirement.
+- Contracts: update the relevant spec files above together with their implementation; document the distinction between interactive token expansion and child composition.
+*** Out of scope
+- A Pi task UI, dashboard, automatic scheduling, or a second state store/model resolver.
+- Reimplementing the prerequisite's raw-adapter repairs, version gate, abandonment recovery, model-contract repair or managed/vendored refresh. Native prompt-event/listener work remains its separate upstream follow-up, not a Ponytail dependency.
+- A new generic write-enabled base, mandatory advisor consultation, or combining complexity review with correctness review.
+- Parsing natural-language spawn requests inside the CLI; arbitrary YAML configuration; automatic detection of semantic contradictions in prose.
+- Hot replacement of a child's recorded launch persona. User intervention and supplementary prompts remain available.
+- Benchmark/gain/help injection, mandatory ponytail debt comments, or a new debt-scanning mechanism.
+
+** Acceptance
+*** Core functionality
+- [ ] A persona resolves one base through the existing layer lookup.
+- [ ] A persona accepts a one-line traits list of resolving names.
+- [ ] Metadata/per-spawn fragments follow the complete base-plus-derived body.
+- [ ] A spawn accepts explicit trait names independently of its model selection.
+- [ ] Metadata/per-spawn trait overlap emits one copy of each trait.
+- [ ] Preview exposes the effective persona text.
+- [ ] Preview identifies the selected persona and its resolved base, when present.
+- [ ] The ledger retains the launch trait sources.
+- [ ] Only trailing standalone trait blocks are migrated to metadata.
+- [ ] Embedded trait occurrences retain their positions.
+- [ ] base-analyst has an explicit read-only boundary.
+- [ ] base-analyst defaults to a leaf.
+- [ ] worker, planner, advisor and base-analyst select the compact simple default.
+- [ ] The foreman's engineering guidance points to the same simple fragment.
+- [ ] Complexity findings identify a behaviour-preserving alternative with evidence.
+- [ ] A clean complexity assessment can return no findings.
+- [ ] Normal Pi startup does not inject the full Ponytail body.
+- [ ] Normal skill discovery does not advertise the upstream core's broad automatic coding trigger.
+- [ ] Retained upstream reference/comparison material has a documented access path.
+- [ ] Each admitted new trait has a recorded treated/control probe attempt.
+- [ ] The candidate assessment records source, consumer and reuse/extract/omit decisions.
+*** Edge cases
+- [ ] Missing bases fail before assignment allocation.
+- [ ] A base that declares its own extends fails before assignment allocation.
+- [ ] Malformed composition metadata fails before assignment allocation.
+- [ ] Unknown explicitly selected trait names fail before assignment allocation.
+- [ ] A derived definition retains inherited read-only policy.
+- [ ] Legacy inline tokens retain their placement.
+- [ ] Repeated resolving inline tokens retain their failure behaviour.
+- [ ] A definition without composition metadata retains its existing scalar-setting semantics.
+- [ ] A continuation retains its recorded launch composition.
+*** Anti-criteria
+- [ ] Must not: silently reduce accepted task scope.
+- [ ] Must not: reduce role-specific verification duties.
+- [ ] Must not: permit traits to grant delegation authority.
+- [ ] Must not: couple model weight to engineering stance.
+- [ ] Must not: replace the result-publication protocol with pane text.
+- [ ] Must not: claim that launch metadata captures later user interventions.
+- [ ] Must not: impose a line-count quota on implementation or review.
+- [ ] Must not: implement a second orchestration state store.
+
+** Decisions
+*** Prerequisite and integration baseline
+- Order agreed on 2026-09-17: complete [[proj:design/log/2026-09-17-herdr-orch-improvements-260917.org][Herdr maintenance]] before either entry task here. The parent and both entry tasks carry the prerequisite blocker; later tasks keep their existing dependency chain. The review decisions below narrow composition and activation; the prerequisite order remains unchanged.
+- Before execution, record the delivered commit and worktree state, verify prerequisite acceptance evidence, and refresh the source/test references below. Its planned changes are requirements to preserve, not claims that they have already shipped.
+- Runtime: inherit the prerequisite's client/server minimum of 0.9.1 and status-based preflight. Use its updated fake-Herdr fixture; composition refusal tests must pass preflight before testing their own boundary. An insufficient live runtime blocks smoke; only the operator upgrades it.
+- Adapter/lifecycle: preserve non-waiting delegation dispatch, unfocused delegation splits, raw prompt wait/timeout semantics, start/prompt failure handling and guarded no-publication retirement. Composition adds launch provenance; it does not replace those paths or use abandonment as successful completion.
+- Models: build on the repaired current-model contract tests. Preserve existing role defaults and model translation while adding inherited persona settings; pin the resolved model in each probe pair rather than assume a floating weight stayed unchanged.
+- Pi integration: keep the refreshed state integration upstream-owned. Check the resources changed by the Ponytail migration, not unrelated identity/lifecycle reporting. The raw Pi adapter and deferred task-interface decision remain distinct.
+- Shared docs: extend the delivered skill, contract, READMEs and licence inventory in place. Preserve the maintenance record's historical API-review evidence and upstream-managed files; do not replay changes from the pre-maintenance snapshot.
+
+*** Composition
+- One-level inheritance, clarified on 2026-09-17: resolve one named base through the existing project > home > packaged lookup, then concatenate base body before derived body. Reject a missing base or a base that itself declares extends; that also rejects self-reference without graph traversal or a cycle detector. The earlier recursive choice sought to avoid elaborate depth safeguards, not to require arbitrary-depth inheritance.
+- Inherit scalar runtime settings; the nearest derived declaration wins before existing spawn flags apply. Keep name/description local to the selected persona. Inherit an omitted spawns declaration; preserve the existing meaning of an explicit empty declaration. Traits never set runtime settings or capability.
+- Append metadata traits after the complete base-plus-derived body, separated by blank lines: base metadata first, derived metadata second, explicit spawn traits last. Deduplicate these selections by name. They cannot remove inherited traits. Different policy requires a different base, not a subtraction switch.
+- Retain legacy inline substitution in place. Repeated resolving inline tokens remain errors. If a metadata selection already has an inline occurrence, use that occurrence rather than emit a second body. Resolve the effective trait set before read-only checkout/publication policy is selected.
+- Proposed CLI surface: repeatable =--trait NAME= on task run/start and their preview path. Validate explicit names regardless of token-length rules; do not parse assignment prose for traits. Compose through the existing interpolator, not a copied implementation.
+- Support the requested one-line list syntax explicitly; reject unsupported list shapes rather than silently flatten them. Preserve existing scalar parsing behaviour for legacy definitions. No new general-purpose configuration language is required.
+- Keep selected/base persona and trait-source provenance beside the existing persona path in the ledger. Preview must expose the same effective text/settings that spawn consumes, without creating a pane or ledger entry.
+- Migrate only a suffix of standalone trait tokens after the persona's last substantive prose, preserving token order. Keep embedded tokens in place, including earlier tokens in a persona with an eligible suffix. Do not move prose to manufacture eligibility or force a common authoring style. This limits existing-token migration, not the addition of newly admitted metadata traits. Do not force unrelated roles into an inheritance hierarchy.
+- Continue retains the launch composition. Normally spawn a fresh child to change persona or traits. Supplementary prompts, already-expanded inline guidance and direct user intervention remain valid; these do not rewrite launch metadata or promise removal of prior instructions.
+
+*** Personas and guidance
+- base-analyst is a directly usable read-only analysis base, proposed default model light. Its scaffold fixes assignment ownership, scope, evidence/source reporting, uncertainty, scratch/report permissions and default leaf capability. It can receive user intervention in its pane; it does not prescribe the planner's staged dialogue.
+- simple is engineering stance, not output style: understand affected behaviour, reuse repository facilities, prefer standard library/native/installed capabilities, and make the smallest coherent change that satisfies accepted requirements. Scope-changing simplifications return to the owner for approval. Preserve security, accessibility, data safety, repository conventions and required validation.
+- prune remains a direction/scope challenge, not a worker licence to discard requirements. Replace its spent probe with a synthetic scenario without treating its historical result as current evidence.
+- Extract candidates from the existing persona and Ponytail guidance; rigorous was an example name, not a required trait. For each candidate, name its source passage, real consumer, existing overlap and the prose it would replace. Reuse/refine existing fragments first; admit new ones only under the named-consumer plus honest-probe-attempt contract. A non-discriminating probe is not a demonstrated gain.
+- Keep scout/researcher factual. Keep reviewer focused on correctness/security/regression/test gaps. Keep advisor's mid-task remit. A named complexity-review skill supplies the analyst's optional workflow; it does not broaden the advisor or modify the correctness-review contract.
+- Adapt useful Ponytail review/audit guidance, not its unsafe reduction examples, line-count target, mode persistence or one-test/no-framework rhetoric. Require a concrete replacement that preserves required behaviour; report unknowns rather than assume equivalence.
+
+*** Initial candidate set
+- Simplicity: Ponytail's reuse/stdlib/native ladder plus worker's minimal-change rules; candidate simple for worker/planner/advisor/base-analyst, replacing duplicated engineering stance.
+- Scope challenge: Ponytail's necessity test and existing prune; refine prune for foreman/planner decisions, not unilateral worker scope changes.
+- Assignment focus and evidence: scout/researcher/advisor/reviewer guidance; assess reuse or refinement of focused and no-bullshit rather than introduce a generic rigorous synonym.
+- Root-cause repair: Ponytail's caller tracing and worker's evidence-first debugging; assess extraction for worker/advisor only if a separate fragment improves on simple and existing instructions.
+- Regression proof: worker's pre-fix-failure and coverage-preservation rules plus Ponytail's runnable-check minimum; assess a reusable verification fragment without importing the upstream test-count/framework restrictions or duplicating home-level rules.
+
+This is a source-grounded assessment set, not a promise to ship five new traits. Record reuse/extract/omit outcomes in this record; keep a rule persona-local when extraction buys nothing.
+
+*** Requests, activation and extension assessment
+- Document shorthand such as “Spawn a light worker. #simple” as a foreman request convention. The foreman maps names to explicit CLI selections and checks resolution. This is not a new global hashtag parser, nor a promise that arbitrary natural language is mechanically enforced.
+- Existing =%trait= input expansion remains available for interactive guidance. It expands into the receiving session; it is not structured child targeting. Code-span, fenced and indented examples remain literal under the existing scanner rules.
+- Incremental replacement, clarified on 2026-09-17: deliver and probe the hybrid guidance/workflows before switching their normal activation away from Ponytail. Use supported Pi resource selection to disable the upstream extension's automatic policy and overlapping skill triggers. Keep upstream skills/source as inert reference or deliberately loaded comparison material while useful; retaining them does not require retaining the extension or permanent full-mode controls. Record what each stage replaces and the temporary comparison path. Do not edit the package cache or mistake default-off alone for removal of the broad skill trigger.
+- Alternatives considered: prompt forwarding alone costs no runtime code but depends on the foreman to forward prose and gives no structured child provenance; CLI composition was selected for reliable child targeting and cross-harness use. A thin Pi task adapter could reduce command assembly and expose validated lifecycle/results, but it is deferred by user choice. Any later adapter must call oh, not duplicate its resolver, ledger or lifecycle. Existing raw-control tools and the Herdr state integration are not a second task engine to extend independently.
+
+** Risks
+- Hidden or contradictory inherited prose: show effective composition, preserve additive boundaries, test representative chains; semantic consistency remains a curation/probe responsibility.
+- Simplicity used as a scope escape: include an acceptance-breaking shortcut in the probe; treat scope approval as the owner's decision.
+- Redundant policy/context: measure the trait's marginal contribution over the actual consumer; remove duplicated persona prose only when its duty remains represented.
+- Full-mode contamination: inspect effective activation in both probe arms. Resumed sessions may retain previously injected instructions; migration checks use fresh sessions and document that limitation.
+- Trait metadata mistaken for a sandbox: read-only composition preserves existing policy and non-shared-checkout publication guards, not a universal write sandbox.
+
+* Plan
+Approved plan; execution requires a separate assignment after the Herdr maintenance prerequisite completes. Composition and the standalone complexity workflow are the two entry tasks; both wait for that prerequisite.
+
+** TODO Resolve one-level personas and additive spawn traits
+:PROPERTIES:
+:CUSTOM_ID: b4c63339-fae8-4b0c-8c7c-b8804be0f815
+:CREATED: [2026-09-17 Thu 16:43]
+:BLOCKED-BY: task:561270b1-e372-47a7-9173-bd966c4204ae
+:END:
+:LOGBOOK:
+- Created [2026-09-17 Thu 16:43]
+:END:
+Acceptance criteria:
+- [ ] One base and a derived persona compose base-first through the existing layer lookup.
+- [ ] Metadata/per-spawn fragments follow the complete composed body.
+- [ ] traits flow lists accept the syntax specified in Summary/Decisions.
+- [ ] Repeatable --trait selections are available on run/start and preview.
+- [ ] Metadata/per-spawn overlaps emit each trait once.
+- [ ] Inline/metadata overlap retains the inline occurrence.
+- [ ] Missing bases fail before ledger or pane mutation.
+- [ ] A base declaring extends fails before ledger or pane mutation.
+- [ ] Self-reference fails through the same one-level guard.
+- [ ] Malformed metadata fails before ledger or pane mutation.
+- [ ] Unknown explicit trait names fail before ledger or pane mutation.
+- [ ] Legacy inline placement remains unchanged.
+- [ ] Repeated inline tokens still fail.
+- [ ] Legacy scalar-setting fixtures retain their results.
+- [ ] Preview exposes the exact effective persona text.
+- [ ] Launch provenance records the selected/base persona sources and trait sources.
+- [ ] Continuation retains launch provenance.
+- [ ] Read-only target/publication policy uses the effective trait set.
+- [ ] The delivered prerequisite baseline is recorded before composition edits.
+- [ ] Focused fake-Herdr tests demonstrate the refusal boundaries after successful client/server preflight.
+- [ ] Existing model translations pass the repaired contract tests after composition changes.
+- [ ] Prerequisite lifecycle regression checks pass after launch-provenance changes.
+- [ ] The mechanical contract documents the implemented composition semantics.
+- [ ] Must not: add trait-controlled runtime settings or delegation grants.
+
+Files/reference: core/parse-frontmatter and resolve-persona in `skills/herdr-orch/scripts/src/herdr_orch/core.clj`; trait-interpolation, preview!, spawn! and continue! in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; interpolate in `skills/herdr-orch/scripts/src/herdr_orch/traits.clj`; their existing test namespaces; `skills/herdr-orch/scripts/docs/contract.md`. Follow Summary/Decisions; do not edit the roster in this task.
+
+** TODO Extract useful guidance and migrate eligible trailing traits
+:PROPERTIES:
+:CUSTOM_ID: 9e22a186-a3ae-4064-8f1e-7d9c0f1778e3
+:CREATED: [2026-09-17 Thu 16:43]
+:BLOCKED-BY: task:b4c63339-fae8-4b0c-8c7c-b8804be0f815
+:END:
+:LOGBOOK:
+- Created [2026-09-17 Thu 16:43]
+:END:
+Acceptance criteria:
+- [ ] The packaged simple trait states the agreed scope-preserving engineering stance.
+- [ ] simple has an honest synthetic treated/control probe record for a named consumer.
+- [ ] prune has a replacement synthetic probe record.
+- [ ] prune does not authorise silent changes to accepted scope.
+- [ ] The candidate assessment cites existing persona/Ponytail source passages.
+- [ ] Each candidate has a named consumer or an explicit omit decision.
+- [ ] Each admitted extraction identifies the duplicated prose it replaces or why a net addition earns its place.
+- [ ] Each admitted new trait has an honest treated/control probe record.
+- [ ] Admitted persona-required traits resolve from the packaged store without home overrides.
+- [ ] Roster migration is limited to trailing standalone trait suffixes.
+- [ ] Embedded tokens remain in place.
+- [ ] Migrated trailing fragments preserve their relative order.
+- [ ] worker, planner, advisor and base-analyst select simple by default.
+- [ ] base-analyst preserves the read-only boundary.
+- [ ] base-analyst defaults to a leaf.
+- [ ] base-analyst defines assignment, evidence, uncertainty and reporting duties.
+- [ ] The foreman skill points to the canonical simple guidance.
+- [ ] Adapted fragments retain source provenance and required licence notices.
+- [ ] The trait reference and roster documentation describe the shipped policy.
+- [ ] Must not: weaken existing validation or role-specific interaction duties.
+- [ ] Must not: treat a non-discriminating probe as a demonstrated gain.
+
+Files/reference: `skills/herdr-orch/subagents/worker.md` Engineering rules and the other six packaged personas; `skills/herdr-orch/traits/`; `traits/prune/prompt.md` and gate.md; `skills/herdr-orch/references/traits.md`; `skills/herdr-orch/SKILL.md`; roster guidance in `skills/herdr-orch/README.org`. Add base-analyst and simple under the packaged directories. Follow Validation for uncontaminated probes; the existing read-only Codex runner is not a worker-execution probe.
+
+** TODO Adapt a safe on-demand complexity-review workflow
+:PROPERTIES:
+:CUSTOM_ID: d185837c-0405-4583-96c6-e140b6271209
+:CREATED: [2026-09-17 Thu 16:43]
+:BLOCKED-BY: task:561270b1-e372-47a7-9173-bd966c4204ae
+:END:
+:LOGBOOK:
+- Created [2026-09-17 Thu 16:43]
+:END:
+Acceptance criteria:
+- [ ] A local complexity-review skill operates on the declared review range.
+- [ ] Wider-scope auditing requires an explicit assignment.
+- [ ] Each finding identifies a concrete replacement.
+- [ ] Each finding provides evidence that required behaviour is preserved.
+- [ ] The clean synthetic case returns no findings.
+- [ ] The behaviour-breaking shortcut case rejects the tempting reduction.
+- [ ] The unnecessary-wrapper case identifies the compatible simplification.
+- [ ] The workflow permits report/scratch output without repository implementation changes.
+- [ ] The skill is listed in the repository inventory.
+- [ ] Adapted material retains upstream attribution and required licence notices.
+- [ ] Must not: impose a line-count quota.
+- [ ] Must not: replace the correctness-review workflow or broaden advisor authority.
+
+Files/reference: create the complexity-review skill under skills/; use `skills/herdr-orch/subagents/reviewer.md` Output and `skills/herdr-orch/subagents/advisor.md` Constraints as role boundaries; update `skills/README.org` Adopted or adapted. Follow this record’s Personas and guidance decision. Test the skill independently; the final activation task owns its integrated base-analyst smoke.
+
+** TODO Switch normal activation to composed guidance and verify the workflow
+:PROPERTIES:
+:CUSTOM_ID: 533be6ae-0650-472c-8c1d-fd7957d77a66
+:CREATED: [2026-09-17 Thu 16:43]
+:BLOCKED-BY: task:9e22a186-a3ae-4064-8f1e-7d9c0f1778e3
+:BLOCKED-BY+: task:d185837c-0405-4583-96c6-e140b6271209
+:END:
+:LOGBOOK:
+- Created [2026-09-17 Thu 16:43]
+:END:
+Acceptance criteria:
+- [ ] An isolated fresh Pi startup has no full Ponytail injection.
+- [ ] Normal skill discovery does not advertise the upstream core coding trigger.
+- [ ] Hybrid guidance/workflows are available before their automatic Ponytail counterparts are disabled.
+- [ ] Retained upstream reference/comparison material has a documented access path.
+- [ ] Local complexity-review routing does not also activate the unadapted review/audit policy.
+- [ ] Documentation explains #trait shorthand as a foreman convention.
+- [ ] Documentation distinguishes interactive %trait expansion from child composition.
+- [ ] The integrated base-analyst complexity-review smoke stays read-only.
+- [ ] The integrated smoke returns a valid published result.
+- [ ] Startup evidence records the actual effective resources rather than settings alone.
+- [ ] The replacement/comparison choices are recorded for the migrated workflows.
+- [ ] Must not: edit the upstream package cache.
+- [ ] Must not: disable unrelated authentication extensions.
+- [ ] Must not: hand-patch the upstream-managed state integration.
+- [ ] Must not: upgrade or restart the operator's runtime during validation.
+- [ ] Must not: introduce a new Pi task interface or lifecycle store.
+- [ ] Must not: close the top-level task.
+
+Files/reference: `pi/settings.json` packages; `README.md` editable installation guidance; `pi/extensions/traits/README.md`; `skills/herdr-orch/README.org` and `skills/herdr-orch/SKILL.md` request/routing guidance. Re-read live settings and the concurrent README before editing. A root orchestrator must run live delegation checks outside a worker’s granted spawn capability; do not bypass the capability guard. Record evidence in this change-record; leave parent closeout to the owner.
+
+* Implementation
+** Source baseline and findings
+Historical pre-maintenance observations from the planner. Re-verify against the delivered prerequisite before using these as implementation premises; preserve only findings that still apply.
+
+- Planning baseline measured at f2c4a14533f8d93998ba235b4b93956bc94ae326. TASKS.org, pi/settings.json, skills/herdr-orch/README.org and skills/nix/SKILL.md were already dirty when inspected. This is a snapshot, not attribution; preserve concurrent edits.
+- Current persona parsing is scalar-only in core/parse-frontmatter. Spawn interpolates persona-body tokens; assignment and prompt-extra remain opaque in cli/prompt-text. Preview exposes trait sources; spawn currently retains the composed persona path rather than a full source-chain record.
+- cli/spawn! derives read-only target/publication policy from the resolved read-only trait. Inheritance and metadata composition must feed that same decision before checkout allocation.
+- references/traits.md mentions incompatible-with enforcement, but the inspected traits/interpolate and cli/trait-interpolation do not implement it. Correct the documentation rather than assume a conflict engine exists. This plan does not add a generic semantic conflict solver.
+- The trait admission contract requires one named consumer plus an honest probe attempt. traits/prune/gate.md records a lapsed repo-referential scenario. The README's older two-persona wording conflicts with that contract and should be reconciled in scope.
+- The effective home persona layer resolves to this repository's subagents directory and contains config.edn. The installed trait layer resolves to this repository's traits directory. Packaged persona definitions supply the inspected roles.
+- pi/extensions/herdr-orch/index.ts exposes raw layout/pane/agent operations through oh. pi/extensions/traits/index.ts handles input expansion. pi/extensions/herdr-agent-state.ts is Herdr-managed lifecycle reporting. None of these observations warrants a new independent orchestration engine.
+- Installed upstream Ponytail package.json reports 4.10.0 and loads pi-extension/index.js plus skills/. Its extension restores session mode or configured default and appends full instructions before agent start; its core skill has a broad coding trigger. Source: /home/cormacc/.pi/agent/git/github.com/DietrichGebert/ponytail/. Preserve MIT copyright/permission notices for substantial adaptations; record source URLs and source-file hashes under the existing provenance convention.
+
+* Validation
+Planning used source/doc inspection and read-only CLI/state checks. No feature build, production edit, trait-effect probe or live child smoke was run. Behavioural gains remain hypotheses until the planned probes run.
+
+- Prerequisite regressions: establish the post-maintenance baseline and rerun tests covering paths changed by composition. Do not replay raw-adapter, version-gate or managed-integration validation solely for a Ponytail resource-selection edit. Investigate new failures against the delivered baseline, not historical API-review failures; confirm namespace selection before citing coverage.
+- Composition checks: one base plus derived body; project/home/package shadowing; effective scalar settings; appended metadata order; trailing-only migration; ordered trait union; inline/metadata overlap; missing base; self-reference or base declaring extends; malformed list; unknown explicit short/long name; repeated inline token; legacy no-composition path. Use existing fake-Herdr fixtures to prove refusal before pane/ledger/checkout mutation. Establish passing controls before known-bad cases.
+- Integration checks: preview text equals the materialised persona; model choice remains independent; metadata read-only follows the existing target/publication path; continuation preserves launch provenance; old ledger entries remain readable. Use existing herdr-orch test namespaces rather than a new framework.
+- Live check: one bounded, disposable base-analyst complexity-review smoke verifies the hybrid workflow stays read-only and publishes a valid RESULT. Use normal prerequisite preflight and explicit cleanup; do not add a separate client/server, TUI identity or RPC socket test matrix. Composition/continuation behaviour belongs in the focused composition tests, not activation acceptance.
+- Policy probes: same consumer/persona and resolved model in both arms, synthetic subject, one removed trait selection as the only treatment difference, full Ponytail injection absent from both arms. Pre-register observable criteria for unnecessary mechanisms, accepted behaviour, validation and reporting; do not score only line count. Exercise a reusable implementation opportunity and a tempting unsafe shortcut. Record exact prompts, model, instruction baseline and outcomes; no universal-effect claim.
+- Workflow checks: needless wrapper with a behaviour-preserving replacement; apparently shorter but behaviour-breaking replacement; clean input. The analyst stays read-only and publishes the assigned result. Diff and wider-scope modes must keep their declared boundary.
+- Reuse scripts/run-trait-gate.bb only where its current read-only Codex execution matches the intended consumer. It is not a write-enabled worker probe merely because its scaffold mentions worker. Use isolated disposable fixtures for implementation behaviour; keep probe tooling off shipped runtime paths.
+- Activation check: an isolated fresh Pi startup verifies that automatic full Ponytail injection and overlapping skill triggers are absent after the hybrid replacement is available. Confirm the documented reference/comparison path resolves. Do not disable unrelated authentication extensions. Preserve actual resource/prompt evidence rather than infer success from settings alone.

@@ -185,7 +185,7 @@ Likely later scope:
 
 Known constraints and candidate direction:
 - The current Pi adapter resolves the interpolator through `~/.agents/skills/herdr-orch/scripts/traits`; packaged resolution must retain that live path and add an explicit or package-relative fallback.
-- herdr-orch currently requires Herdr 0.8.2 or later and Babashka. Its Bash launchers currently imply Linux and macOS support.
+- herdr-orch currently requires Herdr 0.9.1 or later and Babashka. Its Bash launchers currently imply Linux and macOS support.
 - A single source repository can expose separate native package interfaces for Herdr, Pi, and Agent Skills. The Herdr plugin should remain an adapter and distribution surface rather than becoming the canonical implementation.
 - Herdr plugin v1 supports terminal panes, actions, event hooks, runtime context, and socket access. It does not provide arbitrary native non-terminal plugin UI. A session tree therefore belongs in a plugin terminal pane.
 
@@ -277,25 +277,6 @@ Two verified =pi= facts any implementation must respect, both of which cost a ro
 Depending on scope of use -- using fork rather than spawn might be a good idea for some subagents -- let them inherit the orchestrator context without bloating it.
 This could work via an optional `:fork :true` in the subagent header (default `:fork :false`)
 This should be straightforward using pi. Maybe also using claude/codex? Investigate...
-*** TODO herdr-orch: check oh docs against herdr v0.8.2 agent semantics :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 9a7f8771-48ad-4ee0-a1f7-25f6b1fdc710
-:CREATED: [2026-08-21 Fri 16:24]
-:END:
-:LOGBOOK:
-- Created [2026-08-21 Fri 16:24]
-:END:
-The herdr skill was refreshed from upstream v0.8.2 (see [[plan:2026-08-21-skill-vendoring-improvements.org]]), which documents two behaviours our 2026-07-22 copy predated: `agent start` can return `agent_not_ready` while keeping the name usable for `agent read` / `agent send-keys`, and `agent prompt` rejects an agent sitting at an approval or question dialog with `agent_blocked` before sending input.
-
-Check whether `herdr-orch` SKILL.md, `scripts/docs/contract.md`, and the `oh` implementation contradict either behaviour -- particularly the dispatch/poke path, which reasons about a child that has not settled.
-
-Acceptance criteria:
-- Each of the two behaviours is either reflected in the oh contract/skill or explicitly recorded as not applicable.
-- Any oh code path that assumes `agent start` success implies readiness is identified.
-
-*EDIT* [2026-08-27 Thu] Re-scoped. The dispatch/poke premise above is gone: commit =4741d59= (2026-08-26, an ancestor of HEAD) deleted the =agent_pane_busy= start retry, the post-prompt dispatch verifier, poke's dispatch-unconfirmed refusal, and the =:dispatch= ledger field, and moved preflight to refuse Herdr below 0.8.2. =oh= now makes one =agent start= attempt and one =agent prompt= call, so the second criterion has no remaining code path to identify -- close it as satisfied by that commit rather than auditing for it.
-
-The first criterion is still unmet, and is now the whole task: neither =agent_not_ready= nor =agent_blocked= appears anywhere in =skills/herdr-orch/SKILL.md=, =scripts/docs/contract.md=, or =scripts/src/= (control: =contract.md= carries three mentions of =0.8.2=). Locally installed Herdr is 0.8.2, matching the floor. Reduced scope: record both behaviours in =contract.md= where it describes start and prompt, or record why each is not applicable now that no workaround reasons about an unsettled child.
 *** TODO [#B] herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 22f68a11-eeef-43e9-81d3-79341842ca84
@@ -335,41 +316,6 @@ Origin:
 
 Evidence:
 `herdr agent start --help` enumerates: pi, claude, codex, gemini, cursor, devin, agy, cline, omp, mastracode, opencode, copilot, kimi, kiro, droid, amp, grok, hermes, kilo, qodercli, maki. dirge is absent but does expose `--model`, so only the launch/detect half is missing. herdr has no local extension point: no agent definitions in config.toml, no plugins subcommand, and no manifest file on disk.
-*** TODO herdr-orch: an aborted round cannot be closed or pruned :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 08fba41e-c94c-435d-bb1e-84c757d057cd
-:CREATED: [2026-08-20 Thu 10:36]
-:END:
-:LOGBOOK:
-- Created [2026-08-20 Thu 10:36]
-:END:
-An aborted subagent round has no lifecycle exit. When a continuation round exists and the operator stops the child before it publishes, both exits refuse each other:
-
-- `oh task close <earlier-round>` returns `close refused: an uncaptured newer round names this child`, naming the newer round.
-- `oh task prune <newer-round>` returns `prune refused: named child is present in agent list`, naming the child.
-
-Close requires the newer round to be captured. Prune requires the child to be absent. Neither is reachable for a round that will never publish. `oh task collect` on that round returns `{"status":"pending","terminal?":false}`, so capture cannot settle it either.
-
-The documented escape is `oh task poke`, framed for "a settled child with no valid publication". It cleared the deadlock in practice, but by resuming the agent, which is the opposite of the operator's intent when abandoning a round. It succeeded only because the assignment was still valid.
-
-Desired outcome: a way to abandon a round that will never publish, without resuming the child. Each guard is individually correct, so the defect is in their interaction rather than in either one.
-
-Candidate directions, none chosen:
-- A `--force` or `--abandon` on `prune` for a named round whose child is still alive.
-- Let `close` capture a pending round as invalid and proceed.
-- Document poke-then-collect as the sanctioned abort path, and state its resume side effect.
-
-Also observed: `close` is not addressable by an older round id. After the newer round settled, closing required the newest round's UUID. Worth stating in the contract whichever direction the fix takes.
-
-*EDIT* [2026-08-27 Thu] Adjacent prior art exists and does *not* resolve this: `a63a97e` (2026-08-13) added `oh task close <uuid> --abandon`, which retires a ledger round without touching the pane. It does not apply here, because contract.md § close records that it runs every `assert-closable!` guard first -- ownership, *capture*, newest round, no `:closed-at` -- and skips only the liveness observation. This task's round is precisely the uncaptured one, and `collect` returns `{"status":"pending"}` for it, so the capture guard can never be satisfied. Read `--abandon` as the shape a fix should follow rather than as the fix: it establishes that retiring an entry while leaving the pane to the operator is already sanctioned, so what is missing is the same treatment for a round that will never publish.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com/cormacc/dotagents @ main
-- timestamp: [2026-08-19 Wed 19:30]
-- sender: agent
-
-Evidence: reproduced first-hand during the prose-style evaluation. Child `worker-cd1dbbca`, rounds `cd1dbbca-e93c-4e12-b69a-02a093cae122` and `73ec4d3a-8e25-4603-85ac-1e260234af7d`. Exact refusal messages above.
 
 ** TODO Vendored skill hygiene :skill:
 :PROPERTIES:
@@ -382,27 +328,6 @@ Evidence: reproduced first-hand during the prose-style evaluation. Child `worker
 Two open findings about third-party skills that this repository vendors rather than authors, both of which resolve by recording a decision in `skills/README.org` § Vendored rather than by editing a vendored body. Their predecessor task, "Skill vendoring improvements", is archived, so they need a live home.
 
 Grouped 2026-08-27.
-*** TODO Vendored herdr carries no upstream LICENSE :skill:
-:PROPERTIES:
-:CUSTOM_ID: f7692a6c-17c3-4971-b185-2d13ee3db100
-:CREATED: [2026-08-21 Fri 16:46]
-:END:
-:LOGBOOK:
-- Created [2026-08-21 Fri 16:46]
-:END:
-Upstream ships https://raw.githubusercontent.com/ogulcancelik/herdr/master/LICENSE (HTTP 200; `LICENSE.md` 404s), but `gh skill install` copies only the skill directory, so `skills/herdr/` has no licence file. The same applies to any future vendored skill.
-
-Decide and record one route:
-- carry a LICENSE alongside each vendored skill, noting that `gh skill update` will not maintain it;
-- record upstream licences centrally in `skills/README.org` § Vendored beside each Source;
-- establish that the frontmatter `license:` field (which the Agent Skills spec defines) is sufficient, and populate it where upstream leaves it implicit.
-
-Carried over from the original body of "Skill vendoring improvements" (98cf369c), which noted the gap but never addressed it.
-
-Acceptance criteria:
-- skills/README.org states where a vendored skill's licence lives.
-- herdr's upstream licence is either present in the tree or cited from the README.
-- No vendored SKILL.md body is hand-edited to add licence text.
 *** TODO gitlab-cli-skills: glab-schedule create rejects --output json (list supports it) :skill_gitlab_cli_skills:
 :PROPERTIES:
 :CUSTOM_ID: 6d205682-bacc-465a-911f-419a76604e6f
@@ -487,6 +412,56 @@ Origin:
 - cwd: /Users/cormacc/dotfiles/agents
 - git: cormacc/dotagents @ main
 - sender: agent
+
+** WAITING Adapt ponytail for use with herdr-orch/traits
+:PROPERTIES:
+:CUSTOM_ID: 1feac5ff-84b8-4a40-b15e-1de84d6c40b6
+:CREATED: [2026-09-17 Thu 15:35]
+:STARTED: [2026-09-17 Thu 15:36]
+:BLOCKED-BY: task:561270b1-e372-47a7-9173-bd966c4204ae
+:HANDOFF: Accepted plan waits for 561270b1-e372-47a7-9173-bd966c4204ae. Review decisions: one-level inheritance; append metadata traits after the body; migrate trailing tokens only; assess source-grounded trait candidates, not a mandatory rigorous trait; incrementally replace Ponytail with reference/comparison access; focused activation checks. Recheck the delivered maintenance baseline before execution.
+:END:
+:LOGBOOK:
+- Created [2026-09-17 Thu 15:35]
+- State "STARTED" from "TODO" [2026-09-17 Thu 15:36]
+- State "WAITING" from "STARTED" [2026-09-17 Thu 17:57]
+:END:
+#+IMPORT: [[plan:2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]]
+Adapt Ponytail principles and workflows for foreman-led delegation, primarily for context management rather than parallelisation. Evaluate improvements and additions to subagent personas, trait extraction and refinement, minimal/base personas for dynamic trait composition, and whether a thin herdr-orch Pi extension adds value. Plan first; treat the initial recommendations as proposals, not accepted design decisions.
+
+** STARTED herdr-orch improvements 260917 :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 561270b1-e372-47a7-9173-bd966c4204ae
+:CREATED: [2026-09-17 Thu 15:40]
+:STARTED: [2026-09-17 Thu 15:41]
+:HANDOFF: Planning approved in planner pane. Canonical record has eight TODO plan tasks: three migrated IDs plus five new execution units; final validation depends on the seven implementation/documentation tasks. Herdr client/server floor is 0.9.1. Separate unpublished upstream proposal: 5631ba57-09cf-4359-bab4-afa27ae7e7e9. No implementation authorised or started. Runtime owner must provide >=0.9.1 before live smoke; protect concurrent Ponytail work and unrelated edits.
+:END:
+:LOGBOOK:
+- Created [2026-09-17 Thu 15:40]
+- State "STARTED" from "TODO" [2026-09-17 Thu 15:41]
+:END:
+#+IMPORT: [[plan:2026-09-17-herdr-orch-improvements-260917.org]]
+Plan the improvements identified in the Herdr 0.8.2 to 0.9.1 and Pi 0.84.2 to 0.85.1 API review. Cover adapter fidelity, lifecycle integration, model-contract drift, and justified simplifications. Review related backlog tasks for reuse, separate follow-up scope, or evidenced cancellation. Preserve the validated RESULT protocol and safety guards; do not implement changes during planning. Reviewed versions and runtime limits are recorded in skills/herdr-orch/README.org under Last API review.
+
+** TODO Draft upstream Herdr Pi native-prompt and listener-disposal proposal :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 5631ba57-09cf-4359-bab4-afa27ae7e7e9
+:CREATED: [2026-09-17 Thu 16:42]
+:END:
+:LOGBOOK:
+- Created [2026-09-17 Thu 16:42]
+:END:
+Acceptance criteria:
+- An unpublished proposal cites the selected upstream managed integration revision and installed Pi event API.
+- The proposal explains migration from herdr:blocked to ui_prompt_start/ui_prompt_end.
+- It accounts for Pi's nested-prompt coalescing rather than assuming one event per nested dialog.
+- It demonstrates the listener-disposal issue with a bounded isolated reproduction.
+- It specifies reload/shutdown listener cleanup through the documented event-bus API.
+- It distinguishes measured behaviour from proposed upstream changes.
+- Must not: publish an issue or patch without explicit permission.
+- Must not: fork pi/extensions/herdr-agent-state.ts locally or block the local maintenance delivery on upstream acceptance.
+
+Reference: `pi/extensions/herdr-agent-state.ts` and the installed Pi docs/extensions.md event API; `design/log/2026-09-17-herdr-orch-improvements-260917.org` records the local maintenance boundary. Verify native-event and unsubscribe identifiers against the selected Pi source before drafting.
 
 * Fixes
 
