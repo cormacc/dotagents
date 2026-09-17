@@ -10,10 +10,6 @@ Browser automation is provided by the `browser_nav`, `browser_eval`, `browser_ta
 These connect to Chromium/Chrome on `localhost:9222` — the browser must be running
 with `--remote-debugging-port=9222`.
 
-> **See also:** The `webdriver` extension provides an alternative browser automation
-> approach using etaoin/WebDriver via babashka. It manages its own browser lifecycle
-> and may be more suited to automated testing and CI workflows.
-
 ## Workflow
 
 1. **Investigate first** — use `browser_eval` to understand the page before acting:

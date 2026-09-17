@@ -4,7 +4,16 @@ import { spawn, execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { platform, homedir } from "node:os";
 import { join } from "node:path";
-import puppeteer from "puppeteer-core";
+
+/** CDP liveness probe: /json/version is served by the debugging port itself. */
+async function debugPortLive() {
+	try {
+		const res = await fetch("http://localhost:9222/json/version");
+		return res.ok;
+	} catch {
+		return false;
+	}
+}
 
 const useProfile = process.argv[2] === "--profile";
 
@@ -18,15 +27,10 @@ if (process.argv[2] && process.argv[2] !== "--profile") {
 const SCRAPING_DIR = join(homedir(), ".cache", "chromium-debug");
 
 // Check if already running on :9222
-try {
-	const browser = await puppeteer.connect({
-		browserURL: "http://localhost:9222",
-		defaultViewport: null,
-	});
-	await browser.disconnect();
+if (await debugPortLive()) {
 	console.log("✓ Chrome/Chromium already running on :9222");
 	process.exit(0);
-} catch {}
+}
 
 // ---------------------------------------------------------------------------
 // Find Chrome/Chromium binary and default profile path per platform
@@ -163,17 +167,11 @@ spawn(
 // Wait for browser to be ready
 let connected = false;
 for (let i = 0; i < 30; i++) {
-	try {
-		const browser = await puppeteer.connect({
-			browserURL: "http://localhost:9222",
-			defaultViewport: null,
-		});
-		await browser.disconnect();
+	if (await debugPortLive()) {
 		connected = true;
 		break;
-	} catch {
-		await new Promise((r) => setTimeout(r, 500));
 	}
+	await new Promise((r) => setTimeout(r, 500));
 }
 
 if (!connected) {
