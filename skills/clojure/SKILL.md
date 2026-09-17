@@ -1,93 +1,36 @@
 ---
 name: clojure
-description: REPL-driven Clojure, ClojureScript, EDN, and Babashka development. Use whenever the user mentions Clojure code, .clj/.cljs/.cljc/.edn/.bb files, deps.edn, project.clj, bb.edn, shadow-cljs, lein, nREPL, namespaces, vars, or clojure-lsp / clj-kondo workflows. Covers writing, editing, debugging, paren-repair, and REPL-first validation.
+description: Clojure, ClojureScript, EDN, and Babashka development with runtime validation. Use for .clj/.cljs/.cljc/.edn/.bb files, deps.edn, project.clj, bb.edn, shadow-cljs, lein, nREPL, or clojure-lsp / clj-kondo workflows. Covers reading, editing, debugging, and testing.
 ---
 
-# Clojure Development
+# Clojure development
 
-REPL-first development against `.clj` / `.cljs` / `.cljc` / `.edn` / `.bb` files. Most tasks land entirely in source files -- prefer extending existing namespaces to creating new files, and don't introduce sibling `*.md` notes unless asked.
+Follow the project's `AGENTS.md`, commands, and conventions. Use the local [style digest](references/idioms.md) when the project does not specify a style; no web lookup is needed.
 
-Defer to the project's `AGENTS.md` for architecture, commands, and test infrastructure. These rules govern Clojure work only; they don't override planning, documentation, git, or non-Clojure tasks.
+## Workflow
 
-Default style reference: <https://guide.clojure.style/>. When reporting changes, cite code as `file_path:line_number`.
+1. Read the target code, namespace dependencies, and callers. Use `lsp` for symbol definitions and references.
+2. Prefer an existing REPL verified to belong to the target project. Use `clojure_find_nrepl_port` and `clojure_eval` when available; see the [tool guide](references/tool-guide.md) for CLI fallback and session handling. A port file or occupied port alone does not identify a live project REPL.
+3. If no suitable REPL is available, use the project's test command or a focused Babashka check. Start a server only when needed, using the project's startup instructions.
+4. Validate changed behaviour in the intended runtime, including relevant edge cases. Check unfamiliar Java interop in that runtime: JVM support does not imply Babashka support.
+5. After saving, reload changed namespaces or confirm the watch build has loaded them. Run the relevant tests against the saved code.
 
-## Core workflow
+`require` (including `:reload`), `load-file`, and `bb -e` execute code. Inspect top-level effects before loading; use a non-evaluating reader or the project's static checker when only a syntax check is intended. Parse EDN as data rather than evaluating it.
 
-**Never write Clojure without REPL validation.** Every task is a gather-context → take-action → verify-output loop:
+For JVM/Babashka tests, use `clojure.test/run-test-var` or `clojure.test/run-tests`, not direct test-function calls, so fixtures run. Use the project's CLJS test runner for CLJS. Check test failures and errors, not just whether evaluation returned. In cross-platform regex tests, assert matching and non-matching inputs rather than regex equality or printed forms.
 
-1. **Read the target file.** Use `lsp` (`definition`, `references`, `workspace_symbol`) for related symbols, call sites, and dependencies. Review namespace imports and match local patterns.
-2. **Connect to nREPL.** Use `clojure_find_nrepl_port` + `clojure_eval` if the pi-clojure extension is loaded; otherwise `clj-nrepl-eval --discover-ports` to find a port, then `-p PORT "code"` to evaluate. **Reuse an existing nREPL -- never spawn a second.** A discovered port file (`.nrepl-port`, `.shadow-cljs/nrepl.port`, `.cider-nrepl.port`) means a server is up. If no nREPL is reachable and the project is Babashka (`bb.edn`, or a bare bb script), start one yourself: `bb nrepl-server` (writes `.nrepl-port`) in a background terminal -- under Herdr (`HERDR_ENV=1`), a new tab in the current workspace (`herdr_layout` `tab_create`, then `herdr_pane` `run`). If `bb nrepl-server` fails with address-in-use, an nREPL is already listening on the default port without a discoverable port file -- probe that port with an eval and reuse it instead of retrying startup. Ephemeral bb scripts have no persistent build watch, so spawning the server is the normal bb workflow, not an exception -- the never-spawn-a-second rule still applies once it is up. For JVM/ClojureScript projects, ask the user to start one (`lein repl :headless`, `clj -M:repl`, shadow-cljs watch, etc.) -- their build/watch setup is session-owned.
-3. **Explore unfamiliar code in the REPL.** `(clojure.repl/doc x)`, `(clojure.repl/source x)`, `(clojure.repl/dir ns)`. For an unfamiliar Java interop call, evaluate it on a real input before relying on its documented behavior -- some `java.nio`/`java.io` methods (e.g. `Path.toUri`) perform filesystem I/O and are not pure. Under Babashka the call may not resolve *at all* rather than merely behave differently: sci does not reliably dispatch overloaded JDK static methods on primitive arrays, so valid JVM Clojure like `(java.util.Arrays/binarySearch ^longs a 5)` throws `No matching method binarySearch found taking 2 args` (verified, bb 1.12.218). Smoke-test the specific overload with `bb -e` before depending on it, and hand-roll the operation when it does not resolve. Never assert purity, totality, or determinism of a function in code comments or docs without having checked.
-4. **Define and validate in the REPL before saving** -- happy path, nil, empty collections, edge cases.
-5. **Save with `edit` or `write`.**
-6. **Reload and re-verify** -- `(require '[project.ns] :reload)` for `.clj`; shadow-cljs/figwheel watch loops typically auto-reload `.cljs`. Re-run the changed function and any directly-relevant tests.
-7. **Do not report success before verification passes.**
+## ClojureScript
 
-Ask for clarification when requirements are ambiguous, when materially different approaches exist, or when an architectural decision is needed.
+Confirm the selected build and attached JS runtime before evaluating CLJS. Opening a browser tab alone does not switch a CLJ nREPL session to CLJS. Native `clojure_eval` calls use fresh sessions; use the persistent CLI or the project's evaluator for session-based CLJS work. See the [tool guide](references/tool-guide.md) for a shadow-cljs example.
 
-### ClojureScript runtime
+## Delimiter repair
 
-A ClojureScript nREPL evaluates against a connected JS runtime -- usually a browser tab (shadow-cljs `:browser` / `:browser-repl`, figwheel), occasionally Node or a self-hosted runtime. Before evaluating `.cljs`, confirm a runtime is attached. For the browser case use the `chromium` skill to open a tab against the dev server URL. A `.cljs` eval that hangs or returns `nil` with no effect is the classic disconnected-runtime symptom -- check the runtime before debugging the form.
+Correct small delimiter errors directly. If an available repair tool helps, inspect its changes and rerun normal verification. Repair is not syntax validation; the native `clojure_paren_repair` check can miss mismatched delimiter types and misread character literals. For file repair, work on a copy under `<repository-root>/.tmp/`: `clj-paren-repair COPY.clj` repairs and formats the whole copy in place. Copy back only the intended changes.
 
-Share a test fixture between JVM and CLJS by loading it from the classpath at *compile* time. CLJS has no runtime file access outside Node, and `js/require "fs"` compiles under every target while working under one, so the break surfaces at runtime in a browser build rather than at compile time. `shadow.resource/inline` is the ready-made macro; for one call that works on both platforms, wrap the `shadow.resource/slurp-resource` *function* (pass it `&env`) in a `.cljc` macro branching on `(:ns &env)`, which slurps on the JVM and inlines under CLJS. Inlined bytes ship in the JS bundle, so keep shared fixtures small -- and never paste a fixture's contents into source instead.
+## Babashka caveats
 
-## Tools
-
-| Capability     | pi-clojure (preferred)    | CLI fallback                                              |
-| -------------- | ------------------------- | --------------------------------------------------------- |
-| Find port      | `clojure_find_nrepl_port` | `clj-nrepl-eval --discover-ports`                         |
-| Eval           | `clojure_eval`            | `clj-nrepl-eval -p PORT "code"`                           |
-| Paren -- file   | n/a                       | `clj-paren-repair file.clj`                               |
-| Paren -- string | `clojure_paren_repair`    | `echo '…' \| clj-paren-repair`                            |
-
-Detect availability by tool list (`clojure_eval` appears when pi-clojure is loaded) and `which clj-nrepl-eval` / `which clj-paren-repair` for the CLI. `clojure_eval` accepts an optional namespace and 1--2147483647 ms timeout that covers connection and response processing; cancellation closes its socket and settles the operation once. Native eval and string-repair results (including details) are bounded to pi's standard 2000 lines or 50KB. See the tool guide for discovery probe limits and troubleshooting.
-
-**Use `clj-paren-repair` for file repair even when pi-clojure is loaded** -- it uses a real Clojure reader (edamame), parinfer-rust, and cljfmt, so the output is also formatted. That formatting pass is whole-file, not edit-local: on a file whose existing style predates cljfmt it rewrites regions you never touched, and the churn is easy to publish unnoticed inside a larger diff. Run it on a copy under `<repository-root>/.tmp/`, diff that against the source, and copy back only when the diff is the repair you intended. `clojure_paren_repair` (JS parinfer) is for string repair before writing a new file. Never hand-fix delimiter errors.
-
-After structural edits that move or delete forms, run a balance check (`clj-paren-repair` on the file, or `clojure_paren_repair` with `check`) *before* running the test suite -- a dropped delimiter otherwise surfaces as a confusing whole-suite parse failure.
-
-See [references/tool-guide.md](references/tool-guide.md) for parameters, session persistence, the `clj-nrepl-eval --connected-ports` listing, and troubleshooting.
-
-## Idioms
-
-Match codebase conventions; default to community idiom otherwise. The short list:
-
-- Prefer threading macros (`->`, `->>`, `some->`, `cond->`) over deep nesting.
-- `kebab-case` names; predicates end in `?`; conversions use `->`; `!` suffix marks unsafe mutation (`swap!`, `save-user!`), `!` prefix marks mutable refs (`!conn`).
-- Docstrings on public functions describing args, return, and at least one example.
-- `(set! *warn-on-reflection* true)` in JVM namespaces that interop with Java.
-- Repository Babashka tasks are defined by the root `bb.edn` and only resolve from the git root: `bb test` run from a subdirectory fails with `File does not exist: test`, because the task name is read as a script path. When overriding the classpath for a focused run, `-cp` *replaces* the configured `:paths`, so include every required source and test root explicitly or namespaces fail to load.
-- Babashka resolves `user.home` from the OS user database, not `$HOME`: in bb subprocess tests, never rely on a `$HOME` override to isolate home-directory probes unless the code under test reads `$HOME` itself -- otherwise inject an explicit root/path override. Prefer `(or (not-empty (System/getenv "HOME")) (System/getProperty "user.home"))` when writing home resolution, so `$HOME` isolation works and the fallback still holds; a `user.home`-only probe silently reads the developer's real dotfiles from inside a fake-home subprocess.
-- Conversely, bb's classpath cache *does* follow `$HOME`, so overriding it for isolation silently forces cold classpath resolution (~0.7s vs ~70ms per call) and bootstraps a `.clojure/` into the fake home. `CLJ_CACHE` (classpath cache) and `CLJ_CONFIG` (user config/`tools` dir) are independent knobs -- set both to one shared warm dir, not just `CLJ_CACHE`.
-- Measure per-test timing inside a real namespace or suite run. A test timed as the first subprocess-spawning call in a fresh `bb` process over-reads by ~3× on one-time JIT/class-load warm-up.
-- `fs/glob` does not traverse a directory symlink -- it returns `[]` unless called with `{:follow-links true}`. Home Manager installs managed trees as symlinks, so any discovery walk over them needs the flag, and its test needs a real `fs/create-sym-link` fixture rather than a plain directory.
-
-See [references/idioms.md](references/idioms.md) for threading-macro, control-flow, data-structure, error-handling, testing, and anti-pattern detail.
-
-## Babashka script gotchas
-
-Both verified by probe, not inference:
-
-- A bare script runs in `user`, where `clojure.repl` is already referred. `(def source ...)` fails with "source already refers to #'clojure.repl/source"; the same applies to `doc` and `dir`. Use a specific name such as `source-path`.
-- Core `slurp`/`spit` reject a `babashka.fs` path object: "Cannot open <UnixPath ...> as an InputStream". Wrap `fs/path` values in `str` before passing them.
-- `load-file` and `-e` evaluate a script, so they never syntax-check one. `bb -e '(load-file "driver.bb")'` ran a driver's top-level forms and started a real long-running subprocess that had to be found and killed. Put driver logic behind a function that only the script's own entry point calls, or check syntax by parsing rather than evaluating.
-
-## Failure recovery
-
-If REPL eval, namespace load, or a test fails:
-
-1. Read the exact error message.
-2. Isolate the failing expression.
-3. Fix the root cause.
-4. Reload affected namespaces.
-5. Re-run verification.
-
-After a large multi-line replacement via a tool that does its own text escaping, run a cheap compile-check (`bb -e '(require (quote project.ns) :reload)'` or equivalent) immediately, before the full test suite -- an extra layer of string-escaping can produce a syntactically balanced but semantically bogus top-level form that a delimiter check alone won't catch.
-
-Before a complex validator loops across an input set, run it on one representative input. Check its output and exit status. If this run fails, stop before the loop starts.
-
-Before you use a newly authored Clojure regular expression, evaluate it against one positive example and one negative example. Confirm that it matches the positive example and rejects the negative example.
-
-Keep `bb -e` to a single short form. Multi-line code carrying `$`, regexes, or nested quotes misevaluates silently inside a shell heredoc; write it to a checked `.tmp/*.clj` script and run `bb <file>` instead.
-
-For unbalanced-delimiter / EOF errors, run `clj-paren-repair` (file) or `clojure_paren_repair` (string) instead of editing by hand.
+- Run tasks from the project's documented task directory. `-cp` replaces configured `:paths`; include all roots needed by a focused run.
+- In bare scripts without an `ns` form, names such as `source`, `doc`, and `dir` are already referred from `clojure.repl`; choose distinct names.
+- Convert `babashka.fs` Path values to strings before passing them to `slurp` or `spit`.
+- A `$HOME` override does not necessarily change `user.home`. Isolate tests through the path source the code actually uses.
+- For `babashka.fs/glob` walks that must traverse directory symlinks, use `{:follow-links true}` and test with an actual symlink.
