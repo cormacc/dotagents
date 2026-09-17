@@ -149,10 +149,20 @@ publish_queue_step() {
   return 0
 }
 case "${1:-}" in
-  --version) echo "herdr ${FAKE_HERDR_VERSION:-0.8.2}" ;;
+  # Preflight reads both endpoints from this one envelope (herdr 0.9.1 `src/cli/status.rs`
+  # shape: `.client.version` a string, `.server.version` nullable). FAKE_HERDR_CLIENT_VERSION /
+  # FAKE_HERDR_SERVER_VERSION set each; the literal `null` for the server models no running
+  # server, and FAKE_HERDR_STATUS_BROKEN=1 models an unparseable status envelope.
+  status)
+    if [ "${FAKE_HERDR_STATUS_BROKEN:-}" = 1 ]; then echo 'not json'; exit 0; fi
+    server="${FAKE_HERDR_SERVER_VERSION:-0.9.1}"
+    if [ "$server" = null ]; then server_json='null'; else server_json="\"$server\""; fi
+    printf '{"client":{"version":"%s"},"server":{"status":"running","running":true,"version":%s}}\n' "${FAKE_HERDR_CLIENT_VERSION:-0.9.1}" "$server_json" ;;
   pane)
     case "$2" in
-      layout) echo '{"result":{"layout":{"area":{"width":113,"height":110},"focused_pane_id":"other","panes":[{"pane_id":"w:other","rect":{"width":200,"height":50}},{"pane_id":"w:p","rect":{"width":113,"height":55}}]}}}' ;;
+      # `w:p` (113x55) and `w:other` infer `right`; `w:tall` (100x80) infers `down`, so a
+      # split whose explicit `--pane` names it proves direction came from *that* rect.
+      layout) echo '{"result":{"layout":{"area":{"width":113,"height":110},"focused_pane_id":"other","panes":[{"pane_id":"w:other","rect":{"width":200,"height":50}},{"pane_id":"w:p","rect":{"width":113,"height":55}},{"pane_id":"w:tall","rect":{"width":100,"height":80}}]}}}' ;;
       # $3 is echoed back as the target's own pane_id (real herdr identifies the pane it
       # was asked about); a per-pane `gone` marker under <state>/panes/<id>/gone models a
       # pane that no longer exists at all, distinct from a child whose *name* was merely
@@ -161,6 +171,13 @@ case "${1:-}" in
         target="${3:-w:p}"
         if [ -f "$(state_dir)/panes/$target/gone" ]; then
           echo '{"error":{"code":"pane_not_found","message":"pane not found"}}' >&2; exit 1
+        fi
+        # A lookup that *fails without proving absence* -- the server is unreachable, the
+        # request is malformed, the daemon is mid-restart. Distinct from `gone` above on
+        # purpose: only `pane_not_found` is positive evidence that a pane is absent, and a
+        # caller that treats any failure as absence fails open (reviewer finding P2).
+        if [ -f "$(state_dir)/panes/$target/get-error" ]; then
+          printf '{"error":{"code":"%s","message":"pane lookup failed"}}\n' "$(cat "$(state_dir)/panes/$target/get-error")" >&2; exit 1
         fi
         printf '{"result":{"pane":{"pane_id":"%s","label":"%s"}}}\n' "$target" "${FAKE_PARENT_LABEL:-planner-1-model}" ;;
       # `--pane <id>`, herdr 0.8.0 shape: `.result.process_info.shell_pid`. Same `gone`

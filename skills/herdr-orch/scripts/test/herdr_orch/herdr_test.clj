@@ -63,13 +63,46 @@
       (is (= expected-operations
              (set/intersection expected-operations (set (map #(vec (take 2 %)) @calls))))))))
 
-(deftest split-always-uses-no-focus
+;; Delegation never passes `:focus` or `:pane`, so the defaults -- the caller's own pane,
+;; `--no-focus` -- are what every delegated split gets (contract.md § Placement). Raw
+;; passthrough may name another source pane and may request focus (task af7273fd).
+(deftest split-defaults-to-caller-pane-unfocused-and-honours-raw-options
   (let [calls (atom [])]
     (with-redefs [herdr/invoke (fn [argv] (swap! calls conj argv) {:ok true :value {:result {:pane {:pane_id "p"}}} :out ""})]
-      (doseq [extra [{} {:focus true} {:focus false}]]
+      (doseq [extra [{} {:focus false} {:focus nil}]]
         (herdr/split! (merge {:direction "right" :cwd "/tmp" :env {}} extra))
+        (is (= (System/getenv "HERDR_PANE_ID") (nth (last @calls) 3)) (str "source pane defaults to the caller for " (pr-str extra)))
         (is (some #{"--no-focus"} (last @calls)))
-        (is (not-any? #{"--focus"} (last @calls)))))))
+        (is (not-any? #{"--focus"} (last @calls))))
+      (herdr/split! {:pane "w:other" :direction "down" :cwd "/tmp" :env {} :focus true})
+      (is (= ["pane" "split" "--pane" "w:other" "--direction" "down" "--cwd" "/tmp" "--focus"] (last @calls))))))
+
+(deftest caller-rect-reads-the-explicit-source-pane
+  (let [calls (atom [])]
+    (with-redefs [herdr/invoke (fn [argv]
+                                 (swap! calls conj argv)
+                                 {:ok true :out "" :value {:result {:layout {:panes [{:pane_id (System/getenv "HERDR_PANE_ID") :rect {:width 160 :height 80}}
+                                                                                     {:pane_id "w:tall" :rect {:width 100 :height 80}}]}}}})]
+      (is (= {:width 160 :height 80} (herdr/caller-rect!)))
+      (is (= {:width 100 :height 80} (herdr/caller-rect! "w:tall")))
+      (is (= ["pane" "layout" "--pane" "w:tall"] (last @calls)))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"source pane absent" (herdr/caller-rect! "w:missing"))))))
+
+;; The two-arity call is the delegation submission and must never wait; the option arity
+;; puts `--wait`, every `--until`, and `--timeout` on the *same* `agent prompt` call, and
+;; omits `--timeout` entirely when none is given so Herdr's own indefinite wait applies.
+(deftest prompt-wait-options-ride-the-same-agent-prompt-call
+  (let [calls (atom [])]
+    (with-redefs [herdr/invoke (fn [argv] (swap! calls conj argv) {:ok true :value {:result {}} :out ""})]
+      (herdr/prompt! "child" "text")
+      (is (= ["agent" "prompt" "child" "text"] (last @calls)))
+      (herdr/prompt! "child" "text" {:wait false :until ["idle"] :timeout 5})
+      (is (= ["agent" "prompt" "child" "text"] (last @calls)) "wait-only options are inert without :wait at this layer; the CLI refuses them")
+      (herdr/prompt! "child" "text" {:wait true})
+      (is (= ["agent" "prompt" "child" "text" "--wait"] (last @calls)) "no timeout means no --timeout: indefinite")
+      (herdr/prompt! "child" "text" {:wait true :until ["idle" "done"] :timeout 120000})
+      (is (= ["agent" "prompt" "child" "text" "--wait" "--until" "idle" "--until" "done" "--timeout" "120000"] (last @calls)))
+      (is (every? #(= ["agent" "prompt"] (vec (take 2 %))) @calls) "never a separate agent wait"))))
 
 (deftest self-close-is-refused
   (with-redefs [herdr/current-pane! (constantly {:pane_id "self"})]

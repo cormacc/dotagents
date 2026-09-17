@@ -1,10 +1,11 @@
 (ns herdr-orch.herdr
-  "Safe argv adapter for Herdr 0.8.2. No command text is passed to a shell."
+  "Safe argv adapter for Herdr 0.9.1. No command text is passed to a shell."
   (:require [babashka.process :as process]
             [cheshire.core :as json]
             [clojure.string :as str]))
 
-(def minimum-version [0 8 2])
+(def minimum-version [0 9 1])
+(def minimum-version-text (str/join "." minimum-version))
 (def max-output-lines 2000)
 (def max-output-bytes (* 50 1024))
 
@@ -41,10 +42,21 @@
   (let [result (invoke argv)]
     (if (:ok result) (:out result)
         (let [error (:error result)] (throw (ex-info (:message error) error))))))
-(defn version []
-  (let [{:keys [exit out err]} @(process/process ["herdr" "--version"] {:out :string :err :string})
-        found (some->> (re-find #"(\d+)\.(\d+)\.(\d+)" out) rest (mapv #(Long/parseLong %)))]
-    (if (and (zero? exit) found) found (throw (ex-info "unable to determine Herdr version" {:exit exit :stderr err})))))
+;; `herdr status --json` is the one envelope that reports both endpoints: `.client.version`
+;; is the invoking binary and `.server.version` is the running daemon (`null` when no server
+;; is running). Either missing or unparseable is a refusal, not a pass: a client that cannot
+;; prove its server's version cannot prove the server accepts the commands `oh` will issue.
+(defn- parse-version [s]
+  (some->> (when (string? s) (re-find #"(\d+)\.(\d+)\.(\d+)" s)) rest (mapv #(Long/parseLong %))))
+(defn versions []
+  (let [{:keys [exit out err]} @(process/process ["herdr" "status" "--json"] {:out :string :err :string})
+        status (when (zero? exit) (decode out))
+        client (parse-version (get-in status [:client :version]))
+        server (parse-version (get-in status [:server :version]))]
+    (when-not status (throw (ex-info "unable to read `herdr status --json`" {:exit exit :stderr err})))
+    (when-not client (throw (ex-info "unable to determine the Herdr client version from `herdr status --json`" {:status status})))
+    (when-not server (throw (ex-info "unable to determine the Herdr server version from `herdr status --json`; is the server running?" {:status status})))
+    {:client client :server server}))
 (defn at-least? [actual expected] (not (neg? (compare actual expected))))
 ;; The version gate is the whole capability check. Every command and flag the CLI uses
 ;; shipped well before `minimum-version`, so per-command `--help` probing (12 extra subprocesses on
@@ -55,17 +67,29 @@
 ;; flags, so mapping one onto the other would add machinery rather than remove it.
 (defn preflight! []
   (when-not (= "1" (System/getenv "HERDR_ENV")) (throw (ex-info "oh requires HERDR_ENV=1; run inside a Herdr pane" {:kind :environment})))
-  (let [actual (version)]
-    (when-not (at-least? actual minimum-version) (throw (ex-info "Herdr 0.8.2 or newer is required" {:actual actual :minimum minimum-version}))))
+  ;; Each endpoint is judged against the floor on its own; a client and server that differ
+  ;; but both clear it pass, because Herdr's own protocol check governs their pairing.
+  (let [actual (versions)]
+    (doseq [endpoint [:client :server]]
+      (when-not (at-least? (endpoint actual) minimum-version)
+        (throw (ex-info (str "Herdr " minimum-version-text " or newer is required; the " (name endpoint) " is "
+                             (str/join "." (endpoint actual)))
+                        {:endpoint endpoint :actual (endpoint actual) :minimum minimum-version})))))
   true)
 (defn- env-args [env] (mapcat (fn [[k v]] ["--env" (str k "=" v)]) env))
-(defn caller-rect! []
-  (let [pane (System/getenv "HERDR_PANE_ID") layout (value! ["pane" "layout" "--pane" pane])
-        panes (get-in layout [:result :layout :panes]) match (some #(when (= pane (:pane_id %)) %) panes)]
-    (or (:rect match) (throw (ex-info "caller pane absent from Herdr layout" {:pane pane :panes panes})))))
-(defn split! [{:keys [direction cwd env]}]
-  (let [pane (System/getenv "HERDR_PANE_ID")]
-    (get-in (value! (into ["pane" "split" "--pane" pane "--direction" direction "--cwd" cwd "--no-focus"]
+;; The source pane defaults to the caller's own; raw `oh pane split --pane` may name another,
+;; and direction inference then reads *that* pane's rect, not the caller's.
+(defn caller-rect!
+  ([] (caller-rect! nil))
+  ([source]
+   (let [pane (or source (System/getenv "HERDR_PANE_ID")) layout (value! ["pane" "layout" "--pane" pane])
+         panes (get-in layout [:result :layout :panes]) match (some #(when (= pane (:pane_id %)) %) panes)]
+     (or (:rect match) (throw (ex-info "source pane absent from Herdr layout" {:pane pane :panes panes}))))))
+;; `:focus` is a raw-passthrough option only. Delegation (`spawn!`) never passes it, so the
+;; default `--no-focus` is what every delegated split gets (contract.md § Placement).
+(defn split! [{:keys [pane direction cwd env focus]}]
+  (let [pane (or pane (System/getenv "HERDR_PANE_ID"))]
+    (get-in (value! (into ["pane" "split" "--pane" pane "--direction" direction "--cwd" cwd (if focus "--focus" "--no-focus")]
                           (env-args env))) [:result :pane])))
 ;; The child pane is `.result.root_pane`, not `.result.pane` (tab creation also returns
 ;; `.result.tab`); `--label` here sets the *tab's* label, distinct from the pane label
@@ -198,7 +222,17 @@
         outcome (invoke argv)]
     (if (:ok outcome) (get-in (:value outcome) [:result :agent])
         (let [error (:error outcome)] (throw (ex-info (:message error) error))))))
-(defn prompt! [target text] (value! ["agent" "prompt" target text]))
+;; Two-arity is the non-waiting submission every delegation site uses (spawn, continue, poke,
+;; parent push). The option arity is raw passthrough only: with `:wait`, `--until` and
+;; `--timeout` ride on the *same* `agent prompt` call, and an omitted timeout is omitted from
+;; the argv too, so Herdr waits indefinitely exactly as it does for a direct invocation.
+(defn prompt!
+  ([target text] (prompt! target text {}))
+  ([target text {:keys [wait until timeout]}]
+   (value! (cond-> ["agent" "prompt" target text]
+             wait (conj "--wait")
+             wait (into (mapcat #(vector "--until" %) until))
+             (and wait timeout) (into ["--timeout" (str timeout)])))))
 (defn agent-wait! [target timeout until]
   (invoke (into ["agent" "wait" target "--timeout" (str timeout)]
                 (mapcat #(vector "--until" %) until))))

@@ -235,13 +235,18 @@
     (is (= (str dir) (injected "ORCH_ASSIGNMENT_ROOT")))
     (is (= "COMPLETE" (get-in (result proc) [:result :status])))
     (is (= ["pane" "split" "--pane" "w:p" "--direction" "right"] (subvec (vec (first (filter #(= ["pane" "split"] (vec (take 2 %))) argv))) 0 6)))
+    ;; Delegation never moves the UI: the raw `--focus` option (task af7273fd) is not
+    ;; reachable from a spawn, so the delegated split always carries `--no-focus`.
+    (let [split (vec (first (filter #(= ["pane" "split"] (vec (take 2 %))) argv)))]
+      (is (some #{"--no-focus"} split))
+      (is (not-any? #{"--focus"} split)))
     ;; Capture closes nothing: the pane persists until `close` or `continue` acts on it.
     (is (not-any? #(= ["pane" "close"] (vec (take 2 %))) argv))
     (is (re-find #"(?s)\$\(unsafe\).*`unsafe`" (slurp prompt-file)))
     ;; Preflight is the version gate alone: no per-command `--help` probing survives, so a
     ;; spawn issues exactly one non-mutating capability call.
     (is (empty? (filter #(some #{"--help"} %) argv)))
-    (is (= 1 (count (filter #(= ["--version"] (vec %)) argv))))))
+    (is (= 1 (count (filter #(= ["status" "--json"] (vec %)) argv))))))
 
 (defn- ledger-entry* [dir task]
   (json/parse-string (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json")))) true))
@@ -965,11 +970,31 @@
         (is (zero? (:exit proc)))
         (is (= prompt (slurp prompt-file)))))))
 
+;; Preflight reads both endpoints from `herdr status --json` and judges each against the
+;; 0.9.1 floor on its own (contract.md § Preconditions). Every refusal happens before the
+;; ledger exists and before any mutating Herdr call; every pass costs exactly one `status`.
 (deftest preflight-fails-before-ledger-or-mutation
-  (let [{:keys [env log]} (fake-env {"FAKE_HERDR_VERSION" "0.8.1"}) proc (call! env "task" "start" "worker" "--task" "x")]
-    (is (= 1 (:exit proc)))
-    (is (str/includes? (str (:out proc) (:err proc)) "0.8.2"))
-    (is (not-any? mutating? (calls log)))))
+  (doseq [[label overrides expected] [["old client" {"FAKE_HERDR_CLIENT_VERSION" "0.9.0"} #"0\.9\.1 or newer is required; the client is 0\.9\.0"]
+                                      ["old server" {"FAKE_HERDR_SERVER_VERSION" "0.9.0"} #"0\.9\.1 or newer is required; the server is 0\.9\.0"]
+                                      ["old client on a pre-0.9 line" {"FAKE_HERDR_CLIENT_VERSION" "0.8.2"} #"the client is 0\.8\.2"]
+                                      ["no running server" {"FAKE_HERDR_SERVER_VERSION" "null"} #"unable to determine the Herdr server version"]
+                                      ["unparseable status" {"FAKE_HERDR_STATUS_BROKEN" "1"} #"unable to read `herdr status --json`"]]]
+    (testing label
+      (let [{:keys [env log dir]} (fake-env overrides) proc (call! env "task" "start" "worker" "--task" "x")]
+        (is (= 1 (:exit proc)) label)
+        (is (re-find expected (str (:out proc) (:err proc))) (str label " -> " (:out proc)))
+        (is (not-any? mutating? (calls log)) label)
+        (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))) (str label ": no ledger was allocated"))))))
+
+(deftest preflight-accepts-versions-at-or-above-the-floor
+  (doseq [[label overrides] [["both exactly 0.9.1" {}]
+                             ["both above the floor" {"FAKE_HERDR_CLIENT_VERSION" "0.10.0" "FAKE_HERDR_SERVER_VERSION" "1.0.0"}]
+                             ["client and server differ, both sufficient" {"FAKE_HERDR_CLIENT_VERSION" "0.9.2" "FAKE_HERDR_SERVER_VERSION" "0.9.1"}]
+                             ["server ahead of client" {"FAKE_HERDR_CLIENT_VERSION" "0.9.1" "FAKE_HERDR_SERVER_VERSION" "0.9.3"}]]]
+    (testing label
+      (let [{:keys [env log]} (fake-env overrides) proc (call! env "task" "start" "worker" "--task" "x")]
+        (is (zero? (:exit proc)) (str label " -> " (:out proc)))
+        (is (= 1 (count (filter #(= ["status" "--json"] (vec %)) (calls log)))) label)))))
 
 (deftest preview-is-side-effect-free
   (let [{:keys [env log]} (fake-env {}) proc (call! env "task" "run" "worker" "--task" "preview" "--print-prompt")]
@@ -4108,11 +4133,13 @@
         (let [proc (call! (:env fixture) "task" "close" (:task entry) "--abandon")]
           (is (= 1 (:exit proc)))
           (is (re-find #"does not own" (:out proc)))))
+      ;; An uncaptured round takes the no-publication path (task 08fba41e), which demands
+      ;; liveness evidence instead: a child still `working` is refused, not retired.
       (let [{:keys [env dir log]} (fake-env {})
             entry (start-child! env dir "never captured")
             proc (call! env "task" "close" (:task entry) "--abandon")]
         (is (= 1 (:exit proc)))
-        (is (re-find #"not captured" (:out proc)))
+        (is (re-find #"the child is working" (:out proc)))
         (is (empty? (closed-panes log)))
         (is (nil? (:closed-at (closed-entry dir entry))))))
     (testing "the sweep refuses it outright rather than accepting and ignoring it"
@@ -4659,7 +4686,7 @@
 (deftest ^:serial mechanical-cli-groups-dispatch-to-herdr
   (let [calls (atom [])
         record! (fn [op & args] (swap! calls conj (into [op] args)))]
-    (with-redefs [herdr/caller-rect! (fn [] {:width 160 :height 80})
+    (with-redefs [herdr/caller-rect! (fn [& _] {:width 160 :height 80})
                   herdr/split! (fn [opts] (record! :pane/split opts) {:pane_id "split"})
                   herdr/pane-run! (fn [pane command] (record! :pane/run pane command))
                   herdr/pane-read! (fn [pane opts] (record! :pane/read pane opts) "output")
@@ -4679,7 +4706,7 @@
                   herdr/workspace-list! (fn [] (record! :ws/list) [])
                   herdr/workspace-focus! (fn [workspace] (record! :ws/focus workspace) {:workspace_id workspace})
                   herdr/start! (fn [name kind pane native] (record! :agent/start name kind pane native) {:name name})
-                  herdr/prompt! (fn [target text] (record! :agent/prompt target text))
+                  herdr/prompt! (fn [target text & _] (record! :agent/prompt target text))
                   herdr/agent-wait! (fn [target timeout until] (record! :agent/wait target timeout until) {:ok true})
                   herdr/agent-read! (fn [target opts] (record! :agent/read target opts) "output")
                   herdr/agent-send-keys! (fn [target keys] (record! :agent/send-keys target keys))
@@ -4706,6 +4733,72 @@
              (set (map first @calls))))
       (is (true? (get-in (first (filter #(= :tab/create (first %)) @calls)) [1 :focus])))
       (is (true? (get-in (first (filter #(= :ws/create (first %)) @calls)) [1 :focus]))))))
+
+;; oh -> Herdr argv for the raw passthrough options task af7273fd restored, checked on the
+;; fake-herdr call log (the final argv), not on any in-process proxy.
+(deftest raw-agent-start-accepts-any-nonblank-kind
+  (let [{:keys [env log]} (fake-env {})]
+    (doseq [kind ["pi" "qwen" "letta" "muse" "some-future-kind"]]
+      (let [proc (call! env "agent" "start" "child" "--kind" kind "--pane" "w:x")]
+        (is (zero? (:exit proc)) (str kind " -> " (:out proc)))
+        (is (= ["agent" "start" "child" "--kind" kind "--pane" "w:x"] (vec (last (calls log)))) kind)))
+    (let [before (count (calls log))]
+      (doseq [kind ["" "   " "\t"]]
+        (let [proc (call! env "agent" "start" "child" "--kind" kind "--pane" "w:x")]
+          (is (= 1 (:exit proc)) (pr-str kind))
+          (is (str/includes? (:out proc) "nonblank --kind") (pr-str kind))))
+      (let [proc (call! env "agent" "start" "child" "--pane" "w:x")]
+        (is (= 1 (:exit proc)))
+        (is (str/includes? (:out proc) "nonblank --kind")))
+      (is (= before (count (calls log))) "a blank kind never reaches Herdr"))))
+
+(deftest raw-agent-prompt-wait-options-reach-the-same-herdr-call
+  (let [{:keys [env log]} (fake-env {})
+        prompt-calls (fn [] (filterv #(= ["agent" "prompt"] (vec (take 2 %))) (calls log)))]
+    (testing "plain prompt does not wait"
+      (let [proc (call! env "agent" "prompt" "child" "hello")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= ["agent" "prompt" "child" "hello"] (vec (last (prompt-calls)))))))
+    (testing "--wait alone omits --timeout so Herdr waits indefinitely"
+      (let [proc (call! env "agent" "prompt" "child" "hello" "--wait")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= ["agent" "prompt" "child" "hello" "--wait"] (vec (last (prompt-calls)))))))
+    (testing "--until and --timeout ride the same agent prompt call"
+      (let [proc (call! env "agent" "prompt" "child" "hello" "--wait" "--until" "idle" "--until" "done" "--timeout" "5000")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= ["agent" "prompt" "child" "hello" "--wait" "--until" "idle" "--until" "done" "--timeout" "5000"] (vec (last (prompt-calls)))))
+        (is (not-any? #(= ["agent" "wait"] (vec (take 2 %))) (calls log)) "never a separate agent wait")))
+    (testing "wait-only options without --wait are refused before Herdr is invoked"
+      (let [before (count (calls log))]
+        (doseq [argv [["--until" "idle"] ["--timeout" "5000"] ["--until" "idle" "--timeout" "5000"]]]
+          (let [proc (apply call! env "agent" "prompt" "child" "hello" argv)]
+            (is (= 1 (:exit proc)) (pr-str argv))
+            (is (str/includes? (:out proc) "require --wait") (pr-str argv))))
+        (is (= before (count (calls log))))))
+    (testing "an unparseable --timeout is a clean refusal"
+      (let [before (count (calls log)) proc (call! env "agent" "prompt" "child" "hello" "--wait" "--timeout" "soon")]
+        (is (= 1 (:exit proc)))
+        (is (str/includes? (:out proc) "positive integer"))
+        (is (= before (count (calls log))))))))
+
+(deftest raw-pane-split-targets-the-explicit-source-pane-and-focus
+  (let [{:keys [env log dir]} (fake-env {})
+        split-calls (fn [] (filterv #(= ["pane" "split"] (vec (take 2 %))) (calls log)))]
+    (testing "omitted pane is the caller; omitted direction is inferred from its rect; focus preserved"
+      (let [proc (call! env "pane" "split")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= ["pane" "split" "--pane" "w:p" "--direction" "right" "--cwd" (str dir) "--no-focus"] (vec (last (split-calls)))))))
+    (testing "an explicit pane is the source and its geometry infers the direction"
+      (let [proc (call! env "pane" "split" "--pane" "w:tall")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= ["pane" "split" "--pane" "w:tall" "--direction" "down" "--cwd" (str dir) "--no-focus"] (vec (last (split-calls)))))))
+    (testing "--focus requests focus; an explicit direction is passed through"
+      (let [layouts (fn [] (count (filter #(= ["pane" "layout"] (vec (take 2 %))) (calls log))))
+            before (layouts)
+            proc (call! env "pane" "split" "--pane" "w:tall" "--direction" "right" "--focus")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= ["pane" "split" "--pane" "w:tall" "--direction" "right" "--cwd" (str dir) "--focus"] (vec (last (split-calls)))))
+        (is (= before (layouts)) "no layout read when direction is explicit")))))
 
 (deftest spawn-creates-a-tab-and-rejects-personas
   (let [{:keys [env log]} (fake-env {})
@@ -4751,58 +4844,62 @@
           (is (zero? (:exit proc)) (str argv " -> " (:err proc)))
           (is (not (str/includes? (:out proc) "\"ok\""))))))))
 
-;; Ties the shipped default table to the record's verified rows, independent of the
-;; loader/translation machinery under test elsewhere in this namespace.
+;; Ties the shipped default table to independently stated expected values, apart from the
+;; loader/translation machinery under test elsewhere in this namespace. Every expectation
+;; below is written out by hand: nothing is derived from the parsed config, so a table edit
+;; that drops or remaps a row fails here rather than being read back as its own oracle.
 (deftest default-config-content-contract
   (let [config (core/parse-config "config.edn" (slurp (str (fs/path root "skills" "herdr-orch" "subagents" "config.edn"))))
-        ;; The pre-migration flat table (design/log/2026-08-04-herdr-orch-simplify-model-aliasing.org
-        ;; task 1's starting point): every ID used to be its own `:models` row. Hardcoded
-        ;; here, never derived from the new two-level table below, so the argv-preservation
-        ;; check cannot be circular.
-        old-flat-table {"heavy"            {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
-                        "middle"           {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
-                        "light"            {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
-                        "feather"          {:pi "anthropic/claude-haiku-4-5" :claude "haiku"            :codex "gpt-5.6-luna"}
-                        "claude-fable"     {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
-                        "claude-opus"      {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
-                        "claude-sonnet"    {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
-                        "claude-haiku"     {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
-                        "gpt-sol"          {:pi "openai-codex/gpt-5.6-sol"   :claude "opus"             :codex "gpt-5.6-sol"}
-                        "gpt-terra"        {:pi "openai-codex/gpt-5.6-terra" :claude "sonnet"           :codex "gpt-5.6-terra"}
-                        "gpt-luna"         {:pi "openai-codex/gpt-5.6-luna"  :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
-                        "claude-fable-5"   {:pi "anthropic/claude-fable-5"   :claude "fable"            :codex "gpt-5.6-sol"}
-                        "claude-opus-5"    {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
-                        "claude-sonnet-5"  {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
-                        "claude-haiku-4-5" {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
-                        "gpt-5.6-sol"      {:pi "openai-codex/gpt-5.6-sol"   :claude "opus"             :codex "gpt-5.6-sol"}
-                        "gpt-5.6-terra"    {:pi "openai-codex/gpt-5.6-terra" :claude "sonnet"           :codex "gpt-5.6-terra"}
-                        "gpt-5.6-luna"     {:pi "openai-codex/gpt-5.6-luna"  :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}}
-        weight-rows {"heavy" {:pi "anthropic/claude-fable-5" :claude "fable" :codex "gpt-5.6-sol"}
-                     "middle" {:pi "anthropic/claude-opus-5" :claude "opus" :codex "gpt-5.6-sol"}
-                     "light" {:pi "anthropic/claude-sonnet-5" :claude "sonnet" :codex "gpt-5.6-terra"}
+        canonical-rows {"anthropic/claude-fable-5-1" {:claude "fable"            :codex "gpt-6-astra"}
+                        "anthropic/claude-opus-5"    {:claude "opus"             :codex "gpt-5.6-sol"}
+                        "anthropic/claude-sonnet-5"  {:claude "sonnet"           :codex "gpt-5.6-terra"}
+                        "anthropic/claude-haiku-4-5" {:claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}
+                        "openai-codex/gpt-6-astra"   {:claude "fable"            :codex "gpt-6-astra"}
+                        "openai-codex/gpt-5.6-sol"   {:claude "opus"             :codex "gpt-5.6-sol"}
+                        "openai-codex/gpt-5.6-terra" {:claude "sonnet"           :codex "gpt-5.6-terra"}
+                        "openai-codex/gpt-5.6-luna"  {:claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}}
+        alias-rows {"heavy"            "anthropic/claude-fable-5-1"
+                    "middle"           "anthropic/claude-opus-5"
+                    "light"            "anthropic/claude-sonnet-5"
+                    "feather"          "anthropic/claude-haiku-4-5"
+                    "claude-fable"     "anthropic/claude-fable-5-1"
+                    "claude-opus"      "anthropic/claude-opus-5"
+                    "claude-sonnet"    "anthropic/claude-sonnet-5"
+                    "claude-haiku"     "anthropic/claude-haiku-4-5"
+                    "gpt-astra"        "openai-codex/gpt-6-astra"
+                    "gpt-sol"          "openai-codex/gpt-5.6-sol"
+                    "gpt-terra"        "openai-codex/gpt-5.6-terra"
+                    "gpt-luna"         "openai-codex/gpt-5.6-luna"
+                    "claude-fable-5-1" "anthropic/claude-fable-5-1"
+                    "claude-opus-5"    "anthropic/claude-opus-5"
+                    "claude-sonnet-5"  "anthropic/claude-sonnet-5"
+                    "claude-haiku-4-5" "anthropic/claude-haiku-4-5"
+                    "gpt-6-astra"      "openai-codex/gpt-6-astra"
+                    "gpt-5.6-sol"      "openai-codex/gpt-5.6-sol"
+                    "gpt-5.6-terra"    "openai-codex/gpt-5.6-terra"
+                    "gpt-5.6-luna"     "openai-codex/gpt-5.6-luna"}
+        ;; The weight table in contract.md § Model resolution, restated by hand. Pi has no
+        ;; column in config.edn: its expected value is the canonical ID passed through.
+        weight-rows {"heavy"   {:pi "anthropic/claude-fable-5-1" :claude "fable"            :codex "gpt-6-astra"}
+                     "middle"  {:pi "anthropic/claude-opus-5"    :claude "opus"             :codex "gpt-5.6-sol"}
+                     "light"   {:pi "anthropic/claude-sonnet-5"  :claude "sonnet"           :codex "gpt-5.6-terra"}
                      "feather" {:pi "anthropic/claude-haiku-4-5" :claude "claude-haiku-4-5" :codex "gpt-5.6-luna"}}]
     (is (= "--model" (get-in config [:harnesses :pi :model-flag])))
     (is (= "--model" (get-in config [:harnesses :claude :model-flag])))
     (is (= "--model" (get-in config [:harnesses :codex :model-flag])))
     (is (= {:placement :tab-split} (:defaults config)))
-    (is (= 7 (count (:models config))) "shipped :models has exactly 7 canonical rows")
-    (is (= 18 (count (:aliases config))) "shipped :aliases has exactly 18 entries")
-    (testing "argv preservation: every pre-migration ID translates identically for every kind, except feather+claude"
-      (doseq [[id row] old-flat-table
-              [kind native-model] row
-              :let [expected (if (and (= id "feather") (= kind :claude)) "claude-haiku-4-5" native-model)]]
-        (is (= ["--model" expected] (core/model-args config (name kind) id))
-            (str id " translates for " (name kind)))))
-    ;; Model resolution per weight and kind, against the shipped config. The table in
-    ;; contract.md § Model resolution documents the same rows; it is maintained by review
-    ;; rather than asserted here, because no test in this repository reads its documentation.
-    (testing "each shipped weight resolves to its expected native model for every kind"
+    (is (= canonical-rows (:models config)) "shipped :models rows are exactly the expected canonical rows")
+    (is (= alias-rows (:aliases config)) "shipped :aliases entries are exactly the expected alias rows")
+    (testing "each shipped weight translates to its expected native model for every kind"
       (doseq [[weight row] weight-rows
               [kind native-model] row]
         (is (= ["--model" native-model] (core/model-args config (name kind) weight))
             (str weight " " (name kind) " must resolve to " native-model))))
     ;; Pi receives the configured OpenAI model for `gpt-*`; only the claude/codex
     ;; columns use tier-equivalent cross-provider mappings.
+    (is (= ["--model" "openai-codex/gpt-6-astra"] (core/model-args config "pi" "gpt-6-astra")))
+    (is (= ["--model" "fable"] (core/model-args config "claude" "gpt-6-astra")))
+    (is (= ["--model" "gpt-6-astra"] (core/model-args config "codex" "gpt-6-astra")))
     (is (= ["--model" "openai-codex/gpt-5.6-terra"] (core/model-args config "pi" "gpt-5.6-terra")))
     (is (= ["--model" "sonnet"] (core/model-args config "claude" "gpt-5.6-terra")))
     (is (= ["--model" "gpt-5.6-terra"] (core/model-args config "codex" "gpt-5.6-terra")))
@@ -4810,16 +4907,21 @@
     (is (= ["--model" "opus"] (core/model-args config "claude" "gpt-5.6-sol")))
     (is (= ["--model" "openai-codex/gpt-5.6-luna"] (core/model-args config "pi" "gpt-5.6-luna")))
     (is (= ["--model" "claude-haiku-4-5"] (core/model-args config "claude" "gpt-5.6-luna")))
-    ;; The canonical `claude-haiku*` rows retain the full name despite `feather` using
-    ;; the requested undocumented `haiku` alias in the pre-migration table.
+    ;; The canonical `claude-haiku*` row keeps the full native name; there is no `haiku`
+    ;; short spelling anywhere in the shipped table.
     (is (= "claude-haiku-4-5" (get-in config [:models "anthropic/claude-haiku-4-5" :claude])))
     ;; Unversioned canonical IDs are floating aliases for the latest version of the tier.
-    (doseq [[unversioned latest] [["claude-fable" "claude-fable-5"] ["claude-opus" "claude-opus-5"]
+    (doseq [[unversioned latest] [["claude-fable" "claude-fable-5-1"] ["claude-opus" "claude-opus-5"]
                                   ["claude-sonnet" "claude-sonnet-5"] ["claude-haiku" "claude-haiku-4-5"]
-                                  ["gpt-sol" "gpt-5.6-sol"] ["gpt-terra" "gpt-5.6-terra"] ["gpt-luna" "gpt-5.6-luna"]]
+                                  ["gpt-astra" "gpt-6-astra"] ["gpt-sol" "gpt-5.6-sol"]
+                                  ["gpt-terra" "gpt-5.6-terra"] ["gpt-luna" "gpt-5.6-luna"]]
             kind ["pi" "claude" "codex"]]
       (is (= (core/model-args config kind latest) (core/model-args config kind unversioned))
           (str unversioned " resolves identically to " latest " for " kind)))
+    ;; A retired versioned ID is no longer an alias and passes through unchanged, so a
+    ;; stale caller gets the literal it asked for rather than a silently remapped tier.
+    (is (= ["--model" "claude-fable-5"] (core/model-args config "pi" "claude-fable-5")))
+    (is (= ["--model" "claude-fable-5"] (core/model-args config "claude" "claude-fable-5")))
     (is (= ["--model" "gpt-5.6-terra"] (core/model-args config "codex" "claude-sonnet-5")))))
 
 ;; contract.md § Model resolution states "Every packaged persona declares one": the
@@ -5524,6 +5626,246 @@
     (is (= "COMPLETE" (:status res)))
     (is (nil? (:released-children res)))
     (is (fs/exists? (:result publisher)))))
+
+;; --- no-publication retirement (task 08fba41e) ----------------------------------------
+;; The measured deadlock: a newest round whose child published nothing and has since
+;; settled or stopped. `close` refused it as uncaptured, `prune` refused it while the name
+;; was listed, and `poke` recovered only by *resuming* the child. `close --abandon` now
+;; retires it on evidence -- identity-checked idle/done, or proof the process stopped -- and
+;; sends nothing to the child, closes no pane, fabricates no RESULT, and deletes nothing.
+;; Calls made *after* index `since` (the spawn's own `agent start`/`agent prompt` precede it).
+(defn- child-input-calls [log child since]
+  (filterv #(and (#{["agent" "prompt"] ["agent" "send-keys"] ["pane" "send-text"] ["pane" "send-keys"] ["pane" "run"] ["agent" "wait"]} (vec (take 2 %)))
+                 (= child (nth % 2 nil)))
+           (drop since (calls log))))
+(defn- abandon! [env entry] (call! env "task" "close" (:task entry) "--abandon"))
+(defn- ledger-files [dir] (set (map str (fs/glob (fs/path dir ".tmp" "herdr-orch" "ledger") "*.json"))))
+
+(deftest close-abandon-retires-a-settled-unpublished-round-without-resuming-the-child
+  (let [{:keys [env dir log state]} (fake-env {})
+        entry (start-child! env dir "settled, published nothing")
+        _ (child-state! state entry "status" "idle")
+        before-calls (count (calls log)) before-ledger (ledger-files dir)
+        proc (abandon! env entry)
+        res (:result (result proc))
+        stored (closed-entry dir entry)]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= "abandoned" (:status res)))
+    (is (= "pane-left-to-operator" (:reason res)))
+    (is (= "none" (:publication res)))
+    (is (= "operator" (:pane-owner res)) "the retained pane is reported as operator-owned")
+    (is (= "settled" (get-in res [:evidence :kind])))
+    (is (= (:pane-id entry) (:pane-id res)))
+    (testing "the ledger round is retired, nothing else changes"
+      (is (some? (:closed-at stored)))
+      (is (true? (:pane-abandoned stored)))
+      (is (true? (:abandoned-unpublished stored)))
+      (is (nil? (:captured-at stored)) "no capture is fabricated")
+      (is (= "prompted" (:status stored)) "status is untouched; :closed-at is the marker")
+      (is (= before-ledger (ledger-files dir)) "no ledger file is deleted or created")
+      (is (not (fs/exists? (:result entry))) "no RESULT item is fabricated"))
+    (testing "nothing was sent to the child and no pane was touched"
+      (is (empty? (child-input-calls log (:child entry) before-calls)))
+      (is (empty? (closed-panes log)))
+      (is (not-any? #(= ["agent" "wait"] (vec (take 2 %))) (drop before-calls (calls log))) "no settle wait: a working child is refused, not waited for")
+      (is (= 1 (count (filter #(= ["agent" "list"] (vec (take 2 %))) (drop before-calls (calls log))))) "exactly one liveness listing"))
+    (testing "a later publish by the child fails without creating an item"
+      (let [proc (call! (child-publish-env env entry) "task" "publish" "--status" "COMPLETE" "--summary" "too late")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"round is closed" (:out proc)))
+        (is (not (fs/exists? (:result entry))))))
+    (testing "a second abandon is refused as already closed"
+      (let [proc (abandon! env entry)]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"already closed" (:out proc)))))))
+
+(deftest close-abandon-accepts-proof-that-the-child-process-stopped
+  (testing "the name was released and the pane is gone"
+    (let [{:keys [env dir log state]} (fake-env {})
+          entry (start-child! env dir "vanished with its pane")]
+      (child-state! state entry "gone" "")
+      (pane-state! state (:pane-id entry) "gone" "")
+      (let [proc (abandon! env entry) res (:result (result proc))]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= "abandoned" (:status res)))
+        (is (= "pane-absent" (get-in res [:evidence :kind])))
+        (is (empty? (closed-panes log))))))
+  (testing "the name was released, the pane's shell still matches and its foreground is idle"
+    (let [{:keys [env dir log state]} (fake-env {})
+          entry (start-child! env dir "process exited, shell remains")]
+      (child-state! state entry "gone" "")
+      (let [proc (abandon! env entry) res (:result (result proc))]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= "abandoned" (:status res)))
+        (is (= "shell-idle" (get-in res [:evidence :kind])))
+        (is (= (:shell-pid entry) (get-in res [:evidence :shell-pid])))
+        (is (empty? (closed-panes log)))
+        (is (some? (:closed-at (closed-entry dir entry))))))))
+
+(deftest close-abandon-refuses-a-child-that-is-not-provably-stopped
+  (let [refused (fn [label fixture entry pattern]
+                  (let [{:keys [env dir log]} fixture
+                        before (count (calls log))
+                        stored-before (closed-entry dir entry)
+                        proc (abandon! env entry)]
+                    (is (= 1 (:exit proc)) label)
+                    (is (re-find pattern (:out proc)) (str label " -> " (:out proc)))
+                    (is (= stored-before (closed-entry dir entry)) (str label ": no ledger mutation"))
+                    (is (empty? (closed-panes log)) label)
+                    (is (empty? (child-input-calls log (:child entry) before)) (str label ": no input or signal"))
+                    (is (not (fs/exists? (:result entry))) (str label ": no RESULT fabricated"))
+                    (is (not-any? #(= ["agent" "wait"] (vec (take 2 %))) (drop before (calls log))) (str label ": no settle wait"))))]
+    (testing "blocked: the refusal names the operator's remedy"
+      (let [fixture (fake-env {}) entry (start-child! (:env fixture) (:dir fixture) "blocked at a dialog")]
+        (child-state! (:state fixture) entry "status" "blocked")
+        (refused "blocked" fixture entry #"blocked at an approval or question dialog.*dismiss the dialog or stop the child manually.*retry")))
+    (testing "working"
+      (let [fixture (fake-env {}) entry (start-child! (:env fixture) (:dir fixture) "still working")]
+        (refused "working" fixture entry #"the child is working")))
+    (testing "unknown"
+      (let [fixture (fake-env {}) entry (start-child! (:env fixture) (:dir fixture) "unclassifiable")]
+        (child-state! (:state fixture) entry "status" "unknown")
+        (refused "unknown" fixture entry #"the child is unknown")))
+    (testing "name released, pane live, but its shell no longer matches"
+      (let [fixture (fake-env {}) entry (start-child! (:env fixture) (:dir fixture) "reused pane")]
+        (child-state! (:state fixture) entry "gone" "")
+        (pane-state! (:state fixture) (:pane-id entry) "shell-pid" "4242")
+        (refused "shell mismatch" fixture entry #"shell no longer matches")))
+    (testing "name released, shell matches, but a foreground process is busy"
+      (let [fixture (fake-env {}) entry (start-child! (:env fixture) (:dir fixture) "busy foreground")]
+        (child-state! (:state fixture) entry "gone" "")
+        (pane-state! (:state fixture) (:pane-id entry) "foreground-pgid" "5555")
+        (refused "busy foreground" fixture entry #"foreground is busy")))
+    (testing "name released, a nameless occupant at the pane is not settled"
+      (let [fixture (fake-env {}) entry (start-child! (:env fixture) (:dir fixture) "nameless resumed agent")]
+        (child-state! (:state fixture) entry "nameless" "")
+        (child-state! (:state fixture) entry "status" "working")
+        (refused "nameless working occupant" fixture entry #"the child is working")))
+    ;; Reviewer finding P2: `pane-alive?` caught *every* exception, so a pane lookup that
+    ;; failed for any reason other than `pane_not_found` was committed as pane-absent
+    ;; evidence and the round was retired. The fixture's `get-error` marker fails the
+    ;; lookup without proving absence; `gone` (the positive-evidence sibling, asserted in
+    ;; close-abandon-accepts-proof-that-the-child-process-stopped) still abandons.
+    (testing "the pane lookup fails without proving the pane is absent"
+      (let [fixture (fake-env {}) entry (start-child! (:env fixture) (:dir fixture) "herdr unreachable")]
+        (child-state! (:state fixture) entry "gone" "")
+        (pane-state! (:state fixture) (:pane-id entry) "get-error" "internal_error")
+        (refused "unreadable pane" fixture entry #"pane could not be inspected")))
+    (testing "the listing is unusable"
+      (let [fixture (fake-env {"FAKE_AGENT_LIST_NO_AGENTS_KEY" "1"}) entry (start-child! (:env fixture) (:dir fixture) "unlisted")]
+        (child-state! (:state fixture) entry "status" "idle")
+        (refused "unusable listing" fixture entry #"agent list is unusable")))
+    (testing "the named child occupies a different pane"
+      (let [fixture (fake-env {}) entry (start-child! (:env fixture) (:dir fixture) "moved pane")]
+        (child-state! (:state fixture) entry "status" "idle")
+        (child-state! (:state fixture) entry "pane" "w:elsewhere")
+        (refused "pane mismatch" fixture entry #"recorded pane is not this child's pane")))))
+
+(deftest close-abandon-refuses-stale-ownership-newer-rounds-and-existing-items
+  (testing "a foreign or unresolvable owner"
+    (let [{:keys [env dir state] :as fixture} (fake-env {}) entry (start-child! env dir "not mine")]
+      (child-state! state entry "status" "idle")
+      (patch-entry! dir (ledger-entry* dir (:task entry)) :parent-session "another-session")
+      (let [proc (abandon! env entry)]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"does not own" (:out proc)))
+        (is (nil? (:closed-at (closed-entry dir entry)))))
+      (let [proc (call! (assoc env "FAKE_FAIL_AGENT_GET" "w:p") "task" "close" (:task entry) "--abandon")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"does not own" (:out proc))))))
+  (testing "an older round cannot retire the newest round's child"
+    (let [{:keys [env dir state]} (fake-env {})
+          older (start-child! env dir "first round")]
+      (patch-entry! dir (ledger-entry* dir (:task older)) :captured-at "2026-01-01T00:00:00Z" :status "COMPLETE")
+      ;; `settle-to` keeps `continue`'s settle wait from publishing an item for the older
+      ;; round (the fixture's default wait side effect), so the newest-round guard is what
+      ;; the second abandon below exercises rather than the published-item guard.
+      (child-state! state older "settle-to" "idle")
+      (child-state! state older "status" "idle")
+      (let [cont (call! env "task" "continue" (:task older) "--task" "second round")
+            _ (is (zero? (:exit cont)) (:out cont))
+            newer (ledger-entry* dir (get-in (result cont) [:result :task]))]
+        (child-state! state older "status" "idle")
+        ;; The captured older round takes the captured path and is refused by its guard.
+        (let [proc (abandon! env older)]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"newer round names this child" (:out proc)))
+          (is (= (:task newer) (:newest (:data (:error (result proc)))))))
+        ;; Rewritten as an uncaptured older round, it takes the no-publication path, whose
+        ;; refusal names the rule: recovery addresses the newest round UUID.
+        (spit (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str (:task older) ".json")))
+              (json/generate-string (-> (ledger-entry* dir (:task older)) (dissoc :captured-at) (assoc :status "prompted"))))
+        (let [proc (abandon! env older)]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"a newer round exists for this child; recovery addresses the newest round" (:out proc)))
+          (is (= (:task newer) (:newest (:data (:error (result proc))))))
+          (is (nil? (:closed-at (closed-entry dir older))))
+          (is (nil? (:closed-at (closed-entry dir newer)))))
+        ;; The newest round itself, settled and unpublished, is what recovery addresses.
+        (let [proc (abandon! env newer)]
+          (is (zero? (:exit proc)) (:out proc))
+          (is (some? (:closed-at (closed-entry dir newer))))
+          (is (nil? (:closed-at (closed-entry dir older))) "the older round is untouched")))))
+  (testing "an uncaptured published item must be collected, not discarded"
+    (let [{:keys [env dir state]} (fake-env {})
+          entry (start-child! env dir "published then settled")]
+      (child-state! state entry "status" "idle")
+      (publish-child! entry "COMPLETE")
+      (let [proc (abandon! env entry)]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"has a published item; capture it" (:out proc)))
+        (is (fs/exists? (:result entry)) "the item is preserved")
+        (is (nil? (:closed-at (closed-entry dir entry)))))
+      ;; Collecting it takes the round onto the ordinary captured path.
+      (let [proc (call! env "task" "collect" (:task entry))]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= "COMPLETE" (get-in (result proc) [:result :status]))))))
+  (testing "a terminal failed round is not retired again"
+    (let [{:keys [env dir state]} (fake-env {}) entry (start-child! env dir "already failed")]
+      (child-state! state entry "status" "idle")
+      (patch-entry! dir (ledger-entry* dir (:task entry)) :status "failed")
+      (let [proc (abandon! env entry)]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"already terminal" (:out proc)))))))
+
+;; Publication and retirement contend for the same child lock; whichever commits first
+;; wins, and the loser refuses without damaging the winner's state.
+(deftest close-abandon-preserves-a-publication-that-wins-the-race
+  (let [{:keys [env dir state]} (fake-env {})
+        entry (start-child! env dir "publishes during the liveness check")]
+    (child-state! state entry "status" "idle")
+    ;; The fixture publishes this child's item as a side effect of the `agent list` the
+    ;; retirement makes, so the item lands after the pre-check and before the locked write.
+    (spit (str (fs/path state "publish-queue")) (str (:child entry) "\n"))
+    (let [proc (abandon! env entry)]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"a publication won the race; capture it" (:out proc)))
+      (is (fs/exists? (:result entry)) "the winning item is preserved")
+      (is (nil? (:closed-at (closed-entry dir entry)))))
+    (let [proc (call! env "task" "collect" (:task entry))]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= "COMPLETE" (get-in (result proc) [:result :status])) "the winning publication remains collectible"))))
+
+(deftest close-abandon-of-an-unpublished-round-unblocks-the-parents-publication
+  (let [{:keys [env dir state]} (fake-env {})
+        publisher (start-child! env dir "owns a settled child that published nothing")
+        grandchild (owned-round! dir "scout-silent")]
+    (fake-child! state (:child grandchild) (:pane-id grandchild))
+    (child-state! state grandchild "status" "idle")
+    (testing "before retirement the guard refuses"
+      (let [proc (call! (owning-publish-env env publisher) "task" "publish" "--status" "COMPLETE" "--summary" "done")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"you still own 1 open child assignment" (:out proc)))
+        (is (= ["uncaptured"] (mapv :state (:children (:data (:error (result proc)))))))))
+    (testing "the publishing child retires its own settled, silent grandchild"
+      (let [proc (call! (owning-publish-env env publisher) "task" "close" (:task grandchild) "--abandon")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= "abandoned" (get-in (result proc) [:result :status])))))
+    (testing "after retirement its own terminal publication succeeds"
+      (let [proc (call! (owning-publish-env env publisher) "task" "publish" "--status" "COMPLETE" "--summary" "done")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= "COMPLETE" (get-in (result proc) [:result :status])))
+        (is (fs/exists? (:result publisher)))))))
 
 ;; A terminal `failed` round is not an open claim, and an older round of a child whose
 ;; newest round was closed carries no `:closed-at` of its own -- both would otherwise block

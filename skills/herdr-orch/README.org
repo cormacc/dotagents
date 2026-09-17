@@ -18,6 +18,7 @@ Where things live:
 - [[#how-do-i-use-it][How do I use it?]]
 - [[#known-gaps][Known gaps]]
 - [[#llm-use-statement][LLM use statement]]
+- [[#last-api-review][Last API review]]
 
 * What is this?
 A harness-agnostic orchestration framework for agent-assisted development. Subagent personas and their interactions are defined independently of any one coding harness, so you can evaluate or migrate between harnesses without rebuilding your workflow. The bundled =oh= CLI absorbs the mechanical ceremony of orchestration, which keeps token and tool-call overhead down.
@@ -51,7 +52,7 @@ Integration is the parent's work. =oh= never merges, rebases, pushes, deletes a 
 ** Requirements
 
 - [[https://babashka.org][babashka]] on =PATH= -- the =oh= CLI is Clojure/babashka.
-- The =herdr= binary, and =HERDR_ENV=1= in the environment (i.e. running inside a Herdr pane).
+- The =herdr= binary at 0.9.1 or newer, with a running Herdr server at 0.9.1 or newer, and =HERDR_ENV=1= in the environment (i.e. running inside a Herdr pane). =oh= preflight reads both versions from =herdr status --json= and refuses an older or unknown endpoint before it allocates anything ([[file:scripts/docs/contract.md][contract.md]] § Preconditions).
 - Optional: the =org-plan= and =org-tasks= skills in this repository complement it but are not required.
 
 Herdr itself is the authority for direct pane and agent operations. The [[https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md][upstream Herdr skill]] is vendored here at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]] for convenience, but the CLI path does not need it, so standalone installs work without it.
@@ -251,7 +252,21 @@ The preview reports =kind=, the resolved (pre-alias) =model=, its post-alias =mo
 - =close= refuses a foreign or unresolvable parent identity, so an orphaned child whose owning session has ended is not closable through it. =oh task orphans= lists such panes and =oh task orphans --close= sweeps them, under the same live child+pane match =close= uses (see [[file:scripts/docs/contract.md][contract.md]] § Orphans). Both forms are root-only and the operator supplies the judgement that a foreign session is a dead one.
 - The advisor-tier convention holds only for a worker that consults through =oh task run advisor=. A worker that hand-rolls a consult with raw =herdr agent start= silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so ledger consult counts and advisor costs are a floor rather than the truth.
 - =HERDR_ORCH_BIN= intentionally carries the deployed absolute path rather than a canonical repository path. Launcher-matrix coverage is its guard.
+- The Pi state integration =pi/extensions/herdr-agent-state.ts= is a verbatim copy of Herdr's managed asset (=src/integration/assets/pi/herdr-agent-state.ts=, integration revision 9, commit =065ef9d6a531c49fb8bee7e818ef837065b21ee9=). Reinstalling the integration overwrites it, so it is never patched locally; its checks live beside it in =pi/extensions/test/herdr-agent-state.test.ts= and drive it only through a disposable socket. Refreshing it fixed the RPC gate (=ctx.mode=, not =hasUI=) and nothing more: the blocked state still arrives over the =herdr:blocked= bus topic rather than Pi's native =ui_prompt_start=/=ui_prompt_end= events, and the listeners it registers are never disposed on reload. Both are upstream work, tracked as a separate proposal from [[file:../../design/log/2026-09-17-herdr-orch-improvements-260917.org][herdr-orch improvements 260917]].
 
 * LLM use statement
 
 This skill is almost entirely LLM-authored (though heavily human-guided), dogfooding both itself and the =org-plan= spec-driven workflow.
+
+* Last API review
+
+| Field | Last reviewed value |
+|-------+---------------------|
+| Review date | 2026-09-17 |
+| Herdr source/API | [[https://github.com/ogulcancelik/herdr/tree/v0.9.1][0.9.1]] (=065ef9d6a531c49fb8bee7e818ef837065b21ee9=) |
+| Pi source/API | [[https://github.com/earendil-works/pi/tree/v0.85.1][0.85.1]] (=d981de1229ef899957bbe968bc8dcda02a21f477=) |
+| Installed Herdr client and server inspected | 0.9.0 |
+| Installed Pi inspected | 0.85.1 |
+| Comparison baseline | Herdr 0.8.2; Pi 0.84.2 (user-supplied Pi baseline) |
+
+These are review checkpoints, not minimum supported versions or compatibility certification. The review covered upstream changes, the =oh= adapter and lifecycle paths, the Pi tool proxy and state integration, focused tests, and isolated probes. No live child-agent smoke was run; Herdr 0.9.1 was reviewed from source, not executed. The Herdr minimum at that review was 0.8.2; [[file:../../design/log/2026-09-17-herdr-orch-improvements-260917.org][herdr-orch improvements 260917]] raises it to 0.9.1 on both client and server.

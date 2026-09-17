@@ -62,13 +62,14 @@
   (let [n (some-> raw str/trim not-empty parse-long)]
     (if (and n (pos? n)) n default-settle-close-ms)))
 (defn settle-close-ms [] (parse-settle-close (System/getenv "ORCH_SETTLE_CLOSE_MS")))
-;; Single source of truth for delegation value-less flags. The raw tab/workspace create
-;; `--focus` operator flag is scoped to those commands by `boolean-flags-for`; both argv
-;; consumers use the same resolved set so no value-less flag swallows the next element.
+;; Single source of truth for delegation value-less flags. The raw tab/workspace create and
+;; pane split `--focus` operator flag is scoped to those commands by `boolean-flags-for`; both
+;; argv consumers use the same resolved set so no value-less flag swallows the next element.
 (def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon" "--prune"})
 (defn boolean-flags-for [group op]
   (cond-> boolean-flags
-    (and (#{"tab" "ws"} group) (= "create" op)) (conj "--focus")))
+    (or (and (#{"tab" "ws"} group) (= "create" op))
+        (and (= "pane" group) (= "split" op))) (conj "--focus")))
 (defn option-map [args flags known]
   (loop [xs args out {}]
     (if-let [x (first xs)]
@@ -1425,11 +1426,14 @@
              (let [state (stream-state entry)]
                (and caller (:parent-session entry) (= caller (:parent-session entry))
                     (not= own-child (:child entry))
+                    ;; A closed round is no longer live -- including an uncaptured round
+                    ;; retired by `close --abandon` (task 08fba41e), which can never be
+                    ;; published to again -- but an unsealed resident child remains open
+                    ;; even after each published WAITING item was captured.
+                    (nil? (:closed-at entry))
                     (or (not (stream-captured? state))
-                        ;; A closed round is no longer live, but an unsealed resident child
-                        ;; remains open even after each published WAITING item was captured.
-                        (and (nil? (:closed-at entry))
-                             (or (not (:sealed? state)) (:pane-id entry)))))))
+                        (not (:sealed? state))
+                        (:pane-id entry)))))
            (newest-rounds entries)))
 ;; The same evidence `close`'s shell_pid fallback (task ca6fecef) uses for a name-absent
 ;; round: a live pane whose recorded `:shell-pid` still matches is a round `close` could
@@ -1505,6 +1509,17 @@
     (cond-> {:status (if abandon? "abandoned" "closed") :task task :child child :pane-id pane-id :closed-at (:closed-at updated)}
       abandon? (assoc :reason "pane-left-to-operator"))))
 (defn- pane-alive? [pane] (try (boolean (herdr/pane! pane)) (catch Exception _ false)))
+;; `pane-alive?` answers a *two*-way question with a `catch`-all, so every failure -- an
+;; unreachable server, a malformed request, a daemon mid-restart -- reads as `false`, the
+;; same as a pane that is provably gone. Where absence is merely one branch of a decision
+;; that is about to mutate the ledger, that conflation fails open: only `pane_not_found`
+;; is positive evidence that a pane is absent. This three-way read keeps the unusable case
+;; separate so the caller can refuse it (contract.md § Close: an unreadable inspection is
+;; unusable evidence and fails closed).
+(defn- pane-absence [pane]
+  (try (if (herdr/pane! pane) :present :unknown)
+       (catch Exception e
+         (if (= "pane_not_found" (get-in (ex-data e) [:response :error :code])) :absent :unknown))))
 (defn- pane-process-info! [pane] (try (herdr/process-info! pane) (catch Exception _ nil)))
 (defn- pane-shell-pid! [pane] (:shell_pid (pane-process-info! pane)))
 ;; A foreground process group that differs from the pane's own shell means something is
@@ -1582,20 +1597,132 @@
   (or (agents-snapshot) (fail (str verb " refused: agent list is unusable; liveness is unknown") {:task (:task entry)})))
 (defn- settle-then-close! [entry]
   (close-observed! entry (settle-and-list! "close" entry)))
-;; `--abandon` retires the ledger round for a captured entry whose pane cannot be confirmed
-;; free, and never touches the pane. It runs the whole of `assert-closable!` first, so it
-;; grants no authority the ordinary path lacks -- same ownership, capture, newest-round and
-;; not-already-closed bars -- and skips only the liveness observation, which is precisely
-;; the step that cannot conclude for a stuck round. The pane is the operator's to dispose
-;; of; what this recovers is the entry, which otherwise outlives it in `close --settled`
-;; and `orphans` forever (task c04a4e67).
+;; --- no-publication retirement (task 08fba41e) ---------------------------------------
+;; The measured deadlock: a newest round whose child published nothing and has since
+;; stopped or settled. `close` refuses it as uncaptured, `prune` refuses it while the name
+;; is listed, `collect --any` polls it forever, and the only recovery was `poke`, which
+;; *resumes* the child -- the opposite of retiring it. This path retires such a round on
+;; evidence and nothing else: it sends no prompt, no keys, no signal, closes no pane,
+;; removes no checkout, fabricates no RESULT, and deletes no file.
+;;
+;; The evidence bar is one positively-usable `agent list`, with no settle wait: a wait is
+;; harmless but pointless here, because a child that is still `working` is refused rather
+;; than waited for. A *named* observation must match the recorded pane and report
+;; `idle`/`done`; `blocked` names the operator's remedy (dismiss the dialog or stop the
+;; child, then retry once a permitted state is proved); `working`/`unknown` refuse. A
+;; released name alone proves only that the name is free, so it falls back to the same
+;; shell_pid witness `close` uses: the pane is gone (process gone with it), or the pane's
+;; shell still matches what this round provisioned *and* nothing but that shell is in its
+;; foreground. A mismatched shell, a busy foreground, or an unreadable `process_info` is
+;; unusable evidence and fails closed. Names are re-read as `:child`, never rebuilt.
+(defn- observed-agent-status-refusal [task child status]
+  (case status
+    "blocked" (fail (str "close --abandon refused: the child is blocked at an approval or question dialog. "
+                         "Abandonment sends no input: dismiss the dialog or stop the child manually, "
+                         "then retry once the child is observed idle/done or its process has stopped.")
+                    {:task task :child child :agent-status status})
+    (fail (str "close --abandon refused: the child is " status "; retry after it settles to idle/done or its process stops")
+          {:task task :child child :agent-status status})))
+(defn- stopped-process-evidence! [entry agents]
+  (let [task (:task entry) child (:child entry) pane (:pane-id entry)
+        absence (pane-absence pane)]
+    (when (= :unknown absence)
+      (fail (str "close --abandon refused: the pane could not be inspected, so a stopped child cannot be proved; "
+                 "only a `pane_not_found` lookup proves the pane is gone. Inspect the pane manually "
+                 "(`herdr pane get " pane "`) and retry once Herdr answers.")
+            {:task task :child child :pane-id pane}))
+    (if (= :absent absence)
+      {:kind "pane-absent"}
+      (let [occupant (some #(when (= pane (:pane_id %)) %) agents)
+            info (pane-process-info! pane)]
+        (cond
+          (and occupant (not (contains? #{"idle" "done"} (:agent_status occupant))))
+          (observed-agent-status-refusal task child (:agent_status occupant))
+          (nil? info)
+          (fail "close --abandon refused: the agent name was released and the pane's process info is unreadable; liveness is unknown"
+                {:task task :child child :pane-id pane})
+          (pane-busy-foreground? info)
+          (fail "close --abandon refused: the agent name was released but the pane's foreground is busy, so the child process may still be running"
+                {:task task :child child :pane-id pane :foreground (:foreground_process_group_id info) :shell (:shell_pid info)})
+          (let [recorded (:shell-pid entry) live (:shell_pid info)] (and recorded live (= recorded live)))
+          {:kind "shell-idle" :shell-pid (:shell_pid info)}
+          :else
+          (fail (str "close --abandon refused: the agent name was released and the pane's shell no longer matches what this round provisioned, "
+                     "so a stopped child cannot be proved; inspect the pane manually (`herdr pane get " pane "`)")
+                {:task task :child child :pane-id pane :recorded-shell-pid (:shell-pid entry) :live-shell-pid (:shell_pid info)}))))))
+(defn- abandonment-evidence! [entry]
+  (let [task (:task entry) child (:child entry)
+        {:keys [index agents]} (or (agents-snapshot) (fail "close --abandon refused: agent list is unusable; liveness is unknown" {:task task}))
+        agent (get index child)]
+    (cond
+      (nil? agent) (stopped-process-evidence! entry agents)
+      (not= (:pane-id entry) (:pane_id agent))
+      (fail "close --abandon refused: the recorded pane is not this child's pane"
+            {:task task :child child :recorded (:pane-id entry) :observed (:pane_id agent)})
+      (contains? #{"idle" "done"} (:agent_status agent)) {:kind "settled" :agent-status (:agent_status agent)}
+      :else (observed-agent-status-refusal task child (:agent_status agent)))))
+(defn- assert-abandonable-unpublished! [entry entries]
+  (let [task (:task entry) child (:child entry)
+        caller (caller-parent-session) recorded (:parent-session entry)]
+    (when-not (and caller recorded (= caller recorded))
+      (fail "close refused: caller session does not own this ledger entry" {:task task}))
+    (when (:closed-at entry)
+      (fail "close refused: this round's pane was already closed" {:task task :closed-at (:closed-at entry)}))
+    (when-not (:pane-id entry)
+      (fail "close refused: entry records no pane" {:task task}))
+    (when (= "failed" (:status entry))
+      (fail "close --abandon refused: this round is already terminal" {:task task :status (:status entry)}))
+    ;; An item that exists is the child's testimony and is never discarded: collect it,
+    ;; then take the captured path. This is the same rule the lock-time re-check applies.
+    (when (seq (:published (stream-state entry)))
+      (fail (str "close --abandon refused: this round has a published item; capture it with `" (bin-hint)
+                 " task collect " task "` first") {:task task}))
+    (let [newest (newest-round entries child)]
+      (when-not (= task (:task newest))
+        (fail "close refused: a newer round exists for this child; recovery addresses the newest round"
+              {:task task :child child :newest (:task newest)})))))
+(defn- abandon-unpublished! [entry]
+  (let [task (:task entry) child (:child entry) pane (:pane-id entry)
+        evidence (abandonment-evidence! entry)
+        ;; Publication contends for this same lock (§ Ledger and completion). Whichever
+        ;; side takes it first wins: an item that landed before us is preserved and refused
+        ;; here; a `:closed-at` written by us makes `assert-publishable!` refuse a later
+        ;; publish without creating an item.
+        updated (with-child-lock child
+                  (fn []
+                    (ledger/update! task
+                                    (fn [current]
+                                      (when (:closed-at current) (fail "close refused: already closed" {:task task}))
+                                      (when (seq (:published (stream-state current)))
+                                        (fail (str "close --abandon refused: a publication won the race; capture it with `" (bin-hint)
+                                                   " task collect " task "`") {:task task}))
+                                      (when-not (= task (:task (newest-round (ledger/entries) child)))
+                                        (fail "close refused: a newer round appeared during the liveness check" {:task task :child child}))
+                                      (assoc current :closed-at (now) :pane-abandoned true
+                                             :abandoned-unpublished true :abandonment-evidence evidence)))))]
+    {:status "abandoned" :task task :child child :pane-id pane :closed-at (:closed-at updated)
+     :reason "pane-left-to-operator" :publication "none" :evidence evidence
+     :pane-owner "operator"
+     :note (str "The pane " pane " and any checkout remain in place and are now the operator's to dispose of; "
+                "TASK, ledger and artifact files are retained. Nothing was sent to the child.")}))
+;; `--abandon` retires the ledger round without touching the pane. For a captured entry
+;; whose pane cannot be confirmed free, it runs the whole of `assert-closable!` first, so
+;; it grants no authority the ordinary path lacks -- same ownership, capture, newest-round
+;; and not-already-closed bars -- and skips only the liveness observation, which is
+;; precisely the step that cannot conclude for a stuck round. For a round with *no
+;; publication at all* it takes `abandon-unpublished!` instead, which demands liveness
+;; evidence rather than skipping it. The pane is the operator's to dispose of either way;
+;; what this recovers is the entry, which otherwise outlives it in `close --settled` and
+;; `orphans` forever (task c04a4e67) or deadlocks its parent's publication (task 08fba41e).
 (defn close-task! [task opts]
   (when-not task (fail "close requires a full task uuid" {}))
-  (let [entry (ledger/read! task)]
-    (assert-closable! entry (ledger/entries))
-    (if (one opts :abandon)
-      (close-mutation! (:task entry) (:child entry) (:pane-id entry) {:abandon? true})
-      (settle-then-close! entry))))
+  (let [entry (ledger/read! task) entries (ledger/entries)]
+    (cond
+      (not (one opts :abandon)) (do (assert-closable! entry entries) (settle-then-close! entry))
+      (stream-captured? (stream-state entry))
+      (do (assert-closable! entry entries)
+          (close-mutation! (:task entry) (:child entry) (:pane-id entry) {:abandon? true}))
+      :else (do (assert-abandonable-unpublished! entry entries) (abandon-unpublished! entry)))))
 ;; The sweep's candidate filter *is* its guard, and it is the same rule `assert-closable!`
 ;; applies one entry at a time: owned (strictly -- a bulk sweep grants no dead-owner
 ;; recovery), captured, not already closed, with a pane, and the newest round for its child.
@@ -2383,7 +2510,7 @@
 ;; guesses wrong pays a failed invocation. Keep each line true to the `require-positionals`
 ;; arity and flag reads in the handler directly below it.
 (def signatures
-  {"pane" ["split [--direction right|down] [--cwd DIR] [--env KEY=VALUE]*"
+  {"pane" ["split [--pane PANE] [--direction right|down] [--cwd DIR] [--env KEY=VALUE]* [--focus]"
            "run <pane> <command>"
            "read <pane> [--source visible|recent|recent-unwrapped|detection] [--lines N] [--format text|ansi]"
            "wait-output <pane> (--match TEXT | --regex PATTERN) [--source S] [--lines N] [--timeout MS] [--raw]"
@@ -2402,7 +2529,7 @@
          "list"
          "focus <workspace>"]
    "agent" ["start <name> --kind KIND --pane PANE [--native ARG]*"
-            "prompt <target> <text>"
+            "prompt <target> <text> [--wait [--until STATE]* [--timeout MS]]"
             "wait <target> [--timeout MS] [--until STATE]*"
             "read <target> [--source S] [--lines N] [--format text|ansi]"
             "send-keys <target> <key> [<key>...]"
@@ -2463,8 +2590,11 @@
 (defn current-cwd [] (System/getProperty "user.dir"))
 (defn raw-pane! [op opts positional]
   (case op
-    "split" (herdr/split! {:direction (or (one opts :direction) (core/direction (herdr/caller-rect!)))
-                            :cwd (or (one opts :cwd) (current-cwd)) :env (parse-env (all opts :env))})
+    ;; An explicit `--pane` is the split's source *and* the pane whose geometry infers an
+    ;; omitted direction. `--focus` is honoured here only; delegation never passes it.
+    "split" (let [pane (one opts :pane)]
+              (herdr/split! {:pane pane :direction (or (one opts :direction) (core/direction (herdr/caller-rect! pane)))
+                             :cwd (or (one opts :cwd) (current-cwd)) :env (parse-env (all opts :env)) :focus (boolean (one opts :focus))}))
     "run" (let [[pane command] (require-positionals positional 2 "pane run")] (herdr/pane-run! pane command))
     "read" (let [[pane] (require-positionals positional 1 "pane read")] (herdr/pane-read! pane {:source (one opts :source) :lines (one opts :lines) :format (one opts :format)}))
     "wait-output" (let [[pane] (require-positionals positional 1 "pane wait-output")
@@ -2503,9 +2633,18 @@
     (fail "unknown ws command" {:command op})))
 (defn raw-agent! [op opts positional]
   (case op
-    "start" (let [[name] (require-positionals positional 1 "agent start") kind (or (one opts :kind) (fail "agent start requires --kind" {})) pane (or (one opts :pane) (fail "agent start requires --pane" {}))]
+    ;; The kind is validated as nonblank only: installed Herdr owns the kind set, and a
+    ;; local allow-list would refuse a kind the runtime accepts (`qwen`, `letta`, `muse`).
+    "start" (let [[name] (require-positionals positional 1 "agent start") kind (one opts :kind) pane (or (one opts :pane) (fail "agent start requires --pane" {}))]
+              (when (str/blank? kind) (fail "agent start requires a nonblank --kind" {:kind kind}))
               (herdr/start! name kind pane (:native opts)))
-    "prompt" (let [[target text] (require-positionals positional 2 "agent prompt")] (herdr/prompt! target text))
+    ;; `--until`/`--timeout` are wait-only: without `--wait` they are refused rather than
+    ;; silently dropped or silently promoted into a wait the caller did not ask for.
+    "prompt" (let [[target text] (require-positionals positional 2 "agent prompt")
+                   wait? (boolean (one opts :wait)) until (all opts :until) timeout (one opts :timeout)]
+               (when (and (not wait?) (or (seq until) timeout))
+                 (fail "agent prompt --until and --timeout require --wait" {:until until :timeout timeout}))
+               (herdr/prompt! target text {:wait wait? :until until :timeout (some->> timeout (core/timeout-value! "--timeout" nil))}))
     "wait" (let [[target] (require-positionals positional 1 "agent wait")] (herdr/agent-wait! target (Long/parseLong (or (one opts :timeout) "600000")) (all opts :until)))
     "read" (let [[target] (require-positionals positional 1 "agent read")] (herdr/agent-read! target {:source (one opts :source) :lines (one opts :lines) :format (one opts :format)}))
     "send-keys" (let [[target & keys] positional]

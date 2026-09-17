@@ -5,7 +5,7 @@ description: "Delegate work to Herdr subagents with the in-skill `oh` CLI: spawn
 
 # Herdr subagents
 
-Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md) safety rules and verify `HERDR_ENV=1` before delegation. For ordinary one-child delegation use `scripts/oh`. The canonical mechanical CLI, ledger, envelope, and exit-code contract is [`scripts/docs/contract.md`](scripts/docs/contract.md), with invocation and test entry points in [`scripts/README.md`](scripts/README.md).
+Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md) safety rules and verify `HERDR_ENV=1` before delegation. `oh` requires Herdr 0.9.1 or newer on both the client and the running server; its preflight reads both from `herdr status --json` and refuses an older or unknown endpoint before allocating anything. For ordinary one-child delegation use `scripts/oh`. The canonical mechanical CLI, ledger, envelope, and exit-code contract is [`scripts/docs/contract.md`](scripts/docs/contract.md), with invocation and test entry points in [`scripts/README.md`](scripts/README.md).
 
 ```sh
 OH="$HOME/.agents/skills/herdr-orch/scripts/oh"
@@ -74,6 +74,8 @@ A validated terminal item in the parent-chosen `RESULT` stream is the only compl
 `BLOCKED` means a genuine resumable dependency. `FAILED` means the child could not recover after reasonable retries. Read the published summary before you re-prompt or respawn.
 
 For a settled child with no valid publication, use `oh task poke <full-task-uuid>` before you respawn. If an `invalid` capture arrives while the child is still `working`, let it settle and collect again. If a settled child's `RESULT` contains prose, capture it as invalid, then use `poke`. Never adopt that prose as the result.
+
+To retire a newest round whose child published nothing and should *not* be resumed, use `oh task close <full-task-uuid> --abandon` on that newest round's UUID. It retires the ledger round only when the child is observed `idle`/`done` at its recorded pane or its process is proved stopped; it sends the child nothing, closes no pane, and fabricates no result. A `blocked` child is refused: dismiss its dialog or stop it yourself, then retry. A `working` or `unknown` child is refused too; wait for it to settle or use `poke` if you want it to publish. The pane stays yours to clean up ([contract](scripts/docs/contract.md) § Close).
 
 Capture before you close or continue. Never close user or other-agent panes, kill a parent, or stop the Herdr server. Use `orphans` only for children whose owning parent session has ended. Read per-child outcomes from bulk close commands instead of trusting their aggregate exit status. Guard and reason details are in the [contract](scripts/docs/contract.md) § Close and § Poke.
 

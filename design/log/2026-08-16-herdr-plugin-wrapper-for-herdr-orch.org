@@ -17,7 +17,7 @@ Package herdr-orch as a Herdr plugin so `herdr plugin install cormacc/dotagents/
 
 *** In scope
 
-- New `herdr-plugin/` subdir: `herdr-plugin.toml` (id `cormacc.herdr-orch`, `min_herdr_version = "0.8.2"`, `platforms = ["linux", "macos"]`), `doctor.sh`, `setup.sh`, `lib.sh`, `open-pane.sh`, `README.md`.
+- New `herdr-plugin/` subdir: `herdr-plugin.toml` (id `cormacc.herdr-orch`, `min_herdr_version = "0.9.1"`, `platforms = ["linux", "macos"]`), `doctor.sh`, `setup.sh`, `lib.sh`, `open-pane.sh`, `README.md`.
 - `doctor` and `setup` as `popup` panes plus mirror actions that open them through `HERDR_BIN_PATH`.
 - Consent-gated `setup` that creates or repairs plugin-owned links and refuses foreign-owned paths.
 - Traits-binary fallback resolution in `pi/extensions/traits/index.ts` with tests.
@@ -38,8 +38,8 @@ Package herdr-orch as a Herdr plugin so `herdr plugin install cormacc/dotagents/
 
 *** Core functionality
 
-- [ ] `herdr plugin link <checkout>/herdr-plugin` registers the plugin on Herdr 0.8.2 with no change to `~/.agents` or `~/.pi` links.
-- [ ] Manifest declares id `cormacc.herdr-orch`, `min_herdr_version = "0.8.2"`, `platforms = ["linux", "macos"]`, two popup panes, two mirror actions, and no build, startup, or event entries.
+- [ ] `herdr plugin link <checkout>/herdr-plugin` registers the plugin on Herdr 0.9.1 with no change to `~/.agents` or `~/.pi` links.
+- [ ] Manifest declares id `cormacc.herdr-orch`, `min_herdr_version = "0.9.1"`, `platforms = ["linux", "macos"]`, two popup panes, two mirror actions, and no build, startup, or event entries.
 - [ ] Doctor reports each check as pass or fail: Herdr version, `bb` presence, clone layout (`../skills/herdr-orch/scripts/oh` and `scripts/traits` executable), canonical-path classification, and Pi extension wiring state.
 - [ ] Doctor runs to a full report when `bb` is absent.
 - [ ] Doctor's `bb` failure includes an actionable install hint (official installer command, or the detected package manager).
@@ -73,7 +73,7 @@ Package herdr-orch as a Herdr plugin so `herdr plugin install cormacc/dotagents/
   - Repo-root manifest: conflates the whole repository with the plugin surface.
   - `bb.edn` tasks with degraded bash shims: the degraded path reimplements half of doctor for no user-visible gain.
   - Single dispatcher script: separate scripts read better in the install preview users audit.
-- Minimum Herdr version 0.8.2 everywhere (manifest and `oh` preflight) :: eliminates legacy-support and API-drift considerations; unlocks `popup` placement. User decision 2026-08-16 set this at 0.8.0; raised to 0.8.2 by the later user decision of 2026-08-26, when task cf561004 gated `oh` on 0.8.2 to delete the readiness workarounds. The floor is single-valued on purpose: a manifest that loads on a Herdr the bundled `oh` refuses is the incoherence this bullet exists to prevent.
+- Minimum Herdr version 0.9.1 everywhere (manifest and `oh` preflight) :: eliminates legacy-support and API-drift considerations; unlocks `popup` placement. User decision 2026-08-16 set this at 0.8.0; raised to 0.8.2 by the later user decision of 2026-08-26, when task cf561004 gated `oh` on 0.8.2 to delete the readiness workarounds; raised again to 0.9.1 (client and server) by [[file:2026-09-17-herdr-orch-improvements-260917.org][herdr-orch improvements 260917]]. The floor is single-valued on purpose: a manifest that loads on a Herdr the bundled `oh` refuses is the incoherence this bullet exists to prevent.
 - Link classification by realpath equality against the clone root :: one rule serves linked-dev and GitHub-install modes. Measured on this machine: both canonical paths realpath into the live checkout, so linked-dev classifies healthy and setup no-ops. States: healthy, foreign, foreign-parent, plugin-stale, absent.
 - No `[[build]]` entries :: nothing needs building; the install-time no-global-mutation constraint is honoured structurally. Babashka is a documented prerequisite that doctor checks.
 - Traits fallback keeps the live path's priority :: env override, then the canonical home path, then extension-file-relative, per the parent task constraint.
@@ -97,8 +97,8 @@ Package herdr-orch as a Herdr plugin so `herdr plugin install cormacc/dotagents/
 :CREATED: [2026-08-16 Sun 11:59]
 :END:
 Acceptance criteria:
-- `herdr plugin link <checkout>/herdr-plugin` registers on Herdr 0.8.2 without touching `~/.agents` or `~/.pi` links.
-- Manifest declares id `cormacc.herdr-orch`, `min_herdr_version = "0.8.2"`, `platforms = ["linux", "macos"]`, popup panes `doctor` and `setup`, mirror actions via `open-pane.sh`, and no build, startup, or event entries.
+- `herdr plugin link <checkout>/herdr-plugin` registers on Herdr 0.9.1 without touching `~/.agents` or `~/.pi` links.
+- Manifest declares id `cormacc.herdr-orch`, `min_herdr_version = "0.9.1"`, `platforms = ["linux", "macos"]`, popup panes `doctor` and `setup`, mirror actions via `open-pane.sh`, and no build, startup, or event entries.
 - Doctor reports pass or fail for: Herdr version, `bb` presence, clone layout (`../skills/herdr-orch/scripts/oh` and `scripts/traits` executable), canonical-path classification for `~/.agents/skills/herdr-orch` and `~/.pi/agent/extensions/traits`, and Pi wiring state.
 - Doctor completes its full report when `bb` is absent, and the `bb` failure line carries an actionable install hint.
 - `lib.sh` classifies healthy, foreign, foreign-parent, plugin-stale, and absent by realpath equality against the clone root derived from `HERDR_PLUGIN_ROOT`.
