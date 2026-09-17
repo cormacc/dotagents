@@ -47,7 +47,6 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 | `ORCH_SETTLE_CLOSE_MS` | parent | Budget for the single `agent wait` that `close` and `continue` each make on the target child before reading liveness (§ Close). No capture spends it: `run`, `collect <task>`, `collect --wait`, and `collect --any` neither wait nor close. Default 45000 ms. |
 | `ORCH_WAITING_INTERVAL_MIN_MS` | child | Minimum interval between `WAITING` publishes. Default 60000 ms. |
 | `ORCH_MAX_STREAM_ITEMS` | parent | Maximum immutable items one stream snapshot validates. Default 1000. A stream over the limit refuses rather than silently overlooking a terminal item. |
-| `ORCH_MAX_ENVELOPE_BYTES` | parent | Maximum bytes read from one result envelope during validation. Default 65536. An over-limit envelope refuses rather than being treated as unsealed. |
 | `HERDR_ORCH_CHILD` | child | Live agent name recorded on the ledger. |
 | `HERDR_ORCH_TASK` | child | Assignment id. |
 | `HERDR_ORCH_RESULT` | child | Exact absolute publication path that only `task publish` may use. Do not use it as a report path or write report content to it. |

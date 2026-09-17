@@ -45,12 +45,9 @@
     (if (and n (pos? n)) n default-max-stream-items)))
 (defn max-stream-items []
   (parse-max-stream-items (System/getenv "ORCH_MAX_STREAM_ITEMS")))
-(def default-max-envelope-bytes 65536)
-(defn parse-max-envelope-bytes [raw]
-  (let [n (some-> raw str/trim not-empty parse-long)]
-    (if (and n (pos? n)) n default-max-envelope-bytes)))
-(defn max-envelope-bytes []
-  (parse-max-envelope-bytes (System/getenv "ORCH_MAX_ENVELOPE_BYTES")))
+;; Fixed, not an env knob: an over-limit envelope refuses, and no operator has ever
+;; needed a different ceiling. Make it configurable when one does.
+(def max-envelope-bytes 65536)
 ;; Bounds the settle wait `close` and `continue` make before reading liveness (see
 ;; `settle-and-list!`); same non-positive/unparseable/blank -> default discipline as
 ;; parse-poll-interval/parse-notify-timeout. Capture makes no such
@@ -362,7 +359,7 @@
 ;; and belongs solely to capture-time validation. An unreadable item is indeterminate rather than
 ;; unsealed, so publication refuses instead of reopening a round on an IO failure.
 (defn- read-envelope! [{:keys [item result]}]
-  (let [limit (max-envelope-bytes)
+  (let [limit max-envelope-bytes
         bytes (try
                 (with-open [input (io/input-stream result)]
                   (let [output (ByteArrayOutputStream.)
