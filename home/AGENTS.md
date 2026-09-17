@@ -68,6 +68,7 @@
 - Never store transient state under `.agents/`. That directory contains durable agent configuration.
   - Some harnesses deliberately mount `.agents/` as read-only so an agent cannot modify its own instructions.
 - Scope a repository reference sweep to tracked files with `git ls-files -z | xargs -0 grep`. A bare recursive grep also matches scratch copies under `.tmp/`.
+- Search a gitignored scratch file by naming it directly, as in `rg <pattern> .tmp/<file>`. A path filter that names an unindexed file returns matches from unrelated tracked files instead.
 
 ## Command-line arguments
 - Verify each flag's meaning before you trust its output.

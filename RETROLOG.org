@@ -156,3 +156,23 @@ Commit ancestry. A general search returned unrelated releases for an exact commi
 ** Not adopted
 
 Validator severity. The parent was ready to treat the change as clean after its own verification; a second validator at a different tier rated the cross-record conflict blocking and was right. No new rule: =herdr-orch= already mandates two independent validators for a Class C closeout, and following that rule is what caught it.
+
+* 2026-09-17 Thu -- herdr-orch improvements 260917 delegation round
+
+Evidence for rules added while delegating the herdr-orch maintenance plan to one worker and two reviewers, then closing it out.
+
+** Temporary files
+
+Scratch-file search. =ffgrep= with =path: .tmp/record-candidate.org= returned matches from =design/log/2026-09-17-herdr-orch-improvements-260917.org= and =skills/herdr-orch/scripts/src/herdr_orch/cli.clj= instead, because the gitignored candidate file is not indexed and the path filter silently does not apply. Reported independently by a reviewer subagent and reproduced in the parent harness.
+
+** Test-authoring guardrails
+
+Cumulative fixture call log. A worker reported two =cli_test= absence assertions that passed against calls made before the verb under test, because =fake-herdr='s call log accumulates for the lifetime of the fixture rather than per command. Attributed to the child: the parent confirmed that the before/after counting pattern already exists in the =refused= helper, but did not reproduce the false negative.
+
+Negative control without touching tracked files. A read-only reviewer needed to break =pane-alive?= to prove its finding. Copying =skills/herdr-orch= into =.tmp/<name>/skills/= and running the test var from that root works because the launcher's bare-subtree fallback loads the copy's =src=. Used again at closeout to control the =pane-absence= repair: reverted, =herdr-orch.cli-test= reports 3 failures and =close --abandon= succeeds with =evidence.kind=pane-absent=; restored, 281 tests and 0 failures.
+
+** Not adopted
+
+Repository check gate. =scripts/check.sh= ran no TypeScript at all, so a regression in any extension suite passed green. Fixed structurally in the same session by looping over =pi/extensions/*/test.sh=, which auto-covers future extensions; no rule was written, because it would only restate the mechanism.
+
+Collect ordering. The parent read a =WAITING= item as the child's result and had to collect again. Already documented -- =contract.md= states that collection consumes the oldest unconsumed item and that a captured =WAITING= is explicitly non-final.

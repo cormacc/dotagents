@@ -51,4 +51,6 @@ Clear those variables only when a test requires absent inherited round metadata.
 
 - Check the subprocess exit status before you read a produced file. `call!` returns the process map. A refused spawn can otherwise appear as `FileNotFoundException: .../ledger/.json`.
 - Put every expected-hang probe behind a per-call timeout or a stub. Never run an unbounded hang probe inside a test namespace.
+- Prove that a verb made no call of a kind by comparing `(count (calls log))` before and after that call. The fixture's call log is cumulative, so the log tail and the whole log also match calls made before the verb under test.
+- Break a guard for a negative control in a copy, not in place: copy `skills/herdr-orch` into `.tmp/<name>/skills/` and run the test var from that root. The launcher's bare-subtree fallback loads the copy's `src`, so no tracked file changes.
 - Do not use auto-resolved `::keywords` in `cli_test.clj`. Its namespace enables parallel tests. The source parser rejects these keywords and reports the error against `test_runner.clj`. Use a plain keyword.

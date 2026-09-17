@@ -576,3 +576,24 @@ Origin:
 Evidence:
 - The mistake was caught immediately after the edit by a grep for the target heading text, then reverted with a follow-up edit before any commit.
 - No incorrect state was ever committed or persisted; the near-miss was purely in an intermediate working-tree edit.
+
+** TODO herdr-orch: a failed spawn round is permanent ledger residue :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: a22509e2-bc51-45ae-a5a3-736753f68f48
+:CREATED: [2026-09-17 Thu 22:29]
+:END:
+:LOGBOOK:
+- Created [2026-09-17 Thu 22:29]
+:END:
+A round whose spawn failed cannot be removed from the ledger. `oh task prune` refuses it with "prune refused: assignment is already terminal", because prune requires a non-terminal `:status` (docs/contract.md, Prune). `oh task compact` retires `:envelope :text` only and never removes an entry. The dead entry therefore stays in `oh task status`/`list` output for the life of the ledger.
+
+Desired outcome: a way to retire a `failed` round, or an explicit contract statement that failed entries are permanent and are filtered from routine listings.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: github.com/cormacc/dotagents @ main
+- timestamp: [2026-09-17 Thu 22:30]
+- sender: agent
+
+Evidence:
+Observed while spawning two reviewers: the first `oh task start reviewer --model claude-fable` failed with herdr `agent_pane_busy` (target pane not an available shell), creating round 51610531-d59c-44eb-af90-3ef5d104ac9f with status `failed`. A retry succeeded. `oh task prune 51610531-...` then refused as above, and no other verb retires the entry. Related but distinct from 08fba41e (no-publication rounds), which close --abandon now covers.
