@@ -1,6 +1,6 @@
 #+TITLE: herdr-orch improvements 260917
 #+DATE: 2026-09-17 Thu
-#+PARENT: [[task:561270b1-e372-47a7-9173-bd966c4204ae][herdr-orch improvements 260917]]
+#+PARENT: [[archive:561270b1-e372-47a7-9173-bd966c4204ae][herdr-orch improvements 260917]]
 #+SETUPFILE: ../../TASKS.setup.org
 
 #+STATUS: Accepted
@@ -16,7 +16,7 @@ Make the existing Pi -> oh -> Herdr path accurately expose supported controls an
 * Summary
 *Level:* production · *Tests:* thorough · *Docs:* full
 
-Accepted plan; implementation has not started. The user approved repairing the existing adapter chain, setting Herdr 0.9.1 as the client/server minimum, and guarded ledger-only recovery. Eight TODO plan tasks cover local delivery; the three incorporated backlog tasks retain their original IDs and lifecycle history.
+Delivered 2026-09-17 in five commits on top of =f2c4a14= (=f64bf68= .. =642624c=). The adapter chain passes raw Pi/oh options through again, Herdr 0.9.1 is the client and server minimum, and =close --abandon= recovers a no-publication round from the ledger alone. All eight plan tasks are DONE; the three incorporated backlog tasks retain their original IDs and lifecycle history.
 
 ** Scope
 *** In scope
@@ -87,7 +87,8 @@ Accepted plan; implementation has not started. The user approved repairing the e
 - MODIFIED [[proj:skills/herdr-orch/README.org]] :: Requirements state the floor; Known gaps records the managed-integration refresh versus the unresolved native-prompt/listener work; the review footer date-qualifies the old minimum.
 - MODIFIED [[proj:skills/README.org]] :: Vendored section records the sibling-licence convention and =herdr/LICENSE='s source; =skills/herdr/SKILL.md= refreshed to =v0.9.1= and =skills/herdr/LICENSE= added.
 - MODIFIED =pi/extensions/herdr-orch/index.ts=, =pi/extensions/herdr-agent-state.ts= (upstream revision 9); ADDED =pi/extensions/herdr-orch/index.test.ts=, =pi/extensions/test/herdr-agent-state.test.ts=.
-- MODIFIED =design/log/2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org= :: active minimum-version requirements read 0.9.1; delivered 0.8.2 evidence retained.
+- MODIFIED =design/log/2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org= :: active minimum-version requirements read 0.9.1; delivered 0.8.2 evidence retained. =TASKS.org='s plugin-wrapper task body reads 0.9.1 for the same reason.
+- ADDED =pi/extensions/herdr-orch/test.sh=; MODIFIED =scripts/check.sh= :: the repository check now runs every =pi/extensions/*/test.sh=. It previously ran no TypeScript at all, so a regression in any of the eight extension suites passed green.
 
 ** Decisions
 - Repair Pi -> oh -> Herdr :: Both adapter layers drop options. Keep one local CLI authority; reject a direct Pi-to-Herdr bypass.
@@ -109,6 +110,10 @@ Accepted plan; implementation has not started. The user approved repairing the e
 - The runtime may be below the new floor :: Verify client and server versions before controlled live smoke. Upgrade requires the runtime owner's action, not a planning-side install.
 - Concurrent work touches nearby files :: Re-read before editing; preserve unrelated changes and historical records. In the README review footer, only date-qualify the old minimum-version sentence as specified by the version-floor task; preserve the review table and execution limits.
 
+** Gotchas
+- A pane lookup that fails proves nothing about the pane. Only Herdr's =pane_not_found= code is positive evidence of absence, so a =catch=-all around =herdr pane get= silently converts an unreachable server into "the pane is gone" -- fail-open in any path about to mutate the ledger. =pane-alive?='s two other callers still conflate the two; they were out of scope here.
+- A =.test.ts= at the =pi/extensions/= root is auto-loaded as an extension, so a top-level extension's tests belong in =pi/extensions/test/= and are run from a sibling extension's =test.sh=.
+
 ** Follow-ups
 - [[task:5631ba57-09cf-4359-bab4-afa27ae7e7e9][Draft upstream native-prompt/listener-disposal proposal]] is independent of local delivery; publishing needs separate permission.
 
@@ -126,16 +131,6 @@ CLOSED: [2026-09-17 Thu 20:21]
 - State "STARTED" from "TODO" [2026-09-17 Thu 19:50]
 - State "DONE" from "STARTED" [2026-09-17 Thu 20:21]
 :END:
-Acceptance criteria:
-- A new contract section, Start and prompt outcomes, describes agent_not_ready as a Herdr start outcome that leaves the name usable for agent read or agent send-keys.
-- That section describes agent_blocked as a prompt refusal before input reaches an approval/question dialog.
-- That section distinguishes Herdr's retained-name outcome from oh delegation's start-failure cleanup.
-- Placement and Spawn gating link to the start outcome; Poke, Continue and Parent push link to the prompt outcome.
-- The skill and scripts README do not contradict either contract statement.
-- Must not: reintroduce the removed dispatch verification or readiness retry workaround.
-
-Reference: `skills/herdr-orch/scripts/docs/contract.md` new Start and prompt outcomes section, with links from existing Placement, Spawn gating, Poke, Continue and Parent push sections; `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` spawn!, poke! and raw-agent!. The older dispatch-audit requirement is satisfied by the removal recorded at commit 4741d59; this task concerns the remaining documentation gap.
-
 ** DONE Retire a stopped no-publication round without resuming the child :skill:herdr_orch:
 CLOSED: [2026-09-17 Thu 20:21]
 :PROPERTIES:
@@ -148,26 +143,6 @@ CLOSED: [2026-09-17 Thu 20:21]
 - State "STARTED" from "TODO" [2026-09-17 Thu 19:50]
 - State "DONE" from "STARTED" [2026-09-17 Thu 20:21]
 :END:
-Acceptance criteria:
-- close --abandon retires a newest, parent-owned round with no publication after identity-checked idle/done observation or proof that the child process stopped.
-- A blocked, working or unknown child refuses the new no-publication path.
-- The refusal for blocked explains that the operator must dismiss the dialog or stop the child manually, then retry after a permitted state is proved.
-- A blocked-child regression check confirms refusal without ledger mutation, input or signals.
-- Revalidation under the child lock refuses retirement if publication wins the race.
-- A publication that wins remains collectible.
-- A successfully retired round no longer blocks its parent's terminal publication.
-- Attempts to publish after retirement fail without creating a result item.
-- The response identifies the retained pane as operator-owned.
-- The contract states that recovery addresses the newest round UUID, not an older round UUID.
-- Regression checks cover stale ownership, a newer round, identity/name loss, and unusable liveness evidence.
-- Must not: prompt or signal the child.
-- Must not: close the pane or remove its checkout.
-- Must not: fabricate a RESULT or capture.
-- Must not: delete TASK, ledger or existing artifacts during retirement.
-- Must not: relax ordinary close's capture guard or existing captured-abandonment behaviour.
-
-Reference: `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` close-task!, assert-closable!, close-mutation!, outstanding-children, assert-publishable!, worktree-in-flight? and worktree-referenced-by-live-round?; extend `skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` and document the same semantics in the skill, contract and scripts README. Reuse abandonment markers and the child lock; missing agent-list identity alone is not stopped-process evidence.
-
 ** DONE Refresh the vendored Herdr skill and carry its upstream licence :skill:
 CLOSED: [2026-09-17 Thu 20:21]
 :PROPERTIES:
@@ -180,17 +155,6 @@ CLOSED: [2026-09-17 Thu 20:21]
 - State "STARTED" from "TODO" [2026-09-17 Thu 19:50]
 - State "DONE" from "STARTED" [2026-09-17 Thu 20:21]
 :END:
-Acceptance criteria:
-- The Herdr skill is deliberately refreshed through the installer documented in skills/README.org.
-- The refreshed body matches its recorded upstream source apart from installer-managed frontmatter.
-- The upstream licence text is carried in a new skills/herdr/LICENSE file.
-- skills/README.org states the licence source and that skill updates do not maintain the sibling licence.
-- The updated guidance is reviewed for local-only IDs, completion badges and alternate-screen read behaviour.
-- Must not: hand-edit the vendored SKILL.md body or installer provenance fields.
-- Must not: refresh unrelated vendored skills.
-
-Reference: `skills/README.org` Vendored section and `skills/herdr/SKILL.md`; the reviewed upstream licence source is https://github.com/ogulcancelik/herdr/blob/master/LICENSE. Fetch from the selected source revision and verify it before adding the sibling file.
-
 ** DONE Preserve raw Pi agent and split options through oh :herdr_orch:
 CLOSED: [2026-09-17 Thu 20:21]
 :PROPERTIES:
@@ -203,33 +167,6 @@ CLOSED: [2026-09-17 Thu 20:21]
 - State "STARTED" from "TODO" [2026-09-17 Thu 19:50]
 - State "DONE" from "STARTED" [2026-09-17 Thu 20:21]
 :END:
-Acceptance criteria:
-- Agent start accepts nonblank kind strings, including qwen, letta and muse, without a static local allow-list.
-- Blank or whitespace-only kinds fail before invoking oh.
-- Pi prompt defaults to a single Herdr agent prompt --wait operation.
-- Explicit wait=false without wait-only options omits waiting.
-- Pi rejects wait=false with until before invoking oh.
-- Pi rejects wait=false with timeout before invoking oh.
-- Raw oh agent prompt rejects --until or --timeout without --wait before invoking Herdr.
-- With waiting enabled, requested until states reach that same Herdr operation.
-- With waiting enabled, requested timeout reaches that same Herdr operation.
-- With waiting enabled and no timeout supplied, both adapters omit --timeout so Herdr waits indefinitely.
-- Regression checks cover each conflicting option and the omitted-timeout case.
-- scripts/README.md Raw passthrough documents indefinite prompt waiting separately from the unchanged 600000 ms agent wait default.
-- Existing two-argument delegation prompt! callers remain non-waiting.
-- An explicit split pane reaches Herdr as the source pane.
-- Omitted split pane defaults to the caller.
-- Omitted direction is inferred from the selected source pane geometry.
-- Raw split focus=true requests focus; omitted/false preserves focus.
-- Delegation split remains unfocused.
-- Regression checks cover the Pi-to-oh argv and the oh-to-Herdr argv independently.
-- The contract and raw-tool guidance describe these behaviours.
-- The contract Placement section scopes its unconditional no-focus statement to delegation; raw pane split may request focus.
-- Must not: replace prompt-with-wait by a separate wait invocation.
-- Must not: remove visible-read fallback or alter delegation policy/model resolution.
-
-Reference: `pi/extensions/herdr-orch/index.ts` AgentKindEnum and herdr_agent/herdr_layout handlers; `skills/herdr-orch/scripts/src/herdr_orch/cli.clj` raw-agent!, raw-pane!, signatures and boolean-flags-for (declare pane split target/focus options and classify its boolean flags); `skills/herdr-orch/scripts/src/herdr_orch/herdr.clj` prompt!, caller-rect! and split!. Extend `skills/herdr-orch/scripts/test/herdr_orch/herdr_test.clj`, `skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` and the fake-Herdr fixture; add a small colocated Pi adapter test using the existing TypeScript test tooling.
-
 ** DONE Require Herdr 0.9.1 on both client and server :herdr_orch:
 CLOSED: [2026-09-17 Thu 20:21]
 :PROPERTIES:
@@ -242,24 +179,6 @@ CLOSED: [2026-09-17 Thu 20:21]
 - State "STARTED" from "TODO" [2026-09-17 Thu 19:50]
 - State "DONE" from "STARTED" [2026-09-17 Thu 20:21]
 :END:
-Acceptance criteria:
-- Preflight reads client/server versions from herdr status --json.
-- A client below 0.9.1 is refused before allocation or spawn.
-- A server below 0.9.1 is refused before allocation or spawn.
-- Missing or unreadable version evidence is refused before allocation or spawn.
-- Client/server 0.9.1 pass the version gate.
-- Different client/server versions both above the floor pass the version gate.
-- Failures identify the deficient endpoint or missing evidence.
-- Fake-Herdr tests cover each boundary without live runtime mutations.
-- Active requirements in the skill, READMEs and contract specify the new floor.
-- In skills/herdr-orch/README.org Last API review, replace only "The Herdr minimum remains 0.8.2." with a historical statement that the minimum at that review was 0.8.2 and this change raises it to 0.9.1, linked to this record.
-- The footer's review table and source-reviewed/not-executed statement remain unchanged.
-- The plugin record's active minimum-version requirements specify 0.9.1.
-- Must not: add legacy fallback or a capability-probe matrix.
-- Must not: rewrite the plugin record's delivered 0.8.2 evidence or take over plugin implementation.
-
-Reference: `skills/herdr-orch/scripts/src/herdr_orch/herdr.clj` minimum-version and preflight!; `skills/herdr-orch/scripts/test/fixtures/fake-herdr`; `skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj`; `design/log/2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org` active scope/acceptance/decision and scaffold-task requirements. Keep fixture changes and tracked-reference updates in this task; confirm the status envelope fields against the selected Herdr source before parsing them.
-
 ** DONE Refresh the upstream-managed Pi state integration :herdr_orch:
 CLOSED: [2026-09-17 Thu 20:21]
 :PROPERTIES:
@@ -272,18 +191,6 @@ CLOSED: [2026-09-17 Thu 20:21]
 - State "STARTED" from "TODO" [2026-09-17 Thu 19:50]
 - State "DONE" from "STARTED" [2026-09-17 Thu 20:21]
 :END:
-Acceptance criteria:
-- pi/extensions/herdr-agent-state.ts matches its recorded upstream revision verbatim.
-- Isolated socket checks demonstrate TUI session identity reporting.
-- Isolated socket checks demonstrate TUI working/idle state reporting.
-- RPC contexts emit no session identity reports, even when hasUI is true.
-- RPC contexts emit no lifecycle reports, even when hasUI is true.
-- Reload/session-switch checks exercise the upstream root-session and active-agent gates.
-- The README distinguishes the managed refresh from unresolved native-prompt/listener work.
-- Must not: hand-patch the managed file, rely on private Pi internals, or claim listener disposal is fixed merely by refreshing upstream.
-
-Reference: `pi/extensions/herdr-agent-state.ts`; reviewed upstream Herdr commit 065ef9d6a531c49fb8bee7e818ef837065b21ee9, managed integration revision 9. Use the installed Pi 0.85.1 ExtensionAPI documentation and a new colocated test file with a disposable socket; record the actual fetched revision and keep custom test code outside the managed file.
-
 ** DONE Align model contract tests and documentation with shipped defaults :herdr_orch:
 CLOSED: [2026-09-17 Thu 20:21]
 :PROPERTIES:
@@ -296,18 +203,6 @@ CLOSED: [2026-09-17 Thu 20:21]
 - State "STARTED" from "TODO" [2026-09-17 Thu 19:50]
 - State "DONE" from "STARTED" [2026-09-17 Thu 20:21]
 :END:
-Acceptance criteria:
-- default-config-content-contract expects the current canonical model rows.
-- It expects the current alias rows.
-- It independently asserts the configured weight-to-harness translations.
-- Floating aliases are checked against their current canonical targets.
-- The contract Model resolution table agrees with subagents/config.edn.
-- The contract accurately states whether documentation itself is tested or reviewed.
-- A focused cli-test run passes this contract test without weakening translation assertions.
-- Must not: change current model defaults or persona/trait files to recover old expectations.
-
-Reference: `skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` default-config-content-contract; `skills/herdr-orch/subagents/config.edn`; `skills/herdr-orch/scripts/docs/contract.md` Model resolution. Replace the obsolete migration-era old-flat-table comparison with independent current expected values; retain meaningful legacy alias checks where those aliases still exist.
-
 ** DONE Validate the integrated Herdr maintenance changes :herdr_orch:
 CLOSED: [2026-09-17 Thu 20:21]
 :PROPERTIES:
@@ -327,24 +222,8 @@ CLOSED: [2026-09-17 Thu 20:21]
 - State "STARTED" from "TODO" [2026-09-17 Thu 20:21]
 - State "DONE" from "STARTED" [2026-09-17 Thu 20:21]
 :END:
-Acceptance criteria:
-- A fresh bb test-clojure run covers the changed herdr-orch namespaces and records its exit status.
-- The new TypeScript adapter and managed-integration checks pass under the existing installed tooling.
-- A live preflight records measured Herdr client/server versions of at least 0.9.1 before allocating smoke panes.
-- Controlled smoke confirms default prompt waiting on a disposable child.
-- Controlled smoke confirms explicit no-wait behaviour on that child.
-- Controlled smoke confirms explicit split targeting without unintended focus changes.
-- Controlled smoke confirms no-publication retirement of a settled disposable child without restarting it.
-- The retained pane is explicitly cleaned up after the retirement assertion.
-- Smoke operations have outer time bounds and cleanup records.
-- The record maps validation evidence to its acceptance checklist; skipped checks remain explicit.
-- Must not: use the planner launch as validation evidence or mutate unrelated panes/worktrees.
-- Must not: silently upgrade or restart the operator's runtime; an insufficient floor blocks live validation until the owner upgrades it.
-
-Reference: `bb.edn` test-clojure and smoke-subagent; `skills/org-tasks/scripts/test/org_tasks/test_runner.clj` namespace discovery; `skills/herdr-orch/scripts/src/herdr_orch/smoke.clj`. Reuse the guarded smoke entry point where applicable; keep targeted probes under the repository .tmp directory and retain only durable evidence in this record.
-
 * Implementation
-Delivered 2026-09-17 against =f2c4a14= (uncommitted; commit is the parent's decision). Recheck of upstream provenance at implementation time confirmed Herdr =v0.9.1= = =065ef9d6a531c49fb8bee7e818ef837065b21ee9= (tag object =8544776=) and installed Pi 0.85.1 (=ctx.mode= present in its =ExtensionContext= type).
+Delivered 2026-09-17 against =f2c4a14=, committed as =f64bf68= .. =642624c=. Recheck of upstream provenance at implementation time confirmed Herdr =v0.9.1= = =065ef9d6a531c49fb8bee7e818ef837065b21ee9= (tag object =8544776=) and installed Pi 0.85.1 (=ctx.mode= present in its =ExtensionContext= type).
 
 - Version gate :: =herdr/preflight!= reads =herdr status --json= once and judges =.client.version= and =.server.version= (field shapes confirmed in =src/cli/status.rs= at the reviewed commit) against =[0 9 1]= independently. =herdr/version= (the =--version= parse) is gone; the fixture's =--version= branch became a =status= branch driven by =FAKE_HERDR_CLIENT_VERSION= / =FAKE_HERDR_SERVER_VERSION= (=null= = no server) / =FAKE_HERDR_STATUS_BROKEN=.
 - Raw passthrough fidelity :: =herdr/prompt!= gained an option arity (=:wait :until :timeout=) that puts every wait flag on the one =agent prompt= call and omits =--timeout= when none is given; the two-arity delegation call is unchanged and every delegation site still uses it. =herdr/split!= takes =:pane= and =:focus= (default caller pane, =--no-focus=); =caller-rect!= takes an optional source pane. =oh agent start= validates =--kind= as nonblank only; the Pi =AgentKindEnum= became an open =minLength 1= string with a trim check before =exec=. Pi =herdr_agent prompt= defaults =wait= to true and refuses =until=/=timeout= with =wait=false=; =herdr_layout pane_split= passes =pane= and =focus=.
@@ -352,7 +231,8 @@ Delivered 2026-09-17 against =f2c4a14= (uncommitted; commit is the parent's deci
 - Managed Pi integration :: =pi/extensions/herdr-agent-state.ts= is byte-identical (sha256 =2c5272d7...=) to =src/integration/assets/pi/herdr-agent-state.ts= at the reviewed commit, revision 9. Revision 6 -> 9 diff: =ctx.mode !== "tui"= replaces =hasUI !== true=, Windows-aware absolute-path check, and the =session_shutdown= / =pane.release_agent= handler is removed upstream. Tests live in =pi/extensions/test/herdr-agent-state.test.ts= (a =.test.ts= at the extensions root would be auto-loaded as an extension).
 - Vendored skill and licence :: =gh skill install ogulcancelik/herdr herdr@v0.9.1 --dir skills/ --force= (provenance =refs/tags/v0.9.1=, tree =6985a5e8= = =git rev-parse v0.9.1^{commit}:skills/herdr=). Body matches upstream apart from the installer's frontmatter re-serialisation. =skills/herdr/LICENSE= is the upstream Apache-2.0 text, sha256 =c71d239d...= matching =raw.githubusercontent.com= at the commit; the installer neither refreshes nor removes such a sibling, which =skills/README.org= now records.
 - Model contract :: =default-config-content-contract= asserts =:models= and =:aliases= against hand-written current rows (8 canonical, 20 aliases; =heavy= -> =anthropic/claude-fable-5-1= / =fable= / =gpt-6-astra=), the weight translations, and floating aliases including =gpt-astra=; the retired =claude-fable-5= is asserted to pass through. contract.md's model table was corrected and its claim that the test asserts the documentation table was replaced with the accurate review-only statement.
-- Docs :: contract.md gained =Start and prompt outcomes= (Herdr codes =agent_not_ready=, =agent_start_failed=, =agent_kind_mismatch=, =agent_name_not_found=, =timeout=, =agent_blocked=, =agent_prompt_stalled=, verified in =src/cli/agent.rs= and =src/cli/spec.rs=) linked from Preconditions, Placement, Spawn gating, Poke, Continue and Parent push. The plugin record's active minimum-version requirements now say 0.9.1; its delivered 0.8.2 evidence lines are untouched. =TASKS.org= line "herdr-orch currently requires Herdr 0.8.2 or later" was left alone: the file was dirty with another actor's edits and outside this record's declared scope.
+- Docs :: contract.md gained =Start and prompt outcomes= (Herdr codes =agent_not_ready=, =agent_start_failed=, =agent_kind_mismatch=, =agent_name_not_found=, =timeout=, =agent_blocked=, =agent_prompt_stalled=, verified in =src/cli/agent.rs= and =src/cli/spec.rs=) linked from Preconditions, Placement, Spawn gating, Poke, Continue and Parent push. The plugin record's active minimum-version requirements now say 0.9.1; its delivered 0.8.2 evidence lines are untouched. =TASKS.org='s "herdr-orch currently requires Herdr 0.8.2 or later" was raised to 0.9.1 at closeout, once the concurrent edits it sat beside were resolved.
+- Post-review repairs :: Two independent reviewers (=claude-fable=, =gpt-6-astra=) returned the same two findings against the pre-commit tree. =stopped-process-evidence!= now reads pane liveness three ways via =pane-absence= (=:present= / =:absent= / =:unknown=) and refuses =:unknown=; only =pane_not_found= yields =pane-absent=. The fake-Herdr fixture gained a per-pane =get-error= marker for a lookup that fails without proving absence. The extension test gate is the second repair.
 - Aborted-round provenance :: The incorporated report reproduced the deadlock with worker-cd1dbbca, earlier round cd1dbbca-e93c-4e12-b69a-02a093cae122 and newer round 73ec4d3a-8e25-4603-85ac-1e260234af7d during the prose-style evaluation. Earlier close refused an uncaptured newer round; newer prune refused a present named child. Poke recovered by resuming the agent, contrary to abandonment intent. Existing captured-only abandonment is prior art, not a fix for that report.
 - Documentation provenance :: The incorporated task's 2026-08-27 amendment records removal of dispatch retry/verification in 4741d59. Its old installed-version observation remains historical; it does not constrain the new floor.
 
@@ -367,4 +247,6 @@ Live smoke 2026-09-17 20:16--20:18 IST, from delegated pane =w3:pCZ=, evidence u
 - Prompt waiting :: =oh agent start smoke-a599 --kind pi --pane w3:pD1= idle in 4 s; =oh agent prompt ... --wait --timeout 120000= returned after 2426 ms with the reply =OK= visible in =agent read=; the same prompt without =--wait= returned in 418 ms and a following =oh agent wait= settled it with =SECOND= visible only afterwards.
 - No-publication retirement :: =oh task start scout= (task =bd37f387-d8e1-40b6-a8fc-9a9ed5f06c95=, pane =w3:pD3=, split placement below root) replied =READY=, settled idle, 0 result items; =oh task close bd37f387... --abandon= returned =abandoned= / =pane-left-to-operator= / =publication none= / evidence =settled idle= / =pane-owner operator= in 135 ms; ledger shows =:closed-at=, =:pane-abandoned=, =:abandoned-unpublished=, no =:captured-at=; the scout was still idle at =w3:pD3= at the same revision afterwards (not restarted, no input sent).
 - Cleanup :: =oh pane close= on =w3:pD2=, =w3:pD3=, =w3:pD1=; final layout is =w3:pCZ= alone and =agent list= (9 agents, positive control) shows neither =smoke-a599= nor =scout-bd37f387=.
-- Skipped :: the Pi =herdr_agent= tool was not exercised live because the running session had loaded the pre-change extension; Pi -> oh argv is covered by the colocated TypeScript test. Publish-after-retirement, the blocked/working refusals and the lock race were exercised only in fake-Herdr tests, not live. The =TASKS.org= 0.8.2 mention is a documented leftover, not a check.
+- Skipped :: the Pi =herdr_agent= tool was not exercised live because the running session had loaded the pre-change extension; Pi -> oh argv is covered by the colocated TypeScript test. Publish-after-retirement, the blocked/working refusals and the lock race were exercised only in fake-Herdr tests, not live.
+
+Closure validation (root, independent of the implementing child): =scripts/check.sh= exit 0 on the pre-commit tree and again at =642624c= (closeout run, record edits aside), with all eight =pi/extensions/*/test.sh= suites listed. The =pane-absence= repair has its own negative control -- reverted to the =catch=-all in a throwaway copy, =herdr-orch.cli-test= reports 3 failures and the abandon succeeds with =evidence.kind=pane-absent=, reproducing the reviewers' finding; restored, 281 tests / 2317 assertions / 0 failures. The check.sh loop was controlled against a fixture whose one suite exits 1 (loop exits 1).

@@ -138,7 +138,6 @@ Approved plan; execution requires a separate assignment after the Herdr maintena
 :PROPERTIES:
 :CUSTOM_ID: b4c63339-fae8-4b0c-8c7c-b8804be0f815
 :CREATED: [2026-09-17 Thu 16:43]
-:BLOCKED-BY: task:561270b1-e372-47a7-9173-bd966c4204ae
 :END:
 :LOGBOOK:
 - Created [2026-09-17 Thu 16:43]
@@ -209,7 +208,6 @@ Files/reference: `skills/herdr-orch/subagents/worker.md` Engineering rules and t
 :PROPERTIES:
 :CUSTOM_ID: d185837c-0405-4583-96c6-e140b6271209
 :CREATED: [2026-09-17 Thu 16:43]
-:BLOCKED-BY: task:561270b1-e372-47a7-9173-bd966c4204ae
 :END:
 :LOGBOOK:
 - Created [2026-09-17 Thu 16:43]

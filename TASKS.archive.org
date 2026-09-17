@@ -3471,3 +3471,20 @@ CLOSED: [2026-08-27 Thu 14:21]
 This looks like a very nice exploratory/learning tool for Clojure.
 Not sure it has a role here, but just catching the reference for now as an aide memoire....
 https://github.com/paintparty/jus
+
+** DONE herdr-orch improvements 260917 :herdr_orch:
+CLOSED: [2026-09-17 Thu 22:08]
+:PROPERTIES:
+:CUSTOM_ID: 561270b1-e372-47a7-9173-bd966c4204ae
+:CREATED: [2026-09-17 Thu 15:40]
+:STARTED: [2026-09-17 Thu 15:41]
+:ARCHIVED: [2026-09-17 Thu 22:08]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-09-17 Thu 15:40]
+- State "STARTED" from "TODO" [2026-09-17 Thu 15:41]
+- State "DONE" from "STARTED" [2026-09-17 Thu 22:08]
+:END:
+#+IMPORT: [[plan:2026-09-17-herdr-orch-improvements-260917.org]]
+Plan the improvements identified in the Herdr 0.8.2 to 0.9.1 and Pi 0.84.2 to 0.85.1 API review. Cover adapter fidelity, lifecycle integration, model-contract drift, and justified simplifications. Review related backlog tasks for reuse, separate follow-up scope, or evidenced cancellation. Preserve the validated RESULT protocol and safety guards; do not implement changes during planning. Reviewed versions and runtime limits are recorded in skills/herdr-orch/README.org under Last API review.
