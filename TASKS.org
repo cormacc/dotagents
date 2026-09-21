@@ -14,38 +14,28 @@
 * Table of Contents                                       :TOC_2_gh:noexport:
 - [[#explorations][Explorations]]
   - [[#investigate-worktrunk-for-worktree-management-skillherdr-orch][Investigate worktrunk for worktree management... :skill:herdr-orch:]]
-  - [[#started-d-evaluate-jus][STARTED [#D] Evaluate jus]]
-  - [[#review-backlogmd-for-org-tasks-inspiration][Review backlog.md for org-tasks inspiration]]
   - [[#herdr-orch-llm-usage-limit-fallback][herdr-orch: LLM usage limit fallback]]
   - [[#evaluate-rpiv-pi-workflow-setup][Evaluate rpiv-pi workflow setup]]
-  - [[#codebase-intelligence-tool-evaluation][Codebase intelligence tool evaluation]]
   - [[#explore-agent-memory-options][Explore agent memory options]]
 - [[#improvements][Improvements]]
   - [[#ot-move-tuipi-overlay-exposure-and---before--after-ordering][ot move: TUI/pi-overlay exposure and --before/--after ordering]]
   - [[#org-tasks-spec-checks-warn-forever-once-a-records-change-is-committed][org-tasks: spec checks warn forever once a record's change is committed]]
-  - [[#herdr-orch-allow-persona-less-subagents][herdr-orch: allow persona-less subagents]]
   - [[#herdr-plugin-wrapper-for-herdr-orch][herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#traits-re-probe-every-fragment-against-synthetic-non-decaying-scenarios][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
-  - [[#org-tasks-ot-blocker-add-silently-ignores-extra-positional-refs][org-tasks: ot blocker add silently ignores extra positional refs]]
-  - [[#herdr-orch-check-oh-docs-against-herdr-v082-agent-semantics][herdr-orch: check oh docs against herdr v0.8.2 agent semantics]]
-  - [[#vendored-herdr-carries-no-upstream-license][Vendored herdr carries no upstream LICENSE]]
+  - [[#herdr-orch-housekeeping][herdr-orch housekeeping]]
+  - [[#vendored-skill-hygiene][Vendored skill hygiene]]
+  - [[#ot-cli-surface-consistency][ot CLI surface consistency]]
+  - [[#adapt-ponytail-for-use-with-herdr-orchtraits][Adapt ponytail for use with herdr-orch/traits]]
+  - [[#draft-upstream-herdr-pi-native-prompt-and-listener-disposal-proposal][Draft upstream Herdr Pi native-prompt and listener-disposal proposal]]
 - [[#fixes][Fixes]]
 - [[#upstream-issues][Upstream issues]]
-  - [[#find-skills-documents-npx-skills-check-as-read-only-but-it-updates][find-skills documents npx skills check as read-only, but it updates]]
-  - [[#gitlab-cli-skills-glab-schedule-create-rejects---output-json-list-supports-it][gitlab-cli-skills: glab-schedule create rejects --output json (list supports it)]]
 - [[#chores][Chores]]
-  - [[#started-b-simplify-herdr-orch-skill-based-on-upstream-changes][STARTED [#B] Simplify herdr-orch skill based on upstream changes]]
 - [[#agent-feedback][Agent feedback]]
-  - [[#skill-vendoring-improvements][Skill vendoring improvements]]
-  - [[#herdr-orch-support-unmanaged-harness-kinds-herdr-cannot-start-or-detect][herdr-orch: support unmanaged harness kinds herdr cannot start or detect]]
-  - [[#org-tasks-ot-create---parent-cannot-target-a-change-record-plan-task][org-tasks: ot create --parent cannot target a change-record plan task]]
   - [[#self-improvement-persist-agents-metrics-comparison-script][self-improvement: persist AGENTS metrics comparison script]]
-  - [[#probe-the-babashka-default-nrepl-port-before-server-startup][Probe the Babashka default nREPL port before server startup]]
-  - [[#herdr-orch-an-aborted-round-cannot-be-closed-or-pruned][herdr-orch: an aborted round cannot be closed or pruned]]
-  - [[#edit-tool-pre-submit-self-check-for-stray-edits-keys][Edit tool: pre-submit self-check for stray edits[] keys]]
-  - [[#org-tasks-copy-heading-state-tokens-verbatim-during-bulk-newtext-edits][org-tasks: copy heading state tokens verbatim during bulk newText edits]]
   - [[#validate-skillsbb-rejects-a-relative---python-path][validate-skills.bb rejects a relative --python path]]
+  - [[#hand-composed-edit-hazards-instruction-rule-additions][Hand-composed edit hazards: instruction rule additions]]
+  - [[#herdr-orch-a-failed-spawn-round-is-permanent-ledger-residue][herdr-orch: a failed spawn round is permanent ledger residue]]
 
 * Explorations
 
@@ -141,13 +131,18 @@ Follow-ups from the initial `ot move` implementation (task 2a2f5aed): expose mov
 
 Also: `ot move <id> --section <name>` fails `section-not-found` when the section heading does not already exist, so introducing a new section is a hand edit. Decide between a `--create-section` flag and documenting the pre-create requirement in the org-tasks skill. Measured in a scratch project: a move to a new section name errored, while the same move into an existing section succeeded.
 
-** TODO [#A] org-tasks: spec checks warn forever once a record's change is committed
+** DONE [#A] org-tasks: spec checks warn forever once a record's change is committed
+CLOSED: [2026-09-21 Mon 14:00]
 :PROPERTIES:
 :CUSTOM_ID: 2b032279-af18-4f98-9bb7-402c519a6f0f
 :CREATED: [2026-08-11 Tue 16:19]
+:STARTED: [2026-09-21 Mon 13:50]
 :END:
 :LOGBOOK:
 - Created [2026-08-11 Tue 16:19]
+- State "DONE" from "TODO" [2026-09-21 Mon 13:31]
+- State "STARTED" from "DONE" [2026-09-21 Mon 13:50]
+- State "DONE" from "STARTED" [2026-09-21 Mon 14:00]
 :END:
 =ot doctor='s =spec-untouched= and =spec-stale= checks read the current git working tree and index, so they cannot see work that has been committed. Every closed record whose change has landed therefore warns forever: immediately after committing the trait-composition change, a record with both declared specs genuinely updated in that same commit reported two =spec-untouched= warnings.
 
@@ -159,6 +154,10 @@ Acceptance criteria:
 - =references/ot-cli.md= documents the widened basis, replacing "has not been touched in the current git working tree/index".
 - A closed, committed record with correctly updated specs reports no findings; verify with this repository's own trait-composition record.
 Must not: silence the check for open records; infer specs that were never declared.
+
+*RESOLVED* [2026-09-21 Mon] Closed records count spec changes from their own Git history, including initial and merge commits and unquoted filenames. Open records still use the working tree/index. =doctor-closed-record-git-history= in =skills/org-tasks/scripts/test/org_tasks/commands/maintenance_test.clj= exercises both findings through the CLI, with open-record and unrelated-history controls.
+
+Verified the archived =DONE= task's record at =design/log/2026-08-08-herdr-orch-subagent-composition-and-exte.org=: with an empty working-tree changed set, the no-history control reports two =spec-untouched= findings; adding its collected history reports none.
 
 ** TODO [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
 :PROPERTIES:
@@ -203,6 +202,7 @@ Design and ship a shared skill-level helper that bootstraps a local Babashka cop
 :PROPERTIES:
 :CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
 :CREATED: [2026-08-11 Tue 12:23]
+:BLOCKED-BY: task:9e22a186-a3ae-4064-8f1e-7d9c0f1778e3
 :END:
 :LOGBOOK:
 - Created [2026-08-11 Tue 12:23]
@@ -211,8 +211,10 @@ No trait fragment holds a probe result valid for the current repository state. E
 
 Requiring a passing probe was abandoned the same day precisely because of this, so nothing is blocked on this task. It is the durable fix rather than the workaround: a synthetic subject does not decay, and observations may then be stored beside the scaffold without becoming an answer key for the next control arm.
 
+Scope narrowed [2026-09-21 Mon]: =prune= is no longer this task's responsibility. The selected ponytail/traits plan already owns it -- =design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org= § Decisions requires "Replace its spent probe with a synthetic scenario", and its plan task 9e22a186 carries the acceptance criterion "prune has a replacement synthetic probe record". That plan also decides whether =focused= and =no-bullshit= survive at all ("assess reuse or refinement of focused and no-bullshit rather than introduce a generic rigorous synonym"), so this task is blocked on 9e22a186 to avoid writing probes for fragments the plan may delete or rewrite.
+
 Acceptance criteria:
-- Each of =read-only=, =focused=, =no-bullshit=, and =prune= gets a scenario whose artifact under review is synthetic and self-contained -- invented for the probe, not drawn from this repository -- with its flaw documented nowhere the child can read.
+- Each of =read-only=, =focused=, and =no-bullshit= that survives the plan's candidate assessment gets a scenario whose artifact under review is synthetic and self-contained -- invented for the probe, not drawn from this repository -- with its flaw documented nowhere the child can read.
 - Each probe runs treated and control at the same persona and tier through =scripts/run-trait-gate.bb=, with the condition pre-registered before the run, and records the outcome in =traits/<name>/gate.md= including =did not discriminate= where that is what happened.
 - Fragments still flat (=traits/focused.md=, =traits/no-bullshit.md=, =traits/read-only.md=) convert to the directory form when they gain a =gate.md=.
 - Redundancy is triaged before wording: =AGENTS.md= loads in every pi session and already carries directives adjacent to =%no-bullshit= (claims stated only when measured or attributed; an empty result is not evidence of absence; a guard only ever seen pass is unverified). A fragment that shows no marginal effect over that baseline is a deletion candidate, not a rewording candidate -- =%challenge= was removed on exactly that reasoning.
@@ -325,9 +327,8 @@ Evidence:
 :LOGBOOK:
 - Created [2026-08-27 Thu 14:22]
 :END:
-Two open findings about third-party skills that this repository vendors rather than authors, both of which resolve by recording a decision in `skills/README.org` § Vendored rather than by editing a vendored body. Their predecessor task, "Skill vendoring improvements", is archived, so they need a live home.
+Remaining work: the glab upstream report below. =skills/herdr/LICENSE= was added in =7763016=. Ponytail attribution and reference access belong to the selected plan's guidance, workflow and activation tasks.
 
-Grouped 2026-08-27.
 *** TODO gitlab-cli-skills: glab-schedule create rejects --output json (list supports it) :skill_gitlab_cli_skills:
 :PROPERTIES:
 :CUSTOM_ID: 6d205682-bacc-465a-911f-419a76604e6f
@@ -352,13 +353,15 @@ Evidence:
 - `glab schedule create --cron "0 6 * * *" --description "..." --ref develop --output json` -> `Unknown flag: --output.`
 - `glab schedule list --output json` succeeded and returned valid JSON in the same session.
 
-** TODO ot CLI surface consistency :skill_org_tasks:
+** STARTED ot CLI surface consistency :skill_org_tasks:
 :PROPERTIES:
 :CUSTOM_ID: 76553bc5-a6ef-4b26-8948-f9869cdd5b12
 :CREATED: [2026-08-27 Thu 14:22]
+:STARTED: [2026-09-21 Mon 13:31]
 :END:
 :LOGBOOK:
 - Created [2026-08-27 Thu 14:22]
+- State "STARTED" from "TODO" [2026-09-21 Mon 13:31]
 :END:
 Two measured cases where an `ot` command rejects or silently drops input that its own documentation implies is accepted. Both are argument-resolution defects in the command layer rather than protocol defects, so they share a fix site and a test shape.
 
@@ -386,13 +389,18 @@ Out of scope: a dangling or malformed ref is supported protocol state, handled b
 Reported by a planner subagent during task 477fc686; verified against source and by behavioural probe before capture.
 
 Two adjacent defects on the same command, measured in a scratch project: `ot blocker add A task:B` run twice stores the ref twice, so the blocker list carries a duplicate; and a multi-ref call with `--format json` prints `Added blocker: task:...` instead of a JSON envelope, so a machine caller cannot parse what happened. Fix these with the arity check rather than separately.
-*** TODO [#A] org-tasks: ot create --parent cannot target a change-record plan task :skill:org_tasks:
+*** DONE [#A] org-tasks: ot create --parent cannot target a change-record plan task :skill:org_tasks:
+CLOSED: [2026-09-21 Mon 14:00]
 :PROPERTIES:
 :CUSTOM_ID: 009c6056-684a-43c8-b1d7-21ea939d7396
 :CREATED: [2026-08-08 Sat 00:14]
+:STARTED: [2026-09-21 Mon 13:50]
 :END:
 :LOGBOOK:
 - Created [2026-08-08 Sat 00:14]
+- State "DONE" from "TODO" [2026-09-21 Mon 13:31]
+- State "STARTED" from "DONE" [2026-09-21 Mon 13:50]
+- State "DONE" from "STARTED" [2026-09-21 Mon 14:00]
 :END:
 `ot create --parent <id>` does not resolve tasks that live inside an `#+IMPORT:`-linked change-record, though `ot show`, `ot status`, and the other mutators do.
 
@@ -405,6 +413,8 @@ Two candidate resolutions, needing a judgement this task should make rather than
 - Keep `create --parent` scoped to `TASKS.org` deliberately and document `ot create --tasks <record> --section Plan` as the canonical route for a new top-level plan task in an existing change-record; test its non-dry-run behaviour before relying on it.
 
 Raised as a `PROCESS` candidate by a planner subagent during the herdr-orch stream-model work; the parent probed it and found the CLI inconsistency above. Expanded 2026-08-14 after another planner candidate established the record-targeted dry-run path.
+
+*RESOLVED* [2026-09-21 Mon] =create --parent= and =create --after= resolve full IDs or unique prefixes across imports and write to the anchor's source file. Duplicate-linked-issue checks retain both task roots and their imports. The two imported-anchor tests fail against the previous implementation; the unknown-ID test is a passing safety control, not new behaviour.
 
 Additional reports came from `design/log/2026-08-13-move-to-on-demand-gitlab-runners-on-aws.org` and `design/log/2026-08-13-migrate-docker-host-from-amazon-linux-1.org`. Both plans needed hand-authored `* Plan` tasks after attempts to route creation through the linked record failed. Treat these reports as supporting evidence, not as a substitute for the measured case above.
 
@@ -475,27 +485,6 @@ Origin:
 
 Evidence:
 A one-off `.tmp/compare-agent-counts.clj` produced the requested comparison. A later Node verification duplicated the calculation and violated the repository's Babashka-first rule. The user identified the comparison as reusable and requested a durable script.
-
-** TODO [#A] Probe the Babashka default nREPL port before server startup :ext:pi_clojure:skill:clojure:
-:PROPERTIES:
-:CUSTOM_ID: f8dcf8df-d12f-497a-81bd-7a50b654d6f4
-:CREATED: [2026-08-17 Mon 09:11]
-:END:
-:LOGBOOK:
-- Created [2026-08-17 Mon 09:11]
-:END:
-Probe Babashka's default nREPL port before a worker creates a new Herdr pane and starts another server. If the default port accepts an evaluation, reuse that server. This check prevents a failed duplicate start and an unnecessary pane.
-
-Origin:
-- cwd: /Users/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-17 Mon 09:11]
-- sender: human
-
-Evidence:
-`clojure_find_nrepl_port` reported no reachable port. The workflow then created a Herdr tab and ran `bb nrepl-server`. That command failed with `java.net.BindException: Address already in use`. A direct `clojure_eval` probe of port 1667 returned `2` for `(+ 1 1)`, which confirmed that an existing Babashka nREPL server was available.
-
-*EDIT* [2026-08-27 Thu] Partly overtaken, so the remaining scope is narrower than the heading. `skills/clojure/SKILL.md` § REPL-driven workflow now instructs: "If `bb nrepl-server` fails with address-in-use, an nREPL is already listening on the default port without a discoverable port file -- probe that port with an eval and reuse it instead of retrying startup." That covers the recovery path and removes the retry loop, but it is reactive: the wasted pane and the failed start still happen once. What is left is the pre-start check -- probe the default port before creating a pane and starting a server -- plus a decision on where it belongs, since `clojure_find_nrepl_port` reads port files only and is the component that reported no reachable port. Close this instead if the reactive guidance is judged sufficient.
 
 ** TODO validate-skills.bb rejects a relative --python path :project_convention:
 :PROPERTIES:

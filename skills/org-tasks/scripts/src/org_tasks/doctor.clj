@@ -272,12 +272,18 @@
                :location {:file src}}])))))
     (record-content-index tasks record-exclude-paths))))
 
-(defn- check-spec [tasks changed-paths record-exclude-paths]
+(defn- touched-paths
+  "Add per-record history evidence; preserve nil when Git is unavailable."
+  [changed record-history-paths src]
+  (when changed (into changed (get record-history-paths src))))
+
+(defn- check-spec [tasks changed-paths record-exclude-paths record-history-paths]
   (let [changed (when changed-paths (set changed-paths))]
     (vec
      (mapcat
       (fn [[src content]]
-        (let [raw-specs (->> (parser/get-file-keywords content "SPEC")
+        (let [touched (touched-paths changed record-history-paths src)
+              raw-specs (->> (parser/get-file-keywords content "SPEC")
                              (map str/trim)
                              (remove str/blank?)
                              distinct)
@@ -298,7 +304,7 @@
                                    " is not a bare [[proj:PATH]] link")
                      :location {:file src}}]
 
-                   (and (not opted-out?) changed (not (contains? changed path)))
+                   (and (not opted-out?) touched (not (contains? touched path)))
                    [{:code :spec-untouched
                      :severity :warn
                      :message (str "Relevant spec unchanged — intended? " path
@@ -364,13 +370,14 @@
   did change. Skipped for `#+NO_SPEC:`-opted-out records, or when
   `changed-paths`/`spec-linked-paths` is nil (git or link data
   unavailable)."
-  [tasks changed-paths record-exclude-paths spec-linked-paths]
+  [tasks changed-paths record-exclude-paths spec-linked-paths record-history-paths]
   (let [changed (when changed-paths (set changed-paths))]
     (when (and changed spec-linked-paths)
       (vec
        (mapcat
         (fn [[src content]]
-          (let [raw-specs (->> (parser/get-file-keywords content "SPEC")
+          (let [touched (touched-paths changed record-history-paths src)
+                raw-specs (->> (parser/get-file-keywords content "SPEC")
                                (map str/trim)
                                (remove str/blank?)
                                distinct)
@@ -382,7 +389,7 @@
                  (let [path (extract-proj-link-path raw)
                        linked (get spec-linked-paths path)
                        stale-linked (when (seq linked) (filter changed linked))]
-                   (when (and path (seq stale-linked) (not (contains? changed path)))
+                   (when (and path (seq stale-linked) (not (contains? touched path)))
                      [{:code :spec-stale
                        :severity :warn
                        :message (str "Spec " path " declared but unchanged, while linked "
@@ -520,8 +527,9 @@
 (defn- check-record-structure-input [{:keys [tasks record-exclude-paths]}]
   (check-record-structure tasks record-exclude-paths))
 
-(defn- check-spec-input [{:keys [tasks changed-paths record-exclude-paths]}]
-  (or (check-spec tasks changed-paths record-exclude-paths) []))
+(defn- check-spec-input [{:keys [tasks changed-paths record-exclude-paths
+                                 record-history-paths]}]
+  (or (check-spec tasks changed-paths record-exclude-paths record-history-paths) []))
 
 (defn- check-spec-declarations-input [{:keys [protocol-files spec-path-exists]}]
   (or (check-spec-declarations protocol-files spec-path-exists) []))
@@ -535,8 +543,11 @@
 (defn- check-spec-citations-input [{:keys [tasks record-exclude-paths]}]
   (check-spec-citations tasks record-exclude-paths))
 
-(defn- check-spec-stale-input [{:keys [tasks changed-paths record-exclude-paths spec-linked-paths]}]
-  (or (check-spec-stale tasks changed-paths record-exclude-paths spec-linked-paths) []))
+(defn- check-spec-stale-input [{:keys [tasks changed-paths record-exclude-paths
+                                       spec-linked-paths record-history-paths]}]
+  (or (check-spec-stale tasks changed-paths record-exclude-paths spec-linked-paths
+                        record-history-paths)
+      []))
 
 (defn- check-duplicate-ids [{:keys [id-index]}]
   (vec
@@ -701,6 +712,10 @@
                              for the link-template / setupfile checks
     :changed-paths         - optional set of repo-relative git status paths
                              for change-record #+SPEC closeout nudges
+    :record-history-paths  - optional {record-source-path -> #{paths}} map of
+                             paths changed by commits touching that record,
+                             supplied by the CLI layer for closed records only
+                             so a committed record stops warning forever
     :record-exclude-paths  - optional set of protocol task source paths to
                              exclude from change-record checks
     :spec-path-exists      - optional {repo-relative-path -> bool} map,

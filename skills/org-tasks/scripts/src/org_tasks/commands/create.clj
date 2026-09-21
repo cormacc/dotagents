@@ -20,13 +20,14 @@
         ;; insert-task-into-file). Locality and source file follow the anchor.
         rel-id   (:relative-to opts)
         rel-kind (when rel-id (if (contains? #{:child "child"} (:as opts)) :child :sibling))
-        anchor   (when rel-id (resolve-required-id (:tasks (load-context opts)) rel-id opts))
-        anchor-id (when anchor (parser/get-task-id anchor))
-        local?  (if rel-id (boolean (:is-local anchor)) (boolean (:local opts)))
-        file    (cond
-                  (and rel-id (not local?)) (or (:source-path anchor) (:tasks files))
-                  local?                    (:local files)
-                  :else                     (:tasks files))
+        parent-id (if rel-id (when (= :child rel-kind) rel-id) (:parent opts))
+        after-id (if rel-id (when (= :sibling rel-kind) rel-id) (:after opts))
+        ctx-tasks (when (or parent-id after-id) (:tasks (load-context opts)))
+        parent-task (when parent-id (resolve-required-id ctx-tasks parent-id opts))
+        after-task (when after-id (resolve-required-id ctx-tasks after-id opts))
+        anchor (or parent-task after-task)
+        file (or (:source-path anchor)
+                 (if (:local opts) (:local files) (:tasks files)))
         ;; Validate --tag on the same rule `ot tag add` enforces, and pass the
         ;; normalised token through, so create can never write a tag its own
         ;; parser will later ignore (e.g. a hyphenated value read back as no tag).
@@ -35,10 +36,7 @@
         invalid-labels (mapv first (filter (comp nil? second) norm-labels))
         labels  (mapv second norm-labels)
         tokens  (coerce-seq (:linked-issue opts))
-        ;; Mirror the pi extension's `alsoScan` heuristic: when
-        ;; inserting into TASKS.org, also scan TASKS.local.org for
-        ;; duplicate :LINKED_ISSUES: tokens, and vice-versa.
-        also-scan (into (if local? [(:tasks files)] [(:local files)])
+        also-scan (into [(:tasks files) (:local files)]
                         (coerce-seq (:also-scan opts)))
         args    {:project-root project-root
                  :file file
@@ -48,12 +46,8 @@
                  :body (:body opts)
                  :linked-issues tokens
                  :labels labels
-                 :parent-id (if rel-id
-                              (when (= :child rel-kind) anchor-id)
-                              (:parent opts))
-                 :after-id  (if rel-id
-                              (when (= :sibling rel-kind) anchor-id)
-                              (:after opts))
+                 :parent-id (some-> parent-task parser/get-task-id)
+                 :after-id (some-> after-task parser/get-task-id)
                  :id (:id opts)
                  :created-at (:created-at opts)
                  :also-scan also-scan

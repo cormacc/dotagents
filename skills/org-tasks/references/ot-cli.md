@@ -47,6 +47,7 @@ ot show <id-or-selected>  # text mode appends a non-empty task body after metada
                         # JSON/EDN retain the Task.description payload
                         # strict: `show selected` exits 1 when nothing is selected
 ot create "New task" --section Improvements --linked-issue '[[jira:ABC-1]]'
+ot create "New child"   --parent <id>                     # nested under <id>, in the file that owns it
 ot create "New sibling" --relative-to <id> --as sibling   # after <id>, same level
 ot create "New child"   --relative-to <id> --as child     # nested under <id>
                                                           # (derives local/source from the anchor)
@@ -194,9 +195,9 @@ Use `#+NO_SPEC: true` when the project has no durable contract layer, the task i
 `ot doctor` emits these task, change-record, and spec findings:
 
 - `done-with-unchecked-criteria` -- one warn-level finding for each `DONE` task with one or more exact `- [ ] criterion` lines. The message includes the task summary and count. `CANCELLED` and open tasks do not produce this finding.
-- `spec-untouched` -- a `#+SPEC:` path declared in a record has not been touched in the current git working tree/index. A nudge, not a gate; it cannot infer omitted specs that were never declared.
+- `spec-untouched` -- a `#+SPEC:` path declared in a record has not been touched in the current git working tree/index, and -- for a record whose importing task is `DONE`/`CANCELLED` -- was not changed by any commit that touched the record either. The committed-history basis applies only to closed records, so a completed record stops warning once its spec work lands, while an open record must still show that work in the working tree. A nudge, not a gate; it cannot infer omitted specs that were never declared.
 - `spec-value-malformed` -- a `#+SPEC:` value is not a bare `[[proj:PATH]]` link: a plain path, the labelled `[[proj:PATH][label]]` form, or a path that is absolute, escapes the repo root (`..`), or is whitespace-padded.
 - `spec-path-dangling` -- a `#+SPEC:` link in TASKS.org points at a path that does not resolve on disk (file or folder).
 - `inline-path-dangling` -- a single-token Markdown-backtick or Org-verbatim repo-relative path citation in a change-record has an existing first path segment but does not resolve on disk. The check ignores URLs, absolute paths, globs/placeholders, basename-only tokens, source/example blocks, and illustrative roots; it is advisory and existence-only.
 - `spec-citation-untested` -- an `** Acceptance` criterion cites `spec:` (see org-plan SKILL.md § Spec/test citation on acceptance criteria) but no `test:` evidence, and is not under `*** Anti-criteria` (which is its own evidence). A nudge only; a criterion with no citation at all produces no finding.
-- `spec-stale` ("declared-but-stale") -- a `#+SPEC:` path declared in a record is unchanged in the current git working tree/index while code it transitively links to (per the `ot spec list` traversal) did change. A lightweight local echo of SOTA drift gates -- still advisory, never blocking; does not fire when the spec itself also changed, or when nothing it links to changed.
+- `spec-stale` ("declared-but-stale") -- a `#+SPEC:` path declared in a record is unchanged in the current git working tree/index (widened with the record's own commit history for a closed record, as above) while code it transitively links to (per the `ot spec list` traversal) did change. A lightweight local echo of SOTA drift gates -- still advisory, never blocking; does not fire when the spec itself also changed, or when nothing it links to changed.

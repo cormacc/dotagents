@@ -45,6 +45,7 @@ ot list --format json  # result includes resolved root + files.{tasks,local,arch
 ot selected --format json  # selection query: {"selected": null} and exit 0 when nothing is selected
 ot show <id-or-selected>  # text output includes the task body; JSON/EDN retain Task.description
 ot create "New task" --section Improvements --body 'Description text' --tag mytag --linked-issue '[[jira:ABC-1]]'
+ot create "New plan task" --parent <id>  # nests under <id>, including a task inside a change-record
 ot move <id> --parent <dest-id>   # reparent an existing subtree in place (--section <name> lifts it back to top level)
 ot status <id> STARTED   # also works for tasks inside linked plan files
 ot priority <id> B       # set/cycle/clear the priority cookie (--cycle forward|back, --clear)
@@ -75,7 +76,7 @@ Use `--format json` for machine callers. JSON/EDN commands use schema `org-tasks
 
 Preserve backward compatibility when reading or updating existing `TASKS.org` and imported Org files. The skill, `ot` CLI, pi integrations, and JSON/EDN machine envelopes are a closed-loop, repository-internal surface: they may evolve together when the implementation, documentation, and tests change in the same repository change. `org-tasks/v1` is therefore not an external compatibility promise.
 
-ID-accepting commands accept full UUIDs or any unique `:CUSTOM_ID:` prefix of at least four characters (the 8-char prefix shown in `ot list` / `ot scan` is pasteable directly). Mutators such as `status`, `handoff`, `blocker`, `issue`, and `ready` also target tasks inside `#+IMPORT:`-linked plan files and persist to the owning file. Ambiguous values fail with `ambiguous-id` and list candidates.
+ID-accepting commands accept full UUIDs or any unique `:CUSTOM_ID:` prefix of at least four characters (the 8-char prefix shown in `ot list` / `ot scan` is pasteable directly). Mutators such as `status`, `handoff`, `blocker`, `issue`, and `ready` also target tasks inside `#+IMPORT:`-linked plan files and persist to the owning file, as do `create --parent` / `create --after`, which insert into the file that owns the resolved anchor. Ambiguous values fail with `ambiguous-id` and list candidates.
 
 Install and local development: `scripts/README.md`.
 

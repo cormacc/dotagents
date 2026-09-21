@@ -274,6 +274,8 @@ Plan task headings may nest deeper than level 2. Status discipline, including pa
 
 Hand-authored skeletons may omit `:LOGBOOK:` until the first automated status write. Fresh plan-only tasks get UUIDs via `ot uuid` or `ot create`; never invent UUIDs in prose.
 
+To add a task inside an existing change-record, use `ot create <summary> --parent <plan-task-id>`: the anchor resolves through the `#+IMPORT:` link and the new task is written to the record that owns it. For a new top-level task in a record's `* Plan` section, target the record directly with `ot create <summary> --tasks <record-path> --section Plan`.
+
 ## Subtask migration from TASKS.org
 
 When a TASKS.org task already has subtasks and a new proactive change-record is created, `ot record create` moves those child task trees into the record under `* Plan`, preserving their `:CUSTOM_ID:` values and nesting. The parent task keeps the `#+IMPORT:` link and loses the local child task trees, so the graph has one canonical writable node per UUID.

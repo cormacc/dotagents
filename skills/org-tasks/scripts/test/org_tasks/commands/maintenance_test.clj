@@ -1,5 +1,7 @@
 (ns org-tasks.commands.maintenance-test
   (:require [babashka.fs :as fs]
+            [babashka.process :as process]
+            [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [org-tasks.commands.test-util :refer :all]
@@ -180,6 +182,75 @@
         (is (zero? (count (filter #(= "spec-value-malformed" (:code %)) (:findings r)))))
         (is (= 1 (count dangling)) "only the missing path dangles")
         (is (str/includes? (:message (first dangling)) "design/missing.org"))))))
+
+(deftest doctor-closed-record-git-history
+  (with-temp-dir
+    (fn [root]
+      (let [record "design/log/linked-plan.org"
+            git (fn [& args]
+                  (:out (apply process/shell
+                         {:dir root :out :string :err :string
+                          :extra-env {"GIT_CONFIG_NOSYSTEM" "1"
+                                      "GIT_CONFIG_GLOBAL" "/dev/null"}}
+                         (into ["git" "-c" "user.name=Test"
+                                "-c" "user.email=test@example.invalid"] args))))
+            put! (fn [path text] (spit (str (fs/path root path)) text))
+            commit! (fn [] (git "add" ".") (git "commit" "-qm" "fixture"))
+            findings (fn []
+                       (let [{:keys [out exit]}
+                             (run-cli! "--root" root "--format" "json" "doctor")
+                             envelope (json/parse-string out true)]
+                         (is (zero? exit))
+                         (is (true? (:ok envelope)))
+                         (filterv #(#{"spec-untouched" "spec-stale"} (:code %))
+                                  (get-in envelope [:result :findings]))))
+            close! (fn [status]
+                     (is (zero? (:exit (run-cli! "--root" root "--format" "json"
+                                                "status" linked-plan-parent-id status)))))]
+        (git "init" "-q" "-b" "main")
+        (bootstrap-linked-plan-graph! root)
+        (fs/create-dirs (fs/path root "docs"))
+        (fs/create-dirs (fs/path root "src"))
+        (put! "src/api.clj" "old\n")
+        (doseq [spec ["api" "café"]]
+          (put! (str "docs/" spec ".org") "[[file:../src/api.clj]]\n"))
+        (put! record (str "#+SPEC: [[proj:docs/api.org]]\n"
+                          "#+SPEC: [[proj:docs/café.org]]\n" (linked-plan-content)))
+        (close! "DONE")
+        (commit!)
+        (testing "initial commit and unquoted filenames count for a closed record"
+          (is (empty? (findings))))
+        ;; These specs predate their declaration in the record. Neither
+        ;; belongs to its history until explicitly changed with that record.
+        (doseq [spec ["merge" "unrelated"]]
+          (put! (str "docs/" spec ".org") "[[file:../src/api.clj]]\n"))
+        (commit!)
+        (put! record (str "#+SPEC: [[proj:docs/merge.org]]\n"
+                          "#+SPEC: [[proj:docs/unrelated.org]]\n"
+                          (slurp (str (fs/path root record)))))
+        (commit!)
+        (git "branch" "side")
+        (put! "main.txt" "main\n") (commit!)
+        (git "checkout" "-q" "side")
+        (put! "side.txt" "side\n") (commit!)
+        (git "checkout" "-q" "main")
+        (git "merge" "--no-ff" "--no-commit" "side")
+        (put! "docs/merge.org" "Updated\n[[file:../src/api.clj]]\n")
+        (spit (str (fs/path root record)) "\nMerged work.\n" :append true)
+        (commit!)
+        (put! "src/api.clj" "new\n")
+        (testing "merge history counts, unrelated commits do not, for both advisories"
+          (let [fs (findings)]
+            (is (= {"spec-untouched" 1 "spec-stale" 1} (frequencies (map :code fs))))
+            (is (every? #(str/includes? (:message %) "docs/unrelated.org") fs))))
+        (testing "reopening restores working-tree checks despite existing history"
+          (close! "TODO")
+          (is (= {"spec-untouched" 4 "spec-stale" 4}
+                 (frequencies (map :code (findings))))))
+        (testing "cancelled records use the same closed-record evidence"
+          (close! "CANCELLED")
+          (is (= {"spec-untouched" 1 "spec-stale" 1}
+                 (frequencies (map :code (findings))))))))))
 
 (deftest doctor-inline-path-citation-resolution-through-cli
   ;; The doctor stays pure: the command resolves candidate paths through the

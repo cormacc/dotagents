@@ -84,6 +84,29 @@
         (is (= "duplicate-linked-issue" (:code e)))
         (is (= "[[jira:ABC-1]]" (get-in e [:details :conflictingToken])))))))
 
+(deftest create-imported-anchor-preserves-duplicate-checks
+  (doseq [owner-name ["TASKS.org" "TASKS.local.org"]
+          placement [["--parent" linked-plan-child-id]
+                     ["--after" linked-plan-child-id]
+                     ["--relative-to" linked-plan-child-id "--as" "child"]]]
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-linked-plan-graph! root)
+        (let [files (mapv #(str (fs/path root %))
+                         ["TASKS.org" "TASKS.local.org" "design/log/linked-plan.org"])
+              owner (str (fs/path root owner-name))]
+          (spit owner (str (slurp owner)
+                           "\n** TODO Existing clone\n:PROPERTIES:\n"
+                           ":CUSTOM_ID: " (random-uuid) "\n"
+                           ":LINKED_ISSUES: [[jira:ABC-1]]\n:END:\n"))
+          (let [before (mapv slurp files)
+                {:keys [err exit]}
+                (apply run-cli! "--root" root "--format" "json"
+                       "create" "Duplicate" "--linked-issue" "[[jira:ABC-1]]" placement)]
+            (is (= 1 exit))
+            (is (= "duplicate-linked-issue" (:code (parse-json-error err))))
+            (is (= before (mapv slurp files)))))))))
+
 (deftest create-missing-section-errors
   (with-temp-dir
     (fn [root]
@@ -172,13 +195,56 @@
             (run-cli! "--root" root "--format" "json"
                       "create" "Rel child"
                       "--relative-to" "11111111-2222-4333-8444-555555555551"
-                      "--as" "child")
+                      "--as" "child" "--parent" "ignored" "--after" "ignored")
             content (slurp (str (fs/path root "TASKS.org")))]
         (is (zero? exit))
         (is (str/includes? content "*** TODO Rel child"))
         (is (< (str/index-of content "** TODO [#A] First")
                (str/index-of content "*** TODO Rel child")
                (str/index-of content "** STARTED Second")))))))
+
+(deftest create-parent-resolves-a-task-inside-a-linked-record
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (let [plan-path (str (fs/path root "design" "log" "linked-plan.org"))
+            {:keys [out exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "create" "Plan grandchild" "--parent"
+                      (subs linked-plan-child-id 0 8))
+            r (parse-json-result out)]
+        (is (zero? exit))
+        (is (= plan-path (:file r)))
+        (is (str/includes? (slurp plan-path) "*** TODO Plan grandchild"))
+        (is (not (str/includes? (slurp (str (fs/path root "TASKS.org")))
+                                "Plan grandchild")))))))
+
+(deftest create-after-resolves-a-task-inside-a-linked-record
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (let [plan-path (str (fs/path root "design" "log" "linked-plan.org"))
+            {:keys [exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "create" "Between plan children" "--after" linked-plan-child-id)
+            content (slurp plan-path)]
+        (is (zero? exit))
+        (is (< (str/index-of content "** TODO Plan child")
+               (str/index-of content "** TODO Between plan children")
+               (str/index-of content "** TODO Second plan child")))))))
+
+(deftest create-parent-unknown-id-still-errors
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (let [before (slurp (str (fs/path root "TASKS.org")))
+            {:keys [err exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "create" "Orphan" "--parent" "9999abcd")
+            e (parse-json-error err)]
+        (is (= 1 exit))
+        (is (= "unknown-task" (:code e)))
+        (is (= before (slurp (str (fs/path root "TASKS.org")))))))))
 
 (deftest create-parent-honours-tasks-source-override
   (with-temp-dir

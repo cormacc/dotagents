@@ -292,6 +292,47 @@
         (parse-git-status-paths out)))
     (catch Throwable _ nil)))
 
+(defn- commit-paths
+  "Repo-relative paths changed by the commits that touched `rel-path`,
+  or nil when git is unavailable or the file has no history."
+  [project-root rel-path]
+  (try
+    (let [git (fn [opts & args]
+                (let [{:keys [exit out]}
+                      (apply process/shell
+                             (merge {:out :string :err :string
+                                     :continue true :dir project-root}
+                                    opts)
+                             "git" args)]
+                  (when (zero? exit) out)))
+          shas (git nil "log" "--format=%H" "--" rel-path)]
+      (when-not (str/blank? shas)
+        ;; --stdin so each commit is diffed against its own parent; passing
+        ;; several commits as arguments would diff them against each other.
+        ;; --root so an initial commit reports its files instead of nothing.
+        (some-> (git {:in shas} "diff-tree" "--stdin" "--root" "-m"
+                     "--no-commit-id" "--name-only" "-r" "-z")
+                (str/split #"\u0000")
+                (->> (into #{} (remove empty?))))))
+    (catch Throwable _ nil)))
+
+(defn- closed-record-history-paths
+  "History evidence for closed records only; open records still use the
+  working tree. Keys match the imported children's resolved source paths."
+  [project-root tasks]
+  (let [closed? #{"DONE" "CANCELLED"}
+        record-paths (->> (tree/all-tasks tasks)
+                          (filter #(closed? (:status %)))
+                          (mapcat :import-children)
+                          (keep :source-path)
+                          distinct)]
+    (into {}
+          (keep (fn [abs]
+                  (let [rel (str (fs/relativize project-root abs))]
+                    (when-let [paths (commit-paths project-root rel)]
+                      [abs paths]))))
+          record-paths)))
+
 (defn- declared-spec-paths-across-graph
   "Distinct `#+SPEC:` paths declared anywhere in the loaded task graph
   (TASKS.org plus every #+IMPORT:-linked change-record), used to scope
@@ -377,6 +418,7 @@
                     :selected-source-path (:local files)
                     :protocol-files protocol-files
                     :changed-paths (changed-git-paths project-root)
+                    :record-history-paths (closed-record-history-paths project-root tasks)
                     :record-exclude-paths record-exclude-paths
                     :citation-first-segment-exists (:citation-first-segment-exists citation-path-data)
                     :citation-path-exists (:citation-path-exists citation-path-data)

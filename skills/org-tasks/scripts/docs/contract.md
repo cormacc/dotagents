@@ -199,7 +199,7 @@ Options:
 }
 ```
 
-Options include `--section`, `--parent`, `--after`, `--priority`, repeated `--tag`, `--body`, repeated `--linked-issue`, repeated `--also-scan`, `--allow-create-section`, and compatibility/test overrides `--id` and `--created-at`. `--parent` inserts a child under that task; `--after` inserts a sibling after the anchor task. Errors: `section-not-found`, `duplicate-linked-issue`, `path-outside-project`, `empty-summary`.
+Options include `--section`, `--parent`, `--after`, `--priority`, repeated `--tag`, `--body`, repeated `--linked-issue`, repeated `--also-scan`, `--allow-create-section`, and compatibility/test overrides `--id` and `--created-at`. `--parent` inserts a child under that task; `--after` inserts a sibling after the anchor task. Both resolve full IDs or unique prefixes across imports and write to the anchor's source file. `--relative-to` takes precedence over explicit placement. Linked-issue duplicate checks scan the target, both configured task roots (shared and local), their imports, and explicit `--also-scan` files. Errors: `unknown-task`, `ambiguous-id`, `section-not-found`, `duplicate-linked-issue`, `path-outside-project`, `empty-summary`.
 
 ### `ot move <id> (--parent <id> | --section <name>)`
 
@@ -354,6 +354,8 @@ Restores only an archive-resolved exact UUID or unique prefix. It refuses unknow
 ```
 
 `selected-not-found` is read-only guidance: it names `ot select --clear-stale`, which atomically repairs only an unresolved local pointer. `done-with-unchecked-criteria` is a warn-level, read-only finding for each `DONE` task with exact `- [ ] criterion` lines. Its message includes the task summary and unchecked-criterion count. `CANCELLED` and open tasks do not produce this finding. `inline-path-dangling` is an advisory doctor finding for a missing constrained inline file citation in a change-record. Its `location.file` and `location.line` identify the first occurrence of each distinct candidate. Valid or excluded token forms produce no finding.
+
+`spec-untouched` and `spec-stale` use working-tree/index paths. For a record whose importing task is `DONE` or `CANCELLED`, paths changed in commits touching that record also count as spec-maintenance evidence, including initial and merge commits. Open records remain working-tree-only. History is scoped per record and does not change the linked-code trigger for `spec-stale`.
 
 ### `ot section <file> [<section>]`
 

@@ -3488,3 +3488,28 @@ CLOSED: [2026-09-17 Thu 22:08]
 :END:
 #+IMPORT: [[plan:2026-09-17-herdr-orch-improvements-260917.org]]
 Plan the improvements identified in the Herdr 0.8.2 to 0.9.1 and Pi 0.84.2 to 0.85.1 API review. Cover adapter fidelity, lifecycle integration, model-contract drift, and justified simplifications. Review related backlog tasks for reuse, separate follow-up scope, or evidenced cancellation. Preserve the validated RESULT protocol and safety guards; do not implement changes during planning. Reviewed versions and runtime limits are recorded in skills/herdr-orch/README.org under Last API review.
+
+** CANCELLED [#A] Probe the Babashka default nREPL port before server startup :ext:pi_clojure:skill:clojure:
+CLOSED: [2026-09-21 Mon 13:19]
+:PROPERTIES:
+:CUSTOM_ID: f8dcf8df-d12f-497a-81bd-7a50b654d6f4
+:CREATED: [2026-08-17 Mon 09:11]
+:ARCHIVED: [2026-09-21 Mon 13:19]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-08-17 Mon 09:11]
+- State "CANCELLED" from "TODO" [2026-09-21 Mon 13:19]
+:END:
+Probe Babashka's default nREPL port before a worker creates a new Herdr pane and starts another server. If the default port accepts an evaluation, reuse that server. This check prevents a failed duplicate start and an unnecessary pane.
+
+Origin:
+- cwd: /Users/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-08-17 Mon 09:11]
+- sender: human
+
+Evidence:
+`clojure_find_nrepl_port` reported no reachable port. The workflow then created a Herdr tab and ran `bb nrepl-server`. That command failed with `java.net.BindException: Address already in use`. A direct `clojure_eval` probe of port 1667 returned `2` for `(+ 1 1)`, which confirmed that an existing Babashka nREPL server was available.
+
+*EDIT* [2026-08-27 Thu] Partly overtaken, so the remaining scope is narrower than the heading. `skills/clojure/SKILL.md` § REPL-driven workflow now instructs: "If `bb nrepl-server` fails with address-in-use, an nREPL is already listening on the default port without a discoverable port file -- probe that port with an eval and reuse it instead of retrying startup." That covers the recovery path and removes the retry loop, but it is reactive: the wasted pane and the failed start still happen once. What is left is the pre-start check -- probe the default port before creating a pane and starting a server -- plus a decision on where it belongs, since `clojure_find_nrepl_port` reads port files only and is the component that reported no reachable port. Close this instead if the reactive guidance is judged sufficient.
