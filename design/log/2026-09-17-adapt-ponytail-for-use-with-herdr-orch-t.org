@@ -186,6 +186,7 @@ CLOSED: [2026-09-22 Tue 10:55]
 - Created [2026-09-17 Thu 16:43]
 - State "STARTED" from "TODO" [2026-09-22 Tue 10:27]
 - State "DONE" from "STARTED" [2026-09-22 Tue 10:55]
+- State "DONE" from "DONE" [2026-09-22 Tue 11:06]
 :END:
 Acceptance criteria:
 - [X] The packaged simple trait states the agreed scope-preserving engineering stance.
@@ -212,7 +213,8 @@ Acceptance criteria:
 
 Files/reference: `skills/herdr-orch/subagents/worker.md` Engineering rules and the other six packaged personas; `skills/herdr-orch/traits/`; `traits/prune/prompt.md` and gate.md; `skills/herdr-orch/references/traits.md`; `skills/herdr-orch/SKILL.md`; roster guidance in `skills/herdr-orch/README.org`. Add base-analyst and simple under the packaged directories. Follow Validation for uncontaminated probes; the existing read-only Codex runner is not a worker-execution probe.
 
-** STARTED Adapt a safe on-demand complexity-review workflow
+** DONE Adapt a safe on-demand complexity-review workflow
+CLOSED: [2026-09-22 Tue 11:06]
 :PROPERTIES:
 :CUSTOM_ID: d185837c-0405-4583-96c6-e140b6271209
 :CREATED: [2026-09-17 Thu 16:43]
@@ -221,20 +223,21 @@ Files/reference: `skills/herdr-orch/subagents/worker.md` Engineering rules and t
 :LOGBOOK:
 - Created [2026-09-17 Thu 16:43]
 - State "STARTED" from "TODO" [2026-09-22 Tue 10:27]
+- State "DONE" from "STARTED" [2026-09-22 Tue 11:06]
 :END:
 Acceptance criteria:
-- [ ] A local complexity-review skill operates on the declared review range.
-- [ ] Wider-scope auditing requires an explicit assignment.
-- [ ] Each finding identifies a concrete replacement.
-- [ ] Each finding provides evidence that required behaviour is preserved.
-- [ ] The clean synthetic case returns no findings.
-- [ ] The behaviour-breaking shortcut case rejects the tempting reduction.
-- [ ] The unnecessary-wrapper case identifies the compatible simplification.
-- [ ] The workflow permits report/scratch output without repository implementation changes.
-- [ ] The skill is listed in the repository inventory.
-- [ ] Adapted material retains upstream attribution and required licence notices.
-- [ ] Must not: impose a line-count quota.
-- [ ] Must not: replace the correctness-review workflow or broaden advisor authority.
+- [X] A local complexity-review skill operates on the declared review range.
+- [X] Wider-scope auditing requires an explicit assignment.
+- [X] Each finding identifies a concrete replacement.
+- [X] Each finding provides evidence that required behaviour is preserved.
+- [X] The clean synthetic case returns no findings.
+- [X] The behaviour-breaking shortcut case rejects the tempting reduction.
+- [X] The unnecessary-wrapper case identifies the compatible simplification.
+- [X] The workflow permits report/scratch output without repository implementation changes.
+- [X] The skill is listed in the repository inventory.
+- [X] Adapted material retains upstream attribution and required licence notices.
+- [X] Must not: impose a line-count quota.
+- [X] Must not: replace the correctness-review workflow or broaden advisor authority.
 
 Files/reference: create the complexity-review skill under skills/; use `skills/herdr-orch/subagents/reviewer.md` Output and `skills/herdr-orch/subagents/advisor.md` Constraints as role boundaries; update `skills/README.org` Adopted or adapted. Follow this record’s Personas and guidance decision. Test the skill independently; the final activation task owns its integrated base-analyst smoke.
 
@@ -321,10 +324,17 @@ Each fix updates test *expectations* to match new, correct, task-intended behavi
 
 *** Documentation
 - =skills/herdr-orch/references/traits.md=: rewrote the stale "Known gaps" bullet that said every probe scenario is repo-referential and decaying -- =%prune='s original scenario is now retired-and-superseded by a synthetic one (kept in the same =gate.md= as evidence), and =%simple= was synthetic from the start. Added bullets naming =%focused= as the one migrated trailing-suffix trait so far and =%simple= as metadata-only (no inline occurrence anywhere), and correcting the unsupported claim that =%read-only=/=%focused=/=%no-bullshit= have their own dated =gate.md= (they predate that convention; pointed at =README.org='s "two of three failed an adversarial check" prose instead of inventing a section that does not exist).
-- =skills/herdr-orch/SKILL.md=: added =base-analyst= to the frontmatter description's persona list; added a roster paragraph introducing =base-analyst= (remit, leaf-by-default, extension point); updated the trait-token paragraph to describe both inline =%<name>= substitution and frontmatter =traits: [...]= metadata as the two selection mechanisms; added one sentence pointing the orchestrating session itself ("the foreman") at =traits/simple/prompt.md= directly, rather than duplicating the stance in =SKILL.md= prose, satisfying "the foreman's engineering guidance points to the same simple fragment."
+- =skills/herdr-orch/SKILL.md=: added =base-analyst= to the frontmatter description's persona list; added a roster paragraph introducing =base-analyst= (remit, leaf-by-default, extension point); updated the trait-token paragraph to describe both inline =%<name>= substitution and frontmatter =traits: [...]= metadata as the two selection mechanisms; added one sentence pointing the orchestrating session itself ("the foreman") at =skills/herdr-orch/traits/simple/prompt.md= directly (written there as a SKILL.md-relative link), rather than duplicating the stance in =SKILL.md= prose, satisfying "the foreman's engineering guidance points to the same simple fragment."
 - =skills/herdr-orch/README.org=: added an =extends:= paragraph and a one-line roster enumeration (all eight personas) to "Defining subagents"; added a paragraph to "Shared directives: traits" describing frontmatter =traits: [...]= metadata selection alongside the existing inline-token description, naming =worker=/=planner=/=advisor=/=base-analyst= as its current consumers.
 
 Files changed: =skills/herdr-orch/traits/simple/prompt.md= (new), =skills/herdr-orch/subagents/base-analyst.md= (new), =skills/herdr-orch/subagents/worker.md=, =planner.md=, =advisor.md=, =scout.md= (frontmatter =traits:= additions; =worker.md= also drops one duplicate bullet; =scout.md= also drops its trailing inline token), =skills/herdr-orch/references/traits.md=, =SKILL.md=, =README.org=, =skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj=, =launcher_test.clj=. Plus the user-layer (repository-root) =traits/simple/gate.md= (new, gate-only fixture per =references/traits.md='s "the user layer holds local additions and gate-only fragments") and =traits/prune/prompt.md=/=gate.md= (refined/rewritten).
+** d185837c -- on-demand complexity-review skill (2026-09-22)
+Baseline recorded before edits: HEAD =7487f88=, =git status --porcelain= empty. File set kept to =skills/complexity-review/= (new) plus =skills/README.org=; nothing under =skills/herdr-orch/= touched, per the concurrent-task boundary with =9e22a186=.
+
+- New skill =skills/complexity-review/SKILL.md= (first version, single file, no =references/=): reviews a caller-declared range only (diff/branch/named files); a wider audit requires an explicit assignment naming that scope. Read-only and scope-bound, matching the boundaries named in =skills/herdr-orch/subagents/reviewer.md= § Output (evidence-backed, file-located findings, explicit no-issues outcome) and =skills/herdr-orch/subagents/advisor.md= § Constraints (read-only, focused, does not broaden the design); those two files were read only, not edited. Tags reused from upstream's taxonomy (=delete=/=stdlib=/=native=/=yagni=/=shrink=). Section 3 ("Require evidence before you report a finding") is the one new requirement upstream does not have: a candidate without evidence that required behaviour survives is reported as =unknown= and is not counted as a finding, rather than assumed equivalent. No line-count quota or scoring; Boundaries section states the workflow applies nothing and does not replace correctness review or broaden =advisor='s remit.
+- Deliberately not adapted, per this record's Personas and guidance decision: the upstream paired good/bad example rhetoric (its own "EmailValidator"/=moment.js= examples model an unverified reduction as an unqualified win), the =net: -N lines= scoring, and the "ACTIVE EVERY RESPONSE"/=stop ponytail=-style persistent-mode framing -- this is a one-shot on-demand workflow, not a persistent mode. The one-test/no-framework rhetoric ("leaves ONE runnable check ... No frameworks") is also not restated; verification duties stay with the calling role's own contract (=reviewer=/=code-review=, or the caller's own test discipline), not duplicated here.
+- Provenance: a =## Provenance= section in the skill body names DietrichGebert/ponytail, MIT License, v4.10.0 (matching this record's Source baseline and findings entry and re-verified against the installed package's =package.json= at =/home/cormacc/.pi/agent/git/github.com/DietrichGebert/ponytail/=), cites the two upstream skill files adapted from, and states what was dropped/added. No upstream files are copied verbatim and no upstream directory tree is vendored, so a sibling =LICENSE= file was not added -- this follows the =find-skills= precedent in =skills/README.org= § Adopted or adapted (a rewrite naming its source, not a byte-copy), not the § Vendored =LICENSE=-sibling convention, which applies to =gh skill=-managed trees that copy upstream files directly.
+- =skills/README.org= § Adopted or adapted: added one entry for =complexity-review= (alphabetically between =clojure= and =find-skills=) naming the source repository, licence, version, and what was kept/dropped, pointing to the skill's own Provenance section for exact paths.
 
 * Validation
 Planning used source/doc inspection and read-only CLI/state checks. No feature build, production edit, trait-effect probe or live child smoke was run. Behavioural gains remain hypotheses until the planned probes run.
@@ -375,3 +385,14 @@ Recorded in full in =traits/prune/gate.md=. One run via =scripts/run-trait-gate.
 
 *** Not independently re-verified
 =extends:= resolution, malformed-metadata refusal, and the composition ordering/dedup mechanism itself are =b4c63339='s own mechanism and mutation-proofed evidence; this task only exercises them through new persona/trait content (=base-analyst=, =simple= admission on four personas), not through new code paths, so re-proving the guards themselves would duplicate that task's evidence rather than add this task's own.
+** d185837c Validation (2026-09-22)
+This is a prose skill, not a build artefact, so validation is: the packaged frontmatter/format checker, the repository test baseline (as a control that nothing else moved), and manually applying the skill's own workflow to three disposable fixtures, establishing the clean-input control first as required.
+
+- =bb scripts/validate-skills.bb --python "/home/cormacc/dotfiles/agents/.tmp/skill-creator-venv/bin/python3"= (repository =python3= lacks PyYAML, so this reuses an existing local venv from a prior session rather than adding a dependency; this worktree's own =.tmp/= has no venv, hence the absolute path): =17 skills checked, 0 gating failure(s), 1 vendored warning(s)= -- =complexity-review= passes; the sole warning is the pre-existing =gitlab-cli-skills= vendored-frontmatter case, unrelated to this change.
+- =cd skills/herdr-orch/scripts && bb test=: =652 tests, 4361 assertions, 0 failures, 0 errors=, unchanged from the recorded baseline -- confirms this task (markdown/org only) left the herdr-orch/org-tasks suite untouched.
+- Workflow fixtures under =.tmp/complexity-review-fixtures/= (Babashka, run with =bb <file>=), in the control-first order the assignment requires:
+  1. =case3-clean.clj= (clean-input control, run first): =double-value= is one stdlib call already at the ladder's floor. Applying the skill's "Hunt for candidates" step finds no wrapper, no dead flexibility, no shrinkable form -- outcome: *No findings*, matching the skill's stated valid-and-expected clean-input outcome. Exit 0.
+  2. =case1-needless-wrapper.clj= (unnecessary-wrapper case): =clamp-before= hand-rolls a three-branch =cond= that =max=/=min= composition ("stdlib") already does. Evidence required by the skill's section 3: an executable probe over 9 cases spanning both bounds, inside, and a degenerate =lo=hi= range; all 9 match (see script output "case1: all 9 cases match -- replacement preserves behaviour", exit 0) -- outcome: one finding, tag =stdlib=, replacement =(max lo (min hi x))=, evidence attached, matching the skill's required finding shape.
+  3. =case2-behaviour-breaking.clj= (behaviour-breaking shortcut case): the tempting shorter form drops the =zero?= guard a caller depends on (division must return =nil= on =b=0=, not throw). The same evidence step run against this candidate diverges at =[7 0]= (script output "case2 mismatches: ({:input [7 0], :before nil, :after :user/threw})", exit 0) -- per section 3 this is not reported as a safe finding; outcome: the tempting reduction is rejected, matching "Never simplify away ... error handling that prevents data loss" surviving into this adaptation as an evidence requirement rather than a restated rule.
+- Exact fixture inputs, the reviewed "before"/tempting-"after" pairs, and full script output are preserved at =.tmp/complexity-review-fixtures/{case1-needless-wrapper,case2-behaviour-breaking,case3-clean}.clj= for independent re-run.
+- Not exercised in this task: the integrated =base-analyst= live smoke (explicitly owned by =533be6ae=) and any interaction with the not-yet-landed =simple=/=prune= traits or roster changes from the concurrent =9e22a186= task -- this skill does not depend on either.
