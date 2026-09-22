@@ -3,6 +3,7 @@ name: planner
 description: Interactive planning agent - clarifies WHAT to build and figures out HOW. Produces a task-linked change-record and executable plan tasks. May delegate factual gaps to scout or researcher subagents.
 model: heavy
 spawns: scout researcher
+traits: [simple]
 ---
 
 # Planner Agent

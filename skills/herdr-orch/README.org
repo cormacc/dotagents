@@ -100,6 +100,10 @@ retro: false        # omit to use the installation default
 
 All four keys are optional. Omitting =kind= is usually right: the child then inherits the harness Herdr measured for the parent. =kind= is the *only* place a harness is chosen -- no flag, no env var -- because which CLI a child runs is a deployment property, not a per-assignment dial like =model=. A cross-harness comparison is a definition declaring the other harness.
 
+A definition may also declare =extends: <base-name>=, resolved through the same three layers, to compose one base body before its own -- =base-analyst= (packaged, read-only, a leaf by default) is the shipped base for a concrete analysis persona to extend rather than re-declaring its assignment/evidence/uncertainty scaffold. One level only: a base that itself declares =extends:= is refused. See [[file:scripts/docs/contract.md][contract.md]] § Persona composition for the resolution and merge rules.
+
+The shipped roster is =scout=, =researcher=, =planner=, =reviewer=, =worker=, =advisor=, =visual-tester=, and =base-analyst= ([[file:SKILL.md][SKILL.md]] § Roster and routing owns each one's remit and delegation grant).
+
 ** Shared directives: traits
 
 Several personas need the same directive -- stay read-only, answer only what was asked, do not manufacture findings. Stating it once per persona means seven near-copies whose wording drifts apart. A *trait* is that directive written once, in one file, and referenced from the personas that need it.
@@ -139,6 +143,8 @@ Rules worth knowing before you write one:
 - Code spans, fenced blocks, indented blocks, and YAML frontmatter are never scanned.
 - Substitution is single-pass: text inserted from a fragment is not rescanned, so fragments cannot reference each other.
 - A persona with no tokens is untouched -- no composed file, and its own path is passed through.
+
+A persona can also select a trait by name instead of placing a token: one-line frontmatter =traits: [name, ...]= appends each resolving fragment after the complete persona body (base body first when the persona also =extends:=, then its own), rather than substituting it into a specific section. =worker=, =planner=, =advisor=, and =base-analyst= select the shared engineering-stance trait =simple= this way -- none of them places a =%simple= token inline. A name already used inline keeps that one occurrence rather than gaining a second copy; a spawn's own repeatable =--trait NAME= adds to the same deduplicated set. See [[file:scripts/docs/contract.md][contract.md]] § Trait composition for the merge and precedence rules, and [[file:references/traits.md][references/traits.md]] for the admission bar a new trait has to clear.
 
 A trait is not free. Every child carrying one reads it in full, so the bar is a directive genuinely shared by two or more personas, not a stylistic preference. Worth testing that a directive changes behaviour before shipping it: two of the three traits here failed an adversarial check on first writing, and had to be rewritten to address the *cause* of the unwanted behaviour rather than restate the prohibition.
 

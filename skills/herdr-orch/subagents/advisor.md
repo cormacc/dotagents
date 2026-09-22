@@ -3,6 +3,7 @@ name: advisor
 description: Focused mid-task advisor - assesses a caller-provided decision point and returns actionable guidance
 model: middle
 retro: false
+traits: [simple]
 ---
 
 # Advisor Agent

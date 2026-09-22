@@ -1,6 +1,6 @@
 ---
 name: herdr-orch
-description: "Delegate work to Herdr subagents with the in-skill `oh` CLI: spawn, fan out, or run a persona such as scout/researcher/planner/reviewer/worker/advisor/visual-tester, then collect, validate, and close or continue it. `oh` also wraps raw pane/tab/workspace/agent control for orchestration. For direct Herdr use unrelated to delegation, prefer the `herdr` skill. Requires HERDR_ENV=1."
+description: "Delegate work to Herdr subagents with the in-skill `oh` CLI: spawn, fan out, or run a persona such as scout/researcher/planner/reviewer/worker/advisor/visual-tester/base-analyst, then collect, validate, and close or continue it. `oh` also wraps raw pane/tab/workspace/agent control for orchestration. For direct Herdr use unrelated to delegation, prefer the `herdr` skill. Requires HERDR_ENV=1."
 ---
 
 # Herdr subagents
@@ -28,7 +28,11 @@ Definitions are `<name>.md` files discovered in descending precedence: `<git-roo
 
 Unknown personas require listing the roster and asking, not improvising.
 
-A persona body may carry `%<name>` trait tokens, substituted from the trait store at spawn into a composed persona file that the child reads instead of the definition. Five shipped personas rely on tokens for directives whose prose was removed, so substitution is a boundary rather than decoration: an unresolved 3+ character token or a repeated one fails the spawn before any ledger or pane mutation. The store, admission rules, and fragment format are in [references/traits.md](references/traits.md). The mechanics are in [`scripts/docs/contract.md`](scripts/docs/contract.md) § Trait composition.
+`base-analyst` is a directly usable, read-only analysis persona (default model `light`, a leaf by default): spawn it for an assessment that does not fit `scout`'s codebase-only remit or `researcher`'s external-facts remit. It also exists to be `extends:`-ed by a concrete analysis workflow (for example the `complexity-review` skill's persona) rather than repeating its assignment/evidence/uncertainty scaffold each time.
+
+A persona body may carry `%<name>` trait tokens, substituted from the trait store at spawn into a composed persona file that the child reads instead of the definition. Five shipped personas rely on inline tokens for directives whose prose was removed; `worker`, `planner`, `advisor`, and `base-analyst` additionally select traits through one-line frontmatter `traits: [name, ...]` metadata, appended after the persona body instead of substituted in place -- both forms fail the same way on an unresolved or repeated name, before any ledger or pane mutation. The store, admission rules, and fragment format are in [references/traits.md](references/traits.md). The mechanics are in [`scripts/docs/contract.md`](scripts/docs/contract.md) § Trait composition.
+
+When shaping or reviewing a delegated assignment's own scope, apply the same engineering stance every `simple`-selecting persona loads rather than restating it here: [`traits/simple/prompt.md`](traits/simple/prompt.md).
 
 Delegation capability is declared, not assumed: a persona may spawn only what its frontmatter `spawns:` allow-list grants (`planner` grants `scout researcher`; `worker` grants `scout researcher advisor`; every other persona is a leaf), and the value-bearing `--spawns` flag overrides the list for one spawn -- the literal `none` forces a leaf. Nesting is one level absolutely: anything spawned below the root is a leaf regardless of its frontmatter, and a below-root spawn stays blocking and one-at-a-time. `continue` is root-only, so a below-root child is never continued: its spawner captures its result and closes it. The CLI enforces the allow-list and the depth bound mechanically before any ledger or pane mutation.
 

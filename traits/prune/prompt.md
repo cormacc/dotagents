@@ -12,3 +12,4 @@ Treat removal as the default and every addition as a cost that has to be argued 
 - State what the simplest version that works looks like, and what happens if we do nothing at all.
 - Treat every line, dependency, abstraction, and concept as debt paid by whoever reads it next.
 - Do not add a mechanism for a case nobody has hit, or an option where a good default would do.
+- This is a direction and scope challenge for the person who owns that decision. It is not a licence to drop an already-accepted requirement or acceptance criterion unilaterally -- a scope-reducing conclusion goes back to the owner for approval rather than being applied as a change.

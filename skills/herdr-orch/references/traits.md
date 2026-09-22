@@ -81,11 +81,14 @@ Keep unknown tokens fail-fast rather than treating missing trait text as an empt
 
 ## Known gaps
 
-- No fragment holds a probe result valid for the current repository
-  state. Every scenario written so far is repo-referential and therefore
-  decays. `%prune` is simply the one we re-ran and watched
-  lapse. Re-probing with synthetic scenarios is tracked separately and
-  blocks nothing.
+- `%prune`'s original repo-referential scenario decayed once the repository documented its own answer (`traits/prune/gate.md` § Why it lapsed) and has been replaced with a synthetic, self-contained scenario that does not have that failure mode; the retired scenario and both dated results stay in the same file as evidence. `%simple` (admitted 2026-09-22, `skills/herdr-orch/traits/simple/`) was probed synthetic from the start and recorded two non-discriminating runs rather than a pass -- an honest negative is an admissible outcome under § Admission bar above, not a gap to close. A synthetic scenario still needs periodic re-probing as models change; that is ordinary maintenance, not the repo-referential decay this note used to describe.
+- `%read-only`, `%focused`, and `%no-bullshit` predate the `gate.md` convention and carry no recorded probe file of their own.
+  README.org "Shared directives: traits" records that two of the three failed an adversarial check on first writing and were rewritten, but not as a dated, reproducible scenario.
+  A future change to any of them should gain a `gate.md` rather than relying on that prose account.
+- `%focused` is also the packaged store's one migrated trailing-suffix trait so far (`scout`, task 9e22a186): most inline `%<name>` occurrences remain embedded in place, migration applies only to a trailing standalone suffix after a persona's last substantive prose.
+  `worker`, `planner`, `advisor`, and `base-analyst` select `%simple` through metadata alone -- it has no inline occurrence in any of them.
+  See `skills/herdr-orch/scripts/docs/contract.md` § Persona composition/§ Trait composition for the mechanics.
+  Re-probing with synthetic scenarios for the pre-`gate.md` traits is tracked separately and blocks nothing.
 - `prune` collides with existing repository vocabulary:
   `ot blocker prune`, `--prune-blockers`, and the
   org-plan closure-time prune all mean remove stale entries, whereas the

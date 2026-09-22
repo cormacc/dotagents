@@ -924,30 +924,38 @@
     (is (= "w:tab" (:tab-id entry)))))
 
 (deftest persona-system-prompt-dialect
-  ;; Also covers --task-file and --prompt-extra assignment input.
-  (let [{:keys [env log roster dir prompt-file]} (fake-env {}) file (str (fs/path dir "assignment.md"))
+  ;; Also covers --task-file and --prompt-extra assignment input. `worker` carries a
+  ;; trailing `simple` trait (task 9e22a186), so it composes: the native transport reads
+  ;; a composed file under `.tmp/herdr-orch/composed/`, not the raw persona path.
+  (let [{:keys [env log dir prompt-file]} (fake-env {}) file (str (fs/path dir "assignment.md"))
+        raw-worker (slurp (str root "/skills/herdr-orch/subagents/worker.md"))
         _ (spit file "assignment from a file")
         pi-proc (call! env "task" "start" "worker" "--task-file" file "--prompt-extra" "stay read-only")
-        pi-start (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log)))]
+        pi-start (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log)))
+        composed-path (some #(when (str/ends-with? % "-worker.md") %) pi-start)]
     (is (zero? (:exit pi-proc)))
-    (is (some #(str/ends-with? % "/worker.md") pi-start))
-    ;; With no project or home definition, the persona resolves from the launcher-local
-    ;; package rather than requiring a repository-root `subagents/` directory.
-    (is (some #(= (str root "/skills/herdr-orch/subagents/worker.md") %) pi-start))
+    (is (some? composed-path))
+    (is (str/starts-with? composed-path (str dir "/.tmp/herdr-orch/composed/")))
+    ;; With no project or home definition, the composed body still derives from the
+    ;; launcher-local packaged worker persona rather than requiring a repository-root
+    ;; `subagents/` directory.
+    (is (str/includes? (slurp composed-path) raw-worker))
     (is (str/includes? (slurp prompt-file) "assignment from a file"))
     (is (str/includes? (slurp prompt-file) "Additional constraints: stay read-only")))
   ;; Also covers the nested planner label end-to-end: the injected persona gates it.
   ;; Below root the spawn gate requires the target in the injected allow-list.
   (let [{:keys [env log]} (fake-env {"HERDR_ORCH_PERSONA" "planner" "HERDR_ORCH_SPAWNS" "worker" "FAKE_PARENT_AGENT" "claude"})
-        persona-path (str root "/skills/herdr-orch/subagents/worker.md")
-        persona-body (slurp persona-path)
+        raw-worker (slurp (str root "/skills/herdr-orch/subagents/worker.md"))
         claude-proc (call! env "task" "start" "worker" "--model" "sonnet" "--task" "claude persona")
         claude-start (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log)))
+        composed-path (last claude-start)
         rename (first (filter #(= ["pane" "rename"] (vec (take 2 %))) (calls log)))]
     (is (zero? (:exit claude-proc)))
-    (is (= persona-path (last claude-start)))
-    (is (some #(= ["--append-system-prompt-file" persona-path] %) (partition 2 1 claude-start)))
-    (is (not-any? #(= persona-body %) claude-start))
+    (is (str/ends-with? composed-path "-worker.md"))
+    (is (some #(= ["--append-system-prompt-file" composed-path] %) (partition 2 1 claude-start)))
+    ;; The persona body is still never inlined as literal argv text -- only a file path.
+    (is (not-any? #(= raw-worker %) claude-start))
+    (is (str/includes? (slurp composed-path) raw-worker))
     ;; Fake `pane get w:p` reports the parent label `planner-1-model`.
     (is (= ["pane" "rename" "w:child" "planner-1/worker-1-sonnet"] (vec rename)))
     (is (= "planner-1/worker-1-sonnet" (get-in (result claude-proc) [:result :label])))))
@@ -1074,7 +1082,9 @@
       (let [claude-argv (argv-for "claude")]
         (is (some #(= ["--permission-mode" "bypassPermissions"] %) (partition 2 1 claude-argv)))
         ;; The persona transport still follows the bypass args, unbroken by the insertion.
-        (is (some #(and (= "--append-system-prompt-file" (first %)) (str/ends-with? (second %) "/worker.md")) (partition 2 1 claude-argv))))
+        ;; `worker` composes (trailing `simple` trait, task 9e22a186), so the transport
+        ;; receives a composed `-worker.md` file, not the raw persona path.
+        (is (some #(and (= "--append-system-prompt-file" (first %)) (str/ends-with? (second %) "-worker.md")) (partition 2 1 claude-argv))))
       (let [codex-argv (argv-for "codex")]
         (is (some #{"--dangerously-bypass-approvals-and-sandbox"} codex-argv))
         ;; Codex gets no persona flag: prompt-level adoption only, per `persona-args`.

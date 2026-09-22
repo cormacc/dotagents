@@ -121,11 +121,14 @@
           bare (str (fs/path (:dir h) "bare" "x" "y" "scripts"))
           _ (fs/create-dirs (fs/parent bare))
           _ (fs/copy-tree scripts-dir bare)
-          ;; A bare-subtree install ships the complete sibling `subagents/` tree. This
-          ;; fixture deliberately has no project or home persona directory, so both the
-          ;; worker definition and config.edn must resolve from beside the launcher.
+          ;; A bare-subtree install ships the complete sibling `subagents/` and `traits/`
+          ;; trees. This fixture deliberately has no project or home persona or trait
+          ;; directory, so the worker definition, its `simple` trait, and config.edn must
+          ;; all resolve from beside the launcher.
           _ (fs/copy-tree (fs/path root "skills" "herdr-orch" "subagents")
                           (fs/path (fs/parent bare) "subagents"))
+          _ (fs/copy-tree (fs/path root "skills" "herdr-orch" "traits")
+                          (fs/path (fs/parent bare) "traits"))
           bin (str bare "/oh")
           proc (launch! h bin (:caller h))
           argv (bb-argv h)]

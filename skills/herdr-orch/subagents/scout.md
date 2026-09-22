@@ -3,6 +3,7 @@ name: scout
 description: Fast codebase reconnaissance - maps existing code, conventions, and patterns for a task
 model: light
 retro: false
+traits: [focused]
 ---
 
 # Scout Agent
@@ -80,5 +81,3 @@ Only include sections that have substance. Skip empty ones.
 
 - **No builds or tests** -- Leave that for the worker
 - **No implementation decisions** -- Leave that for the planner
-
-%focused
