@@ -85,8 +85,8 @@ Keep unknown tokens fail-fast rather than treating missing trait text as an empt
 - `%read-only`, `%focused`, and `%no-bullshit` predate the `gate.md` convention and carry no recorded probe file of their own.
   README.org "Shared directives: traits" records that two of the three failed an adversarial check on first writing and were rewritten, but not as a dated, reproducible scenario.
   A future change to any of them should gain a `gate.md` rather than relying on that prose account.
-- `%focused` is also the packaged store's one migrated trailing-suffix trait so far (`scout`, task 9e22a186): most inline `%<name>` occurrences remain embedded in place, migration applies only to a trailing standalone suffix after a persona's last substantive prose.
-  `worker`, `planner`, `advisor`, and `base-analyst` select `%simple` through metadata alone -- it has no inline occurrence in any of them.
+- Frontmatter `traits: [...]` metadata is now the roster's selection mechanism: every packaged persona selects its traits that way and none places an inline `%<name>` token.
+  Inline placement remains supported and is the right choice when a directive must land in the section it governs rather than after the body; the substitution path is exercised by tests and by project/home personas, not by the packaged roster.
   See `skills/herdr-orch/scripts/docs/contract.md` § Persona composition/§ Trait composition for the mechanics.
   Re-probing with synthetic scenarios for the pre-`gate.md` traits is tracked separately and blocks nothing.
 - `prune` collides with existing repository vocabulary:

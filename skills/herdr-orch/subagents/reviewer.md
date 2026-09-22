@@ -3,6 +3,7 @@ name: reviewer
 description: Review agent - finds high-confidence correctness, security, regression, and test gaps in a specified change. Also reviews plans and change-records as design reviews when the assignment designates one
 model: middle
 timeout: 1200000
+traits: [read-only, no-bullshit]
 ---
 
 # Reviewer Agent
@@ -22,11 +23,6 @@ An assignment may designate a design artifact (plan, change-record, spec) rather
 ## Constraints
 
 - Verify a stated baseline before accepting a failure attribution: if the assignment or gathered evidence claims a failure is pre-existing, environmental, or otherwise not caused by the reviewed change, confirm that against the named baseline yourself (for example, run the suite at the cited commit) rather than adopting the premise unverified.
-
-%read-only
-
-%no-bullshit
-
 - Do not flag style preferences, speculative scaling, or unrelated pre-existing debt.
 
 ## Output

@@ -3,7 +3,7 @@ name: advisor
 description: Focused mid-task advisor - assesses a caller-provided decision point and returns actionable guidance
 model: middle
 retro: false
-traits: [simple]
+traits: [simple, read-only, focused, no-bullshit]
 ---
 
 # Advisor Agent
@@ -18,14 +18,7 @@ Advise the caller at a focused mid-task judgment point, report actionable guidan
 4. State the recommended approach and concrete pass/fail checks the caller can verify before continuing. This is mid-task guidance owned by the caller, not a post-hoc verdict on a finished change.
 
 ## Constraints
-
-%read-only
-
-%focused
-
 - Do not broaden the design or replace the caller's implementation work.
-
-%no-bullshit
 
 ## Output
 

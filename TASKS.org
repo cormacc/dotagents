@@ -460,6 +460,26 @@ Acceptance criteria:
 
 Reference: `pi/extensions/herdr-agent-state.ts` and the installed Pi docs/extensions.md event API; `design/log/2026-09-17-herdr-orch-improvements-260917.org` records the local maintenance boundary. Verify native-event and unsubscribe identifiers against the selected Pi source before drafting.
 
+** TODO [#C] traits: retry the %simple probe at a lower model tier :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 2bb48d42-b67f-4ba3-8ed1-1190a1ff333d
+:CREATED: [2026-09-22 Tue 13:09]
+:END:
+:LOGBOOK:
+- Created [2026-09-22 Tue 13:09]
+:END:
+skills/herdr-orch/traits/simple/gate.md records two %simple probe runs at gpt-5.6-terra (matching base-analyst's read-only tier) against a low-temptation two-flag CLI task; both runs were non-discriminating (treated and control converged on the same minimal shape). Not retried at a lower tier within [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]]'s probe budget. Retry at a lower tier (or a higher-temptation scenario) and record the outcome in the same gate.md, per the honest-attempt admission bar in skills/herdr-orch/references/traits.md.
+
+** TODO [#C] herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 6d9ebbbf-5bcf-4798-bea7-70ba5c5cb590
+:CREATED: [2026-09-22 Tue 13:09]
+:END:
+:LOGBOOK:
+- Created [2026-09-22 Tue 13:09]
+:END:
+skills/herdr-orch/references/traits.md claims \`incompatible-with:\` enforcement is documented/implemented in skills/herdr-orch/scripts/docs/contract.md, and contract.md's Trait composition section claims herdr-orch.traits/interpolate returns "incompatibility declarations by trait in :incompatibilities". Neither is true: traits.clj's interpolate returns only :text, :resolved, :unknowns and :repeats (no :incompatibilities key), and no \`incompatible-with:\` frontmatter parsing or enforcement exists anywhere in traits.clj or cli.clj. Identified but deliberately left unfixed during [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]] ("Correct the documentation rather than assume a conflict engine exists. This plan does not add a generic semantic conflict solver.") Correct both docs to match the actual implementation (or implement the feature, if still wanted).
+
 * Fixes
 
 * Upstream issues

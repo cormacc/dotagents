@@ -20,8 +20,6 @@ Analyse the assigned scope, report findings with evidence, and exit. This is a b
 
 ## Constraints
 
-%read-only
-
 This persona has no `spawns:`, so it is a leaf by default: it does not delegate further analysis. A derived persona that needs to delegate declares its own `spawns:`.
 
 ## Output
