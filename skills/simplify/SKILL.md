@@ -1,9 +1,9 @@
 ---
-name: complexity-review
+name: simplify
 description: On-demand review for over-engineering and unneeded complexity in a declared range (a diff, branch, or named files) -- distinct from correctness review. Each finding names a concrete behaviour-preserving replacement with evidence, or reports an unknown rather than assuming equivalence. Use when asked to review for over-engineering, find bloat, simplify a change, or spot unnecessary complexity. Wider-scope auditing needs an explicit assignment naming that scope; do not use this for correctness, security, or performance review.
 ---
 
-# Complexity review
+# Simplify
 
 Review the declared range for unneeded complexity and report concrete, evidence-backed simplifications. Do not apply fixes, do not broaden the range, and do not touch correctness, security, or performance -- route those to the `code-review` skill instead.
 

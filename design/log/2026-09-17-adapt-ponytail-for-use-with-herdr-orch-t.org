@@ -26,7 +26,7 @@ Delivered across four plan tasks (`b95b430..dfa3100`, five commits), after the p
 - Composition: one-level =extends=, =traits: [name, ...]=, explicit per-spawn trait selection, deterministic preview, retained launch provenance, and pre-mutation validation. Metadata/per-spawn fragments follow the complete persona body.
 - Roster: migrate only standalone trailing trait blocks to metadata; keep other inline tokens in place. Add base-analyst. Preserve each role's authority, interaction, validation and reporting duties.
 - Policy: add a compact simple trait for worker, planner, advisor and base-analyst; let the foreman load the same canonical guidance when making engineering decisions. Refine prune for explicit scope/design challenge. Extract a useful candidate set from existing personas and Ponytail skills; reuse existing traits before admitting new ones.
-- Workflow: one on-demand complexity-review skill for a named diff or explicitly requested wider scope, usable by base-analyst. Preserve upstream attribution and licence notices for adapted material.
+- Workflow: one on-demand simplify skill for a named diff or explicitly requested wider scope, usable by base-analyst. Preserve upstream attribution and licence notices for adapted material.
 - Activation: replace automatic Ponytail policy incrementally as the hybrid guidance/workflows become usable. Retain upstream skills as reference/comparison material where useful, without duplicate automatic activation. Permanent full-mode opt-in is not a delivery requirement.
 - Contracts: update the relevant spec files above together with their implementation; document the distinction between interactive token expansion and child composition.
 *** Out of scope
@@ -106,7 +106,7 @@ Delivered across four plan tasks (`b95b430..dfa3100`, five commits), after the p
 - simple is engineering stance, not output style: understand affected behaviour, reuse repository facilities, prefer standard library/native/installed capabilities, and make the smallest coherent change that satisfies accepted requirements. Scope-changing simplifications return to the owner for approval. Preserve security, accessibility, data safety, repository conventions and required validation.
 - prune remains a direction/scope challenge, not a worker licence to discard requirements. Replace its spent probe with a synthetic scenario without treating its historical result as current evidence.
 - Extract candidates from the existing persona and Ponytail guidance; rigorous was an example name, not a required trait. For each candidate, name its source passage, real consumer, existing overlap and the prose it would replace. Reuse/refine existing fragments first; admit new ones only under the named-consumer plus honest-probe-attempt contract. A non-discriminating probe is not a demonstrated gain.
-- Keep scout/researcher factual. Keep reviewer focused on correctness/security/regression/test gaps. Keep advisor's mid-task remit. A named complexity-review skill supplies the analyst's optional workflow; it does not broaden the advisor or modify the correctness-review contract.
+- Keep scout/researcher factual. Keep reviewer focused on correctness/security/regression/test gaps. Keep advisor's mid-task remit. A named simplify skill supplies the analyst's optional workflow; it does not broaden the advisor or modify the correctness-review contract.
 - Adapt useful Ponytail review/audit guidance, not its unsafe reduction examples, line-count target, mode persistence or one-test/no-framework rhetoric. Require a concrete replacement that preserves required behaviour; report unknowns rather than assume equivalence.
 
 *** Roster selection mechanism (superseding, 2026-09-22)
@@ -130,7 +130,7 @@ Outcome: Simplicity was EXTRACTED as `simple`. Scope challenge was REFINED in pl
 ** Shipped
 - ADDED one-level persona `extends:` plus additive `traits:`/`--trait` composition, with ledger/preview provenance and a trailing-name grammar refusal -- `skills/herdr-orch/scripts/src/herdr_orch/{core,cli,traits}.clj`.
 - ADDED the `simple` trait (`worker`/`planner`/`advisor`/`base-analyst`) and the `base-analyst` persona; REFINED `prune` in place (no new trait file).
-- ADDED `skills/complexity-review/SKILL.md`, an on-demand, scope-bound review workflow that requires evidence for every finding.
+- ADDED `skills/simplify/SKILL.md`, an on-demand, scope-bound review workflow that requires evidence for every finding. Shipped as `complexity-review`; renamed to `simplify` on 2026-09-22, and this record uses the current name throughout.
 - MODIFIED `pi/settings.json` to disable Ponytail's automatic extension and its `ponytail`/`ponytail-review`/`ponytail-audit` skills; `ponytail-debt`/`ponytail-gain`/`ponytail-help` are unchanged (no replacement, out of scope).
 - MODIFIED all seven declared `#+SPEC:` contracts (`SKILL.md`, `contract.md`, `references/traits.md`, `README.org`, `pi/extensions/traits/README.md`, `skills/README.org`, `README.md`) to document the shipped semantics. Confirmed at closure against `git diff b95b430..dfa3100`: all seven were touched; none was declared and left unchanged.
 
@@ -176,7 +176,7 @@ CLOSED: [2026-09-22 Tue 10:55]
 :END:
 Extracted `simple` (worker/planner/advisor/base-analyst), refined `prune` in place, added `base-analyst`, and migrated `scout`'s trailing `%focused` token to metadata. See ** Acceptance and * Implementation § Roster and traits.
 
-** DONE Adapt a safe on-demand complexity-review workflow
+** DONE Adapt a safe on-demand simplify workflow
 CLOSED: [2026-09-22 Tue 11:06]
 :PROPERTIES:
 :CUSTOM_ID: d185837c-0405-4583-96c6-e140b6271209
@@ -188,7 +188,7 @@ CLOSED: [2026-09-22 Tue 11:06]
 - State "STARTED" from "TODO" [2026-09-22 Tue 10:27]
 - State "DONE" from "STARTED" [2026-09-22 Tue 11:06]
 :END:
-Added `skills/complexity-review/SKILL.md`, an on-demand, scope-bound review workflow requiring evidence for every finding. See ** Acceptance and * Implementation § Complexity-review skill.
+Added `skills/simplify/SKILL.md`, an on-demand, scope-bound review workflow requiring evidence for every finding. See ** Acceptance and * Implementation § Complexity-review skill.
 
 ** DONE Switch normal activation to composed guidance and verify the workflow
 CLOSED: [2026-09-22 Tue 11:51]
@@ -204,7 +204,7 @@ CLOSED: [2026-09-22 Tue 11:51]
 - State "STARTED" from "TODO" [2026-09-22 Tue 11:12]
 - State "DONE" from "STARTED" [2026-09-22 Tue 11:51]
 :END:
-Disabled Ponytail's automatic extension and its `ponytail`/`ponytail-review`/`ponytail-audit` skills in `pi/settings.json`, documented the `#trait`/`%trait` distinction, and ran the integrated `base-analyst` complexity-review smoke. See ** Acceptance and * Implementation § Activation switch.
+Disabled Ponytail's automatic extension and its `ponytail`/`ponytail-review`/`ponytail-audit` skills in `pi/settings.json`, documented the `#trait`/`%trait` distinction, and ran the integrated `base-analyst` simplify smoke. See ** Acceptance and * Implementation § Activation switch.
 
 * Implementation
 ** Composition mechanism (`b4c63339`, `7487f88`)
@@ -223,7 +223,7 @@ Roster migration was trailing-suffix-only: re-inspecting all seven packaged pers
 Adding `simple` made `worker.md` compose for the first time, breaking three tests that had assumed it was a pass-through persona; fixed by asserting composed-file path shape/content instead of raw-path equality, and by adding the packaged `traits/` directory to the bare-subtree deployment fixture (a real gap in the fixture's fidelity to actual deployment shape, exposed by this task, not introduced by it).
 
 ** Complexity-review skill (`d185837c`, `59d394d`)
-New `skills/complexity-review/SKILL.md`: reviews a caller-declared range only (diff/branch/named files); a wider audit needs an explicit assignment naming that scope. Adapted from upstream Ponytail's review/audit skills, keeping the evidence requirement (a candidate without proof that required behaviour survives is reported `unknown`, not counted as a finding) and dropping the paired good/bad example rhetoric, line-count scoring, and persistent-mode framing -- this is a one-shot on-demand workflow. Provenance (source repo, licence, version, what was kept/dropped) is recorded in the skill's own `## Provenance` section and in `skills/README.org` § Adopted or adapted.
+New `skills/simplify/SKILL.md`: reviews a caller-declared range only (diff/branch/named files); a wider audit needs an explicit assignment naming that scope. Adapted from upstream Ponytail's review/audit skills, keeping the evidence requirement (a candidate without proof that required behaviour survives is reported `unknown`, not counted as a finding) and dropping the paired good/bad example rhetoric, line-count scoring, and persistent-mode framing -- this is a one-shot on-demand workflow. Provenance (source repo, licence, version, what was kept/dropped) is recorded in the skill's own `## Provenance` section and in `skills/README.org` § Adopted or adapted.
 
 ** Activation switch (`533be6ae`, `7344cb4`)
 `pi/settings.json`'s `git:github.com/DietrichGebert/ponytail` package entry now excludes `pi-extension/index.js` and the `ponytail`/`ponytail-review`/`ponytail-audit` skills, leaving `ponytail-debt`/`ponytail-gain`/`ponytail-help` enabled (no replacement, explicitly out of scope). `README.org`, `SKILL.md`, and `pi/extensions/traits/README.md` document the `#trait` (foreman request-phrasing convention, resolved to an explicit CLI selection) vs `%trait` (interactive expansion of the *parent's own* input, never a child-targeting mechanism) distinction.
@@ -234,7 +234,7 @@ A middle-tier closeout reviewer, run alongside a light-tier reviewer on the iden
 * Validation
 - Regression suite (`bb test`): 653 tests, 4371 assertions, 0 failures at HEAD (`dfa3100`), up from the 329/2825 pre-work baseline at `b95b430`. Mutation-proofed: the missing-base guard, the base-declares-extends/self-reference guard, the explicit/metadata unknown-trait-name pre-validation, and the trait-name-grammar guard were each temporarily deleted and confirmed to fail for the intended reason (not a broken harness) before being restored.
 - Composition/preview/ledger/continuation behaviour is covered by the herdr-orch test suite (`core_test.clj`, `traits_test.clj`, `cli_test.clj`, `launcher_test.clj`); packaged-store resolution (no project/home shadowing) was independently confirmed against the live repository tree with `oh task run <persona> --print-prompt`, with an unresolved-name positive control proving the probe itself was live.
-- complexity-review's evidence requirement was exercised against three disposable Babashka fixtures, control-first: a clean input (no findings, matching the documented clean-input outcome), a stdlib-replaceable wrapper (one finding, with a 9-case behaviour-match probe as evidence), and a tempting-but-behaviour-breaking shortcut (correctly rejected once the probe diverged at one input, preserving a caller-relied-on guard).
+- simplify's evidence requirement was exercised against three disposable Babashka fixtures, control-first: a clean input (no findings, matching the documented clean-input outcome), a stdlib-replaceable wrapper (one finding, with a 9-case behaviour-match probe as evidence), and a tempting-but-behaviour-breaking shortcut (correctly rejected once the probe diverged at one input, preserving a caller-relied-on guard).
 - Activation, probe-blindness finding: verifying "no full Ponytail injection" by grepping the session transcript for the injected text was a dead end. pi's `forceSystemPrompt` mechanism (`_installAgentForcedPromptProjection`, invoked from a `before_agent_start` handler returning `{systemPrompt: ...}`) splices the forced text into the outgoing request *without ever recording it* in the persisted transcript -- confirmed by forcing `PONYTAIL_DEFAULT_MODE=full` and `/ponytail full` before any settings edit and finding zero occurrences of the injected text in either session's JSON, then reading pi's own `dist/core/agent-session.js` to find out why. The transcript-search probe was abandoned as inconclusive-by-construction (recorded, not quietly dropped) in favour of two independent instruments that observe the real decision point: `DefaultResourceLoader`/`DefaultPackageManager` (pi's own resolution code, run offline against a disposable Node subprocess) showed zero ponytail extensions/skills loaded after the settings edit, with a `pi-anthropic-auth` positive control confirming the probe distinguishes "targeted and disabled" from "everything broke"; and a `.message.sections.skills` diff across two fresh `pi --print` sessions showed exactly `ponytail`/`ponytail-review`/`ponytail-audit` disappear from what the model is shown, with `ponytail-debt`/`ponytail-gain`/`ponytail-help` unchanged in both. The documented `--skill`/`--extension` reference/comparison path was exercised, not just written, and resolves.
 - `%simple` probe (`traits/simple/gate.md`): two runs against base-analyst's tier (gpt-5.6-terra, a plain assignment and a bait-clause variant) did not discriminate treated from control -- both converged on the same minimal, non-abstracted shape. Recorded honestly as a non-discriminating attempt, not a demonstrated gain; not retried at a lower tier within this task's probe budget (follow-up task 2bb48d42).
 - `%prune` probe (`traits/prune/gate.md`): one run against a synthetic, self-contained scenario (replacing a retired repo-referential one, kept as historical evidence) discriminated cleanly between treated and control: 3 named removals/refusals vs 0, and 6 of 8 replacement-tagged additions vs 1 of 18.
