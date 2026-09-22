@@ -241,34 +241,38 @@ Acceptance criteria:
 
 Files/reference: create the complexity-review skill under skills/; use `skills/herdr-orch/subagents/reviewer.md` Output and `skills/herdr-orch/subagents/advisor.md` Constraints as role boundaries; update `skills/README.org` Adopted or adapted. Follow this record’s Personas and guidance decision. Test the skill independently; the final activation task owns its integrated base-analyst smoke.
 
-** TODO Switch normal activation to composed guidance and verify the workflow
+** DONE Switch normal activation to composed guidance and verify the workflow
+CLOSED: [2026-09-22 Tue 11:51]
 :PROPERTIES:
 :CUSTOM_ID: 533be6ae-0650-472c-8c1d-fd7957d77a66
 :CREATED: [2026-09-17 Thu 16:43]
 :BLOCKED-BY: task:9e22a186-a3ae-4064-8f1e-7d9c0f1778e3
 :BLOCKED-BY+: task:d185837c-0405-4583-96c6-e140b6271209
+:STARTED: [2026-09-22 Tue 11:12]
 :END:
 :LOGBOOK:
 - Created [2026-09-17 Thu 16:43]
+- State "STARTED" from "TODO" [2026-09-22 Tue 11:12]
+- State "DONE" from "STARTED" [2026-09-22 Tue 11:51]
 :END:
 Acceptance criteria:
-- [ ] An isolated fresh Pi startup has no full Ponytail injection.
-- [ ] Normal skill discovery does not advertise the upstream core coding trigger.
-- [ ] Hybrid guidance/workflows are available before their automatic Ponytail counterparts are disabled.
-- [ ] Retained upstream reference/comparison material has a documented access path.
-- [ ] Local complexity-review routing does not also activate the unadapted review/audit policy.
-- [ ] Documentation explains #trait shorthand as a foreman convention.
-- [ ] Documentation distinguishes interactive %trait expansion from child composition.
-- [ ] The integrated base-analyst complexity-review smoke stays read-only.
-- [ ] The integrated smoke returns a valid published result.
-- [ ] Startup evidence records the actual effective resources rather than settings alone.
-- [ ] The replacement/comparison choices are recorded for the migrated workflows.
-- [ ] Must not: edit the upstream package cache.
-- [ ] Must not: disable unrelated authentication extensions.
-- [ ] Must not: hand-patch the upstream-managed state integration.
-- [ ] Must not: upgrade or restart the operator's runtime during validation.
-- [ ] Must not: introduce a new Pi task interface or lifecycle store.
-- [ ] Must not: close the top-level task.
+- [X] An isolated fresh Pi startup has no full Ponytail injection.
+- [X] Normal skill discovery does not advertise the upstream core coding trigger.
+- [X] Hybrid guidance/workflows are available before their automatic Ponytail counterparts are disabled.
+- [X] Retained upstream reference/comparison material has a documented access path.
+- [X] Local complexity-review routing does not also activate the unadapted review/audit policy.
+- [X] Documentation explains #trait shorthand as a foreman convention.
+- [X] Documentation distinguishes interactive %trait expansion from child composition.
+- [X] The integrated base-analyst complexity-review smoke stays read-only.
+- [X] The integrated smoke returns a valid published result.
+- [X] Startup evidence records the actual effective resources rather than settings alone.
+- [X] The replacement/comparison choices are recorded for the migrated workflows.
+- [X] Must not: edit the upstream package cache.
+- [X] Must not: disable unrelated authentication extensions.
+- [X] Must not: hand-patch the upstream-managed state integration.
+- [X] Must not: upgrade or restart the operator's runtime during validation.
+- [X] Must not: introduce a new Pi task interface or lifecycle store.
+- [X] Must not: close the top-level task.
 
 Files/reference: `pi/settings.json` packages; `README.md` editable installation guidance; `pi/extensions/traits/README.md`; `skills/herdr-orch/README.org` and `skills/herdr-orch/SKILL.md` request/routing guidance. Re-read live settings and the concurrent README before editing. A root orchestrator must run live delegation checks outside a worker’s granted spawn capability; do not bypass the capability guard. Record evidence in this change-record; leave parent closeout to the owner.
 
@@ -336,6 +340,44 @@ Baseline recorded before edits: HEAD =7487f88=, =git status --porcelain= empty. 
 - Provenance: a =## Provenance= section in the skill body names DietrichGebert/ponytail, MIT License, v4.10.0 (matching this record's Source baseline and findings entry and re-verified against the installed package's =package.json= at =/home/cormacc/.pi/agent/git/github.com/DietrichGebert/ponytail/=), cites the two upstream skill files adapted from, and states what was dropped/added. No upstream files are copied verbatim and no upstream directory tree is vendored, so a sibling =LICENSE= file was not added -- this follows the =find-skills= precedent in =skills/README.org= § Adopted or adapted (a rewrite naming its source, not a byte-copy), not the § Vendored =LICENSE=-sibling convention, which applies to =gh skill=-managed trees that copy upstream files directly.
 - =skills/README.org= § Adopted or adapted: added one entry for =complexity-review= (alphabetically between =clojure= and =find-skills=) naming the source repository, licence, version, and what was kept/dropped, pointing to the skill's own Provenance section for exact paths.
 
+** 533be6ae -- switch normal activation to composed guidance (2026-09-22)
+Baseline recorded before edits: HEAD =59d394d=, =git status --porcelain= showed only this record's own prior lifecycle edits (task state to STARTED). =bb test= at this HEAD (recorded independently below, in Validation) was already the =d185837c= baseline (652 tests / 4364 assertions / 0 failures); this task added no source-code changes, only =pi/settings.json= plus four documentation files, so that suite is a control that nothing else moved, not new coverage.
+
+Scope, per Division of work: the =pi/settings.json= resource-selection edit, =README.md=, =pi/extensions/traits/README.md=, =skills/herdr-orch/README.org=, and =skills/herdr-orch/SKILL.md=. Did not touch =pi/extensions/herdr-agent-state.ts=, the ponytail package cache, or any Clojure source. Did not attempt the integrated =base-analyst= complexity-review smoke -- that requires spawning a Herdr subagent, a capability this worker role is not granted; it is reported to the root orchestrator as remaining work below, not worked around.
+
+*** How pi resolves a package resource filter (verified from source, not assumed)
+Pi's own installed package (=@earendil-works/pi-coding-agent= 0.86.1, resolved from the running =pi= binary) ships readable (non-minified) =dist/= sources. Read =dist/modes/interactive/components/config-selector.js= (the =pi config= TUI's =togglePackageResource=/=getPackageResourcePattern=) and =dist/core/package-manager.js= (=applyPackageFilter=, =matchesAnyExactPattern=, =collectPackageResources=) rather than guessing the settings shape: a =packages[]= entry may be an object =\{source, extensions: [...], skills: [...]\}= instead of a bare source string; a ="-<pattern>"= entry force-excludes by exact match against the resource's path relative to the package root (=rel=), or -- for a skill's =SKILL.md= specifically -- against its containing directory's relative path (=parentRel=); everything not named stays enabled by default (an empty/absent array is not the same as an all-exclude filter). This is the exact mechanism =pi config='s own TUI writes; the settings edit here reproduces that shape by hand rather than by running the interactive TUI against the operator's live global settings file.
+
+For the installed ponytail package (=package.json='s ="pi": \{"extensions": ["./pi-extension/index.js"], "skills": ["./skills"]\}=), this resolves to patterns ="pi-extension/index.js"= for the extension and ="skills/<name>"= (=parentRel=) for each of the six skill directories.
+
+*** The edit
+=pi/settings.json='s =packages[]= entry for =git:github.com/DietrichGebert/ponytail= (previously a bare string) becomes:
+#+begin_src json
+{
+  "source": "git:github.com/DietrichGebert/ponytail",
+  "extensions": ["-pi-extension/index.js"],
+  "skills": ["-skills/ponytail", "-skills/ponytail-review", "-skills/ponytail-audit"]
+}
+#+end_src
+This disables exactly: the extension (the automatic full-mode system-prompt injection, =before_agent_start= in =pi-extension/index.js=, and the =/ponytail=, =/ponytail-review=, =/ponytail-audit=, =/ponytail-gain=, =/ponytail-debt=, =/ponytail-help= command aliases it registers), the =ponytail= skill (the broad "use on any coding task" trigger named in this record's Source baseline and findings), and =ponytail-review=/=ponytail-audit= (their triggers -- "review for over-engineering"/"what can we delete"/"is this over-engineered" and "audit this codebase"/"audit for over-engineering"/"find bloat" -- overlap =skills/complexity-review='s own description almost verbatim, matching Acceptance's "Local complexity-review routing does not also activate the unadapted review/audit policy"). =ponytail-debt=, =ponytail-gain=, and =ponytail-help= are untouched: none is named by any acceptance criterion, none overlaps a delivered replacement, and disabling them would be an unrequested scope-narrowing per Decisions ("retaining upstream skills... does not require retaining the extension or permanent full-mode controls" says nothing about the three that do not overlap). The ponytail package cache itself (=/home/cormacc/.pi/agent/git/github.com/DietrichGebert/ponytail/=) was not written to; the only non-git-tracked file inside it (=package-lock.json=, an untracked leftover of a prior =npm test= invocation predating this task, confirmed via that directory's own =git status --porcelain= before and after this task's edits) was not touched by any tool call in this task.
+
+*** Replacement mapping (what each disabled resource is replaced by)
+| Disabled resource | Replaced by (already landed, this task only switches activation) |
+|---|---|
+| =pi-extension/index.js= (automatic full-mode injection) | =skills/herdr-orch/traits/simple/prompt.md= (=simple= trait, =worker=/=planner=/=advisor=/=base-analyst=) plus the foreman-level pointer to it in =SKILL.md= |
+| =skills/ponytail= (broad coding trigger + its ladder/rules prose) | The =simple= trait (ladder/reuse-order/scope-approval subset) plus =AGENTS.md='s existing "prefer the simplest solution" baseline; no on-demand replacement is claimed for content =simple= omitted (line-count target, mode persistence, one-test rhetoric -- see this record's Personas and guidance decision) |
+| =skills/ponytail-review= | =skills/complexity-review= (=d185837c=) |
+| =skills/ponytail-audit= | =skills/complexity-review='s wider-scope mode ("an explicit assignment naming that scope") |
+| =traits/prune= scope-challenge use of the necessity test | Refined =traits/prune/prompt.md= (=9e22a186=), not a new trait |
+
+=ponytail-debt=/=ponytail-gain=/=ponytail-help= have no replacement and are not disabled -- explicitly out of scope per Summary ("Benchmark/gain/help injection, mandatory ponytail debt comments, or a new debt-scanning mechanism").
+
+*** Documentation
+- =README.md= § Editable git submodule and Home Manager: added a paragraph naming the settings shape, what it excludes and why, the replacement mapping in one line, and the reference/comparison access path (=--skill=/=--extension= flags pointed at the still-installed, still-readable package paths, or flipping the filter for a session with =pi config=).
+- =skills/herdr-orch/README.org= § Shared directives: traits: added a paragraph distinguishing =#trait= (a documented foreman request-phrasing convention that a human/foreman translates into an explicit =--trait=/=traits: [...]= selection on the actual spawn -- not a hashtag parser, not natural-language enforcement) from =%trait= (the pi extension's interactive expansion, which rewrites the *parent's own* input text and never targets a child), per Decisions' "document the distinction between interactive token expansion and child composition."
+- =skills/herdr-orch/SKILL.md=: added the same distinction, one paragraph, in the existing trait-token paragraph, pointing back to =README.org= for the full treatment rather than duplicating it.
+- =pi/extensions/traits/README.md=: added one paragraph cross-referencing the =#trait=/=%trait= distinction from the extension side, so a reader who lands here first (rather than in =herdr-orch=) also sees it.
+
 * Validation
 Planning used source/doc inspection and read-only CLI/state checks. No feature build, production edit, trait-effect probe or live child smoke was run. Behavioural gains remain hypotheses until the planned probes run.
 
@@ -396,3 +438,59 @@ This is a prose skill, not a build artefact, so validation is: the packaged fron
   3. =case2-behaviour-breaking.clj= (behaviour-breaking shortcut case): the tempting shorter form drops the =zero?= guard a caller depends on (division must return =nil= on =b=0=, not throw). The same evidence step run against this candidate diverges at =[7 0]= (script output "case2 mismatches: ({:input [7 0], :before nil, :after :user/threw})", exit 0) -- per section 3 this is not reported as a safe finding; outcome: the tempting reduction is rejected, matching "Never simplify away ... error handling that prevents data loss" surviving into this adaptation as an evidence requirement rather than a restated rule.
 - Exact fixture inputs, the reviewed "before"/tempting-"after" pairs, and full script output are preserved at =.tmp/complexity-review-fixtures/{case1-needless-wrapper,case2-behaviour-breaking,case3-clean}.clj= for independent re-run.
 - Not exercised in this task: the integrated =base-analyst= live smoke (explicitly owned by =533be6ae=) and any interaction with the not-yet-landed =simple=/=prune= traits or roster changes from the concurrent =9e22a186= task -- this skill does not depend on either.
+
+** 533be6ae Validation (2026-09-22)
+All commands run from the repository root; all evidence files preserved under =.tmp/533be6ae-evidence/= for independent re-run.
+
+*** Regression suite (control that nothing else moved)
+=bb test=: =652 tests, 4364 assertions, 0 failures, 0 errors=, plus the two chained gate suites (=43=/=14= assertions, =0= failures each) -- identical to the =b4c63339=/=9e22a186= baseline. This task added no Clojure source; the run only confirms the documentation/settings edits did not disturb it.
+=bb scripts/validate-skills.bb --python "/home/cormacc/dotfiles/agents/.tmp/skill-creator-venv/bin/python3"=: =17 skills checked, 0 gating failure(s), 1 vendored warning(s)= -- unchanged from the =d185837c= baseline (same pre-existing =gitlab-cli-skills= warning; no SKILL.md frontmatter was touched by this task).
+
+*** Establishing a valid probe before trusting a negative result
+The project rule against an unfalsifiable negative result applies directly here: before reading "no injection" as evidence, the probe itself had to be shown capable of detecting an injection. The session transcript (=.jsonl=) turned out to be the *wrong* channel to look for it in, discovered only after a positive-control attempt failed to show a signal it should have:
+- Forcing =PONYTAIL_DEFAULT_MODE=full= (the extension's own documented, highest-priority override) and separately running ="/ponytail full"= as an explicit first turn, both before any settings edit, produced *zero* occurrences of the extension's injected text (=PONYTAIL MODE ACTIVE=, =lazy senior developer=) anywhere in the persisted session JSON -- including in a second turn issued after the mode-set command had already appended its own =\{"type":"custom","customType":"ponytail-mode","data":\{"mode":"full"\}\}= entry, proving the mode change itself *did* take effect and persist.
+- Reading =dist/core/agent-session.js= (the same installed, readable pi package used above) explains why: a =before_agent_start= handler that returns =\{systemPrompt: ...\}= (exactly what =pi-extension/index.js='s handler does) is wired through =_installAgentForcedPromptProjection= as a =forceSystemPrompt= -- its own doc comment states it sends the forced text "as the provider's leading system prompt *without recording it*", spliced into the outgoing request inside =transformContext= and never written back into the persisted transcript. So a =grep= over the session file for the injected text is structurally blind to this exact mechanism by the pi's own design, independent of whether ponytail actually fires. This was not knowable from the settings or from prose alone; it took reading the mechanism the extension actually uses.
+- Given that, the transcript-search probe was abandoned as inconclusive-by-construction (recorded here rather than quietly dropped) in favour of a channel that does observe the real decision point: whether the extension's code loads and registers its hooks at all. If it never loads, the =forceSystemPrompt= call cannot happen regardless of mode, env var, or interactive/print distinction, which is the load-bearing fact the acceptance criterion actually needs.
+
+*** Effective-resource probe (actual resolution, not settings text)
+=.tmp/533be6ae-evidence/resource-probe.mjs= reuses pi's own published API (=@earendil-works/pi-coding-agent='s =DefaultResourceLoader=/=DefaultPackageManager=, the same classes =pi='s own CLI entrypoint calls) against the live =~/.pi/agent= agent dir, offline, with no session file, no network call, and no interactive process -- it runs the identical settings-resolution and package-filter code path a real startup runs, isolated in a disposable Node subprocess that never touches the operator's running pi/Herdr process. Chosen over hand-parsing the override syntax a second time (ladder: reuse over reimplementation) and over a live =pi --print= run (the transcript-blindness finding above ruled that out as insufficient by itself).
+
+=git stash push -- pi/settings.json= isolated the before/after comparison to exactly this task's edit:
+| | before (=.tmp/533be6ae-evidence/before-resource-probe.txt=) | after (=.tmp/533be6ae-evidence/after-resource-probe.txt=) |
+|---|---|---|
+| =pi-extension/index.js= | enabled=true (loaded) | enabled=false (not loaded; 0 ponytail extensions in =getExtensions()=) |
+| =skills/ponytail= | enabled=true | enabled=false |
+| =skills/ponytail-review= | enabled=true | enabled=false |
+| =skills/ponytail-audit= | enabled=true | enabled=false |
+| =skills/ponytail-debt=, =ponytail-gain=, =ponytail-help= | enabled=true | enabled=true (unchanged, as intended) |
+With the extension's =enabled= flag false, =resourceLoader.getExtensions().extensions= (the actually-loaded set a real startup passes to =createAgentSession=) contains zero ponytail entries -- the code that would call =forceSystemPrompt= is not loaded, so "no full Ponytail injection" holds for every mode, not just the one this task's session-file probe could observe. Positive control for this instrument: a direct query for =pi-anthropic-auth= confirmed it stays loaded (=anthropic-auth loaded: true=, =25= of =26= total resolved extensions still enabled, =0= errors) -- proving the probe distinguishes "targeted and disabled" from "everything broke", and that no unrelated authentication extension was touched.
+
+*** Prompt-content probe (real system-prompt text, not just resource resolution)
+Two fresh, isolated =pi --print --model anthropic/claude-haiku-4-5 --session-dir .tmp/... = runs (a genuinely cheap model, disposable per-run session directories under this task's own =.tmp/=, never the operator's session store) -- one before the settings edit, one after (=git stash= again isolated the comparison) -- each asked only "Reply with exactly: OK", persisted session inspected via =jq= for =.message.sections.skills= (the literal =<available_skills>= block a real session sends to the model as part of its system prompt: genuine "prompt content", not settings). Diffing the sorted =<name>= list between the two runs:
+#+begin_src diff
+17d16
+< <name>ponytail-audit</name>
+21,22d19
+< <name>ponytail</name>
+< <name>ponytail-review</name>
+#+end_src
+Exactly the three intended skills disappeared from what the model is actually shown; =ponytail-debt=/=ponytail-gain=/=ponytail-help= remain listed in both, and =complexity-review= (already landed) is present in both -- nothing else in the 21-vs-24-skill list moved. This satisfies "startup evidence records the actual effective resources rather than settings alone": both the resource-probe (what loads) and this transcript diff (what the model is actually told) point at the same three-skill delta, from two independent instruments.
+
+*** Reference/comparison access path (confirmed to resolve, not merely documented)
+The path documented in =README.md= was exercised, not just written: a fresh isolated =pi --print= run with =--skill /home/cormacc/.pi/agent/git/github.com/DietrichGebert/ponytail/skills/ponytail= produced a session whose =<available_skills>= block includes =<name>ponytail</name>= despite the settings-level exclusion (=.tmp/.../access-path-check/=) -- =--skill=/=--extension= are additive CLI paths, resolved independently of package-level filtering, exactly as documented. A parallel run with =--extension .../pi-extension/index.js= (plus =PONYTAIL_DEFAULT_MODE=full= as a companion positive-control attempt) loaded without error (=.tmp/.../access-path-ext-check/=); given the transcript-blindness finding above, this confirms the extension *path resolves and loads*, which is what "documented access path... resolves" requires, without re-claiming a transcript-level injection observation the session log cannot provide.
+
+*** Must-not checks
+- Package cache: =git -C /home/cormacc/.pi/agent/git/github.com/DietrichGebert/ponytail status --porcelain= before and after this task's edits shows only a pre-existing untracked =package-lock.json= (a leftover of some earlier, unrelated =npm test= invocation, not created or touched by any tool call in this task) -- no tracked file in that tree was written.
+- Authentication/unrelated extensions: covered above (=pi-anthropic-auth= loaded; =25/26= other resolved extensions unaffected; =0= extension load errors in both the before and after probes).
+- =pi/extensions/herdr-agent-state.ts=: not read or edited by this task.
+- Operator runtime: every verification command ran as a disposable subprocess with its own =--session-dir= under this task's =.tmp/=; none used =--continue=, =--resume=, or the operator's default session store, and no running pi/Herdr process was signalled, reloaded, or upgraded.
+- Top-level task =1feac5ff-...=: not read or written by this task; only =533be6ae='s own heading (=:STARTED:=, its acceptance checkboxes) was touched in =TASKS.org=/this record.
+
+*** Remaining for the root orchestrator
+The integrated =base-analyst= complexity-review live smoke ("stays read-only", "returns a valid published result") requires spawning a Herdr subagent, a capability outside this worker's granted =spawns: scout researcher advisor= allow-list; per the assignment this was not attempted and not worked around. See this task's published result for the exact persona/assignment shape and expected read-only boundary to run it.
+
+*** Integrated base-analyst smoke (run by the root orchestrator, 2026-09-22)
+Spawned =oh task start base-analyst --task-file .tmp/assignment-smoke.md= from the root session (task =88e2c0f9-6b45-482f-8c7f-d13857ad79d8=, pane =w3:pDD=). Launch provenance reported =model light=, =traits [read-only, simple]= -- both resolved from the packaged store -- and a non-shared-checkout policy keeping =work-root= at the repository itself. Assignment: apply =skills/complexity-review/SKILL.md= to one declared range (=git diff 7487f88^..7487f88= restricted to =core.clj=/=cli.clj=/=traits.clj=), read-only, scratch under =.tmp/= only.
+- Read-only boundary held: =git status --porcelain= captured immediately before the spawn and immediately after collection is byte-identical (=.tmp/smoke-before-status.txt= vs =.tmp/smoke-after-status.txt=, =diff= exit 0), with the six then-uncommitted activation files unchanged and no new tracked-file modification. The child's only output outside its result envelope is =.tmp/complexity-review-88e2c0f9/report.md=.
+- Valid published result: =oh task collect= returned a terminal, schema-validated =COMPLETE= envelope with a summary, one =findings= entry and an =artifact-links= reference -- not pane text, not a timeout. Content: no findings, plus one item reported as =unknown= (the double frontmatter parse in =resolve-base=/=trait-interpolation=, for which the child found no in-range replacement that does not change an out-of-range helper's contract). A clean-or-unknown outcome is the skill's documented valid result, and the =unknown= classification is the evidence requirement working as specified rather than a reduction asserted without proof.
+- Not claimed from this smoke: that the reviewed range is optimal, or that =%simple= contributed to the outcome. The smoke's scope is the integrated workflow's read-only boundary and publication validity.

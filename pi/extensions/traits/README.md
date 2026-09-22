@@ -10,6 +10,8 @@ Resolution is first-match-wins from `<ctx.cwd>/.agents/traits/`, when `ctx.isPro
 
 The canonical trait format, admission rules, and gate protocol live in `skills/herdr-orch/references/traits.md`. Mechanical interpolation semantics live in `skills/herdr-orch/scripts/docs/contract.md` under Trait composition.
 
+This `%<name>` token is interactive: it expands into the session that types it, never into a child a foreman is about to spawn. A foreman's own delegation request may separately use `#trait` shorthand ("spawn a light worker, #simple") to name a trait for the *child*; that is a request-phrasing convention resolved into an explicit `--trait`/`traits:` selection on the actual spawn, not a second interpolator and not something this extension parses. See `skills/herdr-orch/README.org` § Shared directives: traits for the full distinction.
+
 ## Runtime
 
 The extension invokes the co-installed `herdr-orch` trait launcher. Its path, symlink resolution, and cwd behaviour are owned by `skills/herdr-orch/scripts/docs/contract.md` § Standalone trait interpolator CLI. It requires Babashka and the co-installed dotagents skills tree. There is no availability probe or alternate implementation.
