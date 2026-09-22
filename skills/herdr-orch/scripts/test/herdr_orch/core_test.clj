@@ -332,6 +332,26 @@
                (and (re-find #"unresolvable persona `resercher`" (.getMessage e))
                     (= {:persona "worker" :spawn "resercher" :source "frontmatter"} (ex-data e))))))))
 
+(deftest trait-list-parsing-is-bracketed-and-distinct-from-spawns
+  ;; `traits:`'s `[name, ...]` shape is deliberately unlike `spawns:`'s bare
+  ;; whitespace/comma form: whitespace inside the brackets is trimmed, duplicates
+  ;; dedupe preserving first occurrence, and an empty list is a legal explicit choice.
+  (is (= ["alpha" "beta"] (core/parse-trait-list "worker" "[alpha, beta]")))
+  (is (= ["alpha" "beta"] (core/parse-trait-list "worker" "[ alpha ,beta ]")))
+  (is (= ["alpha" "beta"] (core/parse-trait-list "worker" "[alpha, beta, alpha]")))
+  (is (= [] (core/parse-trait-list "worker" "[]")))
+  (is (= [] (core/parse-trait-list "worker" "[ ]")))
+  ;; An unbracketed value is a malformed shape, not silently flattened like `spawns:`.
+  (is (try (core/parse-trait-list "worker" "alpha, beta") false
+           (catch clojure.lang.ExceptionInfo e
+             (and (re-find #"persona frontmatter `traits` for `worker` must be a `\[name, \.\.\.\]` list" (.getMessage e))
+                  (= {:persona "worker" :value "alpha, beta"} (ex-data e))))))
+  ;; A nested list is also an unsupported shape.
+  (is (try (core/parse-trait-list "worker" "[[alpha], beta]") false
+           (catch clojure.lang.ExceptionInfo _ true)))
+  ;; Frontmatter carries the raw bracketed string through `parse-frontmatter` unmodified.
+  (is (= "[alpha, beta]" (:traits (core/parse-frontmatter "---\nname: worker\ntraits: [alpha, beta]\n---\nbody")))))
+
 (deftest frontmatter-and-envelope-contract
   (is (= {:name "scout" :description "x" :kind "pi" :model "vendor/model"}
          (core/parse-frontmatter "---\nname: scout\ndescription: x\nkind: pi\nmodel: vendor/model\n---\nbody")))

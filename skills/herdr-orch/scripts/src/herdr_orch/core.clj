@@ -132,6 +132,23 @@
                         {:persona persona :spawn n :source source}))))
     {:spawns (vec names) :spawns-source source}))
 
+;; A `traits:` frontmatter value is the one-line `[name, ...]` list Decisions asks for,
+;; distinct from `spawns:`'s bare whitespace/comma-separated shape: metadata trait names
+;; are an explicit per-persona selection, not free text, so an unbracketed or nested value
+;; is rejected -- a malformed-shape failure -- rather than silently flattened, the same
+;; "fail loud on a typo" precedent `retro:`/`timeout:` already set. An absent `traits:` key
+;; is handled by the caller (nil in, nil out); `traits: []` is a legal explicit empty list.
+(defn parse-trait-list [persona value]
+  (let [trimmed (str/trim (str value))]
+    (when-not (re-matches #"\[[^\[\]]*\]" trimmed)
+      (throw (ex-info (str "persona frontmatter `traits` for `" persona "` must be a `[name, ...]` list")
+                      {:persona persona :value value})))
+    (->> (str/split (subs trimmed 1 (dec (count trimmed))) #",")
+         (map str/trim)
+         (remove str/blank?)
+         distinct
+         vec)))
+
 (defn direction [{:keys [width height]}]
   (if (and (>= width 80) (>= width (* 2 height))) "right" "down"))
 (defn model-basename [model] (some-> model (str/split #"/") last))

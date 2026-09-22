@@ -14,7 +14,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -129,28 +129,79 @@
         (fail "persona not found in project, home, or packaged roster" {:persona persona :available (available-personas)}))))
 (defn trait-directories []
   (traits/trait-directories (ledger/assignment-root) (home-directory) (skill-directory)))
-(defn- interpolation-failure! [message trait directories]
+;; `hint`, when supplied, is the inline-only remedy ("write it as code or fix the trait
+;; name") -- meaningless for a `traits:`/`--trait` explicit selection, which names a real
+;; configured trait rather than incidental body prose, so those callers omit it.
+(defn- trait-resolution-failure! [message trait directories & [hint]]
   (fail (str "trait `" trait "` " message "; searched layers: "
              (str/join ", " (map #(str (:source %) "=" (:directory %)) directories))
-             "; write it as code or fix the trait name")
+             (when hint (str "; " hint)))
         {:trait trait
          :searched-layers (mapv :source directories)
          :searched-paths (vec (mapcat #(traits/trait-candidate-paths % trait) directories))}))
-(defn- trait-interpolation [path persona-text]
-  (let [directories (trait-directories)
-        result (traits/interpolate {:text persona-text
-                                    :directories directories
-                                    :exists? #(fs/exists? %)
-                                    :read-text slurp})]
-    (when-let [trait (first (filter #(< 2 (count %)) (:unknowns result)))]
-      (interpolation-failure! "was not found in the searched layers" trait directories))
-    (when-let [trait (first (:repeats result))]
-      (interpolation-failure! "appears more than once in the persona body" trait directories))
-    (let [sources (mapv #(select-keys % [:trait :source :path]) (:resolved result))]
-      (cond-> {:persona-path (str path)
-               :traits (mapv :trait sources)
-               :trait-sources sources}
-        (seq sources) (assoc :composed-content (:text result))))))
+(defn- interpolation-failure! [message trait directories]
+  (trait-resolution-failure! message trait directories "write it as code or fix the trait name"))
+;; A `traits:` frontmatter value is parsed the same way for a base and a derived persona;
+;; `persona`/`frontmatter` may be nil (no base), in which case there is nothing to declare.
+(defn- traits-frontmatter-names [persona frontmatter]
+  (some->> (:traits frontmatter) (core/parse-trait-list persona)))
+;; One-level `extends`: resolve the named base through the same roster lookup as the
+;; top-level persona, then reject a base that itself declares `extends` -- which also
+;; rejects self-reference (a persona extending itself always fails this same check)
+;; without a graph traversal or cycle detector (see contract.md Persona composition).
+(defn- resolve-base [directories persona frontmatter]
+  (when-some [base-name (:extends frontmatter)]
+    (let [base-path (core/resolve-persona (fn [p] (fs/exists? p)) directories base-name)]
+      (when-not base-path
+        (fail (str "persona `" persona "` extends unresolvable persona `" base-name "`")
+              {:persona persona :extends base-name}))
+      (let [base-text (slurp (str base-path))
+            base-frontmatter (core/parse-frontmatter base-text)]
+        (when (:extends base-frontmatter)
+          (fail (str "persona `" persona "` base `" base-name "` itself declares `extends`; only one level of inheritance is resolved")
+                {:persona persona :base base-name :base-extends (:extends base-frontmatter)}))
+        {:name base-name :path (str base-path) :frontmatter base-frontmatter
+         :body (:body (traits/split-frontmatter base-text))}))))
+;; Resolves one-level `extends` plus `traits:`/`--trait` metadata composition, then
+;; substitutes through the existing interpolator in one pass. Scalar runtime settings
+;; inherit with the derived declaration winning (`name`/`description` stay local, never
+;; inherited); every caller below reads this effective `:frontmatter`, not the raw one.
+;; Metadata trait names -- base first, derived second, explicit `--trait` selections last --
+;; are deduplicated and validated regardless of length (unlike an incidental short inline
+;; candidate); a name the body already carries inline is left alone rather than appended a
+;; second time, using `traits/inline-trait-names` (the same tokenizer, read-only) to decide.
+;; The single `traits/interpolate` call below then substitutes the whole composed text --
+;; base body, derived body, and any appended metadata fragments -- exactly once.
+(defn- trait-interpolation [persona path persona-text explicit-traits]
+  (let [frontmatter (core/parse-frontmatter persona-text)
+        base (resolve-base (persona-directories) persona frontmatter)
+        {derived-frontmatter-block :frontmatter derived-body :body} (traits/split-frontmatter persona-text)
+        composed-body (str (:body base) derived-body)
+        effective-frontmatter (if base (merge (dissoc (:frontmatter base) :name :description) frontmatter) frontmatter)
+        directories (trait-directories)
+        metadata-names (distinct (concat (traits-frontmatter-names (:name base) (:frontmatter base))
+                                          (traits-frontmatter-names persona frontmatter)
+                                          explicit-traits))]
+    (doseq [trait metadata-names]
+      (when-not (traits/resolve-trait #(fs/exists? %) directories trait)
+        (trait-resolution-failure! "was not found in the searched layers" trait directories)))
+    (let [inline (traits/inline-trait-names composed-body)
+          missing (remove inline metadata-names)
+          appended (apply str (map #(str "\n\n%" %) missing))
+          result (traits/interpolate {:text (str derived-frontmatter-block composed-body appended)
+                                      :directories directories
+                                      :exists? #(fs/exists? %)
+                                      :read-text slurp})]
+      (when-let [trait (first (filter #(< 2 (count %)) (:unknowns result)))]
+        (interpolation-failure! "was not found in the searched layers" trait directories))
+      (when-let [trait (first (:repeats result))]
+        (interpolation-failure! "appears more than once in the persona body" trait directories))
+      (let [sources (mapv #(select-keys % [:trait :source :path]) (:resolved result))]
+        (cond-> {:persona-path (str path) :frontmatter effective-frontmatter
+                 :persona-text (:text result)
+                 :traits (mapv :trait sources) :trait-sources sources}
+          base (assoc :base-persona (:name base))
+          (or base (seq sources)) (assoc :composed-content (:text result)))))))
 (defn composed-persona-path [task persona]
   (str (fs/path (ledger/assignment-root) ".tmp" "herdr-orch" "composed" (str task "-" persona ".md"))))
 (defn materialize-persona! [composition task persona]
@@ -319,8 +370,8 @@
   (herdr/preflight!)
   (let [path (roster persona)
         persona-text (slurp (str path))
-        frontmatter (core/parse-frontmatter persona-text)
-        composition (trait-interpolation path persona-text)
+        composition (trait-interpolation persona path persona-text (all opts :trait))
+        frontmatter (:frontmatter composition)
         prompt-persona-path (if (:composed-content composition) "<composed-persona-path>" path)
         ident (parent-identity)
         kind (kind-policy opts frontmatter (:parent-kind ident))
@@ -331,14 +382,20 @@
         spawns (spawns-policy persona opts frontmatter)
         timeout (timeout-policy persona opts frontmatter)
         _ (worktree-target-option opts)]
-    {:preview (prompt-text {:spawns (:spawns spawns) :persona-path prompt-persona-path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
-     ;; :model is the resolved (pre-alias) ID; :model-canonical is that ID after the
-     ;; single-hop `:aliases` translation; :model-args is the effective translated
-     ;; native spelling (e.g. `["--model" "opus"]`) from the merged roster config.
-     :persona-path (str path) :traits (:traits composition) :trait-sources (:trait-sources composition)
-     :kind kind :model model :model-canonical (core/canonical-model config model) :model-args (core/model-args config kind model) :placement placement :retro (:retro retro) :retro-source (:retro-source retro)
-     :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)
-     :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)}))
+    (cond->
+     {:preview (prompt-text {:spawns (:spawns spawns) :persona-path prompt-persona-path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
+      ;; :model is the resolved (pre-alias) ID; :model-canonical is that ID after the
+      ;; single-hop `:aliases` translation; :model-args is the effective translated
+      ;; native spelling (e.g. `["--model" "opus"]`) from the merged roster config.
+      ;; :persona-text is the exact effective persona text -- base-plus-derived body and
+      ;; any appended metadata fragments, substituted -- the same text a spawn would
+      ;; materialize, so a preview can be inspected without a pane or a ledger entry.
+      :persona-path (str path) :persona persona :persona-text (:persona-text composition)
+      :traits (:traits composition) :trait-sources (:trait-sources composition)
+      :kind kind :model model :model-canonical (core/canonical-model config model) :model-args (core/model-args config kind model) :placement placement :retro (:retro retro) :retro-source (:retro-source retro)
+      :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)
+      :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)}
+      (:base-persona composition) (assoc :base-persona (:base-persona composition)))))
 ;; A stream's item records are append-only by item identity. Pre-stream ledger entries retain
 ;; their historical stable head only, so expose that head as item 1 while readers migrate; no
 ;; ledger rewrite is needed just to read an old round.
@@ -818,10 +875,11 @@
       (herdr/preflight!)
       (let [path (roster persona)
             persona-text (slurp (str path))
-            frontmatter (core/parse-frontmatter persona-text)
-            ;; Trait interpolation and its failure policy run before parent identity,
-            ;; config loading, task allocation, and every pane/ledger mutation.
-            composition (trait-interpolation path persona-text)
+            ;; Composition (extends, traits:, --trait) and its failure policy run before
+            ;; parent identity, config loading, task allocation, and every pane/ledger
+            ;; mutation. `frontmatter` below is the effective (post-extends-merge) one.
+            composition (trait-interpolation persona path persona-text (all opts :trait))
+            frontmatter (:frontmatter composition)
             ident (parent-identity)
             kind (kind-policy opts frontmatter (:parent-kind ident))
             model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
@@ -880,7 +938,7 @@
                       ;; against the same publisher-owned value (task ed6d67bf).
                       entry (cond-> {:task task :result result :work-root (:path target)
                                      :child name :pane-id nil
-                                     :label label :index index :persona-path persona-path
+                                     :label label :index index :persona persona :persona-path persona-path
                                      :kind kind :model model
                                      :parent-session (:parent-session ident)
                                      :parent-pane (:parent-pane ident)
@@ -890,7 +948,12 @@
                                      :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)
                                      :placement placement :status "allocating" :created-at (now)}
                               worktree (assoc :worktree worktree)
-                              (and worktree read-only?) (assoc :read-only true))]
+                              (and worktree read-only?) (assoc :read-only true)
+                              ;; Launch provenance: the base persona (when `extends:`
+                              ;; resolved one) and the effective trait sources, so preview
+                              ;; and the ledger agree and `continue` can carry them forward.
+                              (:base-persona composition) (assoc :base-persona (:base-persona composition))
+                              (seq (:traits composition)) (assoc :traits (:traits composition) :trait-sources (:trait-sources composition)))]
                   ;; Persist before releasing the reservation and before the first checkout
                   ;; or pane mutation, so every partial failure remains recoverable.
                   (ledger/write! entry)
@@ -2243,7 +2306,8 @@
                           ;; moves, so every round of this child resolves artifacts against
                           ;; the one value the spawn selected.
                           (select-keys entry
-                                       [:child :pane-id :tab-id :label :index :persona-path
+                                       [:child :pane-id :tab-id :label :index :persona :persona-path
+                                        :base-persona :traits :trait-sources
                                         :kind :model :retro :retro-source :spawns :spawns-source
                                         :timeout :timeout-source :placement :shell-pid
                                         :work-root :worktree :read-only])
@@ -2537,7 +2601,7 @@
             "rename <target> (<name> | --clear)"
             "list"
             "get <target>"]
-   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--model MODEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--prompt-extra TEXT] [--print-prompt] [--worktree <path>|new]"
+   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--model MODEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--trait NAME]* [--prompt-extra TEXT] [--print-prompt] [--worktree <path>|new]"
            "start <persona> (--task TEXT | --task-file PATH | stdin) [same options as run]"
            "collect <full-task-uuid> [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
            "collect --any [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"

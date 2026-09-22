@@ -134,39 +134,43 @@ This is a source-grounded assessment set, not a promise to ship five new traits.
 * Plan
 Approved plan; execution requires a separate assignment after the Herdr maintenance prerequisite completes. Composition and the standalone complexity workflow are the two entry tasks; both wait for that prerequisite.
 
-** TODO Resolve one-level personas and additive spawn traits
+** DONE Resolve one-level personas and additive spawn traits
+CLOSED: [2026-09-21 Mon 16:28]
 :PROPERTIES:
 :CUSTOM_ID: b4c63339-fae8-4b0c-8c7c-b8804be0f815
 :CREATED: [2026-09-17 Thu 16:43]
+:STARTED: [2026-09-21 Mon 15:59]
 :END:
 :LOGBOOK:
 - Created [2026-09-17 Thu 16:43]
+- State "STARTED" from "TODO" [2026-09-21 Mon 15:59]
+- State "DONE" from "STARTED" [2026-09-21 Mon 16:28]
 :END:
 Acceptance criteria:
-- [ ] One base and a derived persona compose base-first through the existing layer lookup.
-- [ ] Metadata/per-spawn fragments follow the complete composed body.
-- [ ] traits flow lists accept the syntax specified in Summary/Decisions.
-- [ ] Repeatable --trait selections are available on run/start and preview.
-- [ ] Metadata/per-spawn overlaps emit each trait once.
-- [ ] Inline/metadata overlap retains the inline occurrence.
-- [ ] Missing bases fail before ledger or pane mutation.
-- [ ] A base declaring extends fails before ledger or pane mutation.
-- [ ] Self-reference fails through the same one-level guard.
-- [ ] Malformed metadata fails before ledger or pane mutation.
-- [ ] Unknown explicit trait names fail before ledger or pane mutation.
-- [ ] Legacy inline placement remains unchanged.
-- [ ] Repeated inline tokens still fail.
-- [ ] Legacy scalar-setting fixtures retain their results.
-- [ ] Preview exposes the exact effective persona text.
-- [ ] Launch provenance records the selected/base persona sources and trait sources.
-- [ ] Continuation retains launch provenance.
-- [ ] Read-only target/publication policy uses the effective trait set.
-- [ ] The delivered prerequisite baseline is recorded before composition edits.
-- [ ] Focused fake-Herdr tests demonstrate the refusal boundaries after successful client/server preflight.
-- [ ] Existing model translations pass the repaired contract tests after composition changes.
-- [ ] Prerequisite lifecycle regression checks pass after launch-provenance changes.
-- [ ] The mechanical contract documents the implemented composition semantics.
-- [ ] Must not: add trait-controlled runtime settings or delegation grants.
+- [X] One base and a derived persona compose base-first through the existing layer lookup.
+- [X] Metadata/per-spawn fragments follow the complete composed body.
+- [X] traits flow lists accept the syntax specified in Summary/Decisions.
+- [X] Repeatable --trait selections are available on run/start and preview.
+- [X] Metadata/per-spawn overlaps emit each trait once.
+- [X] Inline/metadata overlap retains the inline occurrence.
+- [X] Missing bases fail before ledger or pane mutation.
+- [X] A base declaring extends fails before ledger or pane mutation.
+- [X] Self-reference fails through the same one-level guard.
+- [X] Malformed metadata fails before ledger or pane mutation.
+- [X] Unknown explicit trait names fail before ledger or pane mutation.
+- [X] Legacy inline placement remains unchanged.
+- [X] Repeated inline tokens still fail.
+- [X] Legacy scalar-setting fixtures retain their results.
+- [X] Preview exposes the exact effective persona text.
+- [X] Launch provenance records the selected/base persona sources and trait sources.
+- [X] Continuation retains launch provenance.
+- [X] Read-only target/publication policy uses the effective trait set.
+- [X] The delivered prerequisite baseline is recorded before composition edits.
+- [X] Focused fake-Herdr tests demonstrate the refusal boundaries after successful client/server preflight.
+- [X] Existing model translations pass the repaired contract tests after composition changes.
+- [X] Prerequisite lifecycle regression checks pass after launch-provenance changes.
+- [X] The mechanical contract documents the implemented composition semantics.
+- [X] Must not: add trait-controlled runtime settings or delegation grants.
 
 Files/reference: core/parse-frontmatter and resolve-persona in `skills/herdr-orch/scripts/src/herdr_orch/core.clj`; trait-interpolation, preview!, spawn! and continue! in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`; interpolate in `skills/herdr-orch/scripts/src/herdr_orch/traits.clj`; their existing test namespaces; `skills/herdr-orch/scripts/docs/contract.md`. Follow Summary/Decisions; do not edit the roster in this task.
 
@@ -272,6 +276,16 @@ Historical pre-maintenance observations from the planner. Re-verify against the 
 - pi/extensions/herdr-orch/index.ts exposes raw layout/pane/agent operations through oh. pi/extensions/traits/index.ts handles input expansion. pi/extensions/herdr-agent-state.ts is Herdr-managed lifecycle reporting. None of these observations warrants a new independent orchestration engine.
 - Installed upstream Ponytail package.json reports 4.10.0 and loads pi-extension/index.js plus skills/. Its extension restores session mode or configured default and appends full instructions before agent start; its core skill has a broad coding trigger. Source: /home/cormacc/.pi/agent/git/github.com/DietrichGebert/ponytail/. Preserve MIT copyright/permission notices for substantial adaptations; record source URLs and source-file hashes under the existing provenance convention.
 
+** b4c63339 -- one-level persona inheritance and additive spawn traits (2026-09-21)
+Prerequisite baseline recorded before edits: HEAD =b95b430=, =git status --porcelain= clean apart from the STARTED-lifecycle edits to =TASKS.org= and this record. =git merge-base --is-ancestor 109dda8 HEAD= confirmed the prerequisite ("herdr-orch improvements 260917") is an ancestor of =b95b430=, so the 0.9.1 floor, raw passthrough, and refreshed managed Pi integration were already in the tree. A =bb test-clojure= run scoped to the six herdr-orch namespaces was green (329 tests, 2825 assertions, 0 failures) before any composition edit, establishing the passing baseline the refusal tests below prove against.
+
+Implementation, scoped exactly to =core.clj=/=cli.clj=/=traits.clj= and their existing test namespaces plus this contract:
+- =core.clj=: added =parse-trait-list= (pure), the only new core.clj function. =parse-frontmatter= and =resolve-persona= are reused unmodified -- both already generic enough for =extends:=/=traits:= values and base-name lookup.
+- =traits.clj=: added =inline-trait-names= (pure, read-only, no IO), sharing the existing private =scan-body= tokenizer so composition can tell whether a metadata/explicit trait selection already has an inline occurrence, without a second implementation of the token grammar. =interpolate= itself is untouched.
+- =cli.clj=: =trait-interpolation= now resolves one-level =extends= (=resolve-base=, rejecting a missing base or a base that itself declares =extends=, which also rejects self-reference through the identical check), merges scalar frontmatter with the derived declaration winning (=name=/=description= excluded from the merge), computes the ordered/deduplicated metadata-plus-explicit trait-name union (base first, derived second, =--trait= last), validates every name in that union against the resolution layers regardless of length (bypassing the inline short-candidate leniency), and appends only the names not already inline before a single =traits/interpolate= call substitutes the whole text once. =preview!=/=spawn!= now read the effective (post-merge) frontmatter from the composition result instead of re-parsing the raw persona text, and both pass through =(all opts :trait)=. =--trait NAME= is repeatable via the existing =signatures=/=known-options= derivation (added to the "run" signature only; "start" already inherits "same options as run", and =known-options= scans every signature string). The spawn ledger entry now records =:persona=, and -- only when present/non-empty -- =:base-persona=, =:traits=, =:trait-sources=; =reserve-continuation!='s =select-keys= list carries all four forward. =preview!= additionally reports =:persona=, =:base-persona= (when present), and =:persona-text= (the exact effective composed text, computed the same way a spawn would materialize it, with no pane or ledger entry created).
+- =contract.md=: added a "Persona composition (=extends=)" subsection and rewrote the "Trait composition" opening paragraph (the old "traits: frontmatter and a spawn-time trait flag do not exist" claim is now false) to document the metadata list, =--trait=, append/dedup/inline-precedence rules, the new ledger provenance fields, and =:persona-text= in preview.
+- Updated the pre-existing =empty-traits-fixture= case in =traits_test.clj= (previously "retired-fixture", asserting an inert =traits: missing-trait=): =traits:= is no longer inert, so an unbracketed value would now be a malformed-shape refusal; the fixture now asserts the legal-but-empty =traits: []= case still passes through with no ledger =:traits=/=:trait-sources= keys.
+
 * Validation
 Planning used source/doc inspection and read-only CLI/state checks. No feature build, production edit, trait-effect probe or live child smoke was run. Behavioural gains remain hypotheses until the planned probes run.
 
@@ -283,3 +297,16 @@ Planning used source/doc inspection and read-only CLI/state checks. No feature b
 - Workflow checks: needless wrapper with a behaviour-preserving replacement; apparently shorter but behaviour-breaking replacement; clean input. The analyst stays read-only and publishes the assigned result. Diff and wider-scope modes must keep their declared boundary.
 - Reuse scripts/run-trait-gate.bb only where its current read-only Codex execution matches the intended consumer. It is not a write-enabled worker probe merely because its scaffold mentions worker. Use isolated disposable fixtures for implementation behaviour; keep probe tooling off shipped runtime paths.
 - Activation check: an isolated fresh Pi startup verifies that automatic full Ponytail injection and overlapping skill triggers are absent after the hybrid replacement is available. Confirm the documented reference/comparison path resolves. Do not disable unrelated authentication extensions. Preserve actual resource/prompt evidence rather than infer success from settings alone.
+
+** b4c63339 Validation (2026-09-21)
+All runs via =bb test-clojure=, invoked from this repository root.
+- Added 8 deftests (1 in =core_test.clj=: =trait-list-parsing-is-bracketed-and-distinct-from-spawns=; 7 in =traits_test.clj=: =inline-trait-names-uses-the-same-tokenizer-as-interpolate-without-io=, =extends-composes-body-and-inherits-scalar-settings-with-derived-precedence=, =composition-refusals-fail-before-ledger-or-pane-mutation= (7 cases: missing base, base declares extends, self-reference, malformed =traits:= on the derived persona, malformed =traits:= on the base persona, unknown explicit =--trait= of length 1, unknown metadata trait name), =metadata-and-explicit-trait-composition-orders-dedupes-and-respects-inline-occurrence=, =preview-exposes-the-exact-effective-composed-text-and-provenance-without-mutation=, =continuation-retains-composition-provenance=, =inherited-read-only-trait-feeds-the-effective-trait-set=).
+- Scoped run (=herdr-orch.core-test herdr-orch.traits-test herdr-orch.cli-test herdr-orch.launcher-test herdr-orch.herdr-test herdr-orch.traits-cli-test=): 337 tests, 2904 assertions, 0 failures, 0 errors (up from the 329/2825 pre-edit baseline).
+- Full repository suite (=bb test-clojure=, org-tasks plus herdr-orch, every discovered =*_test.clj= on the classpath): 652 tests, 4361 assertions, 0 failures, 0 errors both immediately after the composition edits and again after the mutation-proof restores below.
+- Mutation-proofed three refusal guards by temporarily deleting each in =cli.clj=, rerunning only =herdr-orch.traits-test=, confirming the intended case(s) failed for the removed-guard reason (not a broken harness), then restoring from a pre-edit backup and reconfirming the full suite green:
+  - Removing the missing-base check: the "missing base" case failed with an uncontrolled "(No such file or directory)" instead of the expected refusal message (1 failure).
+  - Removing the base-declares-extends check: both the "base declares extends" and "self-reference" cases failed outright -- the spawn actually proceeded through =agent start=/=agent prompt= against the fake Herdr fixture (6 failures, 2 errors) -- confirming the single guard covers self-reference too, exactly as the one-level design claims.
+  - Removing the explicit/metadata trait-name pre-validation: the "unknown explicit --trait" (1-character) case failed outright, the spawn again reaching =agent start=/=agent prompt= (3 failures, 1 error); the "unknown metadata trait" case (3+ characters) was unaffected, confirming it is still independently caught by the general length-based unknown check inside =interpolate=, and that the pre-validation specifically closes the short-name gap the length filter would otherwise leave open for an explicit selection.
+- Refusal tests assert, in the same =is= block: non-zero exit; the expected message substring; no =.tmp/herdr-orch/ledger= directory; and no mutating call (=pane split=, =tab create=, =pane rename=, =pane close=, =agent start=, =agent prompt=) in the fake-Herdr call log -- and the call log for a non-refused case (captured while proving the mutation above) shows =["status" "--json"] ["agent" "get" ...]= before any mutating call, confirming the 0.9.1 preflight runs and passes before the composition guards would fire.
+- =clj-kondo --lint= on the three touched source files: 0 errors; the 3 pre-existing warnings (unused =e=/=opts= bindings, one redundant =let=) are unchanged from a pre-edit =git stash= lint of the same file, only shifted in line number.
+- Not independently re-verified: the full worktree-creation consequence of an inherited =read-only= trait (pre-existing mechanism, already covered by cli_test.clj's own read-only worktree tests, unchanged by this task) -- =inherited-read-only-trait-feeds-the-effective-trait-set= verifies only that the effective =:traits= set fed to that existing mechanism correctly includes a base-inherited =read-only=, which is what this task's scope adds.

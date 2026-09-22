@@ -191,6 +191,23 @@
         (is (= ["read-only"] (mapv :trait (:resolved edge))))
         (is (= ["focusedx" "an"] (:unknowns edge)))))))
 
+(deftest inline-trait-names-uses-the-same-tokenizer-as-interpolate-without-io
+  ;; Same grammar, exclusions, and dedup as `interpolate`'s own scan, but read-only: no
+  ;; resolution, no length filtering, no substitution. Composition uses this to decide
+  ;; which metadata/explicit trait selections already have an inline occurrence.
+  ;; No length filtering here (unlike `interpolate`'s length-based unknown policy): every
+  ;; grammar-matching candidate is recorded, including the single-character `%s`.
+  (is (= #{"focused" "ct" "s"}
+         (traits/inline-trait-names
+          (str "Start %focused, page%focused %20 %PATH% %s %ct.\n"
+               "`%focused` and `` %focused ``\n"
+               "```md\n%focused\n```\n"
+               "    %focused\n"))))
+  (is (= #{} (traits/inline-trait-names "No tokens here.\n")))
+  (testing "frontmatter is excluded, matching interpolate"
+    (is (= #{"focused"}
+           (traits/inline-trait-names "---\nname: %ignored\n---\nBody %focused.\n")))))
+
 (deftest persona-frontmatter-is-byte-preserved-and-inert
   (let [focus "/project/.agents/traits/focused.md"
         frontmatter "---\r\nname: %focused\r\ndescription: %missing-trait\r\n---\r\n"
@@ -282,13 +299,13 @@
           (is (not (str/includes? prompt "Read ")))
           (is (not (str/includes? prompt composed)))
           (is (= 1 (occurrence-count prompt expected-publication-guidance))))))
-    (testing "token-free, retired-frontmatter-only, and unresolved-short-only personas pass through"
+    (testing "token-free, empty-metadata-traits-list, and unresolved-short-only personas pass through"
       (doseq [[name body]
               [["plain-fixture" "Plain body."]
-               ["retired-fixture" "No body token."]
+               ["empty-traits-fixture" "No body token."]
                ["short-fixture" "Git format %h stays literal."]]]
         (let [{:keys [dir env log prompt-file]} (fixture-env)
-              traits-line (when (= name "retired-fixture") "traits: missing-trait\n")
+              traits-line (when (= name "empty-traits-fixture") "traits: []\n")
               source (write-persona! dir name (str "---\nname: " name "\nkind: pi\n" traits-line "---\n\n" body "\n"))
               proc (call! env "task" "start" name "--task" (str name " spawn"))
               task (get-in (output proc) [:result :task])
@@ -301,3 +318,173 @@
           (is (some #{source} start-argv))
           (is (str/starts-with? (slurp prompt-file) (str "Read " source ", adopt that role.")))
           (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "composed")))))))))
+
+(deftest extends-composes-body-and-inherits-scalar-settings-with-derived-precedence
+  (let [{:keys [dir env]} (fixture-env)
+        _ (write-persona! dir "leaf-fixture" "---\nname: leaf-fixture\nkind: pi\nretro: false\n---\n\nLeaf.\n")
+        _ (write-persona! dir "base-fixture"
+                          "---\nname: base-fixture\nkind: pi\nretro: false\ntimeout: 111000\nspawns: leaf-fixture\n---\n\nBase line.\n")
+        _ (write-persona! dir "derived-fixture"
+                          "---\nname: derived-fixture\nkind: pi\nextends: base-fixture\n---\n\nDerived line.\n")
+        ;; `retro:` is deliberately left inherited here (not overridden): once resolved
+        ;; `true`, the retro skill precedent degrades any enabled resolution silently to
+        ;; `false`/`"skill-missing"` when no retro skill is installed (as in this fixture),
+        ;; which would mask which value actually won -- an unrelated, pre-existing gate
+        ;; this composition test must not exercise. `timeout:` has no such quirk.
+        _ (write-persona! dir "derived-overrides-fixture"
+                          "---\nname: derived-overrides-fixture\nkind: pi\nextends: base-fixture\ntimeout: 222000\n---\n\nOverride line.\n")
+        start (call! env "task" "start" "derived-fixture" "--task" "compose extends")
+        task (get-in (output start) [:result :task])
+        entry (ledger-entry dir task)
+        composed (str (fs/path dir ".tmp" "herdr-orch" "composed" (str task "-derived-fixture.md")))
+        override-start (call! env "task" "start" "derived-overrides-fixture" "--task" "override extends")
+        override-task (get-in (output override-start) [:result :task])
+        override-entry (ledger-entry dir override-task)]
+    (is (zero? (:exit start)) (:err start))
+    (is (zero? (:exit override-start)) (:err override-start))
+    (is (= "derived-fixture" (:persona entry)))
+    (is (= "base-fixture" (:base-persona entry)))
+    (is (= composed (:persona-path entry)))
+    ;; Body composition: base body concatenated before derived body, base's own frontmatter
+    ;; block never appears -- only the derived persona's, byte-preserved.
+    (is (str/starts-with? (slurp composed) "---\nname: derived-fixture\nkind: pi\nextends: base-fixture\n---\n"))
+    (is (str/includes? (slurp composed) "Base line.\n\nDerived line.\n"))
+    ;; Scalar runtime settings inherit; the nearest (derived) declaration wins when present,
+    ;; and an omitted derived declaration falls through to the base's.
+    (is (= {:retro false :retro-source "frontmatter"} (select-keys entry [:retro :retro-source])))
+    (is (= {:timeout 111000 :timeout-source "frontmatter"} (select-keys entry [:timeout :timeout-source])))
+    (is (= {:spawns ["leaf-fixture"] :spawns-source "frontmatter"} (select-keys entry [:spawns :spawns-source])))
+    (is (= {:timeout 222000 :timeout-source "frontmatter"} (select-keys override-entry [:timeout :timeout-source])))))
+
+(deftest composition-refusals-fail-before-ledger-or-pane-mutation
+  (doseq [[label personas target extra-args expected]
+          [["missing base"
+            [["missing-base-fixture" "---\nname: missing-base-fixture\nkind: pi\nextends: nonexistent-base\n---\n\nBody.\n"]]
+            "missing-base-fixture" []
+            "persona `missing-base-fixture` extends unresolvable persona `nonexistent-base`"]
+           ["base declares extends"
+            [["chain-base-fixture" "---\nname: chain-base-fixture\nkind: pi\nextends: another-base\n---\n\nBase body.\n"]
+             ["chain-derived-fixture" "---\nname: chain-derived-fixture\nkind: pi\nextends: chain-base-fixture\n---\n\nDerived body.\n"]]
+            "chain-derived-fixture" []
+            "base `chain-base-fixture` itself declares `extends`"]
+           ["self-reference"
+            [["self-fixture" "---\nname: self-fixture\nkind: pi\nextends: self-fixture\n---\n\nBody.\n"]]
+            "self-fixture" []
+            "base `self-fixture` itself declares `extends`"]
+           ["malformed traits shape on the derived persona"
+            [["malformed-traits-fixture" "---\nname: malformed-traits-fixture\nkind: pi\ntraits: alpha, beta\n---\n\nBody.\n"]]
+            "malformed-traits-fixture" []
+            "persona frontmatter `traits` for `malformed-traits-fixture` must be a `[name, ...]` list"]
+           ["malformed traits shape on the base persona"
+            [["malformed-base-fixture" "---\nname: malformed-base-fixture\nkind: pi\ntraits: alpha\n---\n\nBase body.\n"]
+             ["malformed-base-derived-fixture" "---\nname: malformed-base-derived-fixture\nkind: pi\nextends: malformed-base-fixture\n---\n\nBody.\n"]]
+            "malformed-base-derived-fixture" []
+            "persona frontmatter `traits` for `malformed-base-fixture` must be a `[name, ...]` list"]
+           ["unknown explicit --trait, regardless of name length"
+            [["leaf-plain-fixture" "---\nname: leaf-plain-fixture\nkind: pi\n---\n\nBody.\n"]]
+            "leaf-plain-fixture" ["--trait" "z"]
+            "trait `z` was not found in the searched layers"]
+           ["unknown metadata trait name"
+            [["unknown-meta-fixture" "---\nname: unknown-meta-fixture\nkind: pi\ntraits: [ghost-trait]\n---\n\nBody.\n"]]
+            "unknown-meta-fixture" []
+            "trait `ghost-trait` was not found in the searched layers"]]]
+    (let [{:keys [dir env log]} (fixture-env)
+          _ (doseq [[name body] personas] (write-persona! dir name body))
+          proc (apply call! env "task" "start" target "--task" (str label " refusal") extra-args)
+          failure (output proc)]
+      (is (= 1 (:exit proc)) label)
+      (is (str/includes? (get-in failure [:error :message]) expected) label)
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))) label)
+      (is (not-any? mutating? (calls log)) label))))
+
+(deftest metadata-and-explicit-trait-composition-orders-dedupes-and-respects-inline-occurrence
+  (let [{:keys [dir env]} (fixture-env)
+        _ (write-trait! dir "alpha" :flat "ALPHA.")
+        _ (write-trait! dir "beta" :flat "BETA.")
+        _ (write-trait! dir "gamma" :flat "GAMMA.")
+        _ (write-persona! dir "meta-base-fixture"
+                          "---\nname: meta-base-fixture\nkind: pi\ntraits: [alpha]\n---\n\nBase body with %alpha inline.\n")
+        _ (write-persona! dir "meta-derived-fixture"
+                          "---\nname: meta-derived-fixture\nkind: pi\nextends: meta-base-fixture\ntraits: [beta]\n---\n\nDerived body without inline traits.\n")
+        start (call! env "task" "start" "meta-derived-fixture" "--task" "compose metadata"
+                     "--trait" "gamma" "--trait" "alpha")
+        task (get-in (output start) [:result :task])
+        entry (ledger-entry dir task)
+        composed (slurp (str (fs/path dir ".tmp" "herdr-orch" "composed" (str task "-meta-derived-fixture.md"))))]
+    (is (zero? (:exit start)) (:err start))
+    ;; base metadata first, derived metadata second, explicit spawn traits last; the
+    ;; explicit repeat of `alpha` (already declared by the base) does not add a second entry.
+    (is (= ["alpha" "beta" "gamma"] (:traits entry)))
+    (is (= ["project" "project" "project"] (mapv :source (:trait-sources entry))))
+    ;; `alpha` keeps its one inline occurrence rather than gaining a duplicate appended copy.
+    (is (= 1 (occurrence-count composed "ALPHA.")))
+    (is (= 1 (occurrence-count composed "BETA.")))
+    (is (= 1 (occurrence-count composed "GAMMA.")))
+    (is (not (str/includes? composed "%alpha")))
+    (is (not (str/includes? composed "%beta")))
+    (is (not (str/includes? composed "%gamma")))))
+
+(deftest preview-exposes-the-exact-effective-composed-text-and-provenance-without-mutation
+  (let [persona-body "---\nname: preview-derived-fixture\nkind: pi\nextends: preview-base-fixture\ntraits: [beta]\n---\n\nDerived body.\n"
+        base-body "---\nname: preview-base-fixture\nkind: pi\ntraits: [alpha]\n---\n\nBase body.\n"]
+    (let [{:keys [dir env]} (fixture-env)
+          _ (write-trait! dir "alpha" :flat "ALPHA.")
+          _ (write-trait! dir "beta" :flat "BETA.")
+          _ (write-persona! dir "preview-base-fixture" base-body)
+          _ (write-persona! dir "preview-derived-fixture" persona-body)
+          proc (call! env "task" "run" "preview-derived-fixture" "--task" "preview compose" "--print-prompt")
+          preview (:result (output proc))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "preview-derived-fixture" (:persona preview)))
+      (is (= "preview-base-fixture" (:base-persona preview)))
+      (is (= ["alpha" "beta"] (:traits preview)))
+      (is (str/includes? (:persona-text preview) "Base body."))
+      (is (str/includes? (:persona-text preview) "Derived body."))
+      (is (str/includes? (:persona-text preview) "ALPHA."))
+      (is (str/includes? (:persona-text preview) "BETA."))
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
+      (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "composed")))))
+    ;; A real spawn with the identical inputs materializes exactly the text preview reported.
+    (let [{:keys [dir env]} (fixture-env)
+          _ (write-trait! dir "alpha" :flat "ALPHA.")
+          _ (write-trait! dir "beta" :flat "BETA.")
+          _ (write-persona! dir "preview-base-fixture" base-body)
+          _ (write-persona! dir "preview-derived-fixture" persona-body)
+          preview-proc (call! env "task" "run" "preview-derived-fixture" "--task" "preview compose" "--print-prompt")
+          preview (:result (output preview-proc))
+          start (call! env "task" "start" "preview-derived-fixture" "--task" "materialize compose")
+          task (get-in (output start) [:result :task])
+          composed (slurp (str (fs/path dir ".tmp" "herdr-orch" "composed" (str task "-preview-derived-fixture.md"))))]
+      (is (zero? (:exit start)) (:err start))
+      (is (= composed (:persona-text preview))))))
+
+(deftest continuation-retains-composition-provenance
+  (let [{:keys [dir env state]} (fixture-env)
+        _ (write-trait! dir "alpha" :flat "ALPHA.")
+        _ (write-persona! dir "cont-base-fixture" "---\nname: cont-base-fixture\nkind: pi\ntraits: [alpha]\n---\n\nBase body.\n")
+        _ (write-persona! dir "cont-derived-fixture" "---\nname: cont-derived-fixture\nkind: pi\nextends: cont-base-fixture\n---\n\nDerived body.\n")
+        start (call! env "task" "start" "cont-derived-fixture" "--task" "compose then continue")
+        task (get-in (output start) [:result :task])
+        entry (ledger-entry dir task)
+        _ (patch-entry! dir entry :captured-at "2026-08-10T00:00:00Z" :status "COMPLETE")
+        _ (spit (str (fs/path state "children" (:child entry) "status")) "idle")
+        continued (call! env "task" "continue" task "--task" "continued round")
+        next-entry (ledger-entry dir (get-in (output continued) [:result :task]))]
+    (is (zero? (:exit start)) (:err start))
+    (is (zero? (:exit continued)) (:err continued))
+    (is (= (select-keys entry [:persona :base-persona :traits :trait-sources])
+           (select-keys next-entry [:persona :base-persona :traits :trait-sources])))
+    (is (= "cont-derived-fixture" (:persona next-entry)))
+    (is (= "cont-base-fixture" (:base-persona next-entry)))
+    (is (= ["alpha"] (:traits next-entry)))))
+
+(deftest inherited-read-only-trait-feeds-the-effective-trait-set
+  (let [{:keys [dir env]} (fixture-env)
+        _ (write-trait! dir "read-only" :flat "Read-only.")
+        _ (write-persona! dir "ro-base-fixture" "---\nname: ro-base-fixture\nkind: pi\n---\n\nBase policy: %read-only\n")
+        _ (write-persona! dir "ro-derived-fixture" "---\nname: ro-derived-fixture\nkind: pi\nextends: ro-base-fixture\n---\n\nDerived body.\n")
+        start (call! env "task" "start" "ro-derived-fixture" "--task" "inherit read-only")
+        task (get-in (output start) [:result :task])
+        entry (ledger-entry dir task)]
+    (is (zero? (:exit start)) (:err start))
+    (is (contains? (set (:traits entry)) "read-only"))))

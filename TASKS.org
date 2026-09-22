@@ -423,7 +423,7 @@ Origin:
 - git: cormacc/dotagents @ main
 - sender: agent
 
-** TODO Adapt ponytail for use with herdr-orch/traits
+** STARTED Adapt ponytail for use with herdr-orch/traits
 :PROPERTIES:
 :CUSTOM_ID: 1feac5ff-84b8-4a40-b15e-1de84d6c40b6
 :CREATED: [2026-09-17 Thu 15:35]
@@ -435,6 +435,7 @@ Origin:
 - State "STARTED" from "TODO" [2026-09-17 Thu 15:36]
 - State "WAITING" from "STARTED" [2026-09-17 Thu 17:57]
 - State "TODO" from "WAITING" [2026-09-17 Thu 22:09]
+- State "STARTED" from "TODO" [2026-09-21 Mon 15:59]
 :END:
 #+IMPORT: [[plan:2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]]
 Adapt Ponytail principles and workflows for foreman-led delegation, primarily for context management rather than parallelisation. Evaluate improvements and additions to subagent personas, trait extraction and refinement, minimal/base personas for dynamic trait composition, and whether a thin herdr-orch Pi extension adds value. Plan first; treat the initial recommendations as proposals, not accepted design decisions.

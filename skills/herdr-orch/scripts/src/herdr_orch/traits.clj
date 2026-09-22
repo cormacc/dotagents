@@ -149,6 +149,19 @@
            [[] nil]
            (lines-preserving-endings body))))
 
+;; Composition (persona `extends`/`traits:`/`--trait`) needs to know, before it decides
+;; which metadata selections to append, whether a name is already used as an inline
+;; candidate -- so it can leave that occurrence alone instead of emitting a second body
+;; (see contract.md Trait composition). This reuses `scan-body`'s own tokenizer rather than
+;; a second implementation: same code-fence/backtick/indented exclusions, same grammar. It
+;; is read-only and does no IO: the `expand` callback here only records names and echoes
+;; the token back unchanged, so no resolution, substitution, or length filtering happens.
+(defn inline-trait-names [text]
+  (let [{:keys [body]} (split-frontmatter text)
+        names (atom [])]
+    (scan-body body (fn [trait] (swap! names conj trait) (str "%" trait)))
+    (set @names)))
+
 (defn interpolate
   "Scans and substitutes trait tokens in text.
 
