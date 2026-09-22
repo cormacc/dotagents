@@ -1,6 +1,6 @@
 #+TITLE: Adapt ponytail for use with herdr-orch/traits
 #+DATE: 2026-09-17 Thu
-#+PARENT: [[task:1feac5ff-84b8-4a40-b15e-1de84d6c40b6][Adapt ponytail for use with herdr-orch/traits]]
+#+PARENT: [[archive:1feac5ff-84b8-4a40-b15e-1de84d6c40b6][Adapt ponytail for use with herdr-orch/traits]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
 #+SPEC: [[proj:skills/herdr-orch/SKILL.md]]

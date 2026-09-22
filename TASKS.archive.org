@@ -3513,3 +3513,24 @@ Evidence:
 `clojure_find_nrepl_port` reported no reachable port. The workflow then created a Herdr tab and ran `bb nrepl-server`. That command failed with `java.net.BindException: Address already in use`. A direct `clojure_eval` probe of port 1667 returned `2` for `(+ 1 1)`, which confirmed that an existing Babashka nREPL server was available.
 
 *EDIT* [2026-08-27 Thu] Partly overtaken, so the remaining scope is narrower than the heading. `skills/clojure/SKILL.md` § REPL-driven workflow now instructs: "If `bb nrepl-server` fails with address-in-use, an nREPL is already listening on the default port without a discoverable port file -- probe that port with an eval and reuse it instead of retrying startup." That covers the recovery path and removes the retry loop, but it is reactive: the wasted pane and the failed start still happen once. What is left is the pre-start check -- probe the default port before creating a pane and starting a server -- plus a decision on where it belongs, since `clojure_find_nrepl_port` reads port files only and is the component that reported no reachable port. Close this instead if the reactive guidance is judged sufficient.
+
+** DONE Adapt ponytail for use with herdr-orch/traits
+CLOSED: [2026-09-22 Tue 13:27]
+:PROPERTIES:
+:CUSTOM_ID: 1feac5ff-84b8-4a40-b15e-1de84d6c40b6
+:CREATED: [2026-09-17 Thu 15:35]
+:STARTED: [2026-09-17 Thu 15:36]
+:HANDOFF: Prerequisite herdr-orch improvements 260917 (archive:561270b1-e372-47a7-9173-bd966c4204ae) is delivered and archived: Herdr 0.9.1 client/server floor, raw Pi/oh option passthrough, close --abandon no-publication retirement, managed Pi integration at upstream rev 9, vendored herdr skill v0.9.1. Recheck this plan against that baseline (commits f64bf68..642624c) before execution: shared source references, tests and contracts may have moved. Review decisions: one-level inheritance; append metadata traits after the body; migrate trailing tokens only; assess source-grounded trait candidates, not a mandatory rigorous trait; incrementally replace Ponytail with reference/comparison access; focused activation checks.
+:ARCHIVED: [2026-09-22 Tue 13:27]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-09-17 Thu 15:35]
+- State "STARTED" from "TODO" [2026-09-17 Thu 15:36]
+- State "WAITING" from "STARTED" [2026-09-17 Thu 17:57]
+- State "TODO" from "WAITING" [2026-09-17 Thu 22:09]
+- State "STARTED" from "TODO" [2026-09-21 Mon 15:59]
+- State "DONE" from "STARTED" [2026-09-22 Tue 13:27]
+:END:
+#+IMPORT: [[plan:2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]]
+Adapt Ponytail principles and workflows for foreman-led delegation, primarily for context management rather than parallelisation. Evaluate improvements and additions to subagent personas, trait extraction and refinement, minimal/base personas for dynamic trait composition, and whether a thin herdr-orch Pi extension adds value. Plan first; treat the initial recommendations as proposals, not accepted design decisions.

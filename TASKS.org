@@ -202,7 +202,6 @@ Design and ship a shared skill-level helper that bootstraps a local Babashka cop
 :PROPERTIES:
 :CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
 :CREATED: [2026-08-11 Tue 12:23]
-:BLOCKED-BY: task:9e22a186-a3ae-4064-8f1e-7d9c0f1778e3
 :END:
 :LOGBOOK:
 - Created [2026-08-11 Tue 12:23]
@@ -328,7 +327,6 @@ Evidence:
 - Created [2026-08-27 Thu 14:22]
 :END:
 Remaining work: the glab upstream report below. =skills/herdr/LICENSE= was added in =7763016=. Ponytail attribution and reference access belong to the selected plan's guidance, workflow and activation tasks.
-
 *** TODO gitlab-cli-skills: glab-schedule create rejects --output json (list supports it) :skill_gitlab_cli_skills:
 :PROPERTIES:
 :CUSTOM_ID: 6d205682-bacc-465a-911f-419a76604e6f
@@ -422,23 +420,6 @@ Origin:
 - cwd: /Users/cormacc/dotfiles/agents
 - git: cormacc/dotagents @ main
 - sender: agent
-
-** STARTED Adapt ponytail for use with herdr-orch/traits
-:PROPERTIES:
-:CUSTOM_ID: 1feac5ff-84b8-4a40-b15e-1de84d6c40b6
-:CREATED: [2026-09-17 Thu 15:35]
-:STARTED: [2026-09-17 Thu 15:36]
-:HANDOFF: Prerequisite herdr-orch improvements 260917 (archive:561270b1-e372-47a7-9173-bd966c4204ae) is delivered and archived: Herdr 0.9.1 client/server floor, raw Pi/oh option passthrough, close --abandon no-publication retirement, managed Pi integration at upstream rev 9, vendored herdr skill v0.9.1. Recheck this plan against that baseline (commits f64bf68..642624c) before execution: shared source references, tests and contracts may have moved. Review decisions: one-level inheritance; append metadata traits after the body; migrate trailing tokens only; assess source-grounded trait candidates, not a mandatory rigorous trait; incrementally replace Ponytail with reference/comparison access; focused activation checks.
-:END:
-:LOGBOOK:
-- Created [2026-09-17 Thu 15:35]
-- State "STARTED" from "TODO" [2026-09-17 Thu 15:36]
-- State "WAITING" from "STARTED" [2026-09-17 Thu 17:57]
-- State "TODO" from "WAITING" [2026-09-17 Thu 22:09]
-- State "STARTED" from "TODO" [2026-09-21 Mon 15:59]
-:END:
-#+IMPORT: [[plan:2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]]
-Adapt Ponytail principles and workflows for foreman-led delegation, primarily for context management rather than parallelisation. Evaluate improvements and additions to subagent personas, trait extraction and refinement, minimal/base personas for dynamic trait composition, and whether a thin herdr-orch Pi extension adds value. Plan first; treat the initial recommendations as proposals, not accepted design decisions.
 
 ** TODO Draft upstream Herdr Pi native-prompt and listener-disposal proposal :herdr_orch:
 :PROPERTIES:
