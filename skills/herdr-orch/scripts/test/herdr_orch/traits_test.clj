@@ -458,6 +458,28 @@
       (is (zero? (:exit start)) (:err start))
       (is (= composed (:persona-text preview))))))
 
+(deftest preview-refuses-a-resolvable-but-unsubstitutable-trait-name
+  ;; A selection outside the `%<name>` grammar resolves as a file but can never be
+  ;; substituted: before the grammar check it was dropped silently, leaving a literal
+  ;; `%2fa` in the composed persona, absent from `:traits`, at exit 0.
+  (let [{:keys [dir env log]} (fixture-env)
+        _ (write-trait! dir "oktrait" :flat "OKTRAIT.")
+        _ (write-trait! dir "2fa" :flat "TWOFA.")
+        _ (write-persona! dir "grammar-fixture" "---\nname: grammar-fixture\nkind: pi\n---\n\nBody.\n")
+        ok (call! env "task" "run" "grammar-fixture" "--task" "preview control" "--trait" "oktrait" "--print-prompt")
+        control (:result (output ok))
+        bad (call! env "task" "run" "grammar-fixture" "--task" "preview grammar" "--trait" "2fa" "--print-prompt")]
+    ;; Positive control on the same preview surface: an ordinary `--trait` selection
+    ;; resolves and substitutes, so the refusal below is the guard, not a dead harness.
+    (is (zero? (:exit ok)) (:err ok))
+    (is (= ["oktrait"] (:traits control)))
+    (is (str/includes? (:persona-text control) "OKTRAIT."))
+    (is (= 1 (:exit bad)))
+    (is (str/includes? (get-in (output bad) [:error :message])
+                       "trait `2fa` is not a substitutable trait name"))
+    (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
+    (is (not-any? mutating? (calls log)))))
+
 (deftest continuation-retains-composition-provenance
   (let [{:keys [dir env state]} (fixture-env)
         _ (write-trait! dir "alpha" :flat "ALPHA.")

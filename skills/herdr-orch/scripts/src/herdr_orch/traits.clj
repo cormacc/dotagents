@@ -57,6 +57,15 @@
       (<= (int \0) (int c) (int \9))
       (= c \-)))
 
+(defn tokenizable-name?
+  "True when `trait` can appear as a `%<name>` token. A selection outside this grammar
+  resolves as a file but can never be substituted, so composition must reject it rather
+  than drop the directive and leave a literal `%<name>` in the composed persona."
+  [trait]
+  (boolean (and (seq trait)
+                (lowercase-letter? (first trait))
+                (every? name-character? trait))))
+
 (defn- token-at [^String line i]
   (let [n (.length line)]
     (when (and (= \% (.charAt line i))

@@ -183,6 +183,8 @@
                                           (traits-frontmatter-names persona frontmatter)
                                           explicit-traits))]
     (doseq [trait metadata-names]
+      (when-not (traits/tokenizable-name? trait)
+        (trait-resolution-failure! "is not a substitutable trait name (a lowercase letter followed by lowercase letters, digits or `-`)" trait directories))
       (when-not (traits/resolve-trait #(fs/exists? %) directories trait)
         (trait-resolution-failure! "was not found in the searched layers" trait directories)))
     (let [inline (traits/inline-trait-names composed-body)
