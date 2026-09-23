@@ -19,7 +19,7 @@ Format: `<type>[(scope)][!]: <description>` followed by an optional body and foo
 
    If a requested standalone commit depends on other uncommitted work, surface the dependency and propose dependency-ordered commits instead; verify each intermediate tree (e.g. run the test suite) before committing it.
 
-   Reconcile `git status` against the change's expected file set and stage those paths explicitly. A worktree shared with subagents, other agent sessions, or the user may hold unrelated edits; never `git add -A`/`.` there, and surface anything foreign you deliberately left unstaged.
+   Reconcile `git status` against the change's expected file set and stage those paths explicitly. A worktree shared with subagents, other agent sessions, or the user may hold unrelated edits; never `git add -A`/`.` there, and surface anything foreign you deliberately left unstaged. Omit a path already staged as a deletion: it no longer exists in the worktree, and `git add` validates every pathspec first, so one stale path stages nothing.
 
 2. Pick the type:
    - `feat` -- new functionality

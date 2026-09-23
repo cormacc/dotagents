@@ -67,7 +67,9 @@
 - Use `<repository-root>/.tmp/` for scripts, data, experiments, tests, and other temporary work.
 - Never store transient state under `.agents/`. That directory contains durable agent configuration.
   - Some harnesses deliberately mount `.agents/` as read-only so an agent cannot modify its own instructions.
-- Scope a repository reference sweep to tracked files with `git ls-files -z | xargs -0 grep`. A bare recursive grep also matches scratch copies under `.tmp/`.
+- Scope a repository reference sweep to tracked files with `git ls-files -z | xargs -0 grep`. A bare recursive grep also matches scratch copies under `.tmp/` and build output.
+  - When the change under review adds files, also sweep `git ls-files -z --others --exclude-standard`. A tracked-only sweep reports absence for a symbol that exists in a new, still-untracked file.
+  - Site the positive control inside one of those new files.
 - Search a gitignored scratch file by naming it directly, as in `rg <pattern> .tmp/<file>`. A path filter that names an unindexed file returns matches from unrelated tracked files instead.
 
 ## Command-line arguments
@@ -109,6 +111,7 @@
   - Use the same candidate-and-diff process to replace a long region. Do not replace a long region with one long inline replacement.
   - Check the end of each long edit after it completes. A truncated replacement can appear complete.
   - When an edit call containing several edits returns an error, treat the whole call as not applied. Verify with `grep` or `diff` before you reissue.
+- When an exact-text edit fails against text that reads as identical to the source, check for invisible or non-ASCII characters with `grep -nP '[^\x00-\x7F]'` before you retry.
 - To claim "verbatim except for listed edits", copy the source and apply targeted edits to the copy.
   - Inspect the diff before you make the claim.
 - A human can edit the same file at the same time.

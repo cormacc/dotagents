@@ -176,3 +176,29 @@ Negative control without touching tracked files. A read-only reviewer needed to 
 Repository check gate. =scripts/check.sh= ran no TypeScript at all, so a regression in any extension suite passed green. Fixed structurally in the same session by looping over =pi/extensions/*/test.sh=, which auto-covers future extensions; no rule was written, because it would only restate the mechanism.
 
 Collect ordering. The parent read a =WAITING= item as the child's result and had to collect again. Already documented -- =contract.md= states that collection consumes the oldest unconsumed item and that a captured =WAITING= is explicitly non-final.
+
+* 2026-09-23 Wed -- MBT dispatch namespace split (delegated, 4 subagents)
+
+Session delegated a plan review, an implementation, two independent code reviews and a test-gap worker through =herdr-orch=, in a ClojureScript project repository.
+
+** Scripts and transformations
+
+Invisible characters. A worker's exact-text edits failed repeatedly against =src/connect/mbt/dispatch.cljc= text that read as identical, because three =;;TODO= comments carried U+200B. Confirmed in the parent: =grep -c $'\u200b'= on the pre-split blob returns 3 against 17 ASCII =TODO= lines, and the shipped invocation =grep -nP '[^\x00-\x7F]'= returns those 3 lines on that file and exit 1 on an ASCII file.
+
+** Temporary files
+
+Tracked-only reference sweep. A reviewer's =git ls-files= sweep for a telemetry ID reported absence because the three new namespaces were still untracked; it caught the fault only because its positive control sat inside one of those new files. The parent hit the same trap independently while checking whether =::apply-filter= had any dispatcher, and separately got false positives from a bare recursive grep that matched stale compiled output under =portfolio/resources/public/js/cljs-runtime/=.
+
+** Assignment premises
+
+Post-change baseline. The parent composed a review assignment quoting a JVM total of 375 tests as the "baseline"; the figure had been measured only after the change. A reviewer measured the pre-change tree at 361, turning +14/+57 into positive evidence of preserved coverage rather than an unremarkable green. The same session restated a child's clj-kondo count of 4 errors as the base when the base was 5 -- the change removes one false positive.
+
+** Workflow (git-commit)
+
+Stale pathspec. Staging an explicit path list that included =test/src/connect/mbt/file_put_cli_mode_test.cljc=, already staged as a deletion and absent from the worktree, aborted the whole =git add= and staged none of the other 33 paths.
+
+** Not adopted
+
+Cross-revision probe sentinel. A reviewer's equivalence probe returned a =:NO-HANDLER= sentinel for 41 of 60 lookups against the pre-rename tree, which reads like "handlers are missing". Already covered by home/AGENTS.md § Negative results and controls.
+
+Gitignored tool state in an extracted tree. Linting a =git archive= extract of the base commit reported 437 errors against 5, because =.clj-kondo/config.edn= is tracked but the hook and import directories are gitignored; the same extract could not run the Node suite for want of =node_modules=. Verified in the project repository. Left unfiled pending a decision on whether the general form (a detached or extracted tree lacks gitignored build inputs, so a baseline measured there may be meaningless) earns instruction-file context.
