@@ -13,18 +13,7 @@
     "npm:@ogulcancelik/pi-session-recall",
     "npm:pi-web-access",
     "git:github.com/lemonade-sdk/lemonade-pi-plugin@main",
-    "npm:@ff-labs/pi-fff",
-    {
-      "source": "git:github.com/DietrichGebert/ponytail",
-      "extensions": [
-        "-pi-extension/index.js"
-      ],
-      "skills": [
-        "-skills/ponytail",
-        "-skills/ponytail-review",
-        "-skills/ponytail-audit"
-      ]
-    }
+    "npm:@ff-labs/pi-fff"
   ],
   "theme": "dark"
 }
