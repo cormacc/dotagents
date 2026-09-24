@@ -202,3 +202,9 @@ Stale pathspec. Staging an explicit path list that included =test/src/connect/mb
 Cross-revision probe sentinel. A reviewer's equivalence probe returned a =:NO-HANDLER= sentinel for 41 of 60 lookups against the pre-rename tree, which reads like "handlers are missing". Already covered by home/AGENTS.md § Negative results and controls.
 
 Gitignored tool state in an extracted tree. Linting a =git archive= extract of the base commit reported 437 errors against 5, because =.clj-kondo/config.edn= is tracked but the hook and import directories are gitignored; the same extract could not run the Node suite for want of =node_modules=. Verified in the project repository. Left unfiled pending a decision on whether the general form (a detached or extracted tree lacks gitignored build inputs, so a baseline measured there may be meaningless) earns instruction-file context.
+
+* 2026-09-24 Thu -- Lenire Connect reassociation history rewrite
+
+** Git operations -- read a file at another ref with git show
+
+A probe meant to lint develop's copy of one file ran =git stash && ... git checkout -q develop -- 2>/dev/null ... git stash pop=. With no pathspec after =--=, the checkout switched the worktree to =develop=, and the stash pop then conflicted on six files. It was recovered with =git reset --merge=, =git checkout reassoc-rebase=, and =git stash pop=. The read that was intended is =git show develop:<path> > .tmp/<file>=.

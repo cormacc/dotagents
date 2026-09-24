@@ -58,6 +58,7 @@
 # Git operations
 - Use `git mv` when you move files that Git controls. Do not use `mv` for those files.
 - Use Git to revert file changes that you made. Do not manually edit those files to revert them.
+- Read a file at another ref with `git show <ref>:<path>`. `git checkout <ref>` without a pathspec switches branches, even with a trailing `--`.
 - Read the `git-commit` skill before you write a commit message.
 
 # File operations
