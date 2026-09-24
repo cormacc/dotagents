@@ -176,7 +176,7 @@ Canonical IDs use pi's =<provider>/<model>= form. The packaged defaults cover th
 =merge-config= is =merge-with merge=, so the merge is exactly two levels deep:
 
 - Top-level keys (=:aliases=, =:models=, =:harnesses=, =:defaults=) merge across files.
-- One level down, an entry *replaces* its counterpart wholesale: an override =:models= row for ="anthropic/claude-opus-5"= replaces that whole row rather than merging columns into it, and an override =:harnesses :claude= entry replaces the packaged one -- so it must restate =:model-flag=, or validation rejects the file by name.
+- One level down, an entry *replaces* its counterpart wholesale: an override =:models= row for ="anthropic/claude-opus-5-5"= replaces that whole row rather than merging columns into it, and an override =:harnesses :claude= entry replaces the packaged one -- so it must restate =:model-flag=, or validation rejects the file by name.
 - =:aliases= and =:defaults= are the exceptions, because their values are scalars: each key merges independently. Retargeting ="heavy"= therefore costs one line and disturbs no sibling alias and no =:models= row. That is the point of the two-level split.
 
 A weight name is an =:aliases= key, never a =:models= key. The same key in both maps is rejected post-merge, naming the key -- which is the error you will see when migrating an override that carried a full ="heavy"= row.

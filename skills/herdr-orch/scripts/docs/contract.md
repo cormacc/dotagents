@@ -157,14 +157,14 @@ File chain, project wins: skill default `skills/herdr-orch/subagents/config.edn`
 
 A merged config where the same key is present in both `:aliases` and `:models`, or an `:aliases` value that is itself an `:aliases` key, fails `validate-merged-config!` by name. Both checks run in `cli/config` immediately after `merge-config`, before any ledger allocation or pane mutation, so a stale override (for example, a legacy full weight row now colliding with a shipped alias) fails loudly at spawn instead of silently shadowing or chaining.
 
-This table is the single enumerated home for the shipped weight rows. Every other document states the rule and links here. No test reads this document: `cli_test.clj`'s `default-config-content-contract` asserts `subagents/config.edn` against its own hand-written expected rows, so a model bump that misses the test fails `bb test`, while a bump that misses this table is caught only by review. Keep the two in step by hand. The rows translate only after kind resolution:
+This table is the single enumerated home for the shipped weight rows. Every other document states the rule and links here. `cli_test.clj`'s `shipped-config-invariants` parses this table and asserts that each row matches the translation of `subagents/config.edn`, so a model bump that misses this table fails `bb test`. The rows translate only after kind resolution:
 
 | Weight | Pi | Claude | Codex |
 |---|---|---|---|
 | `heavy` | `anthropic/claude-fable-5-1` | `fable` | `gpt-6-astra` |
-| `middle` | `anthropic/claude-opus-5` | `opus` | `gpt-5.6-sol` |
+| `middle` | `anthropic/claude-opus-5-5` | `opus` | `gpt-6-sol` |
 | `light` | `anthropic/claude-sonnet-5` | `sonnet` | `gpt-5.6-terra` |
-| `feather` | `anthropic/claude-haiku-4-5` | `claude-haiku-4-5` | `gpt-5.6-luna` |
+| `feather` | `anthropic/claude-haiku-4-5` | `claude-haiku-4-5` | `gpt-6-luna` |
 
 Unversioned canonical IDs (`claude-opus`, `gpt-sol`, …) are floating aliases resolving to the latest version of the tier. Versioned IDs pin a release.
 
