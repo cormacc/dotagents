@@ -2,6 +2,12 @@
 
 The scripts in this directory are repository-level development checks and runners. They are not shipped runtime surfaces.
 
+## Isolated test run
+
+The root `bb test` task loads `isolated-test-run.bb` and calls `run-suites` with the org-tasks and herdr-orch Clojure suites and the script test suites. It runs each suite as `bb -Djava.io.tmpdir=<root>` with `TMPDIR=<root>`, where `<root>` is one new `/tmp/dotagents-test-*` directory for the run. Babashka's `fs/create-temp-dir` reads `java.io.tmpdir` and ignores `TMPDIR`; Node's `os.tmpdir()` reads `TMPDIR`. The root is outside the checkout because several tests need a directory outside any git repository. The task deletes the root afterwards; set `DOTAGENTS_KEEP_TEST_TMP=1` to keep it for debugging.
+
+The task also fails when the run adds or removes a git worktree or a `refs/heads/orch/*` branch in this repository, and it prints the cleanup command. Such a change means that a test ran `oh` with this checkout as its working directory. A real orchestration that starts during the run can also cause this failure.
+
 ## Trait gate runner
 
 Run a trait's adversarial gate with a native Codex model ID:

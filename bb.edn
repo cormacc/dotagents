@@ -41,16 +41,14 @@
                           (apply (requiring-resolve 'org-tasks.test-runner/run)
                                  *command-line-args*))}
 
-  test {:doc  "Run all Clojure and repository script tests"
-        :task (do (process/check
-                    (process/process (into ["bb" "test-clojure"] *command-line-args*)
-                                     {:inherit true}))
-                  (process/check
-                    (process/process ["bb" "scripts/test-run-trait-gate.bb"]
-                                     {:inherit true}))
-                  (process/check
-                    (process/process ["bb" "scripts/test-analyse-anthropic-cache-ttl.bb"]
-                                     {:inherit true})))}
+  ;; scripts/isolated-test-run.bb gives the run one temporary root, deletes it
+  ;; afterwards, and fails if the run registers a git worktree or orch/* branch.
+  test {:doc  "Run all Clojure and repository script tests in an isolated temporary root"
+        :task (do (load-file "scripts/isolated-test-run.bb")
+                  ((resolve 'run-suites)
+                   [(into ["test-clojure"] *command-line-args*)
+                    ["scripts/test-run-trait-gate.bb"]
+                    ["scripts/test-analyse-anthropic-cache-ttl.bb"]]))}
 
   smoke-subagent {:doc "Run explicitly guarded live Herdr subagent smoke (set ORCH_LIVE_SMOKE_KIND=claude to exercise Claude)"
                   :task (apply (requiring-resolve 'herdr-orch.smoke/-main)

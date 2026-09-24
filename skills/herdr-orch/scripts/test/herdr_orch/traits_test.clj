@@ -26,9 +26,20 @@
         (throw (ex-info "failed to warm traits test classpath cache" {:exit (:exit proc) :err (:err proc)})))
       dir)))
 
+(defn- init-repo!
+  "Create a git repository with one commit at `path`. `oh` runs `git worktree add` in its
+  working directory, so each fixture subprocess must run here and never in this checkout."
+  [path]
+  (fs/create-dirs path)
+  (doseq [argv [["init" "--quiet"]
+                ["-c" "user.name=fixture" "-c" "user.email=fixture@example.invalid"
+                 "commit" "--quiet" "--allow-empty" "-m" "fixture"]]]
+    (process/check (process/process (into ["git"] argv) {:dir (str path) :out :string :err :string}))))
+
 (defn- fixture-env []
   (let [dir (fs/canonicalize (fs/create-temp-dir {:prefix "traits-cli-"}))
         home (fs/path dir "home")
+        _ (init-repo! (fs/path dir "repo"))
         log (str (fs/path dir "calls"))
         env-file (str (fs/path dir "env"))
         prompt-file (str (fs/path dir "prompt"))
@@ -65,7 +76,11 @@
     (str path)))
 
 (defn- call! [env & argv]
-  @(process/process (into [bin] argv) {:out :string :err :string :env env}))
+  ;; Run from the fixture repository that fixture-env creates under ORCH_ASSIGNMENT_ROOT.
+  (let [root (or (get env "ORCH_ASSIGNMENT_ROOT")
+                 (throw (ex-info "fixture env has no ORCH_ASSIGNMENT_ROOT" {})))]
+    @(process/process (into [bin] argv)
+                      {:dir (str (fs/path root "repo")) :out :string :err :string :env env})))
 (defn- output [proc] (json/parse-string (:out proc) true))
 (defn- calls [log]
   (if (fs/exists? log)
