@@ -128,6 +128,46 @@
   (is (= "worker-1-claude-opus-5" (core/root-label "worker" 1 "claude-opus-5")))
   (is (= "worker-1-claude-opus-5" (core/root-label "worker" 1 "anthropic/claude-opus-5"))))
 
+(deftest effort-resolution-and-rendering-contract
+  (is (= "medium" core/default-effort))
+  (testing "effort-value! trims and returns a valid level"
+    (is (= "high" (core/effort-value! "--effort" nil "  high  "))))
+  (testing "effort-value! rejects a blank value, naming label and persona"
+    (is (try (core/effort-value! "--effort" "worker" "") false
+             (catch clojure.lang.ExceptionInfo e
+               (and (str/includes? (ex-message e) "--effort") (= "worker" (:persona (ex-data e))))))))
+  (testing "effort-value! rejects a value containing whitespace, including \\n \\t \\r"
+    (doseq [bad ["very high" "hi\ngh" "hi\tgh" "hi\rgh"]]
+      (is (try (core/effort-value! "--effort" "worker" bad) false
+               (catch clojure.lang.ExceptionInfo e (str/includes? (ex-message e) "--effort")))
+          bad)))
+  (testing "resolve-effort precedence: flag > frontmatter > same-kind parent > default"
+    (is (= {:effort "high" :effort-source "flag"}
+           (core/resolve-effort {:flag "high" :frontmatter {:effort "low"} :resolved-kind "pi" :parent-kind "pi" :parent-effort "minimal"})))
+    (is (= {:effort "low" :effort-source "frontmatter"}
+           (core/resolve-effort {:frontmatter {:effort "low"} :resolved-kind "pi" :parent-kind "pi" :parent-effort "minimal"})))
+    (is (= {:effort "minimal" :effort-source "parent"}
+           (core/resolve-effort {:frontmatter {} :resolved-kind "pi" :parent-kind "pi" :parent-effort "minimal"})))
+    (is (= {:effort "medium" :effort-source "default"}
+           (core/resolve-effort {:frontmatter {} :resolved-kind "pi" :parent-kind "pi" :parent-effort nil})))
+    ;; Inheritance is same-kind only: a pi parent's level never reaches a claude child.
+    (is (= {:effort "medium" :effort-source "default"}
+           (core/resolve-effort {:frontmatter {} :resolved-kind "claude" :parent-kind "pi" :parent-effort "off"}))))
+  (testing "effort-args"
+    (let [config {:harnesses {:pi {:model-flag "--model"}
+                              :claude {:model-flag "--model" :effort-flag "--effort"}
+                              :codex {:model-flag "--model" :effort-flag "-c model_reasoning_effort={}"}}}]
+      ;; No `:effort-flag`, whether the kind has no entry or its entry omits the key.
+      (is (= [] (core/effort-args config "gemini" "high")))
+      (is (= [] (core/effort-args config "pi" "high")))
+      ;; A template without `{}` appends the level as the next arg.
+      (is (= ["--effort" "high"] (core/effort-args config "claude" "high")))
+      ;; A template with `{}` splits on whitespace and substitutes into each token.
+      (is (= ["-c" "model_reasoning_effort=high"] (core/effort-args config "codex" "high")))
+      ;; A padded template yields no empty token.
+      (is (= ["-c" "model_reasoning_effort=high"]
+             (core/effort-args (assoc-in config [:harnesses :codex :effort-flag] " -c model_reasoning_effort={} ") "codex" "high"))))))
+
 (deftest config-parse-merge-and-shape-validation
   (testing "valid EDN parses"
     (is (= {:harnesses {:pi {:model-flag "--model"}} :models {"claude-opus-5" {:pi "anthropic/claude-opus-5"}}}
@@ -145,6 +185,8 @@
                           ":harnesses entry not a map" "{:harnesses {:pi \"nope\"}}"
                           "blank :model-flag" "{:harnesses {:pi {:model-flag \"\"}}}"
                           "non-string :model-flag" "{:harnesses {:pi {:model-flag 1}}}"
+                          "blank :effort-flag" "{:harnesses {:pi {:model-flag \"--model\" :effort-flag \"\"}}}"
+                          "non-string :effort-flag" "{:harnesses {:pi {:model-flag \"--model\" :effort-flag 1}}}"
                           ":extra-args not sequential" "{:harnesses {:pi {:model-flag \"--model\" :extra-args \"--yolo\"}}}"
                           ":extra-args non-string member" "{:harnesses {:pi {:model-flag \"--model\" :extra-args [1]}}}"
                           ":extra-args blank member" "{:harnesses {:pi {:model-flag \"--model\" :extra-args [\"\"]}}}"

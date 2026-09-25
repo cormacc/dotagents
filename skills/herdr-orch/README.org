@@ -81,13 +81,14 @@ Assignment state (ledger, result files) lives under =<assignment-root>/.tmp/herd
 
 ** Defining subagents
 
-A persona is a Markdown file with frontmatter. =name= and =description= are advisory. The CLI reads =kind=, =model=, =spawns=, and =retro=. Everything after the frontmatter is the persona's instructions.
+A persona is a Markdown file with frontmatter. =name= and =description= are advisory. The CLI reads =kind=, =model=, =effort=, =spawns=, and =retro=. Everything after the frontmatter is the persona's instructions.
 
 #+begin_src markdown
 ---
 name: scout
 description: Fast codebase reconnaissance - maps existing code and conventions
 model: light        # weight alias or canonical ID; omit to inherit
+effort: medium      # thinking/effort tier; omit to inherit the parent's (same kind only)
 kind: claude        # omit to inherit the parent's harness
 spawns: scout       # whitespace-separated allow-list; omit for a leaf
 retro: false        # omit to use the installation default
@@ -98,7 +99,7 @@ retro: false        # omit to use the installation default
 <the persona's instructions>
 #+end_src
 
-All four keys are optional. Omitting =kind= is usually right: the child then inherits the harness Herdr measured for the parent. =kind= is the *only* place a harness is chosen -- no flag, no env var -- because which CLI a child runs is a deployment property, not a per-assignment dial like =model=. A cross-harness comparison is a definition declaring the other harness.
+Every key above is optional. Omitting =kind= is usually right: the child then inherits the harness Herdr measured for the parent. =kind= is the *only* place a harness is chosen -- no flag, no env var -- because which CLI a child runs is a deployment property, not a per-assignment dial like =model=. A cross-harness comparison is a definition declaring the other harness.
 
 A definition may also declare =extends: <base-name>=, resolved through the same three layers, to compose one base body before its own -- =base-analyst= (packaged, read-only, a leaf by default) is the shipped base for a concrete analysis persona to extend rather than re-declaring its assignment/evidence/uncertainty scaffold. One level only: a base that itself declares =extends:= is refused. See [[file:scripts/docs/contract.md][contract.md]] § Persona composition for the resolution and merge rules.
 
@@ -176,7 +177,7 @@ Canonical IDs use pi's =<provider>/<model>= form. The packaged defaults cover th
 =merge-config= is =merge-with merge=, so the merge is exactly two levels deep:
 
 - Top-level keys (=:aliases=, =:models=, =:harnesses=, =:defaults=) merge across files.
-- One level down, an entry *replaces* its counterpart wholesale: an override =:models= row for ="anthropic/claude-opus-5-5"= replaces that whole row rather than merging columns into it, and an override =:harnesses :claude= entry replaces the packaged one -- so it must restate =:model-flag=, or validation rejects the file by name.
+- One level down, an entry *replaces* its counterpart wholesale: an override =:models= row for ="anthropic/claude-opus-5-5"= replaces that whole row rather than merging columns into it, and an override =:harnesses :claude= entry replaces the packaged one -- so it must restate =:model-flag=, or validation rejects the file by name, and =:effort-flag=, or that kind receives no effort args.
 - =:aliases= and =:defaults= are the exceptions, because their values are scalars: each key merges independently. Retargeting ="heavy"= therefore costs one line and disturbs no sibling alias and no =:models= row. That is the point of the two-level split.
 
 A weight name is an =:aliases= key, never a =:models= key. The same key in both maps is rejected post-merge, naming the key -- which is the error you will see when migrating an override that carried a full ="heavy"= row.
@@ -206,7 +207,7 @@ There is no =:pi= column, and adding one would be redundant: an ID with no match
 
 ** Harness configuration
 
-=:harnesses= says how a resolved kind is invoked. =:model-flag= is required in every entry, including an entry you add only to attach =:extra-args=, because the level replaces wholesale.
+=:harnesses= says how a resolved kind is invoked. =:model-flag= is required in every entry, including an entry you add only to attach =:extra-args=, because the level replaces wholesale. =:effort-flag= is optional; an entry without it receives no effort args.
 
 =:extra-args= exists so an override can relax a harness's interactive command approval: without it, claude and codex children stall at their first tool call in a pane nobody is watching. Prefer a bounded grant to a blanket bypass -- the live home override at [[file:../../subagents/config.edn][subagents/config.edn]] records the reasoning and the rejected alternatives, and [[file:scripts/docs/contract.md][contract.md]] § Harness =:extra-args= gives the validation rules.
 
@@ -261,7 +262,7 @@ To see what a spawn would do without spawning it:
 oh task run scout --task x --model heavy --print-prompt
 #+end_src
 
-The preview reports =kind=, the resolved (pre-alias) =model=, its post-alias =model-canonical=, the translated =model-args= the harness will receive, and the resolved =placement=, =retro=/=retro-source=, and =spawns=/=spawns-source=. Read the two model fields together to localise a miss: if =model-canonical= still shows your short name, no =:aliases= entry matched. If it is right but =model-args= repeats it instead of a harness-native ID, the =:models= row has no column for that kind.
+The preview reports =kind=, the resolved (pre-alias) =model=, its post-alias =model-canonical=, the translated =model-args= the harness will receive, the resolved =effort=/=effort-source= and translated =effort-args=, and the resolved =placement=, =retro=/=retro-source=, and =spawns=/=spawns-source=. Read the two model fields together to localise a miss: if =model-canonical= still shows your short name, no =:aliases= entry matched. If it is right but =model-args= repeats it instead of a harness-native ID, the =:models= row has no column for that kind.
 
 * Known gaps
 

@@ -109,6 +109,43 @@
                           :else [default-timeout-ms "default"])]
     {:timeout ms :timeout-source source}))
 
+;; Effort/thinking-level resolution, mirroring `resolve-model`'s tier and mechanism
+;; rather than `resolve-timeout`'s: `--effort` flag > persona frontmatter `effort:` >
+;; same-kind parent inheritance (`parent-effort`, injected as `HERDR_ORCH_EFFORT`) >
+;; the shipped default. Same-kind only, exactly like `resolve-model`'s guard, so a
+;; pi-only level such as `off` never reaches a claude or codex child without a
+;; per-kind vocabulary table. The level itself is pass-through, never validated
+;; against a per-kind vocabulary.
+(def default-effort "medium")
+;; ceiling: a non-whitespace control character (e.g. \x1b) is left to Herdr, which rejects
+;; it at `agent start` after allocation (the round is cleaned up); check here if levels
+;; ever come from a source other than the parent's argv or controlled definitions.
+(defn effort-value! [label persona value]
+  (let [trimmed (str/trim (str value))]
+    (when (or (str/blank? trimmed) (re-find #"\s" trimmed))
+      (throw (ex-info (str label " must be a single word with no whitespace")
+                      (cond-> {:value value} persona (assoc :persona persona)))))
+    trimmed))
+(defn resolve-effort [{:keys [persona flag frontmatter resolved-kind parent-kind parent-effort]}]
+  (let [declared (when (some? (:effort frontmatter))
+                   (effort-value! "persona frontmatter `effort`" persona (:effort frontmatter)))
+        [effort source] (cond (some? flag) [(effort-value! "--effort" nil flag) "flag"]
+                              (some? declared) [declared "frontmatter"]
+                              (and (= resolved-kind parent-kind) (some? parent-effort)) [parent-effort "parent"]
+                              :else [default-effort "default"])]
+    {:effort effort :effort-source source}))
+;; Rendering mirrors `model-args`: a kind with no `:effort-flag` yields no args, and
+;; the flag string is a template with an optional `{}` placeholder. A `{}` token splits
+;; the template on whitespace and substitutes the level into every token (codex's
+;; `"-c model_reasoning_effort={}"` -> `["-c" "model_reasoning_effort=high"]`); a
+;; template without `{}` appends the level as the next arg (claude's `"--effort"` ->
+;; `["--effort" "high"]`).
+(defn effort-args [config kind level]
+  (let [flag (get-in config [:harnesses (keyword kind) :effort-flag])]
+    (cond (nil? flag) []
+          (str/includes? flag "{}") (mapv #(str/replace % "{}" level) (str/split (str/trim flag) #"\s+"))
+          :else [flag level])))
+
 ;; A `spawns:` frontmatter value is a whitespace- and/or comma-separated allow-list.
 ;; Blank (or absent, arriving as nil) means leaf; `distinct` dedupes while preserving
 ;; declaration order.
@@ -186,7 +223,8 @@
 ;; `--permission-mode auto`, codex `--ask-for-approval never --sandbox workspace-write`
 ;; -- is only ever granted by an override file that asks for it explicitly. Because
 ;; `merge-config` replaces a harness entry wholesale rather than merging its keys, such an
-;; override must restate `:model-flag`; validation enforces that.
+;; override must restate `:model-flag` (validation enforces it) and `:effort-flag` (else
+;; that kind receives no effort args).
 (defn harness-extra-args [config kind]
   (vec (get-in config [:harnesses (keyword kind) :extra-args])))
 ;; config.edn shape validation: sparse model rows and harness keywords absent from
@@ -202,6 +240,10 @@
       (let [flag (:model-flag entry)]
         (when-not (and (string? flag) (not (str/blank? flag)))
           (throw (ex-info "config :harnesses entry :model-flag must be a non-blank string" {:path path :harness kind :model-flag flag}))))
+      (when (contains? entry :effort-flag)
+        (let [effort-flag (:effort-flag entry)]
+          (when-not (and (string? effort-flag) (not (str/blank? effort-flag)))
+            (throw (ex-info "config :harnesses entry :effort-flag must be a non-blank string" {:path path :harness kind :effort-flag effort-flag})))))
       ;; `:extra-args` reaches Herdr as native `agent start` argv, which rejects control
       ;; characters outright, so a bad value fails here with the offending file rather
       ;; than as an opaque `invalid_agent_argument` at spawn time.

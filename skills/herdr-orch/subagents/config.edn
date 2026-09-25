@@ -1,8 +1,16 @@
 ;; Canonical model-ID → per-harness-syntax lookup table, in two levels.
 ;;
 ;; `:harnesses` declares how each resolved kind receives a model (currently a
-;; single `--model` flag for all three); the kind set is open — an override
-;; may add an entry for a new kind (e.g. `:gemini`) with no code change.
+;; single `--model` flag for all three) and an effort/thinking level via
+;; `:effort-flag`; the kind set is open — an override may add an entry for a
+;; new kind (e.g. `:gemini`) with no code change.
+;;
+;; `:effort-flag` is an optional string template; a kind without one receives
+;; no effort args. A template containing `{}` splits on whitespace and
+;; substitutes the resolved level into each token (so codex's
+;; `"-c model_reasoning_effort={}"` becomes `["-c" "model_reasoning_effort=high"]`);
+;; a template without `{}` appends the level as the next arg (so claude's
+;; `"--effort"` becomes `["--effort" "high"]`).
 ;;
 ;; `:models` maps a canonical, pi-style `provider/model` ID to a sparse row of
 ;; harness-native spellings for the *other* kinds.
@@ -18,9 +26,9 @@
 ;; ← <assignment-root>/.agents/subagents/config.edn. `:models` rows and `:harnesses`
 ;; entries replace wholesale; `:aliases` and `:defaults` merge per key.
 {:defaults {:placement :tab-split}
- :harnesses {:pi     {:model-flag "--model"}
-             :claude {:model-flag "--model"}
-             :codex  {:model-flag "--model"}}
+ :harnesses {:pi     {:model-flag "--model" :effort-flag "--thinking"}
+             :claude {:model-flag "--model" :effort-flag "--effort"}
+             :codex  {:model-flag "--model" :effort-flag "-c model_reasoning_effort={}"}}
  :models {"anthropic/claude-fable-5-1" {:claude "fable"            :codex "gpt-6-astra"}
           "anthropic/claude-opus-5-5"  {:claude "opus"             :codex "gpt-6-sol"}
           "anthropic/claude-sonnet-5"  {:claude "sonnet"           :codex "gpt-5.6-terra"}

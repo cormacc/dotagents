@@ -6,8 +6,8 @@
 ;;
 ;; `merge-config` is `merge-with merge`, so a `:harnesses` entry here REPLACES the
 ;; packaged entry for that kind wholesale rather than merging its keys. Every entry
-;; below must therefore restate `:model-flag`; omitting it fails validation at parse
-;; with this file's path.
+;; below must therefore restate `:model-flag`, or validation fails at parse with this
+;; file's path, and `:effort-flag`, or that kind receives no effort args.
 ;;
 ;; WHY: Claude Code and Codex both default to interactive per-command approval, so a
 ;; spawned subagent stalls at its first tool call waiting for a human who is not
@@ -42,8 +42,8 @@
 ;;
 ;; Verified against Claude Code 2.1.220 and codex-cli 0.145.0.
 
-{:harnesses {:claude {:model-flag "--model"
+{:harnesses {:claude {:model-flag "--model" :effort-flag "--effort"
                       :extra-args ["--permission-mode" "auto"]}
-             :codex  {:model-flag "--model"
+             :codex  {:model-flag "--model" :effort-flag "-c model_reasoning_effort={}"
                       :extra-args ["--ask-for-approval" "never"
                                    "--sandbox" "workspace-write"]}}}

@@ -4901,6 +4901,10 @@
     (testing "each shipped harness receives its model through --model"
       (doseq [kind [:pi :claude :codex]]
         (is (= "--model" (get-in harnesses [kind :model-flag])) (name kind))))
+    (testing "each shipped harness receives its effort level through its declared :effort-flag"
+      (is (= "--thinking" (get-in harnesses [:pi :effort-flag])))
+      (is (= "--effort" (get-in harnesses [:claude :effort-flag])))
+      (is (= "-c model_reasoning_effort={}" (get-in harnesses [:codex :effort-flag]))))
     (testing "the usage text names the shipped placement default"
       (is (str/includes? cli/usage (str "ships as " (get-in config [:defaults :placement])))))
     (testing "every alias targets a :models row"
@@ -4927,6 +4931,63 @@
                 [kind native] row]
           (is (= ["--model" native] (core/model-args config (name kind) weight))
               (str "contract.md row " weight " " (name kind) " must match config.edn")))))))
+
+;; Effort/thinking-level resolution mirrors `model:` precedence and mechanism
+;; (change-record 2026-09-24-herdr-orch-add-thinking-level-support): --effort flag >
+;; frontmatter `effort:` > same-kind parent `HERDR_ORCH_EFFORT` > the shipped default.
+(def ^:private effort-roster
+  {"effortful" "---\nname: effortful\ndescription: fixture with a declared effort\nkind: pi\nmodel: anthropic/claude-sonnet-5\neffort: low\nretro: false\n---\nFixture.\n"
+   "effortless" "---\nname: effortless\ndescription: fixture without one\nkind: pi\nmodel: anthropic/claude-sonnet-5\nretro: false\n---\nFixture.\n"})
+(deftest effort-print-prompt-reports-flag-then-frontmatter-then-parent-then-default
+  (testing "--effort flag wins over frontmatter"
+    (let [{:keys [env]} (fake-env {} effort-roster)
+          res (:result (result (call! env "task" "run" "effortful" "--task" "x" "--effort" "high" "--print-prompt")))]
+      (is (= "high" (:effort res)))
+      (is (= "flag" (:effort-source res)))))
+  (testing "frontmatter wins over same-kind parent inheritance"
+    (let [{:keys [env]} (fake-env {"HERDR_ORCH_EFFORT" "minimal"} effort-roster)
+          res (:result (result (call! env "task" "run" "effortful" "--task" "x" "--print-prompt")))]
+      (is (= "low" (:effort res)))
+      (is (= "frontmatter" (:effort-source res)))))
+  (testing "a same-kind parent's injected HERDR_ORCH_EFFORT wins over the default"
+    (let [{:keys [env]} (fake-env {"HERDR_ORCH_EFFORT" "minimal"} effort-roster)
+          res (:result (result (call! env "task" "run" "effortless" "--task" "x" "--print-prompt")))]
+      (is (= "minimal" (:effort res)))
+      (is (= "parent" (:effort-source res)))))
+  (testing "no flag, frontmatter, or parent resolves the shipped default"
+    (let [{:keys [env]} (fake-env {} effort-roster)
+          res (:result (result (call! env "task" "run" "effortless" "--task" "x" "--print-prompt")))]
+      (is (= core/default-effort (:effort res)))
+      (is (= "default" (:effort-source res))))))
+
+;; A malformed `--effort` fails fast, before any ledger allocation or pane mutation,
+;; exactly like an invalid `--timeout`.
+(deftest a-blank-effort-flag-fails-before-any-mutation
+  (let [{:keys [env log dir]} (fake-env {} effort-roster)
+        proc (call! env "task" "run" "effortless" "--task" "blank effort" "--effort" "")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"--effort must be a single word with no whitespace" (:out proc)) (:out proc))
+    (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))) "no allocation, no pane")
+    (is (empty? (filter mutating? (calls log))))))
+
+;; The spawn path, which the preview tests do not run: the resolved level reaches the
+;; real `agent start` argv after the model args, and the child env as HERDR_ORCH_EFFORT.
+(deftest spawned-child-receives-effort-args-and-env
+  (let [{:keys [env log env-file]} (fake-env {} effort-roster)
+        proc (call! env "task" "start" "effortful" "--task" "effort reaches spawn")
+        argv (vec (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))
+        at (fn [x] (.indexOf argv x))]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (some #(= ["--thinking" "low"] %) (partition 2 1 argv)) (pr-str argv))
+    (is (< (at "--model") (at "--thinking")) "effort args follow the model args")
+    (is (= "low" (injected-env env-file "HERDR_ORCH_EFFORT")))))
+
+;; `--print-prompt` reports the effort args rendered for the resolved kind.
+(deftest preview-reports-effort-args
+  (let [{:keys [env]} (fake-env {} effort-roster)
+        proc (call! env "task" "run" "effortful" "--task" "x" "--effort" "high" "--print-prompt")]
+    (is (zero? (:exit proc)) (:err proc))
+    (is (= ["--thinking" "high"] (:effort-args (:result (result proc)))))))
 
 ;; contract.md § Model resolution states "Every packaged persona declares one": the
 ;; environment-fallback tier is reachable only by a persona that declares no `model:`.

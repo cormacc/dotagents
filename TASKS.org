@@ -461,6 +461,28 @@ skills/herdr-orch/traits/simple/gate.md records two %simple probe runs at gpt-5.
 :END:
 skills/herdr-orch/references/traits.md claims \`incompatible-with:\` enforcement is documented/implemented in skills/herdr-orch/scripts/docs/contract.md, and contract.md's Trait composition section claims herdr-orch.traits/interpolate returns "incompatibility declarations by trait in :incompatibilities". Neither is true: traits.clj's interpolate returns only :text, :resolved, :unknowns and :repeats (no :incompatibilities key), and no \`incompatible-with:\` frontmatter parsing or enforcement exists anywhere in traits.clj or cli.clj. Identified but deliberately left unfixed during [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]] ("Correct the documentation rather than assume a conflict engine exists. This plan does not add a generic semantic conflict solver.") Correct both docs to match the actual implementation (or implement the feature, if still wanted).
 
+** STARTED herdr-orch - add thinking-level support :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: f984543d-b4d1-4307-9499-f025acd359d9
+:CREATED: [2026-09-24 Thu 16:28]
+:STARTED: [2026-09-24 Thu 19:13]
+:END:
+:LOGBOOK:
+- Created [2026-09-24 Thu 16:28]
+- State "STARTED" from "TODO" [2026-09-24 Thu 19:13]
+:END:
+#+IMPORT: [[plan:2026-09-24-herdr-orch-add-thinking-level-support.org]]
+Requirements (from the user, 2026-09-24):
+- Each `:harnesses` entry in `config.edn` gains an `:effort-flag` member, the native flag that sets the thinking/effort level for that kind.
+- The default level is `medium`.
+- The level is overridable at persona level (frontmatter) and at spawn time (`oh task run|start`).
+- Precedence mirrors model weight selection: spawn > persona > default.
+- Superseded in planning (2026-09-24): no config-chain default. Precedence is `--effort` > frontmatter `effort:` > same-kind parent level > `medium`; see the change-record.
+
+Current state (measured 2026-09-24): `oh` sets no thinking level. In `cli.clj`, the child argv is `core/model-args` + `core/harness-extra-args` + `core/persona-args` only. A pi child therefore inherits `defaultThinkingLevel: high` from `pi/settings.json`; claude and codex children use their own defaults (no effort key in `~/.claude/settings.json` or `~/.codex/config.toml`). `:defaults` is a closed map whose only key is `:placement` (`skills/herdr-orch/scripts/docs/contract.md` § Model resolution).
+
+Native surfaces (from each tool's `--help`): pi 0.87.1 `--thinking <level>` (off, minimal, low, medium, high, xhigh, max); Claude Code 2.1.281 `--effort <level>` (low, medium, high, xhigh, max); codex-cli 0.156.1 has no effort flag, only `-c model_reasoning_effort=<level>` (key found in the binary; accepted values not verified).
+
 * Fixes
 * Upstream issues
 

@@ -1,0 +1,183 @@
+#+TITLE: herdr-orch - add thinking-level support
+#+DATE: 2026-09-24 Thu
+#+PARENT: [[task:f984543d-b4d1-4307-9499-f025acd359d9][herdr-orch - add thinking-level support]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/README.org]]
+
+* Intent
+
+Give every `oh`-spawned child an explicit, inspectable thinking/effort level, resolved like the model (spawn flag > persona frontmatter > same-kind parent inheritance > shipped default `medium`) and rendered through a per-harness `:effort-flag` in `config.edn`, so a child no longer silently inherits whatever level its harness's own settings file happens to hold.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+** Scope
+
+*** In scope
+- `core.clj`: `default-effort`, `effort-value!`, `resolve-effort`, `effort-args`; `validate-config-shape!` checks a present `:effort-flag`.
+- `cli.clj`: `parent-effort`, `effort-policy`, `--effort` on `task run|start`, `HERDR_ORCH_EFFORT` injection, argv order `model-args ++ effort-args ++ extra-args ++ persona-args`, ledger/preview/`continue` fields.
+- Packaged `skills/herdr-orch/subagents/config.edn` and home `subagents/config.edn`.
+- `contract.md` § Model resolution and env-var table; `README.org` frontmatter, merge-rule, and `--print-prompt` sections.
+- `core_test.clj`, `cli_test.clj` (`shipped-config-invariants` and new cases).
+
+*** Out of scope
+- A global default via the config chain or any new `:defaults` key (superseded by parent inheritance, 2026-09-24).
+- Per-kind level vocabularies or translation tables; `oh` passes the level through.
+- The pi `provider/id:<thinking>` model suffix: documented as unsupported, not rejected.
+- Pinning `effort:` in any packaged persona.
+- Cross-kind inheritance (a pi parent's `off` never reaches a claude child).
+
+** Acceptance
+
+*** Core functionality
+- [ ] Packaged `config.edn` declares `:effort-flag` for `:pi` (`"--thinking"`), `:claude` (`"--effort"`), `:codex` (`"-c model_reasoning_effort={}"`).
+- [ ] Home `subagents/config.edn` restates `:effort-flag` for `:claude` and `:codex`.
+- [ ] `oh task run|start` accepts `--effort <level>`.
+- [ ] Persona frontmatter accepts `effort: <level>`.
+- [ ] Precedence is `--effort` > frontmatter `effort:` > parent level (same kind only) > `medium`.
+- [ ] Parent level reads `HERDR_ORCH_EFFORT`; at root, `PI_REASONING_LEVEL` only when the parent kind is pi.
+- [ ] Every spawned child receives `HERDR_ORCH_EFFORT=<resolved level>` in its env.
+- [ ] Child argv is `model-args ++ effort-args ++ harness-extra-args ++ persona-args`.
+- [ ] A template containing `{}` splits on whitespace and substitutes the level into each token; a template without `{}` appends the level as the next arg.
+- [ ] `--print-prompt` reports `:effort`, `:effort-source`, `:effort-args`.
+- [ ] The ledger entry records `:effort` and `:effort-source`; `continue` carries both forward.
+- [ ] `shipped-config-invariants` asserts the three shipped `:effort-flag` values.
+
+*** Edge cases
+- [ ] `validate-config-shape!` rejects a `:harnesses` entry whose `:effort-flag` is present but blank or non-string, naming the file. Narrowed by the owner on 2026-09-25: `:effort-flag` is optional, and the `{}`-count check is removed.
+- [ ] A blank or whitespace-containing `--effort` / `effort:` value fails at spawn before ledger allocation, naming the source. Narrowed by the owner on 2026-09-25: other control characters are left to Herdr's `agent start` check.
+- [ ] A kind with no `:harnesses` entry yields empty `effort-args`.
+- [ ] A pi parent spawning a claude child with no `--effort`/`effort:` resolves `medium`, source `default`.
+
+*** Anti-criteria
+- [ ] Must not: add a key to `:defaults`.
+- [ ] Must not: validate the level against a per-kind vocabulary.
+- [ ] Must not: change `resolve-model`, `model-args`, or the `:models`/`:aliases` tables.
+- [ ] Must not: add `effort:` to any packaged persona.
+
+*** Docs
+- [ ] `contract.md` § Model resolution documents the effort tiers, the `{}` template, the optional `:effort-flag`, `HERDR_ORCH_EFFORT` (env table row), the pi-version-specific `PI_REASONING_LEVEL` fallback, and the unsupported pi `:<thinking>` model suffix.
+- [ ] `README.org` persona-frontmatter and merge-rule sections name `effort:` / `:effort-flag`; the `--print-prompt` field list names the three effort fields.
+
+** Decisions
+- Parent inheritance replaces a config-chain default :: mirrors `resolve-model`'s tier and mechanism (`HERDR_ORCH_EFFORT` injected per spawn; pi-only root fallback). Rejected: a `:defaults :effort` key -- a second global dial with its own merge semantics, when the operator's own level already expresses the default they want.
+- Inheritance is same-kind only :: exactly `resolve-model`'s guard; prevents pi-only `off`/`minimal` reaching claude or codex without a vocabulary table. Rejected: cross-kind pass-through.
+- `:effort-flag` is a string template with an optional `{}` placeholder :: one key, one type, expresses both `--flag <level>` and codex's `-c key=<level>`. Rejected: a vector template (same substitution work, more shape to validate); omitting codex (requirement says every entry gains the member; codex would silently ignore the level).
+- Level vocabulary is pass-through :: consistent with the open model-ID set. Rejected: per-kind allow-lists (three tools, three vocabularies, codex's unverified).
+- `:effort-flag` is optional :: revised by the owner on 2026-09-25, replacing "required, like `:model-flag`". A kind without one receives no effort args, which was the behaviour before this change. This removes the required check, the need for every override to restate the key, and the breakage of existing overrides. Accepted cost: an override that restates a harness entry and omits `:effort-flag` runs that kind at the harness default.
+- pi `provider/id:<thinking>` suffix is documented as unsupported :: no packaged persona, alias, or `:models` column produces one; a rejection would be code for a case nobody has hit.
+- Packaged personas declare no `effort:` :: the operator's level flows down; a persona that needs a fixed level can add it later without a contract change.
+- One resolver per dimension :: `resolve-effort` beside `resolve-timeout`, not folded into `resolve-model`.
+
+** Risks
+- codex `model_reasoning_effort` accepted values are unverified (codex-cli 0.156.1: the key occurs in the real CLI binary `bin/.codex-wrapped` in the nix store, but no source states its value set). If `medium` is rejected, every codex child fails at `agent start` -- loud, not silent. Accepted; see `* Open questions`.
+- `PI_REASONING_LEVEL` is set by pi 0.87.1's bash tool (`dist/core/tools/bash.js`, `= ctx.thinkingLevel`). A future pi that drops it degrades a pi root to `medium` silently. Accepted; `contract.md` names the version, as it does for `PI_MODEL`.
+- pi's precedence between `--thinking` and a `:<thinking>` model suffix is unknown; out of scope by decision.
+
+* Plan
+** DONE Declare :effort-flag in packaged and home config.edn
+CLOSED: [2026-09-24 Thu 19:14]
+:PROPERTIES:
+:CUSTOM_ID: c7cb55ff-857d-43d0-9d16-343e34e31870
+:CREATED: [2026-09-24 Thu 19:05]
+:STARTED: [2026-09-24 Thu 19:13]
+:END:
+:LOGBOOK:
+- Created [2026-09-24 Thu 19:05]
+- State "STARTED" from "TODO" [2026-09-24 Thu 19:13]
+- State "DONE" from "STARTED" [2026-09-24 Thu 19:14]
+:END:
+Acceptance criteria:
+- Packaged `skills/herdr-orch/subagents/config.edn` `:harnesses` carries `:effort-flag` for `:pi` `"--thinking"`, `:claude` `"--effort"`, `:codex` `"-c model_reasoning_effort={}"`.
+- Home `subagents/config.edn` restates `:effort-flag` for `:claude` and `:codex`; its header comment names `:effort-flag` beside `:model-flag` as a key every restated entry must carry.
+- Packaged file header comment documents the `{}` template rule (present: split on whitespace, substitute; absent: level appended as the next arg).
+- `cli_test.clj` `shipped-config-invariants` asserts the three shipped `:effort-flag` values.
+- Must not: add a key to `:defaults`; touch `:models` or `:aliases`.
+Pointer: `cli_test.clj` `shipped-config-invariants` testing "each shipped harness receives its model through --model" is the sibling assertion to extend.
+
+** DONE Add effort resolution, rendering, and config validation to core.clj
+CLOSED: [2026-09-24 Thu 19:18]
+:PROPERTIES:
+:CUSTOM_ID: 73856966-3047-4d74-bb2b-992407086556
+:CREATED: [2026-09-24 Thu 19:05]
+:BLOCKED-BY: task:c7cb55ff-857d-43d0-9d16-343e34e31870
+:STARTED: [2026-09-24 Thu 19:14]
+:END:
+:LOGBOOK:
+- Created [2026-09-24 Thu 19:05]
+- State "STARTED" from "TODO" [2026-09-24 Thu 19:14]
+- State "DONE" from "STARTED" [2026-09-24 Thu 19:18]
+:END:
+Acceptance criteria:
+- `core/default-effort` is `"medium"`.
+- `core/effort-value! [label persona value]` returns the trimmed level; throws `ex-info` naming label and persona for a blank value, a value containing whitespace, or a value containing `\n`, `\t`, or `\r`.
+- `core/resolve-effort {:persona :flag :frontmatter :resolved-kind :parent-kind :parent-effort}` returns `{:effort :effort-source}` with source in `#{"flag" "frontmatter" "parent" "default"}`; the parent tier applies only when `resolved-kind` equals `parent-kind` and `parent-effort` is non-nil.
+- `core/effort-args [config kind level]` returns `[]` for a kind with no `:harnesses` entry; `[flag level]` for a template without `{}`; the whitespace-split template with `{}` replaced in each token otherwise (`"-c model_reasoning_effort={}"` + `"high"` → `["-c" "model_reasoning_effort=high"]`).
+- `validate-config-shape!` rejects, naming the file and harness, a `:harnesses` entry whose `:effort-flag` is missing, non-string, blank, or contains `{}` more than once.
+- The comment above `harness-extra-args` names both `:model-flag` and `:effort-flag` as keys an override must restate.
+- `core_test.clj` covers every tier of `resolve-effort` (including pi parent → claude child → `default`), both template forms and the missing-kind case of `effort-args`, each `effort-value!` rejection, and each `validate-config-shape!` rejection with a passing positive control.
+- Must not: change `resolve-model` or `model-args`.
+Pointer: `core.clj` `resolve-timeout` / `timeout-value!` are the shape to copy; `:extra-args` control-character check in `validate-config-shape!` is the regex to reuse.
+
+** DONE Wire --effort, effort inheritance, argv, env, ledger, and preview in cli.clj
+CLOSED: [2026-09-24 Thu 19:23]
+:PROPERTIES:
+:CUSTOM_ID: ea0bdbc4-9eee-4073-bdff-6bacd2d01918
+:CREATED: [2026-09-24 Thu 19:05]
+:BLOCKED-BY: task:73856966-3047-4d74-bb2b-992407086556
+:STARTED: [2026-09-24 Thu 19:18]
+:END:
+:LOGBOOK:
+- Created [2026-09-24 Thu 19:05]
+- State "STARTED" from "TODO" [2026-09-24 Thu 19:18]
+- State "DONE" from "STARTED" [2026-09-24 Thu 19:23]
+:END:
+Acceptance criteria:
+- `cli/parent-effort [parent-kind]` returns `HERDR_ORCH_EFFORT`, else `PI_REASONING_LEVEL` only when `parent-kind` is `"pi"`, else nil; `parent-identity` gains `:parent-effort`.
+- `cli/effort-policy` resolves via `core/resolve-effort` from `--effort`, effective frontmatter `effort:`, resolved kind, and parent identity; it runs after `kind-policy` and before `config`/ledger allocation in both `spawn!` and `preview!`.
+- The `task run` line in `signatures` carries `[--effort LEVEL]` (this registers the option in `known-options`); the `start` line still says "same options as run".
+- `spawn!` argv is `(concat model-args effort-args harness-extra-args persona-args)`.
+- Every spawned child env carries `"HERDR_ORCH_EFFORT"` set to the resolved level (never absent).
+- The ledger entry records `:effort` and `:effort-source`; `continue` `select-keys` includes both.
+- `preview!` output carries `:effort`, `:effort-source`, `:effort-args`.
+- `cli_test.clj`: `--print-prompt` reports flag > frontmatter > `HERDR_ORCH_EFFORT` > default with the matching source; a blank `--effort` fails before ledger allocation; `effort-args` in preview equals `core/effort-args` for the shipped config and the resolved kind.
+- Must not: inject `HERDR_ORCH_EFFORT` into `continue` rounds differently from spawn (continue reuses the pane; no env change is possible or needed).
+Pointer: `cli.clj` `parent-model`, `timeout-policy`, and the `native` binding in `spawn!` are the three seams; `contract.md` env-var table row for `HERDR_ORCH_MODEL` is the wording to mirror.
+
+** DONE Document effort resolution in contract.md and README.org
+CLOSED: [2026-09-24 Thu 19:25]
+:PROPERTIES:
+:CUSTOM_ID: db9e9316-55e6-4f53-b517-7e7d61d2a8e0
+:CREATED: [2026-09-24 Thu 19:06]
+:STARTED: [2026-09-24 Thu 19:23]
+:END:
+:LOGBOOK:
+- Created [2026-09-24 Thu 19:06]
+- State "STARTED" from "TODO" [2026-09-24 Thu 19:23]
+- State "DONE" from "STARTED" [2026-09-24 Thu 19:25]
+:END:
+Acceptance criteria:
+- `contract.md` § Model resolution has a paragraph stating: effort precedence `--effort` > frontmatter `effort:` > same-kind parent (`HERDR_ORCH_EFFORT`; root fallback `PI_REASONING_LEVEL` when the parent is pi, pi 0.87.1) > `medium`; `:effort-flag` is required per `:harnesses` entry; the `{}` template rule; levels pass through unvalidated; the pi `provider/id:<thinking>` model suffix is unsupported.
+- `contract.md` env-var table has a `HERDR_ORCH_EFFORT` row.
+- `contract.md` § Harness `:extra-args` names `:effort-flag` beside `:model-flag` as a key an override must restate; the config-shape sentence in § Model resolution shows `:effort-flag` in the EDN skeleton.
+- `README.org` persona-frontmatter section lists `effort:` and no longer says "All four keys"; the example frontmatter block shows `effort:` with a comment.
+- `README.org` § The merge rule names `:effort-flag` beside `:model-flag` in the wholesale-replacement sentence.
+- `README.org` `--print-prompt` paragraph names `effort`, `effort-source`, `effort-args`.
+- No hard-wrapped prose is introduced; one logical line per paragraph and list item.
+- Must not: document a per-kind level vocabulary as validated by `oh`.
+Pointer: `contract.md` § Model resolution second paragraph (the `resolve-model` precedence sentence) is the model for the new paragraph.
+
+* Implementation
+
+All four plan tasks landed. Two review rounds followed. On 2026-09-25 the owner chose to simplify, because every effort input is closed-loop (controlled definitions, the parent's argv, and values that `oh` or pi wrote), and Herdr rejects control characters at `agent start`, where `spawn!` cleans up the round. Final state:
+- `effort-value!` trims the value, then rejects a blank or whitespace-containing value. Its `ceiling:` comment names Herdr as the check for other control characters.
+- `:effort-flag` is optional. When present, it must be a non-blank string. Removed after review: the required check, the `{}`-count check, the control-character check, and validation of the inherited level. The owner kept the template trim, so a padded `{}` template yields no empty token.
+- `spawned-child-receives-effort-args-and-env` in `cli_test.clj` covers the spawn path: effort args after the model args in the `agent start` argv, and `HERDR_ORCH_EFFORT` in the child env. With that wiring removed, only this test fails.
+- Confirmed live: `oh task run scout --print-prompt` from a pi root resolves `high` from `PI_REASONING_LEVEL`, source `parent`.
+
+* Open questions
+** OPEN Which values does codex-cli 0.156.1 accept for `model_reasoning_effort`?
+Close with a probe that cannot start real work, e.g. `codex -c model_reasoning_effort=bogus exec --help` was inconclusive (help short-circuits); a `codex exec` against a throwaway prompt with `bogus` would confirm rejection but incurs a live call. Alternatively read the codex-rs `ReasoningEffort` enum in the upstream source at the tagged release.

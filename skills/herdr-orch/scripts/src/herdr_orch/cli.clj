@@ -252,10 +252,21 @@
       (when (= "pi" parent-kind)
         (when-let [model (System/getenv "PI_MODEL")]
           (if-let [provider (System/getenv "PI_PROVIDER")] (str provider "/" model) model)))))
+;; Mirrors `parent-model`'s mechanism and pi-only root fallback exactly: `oh` injects
+;; HERDR_ORCH_EFFORT into every child it spawns (always, since effort always resolves to
+;; a level), so a child spawning a grandchild reads back the level it was itself started
+;; with. At the root, only pi exposes a verified equivalent (`PI_REASONING_LEVEL`, set by
+;; pi 0.87.1's bash tool); claude and codex expose none, so a stray value left in a
+;; claude/codex root's shell must not be read as that root's level.
+(defn parent-effort [parent-kind]
+  (or (System/getenv "HERDR_ORCH_EFFORT")
+      (when (= "pi" parent-kind)
+        (System/getenv "PI_REASONING_LEVEL"))))
 (defn parent-identity []
   (let [agent (herdr/agent! (System/getenv "HERDR_PANE_ID"))]
     {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent)) :parent-kind (:agent agent) :parent-pane (:pane_id agent)
-     :parent-model (parent-model (:agent agent))}))
+     :parent-model (parent-model (:agent agent))
+     :parent-effort (parent-effort (:agent agent))}))
 ;; Composed from the resolved spawn policy, not the persona name: any persona whose
 ;; policy is non-empty gets the delegation sentence, everyone else the leaf sentence.
 ;; The closing sentence is the one lifecycle rule a child must be *told*, because it is the
@@ -328,6 +339,14 @@
 ;; restate it. `collect --any` has no single entry to read and keeps flag-or-default.
 (defn timeout-policy [persona opts frontmatter]
   (core/resolve-timeout {:persona persona :flag (one opts :timeout) :frontmatter frontmatter}))
+;; Mirrors `resolve-model`'s tier and same-kind guard, not `timeout-policy`'s shape:
+;; `--effort` > effective frontmatter `effort:` > same-kind parent inheritance > default.
+;; Runs after `kind-policy` (the resolved kind gates parent inheritance) and before
+;; `config`/ledger allocation in both `spawn!` and `preview!`, so a malformed `--effort`
+;; or `effort:` fails fast exactly like an invalid `timeout:` or unresolvable `spawns:`.
+(defn effort-policy [persona opts frontmatter kind ident]
+  (core/resolve-effort {:persona persona :flag (one opts :effort) :frontmatter frontmatter
+                        :resolved-kind kind :parent-kind (:parent-kind ident) :parent-effort (:parent-effort ident)}))
 (defn- round-timeout [entry opts]
   (or (some->> (one opts :timeout) (core/timeout-value! "--timeout" nil))
       (:timeout entry)
@@ -378,6 +397,7 @@
         ident (parent-identity)
         kind (kind-policy opts frontmatter (:parent-kind ident))
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
+        effort (effort-policy persona opts frontmatter kind ident)
         config (config)
         placement (placement-policy opts config)
         retro (retro-policy persona opts frontmatter)
@@ -396,7 +416,8 @@
       :traits (:traits composition) :trait-sources (:trait-sources composition)
       :kind kind :model model :model-canonical (core/canonical-model config model) :model-args (core/model-args config kind model) :placement placement :retro (:retro retro) :retro-source (:retro-source retro)
       :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)
-      :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)}
+      :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)
+      :effort (:effort effort) :effort-source (:effort-source effort) :effort-args (core/effort-args config kind (:effort effort))}
       (:base-persona composition) (assoc :base-persona (:base-persona composition)))))
 ;; A stream's item records are append-only by item identity. Pre-stream ledger entries retain
 ;; their historical stable head only, so expose that head as item 1 while readers migrate; no
@@ -885,6 +906,9 @@
             ident (parent-identity)
             kind (kind-policy opts frontmatter (:parent-kind ident))
             model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
+            ;; Resolved before `config`/ledger allocation, so a blank or malformed
+            ;; `--effort`/`effort:` fails fast exactly like an invalid `timeout:`.
+            effort (effort-policy persona opts frontmatter kind ident)
             ;; Loaded and schema-validated here, before `ledger/fresh-result`'s
             ;; `fs/create-dirs` and every later ledger/pane mutation: malformed config
             ;; must fail fast, never after allocation has begun.
@@ -948,6 +972,7 @@
                                      :retro (:retro retro) :retro-source (:retro-source retro)
                                      :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)
                                      :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)
+                                     :effort (:effort effort) :effort-source (:effort-source effort)
                                      :placement placement :status "allocating" :created-at (now)}
                               worktree (assoc :worktree worktree)
                               (and worktree read-only?) (assoc :read-only true)
@@ -983,6 +1008,10 @@
                              "HERDR_ORCH_WORK_ROOT" (:work-root entry)
                              "HERDR_ORCH_PERSONA" persona
                              "HERDR_ORCH_SPAWNS" (str/join " " (:spawns spawns))
+                             ;; Unlike HERDR_ORCH_MODEL, always present: `resolve-effort`
+                             ;; always resolves to a level (default "medium"), so this
+                             ;; child's own spawns can always inherit it (`parent-effort`).
+                             "HERDR_ORCH_EFFORT" (:effort effort)
                              ;; Protocol routing state is uniform. Target selection changes
                              ;; only cwd and never the child's environment shape.
                              "ORCH_ASSIGNMENT_ROOT" (ledger/assignment-root)}
@@ -1011,6 +1040,7 @@
                 (when-not (= label (:label renamed)) (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))
                 (ledger/update! task assoc :status "renamed")
                 (let [native (concat (core/model-args config kind model)
+                                     (core/effort-args config kind (:effort effort))
                                      (core/harness-extra-args config kind)
                                      (core/persona-args kind persona-path))]
                   (record-session! task (:agent_session (herdr/start! name kind (:pane-id persisted) native)))
@@ -2311,7 +2341,7 @@
                                        [:child :pane-id :tab-id :label :index :persona :persona-path
                                         :base-persona :traits :trait-sources
                                         :kind :model :retro :retro-source :spawns :spawns-source
-                                        :timeout :timeout-source :placement :shell-pid
+                                        :timeout :timeout-source :effort :effort-source :placement :shell-pid
                                         :work-root :worktree :read-only])
                           {:task task :result result :continues prior-task
                            :parent-session caller :parent-pane (:parent-pane ident)
@@ -2603,7 +2633,7 @@
             "rename <target> (<name> | --clear)"
             "list"
             "get <target>"]
-   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--model MODEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--trait NAME]* [--prompt-extra TEXT] [--print-prompt] [--worktree <path>|new]"
+   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--model MODEL] [--effort LEVEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--trait NAME]* [--prompt-extra TEXT] [--print-prompt] [--worktree <path>|new]"
            "start <persona> (--task TEXT | --task-file PATH | stdin) [same options as run]"
            "collect <full-task-uuid> [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
            "collect --any [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
