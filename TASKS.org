@@ -462,29 +462,6 @@ skills/herdr-orch/traits/simple/gate.md records two %simple probe runs at gpt-5.
 skills/herdr-orch/references/traits.md claims \`incompatible-with:\` enforcement is documented/implemented in skills/herdr-orch/scripts/docs/contract.md, and contract.md's Trait composition section claims herdr-orch.traits/interpolate returns "incompatibility declarations by trait in :incompatibilities". Neither is true: traits.clj's interpolate returns only :text, :resolved, :unknowns and :repeats (no :incompatibilities key), and no \`incompatible-with:\` frontmatter parsing or enforcement exists anywhere in traits.clj or cli.clj. Identified but deliberately left unfixed during [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]] ("Correct the documentation rather than assume a conflict engine exists. This plan does not add a generic semantic conflict solver.") Correct both docs to match the actual implementation (or implement the feature, if still wanted).
 
 * Fixes
-** DONE [#B] herdr-orch tests leak temp dirs and register git worktrees in the real repo :skill:herdr_orch:
-CLOSED: [2026-09-24 Thu 09:51]
-:PROPERTIES:
-:CUSTOM_ID: 708e7de5-00db-49e1-928a-bab75dc5cb33
-:CREATED: [2026-09-23 Wed 12:06]
-:END:
-:LOGBOOK:
-- Created [2026-09-23 Wed 12:06]
-- State "DONE" from "TODO" [2026-09-24 Thu 09:51]
-:END:
-Measured 2026-09-23: each `bb test` run leaves about 26 `/tmp/traits-cli-*` directories (52 from two runs), and a run registered git worktrees of this checkout, with `orch/<id>` branches, under a temp directory (`/tmp/traits-cli-<n>/.tmp/herdr-orch/worktrees/<uuid>`). About 3,300 `/tmp/traits-cli-*` directories and 31 such registered worktrees from earlier runs remain, and `git branch --list 'orch/*'` shows 32 branches (one is a real orchestration worktree under `.tmp/herdr-orch/worktrees/`).
-
-Known sources: `fixture-env` in `skills/herdr-orch/scripts/test/herdr_orch/traits_test.clj` creates its `traits-cli-` temp root with `fs/create-temp-dir` and never deletes it; `traits_cli_test.clj` does the same for its `traits-cli-cwd-`, `traits-cli-file-`, `traits-cli-gate-`, and `traits-cli-failure-` prefixes; `traits-test-warm-home-` and `traits-test-clj-cache-` directories also accumulate. The fixture sets `ORCH_ASSIGNMENT_ROOT` to the temp root but does not set the subprocess working directory, so a `task run` that creates a worktree probably resolves the git repository from the test process cwd (this checkout) and places the worktree under the temp root. Which test creates the worktree is not yet confirmed.
-
-Fix direction: run each fixture subprocess from a disposable git repository (or assert that no worktree is created), and delete the fixture root and any worktree and branch it registered in a `finally` or fixture teardown. Then remove the existing residue: `git worktree remove` each registered `/tmp/traits-cli-*` worktree, delete its `orch/<id>` branch, `git worktree prune`, and delete the leaked `/tmp` directories. Verify with a `bb test` run that leaves the `/tmp/traits-cli-*` count, `git worktree list`, and `git branch --list 'orch/*'` unchanged.
-
-Resolution 2026-09-24: confirmed cause -- `oh` runs `git worktree add` in `source-cwd` (`user.dir`), and `traits_test.clj` `call!` set no `:dir`, so a second write-enabled `task start` in one fixture registered a managed worktree in this checkout. Removed the residue: 31 worktrees and their `orch/*` branches (each with 0 commits not on `main`), 3,708 `traits-cli-*`/`traits-test-*` directories, about 55,300 `fake-herdr-*` directories from `cli_test.clj`, and 4,649 `pi-question-test*` directories. Fix:
-- `scripts/isolated-test-run.bb` :: the root `bb test` task runs each suite with `java.io.tmpdir` and `TMPDIR` set to one `/tmp/dotagents-test-*` root and deletes it afterwards (`DOTAGENTS_KEEP_TEST_TMP` keeps it). This covers every `fs/create-temp-dir` site without per-test edits. The root is outside the checkout because several tests need a directory outside any git repository.
-- Same script :: fails the run when its git worktree paths or `refs/heads/orch/*` refs change, and prints the cleanup command.
-- `traits_test.clj` :: `fixture-env` creates a git repository at `<fixture>/repo`, and `call!` runs `oh` there.
-- `herdr-orch.test-support/call-with-temp-dir` :: deletes a test directory in `finally`, for focused runs outside `bb test`. `traits_cli_test.clj` uses it.
-Verified: with the old fixture, the guard failed the run and named the leaked worktree and branch; with the fixed fixture, `bb test` left `git worktree list`, the `orch/*` refs, and the `/tmp` listing unchanged. The run still reports 31 failures (the same set in both runs) in `cli_test.clj` config tests, which expect the model IDs from before `860e796`.
-
 * Upstream issues
 
 * Chores
