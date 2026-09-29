@@ -1,0 +1,89 @@
+#+TITLE: ms365 -- setup and maintenance
+
+This skill tells an agent how to use the Softeria [[https://github.com/softeria/ms-365-mcp-server][ms-365-mcp-server]] to read Microsoft 365 data. This file is for humans: it describes how to set up the server, the Entra app registration, and the MCP client.
+
+* Architecture
+
+- Server :: Softeria =ms-365-mcp-server=, started by [[file:scripts/ms365-mcp][scripts/ms365-mcp]] as a systemd user service on =127.0.0.1:3365=. The launcher is the single source for the pinned version, the flags (=--http=, =--org-mode=, =--read-only=), and the =--allowed-scopes= list.
+- Authentication :: OAuth authorisation-code flow with PKCE, in the browser. The server runs in HTTP mode because that mode provides OAuth.
+- Client :: an MCP server entry named =ms365= with URL =http://127.0.0.1:3365/mcp= and OAuth. Any MCP client that supports OAuth can use the same URL.
+- Identity :: an Entra app registration (single tenant, public client, no secret) with delegated Microsoft Graph permissions only, so each user sees only their own access.
+- Cost :: Microsoft Graph file, search, mail, calendar, and chat reads are not metered. No Copilot licence is necessary.
+
+* Entra app registration
+
+In https://entra.microsoft.com, go to /Identity > Applications > App registrations/.
+
+1. New registration: for example =ms365-mcp=, /Accounts in this organizational directory only/, no redirect URI.
+2. Record the /Application (client) ID/ and /Directory (tenant) ID/ from /Overview/. They are identifiers, not secrets, but keep them out of this repository. Put them in the service environment (see below).
+3. /Authentication/:
+   - Add platform /Mobile and desktop applications/ with redirect URI =http://localhost/callback=. Entra ignores the port of a =localhost= redirect, so this one entry matches the random port of the client callback. Do not add =localhost= entries that differ only by port.
+   - Set /Allow public client flows/ to /Yes/. Do not create a client secret.
+4. /API permissions/ > Microsoft Graph > /Delegated/: add each scope in the =scopes= array of [[file:scripts/ms365-mcp][scripts/ms365-mcp]], plus =offline_access=. Then select /Grant admin consent/.
+5. Optional: in /Enterprise applications/ > your app > /Properties/, set /Assignment required/ to /Yes/ and assign only the users who need it.
+
+* Service
+
+Both routes run the same launcher. The unit has no install section, so the server starts only on demand.
+
+#+begin_src sh
+systemctl --user start ms365-mcp
+systemctl --user status ms365-mcp
+journalctl --user -u ms365-mcp -f
+#+end_src
+
+** Home Manager
+The cormacc dotfiles define =systemd.user.services.ms365-mcp= in =nmd/nmd.nix=. It sets =PATH= (Node.js, bash, coreutils) and the two IDs, and runs the launcher from the live submodule path.
+
+** Without Nix
+1. Install Node.js 20 or later, so that =npx= is on the =PATH= of the systemd user manager.
+2. Put the IDs in =~/.config/ms365-mcp/env=:
+   #+begin_src sh
+   mkdir -p ~/.config/ms365-mcp
+   printf 'MS365_MCP_CLIENT_ID=%s\nMS365_MCP_TENANT_ID=%s\n' '<client-id>' '<tenant-id>' > ~/.config/ms365-mcp/env
+   #+end_src
+3. Install the unit from [[file:assets/ms365-mcp.service][assets/ms365-mcp.service]]. Its =ExecStart= assumes that the skill is at =~/.agents/skills/ms365=; edit the path if it is not.
+   #+begin_src sh
+   mkdir -p ~/.config/systemd/user
+   cp assets/ms365-mcp.service ~/.config/systemd/user/
+   systemctl --user daemon-reload
+   #+end_src
+
+On macOS, write an equivalent launchd agent that runs the launcher with the same environment.
+
+* MCP client
+
+For pi-mcp-adapter, add this entry to =mcpServers= in =~/.config/mcp/mcp.json= (in the cormacc dotagents repository, =mcp.json=):
+
+#+begin_src json
+"ms365": {
+  "url": "http://127.0.0.1:3365/mcp",
+  "auth": "oauth",
+  "oauth": {
+    "redirectUri": "http://localhost:{port}/callback",
+    "clientName": "pi"
+  }
+}
+#+end_src
+
+The =localhost= redirect matches the Entra redirect URI above.
+
+* First sign-in (pi)
+
+1. Start the service.
+2. Run =/reload=, then =/mcp-auth ms365=. A browser opens the Microsoft sign-in page.
+3. pi-mcp-adapter stores the token in the OS keyring. Sign in again only when the refresh token expires or the scopes change.
+
+* Changing the scopes
+
+A scope must be in three places, or the tools that need it stay hidden or fail:
+
+1. The =scopes= array in [[file:scripts/ms365-mcp][scripts/ms365-mcp]]. To see the effect first, run =scripts/ms365-mcp --list-permissions= with the two IDs set, and read =effectivePermissions= and =disabledTools=.
+2. The Entra app /API permissions/, with admin consent granted again.
+3. A new sign-in (=/mcp-adapter logout ms365=, then =/mcp-auth ms365=), because a token does not gain scopes after it is issued.
+
+Scopes that are deliberately not allowed: groups, shared mailboxes, mailbox settings, contacts, OneNote, To Do and Planner, presence, rooms, and meeting recordings and transcripts. =search-query= needs =Mail.Read=, =Chat.Read=, =Calendars.Read=, =ChannelMessage.Read.All=, and =People.Read= in addition to the file scopes.
+
+* Updating the server
+
+Change =version= in [[file:scripts/ms365-mcp][scripts/ms365-mcp]] and restart the service. Then check the tool list (=mcp({ server: "ms365" })=), because a new version can add, remove, or rename tools and change their scopes.

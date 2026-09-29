@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Launch the Softeria ms-365-mcp-server in read-only HTTP (OAuth) mode on loopback.
+# This file is the single source for the server version, flags, and Graph scope allow-list.
+# Required environment: MS365_MCP_CLIENT_ID, MS365_MCP_TENANT_ID (Entra app registration).
+# Optional environment: MS365_MCP_PORT (default 3365), MS365_MCP_MAX_TOP (default 25).
+# Extra arguments pass through, e.g. `ms365-mcp --list-permissions`.
+set -euo pipefail
+
+: "${MS365_MCP_CLIENT_ID:?set MS365_MCP_CLIENT_ID to the Entra application (client) ID}"
+: "${MS365_MCP_TENANT_ID:?set MS365_MCP_TENANT_ID to the Entra directory (tenant) ID}"
+export MS365_MCP_CLIENT_ID MS365_MCP_TENANT_ID
+export MS365_MCP_MAX_TOP="${MS365_MCP_MAX_TOP:-25}"
+port="${MS365_MCP_PORT:-3365}"
+
+version="0.156.2"
+
+scopes=(
+  User.Read User.Read.All People.Read
+  Files.Read.All Sites.Read.All
+  Mail.Read
+  Calendars.Read Calendars.Read.Shared
+  Chat.ReadBasic Chat.Read ChatMessage.Read ChatMember.Read
+  Team.ReadBasic.All Channel.ReadBasic.All ChannelMessage.Read.All
+)
+
+exec npx -y "@softeria/ms-365-mcp-server@${version}" \
+  --http "127.0.0.1:${port}" \
+  --org-mode --read-only \
+  --allowed-scopes "${scopes[*]}" \
+  "$@"

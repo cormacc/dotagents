@@ -4,6 +4,14 @@
       "url": "https://mcp.atlassian.com/v1/mcp/authv2",
       "auth": "oauth"
     },
+    "ms365": {
+      "url": "http://127.0.0.1:3365/mcp",
+      "auth": "oauth",
+      "oauth": {
+        "redirectUri": "http://localhost:{port}/callback",
+        "clientName": "pi"
+      }
+    },
     "context-mode": {
       "command": "context-mode"
     },

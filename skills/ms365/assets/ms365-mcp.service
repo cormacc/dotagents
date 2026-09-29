@@ -1,0 +1,20 @@
+# systemd user unit for the ms365 MCP server (non-Nix hosts).
+# Install:
+#   mkdir -p ~/.config/systemd/user ~/.config/ms365-mcp
+#   cp ms365-mcp.service ~/.config/systemd/user/
+#   printf 'MS365_MCP_CLIENT_ID=<client-id>\nMS365_MCP_TENANT_ID=<tenant-id>\n' > ~/.config/ms365-mcp/env
+#   systemctl --user daemon-reload
+#   systemctl --user start ms365-mcp
+# The unit has no [Install] section, so it starts only on demand.
+# ExecStart assumes the skill is installed at ~/.agents/skills/ms365; edit the path if not.
+# Node.js >= 20 (npx) must be on the PATH of the systemd user manager.
+
+[Unit]
+Description=Microsoft 365 MCP server (read-only, loopback HTTP)
+After=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/ms365-mcp/env
+ExecStart=%h/.agents/skills/ms365/scripts/ms365-mcp
+Restart=on-failure
+RestartSec=10
