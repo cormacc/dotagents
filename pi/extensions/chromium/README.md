@@ -20,6 +20,26 @@ user who can interact with its in-page overlay.
 
 ## Dependencies
 
-Runtime dependency: `puppeteer-core`. The extension uses Pi-hosted
+Runtime dependency: `puppeteer-core` (`^25.12.0`). The extension uses Pi-hosted
 `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`,
 `@earendil-works/pi-tui`, and TypeBox 1.x (`typebox`) APIs.
+
+### Keep puppeteer-core in step with Chrome
+
+`puppeteer-core` must understand the running Chrome's target model. When Chrome
+is much newer than the pinned puppeteer, `puppeteer.connect()` hangs and every
+`browser_*` tool fails with `Connection timeout` (the 5 s race in
+`ensureBrowser`), even though `curl http://localhost:9222/json/version` and raw
+CDP still work.
+
+Symptom-to-fix: if the CDP HTTP endpoint responds but the tools time out, the
+puppeteer-core version is too old for this Chrome. Bump it:
+
+```sh
+npm install puppeteer-core@latest   # then reload the extension / restart pi
+```
+
+Observed once: `puppeteer-core@23.11.1` could not connect to `Chrome/153`
+(connect never resolved); `@25.12.0` connected in ~34 ms. The dependency is a
+`^25` range so patch/minor Chrome updates stay covered; a major Chrome jump may
+still need a manual bump.
