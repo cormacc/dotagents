@@ -4884,7 +4884,8 @@
     (vec (take 4 (concat parts (repeat 0))))))
 
 (defn- contract-weight-table
-  "The weight table in contract.md § Model resolution, as {weight {:pi .. :claude .. :codex ..}}."
+  "The weight table in contract.md § Model resolution, as {weight {:pi .. :claude .. :codex ..}}.
+  Its cells are model families (see `alias-family`), not versioned IDs."
   []
   (into {}
         (for [[_ weight pi claude codex]
@@ -4923,14 +4924,20 @@
                         (is (= (aliases latest) (aliases family)) (str family " follows " latest))
                         family))]
         (is (seq (doall checked)) "positive control: at least one alias family is checked")))
-    (testing "contract.md's weight table matches the shipped translations"
+    ;; The table names families, so a version bump in config.edn needs no doc edit, while a
+    ;; weight that moves to another family (for example light: sonnet -> haiku) still fails.
+    (testing "contract.md's weight table names the family of each shipped translation"
       (let [table (contract-weight-table)]
         (is (= #{"heavy" "middle" "light" "feather"} (set (keys table)))
             "positive control: the table parses and lists the documented weights")
         (doseq [[weight row] table
-                [kind native] row]
-          (is (= ["--model" native] (core/model-args config (name kind) weight))
-              (str "contract.md row " weight " " (name kind) " must match config.edn")))))))
+                [kind family] row]
+          (is (= family (alias-family family))
+              (str "contract.md row " weight " " (name kind) " must name a family without version tokens: " family))
+          (let [[flag native] (core/model-args config (name kind) weight)]
+            (is (= "--model" flag) (str "contract.md row " weight " " (name kind) " resolves to model args"))
+            (is (= family (some-> native alias-family))
+                (str "contract.md row " weight " " (name kind) " must name the family of config.edn's " native))))))))
 
 ;; Effort/thinking-level resolution mirrors `model:` precedence and mechanism
 ;; (change-record 2026-09-24-herdr-orch-add-thinking-level-support): --effort flag >

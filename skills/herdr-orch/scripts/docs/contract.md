@@ -154,20 +154,20 @@ The model table is in external EDN, in two levels, alongside optional spawn defa
 
 The alias hop is single-hop by contract: `canonical-model` looks a value up in `:aliases` at most once and never re-resolves the result through `:aliases` again. An `:aliases` value that is itself an `:aliases` key is a validation error (below), not a chain resolved at runtime, so the effective canonical ID for any alias never depends on following a value into a second alias entry.
 
-Both the ID and kind sets stay open, and a miss anywhere in the chain is pass-through, never a warning or failure: an alias whose canonical target has no `:models` row yields the *canonical* ID -- not the requested alias -- for the resolved kind, and an ID present in neither `:aliases` nor `:models` passes through unchanged. Rows are sparse, and a configured column may deliberately remap across providers. In the shipped table, tier-equivalent cross-provider mappings are confined to `:claude` and `:codex` (for example, `claude-sonnet-5` → codex `gpt-5.6-terra`). There is no `:pi` column: pass-through already delivers the canonical, pi-style spelling for pi. `:defaults`, when present, is a closed map: its only key is `:placement`, whose values are `:split`, `:tab`, or `:tab-split`. Each file is validated before merge, and an invalid value names that file.
+Both the ID and kind sets stay open, and a miss anywhere in the chain is pass-through, never a warning or failure: an alias whose canonical target has no `:models` row yields the *canonical* ID -- not the requested alias -- for the resolved kind, and an ID present in neither `:aliases` nor `:models` passes through unchanged. Rows are sparse, and a configured column may deliberately remap across providers. In the shipped table, tier-equivalent cross-provider mappings are confined to `:claude` and `:codex` (for example, the `claude-sonnet` family → codex `gpt-terra` family). There is no `:pi` column: pass-through already delivers the canonical, pi-style spelling for pi. `:defaults`, when present, is a closed map: its only key is `:placement`, whose values are `:split`, `:tab`, or `:tab-split`. Each file is validated before merge, and an invalid value names that file.
 
 File chain, project wins: skill default `skills/herdr-orch/subagents/config.edn` (resolved as `subagents/config.edn` under the launcher's skill directory) ← `~/.agents/subagents/config.edn` ← `<git-root>/.agents/subagents/config.edn`. `merge-config` is `merge-with merge`, so the two levels compose differently: a `:models` row is replaced wholesale by canonical ID (an override never deep-merges its harness columns), while `:aliases`, like `:defaults`, merges per key across the chain (README.org § The merge rule that catches people).
 
 A merged config where the same key is present in both `:aliases` and `:models`, or an `:aliases` value that is itself an `:aliases` key, fails `validate-merged-config!` by name. Both checks run in `cli/config` immediately after `merge-config`, before any ledger allocation or pane mutation, so a stale override (for example, a legacy full weight row now colliding with a shipped alias) fails loudly at spawn instead of silently shadowing or chaining.
 
-This table is the single enumerated home for the shipped weight rows. Every other document states the rule and links here. `cli_test.clj`'s `shipped-config-invariants` parses this table and asserts that each row matches the translation of `subagents/config.edn`, so a model bump that misses this table fails `bb test`. The rows translate only after kind resolution:
+This table is the single enumerated home for the shipped weight rows. Every other document states the rule and links here. Each cell names a model family: the translated model with its version tokens removed (`anthropic/claude-sonnet-5-5` is the `anthropic/claude-sonnet` family, `gpt-6.1-sol` is `gpt-sol`). `subagents/config.edn` holds the current versions. `cli_test.clj`'s `shipped-config-invariants` parses this table and asserts that each cell has no version tokens and is the family of the translation of `subagents/config.edn`. A version bump therefore needs no edit here, but a weight that moves to another family fails `bb test` until this table changes. The rows translate only after kind resolution:
 
 | Weight | Pi | Claude | Codex |
 |---|---|---|---|
-| `heavy` | `anthropic/claude-fable-5-1` | `fable` | `gpt-6-astra` |
-| `middle` | `anthropic/claude-opus-5-5` | `opus` | `gpt-6-sol` |
-| `light` | `anthropic/claude-sonnet-5` | `sonnet` | `gpt-5.6-terra` |
-| `feather` | `anthropic/claude-haiku-4-5` | `claude-haiku-4-5` | `gpt-6-luna` |
+| `heavy` | `anthropic/claude-fable` | `fable` | `gpt-astra` |
+| `middle` | `anthropic/claude-opus` | `opus` | `gpt-sol` |
+| `light` | `anthropic/claude-sonnet` | `sonnet` | `gpt-terra` |
+| `feather` | `anthropic/claude-haiku` | `claude-haiku` | `gpt-luna` |
 
 Unversioned canonical IDs (`claude-opus`, `gpt-sol`, …) are floating aliases resolving to the latest version of the tier. Versioned IDs pin a release.
 
