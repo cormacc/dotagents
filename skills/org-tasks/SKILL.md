@@ -66,7 +66,9 @@ ot issue list|add|remove|urls <id> [...]
 ot blocker list|add|remove <id> [...]
 ot blocker prune --dry-run  # remove dangling task blockers only with --yes
 ot ready <id>
-ot handoff get|set|clear <id> [...]
+ot handoff get <id>
+ot handoff set <id> "<text>"
+ot handoff clear <id>
 ot uuid --count 3
 ```
 

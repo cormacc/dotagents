@@ -45,6 +45,7 @@
 - Ask one decision in each question.
   - Do not combine two independent choices in one option set.
   - Such an answer can confirm one choice while the other choice remains unconfirmed.
+- When you ask the user to approve text, such as a commit message, a diff or a rule, put the full text inside the question. The question dialog can hide text that comes before it.
 - When a matched skill owns a domain, read that skill before you issue exploratory commands in that domain.
   - Do not run the skill read and the domain probes in parallel.
 - Do not cite a green suite as coverage until you confirm that it executes the changed file. Confirm which namespaces the test task runs before you attribute its total to one component.
@@ -97,6 +98,7 @@
   - Use `ssh -o BatchMode=yes` for SSH.
 - Inspect files that contain credentials with narrow token matches. Use `grep -o` with explicit patterns, not context flags or an unfiltered `cat`.
 - Wrap each destructive or concurrency probe in its own bounded process timeout. Attach cleanup to that outer bound, not to the probe's own exit path.
+- Run a loop of slow external calls in small batches, with a timeout for each call and one output line per item, so that progress is visible and a hang identifies its item.
 
 ## Scripts and transformations
 - When a script is necessary, prefer Babashka to shell and Python for repository-local automation.
@@ -112,7 +114,7 @@
   - Use the same candidate-and-diff process to replace a long region. Do not replace a long region with one long inline replacement.
   - Check the end of each long edit after it completes. A truncated replacement can appear complete.
   - When an edit call containing several edits returns an error, treat the whole call as not applied. Verify with `grep` or `diff` before you reissue.
-- When an exact-text edit fails against text that reads as identical to the source, check for invisible or non-ASCII characters with `grep -nP '[^\x00-\x7F]'` before you retry.
+- Write non-ASCII characters literally in edit text: a `\uXXXX` escape is written verbatim. When an exact-text edit fails against text that reads as identical to the source, check for non-ASCII characters with `grep -nP '[^\x00-\x7F]'`, then match an ASCII-only fragment next to them.
 - To claim "verbatim except for listed edits", copy the source and apply targeted edits to the copy.
   - Inspect the diff before you make the claim.
 - A human can edit the same file at the same time.
@@ -123,5 +125,5 @@
 - Redirect long-running or expensive command output to `.tmp/`.
   - Read slices from the saved file.
   - Do not pipe such output through `head` or `tail`. Those commands discard the remaining output and often require an expensive repeat execution.
-- Confirm that a subprocess succeeded before you read a file that it should produce. Also confirm that the expected output markers are present.
+- Read a path only after the call that writes it has finished and succeeded. Never run the two calls in parallel. Also confirm that the expected output markers are present.
 - Never report a diagnostic tool's verdict from a truncated view. Read the finding-count summary or the complete report before you report health.

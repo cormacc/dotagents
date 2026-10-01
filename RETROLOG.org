@@ -208,3 +208,25 @@ Gitignored tool state in an extracted tree. Linting a =git archive= extract of t
 ** Git operations -- read a file at another ref with git show
 
 A probe meant to lint develop's copy of one file ran =git stash && ... git checkout -q develop -- 2>/dev/null ... git stash pop=. With no pathspec after =--=, the checkout switched the worktree to =develop=, and the stash pop then conflicted on six files. It was recovered with =git reset --merge=, =git checkout reassoc-rebase=, and =git stash pop=. The read that was intended is =git show develop:<path> > .tmp/<file>=.
+
+* 2026-10-01 Thu -- QARA standards library and med-dev guides
+
+Session built a BSI standards library skill, imported 27 standards and wrote practitioner guides in a medical-device documentation repository.
+
+** Scripts and transformations
+
+Parallel read and write. Several times a call that read a file (=bb= running a script, a =diff=, a test) ran in parallel with the Write or Edit that created or changed it, and failed with "File does not exist" or read the old content. The harness prompt already forbids dependent parallel calls; the rule is now an ordering rule that replaces the earlier bullet on reading a file that a subprocess produces.
+
+Non-ASCII in edit text. An exact-text edit whose match text contained an em dash failed twice, once with a =\u2014= escape and once with the literal character; matching a shorter ASCII-only fragment next to it succeeded. A =\u00A9= escape in replacement text was written into the file as six literal characters. Merged into the existing non-ASCII edit bullet.
+
+** Verification discipline
+
+Approval text inside the question. A commit message shown in the reply just before a question dialog was not visible to the user, who asked to see it. Repeating the full message inside the question worked.
+
+** Privilege and live CLI probes
+
+Slow external call loops. A loop of 25 searches against a web service, with one outer timeout and output only at the end, ran for 15 minutes with no output and was aborted. Rerun in batches of five, with a 60 s timeout per call and one line per result, it completed and showed progress.
+
+** Tooling quick reference (org-tasks)
+
+Handoff set form. The quick reference listed only =ot handoff get|set|clear <id> [...]=, and =ot handoff --help= prints the global command list, so finding the argument form took several lookups. Verified forms: =ot handoff set <id> "<text>"=, =ot handoff get <id>=, =ot handoff clear <id>=.
