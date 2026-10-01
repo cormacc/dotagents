@@ -3586,3 +3586,32 @@ Requirements (from the user, 2026-09-24):
 Current state (measured 2026-09-24): `oh` sets no thinking level. In `cli.clj`, the child argv is `core/model-args` + `core/harness-extra-args` + `core/persona-args` only. A pi child therefore inherits `defaultThinkingLevel: high` from `pi/settings.json`; claude and codex children use their own defaults (no effort key in `~/.claude/settings.json` or `~/.codex/config.toml`). `:defaults` is a closed map whose only key is `:placement` (`skills/herdr-orch/scripts/docs/contract.md` § Model resolution).
 
 Native surfaces (from each tool's `--help`): pi 0.87.1 `--thinking <level>` (off, minimal, low, medium, high, xhigh, max); Claude Code 2.1.281 `--effort <level>` (low, medium, high, xhigh, max); codex-cli 0.156.1 has no effort flag, only `-c model_reasoning_effort=<level>` (key found in the binary; accepted values not verified).
+
+** DONE Migrate off pi-mcp-adapter to pi 0.99 native MCP + codemode :mcp:pi:
+CLOSED: [2026-10-01 Thu 20:27]
+:PROPERTIES:
+:CUSTOM_ID: 45b58f5c-fb6d-421c-bb30-09e43498b3d0
+:CREATED: [2026-10-01 Thu 10:32]
+:STARTED: [2026-10-01 Thu 11:16]
+:ARCHIVED: [2026-10-01 Thu 20:27]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 10:32]
+- State "STARTED" from "TODO" [2026-10-01 Thu 11:16]
+- State "DONE" from "STARTED" [2026-10-01 Thu 20:27]
+:END:
+#+IMPORT: [[plan:2026-10-01-migrate-off-pi-mcp-adapter-to-pi-0-99-na.org]]
+Pi 0.99 ships native MCP (stdio + streamable HTTP) and codemode, so the pi-mcp-adapter plugin can be retired. Per docs/mcp.md, an extension that registers /mcp (pi-mcp-adapter does) REPLACES built-in MCP; removing the package restores native behaviour. Capture detail in a change-record before starting.
+
+Workstreams:
+- Package removal: drop "npm:pi-mcp-adapter" from pi/settings.json packages. Native MCP + codemode then take over.
+- mcp.json relocation: native pi reads ~/.pi/agent/mcp.json; agents.nix (line 230-231) only symlinks ~/.config/mcp/mcp.json, which is the adapter path. Add a symlink to ~/.pi/agent/mcp.json (keep or drop the old one).
+- mcp.json format conversion: current entries use adapter keys. Replace per-server "auth": "oauth" (native auto-detects OAuth for header-less HTTP servers). Rewrite the ms365 oauth block: "redirectUri": "...{port}/callback" is adapter syntax; native uses callbackUrl/callbackPort (loopback only) plus clientName. Validate with `pi mcp list`.
+- Tool-naming break in jira extension: adapter exposes a unified `mcp` proxy and `atlassian_*` direct tools; native registers mcp__<server>__<tool> (e.g. mcp__atlassian__getJiraIssue). Update pi/extensions/jira/{index.ts,utils.ts} constants/prompts (ATLASSIAN_TOOL_PREFIX, MCP_PROXY_TOOL, getAtlassianAvailability, buildClonePrompt/buildGetPrompt/claim/comment/transition) and jira.test.ts assertions.
+- Exposure model: native default exposure is codemode (tools not declared to the model). The jira prompts tell the agent to call atlassian tools directly, which needs exposure: "direct" (or toolExposure) on the atlassian server in mcp.json, OR rewrite the jira flows to codemode scripts. Decide per flow.
+- Re-auth: adapter stores OAuth tokens in the OS keyring; native stores them in ~/.pi/agent/mcp-auth.json. Plan re-login for atlassian, ms365, context7 via `pi mcp login <server>`.
+- Docs: update skills/ms365/{SKILL.md,README.org} (replace /mcp-adapter + /mcp-auth with native /mcp login/logout) and the jira extension comments that describe adapter proxy/direct modes.
+- codemode enablement: confirm auto-enable on connect, or pin via settings defaultTools ["+codemode"] / autoEnableCodemode.
+
+Refs: pi docs/mcp.md (Replace the built-in MCP support, Control tool exposure), docs/cli.md (Tools/codemode). Current config: agents/mcp.json, agents/pi/settings.json.

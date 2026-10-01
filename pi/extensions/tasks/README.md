@@ -299,7 +299,7 @@ The extension no longer registers LLM-facing task/org tools. Agents should use t
 - Read change-record sections: `ot section design/log/foo.org Summary --format json`.
 - Scan prior work: `ot scan --scope all --max-body-chars 500 --format json`.
 
-Cross-extension JS callers that need deterministic org insertion should import `insertTaskIntoFile` from `./insert.ts` directly. The helper still owns UUID/`:CREATED:` rendering, duplicate `:LINKED_ISSUES:` checks, and project-root sandboxing; `jira_clone_apply` uses that direct import path.
+Cross-extension JS callers that need deterministic org insertion should import `insertTaskIntoFile` from `./insert.ts` directly. The helper still owns UUID/`:CREATED:` rendering, duplicate `:LINKED_ISSUES:` checks, and project-root sandboxing; the `jira_clone` tool of the `jira` extension uses that direct import path.
 
 ## Cross-extension events
 

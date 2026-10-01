@@ -3,9 +3,10 @@ set -euo pipefail
 
 # Test runner for the jira extension.
 #
-# Sanity-checks the extension's structural shape. There are no unit
-# tests yet — the extension is a thin wrapper around MCP-driven agent
-# prompts and slash-command dispatch.
+# Sanity-checks the extension's structural shape, then runs jira.test.ts
+# (helpers, triggers, and the deferred jira_* tools against a fake
+# ctx.executeTool). The tasks:status-changed listener is also covered by
+# ../test/event-subscriptions.test.ts (run from ../emacsclient/test.sh).
 
 cd "$(dirname "$0")"
 
@@ -42,9 +43,5 @@ run_tsx() {
   fi
 }
 
-CODE=0
 echo "# Running unit tests..."
-run_tsx ./jira.test.ts || CODE=1
-echo "# Running failure-semantics tests..."
-run_tsx ./failure.test.ts || CODE=1
-exit "$CODE"
+run_tsx ./jira.test.ts

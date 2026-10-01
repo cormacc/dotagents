@@ -55,7 +55,7 @@ Three policies that were previously encoded in both the pi overlay (TypeScript) 
 
 ## Behaviours that stay in TypeScript (cross-extension)
 
-- `insert.ts` exports `insertTaskIntoFile` as a thin async shim that shells `ot create --linked-issue ...` and parses the JSON envelope back into the existing `InsertResult` shape. Keeps `jira_clone_apply` working without a coordinated cutover.
+- `insert.ts` exports `insertTaskIntoFile` as a thin async shim that shells `ot create --linked-issue ...` and parses the JSON envelope back into the existing `InsertResult` shape. Keeps the `jira_clone` tool (formerly `jira_clone_apply`) working without a coordinated cutover.
 - The closure-time `evaluateSummaryRefresh` synchronous check in `summary.ts` stays a regex-based local read (already documented; routing through `ot` would force async on the overlay close path).
 
 ## Behaviours under review

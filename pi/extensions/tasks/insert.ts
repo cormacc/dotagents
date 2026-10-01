@@ -3,7 +3,7 @@
  *
  * `buildTaskBlock` is the single source of truth for assembling an
  * org-mode task block from structured fields. Consumed today by the
- * Jira `jira_clone_apply` tool and exposed publicly so future
+ * Jira `jira_clone` tool and exposed publicly so future
  * cross-tracker integrations (github / linear / gitlab / `/jira create`)
  * never reimplement priority mapping, drawer ordering, or label
  * tagging.
@@ -194,7 +194,7 @@ export function buildTaskBlock(args: BuildTaskArgs): BuiltTaskBlock {
 // ─── File-side insertion + idempotency ──────────────────────────────
 //
 // `insertTaskIntoFile` is the cross-extension entry point consumed by
-// `jira_clone_apply` (today) and any future tracker integration. Kept
+// `jira_clone` (today) and any future tracker integration. Kept
 // here (rather than in `index.ts`) so:
 //
 // 1. It has no `pi-tui` / `pi-coding-agent` dependency and can be
@@ -309,10 +309,13 @@ export async function insertTaskIntoFile(
     ? args.projectRoot!
     : resolve(args.projectRoot ?? ".");
 
-  const cmd = ["create", args.summary];
+  // Free text from another tracker can start with `-`, which `ot` would read
+  // as an option: pass the body as `--body=<text>` and the summary last,
+  // after `--`, so neither is parsed as a flag.
+  const cmd = ["create"];
   if (args.section) cmd.push("--section", args.section);
   if (args.priorityName) cmd.push("--priority", args.priorityName);
-  if (args.body) cmd.push("--body", args.body);
+  if (args.body) cmd.push(`--body=${args.body}`);
   if (args.parentId) cmd.push("--parent", args.parentId);
   if (args.allowCreateSection) cmd.push("--allow-create-section");
   if (args.id) cmd.push("--id", args.id);
@@ -334,6 +337,8 @@ export async function insertTaskIntoFile(
     ? []
     : ["--tasks", args.file];
   if (basename(args.file) === "TASKS.local.org") cmd.push("--local");
+  // Last: everything after `--` is positional.
+  cmd.push("--", args.summary);
 
   let env: OtEnvelope<{ id: string; file: string; line: number }>;
   try {

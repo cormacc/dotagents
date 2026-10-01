@@ -60,25 +60,29 @@ Jira workflows silently ignore tokens that match neither -- a task that carries 
 
 Prefer `#+JIRA_CLOUDID` from the file. If absent:
 
-1. Call `atlassian_getAccessibleAtlassianResources`.
-2. Pick the resource whose `url` field equals the base URL derived from `#+LINK: jira .../browse/%s`.
-3. Use its `id` as the `cloudId` for subsequent calls.
+1. Call `getAccessibleAtlassianResources` (pi: `mcp__atlassian__getAccessibleAtlassianResources`).
+2. Pick the resource whose `url` field equals the base URL derived from `#+LINK: jira .../browse/%s`. The same site can be listed more than once (once per scope set), so de-duplicate by `id`.
+3. Without a `#+LINK: jira` base URL, use the only distinct `id`; with several, ask the user to set `#+JIRA_CLOUDID`.
+4. Use the `id` as the `cloudId` for subsequent calls.
 
 ## Auto-transition mapping
 
-When auto-transitioning Jira status on `tasks:status-changed`:
+When mirroring a local status change on Jira (manually after `ot status`, or from the pi `tasks:status-changed` event):
 
-1. Call `atlassian_getTransitionsForJiraIssue`.
-2. Match by name:
-   - `STARTED` → "Start Progress" or "In Progress".
-   - `DONE` → "Done", "Closed", or "Resolved" (try in order).
-3. If no match, surface a chooser instead of guessing.
+1. Call `getTransitionsForJiraIssue` (pi: `mcp__atlassian__getTransitionsForJiraIssue`).
+2. Match by name, case-insensitive, trying the names in order:
+   - `STARTED` to "Start Progress", then "In Progress".
+   - `DONE` to "Done", then "Closed", then "Resolved".
+3. If no match, surface a chooser instead of guessing, and do nothing for that key.
 
-LOGBOOK is durable audit history; live event payloads are the trigger for Jira writes. Do not replay historical `:LOGBOOK:` entries as queued Jira transitions.
+LOGBOOK is durable audit history; live status changes are the trigger for Jira writes. Do not replay historical `:LOGBOOK:` entries as queued Jira transitions.
 
-## `jira_clone_apply` return shapes
+## Clone outcomes
 
-- `status: "inserted"` -- confirm with the new heading and Jira URL.
-- `status: "duplicate"` -- cite `details.existingId` and refuse to re-clone (the same `:LINKED_ISSUES:` token already appears in TASKS.org / TASKS.local.org / their imports).
-- `status: "section_not_found"` -- ask whether to retry with `allowCreateSection: true` or correct the section name.
-- `status: "error"` -- surface the message verbatim.
+`ot create ... --linked-issue "[[jira:KEY]]"` writes the local task (see the Clone workflow in `SKILL.md`). Its error codes:
+
+- `duplicate-linked-issue` -- the same `:LINKED_ISSUES:` token already appears in `TASKS.org` / `TASKS.local.org` / their imports. Cite the existing task and refuse to re-clone.
+- `section-not-found` -- ask whether to retry with `--allow-create-section` or correct the section name.
+- any other code -- surface the message verbatim.
+
+The pi `jira_clone` tool reports the same outcomes as `status` values: `inserted`, `duplicate` (with `existingId`), `section_not_found`, `error`.

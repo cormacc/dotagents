@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 /** Regression tests for shared pi.events subscription cleanup. */
 
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -106,7 +107,9 @@ await assertSessionScoped({
 });
 
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
+const originalCwd = process.cwd();
 const jiraAgentDir = mkdtempSync(join(tmpdir(), "pi-jira-events-"));
+const jiraProject = mkdtempSync(join(tmpdir(), "pi-jira-project-"));
 try {
   process.env.PI_CODING_AGENT_DIR = jiraAgentDir;
   writeFileSync(
@@ -114,12 +117,26 @@ try {
     JSON.stringify({ autoTransition: true }),
   );
 
+  // The listener resolves the task's Jira keys with `ot` in process.cwd(),
+  // so the event needs a real project whose task links a Jira issue.
+  const ot = new URL("../../../skills/org-tasks/scripts/ot", import.meta.url).pathname;
+  const runOt = (...args: string[]) => {
+    const r = spawnSync(ot, ["--format", "json", "--root", jiraProject, ...args], { encoding: "utf-8" });
+    if (r.status !== 0) throw new Error(`ot ${args.join(" ")} failed: ${r.stdout}${r.stderr}`);
+    return JSON.parse(r.stdout).result;
+  };
+  runOt("init");
+  const taskId: string = runOt(
+    "create", "Test transition", "--section", "Improvements", "--linked-issue", "[[jira:SAND-1]]",
+  ).id;
+  process.chdir(jiraProject);
+
   const { default: registerJira } = await import("../jira/index.ts");
   await assertSessionScoped({
     name: "jira",
     topic: "tasks:status-changed",
     payload: {
-      id: "11111111-1111-4111-8111-111111111111",
+      id: taskId,
       status: "STARTED",
       prevStatus: "TODO",
       summary: "Test transition",
@@ -127,14 +144,16 @@ try {
     },
     register: registerJira,
     createExtras: (actions) => ({
-      getAllTools() { return [{ name: "mcp" }]; },
-      sendUserMessage() { actions.count++; },
+      getAllTools() { return [{ name: "mcp__atlassian__getJiraIssue" }]; },
+      sendMessage() { actions.count++; },
     }),
   });
 } finally {
+  process.chdir(originalCwd);
   if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
   else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
   rmSync(jiraAgentDir, { recursive: true, force: true });
+  rmSync(jiraProject, { recursive: true, force: true });
 }
 
 if (failures > 0) process.exit(1);

@@ -104,212 +104,306 @@ export function resolveKey(
   };
 }
 
-/**
- * Compose the structured prompt that drives `/jira clone` end-to-end.
- *
- * Two-step dispatch (re-scoped 2026-04-28 — see
- * `design/log/2026-04-28-jira-clone-token-efficiency.org`):
- *
- *   1. `atlassian_getJiraIssue` with the field-list filter.
- *   2. `jira_clone_apply` with the parsed fields (key, summary,
- *      priorityName, body, labels). The body, summary, and labels
- *      never re-appear in any `edit` tool argument.
- *
- * Org-mode string assembly (drawer, UUID, :CREATED:, priority cookie,
- * tag suffix) lives in the tasks extension's `insertTaskIntoFile()` helper,
- * which delegates to `ot create`. The model never re-emits the rendered body.
- *
- * Pure function — exported so tests can snapshot the prompt shape.
- */
-export function buildClonePrompt(
-  keys: string[],
-  cfg: JiraConfig,
-  cwd: string,
-  tasksFile: string,
-  tasksLocalFile: string,
-): string {
-  const cloudIdLine = cfg.cloudId
-    ? `Use cloudId \`${cfg.cloudId}\` from #+JIRA_CLOUDID.`
-    : "Resolve the cloudId by calling `atlassian_getAccessibleAtlassianResources`" +
-      (cfg.baseUrl
-        ? ` and selecting the resource whose \`url\` equals \`${cfg.baseUrl}\`.`
-        : ".");
-  const keyList = keys.map((k) => `\`${k}\``).join(", ");
+/** Prefix of every tool name the native MCP client registers for the `atlassian` server. */
+export const ATLASSIAN_TOOL_PREFIX = "mcp__atlassian__";
 
-  return [
-    `Clone the following Jira issue${keys.length === 1 ? "" : "s"} into ${tasksFile} (or ${tasksLocalFile} if working in the local-drafts area): ${keyList}.`,
-    "",
-    "Use the **org-jira** skill for the full clone protocol; the steps below are a concise reminder, not a substitute.",
-    "",
-    "This is a *two-step* dispatch: first fetch the issue, then forward the",
-    "parsed fields to `jira_clone_apply`. Do **not** assemble the org task",
-    "block manually via the `edit` tool; org-mode rendering (drawer, UUID,",
-    "`:CREATED:`, priority cookie, tag suffix, `:LINKED_ISSUES:`) is owned",
-    "by the `jira_clone_apply` tool's deterministic helper.",
-    "",
-    "Steps for each key:",
-    `1. ${cloudIdLine}`,
-    "2. Call `atlassian_getJiraIssue` with the resolved cloudId, the issue key, and `fields=\"summary,priority,labels,description,issuetype,parent,subtasks\"` to keep the response small. Do not request `*all` or expand customfields.",
-    "3. Render the issue description as plain text/markdown (Jira ADF → markdown-ish; do not embed raw ADF JSON). Apply any obvious cleanup (collapse broken `| --- |` table rows, trim noisy summary boilerplate). Keep the result short.",
-    "4. Call `jira_clone_apply` with:",
-    "   - `key` — the issue key.",
-    "   - `summary` — `issue.fields.summary` verbatim (after any small surgery).",
-    "   - `priorityName` — the priority name string (`Highest`/`High`/`Medium`/`Low`/`Lowest`); omit when missing/unknown.",
-    "   - `body` — the rendered description from step 3.",
-    "   - `labels` — the issue's label list (may be empty).",
-    `   - \`file\` — \`${tasksFile}\` by default; pass \`${tasksLocalFile}\` only when the user is working on local drafts.`,
-    "   - `section` — omit to use `Improvements`; pass an explicit section if the user has been working in a different one.",
-    "5. Surface the tool's structured return verbatim:",
-    "   - `status: \"inserted\"` — confirm with the new heading and Jira URL.",
-    "   - `status: \"duplicate\"` — tell the user the issue is already cloned (cite the existing task's `:CUSTOM_ID:` from `details.existingId`).",
-    "   - `status: \"section_not_found\"` — ask whether to retry with `allowCreateSection: true` or correct the section name.",
-    "   - `status: \"error\"` — surface the message.",
-    "",
-    `Project root: \`${cwd}\`.`,
-    "Do not invoke the tasks-extension UI; the tool writes the file directly.",
-    "",
-    "After cloning, summarise: one bullet per key with the new local task's heading and Jira URL.",
-  ].join("\n");
+/** Write flows run against this project only until the workflows are signed off. */
+export const SANDBOX_PROJECT = "SAND";
+
+/** Fields the read flows (clone, get) request from `getJiraIssue`. */
+export const ISSUE_FIELDS = [
+  "summary",
+  "priority",
+  "labels",
+  "description",
+  "issuetype",
+  "parent",
+  "subtasks",
+  "status",
+  "assignee",
+  "reporter",
+  "issuelinks",
+  "updated",
+  "versions",
+  "fixVersions",
+  "components",
+  "comment",
+] as const;
+
+/** Local status -> Jira transition names, tried in order (case-insensitive). */
+export const TRANSITION_TARGETS = {
+  STARTED: ["Start Progress", "In Progress"],
+  DONE: ["Done", "Closed", "Resolved"],
+} as const;
+
+export type TransitionStatus = keyof typeof TRANSITION_TARGETS;
+
+/**
+ * Throw unless every key is `PROJ-NNN`; with `sandbox`, also unless every key
+ * belongs to {@link SANDBOX_PROJECT}. Runs before any MCP call.
+ */
+export function assertKeys(keys: string[], sandbox: boolean): void {
+  if (keys.length === 0) throw new Error("No Jira keys given.");
+  for (const key of keys) {
+    if (!JIRA_KEY_RE.test(key)) {
+      throw new Error(`Invalid Jira key \`${key}\`; expected PROJ-NNN (e.g. SAND-42).`);
+    }
+    if (sandbox && !key.startsWith(`${SANDBOX_PROJECT}-`)) {
+      throw new Error(
+        `Refusing ${key}: write flows run against project ${SANDBOX_PROJECT} only until they are signed off.`,
+      );
+    }
+  }
+}
+
+/** Throw unless `project` is {@link SANDBOX_PROJECT}. */
+export function assertSandboxProject(project: string): void {
+  if (project !== SANDBOX_PROJECT) {
+    throw new Error(
+      `Refusing project ${project}: write flows run against project ${SANDBOX_PROJECT} only until they are signed off.`,
+    );
+  }
 }
 
 /**
- * Compose the prompt for the user-facing inspection helper `/jira get`.
- *
- * Re-scoped at plan time (see
- * `design/log/2026-04-28-jira-clone-token-efficiency.org` →
- * "~/jira get KEY~ ergonomics subcommand"): no underlying
- * `jira_get_issue` tool exists today because pi-mcp-adapter does not
- * expose a JS-callable client to extensions. This helper therefore
- * stays a prompt-builder — the agent calls `atlassian_getJiraIssue`
- * directly with the same field filter used by `buildClonePrompt`,
- * then renders a compact human-readable summary.
- *
- * Pure function — exported so tests can snapshot the prompt shape.
+ * Jira keys among `:LINKED_ISSUES:` tokens (see `references/protocol.md`):
+ * a typed `[[jira:KEY]]`, or a raw org link `[[url]]` / `[[url][label]]`
+ * whose host equals the host of `baseUrl` and whose last path segment is a
+ * key. Other tokens are ignored. Order is kept; duplicates are dropped.
  */
-export function buildGetPrompt(
-  keys: string[],
-  cfg: JiraConfig,
-  cwd: string,
-): string {
-  const cloudIdLine = cfg.cloudId
-    ? `Use cloudId \`${cfg.cloudId}\` from #+JIRA_CLOUDID.`
-    : "Resolve the cloudId by calling `atlassian_getAccessibleAtlassianResources`" +
-        (cfg.baseUrl
-          ? ` and selecting the resource whose \`url\` equals \`${cfg.baseUrl}\`.`
-          : ".");
-  const keyList = keys.map((k) => `\`${k}\``).join(", ");
-  const plural = keys.length === 1 ? "" : "s";
-
-  return [
-    `Show the user a compact human-readable summary of the following Jira issue${plural}: ${keyList}.`,
-    "",
-    "Use the **org-jira** skill for the canonical inspection conventions; the steps below are a concise reminder.",
-    "",
-    `Project root: \`${cwd}\`.`,
-    "",
-    "Steps for each key:",
-    `1. ${cloudIdLine}`,
-    "2. Call `atlassian_getJiraIssue` with the resolved cloudId, the issue key, and `fields=\"summary,priority,labels,description,issuetype,parent,subtasks,status\"` to keep the response small. Do not request `*all` or expand customfields.",
-    "3. Render a compact, human-readable block (NOT raw JSON):",
-    "   - Heading: `KEY \u2014 <summary>` plus the issue's status.",
-    "   - One-line metadata: priority, issuetype, labels (comma-separated; “none” when empty).",
-    "   - Parent: `parent.key \u2014 parent.fields.summary` when set; otherwise omit.",
-    "   - Subtasks: count plus each subtask's `key \u2014 summary` line, capped at 5 with a “+N more” footnote if exceeded.",
-    "   - Description preview: first paragraph of the description, max 300 characters; mark truncation with “…”.",
-    cfg.baseUrl
-      ? `   - Footer link: \`${cfg.baseUrl}/browse/<KEY>\`.`
-      : "   - Footer link: skip when the `#+LINK: jira` template is unset or non-standard.",
-    "",
-    "Render each key as its own block separated by a blank line. Do not write to any TASKS file.",
-  ].join("\n");
+export function jiraKeysFromTokens(tokens: string[], baseUrl: string | null): string[] {
+  let baseHost: string | null = null;
+  try {
+    baseHost = baseUrl ? new URL(baseUrl).host : null;
+  } catch {
+    baseHost = null;
+  }
+  const keys: string[] = [];
+  for (const token of tokens) {
+    const link = /^\[\[([^\]]+)\](?:\[[^\]]*\])?\]$/.exec(token.trim());
+    if (!link) continue;
+    const target = link[1]!;
+    let key: string | null = null;
+    const typed = /^jira:(.+)$/.exec(target);
+    if (typed) {
+      key = typed[1]!;
+    } else if (baseHost) {
+      try {
+        const url = new URL(target);
+        if (url.host === baseHost) key = url.pathname.split("/").filter(Boolean).pop() ?? null;
+      } catch {
+        key = null;
+      }
+    }
+    if (key && JIRA_KEY_RE.test(key) && !keys.includes(key)) keys.push(key);
+  }
+  return keys;
 }
 
 /**
- * Helper used by all selected-task workflows (claim/comment/transition):
- * compose the cloudId-resolution preamble for the prompt.
+ * Jira labels as org tags: `ot` accepts `[A-Za-z0-9_]+` only, so other
+ * characters become `_` (`tech-debt` -> `tech_debt`). Empty results and
+ * duplicates are dropped; order is kept.
  */
-function cloudIdInstruction(cfg: JiraConfig): string {
-  return cfg.cloudId
-    ? `Use cloudId \`${cfg.cloudId}\` from #+JIRA_CLOUDID.`
-    : "Resolve the cloudId by calling `atlassian_getAccessibleAtlassianResources`" +
-        (cfg.baseUrl
-          ? ` and selecting the resource whose \`url\` equals \`${cfg.baseUrl}\`.`
-          : ".");
+export function orgTags(labels: string[]): string[] {
+  return [...new Set(labels.map((l) => l.replace(/[^A-Za-z0-9_]/g, "_")).filter(Boolean))];
+}
+
+/** First transition matching `status`, trying the target names in order. */
+export function pickTransition<T extends { name: string }>(
+  status: TransitionStatus,
+  transitions: T[],
+): T | null {
+  for (const target of TRANSITION_TARGETS[status]) {
+    const hit = transitions.find((t) => t.name.toLowerCase() === target.toLowerCase());
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** The fields of an issue that the read flows keep. */
+export interface IssueSummary {
+  key: string;
+  summary: string;
+  status: string | null;
+  priority: string | null;
+  issuetype: string | null;
+  labels: string[];
+  parent: { key: string; summary: string } | null;
+  subtasks: Array<{ key: string; summary: string }>;
+  description: string | null;
+  assignee: string | null;
+  reporter: string | null;
+  /** `YYYY-MM-DD` of the last update. */
+  updated: string | null;
+  affectsVersions: string[];
+  fixVersions: string[];
+  components: string[];
+  /** Each link from this issue's side: `relation` is the outward or inward phrase. */
+  issueLinks: Array<{ relation: string; key: string; summary: string }>;
+  commentCount: number | null;
+}
+
+/** The `name` of each entry in a Jira list field (versions, components). */
+function names(list: unknown): string[] {
+  return Array.isArray(list)
+    ? list.map((v: any) => v?.name).filter((n: unknown): n is string => typeof n === "string")
+    : [];
+}
+
+function issueLinks(list: unknown): IssueSummary["issueLinks"] {
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((l: any) => {
+    const out = l?.outwardIssue;
+    const other = out ?? l?.inwardIssue;
+    if (!other?.key) return [];
+    const relation = (out ? l?.type?.outward : l?.type?.inward) ?? l?.type?.name ?? "links to";
+    return [{ relation, key: other.key, summary: other.fields?.summary ?? "" }];
+  });
+}
+
+/** Text of an ADF node: text leaves joined, block children separated by a blank line. */
+function adfText(node: any): string {
+  if (typeof node?.text === "string") return node.text;
+  if (!Array.isArray(node?.content)) return "";
+  const inline = node.content.every((c: any) => typeof c?.text === "string" || c?.type === "hardBreak");
+  return node.content
+    .map((c: any) => (c?.type === "hardBreak" ? "\n" : adfText(c)))
+    .filter((s: string) => inline || s.trim() !== "")
+    .join(inline ? "" : "\n\n");
 }
 
 /**
- * Compose the prompt that drives `/jira claim` against the selected
- * task's Jira-shaped `:LINKED_ISSUES:` tokens.
+ * The issue description as text, or null. `getJiraIssue` returns markdown for
+ * `responseContentFormat: "markdown"`, but can still return an ADF document
+ * (observed live: an empty description on SAND-75 came back as
+ * `{type: "doc", version: 1, content: []}`).
  */
-export function buildClaimPrompt(
-  cfg: JiraConfig,
-  cwd: string,
-  tasksFile: string,
-  tasksLocalFile: string,
-  selectedId: string | null,
-): string {
-  const selectedLine = selectedId
-    ? `The selected task's :CUSTOM_ID: is \`${selectedId}\` (from #+SELECTED: in ${tasksLocalFile}).`
-    : `Identify the selected task from #+SELECTED: in ${tasksLocalFile}; refuse with a notification if none is set.`;
-  return [
-    "Claim every Jira-shaped issue linked from the **selected task** by setting its assignee to the current Atlassian user.",
-    "",
-    "Use the **org-jira** skill for the full claim protocol; the steps below are a concise reminder, not a substitute.",
-    "",
-    `Project root: \`${cwd}\`.`,
-    selectedLine,
-    "",
-    "Steps:",
-    `1. ${cloudIdInstruction(cfg)}`,
-    `2. Read the selected task's \`:LINKED_ISSUES:\` drawer property from ${tasksFile} or its imports. Filter to Jira-shaped tokens:`,
-    "   - Typed links `[[jira:KEY]]` where KEY matches `^[A-Z][A-Z0-9_]+-\\d+$`.",
-    cfg.baseUrl
-      ? `   - Raw org-link tokens whose target host equals \`${new URL(cfg.baseUrl).host}\`.`
-      : "   - Raw org-link tokens are skipped when the `#+LINK: jira` template is unset or non-standard.",
-    "3. Call `atlassian_atlassianUserInfo` once to obtain the current user's `accountId`.",
-    "4. For each Jira-shaped key, call `atlassian_editJiraIssue` with `assignee.accountId` set to that value.",
-    "5. Surface a one-line summary per key with success or error message.",
-    "",
-    "Sandbox-only during development: only run against project `SAND` until the workflow is signed off.",
-  ].join("\n");
+function descriptionText(d: unknown): string | null {
+  const text = typeof d === "string" ? d : adfText(d);
+  return text.trim() === "" ? null : text;
+}
+
+/** Filter a parsed `getJiraIssue` result down to {@link IssueSummary}. */
+export function normalizeIssue(key: string, issue: any): IssueSummary {
+  const f = issue?.fields ?? {};
+  return {
+    key,
+    summary: f.summary ?? "",
+    status: f.status?.name ?? null,
+    priority: f.priority?.name ?? null,
+    issuetype: f.issuetype?.name ?? null,
+    labels: f.labels ?? [],
+    parent: f.parent
+      ? { key: f.parent.key, summary: f.parent.fields?.summary ?? "" }
+      : null,
+    subtasks: (f.subtasks ?? []).map((s: any) => ({
+      key: s.key,
+      summary: s.fields?.summary ?? "",
+    })),
+    description: descriptionText(f.description),
+    assignee: f.assignee?.displayName ?? null,
+    reporter: f.reporter?.displayName ?? null,
+    updated: typeof f.updated === "string" ? f.updated.slice(0, 10) : null,
+    affectsVersions: names(f.versions),
+    fixVersions: names(f.fixVersions),
+    components: names(f.components),
+    issueLinks: issueLinks(f.issuelinks),
+    commentCount:
+      typeof f.comment?.total === "number"
+        ? f.comment.total
+        : Array.isArray(f.comment?.comments)
+          ? f.comment.comments.length
+          : null,
+  };
+}
+
+const SUBTASK_CAP = 5;
+const PREVIEW_CHARS = 300;
+
+/** `Label: value`, or `Label: none` when the value is empty. */
+const field = (label: string, value: string | null | undefined): string =>
+  `${label}: ${value || "none"}`;
+
+/** `Label: none`, or `Label (n):` then up to {@link SUBTASK_CAP} `- item` lines and a `+N more` line. */
+function cappedList(label: string, items: string[]): string[] {
+  if (items.length === 0) return [`${label}: none`];
+  const out = [`${label} (${items.length}):`, ...items.slice(0, SUBTASK_CAP).map((i) => `- ${i}`)];
+  if (items.length > SUBTASK_CAP) out.push(`- +${items.length - SUBTASK_CAP} more`);
+  return out;
 }
 
 /**
- * Compose the prompt that drives `/jira comment <markdown>` against the
- * selected task's Jira-shaped `:LINKED_ISSUES:` tokens.
+ * Compact human-readable block for `jira_get`: every field has a line, and an
+ * empty one reads `none`, so the block reads as complete. When empty fields were
+ * omitted, an agent took the block as incomplete and re-fetched the raw issue.
+ * No caller parses the block; the model shows it verbatim.
  */
-export function buildCommentPrompt(
-  body: string,
-  cfg: JiraConfig,
-  cwd: string,
-  tasksFile: string,
-  tasksLocalFile: string,
-  selectedId: string | null,
-): string {
-  const selectedLine = selectedId
-    ? `The selected task's :CUSTOM_ID: is \`${selectedId}\` (from #+SELECTED: in ${tasksLocalFile}).`
-    : `Identify the selected task from #+SELECTED: in ${tasksLocalFile}; refuse with a notification if none is set.`;
-  return [
-    "Add a comment to every Jira-shaped issue linked from the **selected task**.",
-    "",
-    "Use the **org-jira** skill for the full comment protocol; the steps below are a concise reminder, not a substitute.",
-    "",
-    `Project root: \`${cwd}\`.`,
-    selectedLine,
-    "",
-    "Comment body (verbatim, in fenced markdown):",
-    "```markdown",
-    body,
-    "```",
-    "",
-    "Steps:",
-    `1. ${cloudIdInstruction(cfg)}`,
-    `2. Read the selected task's \`:LINKED_ISSUES:\` drawer property from ${tasksFile} or its imports. Filter to Jira-shaped tokens (see the org-jira skill).`,
-    "3. For each Jira-shaped key, call `atlassian_addCommentToJiraIssue` with the markdown body above. The MCP server handles markdown → ADF conversion.",
-    "4. Surface a one-line summary per key with success or error message.",
-    "",
-    "Sandbox-only during development: only run against project `SAND` until the workflow is signed off.",
-  ].join("\n");
+export function renderIssueBlock(issue: IssueSummary, baseUrl: string | null): string {
+  const lines = [
+    `${issue.key} - ${issue.summary}${issue.status ? ` [${issue.status}]` : ""}`,
+    `Priority: ${issue.priority ?? "none"}; type: ${issue.issuetype ?? "unknown"}; labels: ${
+      issue.labels.length > 0 ? issue.labels.join(", ") : "none"
+    }`,
+    field("Components", issue.components.join(", ")),
+    field("Affects versions", issue.affectsVersions.join(", ")),
+    field("Fix versions", issue.fixVersions.join(", ")),
+    field("Assignee", issue.assignee),
+    field("Reporter", issue.reporter),
+    field("Updated", issue.updated),
+    field("Parent", issue.parent && `${issue.parent.key} - ${issue.parent.summary}`),
+    ...cappedList("Subtasks", issue.subtasks.map((s) => `${s.key} - ${s.summary}`)),
+    ...cappedList("Issue links", issue.issueLinks.map((l) => `${l.relation} ${l.key} - ${l.summary}`)),
+    field("Comments", issue.commentCount === null ? null : String(issue.commentCount)),
+  ];
+  const paragraph = (issue.description ?? "").trim().split(/\n\s*\n/)[0] ?? "";
+  lines.push(
+    field(
+      "Description",
+      paragraph.length > PREVIEW_CHARS ? `${paragraph.slice(0, PREVIEW_CHARS)}...` : paragraph,
+    ),
+  );
+  if (baseUrl) lines.push(`${baseUrl}/browse/${issue.key}`);
+  return lines.join("\n");
+}
+
+// ── Hidden one-line triggers ────────────────────────────────────────────
+//
+// Each `/jira` flow sends the model one line: a single `codemode` call of a
+// `jira_*` tool with literal args. Scripts, protocol steps and rendering
+// rules live in the tools. Codemode scripts address a tool as
+// `tools.<name>`; the `jira` namespace only groups the tool listing.
+
+function trigger(tool: string, args: unknown, then: string): string {
+  return `Call \`codemode\` once with exactly this code, then ${then}: return await tools.${tool}(${JSON.stringify(args)});`;
+}
+
+export function buildGetTrigger(keys: string[]): string {
+  return trigger("jira_get", { keys }, "show the returned text verbatim and add nothing");
+}
+
+export function buildCloneTrigger(keys: string[]): string {
+  return trigger("jira_clone", { keys }, "state each key's status in one line");
+}
+
+export function buildClaimTrigger(keys: string[]): string {
+  return trigger("jira_claim", { keys }, "state each key's outcome in one line");
+}
+
+export function buildCommentTrigger(keys: string[], body: string): string {
+  return trigger("jira_comment", { keys, body }, "state each key's outcome in one line");
+}
+
+export function buildCreateTrigger(taskId: string, project: string, type: string): string {
+  return trigger("jira_create", { taskId, project, type }, "state the new key and URL");
+}
+
+export function buildTransitionTrigger(keys: string[], status: TransitionStatus): string {
+  return trigger(
+    "jira_transition",
+    { keys, status },
+    "state each key's outcome in one line; for a key with `choices`, list them and do nothing else",
+  );
 }
 
 export interface CreateOptions {
@@ -317,94 +411,6 @@ export interface CreateOptions {
   project: string | null;
   /** Issue type override (e.g. `Story`, `Bug`). Defaults to `Task`. */
   type: string;
-}
-
-/**
- * Compose the prompt that drives `/jira create` — promote the selected
- * task to a new Jira issue and write the new key back to
- * `:LINKED_ISSUES:`.
- */
-export function buildCreatePrompt(
-  opts: CreateOptions,
-  cfg: JiraConfig,
-  cwd: string,
-  tasksFile: string,
-  tasksLocalFile: string,
-  selectedId: string | null,
-): string {
-  const project = opts.project ?? cfg.project;
-  if (!project) {
-    return [
-      "Refuse the /jira create request: no project given on the command line and #+JIRA_PROJECT is not set in TASKS.setup.org or TASKS.local.org.",
-      "Notify the user to either pass a PROJECT argument or set #+JIRA_PROJECT.",
-    ].join("\n");
-  }
-  const selectedLine = selectedId
-    ? `The selected task's :CUSTOM_ID: is \`${selectedId}\` (from #+SELECTED: in ${tasksLocalFile}).`
-    : `Identify the selected task from #+SELECTED: in ${tasksLocalFile}; refuse with a notification if none is set.`;
-  return [
-    `Promote the **selected task** to a new Jira issue in project \`${project}\` (issue type \`${opts.type}\`).`,
-    "",
-    "Use the **org-jira** skill for the full create protocol; the steps below are a concise reminder, not a substitute.",
-    "",
-    `Project root: \`${cwd}\`.`,
-    selectedLine,
-    "",
-    "Steps:",
-    `1. ${cloudIdInstruction(cfg)}`,
-    `2. Verify the issue type \`${opts.type}\` exists in project \`${project}\` via \`atlassian_getJiraProjectIssueTypesMetadata\`. If not, surface the available types and stop.`,
-    `3. Read the selected task's heading and body from ${tasksFile} (or its imports). The heading becomes the issue \`summary\`; the body becomes the issue \`description\` (markdown → ADF; the MCP server handles conversion).`,
-    `4. Call \`atlassian_createJiraIssue\` with project \`${project}\`, issue type \`${opts.type}\`, summary, and description.`,
-    "5. On success, append `[[jira:<returned-key>]]` to the selected task's `:LINKED_ISSUES:` drawer property (whitespace-separated org-link tokens; preserve any existing tokens).",
-    "6. Save the file. Confirm by surfacing the new key and Jira URL.",
-    "",
-    "Sandbox-only during development: only run against project `SAND` until the workflow is signed off.",
-  ].join("\n");
-}
-
-/**
- * Compose the prompt that drives auto-transition on a task's
- * `tasks:status-changed` event.
- *
- * Pure function so it can be tested without a live event.
- */
-export function buildTransitionPrompt(
-  newStatus: "STARTED" | "DONE",
-  taskId: string,
-  taskSummary: string,
-  cfg: JiraConfig,
-  cwd: string,
-  tasksFile: string,
-  tasksLocalFile: string,
-): string {
-  const cloudIdLine = cfg.cloudId
-    ? `Use cloudId \`${cfg.cloudId}\` from #+JIRA_CLOUDID.`
-    : "Resolve the cloudId by calling `atlassian_getAccessibleAtlassianResources`" +
-        (cfg.baseUrl
-          ? ` and selecting the resource whose \`url\` equals \`${cfg.baseUrl}\`.`
-          : ".");
-  const targets =
-    newStatus === "STARTED"
-      ? ["Start Progress", "In Progress"]
-      : ["Done", "Closed", "Resolved"];
-  return [
-    `Auto-transition: the local task \`${taskSummary}\` (:CUSTOM_ID: \`${taskId}\`) just moved to \`${newStatus}\`. Mirror this on every Jira-shaped issue linked from the task's \`:LINKED_ISSUES:\`.`,
-    "",
-    "Use the **org-jira** skill for the full transition protocol; the steps below are a concise reminder.",
-    "",
-    `Project root: \`${cwd}\`.`,
-    `Look up the task in ${tasksFile} (or its imports). Selected-task UUID is \`${taskId}\`.`,
-    "",
-    "Steps for each Jira-shaped key:",
-    `1. ${cloudIdLine}`,
-    `2. Call \`atlassian_getTransitionsForJiraIssue\` for the key.`,
-    `3. Pick the first transition whose name matches one of (case-insensitive): ${targets.map((t) => `\`${t}\``).join(", ")}.`,
-    "4. If no name matches, surface a chooser to the user instead of guessing.",
-    "5. Call `atlassian_transitionJiraIssue` with the picked transition id.",
-    "6. Surface a one-line summary per key with success or fall-back chooser.",
-    "",
-    "Sandbox-only during development: only run against project `SAND` until the workflow is signed off.",
-  ].join("\n");
 }
 
 /**

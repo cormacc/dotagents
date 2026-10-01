@@ -24,10 +24,10 @@ dotagents/
 ├── emacs/                    # native org-mode protocol companion
 ├── hermes/org-tasks/         # native Desktop renderer + authenticated backend
 ├── design/log/               # durable change-records
-├── mcp.json                  # tracked generic MCP server configuration
 ├── dirge/                    # Dirge config and prompt set
 └── pi/
     ├── settings.json         # owner-local editable-route pi settings
+    ├── mcp.json              # native pi MCP server configuration
     ├── skills/               # pi-only chromium and ext-dev skills
     ├── extensions/           # active pi extensions
     │   ├── tasks, jira, emacsclient
@@ -65,7 +65,7 @@ pi install git:github.com/cormacc/dotagents
 pi install /absolute/path/to/dotagents
 ```
 
-The npm name is reserved but not currently published. The package route does **not** activate the Hermes plugin, configure task roots, install custom agents, prompts, `pi/skills`, `pi/settings.json`, `mcp.json`, Dirge files, `ot` as a shell command, or unrelated extensions. Package-only users must install `ot` separately (for example through `bbin`) and install/link the two Hermes artifacts as documented in [`hermes/org-tasks/README.org`](hermes/org-tasks/README.org).
+The npm name is reserved but not currently published. The package route does **not** activate the Hermes plugin, configure task roots, install custom agents, prompts, `pi/skills`, `pi/settings.json`, `pi/mcp.json`, Dirge files, `ot` as a shell command, or unrelated extensions. Package-only users must install `ot` separately (for example through `bbin`) and install/link the two Hermes artifacts as documented in [`hermes/org-tasks/README.org`](hermes/org-tasks/README.org).
 
 The npm `files` allowlist includes the selected source directories. Pi loads only manifest-declared entry points. The Nix derivation applies an additional package-slice filter that removes co-located `*.test.ts`, `test_*.py`, `*.mjs`, `test.sh`, and `default.nix`; do not generalize that test-exclusion claim to every install route or every test asset.
 
@@ -99,9 +99,8 @@ The consuming `agents.nix` links:
 
 - `skills/` → `~/.agents/skills` (including `skills/herdr-orch/subagents/` packaged persona defaults)
 - `skills/org-tasks/scripts/ot` → `~/.local/bin/ot`
-- `home/AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, and `pi/settings.json` → `~/.pi/agent/...`. The repo-root `AGENTS.md` is deliberately *not* projected: it is this repository's project file, picked up by ordinary cwd discovery when working here.
+- `home/AGENTS.md`, `prompts/`, `pi/extensions/`, `pi/skills/`, `pi/settings.json`, and `pi/mcp.json` → `~/.pi/agent/...`. The repo-root `AGENTS.md` is deliberately *not* projected: it is this repository's project file, picked up by ordinary cwd discovery when working here.
 - `home/CLAUDE.md` → `~/.claude/CLAUDE.md` (imports `home/AGENTS.md`, so claude and pi share one set of portable rules)
-- `mcp.json` → `~/.config/mcp/mcp.json`
 
 Herdr persona definitions resolve project (`<git-root>/.agents/subagents/`) > home (`~/.agents/subagents/`) > packaged (`skills/herdr-orch/subagents/`). Home Manager manages `~/.agents/subagents/` (out-of-store, from this repo's `subagents/`) so the harness permission overrides ship to every host; it holds home overrides only, never the packaged persona defaults. The parallel `config.edn` chain replaces complete model-ID rows in the same precedence order and never uses a model or weight alias to select kind. The packaged weights are `heavy`, `middle`, `light`, and `feather`; their per-kind values are enumerated once, in `skills/herdr-orch/scripts/docs/contract.md` § Model resolution.
 
@@ -119,7 +118,7 @@ The third-party `git:github.com/DietrichGebert/ponytail` package is no longer in
 - **pi-coding-agent** for pi extensions and package management.
 - **Babashka (`bb`)** for `ot`; copying the scripts does not provide the runtime.
 - **Emacs/emacsclient** for Emacs-backed tools and task edit actions. Edit/open actions probe the server and can start `emacs --daemon`; direct eval/read/write tools still report connection/startup failures.
-- **Atlassian MCP** configured in `mcp.json` (or equivalent pi MCP configuration) for Jira network workflows.
+- **Atlassian MCP** configured in `pi/mcp.json` (linked to `~/.pi/agent/mcp.json`; sign in with `pi mcp login atlassian`) for Jira network workflows.
 - Extension-local npm dependencies for chromium, pi-clojure, and dataspex on the editable route.
 
 ## Validation

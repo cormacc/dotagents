@@ -53,26 +53,26 @@ On macOS, write an equivalent launchd agent that runs the launcher with the same
 
 * MCP client
 
-For pi-mcp-adapter, add this entry to =mcpServers= in =~/.config/mcp/mcp.json= (in the cormacc dotagents repository, =mcp.json=):
+pi reads native MCP configuration from =~/.pi/agent/mcp.json=, which =agents.nix= links to =pi/mcp.json= in the cormacc dotagents repository. The entry is:
 
 #+begin_src json
 "ms365": {
   "url": "http://127.0.0.1:3365/mcp",
-  "auth": "oauth",
+  "description": "Microsoft 365: SharePoint, OneDrive, Outlook, Teams, calendar and user directory (read-only)",
   "oauth": {
-    "redirectUri": "http://localhost:{port}/callback",
+    "callbackUrl": "http://localhost/callback",
     "clientName": "pi"
   }
 }
 #+end_src
 
-The =localhost= redirect matches the Entra redirect URI above.
+pi adds a free port to a =callbackUrl= that has no port. The =localhost= redirect then matches the Entra redirect URI above, because Entra ignores the port for loopback redirects.
 
 * First sign-in (pi)
 
 1. Start the service.
-2. Run =/reload=, then =/mcp-auth ms365=. A browser opens the Microsoft sign-in page.
-3. pi-mcp-adapter stores the token in the OS keyring. Sign in again only when the refresh token expires or the scopes change.
+2. Run =pi mcp login ms365= (or =/mcp login ms365= in a session). A browser opens the Microsoft sign-in page.
+3. pi stores the token in =~/.pi/agent/mcp-auth.json=. Sign in again only when the refresh token expires or the scopes change.
 
 * Changing the scopes
 
@@ -80,10 +80,10 @@ A scope must be in three places, or the tools that need it stay hidden or fail:
 
 1. The =scopes= array in [[file:scripts/ms365-mcp][scripts/ms365-mcp]]. To see the effect first, run =scripts/ms365-mcp --list-permissions= with the two IDs set, and read =effectivePermissions= and =disabledTools=.
 2. The Entra app /API permissions/, with admin consent granted again.
-3. A new sign-in (=/mcp-adapter logout ms365=, then =/mcp-auth ms365=), because a token does not gain scopes after it is issued.
+3. A new sign-in (=pi mcp logout ms365=, then =pi mcp login ms365=), because a token does not gain scopes after it is issued.
 
 Scopes that are deliberately not allowed: groups, shared mailboxes, mailbox settings, contacts, OneNote, To Do and Planner, presence, rooms, and meeting recordings and transcripts. =search-query= needs =Mail.Read=, =Chat.Read=, =Calendars.Read=, =ChannelMessage.Read.All=, and =People.Read= in addition to the file scopes.
 
 * Updating the server
 
-Change =version= in [[file:scripts/ms365-mcp][scripts/ms365-mcp]] and restart the service. Then check the tool list (=mcp({ server: "ms365" })=), because a new version can add, remove, or rename tools and change their scopes.
+Change =version= in [[file:scripts/ms365-mcp][scripts/ms365-mcp]] and restart the service. Then check the tool list (=await describeNamespace("mcp__ms365")= in a =codemode= script), because a new version can add, remove, or rename tools and change their scopes.

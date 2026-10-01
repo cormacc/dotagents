@@ -1,0 +1,293 @@
+#+TITLE: Migrate off pi-mcp-adapter to pi 0.99 native MCP + codemode
+#+DATE: 2026-10-01 Thu
+#+PARENT: [[archive:45b58f5c-fb6d-421c-bb30-09e43498b3d0][Migrate off pi-mcp-adapter to pi 0.99 native MCP + codemode]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/ms365/SKILL.md]]
+#+SPEC: [[proj:skills/ms365/README.org]]
+#+SPEC: [[proj:skills/org-jira/SKILL.md]]
+#+SPEC: [[proj:skills/org-jira/references/protocol.md]]
+#+SPEC: [[proj:pi/extensions/jira/README.md]]
+#+SPEC: [[proj:skills/org-tasks/references/ot-cli.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/contract.md]]
+
+* Intent
+
+Retire the =pi-mcp-adapter= package and run every configured MCP server (=atlassian=, =ms365=, =context-mode=, =context7=, =searxng=) on pi 0.99's built-in MCP support with =codemode= exposure, so that no Atlassian, ms365 or jira tool declaration enters the model context and each =/jira= flow sends the model only a one-line trigger and the filtered result of one jira extension tool.
+
+* Summary
+
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+** Scope
+
+*** In scope
+- Remove =npm:pi-mcp-adapter=; move =mcp.json= to =pi/mcp.json= in native syntax, linked at =~/.pi/agent/mcp.json= by the dotfiles =agents.nix=.
+- =pi/extensions/jira=: deferred =jira_*= tools that call =mcp__atlassian__*= through =ctx.executeTool()=, hidden one-line triggers, no =jira_clone_apply=.
+- =skills/org-jira=: a harness-independent protocol over the Atlassian MCP server and =ot=, with the pi tools as an optional accelerator (condition of the 2026-10-01 approval). =skills/ms365=: native MCP commands.
+- =ot create= body hardening, found by the closeout reviews: heading-like body lines are indented, and callers pass the body as =--body=<text>= and the summary after =--=.
+- Adapter residue (files, keyring entries, npm package) removed after an inventory; user-run re-login; agent-driven validation against =SAND=.
+
+*** Out of scope
+- Any =exposure: direct=, =toolExposure=, or =defaultTools= pin.
+- The closed records =design/log/2026-04-28-jira-integration.org= and =design/log/2026-04-28-jira-clone-token-efficiency.org= (history; not edited).
+- A second MCP client for the former "generic" =~/.config/mcp/mcp.json= path (no consumer exists).
+- The pre-existing =ot create --local= crash and =--body= value coercion (backlog =d32327d0= and =3a21a2b5=).
+
+** Acceptance
+
+*** Core functionality
+- [X] =pi/settings.json= =packages= does not contain =npm:pi-mcp-adapter=.
+- [X] =pi/mcp.json= exists (via =git mv=) and =mcp.json= does not.
+- [X] =agents.nix= links =~/.pi/agent/mcp.json= to =${agentsRoot}/pi/mcp.json= and has no =~/.config/mcp/mcp.json= entry.
+- [X] After =home-manager switch=, =pi mcp list --json= reports =errors: []=.
+- [X] After =pi mcp login atlassian|context7|ms365= with the ms365 service running, =pi mcp list --json= reports =state: connected= for all five servers.
+- [X] =atlassian= and =ms365= entries carry a =description=; no entry carries =auth=, =oauth.redirectUri=, =exposure=, or =toolExposure=.
+- [X] =/jira status= reports connected when =pi.getAllTools()= contains a =mcp__atlassian__= tool, and disconnected otherwise.
+- Reversed 2026-10-01 (approach C amendment; the canned script and protocol steps entered context on every run, see Decisions): "Each of =buildClonePrompt=, =buildGetPrompt=, =buildClaimPrompt=, =buildCommentPrompt=, =buildCreatePrompt=, =buildTransitionPrompt= embeds one =codemode= script that names =mcp__atlassian__<tool>= identifiers and no =atlassian_= identifier."
+- Superseded 2026-10-01 by the tool-level criteria below: "Each canned script returns only the fields its flow needs; none returns a raw =CallToolResult=."
+- [X] =jira_get=, =jira_clone=, =jira_claim=, =jira_comment=, =jira_create= and =jira_transition= are registered with =exposure: "deferred"=; none appears in =pi.getActiveTools()= or in the =codemode= tool description. (Amended 2026-10-01 from =exposure: "codemode"=, which lists the tools in the =codemode= description on every request.)
+- [X] Each jira tool calls =mcp__atlassian__*= through =ctx.executeTool()= and returns only the fields or rendered text its flow needs; no raw =CallToolResult= reaches the model.
+- [X] Each =/jira= command and the auto-transition handler send a trigger through =pi.sendMessage= with =display: false= and =triggerTurn: true=; the trigger names one tool call with literal args and contains no script body.
+- [X] The command handlers resolve the selected task and its Jira keys in TypeScript; the model reads no task file for a =/jira= flow.
+- [X] =jira_clone_apply= is not declared to the model.
+- [X] =skills/org-jira/SKILL.md= describes every workflow as steps that need only the Atlassian MCP server and =ot=; the pi =jira= extension tools appear in one separate, optional section.
+- [X] =jira.test.ts= and =event-subscriptions.test.ts= pass with assertions on the =mcp__atlassian__= names.
+- [X] Manual: =/jira get SAND-<n>= and =/jira clone SAND-<n>= complete on native MCP; clone inserts a task. (Amended at closure: the original said "via =jira_clone_apply="; approach C removed that tool and =jira_clone= inserts through =ot create=.)
+- [X] A Jira request in prose, without =/jira=, calls =jira_get= and does not re-fetch the raw issue.
+- [X] Manual: one ms365 =search-query= completes through a codemode script.
+- [X] A tracked and untracked sweep for =pi-mcp-adapter|/mcp-auth|/mcp-adapter|mcp\({|mcpScript|(?<![A-Za-z0-9_])atlassian_= (positive control: this record) matches only this record, the two closed 2026-04-28 records, =TASKS.org= (the parent task text), =TASKS.archive.org= (an archived 2026-04 task) and =skills/ms365/README.org= (the required =mcp-auth.json= path). (Amended 2026-10-01 after the closeout review: the original bare =atlassian_= and =/mcp-auth= patterns also matched the new =mcp__atlassian__= and =mcp-auth.json= text.)
+- [X] =~/.pi/agent/mcp-oauth/=, =mcp-cache.json=, =mcp-onboarding.json=, and the =pi-mcp-adapter= keyring entries are gone; their pre-deletion inventory is saved under =.tmp/=.
+
+*** Edge cases
+- [X] Each write tool (=jira_claim=, =jira_comment=, =jira_create=, =jira_transition=) throws before any MCP call for a key or project outside =SAND=.
+- [X] =jira_transition= matches the target transition names in TypeScript; for a key with no match it returns the choices and performs nothing for that key.
+- [X] =jira_clone= inserts an issue whose labels contain characters outside =[A-Za-z0-9_]=, whose summary or description starts with =-=, or whose description has =* = bullet lines; the bullets do not become Org headings.
+- [X] A jira tool whose nested MCP call resolves with =isError: true= throws with the Jira message and a =/mcp login atlassian= hint.
+- Reversed 2026-10-01 (approach C amendment; the match moves into =jira_transition=): "=buildTransitionPrompt= leaves the transition-name match and chooser with the agent."
+
+*** Anti-criteria
+- Must not: declare any =atlassian= or =ms365= tool to the model on every request -- no =direct= or =toolExposure= exposure, no =defaultTools= pin. The only Atlassian or ms365 content that enters context is the filtered output a script returns.
+- Must not: put any =jira_*= tool in front of the model on every request, either as a declaration or as a listing in the =codemode= description. This rules out =direct= and =codemode= exposure; every jira tool uses =exposure: "deferred"=.
+- Must not: put a =codemode= script, protocol steps, or rendering rules in a =/jira= trigger message.
+- Must not: make a harness-independent =org-jira= step depend on pi, =codemode=, a =jira_*= tool, or the pi =tasks= extension.
+- Reversed 2026-10-01: "Must not: move Atlassian I/O into the jira extension" -- approach C moves it there by design.
+- Must not: edit the closed =design/log/2026-04-28-*.org= records.
+- Must not: hand-edit =~/.pi/agent/mcp.json=; it is a symlink that =agents.nix= manages.
+
+** Decisions
+- Approach C: deferred jira extension tools, called from =codemode=, orchestrate =mcp__atlassian__*= via =ctx.executeTool()= :: the trigger is one line, the model re-emits no script, and filtering, rendering and the =SAND= guard are deterministic and unit-tested. This knowingly reverses the I/O-free extension decision in =design/log/2026-04-28-jira-integration.org=. A slash-command handler cannot call tools (=executeTool= exists only on =ExtensionToolContext=), so the model still makes one =codemode= call per flow. Rejected:
+  - B (canned codemode script in each prompt; shipped first, then replaced): on =/jira get SAND-75= a 2,491-char user message plus a 1,192-char script re-emitted as =codemode= arguments, against a 302-char result. =display: false= only hides a message from the terminal; pi still sends it to the model.
+  - A (agent-authored scripts): returned fields and context cost vary per run.
+  - Direct-exposed jira tools: six more declarations on every request.
+- Jira tools use =exposure: "deferred"= in a =jira= namespace :: callable from =codemode= whether or not active, never declared, and filtered out of the =codemode= description by =createCodemodeDescription=. Rejected: =exposure: "codemode"=, which lists every callable non-deferred tool in that description on every request (about 2,350 chars for the six tools).
+- The =atlassian= server =description= points at the jira tools: "Jira and Confluence. For Jira issues, call the jira_* tools instead, e.g. tools.jira_get({keys})." :: it appears in the =mcp_servers= system-prompt section and in =describeNamespace("mcp__atlassian")=, the path an agent takes first. Rejected: relying on the =org-jira= skill (it did not load for prose requests) and the shorter "Prefer the deferred jira_* tools." (the agent never found =jira_get=); see =* Validation=.
+- =jira_get= shows every field and =none= for an empty one :: an omitted line read as missing data and the agent re-fetched the raw issue. Rejected: omitting empty lines; one summary line of empty fields (36 chars saved on =SAND-75=, and a format of its own).
+- =ot create= protects task bodies itself :: it is the writer for every caller, including the =org-jira= manual Clone step. A body line that would parse as an Org heading is indented by one space; callers pass =--body=<text>= and put the summary after =--=. Rejected: sanitising in =jira_clone= only, which leaves the manual protocol and other callers exposed.
+- Exposure stays =codemode= (the default) for all five servers :: =direct= would declare the Atlassian tool set on every request and make the first prompt wait up to 10 s; =deferred= adds a =tool_search= round trip for no gain.
+- =mcp.json= moves to =pi/mcp.json= and is linked only at =~/.pi/agent/mcp.json= :: it now carries pi-only keys (=oauth.callbackUrl=, =description=). Rejected: keeping both links; a generic plus a pi file for no second client.
+- codemode activation relies on =autoEnableCodemode= (default =true=) :: nothing needs =codemode= without MCP, so no =defaultTools= pin.
+- ms365 OAuth block is =oauth: {callbackUrl: "http://localhost/callback", clientName: "pi"}= :: pi appends a free port to a port-less loopback =callbackUrl=, which matches the Entra =http://localhost/callback= registration documented in =skills/ms365/README.org=.
+- Re-login is a user-run step :: the adapter kept tokens in the OS keyring and native pi keeps them in =~/.pi/agent/mcp-auth.json=, so no migration path exists.
+
+** Shipped
+- REMOVED =npm:pi-mcp-adapter= from =pi/settings.json=; its files, keyring entries and npm package removed from =~/.pi/agent=.
+- ADDED =pi/mcp.json= (from =mcp.json=), native syntax, linked at =~/.pi/agent/mcp.json= by =agents.nix=; =~/.config/mcp/mcp.json= removed. Dotfiles =AGENTS.md=, =nmd/nmd.nix= and this repository's =README.md= updated.
+- ADDED =pi/extensions/jira/tools.ts=: six deferred =jira_*= tools. =jira_get= renders summary, status, priority, type, labels, components, affects and fix versions, assignee, reporter, updated date, parent, subtasks, issue links, comment count and a description preview. =jira_clone= maps labels to valid org tags with =orgTags=.
+- MODIFIED =pi/extensions/jira/index.ts= and =utils.ts=: hidden one-line triggers, handler key resolution through =ot=, =mcp__atlassian__= availability detection; =jira_clone_apply= and the prompt builders removed; =failure.test.ts= merged into =jira.test.ts=.
+- MODIFIED =pi/extensions/tasks/insert.ts=: =ot create= gets =--body=<text>= and the summary after =--=.
+- MODIFIED =skills/org-tasks/scripts/src/org_tasks/insert.clj= (=build-task-block=): heading-like body lines are indented by one space.
+- MODIFIED =skills/org-jira/SKILL.md= and =skills/org-jira/references/protocol.md=: harness-independent protocol plus one pi section.
+- MODIFIED =skills/ms365/SKILL.md= and =README.org=: native =/mcp login= and =codemode= discovery.
+- MODIFIED =pi/extensions/jira/README.md=: tools, triggers and exposure.
+- MODIFIED =skills/org-tasks/references/ot-cli.md= and =skills/org-tasks/scripts/docs/contract.md=: =ot create= body rules.
+
+** Gotchas
+- =getJiraIssue= with =responseContentFormat: "markdown"= can still return the description as an ADF document; an empty description on =SAND-75= came back as ={"type":"doc","version":1,"content":[]}=.
+- An agent asked about a Jira issue in prose went straight to the =mcp_servers= entry and never loaded =org-jira=; the server =description= is the pointer that works.
+- pi did not reconcile =~/.pi/agent/npm= after a package left =settings.json=; the adapter was removed by hand, and 25 orphan dependencies remain until a later =npm prune= or install.
+
+** Risks
+- The model alters the one-line tool call in the trigger :: accepted; the tool validates its args and enforces the =SAND= guard itself.
+- =jira_clone= renders the body deterministically, so no ad hoc cleanup of odd markdown happens :: accepted; fix rendering in TypeScript when a real issue needs it.
+- The jira tools are reachable only while =codemode= is active, which =autoEnableCodemode= ties to a connected codemode MCP server :: accepted; the flows need =atlassian= anyway.
+- pi rewrites =pi/mcp.json= through the symlink on =/mcp= exposure or enable changes :: accepted; it writes only on explicit user action and adds no volatile keys.
+
+** Follow-ups
+- [[task:d32327d0-2313-4382-8768-6a6b2e142c27][ot create --local crashes]]: also blocks =jira_clone= into =TASKS.local.org=.
+- [[task:3a21a2b5-17c3-488b-8be3-dfca16428b86][ot create coerces --body values]].
+
+* Plan
+** DONE Move mcp.json to pi/mcp.json and convert atlassian and ms365 entries to native syntax
+CLOSED: [2026-10-01 Thu 11:19]
+:PROPERTIES:
+:CUSTOM_ID: 6f33058c-f259-4e48-9059-ac5de3fc7c58
+:CREATED: [2026-10-01 Thu 11:00]
+:STARTED: [2026-10-01 Thu 11:16]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 11:00]
+- State "STARTED" from "TODO" [2026-10-01 Thu 11:16]
+- State "DONE" from "STARTED" [2026-10-01 Thu 11:19]
+:END:
+Outcome: =pi/mcp.json= (via =git mv=) in native syntax; the pre-conversion file is the negative control (=auth.provider must be a provider name=).
+
+** DONE Dotfiles: link ~/.pi/agent/mcp.json to pi/mcp.json and drop the ~/.config/mcp link
+CLOSED: [2026-10-01 Thu 11:25]
+:PROPERTIES:
+:CUSTOM_ID: d5a4971a-36f5-4fae-ae89-bcbbbbc53cfd
+:CREATED: [2026-10-01 Thu 11:00]
+:BLOCKED-BY: task:6f33058c-f259-4e48-9059-ac5de3fc7c58
+:STARTED: [2026-10-01 Thu 11:19]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 11:00]
+- State "STARTED" from "TODO" [2026-10-01 Thu 11:19]
+- State "DONE" from "STARTED" [2026-10-01 Thu 11:25]
+:END:
+Outcome: =agents.nix= links =~/.pi/agent/mcp.json= to =pi/mcp.json=; the =~/.config/mcp= link is gone; =AGENTS.md=, =README.md= and =nmd/nmd.nix= updated.
+
+** DONE Remove npm:pi-mcp-adapter from pi/settings.json packages
+CLOSED: [2026-10-01 Thu 11:28]
+:PROPERTIES:
+:CUSTOM_ID: 5b387e39-b4cb-447c-9487-7ba6c3f6aeb8
+:CREATED: [2026-10-01 Thu 11:00]
+:BLOCKED-BY: task:d5a4971a-36f5-4fae-ae89-bcbbbbc53cfd
+:STARTED: [2026-10-01 Thu 11:25]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 11:00]
+- State "STARTED" from "TODO" [2026-10-01 Thu 11:25]
+- State "DONE" from "STARTED" [2026-10-01 Thu 11:28]
+:END:
+Outcome: the adapter is out of =packages=; after the user's re-login all five servers are =connected=.
+
+** DONE Jira extension: mcp__atlassian__ detection and canned codemode scripts in every prompt
+CLOSED: [2026-10-01 Thu 11:52]
+:PROPERTIES:
+:CUSTOM_ID: 77711ddf-a41d-4350-9e0d-64bfc354e5ff
+:CREATED: [2026-10-01 Thu 11:00]
+:BLOCKED-BY: task:5b387e39-b4cb-447c-9487-7ba6c3f6aeb8
+:STARTED: [2026-10-01 Thu 11:28]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 11:00]
+- State "STARTED" from "TODO" [2026-10-01 Thu 11:28]
+- State "DONE" from "STARTED" [2026-10-01 Thu 11:52]
+:END:
+Outcome: approach B (canned =codemode= scripts), superseded by =a1ff05c6= and =bf513630=; its =mcp__atlassian__= availability detection stays.
+
+** DONE Skills docs: ms365 and org-jira on native MCP and codemode
+CLOSED: [2026-10-01 Thu 11:52]
+:PROPERTIES:
+:CUSTOM_ID: 46a4c6bc-adda-48e6-bbf4-9cb561c57808
+:CREATED: [2026-10-01 Thu 11:00]
+:STARTED: [2026-10-01 Thu 11:19]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 11:00]
+- State "STARTED" from "TODO" [2026-10-01 Thu 11:19]
+- State "DONE" from "STARTED" [2026-10-01 Thu 11:52]
+:END:
+Outcome: =ms365= and =org-jira= docs on native MCP; =org-jira= was later rewritten by =c2c1c607=.
+
+** DONE Remove pi-mcp-adapter residue from ~/.pi/agent and the keyring
+CLOSED: [2026-10-01 Thu 11:56]
+:PROPERTIES:
+:CUSTOM_ID: 57b3859d-918b-4381-ae95-309606a3471c
+:CREATED: [2026-10-01 Thu 11:00]
+:BLOCKED-BY: task:5b387e39-b4cb-447c-9487-7ba6c3f6aeb8
+:STARTED: [2026-10-01 Thu 11:52]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 11:00]
+- State "STARTED" from "TODO" [2026-10-01 Thu 11:52]
+- State "DONE" from "STARTED" [2026-10-01 Thu 11:56]
+:END:
+Outcome: residue removed after an inventory (=.tmp/mcp-adapter-residue-inventory.txt=); see =* Implementation=.
+
+** DONE Manual validation of jira and ms365 flows on native MCP
+CLOSED: [2026-10-01 Thu 16:28]
+:PROPERTIES:
+:CUSTOM_ID: 658081f5-9d9b-4ce4-83f6-eef5f239bc5a
+:CREATED: [2026-10-01 Thu 11:00]
+:BLOCKED-BY: task:77711ddf-a41d-4350-9e0d-64bfc354e5ff
+:BLOCKED-BY+: task:46a4c6bc-adda-48e6-bbf4-9cb561c57808
+:BLOCKED-BY+: task:bf513630-6713-424f-a0b6-b2afd18815c4
+:BLOCKED-BY+: task:c2c1c607-42c8-474c-b14f-50e7dca8ef74
+:STARTED: [2026-10-01 Thu 14:27]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 11:00]
+- State "STARTED" from "TODO" [2026-10-01 Thu 14:27]
+- State "DONE" from "STARTED" [2026-10-01 Thu 16:28]
+:END:
+Outcome: all checks passed after the fixes the run found (ADF description, the =atlassian= description pointer, =none= lines); evidence in =* Validation=.
+
+** DONE Jira read flows: codemode-exposed jira_get and jira_clone tools with a hidden one-line trigger
+CLOSED: [2026-10-01 Thu 12:47]
+:PROPERTIES:
+:CUSTOM_ID: a1ff05c6-8c97-450c-8a99-0a6417b809d3
+:CREATED: [2026-10-01 Thu 12:15]
+:STARTED: [2026-10-01 Thu 12:29]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 12:15]
+- State "STARTED" from "TODO" [2026-10-01 Thu 12:29]
+- State "DONE" from "STARTED" [2026-10-01 Thu 12:47]
+:END:
+Outcome: =jira_get= and =jira_clone=; =jira_clone_apply= removed.
+
+** DONE Jira write flows: jira_claim, jira_comment, jira_create and jira_transition tools; remove canned scripts
+CLOSED: [2026-10-01 Thu 12:47]
+:PROPERTIES:
+:CUSTOM_ID: bf513630-6713-424f-a0b6-b2afd18815c4
+:CREATED: [2026-10-01 Thu 12:16]
+:BLOCKED-BY: task:a1ff05c6-8c97-450c-8a99-0a6417b809d3
+:STARTED: [2026-10-01 Thu 12:47]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 12:16]
+- State "STARTED" from "TODO" [2026-10-01 Thu 12:47]
+- State "DONE" from "STARTED" [2026-10-01 Thu 12:47]
+:END:
+Outcome: the four write tools, each with the =SAND= guard in TypeScript; no canned script remains.
+
+** DONE org-jira skill: harness-independent protocol with the pi jira extension as an optional accelerator
+CLOSED: [2026-10-01 Thu 12:49]
+:PROPERTIES:
+:CUSTOM_ID: c2c1c607-42c8-474c-b14f-50e7dca8ef74
+:CREATED: [2026-10-01 Thu 12:23]
+:BLOCKED-BY: task:bf513630-6713-424f-a0b6-b2afd18815c4
+:STARTED: [2026-10-01 Thu 12:49]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 12:23]
+- State "STARTED" from "TODO" [2026-10-01 Thu 12:49]
+- State "DONE" from "STARTED" [2026-10-01 Thu 12:49]
+:END:
+Outcome: a harness-independent =org-jira= protocol with one optional pi section.
+
+* Implementation
+
+- Native config: the adapter-era file fails =pi mcp list --json= with =server "atlassian": auth.provider must be a provider name= (same for =ms365=), and =validateOAuth= in =dist/core/mcp-servers.js= ignores the unknown =redirectUri=. Probe config changes against a copy with =PI_CODING_AGENT_DIR= pointing under =.tmp/=, keeping the old file as the negative control.
+- =getJiraIssue= result under native MCP: the =CallToolResult= has =content=, =isError= and =statusCode= and no =structuredContent=; =content= is one text block holding JSON (=JSON.parse= gives =expand, id, self, key, fields=), and an error is =isError: true= with the Jira message in that text. The description is markdown, =null=, or an ADF document (see Gotchas); =normalizeIssue= reduces ADF to text. =getAccessibleAtlassianResources= lists the same site twice, so the cloudId lookup matches by =url=.
+- Nested calls: a tool's =ctx.executeTool()= returns ={toolCall, result, isError}=. For MCP tools =result.content= may be truncated at 20 KB while =result.structuredContent= is the untruncated =CallToolResult= (=convertMcpResult= in =dist/extensions/mcp/tools.js=), so =callAtlassian= reads =structuredContent.content= first. A codemode script calls a tool as =tools.<name>(args)=; a namespace only groups listings.
+- Tool behaviour: =jira_clone= fetches every issue before inserting any, and reports per-key =inserted=, =duplicate=, =section_not_found= or =error= instead of throwing. Calls outside the per-key loop (cloudId, user info, issue-type metadata, create) throw on =isError=; per-key calls in claim, comment and transition report the Jira message in that key's =error=, so one bad key does not hide keys already written. =jira_create= names the new key in its error when =ot issue add= fails after the issue exists.
+- Handlers resolve keys with =ot selected= (commands) and =ot show <id>= (auto-transition), then =jiraKeysFromTokens=; a task with no Jira key sends nothing. The auto-transition trigger adds =deliverAs: "followUp"= so it queues during a turn; that streaming path was not exercised live.
+- =ot create= argument shape: =--body "<text>"= reads a dash-led value as options (multi-line fails with =argument-error=, single-line is stored as =true=) and a dash-led summary gives =empty-summary=. =insertTaskIntoFile= passes =--body=<text>= and appends =-- <summary>= after every option, including =--local=. =build-task-block= indents lines matching =(?m)^(\*+[^\S\n])=, which mirrors the scanner's =^(\*+)\s+= on =\n=-split lines and so covers CRLF =*\r= lines.
+- Adapter residue: inventory in =.tmp/mcp-adapter-residue-inventory.txt=. The keyring is gnome-keyring without =secret-tool=, so items were listed by label and attribute and deleted through =busctl --user= on =org.freedesktop.secrets= (11 items; controls for two other services unchanged). The npm package and its =package.json= entry were removed by hand; an =npm uninstall= dry run would have added 93 unrelated packages.
+- Tests: =jira.test.ts= drives every tool's =execute()= against a fake =ctx.executeTool= and real =ot= projects; =event-subscriptions.test.ts= builds an =ot= project because the listener resolves keys with =ot= in =process.cwd()=. The prompt-builder assertions (93 names) went with their code; those that checked surviving behaviour moved to tool, renderer, guard and =pickTransition= tests. Each new or changed assertion failed against the code before its change. Final: =pi/extensions/jira/test.sh= 162/0; =scripts/check.sh= passed (=bb test= 659 tests, 4,454 assertions, 0 failures).
+
+* Validation
+
+Agent-driven run of plan task =658081f5= on 2026-10-01: a plain pi 0.99.2 agent in a Herdr pane, cwd a scratch project =.tmp/jira-e2e/=, driven with typed slash commands; evidence read from its session transcripts under =~/.pi/agent/sessions/--home-cormacc-dotfiles-agents-.tmp-jira-e2e--/=, not from the screen.
+
+- Tool surface (first system message): 30 tools declared, no =jira_*= tool; the =codemode= description has no =Nested tools:= section and names no =jira_= tool.
+- Each =/jira= flow: one hidden =custom_message= (=customType: "jira"=, 139 to 230 chars, no script), then one =codemode= call of one =jira_*= tool.
+- =/jira status=, =get=, =clone= (=duplicate= and =inserted= paths; the cloned body and summary never appeared in the transcript), =claim=, =comment= and =create= (=SAND-78=) completed against =SAND=. Auto-transition, with =jira-ext.json= present only for the run, sent one trigger at STARTED and one at DONE and none at WAITING.
+- Independent read-back with a fresh headless =pi -p=: =SAND-65= assigned, with 1 comment and status =Approved= (the Requirement workflow's "Done" transition targets =Approved=).
+- ms365: one =search_query= through =codemode= returned results.
+- Prose request without =/jira=, fresh session each time: with no pointer, and with the short pointer, the agent never called =jira_get= (three and four calls, raw fetches of about 4.2 KB); with the explicit pointer but empty fields omitted, it called =jira_get= first and then re-fetched ("I should pull more detail"); with the explicit pointer and =none= lines, it made one =jira_get= call and replied, in two runs with different wording.
+- Closeout: two independent reviewers (=claude-sonnet=, =claude-fable=) checked the contract; their findings (label tags, dash-led body, heading-like bullets, a contradictory criterion) were fixed, and a fresh reviewer approved the fixes, whose two P3s were also fixed. Reports: =.tmp/review-mcp-migration-claude*.md=, =.tmp/review-postfix.md.out.md=.
+- Not run: the =org-jira= manual protocol in a harness without the pi extension (dropped by user decision; it remains a documentation property).

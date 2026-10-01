@@ -9,34 +9,33 @@
  * - `skills/org-jira/SKILL.md` documents the Jira-specific
  *   conventions (PROJ-NNN key shape, #+JIRA_* keywords, agent prompts).
  *
- * All Jira access is mediated by the agent via the existing `atlassian`
- * MCP server. This extension stays I/O-free for write paths; the slash
- * command drafts a structured prompt that the agent then dispatches to
- * MCP tools and TASKS-file edits.
+ * Jira access goes through the `atlassian` MCP server. The deferred
+ * (codemode-callable) `jira_*` tools in `./tools.ts` call `mcp__atlassian__*` through
+ * `ctx.executeTool()`; a slash command (or the auto-transition listener)
+ * resolves its inputs in TypeScript and sends the model one hidden line that
+ * names a single `codemode` call of one of those tools.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
 import { existsSync, readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
 import { getAgentPath } from "../lib/agent-paths.ts";
 import { getExtensionName } from "../lib/pi-utils.ts";
-import { insertTaskIntoFile } from "../tasks/insert.ts";
-import { readEffectiveOrgContent } from "../tasks/effective.ts";
 import {
-  buildClaimPrompt,
-  buildClonePrompt,
-  buildCommentPrompt,
-  buildCreatePrompt,
-  buildGetPrompt,
-  buildTransitionPrompt,
-  getFileKeyword,
-  JIRA_KEY_RE,
+  loadJiraConfig,
+  registerJiraTools,
+  resolveSelectedTask,
+  resolveTaskKeys,
+} from "./tools.ts";
+import {
+  ATLASSIAN_TOOL_PREFIX,
+  buildClaimTrigger,
+  buildCloneTrigger,
+  buildCommentTrigger,
+  buildCreateTrigger,
+  buildGetTrigger,
+  buildTransitionTrigger,
   parseCreateArgs,
-  resolveJiraConfig,
   resolveKey,
-  type JiraConfig,
 } from "./utils.ts";
 
 export { getFileKeyword, resolveKey } from "./utils.ts";
@@ -67,195 +66,65 @@ function loadUserSettings(): UserSettings {
 
 const EXT_NAME = getExtensionName(import.meta.url);
 
-/** Prefix every tool the Atlassian MCP server registers shares (direct-tools mode). */
-const ATLASSIAN_TOOL_PREFIX = "atlassian_";
-/** Name of the unified MCP proxy tool (default pi-mcp-adapter mode). */
-const MCP_PROXY_TOOL = "mcp";
-
-/** File-name conventions matching the tasks extension. */
-const TASKS_FILE = "TASKS.org";
-const TASKS_LOCAL_FILE = "TASKS.local.org";
+// `ATLASSIAN_TOOL_PREFIX` (`mcp__atlassian__`) lives in `./utils.ts`: pi's native
+// MCP client registers every `atlassian` server tool under that prefix.
 
 /**
  * Inspect the Atlassian MCP availability surface.
  *
- * pi-mcp-adapter operates in two modes:
- *   - direct-tools: each MCP tool is registered with pi (e.g. `atlassian_*`).
- *   - proxy (default): a single unified `mcp` tool is registered and the
- *     agent invokes underlying tools through it.
- *
- * We treat MCP as "available" if we see either direct `atlassian_*` tools
- * or the `mcp` proxy. The proxy alone doesn't *prove* the atlassian server
- * is configured, but it's a much better signal than the previous check
- * (which always reported disconnected under the default proxy mode).
+ * pi's native MCP client registers each tool of the `atlassian` server as
+ * `mcp__atlassian__<tool>`, so MCP counts as "available" when
+ * `pi.getAllTools()` contains at least one such tool.
  */
 function getAtlassianAvailability(pi: ExtensionAPI): {
-  direct: string[];
-  proxy: boolean;
+  tools: string[];
   isAvailable: boolean;
 } {
   try {
-    const names = pi.getAllTools().map((t) => t.name);
-    const direct = names
+    const tools = pi
+      .getAllTools()
+      .map((t) => t.name)
       .filter((name) => name.startsWith(ATLASSIAN_TOOL_PREFIX))
       .sort();
-    const proxy = names.includes(MCP_PROXY_TOOL);
-    return { direct, proxy, isAvailable: direct.length > 0 || proxy };
+    return { tools, isAvailable: tools.length > 0 };
   } catch {
-    return { direct: [], proxy: false, isAvailable: false };
+    return { tools: [], isAvailable: false };
   }
 }
 
-/**
- * Read Jira config from the same effective Org content/order as tasks.
- */
-async function loadJiraConfig(cwd: string): Promise<JiraConfig> {
-  const tasksPath = join(cwd, TASKS_FILE);
-  try {
-    const content = await readFile(tasksPath, "utf-8");
-    return resolveJiraConfig(await readEffectiveOrgContent(cwd, tasksPath, content));
-  } catch {
-    /* TASKS.org may not exist or effective setup expansion may fail. */
-    return resolveJiraConfig("");
-  }
-}
+const DISCONNECTED = "Atlassian MCP: disconnected. Run /mcp login atlassian first.";
+const NO_SELECTION =
+  "No selected task. Press `s` on a task in /tasks first, or set #+SELECTED: in TASKS.local.org.";
 
-// `resolveKey`, `buildClonePrompt`, `getFileKeyword`, and the
-// `JiraConfig` type live in `./utils.ts` so the test suite can import
-// them without pulling in pi-tui via `../lib/pi-utils.ts`.
-
-/**
- * Read `#+SELECTED:` from TASKS.local.org. Returns null when the file
- * is absent, the keyword is missing, or the value is empty.
- */
-async function readSelectedId(cwd: string): Promise<string | null> {
+/** The selected task, or null after notifying why there is none. */
+async function selectedTaskOrNotify(
+  ctx: { cwd: string; ui: { notify(msg: string, level: "info" | "warn" | "error"): void } },
+  cfg: Awaited<ReturnType<typeof loadJiraConfig>>,
+) {
   try {
-    const content = await readFile(join(cwd, TASKS_LOCAL_FILE), "utf-8");
-    const value = getFileKeyword(content, "SELECTED");
-    return value && value.length > 0 ? value : null;
-  } catch {
+    const task = await resolveSelectedTask(ctx.cwd, cfg);
+    if (!task) ctx.ui.notify(NO_SELECTION, "warn");
+    return task;
+  } catch (e) {
+    ctx.ui.notify(`Could not read the selected task: ${(e as Error).message}`, "error");
     return null;
   }
 }
 
-// ── jira_clone_apply: emission-side win for /jira clone ─────────────
-//
-// Registered pi tool. The /jira clone prompt instructs the agent to:
-//   1. atlassian_getJiraIssue (with the field-list filter shipped at
-//      commit 2f0f354).
-//   2. Map the response into a single jira_clone_apply call.
-//
-// This tool then performs Jira-specific transforms (priority-name
-// stays as the primitive, label list flows to org tags as-is) and
-// delegates the org write to insertTaskIntoFile() in tasks/insert.ts.
-// No org-mode string assembly happens inside this extension; that
-// responsibility lives in the tasks extension's helper.
-
-const CloneApplyParams = Type.Object({
-  key: Type.String({
-    description:
-      "Jira issue key to attach as :LINKED_ISSUES: (e.g. SAND-42). " +
-      "Validated against the standard PROJ-NNN regex.",
-  }),
-  summary: Type.String({
-    description: "Issue summary (becomes the org task heading).",
-  }),
-  priorityName: Type.Optional(Type.String({
-    description:
-      "Issue priority name (Highest|High|Medium|Low|Lowest). Anything else \u2192 no priority cookie.",
-  })),
-  body: Type.Optional(Type.String({
-    description:
-      "Issue description rendered as plain markdown/text. Do not embed raw ADF JSON.",
-  })),
-  labels: Type.Optional(Type.Array(Type.String(), {
-    description: "Issue labels rendered as org tags ':l1:l2:'.",
-  })),
-  file: Type.Optional(Type.String({
-    description: "Org file to insert into (default: TASKS.org under cwd).",
-  })),
-  section: Type.Optional(Type.String({
-    description: "Top-level section heading (default: 'Improvements').",
-  })),
-  allowCreateSection: Type.Optional(Type.Boolean({
-    description:
-      "When true, missing sections are appended to the file. Default: false.",
-  })),
-});
-
-function registerCloneApplyTool(pi: ExtensionAPI): void {
-  pi.registerTool({
-    name: "jira_clone_apply",
-    label: "Jira: clone apply",
-    description:
-      "Apply a Jira issue's already-fetched fields to TASKS.org as a new " +
-      "local task. Validates the issue key, performs Jira-specific transforms " +
-      "(priority + labels), and delegates the org write to the tasks " +
-      "extension's deterministic insert helper. The body, summary, and labels " +
-      "are passed verbatim \u2014 they never need to round-trip through an " +
-      "`edit` tool call.",
-    promptSnippet:
-      "Apply a Jira issue's fields to TASKS.org without re-emitting the rendered org body",
-    promptGuidelines: [
-      "Use jira_clone_apply for /jira clone after fetching the Jira issue.",
-    ],
-    parameters: CloneApplyParams,
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      if (!JIRA_KEY_RE.test(params.key)) {
-        throw new Error(
-          `Jira clone failed: invalid key \`${params.key}\`; expected PROJ-NNN (e.g. SAND-42).`,
-        );
-      }
-
-      // Resolve target file/section against ctx.cwd. The default file is
-      // the project's TASKS.org; alsoScan covers TASKS.local.org so a
-      // local draft of the same issue surfaces as a duplicate.
-      const cwd = ctx.cwd;
-      const file = params.file ?? join(cwd, TASKS_FILE);
-      const fileAbs = isAbsolute(file) ? file : resolve(cwd, file);
-      const localAbs = join(cwd, TASKS_LOCAL_FILE);
-      const sibling = fileAbs === localAbs ? join(cwd, TASKS_FILE) : localAbs;
-
-      const result = await insertTaskIntoFile({
-        file: fileAbs,
-        projectRoot: cwd,
-        section: params.section ?? "Improvements",
-        summary: params.summary,
-        priorityName: params.priorityName ?? null,
-        body: params.body ?? null,
-        labels: params.labels ?? null,
-        linkedIssues: [`[[jira:${params.key}]]`],
-        allowCreateSection: params.allowCreateSection ?? false,
-        alsoScan: [sibling],
-      });
-
-      switch (result.status) {
-        case "inserted":
-          return {
-            content: [{
-              type: "text" as const,
-              text:
-                `Cloned ${params.key} into ${result.file}:${result.line} (id=${result.id}).`,
-            }],
-            details: { ...result, key: params.key },
-          };
-        case "duplicate":
-          throw new Error(
-            `Jira clone failed: ${params.key} is already linked from task ${result.existingId ?? "(no :CUSTOM_ID:)"} in ${result.existingFile}.`,
-          );
-        case "section_not_found":
-          throw new Error(
-            `Jira clone failed: section '${result.section}' was not found in ${result.file}; pass allowCreateSection: true or correct the section name.`,
-          );
-        case "error":
-          throw new Error(`Jira clone failed for ${params.key}: ${result.message}`);
-      }
-    },
-  });
-}
-
 export default function (pi: ExtensionAPI) {
-  registerCloneApplyTool(pi);
+  registerJiraTools(pi);
+
+  /**
+   * Send the model one hidden line. `display: false` hides it from the
+   * terminal only; pi still sends it to the model, so each trigger stays a
+   * single `codemode` call of one `jira_*` tool (see `buildGetTrigger`).
+   */
+  const sendTrigger = (content: string, deliverAs?: "followUp"): void => {
+    pi.sendMessage(
+      { customType: "jira", content, display: false },
+      { triggerTurn: true, ...(deliverAs ? { deliverAs } : {}) },
+    );
+  };
 
   // `pi.events` is shared between extension instances, so subscriptions must
   // be released when this instance's session is shut down or replaced.
@@ -284,43 +153,33 @@ export default function (pi: ExtensionAPI) {
       if (subcommand === "status") {
         if (!isConnected) {
           ctx.ui.notify(
-            "Atlassian MCP: disconnected. Run /mcp reconnect atlassian to enable Jira workflows.",
+            "Atlassian MCP: disconnected. Run /mcp login atlassian to enable Jira workflows.",
             "warn",
           );
           return;
         }
-        if (availability.direct.length > 0) {
-          const sample = availability.direct.slice(0, 3).join(", ");
-          const more =
-            availability.direct.length > 3
-              ? `, +${availability.direct.length - 3} more`
-              : "";
-          ctx.ui.notify(
-            `Atlassian MCP: connected via direct tools (${availability.direct.length} — ${sample}${more}).`,
-            "info",
-          );
-        } else {
-          ctx.ui.notify(
-            "Atlassian MCP: connected via proxy tool (`mcp`). Run `/mcp` to inspect server status.",
-            "info",
-          );
-        }
+        const sample = availability.tools.slice(0, 3).join(", ");
+        const more =
+          availability.tools.length > 3
+            ? `, +${availability.tools.length - 3} more`
+            : "";
+        ctx.ui.notify(
+          `Atlassian MCP: connected (${availability.tools.length} tools — ${sample}${more}).`,
+          "info",
+        );
         return;
       }
 
-      if (subcommand === "get") {
+      if (subcommand === "get" || subcommand === "clone") {
         if (rest.length === 0) {
           ctx.ui.notify(
-            "Usage: /jira get KEY [KEY...]   (KEY = PROJ-NNN or a bare number when #+JIRA_PROJECT is set)",
+            `Usage: /jira ${subcommand} KEY [KEY...]   (KEY = PROJ-NNN or a bare number when #+JIRA_PROJECT is set)`,
             "warn",
           );
           return;
         }
         if (!isConnected) {
-          ctx.ui.notify(
-            "Atlassian MCP: disconnected. Run /mcp reconnect atlassian first.",
-            "warn",
-          );
+          ctx.ui.notify(DISCONNECTED, "warn");
           return;
         }
 
@@ -337,101 +196,23 @@ export default function (pi: ExtensionAPI) {
           return;
         }
 
-        const prompt = buildGetPrompt(resolved, cfg, ctx.cwd);
-        pi.sendUserMessage(prompt);
+        sendTrigger(
+          subcommand === "get" ? buildGetTrigger(resolved) : buildCloneTrigger(resolved),
+        );
         ctx.ui.notify(
-          `Dispatched /jira get for ${resolved.length} issue${resolved.length === 1 ? "" : "s"}: ${resolved.join(", ")}.`,
+          `Dispatched /jira ${subcommand} for ${resolved.length} issue${resolved.length === 1 ? "" : "s"}: ${resolved.join(", ")}.`,
           "info",
         );
         return;
       }
 
-      if (subcommand === "clone") {
-        if (rest.length === 0) {
-          ctx.ui.notify(
-            "Usage: /jira clone KEY [KEY...]   (KEY = PROJ-NNN or a bare number when #+JIRA_PROJECT is set)",
-            "warn",
-          );
-          return;
-        }
+      if (subcommand === "claim" || subcommand === "comment") {
         if (!isConnected) {
-          ctx.ui.notify(
-            "Atlassian MCP: disconnected. Run /mcp reconnect atlassian first.",
-            "warn",
-          );
-          return;
-        }
-
-        const cfg = await loadJiraConfig(ctx.cwd);
-        const resolved: string[] = [];
-        const errors: string[] = [];
-        for (const arg of rest) {
-          const r = resolveKey(arg, cfg.project);
-          if ("key" in r) resolved.push(r.key);
-          else errors.push(r.error);
-        }
-        if (errors.length > 0) {
-          for (const e of errors) ctx.ui.notify(e, "error");
-          return;
-        }
-
-        const prompt = buildClonePrompt(
-          resolved,
-          cfg,
-          ctx.cwd,
-          TASKS_FILE,
-          TASKS_LOCAL_FILE,
-        );
-        pi.sendUserMessage(prompt);
-        ctx.ui.notify(
-          `Dispatched /jira clone for ${resolved.length} issue${resolved.length === 1 ? "" : "s"}: ${resolved.join(", ")}.`,
-          "info",
-        );
-        return;
-      }
-
-      if (subcommand === "claim") {
-        if (!isConnected) {
-          ctx.ui.notify(
-            "Atlassian MCP: disconnected. Run /mcp reconnect atlassian first.",
-            "warn",
-          );
-          return;
-        }
-        const cfg = await loadJiraConfig(ctx.cwd);
-        const selectedId = await readSelectedId(ctx.cwd);
-        if (!selectedId) {
-          ctx.ui.notify(
-            "No selected task. Press `s` on a task in /tasks first, or set #+SELECTED: in TASKS.local.org.",
-            "warn",
-          );
-          return;
-        }
-        const prompt = buildClaimPrompt(
-          cfg,
-          ctx.cwd,
-          TASKS_FILE,
-          TASKS_LOCAL_FILE,
-          selectedId,
-        );
-        pi.sendUserMessage(prompt);
-        ctx.ui.notify(
-          `Dispatched /jira claim for the selected task.`,
-          "info",
-        );
-        return;
-      }
-
-      if (subcommand === "comment") {
-        if (!isConnected) {
-          ctx.ui.notify(
-            "Atlassian MCP: disconnected. Run /mcp reconnect atlassian first.",
-            "warn",
-          );
+          ctx.ui.notify(DISCONNECTED, "warn");
           return;
         }
         const body = rest.join(" ").trim();
-        if (!body) {
+        if (subcommand === "comment" && !body) {
           ctx.ui.notify(
             "Usage: /jira comment <markdown body>   (operates on the selected task's :LINKED_ISSUES:)",
             "warn",
@@ -439,25 +220,19 @@ export default function (pi: ExtensionAPI) {
           return;
         }
         const cfg = await loadJiraConfig(ctx.cwd);
-        const selectedId = await readSelectedId(ctx.cwd);
-        if (!selectedId) {
-          ctx.ui.notify(
-            "No selected task. Press `s` on a task in /tasks first, or set #+SELECTED: in TASKS.local.org.",
-            "warn",
-          );
+        const task = await selectedTaskOrNotify(ctx, cfg);
+        if (!task) return;
+        if (task.keys.length === 0) {
+          ctx.ui.notify("The selected task has no Jira-shaped :LINKED_ISSUES:.", "warn");
           return;
         }
-        const prompt = buildCommentPrompt(
-          body,
-          cfg,
-          ctx.cwd,
-          TASKS_FILE,
-          TASKS_LOCAL_FILE,
-          selectedId,
+        sendTrigger(
+          subcommand === "claim"
+            ? buildClaimTrigger(task.keys)
+            : buildCommentTrigger(task.keys, body),
         );
-        pi.sendUserMessage(prompt);
         ctx.ui.notify(
-          `Dispatched /jira comment for the selected task.`,
+          `Dispatched /jira ${subcommand} for ${task.keys.join(", ")}.`,
           "info",
         );
         return;
@@ -465,40 +240,24 @@ export default function (pi: ExtensionAPI) {
 
       if (subcommand === "create") {
         if (!isConnected) {
-          ctx.ui.notify(
-            "Atlassian MCP: disconnected. Run /mcp reconnect atlassian first.",
-            "warn",
-          );
+          ctx.ui.notify(DISCONNECTED, "warn");
           return;
         }
         const opts = parseCreateArgs(rest);
         const cfg = await loadJiraConfig(ctx.cwd);
-        if (!opts.project && !cfg.project) {
+        const project = opts.project ?? cfg.project;
+        if (!project) {
           ctx.ui.notify(
             "Usage: /jira create [PROJECT] [--type Task|Story|Bug|Epic]   (or set #+JIRA_PROJECT in TASKS.setup.org / TASKS.local.org)",
             "warn",
           );
           return;
         }
-        const selectedId = await readSelectedId(ctx.cwd);
-        if (!selectedId) {
-          ctx.ui.notify(
-            "No selected task. Press `s` on a task in /tasks first, or set #+SELECTED: in TASKS.local.org.",
-            "warn",
-          );
-          return;
-        }
-        const prompt = buildCreatePrompt(
-          opts,
-          cfg,
-          ctx.cwd,
-          TASKS_FILE,
-          TASKS_LOCAL_FILE,
-          selectedId,
-        );
-        pi.sendUserMessage(prompt);
+        const task = await selectedTaskOrNotify(ctx, cfg);
+        if (!task) return;
+        sendTrigger(buildCreateTrigger(task.id, project, opts.type));
         ctx.ui.notify(
-          `Dispatched /jira create for project ${opts.project ?? cfg.project} (type ${opts.type}).`,
+          `Dispatched /jira create for project ${project} (type ${opts.type}).`,
           "info",
         );
         return;
@@ -515,8 +274,9 @@ export default function (pi: ExtensionAPI) {
   //
   // Listen for `tasks:status-changed` events from the `tasks` extension.
   // When the user toggles a task to STARTED or DONE and the
-  // `autoTransition` setting is enabled, dispatch an agent prompt that
-  // mirrors the change on every Jira-shaped issue linked from the task.
+  // `autoTransition` setting is enabled, resolve the task's Jira keys with
+  // `ot` and send a hidden trigger that mirrors the change through
+  // `jira_transition`. A task with no Jira key sends nothing.
   //
   // Disabled by default — set `{ "autoTransition": true }` in
   // The configured agent directory's jira-ext.json to enable.
@@ -553,17 +313,15 @@ export default function (pi: ExtensionAPI) {
         | { cwd?: () => string }
         | undefined;
       const cwd = proc?.cwd?.() ?? ".";
-      const cfg = await loadJiraConfig(cwd);
-      const prompt = buildTransitionPrompt(
-        newStatus,
-        payload.id,
-        payload.summary,
-        cfg,
-        cwd,
-        TASKS_FILE,
-        TASKS_LOCAL_FILE,
-      );
-      pi.sendUserMessage(prompt);
+      try {
+        const cfg = await loadJiraConfig(cwd);
+        const keys = await resolveTaskKeys(cwd, payload.id, cfg);
+        if (keys.length === 0) return;
+        // followUp queues the trigger when the event fires mid-turn.
+        sendTrigger(buildTransitionTrigger(keys, newStatus), "followUp");
+      } catch {
+        // ot missing or the task unreadable: nothing to mirror.
+      }
     },
   ));
 

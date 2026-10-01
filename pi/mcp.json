@@ -2,13 +2,13 @@
   "mcpServers": {
     "atlassian": {
       "url": "https://mcp.atlassian.com/v1/mcp/authv2",
-      "auth": "oauth"
+      "description": "Jira and Confluence. For Jira issues, call the jira_* tools instead, e.g. tools.jira_get({keys})."
     },
     "ms365": {
       "url": "http://127.0.0.1:3365/mcp",
-      "auth": "oauth",
+      "description": "Microsoft 365: SharePoint, OneDrive, Outlook, Teams, calendar and user directory (read-only)",
       "oauth": {
-        "redirectUri": "http://localhost:{port}/callback",
+        "callbackUrl": "http://localhost/callback",
         "clientName": "pi"
       }
     },

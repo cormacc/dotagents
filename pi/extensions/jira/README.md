@@ -1,10 +1,14 @@
 # Jira Extension
 
-Agent-driven Jira workflows backed by the [Atlassian
-MCP](https://developer.atlassian.com/) server. Owns slash commands, MCP
-routing, and Jira-specific authoring conventions; stays composable on top
+Jira workflows backed by the [Atlassian
+MCP](https://developer.atlassian.com/) server. Owns slash commands, deferred
+`jira_*` tools (callable from `codemode`), and Jira-specific authoring conventions; stays composable on top
 of the generic `tasks` extension's tracker-agnostic linkage features
 (`:LINKED_ISSUES:` drawer property + org-native `#+LINK:` declarations).
+
+This extension is an optional accelerator. The harness-independent protocol
+(Atlassian MCP server plus `ot`, no pi) lives in `skills/org-jira/SKILL.md`; the
+skill describes what the `/jira` commands do when this extension is not loaded.
 
 ## Status
 
@@ -23,7 +27,7 @@ reloads and session replacement cannot multiply a single status transition.
 | -------------------------------------- | ----------- | ------------------------------------------------------ |
 | `/jira`                                | Implemented | Print Atlassian MCP connection status.                 |
 | `/jira status`                         | Implemented | Alias for `/jira`.                                     |
-| `/jira clone KEY [KEY...]`             | Implemented | Pull issue(s) from Jira → create local task(s) via the `jira_clone_apply` tool. |
+| `/jira clone KEY [KEY...]`             | Implemented | Pull issue(s) from Jira → create local task(s) through the `jira_clone` tool. |
 | `/jira get KEY [KEY...]`               | Implemented | Render a compact human-readable summary of one or more issues. No file writes. |
 | `/jira claim`                          | Implemented | Set assignee on every Jira-shaped issue on the selected task. |
 | `/jira comment <markdown>`             | Implemented | Add a comment to every Jira-shaped issue on the selected task. |
@@ -32,41 +36,71 @@ reloads and session replacement cannot multiply a single status transition.
 
 ## Tools
 
-The extension also registers an LLM-callable tool that handles the
-emission-side cost of `/jira clone` (so the rendered org body never
-round-trips through the model):
+Six tools are registered with `exposure: "deferred"` in the `jira` namespace.
+They are callable from a `codemode` script, are never declared to the model on
+their own (none is in `pi.getActiveTools()`), and are not listed in the
+`codemode` description, so they cost nothing per request. `codemode` exposure
+would list them there on every request. A script addresses a
+tool by its name: `tools.jira_get({...})`, and can find them with
+`searchTools("jira")` or `ALL_TOOLS`. The namespace does not nest the `tools`
+object (verified in `pi-codemode`'s `toCodemodeIdentifier` and sandbox prelude).
 
-- **`jira_clone_apply`** — takes structured Jira fields
-  (`key`, `summary`, `priorityName?`, `body?`, `labels?`, `file?`,
-  `section?`, `allowCreateSection?`) and delegates the org write to the
-  tasks extension's deterministic `insertTaskIntoFile()` helper, which
-  invokes the guaranteed `ot create` protocol engine. Drawer, UUID,
-  `:CREATED:`, priority cookie, tags, and `:LINKED_ISSUES:` assembly stay
-  out of the model.
+Each tool calls `mcp__atlassian__*` through `ctx.executeTool()` and returns only
+the fields or text its flow needs, so no raw `CallToolResult` reaches the model.
+A nested call that resolves with `isError: true` throws with the Jira message and
+a `/mcp login atlassian` hint (per-key write calls report it on their key).
 
-The `/jira clone` slash command instructs the agent in a *two-step
-dispatch*: call `atlassian_getJiraIssue` (with the existing field
-filter), then `jira_clone_apply` with the parsed fields. The agent
-never assembles drawer text via the `edit` tool.
+| Tool              | Input                              | Returns |
+| ----------------- | ---------------------------------- | ------- |
+| `jira_get`        | `keys`                             | Compact text block per issue, one line per field and `none` when empty: heading and status, priority/type/labels, components, affects and fix versions, assignee, reporter, updated date, parent, up to 5 subtasks, up to 5 issue links, comment count, 300-character description preview, footer link. |
+| `jira_clone`      | `keys`, `file?`, `section?`, `allowCreateSection?` | `[{key, status, ...}]` with `status` of `inserted`, `duplicate`, `section_not_found` or `error`. The write goes through `insertTaskIntoFile()` (`ot create`); the issue body, summary and labels never enter model context. |
+| `jira_claim`      | `keys`                             | `[{key, ok, error}]`; `atlassianUserInfo` once, then `editJiraIssue` per key. |
+| `jira_comment`    | `keys`, `body`                     | `[{key, ok, error}]`; `addCommentToJiraIssue` with `contentFormat: "markdown"`. |
+| `jira_create`     | `taskId`, `project`, `type?`       | `{key, url}`; reads the task heading and body through `ot show`, checks the type with `getJiraProjectIssueTypesMetadata`, creates, then runs `ot issue add`. |
+| `jira_transition` | `keys`, `status` (`STARTED`/`DONE`) | `[{key, ok, transition}]`, or `{key, choices: [{id, name}]}` when no transition name matches (nothing is done for that key). |
 
-Network workflows are *agent-driven*: slash commands draft structured prompts
-(using the conventions in the `org-jira` skill) and dispatch them via
-`pi.sendUserMessage`; the agent performs MCP calls. `jira_clone_apply` is the
-intentional deterministic local-write exception and delegates directly to `ot`.
+Write tools (`jira_claim`, `jira_comment`, `jira_create`, `jira_transition`)
+throw before any MCP call for a key or project outside `SAND`. `jira_transition`
+matches names case-insensitively in order: `Start Progress`, `In Progress` for
+`STARTED`; `Done`, `Closed`, `Resolved` for `DONE`. `jira_clone_apply` is
+removed; `jira_clone` replaces it.
+
+### Hidden one-line triggers
+
+A slash-command handler cannot call tools (`executeTool` exists only on the
+tool `execute()` context), so each flow sends the model one hidden line with
+`pi.sendMessage({customType: "jira", display: false, ...}, {triggerTurn: true})`.
+The line names a single `codemode` call with literal arguments, for example:
+
+```
+Call `codemode` once with exactly this code, then show the returned text verbatim and add nothing: return await tools.jira_get({"keys":["SAND-77"]});
+```
+
+`display: false` hides the message from the terminal only; pi still sends it to
+the model, so a trigger carries no script, protocol steps or rendering rules.
+The handlers resolve the keys in TypeScript: `/jira get` and `/jira clone` from
+the arguments and `#+JIRA_PROJECT`; `/jira claim`, `/jira comment` and
+`/jira create` from the selected task through `ot selected` (Jira keys come from
+its `:LINKED_ISSUES:`); auto-transition from `ot show <id>`. The model reads no
+task file. Auto-transition sends nothing for a task with no Jira key, and queues
+its trigger as a follow-up when the event arrives mid-turn.
 
 ## Connection model
 
-The extension itself is I/O-free. All Jira access is mediated by the
-agent through the `atlassian` MCP server. To connect:
+All Jira access goes through the `atlassian` server of pi's native MCP support.
+To connect:
 
 ```
-/mcp reconnect atlassian
+/mcp login atlassian
 ```
 
-After reconnect, `pi.getAllTools()` exposes a set of `atlassian_*` tools
-(issue read/write, transitions, comments, JQL search, etc.). The
-extension uses the presence of those tools as a connection-status proxy
-without invoking them directly.
+(or `pi mcp login atlassian` from a shell). The server entry lives in
+`pi/mcp.json`, linked to `~/.pi/agent/mcp.json`. With the default
+`codemode` exposure, the server's tools are not declared to the model; they
+are registered as `mcp__atlassian__<tool>` and are callable only through
+`ctx.executeTool()` or from a `codemode` script. `pi.getAllTools()` lists them,
+and the extension uses the presence of any `mcp__atlassian__` tool as a
+connection-status check without invoking it.
 
 ## Linkage to tasks
 
@@ -97,17 +131,19 @@ One `tasks`-owned link abbreviation plus two optional Jira keywords live in the 
 | Keyword            | Purpose                                                       |
 | ------------------ | ------------------------------------------------------------- |
 | `#+LINK: jira`     | Org-native URL template for `[[jira:KEY]]` badges, `J` browser-open, raw-URL filtering, and base URL derivation. |
-| `#+JIRA_CLOUDID`   | Skip the `atlassian_getAccessibleAtlassianResources` round-trip on every call. |
+| `#+JIRA_CLOUDID`   | Skip the `mcp__atlassian__getAccessibleAtlassianResources` round-trip on every call. |
 | `#+JIRA_PROJECT`   | Default project for `/jira create`; disambiguates short keys. |
 
-When `#+JIRA_CLOUDID` is absent, the agent calls
-`atlassian_getAccessibleAtlassianResources` and picks the resource whose
-URL matches the base URL derived from `#+LINK: jira .../browse/%s`. Jira uses the same recursively expanded, declaration-ordered `#+SETUPFILE:` stream as tasks: for each setting, the first non-empty effective declaration wins. Put a checkout-local declaration before its `#+SETUPFILE:` line when it must override shared configuration.
+When `#+JIRA_CLOUDID` is absent, each tool calls
+`mcp__atlassian__getAccessibleAtlassianResources` once and picks the resource whose
+URL matches the base URL derived from `#+LINK: jira .../browse/%s` (or the only
+site, when there is no base URL; the same site is listed once per scope set, so
+ids are de-duplicated). Jira uses the same recursively expanded, declaration-ordered `#+SETUPFILE:` stream as tasks: for each setting, the first non-empty effective declaration wins. Put a checkout-local declaration before its `#+SETUPFILE:` line when it must override shared configuration.
 
 ## Skill
 
 `skills/org-jira/SKILL.md` (extending `org-tasks`) documents the
-authoring conventions and agent prompts. Load it when the user wants to
+authoring conventions and the harness-independent protocol. Load it when the user wants to
 work with Jira-shaped tasks.
 
 ## Tests
@@ -116,5 +152,11 @@ work with Jira-shaped tasks.
 ./test.sh
 ```
 
-Structural sanity check only. The workflow commands (when implemented)
-will use `SAND` as their sandbox project for live smoke tests.
+Runs `jira.test.ts`: the pure helpers, the trigger shape of every flow, and each
+`jira_*` tool against a fake `ctx.executeTool` (arguments sent, filtered return,
+`isError` throw, `SAND` guard, transition match and no-match), plus the command
+handlers and the auto-transition listener against throwaway `ot` projects. No
+test calls Jira. The `tasks:status-changed` listener's session-scoped cleanup is
+covered by `pi/extensions/test/event-subscriptions.test.ts` (run from
+`pi/extensions/emacsclient/test.sh`). Live smoke tests use `SAND` as their
+sandbox project.

@@ -3,7 +3,6 @@
   "defaultThinkingLevel": "high",
   "packages": [
     "npm:@gotgenes/pi-anthropic-auth",
-    "npm:pi-mcp-adapter",
     "npm:pi-tldr",
     "npm:@xl0/pi-lovely-dev-tools",
     "npm:@ogulcancelik/pi-ghost",
