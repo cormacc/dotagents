@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 # Register the pi-settings clean filter for this clone of cormacc/dotagents.
 #
-# Pi writes runtime preferences (defaultProvider, defaultModel,
-# lastChangelogVersion) back into ~/.pi/agent/settings.json on every
-# /model swap or pi upgrade. That file is symlinked from this checkout
-# at pi/settings.json, so without this filter every provider swap shows
-# up as a tracked change.
+# Pi writes runtime state back into ~/.pi/agent/settings.json, which is
+# symlinked from this checkout at pi/settings.json: lastChangelogVersion
+# on every pi upgrade, and a per-installation deviceId (created on first
+# use, for example for Sign in with ChatGPT). Neither belongs in git.
 #
-# This script registers a git clean filter that drops those volatile
-# fields when the file is staged, while leaving the working-tree copy
-# untouched (smudge = cat). Pi keeps writing whatever it likes; git
-# only ever sees the durable subset (notably `packages`,
-# `hideThinkingBlock`, `defaultThinkingLevel`).
+# This script registers a git clean filter that drops those fields when
+# the file is staged, while leaving the working-tree copy untouched
+# (smudge = cat). defaultProvider and defaultModel are tracked: since
+# pi 0.84.3 a /model choice is session-only and only Ctrl+S in the
+# selector saves the default, so a change there is deliberate.
 #
-# Safe to re-run; idempotent.
+# A git command that rewrites the working tree (stash, reset --hard,
+# checkout -- pi/settings.json) writes back the committed copy, which
+# lacks the stripped fields; pi recreates them as needed.
+#
+# Safe to re-run; idempotent. Exits early when the filter is current.
 #
 # When this repo is consumed as a git submodule of cormacc/dotfiles at
 # ~/dotfiles/agents/, run this script from within the submodule
@@ -38,8 +41,14 @@ if [[ -z "$REPO_ROOT" ]]; then
 fi
 cd "$REPO_ROOT"
 
-git config filter.pi-settings.clean \
-  "jq 'del(.lastChangelogVersion, .defaultProvider, .defaultModel)' --indent 2"
+CLEAN="jq 'del(.lastChangelogVersion, .deviceId)' --indent 2"
+if [[ "$(git config --get filter.pi-settings.clean || true)" == "$CLEAN" &&
+      "$(git config --get filter.pi-settings.smudge || true)" == "cat" &&
+      "$(git config --get filter.pi-settings.required || true)" == "true" ]]; then
+  exit 0
+fi
+
+git config filter.pi-settings.clean "$CLEAN"
 git config filter.pi-settings.smudge "cat"
 git config filter.pi-settings.required true
 
