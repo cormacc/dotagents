@@ -3559,3 +3559,30 @@ Resolution 2026-09-24: confirmed cause -- `oh` runs `git worktree add` in `sourc
 - `traits_test.clj` :: `fixture-env` creates a git repository at `<fixture>/repo`, and `call!` runs `oh` there.
 - `herdr-orch.test-support/call-with-temp-dir` :: deletes a test directory in `finally`, for focused runs outside `bb test`. `traits_cli_test.clj` uses it.
 Verified: with the old fixture, the guard failed the run and named the leaked worktree and branch; with the fixed fixture, `bb test` left `git worktree list`, the `orch/*` refs, and the `/tmp` listing unchanged. The run still reports 31 failures (the same set in both runs) in `cli_test.clj` config tests, which expect the model IDs from before `860e796`.
+
+** DONE herdr-orch - add thinking-level support :skill:herdr_orch:
+CLOSED: [2026-10-01 Thu 10:30]
+:PROPERTIES:
+:CUSTOM_ID: f984543d-b4d1-4307-9499-f025acd359d9
+:CREATED: [2026-09-24 Thu 16:28]
+:STARTED: [2026-09-24 Thu 19:13]
+:ARCHIVED: [2026-10-01 Thu 10:30]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-09-24 Thu 16:28]
+- State "STARTED" from "TODO" [2026-09-24 Thu 19:13]
+- State "WAITING" from "STARTED" [2026-10-01 Thu 10:29]
+- State "DONE" from "WAITING" [2026-10-01 Thu 10:30]
+:END:
+#+IMPORT: [[plan:2026-09-24-herdr-orch-add-thinking-level-support.org]]
+Requirements (from the user, 2026-09-24):
+- Each `:harnesses` entry in `config.edn` gains an `:effort-flag` member, the native flag that sets the thinking/effort level for that kind.
+- The default level is `medium`.
+- The level is overridable at persona level (frontmatter) and at spawn time (`oh task run|start`).
+- Precedence mirrors model weight selection: spawn > persona > default.
+- Superseded in planning (2026-09-24): no config-chain default. Precedence is `--effort` > frontmatter `effort:` > same-kind parent level > `medium`; see the change-record.
+
+Current state (measured 2026-09-24): `oh` sets no thinking level. In `cli.clj`, the child argv is `core/model-args` + `core/harness-extra-args` + `core/persona-args` only. A pi child therefore inherits `defaultThinkingLevel: high` from `pi/settings.json`; claude and codex children use their own defaults (no effort key in `~/.claude/settings.json` or `~/.codex/config.toml`). `:defaults` is a closed map whose only key is `:placement` (`skills/herdr-orch/scripts/docs/contract.md` § Model resolution).
+
+Native surfaces (from each tool's `--help`): pi 0.87.1 `--thinking <level>` (off, minimal, low, medium, high, xhigh, max); Claude Code 2.1.281 `--effort <level>` (low, medium, high, xhigh, max); codex-cli 0.156.1 has no effort flag, only `-c model_reasoning_effort=<level>` (key found in the binary; accepted values not verified).

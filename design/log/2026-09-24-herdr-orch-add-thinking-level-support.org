@@ -1,6 +1,6 @@
 #+TITLE: herdr-orch - add thinking-level support
 #+DATE: 2026-09-24 Thu
-#+PARENT: [[task:f984543d-b4d1-4307-9499-f025acd359d9][herdr-orch - add thinking-level support]]
+#+PARENT: [[archive:f984543d-b4d1-4307-9499-f025acd359d9][herdr-orch - add thinking-level support]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Accepted
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
