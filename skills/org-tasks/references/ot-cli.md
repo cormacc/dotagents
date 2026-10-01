@@ -82,6 +82,10 @@ ot handoff get|set|clear <id> [...]
 ot uuid --count 3
 ```
 
+## Task bodies from `ot create`
+
+`--body` text loses its leading and trailing blank lines. A body line that would parse as an Org heading (stars at column 0, then whitespace) is indented by one space, so a markdown `* item` bullet from another tracker becomes a list item instead of a new heading. Pass a body that can start with `-` as `--body=<text>`: the separate-argument form `--body "- item"` is read as options, so a multi-line value fails with `argument-error` and a single-line value is stored as `true`.
+
 ## Editing existing task tags
 
 `ot tag add <id> <tag>` and `ot tag remove <id> <tag>` mutate the trailing Org heading tags of an existing task. IDs accept the standard full UUID or unique prefix, and the task is written back to its owning `TASKS.org`, `TASKS.local.org`, or imported plan file. `--dry-run` returns the proposed tag list without writing.

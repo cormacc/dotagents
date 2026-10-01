@@ -56,7 +56,12 @@
     :summary       - heading text, required.
     :priority-name - Jira priority name; passed through map-priority-name.
     :body          - optional body text, normalised to no leading/trailing
-                     newlines.
+                     newlines. A line that would parse as an org heading
+                     (stars at column 0, then whitespace other than a
+                     newline, as the scanner reads `\n`-split lines; this
+                     includes the `\r` of a CRLF body) is indented
+                     by one space, so a markdown `* item` bullet from
+                     another tracker becomes a list item, not a new task.
     :linked-issues - sequence of `:LINKED_ISSUES:` org-link tokens.
     :labels        - sequence of org tag strings.
     :parent-id     - when set, render the block as a level-3 heading.
@@ -88,7 +93,8 @@
           drawer      (str/join "\n" (conj drawer-lines ":END:"))
           body        (-> (or body "")
                           (str/replace #"^\n+" "")
-                          (str/replace #"\n+$" ""))
+                          (str/replace #"\n+$" "")
+                          (str/replace #"(?m)^(\*+[^\S\n])" " $1"))
           block-lines (cond-> [heading drawer ":LOGBOOK:"
                                (parser/created-log-entry created-at)
                                ":END:"]

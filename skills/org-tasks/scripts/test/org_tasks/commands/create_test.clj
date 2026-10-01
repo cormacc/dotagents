@@ -51,6 +51,54 @@
         ;; The write must be refused, not persisted with an unqueryable tag.
         (is (not (str/includes? content "Hyphen tag")))))))
 
+(deftest create-body-heading-lines-are-indented
+  ;; A body from another tracker (for example a Jira markdown description) can
+  ;; contain `* item` bullets. At column 0 org parses them as headings, so the
+  ;; new task's body would split into spurious top-level tasks.
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [body "Intro\n\n* a\n** b\n*bold* text\n * c"
+            {:keys [out exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "create" "Bullet body" (str "--body=" body))
+            r (parse-json-result out)
+            content (slurp (str (fs/path root "TASKS.org")))
+            body-lines (set (str/split-lines content))]
+        (is (zero? exit))
+        (is (some? (:id r)))
+        (is (contains? body-lines " * a") "a `* ` line becomes an indented list item")
+        (is (contains? body-lines " ** b") "a `** ` line is indented too")
+        (is (contains? body-lines "*bold* text") "a star without a following space is not a heading and is kept")
+        (is (contains? body-lines " * c") "an already indented line is kept")
+        (is (not-any? #{"* a" "** b"} body-lines) "no body line remains at column 0 as a heading")
+        (is (= #{"* Improvements" "** TODO [#A] First :backend:" "** STARTED Second" "** TODO Bullet body"}
+               (set (filter #(re-matches #"^\*+\s.*" %) (str/split-lines content))))
+            "the file's heading lines are the fixture's plus the new task's"))))
+  (testing "a CRLF body's star-only line is indented too"
+    ;; The scanner splits on \n, so `*\r` matches its `^(\*+)\s+` heading rule.
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-graph! root)
+        (let [{:keys [out exit]}
+              (run-cli! "--root" root "--format" "json"
+                        "create" "--body=intro\r\n*\r\nafter" "--" "CRLF body")
+              id (:id (parse-json-result out))
+              shown (run-cli! "--root" root "--format" "json" "show" id)]
+          (is (zero? exit))
+          (is (= "intro\r\n *\r\nafter" (get-in (parse-json-result (:out shown)) [:task :description]))
+              "the whole body survives as the task description")))))
+  (testing "`--body=<text>` accepts a body that starts with a dash"
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-graph! root)
+        (let [{:keys [exit]}
+              (run-cli! "--root" root "--format" "json"
+                        "create" "Dash body" "--body=- one\n- two")
+              content (slurp (str (fs/path root "TASKS.org")))]
+          (is (zero? exit))
+          (is (str/includes? content "- one\n- two")))))))
+
 (deftest create-normalises-wrapped-tag
   (with-temp-dir
     (fn [root]

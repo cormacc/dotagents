@@ -199,7 +199,7 @@ Options:
 }
 ```
 
-Options include `--section`, `--parent`, `--after`, `--priority`, repeated `--tag`, `--body`, repeated `--linked-issue`, repeated `--also-scan`, `--allow-create-section`, and compatibility/test overrides `--id` and `--created-at`. `--parent` inserts a child under that task; `--after` inserts a sibling after the anchor task. Both resolve full IDs or unique prefixes across imports and write to the anchor's source file. `--relative-to` takes precedence over explicit placement. Linked-issue duplicate checks scan the target, both configured task roots (shared and local), their imports, and explicit `--also-scan` files. Errors: `unknown-task`, `ambiguous-id`, `section-not-found`, `duplicate-linked-issue`, `path-outside-project`, `empty-summary`.
+Options include `--section`, `--parent`, `--after`, `--priority`, repeated `--tag`, `--body` (a body line that would parse as an Org heading is indented by one space; pass a body that can start with `-` as `--body=<text>`), repeated `--linked-issue`, repeated `--also-scan`, `--allow-create-section`, and compatibility/test overrides `--id` and `--created-at`. `--parent` inserts a child under that task; `--after` inserts a sibling after the anchor task. Both resolve full IDs or unique prefixes across imports and write to the anchor's source file. `--relative-to` takes precedence over explicit placement. Linked-issue duplicate checks scan the target, both configured task roots (shared and local), their imports, and explicit `--also-scan` files. Errors: `unknown-task`, `ambiguous-id`, `section-not-found`, `duplicate-linked-issue`, `path-outside-project`, `empty-summary`.
 
 ### `ot move <id> (--parent <id> | --section <name>)`
 
