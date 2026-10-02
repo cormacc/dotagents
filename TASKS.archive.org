@@ -3615,3 +3615,23 @@ Workstreams:
 - codemode enablement: confirm auto-enable on connect, or pin via settings defaultTools ["+codemode"] / autoEnableCodemode.
 
 Refs: pi docs/mcp.md (Replace the built-in MCP support, Control tool exposure), docs/cli.md (Tools/codemode). Current config: agents/mcp.json, agents/pi/settings.json.
+
+** DONE [#A] Review herdr-orch w.r.t. Pi v1.0.0 release changes
+CLOSED: [2026-10-02 Fri 10:46]
+:PROPERTIES:
+:CUSTOM_ID: d99fa846-412d-4356-a25d-0c2388a596f2
+:CREATED: [2026-10-01 Thu 21:06]
+:STARTED: [2026-10-02 Fri 08:58]
+:ARCHIVED: [2026-10-02 Fri 10:46]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 21:06]
+- State "STARTED" from "TODO" [2026-10-02 Fri 08:58]
+- State "DONE" from "STARTED" [2026-10-02 Fri 10:46]
+:END:
+#+IMPORT: [[plan:2026-10-01-review-herdr-orch-w-r-t-pi-v1-0-0-releas.org]]
+Herdr orch was last updated against pi v 0.85.1 and herdr v 0.9.1.
+Pi v1.0 has been released, and herdr is at 0.9.3 -- review the changes. Consider the following:
+- Opportunities to simplify or improve the implementation leveraging upstream changes, including codemode
+- Whether a thin pi extension over the herdr-orch cli would make subagent spawning more efficient -- currently the agent spends a few turns on things like model routing etc., which should be mechanical. Perhaps a slash command with defined syntax should be introduced?

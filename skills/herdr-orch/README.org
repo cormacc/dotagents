@@ -279,13 +279,15 @@ This skill is almost entirely LLM-authored (though heavily human-guided), dogfoo
 
 * Last API review
 
-| Field | Last reviewed value |
-|-------+---------------------|
-| Review date | 2026-09-17 |
-| Herdr source/API | [[https://github.com/ogulcancelik/herdr/tree/v0.9.1][0.9.1]] (=065ef9d6a531c49fb8bee7e818ef837065b21ee9=) |
-| Pi source/API | [[https://github.com/earendil-works/pi/tree/v0.85.1][0.85.1]] (=d981de1229ef899957bbe968bc8dcda02a21f477=) |
-| Installed Herdr client and server inspected | 0.9.0 |
-| Installed Pi inspected | 0.85.1 |
-| Comparison baseline | Herdr 0.8.2; Pi 0.84.2 (user-supplied Pi baseline) |
+Review date: 2026-10-01.
 
-These are review checkpoints, not minimum supported versions or compatibility certification. The review covered upstream changes, the =oh= adapter and lifecycle paths, the Pi tool proxy and state integration, focused tests, and isolated probes. No live child-agent smoke was run; Herdr 0.9.1 was reviewed from source, not executed. The Herdr minimum at that review was 0.8.2; [[file:../../design/log/2026-09-17-herdr-orch-improvements-260917.org][herdr-orch improvements 260917]] raises it to 0.9.1 on both client and server.
+| Field | Herdr | Pi |
+|-------+-------+----|
+| Reviewed source/API | [[https://github.com/ogulcancelik/herdr/tree/v0.9.3][0.9.3]] (=7b116c05bfda646af39d2524c54e70c751f57ee8=) | [[https://github.com/earendil-works/pi/tree/v1.0.0][1.0.0]] (=a13d35a742c6ef8462812a28fbe1d8c8b7431c32=) |
+| Minimum required API | 0.9.1, client and server; enforced by =oh= preflight (=minimum-version= in [[file:scripts/src/herdr_orch/herdr.clj][herdr.clj]]) | 0.80.4; not enforced; set by the =agent_settled= event that =herdr-agent-state.ts= uses |
+| Installed version inspected | 0.9.3, client and server (protocol 22) | 0.99.2 |
+| Previous review (2026-09-17) | 0.9.1 | 0.85.1 |
+
+The reviewed versions are review checkpoints, not compatibility certification. The minimum required versions are the oldest versions that supply every API herdr-orch uses. Root model and effort inheritance through =PI_MODEL= and =PI_REASONING_LEVEL= needs Pi 0.82.0; with an older Pi root, a root child does not inherit the root's model or effort, and takes the persona value, else the harness default model and =medium= effort. The 2026-10-01 review found no breaking upstream change that affects herdr-orch. The managed Pi asset =herdr-agent-state.ts= is unchanged in Herdr 0.9.3 (integration revision 9, byte-identical to the local copy). Pi 1.0.0 was reviewed from source. The installed Pi 0.99.2 has the same extension layer (=packages/coding-agent/src/core/extensions/= has no diff between the tags). Pi 1.0.0 makes the fullscreen TUI the default, which can limit a raw =oh agent read= of a Pi child to the visible screen; delegation completes through =RESULT= files and is not affected. This caveat was not verified against a live 1.0.0 child. Findings, citations, and follow-up tasks are in [[file:../../design/log/2026-10-01-review-herdr-orch-w-r-t-pi-v1-0-0-releas.org][the 2026-10-01 review record]].
+
+The previous review (2026-09-17) covered Herdr 0.9.1 and Pi 0.85.1 against a Herdr 0.8.2 / Pi 0.84.2 baseline, from source and focused tests. [[file:../../design/log/2026-09-17-herdr-orch-improvements-260917.org][herdr-orch improvements 260917]] raised the Herdr minimum from 0.8.2 to 0.9.1 on both client and server.

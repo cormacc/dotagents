@@ -3603,6 +3603,9 @@
     (is (= (:label prior) (:label entry)))
     (is (= (:persona-path prior) (:persona-path entry)))
     (is (= (select-keys prior [:kind :model]) (select-keys entry [:kind :model])))
+    (let [routing [:model-canonical :model-args :effort-args]]
+      (is (= (count routing) (count (select-keys prior routing))) "positive control: the spawn recorded its routing")
+      (is (= (select-keys prior routing) (select-keys entry routing))))
     (is (not= (:result prior) (:result entry)))
     (is (not (fs/exists? (:result entry))))
     (is (nil? (:captured-at entry)))
@@ -4988,6 +4991,25 @@
     (is (some #(= ["--thinking" "low"] %) (partition 2 1 argv)) (pr-str argv))
     (is (< (at "--model") (at "--thinking")) "effort args follow the model args")
     (is (= "low" (injected-env env-file "HERDR_ORCH_EFFORT")))))
+
+;; The spawn records the routing `--print-prompt` previews, so the parent needs no
+;; preview turn to learn the native args its child received.
+(deftest spawn-ledger-and-envelope-report-the-previewed-routing
+  (doseq [[label persona flags] [["weight alias with explicit effort" "worker" ["--model" "light" "--effort" "high"]]
+                                 ["frontmatter model and effort" "effortful" []]]]
+    (testing label
+      (let [{:keys [env dir log]} (fake-env {} effort-roster)
+            routing #(select-keys % [:model-canonical :model-args :effort-args])
+            preview (:result (result (apply call! env (concat ["task" "run" persona] flags ["--task" "x" "--print-prompt"]))))
+            proc (apply call! env (concat ["task" "start" persona] flags ["--task" "routing reported"]))
+            envelope (:result (result proc))
+            argv (vec (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (seq (:model-args preview)) "positive control: the preview resolved model args")
+        (is (= (routing preview) (routing envelope)) "task start envelope")
+        (is (= (routing preview) (routing (ledger-entry* dir (:task envelope)))) "ledger entry")
+        (is (some #(= (:model-args preview) (vec %)) (partition (count (:model-args preview)) 1 argv))
+            (str "the recorded model args are the ones the child received: " (pr-str argv)))))))
 
 ;; `--print-prompt` reports the effort args rendered for the resolved kind.
 (deftest preview-reports-effort-args

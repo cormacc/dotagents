@@ -17,20 +17,27 @@
   - [[#herdr-orch-llm-usage-limit-fallback][herdr-orch: LLM usage limit fallback]]
   - [[#evaluate-rpiv-pi-workflow-setup][Evaluate rpiv-pi workflow setup]]
   - [[#explore-agent-memory-options][Explore agent memory options]]
+  - [[#investigate-clojure-in-codemode][Investigate clojure in codemode]]
 - [[#improvements][Improvements]]
   - [[#ot-move-tuipi-overlay-exposure-and---before--after-ordering][ot move: TUI/pi-overlay exposure and --before/--after ordering]]
   - [[#org-tasks-spec-checks-warn-forever-once-a-records-change-is-committed][org-tasks: spec checks warn forever once a record's change is committed]]
   - [[#herdr-plugin-wrapper-for-herdr-orch][herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#traits-re-probe-every-fragment-against-synthetic-non-decaying-scenarios][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
-  - [[#herdr-orch-housekeeping][herdr-orch housekeeping]]
+  - [[#herdr-orch-allow-persona-less-subagents][herdr-orch: allow persona-less subagents]]
+  - [[#consider-leveraging-pi-fork-for-subagents][Consider leveraging pi /fork for subagents]]
+  - [[#herdr-orch-support-unmanaged-harness-kinds-herdr-cannot-start-or-detect][herdr-orch: support unmanaged harness kinds herdr cannot start or detect]]
   - [[#vendored-skill-hygiene][Vendored skill hygiene]]
-  - [[#ot-cli-surface-consistency][ot CLI surface consistency]]
-  - [[#adapt-ponytail-for-use-with-herdr-orchtraits][Adapt ponytail for use with herdr-orch/traits]]
+  - [[#started-ot-cli-surface-consistency][STARTED ot CLI surface consistency]]
   - [[#draft-upstream-herdr-pi-native-prompt-and-listener-disposal-proposal][Draft upstream Herdr Pi native-prompt and listener-disposal proposal]]
+  - [[#traits-retry-the-simple-probe-at-a-lower-model-tier][traits: retry the %simple probe at a lower model tier]]
+  - [[#herdr-orch-fix-incompatible-withincompatibilities-doc-code-mismatch-in-contractmd-and-traitsmd][herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md]]
 - [[#fixes][Fixes]]
+  - [[#ot-create---local-crashes-the-create-local-flag-shadows-the-global---local-path-option][ot create --local crashes: the create :local flag shadows the global --local path option]]
+  - [[#ot-create-coerces---body-values-numeric-text-and-dash-led-single-lines-are-not-kept-verbatim][ot create coerces --body values: numeric text and dash-led single lines are not kept verbatim]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
+  - [[#pi-clojure-bump-its-own-pi-coding-agent-dev-pin-from-08010-and-make-testsh-runnable][pi-clojure: bump its own pi-coding-agent dev pin from 0.80.10 and make test.sh runnable]]
 - [[#agent-feedback][Agent feedback]]
   - [[#self-improvement-persist-agents-metrics-comparison-script][self-improvement: persist AGENTS metrics comparison script]]
   - [[#validate-skillsbb-rejects-a-relative---python-path][validate-skills.bb rejects a relative --python path]]
@@ -241,18 +248,7 @@ Acceptance criteria:
 - Where a probe cannot be made to discriminate, say so and say why, rather than reporting an unexplained negative or quietly dropping the fragment.
 Must not: weaken a recorded condition to make a run agree; reuse a repo-referential subject; treat a passing probe as a precondition for the fragment staying in the store.
 
-** TODO herdr-orch housekeeping :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: c8364040-b7bd-41ea-b892-2b53d80cc37e
-:CREATED: [2026-08-27 Thu 14:21]
-:END:
-:LOGBOOK:
-- Created [2026-08-27 Thu 14:21]
-:END:
-Umbrella for the accumulated `oh` defects and gaps that are individually small but share one surface: the spawn path, the round lifecycle, and the contract that documents them. Each child carries its own measured evidence and acceptance criteria; this parent exists so one session can triage them together rather than reopening the same source (`scripts/src/herdr_orch/cli.clj`, `scripts/docs/contract.md`) once per task.
-
-Grouped 2026-08-27. Deliberately excluded: the two Explorations (worktrunk, LLM usage-limit fallback) stay top-level, as do the herdr plugin wrapper and the shared Babashka bootstrap, which are project work rather than housekeeping.
-*** TODO [#B] herdr-orch: allow persona-less subagents :skill:herdr_orch:
+** TODO [#B] herdr-orch: allow persona-less subagents :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: bf34e806-3505-4280-9ce0-85602a0c6bd0
 :CREATED: [2026-08-12 Wed 23:12]
@@ -288,7 +284,8 @@ Two verified =pi= facts any implementation must respect, both of which cost a ro
 - =--tools= is case-sensitive and fails silently. =--tools Read= enables no tool and exits 0; =--tools read= works. Probed directly: the capitalised form returned =NO-TOOL= where the lowercase form returned the file's token.
 
 *EDIT* [2026-08-27 Thu] The gap itself re-confirmed: no =--persona-file= and no inline persona flag exist anywhere under =scripts/src/= (control: 93 =persona= matches in =cli.clj=). The reasoning above is not re-verified, and its snapshot is stale -- =6a89b0f= (2026-08-12) precedes =4741d59= and 20 further commits to =cli.clj=/=herdr.clj=, among them =d757aa7= "give same-kind model inheritance a producer", which is exactly the =resolve-model= tier this task cites as its motivation, and =bc9c38e=, which now derives accepted options from the help signatures and therefore changes how a new flag is added. Re-read =resolve-model= and the option surface before designing; the packaged personas' =model:= declarations also need re-counting rather than restating the seven-of-seven figure.
-**** TODO [#B] Consider leveraging pi /fork for subagents
+
+** TODO [#B] Consider leveraging pi /fork for subagents
 :PROPERTIES:
 :CUSTOM_ID: 84653126-cd7e-412a-9761-d43eaad7f97f
 :CREATED: [2026-08-07 Fri 10:06]
@@ -299,7 +296,11 @@ Two verified =pi= facts any implementation must respect, both of which cost a ro
 Depending on scope of use -- using fork rather than spawn might be a good idea for some subagents -- let them inherit the orchestrator context without bloating it.
 This could work via an optional `:fork :true` in the subagent header (default `:fork :false`)
 This should be straightforward using pi. Maybe also using claude/codex? Investigate...
-*** TODO [#B] herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
+
+See this subagent implementation makes good use of fork -- includes a 'defaultContext' metadata item in the header.
+https://github.com/Neuron-Mr-White/UniPi/blob/main/packages/subagents/agents
+
+** TODO [#B] herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 22f68a11-eeef-43e9-81d3-79341842ca84
 :CREATED: [2026-08-04 Tue 19:44]
@@ -506,6 +507,15 @@ skills/herdr-orch/references/traits.md claims \`incompatible-with:\` enforcement
 * Upstream issues
 
 * Chores
+** TODO pi-clojure: bump its own pi-coding-agent dev pin from 0.80.10 and make test.sh runnable :pi:
+:PROPERTIES:
+:CUSTOM_ID: 17fea754-3b1e-4584-bcf8-fbcf76aa6395
+:CREATED: [2026-10-02 Fri 09:07]
+:END:
+:LOGBOOK:
+- Created [2026-10-02 Fri 09:07]
+:END:
+pi/extensions/pi-clojure/package.json pins @earendil-works/pi-coding-agent 0.80.10 separately from the root package.json (bumped to 1.0.0 by record design/log/2026-10-01-review-herdr-orch-w-r-t-pi-v1-0-0-releas.org). pi/extensions/pi-clojure/test.sh exits 127 because ./node_modules/.bin/tsc is absent: agents.nix installs that directory with --omit=dev. Measured 2026-10-02 with both the 0.80.10 and 1.0.0 root pins; the tsx test files themselves pass.
 
 * Agent feedback
 

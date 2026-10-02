@@ -966,6 +966,12 @@
                                      :child name :pane-id nil
                                      :label label :index index :persona persona :persona-path persona-path
                                      :kind kind :model model
+                                     ;; The same translation `preview!` reports, recorded so the
+                                     ;; parent sees the native args the child received without a
+                                     ;; separate `--print-prompt` turn. `start!` below reads them back.
+                                     :model-canonical (core/canonical-model config model)
+                                     :model-args (core/model-args config kind model)
+                                     :effort-args (core/effort-args config kind (:effort effort))
                                      :parent-session (:parent-session ident)
                                      :parent-pane (:parent-pane ident)
                                      :waiting-policy waiting-policy
@@ -1039,8 +1045,8 @@
               (let [renamed (herdr/rename! (:pane-id persisted) label)]
                 (when-not (= label (:label renamed)) (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))
                 (ledger/update! task assoc :status "renamed")
-                (let [native (concat (core/model-args config kind model)
-                                     (core/effort-args config kind (:effort effort))
+                (let [native (concat (:model-args entry)
+                                     (:effort-args entry)
                                      (core/harness-extra-args config kind)
                                      (core/persona-args kind persona-path))]
                   (record-session! task (:agent_session (herdr/start! name kind (:pane-id persisted) native)))
@@ -2340,7 +2346,8 @@
                           (select-keys entry
                                        [:child :pane-id :tab-id :label :index :persona :persona-path
                                         :base-persona :traits :trait-sources
-                                        :kind :model :retro :retro-source :spawns :spawns-source
+                                        :kind :model :model-canonical :model-args :effort-args
+                                        :retro :retro-source :spawns :spawns-source
                                         :timeout :timeout-source :effort :effort-source :placement :shell-pid
                                         :work-root :worktree :read-only])
                           {:task task :result result :continues prior-task
