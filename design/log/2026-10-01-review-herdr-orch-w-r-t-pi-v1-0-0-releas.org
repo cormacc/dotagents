@@ -23,12 +23,12 @@ The review found no breaking upstream change touching herdr-orch. Pi 0.85.1 -> 1
 - Refresh the vendored =skills/herdr/SKILL.md= from upstream =v0.9.1= to =v0.9.3= (one paragraph changed upstream; licence unchanged).
 - Report =:model-canonical=, =:model-args=, and =:effort-args= on the spawn ledger entry and the =task start= envelope (=task run= returns the capture, not the entry), so the parent sees the routing the CLI performed without a separate =--print-prompt= turn.
 - Bump the =@earendil-works/pi-coding-agent= devDependency pin from 0.80.10 to 1.0.0, the Pi version this review covers, and confirm every extension suite still passes.
-- [[proj:skills/herdr-orch/README.org]] § Last API review: a table with the reviewed source/API version and the minimum required version for both Pi and Herdr.
+- [[file:../../skills/herdr-orch/README.org::*Last API review]]: a table with the reviewed source/API version and the minimum required version for both Pi and Herdr.
 *** Out of scope
-- Any model-facing delegation tool, including =exposure: "codemode"= or =deferred= variants of an =oh task= tool. The decision in [[file:2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org][2026-08-01 § Decisions]] (delegation stays off the tool surface) stands.
+- Any model-facing delegation tool, including =exposure: "codemode"= or =deferred= variants of an =oh task= tool. The decision in [[file:2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org][2026-08-01 [[*Decisions]]]] (delegation stays off the tool surface) stands.
 - Patching =pi/extensions/herdr-agent-state.ts=. It is Herdr's managed asset, unchanged upstream at revision 9; the known gaps (bus-topic blocked state, undisposed listeners) remain upstream work.
 - Raising the =oh= Herdr minimum above 0.9.1. Nothing =oh= uses requires 0.9.2 or 0.9.3.
-- Changing the exposure of =herdr_layout=/=herdr_pane=/=herdr_agent= (see § Decisions).
+- Changing the exposure of =herdr_layout=/=herdr_pane=/=herdr_agent= (see [[*Decisions]]).
 - Installing Pi 1.0.0. The installed binary is 0.99.2; the 0.99.2 -> 1.0.0 extension-layer diff is empty (=packages/coding-agent/src/core/extensions/= unchanged between the tags).
 - A =/oh= slash command or any other new Pi command surface over =oh= (user decision, 2026-10-02).
 
@@ -39,12 +39,12 @@ The review found no breaking upstream change touching herdr-orch. Pi 0.85.1 -> 1
 - [X] =skills/README.org= cites the =herdr= skill and its licence at =v0.9.3= (=7b116c05bfda646af39d2524c54e70c751f57ee8=).
 - [X] The ledger entry written by =task run= and =task start= carries =:model-canonical=, =:model-args=, and =:effort-args= with the same values =--print-prompt= reports for the same arguments.
 - [X] The =task start= success envelope =result= carries those three keys.
-- [X] =contract.md= § Ledger and completion names the three keys.
+- [X] [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Ledger and completion' names the three keys.
 - [X] =package.json= =devDependencies["@earendil-works/pi-coding-agent"]= is =1.0.0= and =package-lock.json= resolves it.
 - [X] Every =pi/extensions/**/test.sh= exits 0 after =npm ci= with the new pin, except =pi-clojure/test.sh=, which exits 127 (no local =tsc=) with both the old and the new pin; its =tsx= tests pass. Follow-up: [[task:17fea754-3b1e-4584-bcf8-fbcf76aa6395][pi-clojure dev pin and test.sh]].
-- [X] =README.org= § Last API review states the reviewed Pi version (1.0.0) and the reviewed Herdr version (0.9.3).
-- [X] =README.org= § Last API review states the minimum required Herdr version (0.9.1, client and server) and names its enforcement point (=minimum-version= in =herdr.clj=).
-- [X] =README.org= § Last API review states the minimum required Pi version (0.80.4) and the API that sets it (=agent_settled=).
+- [X] [[file:../../skills/herdr-orch/README.org::*Last API review]] states the reviewed Pi version (1.0.0) and the reviewed Herdr version (0.9.3).
+- [X] [[file:../../skills/herdr-orch/README.org::*Last API review]] states the minimum required Herdr version (0.9.1, client and server) and names its enforcement point (=minimum-version= in =herdr.clj=).
+- [X] [[file:../../skills/herdr-orch/README.org::*Last API review]] states the minimum required Pi version (0.80.4) and the API that sets it (=agent_settled=).
 *** Edge cases
 - [X] =oh task start= still succeeds when =:models= has no row for the resolved kind (=:model-args= falls through to the canonical ID, as today).
 *** Anti-criteria
@@ -57,16 +57,16 @@ The review found no breaking upstream change touching herdr-orch. Pi 0.85.1 -> 1
 - Codemode: no implementation change :: Codemode is upstream Pi (=packages/codemode= first commit =8562bcf6= "feat(coding-agent): codemode and MCP", shipped 0.99.0, leaner in 1.0.0). Delegation already runs through =oh= via =bash=; a parent that wants to batch =status=/=collect --any= calls can do so today with =tools.bash= in one script and needs nothing from herdr-orch. Rejected: a codemode-exposed =oh task= tool (same objection as the model-facing tool, below); rewriting the proxy to call =herdr= over its socket API (contract.md already rejects a socket-protocol gate; logic stays in Babashka).
 - Delegation stays off the model tool surface :: Re-affirms [[file:2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org][2026-08-01]]. Loading the skill is the gate that teaches envelope, ledger, and closure rules; a discoverable tool is the documented route to uncaptured children. Rejected: =herdr_task= tool with =exposure: "model-only"= or =deferred= -- both are still model-reachable.
 - No =/oh= slash command :: User decision (2026-10-02). The measured delegation overhead is first-spawn skill/persona reads and assignment composition, not model routing, so a user-invoked command would remove turns only in the rare case where the user already knows persona, model, and task. The routing keys on the spawn envelope are the whole efficiency change. Rejected: a user-invoked =/oh= in the proxy extension; a prompt template in =pi/prompts/=.
-- Minimum Pi version is 0.80.4 :: Derived from API use, not enforced at runtime. The Herdr-managed =herdr-agent-state.ts= (integration revision 9) subscribes to =agent_settled=, added in Pi 0.80.4 (=packages/coding-agent/CHANGELOG.md= § 0.80.4; absent from =v0.80.3:packages/coding-agent/src/core/extensions/types.ts=). Its other requirements are older: =ctx.mode= (0.78.1), =@earendil-works/*= scope (0.74.0), =typebox= 1.x (0.69.0). Root model and effort inheritance through =PI_MODEL=/=PI_REASONING_LEVEL= needs 0.82.0 (bash tool environment); on an older root, a root child takes the persona value, else the harness default model and =medium= effort.
+- Minimum Pi version is 0.80.4 :: Derived from API use, not enforced at runtime. The Herdr-managed =herdr-agent-state.ts= (integration revision 9) subscribes to =agent_settled=, added in Pi 0.80.4 (=packages/coding-agent/CHANGELOG.md= section '0.80.4'; absent from =v0.80.3:packages/coding-agent/src/core/extensions/types.ts=). Its other requirements are older: =ctx.mode= (0.78.1), =@earendil-works/*= scope (0.74.0), =typebox= 1.x (0.69.0). Root model and effort inheritance through =PI_MODEL=/=PI_REASONING_LEVEL= needs 0.82.0 (bash tool environment); on an older root, a root child takes the persona value, else the harness default model and =medium= effort.
 - Spawn envelopes report routing :: The ledger entry records =:kind= and pre-alias =:model= but not the translated =:model-args=; =--print-prompt= is the only way to see them, and previews were the measured routing turns. Reporting the same three keys the preview computes (=:model-canonical=, =:model-args=, =:effort-args=) costs one =assoc= at the existing choke point and makes the preview unnecessary after the fact.
 - Dev pin tracks the reviewed Pi :: Tests import =DEFAULT_MAX_BYTES=/=DEFAULT_MAX_LINES= at runtime from the pinned 0.80.10 package while the integration tests spawn the PATH =pi= (0.99.2) and =jira/tools.ts= uses 0.99.0 APIs (=exposure=, =ctx.executeTool=). Pin 1.0.0 so the two agree; the lock also moves the =pi-ai= and =pi-tui= peers (declared =*=) to 1.0.0, because the extensions import =StringEnum= from the top-level =pi-ai= at runtime. Rejected: leave it (silent drift already spans 20 minor versions).
 - Proxy tool exposure unchanged :: =herdr_layout=/=herdr_pane=/=herdr_agent= keep their current exposure. =exposure: "codemode"= or =deferred= would remove three declarations and ten guideline lines from every system prompt, but the model would then reach the tools only through codemode scripts or =tool_search=.
 - Herdr minimum stays 0.9.1 :: Settle waits accept =idle= or =done=, so the 0.9.2 first-task-done fix is not needed for correctness. Every verb =oh= calls is unchanged in 0.9.2/0.9.3 (=docs/next/.../cli-reference.mdx= diff is additive: =machine status|reconnect=, =pane report-agent*= with =-- RESUME_COMMAND=, =terminal.mouse=). The =completion_seq= field (commit =2836010=) is additive.
 
 ** Shipped
-- MODIFIED [[proj:skills/herdr-orch/scripts/docs/contract.md]] § Ledger and completion: a spawn entry and the =task start= envelope carry =:model-canonical=, =:model-args=, =:effort-args=; a continued round copies them. =spawn!= now passes the recorded values to =agent start=.
-- MODIFIED [[proj:skills/herdr-orch/SKILL.md]] § Roster and routing: the =task start= envelope and ledger entry report the translated args.
-- MODIFIED [[proj:skills/herdr-orch/README.org]] § Last API review: Herdr and Pi columns with reviewed, minimum required, installed, and previous-review rows.
+- MODIFIED [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Ledger and completion': a spawn entry and the =task start= envelope carry =:model-canonical=, =:model-args=, =:effort-args=; a continued round copies them. =spawn!= now passes the recorded values to =agent start=.
+- MODIFIED [[file:../../skills/herdr-orch/SKILL.md]] section 'Roster and routing': the =task start= envelope and ledger entry report the translated args.
+- MODIFIED [[file:../../skills/herdr-orch/README.org::*Last API review]]: Herdr and Pi columns with reviewed, minimum required, installed, and previous-review rows.
 - MODIFIED [[proj:skills/README.org]]: =herdr/LICENSE= cited at =v0.9.3=. Vendored =skills/herdr/SKILL.md= refreshed to =v0.9.3=.
 - Root =package.json= dev pin =@earendil-works/pi-coding-agent= 0.80.10 -> 1.0.0; =package-lock.json= resolves it and the top-level =pi-ai=/=pi-tui= peers at 1.0.0.
 - Packaged =subagents/config.edn= =:aliases= gains =fable=, =opus=, =sonnet=, =haiku=, each mapping to the same canonical ID as its =claude-*= alias.
@@ -117,7 +117,7 @@ CLOSED: [2026-10-02 Fri 09:07]
 - State "STARTED" from "TODO" [2026-10-02 Fri 09:02]
 - State "DONE" from "STARTED" [2026-10-02 Fri 09:07]
 :END:
-** DONE Add reviewed and minimum required Pi and Herdr versions to README § Last API review :herdr_orch:
+** DONE Add reviewed and minimum required Pi and Herdr versions to README section 'Last API review' :herdr_orch:
 CLOSED: [2026-10-02 Fri 09:00]
 :PROPERTIES:
 :CUSTOM_ID: cd90b3fe-12a4-450d-a871-5aadd0b79062
@@ -134,20 +134,20 @@ Compatibility findings, each with its upstream citation. "Favourable" means the 
 
 ** Pi 0.85.1 -> 1.0.0 (393 commits; tags verified with =git merge-base --is-ancestor= in a blobless bare clone)
 - Non-breaking :: No local extension uses =shouldStopAfterTurn= (removed 0.87.0), constructs or exhaustively switches on =TurnEndEvent=/=ExtensionEvent= (0.87.0), registers a =context= handler (system messages hidden 0.87.0), or handles =user_bash= (fail-closed 0.86.0). Sweep: =git ls-files 'pi/extensions/**/*.ts'= grep with =registerTool= as the positive control (12 files).
-- Non-breaking :: =--no-extensions= also disables built-in extensions (0.99.0 § Changed). =oh= passes only =--model= and =--thinking= to a pi child (=subagents/config.edn= =:harnesses :pi=); both flags exist in =v1.0.0:packages/coding-agent/docs/cli.md=.
-- Favourable :: 0.99.2 § Fixed: tool schemas with =minimum=/=maximum= are sent non-strict to Anthropic. =herdr_pane= and =herdr_agent= declare =Type.Integer({ minimum: 1 })= parameters.
-- Non-breaking, caveat :: 1.0.0 § Changed: TUI defaults to fullscreen (=tuiMode=). Lifecycle is hook-authoritative (herdr-agent-state.ts) and results travel through =RESULT= files, so delegation is unaffected; raw reads of a pi child may return only visible rows (unverified live).
-- Non-breaking :: 1.0.0 § Fixed: =--provider= without =--model= now errors. =oh= never passes =--provider=.
-- Confirmed :: Codemode is upstream: =packages/codemode= (first commit =8562bcf6=, 2026-09-29), 0.99.0 § New Features, 1.0.0 § New Features "Leaner codemode", reference =packages/coding-agent/docs/codemode.md=. The 0.99.2 -> 1.0.0 diff of =packages/coding-agent/src/core/extensions/= is empty, so the installed 0.99.2 exercises the same extension layer as 1.0.0.
-- Upstream-only :: 0.86.0 § Added: =pi.on()= returns an unsubscribe function. Relevant to the README § Known gaps item on undisposed listeners in Herdr's asset; no local action because the asset is never patched locally.
+- Non-breaking :: =--no-extensions= also disables built-in extensions (0.99.0 section 'Changed'). =oh= passes only =--model= and =--thinking= to a pi child (=subagents/config.edn= =:harnesses :pi=); both flags exist in =v1.0.0:packages/coding-agent/docs/cli.md=.
+- Favourable :: 0.99.2 section 'Fixed': tool schemas with =minimum=/=maximum= are sent non-strict to Anthropic. =herdr_pane= and =herdr_agent= declare =Type.Integer({ minimum: 1 })= parameters.
+- Non-breaking, caveat :: 1.0.0 section 'Changed': TUI defaults to fullscreen (=tuiMode=). Lifecycle is hook-authoritative (herdr-agent-state.ts) and results travel through =RESULT= files, so delegation is unaffected; raw reads of a pi child may return only visible rows (unverified live).
+- Non-breaking :: 1.0.0 section 'Fixed': =--provider= without =--model= now errors. =oh= never passes =--provider=.
+- Confirmed :: Codemode is upstream: =packages/codemode= (first commit =8562bcf6=, 2026-09-29), 0.99.0 section 'New Features', 1.0.0 section 'New Features' "Leaner codemode", reference =packages/coding-agent/docs/codemode.md=. The 0.99.2 -> 1.0.0 diff of =packages/coding-agent/src/core/extensions/= is empty, so the installed 0.99.2 exercises the same extension layer as 1.0.0.
+- Upstream-only :: 0.86.0 section 'Added': =pi.on()= returns an unsubscribe function. Relevant to the README section 'Known gaps' item on undisposed listeners in Herdr's asset; no local action because the asset is never patched locally.
 
 ** Herdr 0.9.1 -> 0.9.3 (96 commits)
 - Unchanged :: =src/integration/assets/pi/herdr-agent-state.ts= has no commits in =v0.9.1..v0.9.3=; =HERDR_INTEGRATION_VERSION=9= at all three tags; the local copy is byte-identical to =v0.9.3= (positive control: it differs from =v0.9.0=).
 - Unchanged :: All 30 =herdr= verbs =herdr.clj= invokes (=status --json=, =pane split|layout|get|process-info|close|rename|list|current|read|run|send-text|send-keys|wait-output=, =tab create|list|focus=, =workspace list|create|focus=, =agent start|prompt|wait|get|list|read|send-keys|focus|rename=, =notification show=) have unchanged synopses in =cli-reference.mdx=; =agent start= still reads =[-- <agent-args...>]=. The new =-- RESUME_COMMAND...= trailer belongs to =pane report-agent= and =pane report-agent-session= (commit =2552d10=, #4687).
 - Favourable :: commit =2836010= (#3338, #3990, #3916): an agent's first task counts as done even when it started with a prompt; Pi =/new= no longer fires false done notifications; hook status survives live handoff. =oh='s settle waits already accept =idle= or =done=, so this only removes false signals. Adds optional =completion_seq= to agent responses (=src/api/schema/agents.rs=).
 - Non-breaking :: commit =8ac9542= (#4104): new panes get =TERM_PROGRAM=herdr= and lose inherited outer-terminal and Claude Code/Codex/OMP session markers *before* explicit =--env= values apply (=src/pane.rs=). =oh='s =HERDR_ORCH_*= injection goes through =--env=, so it is unaffected.
-- Non-breaking :: event subscriptions now raise =events_lost= instead of skipping (0.9.2 § Changed). =oh= polls with =agent wait=; it never subscribes.
-- Breaking upstream, irrelevant :: the pane graphics API (=pane.graphics.*=) was removed (0.9.2 § Breaking, #4561). Nothing local used it.
+- Non-breaking :: event subscriptions now raise =events_lost= instead of skipping (0.9.2 section 'Changed'). =oh= polls with =agent wait=; it never subscribes.
+- Breaking upstream, irrelevant :: the pane graphics API (=pane.graphics.*=) was removed (0.9.2 section 'Breaking', #4561). Nothing local used it.
 - Drift :: vendored =skills/herdr/SKILL.md= is pinned at =refs/tags/v0.9.1=; upstream =v0.9.3= changed one paragraph (=machine add= discovery, =machine status=, =machine reconnect=). =LICENSE= unchanged in the range.
 
 * Validation

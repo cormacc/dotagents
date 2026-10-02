@@ -979,7 +979,7 @@
         (is (= prompt (slurp prompt-file)))))))
 
 ;; Preflight reads both endpoints from `herdr status --json` and judges each against the
-;; 0.9.1 floor on its own (contract.md § Preconditions). Every refusal happens before the
+;; 0.9.1 floor on its own (contract.md section 'Preconditions'). Every refusal happens before the
 ;; ledger exists and before any mutating Herdr call; every pass costs exactly one `status`.
 (deftest preflight-fails-before-ledger-or-mutation
   (doseq [[label overrides expected] [["old client" {"FAKE_HERDR_CLIENT_VERSION" "0.9.0"} #"0\.9\.1 or newer is required; the client is 0\.9\.0"]
@@ -3378,7 +3378,7 @@
 ;; damage: `result` would resolve to the injected `HERDR_ORCH_RESULT`, so this round's
 ;; envelope would land in the child's original round file under a foreign `TASK:` -- and
 ;; publication being one-shot, that round could then never publish at all. Refuse before
-;; the write. The env-derived hand-driven publish (SKILL.md § Manual fallback) keeps working.
+;; the write. The env-derived hand-driven publish (SKILL.md section 'Manual fallback') keeps working.
 (deftest publish-refuses-an-explicit-task-that-names-no-ledger-entry
   (let [{:keys [env dir]} (fake-env {})
         entry (start-child! env dir "round one")
@@ -4887,7 +4887,7 @@
     (vec (take 4 (concat parts (repeat 0))))))
 
 (defn- contract-weight-table
-  "The weight table in contract.md § Model resolution, as {weight {:pi .. :claude .. :codex ..}}.
+  "The weight table in contract.md section 'Model resolution', as {weight {:pi .. :claude .. :codex ..}}.
   Its cells are model families (see `alias-family`), not versioned IDs."
   []
   (into {}
@@ -5018,7 +5018,7 @@
     (is (zero? (:exit proc)) (:err proc))
     (is (= ["--thinking" "high"] (:effort-args (:result (result proc)))))))
 
-;; contract.md § Model resolution states "Every packaged persona declares one": the
+;; contract.md section 'Model resolution' states "Every packaged persona declares one": the
 ;; environment-fallback tier is reachable only by a persona that declares no `model:`.
 ;; Which tier each one picks is a configuration decision, deliberately not pinned here.
 (deftest ^:serial every-packaged-persona-declares-a-model

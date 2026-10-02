@@ -58,7 +58,7 @@ Make the delegation loop's completion, progress, and handoff path observable and
 - [x] A busy-then-available pane yields a successful spawn with one child pane and one ledger entry.
 - [x] `subagent publish --artifact <relative-path>` fails before the `RESULT` file is created, reporting that the artifact path must be absolute.
 - [x] A repeat `publish` with absolute paths in the same child session then succeeds.
-- [x] `SKILL.md` § Invocation policy states the concurrency-limit protocol (at most N in flight, fan in with `collect --any`, spawn a replacement on capture) with no "waves" wording left.
+- [x] [[file:../../skills/herdr-orch/SKILL.md]] section 'Invocation policy' states the concurrency-limit protocol (at most N in flight, fan in with `collect --any`, spawn a replacement on capture) with no "waves" wording left.
 - [x] `subagent progress --summary TEXT` records one latest progress snapshot (`summary`, `reported-at`) for the injected child/task identity, and `status` / `list` expose it unchanged.
 - [x] `subagent prune <full-task-uuid>` marks one same-session, uncaptured, result-less, non-live assignment `failed` with auditable prune metadata, making it ineligible for `collect --any`.
 - [x] `collect` returns a portable Markdown `artifact-links` vector for every existence-validated artifact, preserving its purpose text.
@@ -68,7 +68,7 @@ Make the delegation loop's completion, progress, and handoff path observable and
 - [x] An `--any` capture of a `COMPLETE`/`FAILED` envelope whose child still reads `working` waits (bounded) for the child to settle before the close attempt.
 - [x] A child that settles to `idle`/`done` within that budget has its pane closed.
 - [x] The settle budget is a named default (45 000 ms) overridable via `SUBAGENT_SETTLE_CLOSE_MS`.
-- [x] `contract.md` § Fan-in documents the bounded settle-close: budget, override, and pane-retained give-up.
+- [x] [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Fan-in' documents the bounded settle-close: budget, override, and pane-retained give-up.
 
 *** Edge cases
 - [x] A `working` or `unknown` parent is waited for with a bounded `agent wait --until idle --until done` (default 30 s, `--notify-timeout` override).
@@ -137,31 +137,31 @@ Make the delegation loop's completion, progress, and handoff path observable and
   - Trimming publish's notify wait when the parent is `working`: relitigates the shipped push gate from the wrong side of the race.
 
 ** Shipped
-- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: § Ledger and completion now states that `publish` rejects a relative artifact path before the one-shot write, that `collect`'s `core/artifact-path` is the identical backstop, and that publish time checks path shape only — never existence.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: section 'Ledger and completion' now states that `publish` rejects a relative artifact path before the one-shot write, that `collect`'s `core/artifact-path` is the identical backstop, and that publish time checks path shape only — never existence.
 - `subagent publish` fails fast on a relative `--artifact` / `--from-file` artifact entry, leaving no `RESULT` and no `.tmp` sibling, so a child can correct and retry in-session.
-- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: § Preconditions now documents the `agent start` retry — which code is retried, the budget, and that no other spawn mutation is retried.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: section 'Preconditions' now documents the `agent start` retry — which code is retried, the budget, and that no other spawn mutation is retried.
 - `agent start` survives the post-split startup race: four attempts 500 ms apart on herdr code `agent_pane_busy` only.
 - ADDED `subagent collect --any [--wait --timeout MS]` :: session-scoped fan-in returning the first child to publish, plus `remaining`; outcomes `no-candidates`, `timeout`, `blocked`, `no-live-children`, `unknown-caller`.
-- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new § Fan-in (candidacy, tick structure, outcome table, known limitation).
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new section 'Fan-in' (candidacy, tick structure, outcome table, known limitation).
 - The `fake-herdr` fixture now models ≥2 concurrent children (per-child env/status/publication, populated `agent list`), unblocking every future multi-child test.
 - ADDED advisory parent push :: under `non-blocking`, a successful `publish` prompts the parent pane once (gated on settled status *and* session identity), reporting the outcome as `result.parent-push`; bounded by `--notify-timeout` (default 30 000 ms).
 - ADDED `:parent-pane` to ledger entries at allocation.
-- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: `agent wait` capability row now requires `--until`; push semantics and `--notify-timeout` documented (new § Parent push).
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: `agent wait` capability row now requires `--until`; push semantics and `--notify-timeout` documented (new section 'Parent push').
 - ADDED `subagent progress --summary TEXT` :: child-only, throttled (`SUBAGENT_PROGRESS_INTERVAL_MS`, default 60 000 ms), latest-only ledger snapshot (`:progress {:summary :reported-at}`), exposed unchanged through `status`/`list`; never a completion signal.
-- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new § Progress (identity checks, throttling, rejection cases, the ledger-race known limitation).
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new section 'Progress' (identity checks, throttling, rejection cases, the ledger-race known limitation).
 - ADDED `subagent prune <full-task-uuid>` :: ownership- and staleness-proven retirement of one orphaned assignment, marking it `:status "failed" :failure-phase "orphaned"` with `:pruned-at`/`:prune-reason` audit metadata; never closes a pane.
-- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new § Pruning; Fan-in's known-limitation paragraph now points to it.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new section 'Pruning'; Fan-in's known-limitation paragraph now points to it.
 - ADDED `core/artifact-link` :: renders each existence-validated `ARTIFACTS` item as `[escaped absolute path](Path.toUri encoded file:// URI) — escaped purpose`; advisory (declared, unvalidated) in the non-blocking publish push, existence-validated `artifact-links` on `collect`/`collect --any`, persisted on the ledger entry.
-- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new § Artifact links (portable-syntax-not-clickability-guarantee, advisory-vs-validated weight table, encoding/escaping detail).
-- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] :: § Completion and pane safety requires the parent to surface *validated* artifact links to the user after collection, distinct from the advisory publish-time list.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: new section 'Artifact links' (portable-syntax-not-clickability-guarantee, advisory-vs-validated weight table, encoding/escaping detail).
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] :: section 'Completion and pane safety' requires the parent to surface *validated* artifact links to the user after collection, distinct from the advisory publish-time list.
 - MODIFIED [[proj:skills/herdr-subagents/scripts/src/herdr_subagents/cli.clj]] :: `usage` placeholders unified to `<full-task-uuid>` for `collect`/`status`/`prune`.
 - MODIFIED [[proj:skills/herdr-subagents/SKILL.md]], [[proj:skills/herdr-subagents/scripts/README.md]], [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: each states assignment commands require the complete UUID `run`/`start` emitted, distinct from `ot`'s `:CUSTOM_ID:` prefix matching and from any org task id.
-- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] :: § Invocation policy Cardinality is now "at most N (default 2) in flight, fan in with `collect --any --wait`, replace on capture"; Waiting notes the advisory push while keeping `RESULT` as the sole completion signal. No "waves" wording remains anywhere.
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] :: section 'Invocation policy' Cardinality is now "at most N (default 2) in flight, fan in with `collect --any --wait`, replace on capture"; Waiting notes the advisory push while keeping `RESULT` as the sole completion signal. No "waves" wording remains anywhere.
 - MODIFIED [[proj:skills/herdr-subagents/README.org]] :: the known-gap bullet no longer claims fan-out has no dedicated CLI command; it now separates scheduling (parent policy) from fan-in (`collect --any`).
 - MODIFIED [[proj:skills/herdr-subagents/scripts/README.md]] :: documents `--any` and `--notify-timeout` with a fan-in example.
 - ADDED `collect --any` settle-close :: one bounded `herdr/wait!` on the captured child (gated on `COMPLETE`/`FAILED`) before the unmodified `maybe-close!`; budget `SUBAGENT_SETTLE_CLOSE_MS` (default 45 000 ms), deliberately larger than the 30 000 ms notify-push default.
-- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: § Fan-in gained the settle-close paragraph; new `SUBAGENT_SETTLE_CLOSE_MS` environment row.
-- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] :: § Completion and pane safety's self-declared "prune this note once that lands" caveat (naming this very task) replaced with the shipped bounded-settle-wait behaviour.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] :: section 'Fan-in' gained the settle-close paragraph; new `SUBAGENT_SETTLE_CLOSE_MS` environment row.
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] :: section 'Completion and pane safety''s self-declared "prune this note once that lands" caveat (naming this very task) replaced with the shipped bounded-settle-wait behaviour.
 
 ** Gotchas
 - `herdr agent wait` without `--until` matches idle, done **and blocked** — stated only in the `--help` epilogue prose, not in the flag list. The settle wait must pass `--until idle --until done` explicitly; reusing `herdr/wait!` would have let a blocked parent satisfy the wait and receive prompt text in its approval UI. Read herdr's epilogue prose whenever an omitted flag's default is load-bearing.
@@ -357,7 +357,7 @@ Coverage: 13 tests, including both advisor-caught races (`prune-refuses-when-rec
 ** Advisory progress reporting (task 108792ca)
 `progress!` checks in order: injected `HERDR_SUBAGENT_CHILD`/`_TASK`/`_RESULT` present, the entry's `:child` equals the injected child (never a stray/foreign update), the entry's own `:result` (not the injected env value) does not yet exist on disk, no `:captured-at`, `:status` not terminal (`failed`/`invalid`) — then throttles against `:progress :reported-at` via `SUBAGENT_PROGRESS_INTERVAL_MS`. Throttled is a non-`ledger/update!` no-op (`{:status "throttled" :progress previous}`); an accepted report overwrites the single `:progress` snapshot in place. No herdr call anywhere in the path, so no fixture change was needed. An advisor consult caught two gaps before publish: the RESULT-exists guard must key off the ledger entry's own `:result`, not the injected env (which a caller could mismatch), and `:reported-at` parsing needed defensive handling (unparseable or negative-elapsed treated as stale-so-proceed, never a crash or an under-throttle).
 
-Known limitation, documented in `contract.md` § Progress: `ledger/update!` has no compare-and-swap, so a child's `progress` write racing a concurrent parent `capture!`/`record-session!` on the same entry can lose one side's update. Bounded and recoverable (worst case, a dropped `:captured-at` just re-enters `collect --any` candidacy for a harmless re-parse of the already-published `RESULT`); not worth ledger locking.
+Known limitation, documented in `contract.md` section 'Progress': `ledger/update!` has no compare-and-swap, so a child's `progress` write racing a concurrent parent `capture!`/`record-session!` on the same entry can lose one side's update. Bounded and recoverable (worst case, a dropped `:captured-at` just re-enters `collect --any` candidacy for a harmless re-parse of the already-published `RESULT`); not worth ledger locking.
 
 `bb test`: 380 / 2024 green at hand-off (further isolated runs by the concurrent sibling worker briefly showed unrelated failures from its own in-progress writes to shared test files; both authors' final `bb test` runs were independently green once each had landed).
 

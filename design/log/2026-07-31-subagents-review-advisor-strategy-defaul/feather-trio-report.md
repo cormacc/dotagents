@@ -17,7 +17,7 @@ cell I as the light no-advisor reference line.
 | — | — | — | — | — | — | — | — | — | — |
 | I | light | none | **34/34** | **$1.5185** | $1.5185 | – | **378.5s** | 1.67M | n/a |
 
-† Cell E's advisor cost is **not in the ledger** — see §3. Its ledger-reported
+† Cell E's advisor cost is **not in the ledger** — see [#3. Cell E bypassed the delegation CLI entirely](#3-cell-e-bypassed-the-delegation-cli-entirely). Its ledger-reported
 total was $1.2769, understating true spend by 2.3x.
 
 Every cell scored 34/34, including `performance` 2/2, with clean sweeps across all

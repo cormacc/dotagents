@@ -10,14 +10,14 @@ Note: This skill is a session-learning workflow. It is not the retrospective wor
 
 ## Threshold
 
-Offer one retro without a request only when both of these conditions are true: a substantive session is at its end, and the scan in § 1 finds repeated corrections or increased friction. Task completion is not a signal by itself. The closure of a change record is not a signal by itself.
+Offer one retro without a request only when both of these conditions are true: a substantive session is at its end, and the scan in [#1. Detect signals](#1-detect-signals) finds repeated corrections or increased friction. Task completion is not a signal by itself. The closure of a change record is not a signal by itself.
 
 If the session had fewer than approximately five substantive exchanges, tell the user that the session is unlikely to hold durable lessons. Then skip the retro, unless the user insists.
 
 **Non-interactive equivalent.** A delegated session receives one assignment prompt. Any other non-interactive session also receives one assignment prompt. Therefore the count of exchanges does not measure such a session. Instead, a session is substantive in either of these two conditions:
 
 - The session did multi-step tool work that needed diagnosis or correction.
-- The session hit any signal in § 1 at all.
+- The session hit any signal in [#1. Detect signals](#1-detect-signals) at all.
 
 If the session meets neither condition, write nothing. Silence is the correct outcome. A failed retro is not the correct outcome.
 
@@ -27,7 +27,7 @@ If the session delegated work through [`herdr-orch`](../herdr-orch/SKILL.md), us
 
 A child does steps 1 and 2 only. You keep steps 3 to 6. Therefore you route, deduplicate, and persist the candidates of the child yourself.
 
-A candidate is testimony from an agent that scans itself. Bound that verification with the Class B probe policy of [`herdr-orch`](../herdr-orch/SKILL.md) (§ Trusting a result). Do a maximum of 3 targeted checks for each candidate before it reaches the table in § 2. If a probe cannot settle a claim, attribute the claim to the child. Do not adopt the claim as correct. Let near-duplicate candidates from a fan-out collapse into single rows.
+A candidate is testimony from an agent that scans itself. Bound that verification with the Class B probe policy of [`herdr-orch`](../herdr-orch/SKILL.md) (section 'Trusting a result'). Do a maximum of 3 targeted checks for each candidate before it reaches the table in [#2. Classify](#2-classify). If a probe cannot settle a claim, attribute the claim to the child. Do not adopt the claim as correct. Let near-duplicate candidates from a fan-out collapse into single rows.
 
 You keep the verification and the persistence. A child never routes its own candidate. A child never files its own candidate.
 

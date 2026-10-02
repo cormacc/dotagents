@@ -69,7 +69,7 @@ Exactly four, name-matched case-sensitively:
 |---|---|---|
 | `SUM` | 1+ | Adds all numeric values among its arguments. **Silently skips strings and empty cells.** |
 | `COUNT` | 1+ | Counts arguments that resolve to numbers. Strings and empty cells count 0. |
-| `IF` | exactly 3 | `IF(cond, then, else)` — see §7. |
+| `IF` | exactly 3 | `IF(cond, then, else)` — see [#7. Strict `IF` — both branches always evaluate](#7-strict-if--both-branches-always-evaluate). |
 | `CONCAT` | 1+ | Joins arguments as text. Numbers render integrally when integral (`3`, not `3.0`), otherwise as their decimal form (`3.5`). Empty cells render as `""`. |
 
 Wrong arity for any of these is a malformed formula. An unknown function name is

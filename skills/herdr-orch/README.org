@@ -29,7 +29,7 @@ A harness-agnostic orchestration framework for agent-assisted development. Subag
 
 My own use is predominantly human-in-the-loop and low-fanout -- subagents for context and token-cost management rather than parallel development by swarms. That is preference, not prescription: the skill is written so other orchestration models can be built on top of it with appropriate persona definitions.
 
-Developed primarily against =pi=, and verified against =claude code= and =codex=. Additional harnesses are configurable (§ Harness configuration). Scripts written in babashka (clojure).
+Developed primarily against =pi=, and verified against =claude code= and =codex=. Additional harnesses are configurable ([[*Harness configuration]]). Scripts written in babashka (clojure).
 
 
 * Subagent lifecycle
@@ -43,7 +43,7 @@ The parent owns both ends of a round: it decides where the child works, and it o
 
 Integration is the parent's work. =oh= never merges, rebases, pushes, deletes a branch, or commits in the shared checkout. Isolation keeps concurrent writers out of each other's index, but it does not prove their edits compose, so the parent still remeasures the combined tree. Retained =orch/*= branches accumulate until the parent integrates or deletes them.
 
-[[file:scripts/docs/contract.md][contract.md]] owns the mechanics: § Worktree reconciliation and teardown for the reconciliation shape, the removal guards, and recovery when =.tmp/= was cleared before a child published, and § Close for the closure guards.
+[[file:scripts/docs/contract.md][contract.md]] owns the mechanics: section 'Worktree reconciliation and teardown' for the reconciliation shape, the removal guards, and recovery when =.tmp/= was cleared before a child published, and section 'Close' for the closure guards.
 
 
 
@@ -52,7 +52,7 @@ Integration is the parent's work. =oh= never merges, rebases, pushes, deletes a 
 ** Requirements
 
 - [[https://babashka.org][babashka]] on =PATH= -- the =oh= CLI is Clojure/babashka.
-- The =herdr= binary at 0.9.1 or newer, with a running Herdr server at 0.9.1 or newer, and =HERDR_ENV=1= in the environment (i.e. running inside a Herdr pane). =oh= preflight reads both versions from =herdr status --json= and refuses an older or unknown endpoint before it allocates anything ([[file:scripts/docs/contract.md][contract.md]] § Preconditions).
+- The =herdr= binary at 0.9.1 or newer, with a running Herdr server at 0.9.1 or newer, and =HERDR_ENV=1= in the environment (i.e. running inside a Herdr pane). =oh= preflight reads both versions from =herdr status --json= and refuses an older or unknown endpoint before it allocates anything ([[file:scripts/docs/contract.md]] section 'Preconditions').
 - Optional: the =org-plan= and =org-tasks= skills in this repository complement it but are not required.
 
 Herdr itself is the authority for direct pane and agent operations. The [[https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md][upstream Herdr skill]] is vendored here at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]] for convenience, but the CLI path does not need it, so standalone installs work without it.
@@ -73,11 +73,11 @@ Three discovery chains resolve project > home > packaged:
 | Trait fragments (=<name>.md= or =<name>/prompt.md=) | =<git-root>/.agents/traits/=, =~/.agents/traits/=, this skill's =traits/= |
 | Model and harness config (=config.edn=) | =<git-root>/.agents/subagents/=, =~/.agents/subagents/=, this skill's =subagents/= |
 
-They differ in how they combine. A persona definition *shadows* atomically by name -- the highest-precedence file wins outright. A trait also shadows by name; within one layer, =<name>.md= wins over =<name>/prompt.md=. =config.edn= files are *merged* (§ Model configuration).
+They differ in how they combine. A persona definition *shadows* atomically by name -- the highest-precedence file wins outright. A trait also shadows by name; within one layer, =<name>.md= wins over =<name>/prompt.md=. =config.edn= files are *merged* ([[*Model configuration]]).
 
 =~/.agents/subagents/= is reserved for genuine home overrides. Packaged definitions are never projected into it. A missing override file is ignored. A missing packaged =config.edn= is fatal.
 
-Assignment state (ledger, result files) lives under =<assignment-root>/.tmp/herdr-orch/=, never =.agents/= -- see [[file:design.org][design.org]] § Where assignment state lives for why that matters.
+Assignment state (ledger, result files) lives under =<assignment-root>/.tmp/herdr-orch/=, never =.agents/= -- see [[file:design.org::*Where assignment state lives]] for why that matters.
 
 ** Defining subagents
 
@@ -101,9 +101,9 @@ retro: false        # omit to use the installation default
 
 Every key above is optional. Omitting =kind= is usually right: the child then inherits the harness Herdr measured for the parent. =kind= is the *only* place a harness is chosen -- no flag, no env var -- because which CLI a child runs is a deployment property, not a per-assignment dial like =model=. A cross-harness comparison is a definition declaring the other harness.
 
-A definition may also declare =extends: <base-name>=, resolved through the same three layers, to compose one base body before its own -- =base-analyst= (packaged, read-only, a leaf by default) is the shipped base for a concrete analysis persona to extend rather than re-declaring its assignment/evidence/uncertainty scaffold. One level only: a base that itself declares =extends:= is refused. See [[file:scripts/docs/contract.md][contract.md]] § Persona composition for the resolution and merge rules.
+A definition may also declare =extends: <base-name>=, resolved through the same three layers, to compose one base body before its own -- =base-analyst= (packaged, read-only, a leaf by default) is the shipped base for a concrete analysis persona to extend rather than re-declaring its assignment/evidence/uncertainty scaffold. One level only: a base that itself declares =extends:= is refused. See [[file:scripts/docs/contract.md]] section 'Persona composition (`extends`)' for the resolution and merge rules.
 
-The shipped roster is =scout=, =researcher=, =planner=, =reviewer=, =worker=, =advisor=, =visual-tester=, and =base-analyst= ([[file:SKILL.md][SKILL.md]] § Roster and routing owns each one's remit and delegation grant).
+The shipped roster is =scout=, =researcher=, =planner=, =reviewer=, =worker=, =advisor=, =visual-tester=, and =base-analyst= ([[file:SKILL.md]] section 'Roster and routing' owns each one's remit and delegation grant).
 
 ** Shared directives: traits
 
@@ -155,7 +155,7 @@ Rules worth knowing before you write one:
 - Substitution is single-pass: text inserted from a fragment is not rescanned, so fragments cannot reference each other.
 - A persona with no tokens is untouched -- no composed file, and its own path is passed through.
 
-Metadata selections compose base body first when the persona also =extends:=, then its own. A name already used inline keeps that one occurrence rather than gaining a second copy, and an inline repeat still fails where a metadata repeat is deduplicated. A spawn's own repeatable =--trait NAME= adds to the same deduplicated set, and a selected name outside the =%<name>= grammar is refused before any ledger or pane mutation rather than silently dropped. See [[file:scripts/docs/contract.md][contract.md]] § Trait composition for the merge and precedence rules, and [[file:references/traits.md][references/traits.md]] for the admission bar a new trait has to clear.
+Metadata selections compose base body first when the persona also =extends:=, then its own. A name already used inline keeps that one occurrence rather than gaining a second copy, and an inline repeat still fails where a metadata repeat is deduplicated. A spawn's own repeatable =--trait NAME= adds to the same deduplicated set, and a selected name outside the =%<name>= grammar is refused before any ledger or pane mutation rather than silently dropped. See [[file:scripts/docs/contract.md]] section 'Trait composition' for the merge and precedence rules, and [[file:references/traits.md][references/traits.md]] for the admission bar a new trait has to clear.
 
 A trait is not free. Every child carrying one reads it in full, so the bar is a directive genuinely shared by two or more personas, not a stylistic preference. Worth testing that a directive changes behaviour before shipping it: two of the three traits that predate =simple= failed an adversarial check on first writing, and had to be rewritten to address the *cause* of the unwanted behaviour rather than restate the prohibition.
 
@@ -170,7 +170,7 @@ The idea is borrowed from [[https://github.com/xificurC/ai-behaviors][ai-behavio
 - =:aliases= -- short or weight name → canonical model ID.
 - =:models= -- canonical ID → the native spelling each harness wants.
 
-Canonical IDs use pi's =<provider>/<model>= form. The packaged defaults cover the models available on Anthropic and OpenAI subscriptions, with =heavy=, =middle=, =light=, and =feather= as the portable weight aliases. Their per-kind values are enumerated once, in [[file:scripts/docs/contract.md][contract.md]] § Model resolution.
+Canonical IDs use pi's =<provider>/<model>= form. The packaged defaults cover the models available on Anthropic and OpenAI subscriptions, with =heavy=, =middle=, =light=, and =feather= as the portable weight aliases. Their per-kind values are enumerated once, in [[file:scripts/docs/contract.md]] section 'Model resolution'.
 
 *** The merge rule that catches people
 
@@ -209,7 +209,7 @@ There is no =:pi= column, and adding one would be redundant: an ID with no match
 
 =:harnesses= says how a resolved kind is invoked. =:model-flag= is required in every entry, including an entry you add only to attach =:extra-args=, because the level replaces wholesale. =:effort-flag= is optional; an entry without it receives no effort args.
 
-=:extra-args= exists so an override can relax a harness's interactive command approval: without it, claude and codex children stall at their first tool call in a pane nobody is watching. Prefer a bounded grant to a blanket bypass -- the live home override at [[file:../../subagents/config.edn][subagents/config.edn]] records the reasoning and the rejected alternatives, and [[file:scripts/docs/contract.md][contract.md]] § Harness =:extra-args= gives the validation rules.
+=:extra-args= exists so an override can relax a harness's interactive command approval: without it, claude and codex children stall at their first tool call in a pane nobody is watching. Prefer a bounded grant to a blanket bypass -- the live home override at [[file:../../subagents/config.edn][subagents/config.edn]] records the reasoning and the rejected alternatives, and [[file:scripts/docs/contract.md]] section 'Harness `:extra-args`' gives the validation rules.
 
 The kind set is open on the config side: adding a =:harnesses= entry for a new kind needs no code change, and a kind with no entry simply receives no model arguments.
 
@@ -228,7 +228,7 @@ Upstream support is required at *both* ends of a delegation, which is stricter t
 - *As a child*, the kind must be startable: =oh= spawns via =herdr agent start --kind=, which not only launches the executable but verifies it was *detected* in the pane. A harness absent from the enum cannot be spawned however it is configured, and shadowing a supported kind's executable on =PATH= does not work -- detection fails rather than mis-registering.
 - *As the orchestrator*, the kind must be registered too. Every caller-identity command (=task run=/=start=, =collect --any=, =prune=) runs =agent get= on =$HERDR_PANE_ID=. From a pane hosting an unrecognised process that fails with =agent_not_found=, so an unsupported harness cannot drive delegation at all, only be driven.
 
-What survives without registration is publication and capture: =task publish= degrades open rather than refusing, because an unresolvable caller owns nothing, and =task collect <full-task-uuid>= swallows its own identity probes, downgrading the capture to ="ownership": "foreign-parent-session"= rather than failing it. [[file:scripts/docs/contract.md][contract.md]] § Preconditions enumerates which commands resolve caller identity and how each degrades. So an unsupported harness can be hand-launched into a =pane split --env …= pane and still return a valid, publishable result. Treat that as a manual fallback, not a supported path: such a child is invisible to =agent list=, so it is excluded from =collect --any= and, more dangerously, satisfies =prune='s staleness proof while still working.
+What survives without registration is publication and capture: =task publish= degrades open rather than refusing, because an unresolvable caller owns nothing, and =task collect <full-task-uuid>= swallows its own identity probes, downgrading the capture to ="ownership": "foreign-parent-session"= rather than failing it. [[file:scripts/docs/contract.md]] section 'Preconditions' enumerates which commands resolve caller identity and how each degrades. So an unsupported harness can be hand-launched into a =pane split --env …= pane and still return a valid, publishable result. Treat that as a manual fallback, not a supported path: such a child is invisible to =agent list=, so it is excluded from =collect --any= and, more dangerously, satisfies =prune='s staleness proof while still working.
 
 ** Child placement
 
@@ -250,7 +250,7 @@ Resolution order, highest first:
 
 The code fallback stays ="split"= deliberately, and is *not* kept in step with the shipped value. It fires only when the merged config declares no =:placement= at all. The packaged file always declares one, because a missing packaged =config.edn= is fatal. For that degraded case a split is the conservative answer, because it needs no =HERDR_WORKSPACE_ID=. Changing the product default is therefore a one-line edit to [[file:subagents/config.edn][subagents/config.edn]], not a code change.
 
-Placement is resolved per spawn and never inherited: it is not persisted per child, carried in the child's environment, or consulted by that child's own spawns. The ledger entry records the resolved =:placement= (="split"= or ="tab"=) and =:tab-id= for audit only. See [[file:scripts/docs/contract.md][contract.md]] § Placement for the mechanical detail.
+Placement is resolved per spawn and never inherited: it is not persisted per child, carried in the child's environment, or consulted by that child's own spawns. The ledger entry records the resolved =:placement= (="split"= or ="tab"=) and =:tab-id= for audit only. See [[file:scripts/docs/contract.md]] section 'Placement' for the mechanical detail.
 
 ** Verifying a configuration change
 
@@ -266,9 +266,9 @@ The preview reports =kind=, the resolved (pre-alias) =model=, its post-alias =mo
 
 * Known gaps
 
-- The CLI implements one child per invocation for =run=/=start=. Multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] -- no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md][contract.md]] § Fan-in) captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself. Concurrent writers likewise get checkout isolation (§ Subagent lifecycle), but how many run at once remains the parent's decision.
+- The CLI implements one child per invocation for =run=/=start=. Multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] -- no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md]] section 'Fan-in') captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself. Concurrent writers likewise get checkout isolation ([[*Subagent lifecycle]]), but how many run at once remains the parent's decision.
 - =task close= settle-waits (bounded by =ORCH_SETTLE_CLOSE_MS=, default 45 s) before its single close attempt, but a child that never settles inside that budget still retains its pane -- closure is one attempt, never retried. Capture never closes anything.
-- =close= refuses a foreign or unresolvable parent identity, so an orphaned child whose owning session has ended is not closable through it. =oh task orphans= lists such panes and =oh task orphans --close= sweeps them, under the same live child+pane match =close= uses (see [[file:scripts/docs/contract.md][contract.md]] § Orphans). Both forms are root-only and the operator supplies the judgement that a foreign session is a dead one.
+- =close= refuses a foreign or unresolvable parent identity, so an orphaned child whose owning session has ended is not closable through it. =oh task orphans= lists such panes and =oh task orphans --close= sweeps them, under the same live child+pane match =close= uses (see [[file:scripts/docs/contract.md]] section 'Orphans'). Both forms are root-only and the operator supplies the judgement that a foreign session is a dead one.
 - The advisor-tier convention holds only for a worker that consults through =oh task run advisor=. A worker that hand-rolls a consult with raw =herdr agent start= silently inherits the default model, spends money that never appears in the ledger, and orphans the pane, so ledger consult counts and advisor costs are a floor rather than the truth.
 - =HERDR_ORCH_BIN= intentionally carries the deployed absolute path rather than a canonical repository path. Launcher-matrix coverage is its guard.
 - The Pi state integration =pi/extensions/herdr-agent-state.ts= is a verbatim copy of Herdr's managed asset (=src/integration/assets/pi/herdr-agent-state.ts=, integration revision 9, commit =065ef9d6a531c49fb8bee7e818ef837065b21ee9=). Reinstalling the integration overwrites it, so it is never patched locally; its checks live beside it in =pi/extensions/test/herdr-agent-state.test.ts= and drive it only through a disposable socket. Refreshing it fixed the RPC gate (=ctx.mode=, not =hasUI=) and nothing more: the blocked state still arrives over the =herdr:blocked= bus topic rather than Pi's native =ui_prompt_start=/=ui_prompt_end= events, and the listeners it registers are never disposed on reload. Both are upstream work, tracked as a separate proposal from [[file:../../design/log/2026-09-17-herdr-orch-improvements-260917.org][herdr-orch improvements 260917]].

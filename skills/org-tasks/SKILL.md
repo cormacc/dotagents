@@ -28,7 +28,7 @@ The field-level contract lives in `references/protocol.md`; load it when repairi
 - `#+IMPORT:` links change-records/imported task files. Canonical plan imports use `[[plan:file.org]]` via the `#+LINK: plan` template, which is defined locally in `TASKS.org`/`TASKS.archive.org` (repo-root), not in `TASKS.setup.org`. `#+LINK: proj` (dual-defined: `./` from the task file, `../../` from a record via setup) is a generic repo-root path link for referencing specs/source from records.
 - `#+SELECTED:` in gitignored `TASKS.local.org` stores the local active task. Empty or absent means no selection.
 - `:BLOCKED-BY:` / `:BLOCKED-BY+:`, `:HANDOFF:`, and `:LINKED_ISSUES:` are protocol fields managed by `ot blocker`, `ot ready`, `ot handoff`, and `ot issue`; write task blockers as explicit `task:<UUID>` (bare full UUIDs remain compatible legacy task references).
-- `#+SPEC:` is a single optional keyword naming relevant specification docs as bare `[[proj:PATH]]` links: in `TASKS.org` it declares repo-wide discovery roots, in change-records it lists task-relevant specs (opt out with `#+NO_SPEC: true`). The discovery model is owned by `../org-plan/SKILL.md` § Spec discovery (`#+SPEC:`); the `ot doctor` findings (`spec-untouched`, `spec-value-malformed`, `spec-path-dangling`) and `TASKS.org`-only validation are documented in `references/ot-cli.md` § Spec keyword and checks.
+- `#+SPEC:` is a single optional keyword naming relevant specification docs as bare `[[proj:PATH]]` links: in `TASKS.org` it declares repo-wide discovery roots, in change-records it lists task-relevant specs (opt out with `#+NO_SPEC: true`). The discovery model is owned by [../org-plan/SKILL.md#Spec discovery (`#+SPEC:`)](../org-plan/SKILL.md#spec-discovery-spec); the `ot doctor` findings (`spec-untouched`, `spec-value-malformed`, `spec-path-dangling`) and `TASKS.org`-only validation are documented in [references/ot-cli.md#Spec keyword and checks](references/ot-cli.md#spec-keyword-and-checks).
 - Do not hard-wrap. In every org file this protocol manages (`TASKS*.org` and `#+IMPORT:`-linked change-records), keep each paragraph and each list item as a single logical line (soft-wrap); preserve real line breaks only in headings, drawers, keywords, tables, and src/example blocks. Never reflow to a fixed column such as 80.
 - A scripted line-prefix rewrite over a task subtree must exclude `:PROPERTIES:` and `:LOGBOOK:` drawers, whose entries also begin with `- `. A regex such as `(?m)^- ` will silently rewrite logged state transitions along with the list items you meant to touch, and a small edit is no safer than a large one.
 
@@ -89,7 +89,7 @@ Install and local development: `scripts/README.md`.
 - There is no `ot` mutator for a task or subtask's body prose. Editing that prose in place and verifying with `ot show <id>` plus `ot doctor` is the sanctioned route, not a protocol violation -- do not search for a verb that does not exist, and do not reach for `ot create` to replace a task whose body needs a correction.
 - A task body's source citations are a snapshot of when it was written. Before treating a stored body as a baseline, re-verify the symbols, paths, and line numbers it names: a task can outlive the function it cites, and a stale citation sends the next reader after code that no longer exists.
 - A stored body's stated constraints age the same way. Confirm the motivation of a load-bearing constraint with the requester before you design mechanism for it; a constraint that was real when written may have lapsed.
-- When writing that body, cite a stable symbol, heading, or path rather than a bare line number, exactly as [`org-plan`](../org-plan/SKILL.md) § Body discipline requires of plan-task bodies -- the next edit above the citation invalidates it. `contract.md line 149` became line 150 within the same session that wrote the citation, and an earlier task recorded every line number in its body having drifted before its work began.
+- When writing that body, cite a stable symbol, heading, or path rather than a bare line number, exactly as [../org-plan/SKILL.md#Body discipline](../org-plan/SKILL.md#body-discipline) requires of plan-task bodies -- the next edit above the citation invalidates it. `contract.md line 149` became line 150 within the same session that wrote the citation, and an earlier task recorded every line number in its body having drifted before its work began.
 - Regroup existing tasks with `ot move <id> --parent <dest-id>` / `--section <name>` rather than hand-editing or scripting org surgery; it preserves IDs, lifecycle metadata, descendants, and file locality. Moves are in-file only -- use `ot publish`/`ot unpublish` to change locality and `ot unarchive` before moving an archived task.
 - Keep `TASKS.org` high-level. Put detailed checklists, implementation history, and acceptance criteria in linked change-records.
 - Add discovered work as new `TODO` tasks rather than burying it in prose.
@@ -101,7 +101,7 @@ Bootstrap new projects with `ot init`. If `ot` is unavailable, use `references/b
 
 ## Interactive TUI
 
-Bare `ot` on an interactive terminal opens a standalone task-browser TUI: task tree with status/priority colouring, a details pane (beside the tree, or stacked below it on narrow/portrait terminals), and keybindings for all the common mutations. On exit it prints the selected-task envelope to stdout. Full key map and behaviour: `references/ot-cli.md` § Interactive TUI.
+Bare `ot` on an interactive terminal opens a standalone task-browser TUI: task tree with status/priority colouring, a details pane (beside the tree, or stacked below it on narrow/portrait terminals), and keybindings for all the common mutations. On exit it prints the selected-task envelope to stdout. Full key map and behaviour: [references/ot-cli.md#Interactive TUI](references/ot-cli.md#interactive-tui).
 
 The TUI needs no harness integration -- it is the interactive surface for humans and for agents/harnesses without a dedicated extension. Both task UIs bind `D` to removal through `ot remove`: the standalone TUI previews impact and arms a second `D` on the same cursor task, while the pi overlay uses its modal confirmation. The `D` flow prunes reported inbound blockers on confirmed removal; neither UI has a separate blocker-prune key.
 
@@ -113,7 +113,7 @@ The TUI needs no harness integration -- it is the interactive surface for humans
 - Use `CANCELLED` for intentionally abandoned work.
 - Reopening from `DONE`/`CANCELLED` clears current `CLOSED:` but preserves historical LOGBOOK entries.
 - When child plan work advances, parent status should remain meaningful. `ot status` auto-promotes TODO ancestors when a child starts.
-- Before closing a top-level task, refresh/prune the linked change-record per `org-plan` § Closure-time refresh and prune.
+- Before closing a top-level task, refresh/prune the linked change-record per [../org-plan/SKILL.md#Closure-time refresh and prune](../org-plan/SKILL.md#closure-time-refresh-and-prune).
 
 ## Change-records
 

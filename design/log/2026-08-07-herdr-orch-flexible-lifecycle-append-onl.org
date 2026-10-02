@@ -22,7 +22,7 @@ Replace the one-shot publish with an append-only stream of immutable result item
 - Publish refusal rules replacing the physical one-shot protection: sealed round (a validated terminal item exists among the *published* items, captured or not), closed round (`:closed-at`), superseded round (newer round names the child). Refusal precedence is superseded > sealed > closed, so the `:newer-task` remedy survives.
 - Per-item consumption: `collect`/`collect --any`/`run --wait`/`collect --wait` return the oldest unconsumed item; per-item capture state on the ledger entry.
 - Guard generalisation through one shared stream-state function (published/captured/sealed) consumed by `close`, `close --settled`, `orphans`, `continue`, `prune`, `compact`, `collect --any` candidacy, and the publish discharge guard.
-- Deletion of `oh task progress`: verb, `:progress` ledger field, prompt clause, contract.md § Progress, SKILL.md and persona references; throttle env var renamed and repointed at WAITING publishes.
+- Deletion of `oh task progress`: verb, `:progress` ledger field, prompt clause, contract.md section 'Progress', SKILL.md and persona references; throttle env var renamed and repointed at WAITING publishes.
 - Docs: contract.md, SKILL.md, scripts/README.md, CLI usage string, packaged persona guidance.
 - Tests: `bb test` matrix over single-item and multi-item rounds; fake-herdr scenarios; smoke update.
 
@@ -47,7 +47,7 @@ Replace the one-shot publish with an append-only stream of immutable result item
 - [X] A capture result states terminality explicitly, so a WAITING capture is unambiguously non-final.
 - [X] `close` and `continue` require every published item captured, plus the unchanged ownership/newest-round/liveness/settle guards.
 - [X] A round whose only item is terminal behaves as today across `run`/`collect`/`close`/`continue`/`prune`/`compact`.
-- [X] `oh task progress` is removed: verb, `:progress` ledger field, composed-prompt clause, contract.md § Progress, SKILL.md references.
+- [X] `oh task progress` is removed: verb, `:progress` ledger field, composed-prompt clause, contract.md section 'Progress', SKILL.md references.
 - [X] The renamed publish throttle applies to WAITING items only; a terminal item is never throttled.
 - [X] A WAITING publish emits the operator toast only -- no advisory parent push; terminal publish side-effects are unchanged.
 - [X] Existing personas and the manual-fallback publish need no change: a single terminal envelope with no `WAITING` anywhere remains fully valid.
@@ -82,7 +82,7 @@ Replace the one-shot publish with an append-only stream of immutable result item
 - WAITING side-effects are toast-only and throttled :: a chatty monitor must not prompt-spam the parent agent; the parent polls or collects when it cares. Terminal side-effects (toast + advisory push under non-blocking) are unchanged.
 
 ** Shipped
-- MODIFIED `scripts/docs/contract.md` :: § Ledger and completion rewritten around item streams, sealing, and the refusal rules; § Progress deleted; § Fan-in, § Close, § Continue, § Retention updated.
+- MODIFIED `scripts/docs/contract.md` :: section 'Ledger and completion' rewritten around item streams, sealing, and the refusal rules; section 'Progress' deleted; section 'Fan-in', section 'Close', section 'Continue', section 'Retention' updated.
 - MODIFIED `SKILL.md`, `scripts/README.md`, `README.org`, and the `worker`/`planner` personas :: stream model, the WAITING reporting convention, and "validated terminal result" wherever the wording denoted completion.
 - ADDED `ORCH_WAITING_INTERVAL_MIN_MS` and `ORCH_MAX_STREAM_ITEMS`; REMOVED `ORCH_PROGRESS_INTERVAL_MS`.
 - REMOVED `oh task progress` and the `:progress` ledger field, with no alias or shim.
@@ -219,7 +219,7 @@ CLOSED: [2026-08-07 Fri 20:14]
 - State "DONE" from "STARTED" [2026-08-07 Fri 20:14]
 :END:
 Acceptance criteria:
-- contract.md rewrites § Ledger and completion (item streams, seal, refusal rules), deletes § Progress, and updates § Fan-in, § Close, § Continue, § Retention accordingly.
+- contract.md rewrites section 'Ledger and completion' (item streams, seal, refusal rules), deletes section 'Progress', and updates section 'Fan-in', section 'Close', section 'Continue', section 'Retention' accordingly.
 - SKILL.md and scripts/README.md describe the stream model; completion wording is "validated terminal result" everywhere it was "validated result".
 - Packaged persona guidance reflects the WAITING reporting convention.
 - The fake-herdr test suite exercises a multi-item round end to end (WAITING then terminal); the live smoke gains or updates a stream scenario.

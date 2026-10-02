@@ -40,7 +40,7 @@ Browsable catalogues such as https://skills.sh/ rank skills by installs and are 
 - `--scope user` installs to the home directory for every project; `--scope project` installs inside the current repository.
 - `--dir <path>` overrides both and writes exactly where you say.
 
-Prefer `--dir` whenever the target matters. In this repository the home skills directory is a symlink into a git tree, so a `--scope user` install writes into version control by surprise; `skills/README.org` § Vendored owns that path and the `--dir skills/` convention for it.
+Prefer `--dir` whenever the target matters. In this repository the home skills directory is a symlink into a git tree, so a `--scope user` install writes into version control by surprise; [../README.org#Vendored](../README.org#vendored) owns that path and the `--dir skills/` convention for it.
 
 ## Pinning
 

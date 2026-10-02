@@ -6,7 +6,7 @@ Date: 2026-08-18. Auditor: the worker session for task 4d98c102.
 
 Each run was a fresh, non-interactive `claude -p` session (claude-opus-5 for all three runs, from each result envelope's `modelUsage`). Flags, verified against `claude --help` first: `--disable-slash-commands` (disables all skills), `--allowedTools "Read,Write"`, `--disallowedTools "Task,Bash,Glob,Grep,WebFetch,WebSearch"`, `--session-id <uuid>`, `--output-format json`, prompt on stdin. The first harness choice, `pi --print`, was abandoned: Anthropic refused every new headless pi session with a third-party extra-usage error while `pi auth check` reported `ready` and no other provider was authenticated.
 
-The `home/AGENTS.md` § ASD-STE100 block was removed before the first run and git-restored after the last run. `~/.pi/agent/AGENTS.md` and the `~/.claude/CLAUDE.md` import both resolve to that live file, so the removal covered the sessions. Verified during the removal window: `grep -c ASD-STE100` on the resolved file returned 0 while the positive control `grep -c 'British English'` returned 2.
+The `home/AGENTS.md` section 'ASD-STE100' block was removed before the first run and git-restored after the last run. `~/.pi/agent/AGENTS.md` and the `~/.claude/CLAUDE.md` import both resolve to that live file, so the removal covered the sessions. Verified during the removal window: `grep -c ASD-STE100` on the resolved file returned 0 while the positive control `grep -c 'British English'` returned 2.
 
 ## Per-session tool-call audit
 

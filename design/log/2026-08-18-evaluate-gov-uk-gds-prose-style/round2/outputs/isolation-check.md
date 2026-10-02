@@ -17,7 +17,7 @@ changes only the output format, not tool availability, skill loading, or
 context-file discovery, so it does not touch any control `harness.md`
 verified.
 
-The `home/AGENTS.md` § ASD-STE100 block was removed before the first run
+The `home/AGENTS.md` section 'ASD-STE100' block was removed before the first run
 and git-restored byte-identical after the last run (`git diff --
 home/AGENTS.md` empty). Verified during the removal window: `grep -c
 ASD-STE100 home/AGENTS.md` returned 0, while the positive control `grep -c

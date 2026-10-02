@@ -205,7 +205,7 @@ Acceptance criteria:
 - README notes that the primitive currently lives in the tasks extension for
   packaging convenience but is generically org-shaped, and points at the
   planned extraction (TASKS.org task =f361c429=).
-- Cross-references =org-tasks= § *Resuming and agent memory* read order so
+- Cross-references [[file:../../skills/org-tasks/SKILL.md]] section 'Resuming and agent memory' read order so
   readers understand why the primitive exists.
 - Notes the literal-file-only scope and points at the future
   =tasks_resume_brief= tool as the composer for =#+IMPORT:= chains.

@@ -21,13 +21,13 @@ Post-closure correction: Pi now receives the direct provider-qualified roster va
 - Canonical model-ID → per-harness-syntax lookup table externalised as EDN, applied to the resolved model at spawn time (frontmatter, `--model` flag, and same-kind parent inheritance all flow through it).
 - Default table ships at `skills/herdr-subagents/subagents/roster.edn`; local overrides at `<git-root>/.agents/subagents/roster.edn` then `~/.agents/subagents/roster.edn` (project wins, mirroring persona resolution), merged per model-ID over the default.
 - Path resolution is pinned per deployment mode: the default table resolves relative to the installed skill/launcher location (bare-subtree installs included), and the project override resolves under `ledger/assignment-root` (the existing `SUBAGENT_ASSIGNMENT_ROOT` relocation semantics), never a fresh cwd/git probe.
-- The EDN table is a first-class skill artifact: SKILL.md § Manual fallback directs an agent without the `subagent` CLI to read the table chain and translate models by hand.
+- The EDN table is a first-class skill artifact: [[file:../../skills/herdr-orch/SKILL.md]] section 'Manual fallback' directs an agent without the `subagent` CLI to read the table chain and translate models by hand.
 - The harness set is open: roster.edn carries a `:harnesses` section declaring how each kind receives a model (flag spelling), and model rows may carry columns for any kind. An override file can add a new harness + model columns to evaluate a new tool with no skill update, provided herdr itself supports the kind.
 - Retire the pi-only exception in `resolve-model`: a frontmatter model is honoured for any resolved kind via translation.
 - Retire the paired kind+model drop rule: a definition model survives a kind override instead of being dropped — translation makes it portable, so the drop is legacy noise.
 - Extend `model-args` so codex spawns receive a model argument (currently only `pi`/`claude` do); verify the codex CLI flag first.
 - Verify the extrapolated claude/codex column values against the actual CLIs before implementation (task body table is UI-extrapolated).
-- Update [[proj:skills/herdr-subagents/SKILL.md]] § Roster and routing and [[proj:skills/herdr-subagents/scripts/docs/contract.md]] to document canonical IDs, the table, and the pass-through fallback.
+- Update [[proj:skills/herdr-subagents/SKILL.md]] section 'Roster and routing' and [[proj:skills/herdr-subagents/scripts/docs/contract.md]] to document canonical IDs, the table, and the pass-through fallback.
 - Migrate the eight roster definitions in [[proj:subagents/]] from pi `provider/model` syntax to canonical IDs.
 
 *** Out of scope
@@ -54,7 +54,7 @@ Post-closure correction: Pi now receives the direct provider-qualified roster va
 - [X] A resolved kind with no `:harnesses` entry yields empty model args (today's behaviour for unlisted kinds).
 - [X] `--print-prompt` reports both the canonical resolved model and the effective translated model / native model args from the merged config.
 - [X] SKILL.md and contract.md document the canonical-ID contract, the table file chain, and the pass-through fallback.
-- [X] SKILL.md § Manual fallback names the table files so a CLI-less agent can translate models directly.
+- [X] [[file:../../skills/herdr-orch/SKILL.md]] section 'Manual fallback' names the table files so a CLI-less agent can translate models directly.
 
 *** Edge cases
 - [X] Nil resolved model still yields empty `model-args`.
@@ -91,8 +91,8 @@ Post-closure correction: Pi now receives the direct provider-qualified roster va
 
 ** Shipped
 - ADDED [[proj:skills/herdr-subagents/subagents/roster.edn]] — default canonical model table (`:harnesses` pi/claude/codex + fourteen `:models` rows: seven CLI-verified versioned IDs plus unversioned floating aliases `claude-{fable,opus,sonnet,haiku}` / `gpt-{sol,terra,luna}` resolving to the latest tier version). Post-closure adjustments relocated it from the skill root into `subagents/`, added aliases, and corrected every `gpt-*` `:pi` value to its direct `openai-codex/gpt-5.6-*` model.
-- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] — § Roster and routing states the canonical-ID + roster.edn-chain contract, model-independent kind resolution, Pi's explicit provider-qualified `:pi` mapping, and `:claude`/`:codex`-only tier equivalence; § Manual fallback adds the read-table-and-translate step; § Advisor strategy example uses a canonical ID.
-- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] — new § Model resolution (shape, chain, row-level merge, pre-mutation fail-fast, open ID/kind contracts, preview fields), including the corrected per-kind mapping policy; `SUBAGENT_ASSIGNMENT_ROOT` also governs the project roster.edn override.
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] — section 'Roster and routing' states the canonical-ID + roster.edn-chain contract, model-independent kind resolution, Pi's explicit provider-qualified `:pi` mapping, and `:claude`/`:codex`-only tier equivalence; section 'Manual fallback' adds the read-table-and-translate step; section 'Advisor strategy' example uses a canonical ID.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] — new section 'Model resolution' (shape, chain, row-level merge, pre-mutation fail-fast, open ID/kind contracts, preview fields), including the corrected per-kind mapping policy; `SUBAGENT_ASSIGNMENT_ROOT` also governs the project roster.edn override.
 - MODIFIED [[proj:AGENTS.md]] — orchestration resolves kind through explicit request → persona → parent rather than selecting a harness from an unqualified model prefix.
 - `core.clj`: `translate-model` (pure), data-driven `model-args`, `resolve-model` simplified to requested > frontmatter > same-kind inheritance > nil, `parse-roster`/`merge-roster` + path-bearing shape validation. `cli.clj`: default←home←project loader (skill-location default, assignment-root project override), config validated before ledger/pane mutation, `--print-prompt` reports `:model-args` alongside the canonical model.
 - MODIFIED `subagents/*.md` (all eight) — frontmatter `model:` migrated to canonical IDs.
@@ -122,7 +122,7 @@ CLOSED: [2026-07-29 Wed 12:58]
 - State "STARTED" from "TODO" [2026-07-29 Wed 12:56]
 - State "DONE" from "STARTED" [2026-07-29 Wed 12:58]
 :END:
-Gate PASSED; one table correction (haiku alias → full name). Details: * Implementation § Task 1.
+Gate PASSED; one table correction (haiku alias → full name). Details: * Implementation [[*Task 1: harness syntax verification (decision gate — PASSED)]].
 
 ** DONE Ship default roster.edn and implement loader + translation
 CLOSED: [2026-07-29 Wed 13:20]

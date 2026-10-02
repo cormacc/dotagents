@@ -63,7 +63,7 @@ Make `oh task run`/`start` verify that the composed prompt was actually submitte
 ** Shipped
 - `oh task run`/`start` verify prompt submission after `agent prompt`: bounded by `ORCH_DISPATCH_TIMEOUT_MS` (default 15 s), probing at `ORCH_POLL_INTERVAL_MS`, nudging `enter` on a persisting definite `idle` up to two times, never on `unknown`.
 - Ledger entries gain `:dispatch` (`{status, state, nudges}`; status `dispatched` or `unconfirmed`) and `:dispatched-at`. `:prompted-at` is now explicitly the submission attempt, not a duration baseline.
-- MODIFIED [[proj:skills/herdr-orch/scripts/docs/contract.md]]: new § Dispatch verification, `ORCH_DISPATCH_TIMEOUT_MS` row, and `ORCH_POLL_INTERVAL_MS`'s extended meaning.
+- MODIFIED [[proj:skills/herdr-orch/scripts/docs/contract.md]]: new section 'Dispatch verification', `ORCH_DISPATCH_TIMEOUT_MS` row, and `ORCH_POLL_INTERVAL_MS`'s extended meaning.
 - MODIFIED [[proj:skills/herdr-orch/SKILL.md]]: operators check `:dispatch` before re-prompting a child that published nothing.
 - The fake-herdr fixture models lifecycle state honestly: a dispatched prompt drives a child `working`, a settled wait writes its reported state through, `FAKE_HELD_PROMPT` (`1`/`stuck`) withholds dispatch, and `FAKE_FAIL_CHILD_GET` makes a child unobservable.
 
@@ -104,7 +104,7 @@ CLOSED: [2026-08-05 Wed 15:23]
 :LOGBOOK:
 - State "DONE" from "TODO" [2026-08-05 Wed 15:23]
 :END:
-contract.md § Dispatch verification, plus the `ORCH_DISPATCH_TIMEOUT_MS` row and README.org regression boundaries.
+contract.md section 'Dispatch verification', plus the `ORCH_DISPATCH_TIMEOUT_MS` row and README.org regression boundaries.
 
 * Implementation
 

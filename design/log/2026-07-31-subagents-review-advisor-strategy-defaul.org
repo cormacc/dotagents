@@ -26,7 +26,7 @@ Decide the worker/advisor defaults from measured evidence. Three benchmarks were
 
 *** Out of scope
 
-- Any change to the personas, =config.edn= or SKILL § Advisor strategy before the gate — those landed afterwards under [[plan:2026-07-31-subagents-retire-the-mandatory-advisor-c.org]].
+- Any change to the personas, =config.edn= or SKILL section 'Advisor strategy' before the gate — those landed afterwards under [[plan:2026-07-31-subagents-retire-the-mandatory-advisor-c.org]].
 - CLI/contract/envelope changes; the gate judged the existing =--prompt-extra= tier convention adequate, so a structured flag was not pursued.
 - Statistical rigour: one run per cell throughout.
 - The 9-cell round-2/3 matrix as originally planned — abandoned when both difficulty pilots saturated, rather than spending ~$50 to re-measure a ceiling.
@@ -56,7 +56,7 @@ Decide the worker/advisor defaults from measured evidence. Three benchmarks were
 
 *** Anti-criteria
 
-- [X] Must not: modify `worker.md`, `skilled-worker.md`, `advisor.md`, `config.edn`, or SKILL § Advisor strategy before the decision gate — held; every such change landed under the implementation record after the gate
+- [X] Must not: modify `worker.md`, `skilled-worker.md`, `advisor.md`, `config.edn`, or SKILL section 'Advisor strategy' before the decision gate — held; every such change landed under the implementation record after the gate
 - [X] Must not: orchestrate evaluation runs below root — held; every cell was spawned from the root session
 - [X] Must not: expose any round's hidden test suite, or the validation implementations, to any executor cell — held; suites stayed unnamed in the assignments, validation implementations were moved out of the worktree to =~/.cache/=, and leak checks were run per round
 
@@ -95,7 +95,7 @@ No production code or contract doc changed here by design — the anti-criteria 
 - =design/log/2026-07-31-subagents-review-advisor-strategy-defaul/spawn-cell.sh=, the dispatch workaround now referenced by the open CLI defect.
 - Five gate decisions recorded below, and the =$41.4099= total cost of reaching them.
 
-*Spec note:* =#+SPEC:= names =skills/herdr-subagents/SKILL.md=, which this record deliberately did not touch — modifying it before the gate was an explicit anti-criterion. It was reviewed at closure and updated by the implementation record, which rewrote § Advisor strategy as § Executor tier and advisor strategy.
+*Spec note:* =#+SPEC:= names =skills/herdr-subagents/SKILL.md=, which this record deliberately did not touch — modifying it before the gate was an explicit anti-criterion. It was reviewed at closure and updated by the implementation record, which rewrote section 'Advisor strategy' as section 'Executor tier and advisor strategy'.
 
 ** Gotchas
 
@@ -310,7 +310,7 @@ The remaining eight round-3 cells were again **not** spawned, per the gate condi
 
 *** Decisions implemented (task 41303c50 → [[plan:2026-07-31-subagents-retire-the-mandatory-advisor-c.org]])
 
-All five gate decisions landed under task 6588f447: the =requires:= / =:required= mandate mechanism was rolled back across =core.clj=, =cli.clj=, =contract.md=, =scripts/README.md=, =SKILL.md= and both test namespaces; =worker.md= now describes the advisor as opt-in for a genuinely stuck executor; =skilled-worker.md= was removed in favour of =worker --model <tier>=; and =SKILL.md= § Advisor strategy was rewritten as § Executor tier and advisor strategy, carrying the light-default / feather-false-economy guidance with figures and the ledger-under-reporting caveat.
+All five gate decisions landed under task 6588f447: the =requires:= / =:required= mandate mechanism was rolled back across =core.clj=, =cli.clj=, =contract.md=, =scripts/README.md=, =SKILL.md= and both test namespaces; =worker.md= now describes the advisor as opt-in for a genuinely stuck executor; =skilled-worker.md= was removed in favour of =worker --model <tier>=; and =SKILL.md= section 'Advisor strategy' was rewritten as section 'Executor tier and advisor strategy', carrying the light-default / feather-false-economy guidance with figures and the ledger-under-reporting caveat.
 
 Verified end to end: =bb test= green at 410 tests / 2239 assertions; =--print-prompt= for =worker= at light and middle, with and without =--spawns none=, shows the single gap-only clause naming =advisor= and no mandate language, with =--spawns none= still forcing the leaf sentence; =skilled-worker= is now unresolvable; and one live =worker= spawn published =COMPLETE= with **zero consults** in 29.6s for $0.2709, its output tests passing.
 

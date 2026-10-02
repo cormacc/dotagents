@@ -70,7 +70,7 @@ CLOSED: [2026-05-13 Wed 14:18]
 - State "STARTED"    from "TODO"       [2026-05-13 Wed 14:18]
 - State "DONE"       from "STARTED"    [2026-05-13 Wed 14:18]
 :END:
-Resolved: ship extension + skill together. Recorded in Summary § Decisions.
+Resolved: ship extension + skill together. Recorded in Summary [[*Decisions]].
 ** DONE [#A] MVP: ~dataspex~ pi extension + portable skill
 CLOSED: [2026-05-13 Wed 16:04]
 :PROPERTIES:
@@ -84,7 +84,7 @@ CLOSED: [2026-05-13 Wed 16:04]
 - State "DONE"       from "STARTED"    [2026-05-13 Wed 16:04]
 :END:
 Acceptance criteria:
-- Extension at ~pi/extensions/dataspex/~ mirroring ~chromium~/~pi-clojure~ shape, registering the seven tools (names in Summary § Shipped). Uses ~shadow/cljs-eval~ via the JVM nREPL; no chromium / dataspex-browser-ext dependency.
+- Extension at ~pi/extensions/dataspex/~ mirroring ~chromium~/~pi-clojure~ shape, registering the seven tools (names in Summary [[*Shipped]]). Uses ~shadow/cljs-eval~ via the JVM nREPL; no chromium / dataspex-browser-ext dependency.
 - Build/port auto-discovery via ~shadow/active-builds~ and standard nREPL port files; ambiguous-build errors list candidates.
 - Skill at ~skills/dataspex/SKILL.md~ documents each capability as tool-call / cljs-fallback pair plus the gotchas; portable forms in ~skills/dataspex/references/fallback.md~.
 - ~../agents.nix~ activation installs local deps for dataspex alongside chromium / pi-clojure.
@@ -130,7 +130,7 @@ Verdict: viable, no ~browser_eval~ fallback needed under dev compilation. Canoni
 (shadow/cljs-eval :app "(get @dataspex.core/store \"state\")" {})
 #+end_src
 
-Surprises surfaced into Summary § Gotchas:
+Surprises surfaced into Summary [[*Gotchas]]:
 - App-registered labels lack ~:track-changes? true~, so ~:history~ stays empty. Agent must register a parallel ~<label>-audit~ to see diffs.
 - ~Actions~ ~:val~ is a ~LogInspector~ deftype: not ISeqable; the log is only reachable via ~(aget log-inspector "log")~.
 - ~IAuditable~ is sparse: datascript history entries carry only ~:diff~.

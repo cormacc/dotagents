@@ -21,7 +21,7 @@ Split the flat subagent model table into two levels -- `:models` keyed by pi-sty
 - Shipped [[proj:skills/herdr-orch/subagents/config.edn]]: 7 canonical `:models` rows + 18 `:aliases`.
 - Validation of `:aliases` shape per file, and of alias/model key overlap and alias chains post-merge.
 - `--print-prompt` reports the post-alias canonical model.
-- contract.md § Model resolution, `config.edn` header, AGENTS.md subagents bullet.
+- [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution', `config.edn` header, AGENTS.md subagents bullet.
 
 *** Out of scope
 - Multi-hop alias chains or per-alias row exceptions.
@@ -45,7 +45,7 @@ Split the flat subagent model table into two levels -- `:models` keyed by pi-sty
 - [X] An `:aliases` value that is itself an `:aliases` key fails with a message naming the key.
 - [X] A non-map `:aliases`, or a non-string/blank key or value, fails per-file naming the offending path.
 - [X] `--print-prompt` reports the post-alias canonical model (`:model-canonical`) alongside the resolved model and native model args.
-- [X] contract.md § Model resolution documents the two-level shape, `:aliases` per-key merge vs `:models` row replacement, the single-hop rule, and the overlap failure.
+- [X] [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution' documents the two-level shape, `:aliases` per-key merge vs `:models` row replacement, the single-hop rule, and the overlap failure.
 - [X] `default-config-content-contract` still pins the contract.md weight table cell-for-cell against the shipped config's *effective* translations.
 - [X] The AGENTS.md subagents bullet states alias-level retargeting alongside row replacement.
 - [X] `skills/herdr-orch/subagents/config-new.edn` no longer exists.
@@ -80,7 +80,7 @@ Split the flat subagent model table into two levels -- `:models` keyed by pi-sty
 - `--model feather` on kind claude passes `--model claude-haiku-4-5`, not `--model haiku`. Same model; the only effective translation change.
 - Retargeting a weight is `{:aliases {"heavy" "<canonical-id>"}}` -- one line, no harness spellings restated.
 - An override carrying a weight row in `:models` now fails at spawn naming the key.
-- MODIFIED contract docs :: [[proj:skills/herdr-orch/scripts/docs/contract.md]] § Model resolution and [[proj:skills/herdr-orch/SKILL.md]] describe the two-level shape; [[proj:AGENTS.md]] no longer claims pi receives a `:pi` column.
+- MODIFIED contract docs :: [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution' and [[proj:skills/herdr-orch/SKILL.md]] describe the two-level shape; [[proj:AGENTS.md]] no longer claims pi receives a `:pi` column.
 
 ** Gotchas
 - A config example outside contract.md has no test guarding it, so it can become executable-wrong rather than merely stale :: README.org's worked override (`{:models {"heavy" …}}`) hard-fails with `config key is present in both :aliases and :models {:key "heavy"}`. Validate doc examples by parsing them out of the doc and running them through `validate-merged-config!`.
@@ -132,7 +132,7 @@ CLOSED: [2026-08-04 Tue 16:34]
 - State "STARTED" from "TODO" [2026-08-04 Tue 16:30]
 - State "DONE" from "STARTED" [2026-08-04 Tue 16:34]
 :END:
-contract.md § Model resolution and the AGENTS.md subagents bullet. README.org and SKILL.md were corrected separately.
+[[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution' and the AGENTS.md subagents bullet. README.org and SKILL.md were corrected separately.
 
 * Implementation
 

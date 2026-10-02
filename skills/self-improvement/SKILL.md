@@ -94,7 +94,7 @@ An agent loads an instruction file on every turn, so that file carries the reusa
 
 Adversarially test each behavioural directive before you ship it in an instruction file. Confirm that the directive changes behaviour, and if it does not, change the incentive that causes the unwanted behaviour rather than restating the prohibition.
 
-When an approved edit tightens an existing bloated rule, move the displaced examples into the log in the same change rather than deleting them. A task body under `Agent feedback` is not an instruction file, so it keeps its evidence inline per § Entry conventions.
+When an approved edit tightens an existing bloated rule, move the displaced examples into the log in the same change rather than deleting them. A task body under `Agent feedback` is not an instruction file, so it keeps its evidence inline per [#Entry conventions](#entry-conventions).
 
 ## Entry conventions
 

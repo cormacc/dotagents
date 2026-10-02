@@ -134,7 +134,7 @@ Acceptance criteria:
 - `skills/herdr-orch/scripts/docs/contract.md` documents the per-kind persona transport in one line: pi → `--append-system-prompt <path>`, claude → `--append-system-prompt-file <path>`, other kinds prompt-level only.
 - Record `** Shipped` gains the corresponding `MODIFIED` contract.md bullet at closure.
 Must not: loosen the smoke guards or make claude the smoke default.
-Reference: `skills/herdr-orch/scripts/README.md` § Tests and smoke.
+Reference: `skills/herdr-orch/scripts/README.md` section 'Tests and smoke'.
 
 * Implementation
 

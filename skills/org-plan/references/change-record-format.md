@@ -126,7 +126,7 @@ Skip for refactors, infra, dev-tooling, observability work.
 
 Include for feature work where the user-facing flow is load-bearing. Drafting-time aid -- at closure, the happy path is in Implementation and edge cases are anti-criteria or `** Gotchas`. Prune unless the walkthrough still carries unique value.
 
-Optional Given/When/Then form for an edge case where scenario rigour pays for itself (see org-plan SKILL.md § `* Behavior`):
+Optional Given/When/Then form for an edge case where scenario rigour pays for itself (see org-plan SKILL.md section '`* Behavior`'):
 
 ```org
 ** Edge cases
@@ -139,7 +139,7 @@ Background, motivation, alternatives, constraints, trade-offs. **Default to omit
 
 ### Acceptance criteria citation
 
-Optional: cite the spec clause and/or test a criterion depends on with a `→` suffix (`spec:[[proj:PATH]]` and/or `test:REF`). Cite tests by file path plus `deftest`/test name (optionally with a short quoted assertion anchor) rather than a bare line number, which drifts. See org-plan SKILL.md § Spec/test citation on acceptance criteria.
+Optional: cite the spec clause and/or test a criterion depends on with a `→` suffix (`spec:[[proj:PATH]]` and/or `test:REF`). Cite tests by file path plus `deftest`/test name (optionally with a short quoted assertion anchor) rather than a bare line number, which drifts. See org-plan [../SKILL.md#Spec/test citation on acceptance criteria](../SKILL.md#spectest-citation-on-acceptance-criteria).
 
 ```org
 *** Core functionality
@@ -150,7 +150,7 @@ Optional: cite the spec clause and/or test a criterion depends on with a `→` s
 
 One keyword, `#+SPEC:`, used in two contexts (disambiguated by the file it appears in), always carrying a bare `[[proj:PATH]]` org link (repo-root relative, navigable in Emacs from both TASKS.org and records; the labelled `[[proj:PATH][label]]` form, bare non-link paths, and absolute/`..`-escaping paths are malformed):
 
-- In `TASKS.org` -- *discovery input*: zero or more repeatable declarations of where a project's living specs live (a spec file or a folder, recursive). Project-wide, not per-record. See org-plan SKILL.md § Spec discovery (`#+SPEC:`) for the default root, implicit specs, and rooted/transitive discovery rules.
+- In `TASKS.org` -- *discovery input*: zero or more repeatable declarations of where a project's living specs live (a spec file or a folder, recursive). Project-wide, not per-record. See org-plan [../SKILL.md#Spec discovery (`#+SPEC:`)](../SKILL.md#spec-discovery-spec) for the default root, implicit specs, and rooted/transitive discovery rules.
 - In a change-record -- *planning-time relevance declaration*: which individual specs from the discovered set are relevant to this particular change; `ot doctor` may nudge at closure if a listed spec is unchanged in git.
 
 Use repeated `#+SPEC:` declarations when work is expected to change durable behaviour, public APIs, protocols, domain models, or agent/operator workflow:
@@ -160,7 +160,7 @@ Use repeated `#+SPEC:` declarations when work is expected to change durable beha
 #+SPEC: [[proj:skills/org-plan/SKILL.md]]
 ```
 
-Opt out with `#+NO_SPEC: true`. See org-plan SKILL.md § Spec planning for when to declare vs opt out, and org-tasks `ot-cli.md` § Spec keyword and checks for the canonical `ot doctor` findings (`spec-untouched`, `spec-value-malformed`, `spec-path-dangling`).
+Opt out with `#+NO_SPEC: true`. See org-plan [../SKILL.md#Spec planning](../SKILL.md#spec-planning) for when to declare vs opt out, and org-tasks [../../org-tasks/references/ot-cli.md#Spec keyword and checks](../../org-tasks/references/ot-cli.md#spec-keyword-and-checks) for the canonical `ot doctor` findings (`spec-untouched`, `spec-value-malformed`, `spec-path-dangling`).
 
 ## `#+STATUS:` lifecycle
 

@@ -21,7 +21,7 @@ Make the maintenance boundary between first-party, adapted, and vendored skills 
 - Publish-side control of what =npx skills add cormacc/dotagents= offers consumers.
 - Relocating any skill out of =skills/=; any =agents.nix= change in the parent dotfiles repo.
 - The gitlab-cli-skills body and its =.vendor.edn= plus =scripts/sync-gitlab-cli-skills.bb= sync path.
-- The gitlab-cli-skills schedule-create doc gap (=6d205682=, TASKS.org § Upstream issues).
+- The gitlab-cli-skills schedule-create doc gap (=6d205682=, [[file:../../TASKS.org::*Upstream issues]]).
 
 ** Acceptance
 *** Core functionality
@@ -70,7 +70,7 @@ Make the maintenance boundary between first-party, adapted, and vendored skills 
 - =gh skill= is explicitly "in preview and subject to change without notice". Accepted: the frontmatter it writes is plain YAML that survives the tool, and =gh= itself is flake-pinned.
 
 ** Follow-ups
-- =6d205682= (gitlab-cli-skills schedule-create doc gap) is independent and stays in TASKS.org § Upstream issues.
+- =6d205682= (gitlab-cli-skills schedule-create doc gap) is independent and stays in [[file:../../TASKS.org::*Upstream issues]].
 - =f7692a6c= carries the herdr licence gap noted in the parent task's original body: =gh skill= copies only the skill directory, so no upstream LICENSE comes across.
 - =9a7f8771= checks =herdr-orch= and =oh= against the refreshed herdr agent semantics.
 
@@ -129,7 +129,7 @@ Acceptance criteria:
 - The Vendored table lists only =gh skill=-managed copies and the gitlab-cli-skills exception, each with =Source= filled; adapted skills sit under "Adopted or adapted" with their divergence noted.
 - dirge appears under First-party, described as locally authored, and is removed from the Vendored table.
 - The convention names the maintenance rule per class: first-party and adapted bodies are editable locally; vendored bodies are never edited locally (fix upstream, or reclassify on deliberate divergence).
-- § Vendored names =gh skill install|list|update --dir skills/= as the mechanism, and =metadata.github-*= frontmatter as the authoritative provenance and drift record; no hash or ref is duplicated into prose.
+- section 'Vendored' names =gh skill install|list|update --dir skills/= as the mechanism, and =metadata.github-*= frontmatter as the authoritative provenance and drift record; no hash or ref is duplicated into prose.
 - The inventory lists every top-level skill exactly once, checked by reading it.
 
 ** DONE [#B] Re-test the herdr vendoring exception under gh skill

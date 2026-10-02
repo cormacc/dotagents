@@ -2,7 +2,7 @@
   "Pure spec-discovery traversal engine backing `ot spec list`.
 
   Implements the rooted/transitive discovery convention documented in
-  org-plan SKILL.md § Spec discovery (`#+SPEC:`):
+  org-plan SKILL.md section 'Spec discovery (`#+SPEC:`)':
 
     - `#+SPEC:` roots declared in TASKS.org, or the default root
       `./design/SPEC.org` when none are declared and it exists.

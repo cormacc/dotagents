@@ -214,7 +214,7 @@ Acceptance criteria:
 - `poke` has no `dispatch-unconfirmed` refusal; a ledger entry carrying `:dispatch` with status `unconfirmed` still parses and is poked normally.
 - `skills/herdr-orch/SKILL.md` no longer mentions `dispatch-unconfirmed`.
 - `skills/herdr-orch/SKILL.md`'s Waiting bullet no longer says `start` "returns after dispatch".
-- `docs/contract.md` § Dispatch verification is removed; § Poke, the `ORCH_DISPATCH_TIMEOUT_MS` row, the `ORCH_POLL_INTERVAL_MS` row's dispatch mention, the locking paragraph, and the ledger-field prose no longer reference dispatch verification.
+- `docs/contract.md` section 'Dispatch verification' is removed; section 'Poke', the `ORCH_DISPATCH_TIMEOUT_MS` row, the `ORCH_POLL_INTERVAL_MS` row's dispatch mention, the locking paragraph, and the ledger-field prose no longer reference dispatch verification.
 - `scripts/README.md` no longer describes `task start` as returning "after dispatch".
 - The dispatch and nudge tests in `cli_test.clj` and the `FAKE_HELD_PROMPT` machinery in `test/fixtures/fake-herdr` are removed.
 - `cli_test.clj`'s `child-session-is-recorded-by-every-hook` asserts the backfill through the surviving spawn, wait-outcome, and capture hooks only; its post-prompt-probe subtest and the `child-get-count` bound that counts that probe are adapted, not deleted wholesale.

@@ -47,8 +47,8 @@ Delivered across four plan tasks (`b95b430..dfa3100`, five commits), after the p
 - [X] Preview exposes the effective persona text.
 - [X] Preview identifies the selected persona and its resolved base, when present.
 - [X] The ledger retains the launch trait sources.
-- [X] Only trailing standalone trait blocks are migrated to metadata. (Met as delivered; superseded 2026-09-22 -- see Decisions § Roster selection mechanism.)
-- [X] Embedded trait occurrences retain their positions. (Met as delivered; superseded 2026-09-22 -- see Decisions § Roster selection mechanism.)
+- [X] Only trailing standalone trait blocks are migrated to metadata. (Met as delivered; superseded 2026-09-22 -- see Decisions [[*Roster selection mechanism (superseding, 2026-09-22)]].)
+- [X] Embedded trait occurrences retain their positions. (Met as delivered; superseded 2026-09-22 -- see Decisions [[*Roster selection mechanism (superseding, 2026-09-22)]].)
 - [X] base-analyst has an explicit read-only boundary.
 - [X] base-analyst defaults to a leaf.
 - [X] worker, planner, advisor and base-analyst select the compact simple default.
@@ -158,7 +158,7 @@ CLOSED: [2026-09-21 Mon 16:28]
 - State "STARTED" from "TODO" [2026-09-21 Mon 15:59]
 - State "DONE" from "STARTED" [2026-09-21 Mon 16:28]
 :END:
-Composed one-level `extends:` plus additive `traits:`/`--trait` selection, ledger/preview provenance, and pre-mutation refusal guards. See ** Acceptance (Core functionality, Edge cases) and * Implementation § Composition mechanism.
+Composed one-level `extends:` plus additive `traits:`/`--trait` selection, ledger/preview provenance, and pre-mutation refusal guards. See ** Acceptance (Core functionality, Edge cases) and * Implementation [[*Composition]] mechanism.
 
 ** DONE Extract useful guidance and migrate eligible trailing traits
 CLOSED: [2026-09-22 Tue 10:55]
@@ -174,7 +174,7 @@ CLOSED: [2026-09-22 Tue 10:55]
 - State "DONE" from "STARTED" [2026-09-22 Tue 10:55]
 - State "DONE" from "DONE" [2026-09-22 Tue 11:06]
 :END:
-Extracted `simple` (worker/planner/advisor/base-analyst), refined `prune` in place, added `base-analyst`, and migrated `scout`'s trailing `%focused` token to metadata. See ** Acceptance and * Implementation § Roster and traits.
+Extracted `simple` (worker/planner/advisor/base-analyst), refined `prune` in place, added `base-analyst`, and migrated `scout`'s trailing `%focused` token to metadata. See ** Acceptance and * Implementation [[*Roster and traits (`9e22a186`, `e4773b2`)]].
 
 ** DONE Adapt a safe on-demand simplify workflow
 CLOSED: [2026-09-22 Tue 11:06]
@@ -188,7 +188,7 @@ CLOSED: [2026-09-22 Tue 11:06]
 - State "STARTED" from "TODO" [2026-09-22 Tue 10:27]
 - State "DONE" from "STARTED" [2026-09-22 Tue 11:06]
 :END:
-Added `skills/simplify/SKILL.md`, an on-demand, scope-bound review workflow requiring evidence for every finding. See ** Acceptance and * Implementation § Complexity-review skill.
+Added `skills/simplify/SKILL.md`, an on-demand, scope-bound review workflow requiring evidence for every finding. See ** Acceptance and * Implementation [[*Complexity-review skill (`d185837c`, `59d394d`)]].
 
 ** DONE Switch normal activation to composed guidance and verify the workflow
 CLOSED: [2026-09-22 Tue 11:51]
@@ -204,7 +204,7 @@ CLOSED: [2026-09-22 Tue 11:51]
 - State "STARTED" from "TODO" [2026-09-22 Tue 11:12]
 - State "DONE" from "STARTED" [2026-09-22 Tue 11:51]
 :END:
-Disabled Ponytail's automatic extension and its `ponytail`/`ponytail-review`/`ponytail-audit` skills in `pi/settings.json`, documented the `#trait`/`%trait` distinction, and ran the integrated `base-analyst` simplify smoke. See ** Acceptance and * Implementation § Activation switch.
+Disabled Ponytail's automatic extension and its `ponytail`/`ponytail-review`/`ponytail-audit` skills in `pi/settings.json`, documented the `#trait`/`%trait` distinction, and ran the integrated `base-analyst` simplify smoke. See ** Acceptance and * Implementation [[*Activation switch (`533be6ae`, `7344cb4`)]].
 
 * Implementation
 ** Composition mechanism (`b4c63339`, `7487f88`)
@@ -223,7 +223,7 @@ Roster migration was trailing-suffix-only: re-inspecting all seven packaged pers
 Adding `simple` made `worker.md` compose for the first time, breaking three tests that had assumed it was a pass-through persona; fixed by asserting composed-file path shape/content instead of raw-path equality, and by adding the packaged `traits/` directory to the bare-subtree deployment fixture (a real gap in the fixture's fidelity to actual deployment shape, exposed by this task, not introduced by it).
 
 ** Complexity-review skill (`d185837c`, `59d394d`)
-New `skills/simplify/SKILL.md`: reviews a caller-declared range only (diff/branch/named files); a wider audit needs an explicit assignment naming that scope. Adapted from upstream Ponytail's review/audit skills, keeping the evidence requirement (a candidate without proof that required behaviour survives is reported `unknown`, not counted as a finding) and dropping the paired good/bad example rhetoric, line-count scoring, and persistent-mode framing -- this is a one-shot on-demand workflow. Provenance (source repo, licence, version, what was kept/dropped) is recorded in the skill's own `## Provenance` section and in `skills/README.org` § Adopted or adapted.
+New `skills/simplify/SKILL.md`: reviews a caller-declared range only (diff/branch/named files); a wider audit needs an explicit assignment naming that scope. Adapted from upstream Ponytail's review/audit skills, keeping the evidence requirement (a candidate without proof that required behaviour survives is reported `unknown`, not counted as a finding) and dropping the paired good/bad example rhetoric, line-count scoring, and persistent-mode framing -- this is a one-shot on-demand workflow. Provenance (source repo, licence, version, what was kept/dropped) is recorded in the skill's own `## Provenance` section and in [[file:../../skills/README.org::*Adopted or adapted]].
 
 ** Activation switch (`533be6ae`, `7344cb4`)
 `pi/settings.json`'s `git:github.com/DietrichGebert/ponytail` package entry now excludes `pi-extension/index.js` and the `ponytail`/`ponytail-review`/`ponytail-audit` skills, leaving `ponytail-debt`/`ponytail-gain`/`ponytail-help` enabled (no replacement, explicitly out of scope). `README.org`, `SKILL.md`, and `pi/extensions/traits/README.md` document the `#trait` (foreman request-phrasing convention, resolved to an explicit CLI selection) vs `%trait` (interactive expansion of the *parent's own* input, never a child-targeting mechanism) distinction.

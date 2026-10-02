@@ -20,7 +20,7 @@ Act on the decisions taken at the gate of [[plan:2026-07-31-subagents-review-adv
 - Remove =requires: advisor= from =worker.md= and roll back the =requires:= / =:required= mechanism introduced by commit =7b67e13= (=core.clj=, =cli.clj=, =contract.md=, =scripts/README.md=, =SKILL.md=, =core_test.clj=, =cli_test.clj=).
 - Rewrite =worker.md='s advisor guidance: the pre-publish consult stops being mandatory and becomes an opt-in escalation for genuine difficulty.
 - Retire =skilled-worker=: delete the definition and update its three =SKILL.md= references plus the roster-coupled assertion in =cli_test.clj=.
-- Rewrite =SKILL.md= § Advisor strategy, and add tier guidance recording that light is the efficient default and feather a false economy for implementation work.
+- Rewrite =SKILL.md= section 'Advisor strategy', and add tier guidance recording that light is the efficient default and feather a false economy for implementation work.
 - Document the advisor-tier override convention, including that it is defeated when an executor bypasses the CLI.
 
 *** Out of scope
@@ -39,7 +39,7 @@ Act on the decisions taken at the gate of [[plan:2026-07-31-subagents-review-adv
 - [X] A composed =worker= prompt (=--print-prompt=) contains no mandated-consult clause, while the gap-only discretionary clause still names =advisor=
 - [X] =skilled-worker.md= is gone and no live reference to it remains outside =design/log/= and =TASKS.archive.org=
 - [X] =worker --model middle --spawns none= still resolves and composes correctly, covering the retired persona's use
-- [X] =SKILL.md= § Advisor strategy describes an opt-in middle advisor with per-spawn =--model heavy=, cites the evaluation record, and states the light-default / feather-false-economy guidance
+- [X] =SKILL.md= section 'Advisor strategy' describes an opt-in middle advisor with per-spawn =--model heavy=, cites the evaluation record, and states the light-default / feather-false-economy guidance
 - [X] =bb test= green
 
 *** Anti-criteria
@@ -56,10 +56,10 @@ Act on the decisions taken at the gate of [[plan:2026-07-31-subagents-review-adv
 
 ** Shipped
 
-- MODIFIED =skills/herdr-subagents/SKILL.md= (=#+SPEC:=) — § Advisor strategy replaced by § Executor tier and advisor strategy; the mandated-capability paragraph and the =skilled-worker= references removed from the frontmatter description and the spawn-grant sentence.
+- MODIFIED =skills/herdr-subagents/SKILL.md= (=#+SPEC:=) — section 'Advisor strategy' replaced by section 'Executor tier and advisor strategy'; the mandated-capability paragraph and the =skilled-worker= references removed from the frontmatter description and the spawn-grant sentence.
 - MODIFIED =scripts/docs/contract.md= and =scripts/README.md= — =requires:= / =:required= paragraphs removed.
 - REMOVED =subagents/skilled-worker.md=; =worker --model <tier>= now covers it.
-- MODIFIED =subagents/worker.md= — no =requires:=, no step-7 consult (workflow is seven steps), § Advisor consultation rewritten as opt-in with two named triggers and a =BLOCKED= exit.
+- MODIFIED =subagents/worker.md= — no =requires:=, no step-7 consult (workflow is seven steps), section 'Advisor consultation' rewritten as opt-in with two named triggers and a =BLOCKED= exit.
 - MODIFIED =core.clj= (=resolve-required= gone) and =cli.clj= (single-arity =delegation-guidance=; =:required= removed from prompt composition, preview and ledger entry). The ledger no longer carries a =:required= key.
 - MODIFIED =core_test.clj= / =cli_test.clj= — coverage converted, not dropped: the mandate tests became a *stale-key-is-inert* test, an arity guard against the two-arity variant returning, a leaf-narrowing test, and a positive assertion that =skilled-worker.md= is absent.
 
@@ -103,7 +103,7 @@ CLOSED: [2026-07-31 Fri 20:50]
 - State "STARTED" from "TODO" [2026-07-31 Fri 20:49]
 - State "DONE" from "STARTED" [2026-07-31 Fri 20:50]
 :END:
-=requires: advisor= dropped, step 7 removed, § Advisor consultation rewritten as opt-in with two named triggers.
+=requires: advisor= dropped, step 7 removed, section 'Advisor consultation' rewritten as opt-in with two named triggers.
 
 ** DONE Retire the skilled-worker persona
 CLOSED: [2026-07-31 Fri 20:51]
@@ -131,7 +131,7 @@ CLOSED: [2026-07-31 Fri 20:51]
 - State "STARTED" from "TODO" [2026-07-31 Fri 20:50]
 - State "DONE" from "STARTED" [2026-07-31 Fri 20:51]
 :END:
-§ Advisor strategy → § Executor tier and advisor strategy, carrying tier guidance and the ledger-under-reporting caveat.
+section 'Advisor strategy' → section 'Executor tier and advisor strategy', carrying tier guidance and the ledger-under-reporting caveat.
 
 ** DONE Verify end to end and update the parent evaluation record
 CLOSED: [2026-07-31 Fri 20:54]
@@ -155,9 +155,9 @@ CLOSED: [2026-07-31 Fri 20:54]
 
 Test coverage was updated rather than deleted. =core_test.clj='s =resolve-required-contract= became =ignores-retired-requires-frontmatter-key=, which pins the more useful property now: a stale =requires:= key in a hand-written or third-party persona must be *inert* rather than an error, and must not perturb the resolved spawn policy. The pinned =delegation-guidance= assertions gained a case proving an =advisor= in the allow-list is covered by the ordinary gap-only clause, plus an =ArityException= assertion so the two-arity mandate variant cannot quietly return. =cli_test.clj='s =worker-mandate-drops-with-the-effective-allow-list= became =worker-spawn-policy-narrows-to-a-leaf=, retaining both narrowing paths (=--spawns none= and depth-forced) while asserting the ledger carries no =:required= key.
 
-*Persona changes (c66a8c1d, 3e8af8f0).* =worker.md= lost =requires: advisor=, and its step 7 "Consult before publishing" is gone — the workflow is now seven steps ending at *Report*. Its § Advisor consultation opens by stating there is no routine pre-publish review and why, names the two genuine triggers (debugging dead end after repeated failures; materially ambiguous high-stakes decision), keeps the focused-context budget and the soft cap of three, and directs a stuck worker to publish =BLOCKED= rather than keep spending. The =description:= no longer advertises advisor consultation as a defining feature. =skilled-worker.md= was removed with =git rm=; its three =SKILL.md= references and the roster-coupled weight table in =cli_test.clj= were updated, the latter gaining a positive assertion that the file is absent.
+*Persona changes (c66a8c1d, 3e8af8f0).* =worker.md= lost =requires: advisor=, and its step 7 "Consult before publishing" is gone — the workflow is now seven steps ending at *Report*. Its section 'Advisor consultation' opens by stating there is no routine pre-publish review and why, names the two genuine triggers (debugging dead end after repeated failures; materially ambiguous high-stakes decision), keeps the focused-context budget and the soft cap of three, and directs a stuck worker to publish =BLOCKED= rather than keep spending. The =description:= no longer advertises advisor consultation as a defining feature. =skilled-worker.md= was removed with =git rm=; its three =SKILL.md= references and the roster-coupled weight table in =cli_test.clj= were updated, the latter gaining a positive assertion that the file is absent.
 
-*Documentation (93149919).* § Advisor strategy became § Executor tier and advisor strategy: one executor persona parameterised by =--model=, an opt-in middle advisor for a stuck worker with =--model heavy= for a high-stakes call, the light-default and feather-false-economy guidance with measured figures, and the override convention documented together with its failure mode — a worker that hand-rolls a consult via raw =herdr agent start= inherits the default model, spends outside the ledger, and orphans the pane, so ledger consult counts are a floor rather than the truth. The superseded 2026-07-29 record is marked as such instead of carrying its stale rename note.
+*Documentation (93149919).* section 'Advisor strategy' became section 'Executor tier and advisor strategy': one executor persona parameterised by =--model=, an opt-in middle advisor for a stuck worker with =--model heavy= for a high-stakes call, the light-default and feather-false-economy guidance with measured figures, and the override convention documented together with its failure mode — a worker that hand-rolls a consult via raw =herdr agent start= inherits the default model, spends outside the ledger, and orphans the pane, so ledger consult counts are a floor rather than the truth. The superseded 2026-07-29 record is marked as such instead of carrying its stale rename note.
 
 ** Verification (c12de41f)
 

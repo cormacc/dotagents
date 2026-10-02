@@ -40,7 +40,7 @@ CLOSED: [2026-05-01 Fri 10:23]
 :CREATED: [2026-05-01 Fri 08:51]
 :STARTED: [2026-05-01 Fri 09:41]
 :END:
-Outcome: rewrote =org-plan/SKILL.md= § "UUID mirroring" → "Subtask migration" matching the extension's actual subtask-absorption behaviour. Worked example shows before/after. Parent retains a plain-text bullet summary of migrated subtasks. =org-tasks/SKILL.md= references the migration. No residual "reuse"/"mirror"/"not deleted" wording in skills or extension docs.
+Outcome: rewrote =org-plan/SKILL.md= section 'UUID mirroring' → "Subtask migration" matching the extension's actual subtask-absorption behaviour. Worked example shows before/after. Parent retains a plain-text bullet summary of migrated subtasks. =org-tasks/SKILL.md= references the migration. No residual "reuse"/"mirror"/"not deleted" wording in skills or extension docs.
 
 ** DONE [#A] Define lifecycle LOGBOOK and timestamp semantics :protocol:timestamps:
 CLOSED: [2026-05-01 Fri 10:23]
@@ -64,7 +64,7 @@ CLOSED: [2026-05-05 Tue 22:01]
   direct close, reopen, re-close, WAITING -> DONE, and appending to an
   existing LOGBOOK drawer.
 :END:
-Outcome: shared =lifecycle.ts= helper; LOGBOOK appended on create + every transition; parser/serializer preserve existing drawers structurally; retrospective scaffolding uses =:STARTED:= or LOGBOOK/created fallback. README § Timestamps points at the skill. Tests cover round-trip, append-only ordering, reopen clearing current =CLOSED:=, re-close writing fresh =CLOSED:= + new entry.
+Outcome: shared =lifecycle.ts= helper; LOGBOOK appended on create + every transition; parser/serializer preserve existing drawers structurally; retrospective scaffolding uses =:STARTED:= or LOGBOOK/created fallback. README section 'Timestamps' points at the skill. Tests cover round-trip, append-only ordering, reopen clearing current =CLOSED:=, re-close writing fresh =CLOSED:= + new entry.
 
 ** DONE [#B] Propagate lifecycle LOGBOOK conventions into org-plan guidance :plan:timestamps:
 CLOSED: [2026-05-01 Fri 10:23]
@@ -97,7 +97,7 @@ CLOSED: [2026-05-01 Fri 10:23]
 :CREATED: [2026-05-01 Fri 08:51]
 :STARTED: [2026-05-01 Fri 09:41]
 :END:
-Outcome: =tasks/README.md= § "Linked external issues" states =#+ISSUE_URL_BASE:= / =:LINKED_ISSUES:= are project-local trusted config; non-HTTPS schemes intentionally permitted. =TASKS.local.org= overrides part of the checkout-local trust boundary. Code audit confirmed =J= invokes =open= / =xdg-open= with an argv vector (no shell interpolation).
+Outcome: =tasks/README.md= section 'Linked external issues' states =#+ISSUE_URL_BASE:= / =:LINKED_ISSUES:= are project-local trusted config; non-HTTPS schemes intentionally permitted. =TASKS.local.org= overrides part of the checkout-local trust boundary. Code audit confirmed =J= invokes =open= / =xdg-open= with an argv vector (no shell interpolation).
 
 ** DONE [#C] Extract legacy metadata compatibility policy :compatibility:followup:
 CLOSED: [2026-05-05 Tue 22:05]

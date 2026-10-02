@@ -13,7 +13,7 @@ themselves differ between rounds.
 
 Round 2 scores five conditions: four candidate skills and one no-skill,
 prompt-only control, added to the plan after this rubric was first
-committed (`** Decisions` § "Round 2 includes a no-skill, prompt-only
+committed (`** Decisions` section "Round 2 includes a no-skill, prompt-only
 control"). The control is scored on the same two output dimensions as the
 four candidates. It has no artefact, so dimension 3 treats it as a fixed
 floor rather than measuring it on the anchors below -- see Dimension 3.

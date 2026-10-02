@@ -20,7 +20,7 @@ A session can have fewer than approximately five substantive exchanges. Then say
 **Non-interactive equivalent.** A delegated session receives one assignment prompt. Any other non-interactive session also receives one assignment prompt. Therefore the exchange count does not measure such a session. A non-interactive session is substantive when one of these conditions is true:
 
 - The session did multi-step tool work that had to be diagnosed or corrected.
-- The session hit at least one signal in § 1.
+- The session hit at least one signal in [#1. Detect signals](#1-detect-signals).
 
 For a session below that threshold, emit nothing. Silence is the correct outcome. It is not a failed retro.
 
@@ -34,7 +34,7 @@ The session can delegate work through [`herdr-orch`](../herdr-orch/SKILL.md). Th
 
 A child does steps 1--2 only. You own steps 3--6. Therefore you route, deduplicate, and persist the child's candidates yourself.
 
-Candidates are testimony from an agent that scans itself. Bound that verification by the [`herdr-orch`](../herdr-orch/SKILL.md) Class B probe policy (§ Trusting a result):
+Candidates are testimony from an agent that scans itself. Bound that verification by the [`herdr-orch`](../herdr-orch/SKILL.md) Class B probe policy (section 'Trusting a result'):
 
 - Make a maximum of 3 targeted checks for each candidate before the candidate reaches the table below.
 - A probe cannot settle every claim. Attribute such a claim to the child. Do not adopt such a claim as verified.

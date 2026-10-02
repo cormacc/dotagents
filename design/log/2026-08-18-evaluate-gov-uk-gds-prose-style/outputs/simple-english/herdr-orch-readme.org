@@ -13,4 +13,4 @@ The parent owns both ends of a round. The parent decides where the child works, 
 
 Integration is the work of the parent. =oh= never merges, rebases, pushes, removes a branch, or commits in the shared checkout. Isolation keeps concurrent writers out of the index of each other. Isolation does not show that their edits compose. Therefore the parent measures the combined tree again. Retained =orch/*= branches accumulate until the parent integrates them or removes them.
 
-[[file:scripts/docs/contract.md][contract.md]] owns the mechanics. Its § Worktree reconciliation and teardown gives the shape of the reconciliation, the removal guards, and the recovery when =.tmp/= was cleared before a child published. Its § Close gives the closure guards.
+[[file:scripts/docs/contract.md][contract.md]] owns the mechanics. Its section 'Worktree reconciliation and teardown' gives the shape of the reconciliation, the removal guards, and the recovery when =.tmp/= was cleared before a child published. Its section 'Close' gives the closure guards.

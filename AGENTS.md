@@ -25,6 +25,14 @@ For `ot` CLI development, read `skills/org-tasks/scripts/AGENTS.md`.
 ## Unicode
 - Do not use unicode characters for decoration - only when they convey information.
 - Do not write Unicode dashes in prose. Write `--`, which org converts during export. Alternatively, use an org descriptive list such as `- Term :: detail`.
+- Do not write the section sign (U+00A7). See Section references.
+
+## Section references
+- Refer to a heading in a repository document with a link whose path is relative to the linking file.
+- In org, write `[[file:path::*Heading]]` with no description, or `[[*Heading]]` for the same file. Org generates the link title from the target.
+- In Markdown, write `[path#Heading](path#anchor)`, or `[#Heading](#anchor)` for the same file. The anchor is the GitHub heading anchor.
+- Org cannot link to a Markdown heading. From org, write `[[file:path.md]] section 'Heading'`.
+- Where a link cannot work, such as in a code comment or for an external document, write `path section 'Heading'` and quote the heading.
 
 ## Scripts and transformations
 - New automation scripts in the repository-root `scripts/` directory must use Babashka by default.

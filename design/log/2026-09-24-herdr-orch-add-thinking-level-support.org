@@ -20,7 +20,7 @@ Give every `oh`-spawned child an explicit, inspectable thinking/effort level, re
 - `core.clj`: `default-effort`, `effort-value!`, `resolve-effort`, `effort-args`; `validate-config-shape!` checks a present `:effort-flag`.
 - `cli.clj`: `parent-effort`, `effort-policy`, `--effort` on `task run|start`, `HERDR_ORCH_EFFORT` injection, argv order `model-args ++ effort-args ++ extra-args ++ persona-args`, ledger/preview/`continue` fields.
 - Packaged `skills/herdr-orch/subagents/config.edn` and home `subagents/config.edn`.
-- `contract.md` § Model resolution and env-var table; `README.org` frontmatter, merge-rule, and `--print-prompt` sections.
+- [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution' and env-var table; `README.org` frontmatter, merge-rule, and `--print-prompt` sections.
 - `core_test.clj`, `cli_test.clj` (`shipped-config-invariants` and new cases).
 
 *** Out of scope
@@ -59,7 +59,7 @@ Give every `oh`-spawned child an explicit, inspectable thinking/effort level, re
 - [ ] Must not: add `effort:` to any packaged persona.
 
 *** Docs
-- [ ] `contract.md` § Model resolution documents the effort tiers, the `{}` template, the optional `:effort-flag`, `HERDR_ORCH_EFFORT` (env table row), the pi-version-specific `PI_REASONING_LEVEL` fallback, and the unsupported pi `:<thinking>` model suffix.
+- [ ] [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution' documents the effort tiers, the `{}` template, the optional `:effort-flag`, `HERDR_ORCH_EFFORT` (env table row), the pi-version-specific `PI_REASONING_LEVEL` fallback, and the unsupported pi `:<thinking>` model suffix.
 - [ ] `README.org` persona-frontmatter and merge-rule sections name `effort:` / `:effort-flag`; the `--print-prompt` field list names the three effort fields.
 
 ** Decisions
@@ -160,15 +160,15 @@ CLOSED: [2026-09-24 Thu 19:25]
 - State "DONE" from "STARTED" [2026-09-24 Thu 19:25]
 :END:
 Acceptance criteria:
-- `contract.md` § Model resolution has a paragraph stating: effort precedence `--effort` > frontmatter `effort:` > same-kind parent (`HERDR_ORCH_EFFORT`; root fallback `PI_REASONING_LEVEL` when the parent is pi, pi 0.87.1) > `medium`; `:effort-flag` is required per `:harnesses` entry; the `{}` template rule; levels pass through unvalidated; the pi `provider/id:<thinking>` model suffix is unsupported.
+- [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution' has a paragraph stating: effort precedence `--effort` > frontmatter `effort:` > same-kind parent (`HERDR_ORCH_EFFORT`; root fallback `PI_REASONING_LEVEL` when the parent is pi, pi 0.87.1) > `medium`; `:effort-flag` is required per `:harnesses` entry; the `{}` template rule; levels pass through unvalidated; the pi `provider/id:<thinking>` model suffix is unsupported.
 - `contract.md` env-var table has a `HERDR_ORCH_EFFORT` row.
-- `contract.md` § Harness `:extra-args` names `:effort-flag` beside `:model-flag` as a key an override must restate; the config-shape sentence in § Model resolution shows `:effort-flag` in the EDN skeleton.
+- [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Harness `:extra-args`' names `:effort-flag` beside `:model-flag` as a key an override must restate; the config-shape sentence in section 'Model resolution' shows `:effort-flag` in the EDN skeleton.
 - `README.org` persona-frontmatter section lists `effort:` and no longer says "All four keys"; the example frontmatter block shows `effort:` with a comment.
-- `README.org` § The merge rule names `:effort-flag` beside `:model-flag` in the wholesale-replacement sentence.
+- [[file:../../skills/herdr-orch/README.org::*The merge rule that catches people]] names `:effort-flag` beside `:model-flag` in the wholesale-replacement sentence.
 - `README.org` `--print-prompt` paragraph names `effort`, `effort-source`, `effort-args`.
 - No hard-wrapped prose is introduced; one logical line per paragraph and list item.
 - Must not: document a per-kind level vocabulary as validated by `oh`.
-Pointer: `contract.md` § Model resolution second paragraph (the `resolve-model` precedence sentence) is the model for the new paragraph.
+Pointer: [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution' second paragraph (the `resolve-model` precedence sentence) is the model for the new paragraph.
 
 * Implementation
 

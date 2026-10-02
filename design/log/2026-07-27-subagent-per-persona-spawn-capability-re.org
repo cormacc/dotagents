@@ -72,7 +72,7 @@ Replace the hard-coded planner-only delegation exception with declared per-perso
   - Child self-resolution from the roster at invocation: cannot carry a per-spawn flag override, and mid-flight roster edits would change a live child's capability.
 - Default deny :: capability is declared per persona in the roster, visible and auditable.
   Rejected:
-  - Default-allow: billable/pane-creating failure modes, and grandchild findings reach the root through two layers of testimony (SKILL.md § Trusting a result).
+  - Default-allow: billable/pane-creating failure modes, and grandchild findings reach the root through two layers of testimony ([[file:../../skills/herdr-orch/SKILL.md]] section 'Trusting a result').
 - Depth bound via forced-empty injection :: any below-root spawn injects `HERDR_SUBAGENT_SPAWNS=""` and leaf guidance; no depth counter.
   Rejected:
   - A depth-counter env var: more state for the same one-level result.
@@ -87,7 +87,7 @@ Replace the hard-coded planner-only delegation exception with declared per-perso
   - `spawns: reviewer` for a synthesising lead reviewer: requires below-root parallel fan-out (a separate constitution change), adds a lossy trust hop on exactly the findings the root must verify against source, strands grandchild panes owned by a dead lead, and a self-referential grant changes every ordinary reviewer's composed guidance. Parked as follow-up.
 
 ** Shipped
-- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] — capability-based leaf rule + absolute depth bound replace the planner-only exception; persona-generic nested-labels sentence; kindless-model pi exception in § Roster and routing.
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] — capability-based leaf rule + absolute depth bound replace the planner-only exception; persona-generic nested-labels sentence; kindless-model pi exception in section 'Roster and routing'.
 - MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] — ADDED "Spawn gating" section (precedence, fail-fast, ledger fields, depth rule); `HERDR_SUBAGENT_SPAWNS` env-table row and child-env enumeration entry; persona-generic labels; de-plannered `HERDR_SUBAGENT_PERSONA` row.
 - MODIFIED [[proj:subagents/planner.md]] and [[proj:subagents/worker.md]] — `spawns: scout researcher` grants; worker's unconditional no-spawn clause replaced with a "Delegating factual gaps" section.
 - `core.clj`: `parse-spawns` / `resolve-spawns` (injected roster lookup, fail-fast) and the pi-only kindless-model exception in `resolve-model`.

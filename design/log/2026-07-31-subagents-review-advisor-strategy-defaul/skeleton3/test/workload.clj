@@ -1,6 +1,6 @@
 (ns workload
   "Workload generator — the same one used for scoring, with a different seed.
-  Provided so you can measure your own performance; see ASSIGNMENT.md §5.")
+  Provided so you can measure your own performance; see ASSIGNMENT.md section '5. Performance requirement'.")
 
 (defn gen
   "Deterministically generate [[:points [...]] & ops] with `n-points` points and

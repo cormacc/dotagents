@@ -1,6 +1,6 @@
 # `ot` machine-output contract
 
-This document pins the JSON / EDN contract every machine-readable `ot` command emits when called with `--format json` or `--format edn`. It is the shared surface between `ot` and any consumer (the pi extension, other coding harnesses, CI scripts, future Emacs companions). Bump rules are in `design/log/2026-05-18-tasks-extension-ot-cli.org` § Decisions.
+This document pins the JSON / EDN contract every machine-readable `ot` command emits when called with `--format json` or `--format edn`. It is the shared surface between `ot` and any consumer (the pi extension, other coding harnesses, CI scripts, future Emacs companions). Bump rules are in [../../../../design/log/2026-05-18-tasks-extension-ot-cli.org#Decisions](../../../../design/log/2026-05-18-tasks-extension-ot-cli.org#decisions).
 
 ## Schema version
 

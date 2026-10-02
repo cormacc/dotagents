@@ -64,7 +64,7 @@
              (set/intersection expected-operations (set (map #(vec (take 2 %)) @calls))))))))
 
 ;; Delegation never passes `:focus` or `:pane`, so the defaults -- the caller's own pane,
-;; `--no-focus` -- are what every delegated split gets (contract.md § Placement). Raw
+;; `--no-focus` -- are what every delegated split gets (contract.md section 'Placement'). Raw
 ;; passthrough may name another source pane and may request focus (task af7273fd).
 (deftest split-defaults-to-caller-pane-unfocused-and-honours-raw-options
   (let [calls (atom [])]

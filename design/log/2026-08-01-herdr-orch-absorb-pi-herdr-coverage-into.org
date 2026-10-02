@@ -69,7 +69,7 @@ Herdr control is now first-party: =herdr.clj= covers all 27 operations the npm e
 
 ** Shipped
 
-- MODIFIED =skills/herdr-orch/SKILL.md= (=#+SPEC:=) -- renamed skill, description naming both halves so discovery matches the charter, and § Executor tier and advisor strategy.
+- MODIFIED =skills/herdr-orch/SKILL.md= (=#+SPEC:=) -- renamed skill, description naming both halves so discovery matches the charter, and section 'Executor tier and advisor strategy'.
 - MODIFIED =skills/herdr-orch/scripts/docs/contract.md= (=#+SPEC:=) -- verb paths and env prefix throughout.
 - MODIFIED =herdr.clj= -- 11 to 27 operations, with self-close guard, bounded reads, visible-source fallback, readable list rendering and error-envelope mapping.
 - MODIFIED =cli.clj= -- =pane|tab|ws|agent= verb groups, delegation under =task=, and =spawn "<command>"= sugar that refuses a persona.

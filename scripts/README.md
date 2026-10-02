@@ -80,7 +80,7 @@ scripts/validate-skills.bb --python /path/to/venv/bin/python
 scripts/validate-skills.bb --python python3 --skills-dir .tmp/fixture
 ```
 
-Runs `skills/skill-creator/scripts/quick_validate.py` over every `skills/*/SKILL.md` in two tiers. First-party and adopted skills gate the exit code; the vendored set from `skills/README.org` § Vendored only warns, because those bodies follow upstream rather than this repository. `--skills-dir` exists so the gate itself can be tested against a fixture.
+Runs `skills/skill-creator/scripts/quick_validate.py` over every `skills/*/SKILL.md` in two tiers. First-party and adopted skills gate the exit code; the vendored set from [../skills/README.org#Vendored](../skills/README.org#vendored) only warns, because those bodies follow upstream rather than this repository. `--skills-dir` exists so the gate itself can be tested against a fixture.
 
 `scripts/check.sh` calls it in place of the previous single-skill validation, which checked only `skills/code-review` and so proved the tooling ran without covering the skill set.
 

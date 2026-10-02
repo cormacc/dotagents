@@ -546,7 +546,7 @@
         (is (= #{:task :file :parentId :section :previousParentId
                  :fromLevel :toLevel :movedCount :dryRun}
                (set (keys r)))
-            "ot move result keys are contract (docs/contract.md § ot move)")
+            "ot move result keys are contract (docs/contract.md section 'ot move')")
         (is (= (tasks-org root) (:file r)))))))
 
 (deftest move-mutator-content-projection-is-compact-by-default-and-opt-in

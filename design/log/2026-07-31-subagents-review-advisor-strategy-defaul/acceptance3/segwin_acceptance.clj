@@ -10,7 +10,7 @@
 
   * correctness — small deterministic cases plus randomised cross-checks against
     an independent brute-force implementation in this file.
-  * performance — the 30,000 / 30,000 workload from ASSIGNMENT.md §5 under a
+  * performance — the 30,000 / 30,000 workload from ASSIGNMENT.md section '5. Performance requirement' under a
     different seed, checked for BOTH result correctness at scale and completion
     inside the 60s budget, reported as two separate cases so a fast-but-wrong
     solution is distinguishable from a correct-but-slow one.

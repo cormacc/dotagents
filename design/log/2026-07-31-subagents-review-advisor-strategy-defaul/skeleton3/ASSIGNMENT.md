@@ -4,7 +4,7 @@ Implement `run-ops` in `src/segwin.clj`. The namespace, the function name, its
 arity, and the data shapes below are fixed by the skeleton — do not rename or
 relocate them. Add helpers freely.
 
-**This task has a hard performance requirement. Read §5 before you start coding —
+**This task has a hard performance requirement. Read [#5. Performance requirement](#5-performance-requirement) before you start coding —
 it constrains your choice of data structure, and a correct but naive solution will
 not pass.**
 

@@ -18,7 +18,7 @@ The `traits` launcher and root `bb.edn` task expose the shared interpolator to n
 
 The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/skills` is a *directory* symlink), uses the repository `bb.edn` when present, and falls back to `bb --deps-root <scripts> -Sdeps '{:paths ["src"]}'` for a bare skill subtree. It never `cd`s before `exec`, so the CLI's working directory is always the caller's -- that value becomes the child pane's `--cwd` and drives assignment-root/roster resolution. It has no additional Maven dependencies.
 
-Spawning verbs require Herdr 0.9.1 or newer on both the client and the running server. Preflight reads both from `herdr status --json` and refuses an older or unknown endpoint before allocating a ledger entry or touching a pane ([docs/contract.md](docs/contract.md) § Preconditions).
+Spawning verbs require Herdr 0.9.1 or newer on both the client and the running server. Preflight reads both from `herdr status --json` and refuses an older or unknown endpoint before allocating a ledger entry or touching a pane ([docs/contract.md#Preconditions](docs/contract.md#preconditions)).
 
 `task run` and `task start` take assignment text from one source: `--task`, `--task-file`, or stdin. `run` waits for a published item. `start` returns once the prompt is submitted, so collect its output later.
 
@@ -30,27 +30,27 @@ Command index. [docs/contract.md](docs/contract.md) owns precedence, guards, ref
 
 | Flag or command | Meaning | Detail |
 |---|---|---|
-| `--model MODEL` | select the model for one child | § Model resolution |
-| `--timeout MS` | set the wait budget | § Timeout resolution |
-| `--retro` / `--no-retro` | override retro gating for one spawn | § Retro gating |
-| `--spawns NAMES` / `none` | override the persona allow-list; `none` forces a leaf | § Spawn gating |
-| `--worktree <path>` / `new` | use an existing checkout or create one managed target | § Checkout target resolution |
-| `--tab` / `--split` | force placement; the flags are mutually exclusive | § Placement |
-| `task status [UUID]` / `task list` | inspect one round or list rounds | § JSON output |
-| `task collect UUID` | capture the next published item | § Ledger and completion |
-| `task collect --any` | capture the first same-session child to publish | § Fan-in |
-| `task collect UUID --close` | capture a terminal item, then request a guarded close | § Close |
-| `task publish` | append an immutable result item | § Ledger and completion |
-| `task poke UUID` | ask a settled child to publish after a missing or invalid result | § Poke |
-| `task prune UUID` | retire a stale uncaptured round after the child disappears | § Pruning |
-| `task close UUID` | use the normal guarded path to close an owned child pane | § Close |
-| `task close UUID --abandon` | retire the round without touching its pane: a captured round unconditionally, a never-published newest round only on idle/done or stopped-process evidence, never a blocked or working child | § Close |
-| `task close --settled` | close eligible captured children owned by this session | § Close |
-| `task continue UUID` | assign a root-owned child another round in the same pane | § Continue |
-| `task orphans` / `--close` | list or close captured rounds whose owner session ended | § Orphans |
-| `task compact UUID` / `--closed` | remove raw envelope bulk while retaining ledger history | § Retention |
-| `task harvest` | list this session's process-retro candidates | [SKILL.md](../SKILL.md) § Process retrospectives |
-| `worktree list` / `worktree remove UUID` | inspect targets or remove an eligible managed checkout | § Worktree reconciliation and teardown |
+| `--model MODEL` | select the model for one child | [docs/contract.md#Model resolution](docs/contract.md#model-resolution) |
+| `--timeout MS` | set the wait budget | [docs/contract.md#Timeout resolution](docs/contract.md#timeout-resolution) |
+| `--retro` / `--no-retro` | override retro gating for one spawn | [docs/contract.md#Retro gating](docs/contract.md#retro-gating) |
+| `--spawns NAMES` / `none` | override the persona allow-list; `none` forces a leaf | [docs/contract.md#Spawn gating](docs/contract.md#spawn-gating) |
+| `--worktree <path>` / `new` | use an existing checkout or create one managed target | [docs/contract.md#Checkout target resolution](docs/contract.md#checkout-target-resolution) |
+| `--tab` / `--split` | force placement; the flags are mutually exclusive | [docs/contract.md#Placement](docs/contract.md#placement) |
+| `task status [UUID]` / `task list` | inspect one round or list rounds | [docs/contract.md#JSON output](docs/contract.md#json-output) |
+| `task collect UUID` | capture the next published item | [docs/contract.md#Ledger and completion](docs/contract.md#ledger-and-completion) |
+| `task collect --any` | capture the first same-session child to publish | [docs/contract.md#Fan-in](docs/contract.md#fan-in) |
+| `task collect UUID --close` | capture a terminal item, then request a guarded close | [docs/contract.md#Close](docs/contract.md#close) |
+| `task publish` | append an immutable result item | [docs/contract.md#Ledger and completion](docs/contract.md#ledger-and-completion) |
+| `task poke UUID` | ask a settled child to publish after a missing or invalid result | [docs/contract.md#Poke](docs/contract.md#poke) |
+| `task prune UUID` | retire a stale uncaptured round after the child disappears | [docs/contract.md#Pruning](docs/contract.md#pruning) |
+| `task close UUID` | use the normal guarded path to close an owned child pane | [docs/contract.md#Close](docs/contract.md#close) |
+| `task close UUID --abandon` | retire the round without touching its pane: a captured round unconditionally, a never-published newest round only on idle/done or stopped-process evidence, never a blocked or working child | [docs/contract.md#Close](docs/contract.md#close) |
+| `task close --settled` | close eligible captured children owned by this session | [docs/contract.md#Close](docs/contract.md#close) |
+| `task continue UUID` | assign a root-owned child another round in the same pane | [docs/contract.md#Continue](docs/contract.md#continue) |
+| `task orphans` / `--close` | list or close captured rounds whose owner session ended | [docs/contract.md#Orphans](docs/contract.md#orphans) |
+| `task compact UUID` / `--closed` | remove raw envelope bulk while retaining ledger history | [docs/contract.md#Retention](docs/contract.md#retention) |
+| `task harvest` | list this session's process-retro candidates | [../SKILL.md#Process retrospectives](../SKILL.md#process-retrospectives) |
+| `worktree list` / `worktree remove UUID` | inspect targets or remove an eligible managed checkout | [docs/contract.md#Worktree reconciliation and teardown](docs/contract.md#worktree-reconciliation-and-teardown) |
 
 `--worktree <path>` may name an attached checkout outside the managed root for use, but `oh worktree remove` never removes such a checkout. `--worktree new` is the path that creates a checkout `oh` can later tear down. Concurrent target decision and ledger reservation are serialised across CLI processes, including a continuation racing an explicit start for the inherited checkout. Slow assignment input and Herdr inspection happen before the critical section. A read-only existing target with tracked or untracked dirt refuses before allocation. Worktree publications carry `CHECKPOINT`, require the complete repository witness, and check stream capacity before mutation, while branch integration and deletion remain parent-owned. Reconciliation reports present-but-invalid checkouts as `invalid` without following Git discovery upward.
 
@@ -77,15 +77,15 @@ A child calls the injected absolute launcher path:
 
 `--process` is repeatable, and `--from-file` accepts the same list as a `"process"` array.
 
-Each `--artifact` becomes a portable Markdown link. Use `<relative-path>` or `<relative-path> :: <purpose>`. The parent push shows an advisory link before validation. A successful `collect` or `collect --any` returns existence-validated links in `result.artifact-links`. The URI uses `Path.toUri` and contains no terminal-control escape. Clickability depends on the parent harness and terminal. See [docs/contract.md](docs/contract.md) § Artifact links.
+Each `--artifact` becomes a portable Markdown link. Use `<relative-path>` or `<relative-path> :: <purpose>`. The parent push shows an advisory link before validation. A successful `collect` or `collect --any` returns existence-validated links in `result.artifact-links`. The URI uses `Path.toUri` and contains no terminal-control escape. Clickability depends on the parent harness and terminal. See [docs/contract.md#Artifact links](docs/contract.md#artifact-links).
 
 ## Raw passthrough
 
 `oh` also wraps the raw Herdr `pane`, `tab`, `ws`, and `agent` verbs. The wrapper is not a transparent mirror: it imposes agent-facing defaults that differ from upstream, so pass the flags explicitly when upstream semantics matter. `oh agent wait` defaults to a 600 s timeout where `herdr` waits indefinitely, and the read family defaults to `--source recent-unwrapped` (upstream: `recent`), falls back to `visible` on empty output, and truncates to 2000 lines / 50 KB.
 
-`oh agent prompt <target> <text>` submits without waiting, exactly as the delegation verbs do. `--wait` waits on that same `agent prompt` call for the first settled `idle`, `done`, or `blocked` state, and `--until STATE` (repeatable) and `--timeout MS` ride on it. With `--wait` and no `--timeout`, no timeout is passed and Herdr waits **indefinitely** -- unlike `oh agent wait`, whose 600 000 ms default is unchanged and separate. `--until` or `--timeout` without `--wait` is refused before Herdr is invoked, never silently dropped or promoted into a wait. The Pi `herdr_agent prompt` tool defaults `wait` to true and maps to this one call; it refuses `until`/`timeout` with `wait=false` before invoking `oh`. Herdr's own outcomes (`agent_blocked`, `agent_prompt_stalled`, `timeout`) pass through unchanged ([docs/contract.md](docs/contract.md) § Start and prompt outcomes).
+`oh agent prompt <target> <text>` submits without waiting, exactly as the delegation verbs do. `--wait` waits on that same `agent prompt` call for the first settled `idle`, `done`, or `blocked` state, and `--until STATE` (repeatable) and `--timeout MS` ride on it. With `--wait` and no `--timeout`, no timeout is passed and Herdr waits **indefinitely** -- unlike `oh agent wait`, whose 600 000 ms default is unchanged and separate. `--until` or `--timeout` without `--wait` is refused before Herdr is invoked, never silently dropped or promoted into a wait. The Pi `herdr_agent prompt` tool defaults `wait` to true and maps to this one call; it refuses `until`/`timeout` with `wait=false` before invoking `oh`. Herdr's own outcomes (`agent_blocked`, `agent_prompt_stalled`, `timeout`) pass through unchanged ([docs/contract.md#Start and prompt outcomes](docs/contract.md#start-and-prompt-outcomes)).
 
-`oh agent start <name> --kind KIND --pane PANE` accepts any nonblank kind and lets the installed Herdr decide whether it exists (`herdr agent start --help` prints the live enum). A blank kind is refused before Herdr is invoked. `oh pane split [--pane PANE] [--direction right|down] [--cwd DIR] [--focus]` splits the named pane, defaulting to the caller's; an omitted direction is inferred from the *source* pane's geometry, and `--focus` requests focus where the default preserves it. Delegation never uses `--focus` ([docs/contract.md](docs/contract.md) § Placement). `oh pane wait-output` searches Herdr's selected snapshot immediately, including existing output, and now explicitly uses the same `recent-unwrapped` source default as the wrapper's read family instead of upstream's `recent`. A live probe put a marker into scrollback followed by 250 lines: `oh pane read --lines 300` and `wait-output --source recent-unwrapped --lines 300` found it, while the formerly unqualified wait timed out. Aligning the source default made `wait-output --lines 300` find it too. Snapshot depth still matters, so pass `--source` and `--lines` explicitly when the search window matters. `oh spawn "<shell command>"` runs an ordinary command in a new tab, always unfocused because it never delegates.
+`oh agent start <name> --kind KIND --pane PANE` accepts any nonblank kind and lets the installed Herdr decide whether it exists (`herdr agent start --help` prints the live enum). A blank kind is refused before Herdr is invoked. `oh pane split [--pane PANE] [--direction right|down] [--cwd DIR] [--focus]` splits the named pane, defaulting to the caller's; an omitted direction is inferred from the *source* pane's geometry, and `--focus` requests focus where the default preserves it. Delegation never uses `--focus` ([docs/contract.md#Placement](docs/contract.md#placement)). `oh pane wait-output` searches Herdr's selected snapshot immediately, including existing output, and now explicitly uses the same `recent-unwrapped` source default as the wrapper's read family instead of upstream's `recent`. A live probe put a marker into scrollback followed by 250 lines: `oh pane read --lines 300` and `wait-output --source recent-unwrapped --lines 300` found it, while the formerly unqualified wait timed out. Aligning the source default made `wait-output --lines 300` find it too. Snapshot depth still matters, so pass `--source` and `--lines` explicitly when the search window matters. `oh spawn "<shell command>"` runs an ordinary command in a new tab, always unfocused because it never delegates.
 
 ## Development
 

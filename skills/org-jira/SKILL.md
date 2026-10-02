@@ -134,7 +134,7 @@ In pi with the [`jira` extension](../../pi/extensions/jira/README.md) loaded, th
 
 ## Question-handling
 
-Follow `org-plan` § *Executing from a change-record*. Batch minor ambiguities into `* Open questions`. Raise design-affecting questions (extension API, data shape, cross-extension contract) immediately.
+Follow [../org-plan/SKILL.md#Executing from a change-record](../org-plan/SKILL.md#executing-from-a-change-record). Batch minor ambiguities into `* Open questions`. Raise design-affecting questions (extension API, data shape, cross-extension contract) immediately.
 
 ## Sandbox
 

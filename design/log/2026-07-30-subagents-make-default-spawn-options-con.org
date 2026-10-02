@@ -24,7 +24,7 @@ Rename the subagent CLI's model-table file =roster.edn= to =config.edn= and exte
 - Placement resolution =flag > configured default > shipped :split=, resolved once in a shared helper used by =spawn!= and =preview!=; =:tab-split= resolves per depth (root → tab, below-root → split) using the existing =HERDR_SUBAGENT_PERSONA= discriminator.
 - New value-less =--split= flag as the explicit counterpart to =--tab=; the pair is mutually exclusive.
 - =--print-prompt= reports the resolved placement.
-- Doc lockstep: =contract.md= (§ Model resolution → config, § Placement, =SUBAGENT_ASSIGNMENT_ROOT= env row), =SKILL.md=, =scripts/README.md=, repo =AGENTS.md=, =README.md=, =skills/README.org=, =skills/herdr-subagents/README.org=, config header comment.
+- Doc lockstep: ([[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution' → config, section 'Placement', =SUBAGENT_ASSIGNMENT_ROOT= env row), =SKILL.md=, =scripts/README.md=, repo =AGENTS.md=, =README.md=, =skills/README.org=, =skills/herdr-subagents/README.org=, config header comment.
 
 *** Out of scope
 - =:kind= defaults (=:inherit= restates the existing parent-kind fallback; a configured harness id has no current use case) — parked.
@@ -77,14 +77,14 @@ Rename the subagent CLI's model-table file =roster.edn= to =config.edn= and exte
 - Closed =:defaults= schema :: unknown keys inside =:defaults= are rejected so typos fail loud, unlike the deliberately open kind set in =:harnesses=.
 - Depth discriminator reuses =HERDR_SUBAGENT_PERSONA= :: same signal spawn gating uses, so =:tab-split='s root/below-root split can never diverge from the existing depth model. An agent with the var set outside =subagent= counts as below-root, consistently.
 - =:kind= defaults parked (YAGNI) :: =:inherit= restates =resolve-kind='s existing parent-kind fallback; a configured harness id awaits a real use case.
-- Terminology: only the model-table file is renamed :: SKILL.md's "roster" for the persona list (§ Roster and routing) is a distinct concept and keeps its name.
+- Terminology: only the model-table file is renamed :: SKILL.md's "roster" for the persona list (section 'Roster and routing') is a distinct concept and keeps its name.
 
 ** Shipped
 - MODIFIED [[proj:skills/herdr-subagents/subagents/config.edn]] — renamed from =roster.edn= (=git mv=, history preserved); now declares =:defaults {:placement :split}= alongside =:harnesses=/=:models=, with a header comment documenting the block and the override chain.
 - MODIFIED [[proj:skills/herdr-subagents/scripts/src/herdr_subagents/core.clj]] — =parse-roster=/=validate-roster-shape!=/=merge-roster= → =parse-config=/=validate-config-shape!=/=merge-config=; =merge-config= is =(apply merge-with merge configs)=; new pure =resolve-placement=; closed =:defaults= schema validated per file with the offending path.
 - MODIFIED [[proj:skills/herdr-subagents/scripts/src/herdr_subagents/cli.clj]] — =default-roster-path=/=roster-file=/=roster-config= → =default-config-path=/=config-file=/=config=; shared placement resolution for =spawn!= and =preview!=; new mutually-exclusive =--split= flag; =:placement= in =--print-prompt= and on the ledger entry.
-- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] — § Model resolution names =config.edn= and documents =:defaults= + closed schema + per-key merge; § Placement states the precedence and =:tab-split= depth rule; the no-inheritance invariant reworded from "spawn argv only" to "never persisted per-child, never inherited via environment"; =SUBAGENT_ASSIGNMENT_ROOT= row updated.
-- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] — § Roster and routing, § Invocation policy (configurable default + =--split=), § Manual fallback name the =config.edn= chain. The *persona*-list sense of "roster" deliberately keeps its name.
+- MODIFIED [[proj:skills/herdr-subagents/scripts/docs/contract.md]] — section 'Model resolution' names =config.edn= and documents =:defaults= + closed schema + per-key merge; section 'Placement' states the precedence and =:tab-split= depth rule; the no-inheritance invariant reworded from "spawn argv only" to "never persisted per-child, never inherited via environment"; =SUBAGENT_ASSIGNMENT_ROOT= row updated.
+- MODIFIED [[proj:skills/herdr-subagents/SKILL.md]] — section 'Roster and routing', section 'Invocation policy' (configurable default + =--split=), section 'Manual fallback' name the =config.edn= chain. The *persona*-list sense of "roster" deliberately keeps its name.
 - MODIFIED [[proj:skills/herdr-subagents/scripts/README.md]] — =config.edn= chain and reworded no-inheritance sentence.
 - MODIFIED =AGENTS.md=, =README.md=, =skills/README.org=, =skills/herdr-subagents/README.org= — =roster.edn= → =config.edn=.
 - MODIFIED test namespaces =cli_test.clj=, =core_test.clj=, =launcher_test.clj= — renamed references plus new placement/merge/validation/CLI coverage. Suite 404 → 407 tests, 2164 → 2217 assertions.
@@ -99,7 +99,7 @@ Rename the subagent CLI's model-table file =roster.edn= to =config.edn= and exte
 - A manually exported =HERDR_SUBAGENT_PERSONA= makes =:tab-split= resolve to split — accepted; consistent with spawn gating's treatment of the same state.
 
 ** Follow-ups
-- None outstanding. The cross-repo =dotfiles/AGENTS.md= update landed in the same session (see § Implementation); =agents.nix= needed no change, as expected.
+- None outstanding. The cross-repo =dotfiles/AGENTS.md= update landed in the same session (see [[*Implementation]]); =agents.nix= needed no change, as expected.
 
 * Plan
 
@@ -146,7 +146,7 @@ Seven live doc surfaces moved to =config.edn=; the no-inheritance invariant rewo
 
 * Implementation
 
-All three plan tasks were delegated to =worker= subagents on =gpt-5.6-terra= (kind resolved to pi by parent inheritance, translated to =openai-codex/gpt-5.6-terra=; a model ID never selects a harness). The docs and tests tasks ran concurrently against disjoint file sets. The orchestrator re-derived every load-bearing claim against source rather than trusting a child's report — see § Verification.
+All three plan tasks were delegated to =worker= subagents on =gpt-5.6-terra= (kind resolved to pi by parent inheritance, translated to =openai-codex/gpt-5.6-terra=; a model ID never selects a harness). The docs and tests tasks ran concurrently against disjoint file sets. The orchestrator re-derived every load-bearing claim against source rather than trusting a child's report — see [[*Verification]].
 
 - Symbol renames: =default-roster-path= → =default-config-path=, =roster-file= → =config-file=, =roster-config= → =config=, =parse-roster= → =parse-config=, =validate-roster-shape!= → =validate-config-shape!=, =merge-roster= → =merge-config=.
 - =merge-config= (=core.clj:167=) is exactly =(apply merge-with merge configs)=. The generic primitive gives =:defaults= per-key merging for free while preserving wholesale =:models= row replacement.

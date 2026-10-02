@@ -51,7 +51,7 @@ Plans are written for engineers with project context. Optimise for signal densit
 - Plan-task bodies are acceptance criteria plus, at most, one pointer or non-obvious constraint.
 - Avoid preamble, marketing tone, future-tense implementation narrative after work lands, and prose that restates task headings.
 - Write the end state, not the journey to it. A record describes what now exists and why it is that way; it is not a chronicle of how it got built. Delivery mechanics -- which agent did what, task sequencing, what was tried first -- are not durable. Do not re-enumerate what the diff and commit already carry: name a changed contract because a reader must know its shape changed, not to inventory files.
-- Do not hard-wrap. Write each paragraph and list item as a single logical line (soft-wrap); preserve real line breaks only in headings, drawers, keywords, tables, and src/example blocks. Never reflow a record to a fixed column such as 80. This is the canonical org-tasks rule (`../org-tasks/SKILL.md` § Protocol summary) applied to change-records.
+- Do not hard-wrap. Write each paragraph and list item as a single logical line (soft-wrap); preserve real line breaks only in headings, drawers, keywords, tables, and src/example blocks. Never reflow a record to a fixed column such as 80. This is the canonical org-tasks rule ([../org-tasks/SKILL.md#Protocol summary](../org-tasks/SKILL.md#protocol-summary)) applied to change-records.
 - Because of that rule, line counts say nothing about a record's density -- one bullet is one line however long it runs. Measure prose in words (`wc -w`), and exclude the `* Plan` scaffolding, whose drawers dominate a line count and are not yours to condense.
 - At closure, delete spike-style `* Implementation` subsections such as `*** What worked`, `*** What's awkward`, or `*** Implications for task N`; condense durable findings into Summary decisions/gotchas or implementation outcomes.
 
@@ -149,7 +149,7 @@ Pick one value per dimension. Calibrates ISC tightness, plan-task acceptance cri
 
 `#+SPEC:` is an optional, repeatable keyword naming relevant specification documents. The same keyword is used in two contexts, disambiguated by the file it appears in: in `TASKS.org` it declares where a project's living specs live (repo-wide discovery roots); in a change-record it lists the specs relevant to that one task. In records, cite **individual sub-specs** rather than broad roots or folders -- leave recursive/transitive aggregation to the TASKS.org discovery layer. Whether a relevant spec was actually *impacted* is a closeout determination recorded in `** Shipped` (ADDED/MODIFIED/REMOVED); `ot doctor`'s `spec-untouched` warning is only an advisory nudge.
 
-- Each `#+SPEC:` value is a bare `[[proj:PATH]]` org link (see `references/change-record-format.md` § Spec keyword) pointing at a spec **file or folder**; a folder is included recursively. The labelled `[[proj:PATH][label]]` form, bare non-link paths, and paths that are absolute or escape the repo root are rejected as malformed by `ot doctor`.
+- Each `#+SPEC:` value is a bare `[[proj:PATH]]` org link (see [references/change-record-format.md#Spec keyword](references/change-record-format.md#spec-keyword)) pointing at a spec **file or folder**; a folder is included recursively. The labelled `[[proj:PATH][label]]` form, bare non-link paths, and paths that are absolute or escape the repo root are rejected as malformed by `ot doctor`.
 - `#+SPEC:` is optional. When absent and `./design/SPEC.org` exists, that file is the default root. When neither is present, spec support is inert -- no warnings, no required behaviour change.
 - `#+SPEC:` is declared in `TASKS.org`. The discovery *convention* an agent performs may additionally honour a local `#+SPEC:` in gitignored `TASKS.local.org`, but `ot doctor` validates (malformed / dangling-path) only the `TASKS.org` declarations.
 - **Implicit specs** are always considered without needing a `#+SPEC:` entry: repository-root `README.*` (any extension), `AGENTS.md`, and a project-local skills directory (`.agents/skills` when present; in this repo the skills live at `skills/`).
@@ -247,7 +247,7 @@ An `** Acceptance` criterion may optionally cite the spec clause it satisfies an
 - [ ] Widget renders in dark mode → spec:[[proj:design/specs/theming.org]] test:`test/widget_test.clj` `dark-mode-render`
 ```
 
-See `references/change-record-format.md` § Acceptance criteria citation for a worked example, and `../org-tasks/references/ot-cli.md` § Spec keyword and checks for the `ot doctor` finding this feeds.
+See [references/change-record-format.md#Acceptance criteria citation](references/change-record-format.md#acceptance-criteria-citation) for a worked example, and [../org-tasks/references/ot-cli.md#Spec keyword and checks](../org-tasks/references/ot-cli.md#spec-keyword-and-checks) for the `ot doctor` finding this feeds.
 
 ### Splitting test
 
@@ -298,7 +298,7 @@ When drafting after work has started or completed:
 
 ## Executing from a change-record
 
-Before starting, ask whether questions should be batched in `* Open questions` for final review or raised immediately. Then resume via `org-tasks` § Resuming and agent memory. If commits touching the plan's target surface landed after the record was accepted, re-verify its pinned references and load-bearing assumptions against HEAD (or delegate a plan review) before implementing -- stale pins and drifted contracts are cheaper to catch before code exists.
+Before starting, ask whether questions should be batched in `* Open questions` for final review or raised immediately. Then resume via [../org-tasks/SKILL.md#Resuming and agent memory](../org-tasks/SKILL.md#resuming-and-agent-memory). If commits touching the plan's target surface landed after the record was accepted, re-verify its pinned references and load-bearing assumptions against HEAD (or delegate a plan review) before implementing -- stale pins and drifted contracts are cheaper to catch before code exists.
 
 For each plan task:
 
@@ -323,7 +323,7 @@ When amending an accepted record, re-scan `** Decisions` and `** Scope`'s out-of
 
 Before transitioning a top-level task to `DONE`, walk the record end-to-end with two questions: does each section still earn its place, and does it follow the density rules above?
 
-Record closure is not itself a retro trigger, but it is the checkpoint to check for one: per `org-tasks` § Session closeout, scan for the signals defined by `retro` -- including unscanned child `PROCESS` candidates from delegation -- persist the task and record first, then offer one separate retro when signals exist. Route approved durable agent-process findings through [`self-improvement`](../self-improvement/SKILL.md); reference resulting TODOs in `** Follow-ups` only when they are relevant to the project change-record.
+Record closure is not itself a retro trigger, but it is the checkpoint to check for one: per [../org-tasks/SKILL.md#Session closeout](../org-tasks/SKILL.md#session-closeout), scan for the signals defined by `retro` -- including unscanned child `PROCESS` candidates from delegation -- persist the task and record first, then offer one separate retro when signals exist. Route approved durable agent-process findings through [`self-improvement`](../self-improvement/SKILL.md); reference resulting TODOs in `** Follow-ups` only when they are relevant to the project change-record.
 
 Refresh:
 

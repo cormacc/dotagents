@@ -605,7 +605,7 @@
 ;; even when that value is the entry unchanged, so an equal-observation branch living only
 ;; inside `f` still performed an atomic rewrite on every call -- on every wait tick, for a
 ;; settled child polled repeatedly. The pre-check here is what makes "no ledger write at
-;; all" (contract.md § Ledger and completion) true, and it also removes the no-op case from
+;; all" (contract.md section 'Ledger and completion') true, and it also removes the no-op case from
 ;; the documented read-modify-write lost-update race entirely rather than merely returning
 ;; the same value from inside it; the genuinely different-observation branch still runs the
 ;; race, unchanged. The `cond` retained inside `f` is the safety net for the race window
@@ -1379,7 +1379,7 @@
             (finish-capture! entry parsed owned?)
             {:status "pending" :terminal? false :task task :pane-id (:pane-id entry)})))))
 ;; --- explicit stale-entry pruning ---------------------------------------------------
-;; Remedies the one known `collect --any` gap (contract.md § Fan-in "Known limitation"):
+;; Remedies the one known `collect --any` gap (contract.md section 'Fan-in' "Known limitation"):
 ;; a `run`/`start` killed between `ledger/write!` and its cleanup leaves a same-session,
 ;; uncaptured, non-`failed` entry that no `RESULT` will ever complete and whose named
 ;; child can never reappear in `agent list` — yet it satisfies the `--any` candidate
@@ -1464,7 +1464,7 @@
 ;;
 ;; Ownership is `prune!`'s rule exactly -- both `:parent-session`s non-nil and equal -- with
 ;; no exception for a dead owner, deliberately. An entry whose owning session has gone is
-;; therefore unclosable through this verb, and its pane is an operator cleanup (§ Close in
+;; therefore unclosable through this verb, and its pane is an operator cleanup (section 'Close' in
 ;; contract.md), the same remedy `prune` already prescribes for another session's stale entry.
 ;;
 ;; Two mechanisms were considered and both rejected on evidence. Testing whether the recorded
@@ -1615,7 +1615,7 @@
 ;; same as a pane that is provably gone. Where absence is merely one branch of a decision
 ;; that is about to mutate the ledger, that conflation fails open: only `pane_not_found`
 ;; is positive evidence that a pane is absent. This three-way read keeps the unusable case
-;; separate so the caller can refuse it (contract.md § Close: an unreadable inspection is
+;; separate so the caller can refuse it (contract.md section 'Close': an unreadable inspection is
 ;; unusable evidence and fails closed).
 (defn- pane-absence [pane]
   (try (if (herdr/pane! pane) :present :unknown)
@@ -1785,7 +1785,7 @@
 (defn- abandon-unpublished! [entry]
   (let [task (:task entry) child (:child entry) pane (:pane-id entry)
         evidence (abandonment-evidence! entry)
-        ;; Publication contends for this same lock (§ Ledger and completion). Whichever
+        ;; Publication contends for this same lock (section 'Ledger and completion'). Whichever
         ;; side takes it first wins: an item that landed before us is preserved and refused
         ;; here; a `:closed-at` written by us makes `assert-publishable!` refuse a later
         ;; publish without creating an item.
@@ -1906,7 +1906,7 @@
 ;;
 ;; The authority really is the operator's, because "not this session" is not "dead": a
 ;; concurrently delegating session's captured, unclosed child is indistinguishable from a
-;; true orphan here, and no available signal separates them (see § Close in contract.md).
+;; true orphan here, and no available signal separates them (see section 'Close' in contract.md).
 ;; So listing is the default, `--close` must be asked for, and the two are one verb
 ;; precisely so the list is read before the sweep.
 ;; Closeout fix (P1): root-only, mirroring `continue`'s guard and gated on the identical
@@ -2112,7 +2112,7 @@
 ;; is read from those retained item files directly. The one honest caveat is
 ;; that `RESULT` lives in gitignored scratch (`.tmp/`): an operator who clears that tree loses
 ;; the raw text for good, while every parsed field on the entry remains. Recorded in
-;; contract.md § Retention rather than traded away silently.
+;; contract.md section 'Retention' rather than traded away silently.
 ;;
 ;; Age-plus-closed *deletion* was the admissible alternative and is rejected: it retires
 ;; exactly the entries worth keeping, since the ones old enough to qualify are the ones whose

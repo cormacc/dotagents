@@ -57,7 +57,7 @@ than the total:
 A thrown exception counts as one errored case and never aborts the run, so a
 partially working implementation still scores.
 
-**Calibration** (already measured, see § Validation):
+**Calibration** (already measured, see [#Validation](#validation)):
 
 - Reference implementation: **35/35 (100%)** — the contract is satisfiable
   exactly as written.

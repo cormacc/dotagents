@@ -57,7 +57,7 @@ run in the consult's transcript:
 
 The free-text route is therefore *functional*, and the case for a structured flag
 rests on ergonomics and discoverability rather than on reliability. Note the
-mechanism is only as good as the executor honouring it — see §3 on feather.
+mechanism is only as good as the executor honouring it — see [#3. Should worker and skilled-worker merge? — The evidence favours a no-advisor default, not a merge.](#3-should-worker-and-skilled-worker-merge--the-evidence-favours-a-no-advisor-default-not-a-merge) on feather.
 
 ### 3. Should worker and skilled-worker merge? — The evidence favours a no-advisor default, not a merge.
 

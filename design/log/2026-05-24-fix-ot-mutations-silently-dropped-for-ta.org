@@ -94,7 +94,7 @@ CLOSED: [2026-05-25 Mon 09:26]
 Acceptance criteria:
 - New `doctor` finding "import-child not saveable" that flags any `:source-path` reachable via `:import-children` whose `:file-root?` task collection would produce an empty serialization input (i.e. the loader regressed and dropped the file). Severity warn.
 - `skills/org-tasks/scripts/docs/contract.md` documents that all ID-accepting mutators operate identically on TASKS.org and `#+IMPORT:`-linked plan-file targets.
-- `skills/org-tasks/SKILL.md` § "Tooling quick reference" mentions plan-subtask support explicitly for `ot status` and friends (one line).
+- [[file:../../skills/org-tasks/SKILL.md]] section 'Tooling quick reference' mentions plan-subtask support explicitly for `ot status` and friends (one line).
 
 * Implementation
 

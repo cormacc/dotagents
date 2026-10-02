@@ -12,7 +12,7 @@ Qwen3.8-27B-GGUF-Q4_K_M --tools read,write --mode json`, plus `--skill
 <candidate-path>` for the four skill conditions (omitted for the no-skill
 control).
 
-The `home/AGENTS.md` § ASD-STE100 block was removed before the first run
+The `home/AGENTS.md` section 'ASD-STE100' block was removed before the first run
 and git-restored byte-identical after the last run (`git diff --
 home/AGENTS.md` empty; see `round3/harness.md` for the paired positive
 control on that removal).

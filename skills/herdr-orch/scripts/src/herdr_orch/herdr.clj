@@ -86,7 +86,7 @@
          panes (get-in layout [:result :layout :panes]) match (some #(when (= pane (:pane_id %)) %) panes)]
      (or (:rect match) (throw (ex-info "source pane absent from Herdr layout" {:pane pane :panes panes}))))))
 ;; `:focus` is a raw-passthrough option only. Delegation (`spawn!`) never passes it, so the
-;; default `--no-focus` is what every delegated split gets (contract.md § Placement).
+;; default `--no-focus` is what every delegated split gets (contract.md section 'Placement').
 (defn split! [{:keys [pane direction cwd env focus]}]
   (let [pane (or pane (System/getenv "HERDR_PANE_ID"))]
     (get-in (value! (into ["pane" "split" "--pane" pane "--direction" direction "--cwd" cwd (if focus "--focus" "--no-focus")]

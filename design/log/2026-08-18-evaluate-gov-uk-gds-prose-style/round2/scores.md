@@ -15,7 +15,7 @@ not by reading alone: distinctive-token grep counts (`7KB`, `otList`,
 `persistent-widget`, `9,600`/`9.6k`, `1,100`/`1.1k`, and others) against the
 source and every rewrite, plus bullet/checkbox/heading item counts per
 section. Every count matched the source in every condition (full detail in
-`report.md` § Meaning-preservation audit). Because a dropped claim is the
+[report.md#Meaning-preservation audit](report.md#meaning-preservation-audit)). Because a dropped claim is the
 rubric's only automatic score-cap, no score below is capped for that reason.
 Differences below are quality differences among fully meaning-preserving
 rewrites.
@@ -27,13 +27,13 @@ rewrites.
 | asd-ste100 | 4 | No drops (probe-confirmed). Full STE decomposition into short sentences. The closing admonition is the only rewrite of the five to reorder the source's trailing condition to lead ("Before you use a harness/* name, confirm..."), matching the rubric's "conditions before commands" check most closely. Converts the source's passive "Requires building with `--features plugin`" into a clean imperative ("To build plugin support, use..."). Costs: the heaviest word growth of the five (705 vs 532 source words, +33%) from short-sentence repetition ("It has about 9,600 lines... It already sends... `ot` uses the schema... `ot` is written..."). |
 | technical-prose | 4 | No drops. Same rule set and near-identical quality to asd-ste100 (expected: it is a runtime-cost refactor of the same rules, not a rules change). One explicit win over the source and over asd-ste100: renders the hooks list as "include (but are not limited to)" instead of relying on an implicit "such as", stating the non-exhaustive hedge explicitly. Keeps the trailing condition after the command in the closing admonition, unlike asd-ste100. |
 | simple-prose | 4 | No drops. Reads more fluidly than the STE-derived pair, restructuring the two-location list and the harness/* function list into clean bullets without the STE staccato. One genuine defect: capitalises "Dirge" at three sentence starts ("Dirge auto-loads...", "Dirge finds hooks...", "Dirge's plugin surface...") where the source, the vendored `skills/dirge/SKILL.md`, and every other round 2 rewrite keep it lowercase throughout, including at sentence starts (`grep -n "^Dirge\|\. Dirge\|dirge's" skills/dirge/SKILL.md` confirms the vendored skill's own convention). Treated as a minor identifier-casing slip rather than the rubric's "identifier altered" cap, because it does not change which symbol is referenced or introduce a machine-parseable ambiguity -- but it is the only identifier-fidelity defect found in any of the 15 rewrites and is named here rather than silently absorbed into the score. Also keeps the source's declarative framing for the `--features plugin` line ("Building a plugin-enabled dirge needs...") rather than converting it to an imperative, a smaller miss on directive precision than asd-ste100/technical-prose. |
-| govuk-style | 4 | No drops -- the round 1 defect pattern did not recur (see report.md § Recurrence). The leanest rewrite of the five (595 vs 532 source words, +12%, against the STE pair's +29-33%), close paraphrase, consistent lowercase `dirge`. Same declarative-not-imperative miss on the `--features plugin` line as simple-prose ("Plugins need a build with..."). |
+| govuk-style | 4 | No drops -- the round 1 defect pattern did not recur (see [report.md#Recurrence: did the round 1 drops repeat in the round 2 gist run?](report.md#recurrence-did-the-round-1-drops-repeat-in-the-round-2-gist-run)). The leanest rewrite of the five (595 vs 532 source words, +12%, against the STE pair's +29-33%), close paraphrase, consistent lowercase `dirge`. Same declarative-not-imperative miss on the `--features plugin` line as simple-prose ("Plugins need a build with..."). |
 | no-skill-control | 4 | No drops -- the single prompt line "Use Simplified Technical English" produced a rewrite indistinguishable in quality from the two STE skills on this sample: same imperative conversion of the `--features plugin` line, same hook-list hedge ("...and others"), same word growth in the STE band (667 vs 532, +25%). No skill's rules add a checkable, scoreable improvement over the prompt line on this specific sample. |
 
 All five tie at 4. This is itself a finding: on this strict sample, none of
 the four skills demonstrably outperforms the free one-line control, and the
 STE-derived skills do not demonstrably outperform the GDS-derived ones --
-see report.md § Control question.
+see [report.md#Control question](report.md#control-question).
 
 ## Dimension 2: explanatory-prose output quality
 

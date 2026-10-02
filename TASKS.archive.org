@@ -528,7 +528,7 @@ CLOSED: [2026-05-12 Tue 10:26]
 Expose a primitive that returns a single top-level section of a change-record file (`* Summary`, `* Context`, `* Plan`, `* Implementation`, `* Validation`, `* Open questions`), including any nested subheadings up to the next level-1 boundary, so agents on resume / review can fetch just the surface the `org-tasks` protocol declares "eagerly loaded" without pulling the entire ledger into context.
 
 Motivation:
-- `org-tasks` § *Resuming and agent memory* says only `* Summary` (and `* Context` when promoted, plus `OPEN` items under `* Open questions`) should be eagerly loaded; `* Implementation` and completed plan-task bodies are explicitly "defer until needed".
+- [[file:skills/org-tasks/SKILL.md]] section 'Resuming and agent memory' says only `* Summary` (and `* Context` when promoted, plus `OPEN` items under `* Open questions`) should be eagerly loaded; `* Implementation` and completed plan-task bodies are explicitly "defer until needed".
 - Today the `tasks` extension exposes no read tool, so agents either `read` the whole file (expensive when records carry a 150+ line Implementation ledger) or do a `rg` + ranged `read` two-step.
 - The closure-refresh helpers in `summary.ts` already know how to locate `* Summary`; section extraction is the same shape generalised over a heading name.
 
@@ -1347,7 +1347,7 @@ Agreed plan (compressed session, documented inline per user request — no separ
 - Acceptance: composed prompt for all personas names `BLOCKED` and `FAILED` with the unrecoverable/blocking-dependency bar; states partial-account and no-re-publish-after-recovery; added prompt text ≤2 lines; fake-env `--print-prompt` unit assertions pass (`cli_test.clj`, same pattern as `retro-gating-is-resolved-and-recorded`); `scripts/docs/contract.md` and `SKILL.md` gain one sentence each defining BLOCKED (dependency, pane retained, resumable) vs FAILED (unrecoverable, closable) semantics so parents expect partial accounts.
 - Anti-criteria: no change to envelope grammar, publish mechanics, wait/capture behaviour, or the live smoke.
 
-Shipped: one invariant sentence appended to the publish instruction in `prompt-text` (cli.clj); `failure-publication-instruction-is-invariant` in cli_test.clj asserts BLOCKED/FAILED naming, the unrecoverable-after-retries bar, partial-account, and no-re-publish across worker/scout/researcher/planner via fake-env `--print-prompt`; MODIFIED `scripts/docs/contract.md` (§ Ledger and completion) and `SKILL.md` (§ Completion and pane safety) with matching BLOCKED-vs-FAILED semantics. `bb test`: 267 tests, 1129 assertions, 0 failures. All anti-criteria held — src diff touches `prompt-text` only.
+Shipped: one invariant sentence appended to the publish instruction in `prompt-text` (cli.clj); `failure-publication-instruction-is-invariant` in cli_test.clj asserts BLOCKED/FAILED naming, the unrecoverable-after-retries bar, partial-account, and no-re-publish across worker/scout/researcher/planner via fake-env `--print-prompt`; MODIFIED `scripts/docs/contract.md` (section 'Ledger and completion') and ([[file:skills/herdr-orch/SKILL.md]] section 'Completion and pane safety') with matching BLOCKED-vs-FAILED semantics. `bb test`: 267 tests, 1129 assertions, 0 failures. All anti-criteria held — src diff touches `prompt-text` only.
 
 Origin:
 - cwd: /home/cormacc/dotfiles/agents
@@ -1643,7 +1643,7 @@ CLOSED: [2026-07-29 Wed 13:36]
 - Created [2026-07-29 Wed 13:35]
 - State "DONE" from "TODO" [2026-07-29 Wed 13:36]
 :END:
-Inline change (no record): renamed subagents/worker.md -> skilled-worker.md (frontier executor, claude-opus, spawns scout researcher) and subagents/advised-worker.md -> worker.md (default executor with mandatory advisor consult, claude-sonnet, spawns scout researcher advisor) via git mv. All eight roster definitions now declare unversioned canonical model aliases (claude-fable/claude-opus/claude-sonnet; scout/researcher/worker on claude-sonnet). SKILL.md updated: frontmatter persona list, spawn-grant sentence, § Advisor strategy retitled 'default worker' with a rename note for the 2026-07-29 advisor-strategy record. Three live-roster-coupled deftests in cli_test.clj updated (advisor grant + unversioned label suffix); bb test green (323/1576). Verified via --print-prompt probes for both personas.
+Inline change (no record): renamed subagents/worker.md -> skilled-worker.md (frontier executor, claude-opus, spawns scout researcher) and subagents/advised-worker.md -> worker.md (default executor with mandatory advisor consult, claude-sonnet, spawns scout researcher advisor) via git mv. All eight roster definitions now declare unversioned canonical model aliases (claude-fable/claude-opus/claude-sonnet; scout/researcher/worker on claude-sonnet). SKILL.md updated: frontmatter persona list, spawn-grant sentence, section 'Advisor strategy' retitled 'default worker' with a rename note for the 2026-07-29 advisor-strategy record. Three live-roster-coupled deftests in cli_test.clj updated (advisor grant + unversioned label suffix); bb test green (323/1576). Verified via --print-prompt probes for both personas.
 
 ** DONE subagent comms housekeeping
 CLOSED: [2026-07-30 Thu 14:36]
@@ -1736,7 +1736,7 @@ CLOSED: [2026-07-30 Thu 17:49]
 - Created [2026-07-28 Tue 14:02]
 - State "DONE" from "TODO" [2026-07-30 Thu 17:49]
 :END:
-The org-plan Spec/test citation contract (SKILL.md § Spec/test citation on acceptance criteria, ~:239-247) allows bare file:line test references, and § plan-task bodies (~:263) actively recommends file:line pointers. During the per-persona-spawn-capability plan review, a bare cli_test.clj:69-79 pin went stale within one day of unrelated drift (--tab tests landed, block moved to ~:146-157), costing review effort to re-locate. Three subagent children independently surfaced the same lesson.
+The org-plan Spec/test citation contract ([[file:skills/org-plan/SKILL.md]] section 'Spec/test citation on acceptance criteria', ~:239-247) allows bare file:line test references, and section 'plan-task bodies' (~:263) actively recommends file:line pointers. During the per-persona-spawn-capability plan review, a bare cli_test.clj:69-79 pin went stale within one day of unrelated drift (--tab tests landed, block moved to ~:146-157), costing review effort to re-locate. Three subagent children independently surfaced the same lesson.
 
 Desired outcome: amend the citation guidance to prefer a deftest/symbol name plus a short quoted source anchor when citing tests in change-records, reserving bare line numbers for cheap-to-re-derive one-off pointers.
 
@@ -2167,14 +2167,14 @@ Every `oh task run`/`start`/`--print-prompt` runs `herdr --version` plus 12 `her
 Design (inline, agreed -- no change-record):
 - Reduce `preflight!` to the `HERDR_ENV` check plus the existing version gate; delete `required-capabilities` and `command-help`.
 - Do NOT map CLI flags onto `herdr api schema`: the schema describes the socket protocol, so that would add machinery rather than remove it. The version gate already produces the actionable pre-mutation error the probes were defending.
-- Simplify the fake-herdr fixture accordingly (its per-command help emulation exists only for these probes), and update contract.md § Preconditions plus the README known-regression note that pairs `required-capabilities` with the fixture help output.
+- Simplify the fake-herdr fixture accordingly (its per-command help emulation exists only for these probes), and update [[file:skills/herdr-orch/scripts/docs/contract.md]] section 'Preconditions' plus the README known-regression note that pairs `required-capabilities` with the fixture help output.
 
 Acceptance criteria:
 - [ ] A spawn issues exactly one `herdr` preflight subprocess (the version check), down from 13.
 - [ ] An under-minimum Herdr still fails before any pane or ledger mutation, with a message naming the required version.
 - [ ] `required-capabilities` and `command-help` no longer exist in `herdr.clj`.
 - [ ] `bb test` passes with the fixture help-shape emulation removed.
-- [ ] contract.md § Preconditions and README.org no longer describe per-command capability probing.
+- [ ] [[file:skills/herdr-orch/scripts/docs/contract.md]] section 'Preconditions' and README.org no longer describe per-command capability probing.
 - Must not: change spawn, capture, closure, or ledger behaviour.
 - Must not: add a socket-protocol capability check in place of the probes.
 
@@ -2854,7 +2854,7 @@ Agreed approach (inline flow, no change record; 2026-08-12):
 - =home/AGENTS.md= holds the portable rules and is what =agents.nix= projects to =~/.pi/agent/AGENTS.md=. Repo-root =AGENTS.md= becomes the dotagents project file, discovered by ordinary cwd resolution. Only the project file must sit at the root, so the global one moves into a subdirectory rather than the reverse. Precedent for a nested scoped guide already exists at =skills/org-tasks/scripts/AGENTS.md=.
 - A claim-by-claim duplication test drove the partition rather than topic sorting. The whole =# Subagents= section (233 words) was deleted, not split: every claim already exists in =skills/herdr-orch/SKILL.md= (resolution precedence, kind-as-deployment-property, weights), =scripts/docs/contract.md= (=:models=/=:aliases= merge semantics, pi pass-through), =README.org=, and the =subagents/config.edn= header comment. Only one clause was unique -- that this repo supplies the home override layer and it must be edited here, not under =~= -- and that is a maintenance fact for the project file.
 - =# File operations= stays global almost intact: no skill owns general shell/CLI hygiene, so the rg/grep/sed/printf/argv corpus has no other home. Contrary to the initial expectation that it would be the most recoverable from skills, it was the least.
-- Bullets that other files actively cite are retained verbatim: =herdr-orch= § Trusting a result defers to "AGENTS.md's CRITICAL rule is unconditional and outside this probe budget", and § Assignment premises specialises the measured-claims rule. Deleting either would break a live reference.
+- Bullets that other files actively cite are retained verbatim: [[file:skills/herdr-orch/SKILL.md]] section 'Trusting a result' defers to "AGENTS.md's CRITICAL rule is unconditional and outside this probe budget", and section 'Assignment premises' specialises the measured-claims rule. Deleting either would break a live reference.
 - New global rule added, not migrated: prefer Babashka to both shell and Python, with a checkable threshold (a loop, a conditional, string manipulation, or a second pipe earns a =.tmp/*.clj= script; single commands stay shell). Nothing previously stated a preference over bash.
 
 Sequencing matters because =agents.nix= changing a symlink *source path* needs a Home Manager switch, unlike content edits which are live. Order chosen so no window exists where the global rules are absent: create =home/AGENTS.md= and repoint =agents.nix= while root stays intact (brief duplication), switch, verify, then trim root. The reverse order would drop the rules until the switch ran.
@@ -2868,7 +2868,7 @@ Shipped:
 - =home/AGENTS.md= (1803 words, 37 bullets) holds the portable rules and is projected to =~/.pi/agent/AGENTS.md=; repo-root =AGENTS.md= (294 words, 4 bullets) is now the dotagents project file, discovered by cwd. The two share no bullet, and every original bullet survives in one of them except the three deliberately deleted =# Subagents= duplicates and the superseded Babashka bullet. Retained bullets were lifted by line number and checked byte-identical rather than retyped.
 - Claude reached parity with pi: =home/CLAUDE.md= is a one-line =@= import of =home/AGENTS.md=, symlinked to =~/.claude/CLAUDE.md=. The import is written absolute because the file is reached through a symlink and a relative =@AGENTS.md= would resolve differently depending on whether Claude takes the dirname before or after resolving the link; the absolute form is correct either way. Repo-root =CLAUDE.md= stays a bare =@AGENTS.md= so an in-repo claude session does not load the portable rules twice.
 - =README.md= tree and symlink list updated. One claim there was stale rather than merely duplicated and was corrected: it said Home Manager "deliberately does not manage =~/.agents/subagents/=", while =agents.nix= records that the path is now managed so the harness permission overrides ship to every host. The persona-resolution paragraph was deliberately kept -- duplication is acceptable there as human orientation.
-- =org-plan= § The project constitution now names both AGENTS.md files as constitutional; =self-improvement= routing now asks whether a finding holds in every project before choosing between them.
+- [[file:skills/org-plan/SKILL.md]] section 'The project constitution' now names both AGENTS.md files as constitutional; =self-improvement= routing now asks whether a finding holds in every project before choosing between them.
 
 Open at closure: =~/.claude/CLAUDE.md= is wired but unverified until the next =home-manager switch=, since the symlink does not exist before activation. The pi side was verified live (=realpath= resolved into =home/=) before the root file was trimmed.
 
@@ -2956,7 +2956,7 @@ Acceptance criteria:
 - [X] =oh= rejects an unknown =task= option with an =unknown option= error instead of parsing and ignoring it (b0eb67fc).
 - [X] That rejection is triggered deliberately with known-bad input, in final argv position as well as mid-argv, before the subtask is called done (b0eb67fc).
 - [X] A test in the herdr-orch scripts suite fails if an unknown =task= option is accepted again (b0eb67fc).
-- [X] What =oh pane wait-output= searches is measured against a pane holding a marker already in scrollback, and the result is documented in =scripts/README.md= § Raw passthrough (1fdcee79).
+- [X] What =oh pane wait-output= searches is measured against a pane holding a marker already in scrollback, and the result is documented in =scripts/README.md= section 'Raw passthrough' (1fdcee79).
 - [X] Both test-fixture environment facts are confirmed against the current fixtures and documented where the scripts' testing guidance lives (67518ea0) -- one confirmed, and the second *did not reproduce*: clearing =HERDR_ORCH_PERSONA= alone is what marks a caller below-root, not the five variables the task body claimed, so the README records the correction rather than the report.
 
 Closure note [2026-08-12 Wed]: the option-validation fix grew a second pass after review. The per-group option table it introduced immediately drifted from the built-in help in both directions (=--native= documented but rejected, =--parent-model= accepted but documented nowhere), so the table was deleted and the accepted set is now derived from =signatures=, making the two incapable of disagreeing. Removing =--parent-model= then exposed that =resolve-model='s same-kind inheritance tier had no producer at all; it now has one (=HERDR_ORCH_MODEL= injected per spawn, harness env at the root), one level at every depth. That tier is reachable only by a roster persona declaring no =model:=, which no packaged persona does -- see the persona-less subagent follow-up.
@@ -2979,7 +2979,7 @@ CLOSED: [2026-08-12 Wed 22:01]
 :END:
 The injected child prompt never states that a published SUMMARY must be a single line, so children discover the constraint by having a publish rejected mid-run.
 
-=scripts/docs/contract.md= § Ledger and completion specifies =SUMMARY: <single line>=, and =core.clj/parse-result= reads the envelope line-wise via =field-labels=. But =cli.clj/publication-guidance= -- the only publication text a child actually receives, since a child never reads contract.md -- covers report paths, =--artifact=, =--finding=, and "never treat pane text as the result", and says nothing about line shape.
+=scripts/docs/contract.md= section 'Ledger and completion' specifies =SUMMARY: <single line>=, and =core.clj/parse-result= reads the envelope line-wise via =field-labels=. But =cli.clj/publication-guidance= -- the only publication text a child actually receives, since a child never reads contract.md -- covers report paths, =--artifact=, =--finding=, and "never treat pane text as the result", and says nothing about line shape.
 
 Outcome (56d03f9): =publication-guidance= now states the single-line constraint and routes multi-line detail to =--finding= / the report artifact, pinned by =publication-guidance-is-exact-and-unconditional=. Raised as a PROCESS candidate by reviewer-c42a8132 after its own multiline summary was rejected.
 *** DONE herdr-orch: oh silently accepts unknown task options
@@ -3017,13 +3017,13 @@ CLOSED: [2026-08-12 Wed 22:13]
 - State "STARTED" from "TODO" [2026-08-12 Wed 22:10]
 - State "DONE" from "STARTED" [2026-08-12 Wed 22:13]
 :END:
-Determine what window =oh pane wait-output= actually searches, then document it in =scripts/README.md= § Raw passthrough alongside the existing wrapper-vs-upstream default differences.
+Determine what window =oh pane wait-output= actually searches, then document it in =scripts/README.md= section 'Raw passthrough' alongside the existing wrapper-vs-upstream default differences.
 
 Reported by worker-89073d9a (task 89073d9a-7208-4cc0-8cef-a386f81f71c6): =wait-output= twice timed out on markers that a =--source recent-unwrapped= read showed immediately. Filed unverified, pending the live pane experiment that later settled it.
 
 Why it is plausible: =herdr.clj/pane-wait-output!= passes =--source= only when the caller supplies one, so an unqualified =wait-output= takes the upstream default, while =scripts/README.md= records that the *read* family is defaulted by the wrapper to =recent-unwrapped= (upstream: =recent=). If the two verbs search different windows, a marker already in scrollback can be visible to one and invisible to the other -- which reads as "the process never emitted it" rather than "I searched the wrong window".
 
-Outcome (25fed47): the report reproduced. A marker followed by 250 lines of output was found by =pane read --lines 300= and by =wait-output --source recent-unwrapped --lines 300=, while the unqualified wait timed out. =pane-wait-output!= now defaults its source to =recent-unwrapped=, matching the read family, and § Raw passthrough records that default plus the remaining snapshot-depth caveat. Originally a child PROCESS candidate from worker-89073d9a.
+Outcome (25fed47): the report reproduced. A marker followed by 250 lines of output was found by =pane read --lines 300= and by =wait-output --source recent-unwrapped --lines 300=, while the unqualified wait timed out. =pane-wait-output!= now defaults its source to =recent-unwrapped=, matching the read family, and section 'Raw passthrough' records that default plus the remaining snapshot-depth caveat. Originally a child PROCESS candidate from worker-89073d9a.
 *** DONE herdr-orch: document test-fixture environment requirements :skill:herdr_orch:
 CLOSED: [2026-08-12 Wed 22:16]
 :PROPERTIES:
@@ -3068,13 +3068,13 @@ An earlier rejection of CLI-detected parallelism is withdrawn: it conflated *wil
 Settled [2026-08-13 Thu], and deliberately not re-opened in code:
 - Always create from the parent's current HEAD, and do not guard it: the implementation cannot produce a non-HEAD base, so no check, flag, or warning is warranted. The divergence rationale first recorded here had the right conclusion for the wrong reason, and the correction matters because it changes what an implementer must keep straight. Verified [2026-08-13]: `persona-directories` and `trait-directories` in cli.clj resolve their project layer from `ledger/assignment-root`, not from the child's git root, and the packaged layer from `skill-directory`, which pins to the launcher path. Since a worktree child has `ORCH_ASSIGNMENT_ROOT` pinned to the parent root, it resolves personas and traits from the *parent* whatever its own checkout contains. Source root, assignment root, and launcher root are three separate things here and must be reasoned about separately.
 - Create the branch explicitly, with `git worktree add -b <branch>`. Measured [2026-08-13]: plain `git worktree add PATH HEAD` produces a *detached* HEAD, so without `-b` a child's commits belong to no ref and are unreachable by ordinary lookup once the checkout is gone.
-- Require the child to commit its work on that branch, and say so in the `%worktree` fragment, because `worker`'s engineering rules otherwise forbid unrequested commits. This is what makes the `.tmp/` location tolerable: measured [2026-08-13], a linked worktree shares the parent's object store and refs, so a committed branch survives deletion of its checkout directory with ref, object, and content intact, while *uncommitted* work in a cleared `.tmp/` is simply lost. contract.md § Retention states an operator may clear that scratch, so uncommitted-only output there is a real data-loss path rather than a theoretical one.
+- Require the child to commit its work on that branch, and say so in the `%worktree` fragment, because `worker`'s engineering rules otherwise forbid unrequested commits. This is what makes the `.tmp/` location tolerable: measured [2026-08-13], a linked worktree shares the parent's object store and refs, so a committed branch survives deletion of its checkout directory with ref, object, and content intact, while *uncommitted* work in a cleared `.tmp/` is simply lost. [[file:skills/herdr-orch/scripts/docs/contract.md]] section 'Retention' states an operator may clear that scratch, so uncommitted-only output there is a real data-loss path rather than a theoretical one.
 - Use plain `git worktree add`, not `herdr worktree create`. The latter also creates a workspace, and a subagent worktree stays in the *same* herdr workspace as the parent session, so placement geometry is untouched: the child still takes a tab in the caller's workspace or a split of the caller's pane, and only its cwd differs. `oh` therefore needs no `worktree` passthrough group and no third placement mode.
 - Put the checkout at `<parent-root>/.tmp/herdr-orch/worktrees/<task>`, matching the repository's scratch convention. Verified [2026-08-13]: `.tmp/` is gitignored, and of 5632 files under it, default `rg` sees none -- so a checkout there stays out of both `git status` and ordinary recursive search, which a sibling copy of every source file would otherwise pollute.
 
 Source: design review of herdr-orch against upstream docs (herdr 0.7.5, protocol 18). The `ORCH_ASSIGNMENT_ROOT` and hardcoded-cwd claims above were re-verified against `spawn!` on [2026-08-13].
 
-*EDIT* [2026-07-31 Fri] Part of the strategy above landed via the test-build retro, as a second prevention-side partial mitigation: herdr-orch § Invocation policy (Cardinality) now states that concurrency is bounded by edit targets as well as by N and forbids fanning out siblings whose file sets overlap, and org-plan § Splitting test now keeps work that must edit the same function or form in one task. Both are orchestrator/planner habits, so the structural guarantee this task asks for is still open. Remaining: the git-worktree-per-worker evaluation, whether the `planner` persona itself should carry overlap analysis (its plan for [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]] split one edit to one `fake-env` map across two nominally independent tasks, which forced the orchestrator to re-serialise them), and orchestrator-applied or advisory-locked shared-file writes.
+*EDIT* [2026-07-31 Fri] Part of the strategy above landed via the test-build retro, as a second prevention-side partial mitigation: [[file:skills/herdr-orch/SKILL.md]] section 'Invocation policy' (Cardinality) now states that concurrency is bounded by edit targets as well as by N and forbids fanning out siblings whose file sets overlap, and [[file:skills/org-plan/SKILL.md]] section 'Splitting test' now keeps work that must edit the same function or form in one task. Both are orchestrator/planner habits, so the structural guarantee this task asks for is still open. Remaining: the git-worktree-per-worker evaluation, whether the `planner` persona itself should carry overlap analysis (its plan for [[archive:c6c38412-651d-4015-9f08-ae5a217640c6][Optimise test build]] split one edit to one `fake-env` map across two nominally independent tasks, which forced the orchestrator to re-serialise them), and orchestrator-applied or advisory-locked shared-file writes.
 
 *EDIT* [2026-08-11 Tue] Further evidence that the prevention-side habits are insufficient, and a dimension not covered above: disjoint *edit* sets do not give disjoint *measurements*. Two workers were fanned out over deliberately non-overlapping files, each naming the other's files as off-limits, and both respected that -- yet one changed a shared test utility's signature, transiently breaking an existing call site, so the sibling's full-suite and lint runs measured a tree neither of them authored. Both reported counts that disagreed with the stated baseline for reasons outside their own change; one correctly attributed the discrepancy to the sibling, which is the only reason it was not read as its own regression. A worktree per worker fixes this where the overlap rule cannot, since the contamination is in the *build*, not in any file either child edited. Until then a parent must re-measure the combined tree itself after all children settle, and treat a child's aggregate suite counts as unattributable.
 
@@ -3153,7 +3153,7 @@ CLOSED: [2026-08-13 Thu 02:18]
 - Created [2026-08-12 Wed 23:31]
 - State "DONE" from "TODO" [2026-08-13 Thu 02:18]
 :END:
-The herdr-orch scripts suite has two recurring test-authoring hazards, both of which have now cost real time twice, and neither is written down where a test author would look (=skills/herdr-orch/scripts/README.md= § Tests and smoke, or a scripts-local AGENTS.md alongside the one org-tasks already has).
+The herdr-orch scripts suite has two recurring test-authoring hazards, both of which have now cost real time twice, and neither is written down where a test author would look (=skills/herdr-orch/scripts/README.md= section 'Tests and smoke', or a scripts-local AGENTS.md alongside the one org-tasks already has).
 
 Reading a produced file before asserting the producer succeeded. A new test dereferenced the ledger path straight from a spawn result, so a refused spawn surfaced as =FileNotFoundException: .../ledger/.json= and hid the actual error (a nested spawn rejected for a missing =FAKE_PARENT_LABEL=). =home/AGENTS.md= already carries this exact rule, with this exact FileNotFoundException example, and it was violated anyway -- so the fix is not to restate the prohibition but to remove the incentive: a small spawn helper that asserts =(zero? (:exit proc))= and only then reads the entry, used by every spawn-shaped test. One such helper (=spawned-model=) now exists in =cli_test.clj=; the work is to make that the documented default and note why.
 
@@ -3413,7 +3413,7 @@ CLOSED: [2026-08-21 Fri 15:46]
 - Created [2026-07-31 Fri 13:18]
 - State "DONE" from "TODO" [2026-08-21 Fri 15:46]
 :END:
-find-skills/SKILL.md § Other useful commands claims "`npx skills check` — list updates available". It actually performs updates: running it in an unrelated project upgraded 3 installed skills and rewrote their `skills-lock.json` hashes. The current `--help` lists no `check` command at all under Updates, only `update`.
+find-skills/SKILL.md section 'Other useful commands' claims "`npx skills check` — list updates available". It actually performs updates: running it in an unrelated project upgraded 3 installed skills and rewrote their `skills-lock.json` hashes. The current `--help` lists no `check` command at all under Updates, only `update`.
 
 This is a live foot-gun: an agent following the skill mutates a project it was only inspecting.
 
@@ -3512,7 +3512,7 @@ Origin:
 Evidence:
 `clojure_find_nrepl_port` reported no reachable port. The workflow then created a Herdr tab and ran `bb nrepl-server`. That command failed with `java.net.BindException: Address already in use`. A direct `clojure_eval` probe of port 1667 returned `2` for `(+ 1 1)`, which confirmed that an existing Babashka nREPL server was available.
 
-*EDIT* [2026-08-27 Thu] Partly overtaken, so the remaining scope is narrower than the heading. `skills/clojure/SKILL.md` § REPL-driven workflow now instructs: "If `bb nrepl-server` fails with address-in-use, an nREPL is already listening on the default port without a discoverable port file -- probe that port with an eval and reuse it instead of retrying startup." That covers the recovery path and removes the retry loop, but it is reactive: the wasted pane and the failed start still happen once. What is left is the pre-start check -- probe the default port before creating a pane and starting a server -- plus a decision on where it belongs, since `clojure_find_nrepl_port` reads port files only and is the component that reported no reachable port. Close this instead if the reactive guidance is judged sufficient.
+*EDIT* [2026-08-27 Thu] Partly overtaken, so the remaining scope is narrower than the heading. `skills/clojure/SKILL.md` section 'REPL-driven workflow' now instructs: "If `bb nrepl-server` fails with address-in-use, an nREPL is already listening on the default port without a discoverable port file -- probe that port with an eval and reuse it instead of retrying startup." That covers the recovery path and removes the retry loop, but it is reactive: the wasted pane and the failed start still happen once. What is left is the pre-start check -- probe the default port before creating a pane and starting a server -- plus a decision on where it belongs, since `clojure_find_nrepl_port` reads port files only and is the component that reported no reachable port. Close this instead if the reactive guidance is judged sufficient.
 
 ** DONE Adapt ponytail for use with herdr-orch/traits
 CLOSED: [2026-09-22 Tue 13:27]
@@ -3583,7 +3583,7 @@ Requirements (from the user, 2026-09-24):
 - Precedence mirrors model weight selection: spawn > persona > default.
 - Superseded in planning (2026-09-24): no config-chain default. Precedence is `--effort` > frontmatter `effort:` > same-kind parent level > `medium`; see the change-record.
 
-Current state (measured 2026-09-24): `oh` sets no thinking level. In `cli.clj`, the child argv is `core/model-args` + `core/harness-extra-args` + `core/persona-args` only. A pi child therefore inherits `defaultThinkingLevel: high` from `pi/settings.json`; claude and codex children use their own defaults (no effort key in `~/.claude/settings.json` or `~/.codex/config.toml`). `:defaults` is a closed map whose only key is `:placement` (`skills/herdr-orch/scripts/docs/contract.md` § Model resolution).
+Current state (measured 2026-09-24): `oh` sets no thinking level. In `cli.clj`, the child argv is `core/model-args` + `core/harness-extra-args` + `core/persona-args` only. A pi child therefore inherits `defaultThinkingLevel: high` from `pi/settings.json`; claude and codex children use their own defaults (no effort key in `~/.claude/settings.json` or `~/.codex/config.toml`). `:defaults` is a closed map whose only key is `:placement` ([[file:skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution').
 
 Native surfaces (from each tool's `--help`): pi 0.87.1 `--thinking <level>` (off, minimal, low, medium, high, xhigh, max); Claude Code 2.1.281 `--effort <level>` (low, medium, high, xhigh, max); codex-cli 0.156.1 has no effort flag, only `-c model_reasoning_effort=<level>` (key found in the binary; accepted values not verified).
 
@@ -3635,3 +3635,21 @@ Herdr orch was last updated against pi v 0.85.1 and herdr v 0.9.1.
 Pi v1.0 has been released, and herdr is at 0.9.3 -- review the changes. Consider the following:
 - Opportunities to simplify or improve the implementation leveraging upstream changes, including codemode
 - Whether a thin pi extension over the herdr-orch cli would make subagent spawning more efficient -- currently the agent spends a few turns on things like model routing etc., which should be mechanical. Perhaps a slash command with defined syntax should be introduced?
+
+** DONE Replace the § section sign with the word section across the repository :docs:
+CLOSED: [2026-10-02 Fri 14:45]
+:PROPERTIES:
+:CUSTOM_ID: 93f27963-fb6c-42c6-9e46-1ec9e5586567
+:CREATED: [2026-10-02 Fri 11:02]
+:STARTED: [2026-10-02 Fri 14:40]
+:ARCHIVED: [2026-10-02 Fri 14:45]
+:ARCHIVE_OLPATH: Chores
+:END:
+:LOGBOOK:
+- Created [2026-10-02 Fri 11:02]
+- State "STARTED" from "TODO" [2026-10-02 Fri 14:40]
+- State "DONE" from "STARTED" [2026-10-02 Fri 14:45]
+:END:
+House style: no decorative Unicode in docs without good reason, and the word "section" carries the same meaning as §. skills/herdr-orch/scripts/docs/contract.md is already fixed (44 occurrences, 2026-10-02): "§ X" became "section X", and a list "(§ A, § B)" became "(sections A and B)". Measured 2026-10-02 with plain git grep, before this task was added: 329 occurrences in tracked files (one is a binary match in skills/org-tasks/scripts/docs/design-layers.png), of which design/log 181, TASKS*.org 29, skills/ 105, code comments in *.clj/*.bb/*.ts 21. Use a scripted candidate under .tmp/ and inspect the diff before replacing. Exclude vendored skills (skills/README.org vendored table) and binary files. Decide before starting whether closed change-records and TASKS.archive.org are rewritten or left as history. Add a rule to the Unicode section of the repository-root AGENTS.md: write "section", not §, so agents stop copying the convention. Done when git grep -I -c § reports only vendored or deliberately kept files.
+
+Result 2026-10-02 (approach changed by the user after the first sweep): references became relative links, not the bare word. 372 occurrences in 77 tracked text files, including closed change-records and TASKS.archive.org. Org links use [[file:path::*Heading]] or [[*Heading]] with no description; Markdown links use [path#Heading](path#anchor). Org cannot target a Markdown heading, so org-to-Markdown references are [[file:path.md]] section 'Heading'. Code comments, upstream changelogs, and headings that no longer exist use the quoted text form. A dangling contract.md reference to a Harvest section now links to SKILL.md Process retrospectives. Every introduced link was checked: org links by opening them in Emacs batch mode, Markdown links against GitHub heading anchors. Unverified: whether GitHub renders anchors for .org headings, which Markdown links into .org files rely on. Kept: this task's own text and one binary match in skills/org-tasks/scripts/docs/design-layers.png. Vendored skills had no matches. The rule is in the Section references section of AGENTS.md.

@@ -88,7 +88,7 @@ Part of this rule group was removed from =home/AGENTS.md=. Only the preference f
 
 ** Frontmatter after a bulk edit
 
-Evidence for the rule in [[file:skills/skill-creator/SKILL.md][skill-creator]] § After any bulk edit to a SKILL.md.
+Evidence for the rule in [[file:skills/skill-creator/SKILL.md]] section 'After any bulk edit to a SKILL.md'.
 
 - A whole-file soft-wrap conversion joined =---=, =name:= and =description:= into one line and removed a production-safety skill from discovery. A token-stream diff plus code-fence, table and heading checks all reported the file unchanged: every token survived, and the structure that gave them meaning did not.
 
@@ -102,33 +102,33 @@ Evidence for the rule in [[file:skills/skill-creator/SKILL.md][skill-creator]] �
 
 ** Ageing task-body constraints
 
-Evidence for the rule in [[file:skills/org-tasks/SKILL.md][org-tasks]] § Creating, selecting, and updating tasks.
+Evidence for the rule in [[file:skills/org-tasks/SKILL.md]] section 'Creating, selecting, and updating tasks'.
 
 - A task body written three weeks earlier stated two constraints as requirements: vendored skills must stay manageable by a named tool, and must not be republished to consumers. A planner designed a mechanism around both. Probing the motivation of the second with the owner dropped it outright, and a later tool change dissolved the first, which had been specific to the tool the body assumed. Two plan pivots followed, each discarding work built on a lapsed constraint.
 
 ** Verifier baselines
 
-Evidence for the rule in [[file:home/AGENTS.md][home/AGENTS.md]] § Verification discipline.
+Evidence for the rule in [[file:home/AGENTS.md]] section 'Verification discipline'.
 
 - A frontmatter gate was probed with a deliberately broken skill to prove a regression. The interpreter in use lacked a required module, so every skill failed identically and the clean tree failed too. The result was reported before the baseline was established. Re-run with a working interpreter, the clean baseline exited 0 and the regression was real, but the first probe could not have shown either.
 - A reviewer subagent hit the same shape from the other side: =realpath= on a venv interpreter resolved to the base interpreter and silently dropped its site-packages, reproducing the identical-failure probe. Not filed as a rule: too narrow for this tree. Recorded here so a later capture knows the case was seen.
 
 ** Verifying a vendored copy against upstream
 
-Evidence for the rule in [[file:skills/README.org][skills/README.org]] § Vendored.
+Evidence for the rule in [[file:skills/README.org::*Vendored]].
 
 - An upstream path was guessed from the repository's historic layout and returned 404, while the installed body's own =github-path= frontmatter recorded the correct one. The upstream project had repackaged the skill, which also silently retired a vendoring exception that documentation still asserted.
 - The follow-up check used =github.com/blob/= URLs, which answered 301 for both a present and an absent path. The probe could not distinguish them and was rerun against =raw.githubusercontent.com=.
 
 ** Class C validation, second measurement
 
-No rule change: [[file:skills/herdr-orch/SKILL.md][herdr-orch]] § Trusting a result already requires two validators for a closeout. Recorded as a further data point.
+No rule change: [[file:skills/herdr-orch/SKILL.md]] section 'Trusting a result' already requires two validators for a closeout. Recorded as a further data point.
 
 - Two reviewers on one closeout assignment, at different tiers, returned near-disjoint findings. Only one found a gating regression in which a reclassified skill silently stopped being validated; only the other found that a documented causal rationale was factually wrong. Either reviewer alone would have approved the defect the other caught. A third reviewer, spawned fresh against the fixes only, approved them and added one minor finding.
 
 ** Duplicates of existing rules, not re-filed
 
-- A structured CLI envelope was read by field path without checking its =ok= field first, producing a phantom "creation failed" for a task that had in fact been created. [[file:home/AGENTS.md][home/AGENTS.md]] § Verification discipline already requires the check.
+- A structured CLI envelope was read by field path without checking its =ok= field first, producing a phantom "creation failed" for a task that had in fact been created. [[file:home/AGENTS.md]] section 'Verification discipline' already requires the check.
 - An exit status was read after a =| head= pipeline during an =ot= probe, reporting the status of =head=. The same file already prohibits this.
 
 * 2026-08-26 Wed -- Herdr 0.8.2 simplification of herdr-orch
@@ -199,7 +199,7 @@ Stale pathspec. Staging an explicit path list that included =test/src/connect/mb
 
 ** Not adopted
 
-Cross-revision probe sentinel. A reviewer's equivalence probe returned a =:NO-HANDLER= sentinel for 41 of 60 lookups against the pre-rename tree, which reads like "handlers are missing". Already covered by home/AGENTS.md § Negative results and controls.
+Cross-revision probe sentinel. A reviewer's equivalence probe returned a =:NO-HANDLER= sentinel for 41 of 60 lookups against the pre-rename tree, which reads like "handlers are missing". Already covered by [[file:home/AGENTS.md]] section 'Negative results and controls'.
 
 Gitignored tool state in an extracted tree. Linting a =git archive= extract of the base commit reported 437 errors against 5, because =.clj-kondo/config.edn= is tracked but the hook and import directories are gitignored; the same extract could not run the Node suite for want of =node_modules=. Verified in the project repository. Left unfiled pending a decision on whether the general form (a detached or extracted tree lacks gitignored build inputs, so a baseline measured there may be meaningless) earns instruction-file context.
 

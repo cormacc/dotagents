@@ -6,7 +6,7 @@
   not change the namespace, and do not move this file. Helper functions may be
   added freely.
 
-  Note the performance requirement in ASSIGNMENT.md §5: per-operation cost must be
+  Note the performance requirement in ASSIGNMENT.md section '5. Performance requirement': per-operation cost must be
   logarithmic in the number of points.")
 
 (defn run-ops

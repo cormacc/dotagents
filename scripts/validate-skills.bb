@@ -7,7 +7,7 @@
 ;;   - vendored skills warn only, since their bodies follow upstream rather
 ;;     than this repository.
 ;;
-;; The vendored set is the one in skills/README.org § Vendored. Upstream
+;; The vendored set is the one in skills/README.org section 'Vendored'. Upstream
 ;; gitlab-cli-skills carries top-level `openclaw:` and `requirements:` keys,
 ;; which the Agent Skills specification does not define -- it defines exactly
 ;; name, description, license, compatibility, metadata and allowed-tools, and
@@ -17,7 +17,7 @@
          '[babashka.process :refer [shell]]
          '[clojure.string :as str])
 
-;; Mirrors skills/README.org § Vendored. Keep the two in step -- a skill that
+;; Mirrors skills/README.org section 'Vendored'. Keep the two in step -- a skill that
 ;; leaves the vendored class must leave this set, or its frontmatter silently
 ;; stops gating. skill-creator, find-skills and clojure are not here: they are
 ;; adopted and locally rewritten, so this repository owns their frontmatter and
@@ -41,7 +41,7 @@
   (System/exit 2))
 
 ;; skill-creator's scripts run as modules from its own directory, so the target
-;; skill must be absolute. See skills/skill-creator/SKILL.md § Validation and packaging.
+;; skill must be absolute. See skills/skill-creator/SKILL.md section 'Validation and packaging'.
 (defn validate [dir]
   (let [{:keys [exit out err]} (shell {:out :string :err :string :continue true
                                       :dir (str skill-creator)}

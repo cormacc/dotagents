@@ -116,7 +116,7 @@ CLOSED: [2026-07-04 Sat 19:47]
 - State "STARTED" from "TODO" [2026-07-04 Sat 19:47]
 - State "DONE" from "STARTED" [2026-07-04 Sat 19:47]
 :END:
-HIGH rec from the spec-driven SOTA review ([[file:2026-07-04-agentic-spec-sota-review-follow-up-org-p/research-spec-driven-sota.md][report]]). Biggest gap vs SOTA: no spec->test coupling ("if no test asserts the spec it drifts"). Let a `** Acceptance` criterion optionally cite the spec clause it satisfies and/or the test that asserts it (e.g. inline `-> spec:[[proj:...]]` / `-> test:` pointers), with an `ot doctor` advisory when a spec-citing criterion has no test/anti-criterion evidence at closure. Keep nudge-not-gate. Follows on from the `#+SPEC:` feature (8d82d979). Touches `skills/org-plan/SKILL.md` § Acceptance criteria, `references/change-record-format.md`, and `ot doctor` (`doctor.clj`; follow the existing `spec-untouched` finding pattern for naming/severity).
+HIGH rec from the spec-driven SOTA review ([[file:2026-07-04-agentic-spec-sota-review-follow-up-org-p/research-spec-driven-sota.md][report]]). Biggest gap vs SOTA: no spec->test coupling ("if no test asserts the spec it drifts"). Let a `** Acceptance` criterion optionally cite the spec clause it satisfies and/or the test that asserts it (e.g. inline `-> spec:[[proj:...]]` / `-> test:` pointers), with an `ot doctor` advisory when a spec-citing criterion has no test/anti-criterion evidence at closure. Keep nudge-not-gate. Follows on from the `#+SPEC:` feature (8d82d979). Touches [[file:../../skills/org-plan/SKILL.md]] section 'Acceptance criteria', `references/change-record-format.md`, and `ot doctor` (`doctor.clj`; follow the existing `spec-untouched` finding pattern for naming/severity).
 
 Acceptance criteria:
 - org-plan documents the optional citation syntax with an example criterion.
@@ -139,7 +139,7 @@ CLOSED: [2026-07-04 Sat 19:50]
 - State "STARTED" from "TODO" [2026-07-04 Sat 19:50]
 - State "DONE" from "STARTED" [2026-07-04 Sat 19:50]
 :END:
-MEDIUM rec. Turn the fallible agent discovery convention into a verifiable command: `ot spec list` (alias `spec discover`) performs the rooted/transitive traversal documented in org-plan § Spec discovery — `#+SPEC:` roots from TASKS.org, default root `./design/SPEC.org`, implicit specs (root `README.*`, `AGENTS.md`, skills dir), recursive folder inclusion, transitive org `[[file:]]`/`[[proj:]]` link-following with a visited-set cycle guard. Report only; no gating, no doctor coupling. Implement alongside existing spec parsing (see `doctor.clj` spec checks for `#+SPEC:` value parsing) and register the subcommand in `commands/maintenance.clj` / cli dispatch following the `record`/`issue` subcommand pattern.
+MEDIUM rec. Turn the fallible agent discovery convention into a verifiable command: `ot spec list` (alias `spec discover`) performs the rooted/transitive traversal documented in [[file:../../skills/org-plan/SKILL.md]] section 'Spec discovery (`#+SPEC:`)' — `#+SPEC:` roots from TASKS.org, default root `./design/SPEC.org`, implicit specs (root `README.*`, `AGENTS.md`, skills dir), recursive folder inclusion, transitive org `[[file:]]`/`[[proj:]]` link-following with a visited-set cycle guard. Report only; no gating, no doctor coupling. Implement alongside existing spec parsing (see `doctor.clj` spec checks for `#+SPEC:` value parsing) and register the subcommand in `commands/maintenance.clj` / cli dispatch following the `record`/`issue` subcommand pattern.
 
 Acceptance criteria:
 - `ot spec list` prints the discovered spec set with root provenance.
@@ -170,7 +170,7 @@ CLOSED: [2026-07-04 Sat 19:53]
 MEDIUM rec. Extend drift detection beyond `spec-untouched` (spec path unchanged in git): flag a declared spec whose *linked code changed but the spec file did not* within the record's git scope (`:STARTED:`..`CLOSED:` derived log, as used by `ot record create --mode retrospective`). A lightweight local echo of the SOTA drift gate — still a warning, never blocking. Blocked by 24b95233: reuses its traversal/link-resolution machinery to know what a spec "links to". Extend `doctor.clj` following the existing `spec-untouched` finding shape; wire any shared helpers via `commands/maintenance.clj`.
 
 Acceptance criteria:
-- New advisory finding (e.g. `spec-stale`) with its own documented name in ot-cli.md § doctor findings.
+- New advisory finding (e.g. `spec-stale`) with its own documented name in ot-cli.md section 'doctor findings'.
 - Fires when spec-linked code changed in the record's git scope and the spec did not.
 - Does not fire when the spec also changed, or nothing it links to changed.
 - Regression tests cover fire/no-fire cases.
@@ -208,7 +208,7 @@ CLOSED: [2026-07-04 Sat 19:55]
 - State "STARTED" from "TODO" [2026-07-04 Sat 19:54]
 - State "DONE" from "STARTED" [2026-07-04 Sat 19:55]
 :END:
-LOW rec. The documented MVP boundary limits transitive discovery to org `[[file:]]`/`[[proj:]]` links; extend to Markdown `[text](path)` links and org `#+INCLUDE:` so Markdown specs (AGENTS.md, skills) contribute sub-specs. Update the convention in `skills/org-plan/SKILL.md` § Spec discovery and the `ot spec list` traversal (hence blocked by 24b95233 — extend one implementation, not two conventions). Revisit priority only if manual discovery proves error-prone.
+LOW rec. The documented MVP boundary limits transitive discovery to org `[[file:]]`/`[[proj:]]` links; extend to Markdown `[text](path)` links and org `#+INCLUDE:` so Markdown specs (AGENTS.md, skills) contribute sub-specs. Update the convention in [[file:../../skills/org-plan/SKILL.md]] section 'Spec discovery (`#+SPEC:`)' and the `ot spec list` traversal (hence blocked by 24b95233 — extend one implementation, not two conventions). Revisit priority only if manual discovery proves error-prone.
 
 Acceptance criteria:
 - Documented traversal syntaxes include Markdown links and `#+INCLUDE:`.

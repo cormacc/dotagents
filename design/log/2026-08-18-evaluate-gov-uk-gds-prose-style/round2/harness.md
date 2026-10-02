@@ -54,7 +54,7 @@ loaded).
 
 ## No-skill control invocation
 
-The record's `** Decisions` § "Round 2 includes a no-skill, prompt-only
+The record's `** Decisions` section "Round 2 includes a no-skill, prompt-only
 control" (added after this file's first version) adds a fifth condition
 with no candidate skill. Its invocation differs from the candidate
 invocation in exactly two ways: no `--skill` flag, and the verbatim style

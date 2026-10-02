@@ -6,7 +6,7 @@
 
 Three candidates each rewrote the same three reference samples in an isolated, fresh, non-interactive session: the govuk-style gist, the SimpleEnglish skill, and the incumbent vendored `asd-ste100` skill. The rubric (`rubric.md`) was fixed and committed before the first run. Scores are in `scores.md`. Isolation evidence is in `outputs/isolation-check.md`.
 
-Harness note: the planned harness was `pi --print`, but Anthropic refused every new headless pi session with a third-party extra-usage error, so the runs used `claude -p` instead. All three runs used the same model (claude-opus-5), the same flags, and the same prompt template, so the comparison stays fair. The `home/AGENTS.md` § ASD-STE100 block was removed for the duration of the runs and git-restored byte-identical afterwards; both the pi and the claude context chains resolve to that file, so the removal covered the sessions.
+Harness note: the planned harness was `pi --print`, but Anthropic refused every new headless pi session with a third-party extra-usage error, so the runs used `claude -p` instead. All three runs used the same model (claude-opus-5), the same flags, and the same prompt template, so the comparison stays fair. The `home/AGENTS.md` section 'ASD-STE100' block was removed for the duration of the runs and git-restored byte-identical afterwards; both the pi and the claude context chains resolve to that file, so the removal covered the sessions.
 
 ## Results
 

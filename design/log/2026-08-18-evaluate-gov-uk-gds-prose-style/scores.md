@@ -32,7 +32,7 @@ All rewrites came from fresh `claude -p` sessions on the same model (claude-opus
 
 ## Dimension 3: skill-artifact cost
 
-Word counts measured with frontmatter and snapshot headers excluded. Density is an estimate from measured section word counts (see `report.md` § Skill-artifact audit).
+Word counts measured with frontmatter and snapshot headers excluded. Density is an estimate from measured section word counts (see [report.md#Skill-artifact audit](report.md#skill-artifact-audit)).
 
 | Candidate | Body words | Runtime-relevant density | Corrects the runtime-context defect | Score |
 |---|---|---|---|---|

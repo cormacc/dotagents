@@ -73,7 +73,7 @@ No. `govuk-style`'s round 2 run preserved all meaning on all three samples,
 under the same probes that caught the round 1 drops. `simple-prose`'s round
 2 run was also clean.
 
-The record's own decision framework (`** Decisions` § "Pivot") set the test
+The record's own decision framework (`** Decisions` section 'Pivot') set the test
 in advance: "a repeat drop in the gist run alongside a clean `simple-prose`
 run attributes the defect to the gist. Two clean runs point to run
 variance." Round 2 produced two clean runs. This points to run variance in
@@ -119,7 +119,7 @@ the control by 1 point" finding as suggestive, not established.
   not look like the cost is earning its keep on this round's evidence.
 - `technical-prose`: 2,342 words every session (a bare 4% saving over the
   incumbent, within the dimension's own stated noise floor -- see
-  `scores.md` § Known limitation), for the same 1-point margin. Same
+  `scores.md` section 'Known limitation'), for the same 1-point margin. Same
   answer as the incumbent: not clearly earning the cost on quality grounds.
   Its case, if any, rests on being an unencumbered owned artefact rather
   than on quality or cost superiority shown here.

@@ -22,7 +22,7 @@ A *passing* probe is not required. Requiring current passing evidence would mean
 
 What is required:
 
-- Name the consumer and its real workflow before designing the fragment. A consumer is a persona body *or* interactive use against a live session, and a fragment carried only by the latter is fully admitted rather than unfinished (§ Why the bar is not a consumer count). `%prune` is the standing example. A reusable-looking directive with neither kind of consumer does not belong in the store.
+- Name the consumer and its real workflow before designing the fragment. A consumer is a persona body *or* interactive use against a live session, and a fragment carried only by the latter is fully admitted rather than unfinished (section 'Why the bar is not a consumer count'). `%prune` is the standing example. A reusable-looking directive with neither kind of consumer does not belong in the store.
 - Run at least one probe and record what happened -- including `did not discriminate`, `failed`, or `lapsed`. An unprobed fragment is not admissible. An honestly-failing one is.
 - Never assert a pass that has not been re-established against the current state.
 
@@ -81,13 +81,13 @@ Keep unknown tokens fail-fast rather than treating missing trait text as an empt
 
 ## Known gaps
 
-- `%prune`'s original repo-referential scenario decayed once the repository documented its own answer (`traits/prune/gate.md` § Why it lapsed) and has been replaced with a synthetic, self-contained scenario that does not have that failure mode; the retired scenario and both dated results stay in the same file as evidence. `%simple` (admitted 2026-09-22, `skills/herdr-orch/traits/simple/`) was probed synthetic from the start and recorded two non-discriminating runs rather than a pass -- an honest negative is an admissible outcome under § Admission bar above, not a gap to close. A synthetic scenario still needs periodic re-probing as models change; that is ordinary maintenance, not the repo-referential decay this note used to describe.
+- `%prune`'s original repo-referential scenario decayed once the repository documented its own answer ([../../../traits/prune/gate.md#Why it lapsed](../../../traits/prune/gate.md#why-it-lapsed)) and has been replaced with a synthetic, self-contained scenario that does not have that failure mode; the retired scenario and both dated results stay in the same file as evidence. `%simple` (admitted 2026-09-22, `skills/herdr-orch/traits/simple/`) was probed synthetic from the start and recorded two non-discriminating runs rather than a pass -- an honest negative is an admissible outcome under [#Admission bar](#admission-bar) above, not a gap to close. A synthetic scenario still needs periodic re-probing as models change; that is ordinary maintenance, not the repo-referential decay this note used to describe.
 - `%read-only`, `%focused`, and `%no-bullshit` predate the `gate.md` convention and carry no recorded probe file of their own.
   README.org "Shared directives: traits" records that two of the three failed an adversarial check on first writing and were rewritten, but not as a dated, reproducible scenario.
   A future change to any of them should gain a `gate.md` rather than relying on that prose account.
 - Frontmatter `traits: [...]` metadata is now the roster's selection mechanism: every packaged persona selects its traits that way and none places an inline `%<name>` token.
   Inline placement remains supported and is the right choice when a directive must land in the section it governs rather than after the body; the substitution path is exercised by tests and by project/home personas, not by the packaged roster.
-  See `skills/herdr-orch/scripts/docs/contract.md` § Persona composition/§ Trait composition for the mechanics.
+  See [../scripts/docs/contract.md#Persona composition (`extends`)](../scripts/docs/contract.md#persona-composition-extends)/[../scripts/docs/contract.md#Trait composition](../scripts/docs/contract.md#trait-composition) for the mechanics.
   Re-probing with synthetic scenarios for the pre-`gate.md` traits is tracked separately and blocks nothing.
 - `prune` collides with existing repository vocabulary:
   `ot blocker prune`, `--prune-blockers`, and the

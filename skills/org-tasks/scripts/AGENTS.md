@@ -1,6 +1,6 @@
 # Agent guide: developing `ot`
 
-Rules and workflows for agents modifying the `ot` codebase. For *using* `ot` against a project's task memory, load the [`org-tasks` skill](../SKILL.md) instead. Architecture and namespace map: [`docs/DESIGN.org`](docs/DESIGN.org). Doc ownership: [`README.md`](README.md) § Documentation map.
+Rules and workflows for agents modifying the `ot` codebase. For *using* `ot` against a project's task memory, load the [`org-tasks` skill](../SKILL.md) instead. Architecture and namespace map: [`docs/DESIGN.org`](docs/DESIGN.org). Doc ownership: [README.md#Documentation map](README.md#documentation-map).
 
 ## Invariants (verify before committing)
 
