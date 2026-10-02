@@ -33,6 +33,7 @@ For `ot` CLI development, read `skills/org-tasks/scripts/AGENTS.md`.
 - In Markdown, write `[path#Heading](path#anchor)`, or `[#Heading](#anchor)` for the same file. The anchor is the GitHub heading anchor.
 - Org cannot link to a Markdown heading. From org, write `[[file:path.md]] section 'Heading'`.
 - Where a link cannot work, such as in a code comment or for an external document, write `path section 'Heading'` and quote the heading.
+- After you rename or remove a heading, run `scripts/check-section-links.bb`. `scripts/check.sh` also runs it.
 
 ## Scripts and transformations
 - New automation scripts in the repository-root `scripts/` directory must use Babashka by default.

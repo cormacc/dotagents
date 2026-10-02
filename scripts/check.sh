@@ -24,6 +24,12 @@ for suite in pi/extensions/*/test.sh; do
   bash "$suite"
 done
 
+printf '\n==> section references resolve\n'
+scripts/check-section-links.bb \
+  --exclude skills/herdr/ \
+  --exclude skills/gitlab-cli-skills/ \
+  --exclude skills/convert-documents-to-markdown/
+
 printf '\n==> skill-creator clean validation and packaging\n'
 python3 -m venv "$work/venv"
 "$work/venv/bin/python" -m pip install --quiet --disable-pip-version-check -r skills/skill-creator/requirements.txt

@@ -73,6 +73,24 @@ The dry run is the default because it builds the candidate under `.tmp/` and pri
 
 It aborts rather than guessing when upstream changes shape: a missing router `SKILL.md`, no root-level `glab-*` directories, a router link style that no longer needs rewriting, a remaining parent-relative link, or a router entry that collides with a root entry whose shared files are not byte-identical.
 
+## Section reference check
+
+```sh
+scripts/check-section-links.bb --exclude skills/herdr/ --exclude skills/gitlab-cli-skills/ --exclude skills/convert-documents-to-markdown/
+agents/scripts/check-section-links.bb    # from the dotfiles checkout, against that repository
+```
+
+Checks that every section reference in the tracked `.org` and `.md` files of the git repository containing `--root` (default: the working directory) resolves. It covers the forms in [../AGENTS.md#Section references](../AGENTS.md#section-references) and custom-ID links:
+
+- Org `[[file:path::*Heading]]` and `[[*Heading]]`: the target heading exists. Matching is exact after the TODO keyword, priority cookie, `COMMENT` and tags are removed, as `org-get-heading` does.
+- Org `[[file:path::#id]]` and `[[#id]]`: a `CUSTOM_ID` matches, or a GitHub-style heading anchor matches. toc-org `_gh` tables of contents use the anchor form, and `toc-org-mode` translates it when the link is followed.
+- Org `[[file:path.md]] section 'Heading'`: the Markdown heading exists. Org cannot search a Markdown file for a heading, so a `::*` search into a Markdown file is itself reported.
+- Markdown `[text](path#anchor)` and `[text](#anchor)` to `.md` or `.org` files: the GitHub heading anchor exists. Whether GitHub renders anchors for `.org` headings is unverified; the check assumes it uses the same slug as Markdown.
+
+Paths must be relative to the linking file. Links inside code spans, org verbatim, and code blocks are examples and are skipped. `--exclude` drops a path prefix, such as a vendored skill. Each problem prints as `path:line: message`. The script exits 1 when any reference fails to resolve and 2 on a usage error.
+
+`scripts/check.sh` runs it with the vendored skills excluded. `bb test` runs the focused tests in `scripts/test-check-section-links.bb`.
+
 ## Skill frontmatter validation
 
 ```sh

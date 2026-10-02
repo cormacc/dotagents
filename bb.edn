@@ -48,7 +48,8 @@
                   ((resolve 'run-suites)
                    [(into ["test-clojure"] *command-line-args*)
                     ["scripts/test-run-trait-gate.bb"]
-                    ["scripts/test-analyse-anthropic-cache-ttl.bb"]]))}
+                    ["scripts/test-analyse-anthropic-cache-ttl.bb"]
+                    ["scripts/test-check-section-links.bb"]]))}
 
   smoke-subagent {:doc "Run explicitly guarded live Herdr subagent smoke (set ORCH_LIVE_SMOKE_KIND=claude to exercise Claude)"
                   :task (apply (requiring-resolve 'herdr-orch.smoke/-main)
