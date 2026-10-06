@@ -8,7 +8,8 @@
     "npm:@ogulcancelik/pi-session-recall",
     "npm:pi-web-access",
     "git:github.com/lemonade-sdk/lemonade-pi-plugin@main",
-    "npm:@ff-labs/pi-fff"
+    "npm:@ff-labs/pi-fff",
+    "npm:@ogulcancelik/pi-minimal-footer"
   ],
   "theme": "dark",
   "defaultProvider": "anthropic",

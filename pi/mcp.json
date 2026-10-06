@@ -12,9 +12,6 @@
         "clientName": "pi"
       }
     },
-    "context-mode": {
-      "command": "context-mode"
-    },
     "context7": {
       "url": "https://mcp.context7.com/mcp/oauth"
     },
