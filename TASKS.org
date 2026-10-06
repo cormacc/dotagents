@@ -638,3 +638,41 @@ Origin:
 
 Evidence:
 Observed while spawning two reviewers: the first `oh task start reviewer --model claude-fable` failed with herdr `agent_pane_busy` (target pane not an available shell), creating round 51610531-d59c-44eb-af90-3ef5d104ac9f with status `failed`. A retry succeeded. `oh task prune 51610531-...` then refused as above, and no other verb retires the entry. Related but distinct from 08fba41e (no-publication rounds), which close --abandon now covers.
+
+** TODO AGENTS.md: bound the length of approval text inside a question :agents_md:
+:PROPERTIES:
+:CUSTOM_ID: 52e53b0b-3b01-45bb-8ae3-5f9801ef2013
+:CREATED: [2026-10-05 Mon 18:27]
+:END:
+:LOGBOOK:
+- Created [2026-10-05 Mon 18:27]
+:END:
+home/AGENTS.md (Verification discipline) requires the full text of a commit message, diff or rule inside the question, because the dialog can hide text that comes before it. For long text this makes the dialog taller than the terminal and hides the answer editor (see the question-tool feedback task). Revise the rule so that approval text stays visible and the editor stays usable, for example: put short text (a screenful with the options) inside the question; for longer text, write it to a file under <repository-root>/.tmp/ and put the path and a one-line summary in the question, or split the approval into one question per item. Keep the rule if the question tool gains a bounded, scrollable body.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@git.nmd.ie:products/connect/portal @ reassoc-device-patient
+- timestamp: [2026-10-05 Mon 18:27]
+- sender: human
+
+Evidence:
+Following the rule, the agent put 11 full commit messages (about 140 lines) in one approval question. The input box moved off the screen and the dialog could not be scrolled. The main pi session window does support scrollback.
+
+** TODO question tool: keep the answer editor visible for long questions :ext:question:
+:PROPERTIES:
+:CUSTOM_ID: 2bc60e8c-db37-4972-9845-6cbd2ea768c2
+:CREATED: [2026-10-05 Mon 18:27]
+:END:
+:LOGBOOK:
+- Created [2026-10-05 Mon 18:27]
+:END:
+The question dialog renders the full wrapped question text, then the options, then the answer editor, with no height limit (pi/extensions/question.ts render). A long question pushes the options and the editor below the bottom of the terminal, so the user cannot see what they type. The dialog has no scrollback, unlike the main pi session window. Desired outcome: the options and the answer editor stay visible at every question length; the question body gets a bounded viewport that the user can scroll (for example PgUp/PgDn), with an indicator when text is hidden.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@git.nmd.ie:products/connect/portal @ reassoc-device-patient
+- timestamp: [2026-10-05 Mon 18:27]
+- sender: human
+
+Evidence:
+An approval question that contained 11 full commit messages (about 140 lines) pushed the input box off the screen. The user could not see the typed answer, and could not scroll the dialog.
