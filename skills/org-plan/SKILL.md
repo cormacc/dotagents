@@ -7,7 +7,7 @@ description: "Draft, review, and execute implementation plans as TASKS.org-linke
 
 Use this skill when the user asks for a plan. A plan is the leading content of a change-record -- a separate org file linked from a task via `#+IMPORT:` that begins life as a plan and becomes the record of what shipped as work proceeds.
 
-This skill owns planning methodology and change-record section conventions. `org-tasks` (`../org-tasks/SKILL.md`) owns file format, task lifecycle, persistence rules, and the `ot` CLI. Prefer `ot record create <task-id>` to scaffold a change-record before filling the sections below; use `ot record create <task-id> --mode retrospective` after work has started or completed. If the generated scaffold predates the current section contract, add/reorder sections before filling them.
+This skill owns planning methodology and change-record section conventions. `org-tasks` (`../org-tasks/SKILL.md`) owns file format, task lifecycle, persistence rules, and the `ot` CLI. Prefer `ot record create <task-id>` to scaffold a change-record before filling the sections below; use `ot record create <task-id> --mode retrospective` after work has started or completed. The default file name comes from the task summary and can be long. Before you scaffold an interactive plan, propose the file name to the user, then pass it with `--path`. If the generated scaffold predates the current section contract, add/reorder sections before filling them.
 
 Detailed skeletons, `#+STATUS:` values, `#+SPEC:` / `#+NO_SPEC:` examples, and subtask-migration examples live in `references/change-record-format.md`.
 
