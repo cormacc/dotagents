@@ -676,3 +676,22 @@ Origin:
 
 Evidence:
 An approval question that contained 11 full commit messages (about 140 lines) pushed the input box off the screen. The user could not see the typed answer, and could not scroll the dialog.
+
+** TODO Reconcile ot status ancestor promotion with assignments that keep the parent task open :skill:org_tasks:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 5e075164-70b2-42a9-877f-67c1dd51a338
+:CREATED: [2026-10-07 Wed 11:00]
+:END:
+:LOGBOOK:
+- Created [2026-10-07 Wed 11:00]
+:END:
+`ot status <child> STARTED` promotes a TODO ancestor to STARTED, as the org-tasks skill documents. A delegated assignment that forbids parent status changes, so that the parent stays open for independent closeout, conflicts with that promotion. The worker must then revert the task file after each transition (`git checkout`), and `ot doctor` reports `stale-parent-status`. Decide one: (a) an `ot status` option that does not promote ancestors, or (b) herdr-orch guidance that a parent-status restriction in an assignment covers closure only (DONE/CANCELLED, record status), so auto-promotion to STARTED is allowed.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: products/connect/portal @ dispatch-opts-refactor
+- timestamp: [2026-10-07 Wed 10:59]
+- sender: agent
+
+Evidence:
+The parent agent's worker assignment said "Do not change the parent task 7d1c5b77 status". Its intent was to keep closure (a Class C action) with the parent. A claude-opus-5-5 worker started 6 plan tasks in an imported change-record; each `ot status ... STARTED` promoted the parent, and the worker reverted TASKS.org with git each time. Worker process note, task 5ec8c5bd.
