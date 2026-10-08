@@ -167,7 +167,7 @@ This table is the single enumerated home for the shipped weight rows. Every othe
 | `heavy` | `anthropic/claude-fable` | `fable` | `gpt-astra` |
 | `middle` | `anthropic/claude-opus` | `opus` | `gpt-sol` |
 | `light` | `anthropic/claude-sonnet` | `sonnet` | `gpt-terra` |
-| `feather` | `anthropic/claude-haiku` | `claude-haiku` | `gpt-luna` |
+| `feather` | `anthropic/claude-haiku` | `haiku` | `gpt-luna` |
 
 Unversioned canonical IDs (`claude-opus`, `gpt-sol`, …) are floating aliases resolving to the latest version of the tier. Versioned IDs pin a release.
 

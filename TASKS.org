@@ -458,6 +458,7 @@ Acceptance criteria:
 - It demonstrates the listener-disposal issue with a bounded isolated reproduction.
 - It specifies reload/shutdown listener cleanup through the documented event-bus API.
 - It distinguishes measured behaviour from proposed upstream changes.
+- It compares the native-event migration with an alternative: Herdr consumes the OSC 7501 Program Status Protocol reports that Pi 1.1.0 emits (`ProgramStatusReporter` in `pi-coding-agent/dist/modes/interactive/program-status-reporter.js`, which reports `blocked` with the dialog title for extension dialogs and login). The comparison covers harness independence, Pi's extra `done` and `error` states against the `working`/`blocked`/`idle` states that the integration reports and the `idle`/`done` states that `oh task close --abandon` accepts, and Herdr's rule of one status authority for each pane. Measured [2026-10-08]: Herdr `master` at `4dc23bb` has no OSC 7501 code, and Pi emits reports only after the terminal answers the `OSC 7501;?` query (`PI_PROGRAM_STATUS=1` forces them).
 - Must not: publish an issue or patch without explicit permission.
 - Must not: fork pi/extensions/herdr-agent-state.ts locally or block the local maintenance delivery on upstream acceptance.
 
