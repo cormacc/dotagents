@@ -13,11 +13,14 @@
 
 * Table of Contents                                       :TOC_2_gh:noexport:
 - [[#explorations][Explorations]]
+  - [[#investigate-sova][Investigate sova]]
   - [[#investigate-worktrunk-for-worktree-management-skillherdr-orch][Investigate worktrunk for worktree management... :skill:herdr-orch:]]
   - [[#herdr-orch-llm-usage-limit-fallback][herdr-orch: LLM usage limit fallback]]
   - [[#evaluate-rpiv-pi-workflow-setup][Evaluate rpiv-pi workflow setup]]
   - [[#explore-agent-memory-options][Explore agent memory options]]
   - [[#investigate-clojure-in-codemode][Investigate clojure in codemode]]
+  - [[#review-herdr-tsk-plugin-for-inspiration-for-org-tasks][Review herdr tsk plugin for inspiration for org-tasks]]
+  - [[#extend-herdr-orch-to-support-workflows][Extend herdr-orch to support workflows]]
 - [[#improvements][Improvements]]
   - [[#ot-move-tuipi-overlay-exposure-and---before--after-ordering][ot move: TUI/pi-overlay exposure and --before/--after ordering]]
   - [[#org-tasks-spec-checks-warn-forever-once-a-records-change-is-committed][org-tasks: spec checks warn forever once a record's change is committed]]
@@ -43,8 +46,23 @@
   - [[#validate-skillsbb-rejects-a-relative---python-path][validate-skills.bb rejects a relative --python path]]
   - [[#hand-composed-edit-hazards-instruction-rule-additions][Hand-composed edit hazards: instruction rule additions]]
   - [[#herdr-orch-a-failed-spawn-round-is-permanent-ledger-residue][herdr-orch: a failed spawn round is permanent ledger residue]]
+  - [[#agentsmd-bound-the-length-of-approval-text-inside-a-question][AGENTS.md: bound the length of approval text inside a question]]
+  - [[#question-tool-keep-the-answer-editor-visible-for-long-questions][question tool: keep the answer editor visible for long questions]]
+  - [[#reconcile-ot-status-ancestor-promotion-with-assignments-that-keep-the-parent-task-open][Reconcile ot status ancestor promotion with assignments that keep the parent task open]]
 
 * Explorations
+
+** TODO [#B] Investigate sova
+:PROPERTIES:
+:CUSTOM_ID: 8e199d7c-5f34-4287-98b3-b62e73e51f21
+:CREATED: [2026-10-08 Thu 22:21]
+:END:
+:LOGBOOK:
+- Created [2026-10-08 Thu 22:21]
+:END:
+This looks like a kind of wrapper for pi (via its SDK).
+Interesting -- has some stuff around subscription failover that might be worth adapting even if I bounce of sova itself.
+https://github.com/Naomarik/sova
 
 ** TODO [#B] Investigate worktrunk for worktree management... :skill:herdr-orch:
 :PROPERTIES:
@@ -67,6 +85,7 @@ https://github.com/max-sixty/worktrunk
 :END:
 It would be useful for sessions to fallback  after hitting session limits (anthropic -> openai -> local, openai -> anthropic -> local)
 Take a look at https://github.com/luongnv89/ccl, which implements a solution for pi, claude and codex. Evaluate whether we can piggyback on this without breaking our model aliasing etc.
+There's also `agent-router`, which is session limit aware: https://github.com/nidhi-singh02/agent-router
 
 ** TODO [#D] Evaluate rpiv-pi workflow setup :pi:
 :PROPERTIES:
@@ -144,6 +163,29 @@ Open questions for a spike:
 - Isolation: a Node-hosted SCI tool runs in the pi process, not QuickJS; confirm what SCI exposes by default.
 - Whether loading SCI inside the QuickJS sandbox is feasible at all (bundle size per fresh sandbox, heap limit, browser globals in scittle).
 - Benefit versus cost: models write JS orchestration fluently; the gain is human readability of agent scripts, not tokens.
+
+** TODO Review herdr tsk plugin for inspiration for org-tasks
+:PROPERTIES:
+:CUSTOM_ID: ee586514-fd6b-42b0-b219-4fd382ace366
+:CREATED: [2026-10-08 Thu 19:11]
+:END:
+:LOGBOOK:
+- Created [2026-10-08 Thu 19:11]
+:END:
+https://github.com/smarzban/tsk
+It supports multiple items in progress and some other QOL features that could be worth looking at.
+
+** TODO Extend herdr-orch to support workflows
+:PROPERTIES:
+:CUSTOM_ID: 45adb239-2987-4a69-b06c-1d5feb1f8071
+:CREATED: [2026-10-08 Thu 19:11]
+:END:
+:LOGBOOK:
+- Created [2026-10-08 Thu 19:11]
+:END:
+There may be little or no extension necessary and this can be covered via a skill or prompt? The planner is already a workflow of sorts, though for a single subagent.
+But a workflow should be owned by an orchestrator (or sub-orchestrator) and be able to spawn subagents per stage, re-use subagents etc.
+Look at https://github.com/osolmaz/pi-workflows for prior art / inspiration
 
 * Improvements
 
