@@ -230,3 +230,15 @@ Slow external call loops. A loop of 25 searches against a web service, with one 
 ** Tooling quick reference (org-tasks)
 
 Handoff set form. The quick reference listed only =ot handoff get|set|clear <id> [...]=, and =ot handoff --help= prints the global command list, so finding the argument form took several lookups. Verified forms: =ot handoff set <id> "<text>"=, =ot handoff get <id>=, =ot handoff clear <id>=.
+
+* 2026-10-14 Wed -- Lenire Connect slow-test tagging and CI suites
+
+Session replaced the slow test namespace list with =^:slow= tags, added namespace tags, and ran the =all= suite in CI on =develop=, with a planner, two workers and three reviewers delegated through herdr-orch.
+
+** Invocation policy (herdr-orch) -- Isolation
+
+Shared checkout assumed. Two workers were assigned disjoint edit sets in one checkout. The second =oh task start=, issued while the first child was in flight and without =--worktree=, received a managed checkout under =.tmp/herdr-orch/worktrees/= on branch =orch/<id>=; the contract documents this ("An additional concurrent write-enabled child receives a newly managed checkout"), but the skill body said only "Automatic isolation". Retried with =--worktree <repo-root>=, the child shared the checkout.
+
+** Babashka caveats (clojure)
+
+Reader macro in bb.edn. A new =bb.edn= task used =(filter #(and ...) ...)=, and every =bb= invocation then failed with =No dispatch macro for: (= from =clojure.lang.EdnReader=. Rewritten as =(fn [d] ...)=, the file loaded.

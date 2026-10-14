@@ -34,5 +34,6 @@ Correct small delimiter errors directly. If an available repair tool helps, insp
 - Run tasks from the project's documented task directory. `-cp` replaces configured `:paths`; include all roots needed by a focused run.
 - In bare scripts without an `ns` form, names such as `source`, `doc`, and `dir` are already referred from `clojure.repl`; choose distinct names.
 - Convert `babashka.fs` Path values to strings before passing them to `slurp` or `spit`.
+- `bb.edn` is read as EDN, so task code cannot use `#(...)`; write `(fn [x] ...)`.
 - A `$HOME` override does not necessarily change `user.home`. Isolate tests through the path source the code actually uses.
 - For `babashka.fs/glob` walks that must traverse directory symlinks, use `{:follow-links true}` and test with an actual symlink.

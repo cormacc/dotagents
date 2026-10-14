@@ -738,3 +738,42 @@ Origin:
 
 Evidence:
 The parent agent's worker assignment said "Do not change the parent task 7d1c5b77 status". Its intent was to keep closure (a Class C action) with the parent. A claude-opus-5-5 worker started 6 plan tasks in an imported change-record; each `ot status ... STARTED` promoted the parent, and the worker reverted TASKS.org with git each time. Worker process note, task 5ec8c5bd.
+
+** TODO Guard against a parallel tool batch that writes and reads the same path :agents_md:
+:PROPERTIES:
+:CUSTOM_ID: 503585ee-3c52-45ed-b5aa-9e99e5a91ed4
+:CREATED: [2026-10-14 Wed 11:10]
+:END:
+:LOGBOOK:
+- Created [2026-10-14 Wed 11:10]
+:END:
+The portable rule "Read a path only after the call that writes it has finished and succeeded. Never run the two calls in parallel." (home/AGENTS.md, File operations) does not stop the agent from batching a write and its verifying read into one parallel tool call. The check then reads the old file and its result is wrong. Restating the rule has not changed the behaviour, so add a structural guard: a harness check that warns, or serialises, when one parallel tool batch both writes a path (Edit, Write) and reads it (Read, grep or bash naming the same path).
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@git.nmd.ie:products/connect/portal @ fail-fast
+- timestamp: [2026-10-14 Wed 11:10]
+- sender: agent
+
+Evidence:
+- 2026-10-14: four batches paired an Edit with a grep or sed of the same file; each check read the pre-edit content, and one led the agent to report a remaining match that the edit had already removed.
+- RETROLOG.org 2026-10-01 records the same failure ("Parallel read and write"), after which the rule was rewritten as an ordering rule.
+
+** TODO herdr-orch: oh task start fails with agent_pane_busy when started right after another spawn :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 435c5d86-d35f-43d8-a94c-d7c9419a29ed
+:CREATED: [2026-10-14 Wed 11:10]
+:END:
+:LOGBOOK:
+- Created [2026-10-14 Wed 11:10]
+:END:
+A second `oh task start` issued immediately after a first one failed with herdr `agent_pane_busy` ("agent target pane ... is not an available shell"): the new tab's pane was not yet a usable shell when `agent start` ran. The failed round had already created a managed checkout and its `orch/<id>` branch, which the parent had to remove by hand (`oh worktree remove`, then `git branch -d`). Desired outcome: `oh` waits for the new pane to report an available shell (or retries `agent start` briefly) before starting the agent, and removes a managed checkout it created for a round that failed before the agent started.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@git.nmd.ie:products/connect/portal @ fail-fast
+- timestamp: [2026-10-14 Wed 11:10]
+- sender: agent
+
+Evidence:
+- 2026-10-13: `oh task start worker` run twice in one shell command; the first succeeded, the second returned exit 1 with `agent_pane_busy` for pane `w2:p41`, round status `failed`, worktree `.tmp/herdr-orch/worktrees/<id>` at the base commit. `oh task close` then refused ("assignment is not captured"), and `close --abandon` refused ("already terminal"). A retry 8 s after a later start succeeded.
