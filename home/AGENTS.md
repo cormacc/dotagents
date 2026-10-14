@@ -45,7 +45,6 @@
 - Ask one decision in each question.
   - Do not combine two independent choices in one option set.
   - Such an answer can confirm one choice while the other choice remains unconfirmed.
-- When you ask the user to approve text, such as a commit message, a diff or a rule, put the full text inside the question. The question dialog can hide text that comes before it.
 - When a matched skill owns a domain, read that skill before you issue exploratory commands in that domain.
   - Do not run the skill read and the domain probes in parallel.
 - Do not cite a green suite as coverage until you confirm that it executes the changed file. Confirm which namespaces the test task runs before you attribute its total to one component.

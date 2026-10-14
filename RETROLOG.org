@@ -242,3 +242,15 @@ Shared checkout assumed. Two workers were assigned disjoint edit sets in one che
 ** Babashka caveats (clojure)
 
 Reader macro in bb.edn. A new =bb.edn= task used =(filter #(and ...) ...)=, and every =bb= invocation then failed with =No dispatch macro for: (= from =clojure.lang.EdnReader=. Rewritten as =(fn [d] ...)=, the file loaded.
+
+* 2026-10-14 Wed -- Lenire Connect fail-fast and test-pipeline MR split
+
+Session split a mixed branch into a test-pipeline MR and a fail-fast MR, reviewed and closed the fail-fast change-record, and ran a retro.
+
+** Verification discipline -- approval text inside the question (removed)
+
+Rule removed from =home/AGENTS.md= at the user's request: "When you ask the user to approve text, such as a commit message, a diff or a rule, put the full text inside the question. The question dialog can hide text that comes before it." Long approval text (five commit messages, a retro findings table) made the question dialog taller than the window and pushed the prompt off the screen, and a markdown table inside the question did not render. Default behaviour applies again: present the text in the response, then ask. Related open feedback: =52e53b0b= (bound the length of approval text inside a question) and =2bc60e8c= (question tool: keep the answer editor visible).
+
+** Self-improvement -- tight loop on a home-config tier
+
+Clean-tree condition relaxed at the user's request: uncommitted =TASKS.org= changes no longer block a tight-loop edit in dotagents or dotfiles. The dotagents tree held only task-capture edits to =TASKS.org=, and the clean-tree rule routed a one-line, user-requested rule removal to a TODO.

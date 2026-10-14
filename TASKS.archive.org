@@ -3653,3 +3653,49 @@ CLOSED: [2026-10-02 Fri 14:45]
 House style: no decorative Unicode in docs without good reason, and the word "section" carries the same meaning as §. skills/herdr-orch/scripts/docs/contract.md is already fixed (44 occurrences, 2026-10-02): "§ X" became "section X", and a list "(§ A, § B)" became "(sections A and B)". Measured 2026-10-02 with plain git grep, before this task was added: 329 occurrences in tracked files (one is a binary match in skills/org-tasks/scripts/docs/design-layers.png), of which design/log 181, TASKS*.org 29, skills/ 105, code comments in *.clj/*.bb/*.ts 21. Use a scripted candidate under .tmp/ and inspect the diff before replacing. Exclude vendored skills (skills/README.org vendored table) and binary files. Decide before starting whether closed change-records and TASKS.archive.org are rewritten or left as history. Add a rule to the Unicode section of the repository-root AGENTS.md: write "section", not §, so agents stop copying the convention. Done when git grep -I -c § reports only vendored or deliberately kept files.
 
 Result 2026-10-02 (approach changed by the user after the first sweep): references became relative links, not the bare word. 372 occurrences in 77 tracked text files, including closed change-records and TASKS.archive.org. Org links use =[[file:path::*Heading]]= or =[[*Heading]]= with no description; Markdown links use =[path#Heading](path#anchor)=. Org cannot target a Markdown heading, so org-to-Markdown references are =[[file:path.md]] section 'Heading'=. Code comments, upstream changelogs, and headings that no longer exist use the quoted text form. A dangling contract.md reference to a Harvest section now links to SKILL.md Process retrospectives. Every introduced link was checked: org links by opening them in Emacs batch mode, Markdown links against GitHub heading anchors. Unverified: whether GitHub renders anchors for .org headings, which Markdown links into .org files rely on. Kept: this task's own text and one binary match in skills/org-tasks/scripts/docs/design-layers.png. Vendored skills had no matches. The rule is in the Section references section of AGENTS.md.
+
+** CANCELLED AGENTS.md: bound the length of approval text inside a question :agents_md:
+CLOSED: [2026-10-14 Wed 16:24]
+:PROPERTIES:
+:CUSTOM_ID: 52e53b0b-3b01-45bb-8ae3-5f9801ef2013
+:CREATED: [2026-10-05 Mon 18:27]
+:ARCHIVED: [2026-10-14 Wed 16:24]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-10-05 Mon 18:27]
+- State "CANCELLED" from "TODO" [2026-10-14 Wed 16:24]
+:END:
+home/AGENTS.md (Verification discipline) requires the full text of a commit message, diff or rule inside the question, because the dialog can hide text that comes before it. For long text this makes the dialog taller than the terminal and hides the answer editor (see the question-tool feedback task). Revise the rule so that approval text stays visible and the editor stays usable, for example: put short text (a screenful with the options) inside the question; for longer text, write it to a file under <repository-root>/.tmp/ and put the path and a one-line summary in the question, or split the approval into one question per item. Keep the rule if the question tool gains a bounded, scrollable body.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@git.nmd.ie:products/connect/portal @ reassoc-device-patient
+- timestamp: [2026-10-05 Mon 18:27]
+- sender: human
+
+Evidence:
+Following the rule, the agent put 11 full commit messages (about 140 lines) in one approval question. The input box moved off the screen and the dialog could not be scrolled. The main pi session window does support scrollback.
+
+** CANCELLED question tool: keep the answer editor visible for long questions :ext:question:
+CLOSED: [2026-10-14 Wed 16:24]
+:PROPERTIES:
+:CUSTOM_ID: 2bc60e8c-db37-4972-9845-6cbd2ea768c2
+:CREATED: [2026-10-05 Mon 18:27]
+:ARCHIVED: [2026-10-14 Wed 16:24]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-10-05 Mon 18:27]
+- State "CANCELLED" from "TODO" [2026-10-14 Wed 16:24]
+:END:
+The question dialog renders the full wrapped question text, then the options, then the answer editor, with no height limit (pi/extensions/question.ts render). A long question pushes the options and the editor below the bottom of the terminal, so the user cannot see what they type. The dialog has no scrollback, unlike the main pi session window. Desired outcome: the options and the answer editor stay visible at every question length; the question body gets a bounded viewport that the user can scroll (for example PgUp/PgDn), with an indicator when text is hidden.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@git.nmd.ie:products/connect/portal @ reassoc-device-patient
+- timestamp: [2026-10-05 Mon 18:27]
+- sender: human
+
+Evidence:
+An approval question that contained 11 full commit messages (about 140 lines) pushed the input box off the screen. The user could not see the typed answer, and could not scroll the dialog.

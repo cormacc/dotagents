@@ -46,9 +46,10 @@
   - [[#validate-skillsbb-rejects-a-relative---python-path][validate-skills.bb rejects a relative --python path]]
   - [[#hand-composed-edit-hazards-instruction-rule-additions][Hand-composed edit hazards: instruction rule additions]]
   - [[#herdr-orch-a-failed-spawn-round-is-permanent-ledger-residue][herdr-orch: a failed spawn round is permanent ledger residue]]
-  - [[#agentsmd-bound-the-length-of-approval-text-inside-a-question][AGENTS.md: bound the length of approval text inside a question]]
-  - [[#question-tool-keep-the-answer-editor-visible-for-long-questions][question tool: keep the answer editor visible for long questions]]
   - [[#reconcile-ot-status-ancestor-promotion-with-assignments-that-keep-the-parent-task-open][Reconcile ot status ancestor promotion with assignments that keep the parent task open]]
+  - [[#guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][Guard against a parallel tool batch that writes and reads the same path]]
+  - [[#herdr-orch-oh-task-start-fails-with-agent_pane_busy-when-started-right-after-another-spawn][herdr-orch: oh task start fails with agent_pane_busy when started right after another spawn]]
+  - [[#org-plan-check-that-a-change-records-identifiers-resolve][org-plan: check that a change-record's identifiers resolve]]
 
 * Explorations
 
@@ -114,9 +115,15 @@ https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without poll
 I'm enjoying the org-tasks flow for task tracking and planning, but it's not really agent memory.
 Identify a lower layer more immediately useful to the agent. This is a crowded/interesting space.
 
+A digest of available options and reviews...
+https://neoneye.github.io/agent-memory-atlas
+
 Hindsight gets some good press -- see this guy's extension: https://pi.dev/packages/@noctuid/epimetheus?name=hindsight
 
 Here's one https://github.com/elpapi42/pi-observational-memory
+
+Here's another one that's getting some buzz recently:
+https://github.com/TencentCloud/TencentDB-Agent-Memory/blob/feat/server_team/INSTALL.md
 **** CANCELLED [#C] Evaluate pi-hermes-memory plugin :pi:memory:
 CLOSED: [2026-08-27 Thu 14:21]
 :PROPERTIES:
@@ -682,44 +689,6 @@ Origin:
 Evidence:
 Observed while spawning two reviewers: the first `oh task start reviewer --model claude-fable` failed with herdr `agent_pane_busy` (target pane not an available shell), creating round 51610531-d59c-44eb-af90-3ef5d104ac9f with status `failed`. A retry succeeded. `oh task prune 51610531-...` then refused as above, and no other verb retires the entry. Related but distinct from 08fba41e (no-publication rounds), which close --abandon now covers.
 
-** TODO AGENTS.md: bound the length of approval text inside a question :agents_md:
-:PROPERTIES:
-:CUSTOM_ID: 52e53b0b-3b01-45bb-8ae3-5f9801ef2013
-:CREATED: [2026-10-05 Mon 18:27]
-:END:
-:LOGBOOK:
-- Created [2026-10-05 Mon 18:27]
-:END:
-home/AGENTS.md (Verification discipline) requires the full text of a commit message, diff or rule inside the question, because the dialog can hide text that comes before it. For long text this makes the dialog taller than the terminal and hides the answer editor (see the question-tool feedback task). Revise the rule so that approval text stays visible and the editor stays usable, for example: put short text (a screenful with the options) inside the question; for longer text, write it to a file under <repository-root>/.tmp/ and put the path and a one-line summary in the question, or split the approval into one question per item. Keep the rule if the question tool gains a bounded, scrollable body.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: git@git.nmd.ie:products/connect/portal @ reassoc-device-patient
-- timestamp: [2026-10-05 Mon 18:27]
-- sender: human
-
-Evidence:
-Following the rule, the agent put 11 full commit messages (about 140 lines) in one approval question. The input box moved off the screen and the dialog could not be scrolled. The main pi session window does support scrollback.
-
-** TODO question tool: keep the answer editor visible for long questions :ext:question:
-:PROPERTIES:
-:CUSTOM_ID: 2bc60e8c-db37-4972-9845-6cbd2ea768c2
-:CREATED: [2026-10-05 Mon 18:27]
-:END:
-:LOGBOOK:
-- Created [2026-10-05 Mon 18:27]
-:END:
-The question dialog renders the full wrapped question text, then the options, then the answer editor, with no height limit (pi/extensions/question.ts render). A long question pushes the options and the editor below the bottom of the terminal, so the user cannot see what they type. The dialog has no scrollback, unlike the main pi session window. Desired outcome: the options and the answer editor stay visible at every question length; the question body gets a bounded viewport that the user can scroll (for example PgUp/PgDn), with an indicator when text is hidden.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: git@git.nmd.ie:products/connect/portal @ reassoc-device-patient
-- timestamp: [2026-10-05 Mon 18:27]
-- sender: human
-
-Evidence:
-An approval question that contained 11 full commit messages (about 140 lines) pushed the input box off the screen. The user could not see the typed answer, and could not scroll the dialog.
-
 ** TODO Reconcile ot status ancestor promotion with assignments that keep the parent task open :skill:org_tasks:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 5e075164-70b2-42a9-877f-67c1dd51a338
@@ -777,3 +746,22 @@ Origin:
 
 Evidence:
 - 2026-10-13: `oh task start worker` run twice in one shell command; the first succeeded, the second returned exit 1 with `agent_pane_busy` for pane `w2:p41`, round status `failed`, worktree `.tmp/herdr-orch/worktrees/<id>` at the base commit. `oh task close` then refused ("assignment is not captured"), and `close --abandon` refused ("already terminal"). A retry 8 s after a later start succeeded.
+
+** TODO org-plan: check that a change-record's identifiers resolve :skill:org_plan:
+:PROPERTIES:
+:CUSTOM_ID: 58d81bcd-bb15-4835-9737-da8fe64dd93b
+:CREATED: [2026-10-14 Wed 16:22]
+:END:
+:LOGBOOK:
+- Created [2026-10-14 Wed 16:22]
+:END:
+Add a change-record check, in `ot doctor` or an org-plan script, that resolves each backticked identifier in a record (keywords, auto-resolved `::` keywords, qualified and simple symbols, namespaces, file paths) against tracked source, and reports the unresolved ones for review. Include a positive control in each run. Expect some names to stay unresolved by design (removed identifiers, rejected alternatives, library internals), so report them and do not fail on them.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@git.nmd.ie:products/connect/portal @ fail-fast
+- timestamp: [2026-10-14 Wed 16:22]
+- sender: agent
+
+Evidence:
+Checking a 330-line change-record against its changeset needed a one-off Babashka script (portal `.tmp/check-record-ids.clj`, gitignored) that runs `git grep -P` over `src` and `test` for each backticked span. It found one stale identifier (a renamed test helper) and confirmed the rest; a second pass verified the record after edits. The unresolved residue was removed or rejected names and Nexus/Replicant internals, which needed a manual check in the library jars.
