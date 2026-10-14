@@ -1,6 +1,6 @@
 ---
 name: herdr-orch
-description: "Delegate work to Herdr subagents with the in-skill `oh` CLI: spawn, fan out, or run a persona such as scout/researcher/planner/reviewer/worker/advisor/visual-tester/base-analyst, then collect, validate, and close or continue it. `oh` also wraps raw pane/tab/workspace/agent control for orchestration. For direct Herdr use unrelated to delegation, prefer the `herdr` skill. Requires HERDR_ENV=1."
+description: "Delegate work to Herdr subagents with the in-skill `oh` CLI: spawn, fan out, or run a persona such as scout/researcher/planner/reviewer/worker/advisor/visual-tester/base-analyst/simplifier, then collect, validate, and close or continue it. `oh` also wraps raw pane/tab/workspace/agent control for orchestration. For direct Herdr use unrelated to delegation, prefer the `herdr` skill. Requires HERDR_ENV=1."
 ---
 
 # Herdr subagents
@@ -29,6 +29,8 @@ Definitions are `<name>.md` files discovered in descending precedence: `<git-roo
 Unknown personas require listing the roster and asking, not improvising.
 
 `base-analyst` is a directly usable, read-only analysis persona (default model `light`, a leaf by default): spawn it for an assessment that does not fit `scout`'s codebase-only remit or `researcher`'s external-facts remit. It also exists to be `extends:`-ed by a concrete analysis workflow (for example the `simplify` skill's persona) rather than repeating its assignment/evidence/uncertainty scaffold each time.
+
+`simplifier` is that example: it extends `base-analyst` and applies the `simplify` skill to a declared range. It is not part of a `reviewer` run. When you want both correctness and over-engineering review, start one `reviewer` and one `simplifier` on the same range and collect both. Each keeps its own bar and result.
 
 A persona body may carry `%<name>` trait tokens, substituted from the trait store at spawn into a composed persona file that the child reads instead of the definition. A persona may instead select traits by name through one-line frontmatter `traits: [name, ...]` metadata, appended after the persona body rather than substituted in place. The whole shipped roster selects this way; no packaged persona currently places an inline token, though inline placement stays supported for a directive that must land in the section it governs. Either form carries directives whose prose the persona no longer states itself, so substitution is a boundary rather than decoration. Both forms fail before any ledger or pane mutation on a name that does not resolve or cannot be substituted; they differ on a repeat, which fails inline but is deduplicated in metadata. The store, admission rules, and fragment format are in [references/traits.md](references/traits.md). The mechanics are in [scripts/docs/contract.md#Trait composition](scripts/docs/contract.md#trait-composition).
 

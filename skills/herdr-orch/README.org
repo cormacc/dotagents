@@ -103,7 +103,7 @@ Every key above is optional. Omitting =kind= is usually right: the child then in
 
 A definition may also declare =extends: <base-name>=, resolved through the same three layers, to compose one base body before its own -- =base-analyst= (packaged, read-only, a leaf by default) is the shipped base for a concrete analysis persona to extend rather than re-declaring its assignment/evidence/uncertainty scaffold. One level only: a base that itself declares =extends:= is refused. See [[file:scripts/docs/contract.md]] section 'Persona composition (`extends`)' for the resolution and merge rules.
 
-The shipped roster is =scout=, =researcher=, =planner=, =reviewer=, =worker=, =advisor=, =visual-tester=, and =base-analyst= ([[file:SKILL.md]] section 'Roster and routing' owns each one's remit and delegation grant).
+The shipped roster is =scout=, =researcher=, =planner=, =reviewer=, =worker=, =advisor=, =visual-tester=, =base-analyst=, and =simplifier= ([[file:SKILL.md]] section 'Roster and routing' owns each one's remit and delegation grant).
 
 ** Shared directives: traits
 
