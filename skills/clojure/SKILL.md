@@ -9,6 +9,8 @@ Follow the project's `AGENTS.md`, commands, and conventions. Use the local [styl
 
 For error handling, JVM/CLJS portability, Java interop or test design, read the [runtime and testing cautions](references/runtime-testing.md). They preserve concrete failure modes and local findings without expanding the core workflow.
 
+When you review or simplify Clojure code, read the [review reference](references/review.md) for language-specific defect hazards, readability items, and simplification candidates.
+
 ## Workflow
 
 1. Read the target code, namespace dependencies, and callers. Use `lsp` for symbol definitions and references.

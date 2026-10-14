@@ -31,6 +31,8 @@ For each candidate site, classify it with one tag:
 - `yagni` -- an abstraction with one implementation, a config value nobody sets, or a layer with one caller.
 - `shrink` -- the same logic, expressible in less code, with no change in behaviour.
 
+When a skill for the range's language supplies a review reference (for example, the `clojure` skill's `references/review.md`), read it for language-specific candidates. Its candidates need the same evidence as yours.
+
 Reuse before you write, standard library before custom code, and native platform behaviour before a dependency: that ordering is the heuristic for finding candidates, not a licence to ship a replacement without evidence.
 
 ## 3. Require evidence before you report a finding

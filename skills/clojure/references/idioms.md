@@ -26,3 +26,9 @@ Project conventions and formatter settings take precedence. Do not reformat unre
 - Use `when` or `when-not` for a single conditional branch; use `:else` for the default branch of `cond`.
 - Prefer functions to macros when a function suffices.
 - Use `with-open` for closeable JVM resources, keeping their consumption inside its scope.
+
+## Local preferences
+
+These are this installation's preferences. They are not part of the style guide, and project conventions still take precedence.
+
+- Prefer destructuring in the argument vector or `let` to repeated keyword or `get` access on the same map, so that a function shows its inputs in one place. Direct access stays clearer for a single key or inside a threading form.
