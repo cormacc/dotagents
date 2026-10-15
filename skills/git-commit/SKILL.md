@@ -28,14 +28,20 @@ Format: `<type>[(scope)][!]: <description>` followed by an optional body and foo
    - Breaking: append `!` before the colon or add a `BREAKING CHANGE:` footer.
 
 3. Pick a scope (optional noun for the area touched), then write the subject:
+   - Match the project's capitalisation after the colon. Aim for 50 characters or fewer.
    - Imperative mood ("add", not "added"), no trailing period, ≤72 chars.
 
 4. **Body -- only what's needed.** What's changed and why. Prompt the user for the *why* if it's not evident from the diff. Refer to associated design change-records rather than restating their content.
+
+   Always include a body for a breaking change, a security fix, a data migration, or a revert, even when the subject seems sufficient.
+
+   Wrap the body at 72 characters. Use `-` for bullets. Put issue references (`Closes #42`, `Refs #17`) at the end.
 
    Do **not** include:
    - Test run details / output
    - Abandoned approaches or failed experiments
    - Co-author / generation attribution footers unless the user asks
+   - Narration of the diff: "This commit does X", "I", "we", "now", "currently", or a file name that the scope already gives. The diff shows *what* changed; the body says *why*.
 
 5. Show the proposed message to the user and wait for explicit approval before running `git commit`.
 
@@ -91,3 +97,7 @@ Additional changes
 - The webserial and webbluetooth wrappers return promises instead of taking
   :on-success/:on-error callbacks, for consistency.
 ```
+
+## Provenance
+
+The capitalisation, 50-character, mandatory-body, wrapping, issue-reference, and diff-narration rules adapt `caveman-commit` from https://github.com/JuliusBrussee/caveman/blob/v4.0.1/skills/caveman-commit/SKILL.md (Apache License 2.0).

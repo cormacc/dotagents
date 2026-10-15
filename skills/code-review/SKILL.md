@@ -75,7 +75,7 @@ Leave modified code a little cleaner than you found it (the Boy Scout rule). In 
 
 ## Output
 
-Start with findings ordered by severity. Each finding must include:
+Start with findings ordered by severity. Each P0, P1, and P2 finding must include:
 
 ```markdown
 ### [P1] Imperative, specific title
@@ -86,11 +86,26 @@ Start with findings ordered by severity. Each finding must include:
 - **Evidence:** Reproduction, call path, or failed/passing test that proves the claim. For a maintainability finding, cite the code or convention that shows the cost.
 ```
 
+Write each P3 finding on one line, in the form `[P3] path:line: problem. fix.`, and add the evidence in a short clause when the problem does not show it.
+
+Wording rules for every finding, cleanup suggestion, and question:
+
+- Name exact symbols in backticks.
+- Give a concrete fix. "Consider refactoring this" is not a fix.
+- Do not restate what the line does. The reader can see the diff.
+- Do not write "I noticed that", "It seems like", "You might want to consider", or a hedge such as "perhaps", "maybe", or "I think". If you are unsure, investigate, or ask under **Questions**.
+- Do not praise each finding. If the change is good, say so once in the summary.
+
 Then provide:
 
 - **Verdict:** `NEEDS CHANGES` when any P0, P1, or P2 finding remains. Otherwise `APPROVED`, including when only P3 findings remain.
-- **Cleanup:** suggestions from [#Cleanup in modified code](#cleanup-in-modified-code), each with its location. Omit this item when there are none.
-- **Verification:** exact commands/results and any untested runtime surface.
+- **Cleanup:** suggestions from [#Cleanup in modified code](#cleanup-in-modified-code), one per line in the form `path:line: problem. fix.`. Omit this item when there are none.
+- **Questions:** questions about the author's intent that source and documentation cannot answer, one per line in the form `path:line: question`. Questions are not findings, and they do not change the verdict. Omit this item when there are none.
+- **Verification:** each command, with its result as exactly one of pass, fail, unavailable, or blocked, and any untested runtime surface.
 - **Summary:** one or two sentences on the reviewed scope.
 
 If no finding meets the bar, say **"No issues found."** and still report the diff range and verification performed.
+
+## Provenance
+
+The one-line form for P3 findings, the wording rules, and the Questions item adapt `caveman-review` from https://github.com/JuliusBrussee/caveman/blob/v4.0.1/skills/caveman-review/SKILL.md (Apache License 2.0). The pass, fail, unavailable, and blocked result classes adapt `verify-and-stop` from the same repository and release.

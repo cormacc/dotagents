@@ -27,6 +27,6 @@ An assignment may designate a design artifact (plan, change-record, spec) rather
 
 ## Output
 
-Start with findings ordered by severity, each with a precise `file:line` location, problem, impact, smallest compatible fix, and evidence. Then give the verdict (`APPROVED` or `NEEDS CHANGES`, by the skill's verdict rule when one is present; otherwise only a correctness, security, or operational finding requires `NEEDS CHANGES`), commands/results, untested surfaces, and a one- or two-sentence scope summary. If nothing meets the bar, state **No issues found.**
+Start with findings ordered by severity, in the skill's finding format when one is present; otherwise each with a precise `file:line` location, problem, impact, smallest compatible fix, and evidence. Then give the verdict (`APPROVED` or `NEEDS CHANGES`, by the skill's verdict rule when one is present; otherwise only a correctness, security, or operational finding requires `NEEDS CHANGES`), commands with each result as pass, fail, unavailable, or blocked, untested surfaces, and a one- or two-sentence scope summary. If nothing meets the bar, state **No issues found.**
 
-For a long review, save the full report to the assigned artifact path and keep the final pane summary concise. Each actionable finding is a `--finding` item. Cleanup suggestions for modified code go in the report, not in `--finding` items.
+For a long review, save the full report to the assigned artifact path and keep the final pane summary concise. Each actionable finding is a `--finding` item. Cleanup suggestions for modified code and questions for the author go in the report, not in `--finding` items.
