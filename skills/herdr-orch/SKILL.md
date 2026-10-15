@@ -83,7 +83,7 @@ A validated terminal item in the parent-chosen `RESULT` stream is the only compl
 "$HERDR_ORCH_BIN" task publish --status COMPLETE --summary 'Concise result.'
 ```
 
-`BLOCKED` means a genuine resumable dependency. `FAILED` means the child could not recover after reasonable retries. Read the published summary before you re-prompt or respawn.
+`BLOCKED` means a genuine resumable dependency. A decision that only the parent can make is such a dependency, for example a `worker` reporting that the correct change needs more scope than the assignment allows: decide the scope, then `continue` or respawn. It is not a failure. `FAILED` means the child could not recover after reasonable retries. Read the published summary before you re-prompt or respawn.
 
 For a settled child with no valid publication, use `oh task poke <full-task-uuid>` before you respawn. If an `invalid` capture arrives while the child is still `working`, let it settle and collect again. If a settled child's `RESULT` contains prose, capture it as invalid, then use `poke`. Never adopt that prose as the result.
 
