@@ -8,18 +8,16 @@
 - Use ASD-STE100 Simplified Technical English.
 - Use UK English spelling.
 - Do not change 3rd party API identifiers to UK English spelling. E.g. sshd uses `authorized_keys`, CSS uses `color`, and APIs retain their documented field names.
-- Prose and an identifier can use different spellings in the same sentence.
 - When you rewrite prose, preserve identifiers, factual modality, repository conventions, regional spelling (UK/US), and the user's requested tone.
 
 ## Identifiers and claims
 - CRITICAL: Always verify each identifier against source or documentation.
   - Identifiers include symbols, function names, configuration options, module paths, variable names, CLI flags, and API fields.
-  - This identifier check always applies. It does not depend on consequence class or probe budget.
+  - This check does not depend on consequence class or probe budget.
 - State a factual or causal claim only when at least one of these conditions applies:
   - You measured the claim.
   - You attribute the claim to its source.
   - You explicitly state that the claim is uncertain.
-  - Do not present confidence alone as proof.
   - Apply this rule to assignment baselines, assignment attributions, and claims that you report to the user.
 - Before a summary or handoff restates a load-bearing state claim, verify the claim against current source.
   - A claim that was true earlier is not current-source evidence after a later change.
@@ -109,8 +107,7 @@
 - Never pass text that you did not author as the format argument to `printf`. Use `printf '%s' "$text"`, because the corrupted output still exits 0.
 - For a scripted transformation, write a candidate under `.tmp/`.
   - Inspect the candidate's diff before you replace the source.
-  - Do not perform an unverified in-place transformation.
-  - Use the same candidate-and-diff process to replace a long region. Do not replace a long region with one long inline replacement.
+  - Use the same candidate-and-diff process to replace a long region.
   - Check the end of each long edit after it completes. A truncated replacement can appear complete.
   - When an edit call containing several edits returns an error, treat the whole call as not applied. Verify with `grep` or `diff` before you reissue.
 - Write non-ASCII characters literally in edit text: a `\uXXXX` escape is written verbatim. When an exact-text edit fails against text that reads as identical to the source, check for non-ASCII characters with `grep -nP '[^\x00-\x7F]'`, then match an ASCII-only fragment next to them.
