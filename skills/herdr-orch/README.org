@@ -1,4 +1,5 @@
 #+TITLE: herdr-orch -- harness-agnostic subagent orchestration
+#+PROPERTY: header-args :eval no
 
 Where things live:
 
@@ -103,7 +104,7 @@ Every key above is optional. Omitting =kind= is usually right: the child then in
 
 A definition may also declare =extends: <base-name>=, resolved through the same three layers, to compose one base body before its own -- =base-analyst= (packaged, read-only, a leaf by default) is the shipped base for a concrete analysis persona to extend rather than re-declaring its assignment/evidence/uncertainty scaffold. One level only: a base that itself declares =extends:= is refused. See [[file:scripts/docs/contract.md]] section 'Persona composition (`extends`)' for the resolution and merge rules.
 
-The shipped roster is =scout=, =researcher=, =planner=, =reviewer=, =worker=, =advisor=, =visual-tester=, =base-analyst=, and =simplifier= ([[file:SKILL.md]] section 'Roster and routing' owns each one's remit and delegation grant).
+The shipped roster is =scout=, =researcher=, =planner=, =reviewer=, =worker=, =advisor=, =visual-tester=, =base-analyst=, and =simplifier= ([[file:SKILL.md]] section 'Roster and routing' owns each one's remit and delegation grant). [[*Packaged personas]] lists each one's model, traits, and delegation grant.
 
 ** Shared directives: traits
 
@@ -264,6 +265,86 @@ oh task run scout --task x --model heavy --print-prompt
 
 The preview reports =kind=, the resolved (pre-alias) =model=, its post-alias =model-canonical=, the translated =model-args= the harness will receive, the resolved =effort=/=effort-source= and translated =effort-args=, and the resolved =placement=, =retro=/=retro-source=, and =spawns=/=spawns-source=. Read the two model fields together to localise a miss: if =model-canonical= still shows your short name, no =:aliases= entry matched. If it is right but =model-args= repeats it instead of a harness-native ID, the =:models= row has no column for that kind.
 
+** Listing personas, traits, and models
+
+=oh roster= lists what a spawn would resolve from the caller's checkout:
+
+- each persona with its model, harness, traits, delegation grant, and source layer, or the error that a spawn would fail with
+- each trait with its description and the personas that select it
+- each model alias with the model name that each harness receives
+- the spawn defaults
+
+It only reads files, so it works outside Herdr.
+
+#+begin_src sh
+oh roster                                 # JSON, for tools and agents
+oh roster --format markdown               # every section, for a person
+oh roster --format org --section models   # one section, as an org list or table
+oh roster --format markdown --detail      # add paths, timeouts, retro, every alias, and the layers
+#+end_src
+
+In pi, =/oh= shows the same listing in the session and does not add it to model context. =/oh personas=, =/oh traits=, and =/oh models= show one section. The tool-output expand key (default =ctrl+o=) switches to the =--detail= form. See [[file:../../pi/extensions/herdr-orch/README.md][pi/extensions/herdr-orch/README.md]].
+
+The listings below come from the packaged definitions only, so a project or home override does not appear. Run =oh roster= to see your own.
+
+*** Packaged personas
+
+#+CALL: oh-roster[:eval yes](section="personas")
+
+#+RESULTS:
+- *advisor* -- middle; traits =simple= =read-only= =focused= =no-bullshit=
+  Focused mid-task advisor - assesses a caller-provided decision point and returns actionable guidance
+- *base-analyst* -- light; traits =read-only= =simple=
+  Read-only analysis base -- owns assignment scope, evidence, and uncertainty; extend it for a concrete analysis workflow
+- *planner* -- heavy; spawns scout, researcher; traits =simple=
+  Interactive planning agent - clarifies WHAT to build and figures out HOW. Produces a task-linked change-record and executable plan tasks. May delegate factual gaps to scout or researcher subagents.
+- *researcher* -- light; traits =focused= =read-only=
+  External-knowledge research - library capabilities, current best practices, API behaviors, tradeoffs between options. Reads docs, runs web searches, and synthesises findings with source links. Use when a planning or implementation decision depends on facts outside the codebase.
+- *reviewer* -- middle; traits =read-only= =no-bullshit=
+  Review agent - finds high-confidence correctness, security, regression, test, and maintainability problems in a specified change. Also reviews plans and change-records as design reviews when the assignment designates one
+- *scout* -- light; traits =focused= =read-only= =compact=
+  Fast codebase reconnaissance - maps existing code, conventions, and patterns for a task
+- *simplifier* -- light; extends base-analyst; traits =read-only= =simple=
+  Over-engineering review agent - applies the simplify skill to a declared range and reports evidence-backed simplifications; runs beside reviewer, not in place of it
+- *visual-tester* -- middle; traits =focused= =read-only=
+  Visual QA tester -- navigates web UIs via Chrome CDP, spots visual issues, tests interactions, produces structured reports
+- *worker* -- light; spawns scout, researcher, advisor; traits =simple=
+  Default worker - implements a scoped task with minimal production-quality changes, verifies acceptance criteria, and reports concrete changes and test evidence
+
+*** Packaged traits
+
+A trait that no persona selects is for a spawn's =--trait NAME= or for interactive =%name= use ([[*Shared directives: traits]]).
+
+#+CALL: oh-roster[:eval yes](section="traits")
+
+#+RESULTS:
+- =compact= -- Result format; selected by scout
+- =focused= -- Assignment boundary; selected by advisor, researcher, scout, visual-tester
+- =investigate= -- Debugging stance; no persona selects it
+- =migration= -- Transition safety; no persona selects it
+- =no-bullshit= -- Evidence bar; selected by advisor, reviewer
+- =read-only= -- Write boundary; selected by advisor, base-analyst, researcher, reviewer, scout, simplifier, visual-tester
+- =refactor= -- Behaviour preservation; no persona selects it
+- =simple= -- Engineering stance; selected by advisor, base-analyst, planner, simplifier, worker
+
+*** Packaged models
+
+The first column shows the two shortest aliases for each canonical ID. A harness with no entry of its own receives the canonical ID, which is the pi spelling ([[*Model configuration]]).
+
+#+CALL: oh-roster[:eval yes](section="models")
+
+#+RESULTS:
+| Aliases                  | claude | codex         | pi                          |
+|--------------------------+--------+---------------+-----------------------------|
+| fable, heavy             | fable  | gpt-6-astra   | anthropic/claude-fable-5-1  |
+| haiku, feather           | haiku  | gpt-6-luna    | anthropic/claude-haiku-5-5  |
+| opus, middle             | opus   | gpt-6.1-sol   | anthropic/claude-opus-5-5   |
+| light, sonnet            | sonnet | gpt-5.6-terra | anthropic/claude-sonnet-5-5 |
+| gpt-terra, gpt-5.6-terra | sonnet | gpt-5.6-terra | openai-codex/gpt-5.6-terra  |
+| gpt-astra, gpt-6-astra   | fable  | gpt-6-astra   | openai-codex/gpt-6-astra    |
+| gpt-luna, gpt-6-luna     | haiku  | gpt-6-luna    | openai-codex/gpt-6-luna     |
+| gpt-sol, gpt-6.1-sol     | opus   | gpt-6.1-sol   | openai-codex/gpt-6.1-sol    |
+
 * Known gaps
 
 - The CLI implements one child per invocation for =run=/=start=. Multi-child fan-out scheduling (how many in flight, when to replace one) and resident lifecycle remain parent policy in [[file:SKILL.md][SKILL.md]] -- no command spawns or schedules more than one child. Fan-in, however, now has a dedicated primitive: =collect --any= (see [[file:scripts/docs/contract.md]] section 'Fan-in') captures whichever in-flight child of the caller's session publishes first, without scheduling anything itself. Concurrent writers likewise get checkout isolation ([[*Subagent lifecycle]]), but how many run at once remains the parent's decision.
@@ -297,3 +378,14 @@ The 2026-10-08 review covered Pi 1.0.0 to 1.1.0 from the installed 1.1.0 package
 The 2026-10-01 review covered Herdr 0.9.3 and Pi 1.0.0 against a Herdr 0.9.1 / Pi 0.85.1 baseline, and found no breaking upstream change that affects herdr-orch. The managed Pi asset =herdr-agent-state.ts= is unchanged in Herdr 0.9.3 (integration revision 9, byte-identical to the local copy). Pi 1.0.0 was reviewed from source. The installed Pi 0.99.2 has the same extension layer (=packages/coding-agent/src/core/extensions/= has no diff between the tags). Pi 1.0.0 makes the fullscreen TUI the default, which can limit a raw =oh agent read= of a Pi child to the visible screen; delegation completes through =RESULT= files and is not affected. This caveat was not verified against a live 1.0.0 child. Findings, citations, and follow-up tasks are in [[file:../../design/log/2026-10-01-review-herdr-orch-w-r-t-pi-v1-0-0-releas.org][the 2026-10-01 review record]].
 
 The previous review (2026-09-17) covered Herdr 0.9.1 and Pi 0.85.1 against a Herdr 0.8.2 / Pi 0.84.2 baseline, from source and focused tests. [[file:../../design/log/2026-09-17-herdr-orch-improvements-260917.org][herdr-orch improvements 260917]] raised the Herdr minimum from 0.8.2 to 0.9.1 on both client and server.
+
+* Generated listings                                                :noexport:
+
+The =#+CALL:= lines in [[*Listing personas, traits, and models]] run this block. The file-level =#+PROPERTY: header-args :eval no= disables every other block, so =org-babel-execute-buffer= runs only those calls. An empty =HOME= and assignment root leave only the packaged layer, so the output does not depend on the machine. [[file:scripts/AGENTS.md]] section 'Regenerating README listings' gives the maintenance workflow.
+
+#+NAME: oh-roster
+#+begin_src sh :var section="personas" :results raw replace
+home="$(mktemp -d)"; root="$(mktemp -d)"
+trap 'rm -rf "$home" "$root"' EXIT
+HOME="$home" ORCH_ASSIGNMENT_ROOT="$root" scripts/oh roster --format org --section "$section"
+#+end_src

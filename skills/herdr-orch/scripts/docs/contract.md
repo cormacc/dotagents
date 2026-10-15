@@ -49,7 +49,7 @@ Failures use `{ "ok": false, "schema": "herdr-orch/v1", "error": {"message": "..
 
 `status` without a task and `list` return a JSON **array** of ledger entries under `result`, and `close --settled`, `orphans`, `compact --closed`, and `harvest` return JSON **arrays** too ([#Close](#close), [#Orphans](#orphans), [#Retention](#retention), [../../SKILL.md#Process retrospectives](../../SKILL.md#process-retrospectives)). Every other command returns an object.
 
-The read verbs -- `collect` (including `--any`), `status`, `list`, and `harvest` -- accept two output knobs, because a delegating parent pays for every byte they emit. `--raw` opts *in* to the raw result envelope: the `text` blob is a byte-for-byte repeat of the parsed fields beside it (top-level `text` on a capture, `:envelope :text` on a ledger entry) and is omitted unless asked for. `--format text` (default `json`; any other value is a loud refusal) renders lines instead of a JSON envelope, and is the one other documented non-JSON output besides `--help`: a capture becomes `LABEL: value` lines plus `- ` list sections in envelope order, and a ledger entry becomes one tab-separated line of `task`, `child`, pane, status, `captured`/`uncaptured`, `closed`/`open`. An empty listing renders `none`, never an empty string.
+The read verbs -- `collect` (including `--any`), `status`, `list`, and `harvest` -- accept two output knobs, because a delegating parent pays for every byte they emit. `--raw` opts *in* to the raw result envelope: the `text` blob is a byte-for-byte repeat of the parsed fields beside it (top-level `text` on a capture, `:envelope :text` on a ledger entry) and is omitted unless asked for. `--format text` (default `json`; any other value is a loud refusal) renders lines instead of a JSON envelope, and is, with `oh roster --format markdown|org` ([#Roster](#roster)), one of the documented non-JSON outputs besides `--help`: a capture becomes `LABEL: value` lines plus `- ` list sections in envelope order, and a ledger entry becomes one tab-separated line of `task`, `child`, pane, status, `captured`/`uncaptured`, `closed`/`open`. An empty listing renders `none`, never an empty string.
 
 An immutable item that fails validation (identity mismatch, malformed envelope, or missing artifact) is recorded as the non-final status `invalid`, with the reason on that item and in `result.reason`. It is consumed but never seals the stream, so a later valid item can capture normally. Collection re-reads the oldest unconsumed item. A child that wrote malformed content directly may publish a corrected successor.
 
@@ -160,7 +160,7 @@ File chain, project wins: skill default `skills/herdr-orch/subagents/config.edn`
 
 A merged config where the same key is present in both `:aliases` and `:models`, or an `:aliases` value that is itself an `:aliases` key, fails `validate-merged-config!` by name. Both checks run in `cli/config` immediately after `merge-config`, before any ledger allocation or pane mutation, so a stale override (for example, a legacy full weight row now colliding with a shipped alias) fails loudly at spawn instead of silently shadowing or chaining.
 
-This table is the single enumerated home for the shipped weight rows. Every other document states the rule and links here. Each cell names a model family: the translated model with its version tokens removed (`anthropic/claude-sonnet-5-5` is the `anthropic/claude-sonnet` family, `gpt-6.1-sol` is `gpt-sol`). `subagents/config.edn` holds the current versions. `cli_test.clj`'s `shipped-config-invariants` parses this table and asserts that each cell has no version tokens and is the family of the translation of `subagents/config.edn`. A version bump therefore needs no edit here, but a weight that moves to another family fails `bb test` until this table changes. The rows translate only after kind resolution:
+This table is the single hand-maintained enumeration of the shipped weight rows. Every other document states the rule and links here. The one exception is generated: [../../README.org](../../README.org) embeds `oh roster --format org --section models` output, which a test keeps current ([#Roster](#roster)). Each cell names a model family: the translated model with its version tokens removed (`anthropic/claude-sonnet-5-5` is the `anthropic/claude-sonnet` family, `gpt-6.1-sol` is `gpt-sol`). `subagents/config.edn` holds the current versions. `cli_test.clj`'s `shipped-config-invariants` parses this table and asserts that each cell has no version tokens and is the family of the translation of `subagents/config.edn`. A version bump therefore needs no edit here, but a weight that moves to another family fails `bb test` until this table changes. The rows translate only after kind resolution:
 
 | Weight | Pi | Claude | Codex |
 |---|---|---|---|
@@ -174,6 +174,31 @@ Unversioned canonical IDs (`claude-opus`, `gpt-sol`, …) are floating aliases r
 Config is loaded and schema-validated (parse errors and shape/type errors alike) before any ledger allocation or pane mutation. A validation failure carries the offending path. A missing override file is ignored. A missing shipped default is fatal.
 
 `--print-prompt` reports the resolved (pre-alias) model, its post-alias canonical ID under the `:model-canonical` key, and the effective translated native model args. Its prompt preview contains the resolved persona file path and launcher-composed guidance, not the persona body. Inspect the resolved file directly when validating persona-local rules. Spawn capability is enforced before preview generation, so a delegated leaf cannot use `--print-prompt` for a persona outside its `HERDR_ORCH_SPAWNS` allow-list.
+
+## Roster
+
+`oh roster [--format json|markdown|org] [--section all|personas|traits|models] [--detail]` is read-only discovery. It takes no positional argument, never runs preflight, and never calls Herdr, so it works without `HERDR_ENV`.
+
+The default `--format json` is for a tool or agent. It writes the usual envelope, and its `result` is an object:
+
+- `personas` -- every name `available-personas` returns, sorted, each with `name`, `source` (`project`, `home`, or `packaged`), `path`, `description`, `model`, `model-canonical`, `kind`, `spawns`, `traits`, `retro`, `timeout`, and `extends` when a base resolved. The values come from the resolvers a spawn uses ([#Persona composition (`extends`)](#persona-composition-extends), [#Trait composition](#trait-composition), [#Spawn gating](#spawn-gating), [#Retro gating](#retro-gating), [#Timeout resolution](#timeout-resolution)) with no flags applied. `spawns` is the declared allow-list, not the depth-gated policy. A persona whose composition or policy resolution fails carries `error` (the message a spawn would fail with) in place of the resolved fields, and the listing still succeeds.
+- `traits` -- every name that some layer offers as `<name>.md` or `<name>/prompt.md` and that matches the token grammar, sorted, each with the winning `name`, `source`, `path`, frontmatter `description`, and `selected-by` (the listed personas whose `traits` contain it).
+- `models` -- one row for each canonical ID in the merged `:models` keys or `:aliases` values, sorted, with `canonical`, `aliases` (shortest first), and `kinds` (the sparse per-kind spellings; a kind absent from a row receives the canonical ID).
+- `harnesses` -- the sorted kind names in the merged `:harnesses`.
+- `defaults` -- the merged `:defaults` map.
+- `layers` -- the ordered persona and trait resolution directories, each `{source, directory}`.
+
+An invalid merged config fails the command, as it fails every spawn ([#Model resolution](#model-resolution)).
+
+`--format markdown` and `--format org` are for a person. Each writes the same rendering of that result as plain text, not an envelope. One renderer produces both formats, so the pi `/oh` command (Markdown) and the listings generated into [../../README.org](../../README.org) (org) cannot disagree:
+
+- A persona is one list item: name, then `model` (or `inherits parent model`), `kind`, `extends`, `spawns`, and `traits` when present, then a non-packaged source as `<source> layer`. Its description follows as an indented continuation line. A persona with `error` shows only its name and the error.
+- A trait is one list item: name, description, then `selected by <personas>` or `no persona selects it`, then a non-packaged source.
+- Models are one table: the two shortest aliases, then one column for each harness. A harness with no entry for a row shows the canonical ID, which is what that harness receives. Cells are padded the way org aligns a table, so org's realignment of a babel result changes nothing.
+- `--section all`, the default, writes every section under a heading (`## Title` in Markdown, a bold `*Title*` line in org) and adds the spawn defaults. A single section writes only its list or table, with no heading, so that an org babel result can replace it cleanly.
+- `--detail` adds each path (instead of the `<source> layer` note), each persona's timeout and retro policy, every alias, and, under `all`, the resolution layers.
+
+`--section` or `--detail` with `--format json` is refused, as is an unknown format or section. `cli_test.clj`'s `readme-roster-listings-are-current` compares each listing embedded in README.org with a packaged-only rendering, so a packaged persona, trait, or config change fails `bb test` until the README is regenerated ([AGENTS.md#Regenerating README listings](../AGENTS.md#regenerating-readme-listings)).
 
 ## Ledger and completion
 

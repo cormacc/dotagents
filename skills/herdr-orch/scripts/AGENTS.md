@@ -20,6 +20,23 @@ bb test-clojure herdr-orch.cli-test
 
 The Herdr tests use fake processes and per-test `ORCH_ASSIGNMENT_ROOT` directories. They must not write to the live `<git-root>/.tmp/herdr-orch/` tree.
 
+## Regenerating README listings
+
+`../README.org` embeds the packaged personas, traits, and models as `oh roster --format org` output. Each `#+CALL: oh-roster[:eval yes](section="...")` line runs the `oh-roster` block in that file's `Generated listings` section, with an empty `HOME` and assignment root so that only the packaged layer appears. The file-level `#+PROPERTY: header-args :eval no` disables every other block, so executing the whole buffer runs only those calls.
+
+Regenerate after a change to a packaged persona (`../subagents/*.md`), a packaged trait (`../traits/`), `../subagents/config.edn`, or the roster renderer in `cli.clj`. Until then, `bb test` fails in `readme-roster-listings-are-current` with "README.org `<section>` listing is stale". Do not edit a `#+RESULTS:` block by hand.
+
+In Emacs:
+
+1. Visit `../README.org`.
+2. Load the shell backend once in the session: `M-: (require 'ob-shell)`, or add `(shell . t)` to `org-babel-load-languages`.
+3. Type `C-c C-v b` (`org-babel-execute-buffer`) and accept each evaluation prompt. To regenerate one listing, type `C-c C-c` on its `#+CALL:` line.
+4. Save the buffer.
+
+From a shell, run `bb readme-roster` at the repository root. It runs the same calls in `emacs --batch -Q` and saves the file. It refuses while an Emacs `.#README.org` lock exists, because writing under a visiting buffer can discard unsaved edits.
+
+An agent with an Emacs evaluation tool first checks whether the user's Emacs visits `README.org`. If it does, regenerate in that buffer with `(require 'ob-shell)` and `(let ((org-confirm-babel-evaluate nil)) (org-babel-execute-buffer))`, and leave the save to the user when the buffer had unsaved changes before. Otherwise run `bb readme-roster`. Then run `bb test-clojure herdr-orch.cli-test` to confirm the listings are current.
+
 ## Live smoke
 
 Run the live smoke only from the repository root and from a Herdr-managed pane. Confirm that Herdr injected `HERDR_ENV=1`. Then run:

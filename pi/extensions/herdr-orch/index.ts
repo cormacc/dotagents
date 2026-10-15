@@ -1,8 +1,17 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { StringEnum } from "@earendil-works/pi-ai";
+import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Type } from "typebox";
+import { composeHelp, parseSection, rosterArgs, SECTION_DESCRIPTIONS, SECTIONS, type Section } from "./help.ts";
+
+// `/oh` output is a session entry, not a message: it is shown to the user and never enters
+// model context, because the skill already gives the model this information.
+const HELP_ENTRY = "herdr-orch-help";
+// `compact` and `detail` are the two `oh roster --format markdown` renderings; the
+// tool-output expand state chooses one.
+type HelpEntry = { section: Section; herdr: boolean; compact: string; detail: string };
 
 type OhEnvelope = {
   ok: boolean;
@@ -140,8 +149,8 @@ function outputText(result: unknown): string {
 }
 
 export default function (pi: ExtensionAPI) {
-  async function execute(args: string[], signal?: AbortSignal) {
-    const result = await pi.exec(launcherPath(), args, { signal });
+  async function execute(args: string[], signal?: AbortSignal, options: { cwd?: string; timeout?: number } = {}) {
+    const result = await pi.exec(launcherPath(), args, { signal, ...options });
     if (signal?.aborted || result.killed) throw new Error("Aborted");
     if (result.code !== 0) {
       throw new Error(errorMessage(result.stdout, result.stderr) ?? `oh ${args.join(" ")} failed with exit code ${result.code}`);
@@ -161,6 +170,53 @@ export default function (pi: ExtensionAPI) {
       details: { output: result.stdout },
     };
   }
+
+  pi.registerEntryRenderer<HelpEntry>(HELP_ENTRY, (entry, { expanded }, theme) => {
+    const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
+    const data = entry.data;
+    if (typeof data?.compact !== "string" || typeof data.detail !== "string") {
+      box.addChild(new Text(theme.fg("error", "/oh: entry has no listing; run /oh again"), 0, 0));
+      return box;
+    }
+    box.addChild(new Text(theme.fg("toolTitle", theme.bold(`herdr-orch ${data.section}`)), 0, 0));
+    const listing = expanded ? data.detail : data.compact;
+    box.addChild(new Markdown(composeHelp(data.section, listing, data.herdr), 0, 1, getMarkdownTheme()));
+    return box;
+  });
+
+  pi.registerCommand("oh", {
+    description: `Show herdr-orch subagents, traits, and models without adding them to model context: ${SECTIONS.join(" | ")}`,
+    getArgumentCompletions: (prefix) => {
+      const items = SECTIONS.filter((section) => section.startsWith(prefix.trim()))
+        .map((section) => ({ value: section, label: section, description: SECTION_DESCRIPTIONS[section] }));
+      return items.length ? items : null;
+    },
+    handler: async (args, ctx) => {
+      // JSON and print modes have no reader for the listing, so they do nothing.
+      if (!ctx.hasUI) return;
+      const section = parseSection(args);
+      if (!section) {
+        ctx.ui.notify(`Unknown /oh section "${args.trim()}". Use one of: ${SECTIONS.join(", ")}`, "warning");
+        return;
+      }
+      // cwd selects the project layer: `oh` resolves it from the git root of its cwd.
+      const render = async (detail: boolean) => {
+        const { content } = await execute(rosterArgs(section, detail), ctx.signal, { cwd: ctx.cwd, timeout: 30_000 });
+        return content[0]?.text ?? "";
+      };
+      const herdr = process.env.HERDR_ENV === "1";
+      try {
+        if (ctx.mode === "tui") {
+          const [compact, detail] = await Promise.all([render(false), render(true)]);
+          pi.appendEntry<HelpEntry>(HELP_ENTRY, { section, herdr, compact, detail });
+        } else {
+          ctx.ui.notify(composeHelp(section, await render(true), herdr), "info");
+        }
+      } catch (error) {
+        ctx.ui.notify(`/oh: ${error instanceof Error ? error.message : String(error)}`, "error");
+      }
+    },
+  });
 
   pi.registerTool({
     name: "herdr_layout",

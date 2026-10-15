@@ -51,6 +51,21 @@
                     ["scripts/test-analyse-anthropic-cache-ttl.bb"]
                     ["scripts/test-check-section-links.bb"]]))}
 
+  ;; Batch Emacs runs every `#+CALL:` in the README; the file's `:eval no` default keeps
+  ;; every other block inert. A visiting Emacs holds a `.#README.org` lock (a dangling
+  ;; symlink, hence `:nofollow-links`); writing under it would discard unsaved edits.
+  readme-roster {:doc "Regenerate the oh roster listings embedded in skills/herdr-orch/README.org (needs emacs)"
+                 :task (let [dir (fs/path (fs/parent (fs/absolutize (System/getProperty "babashka.config"))) "skills" "herdr-orch")
+                             readme (str (fs/path dir "README.org"))]
+                         (when (fs/exists? (fs/path dir ".#README.org") {:nofollow-links true})
+                           (throw (ex-info "README.org is open with unsaved changes in Emacs; regenerate it there (C-c C-v b) or save it first" {:path readme})))
+                         (process/shell "emacs" "--batch" "-Q" "--eval"
+                                        (pr-str (list 'progn '(require 'org) '(require 'ob-shell)
+                                                      '(setq org-confirm-babel-evaluate nil)
+                                                      (list 'find-file readme)
+                                                      '(org-babel-execute-buffer)
+                                                      '(save-buffer)))))}
+
   smoke-subagent {:doc "Run explicitly guarded live Herdr subagent smoke (set ORCH_LIVE_SMOKE_KIND=claude to exercise Claude)"
                   :task (apply (requiring-resolve 'herdr-orch.smoke/-main)
                                *command-line-args*)}

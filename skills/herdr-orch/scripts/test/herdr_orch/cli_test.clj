@@ -222,6 +222,108 @@
                   cli/packaged-personas-directory (constantly (str (fs/path dir "packaged")))]
       (is (= ["home-only"] (cli/available-personas))))))
 
+;; Mutates global with-redefs state (ledger/assignment-root, cli/home-directory,
+;; cli/launcher-bin) -- must run serially.
+(deftest ^:serial roster-listing-reports-resolved-roster
+  (let [shipped-config-text (slurp (str (fs/path root "skills" "herdr-orch" "subagents" "config.edn")))
+        dir (fs/create-temp-dir {:prefix "roster-listing-"})
+        project (str (fs/path dir "project"))
+        home (str (fs/path dir "home"))
+        skill (fs/path dir "installed" "herdr-orch")
+        write! (fn [path text] (fs/create-dirs (fs/parent path)) (spit (str path) text))
+        persona (fn [name & lines] (str "---\nname: " name "\n" (str/join "\n" lines) "\n---\nFixture persona.\n"))
+        fragment (fn [name description] (str "---\nname: " name "\ndescription: " description "\n---\nFixture directive.\n"))]
+    (fs/create-dirs project)
+    (write! (fs/path skill "subagents" "config.edn") shipped-config-text)
+    (write! (fs/path skill "subagents" "base.md") (persona "base" "description: packaged base" "model: light" "traits: [alpha]" "retro: false"))
+    (write! (fs/path skill "subagents" "derived.md") (persona "derived" "description: derived own" "extends: base" "spawns: base"))
+    (write! (fs/path skill "subagents" "shadowed.md") (persona "shadowed" "description: packaged copy"))
+    (write! (fs/path project ".agents" "subagents" "shadowed.md") (persona "shadowed" "description: project copy" "traits: [beta]"))
+    ;; Unbracketed `traits:` fails composition; the listing must report it, not abort.
+    (write! (fs/path project ".agents" "subagents" "broken.md") (persona "broken" "description: broken" "traits: alpha"))
+    (write! (fs/path skill "traits" "alpha.md") (fragment "alpha" "packaged alpha"))
+    (write! (fs/path home ".agents" "traits" "alpha.md") (fragment "alpha" "home alpha"))
+    (write! (fs/path home ".agents" "traits" "beta.md") (fragment "beta" "home beta"))
+    (write! (fs/path skill "traits" "gamma" "prompt.md") (fragment "gamma" "packaged gamma"))
+    ;; Neither candidate shape: a gate-only probe directory and a name outside the token grammar.
+    (write! (fs/path skill "traits" "gate-only" "gate.md") "Probe scaffold.\n")
+    (write! (fs/path skill "traits" "Bad.md") "Unselectable.\n")
+    (write! (fs/path home ".agents" "skills" "retro" "SKILL.md") "---\nname: retro\n---\n")
+    (with-redefs [ledger/assignment-root (constantly project)
+                  cli/home-directory (constantly home)
+                  cli/launcher-bin (constantly (str (fs/path skill "scripts" "oh")))]
+      (let [{:keys [personas traits models defaults layers]} (cli/roster-listing)
+            by-name (fn [items] (into {} (map (juxt :name identity)) items))
+            p (by-name personas)
+            t (by-name traits)
+            light (get-in (core/parse-config "config.edn" shipped-config-text) [:aliases "light"])]
+        (is (= ["base" "broken" "derived" "shadowed"] (mapv :name personas)))
+        (is (= {:source "project" :description "project copy" :traits ["beta"]}
+               (select-keys (p "shadowed") [:source :description :traits])))
+        (is (= {:source "packaged" :description "derived own" :extends "base" :model "light"
+                :model-canonical light :spawns ["base"] :traits ["alpha"] :retro false :timeout core/default-timeout-ms}
+               (select-keys (p "derived") [:source :description :extends :model :model-canonical :spawns :traits :retro :timeout])))
+        (is (true? (:retro (p "shadowed"))))
+        (is (= "project" (:source (p "broken"))))
+        (is (re-find #"traits" (str (:error (p "broken")))))
+        (is (= ["alpha" "beta" "gamma"] (mapv :name traits)))
+        (is (= {:source "home" :description "home alpha" :selected-by ["base" "derived"]}
+               (select-keys (t "alpha") [:source :description :selected-by])))
+        (is (= {:source "packaged" :description "packaged gamma" :selected-by []}
+               (select-keys (t "gamma") [:source :description :selected-by])))
+        (is (some #{"light"} (:aliases (first (filter #(= light (:canonical %)) models)))))
+        (is (= :tab-split (:placement defaults)))
+        (is (= ["project" "home" "packaged"] (mapv :source (:personas layers)) (mapv :source (:traits layers))))
+        (testing "one renderer serves markdown and org"
+          (let [listing (cli/roster-listing)
+                org-traits (cli/roster-text listing "org" "traits" false)
+                md-traits (cli/roster-text listing "markdown" "traits" false)]
+            (is (= (str "- =alpha= -- home alpha; selected by base, derived; home layer\n"
+                        "- =beta= -- home beta; selected by shadowed; home layer\n"
+                        "- =gamma= -- packaged gamma; no persona selects it")
+                   org-traits))
+            (is (= (str/replace org-traits "=" "`") md-traits))
+            (is (str/includes? (cli/roster-text listing "org" "personas" false)
+                               "- *derived* -- light; extends base; spawns base; traits =alpha=\n  derived own"))
+            (is (str/includes? (cli/roster-text listing "markdown" "personas" false)
+                               "- **broken** -- **error:** "))
+            (testing "--detail adds paths, policy, and layers"
+              (let [detail (cli/roster-text listing "markdown" "all" true)]
+                (is (str/includes? detail (str "timeout 10 min; retro off; packaged: `" (fs/path skill "subagents" "derived.md") "`")))
+                (is (str/includes? detail "## Resolution layers (highest first)"))
+                (is (not (str/includes? (cli/roster-text listing "markdown" "all" false) "Resolution layers")))))
+            (testing "a single section has no heading; all has one per section"
+              (is (not (str/includes? org-traits "Traits")))
+              (is (= ["## Personas" "## Traits" "## Models" "## Spawn defaults"]
+                     (re-seq #"(?m)^## .*$" (cli/roster-text listing "markdown" "all" false))))
+              (is (= ["*Personas*" "*Traits*" "*Models*" "*Spawn defaults*"]
+                     (re-seq #"(?m)^\*[A-Z][^*]*\*$" (cli/roster-text listing "org" "all" false)))))
+            (testing "tables are padded the way each format aligns them"
+              (let [org-rows (str/split-lines (cli/roster-text listing "org" "models" false))
+                    md-rows (str/split-lines (cli/roster-text listing "markdown" "models" false))]
+                (is (re-matches #"\|-+(\+-+)+\|" (second org-rows)))
+                (is (re-matches #"\| -{3,}( \| -{3,})+ \|" (second md-rows)))
+                (is (apply = (map count org-rows)))
+                (is (apply = (map count md-rows)))))))))))
+
+;; The README embeds `oh roster --format org` output through org babel `#+CALL:` lines.
+;; This fails when a packaged persona, trait, or config change was not regenerated into it.
+;; Mutates global with-redefs state (ledger/assignment-root, cli/home-directory,
+;; cli/launcher-bin) -- must run serially.
+(deftest ^:serial readme-roster-listings-are-current
+  (let [readme (slurp (str (fs/path root "skills" "herdr-orch" "README.org")))
+        embeds (re-seq #"(?m)^#\+CALL: oh-roster\[[^\]]*\]\(section=\"([a-z]+)\"\)\n\n#\+RESULTS:\n((?:.+\n)+)" readme)]
+    ;; Positive control: a parse that silently matched nothing would pass vacuously.
+    (is (= ["personas" "traits" "models"] (mapv second embeds)))
+    ;; The babel block runs with an empty HOME and assignment root: packaged layer only.
+    (with-redefs [ledger/assignment-root (constantly (str (fs/create-temp-dir {:prefix "readme-roster-root-"})))
+                  cli/home-directory (constantly (str (fs/create-temp-dir {:prefix "readme-roster-home-"})))
+                  cli/launcher-bin (constantly (str (fs/path root "skills" "herdr-orch" "scripts" "oh")))]
+      (let [listing (cli/roster-listing)]
+        (doseq [[_ section embedded] embeds]
+          (is (= (str (cli/roster-text listing "org" section false) "\n") embedded)
+              (str "README.org `" section "` listing is stale; run `bb readme-roster` from the repository root")))))))
+
 ;; `--split` is explicit because this test pins the split argv itself, not the shipped
 ;; placement default (which is `:tab-split`, so a root spawn otherwise creates a tab).
 (deftest preflight-and-vector-argv-contract
@@ -4841,7 +4943,8 @@
                                ["agent" "prompt" "--help"] "oh agent prompt <target> <text>"
                                ["pane" "rename" "--help"] "oh pane rename <pane> <label>"
                                ["task" "publish" "--help"] "oh task publish --status COMPLETE|BLOCKED|FAILED|WAITING"
-                               ["spawn" "--help"] "oh spawn \"<shell command>\""}]
+                               ["spawn" "--help"] "oh spawn \"<shell command>\""
+                               ["roster" "--help"] "oh roster"}]
         (let [proc (apply call! env argv)]
           (is (zero? (:exit proc)) (str argv " -> " (:err proc)))
           (is (str/starts-with? (:out proc) expected) (str argv " -> " (:out proc)))
@@ -4856,6 +4959,35 @@
         (let [proc (apply call! env argv)]
           (is (zero? (:exit proc)) (str argv " -> " (:err proc)))
           (is (not (str/includes? (:out proc) "\"ok\""))))))))
+
+;; Discovery must work from any shell: no `HERDR_ENV`, no preflight, no Herdr call at all.
+(deftest roster-is-a-herdr-free-json-listing
+  (let [{:keys [env log]} (fake-env {"HERDR_ENV" "0"})
+        proc (call! env "roster")
+        listed (:result (result proc))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (true? (:ok (result proc))))
+    (is (= "packaged" (:source (first (filter #(= "scout" (:name %)) (:personas listed))))))
+    (is (some #(= "read-only" (:name %)) (:traits listed)))
+    (is (empty? (calls log))))
+  (let [{:keys [env log]} (fake-env {})
+        proc (call! env "roster" "extra")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"roster requires 0 arguments" (:out proc)))
+    (is (empty? (calls log))))
+  (let [{:keys [env]} (fake-env {})]
+    (testing "text formats print the rendering, not an envelope"
+      (let [proc (call! env "roster" "--format" "org" "--section" "traits")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (str/starts-with? (:out proc) "- ="))))
+    (doseq [[argv pattern] {["--format" "html"] #"--format must be json, markdown, or org"
+                            ["--format" "org" "--section" "bogus"] #"--section must be one of all, personas, traits, models"
+                            ["--section" "traits"] #"apply only to markdown or org output"
+                            ["--detail"] #"apply only to markdown or org output"}]
+      (let [proc (apply call! env "roster" argv)]
+        (is (= 1 (:exit proc)) (str argv))
+        (is (false? (:ok (result proc))) (str argv))
+        (is (re-find pattern (:out proc)) (str argv))))))
 
 ;; The shipped model table changes with each model release. Tests that need a real shipped
 ;; row read it from the parsed config through these helpers instead of naming a model ID.

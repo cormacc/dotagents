@@ -14,7 +14,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -65,7 +65,7 @@
 ;; Single source of truth for delegation value-less flags. The raw tab/workspace create and
 ;; pane split `--focus` operator flag is scoped to those commands by `boolean-flags-for`; both
 ;; argv consumers use the same resolved set so no value-less flag swallows the next element.
-(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon" "--prune"})
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon" "--prune" "--detail"})
 (defn boolean-flags-for [group op]
   (cond-> boolean-flags
     (or (and (#{"tab" "ws"} group) (= "create" op))
@@ -2658,7 +2658,8 @@
            "harvest [--format json|text]"]
    "worktree" ["list"
                "remove <full-task-uuid>"]
-   "spawn" ["spawn \"<shell command>\""]})
+   "spawn" ["spawn \"<shell command>\""]
+   "roster" ["roster [--format json|markdown|org] [--section all|personas|traits|models] [--detail]"]})
 ;; Derived from the signatures above rather than restated, so help and validation cannot
 ;; disagree. Flat on purpose: it exists to catch typos, and per-group scoping would
 ;; reintroduce a second list to keep in step. Boolean-ness is *not* derivable here
@@ -2669,7 +2670,7 @@
   "Global usage, one group's signatures, or a single command's signature."
   [group op]
   (if-let [lines (and group (signatures group))]
-    (let [prefix (if (= group "spawn") "oh " (str "oh " group " "))
+    (let [prefix (if (#{"spawn" "roster"} group) "oh " (str "oh " group " "))
           matching (when (and op (not (str/starts-with? op "-")))
                      (seq (filter #(or (= op (first (str/split % #" ")))
                                        ;; `spawn`'s only signature repeats the group name.
@@ -2785,6 +2786,175 @@
                 (fail "close --settled does not take --abandon; abandon one round at a time" {}))
               (if settled? (close-settled!) (close-task! (first positional) opts)))
     (fail "unknown task command" {:command op})))
+;; --- roster -------------------------------------------------------------------------
+;; Read-only discovery for a human reader (the pi `/oh` command renders it). Each value comes
+;; from the resolver a spawn uses -- roster lookup, `extends`/trait composition, the spawn,
+;; retro and timeout policies, and the merged config -- so the listing cannot disagree with
+;; what a spawn would do. A persona that fails composition is listed with its error instead
+;; of failing the whole listing: one broken override must not hide the rest of the roster.
+;; Never contacts Herdr, so it needs neither `HERDR_ENV` nor a running server.
+(def layer-names ["project" "home" "packaged"])
+(defn- roster-persona [config directories persona]
+  (let [path (core/resolve-persona (fn [p] (fs/exists? p)) directories persona)
+        source (some (fn [[s d]] (when (= path (str d "/" persona ".md")) s)) (map vector layer-names directories))
+        entry {:name persona :source source :path path}]
+    (try
+      (let [text (slurp path)
+            {:keys [frontmatter traits base-persona]} (trait-interpolation persona path text [])
+            model (:model frontmatter)]
+        (cond-> (assoc entry
+                       ;; `description` is never inherited through `extends`.
+                       :description (:description (core/parse-frontmatter text))
+                       :model model
+                       :model-canonical (some->> model (core/canonical-model config))
+                       :kind (:kind frontmatter)
+                       :spawns (:spawns (core/resolve-spawns {:persona persona :frontmatter frontmatter
+                                                              :resolve-persona #(core/resolve-persona (fn [p] (fs/exists? p)) directories %)}))
+                       :traits traits
+                       :retro (:retro (retro-policy persona {} frontmatter))
+                       :timeout (:timeout (timeout-policy persona {} frontmatter)))
+          base-persona (assoc :extends base-persona)))
+      (catch Exception e (assoc entry :error (.getMessage e))))))
+;; A layer offers `<name>.md` and `<name>/prompt.md`, the two candidate shapes the resolver
+;; probes. A directory without `prompt.md` (a gate-only probe directory) is not a trait, and a
+;; name outside the token grammar can never be selected, so neither is listed.
+(defn- layer-trait-names [{:keys [directory]}]
+  (if (fs/directory? directory)
+    (keep (fn [p]
+            (let [file-name (str (fs/file-name p))]
+              (cond (and (fs/regular-file? p) (str/ends-with? file-name ".md")) (str (fs/strip-ext file-name))
+                    (fs/regular-file? (fs/path p "prompt.md")) file-name)))
+          (fs/list-dir directory))
+    []))
+(defn- roster-traits [personas]
+  (let [directories (trait-directories)]
+    (->> directories
+         (mapcat layer-trait-names)
+         (filter traits/tokenizable-name?)
+         distinct sort
+         (keep #(traits/resolve-trait (fn [p] (fs/exists? p)) directories %))
+         (mapv (fn [{:keys [trait source path]}]
+                 {:name trait :source source :path path
+                  :description (try (:description (core/parse-frontmatter (slurp path))) (catch Exception _ nil))
+                  :selected-by (vec (keep #(when (some #{trait} (:traits %)) (:name %)) personas))})))))
+;; One row per canonical ID, carrying every alias that names it and its per-kind spellings.
+;; Shortest alias first, so a weight name such as `light` leads its row.
+(defn- roster-models [config]
+  (let [by-canonical (group-by val (:aliases config))]
+    (mapv (fn [id] {:canonical id
+                    :aliases (vec (sort-by (juxt count identity) (map key (by-canonical id))))
+                    :kinds (into (sorted-map) (get-in config [:models id]))})
+          (sort (distinct (concat (keys (:models config)) (vals (:aliases config))))))))
+(defn roster-listing []
+  (let [merged (config)
+        directories (persona-directories)
+        personas (mapv #(roster-persona merged directories %) (available-personas))]
+    {:personas personas
+     :traits (roster-traits personas)
+     :models (roster-models merged)
+     :harnesses (vec (sort (map name (keys (:harnesses merged)))))
+     :defaults (:defaults merged {})
+     :layers {:personas (mapv (fn [s d] {:source s :directory (str d)}) layer-names directories)
+              :traits (mapv #(select-keys % [:source :directory]) (trait-directories))}}))
+;; Human renderings of `roster-listing`. One renderer serves the pi `/oh` command (Markdown)
+;; and the generated listings in README.org (org), so the two cannot drift apart. The
+;; compact form omits paths and per-run policy; `--detail` adds them. A single section is
+;; one list or one table with no heading, which is what an org babel result can replace
+;; cleanly on re-evaluation.
+(def roster-formats #{"json" "markdown" "org"})
+(def roster-sections ["all" "personas" "traits" "models"])
+(def ^:private roster-markup
+  {"markdown" {:bold #(str "**" % "**") :code #(str "`" % "`") :heading #(str "## " %)}
+   ;; A line starting `*Title*` is bold text, not an org heading: a heading needs `* `.
+   "org" {:bold #(str "*" % "*") :code #(str "=" % "=") :heading #(str "*" % "*")}})
+(defn- duration-text [ms] (if (zero? (mod ms 60000)) (str (quot ms 60000) " min") (str ms " ms")))
+(defn- source-note [{:keys [code]} source path detail?]
+  (cond (and detail? path) (str (or source "?") ": " (code path))
+        ;; Packaged is the default, so the compact form flags only another layer.
+        (and source (not= source "packaged")) (str source " layer")))
+(defn- persona-lines [{:keys [bold code] :as markup} personas detail?]
+  (if (empty? personas)
+    ["No personas found."]
+    (mapcat (fn [{:keys [error path description model kind spawns traits timeout retro source] :as persona}]
+              (if error
+                [(str "- " (bold (:name persona)) " -- " (bold "error:") " " error
+                      (when (and detail? path) (str " (" (code path) ")")))]
+                (let [facts [(or model "inherits parent model")
+                             (when kind (str "kind " kind))
+                             (when-let [base (:extends persona)] (str "extends " base))
+                             (when (seq spawns) (str "spawns " (str/join ", " spawns)))
+                             (when (seq traits) (str "traits " (str/join " " (map code traits))))
+                             (when (and detail? timeout) (str "timeout " (duration-text timeout)))
+                             (when (and detail? (some? retro)) (str "retro " (if retro "on" "off")))
+                             (source-note markup source path detail?)]]
+                  (cond-> [(str "- " (bold (:name persona)) " -- " (str/join "; " (remove nil? facts)))]
+                    description (conj (str "  " description))))))
+            personas)))
+(defn- trait-lines [{:keys [code] :as markup} traits detail?]
+  (if (empty? traits)
+    ["No traits found."]
+    (mapv (fn [{:keys [source path description selected-by] :as trait}]
+            (str "- " (code (:name trait)) " -- "
+                 (str/join "; " (remove nil? [description
+                                              (if (seq selected-by) (str "selected by " (str/join ", " selected-by)) "no persona selects it")
+                                              (source-note markup source path detail?)]))))
+          traits)))
+;; Cells are padded the way org aligns a table, so org's own realignment is a no-op and a
+;; regenerated README result is byte-stable. Markdown needs at least three rule dashes.
+(defn- table-lines [format rows]
+  (let [minimum (if (= format "org") 1 3)
+        widths (apply map (fn [& cells] (apply max minimum (map count cells))) rows)
+        pad (fn [cell width] (str cell (str/join (repeat (- width (count cell)) " "))))
+        row (fn [cells] (str "| " (str/join " | " (map pad cells widths)) " |"))
+        rule (if (= format "org")
+               (str "|" (str/join "+" (map #(str/join (repeat (+ 2 %) "-")) widths)) "|")
+               (str "| " (str/join " | " (map #(str/join (repeat % "-")) widths)) " |"))]
+    (into [(row (first rows)) rule] (map row (rest rows)))))
+(defn- model-lines [format {:keys [models harnesses]} detail?]
+  (if (empty? models)
+    ["No models configured."]
+    (let [kinds (if (seq harnesses) harnesses ["pi"])]
+      (table-lines format
+                   (cons (cons "Aliases" kinds)
+                         (map (fn [{:keys [canonical aliases] :as model}]
+                                (let [shown (if detail? aliases (take 2 aliases))]
+                                  ;; A kind absent from a row receives the canonical ID unchanged.
+                                  (cons (if (seq shown) (str/join ", " shown) "--")
+                                        (map #(get (:kinds model) (keyword %) canonical) kinds))))
+                              models))))))
+(defn- default-lines [defaults]
+  (if (seq defaults)
+    (mapv (fn [[k v]] (str "- " (name k) ": " (if (keyword? v) (name v) v))) (sort-by key defaults))
+    ["- none"]))
+(defn- layer-lines [{:keys [code]} layers]
+  (let [chain (fn [entries] (str/join " > " (map #(str (:source %) " " (code (:directory %))) entries)))]
+    [(str "- Personas: " (chain (:personas layers)))
+     (str "- Traits: " (chain (:traits layers)))]))
+(defn roster-text [listing format section detail?]
+  (let [markup (roster-markup format)
+        block (fn [part]
+                (case part
+                  "personas" ["Personas" (persona-lines markup (:personas listing) detail?)]
+                  "traits" ["Traits" (trait-lines markup (:traits listing) detail?)]
+                  "models" ["Models" (model-lines format listing detail?)]
+                  "defaults" ["Spawn defaults" (default-lines (:defaults listing))]
+                  "layers" ["Resolution layers (highest first)" (layer-lines markup (:layers listing))]))]
+    (if (= section "all")
+      (str/join "\n\n" (map (fn [part]
+                              (let [[title lines] (block part)]
+                                (str ((:heading markup) title) "\n\n" (str/join "\n" lines))))
+                            (cond-> ["personas" "traits" "models" "defaults"] detail? (conj "layers"))))
+      (str/join "\n" (second (block section))))))
+(defn roster! [opts positional]
+  (require-positionals positional 0 "roster")
+  (let [format (or (one opts :format) "json") section (one opts :section) detail? (boolean (one opts :detail))]
+    (when-not (roster-formats format) (fail "--format must be json, markdown, or org" {:format format}))
+    (when (and section (not (some #{section} roster-sections)))
+      (fail (str "--section must be one of " (str/join ", " roster-sections)) {:section section}))
+    (when (and (= format "json") (or section detail?))
+      (fail "--section and --detail apply only to markdown or org output" {}))
+    (let [listing (roster-listing)]
+      (if (= format "json") listing (roster-text listing format (or section "all") detail?)))))
 (defn spawn-command! [opts positional]
   (let [[command] (require-positionals positional 1 "spawn")]
     (when (some #{command} (available-personas))
@@ -2796,7 +2966,7 @@
   (let [[group op & args] argv]
     (if (help-request? group op args)
       (help-text group op)
-      (let [parse-args (if (= "spawn" group) (cons op args) args)
+      (let [parse-args (if (#{"spawn" "roster"} group) (cons op args) args)
             opts (option-map parse-args (boolean-flags-for group op) known-options)
             positional (:_ opts)]
         (case group
@@ -2807,6 +2977,7 @@
           "task" (task! op opts positional)
           "worktree" (worktree! op opts positional)
           "spawn" (spawn-command! opts positional)
+          "roster" (roster! opts positional)
           (fail "unknown oh command" {:command group}))))))
 (defn -main [& argv]
   (try (let [result (execute argv)] (println (if (string? result) result (core/json-envelope true result))))

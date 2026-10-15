@@ -6,6 +6,7 @@
  */
 
 import register from "./index.ts";
+import { composeHelp, parseSection, rosterArgs } from "./help.ts";
 
 type Tool = { name: string; execute: (id: string, params: any, signal?: AbortSignal) => Promise<unknown> };
 
@@ -25,12 +26,30 @@ function same(actual: unknown, expected: unknown, message: string): void {
 
 const tools = new Map<string, Tool>();
 const execCalls: string[][] = [];
+const execOptions: Array<Record<string, unknown> | undefined> = [];
+type Command = { handler: (args: string, ctx: any) => Promise<void>; getArgumentCompletions?: (prefix: string) => unknown };
+const commands = new Map<string, Command>();
+const entryRenderers = new Map<string, unknown>();
+const entries: Array<{ type: string; data: any }> = [];
+
 register({
   registerTool(tool: Tool) {
     tools.set(tool.name, tool);
   },
-  async exec(_bin: string, args: string[]) {
+  registerCommand(name: string, command: Command) {
+    commands.set(name, command);
+  },
+  registerEntryRenderer(type: string, renderer: unknown) {
+    entryRenderers.set(type, renderer);
+  },
+  appendEntry(type: string, data: unknown) {
+    entries.push({ type, data });
+  },
+  async exec(_bin: string, args: string[], options?: Record<string, unknown>) {
     execCalls.push(args);
+    execOptions.push(options);
+    // `oh roster --format markdown` prints its rendering, not an envelope.
+    if (args[0] === "roster") return { stdout: `LISTING ${args.join(" ")}\n`, stderr: "", code: 0, killed: false };
     return { stdout: JSON.stringify({ ok: true, schema: "herdr-orch/v1", result: { echoed: args } }), stderr: "", code: 0, killed: false };
   },
 } as any);
@@ -86,6 +105,63 @@ same(await argv("herdr_layout", { action: "pane_split", pane: "w:tall" }), ["pan
 same(await argv("herdr_layout", { action: "pane_split", pane: "w:tall", direction: "down", cwd: "/tmp", focus: true }),
   ["pane", "split", "--pane", "w:tall", "--direction", "down", "--cwd", "/tmp", "--focus"], "explicit direction, cwd and focus=true reach oh");
 same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane", "split"], "focus=false requests nothing");
+
+// --- /oh: display-only roster listing ------------------------------------------------
+{
+  const oh = commands.get("oh");
+  ok(oh !== undefined, "/oh is registered");
+  ok(entryRenderers.has("herdr-orch-help"), "/oh entry renderer is registered");
+  same(parseSection(""), "help", "bare /oh shows the help overview");
+  same(parseSection(" traits "), "traits", "section argument is trimmed");
+  same(parseSection("bogus"), null, "unknown section is rejected");
+  same((oh!.getArgumentCompletions!("m") as Array<{ value: string }>).map((item) => item.value), ["models"], "completion narrows by prefix");
+
+  const notices: Array<[string, string]> = [];
+  const ctx = (mode: string) => ({ mode, hasUI: true, cwd: "/proj", signal: undefined, ui: { notify: (message: string, level: string) => notices.push([message, level]) } });
+
+  let before = execCalls.length;
+  await oh!.handler("", { ...ctx("print"), hasUI: false });
+  ok(execCalls.length === before && entries.length === 0 && notices.length === 0, "no UI (print/JSON): nothing runs, appends, or notifies");
+
+  before = execCalls.length;
+  await oh!.handler("bogus", ctx("tui"));
+  ok(execCalls.length === before && entries.length === 0, "unknown section: oh not invoked and nothing appended");
+  ok(notices.at(-1)?.[1] === "warning" && /help, personas, traits, models/.test(notices.at(-1)![0]), "unknown section: warns with the valid sections");
+
+  before = execCalls.length;
+  await oh!.handler("personas", ctx("tui"));
+  same(execCalls.slice(before).sort(), [
+    ["roster", "--format", "markdown", "--section", "personas"],
+    ["roster", "--format", "markdown", "--section", "personas", "--detail"],
+  ], "TUI: oh renders the compact and detail Markdown");
+  ok(execOptions.slice(-2).every((options) => options?.cwd === "/proj"), "/oh runs oh in the session cwd so the project layer resolves");
+  same(entries.length, 1, "TUI: one session entry appended");
+  same(entries[0]?.type, "herdr-orch-help", "TUI: entry uses the display-only custom type");
+  same(entries[0]?.data, {
+    section: "personas",
+    herdr: process.env.HERDR_ENV === "1",
+    compact: "LISTING roster --format markdown --section personas\n",
+    detail: "LISTING roster --format markdown --section personas --detail\n",
+  }, "TUI: entry stores both oh renderings verbatim");
+
+  before = execCalls.length;
+  const noticesBefore = notices.length;
+  await oh!.handler("", ctx("rpc"));
+  same(execCalls.slice(before), [["roster", "--format", "markdown", "--detail"]], "RPC: one detail rendering of every section");
+  same(entries.length, 1, "RPC: no session entry appended");
+  ok(notices.length === noticesBefore + 1 && notices.at(-1)![1] === "info" && notices.at(-1)![0].includes("LISTING roster --format markdown --detail"), "RPC: listing is shown as a notification");
+}
+
+// --- /oh framing ----------------------------------------------------------------------
+{
+  same(rosterArgs("help", false), ["roster", "--format", "markdown"], "help asks oh for every section");
+  same(rosterArgs("models", true), ["roster", "--format", "markdown", "--section", "models", "--detail"], "a section with detail");
+  const help = composeHelp("help", "## Personas\n\n- x\n", true);
+  ok(help.startsWith("Herdr: this pane can delegate"), "help leads with the pane's Herdr status");
+  ok(help.includes("## Personas\n\n- x\n\n## Usage"), "help keeps the oh listing verbatim before the usage notes");
+  ok(composeHelp("help", "", false).includes("not detected"), "help reports missing Herdr");
+  same(composeHelp("traits", "- `a` -- b\n", true), "- `a` -- b", "a section is the oh listing alone");
+}
 
 if (failures > 0) {
   console.log(`# ${failures} failure(s)`);
