@@ -126,3 +126,26 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 - [[file:../../design/log/2026-08-08-herdr-orch-subagent-composition-and-exte.org][2026-08-08]] -- trait fragments composed into personas at spawn and into interactively typed prompts.
 - [[file:../../design/log/2026-08-13-herdr-orch-worktree-backed-fan-out.org][2026-08-13]] -- worktree-backed fan-out: parent-resolved checkout targets, mechanical publication checkpoints, and reconciliation/teardown.
 
+** API reviews
+
+Last review: 2026-10-13.
+
+| Field | Herdr | Pi |
+|-------+-------+----|
+| Reviewed source/API | [[https://github.com/ogulcancelik/herdr/tree/v0.9.3][0.9.3]] (=7b116c05bfda646af39d2524c54e70c751f57ee8=) | [[https://github.com/earendil-works/pi/tree/v1.2.0][1.2.0]] (=06a466935536f8c9bcacb2d5efc0fc021be1bdff=) |
+| Minimum required API | 0.9.1, client and server; enforced by =oh= preflight (=minimum-version= in [[file:scripts/src/herdr_orch/herdr.clj][herdr.clj]]) | 0.80.4; not enforced; set by the =agent_settled= event that =herdr-agent-state.ts= uses |
+| Installed version inspected | 0.9.3, client and server (protocol 22) | 1.2.0 |
+| Previous review (2026-10-08) | 0.9.3 | 1.1.0 |
+
+The reviewed versions are review checkpoints, not compatibility certification. The minimum required API versions are the oldest that supply every API herdr-orch uses. Some features need a newer Pi, so [[file:README.org::*Requirements]] requires Pi 1.2.0, the oldest release with which all of them work:
+
+- Pi 0.82.0 :: A root child inherits the root's model and effort through =PI_MODEL= and =PI_REASONING_LEVEL=. With an older Pi root, the child takes the persona value, else the harness default model and =medium= effort.
+- Pi 1.1.0 :: Adds =anthropic/claude-haiku-5-5=, the target of the =feather= and =haiku= aliases (=CHANGELOG.md= section '1.1.0'). An older Pi does not list that model.
+- Pi 1.2.0 :: A Pi child in a managed worktree loads project context when the project's =AGENTS.md= is a symlink (2026-10-13 review below).
+
+Scope and findings of each review, newest first:
+
+- 2026-10-13 :: Pi 1.1.0 to 1.2.0, from the installed 1.2.0 package (=CHANGELOG.md=, =docs/=, and =dist/=), not the source tree. Herdr was not reviewed again; the installed Herdr is still 0.9.3. No breaking change affects herdr-orch. No local extension registers =before_agent_start=, and =herdr-agent-state.ts= reads =ctx.isIdle()= only in =session_start= and =agent_settled=, so the new busy state while a run starts does not change its reports. =oh= creates managed worktrees inside the main repository (=<root>/.tmp/herdr-orch/worktrees/=). Before Pi 1.2.0, a symlinked =AGENTS.md= in a worktree nested in its main repository loaded no project context (=CHANGELOG.md= section '1.2.0', #10681). This was not verified against a live child. The root =package.json= dev pin moved from 1.0.0 to 1.2.0, and every extension suite gave the same exit status before and after.
+- 2026-10-08 :: Pi 1.0.0 to 1.1.0, from the installed 1.1.0 package (=CHANGELOG.md= and =dist/=), not the source tree. Herdr has no release after 0.9.3, and the managed =herdr-agent-state.ts= on Herdr =master= at =4dc23bb= is byte-identical to the local copy. No breaking change affects herdr-orch. Pi 1.1.0 adds Claude Haiku 5.5, so the =feather= weight moved from Haiku 4.5 to Haiku 5.5. Pi 1.1.0 also reports its state with the OSC 7501 Program Status Protocol. Herdr =master= at =4dc23bb= does not read these reports, and Pi sends them only after the terminal answers the protocol query, so delegation is not affected. [[file:../../TASKS.org::*Draft upstream Herdr Pi native-prompt and listener-disposal proposal]] compares OSC 7501 with Pi's native prompt events as the source of the =blocked= state.
+- 2026-10-01 :: Herdr 0.9.3 and Pi 1.0.0, against a Herdr 0.9.1 and Pi 0.85.1 baseline. No breaking change affects herdr-orch. The managed =herdr-agent-state.ts= is unchanged in Herdr 0.9.3 (integration revision 9, byte-identical to the local copy). Pi 1.0.0 was reviewed from source. The installed Pi 0.99.2 has the same extension layer (=packages/coding-agent/src/core/extensions/= has no diff between the tags). Pi 1.0.0 makes the fullscreen TUI the default, which can limit a raw =oh agent read= of a Pi child to the visible screen. Delegation completes through =RESULT= files and is not affected. This was not verified against a live 1.0.0 child. Findings, citations, and follow-up tasks are in [[file:../../design/log/2026-10-01-review-herdr-orch-w-r-t-pi-v1-0-0-releas.org][the 2026-10-01 review record]].
+- 2026-09-17 :: Herdr 0.9.1 and Pi 0.85.1, against a Herdr 0.8.2 and Pi 0.84.2 baseline, from source and focused tests. [[file:../../design/log/2026-09-17-herdr-orch-improvements-260917.org][herdr-orch improvements 260917]] raised the Herdr minimum from 0.8.2 to 0.9.1, on both client and server.

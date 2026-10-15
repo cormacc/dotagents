@@ -23,7 +23,7 @@ The review found no breaking upstream change touching herdr-orch. Pi 0.85.1 -> 1
 - Refresh the vendored =skills/herdr/SKILL.md= from upstream =v0.9.1= to =v0.9.3= (one paragraph changed upstream; licence unchanged).
 - Report =:model-canonical=, =:model-args=, and =:effort-args= on the spawn ledger entry and the =task start= envelope (=task run= returns the capture, not the entry), so the parent sees the routing the CLI performed without a separate =--print-prompt= turn.
 - Bump the =@earendil-works/pi-coding-agent= devDependency pin from 0.80.10 to 1.0.0, the Pi version this review covers, and confirm every extension suite still passes.
-- [[file:../../skills/herdr-orch/README.org::*Last API review]]: a table with the reviewed source/API version and the minimum required version for both Pi and Herdr.
+- [[file:../../skills/herdr-orch/design.org::*API reviews]]: a table with the reviewed source/API version and the minimum required version for both Pi and Herdr.
 *** Out of scope
 - Any model-facing delegation tool, including =exposure: "codemode"= or =deferred= variants of an =oh task= tool. The decision in [[file:2026-08-01-herdr-orch-absorb-pi-herdr-coverage-into.org][2026-08-01 [[*Decisions]]]] (delegation stays off the tool surface) stands.
 - Patching =pi/extensions/herdr-agent-state.ts=. It is Herdr's managed asset, unchanged upstream at revision 9; the known gaps (bus-topic blocked state, undisposed listeners) remain upstream work.
@@ -42,9 +42,9 @@ The review found no breaking upstream change touching herdr-orch. Pi 0.85.1 -> 1
 - [X] [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Ledger and completion' names the three keys.
 - [X] =package.json= =devDependencies["@earendil-works/pi-coding-agent"]= is =1.0.0= and =package-lock.json= resolves it.
 - [X] Every =pi/extensions/**/test.sh= exits 0 after =npm ci= with the new pin, except =pi-clojure/test.sh=, which exits 127 (no local =tsc=) with both the old and the new pin; its =tsx= tests pass. Follow-up: [[task:17fea754-3b1e-4584-bcf8-fbcf76aa6395][pi-clojure dev pin and test.sh]].
-- [X] [[file:../../skills/herdr-orch/README.org::*Last API review]] states the reviewed Pi version (1.0.0) and the reviewed Herdr version (0.9.3).
-- [X] [[file:../../skills/herdr-orch/README.org::*Last API review]] states the minimum required Herdr version (0.9.1, client and server) and names its enforcement point (=minimum-version= in =herdr.clj=).
-- [X] [[file:../../skills/herdr-orch/README.org::*Last API review]] states the minimum required Pi version (0.80.4) and the API that sets it (=agent_settled=).
+- [X] [[file:../../skills/herdr-orch/design.org::*API reviews]] states the reviewed Pi version (1.0.0) and the reviewed Herdr version (0.9.3).
+- [X] [[file:../../skills/herdr-orch/design.org::*API reviews]] states the minimum required Herdr version (0.9.1, client and server) and names its enforcement point (=minimum-version= in =herdr.clj=).
+- [X] [[file:../../skills/herdr-orch/design.org::*API reviews]] states the minimum required Pi version (0.80.4) and the API that sets it (=agent_settled=).
 *** Edge cases
 - [X] =oh task start= still succeeds when =:models= has no row for the resolved kind (=:model-args= falls through to the canonical ID, as today).
 *** Anti-criteria
@@ -66,7 +66,7 @@ The review found no breaking upstream change touching herdr-orch. Pi 0.85.1 -> 1
 ** Shipped
 - MODIFIED [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Ledger and completion': a spawn entry and the =task start= envelope carry =:model-canonical=, =:model-args=, =:effort-args=; a continued round copies them. =spawn!= now passes the recorded values to =agent start=.
 - MODIFIED [[file:../../skills/herdr-orch/SKILL.md]] section 'Roster and routing': the =task start= envelope and ledger entry report the translated args.
-- MODIFIED [[file:../../skills/herdr-orch/README.org::*Last API review]]: Herdr and Pi columns with reviewed, minimum required, installed, and previous-review rows.
+- MODIFIED [[file:../../skills/herdr-orch/design.org::*API reviews]]: Herdr and Pi columns with reviewed, minimum required, installed, and previous-review rows.
 - MODIFIED [[proj:skills/README.org]]: =herdr/LICENSE= cited at =v0.9.3=. Vendored =skills/herdr/SKILL.md= refreshed to =v0.9.3=.
 - Root =package.json= dev pin =@earendil-works/pi-coding-agent= 0.80.10 -> 1.0.0; =package-lock.json= resolves it and the top-level =pi-ai=/=pi-tui= peers at 1.0.0.
 - Packaged =subagents/config.edn= =:aliases= gains =fable=, =opus=, =sonnet=, =haiku=, each mapping to the same canonical ID as its =claude-*= alias.
