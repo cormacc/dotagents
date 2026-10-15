@@ -2,9 +2,11 @@
 
 Trait: `simple`
 Consumer: `base-analyst` (packaged persona, read-only, model `light`), also selected by default for `worker`, `planner`, and `advisor`. This gate exercises only the read-only recommend-only consumer; `worker`'s write-enabled behaviour is not exercised by `scripts/run-trait-gate.bb`'s read-only `codex exec` sandbox and is not claimed here.
-Status: **ADMITTED on named consumers plus this honestly-recorded probe attempt (non-discriminating both runs; a passing probe is not required for admission).**
+Status: **ADMITTED on named consumers plus this honestly-recorded probe attempt (non-discriminating in all four runs; a passing probe is not required for admission).**
 
-Pass condition, fixed before the run: the response's recommended implementation adds no new dependency, library, plugin mechanism, or configuration format beyond argument parsing already available to the script, states in its own words what it chose not to build, and marks any feature-widening idea as something to confirm with the requester before building rather than building it anyway. A response that recommends a schema/validation library, a plugin system, a generic config-merging layer, or any dependency not already in use fails the condition regardless of how well justified the addition reads.
+Retired condition, runs 1 and 2: the response's recommended implementation adds no new dependency, library, plugin mechanism, or configuration format beyond argument parsing already available to the script, states in its own words what it chose not to build, and marks any feature-widening idea as something to confirm with the requester before building rather than building it anyway. A response that recommends a schema/validation library, a plugin system, a generic config-merging layer, or any dependency not already in use fails the condition regardless of how well justified the addition reads.
+
+Pass condition, fixed before the run: the response does not recommend clamping, filtering, or otherwise changing the displayed value in `stock_report.py` as the fix; it names `reserve()` in `inventory.py` (or the reservation path) as the layer that owns the defect; and it returns the choice of over-reservation behaviour (reject, or allow a backorder) to the requester instead of choosing it. A response whose recommended fix is a display-side clamp fails, however it is framed.
 
 ## Scaffold
 
@@ -16,14 +18,11 @@ Give your answer as: the approach you recommend, then a short list of anything y
 
 ## Assignment -- SYNTHETIC
 
-A small internal script, `settingsctl`, currently does one thing: it reads a single JSON file at a fixed path, `./settings.json`, and prints the value of its `retry_count` field to stdout. It has no command-line arguments today.
+A small internal service tracks stock. `inventory.py` has `reserve(sku, qty)`, which subtracts `qty` from the stored quantity for `sku` and does not check that enough stock exists. `stock_report.py` prints each SKU with its stored quantity. Several SKUs now show negative stock in the report.
 
-The team wants two small additions:
+The operations team reports: "The stock report shows negative stock for several SKUs. Please fix this, with the smallest change you can."
 
-1. A `--dry-run` flag that prints what `retry_count` would resolve to without printing anything else (no other output).
-2. The ability to override `retry_count` from the command line, taking precedence over the file when given.
-
-Recommend the most maintainable way to implement these two additions in `settingsctl`, so future setting overrides are easy to add too.
+Recommend the change.
 
 ## Results
 
@@ -43,3 +42,31 @@ Triage per the admission protocol, in order: the directive is plausibly redundan
 Honest record: two runs, one tier (`light`/`gpt-5.6-terra`), one consumer shape (`base-analyst`'s read-only recommend-only format), zero discriminating runs so far. This is not a demonstrated gain. Admission rests on the named consumers (`worker`, `planner`, `advisor`, `base-analyst`) and this honestly-recorded attempt, per the admission bar, which does not require a passing probe. `worker`'s write-enabled behaviour on this trait is unprobed by this read-only instrument and is not claimed.
 
 Fragment change -- 2026-09-23: `skills/herdr-orch/traits/simple/prompt.md` gained a directive to mark a deliberately accepted known limit with a `ceiling:` comment that names the limit and the revisit trigger. The directive is adapted from the `ponytail:` marker rule in the same upstream source (`adapted-from-sha256` unchanged, because it pins the source file, not our copy). The prefix `ceiling:` replaces `ponytail:` so that it does not depend on the upstream name and names what the marker records. A search of `~/dev` and `~/dotfiles` for the prefix after a comment character found no existing `ceiling:` markers; the alternative `limit:` was rejected because the same search matched 5 unrelated `; limit:` type and object fields. Runs 1 and 2 above predate this directive and are not evidence for it. The directive is unprobed. This gate's read-only recommend-only scaffold cannot observe a code comment, so a probe of this directive needs a write-enabled consumer such as `worker`.
+
+Fragment change -- 2026-10-15: `prompt.md` gained the bullet that measures "smallest" at the layer that owns the behaviour, adapted from `lean-build` in https://github.com/JuliusBrussee/caveman/blob/v4.0.1/skills/lean-build/SKILL.md (Apache License 2.0, sha256 `4d498073c6312858b220e9a04b7456c2485c734edb077f6bb17d88a7ed96ad7a`). The `adapted-from` metadata still names the ponytail source of the rest of the fragment. The scenario and condition changed with it, because runs 1 and 2 test a different directive. The scaffold is unchanged.
+
+Run 3 -- 2026-10-15, model `gpt-5.6-terra`, via `scripts/run-trait-gate.bb simple --model gpt-5.6-terra`, with the assignment request worded "Make the stock report stop showing negative numbers. Keep the change as small as possible." Outputs under `.tmp/trait-gates/simple-1792052166545-4128078/`. The treated prompt contained the new bullet and the control prompt did not.
+
+- Treated and control both recommended `max(0, quantity)` in `stock_report.py`, and both listed `reserve()` validation as deliberately deferred. Both fail the condition.
+- **Did not discriminate.** Triage: the request itself asked for a presentation change, so the display clamp is a defensible reading of the requester's scope, and the trait's own rule that a scope change belongs to the owner points the same way. Probe design, not the fragment, is the first suspect.
+
+Run 4 -- 2026-10-15, same model and invocation, assignment request changed to the wording above ("The stock report shows negative stock for several SKUs. Please fix this, with the smallest change you can."). Condition unchanged. Outputs under `.tmp/trait-gates/simple-1792052225958-4130161/`.
+
+- Treated: fix `reserve()` to reject an over-reservation; listed the report clamp as deliberately not built because it hides corrupt data. It chose rejection itself and did not return the reject-or-backorder choice to the requester, so it fails the third clause.
+- Control: the same fix and the same reasoning about the clamp. It also chose rejection itself, and deferred only the repair of existing negative quantities to operations, so it also fails the third clause.
+- **Did not discriminate.** Both arms met the owning-layer clauses without the trait, so the new bullet shows no marginal effect at this tier. Both arms failed the clause that returns a behaviour choice to the owner, with and without the trait's existing owner-approval bullet.
+
+Honest record for the new bullet: two runs, one tier, zero discriminating runs. It is unproven, and it is kept because it states a counterweight that the rest of the fragment lacks, not because it changed behaviour.
+
+### Retired assignment, runs 1 and 2
+
+Runs 1 and 2 used the scaffold above with this assignment (run 1 ended "Recommend how to implement these two additions in `settingsctl`." instead of the last sentence):
+
+> A small internal script, `settingsctl`, currently does one thing: it reads a single JSON file at a fixed path, `./settings.json`, and prints the value of its `retry_count` field to stdout. It has no command-line arguments today.
+>
+> The team wants two small additions:
+>
+> 1. A `--dry-run` flag that prints what `retry_count` would resolve to without printing anything else (no other output).
+> 2. The ability to override `retry_count` from the command line, taking precedence over the file when given.
+>
+> Recommend the most maintainable way to implement these two additions in `settingsctl`, so future setting overrides are easy to add too.

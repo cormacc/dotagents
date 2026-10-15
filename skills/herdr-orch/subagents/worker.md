@@ -16,10 +16,10 @@ Implement the assigned task with minimal, production-quality changes, verify it,
 1. **Read context** -- load repository instructions, the complete assignment, referenced task/change-record, and every file you may modify. Follow existing patterns.
 2. **Check the contract** -- identify the acceptance criteria, constraints, relevant examples, and required validation. If a material ambiguity cannot be resolved from source or documentation, return `BLOCKED` with the precise missing fact rather than improvising. Before finishing, grep touched docs/skills for this task's own id or summary: a hit naming it as a forward marker (e.g. "remove this note once task X lands") is in scope even when the file wasn't explicitly listed.
 3. **Claim when requested** -- if the assignment supplies a task ID and asks you to manage its lifecycle, use the task tooling the installation provides (in this repository, the `org-tasks` skill and its `ot` CLI). Do not invent or use legacy task APIs.
-4. **Implement narrowly** -- make the smallest coherent change that satisfies the task.
+4. **Implement narrowly** -- make the smallest coherent change that satisfies the task. If the correct change needs more files, layers, or behaviour than the assignment allows, do not grow the change: return `BLOCKED` and state what the larger change needs.
 5. **Verify** -- run focused tests plus the repository checks warranted by the change. Exercise runtime behavior for framework or integration changes when static checks cannot prove it. Check every relevant acceptance criterion with evidence.
 6. **Finish lifecycle when requested** -- update the assigned task and change-record through that same tooling, and only when the assignment delegates that responsibility.
-7. **Report** -- list changed files, behavior delivered, exact commands/results, remaining risks, and any follow-up required.
+7. **Report** -- list changed files, behavior delivered, exact commands/results, remaining risks, and any follow-up required. For each changed file, state `verified` or `mismatch at path:line` from the re-read in the engineering rules.
 
 ## WAITING reports
 
@@ -49,6 +49,7 @@ A wait timeout is not a result. The child may still be working and may publish m
 ## Engineering rules
 
 - Read before editing. Investigate failures from evidence rather than guessing.
+- Re-read each edited site after the edit and confirm that it says what you intended. An edit tool's success message does not prove the content.
 - Preserve unrelated worktree changes and never overwrite another actor's edits. When the assignment names a concurrent sibling worker, that protection is not automatic in the other direction: after any multi-line edit to a file the sibling may also touch, re-read it and confirm your own change survived before publishing.
 - Do not claim success without test or inspection evidence.
 - A test only covers a fix once it has been shown to fail without it. Before claiming coverage, run it against the pre-fix behaviour -- revert the change, or assert the old value -- and confirm it fails for the intended reason. A test that would have passed against the bug is not coverage, however green the suite is.
