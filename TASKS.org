@@ -349,46 +349,6 @@ This should be straightforward using pi. Maybe also using claude/codex? Investig
 See this subagent implementation makes good use of fork -- includes a 'defaultContext' metadata item in the header.
 https://github.com/Neuron-Mr-White/UniPi/blob/main/packages/subagents/agents
 
-** TODO [#B] herdr-orch: support unmanaged harness kinds herdr cannot start or detect :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 22f68a11-eeef-43e9-81d3-79341842ca84
-:CREATED: [2026-08-04 Tue 19:44]
-:END:
-:LOGBOOK:
-- Created [2026-08-04 Tue 19:44]
-:END:
-A harness absent from herdr's `agent start --kind` enum (e.g. dirge) cannot participate in delegation at all today, even though most of the protocol does not actually depend on agent registration. Adding the kind upstream is the clean fix; this task is the local workaround.
-
-What already works without registration (verified):
-- `task publish` takes identity purely from the injected HERDR_ORCH_* env vars and makes no herdr agent call (`publish!` and `publish-round!` in `cli.clj`). The result-item stream added a parent toast, but that is `notify!` in `herdr.clj` running `notification show`, not an agent call, so this still holds.
-- `task collect <full-task-uuid>` captures and validates the result file, and closes no pane on any path (`finish-capture!`; `maybe-close!` was removed with the explicit close/continue lifecycle in 436cbe2). The only agent call left in capture is a best-effort `agent get` that backfills the child's session reference, and a failed lookup there is swallowed, so an unregistered child still captures cleanly.
-- `pane split --env KEY=VALUE` can inject the protocol variables (`raw-pane!`'s `split` branch -> `herdr/split!` -> `env-args`). Note `oh spawn` cannot -- `spawn-command!` hardcodes `:env {}`.
-
-What is blocked:
-- Spawning: `spawn!` calls `herdr/start!` with the kind, and `agent start` additionally verifies the expected agent was *detected*, so PATH-shadowing a supported kind fails rather than mis-registering.
-- Orchestrating: `parent-identity` runs `herdr/agent!` on $HERDR_PANE_ID, so an unsupported harness cannot drive `task run`/`start`, `collect --any`, or `prune` either. Verified empirically: from a bare pane, `oh task run scout --task x --print-prompt` fails with agent_not_found.
-
-Desired outcome: let a :harnesses entry declare itself launch-by-command (a command template plus e.g. :managed false). spawn! then uses `pane split` + `pane run` instead of `agent start` and flags the ledger entry as unmanaged.
-
-Load-bearing safety requirement: for an unmanaged entry, `prune` and `collect --any` must treat absence from `agent list` as *unknown*, never as proof of death. Today absence is part of prune's staleness proof, so an unmanaged child that is alive and working satisfies the whole proof (uncaptured, non-terminal, no RESULT yet, absent from the listing) and can be pruned mid-flight. Shipping the launch path without this would build that hazard into the tool.
-
-*EDIT* [2026-08-08] Citations above re-verified against current source; every line number in the original body had drifted and is corrected here, while every substantive claim still holds. Two things have since moved toward this task: `prune!` now refuses outright with "prune refused: agent list is unusable; liveness is unknown", which is exactly the unknown-liveness distinction the safety requirement needs, generalised from the listing being unreadable to the child being unlistable; and making harness kind a deployment property (dabca39) reshaped the `:harnesses` config surface a `:managed false` entry would live in, so re-read that before designing the flag.
-
-*EDIT* [2026-08-12 Wed] Every line number had drifted a second time, one of them past the end of `herdr.clj`, so the citations above are now by symbol only. Substantive claims re-verified unchanged: `spawn-command!` still hardcodes `:env {}`, and `publish`/`collect` still make no blocking agent call.
-
-*EDIT* [2026-08-27 Thu] Spot-check only, not a full re-verification: =parent-identity=, =publish-round!=, =spawn-command!= and the hardcoded =:env {}= are all still present in =cli.clj=. Treat the rest as unverified -- 21 commits have touched =cli.clj= or =herdr.clj= since the 2026-08-12 pass, including =4741d59= (readiness workarounds and the =:dispatch= field deleted, Herdr floor raised to 0.8.2), =dec9230= (assignment lifecycle protocol hardened), the worktree series, and =bc9c38e= (accepted options derived from help signatures, which is the option surface a =:managed false= flag would join). Re-read the spawn and prune paths before designing, and expect the =:harnesses= surface to have moved again. The =agent start --kind= enum still omits dirge, per the herdr MCP tool schema exposed to this session.
-
-Accepted degradation for unmanaged kinds: no lifecycle states, no :child-session, no auto-close, no agent prompt/wait/read, excluded from fan-in, and no ability to spawn grandchildren. The result file remains the completion signal, which is the part that matters.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-08-04 Tue 20:15]
-- sender: agent
-
-Evidence:
-`herdr agent start --help` enumerates: pi, claude, codex, gemini, cursor, devin, agy, cline, omp, mastracode, opencode, copilot, kimi, kiro, droid, amp, grok, hermes, kilo, qodercli, maki. dirge is absent but does expose `--model`, so only the launch/detect half is missing. herdr has no local extension point: no agent definitions in config.toml, no plugins subcommand, and no manifest file on disk.
-
 ** TODO Vendored skill hygiene :skill:
 :PROPERTIES:
 :CUSTOM_ID: 65e49f0b-d805-4974-9511-75901d9992b6
@@ -491,27 +451,6 @@ Origin:
 - cwd: /Users/cormacc/dotfiles/agents
 - git: cormacc/dotagents @ main
 - sender: agent
-
-** TODO Draft upstream Herdr Pi native-prompt and listener-disposal proposal :herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 5631ba57-09cf-4359-bab4-afa27ae7e7e9
-:CREATED: [2026-09-17 Thu 16:42]
-:END:
-:LOGBOOK:
-- Created [2026-09-17 Thu 16:42]
-:END:
-Acceptance criteria:
-- An unpublished proposal cites the selected upstream managed integration revision and installed Pi event API.
-- The proposal explains migration from herdr:blocked to ui_prompt_start/ui_prompt_end.
-- It accounts for Pi's nested-prompt coalescing rather than assuming one event per nested dialog.
-- It demonstrates the listener-disposal issue with a bounded isolated reproduction.
-- It specifies reload/shutdown listener cleanup through the documented event-bus API.
-- It distinguishes measured behaviour from proposed upstream changes.
-- It compares the native-event migration with an alternative: Herdr consumes the OSC 7501 Program Status Protocol reports that Pi 1.1.0 emits (`ProgramStatusReporter` in `pi-coding-agent/dist/modes/interactive/program-status-reporter.js`, which reports `blocked` with the dialog title for extension dialogs and login). The comparison covers harness independence, Pi's extra `done` and `error` states against the `working`/`blocked`/`idle` states that the integration reports and the `idle`/`done` states that `oh task close --abandon` accepts, and Herdr's rule of one status authority for each pane. Measured [2026-10-08]: Herdr `master` at `4dc23bb` has no OSC 7501 code, and Pi emits reports only after the terminal answers the `OSC 7501;?` query (`PI_PROGRAM_STATUS=1` forces them).
-- Must not: publish an issue or patch without explicit permission.
-- Must not: fork pi/extensions/herdr-agent-state.ts locally or block the local maintenance delivery on upstream acceptance.
-
-Reference: `pi/extensions/herdr-agent-state.ts` and the installed Pi docs/extensions.md event API; `design/log/2026-09-17-herdr-orch-improvements-260917.org` records the local maintenance boundary. Verify native-event and unsubscribe identifiers against the selected Pi source before drafting.
 
 ** TODO [#C] traits: retry the %simple probe at a lower model tier :skill:herdr_orch:
 :PROPERTIES:
