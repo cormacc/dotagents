@@ -62,8 +62,8 @@ than the five-second validation budget.
 
 ### `clojure_paren_repair`
 
-Accepts `code` and an optional `check` flag. It repairs strings only; use the
-`clj-paren-repair` CLI for in-place file repair. Repaired output uses the same
+Accepts `code` and an optional `check` flag. It repairs strings only; it does
+not edit files. Repaired output uses the same
 2000-line/50KB bounds as evaluation output.
 
 ## Development

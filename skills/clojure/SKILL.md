@@ -25,11 +25,11 @@ For JVM/Babashka tests, use `clojure.test/run-test-var` or `clojure.test/run-tes
 
 ## ClojureScript
 
-Confirm the selected build and attached JS runtime before evaluating CLJS. Opening a browser tab alone does not switch a CLJ nREPL session to CLJS. Native `clojure_eval` calls use fresh sessions; use the persistent CLI or the project's evaluator for session-based CLJS work. See the [tool guide](references/tool-guide.md) for a shadow-cljs example.
+Confirm the selected build and attached JS runtime before evaluating CLJS. Opening a browser tab alone does not switch a CLJ nREPL session to CLJS. `clojure_eval` keeps one session for each host and port, so a CLJS selection persists until `:cljs/quit` or `reset`. See the [tool guide](references/tool-guide.md) for a shadow-cljs example.
 
 ## Delimiter repair
 
-Correct small delimiter errors directly. If an available repair tool helps, inspect its changes and rerun normal verification. Repair is not syntax validation; the native `clojure_paren_repair` check can miss mismatched delimiter types and misread character literals. For file repair, work on a copy under `<repository-root>/.tmp/`: `clj-paren-repair COPY.clj` repairs and formats the whole copy in place. Copy back only the intended changes.
+Correct small delimiter errors directly. If an available repair tool helps, inspect its changes and rerun normal verification. Repair is not syntax validation; the native `clojure_paren_repair` check can miss mismatched delimiter types and misread character literals. It repairs strings only: apply the repair to the file with an edit.
 
 ## Babashka caveats
 
