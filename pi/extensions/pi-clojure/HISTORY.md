@@ -20,6 +20,13 @@ upstream-sync ledger. Original authorship and EPL-2.0 licensing remain in
   pi's `AbortSignal`, and settles success, error, timeout, abort, and socket
   close through one cleanup path.
 - Bounds nREPL discovery probes and stops discovery when cancelled.
+- `clojure_eval` keeps one persistent nREPL session for each host and port,
+  instead of cloning a session for each call. It replaces a session that the
+  server no longer knows, adds a `reset` parameter, runs calls for one server
+  in order, interrupts a timed-out or cancelled evaluation, and closes its
+  sessions on `session_shutdown`.
+- One-shot `evalExpr` sends its eval without a session, so it no longer
+  leaves a cloned session on the server for each call.
 
 ### Tool results and repair
 

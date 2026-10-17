@@ -10,7 +10,7 @@ repository, not an npm package, is the maintained source.
 | Tool | Description |
 | --- | --- |
 | `clojure_find_nrepl_port` | Finds an nREPL port from project port files or common defaults. Each probe has a five-second budget. |
-| `clojure_eval` | Evaluates Clojure code through an existing nREPL connection. |
+| `clojure_eval` | Evaluates Clojure code in a persistent session on an existing nREPL server. |
 | `clojure_paren_repair` | Checks or repairs delimiters in a Clojure-family source string with parinfer. |
 
 There are no slash commands or default keybindings.
@@ -25,12 +25,33 @@ manually (for example, `bb nrepl`, `lein repl :headless`, or `clj -M:repl`).
 | `code` | Clojure expression to evaluate. |
 | `port` | TCP port from 1 through 65535. |
 | `host` | nREPL host (default: `localhost`). |
-| `ns` | Optional namespace forwarded on the nREPL `eval` request. |
+| `ns` | Optional namespace for this evaluation only, forwarded on the nREPL `eval` request. The session's current namespace does not change. |
+| `reset` | Close the persistent session for this host and port, and evaluate in a new one. |
 | `timeout` | Optional 1–2147483647 ms budget (default: 30000), covering connection and response processing. |
 
-Pi cancellation aborts the pending connection or evaluation and closes its
-socket. Results are limited to pi's standard 2000 lines or 50KB before they
-enter model context or result details.
+The extension clones one nREPL session for each host and port and keeps it
+for the pi session. Session state therefore persists between calls: the
+current namespace, `*1`, `*e`, `set!` bindings, and a shadow-cljs CLJS REPL
+selection (shadow-cljs keeps its REPL state in the nREPL session). Each call
+opens its own connection, because a session outlives its connection. Calls
+for one server run one at a time, in call order. `session_shutdown` closes
+the stored sessions on their servers.
+
+- If the server no longer knows the session, for example after a restart,
+  the call clones a new session and evaluates again. The result then starts
+  with a note that earlier session state is lost. Result details carry the
+  session ID and `sessionStatus` (`new`, `reused`, or `replaced`).
+- Timeout or pi cancellation interrupts a sent evaluation with the nREPL
+  `interrupt` op. The call keeps its connection open until the server answers
+  the interrupt, for at most 1 s, and fails after that. JVM nREPL 1.3.1 ignored
+  an interrupt when the connection closed directly after it, and lost an eval
+  that was queued behind the interrupted one; Babashka 1.13.226 did neither.
+- Other callers of `evalExpr` (`clojure_find_nrepl_port` and the `dataspex`
+  extension) send one eval without a session. The server evaluates it in a
+  throwaway session, so no session remains afterwards.
+
+Results are limited to pi's standard 2000 lines or 50KB before they enter
+model context or result details.
 
 ### `clojure_find_nrepl_port`
 
