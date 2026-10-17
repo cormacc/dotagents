@@ -704,3 +704,26 @@ Origin:
 
 Evidence:
 Checking a 330-line change-record against its changeset needed a one-off Babashka script (portal `.tmp/check-record-ids.clj`, gitignored) that runs `git grep -P` over `src` and `test` for each backticked span. It found one stale identifier (a renamed test helper) and confirmed the rest; a second pass verified the record after edits. The unresolved residue was removed or rejected names and Nexus/Replicant internals, which needed a manual check in the library jars.
+
+** TODO Run skill trigger evals in pi, in context :skill:skill_creator:
+:PROPERTIES:
+:CUSTOM_ID: b3522825-53ca-42d7-8ebb-6223e186ce9c
+:CREATED: [2026-10-17 Sat 13:04]
+:END:
+:LOGBOOK:
+- Created [2026-10-17 Sat 13:04]
+:END:
+Run skill trigger evals (skill-creator description optimiser) in pi, with the full set of skills and extensions loaded, so that the candidate competes in context. To stop an installed copy of the skill under test from shadowing the candidate, move that one skill out of the skill tree for the duration of the eval and restore it afterwards. Do not disable all skills or extensions, and do not use a project-only skill set. Record this in skill-creator's references/description-optimiser.md, and give the harness a pi path, because scripts/run_eval.py and scripts/improve_description.py only call claude -p.
+
+Also fix or report upstream: run_eval.py writes one docs-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-10-17 Sat 13:04]
+- sender: human
+
+Evidence:
+- doc-writing (then docs) trigger eval, 2026-10-16: with 10 workers and the installed skill visible, every positive query scored 0/3. The agent's first call was the installed skill, not the temporary command.
+- Workaround used: Claude Code with --setting-sources project, from a scratch project that linked every skill except the candidate, and --num-workers 1. A control eval then gave positive 2/2, negative 0/2.
+- User direction: prefer pi for skill evals; bypass only the skill under test, by moving it out of the skill tree temporarily.
