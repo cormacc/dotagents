@@ -1,8 +1,14 @@
 # Clojure style digest
 
-A selected, paraphrased digest of the [Clojure Style Guide](https://guide.clojure.style/) by Bozhidar Batsov and contributors, licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
+A selected, paraphrased digest of the [Clojure Style Guide](https://guide.clojure.style/) by Bozhidar Batsov and contributors, licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Checked against guide commit `2bc3d2c` (2026-09-17).
 
 Project conventions and formatter settings take precedence. Do not reformat unrelated code or change behaviour to satisfy a style preference.
+
+## Tools first
+
+- Format changed files with the project's formatter (cljfmt, zprint, or cljstyle) when the project configures one. The formatter, not this digest, decides layout.
+- Lint changed files with the project's clj-kondo configuration, or with `clj-kondo --lint <file>` when the project has none. Fix the warnings that the change introduces.
+- The default clj-kondo configuration does not report every guide rule. On clj-kondo v2026.08.04 it did not report `(not (empty? x))`, `(if c x nil)`, or `(.toUpperCase s)`, so the rules below still apply.
 
 ## Layout and namespaces
 
@@ -17,7 +23,7 @@ Project conventions and formatter settings take precedence. Do not reformat unre
 - Use `!` for functions unsafe in STM transactions, and earmuffs with `^:dynamic` for dynamically rebound vars.
 - Make private functions with `defn-` and private vars with `^:private`; a name prefix alone does not make a var private.
 - Use `_` or an informative underscore-prefixed name for unused bindings.
-- Put function docstrings after the name and before the argument vector. Describe the contract rather than repeating the implementation.
+- Put function docstrings after the name and before the argument vector. Describe the contract rather than repeating the implementation. Wrap argument names and var references in backticks: ``"Returns the total of `items`."``.
 
 ## Expressions and data
 
@@ -26,6 +32,10 @@ Project conventions and formatter settings take precedence. Do not reformat unre
 - Use `when` or `when-not` for a single conditional branch; use `:else` for the default branch of `cond`.
 - Prefer functions to macros when a function suffices.
 - Use `with-open` for closeable JVM resources, keeping their consumption inside its scope.
+
+## Tests
+
+- Name each test `something-test`, not `test-something` or a bare description. Name the test namespace `my-app.thing-test`, in `test/my_app/thing_test.clj`.
 
 ## Local preferences
 
