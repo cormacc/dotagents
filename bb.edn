@@ -49,7 +49,9 @@
                    [(into ["test-clojure"] *command-line-args*)
                     ["scripts/test-run-trait-gate.bb"]
                     ["scripts/test-analyse-anthropic-cache-ttl.bb"]
-                    ["scripts/test-check-section-links.bb"]]))}
+                    ["scripts/test-check-section-links.bb"]
+                    ["skills/doc-writing/scripts/test-unwrap.bb"]
+                    ["skills/doc-writing/scripts/test-check-diagrams.bb"]]))}
 
   ;; Batch Emacs runs every `#+CALL:` in the README; the file's `:eval no` default keeps
   ;; every other block inert. A visiting Emacs holds a `.#README.org` lock (a dangling

@@ -9,6 +9,10 @@
 - Use UK English spelling.
 - Do not change 3rd party API identifiers to UK English spelling. E.g. sshd uses `authorized_keys`, CSS uses `color`, and APIs retain their documented field names.
 - When you rewrite prose, preserve identifiers, factual modality, repository conventions, regional spelling (UK/US), and the user's requested tone.
+- Do not hard-wrap prose in Org or Markdown documents. Write one line for each paragraph and each list item. Comments and docstrings follow the code's line length.
+- In comments and docstrings, say why, not what the code does. Describe the current code, not its history: do not write "now", "previously" or "was changed to".
+- A docstring states the contract. Update it in the same change as the code.
+- The `doc-writing` skill covers document structure, diagrams, and scripts that unwrap text and render diagrams.
 
 ## Identifiers and claims
 - CRITICAL: Always verify each identifier against source or documentation.
