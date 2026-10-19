@@ -1,0 +1,5 @@
+# Claude Code syncs account skills (claude.ai and Anthropic examples) into
+# ~/.claude/skills/synced/, which agents.nix links to this directory. pi reads
+# this file too, so the rule also keeps those skills out of pi's discovery: they
+# need claude.ai connectors, or carry licences that forbid use outside Claude.
+/synced/
