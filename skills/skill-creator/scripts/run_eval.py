@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Run trigger evaluation for a skill description.
 
-Tests whether a skill's description causes Claude to trigger (read the skill)
-for a set of queries. Outputs results as JSON.
+Tests whether a skill's description causes the agent to trigger (read the
+skill) for a set of queries. The agent is pi by default, or Claude Code with
+--harness claude. Outputs results as JSON.
 """
 
 import argparse
@@ -18,14 +19,22 @@ from pathlib import Path
 
 from scripts.utils import parse_skill_md
 
+HARNESSES = ("pi", "claude")
 
-def find_project_root() -> Path:
-    """Find the project root by walking up from cwd looking for .claude/.
+PI_SWAP_EXTENSION = Path(__file__).resolve().parent / "pi_eval_swap.ts"
 
-    Mimics how Claude Code discovers its project root, so the command file
-    we create ends up where claude -p will look for it.
+
+def find_project_root(harness: str = "pi") -> Path:
+    """Return the directory that eval runs use as their working directory.
+
+    pi takes project context from the working directory and its ancestors, so
+    the cwd is used as is. For Claude Code, walk up to the nearest .claude/,
+    as Claude Code does, so that the command file we create ends up where
+    claude -p looks for it.
     """
     current = Path.cwd()
+    if harness == "pi":
+        return current
     for parent in [current, *current.parents]:
         if (parent / ".claude").is_dir():
             return parent
@@ -39,8 +48,147 @@ def run_single_query(
     timeout: int,
     project_root: str,
     model: str | None = None,
+    harness: str = "pi",
+    skill_path: str | None = None,
 ) -> bool:
-    """Run a single query and return whether the skill was triggered.
+    """Run a single query and return whether the skill was triggered."""
+    if harness == "pi":
+        if skill_path is None:
+            raise ValueError("the pi harness needs skill_path")
+        return _run_single_query_pi(
+            query, skill_name, skill_description, timeout, project_root,
+            model, skill_path,
+        )
+    return _run_single_query_claude(
+        query, skill_name, skill_description, timeout, project_root, model,
+    )
+
+
+def _run_single_query_pi(
+    query: str,
+    skill_name: str,
+    skill_description: str,
+    timeout: int,
+    project_root: str,
+    model: str | None,
+    skill_path: str,
+) -> bool:
+    """Run one query through `pi --mode json` and report whether it read the skill.
+
+    pi_eval_swap.ts puts the candidate description into the real prompt and
+    reports the SKILL.md path that the prompt shows. The first assistant
+    message decides: the skill triggered if any of its tool calls names that
+    path. A run that cannot decide (no swap report, provider error, early
+    exit, timeout) raises, so that run_eval reports it instead of counting it
+    silently as "not triggered".
+    """
+    cmd = ["pi", "--mode", "json", "--no-session", "-e", str(PI_SWAP_EXTENSION)]
+    if model:
+        cmd.extend(["--model", model])
+    cmd.append(query)
+
+    env = {
+        **os.environ,
+        "SKILL_EVAL_NAME": skill_name,
+        "SKILL_EVAL_DESCRIPTION": skill_description,
+        "SKILL_EVAL_DRAFT_PATH": str(Path(skill_path).resolve() / "SKILL.md"),
+    }
+
+    process = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        cwd=project_root,
+        env=env,
+    )
+
+    start_time = time.time()
+    buffer = b""
+    tokens: set[str] = set()
+    tool_args: dict[int, str] = {}
+
+    try:
+        while time.time() - start_time < timeout:
+            ready, _, _ = select.select([process.stdout], [], [], 1.0)
+            if not ready:
+                if process.poll() is not None:
+                    break
+                continue
+
+            chunk = os.read(process.stdout.fileno(), 8192)
+            if not chunk:
+                break
+            buffer += chunk
+
+            # pi frames records on LF only; split bytes before decoding.
+            while b"\n" in buffer:
+                raw, buffer = buffer.split(b"\n", 1)
+                try:
+                    event = json.loads(raw.decode("utf-8", errors="replace"))
+                except json.JSONDecodeError:
+                    continue
+
+                event_type = event.get("type")
+                if event_type == "entry_appended":
+                    entry = event.get("entry", {})
+                    if entry.get("customType") != "skill-eval-swap":
+                        continue
+                    data = entry.get("data", {})
+                    if data.get("hidden"):
+                        raise RuntimeError(
+                            f"{skill_name} sets disable-model-invocation, so it cannot trigger"
+                        )
+                    shown = data["filePath"]
+                    # The model can name the shown path or the file it links to.
+                    tokens = {shown, os.path.realpath(shown)}
+
+                elif event_type == "message_update":
+                    ame = event.get("assistantMessageEvent", {})
+                    if ame.get("type") == "toolcall_delta" and tokens:
+                        index = ame.get("contentIndex", 0)
+                        tool_args[index] = tool_args.get(index, "") + ame.get("delta", "")
+                        if any(t in tool_args[index] for t in tokens):
+                            return True
+
+                elif event_type == "message_end":
+                    message = event.get("message", {})
+                    if message.get("role") != "assistant":
+                        continue
+                    if message.get("stopReason") in ("error", "aborted"):
+                        raise RuntimeError(
+                            f"pi run ended with {message.get('stopReason')}: "
+                            f"{message.get('errorMessage', '')}"
+                        )
+                    if not tokens:
+                        raise RuntimeError(
+                            "pi_eval_swap.ts did not report a swap; the prompt "
+                            "may not contain the candidate description"
+                        )
+                    calls = [c for c in message.get("content", []) if c.get("type") == "toolCall"]
+                    return any(
+                        t in json.dumps(c.get("arguments", {}), ensure_ascii=False) for c in calls for t in tokens
+                    )
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
+    # No decision: a timeout or an early exit (e.g. an unknown model).
+    if time.time() - start_time >= timeout:
+        raise TimeoutError(f"pi gave no first assistant message within {timeout}s")
+    raise RuntimeError(f"pi exited {process.returncode} before the first assistant message ended")
+
+
+def _run_single_query_claude(
+    query: str,
+    skill_name: str,
+    skill_description: str,
+    timeout: int,
+    project_root: str,
+    model: str | None = None,
+) -> bool:
+    """Run a single query through `claude -p` and return whether it triggered.
 
     Creates a command file in .claude/commands/ so it appears in Claude's
     available_skills list, then runs `claude -p` with the raw query.
@@ -191,6 +339,8 @@ def run_eval(
     runs_per_query: int = 1,
     trigger_threshold: float = 0.5,
     model: str | None = None,
+    harness: str = "pi",
+    skill_path: Path | None = None,
 ) -> dict:
     """Run the full eval set and return results."""
     results = []
@@ -207,6 +357,8 @@ def run_eval(
                     timeout,
                     str(project_root),
                     model,
+                    harness,
+                    str(skill_path) if skill_path else None,
                 )
                 future_to_info[future] = (item, run_idx)
 
@@ -265,7 +417,8 @@ def main():
     parser.add_argument("--timeout", type=int, default=30, help="Timeout per query in seconds")
     parser.add_argument("--runs-per-query", type=int, default=3, help="Number of runs per query")
     parser.add_argument("--trigger-threshold", type=float, default=0.5, help="Trigger rate threshold")
-    parser.add_argument("--model", default=None, help="Model to use for claude -p (default: user's configured model)")
+    parser.add_argument("--model", default=None, help="Model for the harness, in its own syntax (default: user's configured model)")
+    add_harness_args(parser)
     parser.add_argument("--verbose", action="store_true", help="Print progress to stderr")
     args = parser.parse_args()
 
@@ -278,7 +431,7 @@ def main():
 
     name, original_description, content = parse_skill_md(skill_path)
     description = args.description or original_description
-    project_root = find_project_root()
+    project_root = project_root_from_args(args)
 
     if args.verbose:
         print(f"Evaluating: {description}", file=sys.stderr)
@@ -293,6 +446,8 @@ def main():
         runs_per_query=args.runs_per_query,
         trigger_threshold=args.trigger_threshold,
         model=args.model,
+        harness=args.harness,
+        skill_path=skill_path,
     )
 
     if args.verbose:
@@ -304,6 +459,23 @@ def main():
             print(f"  [{status}] rate={rate_str} expected={r['should_trigger']}: {r['query'][:70]}", file=sys.stderr)
 
     print(json.dumps(output, indent=2))
+
+
+def add_harness_args(parser: argparse.ArgumentParser) -> None:
+    """Add the options that select and configure the agent harness."""
+    parser.add_argument("--harness", choices=HARNESSES, default="pi", help="Agent CLI that runs the queries (default: pi)")
+    parser.add_argument(
+        "--cwd", default=None, metavar="DIR",
+        help="Working directory for eval runs: the project whose context the skill is used in "
+             "(default: the current directory for pi, the nearest .claude/ ancestor for claude)",
+    )
+
+
+def project_root_from_args(args: argparse.Namespace) -> Path:
+    """Resolve --cwd, or fall back to the harness default."""
+    if args.cwd:
+        return Path(args.cwd).expanduser().resolve()
+    return find_project_root(args.harness)
 
 
 if __name__ == "__main__":

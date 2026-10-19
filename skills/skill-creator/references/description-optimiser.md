@@ -54,19 +54,52 @@ Bad eval queries lead to bad descriptions — this step matters.
 
 ## Step 3: Run the optimisation loop
 
-Tell the user this will take some time.
+Tell the user this will take some time. Run the loop in the background,
+send its output to a file under `.tmp/`, and read that file periodically to
+report the iteration and scores.
 
 ```bash
 python -m scripts.run_loop \
   --eval-set <path-to-trigger-eval.json> \
   --skill-path <path-to-skill> \
   --model <model-id> \
+  --cwd <project-where-the-skill-is-used> \
   --max-iterations 5 \
   --verbose
 ```
 
 Use the model the current session is running on so triggering matches the
-user's experience.
+user's experience. Give it in the harness's own syntax: for pi,
+`provider/id` with an optional `:<thinking>` suffix.
+
+Set `--cwd` to a project where the skill is used. The scripts run from the
+skill-creator directory, so without it the runs get that repository's
+AGENTS.md and project skills instead. Context changes the result: a project
+AGENTS.md that already answers part of a query can lead the model to explore
+before it reads the skill.
+
+### Harness
+
+`--harness pi` (default) runs each query through `pi --mode json`; `--harness
+claude` uses `claude -p`. Pick the harness whose triggering you want to tune;
+the improver runs on the same harness and model.
+
+The pi harness measures triggering in the context of use. Each run is a
+normal pi session with every discovered skill, extension, MCP server, and
+tool, plus `scripts/pi_eval_swap.ts`, which:
+
+- Swaps the candidate description into that session's system prompt only.
+  The skill keeps its place in the list and its real location, and nothing
+  on disk changes, so parallel runs and other sessions are unaffected. A
+  skill that is not installed yet is appended at its draft location.
+- Blocks every tool call. The model sees the real tool declarations, but no
+  run can change state.
+
+A run triggers when the first assistant message reads the skill's SKILL.md.
+A run that cannot decide (no swap report from the extension, a provider
+error, a timeout) prints a warning and counts as not triggered, so check the
+warnings before you trust a low score. Each run starts your MCP servers, so
+with a slow or high-thinking model raise `--timeout` (default 30 s).
 
 The loop splits the eval set 60/40 train/held-out, evaluates the current
 description (3 runs per query for a stable trigger rate), proposes

@@ -2,8 +2,8 @@
 """Improve a skill description based on eval results.
 
 Takes eval results (from run_eval.py) and generates an improved description
-by calling `claude -p` as a subprocess (same auth pattern as run_eval.py —
-uses the session's Claude Code auth, no separate ANTHROPIC_API_KEY needed).
+by calling `pi -p` (default) or `claude -p` as a subprocess, so the harness's
+own credentials apply and no separate API key is needed.
 """
 
 import argparse
@@ -17,13 +17,17 @@ from pathlib import Path
 from scripts.utils import parse_skill_md
 
 
-def _call_claude(prompt: str, model: str | None, timeout: int = 300) -> str:
-    """Run `claude -p` with the prompt on stdin and return the text response.
+def _call_model(prompt: str, model: str | None, harness: str = "pi", timeout: int = 300) -> str:
+    """Run the harness in print mode with the prompt on stdin; return its text.
 
     Prompt goes over stdin (not argv) because it embeds the full SKILL.md
-    body and can easily exceed comfortable argv length.
+    body and can easily exceed comfortable argv length. The pi call gets no
+    tools, skills, or MCP servers: it only writes text.
     """
-    cmd = ["claude", "-p", "--output-format", "text"]
+    if harness == "pi":
+        cmd = ["pi", "-p", "--no-session", "--no-tools", "--no-skills", "--no-mcp"]
+    else:
+        cmd = ["claude", "-p", "--output-format", "text"]
     if model:
         cmd.extend(["--model", model])
 
@@ -42,7 +46,7 @@ def _call_claude(prompt: str, model: str | None, timeout: int = 300) -> str:
     )
     if result.returncode != 0:
         raise RuntimeError(
-            f"claude -p exited {result.returncode}\nstderr: {result.stderr}"
+            f"{harness} -p exited {result.returncode}\nstderr: {result.stderr}"
         )
     return result.stdout
 
@@ -57,6 +61,7 @@ def improve_description(
     test_results: dict | None = None,
     log_dir: Path | None = None,
     iteration: int | None = None,
+    harness: str = "pi",
 ) -> str:
     """Call Claude to improve the description based on eval results."""
     failed_triggers = [
@@ -141,7 +146,7 @@ I'd encourage you to be creative and mix up the style in different iterations si
 
 Please respond with only the new description text in <new_description> tags, nothing else."""
 
-    text = _call_claude(prompt, model)
+    text = _call_model(prompt, model, harness)
 
     match = re.search(r"<new_description>(.*?)</new_description>", text, re.DOTALL)
     description = match.group(1).strip().strip('"') if match else text.strip().strip('"')
@@ -158,7 +163,7 @@ Please respond with only the new description text in <new_description> tags, not
     # Safety net: the prompt already states the 1024-char hard limit, but if
     # the model blew past it anyway, make one fresh single-turn call that
     # quotes the too-long version and asks for a shorter rewrite. (The old
-    # SDK path did this as a true multi-turn; `claude -p` is one-shot, so we
+    # SDK path did this as a true multi-turn; print mode is one-shot, so we
     # inline the prior output into the new prompt instead.)
     if len(description) > 1024:
         shorten_prompt = (
@@ -171,7 +176,7 @@ Please respond with only the new description text in <new_description> tags, not
             f"important trigger words and intent coverage. Respond with only "
             f"the new description in <new_description> tags."
         )
-        shorten_text = _call_claude(shorten_prompt, model)
+        shorten_text = _call_model(shorten_prompt, model, harness)
         match = re.search(r"<new_description>(.*?)</new_description>", shorten_text, re.DOTALL)
         shortened = match.group(1).strip().strip('"') if match else shorten_text.strip().strip('"')
 
@@ -196,7 +201,8 @@ def main():
     parser.add_argument("--eval-results", required=True, help="Path to eval results JSON (from run_eval.py)")
     parser.add_argument("--skill-path", required=True, help="Path to skill directory")
     parser.add_argument("--history", default=None, help="Path to history JSON (previous attempts)")
-    parser.add_argument("--model", required=True, help="Model for improvement")
+    parser.add_argument("--model", required=True, help="Model for improvement, in the harness's own syntax")
+    parser.add_argument("--harness", choices=("pi", "claude"), default="pi", help="Agent CLI that writes the description (default: pi)")
     parser.add_argument("--verbose", action="store_true", help="Print thinking to stderr")
     args = parser.parse_args()
 
@@ -224,6 +230,7 @@ def main():
         eval_results=eval_results,
         history=history,
         model=args.model,
+        harness=args.harness,
     )
 
     if args.verbose:
