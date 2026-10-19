@@ -77,6 +77,9 @@ This is the only opportunity — the data isn't persisted elsewhere.
 
 ## Step 4: Grade, aggregate, launch the viewer
 
+Put the outputs in front of the user before you judge them yourself or
+revise the skill. Your own reading of the outputs comes second.
+
 1. **Grade.** Spawn a grader subagent (or grade inline) using
    `agents/grader.md`. Save results to `grading.json` per run. The
    `expectations` array must use `text`, `passed`, `evidence` (not
@@ -111,14 +114,31 @@ This is the only opportunity — the data isn't persisted elsewhere.
    file. Feedback downloads as `feedback.json`; copy it into the workspace
    for the next iteration.
 
-5. **Tell the user** where to look (Outputs tab walks through cases for
-   feedback; Benchmark tab shows quantitative comparison).
+5. **Tell the user** where to look:
+   - **Outputs** shows one test case at a time: the prompt, the output files
+     (rendered inline where possible), the previous iteration's output and
+     grades (collapsed), and a feedback box that saves as the user types.
+   - **Benchmark** shows pass rate, time, and tokens per configuration, with
+     per-eval breakdowns and analyst notes.
+   - The user moves with prev/next or the arrow keys, then clicks "Submit
+     All Reviews" to write `feedback.json`.
 
 ## Step 5: Read the feedback
 
-When the user says they're done, read `feedback.json`. Empty feedback means
-that test case looked fine; focus improvements where the user had specific
-complaints. Kill the viewer:
+When the user says they're done, read `feedback.json`:
+
+```json
+{
+  "reviews": [
+    {"run_id": "eval-0-with_skill", "feedback": "the chart is missing axis labels", "timestamp": "..."},
+    {"run_id": "eval-1-with_skill", "feedback": "", "timestamp": "..."}
+  ],
+  "status": "complete"
+}
+```
+
+Empty feedback means that test case looked fine; focus improvements where
+the user had specific complaints. Kill the viewer:
 
 ```bash
 kill $VIEWER_PID 2>/dev/null

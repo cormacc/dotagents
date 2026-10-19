@@ -41,6 +41,9 @@ Ask:
    steps) benefit. Subjective skills (writing style, design) usually don't.
    Suggest a default; let the user decide.
 
+Then ask about edge cases, example input files, success criteria, and
+dependencies. Write test prompts only after these answers are clear.
+
 If MCPs are available for research (docs, similar skills, best practices),
 use them — in parallel via subagents if available, otherwise inline.
 
@@ -86,6 +89,13 @@ Patterns:
 - When a skill spans multiple variants (frameworks, cloud providers,
   languages), put workflow + selection logic in SKILL.md and per-variant
   detail in `references/<variant>.md` so only the relevant one gets read.
+
+### No surprises
+
+A skill must do nothing that its description would not lead the user to
+expect. Do not write malware, exploit code, data exfiltration, or misleading
+skills. Apply the same check when you review a third-party skill before it is
+installed.
 
 ### Writing patterns
 
