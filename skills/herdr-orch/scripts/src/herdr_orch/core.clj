@@ -117,7 +117,7 @@
 ;; per-kind vocabulary table. The level itself is pass-through, never validated
 ;; against a per-kind vocabulary.
 (def default-effort "medium")
-;; ceiling: a non-whitespace control character (e.g. \x1b) is left to Herdr, which rejects
+;; known-limit: a non-whitespace control character (e.g. \x1b) is left to Herdr, which rejects
 ;; it at `agent start` after allocation (the round is cleaned up); check here if levels
 ;; ever come from a source other than the parent's argv or controlled definitions.
 (defn effort-value! [label persona value]

@@ -24,7 +24,7 @@ The standalone-document rules below do not apply here. In particular, follow the
 - A docstring states the contract: what the function takes, returns, throws and changes. It does not describe the implementation. Update it in the same change as the code.
 - A comment says why: a constraint, a non-obvious decision, a trap. Do not restate what the next line does.
 - Describe the current code, not its history. Do not write "now", "previously" or "was changed to"; version control holds the history.
-- Mark a deliberately accepted limit with a `ceiling:` comment that names the limit and the trigger to revisit it.
+- Mark a deliberately accepted limit with a `known-limit:` comment that names the limit and the trigger to revisit it.
 - Keep long rationale in a design record, and link to it from the comment.
 
 ## Standalone documents

@@ -36,6 +36,8 @@ When a skill for the changed files' language supplies a review reference (for ex
 
 Treat user-controlled URLs, shell fragments, SQL, HTML, file paths, and broadcast/client-synchronised state as hostile until proven constrained.
 
+Find the expected load in the repository (README, deployment or build configuration, entry points): one person who runs a script, or many users and processes at the same time. Judge concurrency and performance against that load. A site with a `known-limit:` comment that names its limit is a recorded decision, not a finding, unless the expected load already crosses that limit.
+
 ## 3. Verify
 
 Run the narrowest relevant tests, type checks, linters, or reproduction commands. Report commands and failures. A passing suite does not prove correctness; inspect whether tests assert the changed semantics. Do not claim a failure without reproducing it or tracing a concrete reachable path.
@@ -75,10 +77,10 @@ Leave modified code a little cleaner than you found it (the Boy Scout rule). In 
 
 ## Output
 
-Start with findings ordered by severity. Each P0, P1, and P2 finding must include:
+Start with findings ordered by severity. Number the findings in one sequence across all severities, so that the reader can refer to a finding by its number, as in "fix 2 and 5". Each P0, P1, and P2 finding must include:
 
 ```markdown
-### [P1] Imperative, specific title
+### 1. [P1] Imperative, specific title
 - **Location:** `path/file.ts:42`
 - **Problem:** Reachable behaviour, or the misreading or later edit that the code invites, and why it is wrong.
 - **Impact:** Concrete consequence.
@@ -86,7 +88,7 @@ Start with findings ordered by severity. Each P0, P1, and P2 finding must includ
 - **Evidence:** Reproduction, call path, or failed/passing test that proves the claim. For a maintainability finding, cite the code or convention that shows the cost.
 ```
 
-Write each P3 finding on one line, in the form `[P3] path:line: problem. fix.`, and add the evidence in a short clause when the problem does not show it.
+Write each P3 finding on one line, in the form `3. [P3] path:line: problem. fix.`, and add the evidence in a short clause when the problem does not show it.
 
 Wording rules for every finding, cleanup suggestion, and question:
 
@@ -102,10 +104,10 @@ Then provide:
 - **Cleanup:** suggestions from [#Cleanup in modified code](#cleanup-in-modified-code), one per line in the form `path:line: problem. fix.`. Omit this item when there are none.
 - **Questions:** questions about the author's intent that source and documentation cannot answer, one per line in the form `path:line: question`. Questions are not findings, and they do not change the verdict. Omit this item when there are none.
 - **Verification:** each command, with its result as exactly one of pass, fail, unavailable, or blocked, and any untested runtime surface.
-- **Summary:** one or two sentences on the reviewed scope.
+- **Summary:** one or two sentences on the reviewed scope. When a finding, or a concern that you cleared, depends on the load, state the load that you assumed.
 
 If no finding meets the bar, say **"No issues found."** and still report the diff range and verification performed.
 
 ## Provenance
 
-The one-line form for P3 findings, the wording rules, and the Questions item adapt `caveman-review` from https://github.com/JuliusBrussee/caveman/blob/v4.0.1/skills/caveman-review/SKILL.md (Apache License 2.0). The pass, fail, unavailable, and blocked result classes adapt `verify-and-stop` from the same repository and release.
+The one-line form for P3 findings, the wording rules, and the Questions item adapt `caveman-review` from https://github.com/JuliusBrussee/caveman/blob/v4.0.1/skills/caveman-review/SKILL.md (Apache License 2.0). The pass, fail, unavailable, and blocked result classes adapt `verify-and-stop` from the same repository and release. The expected-load rule, the treatment of a marked limit as a decision, and the numbering of findings across severities adapt `ponytail-review` from https://github.com/DietrichGebert/ponytail/blob/v5.3.2/skills/ponytail-review/SKILL.md (MIT License), where the marker is `shortcut:`.

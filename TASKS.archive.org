@@ -3771,3 +3771,50 @@ Acceptance criteria:
 - Must not: fork pi/extensions/herdr-agent-state.ts locally or block the local maintenance delivery on upstream acceptance.
 
 Reference: `pi/extensions/herdr-agent-state.ts` and the installed Pi docs/extensions.md event API; `design/log/2026-09-17-herdr-orch-improvements-260917.org` records the local maintenance boundary. Verify native-event and unsubscribe identifiers against the selected Pi source before drafting.
+
+** DONE Apply ponytail v5 review to traits and adjacent skills :skill:herdr_orch:
+CLOSED: [2026-10-19 Mon 17:47]
+:PROPERTIES:
+:CUSTOM_ID: 5bb83422-a66c-4c85-9df2-38fbb8686e36
+:CREATED: [2026-10-19 Mon 17:42]
+:STARTED: [2026-10-19 Mon 17:42]
+:ARCHIVED: [2026-10-19 Mon 17:47]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-10-19 Mon 17:42]
+- State "STARTED" from "TODO" [2026-10-19 Mon 17:42]
+- State "DONE" from "STARTED" [2026-10-19 Mon 17:47]
+:END:
+Apply the ponytail v4.10.0..v5.3.2 review (upstream `skills/` unchanged at `main` `09c434a`) to the traits and adjacent skills. Inline plan by user choice; no change-record.
+
+Approach:
+- `simple` :: re-adapt from upstream v5.3.2 `skills/ponytail/SKILL.md`, re-hash, and add the complete-change bullet. Keep the local additions (owning-layer bullet, marker comment, owner approval, never-trade-away). Record the fragment change in `traits/simple/gate.md`.
+- `simplify` :: add the `reuse` and `merge` tags and the whole-tree reference search before a `delete` finding. Pin provenance links to v4.10.0 and qualify the "upstream does not have" claim; same in `skills/README.org`.
+- `code-review` :: treat a marked site as a recorded decision unless the expected load crosses it, state the assumed load, and number findings across severities.
+- Marker :: rename `ceiling:` to `known-limit:` (user decision, 2026-10-19).
+- `worker` :: report what was not checked.
+
+Acceptance:
+- [X] `simple` `adapted-from` names v5.3.2 and `adapted-from-sha256` equals the sha256 of that file.
+- [X] `simple` directs the agent to reach every caller, test, fixture, config and export the change breaks.
+- [X] `simplify` lists `reuse` and `merge` tags.
+- [X] `simplify` requires a whole-tree reference search before a `delete` finding.
+- [X] `simplify` provenance links name v4.10.0 (and v5.3.2 for the new tags), not `main`.
+- [X] `simplify` and `skills/README.org` limit the "upstream does not have" claim to v4.10.0.
+- [X] `code-review` treats a `known-limit:` marker as a decision unless the expected load crosses it.
+- [X] `code-review` asks the reviewer to state the assumed load.
+- [X] `worker` Report step names what was not checked.
+- [X] `code-review` numbers findings in one sequence across severities.
+- [X] No tracked file outside `design/log/` and history paragraphs uses `ceiling:` as the marker.
+- [X] `scripts/validate-skills.bb` passes.
+
+Anti-criteria:
+- Must not: merge lean review into correctness review.
+- Must not: import upstream output style, levels, line-count scoring, or the codebase map.
+
+Execution 2026-10-19 (uncommitted):
+- Edited `skills/herdr-orch/traits/simple/prompt.md`, `traits/simple/gate.md` (fragment change paragraph: added, kept, omitted, unprobed), `skills/simplify/SKILL.md`, `skills/README.org`, `skills/code-review/SKILL.md`, `skills/herdr-orch/subagents/worker.md`; then the `known-limit:` rename in `simple`, `skills/doc-writing/SKILL.md`, `skills/code-review/SKILL.md` and `skills/herdr-orch/scripts/src/herdr_orch/core.clj` `effort-value!`, and finding numbering in `code-review`.
+- Verified: the `simple` hash line matches `git show v5.3.2:skills/ponytail/SKILL.md | sha256sum`; `skills/herdr-orch/scripts/oh task run worker --print-prompt` composes the new `simple` text and the new Report wording, and an unknown `--trait` exits 1 (control); `scripts/validate-skills.bb` 0 gating failures; `bb test` exit 0 (663 tests, 0 failures in the main suite); `scripts/check-section-links.bb` reports the same 3 problems in a clean HEAD worktree (pre-existing, in the TOC and `skills/herdr-orch/design.org`).
+- Not checked: no trait-gate probe of the re-adapted `simple` (unprobed, as `gate.md` records). `ot doctor` `spec-untouched`/`spec-stale` for `skills/herdr-orch/scripts/docs/contract.md` is intended: the contract's `adapted-from` semantics are unchanged.
+- Open: `skills/herdr-orch/references/traits.md` still says `%simple` recorded two non-discriminating runs; `gate.md` records four. Pre-existing; not changed here.

@@ -19,7 +19,7 @@ Implement the assigned task with minimal, production-quality changes, verify it,
 4. **Implement narrowly** -- make the smallest coherent change that satisfies the task. If the correct change needs more files, layers, or behaviour than the assignment allows, do not grow the change: return `BLOCKED` and state what the larger change needs.
 5. **Verify** -- run focused tests plus the repository checks warranted by the change. Exercise runtime behavior for framework or integration changes when static checks cannot prove it. Check every relevant acceptance criterion with evidence.
 6. **Finish lifecycle when requested** -- update the assigned task and change-record through that same tooling, and only when the assignment delegates that responsibility.
-7. **Report** -- list changed files, behavior delivered, exact commands/results, remaining risks, and any follow-up required. For each changed file, state `verified` or `mismatch at path:line` from the re-read in the engineering rules.
+7. **Report** -- list changed files, behavior delivered, exact commands/results, what you did not check or could not run, remaining risks, and any follow-up required. For each changed file, state `verified` or `mismatch at path:line` from the re-read in the engineering rules.
 
 ## WAITING reports
 
