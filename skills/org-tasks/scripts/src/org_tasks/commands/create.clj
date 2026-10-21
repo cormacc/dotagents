@@ -11,7 +11,8 @@
 ;; ── ot create ──────────────────────────────────────────────────────
 
 (defn create-cmd [{:keys [opts] :as result}]
-  (let [{:keys [project-root files]} (resolve-context opts)
+  (let [path-opts (if (boolean? (:local opts)) (dissoc opts :local) opts)
+        {:keys [project-root files]} (resolve-context path-opts)
         summary (positional-arg result :summary)
         ;; --relative-to derives placement from an anchor task, overriding any
         ;; explicit --parent/--after/--local/--tasks. `:child` nests under the
@@ -22,7 +23,7 @@
         rel-kind (when rel-id (if (contains? #{:child "child"} (:as opts)) :child :sibling))
         parent-id (if rel-id (when (= :child rel-kind) rel-id) (:parent opts))
         after-id (if rel-id (when (= :sibling rel-kind) rel-id) (:after opts))
-        ctx-tasks (when (or parent-id after-id) (:tasks (load-context opts)))
+        ctx-tasks (when (or parent-id after-id) (:tasks (load-context path-opts)))
         parent-task (when parent-id (resolve-required-id ctx-tasks parent-id opts))
         after-task (when after-id (resolve-required-id ctx-tasks after-id opts))
         anchor (or parent-task after-task)

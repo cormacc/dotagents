@@ -29,15 +29,10 @@
   - [[#traits-re-probe-every-fragment-against-synthetic-non-decaying-scenarios][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
   - [[#herdr-orch-allow-persona-less-subagents][herdr-orch: allow persona-less subagents]]
   - [[#consider-leveraging-pi-fork-for-subagents][Consider leveraging pi /fork for subagents]]
-  - [[#herdr-orch-support-unmanaged-harness-kinds-herdr-cannot-start-or-detect][herdr-orch: support unmanaged harness kinds herdr cannot start or detect]]
   - [[#vendored-skill-hygiene][Vendored skill hygiene]]
-  - [[#started-ot-cli-surface-consistency][STARTED ot CLI surface consistency]]
-  - [[#draft-upstream-herdr-pi-native-prompt-and-listener-disposal-proposal][Draft upstream Herdr Pi native-prompt and listener-disposal proposal]]
   - [[#traits-retry-the-simple-probe-at-a-lower-model-tier][traits: retry the %simple probe at a lower model tier]]
   - [[#herdr-orch-fix-incompatible-withincompatibilities-doc-code-mismatch-in-contractmd-and-traitsmd][herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md]]
 - [[#fixes][Fixes]]
-  - [[#ot-create---local-crashes-the-create-local-flag-shadows-the-global---local-path-option][ot create --local crashes: the create :local flag shadows the global --local path option]]
-  - [[#ot-create-coerces---body-values-numeric-text-and-dash-led-single-lines-are-not-kept-verbatim][ot create coerces --body values: numeric text and dash-led single lines are not kept verbatim]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
   - [[#pi-clojure-bump-its-own-pi-coding-agent-dev-pin-from-08010-and-make-testsh-runnable][pi-clojure: bump its own pi-coding-agent dev pin from 0.80.10 and make test.sh runnable]]
@@ -46,7 +41,6 @@
   - [[#validate-skillsbb-rejects-a-relative---python-path][validate-skills.bb rejects a relative --python path]]
   - [[#hand-composed-edit-hazards-instruction-rule-additions][Hand-composed edit hazards: instruction rule additions]]
   - [[#herdr-orch-a-failed-spawn-round-is-permanent-ledger-residue][herdr-orch: a failed spawn round is permanent ledger residue]]
-  - [[#reconcile-ot-status-ancestor-promotion-with-assignments-that-keep-the-parent-task-open][Reconcile ot status ancestor promotion with assignments that keep the parent task open]]
   - [[#guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][Guard against a parallel tool batch that writes and reads the same path]]
   - [[#herdr-orch-oh-task-start-fails-with-agent_pane_busy-when-started-right-after-another-spawn][herdr-orch: oh task start fails with agent_pane_busy when started right after another spawn]]
   - [[#org-plan-check-that-a-change-records-identifiers-resolve][org-plan: check that a change-record's identifiers resolve]]
@@ -311,97 +305,6 @@ Evidence:
 - `glab schedule create --cron "0 6 * * *" --description "..." --ref develop --output json` -> `Unknown flag: --output.`
 - `glab schedule list --output json` succeeded and returned valid JSON in the same session.
 
-** STARTED ot CLI surface consistency :skill_org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: 76553bc5-a6ef-4b26-8948-f9869cdd5b12
-:CREATED: [2026-08-27 Thu 14:22]
-:STARTED: [2026-09-21 Mon 13:31]
-:END:
-:LOGBOOK:
-- Created [2026-08-27 Thu 14:22]
-- State "STARTED" from "TODO" [2026-09-21 Mon 13:31]
-:END:
-Two measured cases where an `ot` command rejects or silently drops input that its own documentation implies is accepted. Both are argument-resolution defects in the command layer rather than protocol defects, so they share a fix site and a test shape.
-
-Grouped 2026-08-27.
-*** TODO org-tasks: ot blocker add silently ignores extra positional refs
-:PROPERTIES:
-:CUSTOM_ID: 9a29de9d-d385-4c26-9720-339fc4437fc3
-:CREATED: [2026-08-19 Wed 11:39]
-:END:
-:LOGBOOK:
-- Created [2026-08-19 Wed 11:39]
-:END:
-`ot blocker add <id> <token>` maps exactly two positionals (`:args->opts [:id :token]` in `skills/org-tasks/scripts/src/org_tasks/commands/registry.clj`, the `["blocker" "add"]` entry) and performs no arity check. A call that passes several refs adds only the first and exits 0, so the extra refs are lost silently.
-
-Measured in a contained scratch project: `ot blocker add A task:B task:C task:D` exited 0 and left one blocker on A. A single-ref control call added its blocker correctly.
-
-`ot blocker remove` shares the same `[:id :token]` shape and needs the same check.
-
-The `org-tasks` SKILL.md quick reference writes `ot blocker list|add|remove <id> [...]`, which reads as multi-ref. `ot blocker add --help` correctly documents the singular `<token>`.
-
-Fix direction: reject extra positionals with an `argument-error`, matching how `ot tag` reports a missing positional. Decide separately whether multi-ref should be supported rather than rejected.
-
-Out of scope: a dangling or malformed ref is supported protocol state, handled by `ot blocker prune` and the `ot doctor` dangling-blocker finding. Do not add ref-format validation as part of this task.
-
-Reported by a planner subagent during task 477fc686; verified against source and by behavioural probe before capture.
-
-Two adjacent defects on the same command, measured in a scratch project: `ot blocker add A task:B` run twice stores the ref twice, so the blocker list carries a duplicate; and a multi-ref call with `--format json` prints `Added blocker: task:...` instead of a JSON envelope, so a machine caller cannot parse what happened. Fix these with the arity check rather than separately.
-*** DONE [#A] org-tasks: ot create --parent cannot target a change-record plan task :skill:org_tasks:
-CLOSED: [2026-09-21 Mon 14:00]
-:PROPERTIES:
-:CUSTOM_ID: 009c6056-684a-43c8-b1d7-21ea939d7396
-:CREATED: [2026-08-08 Sat 00:14]
-:STARTED: [2026-09-21 Mon 13:50]
-:END:
-:LOGBOOK:
-- Created [2026-08-08 Sat 00:14]
-- State "DONE" from "TODO" [2026-09-21 Mon 13:31]
-- State "STARTED" from "DONE" [2026-09-21 Mon 13:50]
-- State "DONE" from "STARTED" [2026-09-21 Mon 14:00]
-:END:
-`ot create --parent <id>` does not resolve tasks that live inside an `#+IMPORT:`-linked change-record, though `ot show`, `ot status`, and the other mutators do.
-
-Measured: `ot create "probe child" --parent 6eb0f653 --format json` returns `{"code": "unknown-task", "message": "Parent task not found: 6eb0f653", "details": {"reason": "parent-not-found"}}`, while `ot show 6eb0f653` and `ot status 6eb0f653 DONE` both resolve the same id inside `design/log/2026-08-07-herdr-orch-flexible-lifecycle-append-onl.org`.
-
-Consequence: `--parent` cannot create a plan child under an imported record, but `--tasks <record> --section Plan` is an alternative placement route. A 2026-08-14 dry-run against `design/log/2026-08-14-review-and-consolidate-gitlab-configurat.org` returned that record path and section `Plan`; it does not establish the non-dry-run write behaviour. [[file:skills/org-plan/SKILL.md]] section 'Plan task metadata and status' should direct agents to the verified record-targeted form rather than implying that `--parent` works there.
-
-Two candidate resolutions, needing a judgement this task should make rather than assume:
-- Extend `create --parent` (and `--after`) to resolve imported plan files, matching the mutator set documented in [[file:skills/org-tasks/SKILL.md]] section 'Compatibility policy'. This is the consistent option but widens which file `create` may write.
-- Keep `create --parent` scoped to `TASKS.org` deliberately and document `ot create --tasks <record> --section Plan` as the canonical route for a new top-level plan task in an existing change-record; test its non-dry-run behaviour before relying on it.
-
-Raised as a `PROCESS` candidate by a planner subagent during the herdr-orch stream-model work; the parent probed it and found the CLI inconsistency above. Expanded 2026-08-14 after another planner candidate established the record-targeted dry-run path.
-
-*RESOLVED* [2026-09-21 Mon] =create --parent= and =create --after= resolve full IDs or unique prefixes across imports and write to the anchor's source file. Duplicate-linked-issue checks retain both task roots and their imports. The two imported-anchor tests fail against the previous implementation; the unknown-ID test is a passing safety control, not new behaviour.
-
-Additional reports came from `design/log/2026-08-13-move-to-on-demand-gitlab-runners-on-aws.org` and `design/log/2026-08-13-migrate-docker-host-from-amazon-linux-1.org`. Both plans needed hand-authored `* Plan` tasks after attempts to route creation through the linked record failed. Treat these reports as supporting evidence, not as a substitute for the measured case above.
-
-Origin:
-- cwd: /Users/cormacc/dotfiles/agents
-- git: cormacc/dotagents @ main
-- sender: agent
-
-*** TODO Reconcile ot status ancestor promotion with assignments that keep the parent task open :skill:org_tasks:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 5e075164-70b2-42a9-877f-67c1dd51a338
-:CREATED: [2026-10-07 Wed 11:00]
-:END:
-:LOGBOOK:
-- Created [2026-10-07 Wed 11:00]
-:END:
-`ot status <child> STARTED` promotes a TODO ancestor to STARTED, as the org-tasks skill documents. A delegated assignment that forbids parent status changes, so that the parent stays open for independent closeout, conflicts with that promotion. The worker must then revert the task file after each transition (`git checkout`), and `ot doctor` reports `stale-parent-status`. Decide one: (a) an `ot status` option that does not promote ancestors, or (b) herdr-orch guidance that a parent-status restriction in an assignment covers closure only (DONE/CANCELLED, record status), so auto-promotion to STARTED is allowed.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: products/connect/portal @ dispatch-opts-refactor
-- timestamp: [2026-10-07 Wed 10:59]
-- sender: agent
-
-Evidence:
-The parent agent's worker assignment said "Do not change the parent task 7d1c5b77 status". Its intent was to keep closure (a Class C action) with the parent. A claude-opus-5-5 worker started 6 plan tasks in an imported change-record; each `ot status ... STARTED` promoted the parent, and the worker reverted TASKS.org with git each time. Worker process note, task 5ec8c5bd.
-
-Decision [2026-10-20 Tue]: option (a), an `ot status` option that does not promote ancestors. Verified at e67e868: `ot status --help` lists only `--cycle` and `--include-content`, so the option does not exist yet. Once it lands, add herdr-orch delegation guidance that a worker under a parent-status restriction uses it, and update the org-tasks skill line that documents auto-promotion.
-
 ** TODO [#B] herdr-orch: child context modes :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: f8f0d6bb-b571-4802-b1cc-d27d5c2fd30d
@@ -411,7 +314,6 @@ Decision [2026-10-20 Tue]: option (a), an `ot status` option that does not promo
 - Created [2026-10-20 Tue 12:24]
 :END:
 Aggregate for spawn shapes that differ in how much context a child receives: fork (inherits the parent session), persona (current default), persona-less (assignment plus injected guidance only), and measurement (sample and instruction only, no launcher wrap). Design them together so the option surface (derived from help signatures since bc9c38e) gains one coherent axis rather than one flag per shape. Create a change-record (ot record create) before implementation; the child tasks carry the evidence gathered so far. Workflows (orchestrator-owned multi-stage delegation) is the final phase and may resolve to a skill or prompt only, since subagent re-use already maps to oh task continue.
-
 *** TODO [#B] herdr-orch: allow persona-less subagents :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: bf34e806-3505-4280-9ce0-85602a0c6bd0
@@ -450,7 +352,6 @@ Two verified =pi= facts any implementation must respect, both of which cost a ro
 *EDIT* [2026-08-27 Thu] The gap itself re-confirmed: no =--persona-file= and no inline persona flag exist anywhere under =scripts/src/= (control: 93 =persona= matches in =cli.clj=). The reasoning above is not re-verified, and its snapshot is stale -- =6a89b0f= (2026-08-12) precedes =4741d59= and 20 further commits to =cli.clj=/=herdr.clj=, among them =d757aa7= "give same-kind model inheritance a producer", which is exactly the =resolve-model= tier this task cites as its motivation, and =bc9c38e=, which now derives accepted options from the help signatures and therefore changes how a new flag is added. Re-read =resolve-model= and the option surface before designing; the packaged personas' =model:= declarations also need re-counting rather than restating the seven-of-seven figure.
 
 *EDIT* [2026-10-20 Tue] Re-checked at e67e868. Partly overtaken: =base-analyst= (read-only, =traits: [read-only, simple]=) plus the repeatable =--trait NAME= spawn option now cover a throwaway read-only delegation without a new definition file. Still open: no =--persona-file= or inline persona flag; all 9 packaged personas (=skills/herdr-orch/subagents/=) declare =model:= and the home layer (=subagents/=) holds only =config.edn=, so the same-kind inheritance tier still never fires for a shipped persona; the measurement-mode shape is untouched. Narrow the design to those three gaps. Now a child of the child-context-modes aggregate f8f0d6bb.
-
 *** TODO [#B] Consider leveraging pi /fork for subagents
 :PROPERTIES:
 :CUSTOM_ID: 84653126-cd7e-412a-9761-d43eaad7f97f
@@ -465,7 +366,6 @@ This should be straightforward using pi. Maybe also using claude/codex? Investig
 
 See this subagent implementation makes good use of fork -- includes a 'defaultContext' metadata item in the header.
 https://github.com/Neuron-Mr-White/UniPi/blob/main/packages/subagents/agents
-
 *** TODO Extend herdr-orch to support workflows
 :PROPERTIES:
 :CUSTOM_ID: 45adb239-2987-4a69-b06c-1d5feb1f8071
@@ -487,7 +387,6 @@ Look at https://github.com/osolmaz/pi-workflows for prior art / inspiration
 - Created [2026-10-20 Tue 12:25]
 :END:
 Aggregate for outstanding trait probe work under the admission bar in skills/herdr-orch/references/traits.md: synthetic, non-decaying probes for the surviving flat fragments, and further attempts at fragments whose recorded probes did not discriminate. Probe records live in the repository user layer at traits/<name>/gate.md; the runner is scripts/run-trait-gate.bb.
-
 *** TODO [#B] traits: re-probe every fragment against synthetic, non-decaying scenarios
 :PROPERTIES:
 :CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
@@ -511,7 +410,6 @@ Acceptance criteria:
 - Redundancy is triaged before wording: =AGENTS.md= loads in every pi session and already carries directives adjacent to =%no-bullshit= (claims stated only when measured or attributed; an empty result is not evidence of absence; a guard only ever seen pass is unverified). A fragment that shows no marginal effect over that baseline is a deletion candidate, not a rewording candidate -- =%challenge= was removed on exactly that reasoning.
 - Where a probe cannot be made to discriminate, say so and say why, rather than reporting an unexplained negative or quietly dropping the fragment.
 Must not: weaken a recorded condition to make a run agree; reuse a repo-referential subject; treat a passing probe as a precondition for the fragment staying in the store.
-
 *** TODO [#C] traits: retry the %simple probe at a lower model tier :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 2bb48d42-b67f-4ba3-8ed1-1190a1ff333d
@@ -525,25 +423,6 @@ Path corrected [2026-10-20 Tue]: the probe record is the repository user-layer f
 traits/simple/gate.md records two %simple probe runs at gpt-5.6-terra (matching base-analyst's read-only tier) against a low-temptation two-flag CLI task; both runs were non-discriminating (treated and control converged on the same minimal shape). Not retried at a lower tier within [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]]'s probe budget. Retry at a lower tier (or a higher-temptation scenario) and record the outcome in the same gate.md, per the honest-attempt admission bar in skills/herdr-orch/references/traits.md.
 
 * Fixes
-** TODO ot create --local crashes: the create :local flag shadows the global --local path option :ot:
-:PROPERTIES:
-:CUSTOM_ID: d32327d0-2313-4382-8768-6a6b2e142c27
-:CREATED: [2026-10-01 Thu 20:17]
-:END:
-:LOGBOOK:
-- Created [2026-10-01 Thu 20:17]
-:END:
-`ot create --local` crashes with `IllegalArgumentException: No implementation of method: :as-file ... java.lang.Boolean` (reproduced 2026-10-01 on a scratch root). Per the 2026-10-01 re-check review (`.tmp/review-postfix.md.out.md`), the create command spec `:local` boolean shadows the global `--local <path>` option when `cli.clj` merges `registry/global-spec` with the command spec, and `root.clj` then treats the boolean as a path. Impact: `insertTaskIntoFile` (pi/extensions/tasks/insert.ts) passes `--local` for `TASKS.local.org`, so `jira_clone` with `file: TASKS.local.org` fails.
-
-** TODO ot create coerces --body values: numeric text and dash-led single lines are not kept verbatim :ot:
-:PROPERTIES:
-:CUSTOM_ID: 3a21a2b5-17c3-488b-8be3-dfca16428b86
-:CREATED: [2026-10-01 Thu 20:17]
-:END:
-:LOGBOOK:
-- Created [2026-10-01 Thu 20:17]
-:END:
-`ot create` coerces `--body` values as data instead of keeping them as text (reproduced 2026-10-01 on a scratch root): `--body=1e3` is stored as `1000.0`, and the separate-argument form `--body "- item"` stores `true` (a multi-line value fails with `argument-error`). `--body=<text>` keeps a leading dash, which `insertTaskIntoFile` and the org-jira manual Clone step now rely on. Expected: `--body` is always a string, verbatim.
 
 ** TODO herdr-orch: failed-spawn hygiene :skill:herdr_orch:
 :PROPERTIES:
@@ -554,7 +433,6 @@ traits/simple/gate.md records two %simple probe runs at gpt-5.6-terra (matching 
 - Created [2026-10-20 Tue 12:25]
 :END:
 Aggregate for residue left by a spawn that fails before its agent starts, plus small herdr-orch doc corrections. The two field reports (a22509e2, 435c5d86) share one trigger: agent_pane_busy on back-to-back oh task start. Verified 2026-10-20 at e67e868: safe-cleanup! in cli.clj marks the entry failed and closes the pane, but does not remove a managed checkout or its orch/<id> branch; contract.md section Retention states ledger entries are never deleted, so filtering failed entries from routine listings is the likely fix rather than a retire verb. contract.md section Start and prompt outcomes bans a local start retry (4741d59), so agent_pane_busy needs a repro on the installed Herdr (0.9.5) and either an upstream report or an explicit reversal of that decision.
-
 *** TODO herdr-orch: a failed spawn round is permanent ledger residue :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: a22509e2-bc51-45ae-a5a3-736753f68f48
@@ -575,7 +453,6 @@ Origin:
 
 Evidence:
 Observed while spawning two reviewers: the first `oh task start reviewer --model claude-fable` failed with herdr `agent_pane_busy` (target pane not an available shell), creating round 51610531-d59c-44eb-af90-3ef5d104ac9f with status `failed`. A retry succeeded. `oh task prune 51610531-...` then refused as above, and no other verb retires the entry. Related but distinct from 08fba41e (no-publication rounds), which close --abandon now covers.
-
 *** TODO herdr-orch: oh task start fails with agent_pane_busy when started right after another spawn :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 435c5d86-d35f-43d8-a94c-d7c9419a29ed
@@ -594,7 +471,6 @@ Origin:
 
 Evidence:
 - 2026-10-13: `oh task start worker` run twice in one shell command; the first succeeded, the second returned exit 1 with `agent_pane_busy` for pane `w2:p41`, round status `failed`, worktree `.tmp/herdr-orch/worktrees/<id>` at the base commit. `oh task close` then refused ("assignment is not captured"), and `close --abandon` refused ("already terminal"). A retry 8 s after a later start succeeded.
-
 *** TODO [#C] herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 6d9ebbbf-5bcf-4798-bea7-70ba5c5cb590
@@ -604,7 +480,6 @@ Evidence:
 - Created [2026-09-22 Tue 13:09]
 :END:
 skills/herdr-orch/references/traits.md claims \`incompatible-with:\` enforcement is documented/implemented in skills/herdr-orch/scripts/docs/contract.md, and contract.md's Trait composition section claims herdr-orch.traits/interpolate returns "incompatibility declarations by trait in :incompatibilities". Neither is true: traits.clj's interpolate returns only :text, :resolved, :unknowns and :repeats (no :incompatibilities key), and no \`incompatible-with:\` frontmatter parsing or enforcement exists anywhere in traits.clj or cli.clj. Identified but deliberately left unfixed during [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]] ("Correct the documentation rather than assume a conflict engine exists. This plan does not add a generic semantic conflict solver.") Correct both docs to match the actual implementation (or implement the feature, if still wanted).
-
 *** TODO herdr-orch: guidance or a verb for retiring integrated orch/* branches :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: a84f503e-d621-42fc-ae96-7c0e3c0dd7d9

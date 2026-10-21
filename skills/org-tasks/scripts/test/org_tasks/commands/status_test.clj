@@ -6,6 +6,40 @@
             [org-tasks.parser :as parser]
             [org-tasks.styling :as styling]))
 
+(deftest status-no-promote-keeps-todo-ancestors
+  (doseq [transition [["STARTED"] ["--cycle" "forward"]]
+          dry-run? [false true]
+          no-promote? [false true]]
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-parent-child-graph! root)
+        (let [path (str (fs/path root "TASKS.org"))
+              raw (slurp path)
+              canonical (parser/serialize-tasks-preserving-file raw (:tasks (parser/parse-tasks raw)))
+              _ (spit path canonical)
+              before (slurp path)
+              argv (concat ["status" "aaaa2222-2222-4333-8444-555555555552"] transition
+                           (when no-promote? ["--no-promote"])
+                           (when dry-run? ["--dry-run"]))
+              {:keys [out exit]} (apply run-cli! "--root" root "--format" "json" argv)
+              r (parse-json-result out)]
+          (is (zero? exit))
+          (is (= "STARTED" (:status r)))
+          (is (= #{:task :prevStatus :status :closed :started :promoted} (set (keys r))))
+          (is (= (if no-promote? [] ["aaaa1111-2222-4333-8444-555555555551"])
+                 (mapv :id (:promoted r))))
+          (if dry-run?
+            (is (= before (slurp path)))
+            (do
+              (is (str/includes? (slurp path) "*** STARTED Child A1"))
+              (is (str/includes? (slurp path) (if no-promote? "** TODO Parent A" "** STARTED Parent A"))))))))))
+
+(deftest status-help-lists-no-promote
+  (let [{:keys [out exit]} (run-cli! "status" "--root" ".tmp" "--help")]
+    (is (zero? exit))
+    (is (str/includes? out "--no-promote"))
+    (is (not (str/includes? out "--no-promote <")))))
+
 (deftest status-cycles-with-logbook
   (with-temp-dir
     (fn [root]

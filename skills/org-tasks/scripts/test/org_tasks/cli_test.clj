@@ -8,6 +8,7 @@
   (:require [babashka.fs :as fs]
             [cheshire.core :as json]
             [clojure.string :as str]
+            [clojure.edn :as edn]
             [clojure.test :refer [deftest is testing]]
             [org-tasks.cli :as cli]
             [org-tasks.commands.registry :as registry]
@@ -47,6 +48,158 @@
     {:out  (str out)
      :err  (str err)
      :exit (or @exit 0)}))
+
+(deftest surplus-arguments-rejected-before-handlers
+  (let [calls (atom [])
+        entries (mapv #(assoc % :fn (fn [result] (swap! calls conj result))) registry/commands)]
+    (with-redefs [registry/commands entries]
+      (doseq [{:keys [cmds args->opts]} entries]
+        (testing (str cmds)
+          (reset! calls [])
+          (let [argv (into ["--root" ".tmp" "--format" "json"]
+                           (concat cmds (repeat (count args->opts) "value") ["surplus"]))
+                {:keys [err exit]} (capture #(apply cli/-main argv))
+                envelope (json/parse-string err true)]
+            (is (= 2 exit))
+            (is (false? (:ok envelope)))
+            (is (= "argument-error" (get-in envelope [:error :code])))
+            (is (str/includes? (or (get-in envelope [:error :message]) "") "surplus"))
+            (is (empty? @calls)))
+          (let [argv (into ["--root" ".tmp"]
+                           (concat cmds (repeat (count args->opts) "value") ["--dry-run"]))]
+            (is (zero? (:exit (capture #(apply cli/-main argv)))))
+            (is (= 1 (count @calls)))
+            (is (true? (get-in (first @calls) [:opts :dry-run])))))))))
+
+(deftest mixed-mapped-and-raw-positionals-rejected-before-handlers
+  (let [calls (atom [])
+        entries (mapv #(assoc % :fn (fn [result] (swap! calls conj result))) registry/commands)]
+    (with-redefs [registry/commands entries]
+      (doseq [{:keys [cmds args->opts]} entries
+              :when (> (count args->opts) 1)]
+        (testing (str cmds)
+          (reset! calls [])
+          (let [argv (into ["--root" ".tmp" "--format" "json"]
+                           (concat cmds ["mapped" "--" "UNUSED"]))
+                {:keys [err exit]} (capture #(apply cli/-main argv))
+                envelope (json/parse-string err true)]
+            (is (= 2 exit))
+            (is (false? (:ok envelope)))
+            (is (= "argument-error" (get-in envelope [:error :code])))
+            (is (str/includes? (get-in envelope [:error :message]) "UNUSED"))
+            (is (empty? @calls)))
+          (let [argv (into ["--root" ".tmp"]
+                           (concat cmds ["--"] (repeat (count args->opts) "raw")))]
+            (is (zero? (:exit (capture #(apply cli/-main argv)))))
+            (is (= 1 (count @calls)))))))))
+
+(deftest surplus-status-does-not-write
+  (fs/create-dirs ".tmp")
+  (let [dir (str (fs/create-temp-dir {:dir ".tmp" :prefix "ot-surplus"}))
+        id "11111111-1111-4111-8111-111111111111"
+        files (mapv #(str (fs/path dir %)) ["TASKS.org" "TASKS.local.org" "TASKS.archive.org"])]
+    (try
+      (doseq [file files]
+        (spit file (if (= file (first files))
+                     (str "* TODO Target\n:PROPERTIES:\n:CUSTOM_ID: " id "\n:END:\n")
+                     "#+TITLE: Tasks\n")))
+      (let [before (mapv slurp files)]
+        (doseq [fmt ["json" "edn" nil]
+                command [["status" id "DONE" "extra" "--dry-run" "--format" "json"]
+                         ["status" id "--cycle" "forward" "--" "extra"]
+                         ["priority" id "--clear" "--" "extra"]]]
+          (let [argv (into ["--root" dir]
+                           (concat (when fmt ["--format" fmt]) command))
+                {:keys [err exit]} (capture #(apply cli/-main argv))]
+            (is (= 2 exit))
+            (if fmt
+              (let [envelope (if (= fmt "json") (json/parse-string err true) (edn/read-string err))]
+                (is (false? (:ok envelope)))
+                (is (= "argument-error" (get-in envelope [:error :code]))))
+              (is (str/starts-with? err "ot: argument-error:")))
+            (is (str/includes? err "extra"))
+            (is (= before (mapv slurp files)))))
+        (let [{:keys [out exit]} (capture #(apply cli/-main ["--root" dir "--format" "json"
+                                                          "status" id "DONE" "--dry-run"]))]
+          (is (zero? exit))
+          (is (true? (:ok (json/parse-string out true))))
+          (is (= before (mapv slurp files)))))
+      (finally (fs/delete-tree dir)))))
+
+(deftest selected-command-rejects-foreign-options
+  (doseq [argv [["list" "--local" "custom.org"]
+                ["--local" "custom.org" "list"]
+                ["list" "--local"]
+                ["list" "custom.org" "--local"]
+                ["list" "--body=text"]
+                ["--body=text" "list"]]]
+    (let [{:keys [err exit]} (capture #(apply cli/-main (into ["--root" ".tmp" "--format" "json"] argv)))
+          envelope (json/parse-string err true)]
+      (is (= 2 exit) (str argv))
+      (is (false? (:ok envelope)))
+      (is (= "argument-error" (get-in envelope [:error :code])))))
+  (is (not (contains? registry/global-spec :local)))
+  (let [{:keys [out exit]} (capture #(cli/-main "--help"))]
+    (is (zero? exit))
+    (is (not (str/includes? out "--local")))))
+
+(deftest registry-text-defaults-and-explicit-types
+  (doseq [{:keys [args->opts spec] :as entry} registry/commands]
+    (let [effective ((ns-resolve 'org-tasks.commands.registry 'effective-spec) entry)]
+      (doseq [k args->opts]
+        (is (= (get-in (merge registry/global-spec spec) [k :coerce] :string)
+               (get registry/dispatch-coerce k)) (str (:cmds entry) " " k)))
+      (doseq [[k option] effective]
+        (is (= (get-in (merge registry/global-spec spec) [k :coerce] :string)
+               (:coerce option)) (str (:cmds entry) " " k)))))
+  (let [calls (atom [])]
+    (with-redefs [registry/commands (mapv #(assoc % :fn (fn [result] (swap! calls conj result)))
+                                        registry/commands)]
+      (doseq [[cmd positionals option expected]
+              [["create" ["1e3"] ["--body" "1e3"] {:summary "1e3" :body "1e3"}]
+               ["list" [] ["--levels" "2"] {:levels 2}]
+               ["scan" [] ["--scope" "active"] {:scope :active}]
+               ["create" ["text"] ["--tag" "one" "--tag" "two"] {:tag ["one" "two"]}]
+               ["create" ["text"] ["--local"] {:local true}]]
+              before? [true false]]
+        (let [argv (into ["--root" ".tmp"]
+                         (if before? (concat option [cmd] positionals)
+                             (concat [cmd] positionals option)))
+              {:keys [exit]} (capture #(apply cli/-main argv))]
+          (is (zero? exit) (str argv))
+          (is (= expected (select-keys (:opts (last @calls)) (keys expected))) (str argv)))))))
+
+(deftest registry-aliases-normalise-before-dispatch
+  (is (= {:y :yes :h :help :S :status-filter :l :levels}
+         registry/dispatch-aliases))
+  (let [calls (atom [])
+        list-entry (some #(when (= ["list"] (:cmds %)) %) registry/commands)]
+    (with-redefs [registry/commands [(assoc list-entry :fn #(swap! calls conj %))]]
+      (doseq [[option expected] [[["-l" "1"] {:levels 1}]
+                                 [["-S" "TODO"] {:status-filter ["TODO"]}]
+                                 [["-y"] {:yes true}]]
+              before? [true false]]
+        (reset! calls [])
+        (let [argv (into ["--root" ".tmp"]
+                         (if before?
+                           (concat option ["list"])
+                           (concat ["list"] option)))
+              {:keys [exit]} (capture #(apply cli/-main argv))]
+          (is (zero? exit) (str argv))
+          (is (= expected
+                 (select-keys (:opts (first @calls)) (keys expected)))
+              (str argv)))))))
+
+(deftest delimiter-summary-remains-accepted
+  (let [calls (atom [])
+        create (some #(when (= ["create"] (:cmds %)) %) registry/commands)]
+    (with-redefs [registry/commands [(assoc create :fn #(swap! calls conj %))]]
+      (doseq [summary ["- summary" "1e3"]]
+        (let [{:keys [exit]} (capture #(apply cli/-main ["--root" ".tmp" "create" "--dry-run"
+                                                       "--body=text" "--" summary]))]
+          (is (zero? exit))
+          (is (= [summary] (:args (last @calls))))
+          (is (true? (get-in (last @calls) [:opts :dry-run]))))))))
 
 (deftest help-flag-shows-summary
   (testing "ot --help prints the command summary and exits 0"

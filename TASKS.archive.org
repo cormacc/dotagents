@@ -3818,3 +3818,20 @@ Execution 2026-10-19 (uncommitted):
 - Verified: the `simple` hash line matches `git show v5.3.2:skills/ponytail/SKILL.md | sha256sum`; `skills/herdr-orch/scripts/oh task run worker --print-prompt` composes the new `simple` text and the new Report wording, and an unknown `--trait` exits 1 (control); `scripts/validate-skills.bb` 0 gating failures; `bb test` exit 0 (663 tests, 0 failures in the main suite); `scripts/check-section-links.bb` reports the same 3 problems in a clean HEAD worktree (pre-existing, in the TOC and `skills/herdr-orch/design.org`).
 - Not checked: no trait-gate probe of the re-adapted `simple` (unprobed, as `gate.md` records). `ot doctor` `spec-untouched`/`spec-stale` for `skills/herdr-orch/scripts/docs/contract.md` is intended: the contract's `adapted-from` semantics are unchanged.
 - Open: `skills/herdr-orch/references/traits.md` still says `%simple` recorded two non-discriminating runs; `gate.md` records four. Pre-existing; not changed here.
+
+** DONE ot CLI surface consistency :skill_org_tasks:
+CLOSED: [2026-10-21 Wed 00:42]
+:PROPERTIES:
+:CUSTOM_ID: 76553bc5-a6ef-4b26-8948-f9869cdd5b12
+:CREATED: [2026-08-27 Thu 14:22]
+:STARTED: [2026-09-21 Mon 13:31]
+:ARCHIVED: [2026-10-21 Wed 00:42]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-08-27 Thu 14:22]
+- State "STARTED" from "TODO" [2026-09-21 Mon 13:31]
+- State "DONE" from "STARTED" [2026-10-21 Wed 00:42]
+:END:
+#+IMPORT: [[plan:2026-10-20-ot-cli-surface-consistency.org]]
+Reject surplus and unused raw arguments before mutation, preserve registry text inputs, restore boolean `create --local`, add `status --no-promote`, and make repeated blocker/issue additions no-write operations. Completed scope and retained limits are in the linked record.

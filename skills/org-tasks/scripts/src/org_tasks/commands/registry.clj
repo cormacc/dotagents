@@ -48,8 +48,6 @@
                      (enum-opt "format" [:text :json :edn]))
    :tasks     {:desc "Override path to TASKS.org"
                :ref  "<path>"}
-   :local     {:desc "Override path to TASKS.local.org"
-               :ref  "<path>"}
    :archive   {:desc "Override path to TASKS.archive.org"
                :ref  "<path>"}
    :dry-run   {:desc "Print proposed changes without writing"
@@ -136,7 +134,8 @@
                     :ref  "<n>" :coerce :long :default 500}})
 
 (def ^:private status-spec
-  {:cycle (merge {:desc "Cycle relative to the current status instead of setting it: forward | back"
+  {:no-promote {:desc "Leave ancestor statuses unchanged" :coerce :boolean}
+   :cycle (merge {:desc "Cycle relative to the current status instead of setting it: forward | back"
                   :ref "<dir>"}
                  (enum-opt "cycle" [:forward :back]))})
 
@@ -315,34 +314,33 @@
     :spec {}
     :summary ["" "Alias of 'spec list'"]}])
 
+(defn effective-spec
+  "Return a command's global and local options with string defaults.
+  Explicit coercions, including repeatable and boolean types, take precedence."
+  [{:keys [spec]}]
+  (into {} (map (fn [[k option]] [k (merge {:coerce :string} option)]))
+        (merge global-spec spec)))
+
 (def dispatch-coerce
-  "Top-level :coerce passed to `babashka.cli/dispatch`, derived from
-  `global-spec` plus every command spec.
+  "Aggregate coercions for options before command names and mapped positionals.
+  Text inputs default to strings; explicit registry types take precedence.
+  Positional defaults do not add synthetic options to command help."
+  (let [specs (apply merge global-spec (map :spec commands))
+        defaults (zipmap (concat (mapcat :args->opts commands) (keys specs))
+                         (repeat :string))
+        explicit (into {} (keep (fn [[k option]]
+                                 (when (contains? option :coerce)
+                                   [k (:coerce option)])))
+                       specs)]
+    (merge defaults explicit)))
 
-  Required because `dispatch` parses options that *precede* the subcommand
-  before it has resolved which entry to run, so no entry `:spec` is in scope
-  for them and only this top-level map applies. `ot --format json show <id>`
-  therefore yields the string \"json\" without the aggregate entry, while
-  `ot show <id> --format json` is coerced to `:json` by the entry spec alone.
-  Duplicating every command's coercions here keeps both orders equivalent.
-
-  Positional id mappings use this aggregate entry without adding a synthetic
-  `--id` option to their per-command help; `:id :string` also stops an
-  all-digit or scientific-notation-shaped `:CUSTOM_ID:` prefix being
-  number-coerced.
-
-  Measured identical across org.babashka/cli 0.7.53, 0.8.61, 0.11.73, 0.12.75
-  and 0.12.85 (bb v1.13.219, 2026-08-08): this is stable library behaviour,
-  not a version-specific workaround. Dropping the aggregation fails ~111
-  tests with `No matching clause: json`."
-  (let [spec-coerce (into {}
-                          (keep (fn [[k spec]]
-                                  (when (contains? spec :coerce)
-                                    [k (:coerce spec)])))
-                          (apply merge global-spec (map :spec commands)))
-        positional-id? (some #(some #{:id} (:args->opts %)) commands)]
-    (cond-> spec-coerce
-      positional-id? (assoc :id :string))))
+(def dispatch-aliases
+  "Aggregate short option aliases for options before command names."
+  (into {}
+        (keep (fn [[k option]]
+                (when-let [alias (:alias option)]
+                  [alias k])))
+        (apply merge global-spec (map :spec commands))))
 
 (def tui-command-fns
   "Keyword → handler map for TUI-exposed commands (entries with a

@@ -48,7 +48,9 @@ This document pins the JSON / EDN contract every machine-readable `ot` command e
 - `message` is a single-line human-readable summary.
 - `file` and `line` are populated when locatable; otherwise `null`.
 - `details` may carry command-specific extra context.
-- The process exit code is `0` on success and `1` on failure.
+- The process exit code is `0` on success, `1` on domain failure, and `2` on argument or option parse failure.
+- Registry positional arguments and value-taking options default to strings, so text such as `1e3` is preserved. Explicit boolean, numeric, enum, and repeatable coercions take precedence, both before and after command names. A dash-led body must use `--body=<text>`; the separate-argument form remains unsupported.
+- Surplus positional arguments fail with `argument-error` before the selected command handler runs. The message echoes the surplus tokens. The error uses an already-parsed `--format json|edn`; options after surplus input are not parsed or recovered.
 
 #### `conflict`
 
@@ -236,7 +238,7 @@ Cross-file moves are refused: locality changes belong to `publish` / `unpublish`
 }
 ```
 
-`promoted` lists ancestor auto-promotions performed by the same call. ID-accepting mutators resolve targets across the full loaded graph, including tasks in `TASKS.org`, `TASKS.local.org`, and `#+IMPORT:`-linked plan/change-record files. For linked plan targets, writes persist to the task's own `sourcePath`; ancestor auto-promotion may also update the importing TASKS file. Errors: `unknown-task`, `invalid-status`, `validation`.
+`promoted` lists ancestor auto-promotions performed by the same call. The boolean `--no-promote` leaves ancestor statuses unchanged and returns `promoted: []`, for both explicit transitions and `--cycle forward|back`. Default TODO-ancestor promotion on STARTED is unchanged. Dry-run never writes. Doctor can still report `stale-parent-status` after an intentional opt-out. ID-accepting mutators resolve targets across the full loaded graph, including tasks in `TASKS.org`, `TASKS.local.org`, and `#+IMPORT:`-linked plan/change-record files. For linked plan targets, writes persist to the task's own `sourcePath`; ancestor auto-promotion may also update the importing TASKS file. Errors: `unknown-task`, `invalid-status`, `validation`.
 
 ### `ot priority <id> [<level>]`
 
@@ -439,6 +441,10 @@ Errors: `out-of-root`, `unreadable`. Not-found is a non-error result with `"foun
 }
 ```
 
+### `ot issue add|remove <id> <token>` / `ot blocker add|remove <id> <token>`
+
+Each call accepts one token. Issue mutations return `{taskId, tokens}` (raw token strings); blocker mutations return `{taskId, blockers}` (the blocker objects shown below). Adding an existing normalised stored token succeeds with exit 0 and the unchanged result shape/list, without saving the owning file. Text output says `already present`. Existing historical duplicates are not removed, and equivalent reference spellings are not resolved. Removing an absent token remains a successful no-op.
+
 ### `ot blocker prune [--yes]`
 
 ```json
@@ -513,6 +519,8 @@ Options: `--count <n>` (default `1`, must be positive). Text output is one UUID 
 
 ## Global options
 
+The CLI has no global `--local <path>` override. `create --local` is a boolean selector for `<root>/TASKS.local.org`; internal protocol-path maps still carry a `local` path. Options are checked against the selected command's specification, so `list --local` fails with `argument-error` and exit 2. `--tasks` and `--archive` remain path overrides.
+
 All commands accept:
 
 | Flag             | Default                                                 | Notes                                              |
@@ -520,7 +528,6 @@ All commands accept:
 | `--root <dir>`   | nearest `TASKS.org` ancestor, else cwd                  | Anchors all relative paths; explicit value wins.   |
 | `--format <fmt>` | `text` for TTY, `json` for non-TTY (configurable)       | `text`, `json`, `edn`.                             |
 | `--tasks <path>` | `<root>/TASKS.org`                                      |                                                    |
-| `--local <path>` | `<root>/TASKS.local.org`                                |                                                    |
 | `--archive <path>` | `<root>/TASKS.archive.org`                            |                                                    |
 | `--dry-run`      | false                                                   | Mutation commands print the proposed result without writing. |
 | `--yes`, `-y`    | false                                                   | Skips confirmation prompts on destructive commands. |

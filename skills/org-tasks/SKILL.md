@@ -62,8 +62,10 @@ ot scan --scope all --max-body-chars 500 --format json
 ot record path <id>
 ot record create <id>
 ot record create <id> --mode retrospective
-ot issue list|add|remove|urls <id> [...]
-ot blocker list|add|remove <id> [...]
+ot issue list|urls <id>
+ot issue add|remove <id> <token>
+ot blocker list <id>
+ot blocker add|remove <id> <token>
 ot blocker prune --dry-run  # remove dangling task blockers only with --yes
 ot ready <id>
 ot handoff get <id>
@@ -112,7 +114,7 @@ The TUI needs no harness integration -- it is the interactive surface for humans
 - Use `WAITING` with `:BLOCKED-BY:` for blocked work. `:BLOCKED-BY:` is also valid on `TODO` to express prerequisites without forcing `WAITING`.
 - Use `CANCELLED` for intentionally abandoned work.
 - Reopening from `DONE`/`CANCELLED` clears current `CLOSED:` but preserves historical LOGBOOK entries.
-- When child plan work advances, parent status should remain meaningful. `ot status` auto-promotes TODO ancestors when a child starts.
+- When child plan work advances, parent status should remain meaningful. `ot status` auto-promotes TODO ancestors when a child starts. Use `ot status <id> STARTED --no-promote` or `ot status <id> --cycle forward --no-promote` when an assignment requires ancestor statuses to remain unchanged. The opt-out returns `promoted: []`; doctor can still report `stale-parent-status`.
 - Before closing a top-level task, refresh/prune the linked change-record per [../org-plan/SKILL.md#Closure-time refresh and prune](../org-plan/SKILL.md#closure-time-refresh-and-prune).
 
 ## Change-records

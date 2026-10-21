@@ -1,6 +1,8 @@
 (ns org-tasks.commands.links-test
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
+            [clojure.edn :as edn]
+            [cheshire.core :as json]
             [clojure.test :refer [deftest is testing]]
             [org-tasks.commands.test-util :refer :all]
             [org-tasks.loader :as loader]
@@ -8,6 +10,18 @@
             [org-tasks.styling :as styling]))
 
 ;; ── handoff ───────────────────────────────────────────
+
+(deftest handoff-preserves-numeric-looking-text
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [id "11111111-2222-4333-8444-555555555551"
+            {:keys [out exit]} (run-cli! "--root" root "--format" "json" "handoff" "set" id "1e3")
+            shown (run-cli! "--root" root "--format" "json" "handoff" "get" id)]
+        (is (zero? exit))
+        (is (= {:taskId id :handoff "1e3"} (parse-json-result out)))
+        (is (zero? (:exit shown)))
+        (is (= "1e3" (:handoff (parse-json-result (:out shown)))))))))
 
 (deftest handoff-set-get-clear
   (with-temp-dir
@@ -39,6 +53,85 @@
                    r))
             (is (not (str/includes? (slurp (str (fs/path root "TASKS.org")))
                                     ":HANDOFF:")))))))))
+
+(deftest duplicate-property-adds-succeed-without-saving
+  (doseq [[family token] [["blocker" "review needed"] ["issue" "[[jira:ABC-1][issue one]]"]]
+          id [linked-plan-parent-id linked-plan-child-id "dddddddd-4444-4444-8444-dddddddddddd"]]
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-linked-plan-graph! root)
+        (spit (str (fs/path root "TASKS.local.org"))
+              (str "#+SELECTED:\n\n* Drafts\n** TODO Local\n:PROPERTIES:\n:CUSTOM_ID: "
+                   "dddddddd-4444-4444-8444-dddddddddddd\n:END:\n"))
+        (let [files (mapv #(str (fs/path root %))
+                          ["TASKS.org" "TASKS.local.org" "design/log/linked-plan.org"])
+              saves (atom 0)
+              save! loader/save-source-roots-locality]
+          (with-redefs [loader/save-source-roots-locality
+                        (fn [& args] (swap! saves inc) (apply save! args))]
+            (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" family "add" id token)
+                  original (json/parse-string out true)
+                  before (mapv slurp files)]
+              (is (zero? exit))
+              (is (true? (:ok original)))
+              (is (pos? @saves) "positive control: a new token saves")
+              (when (= family "issue")
+                (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "issue" "list" id)
+                      issues (:issues (parse-json-result out))]
+                  (is (zero? exit))
+                  (is (= [{:rawToken token :label "issue one"}]
+                         (mapv #(select-keys % [:rawToken :label]) issues))
+                      "positive control: described link stays one complete token")))
+              (reset! saves 0)
+              (doseq [fmt ["json" "edn" "text"]
+                      dry-run? [false true]]
+                (let [{:keys [out exit]} (apply run-cli! "--root" root "--format" fmt
+                                                family "add" id token (when dry-run? ["--dry-run"]))]
+                  (is (zero? exit))
+                  (if (= fmt "text")
+                    (is (str/includes? out "already present"))
+                    (let [envelope (if (= fmt "json") (json/parse-string out true) (edn/read-string out))]
+                      (is (true? (:ok envelope)))
+                      (is (= (:result original) (:result envelope)))))
+                  (is (= before (mapv slurp files)))
+                  (is (zero? @saves) "duplicate add does not call the saver"))))))))))
+
+(deftest duplicate-add-keeps-historical-duplicates-and-distinct-spellings
+  (doseq [[family property token] [["blocker" "BLOCKED-BY" "task:other"]
+                                   ["issue" "LINKED_ISSUES" "[[jira:ABC-1]]"]]]
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-graph! root)
+        (let [id "11111111-2222-4333-8444-555555555551"
+              path (str (fs/path root "TASKS.org"))
+              content (str/replace-first (slurp path) ":END:" (str ":" property ": " token
+                              (if (= family "blocker") "\n:BLOCKED-BY+: " " ") token "\n:END:"))]
+          (spit path content)
+          (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" family "add" id token)
+                r (parse-json-result out)]
+            (is (zero? exit))
+            (is (= 2 (count (or (:tokens r) (:blockers r)))))
+            (is (= content (slurp path))))))))
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [id "11111111-2222-4333-8444-555555555551"
+            dep "22229999-2222-4333-8444-555555555552"]
+        (run-cli! "--root" root "--format" "json" "blocker" "add" id dep)
+        (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "blocker" "add" id (str "task:" dep))]
+          (is (zero? exit))
+          (is (= [dep (str "task:" dep)] (mapv :raw (:blockers (parse-json-result out))))))))))
+
+(deftest blocker-remove-absent-token-remains-successful
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [id "11111111-2222-4333-8444-555555555551"]
+        (run-cli! "--root" root "--format" "json" "blocker" "add" id "human: review")
+        (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "blocker" "remove" id "absent")]
+          (is (zero? exit))
+          (is (= [{:raw "human: review" :kind "human" :ref "review"}]
+                 (:blockers (parse-json-result out)))))))))
 
 ;; ── blocker + ready ────────────────────────────────────────
 

@@ -38,8 +38,9 @@
 
 (defn resolve-protocol-files
   "Return `{:tasks, :local, :archive}` absolute paths, with each entry
-  taking the matching `--tasks`/`--local`/`--archive` override when
-  provided and otherwise sitting at `<root>/TASKS{.local,.archive}.org`."
+  taking the matching internal option-map path when provided and otherwise
+  sitting at `<root>/TASKS{.local,.archive}.org`. The CLI exposes only the
+  tasks and archive path overrides; create's local selector is boolean."
   [opts root]
   {:tasks   (str (fs/absolutize (or (:tasks opts)
                                     (fs/path root "TASKS.org"))))

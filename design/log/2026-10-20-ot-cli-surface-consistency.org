@@ -1,0 +1,207 @@
+#+TITLE: ot CLI surface consistency
+#+DATE: 2026-10-20 Tue
+#+PARENT: [[archive:76553bc5-a6ef-4b26-8948-f9869cdd5b12][ot CLI surface consistency]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/org-tasks/references/ot-cli.md]]
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+
+* Intent
+Make ot reject surplus input before mutation and preserve text values instead of coercing them as data. Make repeated blocker/issue additions safe to retry, restore local task creation, and let delegated workers change their tasks without promoting ancestors.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+The registry defines accepted inputs; dispatch validates them before handlers. Babashka's parser, protocol-path representation, doctor semantics, and UI implementations remain unchanged.
+
+** Scope
+*** In scope
+- Dispatch validation and help in =skills/org-tasks/scripts/src/org_tasks/cli.clj=; derived coercions and command specifications in =skills/org-tasks/scripts/src/org_tasks/commands/registry.clj=.
+- Create locality separation in =skills/org-tasks/scripts/src/org_tasks/commands/create.clj=; duplicate addition in =skills/org-tasks/scripts/src/org_tasks/commands/links.clj=; promotion control in =skills/org-tasks/scripts/src/org_tasks/commands/status.clj=.
+- Regression tests in =skills/org-tasks/scripts/test/org_tasks/cli_test.clj= and =skills/org-tasks/scripts/test/org_tasks/commands/{create,links,status}_test.clj=; imported-source locality coverage in =skills/org-tasks/scripts/test/org_tasks/mutation_locality_test.clj= where appropriate.
+- Living contracts declared above: machine envelopes, global options, singular blocker/issue arguments, text handling, promotion policy, and delegation guidance change with their implementation.
+- Callers to preserve: =pi/extensions/tasks/insert.ts= =insertTaskIntoFile=, =pi/extensions/tasks/ot.ts= creation/status wrappers, and =skills/org-tasks/scripts/src/org_tasks/tui/dispatch.clj= direct handler calls. Existing =skills/org-jira/SKILL.md= clone instructions remain valid.
+- Existing round-trip fixtures and machine-output goldens remain validation controls. No fixture rewrite, dependency, launcher configuration, or export change is planned; any required fallout stays in the task that causes it.
+*** Out of scope
+- Multiple tokens per blocker/issue add or remove invocation; blocker reference validation; semantic equivalence of different reference spellings; cleaning up historical duplicates.
+- Repairing dash-led separate-argument body parsing; accepting options after surplus positionals; recovering a format flag after the parser stops.
+- New TUI/overlay controls, parent-status persistence properties, doctor suppression, a custom parser, or dependency upgrades.
+- Reopening DONE task =009c6056=; its migrated subtree is history.
+
+** Acceptance
+*** Core functionality
+- [X] =ot status <id> DONE extra --dry-run= exits 2 with =argument-error=.
+- [X] That surplus-argument status invocation leaves protocol files byte-identical.
+- [X] A surplus-argument error message echoes the surplus tokens.
+- [X] A registry-derived test rejects surplus positionals for each entry in =registry/commands= before its handler runs, including entries without positional arguments.
+- [X] =blocker add|remove= accepts one token; a second token is rejected before mutation.
+- [X] =issue add|remove= accepts one token; a second token is rejected before mutation.
+- [X] Repeating =ot blocker add A task:B= leaves the stored list unchanged.
+- [X] The repeated blocker add exits 0 with the existing result shape.
+- [X] Repeating =ot issue add A <token>= leaves the stored list unchanged.
+- [X] The repeated issue add exits 0 with the existing result shape.
+- [X] A duplicate add leaves the owning file byte-identical.
+- [X] Duplicate-add text output says =already present=.
+- [X] =ot status <child> STARTED --no-promote= leaves TODO ancestors TODO.
+- [X] The no-promote result contains =promoted: []=.
+- [X] The same transition without the flag still promotes TODO ancestors.
+- [X] =ot create "x" --local= inserts into TASKS.local.org.
+- [X] =ot list --local <path>= exits 2 with =argument-error=.
+- [X] =ot create 1e3= stores summary =1e3=.
+- [X] =ot create "x" --body=1e3= stores description =1e3=.
+- [X] =ot handoff set <id> 1e3= stores =1e3=.
+- [X] Every registry positional mapping defaults to string coercion unless explicitly typed.
+- [X] Every value-taking option without explicit coercion defaults to string coercion.
+- [X] The contract documents surplus errors, duplicate-add semantics, no-promote output, and removal of the global local-path option.
+- [X] The CLI reference documents the accepted argument forms.
+- [X] The org-tasks skill documents singular blocker/issue mutations.
+- [X] The org-tasks skill documents the promotion opt-out.
+- [X] The herdr-orch skill tells workers under a parent-status restriction to use =--no-promote=.
+*** Edge cases
+- [X] =ot --format json status <id> DONE extra= exits 2.
+- [X] A surplus error uses the already-parsed JSON or EDN format when it is available.
+- [X] A format option after surplus tokens is not recovered; without an earlier format option the error is text.
+- [X] =ot help= and per-command =--help= retain their existing routing.
+- [X] =ot blocker remove <id> <absent-token>= remains a successful no-op.
+- [X] =--no-promote= applies when =--cycle= resolves to STARTED.
+- [X] No-promote on an imported task leaves its ancestor's TASKS.org file byte-identical.
+- [X] Dry-run with no-promote writes no protocol file.
+- [X] =ot create "x" "--body=- item"= stores =- item=.
+- [X] The pi insertion shape, options followed by =-- <summary>=, remains accepted for numeric-looking and dash-led summaries.
+- [X] Existing explicit boolean, numeric, enum, and repeatable coercions retain their behaviour before and after command names.
+- [X] Create =--parent=, =--after=, and =--relative-to= retain anchor-source routing.
+- [X] Internal protocol-path maps retain their existing representation.
+*** Anti-criteria
+- [X] Must not: change existing success-envelope fields, except =promoted= contents under the new flag.
+- [X] Must not: validate blocker reference formats or normalise equivalent references beyond existing add normalisation.
+- [X] Must not: alter doctor finding order or wording; =stale-parent-status= remains possible after no-promote.
+- [X] Must not: change TUI or pi-overlay implementation code.
+- [X] Must not: add a dependency or upgrade org.babashka/cli.
+- [X] Must not: change existing body whitespace trimming or Org-heading escaping.
+
+** Decisions
+- Keep babashka.cli and validate at the shared dispatch boundary before a command handler runs. Reject surplus positionals with =argument-error= and exit 2, not command-specific checks. Validate options against the selected command's effective spec; mapped positional keys are not unknown flags.
+  Rejected: a custom parser, per-command arity checks, and best-effort scanning of surplus tokens for a late =--format=.
+- Keep blocker/issue add and remove singular; correct the ambiguous =[...]= quick reference. Duplicate additions are successful no-ops against the existing normalised stored token, not new errors. Skip saving on a duplicate; do not deduplicate old entries.
+  Rejected: multi-ref operations and duplicate error codes.
+- =--no-promote= is a boolean status option for explicit and cycled transitions. Default promotion stays unchanged; opt-out returns the existing empty =promoted= vector without a new field. Doctor stays unchanged.
+  Rejected: interpreting parent-status restrictions as closure-only, persistent opt-out properties, and warning suppression.
+- Remove global =--local <path>=; retain create's boolean =--local=. Separate the create selection boolean from options sent to protocol-path resolution. Keep internal path maps and create anchor precedence unchanged.
+  Rejected: renaming either flag or a dual boolean/path argument syntax.
+- Derive string defaults for positional mappings and value-taking options from registry data; explicit coercions win. Apply a consistent effective spec/coercion rule to command dispatch and pre-command options.
+  Rejected: a create-only patch and hand-written per-option string coercions.
+- Retain the documented dash-led body limit: use =--body=<text>=. Add a =known-limit:= comment where the retained parser limit is owned, naming the limit and reconsideration trigger. Numeric-looking body text is fixed; separate-argument dash-led bodies are not.
+- Preserve existing TUI/overlay behaviour without adding no-promote controls. Add herdr-orch worker guidance in this change rather than a follow-up.
+
+** Shipped
+- MODIFIED =skills/org-tasks/scripts/docs/contract.md= and =skills/org-tasks/references/ot-cli.md= define surplus/unknown-option rejection, string-preserving inputs, create-only boolean locality, no-promote, and duplicate-add no-write semantics.
+- MODIFIED =skills/org-tasks/SKILL.md= documents singular blocker/issue mutations and promotion opt-out; =skills/herdr-orch/SKILL.md= directs restricted workers to use =--no-promote=.
+
+** Gotchas
+- Raw positional fallback uses fixed indices, not compressed missing slots. A mapped key cannot free its raw index for another argument.
+- Aliases before command names need the registry's aggregate alias map as well as its coercion map.
+- Issue-token comparison uses complete parsed raw links so a description containing spaces remains one token; it does not require link-template resolution.
+- Accepted limits: late options remain unparsed after surplus input; dash-led separate-argument bodies require the equals form; doctor can warn about intentional TODO ancestors; historical duplicate entries remain.
+
+* Plan
+** DONE Reject surplus positional arguments across ot commands
+CLOSED: [2026-10-21 Wed 00:32]
+:PROPERTIES:
+:CUSTOM_ID: 9a29de9d-d385-4c26-9720-339fc4437fc3
+:CREATED: [2026-08-19 Wed 11:39]
+:STARTED: [2026-10-20 Tue 23:43]
+:END:
+:LOGBOOK:
+- Created [2026-08-19 Wed 11:39]
+- State "STARTED" from "TODO" [2026-10-20 Tue 23:43]
+- State "DONE" from "STARTED" [2026-10-20 Tue 23:45]
+- State "STARTED" from "DONE" [2026-10-21 Wed 00:31]
+- State "DONE" from "STARTED" [2026-10-21 Wed 00:32]
+:END:
+Dispatch rejects surplus and unused raw arguments before handlers, including mixed mapped/raw tails; all-raw delimiter forms remain valid.
+
+** DONE [#A] org-tasks: ot create --parent cannot target a change-record plan task :skill:org_tasks:
+CLOSED: [2026-09-21 Mon 14:00]
+:PROPERTIES:
+:CUSTOM_ID: 009c6056-684a-43c8-b1d7-21ea939d7396
+:CREATED: [2026-08-08 Sat 00:14]
+:STARTED: [2026-09-21 Mon 13:50]
+:END:
+:LOGBOOK:
+- Created [2026-08-08 Sat 00:14]
+- State "DONE" from "TODO" [2026-09-21 Mon 13:31]
+- State "STARTED" from "DONE" [2026-09-21 Mon 13:50]
+- State "DONE" from "STARTED" [2026-09-21 Mon 14:00]
+:END:
+Resolved 2026-09-21: create parent/after anchors resolve full IDs or unique prefixes across imports and write to the anchor's source file. Migrated history; not reopened by this change.
+
+** DONE Add --no-promote status control and delegation guidance :skill:org_tasks:herdr_orch:
+CLOSED: [2026-10-20 Tue 23:49]
+:PROPERTIES:
+:CUSTOM_ID: 5e075164-70b2-42a9-877f-67c1dd51a338
+:CREATED: [2026-10-07 Wed 11:00]
+:STARTED: [2026-10-20 Tue 23:48]
+:END:
+:LOGBOOK:
+- Created [2026-10-07 Wed 11:00]
+- State "STARTED" from "TODO" [2026-10-20 Tue 23:48]
+- State "DONE" from "STARTED" [2026-10-20 Tue 23:49]
+:END:
+Explicit and cycled no-promote transitions preserve TODO ancestors and imported parent bytes; delegation guidance accompanies the option.
+
+** DONE Restore create --local and remove the global local-path option :ot:
+CLOSED: [2026-10-21 Wed 00:23]
+:PROPERTIES:
+:CUSTOM_ID: d32327d0-2313-4382-8768-6a6b2e142c27
+:CREATED: [2026-10-01 Thu 20:17]
+:STARTED: [2026-10-20 Tue 23:45]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 20:17]
+- State "STARTED" from "TODO" [2026-10-20 Tue 23:45]
+- State "DONE" from "STARTED" [2026-10-20 Tue 23:47]
+- State "STARTED" from "DONE" [2026-10-21 Wed 00:19]
+- State "DONE" from "STARTED" [2026-10-21 Wed 00:23]
+:END:
+Create's boolean local selector is separate from internal path options. Selected-command validation accepts canonicalised registry aliases before and after command names.
+
+** DONE Preserve registry text arguments without implicit data coercion :ot:
+CLOSED: [2026-10-20 Tue 23:48]
+:PROPERTIES:
+:CUSTOM_ID: 3a21a2b5-17c3-488b-8be3-dfca16428b86
+:CREATED: [2026-10-01 Thu 20:17]
+:STARTED: [2026-10-20 Tue 23:47]
+:END:
+:LOGBOOK:
+- Created [2026-10-01 Thu 20:17]
+- State "STARTED" from "TODO" [2026-10-20 Tue 23:47]
+- State "DONE" from "STARTED" [2026-10-20 Tue 23:48]
+:END:
+Registry text inputs preserve numeric-looking strings; explicit coercions and delimiter summaries retain their behaviour.
+
+** DONE Make blocker and issue additions idempotent
+CLOSED: [2026-10-21 Wed 00:23]
+:PROPERTIES:
+:CUSTOM_ID: cd848d5f-a03b-45cd-a6e2-f8f408087994
+:CREATED: [2026-10-20 Tue 23:29]
+:STARTED: [2026-10-20 Tue 23:49]
+:END:
+:LOGBOOK:
+- Created [2026-10-20 Tue 23:29]
+- State "STARTED" from "TODO" [2026-10-20 Tue 23:49]
+- State "DONE" from "STARTED" [2026-10-20 Tue 23:54]
+- State "STARTED" from "DONE" [2026-10-21 Wed 00:19]
+- State "DONE" from "STARTED" [2026-10-21 Wed 00:23]
+:END:
+Duplicate blocker/issue additions bypass persistence, including complete described issue links with spaces; stored history and distinct spellings remain untouched.
+
+* Implementation
+- Create removes only boolean =:local= from context options; internal path-valued maps and anchor-source precedence remain valid.
+- Promotion control is applied at the shared explicit/cycle transition boundary.
+- Duplicate additions return the existing result projection without invoking the saver.
+
+* Validation
+- Regression witnesses against disposable =29471d7= source copies fail for surplus mutation, boolean/path locality, numeric-looking text, promotion, and duplicate writes; ordinary-input controls pass. No shared source was reverted for those checks.
+- Independent subprocess checks cover alias behaviour, complete described-link retries, and mixed raw-slot no-write failures. Their permanent tests were observed failing before the respective corrections.

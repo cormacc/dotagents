@@ -26,7 +26,7 @@
 (defn- pad [s n] (format (str "%-" n "s") s))
 
 (def ^:private global-opt-order
-  [:root :format :tasks :local :archive :dry-run :yes :no-color :help])
+  [:root :format :tasks :archive :dry-run :yes :no-color :help])
 
 (defn- format-help []
   (let [cmd-w  (apply max (map (comp count first)  command-summary))
@@ -92,16 +92,44 @@
 
 ;; ── Dispatch table ────────────────────────────────────────────────
 
-(def ^:private dispatch-table
+(defn- validate-options! [opts spec args->opts]
+  (let [allowed (into (set (keys spec)) args->opts)
+        unknown (remove allowed (keys opts))]
+    (when (seq unknown)
+      (out/emit-error opts
+                      {:code "argument-error"
+                       :message (str "Unknown options: "
+                                     (str/join " " (map #(str "--" (name %)) unknown)))}
+                      2))))
+
+(defn- dispatch-table []
   (conj
-   (mapv (fn [{:keys [cmds spec args->opts] :as entry}]
+   (mapv (fn [{:keys [cmds args->opts] :as entry}]
            (cond-> {:cmds cmds
-                    :fn   (:fn entry)
-                    :spec (merge registry/global-spec spec)}
+                    :fn   (fn [{:keys [opts args] :as result}]
+                            (validate-options! opts (registry/effective-spec entry) args->opts)
+                            ;; Raw fallback keeps fixed indices; mapped keys do not
+                            ;; shift later arguments into an earlier raw slot.
+                            (let [surplus (keep-indexed
+                                            (fn [index arg]
+                                              (let [k (nth args->opts index nil)]
+                                                (when (or (nil? k) (contains? opts k))
+                                                  arg)))
+                                            args)]
+                              (when (seq surplus)
+                                (out/emit-error opts
+                                                {:code "argument-error"
+                                                 :message (str "Unexpected arguments: "
+                                                               (str/join " " surplus))}
+                                                2))
+                              ((:fn entry) result)))
+                    :spec (registry/effective-spec entry)}
              args->opts (assoc :args->opts args->opts)))
          registry/commands)
    ;; Catch-all → top-level help. Must be last.
-   {:cmds [] :fn help-cmd}))
+   {:cmds [] :fn (fn [{:keys [opts] :as result}]
+                   (validate-options! opts registry/global-spec nil)
+                   (help-cmd result))}))
 
 ;; ── Error handling ────────────────────────────────────────────────
 
@@ -139,6 +167,9 @@
         (tui-tasks/selected-json! {:format :json}))
 
       :else
-      (cli/dispatch dispatch-table args
+      ;; known-limit: dash-led separate option values are parsed as flags; use
+      ;; --body=<text>. Revisit if the parser supports literal separate values.
+      (cli/dispatch (dispatch-table) args
                     {:error-fn cli-error-fn
-                     :coerce   registry/dispatch-coerce}))))
+                     :coerce   registry/dispatch-coerce
+                     :alias    registry/dispatch-aliases}))))

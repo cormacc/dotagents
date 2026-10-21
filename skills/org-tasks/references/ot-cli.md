@@ -55,6 +55,8 @@ ot move <id> --parent <dest-id>            # reparent an existing subtree (last 
 ot move <id> --section Improvements        # lift an existing subtree back to top level
 ot status <id> STARTED
 ot status <id> --cycle forward   # or: --cycle back (order owned by ot)
+ot status <id> STARTED --no-promote  # leave ancestor statuses unchanged
+ot status <id> --cycle forward --no-promote
 ot priority <id> B               # set the priority cookie (A|B|C|D)
 ot priority <id> --cycle forward # unset → A → B → C → D → unset; back reverses (unset → D)
 ot priority <id> --clear
@@ -73,8 +75,10 @@ ot scan --scope all --max-body-chars 500 --format json
 ot record path <id>
 ot record create <id>
 ot record create <id> --mode retrospective
-ot issue list|add|remove|urls <id> [...]
-ot blocker list|add|remove <id> [...]
+ot issue list|urls <id>
+ot issue add|remove <id> <token>
+ot blocker list <id>
+ot blocker add|remove <id> <token>
 ot blocker prune --dry-run  # actual pruning requires --yes
 ot tag add|remove <id> <tag>
 ot ready <id>
@@ -82,9 +86,15 @@ ot handoff get|set|clear <id> [...]
 ot uuid --count 3
 ```
 
+Surplus positional arguments fail with `argument-error` and exit 2 before the command runs. Blocker and issue add/remove each take one token. Options can precede the command or follow its expected positionals, but options after surplus input are not parsed: put `--root` and `--format` before that input. Errors use an already-parsed format, or text if no format was parsed. Options followed by `-- <summary>` remain valid for create, including dash-led summaries.
+
 ## Task bodies from `ot create`
 
-`--body` text loses its leading and trailing blank lines. A body line that would parse as an Org heading (stars at column 0, then whitespace) is indented by one space, so a markdown `* item` bullet from another tracker becomes a list item instead of a new heading. Pass a body that can start with `-` as `--body=<text>`: the separate-argument form `--body "- item"` is read as options, so a multi-line value fails with `argument-error` and a single-line value is stored as `true`.
+`--body` text loses its leading and trailing blank lines. A body line that would parse as an Org heading (stars at column 0, then whitespace) is indented by one space, so a markdown `* item` bullet from another tracker becomes a list item instead of a new heading. Pass a body that can start with `-` as `--body=<text>`: the separate-argument form `--body "- item"` is read as options and remains unsupported. Registry text inputs preserve numeric-looking strings: `ot create 1e3`, `ot create "x" --body=1e3`, and `ot handoff set <id> 1e3` keep `1e3` as text. Explicit boolean, numeric, enum, and repeatable option types are unchanged.
+
+## Status transitions
+
+A STARTED status transition promotes TODO ancestors by default. Pass boolean `--no-promote` with an explicit status or `--cycle` to keep ancestors unchanged; the result contains `promoted: []`. Imported tasks still write to their own file, without touching the importing TASKS.org. `--dry-run` writes nothing. Doctor can still report `stale-parent-status` for an intentional TODO ancestor.
 
 ## Editing existing task tags
 
@@ -102,6 +112,10 @@ Tags are ASCII letters, digits, and underscores (`[A-Za-z0-9_]+`). Surrounding w
 The subtree's source lines move verbatim apart from heading stars, so `:CUSTOM_ID:`, `:CREATED:` / `:STARTED:`, `CLOSED:`, `:LOGBOOK:`, `#+IMPORT:`, unknown drawer properties, bodies, descendant order, and intra-subtree blank lines all survive byte-for-byte, and the rest of the file is left untouched. `:CUSTOM_ID:` never changes, so `#+IMPORT:` links and a change-record's `#+PARENT: [[task:<uuid>]]` keep resolving. Use it to group existing tasks under a new parent instead of hand-editing org.
 
 `move` is in-file only. Locality changes belong to `ot publish` / `ot unpublish` and the archive to `ot archive` / `ot unarchive`, so a destination in another file is refused rather than silently creating a second writable node for a UUID. It also refuses an archived source, a destination that is the task itself or one of its descendants, an unknown `--section`, and supplying both or neither destination. `--dry-run` runs every preflight and reports the proposed move without writing.
+
+## Blocker and issue mutations
+
+Blocker and issue add/remove are singular: pass one token per call. Repeating an add for the existing normalised stored token succeeds without saving or changing the token list; text output says `already present` and JSON/EDN result shapes are unchanged. Historical duplicates remain, and different reference spellings are not resolved as equivalent. Removing an absent token remains a successful no-op.
 
 ## Removing a task subtree and pruning blockers
 
@@ -153,7 +167,7 @@ Exit contract: the TUI reserves stdout for a final org-tasks/v1 selected-task en
 
 The in-tree, directory-symlink, and bare-skill launchers preserve the caller's working directory. A relative `--root` therefore resolves from that caller directory in every launcher form.
 
-`ot root` prints the resolved absolute project root on one line. Only `--root` changes that value: `--tasks`, `--local`, and `--archive` override protocol file paths exposed by `ot list`, not project-root resolution.
+`ot root` prints the resolved absolute project root on one line. Only `--root` changes that value: `--tasks <path>` and `--archive <path>` override protocol file paths exposed by `ot list`, not project-root resolution. There is no global `--local <path>` override. `ot create "New task" --local` selects `<root>/TASKS.local.org`; parent/after/relative-to anchors still determine the owning file. An option not accepted by the selected command, such as `ot list --local`, fails with `argument-error` and exit 2.
 
 `ot list --format json` returns both the resolved `root` and absolute protocol `files`:
 

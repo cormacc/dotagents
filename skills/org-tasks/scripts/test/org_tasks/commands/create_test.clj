@@ -3,6 +3,8 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [org-tasks.commands.test-util :refer :all]
+            [org-tasks.commands.create :as create]
+            [org-tasks.root :as root]
             [org-tasks.parser :as parser]
             [org-tasks.styling :as styling]))
 
@@ -26,6 +28,75 @@
         (is (str/includes? content ":CREATED:"))
         (is (str/includes? content ":LOGBOOK:"))
         (is (str/includes? content "- Created "))))))
+
+(deftest create-local-separates-selector-from-paths
+  (doseq [placement [[] ["--parent" linked-plan-child-id]
+                     ["--after" linked-plan-child-id]
+                     ["--relative-to" linked-plan-child-id "--as" "child"]]]
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-linked-plan-graph! root)
+        (spit (str (fs/path root "TASKS.local.org")) "* Improvements\n")
+        (let [shared (str (fs/path root "TASKS.org"))
+              local (str (fs/path root "TASKS.local.org"))
+              before (slurp shared)
+              {:keys [out exit]} (apply run-cli! "--root" root "--format" "json"
+                                       "create" "Local task" "--local" placement)
+              result (parse-json-result out)]
+          (is (zero? exit))
+          (is (= (if (seq placement) (str (fs/path root "design/log/linked-plan.org")) local)
+                 (:file result)))
+          (is (= before (slurp shared)))
+          (is (str/includes? (slurp (:file result)) "TODO Local task")))))))
+
+(deftest create-local-direct-handler-and-pi-shapes
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-graph! root)
+      (let [local (str (fs/path root "TASKS.local.org"))]
+        (spit local "* Improvements\n")
+        (doseq [invoke [(fn [] (run-cli! "--root" root "--format" "json" "create"
+                                         "--local" "--body=text" "--" "- pi summary"))
+                        (fn [] (capture #(create/create-cmd
+                                            {:opts {:root root :format :json :local true
+                                                     :summary "Direct summary"}})))]]
+          (let [{:keys [out exit]} (invoke)]
+            (is (zero? exit))
+            (is (= local (:file (parse-json-result out))))))
+        (is (str/includes? (slurp local) "TODO - pi summary"))
+        (is (str/includes? (slurp local) "TODO Direct summary"))))))
+
+(deftest protocol-path-maps-retain-overrides
+  (with-temp-dir
+    (fn [dir]
+      (let [opts (into {} (map (fn [k] [k (str (fs/path dir (str (name k) ".org")))])
+                               [:tasks :local :archive]))]
+        (is (= opts (root/resolve-protocol-files opts dir)))
+        (let [{:keys [out exit]} (run-cli! "--root" dir "--format" "json" "list"
+                                          "--tasks" (:tasks opts) "--archive" (:archive opts))
+              files (:files (parse-json-result out))]
+          (is (zero? exit))
+          (is (= (:tasks opts) (:tasks files)))
+          (is (= (:archive opts) (:archive files)))
+          (is (= (str (fs/path dir "TASKS.local.org")) (:local files))))))))
+
+(deftest create-preserves-numeric-looking-text
+  (doseq [summary ["1e3" "- summary"]
+          delimiter? [true false]
+          :when (or delimiter? (= summary "1e3"))]
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-graph! root)
+        (let [argv (if delimiter? ["create" "--body=1e3" "--" summary]
+                       ["create" summary "--body=1e3"])
+              {:keys [out exit]} (apply run-cli! "--root" root "--format" "json" argv)
+              id (:id (parse-json-result out))
+              shown (run-cli! "--root" root "--format" "json" "show" id)
+              task (:task (parse-json-result (:out shown)))]
+          (is (zero? exit))
+          (is (zero? (:exit shown)))
+          (is (= summary (:summary task)))
+          (is (= "1e3" (:description task))))))))
 
 (deftest create-empty-summary-errors
   (with-temp-dir

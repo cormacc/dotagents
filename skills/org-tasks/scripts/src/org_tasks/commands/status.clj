@@ -34,7 +34,8 @@
 
 (defn- apply-status-cmd
   "Apply a resolved status transition to `target` and emit the envelope.
-  Shared by explicit `ot status <id> <new-status>` and `--cycle`."
+  Shared by explicit `ot status <id> <new-status>` and `--cycle`.
+  `:no-promote` leaves ancestors unchanged and returns an empty promoted vector."
   [opts tasks target status]
   (let [full-id (parser/get-task-id target)
         {updated :task :keys [prev-status timestamp]}
@@ -43,7 +44,7 @@
         ;; Parent auto-promotion: when a subtask goes STARTED, walk
         ;; ancestors and promote any TODO ancestor to STARTED.
         [tree-final promotions]
-        (if (= status "STARTED")
+        (if (and (= status "STARTED") (not (:no-promote opts)))
           (let [path (find-path-to-id tree-after full-id)
                 ancestors (vec (butlast path))]
             (reduce

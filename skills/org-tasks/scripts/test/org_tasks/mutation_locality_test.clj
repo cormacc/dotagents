@@ -3,7 +3,8 @@
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [org-tasks.commands.test-util :refer [parse-json-result run-cli! with-temp-dir]]
+            [org-tasks.commands.test-util :refer [parse-json-result run-cli! with-temp-dir
+                                                  bootstrap-linked-plan-graph! linked-plan-child-id]]
             [org-tasks.loader :as loader]
             [org-tasks.parser :as parser]
             [org-tasks.tree :as tree]))
@@ -62,6 +63,35 @@
   (let [{:keys [out exit]} (apply run-cli! "--root" root "--format" "json" args)]
     (is (zero? exit))
     (parse-json-result out)))
+
+(deftest no-promote-imported-status-leaves-parent-file-byte-identical
+  (doseq [transition [["STARTED"] ["--cycle" "forward"]]
+          dry-run? [false true]]
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-linked-plan-graph! root)
+        (let [files (mapv #(str (fs/path root %))
+                          ["TASKS.org" "TASKS.local.org" "TASKS.setup.org" "design/log/linked-plan.org"])
+              before (mapv slurp files)
+              parent (first before)
+              parsed (:tasks (parser/parse-tasks parent))]
+          (is (= parent (parser/serialize-tasks-preserving-file parent parsed))
+              "positive control: canonical parent spacing round-trips")
+          (let [r (apply mutate! root "status" linked-plan-child-id
+                         (concat transition ["--no-promote"] (when dry-run? ["--dry-run"])))]
+            (is (= "STARTED" (:status r)))
+            (is (= [] (:promoted r)))
+            (is (= (vec (butlast before)) (mapv slurp (butlast files))))
+            (if dry-run?
+              (is (= before (mapv slurp files)))
+              (do
+                (is (str/includes? (slurp (last files)) "** STARTED Plan child"))
+                (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "doctor")
+                      findings (:findings (parse-json-result out))]
+                  (is (zero? exit))
+                  (is (some #(and (= "stale-parent-status" (:code %))
+                                  (str/includes? (:message %) "TODO")) findings)
+                      "doctor still reports the intentional stale parent"))))))))))
 
 (deftest status-transition-inserts-closed-before-existing-drawers
   (with-temp-dir

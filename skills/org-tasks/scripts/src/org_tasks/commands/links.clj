@@ -37,10 +37,7 @@
   (parser/parse-link-templates (or (:effective-source-content task)
                                    (:source-content task) "")))
 (defn- existing-issue-tokens [task]
-  (vec (filter seq
-               (or (some-> (parser/get-drawer-property task "LINKED_ISSUES")
-                           (str/split #"\s+"))
-                   []))))
+  (mapv :raw-token (parser/get-linked-issues task {})))
 (def ^:private property-commands
   {:handoff {:list-key :handoff
              :list-fn parser/get-task-handoff
@@ -101,15 +98,18 @@
       (let [target (resolve-required-id (:tasks ctx) id opts)
             full-id (parser/get-task-id target)
             token' (if (= op :add) ((:normalise cfg identity) token) token)
-            [updated _] (mutate-task-and-save-locality
-                          (assoc ctx :dry-run? (:dry-run opts))
-                          full-id
-                          (fn [t]
-                            (let [existing ((:tokens-fn cfg) t)
-                                  next (if (= op :add)
-                                         (conj existing token')
-                                         (filterv #(not= % token) existing))]
-                              ((:set-fn cfg) t next))))
+            existing ((:tokens-fn cfg) target)
+            duplicate? (and (= op :add) (some #{token'} existing))
+            updated (if duplicate?
+                      target
+                      (first (mutate-task-and-save-locality
+                               (assoc ctx :dry-run? (:dry-run opts))
+                               full-id
+                               (fn [t]
+                                 ((:set-fn cfg) t
+                                  (if (= op :add)
+                                    (conj existing token')
+                                    (filterv #(not= % token) existing)))))))
             values ((:tokens-fn cfg) updated)]
         (out/emit-result opts
                          {:taskId full-id
@@ -117,7 +117,9 @@
                           (if (= prop :blocker)
                             (mapv blocker->wire (parser/get-task-blockers updated))
                             values)
-                          :text/lines [((cfg (if (= op :add) :add-line :remove-line)) token')]})))))
+                          :text/lines [(if duplicate?
+                                         (str "Token already present: " token')
+                                         ((cfg (if (= op :add) :add-line :remove-line)) token'))]})))))
 (defn handoff-get-cmd [result] (list-property-cmd :handoff result))
 (defn handoff-set-cmd [{:keys [opts] :as result}]
   (let [ctx (load-context opts)
