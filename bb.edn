@@ -51,7 +51,8 @@
                     ["scripts/test-analyse-anthropic-cache-ttl.bb"]
                     ["scripts/test-check-section-links.bb"]
                     ["skills/doc-writing/scripts/test-unwrap.bb"]
-                    ["skills/doc-writing/scripts/test-check-diagrams.bb"]]))}
+                    ["skills/doc-writing/scripts/test-check-diagrams.bb"]
+                    ["skills/logic-pro/scripts/test-logic_extract_midi.bb"]]))}
 
   ;; Batch Emacs runs every `#+CALL:` in the README; the file's `:eval no` default keeps
   ;; every other block inert. A visiting Emacs holds a `.#README.org` lock (a dangling
