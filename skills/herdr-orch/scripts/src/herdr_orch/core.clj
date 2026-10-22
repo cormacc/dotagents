@@ -340,6 +340,24 @@
     "pi" ["--append-system-prompt" path]
     "claude" ["--append-system-prompt-file" path]
     []))
+;; The rule a fork applies, reported by preview and recorded in provenance. The adapter
+;; (scripts/pi/fork-adapter.ts BOUNDARY_RULE) states the same text; a test keeps them equal.
+(def fork-boundary-rule
+  "Branch before the first message after the caller's last completed assistant response, so the current turn and its launching tool batch stay outside the child")
+;; Display and index token for a launch that has no role. It is never a roster lookup key and
+;; never an authority: a roster persona may legitimately carry the same name.
+(def anonymous-persona "anonymous")
+(defn sha256 [^String text]
+  (let [digest (.digest (java.security.MessageDigest/getInstance "SHA-256") (.getBytes text "UTF-8"))]
+    (apply str (map #(format "%02x" (bit-and % 0xff)) digest))))
+;; Immutable launch-time copy of a named role's effective text. A fork without an overlay
+;; reapplies this snapshot rather than rereading an editable definition.
+(defn role-snapshot [persona text]
+  {:persona persona :text text :sha256 (sha256 text)})
+;; Ledger entries written before context modes carry no context fields; they are fresh
+;; interactive delegation.
+(defn entry-context [entry] (or (:context entry) "fresh"))
+(defn entry-execution [entry] (or (:execution entry) "interactive"))
 (defn root-label [persona index model]
   (str persona "-" index (when-let [m (model-basename model)] (str "-" m))))
 (defn nested-prefix [parent-label parent-persona]

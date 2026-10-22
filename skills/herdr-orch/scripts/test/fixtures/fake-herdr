@@ -224,7 +224,7 @@ case "${1:-}" in
         # push gates at publish time; their defaults keep the historical shape exactly.
         # FAKE_PARENT_AGENT is the harness Herdr reports for the caller, which is the tier
         # a child inherits its kind from when its definition declares none.
-        if [ "${3:-}" = w:p ]; then printf '{"result":{"agent":{"agent":"%s","pane_id":"w:p","agent_session":{"value":"%s"},"agent_status":"%s"}}}\n' "${FAKE_PARENT_AGENT:-pi}" "${FAKE_PARENT_SESSION:-session}" "${FAKE_PARENT_STATUS:-idle}"; else
+        if [ "${3:-}" = w:p ]; then printf '{"result":{"agent":{"agent":"%s","pane_id":"w:p","agent_session":{"kind":"%s","value":"%s"},"agent_status":"%s"}}}\n' "${FAKE_PARENT_AGENT:-pi}" "${FAKE_PARENT_SESSION_KIND:-path}" "${FAKE_PARENT_SESSION:-session}" "${FAKE_PARENT_STATUS:-idle}"; else
           # A `gone` marker models a vanished child: `agent get` fails as it does when
           # Herdr no longer knows the agent name.
           if [ -f "$(state_dir)/children/${3:-}/gone" ]; then
@@ -257,6 +257,12 @@ case "${1:-}" in
               printf '{"agent":"pi","name":"%s","agent_status":"%s","pane_id":"%s"}' "$name" "$(child_status "$name")" "$pane"
             fi
           done
+        fi
+        # FAKE_AGENT_LIST_SESSION lists one more agent attached to that session value, so a
+        # caller can prove a recorded owner is still attached.
+        if [ -n "${FAKE_AGENT_LIST_SESSION:-}" ]; then
+          if [ "$first" = 1 ]; then first=0; else printf ','; fi
+          printf '{"agent":"pi","name":"owner-agent","agent_status":"idle","pane_id":"w:owner","agent_session":{"kind":"path","value":"%s"}}' "$FAKE_AGENT_LIST_SESSION"
         fi
         printf ']}}\n'
         publish_queue_step ;;

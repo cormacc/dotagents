@@ -160,6 +160,9 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   ok(help.startsWith("Herdr: this pane can delegate"), "help leads with the pane's Herdr status");
   ok(help.includes("## Personas\n\n- x\n\n## Usage"), "help keeps the oh listing verbatim before the usage notes");
   ok(composeHelp("help", "", false).includes("not detected"), "help reports missing Herdr");
+  ok(/Spawn a subagent\* starts a fresh context.*fork a subagent\* inherits your completed earlier turns, not the current one/.test(help), "usage routes spawn to fresh and fork to forked context");
+  ok(/--context measurement --measurement-config PATH`: a headless Pi sample with no pane/.test(help), "usage describes headless measurement apart from its optional monitor");
+  ok(help.includes("skills/herdr-orch/references/workflow-recipes.md"), "usage links root-owned workflow recipes");
   same(composeHelp("traits", "- `a` -- b\n", true), "- `a` -- b", "a section is the oh listing alone");
 }
 

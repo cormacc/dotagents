@@ -12,7 +12,7 @@ The tools proxy Herdr control only. Persona delegation uses `oh task ...` as the
 
 ## Slash command
 
-`/oh [help|personas|traits|models]` shows the output of `oh roster --format markdown` to the user. Without an argument it shows every section, the Herdr status of the pane, the spawn defaults, and short usage notes.
+`/oh [help|personas|traits|models]` shows the output of `oh roster --format markdown` to the user. Without an argument it shows every section, the Herdr status of the pane, the spawn defaults, and short usage notes. The notes route natural language to a context: "spawn a subagent" is a fresh context, and "fork a subagent" is a forked context (`oh task run|start --context fork`). A measurement runs headless (`--context measurement`), with a read-only monitor pane only on `--tab` or `--split`.
 
 - `oh` owns the rendering. The same renderer generates the org listings in [../../../skills/herdr-orch/README.org](../../../skills/herdr-orch/README.org), so this extension adds only the Herdr status line and the usage notes (`help.ts`).
 
@@ -21,6 +21,7 @@ The tools proxy Herdr control only. Persona delegation uses `oh task ...` as the
 - RPC mode shows the detail rendering as a notification. JSON and print modes do nothing.
 - `oh roster` runs in the session cwd, so the project layer is the git root of that cwd. The listing therefore shows what a spawn would use. The `traits` extension expands a project-layer `%name` only in a trusted project, so an untrusted project's trait can appear in `/oh traits` and still not expand interactively.
 - The output contract is in [../../../skills/herdr-orch/scripts/docs/contract.md#Roster](../../../skills/herdr-orch/scripts/docs/contract.md#roster).
+- Root-owned staging, repeated measurements and the approval-gated context smoke are in [../../../skills/herdr-orch/references/workflow-recipes.md](../../../skills/herdr-orch/references/workflow-recipes.md).
 
 ## Dependencies
 

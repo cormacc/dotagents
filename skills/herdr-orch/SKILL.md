@@ -11,6 +11,7 @@ Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/skills/h
 OH="$HOME/.agents/skills/herdr-orch/scripts/oh"
 "$OH" task run scout --task 'Locate the implementation and report paths.'
 "$OH" task start reviewer --task-file assignment.md
+"$OH" task start --task 'Summarise the build failure.'   # persona-less fresh child
 "$OH" task collect <full-task-uuid> --wait --timeout 600000
 ```
 
@@ -58,6 +59,7 @@ The advisor-tier override is a convention, not a structured flag: instruct the w
 
 Choose explicitly:
 
+- **Context:** `--context fresh` is the default. A request to "spawn a subagent" means fresh context. A request to "fork a subagent" means `--context fork`: the child inherits your completed earlier turns, not the current turn that delegates (Pi callers and Pi children only; it never silently becomes a fresh child). Nothing after your last completed response is inherited, including `!` command output since then. Put the request and any findings from the current turn that the child needs in the assignment. A fork from your first turn refuses; use fresh context there. A persona named with `--context fork` replaces the role the fork would inherit. Name a roster persona for a role (`task run scout ...`), or omit the persona for a persona-less fresh child that receives the assignment, any explicit `--trait` selections, and the normal launcher guidance but no synthetic role. Absence of a persona is not authority: a persona-less child is a leaf unless the root grants `--spawns`, and below root only a named allow-listed persona may be launched. `--context measurement --measurement-config PATH` runs a Pi subject headless under a detached supervisor with only the configured treatment, tools and the literal assignment: no persona, `--trait`, `--prompt-extra`, `--retro`, `--no-retro` or `--spawns`, and no pane unless `--tab` or `--split` asks for a read-only monitor. The supervisor publishes the result, so `collect`, `collect --any` and `close` work as usual; `continue` and `poke` refuse, and execution success is not an answer-quality score. Detachment is Linux-only. Its request audit covers exactly four Pi APIs (`anthropic-messages`, `openai-completions`, `openai-responses`, `openai-codex-responses`) and any other API fails closed; fresh delegation and forks are unaffected. See [scripts/docs/contract.md#Measurement launch](scripts/docs/contract.md#measurement-launch).
 - **Waiting:** `run` blocks for one published item. `start` returns once the prompt is submitted, for later `collect`, or `collect --any` during fan-in. A wait timeout is non-final. Read its `child-status`, then collect again instead of concluding failure or respawning.
 - **Placement:** explicit `--tab` or `--split` overrides configured placement. The shipped `:tab-split` default gives a root child its own tab and splits a below-root child from its parent. See the [scripts/docs/contract.md#Placement](scripts/docs/contract.md#placement) for resolution details.
 - **Cardinality:** keep at most N root children in flight (default 2). Fan in with `collect --any --wait`, then replace each captured child as capacity opens. Below root, run one blocking leaf child at a time. Its spawner captures and closes it. Run one representative child before a fan-out that shares one design or benchmark premise.
@@ -66,6 +68,8 @@ Choose explicitly:
 - **Lifecycle:** capture closes nothing. After each capture, choose `close <full-task-uuid>` or `continue <full-task-uuid> --task '<next assignment>'`. Use `collect --close` when the close decision is already known. Whoever spawns a child closes it.
 
 Continue when the follow-up depends on the child's existing context. Respawn for unrelated work, a different persona, or independent Class C validation. The CLI owns continuation preconditions and refuses unsafe reuse. See the [scripts/docs/contract.md#Continue](scripts/docs/contract.md#continue).
+
+For root-owned staged delegation, repeated measurements, evidence retention and the separately approved live context smoke, use [references/workflow-recipes.md](references/workflow-recipes.md). The recipe is policy over existing lifecycle verbs, not a workflow engine.
 
 ## Process retrospectives
 

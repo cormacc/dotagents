@@ -3835,3 +3835,21 @@ CLOSED: [2026-10-21 Wed 00:42]
 :END:
 #+IMPORT: [[plan:2026-10-20-ot-cli-surface-consistency.org]]
 Reject surplus and unused raw arguments before mutation, preserve registry text inputs, restore boolean `create --local`, add `status --no-promote`, and make repeated blocker/issue additions no-write operations. Completed scope and retained limits are in the linked record.
+
+** DONE [#B] herdr-orch: child context modes :skill:herdr_orch:
+CLOSED: [2026-10-22 Thu 19:05]
+:PROPERTIES:
+:CUSTOM_ID: f8f0d6bb-b571-4802-b1cc-d27d5c2fd30d
+:CREATED: [2026-10-20 Tue 12:24]
+:STARTED: [2026-10-21 Wed 08:13]
+:HANDOFF: DONE 2026-10-22 after two independent closure reviews (.tmp/closure/closure-review.md, closure-recheck.md). Commit not made: awaiting owner approval of the staging plan and message in .tmp/closure/commit-plan.md. Not archived.
+:ARCHIVED: [2026-10-22 Thu 19:05]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-10-20 Tue 12:24]
+- State "STARTED" from "TODO" [2026-10-21 Wed 08:13]
+- State "DONE" from "STARTED" [2026-10-22 Thu 19:05]
+:END:
+#+IMPORT: [[plan:2026-10-21-child-context-modes.org]]
+Aggregate for spawn shapes that differ in how much context a child receives: fork (inherits the parent session), persona (current default), persona-less (assignment plus injected guidance only), and measurement (sample and instruction only, no launcher wrap). Design them together so the option surface (derived from help signatures since bc9c38e) gains one coherent axis rather than one flag per shape. Create a change-record (ot record create) before implementation; the child tasks carry the evidence gathered so far. Workflows (orchestrator-owned multi-stage delegation) is the final phase and may resolve to a skill or prompt only, since subagent re-use already maps to oh task continue.

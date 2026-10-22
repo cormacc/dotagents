@@ -1,6 +1,7 @@
 (ns herdr-orch.smoke
-  "Explicitly billable root and nested delegation smoke. Never call from tests."
+  "Explicitly billable delegation smoke. Tests must stub the entire CLI launch boundary."
   (:require [babashka.fs :as fs]
+            [cheshire.core :as json]
             [clojure.string :as str]
             [herdr-orch.core :as core]
             [herdr-orch.cli :as cli]
@@ -229,13 +230,339 @@
                                            :retro-source (:retro-source retro-entry) :process (:process retro)
                                            :child-sessions (mapv (partial session! kind) [root-entry planner-entry child-entry retro-entry])}))))))
 
-(defn -main [& _]
+;; The manifest is independent of disposable measurement checkouts. Evidence changes stay
+;; in memory before validation or cleanup so a failed flush cannot erase task identity.
+(def ^:dynamic ^:private *context-evidence* nil)
+(defn- failure-data [e]
+  {:message (.getMessage e) :data (ex-data e)})
+
+(defn- persistence-error [e]
+  {:message (.getMessage e) :class (str (class e))})
+
+(defn- flush-evidence! [state]
+  (let [path (:manifest state)
+        temp (str path ".tmp")]
+    (spit temp (core/json-envelope true state))
+    (java.nio.file.Files/move
+     (java.nio.file.Paths/get temp (make-array String 0))
+     (java.nio.file.Paths/get path (make-array String 0))
+     (into-array java.nio.file.StandardCopyOption
+                 [java.nio.file.StandardCopyOption/REPLACE_EXISTING
+                  java.nio.file.StandardCopyOption/ATOMIC_MOVE]))))
+
+(defn- evidence! [f & args]
+  (let [state (apply swap! *context-evidence* f args)]
+    (try
+      (flush-evidence! state)
+      state
+      (catch Exception e
+        (swap! *context-evidence* update :persistence-errors (fnil conj []) (persistence-error e))))))
+
+(defn- persistence-ok! []
+  (let [state @*context-evidence*]
+    (when (seq (:persistence-errors state))
+      (throw (ex-info "context smoke manifest persistence failed"
+                      {:manifest (:manifest state) :evidence state
+                       :persistence-errors (:persistence-errors state)})))))
+
+(defn- remember! [task leg fields]
+  (evidence! update-in [:tasks task] merge {:task task :leg leg} fields))
+
+(defn- terminal-capture [entry]
+  (let [state (cli/stream-state entry)]
+    (when (and (:sealed? state) (cli/stream-captured? state))
+      (last (filter #(and (:captured-at %) (:envelope %)
+                          (= (:status %) (get-in % [:envelope :status]))
+                          (core/terminal-status? (:status %)))
+                    (:captured state))))))
+
+(defn- model! [model canonical entry]
+  (when-not (and (= "pi" (:kind entry)) (= model (:model entry))
+                 (= canonical (:model-canonical entry))
+                 (= ["--model" canonical] (:model-args entry)))
+    (throw (ex-info "context smoke effective model differs from the explicit selection"
+                    {:task (:task entry) :expected model :canonical canonical
+                     :actual (select-keys entry [:kind :model :model-canonical :model-args])}))))
+
+(defn- role-snapshot! [entry persona]
+  (let [snapshot (:role-snapshot entry)]
+    (when-not (and (= persona (:persona snapshot)) (string? (:text snapshot))
+                   (= snapshot (core/role-snapshot persona (:text snapshot))))
+      (throw (ex-info "context smoke role snapshot is missing or inconsistent" {:task (:task entry) :persona persona})))))
+
+(defn- captured-complete! [entry]
+  (let [capture (terminal-capture entry)]
+    (when-not (= "COMPLETE" (:status capture))
+      (throw (ex-info "context smoke needs a captured terminal COMPLETE result"
+                      {:task (:task entry) :capture capture})))
+    (when (> (count (str (get-in capture [:envelope :summary]))) 120)
+      (throw (ex-info "context smoke summary exceeded the post-hoc 120-character check"
+                      {:task (:task entry)})))))
+
+(defn- recorded-sessions [entry]
+  (keep :value (cons (:child-session entry) (:child-session-history entry))))
+
+(defn- descendants! [bridge]
+  (loop [sources (set (recorded-sessions bridge))
+         found {}]
+    (let [children (filter #(and (contains? sources (:parent-session %))
+                                (not (contains? found (:task %)))) (ledger/entries))]
+      (if (empty? children)
+        (vec (vals found))
+        (do
+          (doseq [entry children]
+            (remember! (:task entry) "synthetic-descendant"
+                       {:entry entry :disposition (if (:closed-at entry) "closed-by-owner" "outstanding")
+                        :recovery (when-not (:closed-at entry)
+                                    "The recorded parent session owns this descendant; root close cannot bypass that ownership. Recover through that owner, or inspect the existing orphan policy only after proving the owner ended.")}))
+          (recur (into sources (mapcat recorded-sessions children))
+                 (into found (map (juxt :task identity) children))))))))
+
+(defn- dispose-context-task! [task leg measurement?]
+  (try
+    (let [entry (ledger/read! task)]
+      (remember! task leg {:entry entry})
+      (if-not (terminal-capture entry)
+        (remember! task leg {:disposition "outstanding"
+                            :recovery (str "No stop was attempted. Inspect task status " task
+                                           " and collect " task " --wait --timeout 600000 from its owning session; a wait is non-destructive. Capture terminal evidence before guarded close and checkout removal.")})
+        (try
+          ;; A manifest flush must not decide whether a terminal child receives its
+          ;; existing guarded close. These verbs retain their ownership and lifecycle
+          ;; guards; a refusal is recovery evidence, never force-close.
+          (let [closed (close! task leg)]
+            (remember! task leg {:close closed :disposition "closed"})
+            (when measurement?
+              (let [removed (cli/execute ["worktree" "remove" task])]
+                (remember! task leg {:checkout-removal removed})
+                (when-not (= "removed" (:status removed))
+                  (throw (ex-info "context smoke checkout removal was refused" {:task task :outcome removed}))))))
+          (catch Exception e
+            (remember! task leg {:disposition "recovery-required"
+                                :recovery (failure-data e)})))))
+    (catch Exception e
+      (remember! task leg {:disposition "recovery-required"
+                          :recovery (failure-data e)}))))
+
+(defn- collect-round! [leg task timeout model bridge?]
+  (let [outcome (cli/execute ["task" "collect" task "--wait" "--timeout" (str timeout)])]
+    (remember! task leg {:outcome outcome})
+    (persistence-ok!)
+    (let [entry (ledger/read! task)]
+      (remember! task leg {:entry entry})
+      (persistence-ok!)
+      (when bridge? (descendants! entry))
+      (complete! outcome)
+      (when-not (true? (:terminal? outcome))
+        (throw (ex-info "context smoke capture is not terminal" {:task task :outcome outcome})))
+      (captured-complete! entry)
+      (model! model (:canonical @*context-evidence*) entry)
+      entry)))
+
+;; A `follow-up` assignment continues the captured first round in the same child, and the
+;; newest round is the one validated and closed: `close` addresses only the newest round.
+(defn- context-task! [leg command model validate! measurement? bridge? & [follow-up]]
+  (let [canonical (:canonical @*context-evidence*)
+        preview (cli/execute (conj command "--print-prompt"))
+        _ (evidence! assoc-in [:previews leg] preview)
+        _ (persistence-ok!)
+        _ (model! model canonical preview)
+        started (cli/execute (assoc command 1 "start"))
+        first-task (:task started)
+        current (volatile! first-task)]
+    (when-not first-task (throw (ex-info "context smoke start returned no task identity" {:leg leg :outcome started})))
+    (try
+      (remember! first-task leg {:start started :disposition "outstanding"})
+      (persistence-ok!)
+      (let [entry (collect-round! leg first-task (:timeout preview) model bridge?)
+            entry (if-not follow-up
+                    entry
+                    (let [continued (cli/execute ["task" "continue" first-task "--task" follow-up])
+                          task (:task continued)]
+                      (when-not task (throw (ex-info "context smoke continue returned no task identity" {:leg leg :outcome continued})))
+                      (vreset! current task)
+                      (remember! first-task leg {:disposition "continued" :successor task})
+                      (remember! task leg {:start continued :continues first-task :disposition "outstanding"})
+                      (persistence-ok!)
+                      (collect-round! leg task (:timeout preview) model bridge?)))]
+        (validate! entry))
+      (finally
+        (when bridge?
+          (try (descendants! (ledger/read! @current))
+               (catch Exception e
+                 (remember! @current leg {:descendant-discovery-error (.getMessage e)}))))
+        (dispose-context-task! @current leg measurement?)))
+    (let [task @current
+          record (get-in @*context-evidence* [:tasks task])]
+      (when-not (= "closed" (:disposition record))
+        (throw (ex-info "context smoke task needs recovery" {:task task :record record})))
+      (persistence-ok!)
+      task)))
+
+;; A nil `persona` is the persona-less leg: it must resolve no role at all.
+(defn- completed-and-closed! [leg command model persona]
+  (context-task! leg command model
+                 (fn [entry]
+                   (when-not (= {:context "fresh" :execution "interactive"} (select-keys entry [:context :execution]))
+                     (throw (ex-info "fresh context smoke did not resolve fresh interactive execution" {:task (:task entry)})))
+                   (if persona
+                     (do (when-not (= persona (:persona entry))
+                           (throw (ex-info "fresh named smoke child resolved another persona" {:task (:task entry) :persona (:persona entry)})))
+                         (role-snapshot! entry persona))
+                     (when-not (and (true? (:role-absent entry)) (nil? (:role-snapshot entry)))
+                       (throw (ex-info "persona-less smoke child resolved a role" {:task (:task entry)})))))
+                 false false))
+
+;; The fork child's own first user message after the adapter's marker is its launch prompt.
+;; The forks are synthetic sessions, so the root may read them.
+(def ^:private fork-marker "herdr-orch-fork") ; FORK_MARKER in scripts/pi/fork-adapter.ts
+(defn- fork-assignment [fork]
+  (let [entries (->> (str/split-lines (slurp (get-in fork [:fork :session-file])))
+                     (remove str/blank?)
+                     (map #(json/parse-string % true)))
+        content (->> entries
+                     (drop-while #(not= fork-marker (:customType %)))
+                     (filter #(= "user" (get-in % [:message :role])))
+                     first :message :content)]
+    (if (string? content) content (str/join (keep :text content)))))
+
+;; The fork's active history: the entries from its marker's parent back to the root. The
+;; file also holds the source's later entries, off this path. `:boundary` is the marker's
+;; parent entry, which must be a completed response for the history to end at a turn.
+(defn- fork-history [fork]
+  (let [entries (->> (str/split-lines (slurp (get-in fork [:fork :session-file])))
+                     (remove str/blank?)
+                     (map #(json/parse-string % true)))
+        by-id (into {} (map (juxt :id identity)) entries)
+        marker (first (filter #(= fork-marker (:customType %)) entries))
+        boundary (get by-id (:parentId marker))]
+    {:boundary boundary
+     :text (->> (iterate #(get by-id (:parentId %)) boundary)
+                (take-while some?)
+                (map #(pr-str (or (:message %) (:content %))))
+                str/join)}))
+(defn- completed-response? [entry]
+  (let [message (:message entry)]
+    (and (= "assistant" (:role message)) (= "stop" (:stopReason message))
+         (not-any? #(= "toolCall" (:type %)) (:content message)))))
+
+;; Only the synthetic bridge's recorded session can identify its descendants. The
+;; root records them even on failure but never assumes their parent's close authority.
+;; A fork inherits only completed turns, so the bridge first completes a round that holds a
+;; fresh code word, then forks in a continued round. Each fork must report that word from
+;; inherited context: both forks see the same history, and the word is absent from their
+;; assignments.
+(defn- fork-context-leg! [model]
+  (let [canonical (:canonical @*context-evidence*)
+        code (str "synthetic-inherited-" (subs (str (java.util.UUID/randomUUID)) 0 8))
+        fork-task "Publish COMPLETE with the exact summary set to the synthetic code word from the inherited conversation."
+        second-round "Synthetic fork smoke, second round."
+        ;; pr-str is not shell quoting; model IDs go through the existing shell helper.
+        quoted-model (#'cli/shell-quote model)
+        first-command (str "task run --context fork --model " quoted-model)
+        second-command (str "task run scout --context fork --model " quoted-model)]
+    (evidence! assoc :fork-code code)
+    (context-task!
+     "fork-context"
+     ["task" "run" "worker" "--context" "fresh" "--model" model "--spawns" "worker scout" "--task"
+      (str "Synthetic fork smoke, first round. Remember the synthetic code word " code " for a later round. Launch nothing in this round. Publish COMPLETE with the exact summary synthetic-bridge-ready.")]
+     model
+     (fn [entry]
+       (when-not (= {:context "fresh" :execution "interactive" :persona "worker"}
+                    (select-keys entry [:context :execution :persona]))
+         (throw (ex-info "synthetic bridge is not a fresh worker" {:task (:task entry)})))
+       (role-snapshot! entry "worker")
+       (let [source (get-in entry [:child-session :value])
+             forks (descendants! entry)]
+         (when-not (and (= "path" (get-in entry [:child-session :kind])) source)
+           (throw (ex-info "synthetic fork source has no recorded Pi session path" {:task (:task entry)})))
+         (when-not (= #{["snapshot" "worker"] ["overlay" "scout"]}
+                      (set (map #(vector (get-in % [:fork :role-source]) (:persona %)) forks)))
+           (throw (ex-info "synthetic fork smoke did not record both fork shapes" {:task (:task entry)})))
+         (when-not (= 2 (count forks))
+           (throw (ex-info "synthetic fork smoke did not record exactly two descendants" {:task (:task entry)})))
+         (doseq [fork forks]
+           (when-not (and (= "fork" (:context fork)) (= "interactive" (:execution fork))
+                          (= source (:parent-session fork)) (= source (get-in fork [:fork :source-session])))
+             (throw (ex-info "fork smoke source was not the controlled fresh session" {:task (:task fork)})))
+           (role-snapshot! fork (:persona fork))
+           (when (= "snapshot" (get-in fork [:fork :role-source]))
+             (when-not (= (:role-snapshot entry) (:role-snapshot fork))
+               (throw (ex-info "fork did not inherit the worker role snapshot" {:task (:task fork)}))))
+           (model! model canonical fork)
+           (captured-complete! fork)
+           (when-not (= code (some-> (get-in (terminal-capture fork) [:envelope :summary]) str/trim))
+             (throw (ex-info "fork did not report the inherited code word" {:task (:task fork)})))
+           (let [assignment (fork-assignment fork)]
+             (when-not (and (str/includes? assignment fork-task) (not (str/includes? assignment code)))
+               (throw (ex-info "fork assignment was not the synthetic task without the code word" {:task (:task fork)}))))
+           ;; The code word alone would also pass if the fork inherited the launching round.
+           (let [{inherited :text boundary :boundary} (fork-history fork)]
+             (when-not (and (completed-response? boundary) (str/includes? inherited code) (not (str/includes? inherited second-round)))
+               (throw (ex-info "fork history does not end at the bridge's completed first round" {:task (:task fork)}))))
+           (when-not (:closed-at fork)
+             (throw (ex-info "synthetic fork was not closed by its owner" {:task (:task fork)}))))))
+     false true
+     (str second-round " Use the injected launcher for exactly two blocking fork rounds from this Pi session: first `" first-command "` with no persona, then `" second-command "`. Before each launch, preview that same command with --print-prompt and --task '" fork-task "'; require kind pi, model " model ", model-canonical " canonical " and model-args [--model " canonical "]. Refuse a mismatch before launch. Give each child exactly that assignment text and nothing else. Capture a terminal COMPLETE and close each child before starting the next. On WAITING or pending, retain its task ID for recovery; waiting does not stop a child. Publish COMPLETE with a summary of at most 120 characters only after both closes. Do not read, report or write any non-synthetic conversation content."))))
+
+(defn- measurement-config! [dir]
+  (let [system (str (fs/path dir "system.md"))
+        config (str (fs/path dir "measurement.json"))]
+    (spit system "This is synthetic context-smoke data. Reply with exactly synthetic-context-smoke.")
+    (spit config "{\"systemPromptFile\":\"system.md\",\"tools\":[],\"hardTimeoutMs\":120000}")
+    config))
+
+(defn- measurement-context-leg! [model config monitor?]
+  (context-task!
+   (if monitor? "measurement-monitor" "measurement-headless")
+   (cond-> ["task" "run" "--context" "measurement" "--measurement-config" config "--model" model "--worktree" "new" "--task" "Reply with exactly synthetic-context-smoke."]
+     monitor? (conj "--tab"))
+   model
+   (fn [entry]
+     (when-not (and (= "measurement" (:context entry)) (= "headless" (:execution entry))
+                    (= monitor? (boolean (:monitor entry))))
+       (throw (ex-info "measurement context or monitor differed from the request" {:task (:task entry)}))))
+   true false))
+
+(defn- context-modes! [model]
+  (let [dir (str (fs/create-dirs (fs/path (ledger/result-directory) "context-smoke" (str (java.util.UUID/randomUUID)))))
+        manifest (str (fs/path dir "manifest.json"))]
+    (binding [*context-evidence* (atom {:manifest manifest :model model :tasks {}})]
+      (try
+        (evidence! assoc :state "preparing")
+        (persistence-ok!)
+        (evidence! assoc :canonical (core/canonical-model (cli/config) model))
+        (persistence-ok!)
+        (let [config (measurement-config! dir)]
+          (evidence! assoc :state "running" :measurement-config config)
+          (persistence-ok!)
+          (completed-and-closed! "fresh-named" ["task" "run" "scout" "--model" model "--task" "Publish COMPLETE with the exact summary synthetic-fresh-smoke."] model "scout")
+          (completed-and-closed! "fresh-persona-less" ["task" "run" "--model" model "--task" "Publish COMPLETE with the exact summary synthetic-persona-less-smoke."] model nil)
+          (fork-context-leg! model)
+          (measurement-context-leg! model config false)
+          (measurement-context-leg! model config true))
+        (evidence! assoc :state "complete")
+        (persistence-ok!)
+        (println (core/json-envelope true @*context-evidence*))
+        (catch Exception e
+          (evidence! assoc :state "failed" :error (failure-data e))
+          (throw (ex-info "context smoke failed; retain the recovery manifest"
+                          {:manifest manifest :evidence @*context-evidence*
+                           :persistence-errors (:persistence-errors @*context-evidence*)
+                           :failure (failure-data e)} e)))))))
+
+(defn -main [& args]
   (try
     (when-not (= "1" (required! "HERDR_ENV")) (throw (ex-info "live smoke requires HERDR_ENV=1" {})))
     (when-not (= "1" (required! "ORCH_LIVE_SMOKE")) (throw (ex-info "live smoke requires ORCH_LIVE_SMOKE=1" {})))
     (let [model (required! "ORCH_LIVE_SMOKE_MODEL")
           kind (some-> (System/getenv "ORCH_LIVE_SMOKE_KIND") str/trim not-empty)]
-      (with-personas kind #(run! model kind)))
+      (case (first args)
+        nil (with-personas kind #(run! model kind))
+        "context-modes" (do
+                          (when kind (throw (ex-info "context-modes smoke requires the caller's Pi harness, not ORCH_LIVE_SMOKE_KIND" {:kind kind})))
+                          (context-modes! model))
+        (throw (ex-info "unknown live smoke mode" {:mode (first args)}))))
     (catch Exception e
       (println (core/json-envelope false {:message (.getMessage e) :data (ex-data e)}))
       (System/exit 1))))

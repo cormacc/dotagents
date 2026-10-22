@@ -5,12 +5,14 @@
   (:require [babashka.fs :as fs]
             [babashka.process :as process]
             [cheshire.core :as json]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [herdr-orch.cli :as cli]
             [herdr-orch.core :as core]
             [herdr-orch.herdr :as herdr]
-            [herdr-orch.ledger :as ledger])
+            [herdr-orch.ledger :as ledger]
+            [herdr-orch.measurement :as measurement])
   (:import [java.nio.channels FileChannel]
            [java.nio.file Paths StandardOpenOption]))
 
@@ -1305,7 +1307,7 @@
         ;; Help text, not a missing-assignment failure: `--retro` must not have eaten
         ;; `--help`. Per-command help means this is `task run`'s signature, not the
         ;; global usage.
-        (is (str/starts-with? (:out proc) "oh task run <persona>"))))
+        (is (str/starts-with? (:out proc) "oh task run [<persona>]"))))
     (testing "contradictory flags fail fast"
       (let [proc (call! env "task" "run" "worker" "--task" "x" "--retro" "--no-retro" "--print-prompt")]
         (is (= 1 (:exit proc)))
@@ -6676,3 +6678,1441 @@
     (is (nil? (spawned-model (fake-env {"FAKE_PARENT_AGENT" "claude" "PI_PROVIDER" "anthropic" "PI_MODEL" "claude-opus-5"}
                                        {"helper" modelless-persona})
                              "helper" "--task" "no stray inheritance")))))
+
+;; --- context modes: persona-less delegation and identity foundation -------------------
+(defn- agent-start-argv [log] (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))
+(defn- no-allocation? [dir log]
+  (and (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))) (empty? (calls log))))
+(def ^:private anonymous-caller
+  {"HERDR_ORCH_PERSONA" "anonymous" "HERDR_ORCH_ANONYMOUS" "1" "HERDR_ORCH_SPAWNS" "scout"
+   "FAKE_PARENT_LABEL" "anonymous-1-light"})
+
+(deftest persona-less-launch-carries-no-synthetic-role
+  (let [{:keys [env env-file log dir prompt-file]} (fake-env {})
+        proc (call! env "task" "start" "--task" "plain assignment")
+        task (get-in (result proc) [:result :task])
+        entry (ledger-entry* dir task)
+        prompt (slurp prompt-file)]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (str/starts-with? prompt "Task: plain assignment"))
+    (is (not (str/includes? prompt "adopt that role")))
+    (is (str/includes? prompt "You are a leaf: do not spawn subagents."))
+    (is (str/includes? prompt "Herdr assigned TASK="))
+    (is (not-any? #{"--append-system-prompt" "--append-system-prompt-file"} (agent-start-argv log)))
+    (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "composed"))))
+    (is (= {:persona "anonymous" :role-absent true :context "fresh" :execution "interactive" :spawns []}
+           (select-keys entry [:persona :role-absent :context :execution :spawns])))
+    (is (nil? (:role-snapshot entry)))
+    (is (nil? (:persona-path entry)))
+    (is (re-matches #"anonymous-[0-9a-f]{8}" (:child entry)))
+    (is (re-matches #"[a-z][a-z0-9_-]{0,31}" (:child entry)))
+    (is (= "anonymous-1" (:label entry)) "no persona frontmatter and no inherited model leaves the label bare")
+    (is (= "anonymous" (injected-env env-file "HERDR_ORCH_PERSONA")))
+    (is (= "1" (injected-env env-file "HERDR_ORCH_ANONYMOUS")))))
+
+(deftest persona-less-preview-reports-the-resolved-context
+  (let [{:keys [env log dir]} (fake-env {})
+        proc (call! env "task" "run" "--print-prompt" "--task" "preview me" "--trait" "read-only")
+        preview (:result (result proc))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= {:context "fresh" :execution "interactive" :persona nil :role-absent true}
+           (select-keys preview [:context :execution :persona :role-absent])))
+    (is (= ["read-only"] (:traits preview)))
+    (is (str/includes? (:persona-text preview) "Do not create, modify, or delete repository files."))
+    (is (str/starts-with? (:preview preview) "Read <composed-persona-path> and follow its instructions. Task: preview me"))
+    (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
+    (is (not-any? #(= ["agent" "start"] (vec (take 2 %))) (calls log)))))
+
+(deftest persona-less-explicit-traits-compose-without-a-persona
+  (let [{:keys [env dir log prompt-file]} (fake-env {})
+        proc (call! env "task" "start" "--trait" "read-only" "--task" "traits only")
+        task (get-in (result proc) [:result :task])
+        entry (ledger-entry* dir task)
+        composed (str (fs/path dir ".tmp" "herdr-orch" "composed" (str task "-anonymous.md")))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= composed (:persona-path entry)))
+    (is (str/includes? (slurp composed) "Do not create, modify, or delete repository files."))
+    (is (= ["read-only"] (:traits entry)))
+    (is (= composed (second (drop-while #(not= "--append-system-prompt" %) (agent-start-argv log)))))
+    (is (str/starts-with? (slurp prompt-file) (str "Read " composed " and follow its instructions. Task: traits only")))
+    (testing "an unresolvable trait still fails before allocation"
+      (let [{:keys [env log dir]} (fake-env {})
+            bad (call! env "task" "start" "--trait" "no-such-trait" "--task" "x")]
+        (is (= 1 (:exit bad)))
+        (is (re-find #"trait `no-such-trait`" (:out bad)))
+        (is (no-allocation? dir (assoc {} :x log)))))))
+
+(deftest named-launch-records-an-immutable-role-snapshot
+  (let [{:keys [env dir roster]} (fake-env {} {"helper" modelless-persona})
+        proc (call! env "task" "start" "helper" "--task" "snapshot")
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+        snapshot (:role-snapshot entry)]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= "fresh" (:context entry)))
+    (is (not (contains? entry :role-absent)))
+    (is (= "helper" (:persona snapshot)))
+    (is (= modelless-persona (:text snapshot)))
+    (is (= (core/sha256 modelless-persona) (:sha256 snapshot)))
+    (testing "a later definition edit cannot change the recorded role"
+      (spit (str (fs/path roster "helper.md")) "---\nname: helper\n---\nEdited.\n")
+      (is (= modelless-persona (get-in (ledger-entry* dir (:task entry)) [:role-snapshot :text]))))))
+
+(deftest below-root-absent-role-launch-is-refused-before-allocation
+  (doseq [[label caller] [["anonymous caller" anonymous-caller]
+                          ["named caller allow-listing anonymous"
+                           {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "anonymous scout" "FAKE_PARENT_LABEL" "worker-1-light"}]]]
+    (let [{:keys [env log dir]} (fake-env caller {"anonymous" "---\nname: anonymous\ndescription: roster persona\nkind: pi\n---\nRoster persona.\n"})
+          proc (call! env "task" "start" "--task" "persona-less below root")]
+      (is (= 1 (:exit proc)) label)
+      (is (re-find #"never a persona-less child" (:out proc)) label)
+      (is (no-allocation? dir log) label))))
+
+(deftest a-roster-persona-named-anonymous-is-distinct-from-an-absent-role
+  (let [named {"anonymous" "---\nname: anonymous\ndescription: roster persona\nkind: pi\nmodel: light\nretro: false\n---\nRoster persona.\n"}
+        {:keys [env env-file dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "anonymous" "FAKE_PARENT_LABEL" "worker-1-light"} named)
+        proc (call! env "task" "start" "anonymous" "--task" "named anonymous")
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (not (contains? entry :role-absent)))
+    (is (= "anonymous" (get-in entry [:role-snapshot :persona])))
+    (is (nil? (injected-env env-file "HERDR_ORCH_ANONYMOUS")))
+    (is (str/ends-with? (:persona-path entry) "/subagents/anonymous.md") "the roster definition, not a composed anonymous file")))
+
+(deftest anonymous-callers-are-below-root-for-every-guard
+  (testing "a grandchild of an anonymous caller is forced to a leaf despite its frontmatter"
+    (let [{:keys [env env-file dir log]} (fake-env anonymous-caller {"scout" "---\nname: scout\ndescription: fixture\nkind: pi\nmodel: light\nspawns: scout\n---\nFixture.\n"})
+          proc (call! env "task" "start" "scout" "--task" "grandchild")
+          entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= {:spawns [] :spawns-source "depth"} (select-keys entry [:spawns :spawns-source])))
+      (is (= "" (injected-env env-file "HERDR_ORCH_SPAWNS")))
+      (is (= "anonymous-1/scout-1-light" (:label entry)) "nested labels preserve the anonymous task-bound prefix")
+      (is (some? log))))
+  (testing "spawn guard"
+    (let [{:keys [env dir log]} (fake-env anonymous-caller)
+          proc (call! env "task" "start" "worker" "--task" "not allow-listed")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"not in this agent's HERDR_ORCH_SPAWNS allow-list" (:out proc)))
+      (is (no-allocation? dir log))))
+  (testing "continuation guard"
+    (let [{:keys [env log]} (fake-env anonymous-caller)
+          proc (call! env "task" "continue" "00000000-0000-4000-8000-000000000000" "--task" "x")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"continue is root-only" (:out proc)))
+      (is (empty? (calls log)))))
+  (testing "orphan guard"
+    (let [{:keys [env log]} (fake-env anonymous-caller)
+          proc (call! env "task" "orphans")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"orphans is root-only" (:out proc)))
+      (is (empty? (calls log)))))
+  (testing "placement is below-root (split) rather than the root tab default"
+    (let [{:keys [env]} (fake-env anonymous-caller)
+          proc (call! env "task" "start" "scout" "--print-prompt" "--task" "placement")]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= "split" (get-in (result proc) [:result :placement]))))))
+
+(deftest subject-marked-invocations-fail-before-identity-fallback
+  (doseq [argv [["task" "start" "worker" "--task" "x"] ["task" "run" "--task" "x"]
+                ["task" "close" "00000000-0000-4000-8000-000000000000"]
+                ["task" "continue" "00000000-0000-4000-8000-000000000000" "--task" "x"]
+                ["task" "orphans"] ["task" "publish" "--status" "COMPLETE" "--summary" "s"]
+                ["task" "status"] ["pane" "list"] ["agent" "list"] ["roster"]]]
+    (let [{:keys [env log dir]} (fake-env {"HERDR_ORCH_SUBJECT" "00000000-0000-4000-8000-000000000001"})
+          proc (apply call! env argv)]
+      (is (= 1 (:exit proc)) (str argv))
+      (is (re-find #"measurement subject cannot run orchestration commands" (:out proc)) (str argv))
+      (is (no-allocation? dir log) (str argv))))
+  (testing "help stays available"
+    (let [{:keys [env]} (fake-env {"HERDR_ORCH_SUBJECT" "t"})]
+      (is (zero? (:exit (call! env "task" "--help")))))))
+
+(deftest ledger-entries-without-context-metadata-read-as-fresh-interactive
+  (let [{:keys [env dir]} (fake-env {})
+        spawn (call! env "task" "start" "worker" "--task" "legacy")
+        entry (ledger-entry* dir (get-in (result spawn) [:result :task]))
+        legacy (apply dissoc entry [:context :execution :role-snapshot])
+        _ (patch-entry! dir legacy :status (:status legacy))
+        status (call! env "task" "status" (:task entry))]
+    (is (zero? (:exit status)) (:out status))
+    (is (= {:context "fresh" :execution "interactive"}
+           (select-keys (:result (result status)) [:context :execution])))
+    (is (= ["fresh" "interactive"] [(core/entry-context legacy) (core/entry-execution legacy)]))))
+
+(deftest continue-retains-context-and-role-provenance
+  (let [{:keys [env dir]} (fake-env {})
+        spawn (call! env "task" "start" "--task" "anonymous round one")
+        prior (capture-entry! dir (ledger-entry* dir (get-in (result spawn) [:result :task])))
+        continued (call! env "task" "continue" (:task prior) "--task" "round two")
+        next-entry (ledger-entry* dir (get-in (result continued) [:result :task]))]
+    (is (zero? (:exit continued)) (:out continued))
+    (is (= {:persona "anonymous" :role-absent true :context "fresh" :execution "interactive"}
+           (select-keys next-entry [:persona :role-absent :context :execution])))
+    (is (= "worker" (:persona (ledger-entry* dir (get-in (result (call! env "task" "start" "worker" "--task" "named")) [:result :task])))))))
+
+;; --- context modes: fork integration ---------------------------------------------------
+(def ^:private fake-pi (str root "/skills/herdr-orch/scripts/test/fixtures/fake-pi"))
+(defn- fork-env
+  "A fixture whose caller session is a readable file and whose `pi` is the adapter-protocol
+  stand-in. `extra` overrides the env; `personas` adds project roster entries."
+  ([extra] (fork-env extra nil))
+  ([extra personas]
+   (let [fixture (fake-env {} personas)
+         dir (:dir fixture)
+         source (str (fs/path dir "caller-session.jsonl"))
+         forked (str (fs/path dir "forked.jsonl"))
+         pi-log (str (fs/path dir "pi.log"))]
+     (spit source "{\"type\":\"session\"}\n")
+     (-> fixture
+         (update :env merge {"HERDR_ORCH_PI_BIN" fake-pi "FAKE_PI_LOG" pi-log "FAKE_PI_FORK_FILE" forked "FAKE_PARENT_SESSION" source} extra)
+         (assoc :source source :forked forked :pi-log pi-log)))))
+(defn- pi-ops [{:keys [pi-log]}]
+  (let [file (str pi-log ".ops")]
+    (if (fs/exists? file) (mapv #(first (str/split % #" " 2)) (str/split-lines (slurp file))) [])))
+(defn- pi-request [{:keys [pi-log]} op]
+  (some #(when (str/starts-with? % (str op " ")) (json/parse-string (subs % (inc (count op))) true))
+        (str/split-lines (slurp (str pi-log ".ops")))))
+(defn- ledger-count [dir]
+  (let [ledger (fs/path dir ".tmp" "herdr-orch" "ledger")]
+    (if (fs/directory? ledger) (count (filter #(str/ends-with? (str %) ".json") (fs/list-dir ledger))) 0)))
+
+(defn- assert-fork-task-boundary [prompt lead task result]
+  (is (str/starts-with? prompt "Fork task boundary\nThis conversation was forked from its caller."))
+  (is (str/includes? prompt "The assignment below is your current task, not a request to resume the caller's workflow."))
+  (is (str/includes? prompt "Earlier requests and tool actions are inherited context, not work to continue unless this assignment explicitly asks for it."))
+  (is (str/includes? prompt "Keep relevant inherited context and constraints that do not conflict with this assignment."))
+  (is (str/includes? prompt "The selected role and delegation policy below still apply; inherited permissions do not grant authority."))
+  (is (str/includes? prompt "Use only the TASK and RESULT below for this launch, not earlier task, result or identity values."))
+  (is (str/includes? prompt (str "\n\nCurrent delegated assignment:\n" lead)))
+  (is (str/includes? prompt (str "Herdr assigned TASK=" task " and RESULT=" result)))
+  (is (< (.indexOf prompt "Fork task boundary") (.indexOf prompt lead)
+         (.indexOf prompt "When finished, publish exactly once"))))
+
+(deftest fork-bootstrap-separates-current-work-from-inherited-context
+  (doseq [[role lead] [[{} "Task: Use the inherited design notes to check input validation."]
+                      [{:persona-path "/role.md"} "Read /role.md, adopt that role. Task: Use the inherited design notes to check input validation."]
+                      [{:persona-path "/traits.md" :role-absent true} "Read /traits.md and follow its instructions. Task: Use the inherited design notes to check input validation."]]]
+    (let [launch (merge {:assignment "Use the inherited design notes to check input validation."
+                         :task "current-child" :result "/current-child.result" :spawns []
+                         :waiting-policy "non-blocking" :prompt-extra "Keep the output concise."} role)
+          fresh (cli/prompt-text launch)
+          fork (cli/prompt-text (assoc launch :fork? true))]
+      (assert-fork-task-boundary fork lead "current-child" "/current-child.result")
+      (is (str/ends-with? fork fresh) "fork guidance does not replace role, assignment, authority or publication guidance")
+      (is (str/starts-with? fresh lead))
+      (is (not (str/includes? fresh "Fork task boundary")))
+      (is (str/includes? fork "You are a leaf: do not spawn subagents."))
+      (is (str/includes? fork "--status BLOCKED"))
+      (is (str/includes? fork "--status FAILED"))
+      (is (str/includes? fork "task publish --task current-child --status WAITING")))))
+
+(deftest fork-from-an-unnamed-root-invents-no-role
+  (let [{:keys [env env-file dir log source forked] :as fixture} (fork-env {})
+        proc (call! env "task" "start" "--context" "fork" "--task" "forked assignment")
+        out (:result (result proc))
+        entry (ledger-entry* dir (:task out))
+        request (pi-request fixture "fork-create")]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= ["fork-capability" "fork-create"] (pi-ops fixture)))
+    (is (= {:sourceSession source :targetCwd (:work-root entry)} request) "no overlay and no inherited role")
+    (is (= {:context "fork" :role-absent true :persona "anonymous"} (select-keys entry [:context :role-absent :persona])))
+    (is (nil? (:role-snapshot entry)))
+    (is (= "E-BOUNDARY" (get-in entry [:fork :boundary-entry])) "the ledger records the boundary this launch selected")
+    (is (= "E-BOUNDARY" (get-in out [:fork :boundary-entry])) "so does the start envelope")
+    (is (= {:source-session source :session-file forked :role-source "none"} (select-keys (:fork entry) [:source-session :session-file :role-source])))
+    (let [argv (agent-start-argv log)]
+      (is (= forked (second (drop-while #(not= "--session" %) argv))))
+      (is (not-any? #{"--append-system-prompt"} argv)))
+    (is (str/includes? (slurp (:prompt-file fixture)) "This conversation was forked from its caller."))
+    (assert-fork-task-boundary (slurp (:prompt-file fixture)) "Task: forked assignment" (:task entry) (:result entry))
+    (is (= "1" (injected-env env-file "HERDR_ORCH_ANONYMOUS")))))
+
+(deftest fork-with-an-explicit-persona-replaces-the-role
+  (let [{:keys [env dir log] :as fixture} (fork-env {})
+        proc (call! env "task" "start" "worker" "--context" "fork" "--task" "overlay")
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+        request (pi-request fixture "fork-create")]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= "worker" (get-in request [:overlay :persona])))
+    (is (= (get-in entry [:role-snapshot :text]) (get-in request [:overlay :text])))
+    (is (= "overlay" (get-in entry [:fork :role-source])))
+    (is (= "worker" (:persona entry)))
+    (is (some #{"--append-system-prompt"} (agent-start-argv log)))
+    (is (some #{"--session"} (agent-start-argv log)))))
+
+(defn- named-caller-fixture
+  "A below-root `worker` caller whose own ledger entry carries the launch-time role snapshot."
+  [spawns]
+  (let [root-fixture (fork-env {})
+        root-proc (call! (:env root-fixture) "task" "start" "worker" "--task" "caller round")
+        caller-task (get-in (result root-proc) [:result :task])
+        snapshot (:role-snapshot (ledger-entry* (:dir root-fixture) caller-task))]
+    (assert (zero? (:exit root-proc)) (:out root-proc))
+    (assoc root-fixture
+           :caller-snapshot snapshot
+           :below (merge (:env root-fixture) {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" spawns
+                                              "HERDR_ORCH_TASK" caller-task "FAKE_PARENT_LABEL" "worker-1-light"}))))
+
+(deftest below-root-no-overlay-fork-follows-the-recorded-role-and-the-allow-list
+  (testing "an allow-listed inherited persona is admitted and stays a leaf"
+    (let [{:keys [below dir caller-snapshot env-file] :as fixture} (named-caller-fixture "worker")
+          before (ledger-count dir)
+          _ (do (fs/create-dirs (:roster fixture))
+                (spit (str (fs/path (:roster fixture) "worker.md")) "---\nname: worker\n---\nDifferent roster role.\n"))
+          proc (call! below "task" "start" "--context" "fork" "--task" "inherit the role")
+          entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+          request (pi-request fixture "fork-create")]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= (inc before) (ledger-count dir)))
+      (is (= caller-snapshot (get-in request [:callerRole :snapshot])))
+      (is (= "snapshot" (get-in entry [:fork :role-source])))
+      (is (= "worker" (:persona entry)))
+      (is (= caller-snapshot (:role-snapshot entry)))
+      (is (= {:spawns [] :spawns-source "depth"} (select-keys entry [:spawns :spawns-source])))
+      (is (= "" (injected-env env-file "HERDR_ORCH_SPAWNS")))
+      (assert-fork-task-boundary (slurp (:prompt-file fixture))
+                                 (str "Read " (:persona-path entry) ", adopt that role. Task: inherit the role")
+                                 (:task entry) (:result entry))
+      (is (= (:text caller-snapshot) (slurp (:persona-path entry))))))
+  (testing "a persona outside the allow-list is refused before any allocation"
+    (let [{:keys [below dir log] :as fixture} (named-caller-fixture "scout")
+          entries (ledger-count dir) pi-before (pi-ops fixture) herdr-before (count (calls log))
+          proc (call! below "task" "start" "--context" "fork" "--task" "not allowed")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"not in this agent's HERDR_ORCH_SPAWNS allow-list" (:out proc)))
+      (is (= entries (ledger-count dir)))
+      (is (= pi-before (pi-ops fixture)))
+      (is (= herdr-before (count (calls log))))))
+  (testing "a named caller with no recorded snapshot is told to name a persona"
+    (let [{:keys [below dir] :as fixture} (named-caller-fixture "worker")
+          entries (ledger-count dir) pi-before (pi-ops fixture)
+          proc (call! (assoc below "HERDR_ORCH_TASK" "00000000-0000-4000-8000-000000000042") "task" "start" "--context" "fork" "--task" "x")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"no recorded role snapshot" (:out proc)))
+      (is (= entries (ledger-count dir)))
+      (is (= pi-before (pi-ops fixture)) "no adapter operation ran")))
+  (testing "a persona-less caller cannot fork without an overlay"
+    (let [{:keys [env dir log] :as fixture} (fork-env anonymous-caller)
+          proc (call! env "task" "start" "--context" "fork" "--task" "x")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"never a persona-less child" (:out proc)))
+      (is (no-allocation? dir log))
+      (is (empty? (pi-ops fixture))))))
+
+(deftest below-root-overlay-replaces-the-snapshot-without-changing-authority
+  (let [{:keys [below dir log caller-snapshot] :as fixture} (named-caller-fixture "scout")
+        launched (call! below "task" "start" "scout" "--context" "fork" "--task" "review the inherited design")
+        entry (ledger-entry* dir (get-in (result launched) [:result :task]))
+        request (pi-request fixture "fork-create")]
+    (is (zero? (:exit launched)) (:out launched))
+    (is (= "scout" (:persona entry)))
+    (is (= "overlay" (get-in entry [:fork :role-source])))
+    (is (= (select-keys (:role-snapshot entry) [:persona :text]) (:overlay request)))
+    (is (not= (:text caller-snapshot) (get-in request [:overlay :text])))
+    (is (nil? (:callerRole request)))
+    (is (= {:spawns [] :spawns-source "depth"} (select-keys entry [:spawns :spawns-source])))
+    (let [argv (last (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log)))]
+      (is (= (:persona-path entry) (flag-value argv "--append-system-prompt"))))
+    (assert-fork-task-boundary (slurp (:prompt-file fixture))
+                               (str "Read " (:persona-path entry) ", adopt that role. Task: review the inherited design")
+                               (:task entry) (:result entry))))
+
+(deftest inherited-workflow-cannot-grant-nesting-or-parent-publication
+  (let [{:keys [below dir log] :as fixture} (named-caller-fixture "worker")
+        parent (ledger-entry* dir (get below "HERDR_ORCH_TASK"))
+        launched (call! below "task" "start" "--context" "fork" "--task" "check the inherited design")
+        entry (ledger-entry* dir (get-in (result launched) [:result :task]))
+        leaf-env (merge (child-publish-env below entry) {"HERDR_ORCH_SPAWNS" ""})
+        entries (ledger-count dir) pi-before (pi-ops fixture) herdr-before (count (calls log))]
+    (is (zero? (:exit launched)) (:out launched))
+    (is (= [] (:spawns entry)))
+    (doseq [persona [nil "scout"]]
+      (let [refused (apply call! leaf-env "task" "start"
+                           (concat (when persona [persona]) ["--context" "fork" "--task" "resume inherited workflow"]))]
+        (is (= 1 (:exit refused)))
+        (is (false? (:ok (result refused))))
+        (is (str/includes? (:out refused) "HERDR_ORCH_SPAWNS allow-list"))))
+    (is (= entries (ledger-count dir)))
+    (is (= pi-before (pi-ops fixture)))
+    (is (= herdr-before (count (calls log))) "refused nesting never reaches Herdr")
+    (let [refused (call! leaf-env "task" "publish" "--task" (:task parent) "--status" "BLOCKED" "--summary" "wrong workflow")]
+      (is (= 1 (:exit refused)))
+      (is (false? (:ok (result refused))))
+      (is (str/includes? (:out refused) "child identity mismatch"))
+      (is (not (fs/exists? (:result parent))))
+      (is (not (fs/exists? (:result entry)))))
+    (let [published (call! leaf-env "task" "publish" "--status" "BLOCKED" "--summary" "current task dependency")]
+      (is (zero? (:exit published)) (:out published))
+      (is (true? (:ok (result published))))
+      (is (= (:task entry) (get-in (result published) [:result :task])))
+      (is (= "BLOCKED" (get-in (result published) [:result :status])))
+      (is (fs/exists? (:result entry))))))
+
+(deftest fork-needs-a-pi-child-and-a-readable-caller-session
+  (testing "a persona resolving to another kind"
+    (let [{:keys [env dir log] :as fixture} (fork-env {} {"claude-helper" "---\nname: claude-helper\ndescription: x\nkind: claude\n---\nbody\n"})
+          proc (call! env "task" "start" "claude-helper" "--context" "fork" "--task" "x")]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"resolved kind is not pi" (:out proc)))
+      (is (zero? (ledger-count dir)) "nothing was allocated")
+      (is (not-any? #(= ["agent" "start"] (vec (take 2 %))) (calls log)))
+      (is (empty? (pi-ops fixture)))))
+  (testing "a caller that is not pi, or whose session is not a readable path"
+    (doseq [extra [{"FAKE_PARENT_AGENT" "claude"} {"FAKE_PARENT_SESSION_KIND" "id"} {"FAKE_PARENT_SESSION" "/nonexistent/session.jsonl"}]]
+      (let [{:keys [env dir] :as fixture} (fork-env extra)
+            env (merge env extra)
+            proc (call! env "task" "start" "--context" "fork" "--task" "x")]
+        (is (= 1 (:exit proc)) (str extra))
+        (is (re-find #"persistent pi session|needs a pi child" (:out proc)) (str extra))
+        (is (zero? (ledger-count dir)) (str extra))
+        (is (empty? (pi-ops fixture)) (str extra))))))
+
+(deftest fork-launched-with-worktree-new-targets-that-checkout
+  (let [{:keys [env dir] :as fixture} (fork-env {})
+        proc (call! env "task" "start" "--context" "fork" "--worktree" "new" "--task" "isolated fork")
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (some? (:worktree entry)))
+    (is (= (get-in entry [:worktree :path]) (:work-root entry)))
+    (is (= (:work-root entry) (:targetCwd (pi-request fixture "fork-create"))))
+    (is (fs/exists? (:work-root entry)))))
+
+(deftest failed-fork-launch-removes-only-its-session-and-pane
+  (testing "an adapter refusal creates no pane and no session"
+    (let [{:keys [env dir log source] :as fixture} (fork-env {"FAKE_PI_REFUSE" "fork refused: leaf is not inside an in-flight tool batch"})
+          proc (call! env "task" "start" "--context" "fork" "--task" "x")
+          entry (first (map #(json/parse-string (slurp (str %)) true) (filter #(str/ends-with? (str %) ".json") (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger")))))]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"in-flight tool batch" (:out proc)))
+      (is (= "failed" (:status entry)))
+      (is (not-any? #(= ["agent" "start"] (vec (take 2 %))) (calls log)))
+      (is (not (some #{"fork-discard"} (pi-ops fixture))) "nothing was created, so nothing is discarded")
+      (is (fs/exists? source) "the source is untouched")))
+  (testing "a start failure after the fork exists discards that session and closes the pane"
+    (let [{:keys [env log source forked] :as fixture} (fork-env {"FAKE_FAIL_START" "1"})
+          proc (call! env "task" "start" "--context" "fork" "--task" "x")]
+      (is (= 1 (:exit proc)))
+      (is (some #{"fork-discard"} (pi-ops fixture)))
+      (is (not (fs/exists? forked)))
+      (is (fs/exists? source) "the caller's own session is never removed")
+      (is (some #(= ["pane" "close" "w:child"] (vec (take 3 %))) (calls log)))
+      (is (= source (get-in (pi-request fixture "fork-discard") [:source :path]))))))
+
+(deftest fork-preview-reports-source-and-rule-without-side-effects
+  (let [{:keys [env dir log source] :as fixture} (fork-env {})
+        proc (call! env "task" "run" "--context" "fork" "--print-prompt" "--task" "preview")
+        preview (:result (result proc))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= "fork" (:context preview)))
+    (is (= {:source-session source :boundary-rule core/fork-boundary-rule :role-source "none"} (:fork preview)))
+    (is (not (contains? (:fork preview) :boundary-entry)) "the boundary entry is invocation-relative")
+    (assert-fork-task-boundary (:preview preview) "Task: preview" "<assigned-task>" "<assigned-result>")
+    (is (empty? (pi-ops fixture)))
+    (is (no-allocation? dir (assoc {} :x log)) "no ledger and no mutation")
+    (is (= core/fork-boundary-rule
+           (second (re-find #"BOUNDARY_RULE =\s*\"([^\"]+)\"" (slurp (str root "/skills/herdr-orch/scripts/pi/fork-adapter.ts"))))))))
+
+(deftest continuation-retains-fork-provenance-without-forking-again
+  (let [{:keys [env dir] :as fixture} (fork-env {})
+        spawn (call! env "task" "start" "--context" "fork" "--task" "round one")
+        prior (capture-entry! dir (ledger-entry* dir (get-in (result spawn) [:result :task])))
+        continued (call! env "task" "continue" (:task prior) "--task" "round two")
+        next-entry (ledger-entry* dir (get-in (result continued) [:result :task]))]
+    (is (zero? (:exit continued)) (:out continued))
+    (is (= (:fork prior) (:fork next-entry)))
+    (is (= "fork" (:context next-entry)))
+    (is (= 1 (count (filter #{"fork-create"} (pi-ops fixture)))) "no second fork")))
+
+;; The one CLI test that runs the real adapter inside the installed Pi (no stand-in): a
+;; synthetic caller session, a real fork file, and the header cwd the child will run in.
+(deftest fork-launch-through-the-real-installed-pi-adapter
+  (let [fixture (fork-env {})
+        {:keys [dir log source forked]} fixture
+        env (-> (:env fixture) (dissoc "HERDR_ORCH_PI_BIN"))
+        usage "{\"input\":1,\"output\":1,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":2,\"cost\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"total\":0}}"
+        ;; A completed turn (u0/a0) precedes the delegating turn (u1/a1): a fork inherits
+        ;; only completed turns, so it branches at a0.
+        lines [(json/generate-string {:type "session" :version 3 :id "caller" :timestamp "2026-01-01T00:00:00.000Z" :cwd (str dir)})
+               (json/generate-string {:type "message" :id "u0" :parentId nil :timestamp "2026-01-01T00:00:00.100Z" :message {:role "user" :content "earlier" :timestamp 0}})
+               (str "{\"type\":\"message\",\"id\":\"a0\",\"parentId\":\"u0\",\"timestamp\":\"2026-01-01T00:00:00.200Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"done\"}],\"api\":\"x\",\"provider\":\"x\",\"model\":\"x\",\"usage\":" usage ",\"stopReason\":\"stop\",\"timestamp\":0}}")
+               (json/generate-string {:type "message" :id "u1" :parentId "a0" :timestamp "2026-01-01T00:00:01.000Z" :message {:role "user" :content "hello" :timestamp 1}})
+               (str "{\"type\":\"message\",\"id\":\"a1\",\"parentId\":\"u1\",\"timestamp\":\"2026-01-01T00:00:02.000Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"toolCall\",\"id\":\"c1\",\"name\":\"bash\",\"arguments\":{\"command\":\"oh task start\"}}],\"api\":\"x\",\"provider\":\"x\",\"model\":\"x\",\"usage\":" usage ",\"stopReason\":\"toolUse\",\"timestamp\":2}}")]
+        _ (spit source (str (str/join "\n" lines) "\n"))
+        before (slurp source)
+        proc (call! env "task" "start" "--context" "fork" "--worktree" "new" "--task" "real adapter")
+        entry (ledger-entry* dir (get-in (result proc) [:result :task]))
+        session-file (get-in entry [:fork :session-file])
+        header (json/parse-string (first (str/split-lines (slurp session-file))) true)]
+    (is (zero? (:exit proc)) (str (:out proc) (:err proc)))
+    (is (= {:boundary-entry "a0" :batch-entry "a1" :source-session source} (select-keys (:fork entry) [:boundary-entry :batch-entry :source-session])))
+    (is (= (:work-root entry) (:cwd header)) "the forked header, not the pane cwd, fixes the runtime directory")
+    (is (= source (:parentSession header)))
+    (is (= before (slurp source)) "the caller's session is byte-for-byte unchanged")
+    (is (= session-file (second (drop-while #(not= "--session" %) (agent-start-argv log)))))
+    (is (not= forked session-file) "the stand-in file was never used")
+    (is (str/includes? (get-in entry [:fork :runtime :piVersion]) "."))))
+
+;; --- context modes: headless measurement -----------------------------------------------
+;; The supervisor and subject are real detached processes; the subject is the `fake-pi`
+;; stand-in, which writes the adapter's evidence shape. Every sample is bounded: a gated
+;; subject gives up after 60 s, and the hard limit stops a hanging one.
+(defn- measurement-fixture
+  ([] (measurement-fixture {} {}))
+  ([extra config]
+   (let [fixture (fork-env extra)
+         dir (str (:dir fixture))
+         cfg-dir (str (fs/path dir "measure"))
+         cfg (str (fs/path cfg-dir "measurement.json"))
+         gates (str (fs/path dir "gates"))]
+     (fs/create-dirs cfg-dir)
+     (fs/create-dirs gates)
+     (spit (str (fs/path cfg-dir "system.md")) "SYSTEM TREATMENT")
+     (spit cfg (json/generate-string (merge {"systemPromptFile" "system.md" "tools" ["read"] "hardTimeoutMs" 60000} config)))
+     (assoc fixture :config cfg :gates gates))))
+(defn- gated [fixture] (assoc-in fixture [:env "FAKE_PI_GATE_DIR"] (:gates fixture)))
+(defn- measure! [{:keys [env config]} verb & args]
+  (apply call! env "task" verb "--context" "measurement" "--measurement-config" config args))
+(defn- evidence-path [dir task & parts] (str (apply fs/path dir ".tmp" "herdr-orch" "measurements" task parts)))
+(defn- release! [{:keys [gates]} task] (spit (str (fs/path gates task)) "go\n"))
+(defn- await! [pred ms]
+  (let [deadline (+ (System/currentTimeMillis) ms)]
+    (loop [] (cond (pred) true (< deadline (System/currentTimeMillis)) false :else (do (Thread/sleep 50) (recur))))))
+(defn- published? [dir task] (fs/exists? (:result (ledger-entry* dir task))))
+(defn- mutating-calls [log] (filterv mutating? (calls log)))
+(defn- live-members [entry] (measurement/session-members (get-in entry [:supervisor :sid])))
+
+(deftest successful-measurement-publishes-supervisor-owned-evidence-without-a-pane
+  (let [{:keys [dir log] :as fixture} (measurement-fixture)
+        assignment "/literal @file -flag {{template}} $HOME"
+        first-run (measure! fixture "run" "--task" assignment)
+        out (:result (result first-run))
+        entry (ledger-entry* (str dir) (:task out))
+        received (fn [suffix] (slurp (evidence-path (str dir) (:task out) (str "fake-subject" suffix))))
+        run (json/parse-string (slurp (evidence-path (str dir) (:task out) "run.json")) true)]
+    (is (zero? (:exit first-run)) (:out first-run))
+    (is (= {:status "COMPLETE" :terminal? true} (select-keys out [:status :terminal?])))
+    (is (str/includes? (:summary out) "not an answer-quality score"))
+    (is (= {:context "measurement" :execution "headless" :role-absent true :pane-id nil}
+           (select-keys entry [:context :execution :role-absent :pane-id])))
+    (testing "the supervisor is detached into its own session and recorded by start identity"
+      (is (= (get-in entry [:supervisor :pid]) (get-in entry [:supervisor :sid]) (get-in entry [:supervisor :pgid])))
+      (is (integer? (get-in entry [:supervisor :start])))
+      (is (not= (:sid (measurement/process-identity (.pid (java.lang.ProcessHandle/current)))) (get-in entry [:supervisor :sid]))))
+    (testing "the subject runs through the adapter helper's argv with closed stdin and no routing authority"
+      (is (= fake-pi (first (:argv run))))
+      (is (some #(str/ends-with? % "scripts/pi/measurement-adapter.ts") (:argv run)))
+      (is (= ["--mode" "json" "-p" measurement/input-sentinel] (take-last 4 (:argv run))))
+      (is (not-any? #(str/includes? % "literal @file") (:argv run)) "the assignment never travels on argv")
+      (is (= assignment (received ".assignment")) "leading /, @, - and template text stay literal")
+      (let [lines (set (str/split-lines (received ".env")))]
+        (is (contains? lines "STDIN=/dev/null"))
+        (is (contains? lines (str "HERDR_ORCH_SUBJECT=" (:task out))))
+        (is (= #{"HERDR_ORCH_SUBJECT" "HERDR_ORCH_MEASUREMENT_MANIFEST"}
+               (set (keep #(second (re-matches #"(HERDR_[A-Z_]+|ORCH_[A-Z_]+)=.*" %)) lines)))
+            "no pane, task, result, child, persona or assignment-root value reaches the subject")))
+    (testing "repeated default runs allocate no panes"
+      (let [second-run (measure! fixture "run" "--task" "second sample")]
+        (is (zero? (:exit second-run)) (:out second-run))
+        (is (= "COMPLETE" (get-in (result second-run) [:result :status])))
+        (is (empty? (mutating-calls log)) "no split, tab, agent start or prompt")))
+    (testing "collect validated the supervisor's immutable item"
+      (is (= "COMPLETE" (:status (ledger-entry* (str dir) (:task out)))))
+      (is (str/includes? (slurp (:result entry)) (str "CHILD: " (:child entry)))))))
+
+(defn- no-measurement-allocation? [dir log fixture]
+  ;; A refusal inside the reservation may have listed the ledger (creating its directory) but
+  ;; wrote no entry, index or result.
+  (and (zero? (ledger-count dir)) (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger" "indices")))
+       (empty? (fs/glob (fs/path dir ".tmp" "herdr-orch") "*.result")) (empty? (mutating-calls log))
+       (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "measurements"))) (empty? (pi-ops fixture))))
+(deftest measurement-option-matrix-is-refused-before-allocation
+  (doseq [[label extra args pattern]
+          [["a positional persona" {} ["task" "start" "worker" "--context" "measurement" :config "--task" "x"] #"does not take a persona"]
+           ["--trait" {} ["task" "start" "--context" "measurement" :config "--trait" "read-only" "--task" "x"] #"refuses --trait"]
+           ["--prompt-extra" {} ["task" "start" "--context" "measurement" :config "--prompt-extra" "be brief" "--task" "x"] #"refuses --prompt-extra"]
+           ["--retro" {} ["task" "start" "--context" "measurement" :config "--retro" "--task" "x"] #"refuses --retro"]
+           ["--no-retro" {} ["task" "start" "--context" "measurement" :config "--no-retro" "--task" "x"] #"refuses --no-retro"]
+           ["--spawns" {} ["task" "start" "--context" "measurement" :config "--spawns" "none" "--task" "x"] #"refuses --spawns"]
+           ["a missing configuration" {} ["task" "start" "--context" "measurement" "--task" "x"] #"requires --measurement-config"]
+           ["--measurement-config on a fresh launch" {} ["task" "start" "worker" :config "--task" "x"] #"accepted only with --context measurement"]
+           ["--measurement-config on a fork" {} ["task" "start" "--context" "fork" :config "--task" "x"] #"accepted only with --context measurement"]
+           ["a resolved kind that is not pi" {"FAKE_PARENT_AGENT" "claude"} ["task" "start" "--context" "measurement" :config "--task" "x"] #"needs a pi subject"]
+           ["a below-root caller" anonymous-caller ["task" "start" "--context" "measurement" :config "--task" "x"] #"never a persona-less child"]
+           ["a preview with a refused option" {} ["task" "run" "--context" "measurement" :config "--trait" "read-only" "--print-prompt" "--task" "x"] #"refuses --trait"]]]
+    ;; `:config` stands for `--measurement-config PATH`.
+    (let [{:keys [env dir log config] :as fixture} (measurement-fixture extra {})
+          proc (apply call! env (mapcat #(if (= :config %) ["--measurement-config" config] [%]) args))]
+      (is (= 1 (:exit proc)) label)
+      (is (re-find pattern (:out proc)) (str label ": " (:out proc)))
+      (is (no-measurement-allocation? dir log fixture) label)))
+  (testing "configuration errors fail before allocation"
+    (doseq [[label config pattern] [["an unknown field" {"bogus" 1} #"unknown fields: bogus"]
+                                    ["a missing hard limit" {"hardTimeoutMs" nil} #"hardTimeoutMs"]
+                                    ["an unreadable skill file" {"skillFiles" ["missing.md"]} #"unreadable file"]
+                                    ["a tool pattern" {"tools" ["re*"]} #"exact names"]]]
+      (let [{:keys [env dir log] :as fixture} (measurement-fixture {} config)
+            proc (measure! fixture "start" "--task" "x")]
+        (is (= 1 (:exit proc)) label)
+        (is (re-find pattern (:out proc)) (str label ": " (:out proc)))
+        (is (no-measurement-allocation? dir log fixture) label)))))
+
+(deftest invalid-context-options-fail-before-allocation
+  (doseq [[argv pattern] [[["task" "start" "worker" "--context" "measurement" "--task" "x"] #"does not take a persona"]
+                          [["task" "run" "--context" "bogus" "--task" "x"] #"--context must be fresh, fork or measurement"]
+                          [["task" "run" "--context" "measurement" "--print-prompt" "--task" "x"] #"requires --measurement-config"]]]
+    (let [{:keys [env log dir]} (fake-env {})
+          proc (apply call! env argv)]
+      (is (= 1 (:exit proc)) (str argv))
+      (is (re-find pattern (:out proc)) (str argv))
+      (is (no-allocation? dir log) (str argv))))
+  (testing "an explicit fresh context is the default"
+    (let [{:keys [env]} (fake-env {})
+          proc (call! env "task" "run" "worker" "--context" "fresh" "--print-prompt" "--task" "x")]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= "fresh" (get-in (result proc) [:result :context]))))))
+
+(deftest measurement-preview-reports-the-exact-treatment-without-side-effects
+  (let [{:keys [env dir log config] :as fixture} (measurement-fixture)
+        _ (spit (str (fs/path (fs/parent config) "skill.md")) "SKILL BODY")
+        _ (spit config (json/generate-string {"systemPromptFile" "system.md" "skillFiles" ["skill.md"] "tools" [] "hardTimeoutMs" 5000 "expectedOutputs" ["out.txt"]}))
+        proc (measure! fixture "run" "--print-prompt" "--task" "-literal")
+        preview (:result (result proc))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= "SYSTEM TREATMENT\n\nSKILL BODY" (:preview preview)) "system text then skill text, two newlines apart")
+    (is (= "-literal" (:assignment preview)))
+    (is (= {:context "measurement" :execution "headless" :kind "pi" :monitor "none"} (select-keys preview [:context :execution :kind :monitor])))
+    (is (= {:tools [] :hard-timeout-ms 5000 :expected-outputs ["out.txt"]} (select-keys (:measurement preview) [:tools :hard-timeout-ms :expected-outputs])))
+    (is (= (core/sha256 "SYSTEM TREATMENT\n\nSKILL BODY") (get-in preview [:measurement :treatment-sha256])))
+    (is (no-measurement-allocation? (str dir) (str log) fixture))))
+
+(defn- measured-failure [fixture & args]
+  (let [proc (apply measure! fixture "run" args)]
+    (assert (zero? (:exit proc)) (:out proc))
+    (:result (result proc))))
+(deftest measurement-success-needs-exit-zero-valid-evidence-an-ok-audit-and-expected-outputs
+  (doseq [[mode pattern] [["exit-nonzero" #"subject exited with status 3"]
+                          ["malformed" #"terminal evidence is malformed"]
+                          ["harness-failed" #"harness reported failure: harness error"]
+                          ["audit-failed" #"request-context audit failed"]]]
+    (let [out (measured-failure (measurement-fixture {"FAKE_PI_MEASURE" mode} {}) "--task" "x")]
+      (is (= "FAILED" (:status out)) mode)
+      (is (re-find pattern (:summary out)) (str mode ": " (:summary out)))
+      (is (true? (:terminal? out)) mode)))
+  (testing "a missing expected output fails a run whose subject otherwise succeeded"
+    (let [out (measured-failure (measurement-fixture {} {"expectedOutputs" ["answer.txt"]}) "--task" "x")]
+      (is (= "FAILED" (:status out)))
+      (is (re-find #"expected outputs are missing: answer.txt" (:summary out)))))
+  (testing "a produced expected output succeeds and is a validated artifact"
+    (let [{:keys [dir] :as fixture} (measurement-fixture {"FAKE_PI_MEASURE" "output" "FAKE_PI_OUTPUT" "answer.txt"} {"expectedOutputs" ["answer.txt"]})
+          out (measured-failure fixture "--task" "x")]
+      (is (= "COMPLETE" (:status out)) (:summary out))
+      (is (= ["answer.txt"] (:artifacts out)))
+      (is (= 1 (count (:artifact-links out))))
+      (is (fs/exists? (fs/path dir "answer.txt"))))))
+
+(deftest pre-existing-expected-output-is-refused-before-launch
+  (let [{:keys [env dir log] :as fixture} (measurement-fixture {} {"expectedOutputs" ["answer.txt"]})
+        _ (spit (str (fs/path dir "answer.txt")) "already here\n")
+        proc (measure! fixture "start" "--task" "x")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"expectedOutputs` target already exists" (:out proc)) (:out proc))
+    (is (no-measurement-allocation? (str dir) log fixture))))
+
+(deftest measurement-hard-limit-fails-after-owned-process-cleanup
+  (let [{:keys [dir] :as fixture} (measurement-fixture {"FAKE_PI_MEASURE" "hang"} {"hardTimeoutMs" 1500})
+        started (System/currentTimeMillis)
+        out (measured-failure fixture "--task" "x")
+        entry (ledger-entry* (str dir) (:task out))
+        grandchild (parse-long (slurp (evidence-path (str dir) (:task out) "fake-subject.grandchild")))
+        execution (json/parse-string (slurp (evidence-path (str dir) (:task out) "execution.json")) true)]
+    (is (= "FAILED" (:status out)))
+    (is (re-find #"hard limit of 1500 ms expired" (:summary out)))
+    (is (< (- (System/currentTimeMillis) started) 30000) "the 300 s subject was stopped, not waited for")
+    (is (true? (:timed-out execution)))
+    (is (= [] (get-in execution [:cleanup :remaining])))
+    (is (nil? (measurement/process-identity grandchild)) "the subject's grandchild was stopped too")
+    (is (empty? (live-members entry)) "no member of the owned session survives")))
+
+;; Detachment needs `setsid`; a PATH without it must refuse before any allocation or subject.
+(defn- path-without [dir excluded]
+  (let [bin (fs/path dir "path-bin")]
+    (fs/create-dirs bin)
+    (doseq [d (str/split (System/getenv "PATH") #":") :when (fs/directory? d)
+            f (fs/list-dir d)
+            :let [link (fs/path bin (fs/file-name f))]
+            :when (and (not= excluded (str (fs/file-name f))) (not (fs/exists? link {:nofollow-links true})))]
+      (fs/create-sym-link link f))
+    (str dir ":" bin)))
+(deftest unsupported-detachment-fails-before-any-subject-launch
+  (let [{:keys [env dir log] :as fixture} (measurement-fixture)
+        control (measure! fixture "run" "--task" "control")
+        _ (is (= "COMPLETE" (get-in (result control) [:result :status])) (:out control))
+        fixture (measurement-fixture)
+        env (assoc (:env fixture) "PATH" (path-without (str (:dir fixture)) "setsid"))
+        proc (apply call! env ["task" "start" "--context" "measurement" "--measurement-config" (:config fixture) "--task" "x"])]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"needs `setsid` on PATH" (:out proc)) (:out proc))
+    (is (no-measurement-allocation? (str (:dir fixture)) (:log fixture) fixture)))
+  (testing "a non-Linux platform is refused rather than assumed to detach the same way"
+    (is (re-find #"Linux only; this platform is Mac OS X" (measurement/detach-refusal {:os-name "Mac OS X" :setsid "/usr/bin/setsid" :proc? true})))
+    (is (nil? (measurement/detach-refusal {:os-name "Linux" :setsid "/usr/bin/setsid" :proc? true})))))
+
+(defn- started-task [proc] (get-in (result proc) [:result :task]))
+;; A probe that signals a whole process group targets only a group this test created: the
+;; process must lead its own session (setsid has run), and never this test's own group.
+(defn- disposable-group! [proc]
+  (let [pid (.pid ^Process (:proc proc))
+        own (measurement/process-identity (.pid (java.lang.ProcessHandle/current)))]
+    (when-not (await! #(= pid (:sid (measurement/process-identity pid)) (:pgid (measurement/process-identity pid))) 10000)
+      (process/destroy-tree proc)
+      (throw (ex-info "probe process never led its own session" {:pid pid})))
+    (when (some #(= pid %) [(:pgid own) (:sid own)]) (throw (ex-info "refusing to target this test's own group" {:pid pid})))
+    pid))
+(defn- kill-group! [pgid]
+  (let [own (measurement/process-identity (.pid (java.lang.ProcessHandle/current)))]
+    (when (some #(= pgid %) [(:pgid own) (:sid own)]) (throw (ex-info "refusing to signal this test's own group" {:pgid pgid})))
+    @(process/process ["kill" "-KILL" "--" (str "-" pgid)] {:out :string :err :string})))
+(defn- background [{:keys [env dir]} & argv]
+  (process/process (into [bin] argv) {:out :string :err :string :env env :dir (str dir)}))
+
+(deftest headless-single-result-waiting-follows-execution-liveness
+  (let [{:keys [env dir] :as fixture} (gated (measurement-fixture))
+        start (measure! fixture "start" "--task" "held")
+        task (started-task start)]
+    (is (zero? (:exit start)) (:out start))
+    (is (= "running" (:status (ledger-entry* (str dir) task))))
+    (testing "a wait-budget timeout is pending and leaves the execution running"
+      (let [out (:result (result (call! env "task" "collect" task "--wait" "--timeout" "1500")))]
+        (is (= {:status "pending" :reason "timeout"} (select-keys out [:status :reason])))
+        (is (= "running" (get-in out [:execution-state :state])))
+        (is (= "running" (get-in (result (call! env "task" "status" task)) [:result :execution-state :state])))))
+    (testing "the waiter stays active while the execution is live, then returns its result"
+      (let [waiter (background fixture "task" "collect" task "--wait" "--timeout" "30000")]
+        (Thread/sleep 2000)
+        (is (.isAlive ^Process (:proc waiter)) "no pane and no agent, yet the waiter keeps waiting")
+        (release! fixture task)
+        (let [done (deref waiter 30000 nil)]
+          (is (= "COMPLETE" (get-in (result done) [:result :status])) (:out done)))))))
+
+(deftest headless-fan-in-waits-while-an-eligible-execution-is-live
+  (let [{:keys [env] :as fixture} (gated (measurement-fixture))
+        a (started-task (measure! fixture "start" "--task" "sample a"))
+        b (started-task (measure! fixture "start" "--task" "sample b"))
+        waiter (background fixture "task" "collect" "--any" "--wait" "--timeout" "30000")]
+    (Thread/sleep 2000)
+    (is (.isAlive ^Process (:proc waiter)) "live headless executions keep the fan-in waiting")
+    (release! fixture b)
+    (let [first-hit (:result (result (deref waiter 30000 nil)))]
+      (is (= [b "COMPLETE"] [(:task first-hit) (:status first-hit)]))
+      (is (zero? (:remaining first-hit))))
+    (release! fixture a)
+    (let [second-hit (:result (result (call! env "task" "collect" "--any" "--wait" "--timeout" "30000")))]
+      (is (= [a "COMPLETE"] [(:task second-hit) (:status second-hit)])))
+    (testing "with every execution stopped and collected, fan-in reports no candidates"
+      (is (= "no-candidates" (get-in (result (call! env "task" "collect" "--any" "--wait" "--timeout" "1000")) [:result :reason]))))))
+
+(deftest concurrent-measurements-publish-independently-of-open-siblings
+  (let [{:keys [env dir] :as fixture} (gated (measurement-fixture))
+        sibling (call! env "task" "start" "worker" "--task" "unrelated open interactive child")
+        a (started-task (measure! fixture "start" "--task" "sample a"))
+        b (started-task (measure! fixture "start" "--task" "sample b"))]
+    (is (zero? (:exit sibling)) (:out sibling))
+    (release! fixture b)
+    (is (await! #(published? (str dir) b) 30000) "b publishes while a and the interactive sibling are open")
+    (is (not (published? (str dir) a)))
+    (is (:live? (cli/execution-state (ledger-entry* (str dir) a))))
+    (is (nil? (:captured-at (ledger-entry* (str dir) (started-task sibling)))) "the sibling's round is still open")
+    (release! fixture a)
+    (is (await! #(published? (str dir) a) 30000))
+    (doseq [task [a b]]
+      (is (= "COMPLETE" (get-in (result (call! env "task" "collect" task)) [:result :status])) task))
+    (testing "a measurement beside an open round runs in its own managed checkout and is checkpointed there"
+      (let [entry (ledger-entry* (str dir) b)]
+        (is (= (get-in entry [:worktree :path]) (:work-root entry)))
+        (is (re-find #"CHECKPOINT: [0-9a-f]{40}" (slurp (:result entry))))))))
+
+(deftest invoker-process-group-termination-leaves-an-acknowledged-sample-collectable
+  (let [{:keys [env dir config] :as fixture} (gated (measurement-fixture))
+        out-file (str (fs/path dir "invoker.out"))
+        marker (str (fs/path dir "acknowledged"))
+        ;; A disposable invoker in its own process group: it runs `start`, marks the
+        ;; acknowledgement, and keeps the group alive until the test kills the whole group.
+        invoker (process/process ["setsid" "bash" "-c" "\"$0\" task start --context measurement --measurement-config \"$1\" --task held >\"$2\"; : >\"$3\"; exec sleep 120"
+                                  bin config out-file marker]
+                                 {:env env :dir (str dir) :out :string :err :string})
+        pgid (disposable-group! invoker)]
+    (try
+      (is (await! #(fs/exists? marker) 60000) "start acknowledged")
+      (let [task (get-in (json/parse-string (slurp out-file) true) [:result :task])
+            entry (ledger-entry* (str dir) task)]
+        (is (not= pgid (get-in entry [:supervisor :pgid])) "the supervisor is outside the invoker's group")
+        (kill-group! pgid)
+        (is (await! #(not (.isAlive ^Process (:proc invoker))) 10000) "the invoker group is gone")
+        (is (:live? (cli/execution-state entry)) "the sample survives its invoker")
+        (release! fixture task)
+        (is (= "COMPLETE" (get-in (result (call! env "task" "collect" task "--wait" "--timeout" "30000")) [:result :status]))))
+      (finally
+        (when (.isAlive ^Process (:proc invoker)) (kill-group! pgid))))))
+
+(deftest supervisor-loss-is-diagnosable-and-prune-needs-the-owned-session-stopped
+  (let [{:keys [env dir] :as fixture} (gated (measurement-fixture))
+        task (started-task (measure! fixture "start" "--task" "held"))
+        entry (ledger-entry* (str dir) task)
+        supervisor (:supervisor entry)
+        prune #(call! env "task" "prune" task)]
+    (is (await! #(fs/exists? (evidence-path (str dir) task "subject.json")) 30000))
+    (testing "prune refuses while the supervisor lives"
+      (let [proc (prune)]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"measurement execution is still running" (:out proc)))))
+    ;; Only this test's own recorded supervisor, verified by start identity, is signalled.
+    (assert (measurement/identity-alive? supervisor))
+    (.destroyForcibly (.get (java.lang.ProcessHandle/of (:pid supervisor))))
+    (is (await! #(not (measurement/identity-alive? supervisor)) 10000))
+    (testing "a dead supervisor is not enough while its subject lives"
+      (let [state (get-in (result (call! env "task" "status" task)) [:result :execution-state])]
+        (is (= {:state "running" :live? true :supervisor-live? false} (select-keys state [:state :live? :supervisor-live?]))))
+      (let [proc (prune)]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"owned session member is alive" (:out proc)))))
+    (is (= [] (measurement/stop-session! (:sid supervisor) nil)) "the test stops the orphaned subject")
+    (testing "the stopped run is diagnosable and nothing is fabricated"
+      (let [out (:result (result (call! env "task" "collect" task "--wait" "--timeout" "5000")))]
+        (is (= {:status "pending" :reason "execution-stopped"} (select-keys out [:status :reason])))
+        (is (= "supervisor-lost" (get-in out [:execution-state :state]))))
+      (is (not (published? (str dir) task))))
+    (testing "prune retires it only now and keeps the partial evidence"
+      (let [proc (prune)
+            pruned (ledger-entry* (str dir) task)]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= {:status "failed" :prune-reason "supervisor-lost"} (select-keys pruned [:status :prune-reason])))
+        (doseq [file ["run.json" "supervisor.json" "subject.json" "supervisor.log" "fake-subject.env"]]
+          (is (fs/exists? (evidence-path (str dir) task file)) file))))))
+
+(deftest measurement-lifecycle-verbs-are-execution-aware
+  (let [{:keys [env dir] :as fixture} (gated (measurement-fixture))
+        task (started-task (measure! fixture "start" "--task" "held"))]
+    (doseq [[argv pattern] [[["task" "continue" task "--task" "again"] #"cannot be continued"]
+                            [["task" "poke" task] #"no agent to prompt"]
+                            [["task" "close" task] #"terminal result is not captured"]
+                            [["task" "close" task "--abandon"] #"--abandon does not apply to a measurement"]]]
+      (let [proc (apply call! env argv)]
+        (is (= 1 (:exit proc)) (str argv))
+        (is (re-find pattern (:out proc)) (str argv ": " (:out proc)))))
+    (testing "orphan handling from another session does not retire a live measurement"
+      (let [out (:result (result (call! (assoc env "FAKE_PARENT_SESSION" "/other/session.jsonl") "task" "orphans" "--prune")))]
+        (is (= [{:status "refused" :task task}] (mapv #(select-keys % [:status :task]) out)))
+        (is (re-find #"still running" (:reason (first out))))))
+    (testing "an interactive publish naming the measurement's child is refused: only its supervisor publishes"
+      (let [entry (ledger-entry* (str dir) task)
+            proc (call! (assoc env "HERDR_ORCH_CHILD" (:child entry) "HERDR_ORCH_TASK" task "HERDR_ORCH_RESULT" (:result entry))
+                        "task" "publish" "--status" "COMPLETE" "--summary" "forged")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"published only by its supervisor" (:out proc)) (:out proc))
+        (is (not (published? (str dir) task)))))
+    (release! fixture task)
+    (is (await! #(published? (str dir) task) 30000))
+    (is (re-find #"not captured" (:out (call! env "task" "close" task))))
+    (is (= "COMPLETE" (get-in (result (call! env "task" "collect" task)) [:result :status])))
+    (testing "close refuses while the owned execution is still live"
+      (let [entry (ledger-entry* (str dir) task)
+            holder (process/process ["setsid" "sleep" "30"])
+            live-id (do (await! #(= (.pid ^Process (:proc holder)) (:sid (measurement/process-identity (.pid ^Process (:proc holder))))) 5000)
+                        (measurement/process-identity (.pid ^Process (:proc holder))))]
+        (try
+          (patch-entry! (str dir) entry :supervisor live-id)
+          (is (re-find #"execution is still running" (:out (call! env "task" "close" task))))
+          (finally (process/destroy-tree holder) (patch-entry! (str dir) entry :supervisor (:supervisor entry))))))
+    (let [closed (call! env "task" "close" task)]
+      (is (zero? (:exit closed)) (:out closed))
+      (is (= "closed" (get-in (result closed) [:result :status]))))
+    (testing "compact retains context and execution provenance"
+      (let [proc (call! env "task" "compact" task)
+            entry (ledger-entry* (str dir) task)]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= {:context "measurement" :execution "headless"} (select-keys entry [:context :execution])))
+        (is (some? (:measurement entry)))
+        (is (some? (:supervisor entry)))))
+    (testing "harvest tolerates a measurement result with no process-retro items"
+      (let [proc (call! env "task" "harvest")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= [] (:result (result proc))))))))
+
+(defn- monitor-command [log]
+  (some #(when (= ["pane" "run"] (vec (take 2 %))) (nth % 3)) (calls log)))
+(deftest measurement-monitor-is-separate-read-only-and-replacement-safe
+  (let [{:keys [env dir log] :as fixture} (gated (measurement-fixture))
+        start (measure! fixture "start" "--tab" "--task" "watched")
+        task (started-task start)
+        entry (ledger-entry* (str dir) task)
+        command (monitor-command log)]
+    (is (zero? (:exit start)) (:out start))
+    (is (= {:pane-id "w:child" :tab-id "w:tab" :shell-pid 9000 :placement "tab"} (:monitor entry)) "a separately identified monitor")
+    (is (nil? (:pane-id entry)) "the monitor is not the measured process's pane")
+    (is (not-any? #(#{["agent" "start"] ["agent" "prompt"]} (vec (take 2 %))) (calls log)))
+    (is (str/includes? command "herdr-orch.supervisor") command)
+    (is (str/includes? command (evidence-path (str dir) task)) command)
+    (let [monitor (process/process ["setsid" "bash" "-c" command] {:dir (str dir) :out :string :err :string})
+          monitor-pgid (disposable-group! monitor)]
+      (try
+        (testing "typing into the monitor reaches nothing"
+          (with-open [in (io/writer (.getOutputStream ^Process (:proc monitor)))]
+            (.write in "INJECTED-INPUT\n/publish\n") (.flush in)))
+        (testing "status reports execution independently of monitor liveness"
+          (fs/create-dirs (fs/path (:state fixture) "panes" "w:child"))
+          (spit (str (fs/path (:state fixture) "panes" "w:child" "gone")) "")
+          (let [status (:result (result (call! env "task" "status" task)))]
+            (is (= "running" (get-in status [:execution-state :state])))
+            (is (false? (get-in status [:monitor :live?])))))
+        (testing "losing the monitor does not stop the measured process"
+          (kill-group! monitor-pgid)
+          (is (await! #(not (.isAlive ^Process (:proc monitor))) 10000))
+          (is (:live? (cli/execution-state entry))))
+        (finally (when (.isAlive ^Process (:proc monitor)) (kill-group! monitor-pgid)))))
+    (release! fixture task)
+    (is (= "COMPLETE" (get-in (result (call! env "task" "collect" task "--wait" "--timeout" "30000")) [:result :status])))
+    (is (= "watched" (slurp (evidence-path (str dir) task "fake-subject.assignment"))) "monitor input never entered the measured context")
+    (is (str/includes? (slurp (evidence-path (str dir) task "fake-subject.env")) "STDIN=/dev/null"))
+    (testing "the monitor shows events, tool activity, errors and execution state"
+      (let [replay @(process/process ["bash" "-c" command] {:dir (str dir) :out :string :err :string})]
+        (is (zero? (:exit replay)) (:err replay))
+        (doseq [line ["[tool] start read" "[stderr] fake subject stderr line" "[supervisor]" "[event] agent_end" "[state] finished: success"]]
+          (is (str/includes? (:out replay) line) line))))
+    (testing "close leaves a gone monitor pane alone"
+      (let [closed (:result (result (call! env "task" "close" task)))]
+        (is (= {:status "closed" :monitor {:status "gone" :pane-id "w:child"}} (select-keys closed [:status :monitor])))
+        (is (not-any? #(= ["pane" "close" "w:child"] (vec (take 3 %))) (calls log))))))
+  (testing "a replaced monitor occupant is never closed; the recorded one is"
+    (doseq [[replaced? expected] [[true "replaced"] [false "closed"]]]
+      (let [{:keys [env dir log] :as fixture} (measurement-fixture)
+            task (started-task (measure! fixture "start" "--split" "--task" "watched"))
+            pane (get-in (ledger-entry* (str dir) task) [:monitor :pane-id])]
+        (is (some #(= ["pane" "split"] (vec (take 2 %))) (calls log)) "--split places the monitor in a split")
+        (is (= "COMPLETE" (get-in (result (call! env "task" "collect" task "--wait" "--timeout" "30000")) [:result :status])))
+        (when replaced?
+          (fs/create-dirs (fs/path (:state fixture) "panes" pane))
+          (spit (str (fs/path (:state fixture) "panes" pane "shell-pid")) "9999"))
+        (let [closed (:result (result (call! env "task" "close" task)))]
+          (is (= expected (get-in closed [:monitor :status])) (str closed))
+          (is (= (not replaced?) (boolean (some #(= ["pane" "close" pane] (vec (take 3 %))) (calls log)))) (str expected)))))))
+
+(deftest worktree-teardown-refuses-a-checkout-of-a-live-measurement
+  (let [{:keys [env dir] :as fixture} (gated (measurement-fixture {"FAKE_PI_ENV_DELAY_MS" "300"} {}))
+        task (started-task (measure! fixture "start" "--worktree" "new" "--task" "held"))
+        entry (ledger-entry* (str dir) task)]
+    (is (= (get-in entry [:worktree :path]) (:work-root entry)))
+    (let [snapshot-path (evidence-path (str dir) task "fake-subject.env")]
+      (is (await! #(fs/exists? snapshot-path) 30000) "the complete snapshot is published")
+      (let [snapshot (slurp snapshot-path)]
+        (is (str/includes? snapshot "STDIN=/dev/null") "the published snapshot retains every recorded field")
+        (is (= (:work-root entry) (second (re-find #"CWD=(.*)" snapshot)))
+            "the subject runs in the selected checkout")))
+    (let [proc (call! env "worktree" "remove" task)]
+      (is (= 1 (:exit proc)))
+      (is (re-find #"live round of this session still references the checkout" (:out proc))))
+    (release! fixture task)
+    (is (= "COMPLETE" (get-in (result (call! env "task" "collect" task "--wait" "--timeout" "30000")) [:result :status])))
+    (is (await! #(not (:live? (cli/execution-state entry))) 10000))
+    (testing "a sealed result does not release the checkout while the owned execution still lives"
+      (let [holder (process/process ["setsid" "sleep" "30"])
+            pid (.pid ^Process (:proc holder))]
+        (try
+          (await! #(= pid (:sid (measurement/process-identity pid))) 5000)
+          (patch-entry! (str dir) (ledger-entry* (str dir) task) :supervisor (measurement/process-identity pid))
+          (is (re-find #"still references the checkout" (:out (call! env "worktree" "remove" task))))
+          (finally (process/destroy-tree holder)
+                   (patch-entry! (str dir) (ledger-entry* (str dir) task) :supervisor (:supervisor entry))))))
+    (let [proc (call! env "worktree" "remove" task)]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= "removed" (get-in (result proc) [:result :status]))))))
+
+;; In-process because publication identity is a function argument here, not a CLI surface.
+(deftest ^:serial process-start-identity-prevents-ownership-after-pid-reuse
+  (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "pid-reuse-"})))
+        holder (process/process ["sleep" "30"])
+        live (measurement/process-identity (.pid ^Process (:proc holder)))
+        reused (update live :start inc)]
+    (try
+      (is (measurement/identity-alive? live))
+      (is (not (measurement/identity-alive? reused)) "the same PID with another start time is not the recorded process")
+      (with-redefs [ledger/assignment-root (constantly dir)]
+        (let [task (ledger/fresh-task)
+              entry {:task task :result (ledger/fresh-result task) :work-root dir :child (str "anonymous-" (subs task 0 8))
+                     :context "measurement" :execution "headless" :parent-session "s" :status "running"
+                     :created-at "2026-01-01T00:00:00Z" :supervisor reused}
+              body {:status "COMPLETE" :summary "s" :artifacts [] :findings [] :process []}]
+          (ledger/write! entry)
+          (is (false? (:supervisor-live? (cli/execution-state entry))) "a reused PID is not claimed as the supervisor")
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not this run's recorded supervisor"
+                                (cli/publish-execution! task body live)))
+          (is (not (fs/exists? (:result entry))) "nothing was published")
+          (ledger/write! (assoc entry :supervisor live))
+          (is (= "COMPLETE" (:status (cli/publish-execution! task body live))) "control: the recorded identity publishes")))
+      (finally (process/destroy-tree holder)))))
+
+;; The one measurement CLI test that runs the real installed Pi and the real adapter: a local
+;; fake Anthropic endpoint (same SSE shape as scripts/pi/fake-anthropic.ts) serves one text
+;; reply, and the supervisor's subject is the installed `pi` resolved from PATH.
+(defn- sse [event data] (str "event: " event "\ndata: " (json/generate-string data) "\n\n"))
+(defn- fake-anthropic! []
+  (let [requests (atom [])
+        body (str (sse "message_start" {:type "message_start" :message {:id "msg_1" :type "message" :role "assistant" :content [] :model "fake-model" :stop_reason nil :usage {:input_tokens 1 :output_tokens 1}}})
+                  (sse "content_block_start" {:type "content_block_start" :index 0 :content_block {:type "text" :text ""}})
+                  (sse "content_block_delta" {:type "content_block_delta" :index 0 :delta {:type "text_delta" :text "done"}})
+                  (sse "content_block_stop" {:type "content_block_stop" :index 0})
+                  (sse "message_delta" {:type "message_delta" :delta {:stop_reason "end_turn" :stop_sequence nil} :usage {:output_tokens 2}})
+                  (sse "message_stop" {:type "message_stop"}))
+        server ((requiring-resolve 'org.httpkit.server/run-server)
+                (fn [req] (swap! requests conj (json/parse-string (slurp (:body req)) true))
+                  {:status 200 :headers {"content-type" "text/event-stream"} :body body})
+                {:ip "127.0.0.1" :port 0 :legacy-return-value? false})]
+    {:url (str "http://127.0.0.1:" ((requiring-resolve 'org.httpkit.server/server-port) server))
+     :requests requests :stop #((requiring-resolve 'org.httpkit.server/server-stop!) server)}))
+(deftest measurement-through-the-real-installed-pi-adapter
+  (let [fake (fake-anthropic!)]
+    (try
+      (let [fixture (measurement-fixture)
+            {:keys [dir]} fixture
+            agent (str (fs/path dir "pi-agent"))
+            _ (fs/create-dirs agent)
+            _ (spit (str (fs/path agent "models.json"))
+                    (json/generate-string {:providers {:fakeanth {:baseUrl (:url fake) :api "anthropic-messages" :apiKey "sk-ant-api-fake"
+                                                                  :models [{:id "fake-model" :reasoning false}]}}}))
+            env (-> (:env fixture) (dissoc "HERDR_ORCH_PI_BIN") (assoc "PI_CODING_AGENT_DIR" agent))
+            assignment "/literal @file -flag {{template}}"
+            proc (apply call! env ["task" "run" "--context" "measurement" "--measurement-config" (:config fixture)
+                                   "--model" "fakeanth/fake-model" "--task" assignment])
+            out (:result (result proc))
+            adapter (fn [file] (json/parse-string (slurp (evidence-path (str dir) (:task out) "adapter" file)) true))
+            run (json/parse-string (slurp (evidence-path (str dir) (:task out) "run.json")) true)]
+        (is (zero? (:exit proc)) (str (:out proc) (:err proc)))
+        (is (= "COMPLETE" (:status out)) (str out))
+        (is (= "pi" (first (:argv run))) "the installed runtime, resolved from PATH")
+        (is (true? (:ok (adapter "audit-1.json"))) "the real request-context audit ran and passed")
+        (is (= 1 (count @(:requests fake))))
+        (let [request (first @(:requests fake))]
+          (is (= "SYSTEM TREATMENT" (get-in request [:system 0 :text])) "the compiled treatment is the whole system prompt")
+          (is (= [{:role "user" :content [{:type "text" :text assignment}]}] (mapv #(update % :content (partial mapv (fn [b] (select-keys b [:type :text])))) (:messages request)))
+              "the literal assignment is the only user message")
+          (is (= ["read"] (mapv :name (:tools request))) "only the configured tool"))
+        (is (re-find #"^\d+\.\d+\.\d+" (str (get-in (adapter "manifest-record.json") [:runtime :piVersion])))
+            "the adapter recorded the installed runtime"))
+      (finally ((:stop fake))))))
+
+;; The environment a real subject received, replayed: every orchestration verb refuses before
+;; any Herdr call, so no root or focused-pane identity can be resolved on the subject's behalf.
+(deftest subject-side-orchestration-is-refused-in-the-recorded-subject-environment
+  (let [{:keys [env dir log] :as fixture} (measurement-fixture)
+        task (get-in (result (measure! fixture "run" "--task" "x")) [:result :task])
+        recorded (into {} (keep #(when-let [[_ k v] (re-matches #"((?:HERDR|ORCH)_[A-Z_]+)=(.*)" %)] [k v])
+                       (str/split-lines (slurp (evidence-path (str dir) task "fake-subject.env")))))
+        subject-env (merge (into {} (remove (fn [[k _]] (re-find #"^(HERDR|ORCH)_" k)) env)) recorded)]
+    (is (= task (get recorded "HERDR_ORCH_SUBJECT")))
+    (doseq [argv [["task" "start" "worker" "--task" "x"] ["task" "close" task] ["task" "continue" task "--task" "x"]
+                  ["task" "orphans"] ["task" "publish" "--task" task "--status" "COMPLETE" "--summary" "forged"]]]
+      (let [before (count (calls log))
+            proc (apply call! subject-env argv)]
+        (is (= 1 (:exit proc)) (str argv))
+        (is (re-find #"measurement subject cannot run orchestration commands" (:out proc)) (str argv))
+        (is (= before (count (calls log))) (str argv ": no Herdr call"))))
+    (is (= 1 (count (ledger/result-items (:result (ledger-entry* (str dir) task))))) "the forged publish created no item")))
+
+;; --- measurement lifecycle repair (task 8a0e5d7c review) --------------------------------
+;; A disposable stand-in supervisor: a `setsid sleep` that leads its own session, so its
+;; recorded identity is live until the test destroys that one process.
+(defn- session-holder! []
+  (let [proc (process/process ["setsid" "sleep" "60"])
+        pid (.pid ^Process (:proc proc))]
+    (when-not (await! #(= pid (:sid (measurement/process-identity pid))) 5000)
+      (process/destroy-tree proc)
+      (throw (ex-info "holder never led its own session" {:pid pid})))
+    {:proc proc :identity (measurement/process-identity pid)}))
+(defn- headless-entry! [dir holder]
+  (let [task (ledger/fresh-task)
+        entry {:task task :result (ledger/fresh-result task) :work-root dir :child (str "anonymous-" (subs task 0 8))
+               :context "measurement" :execution "headless" :parent-session "s" :status "running"
+               :created-at (str (java.time.Instant/now)) :supervisor (:identity holder)
+               :measurement {:evidence-dir (str (fs/create-dirs (fs/path dir "evidence" task)))}}]
+    (ledger/write! entry)
+    entry))
+(def ^:private completed-body {:status "COMPLETE" :summary "s" :artifacts [] :findings [] :process []})
+;; Publishes through the real `publish-execution!` as the holder, then stops the holder: the
+;; supervisor's own publish-then-exit, placed exactly where a test injects it.
+(defn- publish-and-exit! [entry holder]
+  (cli/publish-execution! (:task entry) completed-body (:identity holder))
+  (process/destroy-tree (:proc holder))
+  (when-not (await! #(not (measurement/identity-alive? (:identity holder))) 5000)
+    (throw (ex-info "holder did not stop" {}))))
+
+;; The liveness of a headless execution is read before the stream snapshot, as `agent list`
+;; is, so a supervisor that publishes and exits at that boundary is captured on the same call.
+(deftest ^:serial headless-fan-in-captures-a-result-published-at-the-liveness-boundary
+  (let [original cli/execution-state
+        ;; `when` decides, per execution-state call, whether this call is the injection point;
+        ;; `before?` places the publish-and-exit before the real liveness read (it then reads
+        ;; stopped) or right after a live read (it then reads live).
+        injecting (fn [holders before? fired]
+                    (fn [entry]
+                      (let [holder (get holders (:task entry))
+                            fire? (and holder (not (contains? @fired (:task entry))))]
+                        (when fire? (swap! fired conj (:task entry)))
+                        (if (and fire? before?)
+                          (do (publish-and-exit! entry holder) (original entry))
+                          (let [state (original entry)]
+                            (when fire? (publish-and-exit! entry holder))
+                            state)))))
+        run (fn [body]
+              (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "anyrace-"})))
+                    holders (atom [])]
+                (try
+                  (with-redefs [ledger/assignment-root (constantly dir)
+                                cli/parent-identity (constantly {:parent-session "s"})
+                                herdr/agents (constantly [])]
+                    (body dir (fn [] (let [h (session-holder!)] (swap! holders conj h) h))))
+                  (finally (doseq [h @holders] (process/destroy-tree (:proc h)))
+                           (fs/delete-tree dir)))))]
+    (testing "control: a live execution with nothing published keeps the fan-in pending"
+      (run (fn [dir holder!]
+             (headless-entry! dir (holder!))
+             (is (= {:status "pending" :reason "timeout"} (select-keys (cli/collect-any! {}) [:status :reason]))))))
+    (testing "a supervisor that published and exited as its liveness was read is captured on that --wait call"
+      (run (fn [dir holder!]
+             (let [h (holder!) entry (headless-entry! dir h) fired (atom #{})
+                   out (with-redefs [cli/execution-state (injecting {(:task entry) h} true fired)]
+                         (cli/collect-any! {:wait true :timeout "5000"}))]
+               (is (= #{(:task entry)} @fired) "the publication was injected at the liveness read")
+               (is (= {:status "COMPLETE" :task (:task entry) :remaining 0} (select-keys out [:status :task :remaining])) (str out))))))
+    (testing "a supervisor that published and exited right after a live read is captured without waiting"
+      (run (fn [dir holder!]
+             (let [h (holder!) entry (headless-entry! dir h) fired (atom #{})
+                   out (with-redefs [cli/execution-state (injecting {(:task entry) h} false fired)]
+                         (cli/collect-any! {}))]
+               (is (= #{(:task entry)} @fired))
+               (is (= {:status "COMPLETE" :task (:task entry)} (select-keys out [:status :task])) (str out))))))
+    (testing "beside a vanished interactive child, the measurement result is still captured"
+      (run (fn [dir holder!]
+             (let [h (holder!) entry (headless-entry! dir h) fired (atom #{})
+                   other (ledger/fresh-task)]
+               (ledger/write! {:task other :result (ledger/fresh-result other) :work-root dir :child "worker-gone"
+                               :parent-session "s" :status "prompted" :created-at "2000-01-01T00:00:00Z"})
+               (let [out (with-redefs [cli/execution-state (injecting {(:task entry) h} true fired)]
+                           (cli/collect-any! {:wait true :timeout "5000"}))]
+                 (is (= #{(:task entry)} @fired))
+                 (is (= {:status "COMPLETE" :task (:task entry)} (select-keys out [:status :task])) (str out)))
+               (is (= {:status "pending" :reason "no-live-children"} (select-keys (cli/collect-any! {}) [:status :reason]))
+                   "control: with the result captured, the vanished interactive child alone is reported")))))
+    (testing "several samples publishing at the boundary are each captured in turn"
+      (run (fn [dir holder!]
+             (let [ha (holder!) a (headless-entry! dir ha) hb (holder!) b (headless-entry! dir hb) fired (atom #{})]
+               (with-redefs [cli/execution-state (injecting {(:task a) ha (:task b) hb} true fired)]
+                 (let [first-hit (cli/collect-any! {:wait true :timeout "5000"})
+                       second-hit (cli/collect-any! {:wait true :timeout "5000"})]
+                   (is (= #{(:task a) (:task b)} @fired))
+                   (is (= [["COMPLETE" 1] ["COMPLETE" 0]] (mapv (juxt :status :remaining) [first-hit second-hit])))
+                   (is (= #{(:task a) (:task b)} (set (map :task [first-hit second-hit]))))))
+               (is (= "no-candidates" (:reason (cli/collect-any! {}))))))))))
+
+;; `--worktree new` runs `git worktree add`, whose post-checkout hook holds the launcher in its
+;; preparation phase until the test releases it. The hook gives up after 60 s.
+(defn- hold-preparation! [{:keys [dir]}]
+  (let [gate (str (fs/path dir "hook-gate"))
+        hook (fs/path dir ".git" "hooks" "post-checkout")]
+    (fs/create-dirs gate)
+    (spit (str hook) (str "#!/bin/sh\n: > '" gate "/entered'\n"
+                          "for _ in $(seq 1 1200); do [ -e '" gate "/release' ] && exit 0; sleep 0.05; done\n"))
+    (fs/set-posix-file-permissions hook "rwxr-xr-x")
+    {:entered (str (fs/path gate "entered")) :release (str (fs/path gate "release"))}))
+(defn- only-entry [dir]
+  (let [files (fs/glob (fs/path dir ".tmp" "herdr-orch" "ledger") "*.json")]
+    (when (= 1 (count files)) (json/parse-string (slurp (str (first files))) true))))
+(defn- backdate! [dir entry]
+  (patch-entry! dir entry :created-at (str (.minusSeconds (java.time.Instant/now) 600))))
+
+(deftest ^:serial stale-launch-snapshots-honour-the-current-acknowledgement
+  (let [{:keys [env dir config] :as fixture} (gated (measurement-fixture))
+        {:keys [entered release]} (hold-preparation! fixture)
+        gate (str (fs/path dir "supervisor-start-release"))
+        launcher (process/process ["bb" "--config" (str root "/bb.edn") "--deps-root" root
+                                   (str root "/skills/herdr-orch/scripts/test/fixtures/delayed-supervisor.clj") gate
+                                   "task" "start" "--context" "measurement" "--measurement-config" config
+                                   "--worktree" "new" "--task" "boundary"]
+                                  {:env env :dir (str dir) :out :string :err :string})
+        task (atom nil)]
+    (try
+      (when-not (await! #(fs/exists? entered) 30000)
+        (throw (ex-info "launcher did not reach preparation" {})))
+      (let [stale (only-entry (str dir))
+            _ (reset! task (:task stale))
+            fired (atom false)]
+        (with-redefs [ledger/assignment-root (constantly (str dir))
+                      cli/parent-identity (constantly {:parent-session (:parent-session stale)})
+                      herdr/agents (fn []
+                                     ;; collect-any! has read ledger/entries but not liveness yet.
+                                     (spit release "go")
+                                     (let [done (deref launcher 30000 :launcher-timeout)]
+                                       (when-not (= 0 (:exit done))
+                                         (throw (ex-info "launcher did not acknowledge" {:done done}))))
+                                     (reset! fired true)
+                                     [])]
+          (is (:live? (cli/execution-state stale)) "control: preparation has a live launcher")
+          (is (nil? (:supervisor stale)) "the waiter holds a pre-acknowledgement entry")
+          (let [out (cli/collect-any! {:wait true :timeout "50"})
+                current (ledger/read! @task)]
+            (is @fired "launch completed between entries and liveness")
+            (is (not (measurement/identity-alive? (:launcher stale))))
+            (is (not (fs/exists? (evidence-path (str dir) @task "supervisor.json")))
+                "the supervisor cannot supply fallback evidence yet")
+            (is (:live? (cli/execution-state current)) "control: the acknowledgement names a live execution")
+            (is (= "timeout" (:reason out)) (str out))
+            (is (= "timeout" (:reason (cli/wait-and-capture! stale 50 true)))
+                "single waiting must also refresh the entry it retains across ticks")
+            (with-redefs [ledger/entries (constantly [stale])
+                          cli/own-persona (constantly nil)
+                          cli/parent-identity (constantly {:parent-session "other-session"})]
+              (is (= "refused" (try (:status (first (cli/orphans! {:prune true})))
+                                      (catch clojure.lang.ExceptionInfo e (ex-message e))))
+                  "a stale orphan listing refuses the live execution before the final update"))
+            (is (nil? (:pruned-at (ledger/read! @task))))))
+        (spit gate "go")
+        (release! fixture @task)
+        (is (= "COMPLETE" (get-in (result (call! env "task" "collect" @task "--wait" "--timeout" "30000")) [:result :status]))
+            "control: releasing the same supervisor yields a collectable result"))
+      (finally
+        (spit release "go")
+        (spit gate "go")
+        (deref launcher 10000 nil)
+        (when @task
+          (let [id (:supervisor (ledger-entry* (str dir) @task))
+                own (measurement/process-identity (.pid (java.lang.ProcessHandle/current)))]
+            (when (and (measurement/identity-alive? id) (= (:pid id) (:sid id) (:pgid id))
+                       (not (contains? (set [(:sid own) (:pgid own)]) (:sid id))))
+              (measurement/stop-session! (:sid id) -1))))))))
+
+(deftest ^:serial orphan-prune-rechecks-execution-inside-its-final-update
+  (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "orphan-ack-"})))
+        holder (session-holder!)]
+    (try
+      (with-redefs [ledger/assignment-root (constantly dir)
+                    cli/own-persona (constantly nil)
+                    cli/parent-identity (constantly {:parent-session "foreign"})]
+        (let [acknowledged (headless-entry! dir holder)
+              stopped (-> acknowledged (dissoc :supervisor) (assoc :created-at "2000-01-01T00:00:00Z"))
+              update! ledger/update!
+              fired (atom false)]
+          (ledger/write! stopped)
+          (is (false? (:live? (cli/execution-state stopped))) "control: the initial observation proves stopped")
+          (with-redefs [ledger/update! (fn [task f & args]
+                                        ;; Acknowledgement arrives after the listing's stop observation.
+                                        (ledger/write! acknowledged)
+                                        (reset! fired true)
+                                        (apply update! task f args))]
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"execution started running during the liveness check"
+                                 (cli/orphans! {:prune true}))))
+          (is @fired "the acknowledgement arrived at the final update boundary")
+          (is (= "running" (:status (ledger/read! (:task stopped)))))
+          (is (nil? (:pruned-at (ledger/read! (:task stopped)))))
+          (is (:live? (cli/execution-state (ledger/read! (:task stopped)))))
+          (ledger/write! stopped)
+          (is (= "pruned" (:status (first (cli/orphans! {:prune true}))))
+              "control: without acknowledgement the stopped round remains prunable")
+          (is (= "not-started" (:prune-reason (ledger/read! (:task stopped)))))))
+      (finally (process/destroy-tree (:proc holder)) (fs/delete-tree dir)))))
+
+(deftest ^:serial a-launch-refresh-error-is-not-proof-of-death
+  (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "refresh-error-"})))
+        holder (session-holder!)]
+    (try
+      (with-redefs [ledger/assignment-root (constantly dir)
+                    cli/own-persona (constantly nil)
+                    cli/parent-identity (constantly {:parent-session "foreign"})]
+        (let [entry (-> (headless-entry! dir holder) (dissoc :supervisor) (assoc :launcher (:identity holder)))]
+          (ledger/write! entry)
+          (is (:live? (cli/execution-state entry)) "control: a live launcher needs no refresh")
+          (let [probes (atom 0)]
+            (with-redefs [measurement/identity-alive? (fn [_] (= 1 (swap! probes inc)))
+                          ledger/read! (fn [_] (throw (ex-info "live launcher must not refresh" {})))]
+              (is (:live? (cli/execution-state entry)) "a launcher seen live may acknowledge before another probe")
+              (is (= 1 @probes) "do not reclassify from a second, unrefreshed death observation")))
+          (process/destroy-tree (:proc holder))
+          (when-not (await! #(not (measurement/identity-alive? (:launcher entry))) 5000)
+            (throw (ex-info "launcher holder did not stop" {})))
+          (with-redefs [ledger/read! (fn [_] (throw (ex-info "refresh unavailable" {})))]
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"refresh unavailable" (cli/execution-state entry)))
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"refresh unavailable" (cli/wait-and-capture! entry 50 false)))
+            (with-redefs [cli/parent-identity (constantly {:parent-session "s"})]
+              (is (thrown-with-msg? clojure.lang.ExceptionInfo #"refresh unavailable" (cli/collect-any! {}))))
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"refresh unavailable" (cli/orphans! {:prune true}))))
+          (is (nil? (:pruned-at (ledger/read! (:task entry)))))
+          (is (false? (:live? (cli/execution-state entry))) "control: a successful refresh proves the dead launch stopped")))
+      (finally (process/destroy-tree (:proc holder)) (fs/delete-tree dir)))))
+
+(deftest slow-launch-preparation-is-owned-by-its-live-launcher
+  (let [{:keys [env dir config] :as fixture} (gated (measurement-fixture))
+        {:keys [entered release]} (hold-preparation! fixture)
+        launcher (background fixture "task" "start" "--context" "measurement" "--measurement-config" config "--worktree" "new" "--task" "held")]
+    (try
+      (is (await! #(fs/exists? entered) 30000) "the launcher is held in checkout preparation")
+      (let [entry (backdate! (str dir) (only-entry (str dir)))
+            task (:task entry)]
+        (is (= "allocating" (:status entry)))
+        (is (measurement/identity-alive? (:launcher entry)) "the launcher recorded its own process identity")
+        (testing "preparation longer than the acknowledgement window is still a live launch"
+          (is (= {:state "launching" :live? true} (select-keys (cli/execution-state (ledger-entry* (str dir) task)) [:state :live?])))
+          (let [proc (call! env "task" "prune" task)]
+            (is (= 1 (:exit proc)))
+            (is (re-find #"still launching" (:out proc)) (:out proc)))
+          (is (= {:status "pending" :reason "timeout"} (select-keys (:result (result (call! env "task" "collect" "--any"))) [:status :reason]))
+              "fan-in keeps the launch as a live candidate"))
+        (spit release "go")
+        (let [done (deref launcher 60000 nil)
+              started (ledger-entry* (str dir) task)]
+          (is (zero? (:exit done)) (:out done))
+          (is (= "running" (:status started)))
+          (is (nil? (:pruned-at started)))
+          (release! fixture task)
+          (is (= "COMPLETE" (get-in (result (call! env "task" "collect" task "--wait" "--timeout" "30000")) [:result :status])))))
+      (finally (spit release "go") (deref launcher 60000 nil)))))
+
+(deftest a-round-retired-during-launch-is-never-resurrected
+  (let [{:keys [env dir config] :as fixture} (gated (measurement-fixture))
+        {:keys [entered release]} (hold-preparation! fixture)
+        launcher (background fixture "task" "start" "--context" "measurement" "--measurement-config" config "--worktree" "new" "--task" "held")]
+    (try
+      (is (await! #(fs/exists? entered) 30000))
+      (let [entry (only-entry (str dir))
+            task (:task entry)]
+        ;; No verb retires a launch while its launcher lives; this models a retirement the
+        ;; launcher could not see, to prove its later writes never overwrite one.
+        (patch-entry! (str dir) entry :status "failed" :failure-phase "orphaned" :pruned-at "2026-01-01T00:00:00Z" :prune-reason "not-started")
+        (spit release "go")
+        (let [done (deref launcher 60000 nil)
+              after (ledger-entry* (str dir) task)]
+          (is (= 1 (:exit done)))
+          (is (re-find #"retired or closed during launch" (:out done)) (:out done))
+          (is (= {:status "failed" :failure-phase "orphaned" :prune-reason "not-started"}
+                 (select-keys after [:status :failure-phase :prune-reason])) "the retirement stands as written")
+          (is (nil? (:supervisor after)))
+          (is (not (fs/exists? (evidence-path (str dir) task "supervisor.json"))) "no supervisor was started")
+          (is (not (fs/exists? (evidence-path (str dir) task "subject.json"))) "no subject was launched")))
+      (finally (spit release "go") (deref launcher 60000 nil)))))
+
+(deftest ^:serial a-dead-launcher-leaves-a-prunable-not-started-round
+  (let [{:keys [env dir config] :as fixture} (gated (measurement-fixture))
+        {:keys [entered release]} (hold-preparation! fixture)
+        ;; A disposable launcher leading its own session, so the whole launch (git and the
+        ;; hook included) can be killed as one group without touching this test's group.
+        launcher (process/process ["setsid" bin "task" "start" "--context" "measurement" "--measurement-config" config
+                                   "--worktree" "new" "--task" "held"]
+                                  {:env env :dir (str dir) :out :string :err :string})
+        pgid (disposable-group! launcher)]
+    (try
+      (is (await! #(fs/exists? entered) 30000))
+      (let [entry (only-entry (str dir))
+            task (:task entry)]
+        (is (:live? (cli/execution-state entry)) "control: live while its launcher lives")
+        (kill-group! pgid)
+        (is (await! #(not (measurement/identity-alive? (:launcher entry))) 10000) "the launcher is gone")
+        (with-redefs [ledger/assignment-root (constantly (str dir))]
+          (is (= {:state "not-started" :live? false} (select-keys (cli/execution-state (ledger-entry* (str dir) task)) [:state :live?]))
+              "a fresh entry rules out acknowledgement after launcher death without an age limit"))
+        (let [proc (call! env "task" "prune" task)]
+          (is (zero? (:exit proc)) (:out proc))
+          (is (= {:status "failed" :prune-reason "not-started"} (select-keys (ledger-entry* (str dir) task) [:status :prune-reason])))))
+      (finally (spit release "go")
+               (when (.isAlive ^Process (:proc launcher)) (kill-group! pgid))))))
+
+(deftest publication-failure-is-pruned-as-such-with-its-evidence
+  (let [{:keys [env dir] :as fixture} (gated (measurement-fixture))
+        task (started-task (measure! fixture "start" "--task" "held"))
+        entry (ledger-entry* (str dir) task)]
+    (is (await! #(fs/exists? (evidence-path (str dir) task "subject.json")) 30000))
+    ;; An incomplete checkout identity makes the supervisor's checkpoint, and so its
+    ;; publication, fail after the run finished.
+    (patch-entry! (str dir) entry :worktree {:path "/nonexistent"})
+    (release! fixture task)
+    (is (await! #(fs/exists? (evidence-path (str dir) task "publication-error.json")) 30000))
+    (is (await! #(not (:live? (cli/execution-state entry))) 10000))
+    (is (= "finished" (:state (cli/execution-state (ledger-entry* (str dir) task)))))
+    (let [proc (call! env "task" "prune" task)]
+      (is (zero? (:exit proc)) (:out proc))
+      (is (= "publication-failed" (:prune-reason (ledger-entry* (str dir) task)))))
+    (doseq [file ["execution.json" "publication-error.json" "supervisor.log" "subject.json" "run.json"]]
+      (is (fs/exists? (evidence-path (str dir) task file)) file))))
+
+(deftest orphaned-captured-measurement-closes-only-once-its-owner-has-ended
+  (let [{:keys [env dir log source] :as fixture} (measurement-fixture)
+        plain (get-in (result (measure! fixture "run" "--task" "x")) [:result :task])
+        watched (get-in (result (measure! fixture "run" "--tab" "--task" "y")) [:result :task])
+        monitor-pane (get-in (ledger-entry* (str dir) watched) [:monitor :pane-id])
+        other (assoc env "FAKE_PARENT_SESSION" "/other/session.jsonl")
+        listed #(set (map :task (:result (result (call! (merge other %) "task" "orphans")))))
+        closed? #(some? (:closed-at (ledger-entry* (str dir) %)))]
+    (is (every? #(= "COMPLETE" (:status (ledger-entry* (str dir) %))) [plain watched]))
+    (testing "an owner still attached to an agent admits nothing, listed or closed"
+      (is (= #{} (listed {"FAKE_AGENT_LIST_SESSION" source})))
+      (is (= [] (:result (result (call! (assoc other "FAKE_AGENT_LIST_SESSION" source) "task" "orphans" "--close")))))
+      (is (not-any? closed? [plain watched])))
+    (testing "an unusable agent listing is not proof that the owner ended"
+      (is (= #{} (listed {"FAKE_AGENT_LIST_NO_AGENTS_KEY" "1"})))
+      (is (= [] (:result (result (call! (assoc other "FAKE_AGENT_LIST_NO_AGENTS_KEY" "1") "task" "orphans" "--close")))))
+      (is (not-any? closed? [plain watched])))
+    (testing "a live execution is not admitted"
+      (let [entry (ledger-entry* (str dir) plain)
+            holder (session-holder!)]
+        (try
+          (patch-entry! (str dir) entry :supervisor (:identity holder))
+          (is (= #{watched} (listed {})))
+          (finally (process/destroy-tree (:proc holder)) (patch-entry! (str dir) entry :supervisor (:supervisor entry))))))
+    (testing "with the owner ended, both are listed and closed; a replaced monitor is left alone"
+      (is (= #{plain watched} (listed {})))
+      (fs/create-dirs (fs/path (:state fixture) "panes" monitor-pane))
+      (spit (str (fs/path (:state fixture) "panes" monitor-pane "shell-pid")) "9999")
+      (let [out (into {} (map (juxt :task identity)) (:result (result (call! other "task" "orphans" "--close"))))]
+        (is (= "closed" (get-in out [plain :status])) (str out))
+        (is (= {:status "closed" :monitor {:status "replaced" :pane-id monitor-pane}} (select-keys (get out watched) [:status :monitor])) (str out))
+        (is (every? closed? [plain watched]))
+        (is (not-any? #(= ["pane" "close" monitor-pane] (vec (take 3 %))) (calls log)) "the replaced occupant was not closed"))
+      (is (= #{} (listed {})) "closed rounds are no longer orphans"))))
+
+;; In-process because the publication body is a function argument here, not a CLI surface.
+(deftest ^:serial execution-publication-validates-the-body-before-checkpointing
+  (let [{:keys [dir] :as fixture} (gated (measurement-fixture))
+        dir (str dir)
+        task (started-task (measure! fixture "start" "--worktree" "new" "--task" "held"))
+        entry (ledger-entry* dir task)
+        checkout (get-in entry [:worktree :path])
+        head #(str/trim (:out @(process/process ["git" "rev-parse" "HEAD"] {:dir checkout :out :string})))
+        holder (session-holder!)]
+    (try
+      (is (await! #(fs/exists? (evidence-path dir task "subject.json")) 30000))
+      (patch-entry! dir entry :supervisor (:identity holder))
+      (spit (str (fs/path checkout "scratch.txt")) "dirty\n")
+      (let [before (head)]
+        (with-redefs [ledger/assignment-root (constantly dir)]
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (cli/publish-execution! task (assoc completed-body :artifacts ["/etc/passwd"]) (:identity holder))))
+          (is (= before (head)) "a refused body leaves no checkpoint commit")
+          (is (str/includes? (:out @(process/process ["git" "status" "--porcelain"] {:dir checkout :out :string})) "?? scratch.txt"))
+          (is (empty? (ledger/result-items (:result entry))))
+          (let [out (cli/publish-execution! task completed-body (:identity holder))]
+            (is (= "COMPLETE" (:status out)) "control: a valid body is checkpointed and published")
+            (is (= (:checkpoint out) (head)))
+            (is (not= before (head))))))
+      (finally
+        (process/destroy-tree (:proc holder))
+        (release! fixture task)
+        (await! #(fs/exists? (evidence-path dir task "execution.json")) 30000)))))
+
+(deftest ^:serial an-early-supervisor-failure-names-its-stderr
+  (let [dir (str (fs/canonicalize (fs/create-temp-dir {:prefix "early-supervisor-"})))]
+    (try
+      (with-redefs-fn {#'cli/supervisor-command (fn [& _] ["--not-a-setsid-option"])}
+        (fn []
+          (let [e (try (#'cli/start-supervisor! (str (fs/path dir "run.json")) dir) nil
+                       (catch clojure.lang.ExceptionInfo e e))
+                stderr (str (fs/path dir "supervisor.err"))]
+            (is (some? e) "setsid refused the option, so the process never led its own session")
+            (is (= stderr (:stderr (ex-data e))))
+            (is (str/includes? (str (ex-message e)) stderr))
+            (is (re-find #"setsid" (slurp stderr)) "the real cause is in that file"))))
+      (finally (fs/delete-tree dir)))))

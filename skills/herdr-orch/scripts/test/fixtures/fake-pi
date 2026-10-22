@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Stand-in for the installed `pi` where a CLI test exercises adapter wiring (HERDR_ORCH_PI_BIN).
+# It speaks the adapter file protocol without running Pi: it logs argv and each operation's
+# request, and answers from FAKE_PI_* variables. The real adapter runs in scripts/pi/test.sh.
+set -uo pipefail
+printf '%s\037' "$@" >>"${FAKE_PI_LOG:?}"; printf '\n' >>"$FAKE_PI_LOG"
+# Measurement subject mode (HERDR_ORCH_MEASUREMENT_MANIFEST set by the supervisor): instead of
+# Pi and the adapter, write the adapter's evidence shape per FAKE_PI_MEASURE, and record what
+# the subject received (routing env, stdin, assignment) beside the evidence.
+if [ -n "${HERDR_ORCH_MEASUREMENT_MANIFEST:-}" ]; then
+  manifest="$(cat "$HERDR_ORCH_MEASUREMENT_MANIFEST")"
+  mfield() { printf '%s' "$manifest" | grep -o "\"$1\":\"[^\"]*\"" | head -1 | cut -d'"' -f4; }
+  evidence="$(mfield evidenceDir)"
+  mkdir -p "$evidence"
+  received="$(dirname "$evidence")/fake-subject"
+  subject_env="$(mktemp "$received.env.XXXXXX")"
+  { if [ "${FAKE_PI_ENV_DELAY_MS:-0}" != 0 ]; then sleep "0.${FAKE_PI_ENV_DELAY_MS}"; fi; env | grep -E '^(HERDR_|ORCH_)' | sort; printf 'STDIN=%s\n' "$(readlink /proc/self/fd/0)"; printf 'CWD=%s\n' "$PWD"; } >"$subject_env"
+  mv -f "$subject_env" "$received.env"
+  cp "$(mfield assignmentFile)" "$received.assignment"
+  printf 'measurement %s\n' "${HERDR_ORCH_SUBJECT:-}" >>"${FAKE_PI_LOG}.ops"
+  printf '{"type":"tool_execution_start","toolName":"read"}\n'
+  printf 'fake subject stderr line\n' >&2
+  # A gate per subject task lets a test hold samples open and release them independently.
+  if [ -n "${FAKE_PI_GATE_DIR:-}" ]; then
+    for _ in $(seq 1 1200); do [ -e "$FAKE_PI_GATE_DIR/$HERDR_ORCH_SUBJECT" ] && break; sleep 0.05; done
+  fi
+  ok='{"ok":true,"violations":[]}'
+  terminal='{"success":true,"requests":1,"violations":[],"turns":[]}'
+  code=0
+  case "${FAKE_PI_MEASURE:-success}" in
+    success) ;;
+    exit-nonzero) code=3 ;;
+    malformed) terminal='not json' ;;
+    harness-failed) terminal='{"success":false,"reason":"harness error","requests":1,"violations":[]}' ;;
+    audit-failed) ok='{"ok":false,"violations":["unexpected model-visible text"]}' ;;
+    output) printf 'produced\n' >"${FAKE_PI_OUTPUT:?}" ;;
+    # A grandchild in the same session, recorded so a test can prove the tree was stopped.
+    hang) sleep 300 & printf '%s' "$!" >"$received.grandchild"; sleep 300 ;;
+  esac
+  printf '%s' "$terminal" >"$evidence/terminal.json"
+  printf '%s' "$ok" >"$evidence/audit-1.json"
+  printf '{"model":"fake","messages":[]}' >"$evidence/request-1.json"
+  printf '{"type":"agent_end"}\n'
+  exit "$code"
+fi
+op="${HERDR_ORCH_ADAPTER:-}"
+request="$(cat "${HERDR_ORCH_ADAPTER_REQUEST:-/dev/null}")"
+printf '%s %s\n' "$op" "$request" >>"${FAKE_PI_LOG}.ops"
+result="${HERDR_ORCH_ADAPTER_RESULT:?}"
+field() { printf '%s' "$request" | grep -o "\"$1\":\"[^\"]*\"" | head -1 | cut -d'"' -f4; }
+case "$op" in
+  fork-capability) printf '{"ok":true,"missing":[]}' >"$result" ;;
+  fork-create)
+    if [ -n "${FAKE_PI_REFUSE:-}" ]; then printf '{"ok":false,"error":"%s"}' "$FAKE_PI_REFUSE" >"$result"; exit 1; fi
+    role=none
+    case "$request" in *'"callerRole"'*) role=snapshot ;; esac
+    case "$request" in *'"overlay"'*) role=overlay ;; esac
+    : >"$FAKE_PI_FORK_FILE"
+    printf '{"ok":true,"sessionFile":"%s","sessionId":"fork-id","source":{"path":"%s","sessionId":"src","sha256":"abc","leafId":"leaf"},"boundary":{"entryId":"E-BOUNDARY","batchEntryId":"E-BATCH","rule":"rule","messages":3},"marker":{"entryId":"E-MARKER"},"role":{"source":"%s"},"targetCwd":"%s","runtime":{"piVersion":"fake"}}' \
+      "$FAKE_PI_FORK_FILE" "$(field sourceSession)" "$role" "$(field targetCwd)" >"$result" ;;
+  fork-discard) rm -f "$(field sessionFile)"; printf '{"ok":true,"removed":true}' >"$result" ;;
+  *) printf '{"ok":false,"error":"unknown op"}' >"$result"; exit 1 ;;
+esac

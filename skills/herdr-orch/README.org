@@ -1,15 +1,16 @@
 #+TITLE: herdr-orch -- harness-agnostic subagent orchestration
 #+PROPERTY: header-args :eval no
 
-| Document                 | Content                                                                    |
-|--------------------------+----------------------------------------------------------------------------|
-| This file                | What the skill does, and how to use and configure it                       |
-| [[file:design.org][design.org]]               | Design rationale, namespace map, maintenance notes, history, and API reviews |
-| [[file:SKILL.md][SKILL.md]]                 | Delegation, trust, and pane-safety policy that an agent loads at runtime   |
-| [[file:references/traits.md][references/traits.md]]     | Trait store, admission bar, probing protocol, and their measured rationale |
-| [[file:scripts/README.md][scripts/README.md]]        | CLI invocation and raw passthrough                                         |
-| [[file:scripts/AGENTS.md][scripts/AGENTS.md]]        | Maintainer tests, smoke, fixtures, and README regeneration                 |
-| [[file:scripts/docs/contract.md][scripts/docs/contract.md]] | Every mechanical contract                                                  |
+| Document                       | Content                                                                      |
+|--------------------------------+------------------------------------------------------------------------------|
+| This file                      | What the skill does, and how to use and configure it                         |
+| [[file:design.org][design.org]]                     | Design rationale, namespace map, maintenance notes, history, and API reviews |
+| [[file:SKILL.md][SKILL.md]]                       | Delegation, trust, and pane-safety policy that an agent loads at runtime     |
+| [[file:references/traits.md][references/traits.md]]           | Trait store, admission bar, probing protocol, and their measured rationale   |
+| [[file:scripts/README.md][scripts/README.md]]              | CLI invocation and raw passthrough                                           |
+| [[file:references/workflow-recipes.md][references/workflow-recipes.md]] | Root-owned staged delegation, measurements, and approved live smoke          |
+| [[file:scripts/AGENTS.md][scripts/AGENTS.md]]              | Maintainer tests, smoke, fixtures, and README regeneration                   |
+| [[file:scripts/docs/contract.md][scripts/docs/contract.md]]       | Every mechanical contract                                                    |
 
 * Table of Contents                                       :TOC_1_gh:noexport:
 - [[#what-is-this][What is this?]]
@@ -36,12 +37,14 @@ Developed against =pi=, and verified against Claude Code and Codex. Other harnes
 The parent owns both ends of a round: it chooses where the child works, and it owns everything the child produces.
 
 - Target :: Before the child exists, the parent resolves one checkout: its own, an attached checkout in the same repository (=--worktree <path>=), or a new managed checkout (=--worktree new=). Without the flag, a read-only child or the first write-enabled child shares the caller's checkout, and each additional concurrent write-enabled child gets a managed one. A managed checkout starts from the source =HEAD= on branch =orch/<task-prefix>=, before any pane exists.
-- Spawn :: =oh task run= blocks for the result. =oh task start= returns at once. The child's cwd is the resolved checkout. The persona does not describe the topology, and the child has no commit permission.
+- Spawn :: =oh task run= blocks for the result. =oh task start= returns at once. The child's cwd is the resolved checkout. The persona does not describe the topology, and the child has no commit permission. The persona is optional: a persona-less child gets the assignment, any explicit =--trait= selections and the launcher guidance, but no role and no authority. =--context fresh= is the default ("spawn a subagent"); =--context fork= ("fork a subagent") starts a Pi child that inherits the completed earlier turns of the caller's own Pi session, not the current turn that delegates; the assignment carries any same-turn findings. =--context measurement= runs a headless Pi sample under a detached supervisor that publishes its result; it opens no pane unless =--tab= or =--split= asks for a read-only monitor.
 - Publish :: =oh task publish= appends immutable items to the round's stream, including interim reports and monitor observations. A terminal status (=COMPLETE=, =BLOCKED=, =FAILED=) seals the round. In a non-shared checkout, publication commits pending non-ignored changes and records the tip as =CHECKPOINT=, so recovery does not depend on the child committing. In the shared checkout, publication does not touch Git. Publication from a read-only child with uncommitted changes is refused.
 - Collect and reconcile :: =oh task collect= captures published items. =collect --any= takes the first in-flight child to publish. For a child with its own checkout, =collect=, =status=, and =oh worktree list= also report base, branch, tip, and checkout state, with committed, dirty, and ignored paths as separate sets.
 - Close, continue, or tear down :: Capture never closes a pane. =oh task close= closes a settled child's pane. =oh task continue= gives the same child another round in the same checkout. =oh worktree remove= deletes only a managed checkout that is owned, unreferenced, and clean. The branch always stays.
 
 The parent integrates. =oh= never merges, rebases, pushes, deletes a branch, or commits in the shared checkout. Isolation keeps concurrent writers out of each other's index, but does not prove that their edits compose, so remeasure the combined tree. =orch/*= branches stay until the parent integrates or deletes them.
+
+[[file:references/workflow-recipes.md][references/workflow-recipes.md]] shows root-owned staging, independent validation, repeated headless measurements, evidence retention and the gated live context smoke.
 
 [[file:scripts/docs/contract.md]] section 'Worktree reconciliation and teardown' gives the reconciliation shape, the removal guards, and recovery after =.tmp/= is cleared before a child publishes. Section 'Close' gives the close guards.
 
@@ -66,11 +69,11 @@ npx skills add https://github.com/cormacc/dotagents/tree/main/skills/herdr-orch
 
 Three chains resolve project > home > packaged:
 
-| What                                             | Locations, highest precedence first                                              |
-|--------------------------------------------------+----------------------------------------------------------------------------------|
-| Persona definitions (=<name>.md=)                  | =<git-root>/.agents/subagents/=, =~/.agents/subagents/=, this skill's =subagents/= |
+| What                                                | Locations, highest precedence first                                                |
+|-----------------------------------------------------+------------------------------------------------------------------------------------|
+| Persona definitions (=<name>.md=)                   | =<git-root>/.agents/subagents/=, =~/.agents/subagents/=, this skill's =subagents/= |
 | Trait fragments (=<name>.md= or =<name>/prompt.md=) | =<git-root>/.agents/traits/=, =~/.agents/traits/=, this skill's =traits/=          |
-| Model and harness config (=config.edn=)            | =<git-root>/.agents/subagents/=, =~/.agents/subagents/=, this skill's =subagents/= |
+| Model and harness config (=config.edn=)             | =<git-root>/.agents/subagents/=, =~/.agents/subagents/=, this skill's =subagents/= |
 
 - A persona shadows by name: the highest-precedence file wins.
 - A trait also shadows by name. In one layer, =<name>.md= wins over =<name>/prompt.md=.
@@ -248,11 +251,11 @@ Publication and capture work without recognition. =task publish= degrades open, 
 
 =:defaults :placement= chooses where a child's pane comes from:
 
-| Value      | At root                           | Below root (spawner has =HERDR_ORCH_PERSONA=) |
-|------------+-----------------------------------+---------------------------------------------|
-| =:split=     | split the caller's pane           | split the caller's pane                     |
-| =:tab=       | new tab in the caller's workspace | new tab in the caller's workspace           |
-| =:tab-split= | new tab                           | split the caller's pane                     |
+| Value        | At root                           | Below root (spawner has =HERDR_ORCH_PERSONA=) |
+|--------------+-----------------------------------+-----------------------------------------------|
+| =:split=     | split the caller's pane           | split the caller's pane                       |
+| =:tab=       | new tab in the caller's workspace | new tab in the caller's workspace             |
+| =:tab-split= | new tab                           | split the caller's pane                       |
 
 Resolution, highest first:
 

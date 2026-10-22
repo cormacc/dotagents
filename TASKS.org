@@ -20,15 +20,12 @@
   - [[#explore-agent-memory-options][Explore agent memory options]]
   - [[#investigate-clojure-in-codemode][Investigate clojure in codemode]]
   - [[#review-herdr-tsk-plugin-for-inspiration-for-org-tasks][Review herdr tsk plugin for inspiration for org-tasks]]
-  - [[#extend-herdr-orch-to-support-workflows][Extend herdr-orch to support workflows]]
 - [[#improvements][Improvements]]
   - [[#ot-move-tuipi-overlay-exposure-and---before--after-ordering][ot move: TUI/pi-overlay exposure and --before/--after ordering]]
   - [[#org-tasks-spec-checks-warn-forever-once-a-records-change-is-committed][org-tasks: spec checks warn forever once a record's change is committed]]
   - [[#herdr-plugin-wrapper-for-herdr-orch][herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#traits-re-probe-every-fragment-against-synthetic-non-decaying-scenarios][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
-  - [[#herdr-orch-allow-persona-less-subagents][herdr-orch: allow persona-less subagents]]
-  - [[#consider-leveraging-pi-fork-for-subagents][Consider leveraging pi /fork for subagents]]
   - [[#vendored-skill-hygiene][Vendored skill hygiene]]
   - [[#traits-retry-the-simple-probe-at-a-lower-model-tier][traits: retry the %simple probe at a lower model tier]]
   - [[#herdr-orch-fix-incompatible-withincompatibilities-doc-code-mismatch-in-contractmd-and-traitsmd][herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md]]
@@ -305,79 +302,6 @@ Evidence:
 - `glab schedule create --cron "0 6 * * *" --description "..." --ref develop --output json` -> `Unknown flag: --output.`
 - `glab schedule list --output json` succeeded and returned valid JSON in the same session.
 
-** TODO [#B] herdr-orch: child context modes :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: f8f0d6bb-b571-4802-b1cc-d27d5c2fd30d
-:CREATED: [2026-10-20 Tue 12:24]
-:END:
-:LOGBOOK:
-- Created [2026-10-20 Tue 12:24]
-:END:
-Aggregate for spawn shapes that differ in how much context a child receives: fork (inherits the parent session), persona (current default), persona-less (assignment plus injected guidance only), and measurement (sample and instruction only, no launcher wrap). Design them together so the option surface (derived from help signatures since bc9c38e) gains one coherent axis rather than one flag per shape. Create a change-record (ot record create) before implementation; the child tasks carry the evidence gathered so far. Workflows (orchestrator-owned multi-stage delegation) is the final phase and may resolve to a skill or prompt only, since subagent re-use already maps to oh task continue.
-*** TODO [#B] herdr-orch: allow persona-less subagents :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: bf34e806-3505-4280-9ce0-85602a0c6bd0
-:CREATED: [2026-08-12 Wed 23:12]
-:END:
-:LOGBOOK:
-- Created [2026-08-12 Wed 23:12]
-:END:
-A persona is mandatory today: =oh task run --task 'write a readme'= fails with "persona not found in project, home, or packaged roster" and lists the seven packaged names. There is no =--persona-file=, no inline persona argument, and no runtime trait-only construction -- =roster= (cli.clj) resolves =<name>.md= through project > home > packaged and fails when nothing matches. So the two natural throwaway delegations ("spawn a subagent to write a readme", "spawn a subagent to check the scripts folder contents") cannot be expressed without first authoring a definition file.
-
-Desired outcome: a spawn with no persona, and/or a light persona composed at runtime from traits, without adding a definition to the roster. Both shapes want the same thing -- an assignment-only child that still gets the delegation, identity, and publication guidance the launcher injects.
-
-Why this matters beyond convenience: =resolve-model='s same-kind inheritance tier fires only for a persona declaring no =model:=, and every packaged persona declares one. A persona-less child is the case that makes inheritance the normal path rather than an extension-point affordance. The producer side already exists -- =HERDR_ORCH_MODEL= is injected per spawn and a pi root falls back to its own =PI_MODEL=/=PI_PROVIDER= ([[file:skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution', [[file:skills/herdr-orch/scripts/docs/contract.md]] section 'Environment') -- so this task is the consumer that gives it routine use.
-
-Open questions to settle before implementing:
-- Where does the persona text come from when none is named: a minimal built-in body, or the assignment alone plus injected guidance?
-- What are =kind=, =spawns=, =retro=, and =timeout= for a persona-less child? =spawns= almost certainly =none= (leaf), but the rest have no frontmatter to read and today every policy resolves through =*-policy= functions that expect one.
-- Does a runtime trait-composed persona need a name for the ledger label and the child name (=child-label= composes =<persona>-<index>-<model>=), and if so what is it?
-- Does =--print-prompt= still make sense as the inspection route.
-
-Verified [2026-08-12 Wed] against cli.clj at 6a89b0f plus the housekeeping commits: the roster failure above is real, all seven packaged personas declare =model:=, and no inline-persona flag exists.
-
-Second shape, added [2026-08-19] from the prose-style evaluation: a *measurement* session, which is a stricter case than the persona-less child above and pulls in the opposite direction on one point. That evaluation ran 45 sessions across three rounds as raw =pi --print= invocations, entirely outside the ledger, because =oh= could not express them. Two reasons, both verified:
-
-- No environment-override surface. =oh task run= and =oh task start= accept only =--model=, =--timeout=, =--tab=/=--split=, =--spawns=, =--retro=/=--no-retro=, =--prompt-extra=, =--print-prompt=, and =--worktree=. The runs needed =--no-skills=, =--no-context-files=, =--skill <one path>=, =--tools read,write=, =--provider lemonade=, a raw model id outside the four weight aliases, and =--mode json=. Grepping contract.md for those terms returns nothing, against a positive control of three =Model resolution= matches.
-- The injected guidance is itself contamination. The persona-less shape above still wants the launcher's delegation, identity, and publication text. A measurement subject must receive only the sample and the instruction under test: the control condition's whole treatment was one sentence, so any wrapper would measure something else. Whatever lands must let a caller opt out of the wrap entirely, not merely skip the persona.
-
-The hard part is the completion signal: the contract requires the child to publish a v1 envelope through the injected launcher, and a bare model rewriting prose cannot. A measurement mode needs a different terminal condition, such as process exit plus the expected output artefact existing. Batching matters too, because 15 sessions per round do not each want a pane.
-
-Cost of the gap, measured: the isolation audit was rebuilt by hand in each round (transcript capture, tool-call extraction, a positive-controlled contamination matrix). As a spawn property it would be derived once.
-
-Two verified =pi= facts any implementation must respect, both of which cost a round when they were assumed rather than checked:
-- =--no-extensions= disables provider-auth extensions. A headless refusal whose message described third-party usage billing was caused by this flag, not by an account limit. Isolate the tool surface with =--tools <allowlist>= instead.
-- =--tools= is case-sensitive and fails silently. =--tools Read= enables no tool and exits 0; =--tools read= works. Probed directly: the capitalised form returned =NO-TOOL= where the lowercase form returned the file's token.
-
-*EDIT* [2026-08-27 Thu] The gap itself re-confirmed: no =--persona-file= and no inline persona flag exist anywhere under =scripts/src/= (control: 93 =persona= matches in =cli.clj=). The reasoning above is not re-verified, and its snapshot is stale -- =6a89b0f= (2026-08-12) precedes =4741d59= and 20 further commits to =cli.clj=/=herdr.clj=, among them =d757aa7= "give same-kind model inheritance a producer", which is exactly the =resolve-model= tier this task cites as its motivation, and =bc9c38e=, which now derives accepted options from the help signatures and therefore changes how a new flag is added. Re-read =resolve-model= and the option surface before designing; the packaged personas' =model:= declarations also need re-counting rather than restating the seven-of-seven figure.
-
-*EDIT* [2026-10-20 Tue] Re-checked at e67e868. Partly overtaken: =base-analyst= (read-only, =traits: [read-only, simple]=) plus the repeatable =--trait NAME= spawn option now cover a throwaway read-only delegation without a new definition file. Still open: no =--persona-file= or inline persona flag; all 9 packaged personas (=skills/herdr-orch/subagents/=) declare =model:= and the home layer (=subagents/=) holds only =config.edn=, so the same-kind inheritance tier still never fires for a shipped persona; the measurement-mode shape is untouched. Narrow the design to those three gaps. Now a child of the child-context-modes aggregate f8f0d6bb.
-*** TODO [#B] Consider leveraging pi /fork for subagents
-:PROPERTIES:
-:CUSTOM_ID: 84653126-cd7e-412a-9761-d43eaad7f97f
-:CREATED: [2026-08-07 Fri 10:06]
-:END:
-:LOGBOOK:
-- Created [2026-08-07 Fri 10:06]
-:END:
-Depending on scope of use -- using fork rather than spawn might be a good idea for some subagents -- let them inherit the orchestrator context without bloating it.
-This could work via an optional `:fork :true` in the subagent header (default `:fork :false`)
-This should be straightforward using pi. Maybe also using claude/codex? Investigate...
-
-See this subagent implementation makes good use of fork -- includes a 'defaultContext' metadata item in the header.
-https://github.com/Neuron-Mr-White/UniPi/blob/main/packages/subagents/agents
-*** TODO Extend herdr-orch to support workflows
-:PROPERTIES:
-:CUSTOM_ID: 45adb239-2987-4a69-b06c-1d5feb1f8071
-:CREATED: [2026-10-08 Thu 19:11]
-:END:
-:LOGBOOK:
-- Created [2026-10-08 Thu 19:11]
-:END:
-There may be little or no extension necessary and this can be covered via a skill or prompt? The planner is already a workflow of sorts, though for a single subagent.
-But a workflow should be owned by an orchestrator (or sub-orchestrator) and be able to spawn subagents per stage, re-use subagents etc.
-Look at https://github.com/osolmaz/pi-workflows for prior art / inspiration
-
 ** TODO [#B] traits: probe backlog :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: b5bc69bb-0c51-43b8-92d8-ae6b54653aee
@@ -502,6 +426,21 @@ oh worktree remove deletes the managed checkout but retains its orch/<id> branch
 - Created [2026-10-02 Fri 09:07]
 :END:
 pi/extensions/pi-clojure/package.json pins @earendil-works/pi-coding-agent 0.80.10 separately from the root package.json (bumped to 1.0.0 by record design/log/2026-10-01-review-herdr-orch-w-r-t-pi-v1-0-0-releas.org). pi/extensions/pi-clojure/test.sh exits 127 because ./node_modules/.bin/tsc is absent: agents.nix installs that directory with --omit=dev. Measured 2026-10-02 with both the 0.80.10 and 1.0.0 root pins; the tsx test files themselves pass.
+
+** TODO herdr-orch: re-check Pi-version-specific test rules after each Pi upgrade :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 216bd6b9-ed8e-4277-b653-bea0ea689706
+:CREATED: [2026-10-22 Thu 18:43]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 18:43]
+:END:
+Acceptance criteria:
+- [ ] After an installed Pi upgrade, ~skills/herdr-orch/scripts/pi/test.sh~ passes on the new runtime, or each failure is traced to a runtime change and its test rule is re-derived from the new installed consumer.
+- [ ] The native case in ~fork-provider-context.test.ts~ (tool-declaration placement) and the ~turnBoundary~ turn rule in ~fork-adapter.ts~ are re-checked against the new ~pi-ai~ and ~pi-coding-agent~ sources.
+- [ ] Must not: derive an expectation from an observed request payload.
+
+Scope/reference: ~skills/herdr-orch/scripts/README.md~ names the Pi 1.4.0 declaration rule. The 1.3.0 to 1.4.0 upgrade changed ~buildRequestBody~ tool resolution in ~openai-codex-responses.js~ and broke that case (see the record ~design/log/2026-10-21-child-context-modes.org~, Gotchas). Trigger: a change to the installed ~pi~ store path.
 
 * Agent feedback
 
@@ -677,3 +616,4 @@ Evidence:
 - Created [2026-10-19 Mon 13:34]
 :END:
 With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.
+

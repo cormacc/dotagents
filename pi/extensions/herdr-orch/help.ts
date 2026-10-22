@@ -33,6 +33,9 @@ export function rosterArgs(section: Section, detail: boolean): string[] {
 
 const USAGE = [
   "- Ask the agent to delegate, for example: *Spawn a light scout to find the config loader.*",
+  "- *Spawn a subagent* starts a fresh context (the default); *fork a subagent* inherits your completed earlier turns, not the current one (`--context fork`, Pi only); put same-turn findings in the assignment. A persona is optional for a fresh child.",
+  "- *Measure* a treatment with `--context measurement --measurement-config PATH`: a headless Pi sample with no pane unless `--tab` or `--split` adds a read-only monitor.",
+  "- Root-owned staged delegation, repeated measurements, and the approval-gated context smoke are in `skills/herdr-orch/references/workflow-recipes.md`.",
   "- Name a weight (`heavy`, `middle`, `light`, `feather`) or another alias to pick the model for that one spawn.",
   "- Write `#name` in a delegation request to ask the agent to add `--trait name` to that spawn.",
   "- Write `%name` in your own prompt to expand that trait into your message (pi `traits` extension).",

@@ -1,5 +1,6 @@
 (ns herdr-orch.cli
-  (:require [babashka.fs :as fs]
+  (:require [babashka.classpath :as classpath]
+            [babashka.fs :as fs]
             [babashka.process :as process]
             [cheshire.core :as json]
             [clojure.java.io :as io]
@@ -7,6 +8,8 @@
             [herdr-orch.core :as core]
             [herdr-orch.herdr :as herdr]
             [herdr-orch.ledger :as ledger]
+            [herdr-orch.measurement :as measurement]
+            [herdr-orch.pi-adapter :as pi-adapter]
             [herdr-orch.traits :as traits])
   (:import [java.io ByteArrayOutputStream]
            [java.nio.channels FileChannel]
@@ -14,7 +17,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start <persona> --task TEXT [--tab|--split] [--spawns NAMES|none] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -110,6 +113,7 @@
   (fs/parent (fs/parent (fs/path (launcher-bin)))))
 ;; Shipped personas and config are siblings of `scripts/`, so both derive from
 ;; the resolved launcher path rather than the assignment root or current working directory.
+(defn fork-adapter-file [] (str (fs/path (skill-directory) "scripts" "pi" "fork-adapter.ts")))
 (defn packaged-personas-directory []
   (str (fs/path (skill-directory) "subagents")))
 (defn persona-directories []
@@ -173,7 +177,9 @@
 ;; The single `traits/interpolate` call below then substitutes the whole composed text --
 ;; base body, derived body, and any appended metadata fragments -- exactly once.
 (defn- trait-interpolation [persona path persona-text explicit-traits]
-  (let [frontmatter (core/parse-frontmatter persona-text)
+  (let [;; A nil `persona-text` is a persona-less launch: no role text, an empty effective
+        ;; frontmatter, and only explicit traits to compose.
+        frontmatter (if persona-text (core/parse-frontmatter persona-text) {})
         base (resolve-base (persona-directories) persona frontmatter)
         {derived-frontmatter-block :frontmatter derived-body :body} (traits/split-frontmatter persona-text)
         composed-body (str (:body base) derived-body)
@@ -199,7 +205,7 @@
       (when-let [trait (first (:repeats result))]
         (interpolation-failure! "appears more than once in the persona body" trait directories))
       (let [sources (mapv #(select-keys % [:trait :source :path]) (:resolved result))]
-        (cond-> {:persona-path (str path) :frontmatter effective-frontmatter
+        (cond-> {:persona-path (some-> path str) :frontmatter effective-frontmatter
                  :persona-text (:text result)
                  :traits (mapv :trait sources) :trait-sources sources}
           base (assoc :base-persona (:name base))
@@ -265,6 +271,7 @@
 (defn parent-identity []
   (let [agent (herdr/agent! (System/getenv "HERDR_PANE_ID"))]
     {:parent-session (or (get-in agent [:agent_session :value]) (:pane_id agent)) :parent-kind (:agent agent) :parent-pane (:pane_id agent)
+     :parent-session-kind (get-in agent [:agent_session :kind])
      :parent-model (parent-model (:agent agent))
      :parent-effort (parent-effort (:agent agent))}))
 ;; Composed from the resolved spawn policy, not the persona name: any persona whose
@@ -304,8 +311,25 @@
 ;; persona-local output sections keep only the role-specific definition of a key finding.
 (def ^:private publication-guidance
   "Published `SUMMARY` must be a single line. Write multi-line detail to a distinct `.tmp/*-report.md` file, pass the report with `--artifact`, and emit each key finding with `--finding`, starting it with its evidence location (`path:line`, or a URL) when it has one; do not hide findings only in `SUMMARY`, and never treat pane text as the result. Never use `HERDR_ORCH_RESULT` as a report file. Use `HERDR_ORCH_RESULT` only through `task publish`. Each `--artifact` value must be a path relative to your working directory (`$HERDR_ORCH_WORK_ROOT`); an absolute path, or one that escapes that root, is refused.")
-(defn prompt-text [{:keys [spawns persona-path task result waiting-policy assignment prompt-extra retro-skill]}]
-  (str "Read " persona-path ", adopt that role. Task: " assignment "\n\n"
+;; A persona-less launch has no role to adopt: it receives the assignment, and any explicit
+;; traits as a composed instruction file when one exists.
+(defn- assignment-lead [{:keys [persona-path role-absent assignment]}]
+  (cond (nil? persona-path) (str "Task: " assignment)
+        role-absent (str "Read " persona-path " and follow its instructions. Task: " assignment)
+        :else (str "Read " persona-path ", adopt that role. Task: " assignment)))
+;; A fork retains useful context without making the caller's unfinished workflow the task.
+;; Put this boundary before the assignment so inherited requests cannot define its scope.
+(def ^:private fork-guidance
+  (str "Fork task boundary\nThis conversation was forked from its caller. "
+       "The assignment below is your current task, not a request to resume the caller's workflow. "
+       "Earlier requests and tool actions are inherited context, not work to continue unless this assignment explicitly asks for it. "
+       "Keep relevant inherited context and constraints that do not conflict with this assignment. "
+       "The selected role and delegation policy below still apply; inherited permissions do not grant authority. "
+       "Use only the TASK and RESULT below for this launch, not earlier task, result or identity values."
+       "\n\nCurrent delegated assignment:\n"))
+(defn prompt-text [{:keys [spawns task result waiting-policy prompt-extra retro-skill fork?] :as launch}]
+  (str (when fork? fork-guidance)
+       (assignment-lead launch) "\n\n"
        (delegation-guidance spawns) " Herdr assigned TASK=" task " and RESULT=" result ". "
        "When finished, publish exactly once with `$HERDR_ORCH_BIN task publish --status COMPLETE --summary \"...\"`; do not send result text to the parent PTY. "
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
@@ -351,6 +375,13 @@
   (or (some->> (one opts :timeout) (core/timeout-value! "--timeout" nil))
       (:timeout entry)
       core/default-timeout-ms))
+;; The one delegated-child predicate. `oh` injects HERDR_ORCH_PERSONA into every child it
+;; launches, with the display token `anonymous` when the launch has no role, so an absent
+;; role never makes a delegated process look root-owned. HERDR_ORCH_ANONYMOUS marks that
+;; absence; a roster persona that is literally named `anonymous` does not carry it.
+(defn own-persona [] (System/getenv "HERDR_ORCH_PERSONA"))
+(defn own-role-absent? [] (some? (System/getenv "HERDR_ORCH_ANONYMOUS")))
+(defn own-task [] (System/getenv "HERDR_ORCH_TASK"))
 (defn worktree-target-option [opts] (one opts :worktree))
 (defn placement-flag [opts]
   (let [tab? (boolean (one opts :tab)) split? (boolean (one opts :split))]
@@ -359,13 +390,18 @@
 (defn placement-policy [opts config]
   (core/resolve-placement {:flag (placement-flag opts)
                            :configured (get-in config [:defaults :placement])
-                           :below-root? (some? (System/getenv "HERDR_ORCH_PERSONA"))}))
+                           :below-root? (some? (own-persona))}))
 ;; Depth and capability gate: below root (own HERDR_ORCH_PERSONA set) a run/start is
 ;; refused before herdr/preflight!, ledger allocation, and any pane mutation, so a denied
 ;; spawn creates nothing billable. Blank and unset HERDR_ORCH_SPAWNS both parse to
 ;; the empty allow-list — the empty-string/unset distinction is never load-bearing.
+;; An absent target role is refused before the name-based allow-list is consulted: the
+;; allow-list names roster personas, and the display token must not satisfy it.
 (defn enforce-spawns! [persona opts]
-  (when-let [own (System/getenv "HERDR_ORCH_PERSONA")]
+  (when-let [own (own-persona)]
+    (when (nil? persona)
+      (fail "spawn refused: a delegated agent may launch only a named roster persona, never a persona-less child"
+            {:own-persona own :target nil}))
     (let [flag (one opts :spawns)]
       (when (and flag (not= "none" flag))
         (fail "below-root spawns cannot grant capability: only `--spawns none` is permitted"
@@ -384,41 +420,157 @@
   (let [directories (persona-directories)
         resolved (core/resolve-spawns {:persona persona :flag (one opts :spawns) :frontmatter frontmatter
                                        :resolve-persona #(core/resolve-persona (fn [path] (fs/exists? path)) directories %)})]
-    (if (System/getenv "HERDR_ORCH_PERSONA")
+    (if (own-persona)
       {:spawns [] :spawns-source "depth"}
       resolved)))
-(defn preview! [persona opts waiting-policy]
-  (herdr/preflight!)
-  (let [path (roster persona)
-        persona-text (slurp (str path))
-        composition (trait-interpolation persona path persona-text (all opts :trait))
+(def context-modes ["fresh" "fork" "measurement"])
+;; A measurement subject receives only its configured treatment and the literal assignment, so
+;; every option that would add launcher, role, retro or spawn context is refused rather than
+;; silently ignored.
+(def measurement-refused-options [[:trait "--trait"] [:prompt-extra "--prompt-extra"] [:retro "--retro"]
+                                  [:no-retro "--no-retro"] [:spawns "--spawns"]])
+(defn context-policy
+  "Validates `--context` against the positional persona and the measurement option matrix.
+  Runs before every allocation."
+  [persona opts]
+  (let [mode (or (one opts :context) "fresh")]
+    (when-not (some #{mode} context-modes)
+      (fail "--context must be fresh, fork or measurement" {:context mode}))
+    (if (= "measurement" mode)
+      (do (when persona
+            (fail "--context measurement does not take a persona" {:context mode :persona persona}))
+          (doseq [[k flag] measurement-refused-options :when (contains? opts k)]
+            (fail (str "--context measurement refuses " flag) {:context mode :option flag}))
+          (when-not (one opts :measurement-config)
+            (fail "--context measurement requires --measurement-config PATH" {:context mode})))
+      (when (contains? opts :measurement-config)
+        (fail "--measurement-config is accepted only with --context measurement" {:context mode})))
+    {:context mode}))
+;; A fork without an overlay reapplies the caller's launch-time role snapshot. An unnamed root
+;; or a persona-less caller has none to apply, and a named delegated caller without a recorded
+;; snapshot is refused with the remedy rather than silently given a different role. Authority is
+;; unchanged: the inherited persona is the effective target and meets the same allow-list.
+(defn- inherited-role [context persona]
+  (when (and (= "fork" context) (nil? persona) (own-persona) (not (own-role-absent?)))
+    (let [task (own-task)
+          snapshot (when task (try (:role-snapshot (ledger/read! task)) (catch Exception _ nil)))]
+      (or (when (and (:persona snapshot) (string? (:text snapshot))) snapshot)
+          (fail "fork refused: the caller has no recorded role snapshot to inherit; name a persona to fork with an explicit role"
+                {:own-persona (own-persona) :task task})))))
+(defn- inherited-composition [snapshot]
+  {:persona-path nil :frontmatter (core/parse-frontmatter (:text snapshot)) :persona-text (:text snapshot)
+   :composed-content (:text snapshot) :traits [] :trait-sources []})
+;; The caller's own persistent Pi session is the fork source. Anything else (another harness,
+;; a session Herdr reports by id rather than path, a path that is not a readable file) fails
+;; before allocation instead of becoming a fresh session.
+(defn- fork-source! [ident kind]
+  (when-not (= "pi" kind)
+    (fail "--context fork needs a pi child: the resolved kind is not pi" {:kind kind}))
+  (let [source (:parent-session ident)]
+    (when-not (and (= "pi" (:parent-kind ident)) (= "path" (:parent-session-kind ident)) (string? source) (fs/regular-file? source))
+      (fail "--context fork needs the caller's own persistent pi session: it is unreadable, ephemeral or not a pi session"
+            {:parent-kind (:parent-kind ident) :session-kind (:parent-session-kind ident) :session source}))
+    source))
+;; The single launch resolver shared by `preview!` and `spawn!`: every stable configuration
+;; input (role composition, kind, model, effort, config, placement, retro, spawns, timeout)
+;; resolves here, once per invocation, before parent-session allocation or any pane/ledger
+;; mutation. A nil `persona` with no inherited role is a persona-less launch: an empty effective
+;; frontmatter and only the explicit traits.
+(defn- resolve-launch [persona opts]
+  (let [{:keys [context]} (context-policy persona opts)
+        inherited (inherited-role context persona)
+        effective (or persona (:persona inherited))
+        path (when persona (roster persona))
+        composition (if inherited
+                      (inherited-composition inherited)
+                      (trait-interpolation persona path (some-> path str slurp) (all opts :trait)))
         frontmatter (:frontmatter composition)
-        prompt-persona-path (if (:composed-content composition) "<composed-persona-path>" path)
         ident (parent-identity)
         kind (kind-policy opts frontmatter (:parent-kind ident))
+        fork-source (when (= "fork" context) (fork-source! ident kind))
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
-        effort (effort-policy persona opts frontmatter kind ident)
-        config (config)
-        placement (placement-policy opts config)
-        retro (retro-policy persona opts frontmatter)
-        spawns (spawns-policy persona opts frontmatter)
-        timeout (timeout-policy persona opts frontmatter)
-        _ (worktree-target-option opts)]
+        effort (effort-policy effective opts frontmatter kind ident)
+        config (config)]
+    {:context context :path path :composition composition :frontmatter frontmatter
+     :inherited inherited :fork-source fork-source :overlay-persona persona
+     :role-absent (nil? effective) :label-persona (or effective core/anonymous-persona)
+     :ident ident :kind kind :model model :effort effort :config config
+     :placement (placement-policy opts config)
+     :retro (retro-policy effective opts frontmatter)
+     :spawns (spawns-policy effective opts frontmatter)
+     :timeout (timeout-policy effective opts frontmatter)
+     :requested-target (worktree-target-option opts)}))
+;; The measurement counterpart of `resolve-launch`, shared by preview and launch: the closed
+;; configuration (frozen file texts), kind, model, effort and wait budget resolve here, before
+;; any allocation. A measurement has no role, so the frontmatter is empty and kind comes from
+;; the caller's harness; only a pi subject has an audited adapter. Visibility is explicit only:
+;; `--tab`/`--split` request a monitor, and the configured placement default never applies.
+(defn- resolve-measurement [opts]
+  (let [resolved (measurement/read-config (one opts :measurement-config))
+        ident (parent-identity)
+        kind (kind-policy opts {} (:parent-kind ident))
+        _ (when-not (= "pi" kind)
+            (fail "--context measurement needs a pi subject: the resolved kind is not pi" {:kind kind}))
+        model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter {} :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
+        effort (effort-policy nil opts {} kind ident)
+        config (config)]
+    {:resolved resolved :treatment (measurement/compile-treatment resolved)
+     :ident ident :kind kind :model model :effort effort :config config
+     :model-args (core/model-args config kind model) :effort-args (core/effort-args config kind (:effort effort))
+     :monitor (placement-flag opts)
+     :timeout (timeout-policy nil opts {})
+     :requested-target (worktree-target-option opts)}))
+(defn- measurement-inputs [resolved treatment]
+  {:config-path (:config-path resolved) :treatment-sha256 (core/sha256 treatment)
+   :system-prompt (when-let [s (:system-prompt resolved)] {:path (:path s) :sha256 (core/sha256 (:text s))})
+   :skills (mapv (fn [s] {:path (:path s) :sha256 (core/sha256 (:text s))}) (:skills resolved))
+   :tools (:tools resolved) :extensions (:extensions resolved)
+   :hard-timeout-ms (:hard-timeout-ms resolved) :expected-outputs (:expected-outputs resolved)})
+;; `:preview` is the exact treatment the subject's system prompt carries; the assignment is the
+;; only user message and travels as literal text, so it is reported beside it.
+(defn- measurement-preview! [opts]
+  (herdr/preflight!)
+  (let [{:keys [resolved treatment kind model effort config model-args effort-args monitor timeout]} (resolve-measurement opts)]
+    {:preview treatment :assignment (task-text opts)
+     :context "measurement" :execution "headless" :persona nil :role-absent true
+     :measurement (measurement-inputs resolved treatment)
+     :kind kind :model model :model-canonical (core/canonical-model config model) :model-args model-args
+     :effort (:effort effort) :effort-source (:effort-source effort) :effort-args effort-args
+     :monitor (or monitor "none")
+     :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)}))
+(defn- interactive-preview! [persona opts waiting-policy]
+  (herdr/preflight!)
+  (let [{:keys [context path composition role-absent label-persona inherited fork-source kind model effort config placement retro spawns timeout]} (resolve-launch persona opts)
+        prompt-persona-path (if (:composed-content composition) "<composed-persona-path>" (some-> path str))]
     (cond->
-     {:preview (prompt-text {:spawns (:spawns spawns) :persona-path prompt-persona-path :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
+     {:preview (prompt-text {:spawns (:spawns spawns) :persona-path prompt-persona-path :role-absent role-absent :fork? (= "fork" context) :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})
       ;; :model is the resolved (pre-alias) ID; :model-canonical is that ID after the
       ;; single-hop `:aliases` translation; :model-args is the effective translated
       ;; native spelling (e.g. `["--model" "opus"]`) from the merged roster config.
       ;; :persona-text is the exact effective persona text -- base-plus-derived body and
       ;; any appended metadata fragments, substituted -- the same text a spawn would
       ;; materialize, so a preview can be inspected without a pane or a ledger entry.
-      :persona-path (str path) :persona persona :persona-text (:persona-text composition)
+      ;; A persona-less launch reports :persona nil and :role-absent true; its
+      ;; :persona-text holds only the composed explicit traits.
+      :context context :execution "interactive"
+      :persona persona :persona-text (:persona-text composition)
       :traits (:traits composition) :trait-sources (:trait-sources composition)
       :kind kind :model model :model-canonical (core/canonical-model config model) :model-args (core/model-args config kind model) :placement placement :retro (:retro retro) :retro-source (:retro-source retro)
       :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)
       :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)
       :effort (:effort effort) :effort-source (:effort-source effort) :effort-args (core/effort-args config kind (:effort effort))}
+      path (assoc :persona-path (str path))
+      role-absent (assoc :role-absent true)
+      ;; The boundary entry is invocation-sensitive, so preview reports the source and the
+      ;; rule; the selected entry exists only on the launch's start envelope and ledger entry.
+      fork-source (assoc :fork {:source-session fork-source :boundary-rule core/fork-boundary-rule
+                                :role-source (cond inherited "snapshot" persona "overlay" :else "none")}
+                         :effective-persona (when-not role-absent label-persona))
       (:base-persona composition) (assoc :base-persona (:base-persona composition)))))
+(defn preview! [persona opts waiting-policy]
+  (if (= "measurement" (:context (context-policy persona opts)))
+    (measurement-preview! opts)
+    (interactive-preview! persona opts waiting-policy)))
 ;; A stream's item records are append-only by item identity. Pre-stream ledger entries retain
 ;; their historical stable head only, so expose that head as item 1 while readers migrate; no
 ;; ledger rewrite is needed just to read an old round.
@@ -626,6 +778,59 @@
                                               (fn [history] (vec (distinct (conj (vec history) current)))))
                                       (assoc :child-session session)))))))
       (catch Exception _ nil))))
+;; --- headless execution state --------------------------------------------------------
+;; A measurement has no agent pane, so Herdr agent presence says nothing about it, and a
+;; missing or replaced monitor pane is never evidence either way. Its liveness is the
+;; supervisor identity the launcher recorded (PID plus start time) and the live members of the
+;; supervisor's session, which own the subject tree (see `measurement/session-members`).
+(defn headless? [entry] (= "headless" (core/entry-execution entry)))
+;; The supervisor launches no subject until it observes its own identity on the ledger entry,
+;; and gives up after this window, counted from its own start (herdr-orch.supervisor). Only the
+;; launcher writes that identity, so before it is recorded the launcher's own recorded process
+;; identity decides: while the launcher lives it still owns the launch, however long checkout
+;; creation or preparation takes. Once it stops, refresh the entry before ruling out an
+;; acknowledgement it wrote after the caller's snapshot. Only an entry
+;; that recorded no launcher (written before `:launcher` existed) still infers that from this
+;; window and `:created-at`.
+(def acknowledgement-window-ms 30000)
+(defn measurement-evidence-dir [task] (str (fs/path (ledger/assignment-root) ".tmp" "herdr-orch" "measurements" task)))
+(defn- evidence-json [entry file]
+  (when-let [dir (get-in entry [:measurement :evidence-dir])]
+    (let [path (fs/path dir file)]
+      (when (fs/exists? path) (try (json/parse-string (slurp (str path)) true) (catch Exception _ ::malformed))))))
+(defn- older-than? [timestamp ms]
+  (try (< ms (- (System/currentTimeMillis) (.toEpochMilli (java.time.Instant/parse timestamp)))) (catch Exception _ false)))
+(defn execution-state
+  "Headless liveness from recorded process identity, never from a pane: `running` while the
+  supervisor or any member of its session lives, `finished` once stopped with terminal
+  execution evidence, `supervisor-lost` once stopped without it. Refreshes a pre-acknowledgement
+  snapshot after its launcher stops; a refresh error propagates, never proves stopped."
+  [entry]
+  (let [;; Use one observation: a launcher seen live can acknowledge before the next probe.
+        launcher-live? (when (and (:launcher entry) (nil? (:supervisor entry)))
+                         (measurement/identity-alive? (:launcher entry)))
+        ;; The launcher can acknowledge and exit after the caller reads its entry, before the
+        ;; supervisor writes supervisor.json. Launcher death alone cannot disprove that ack.
+        entry (if (and (:launcher entry) (nil? (:supervisor entry)) (not launcher-live?))
+                (ledger/read! (:task entry))
+                entry)
+        supervisor (:supervisor entry)
+        terminal? (map? (evidence-json entry "execution.json"))]
+    (if-not supervisor
+      (let [self-recorded (evidence-json entry "supervisor.json")
+            supervisor-live? (boolean (and (map? self-recorded) (measurement/identity-alive? self-recorded)))
+            live? (cond supervisor-live? true
+                        (= "failed" (:status entry)) false
+                        (:launcher entry) launcher-live?
+                        (map? self-recorded) false
+                        :else (not (older-than? (:created-at entry) acknowledgement-window-ms)))]
+        {:state (if live? "launching" "not-started") :live? live? :supervisor-live? supervisor-live?
+         :session-members 0 :terminal-evidence terminal?})
+      (let [members (measurement/session-members (:sid supervisor))
+            live? (boolean (seq members))]
+        {:state (cond live? "running" terminal? "finished" :else "supervisor-lost")
+         :live? live? :supervisor-live? (measurement/identity-alive? supervisor)
+         :session-members (count members) :terminal-evidence terminal?}))))
 (defn caller-owns? [entry]
   (boolean (when-let [recorded (:parent-session entry)]
              (= recorded (try (:parent-session (parent-identity)) (catch Exception _ nil))))))
@@ -649,11 +854,34 @@
 ;; is itself the no-op guard for the common case -- an observation matching what is already
 ;; recorded costs a call but no ledger write.
 (defn finish-capture! [entry parsed owned?]
-  (if-not owned?
-    (assoc parsed :pane-retained true :ownership "foreign-parent-session")
+  (cond
+    (not owned?) (assoc parsed :pane-retained true :ownership "foreign-parent-session")
+    ;; A headless round has no agent whose transcript Herdr could report.
+    (headless? entry) parsed
+    :else
     (do (record-session! (:task entry) (:agent_session (try (herdr/agent! (:child entry)) (catch Exception _ nil))))
         parsed)))
-(defn wait-and-capture! [entry timeout owned?]
+;; A headless waiter polls the result stream and the execution's own liveness, never Herdr: it
+;; keeps waiting while the execution lives and stops early only once the execution is proved
+;; stopped with nothing left to capture. A timeout stops only the wait, never the execution.
+(defn- wait-headless! [entry timeout owned?]
+  (let [deadline (+ (System/currentTimeMillis) timeout)
+        pending (fn [reason state] {:status "pending" :terminal? false :reason reason :execution-state state
+                                    :task (:task entry) :pane-id nil})]
+    (loop []
+      (if-let [parsed (capture! entry)]
+        (finish-capture! entry parsed owned?)
+        (let [state (execution-state entry)
+              remaining (- deadline (System/currentTimeMillis))]
+          (cond
+            ;; One more capture after the stop observation: a supervisor that published and
+            ;; exited between the two reads is a result, not a lost run.
+            (not (:live? state)) (if-let [parsed (capture! entry)]
+                                   (finish-capture! entry parsed owned?)
+                                   (pending "execution-stopped" state))
+            (<= remaining 0) (pending "timeout" state)
+            :else (do (Thread/sleep (min (poll-interval-ms) remaining)) (recur))))))))
+(defn- wait-interactive! [entry timeout owned?]
   (let [deadline (+ (System/currentTimeMillis) timeout)]
     (loop []
       (if-let [parsed (capture! entry)] (finish-capture! entry parsed owned?)
@@ -679,6 +907,10 @@
                         (let [remaining* (- deadline (System/currentTimeMillis))]
                           (when (pos? remaining*) (Thread/sleep (min (poll-interval-ms) remaining*)))
                           (recur)))))))))))
+(defn wait-and-capture! [entry timeout owned?]
+  (if (headless? entry)
+    (wait-headless! entry timeout owned?)
+    (wait-interactive! entry timeout owned?)))
 (defn safe-cleanup! [entry phase]
   (ledger/update! (:task entry) assoc :status "failed" :failed-at (now) :failure-phase (name phase))
   (when (and (:pane-id entry) (#{"split" "rename" "start"} (name phase))) (try (herdr/close! (:pane-id entry)) (catch Exception _))) )
@@ -890,177 +1122,332 @@
 ;; exactly as it carries no `:worktree` field on the ledger entry itself.
 (defn- with-reconciliation [entry value]
   (cond-> value (:worktree entry) (assoc :reconciliation (reconciliation entry))))
-(defn spawn! [persona opts waiting-policy]
-  (enforce-spawns! persona opts)
-  (if (one opts :print-prompt)
-    (preview! persona opts waiting-policy)
-    (do
-      (herdr/preflight!)
-      (let [path (roster persona)
-            persona-text (slurp (str path))
-            ;; Composition (extends, traits:, --trait) and its failure policy run before
-            ;; parent identity, config loading, task allocation, and every pane/ledger
-            ;; mutation. `frontmatter` below is the effective (post-extends-merge) one.
-            composition (trait-interpolation persona path persona-text (all opts :trait))
-            frontmatter (:frontmatter composition)
-            ident (parent-identity)
-            kind (kind-policy opts frontmatter (:parent-kind ident))
-            model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
-            ;; Resolved before `config`/ledger allocation, so a blank or malformed
-            ;; `--effort`/`effort:` fails fast exactly like an invalid `timeout:`.
-            effort (effort-policy persona opts frontmatter kind ident)
-            ;; Loaded and schema-validated here, before `ledger/fresh-result`'s
-            ;; `fs/create-dirs` and every later ledger/pane mutation: malformed config
-            ;; must fail fast, never after allocation has begun.
-            config (config)
-            placement (placement-policy opts config)
-            retro (retro-policy persona opts frontmatter)
-            spawns (spawns-policy persona opts frontmatter)
-            ;; Resolved before allocation, so an unparseable `timeout:` or `--timeout` fails
-            ;; fast exactly like an invalid `retro:` or an unresolvable `spawns:` name.
-            timeout (timeout-policy persona opts frontmatter)
-            ;; `%read-only` is the one reliable write-policy signal already carried by
-            ;; packaged read-only personas. It affects only implicit target creation and,
-            ;; for a non-shared entry, publication's mechanical dirt refusal.
-            read-only? (contains? (set (:traits composition)) "read-only")
-            requested-target (worktree-target-option opts)
-            ;; Potentially blocking input and external inspection happen before reservation.
-            ;; The lock protects only target decision and bounded local entry construction.
-            assignment (task-text opts)
-            own-persona (System/getenv "HERDR_ORCH_PERSONA")
-            parent-label (:label (herdr/pane! (:parent-pane ident)))
-            bin (launcher-bin)
-            ;; The OS file lock serialises target decision and ledger reservation across
-            ;; processes sharing this assignment root. It is released by the kernel on a
-            ;; crash and before checkout creation or pane mutation begins.
-            reservation
-            (with-assignment-reservation-lock
-              (fn []
-                ;; The delayed UUID lets an explicit existing target complete canonicalisation,
-                ;; repository, dirt, and live-reference validation before task allocation.
-                (let [task* (delay (ledger/fresh-task))
-                      target (resolve-worktree-target!
-                              task* requested-target
-                              (and (nil? requested-target)
-                                   (worktree-in-flight? (:parent-session ident)))
-                              read-only?)
-                      task @task*
-                      composition (materialize-persona! composition task persona)
-                      persona-path (:persona-path composition)
-                      result (ledger/fresh-result task)
-                      index (ledger/allocate-index! (:parent-session ident) persona)
-                      ;; Nested labels compose for any spawning persona, gated on the spawner's
-                      ;; own injected HERDR_ORCH_PERSONA (display metadata only -- depth is
-                      ;; enforced by enforce-spawns!, never by label parsing).
-                      label (core/child-label {:parent-label (when own-persona parent-label)
-                                               :parent-persona own-persona :persona persona
-                                               :index index :model model})
-                      name (child-name persona task)
-                      ;; For existing/new targets this identity is complete before the first
-                      ;; ledger write. Checkout and pane mutation happen only after unlock.
-                      worktree (:worktree target)
-                      ;; The pane cwd is the child's work root, recorded before the pane
-                      ;; exists so publication and capture resolve every relative artifact
-                      ;; against the same publisher-owned value (task ed6d67bf).
-                      entry (cond-> {:task task :result result :work-root (:path target)
-                                     :child name :pane-id nil
-                                     :label label :index index :persona persona :persona-path persona-path
-                                     :kind kind :model model
-                                     ;; The same translation `preview!` reports, recorded so the
-                                     ;; parent sees the native args the child received without a
-                                     ;; separate `--print-prompt` turn. `start!` below reads them back.
-                                     :model-canonical (core/canonical-model config model)
-                                     :model-args (core/model-args config kind model)
-                                     :effort-args (core/effort-args config kind (:effort effort))
-                                     :parent-session (:parent-session ident)
-                                     :parent-pane (:parent-pane ident)
-                                     :waiting-policy waiting-policy
-                                     :retro (:retro retro) :retro-source (:retro-source retro)
-                                     :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)
-                                     :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)
-                                     :effort (:effort effort) :effort-source (:effort-source effort)
-                                     :placement placement :status "allocating" :created-at (now)}
-                              worktree (assoc :worktree worktree)
-                              (and worktree read-only?) (assoc :read-only true)
-                              ;; Launch provenance: the base persona (when `extends:`
-                              ;; resolved one) and the effective trait sources, so preview
-                              ;; and the ledger agree and `continue` can carry them forward.
-                              (:base-persona composition) (assoc :base-persona (:base-persona composition))
-                              (seq (:traits composition)) (assoc :traits (:traits composition) :trait-sources (:trait-sources composition)))]
-                  ;; Persist before releasing the reservation and before the first checkout
-                  ;; or pane mutation, so every partial failure remains recoverable.
-                  (ledger/write! entry)
-                  {:target target :entry entry :worktree worktree :assignment assignment
-                   :bin bin :name name :persona-path persona-path})))
-            {:keys [target entry worktree assignment bin name persona-path]} reservation
-            task (:task entry)
-            result (:result entry)
-            label (:label entry)]
+;; The ledger keeps the provenance a later reader needs: the source session, the boundary the
+;; adapter actually selected for this launch, the fork file and the role it applied.
+(defn- fork-provenance [created]
+  {:source-session (get-in created [:source :path]) :source-session-id (get-in created [:source :sessionId])
+   :source-sha256 (get-in created [:source :sha256]) :source-leaf (get-in created [:source :leafId])
+   :boundary-entry (get-in created [:boundary :entryId]) :batch-entry (get-in created [:boundary :batchEntryId])
+   :boundary-rule (get-in created [:boundary :rule]) :session-file (:sessionFile created) :session-id (:sessionId created)
+   :marker-entry (get-in created [:marker :entryId]) :target-cwd (:targetCwd created)
+   :role-source (get-in created [:role :source]) :runtime (:runtime created)})
+;; Removes only the session this launch created; a source or foreign file is never touched, and
+;; a failure here must not mask the launch error it follows.
+(defn- discard-fork! [created]
+  (when created
+    (try (pi-adapter/run-op! (fork-adapter-file) "fork-discard"
+                             {:sessionFile (:sessionFile created) :sessionId (:sessionId created) :source (select-keys (:source created) [:path])})
+         (catch Exception _ nil))))
+(defn- spawn-interactive! [persona opts waiting-policy]
+  (herdr/preflight!)
+  (let [;; Composition (extends, traits:, --trait) and its failure policy run in the
+        ;; shared resolver before parent identity, config loading, task allocation, and
+        ;; every pane/ledger mutation. `frontmatter` is the effective (post-extends-merge)
+        ;; one. Config is loaded and schema-validated there too, before
+        ;; `ledger/fresh-result`'s `fs/create-dirs`: malformed config must fail fast,
+        ;; never after allocation has begun, as must an invalid `--effort`/`timeout:`.
+        {:keys [context composition role-absent label-persona inherited fork-source ident kind model effort config placement retro spawns timeout requested-target]} (resolve-launch persona opts)
+        fork? (= "fork" context)
+        _ (when fork? (pi-adapter/run-op! (fork-adapter-file) "fork-capability" {}))
+        fork-created (atom nil)
+        persona-name label-persona
+        ;; `%read-only` is the one reliable write-policy signal already carried by
+        ;; packaged read-only personas. It affects only implicit target creation and,
+        ;; for a non-shared entry, publication's mechanical dirt refusal.
+        read-only? (contains? (set (:traits composition)) "read-only")
+        ;; Potentially blocking input and external inspection happen before reservation.
+        ;; The lock protects only target decision and bounded local entry construction.
+        assignment (task-text opts)
+        caller-persona (own-persona)
+        parent-label (:label (herdr/pane! (:parent-pane ident)))
+        bin (launcher-bin)
+        ;; The OS file lock serialises target decision and ledger reservation across
+        ;; processes sharing this assignment root. It is released by the kernel on a
+        ;; crash and before checkout creation or pane mutation begins.
+        reservation
+        (with-assignment-reservation-lock
+          (fn []
+            ;; The delayed UUID lets an explicit existing target complete canonicalisation,
+            ;; repository, dirt, and live-reference validation before task allocation.
+            (let [task* (delay (ledger/fresh-task))
+                  target (resolve-worktree-target!
+                          task* requested-target
+                          (and (nil? requested-target)
+                               (worktree-in-flight? (:parent-session ident)))
+                          read-only?)
+                  task @task*
+                  composition (materialize-persona! composition task persona-name)
+                  persona-path (:persona-path composition)
+                  result (ledger/fresh-result task)
+                  index (ledger/allocate-index! (:parent-session ident) persona-name)
+                  ;; Nested labels compose for any spawning persona, gated on the spawner's
+                  ;; own injected HERDR_ORCH_PERSONA (display metadata only -- depth is
+                  ;; enforced by enforce-spawns!, never by label parsing).
+                  label (core/child-label {:parent-label (when caller-persona parent-label)
+                                           :parent-persona caller-persona :persona persona-name
+                                           :index index :model model})
+                  name (child-name persona-name task)
+                  ;; For existing/new targets this identity is complete before the first
+                  ;; ledger write. Checkout and pane mutation happen only after unlock.
+                  worktree (:worktree target)
+                  ;; The pane cwd is the child's work root, recorded before the pane
+                  ;; exists so publication and capture resolve every relative artifact
+                  ;; against the same publisher-owned value (task ed6d67bf).
+                  entry (cond-> {:task task :result result :work-root (:path target)
+                                 :child name :pane-id nil
+                                 :label label :index index :persona persona-name :persona-path persona-path
+                                 :context context :execution "interactive"
+                                 :kind kind :model model
+                                 ;; The same translation `preview!` reports, recorded so the
+                                 ;; parent sees the native args the child received without a
+                                 ;; separate `--print-prompt` turn. `start!` below reads them back.
+                                 :model-canonical (core/canonical-model config model)
+                                 :model-args (core/model-args config kind model)
+                                 :effort-args (core/effort-args config kind (:effort effort))
+                                 :parent-session (:parent-session ident)
+                                 :parent-pane (:parent-pane ident)
+                                 :waiting-policy waiting-policy
+                                 :retro (:retro retro) :retro-source (:retro-source retro)
+                                 :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)
+                                 :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)
+                                 :effort (:effort effort) :effort-source (:effort-source effort)
+                                 :placement placement :status "allocating" :created-at (now)}
+                          worktree (assoc :worktree worktree)
+                          (and worktree read-only?) (assoc :read-only true)
+                          ;; Launch provenance: the base persona (when `extends:`
+                          ;; resolved one) and the effective trait sources, so preview
+                          ;; and the ledger agree and `continue` can carry them forward.
+                          (:base-persona composition) (assoc :base-persona (:base-persona composition))
+                          (seq (:traits composition)) (assoc :traits (:traits composition) :trait-sources (:trait-sources composition))
+                          ;; `:persona` above is only the display/index token for a
+                          ;; persona-less launch; `:role-absent` records that no role
+                          ;; exists, and a named launch snapshots its effective role text
+                          ;; so a later fork inherits the content this child ran with,
+                          ;; not whatever the definition says by then.
+                          role-absent (assoc :role-absent true)
+                          (not role-absent) (assoc :role-snapshot (core/role-snapshot persona-name (:persona-text composition))))]
+              ;; Persist before releasing the reservation and before the first checkout
+              ;; or pane mutation, so every partial failure remains recoverable.
+              (ledger/write! entry)
+              {:target target :entry entry :worktree worktree :assignment assignment
+               :bin bin :name name :persona-path persona-path})))
+        {:keys [target entry worktree assignment bin name persona-path]} reservation
+        task (:task entry)
+        result (:result entry)
+        label (:label entry)]
+    (try
+      ;; A newly managed checkout is created (and, on failure, labelled and left
+      ;; recoverable) before any pane mutation. Existing and shared targets are already
+      ;; present and never run `git worktree add`.
+      (when (= :new (:kind target))
+        (try (create-worktree! (source-cwd) (:path worktree) (:branch worktree) (:base worktree))
+             (catch Exception e (safe-cleanup! (ledger/read! task) :worktree) (throw e))))
+      ;; No waiting policy is injected: it lives on the ledger entry alone (see
+      ;; `publish!`), so a child continued into another round can never publish under
+      ;; its spawn-time policy. Nothing lifecycle-related reaches the child's env.
+      ;; The fork file is created once the selected checkout exists, because its session
+      ;; header, not the pane cwd, fixes the child's runtime working directory. Its
+      ;; selected boundary is recorded on the entry before any pane exists.
+      (when fork?
+        (reset! fork-created
+                (pi-adapter/run-op! (fork-adapter-file) "fork-create"
+                                    (cond-> {:sourceSession fork-source :targetCwd (:work-root entry)}
+                                      persona (assoc :overlay {:persona persona :text (:persona-text composition)})
+                                      inherited (assoc :callerRole {:named true :snapshot (select-keys inherited [:persona :text :sha256])}))))
+        (ledger/update! task assoc :fork (fork-provenance @fork-created)))
+      (let [child-cwd (:work-root entry)
+            env (cond-> {"HERDR_ORCH_CHILD" name "HERDR_ORCH_TASK" task
+                         "HERDR_ORCH_RESULT" result "HERDR_ORCH_BIN" bin
+                         ;; The same immutable value the entry records, so a child can
+                         ;; resolve its own artifact paths without asking the parent.
+                         "HERDR_ORCH_WORK_ROOT" (:work-root entry)
+                         "HERDR_ORCH_PERSONA" persona-name
+                         "HERDR_ORCH_SPAWNS" (str/join " " (:spawns spawns))
+                         ;; Unlike HERDR_ORCH_MODEL, always present: `resolve-effort`
+                         ;; always resolves to a level (default "medium"), so this
+                         ;; child's own spawns can always inherit it (`parent-effort`).
+                         "HERDR_ORCH_EFFORT" (:effort effort)
+                         ;; Protocol routing state is uniform. Target selection changes
+                         ;; only cwd and never the child's environment shape.
+                         "ORCH_ASSIGNMENT_ROOT" (ledger/assignment-root)}
+                  ;; This child's own model, so its grandchildren inherit from it exactly
+                  ;; as it inherited from here (`parent-model`). Absent when unresolved,
+                  ;; leaving a grandchild on the harness default rather than a stale value.
+                  model (assoc "HERDR_ORCH_MODEL" model)
+                  role-absent (assoc "HERDR_ORCH_ANONYMOUS" "1"))
+            ;; Tab placement skips caller-rect!/direction entirely: a tab needs neither.
+            pane-placement (if (= placement "tab")
+                             (herdr/tab-create! {:cwd child-cwd :label label :env env :focus false})
+                             (herdr/split! {:direction (core/direction (herdr/caller-rect!)) :cwd child-cwd :env env}))
+            persisted (ledger/update! task assoc :pane-id (:pane_id pane-placement) :tab-id (:tab-id pane-placement) :status "split")
+            ;; Best-effort, exactly like `record-session!`: never fails a spawn. This is
+            ;; the identity witness `close` falls back to when a resume has released the
+            ;; child's agent name (task ca6fecef) -- the pane's shell is the *parent* of
+            ;; whatever agent occupies it, so it survives that agent dying and a fresh
+            ;; one starting in the same pane, unlike the name Herdr releases on exit.
+            ;; Recorded now, on the bare freshly-split shell, rather than after `start!`:
+            ;; the value is identical either way (it is the shell, never the foreground
+            ;; process), so there is no reason to wait.
+            _ (try (when-let [pid (:shell_pid (herdr/process-info! (:pane-id persisted)))]
+                     (ledger/update! task assoc :shell-pid pid))
+                   (catch Exception _ nil))]
         (try
-          ;; A newly managed checkout is created (and, on failure, labelled and left
-          ;; recoverable) before any pane mutation. Existing and shared targets are already
-          ;; present and never run `git worktree add`.
-          (when (= :new (:kind target))
-            (try (create-worktree! (source-cwd) (:path worktree) (:branch worktree) (:base worktree))
-                 (catch Exception e (safe-cleanup! (ledger/read! task) :worktree) (throw e))))
-          ;; No waiting policy is injected: it lives on the ledger entry alone (see
-          ;; `publish!`), so a child continued into another round can never publish under
-          ;; its spawn-time policy. Nothing lifecycle-related reaches the child's env.
-          (let [child-cwd (:work-root entry)
-                env (cond-> {"HERDR_ORCH_CHILD" name "HERDR_ORCH_TASK" task
-                             "HERDR_ORCH_RESULT" result "HERDR_ORCH_BIN" bin
-                             ;; The same immutable value the entry records, so a child can
-                             ;; resolve its own artifact paths without asking the parent.
-                             "HERDR_ORCH_WORK_ROOT" (:work-root entry)
-                             "HERDR_ORCH_PERSONA" persona
-                             "HERDR_ORCH_SPAWNS" (str/join " " (:spawns spawns))
-                             ;; Unlike HERDR_ORCH_MODEL, always present: `resolve-effort`
-                             ;; always resolves to a level (default "medium"), so this
-                             ;; child's own spawns can always inherit it (`parent-effort`).
-                             "HERDR_ORCH_EFFORT" (:effort effort)
-                             ;; Protocol routing state is uniform. Target selection changes
-                             ;; only cwd and never the child's environment shape.
-                             "ORCH_ASSIGNMENT_ROOT" (ledger/assignment-root)}
-                      ;; This child's own model, so its grandchildren inherit from it exactly
-                      ;; as it inherited from here (`parent-model`). Absent when unresolved,
-                      ;; leaving a grandchild on the harness default rather than a stale value.
-                      model (assoc "HERDR_ORCH_MODEL" model))
-                ;; Tab placement skips caller-rect!/direction entirely: a tab needs neither.
-                pane-placement (if (= placement "tab")
-                                 (herdr/tab-create! {:cwd child-cwd :label label :env env :focus false})
-                                 (herdr/split! {:direction (core/direction (herdr/caller-rect!)) :cwd child-cwd :env env}))
-                persisted (ledger/update! task assoc :pane-id (:pane_id pane-placement) :tab-id (:tab-id pane-placement) :status "split")
-                ;; Best-effort, exactly like `record-session!`: never fails a spawn. This is
-                ;; the identity witness `close` falls back to when a resume has released the
-                ;; child's agent name (task ca6fecef) -- the pane's shell is the *parent* of
-                ;; whatever agent occupies it, so it survives that agent dying and a fresh
-                ;; one starting in the same pane, unlike the name Herdr releases on exit.
-                ;; Recorded now, on the bare freshly-split shell, rather than after `start!`:
-                ;; the value is identical either way (it is the shell, never the foreground
-                ;; process), so there is no reason to wait.
-                _ (try (when-let [pid (:shell_pid (herdr/process-info! (:pane-id persisted)))]
-                         (ledger/update! task assoc :shell-pid pid))
-                       (catch Exception _ nil))]
-            (try
-              (let [renamed (herdr/rename! (:pane-id persisted) label)]
-                (when-not (= label (:label renamed)) (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))
-                (ledger/update! task assoc :status "renamed")
-                (let [native (concat (:model-args entry)
-                                     (:effort-args entry)
-                                     (core/harness-extra-args config kind)
-                                     (core/persona-args kind persona-path))]
-                  (record-session! task (:agent_session (herdr/start! name kind (:pane-id persisted) native)))
-                  (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path persona-path :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})]
-                    (ledger/update! task assoc :status "started" :started-at (now))
-                    (herdr/prompt! name prompt)
-                    (ledger/update! task assoc :status "prompted" :prompted-at (now)))))
-              (catch Exception e
-                (safe-cleanup! (ledger/read! task) :start)
-                (throw e))))
+          (let [renamed (herdr/rename! (:pane-id persisted) label)]
+            (when-not (= label (:label renamed)) (fail "Herdr did not apply child pane label" {:expected label :actual (:label renamed)}))
+            (ledger/update! task assoc :status "renamed")
+            (let [native (concat (:model-args entry)
+                                 (:effort-args entry)
+                                 (core/harness-extra-args config kind)
+                                 (when persona-path (core/persona-args kind persona-path))
+                                 (when fork? ["--session" (:sessionFile @fork-created)]))]
+              (record-session! task (:agent_session (herdr/start! name kind (:pane-id persisted) native)))
+              (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path persona-path :role-absent role-absent :fork? fork? :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro)})]
+                (ledger/update! task assoc :status "started" :started-at (now))
+                (herdr/prompt! name prompt)
+                (ledger/update! task assoc :status "prompted" :prompted-at (now)))))
           (catch Exception e
-            (let [current (ledger/read! task)]
-              (when (not= "failed" (:status current)) (safe-cleanup! current :split)))
-            (throw e)))))))
+            (safe-cleanup! (ledger/read! task) :start)
+            (throw e))))
+      (catch Exception e
+        (let [current (ledger/read! task)]
+          (when (not= "failed" (:status current)) (safe-cleanup! current :split)))
+        (discard-fork! @fork-created)
+        (throw e)))))
+;; --- headless measurement launch -----------------------------------------------------
+;; The supervisor runs the same bb runtime and classpath as this process, so it loads exactly
+;; the namespaces this launch validated with.
+(defn- supervisor-command [& args]
+  (let [bb (or (.orElse (.command (.info (java.lang.ProcessHandle/current))) nil) "bb")
+        cp (or (classpath/get-classpath) (fail "the measurement supervisor needs this process's classpath" {}))]
+    (into [bb "-cp" cp "-m" "herdr-orch.supervisor"] args)))
+(defn- shell-quote [s] (str "'" (str/replace (str s) "'" "'\\''") "'"))
+;; Detached before `start` acknowledges: a new session (setsid), stdin closed, stdout/stderr in
+;; evidence files, and no Herdr routing in its environment, so neither the invoking tool call,
+;; its process group nor the root's pane identity reaches it. Detachment is verified from
+;; /proc (session and group led by the supervisor itself) rather than assumed from the command.
+(defn- start-supervisor! [run-file evidence-dir]
+  (let [env (-> (into {} (remove (fn [[k _]] (or (str/starts-with? k "HERDR_") (str/starts-with? k "ORCH_")))) (System/getenv))
+                (assoc "ORCH_ASSIGNMENT_ROOT" (ledger/assignment-root)))
+        proc (process/process (into ["setsid"] (supervisor-command "supervise" run-file))
+                              {:env env :dir evidence-dir :in (io/file "/dev/null")
+                               :out (io/file (str (fs/path evidence-dir "supervisor.out")))
+                               :err (io/file (str (fs/path evidence-dir "supervisor.err")))})
+        pid (.pid ^Process (:proc proc))
+        stderr (str (fs/path evidence-dir "supervisor.err"))
+        own-sid (:sid (measurement/process-identity (.pid (java.lang.ProcessHandle/current))))
+        deadline (+ (System/currentTimeMillis) 10000)]
+    (loop []
+      (let [identity (measurement/process-identity pid)]
+        (cond
+          (and identity (measurement/identity-alive? identity) (= pid (:sid identity) (:pgid identity)) (not= own-sid (:sid identity)))
+          identity
+          (or (not (measurement/identity-alive? identity)) (< deadline (System/currentTimeMillis)))
+          (do (process/destroy-tree proc)
+              (fail (str "the measurement supervisor did not start in its own session; see " stderr)
+                    {:pid pid :identity identity :stderr stderr}))
+          :else (do (Thread/sleep 20) (recur)))))))
+;; Visibility only: a failure here is recorded, never a launch failure, and the monitor holds
+;; no handle on the supervisor or the subject. The pane identity (including its shell) is
+;; recorded before the monitor runs, so `close` can tell this pane from a later occupant.
+(defn- attach-monitor! [entry placement]
+  (let [task (:task entry)
+        label (str (:label entry) "-monitor")]
+    (try
+      (let [pane (if (= "tab" placement)
+                   (herdr/tab-create! {:cwd (:work-root entry) :label label :env {} :focus false})
+                   (herdr/split! {:direction (core/direction (herdr/caller-rect!)) :cwd (:work-root entry) :env {}}))
+            pane-id (:pane_id pane)
+            shell-pid (try (:shell_pid (herdr/process-info! pane-id)) (catch Exception _ nil))]
+        (ledger/update! task assoc :monitor {:pane-id pane-id :tab-id (:tab-id pane) :shell-pid shell-pid :placement placement})
+        (try (herdr/rename! pane-id label) (catch Exception _ nil))
+        (herdr/pane-run! pane-id (str/join " " (map shell-quote (supervisor-command "monitor" (get-in entry [:measurement :evidence-dir])))))
+        (ledger/read! task))
+      (catch Exception e
+        (ledger/update! task assoc :monitor-error (.getMessage e))))))
+(defn- adapter-directory [] (str (fs/path (skill-directory) "scripts" "pi")))
+;; The launcher writes only over the status it wrote last, so a round that a lifecycle verb
+;; retired or closed while the launcher was delayed is never resurrected by its later writes.
+(defn- advance-launch! [task from & kvs]
+  (ledger/update! task (fn [current]
+                         (when-not (and (= from (:status current)) (nil? (:closed-at current)))
+                           (throw (ex-info "measurement launch stopped: the round was retired or closed during launch"
+                                           {:task task :status (:status current) :closed-at (:closed-at current)
+                                            :launch-retired true})))
+                         (apply assoc current kvs))))
+(defn- spawn-measurement! [opts waiting-policy]
+  (herdr/preflight!)
+  (let [{:keys [resolved treatment ident kind model effort config model-args effort-args monitor timeout requested-target]} (resolve-measurement opts)
+        _ (when-let [refusal (measurement/detach-refusal (measurement/platform))]
+            (fail refusal {:platform (measurement/platform)}))
+        assignment (task-text opts)
+        persona-name core/anonymous-persona
+        {:keys [target entry]}
+        (with-assignment-reservation-lock
+          (fn []
+            (let [task* (delay (ledger/fresh-task))
+                  target (resolve-worktree-target! task* requested-target
+                                                   (and (nil? requested-target) (worktree-in-flight? (:parent-session ident)))
+                                                   false)
+                  ;; A present checkout is checked before any allocation; a new one after creation.
+                  _ (when-not (= :new (:kind target)) (measurement/check-expected-outputs! resolved (:path target)))
+                  task @task*
+                  index (ledger/allocate-index! (:parent-session ident) persona-name)
+                  entry (cond-> {:task task :result (ledger/fresh-result task) :work-root (:path target)
+                                 :child (child-name persona-name task) :pane-id nil
+                                 :label (core/child-label {:persona persona-name :index index :model model})
+                                 :index index :persona persona-name :persona-path nil :role-absent true
+                                 :context "measurement" :execution "headless"
+                                 :kind kind :model model :model-canonical (core/canonical-model config model)
+                                 :model-args model-args :effort-args effort-args
+                                 :effort (:effort effort) :effort-source (:effort-source effort)
+                                 :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)
+                                 :parent-session (:parent-session ident) :parent-pane (:parent-pane ident)
+                                 :waiting-policy waiting-policy
+                                 :measurement (assoc (measurement-inputs resolved treatment)
+                                                     :evidence-dir (measurement-evidence-dir task)
+                                                     :assignment-sha256 (core/sha256 assignment))
+                                 :launcher (measurement/process-identity (.pid (java.lang.ProcessHandle/current)))
+                                 :status "allocating" :created-at (now)}
+                          (:worktree target) (assoc :worktree (:worktree target)))]
+              (ledger/write! entry)
+              {:target target :entry entry})))
+        task (:task entry)
+        evidence-dir (get-in entry [:measurement :evidence-dir])]
+    (try
+      (when (= :new (:kind target))
+        (create-worktree! (source-cwd) (get-in target [:worktree :path]) (get-in target [:worktree :branch]) (get-in target [:worktree :base]))
+        (measurement/check-expected-outputs! resolved (:work-root entry)))
+      ;; The adapter helper freezes the inputs and builds the subject argv; the supervisor runs
+      ;; that argv unchanged and builds the subject env from its own routing-free environment.
+      (let [spec (measurement/launch-spec {:resolved resolved :task task :assignment assignment :evidence-dir evidence-dir
+                                           :adapter-dir (adapter-directory) :model-args model-args :effort-args effort-args
+                                           :parent-env {} :pi-bin (pi-adapter/pi-bin)})
+            run-file (str (fs/path evidence-dir "run.json"))]
+        (spit run-file (json/generate-string {:task task :argv (:argv spec) :work-root (:work-root entry) :evidence-dir evidence-dir
+                                              :manifest-path (:manifest-path spec) :adapter-evidence-dir (:adapter-evidence-dir spec)
+                                              :hard-timeout-ms (:hard-timeout-ms resolved) :expected-outputs (:expected-outputs resolved)
+                                              :acknowledgement-window-ms acknowledgement-window-ms}))
+        (advance-launch! task "allocating" :status "launching")
+        ;; Recording the verified identity is the acknowledgement the supervisor waits for
+        ;; before it launches the subject. A refused acknowledgement leaves that supervisor
+        ;; to give up after its window without launching one.
+        (let [supervisor (start-supervisor! run-file evidence-dir)
+              entry (advance-launch! task "launching" :supervisor supervisor :status "running" :started-at (now))]
+          (if monitor (attach-monitor! entry monitor) entry)))
+      (catch Exception e
+        ;; A round retired or closed by someone else stays as they left it.
+        (when-not (:launch-retired (ex-data e))
+          (safe-cleanup! (ledger/read! task) :launch))
+        (throw e)))))
+;; The effective target persona decides authority: an explicit overlay, else the role a fork
+;; inherits, else none (which a delegated caller may never launch, so a measurement below root
+;; is refused here too).
+(defn spawn! [persona opts waiting-policy]
+  (let [{:keys [context]} (context-policy persona opts)]
+    (enforce-spawns! (or persona (:persona (inherited-role context persona))) opts)
+    (cond (one opts :print-prompt) (preview! persona opts waiting-policy)
+          (= "measurement" context) (spawn-measurement! opts waiting-policy)
+          :else (spawn-interactive! persona opts waiting-policy))))
 ;; --- advisory parent push ----------------------------------------------------------
 ;; Under `non-blocking` the parent has nothing to block on, so a committed publish pushes
 ;; one advisory `agent prompt` naming the child, the task, and the `collect` command to
@@ -1296,6 +1683,8 @@
         _ (when (and entry (not= child (:child entry)))
             (fail "child identity mismatch: the named assignment belongs to another child"
                   {:task task :child child :entry-child (:child entry)}))
+        _ (when (and entry (headless? entry))
+            (fail "publish refused: a headless measurement round is published only by its supervisor" {:task task}))
         result (or (:result entry) (env "HERDR_ORCH_RESULT")
                    (fail "missing HERDR_ORCH_RESULT" {}))
         ;; Publisher-owned, exactly like `:result`: the ledger entry the parent wrote at spawn
@@ -1371,6 +1760,34 @@
   (let [{:keys [child task]} (task-identity opts)]
     (try (publish-round! opts child task)
          (catch Exception e (publish-failure-toast! child task e) (throw e)))))
+;; The supervisor's publication: the same child lock, stream, seal, capacity, checkpoint and
+;; envelope rules as `publish-round!`, bound to the execution identity the launcher recorded
+;; rather than to an injected child environment or the root's pane. It never resolves Herdr
+;; identity, and open sibling rounds are not its children, so no discharge check applies: one
+;; sample's result cannot wait on another's. `self` is the caller's own process identity.
+(defn publish-execution! [task body self]
+  (let [child (:child (ledger/read! task))]
+    (with-child-lock child
+      (fn []
+        (let [entry (ledger/read! task)
+              recorded (:supervisor entry)]
+          (when-not (headless? entry)
+            (fail "execution publication refused: the round is not a headless measurement" {:task task}))
+          (when-not (and recorded (= (select-keys recorded [:pid :start]) (select-keys self [:pid :start]))
+                         (measurement/identity-alive? self))
+            (fail "execution publication refused: the caller is not this run's recorded supervisor"
+                  {:task task :recorded (select-keys recorded [:pid :start]) :caller (select-keys self [:pid :start])}))
+          (assert-publishable! entry)
+          (assert-stream-capacity! (:result entry))
+          ;; As in `publish-round!`, the body is validated before the checkpoint can mutate
+          ;; the checkout, so a refused body leaves no checkpoint commit behind.
+          (let [fields (merge {:child child :task task :result (:result entry) :work-root (:work-root entry)} body)
+                _ (core/envelope fields)
+                checkpoint (when (:worktree entry) (checkpoint-worktree! entry (:status body)))
+                text (core/envelope (cond-> fields checkpoint (assoc :checkpoint checkpoint)))
+                item (append-publication! (:result entry) text)]
+            (cond-> {:task task :result (:result item) :status (:status body) :item (:item item)}
+              checkpoint (assoc :checkpoint checkpoint))))))))
 (defn collect! [task opts]
   (let [entry (ledger/read! task) owned? (caller-owns? entry)]
     (with-reconciliation entry
@@ -1410,6 +1827,23 @@
 ;; Calling it earlier lets a child that publishes inside the `agent list` window trip the
 ;; published-item check here instead of the final re-validation, which reports the race as
 ;; an ordinary stale refusal and loses the distinction the mutation guard exists to draw.
+;; A headless round is stale only once its owned execution is proved stopped: a dead
+;; supervisor is not enough while any member of its session still runs the subject tree.
+(defn- execution-stop-refusal [entry]
+  (let [state (execution-state entry)]
+    (when (:live? state)
+      [(if (= "launching" (:state state))
+         "the measurement is still launching"
+         "the measurement execution is still running: its supervisor or an owned session member is alive")
+       {:task (:task entry) :execution-state state}])))
+;; The reason names what the retained evidence shows: a supervisor that ran to the end but
+;; could not publish wrote `publication-error.json`, one that never launched a subject left no
+;; acknowledged identity, and any other stop without a result lost its supervisor.
+(defn- prune-reason [entry]
+  (cond (not (headless? entry)) "missing-agent"
+        (evidence-json entry "publication-error.json") "publication-failed"
+        (= "not-started" (:state (execution-state entry))) "not-started"
+        :else "supervisor-lost"))
 (defn- stale-round-refusal [entry index-fn]
   (let [task (:task entry)]
     (cond
@@ -1417,6 +1851,7 @@
       (contains? #{"failed" "invalid"} (:status entry))
       ["assignment is already terminal" {:task task :status (:status entry)}]
       (seq (:published (stream-state entry))) ["a published RESULT item already exists" {:task task}]
+      (headless? entry) (execution-stop-refusal entry)
       :else
       ;; `nil` means the listing itself is unusable, so liveness is unknown: only a listing
       ;; that positively omits this child's name is proof of absence.
@@ -1448,10 +1883,15 @@
     ;; before the listing, and refuses rather than overwriting a capture or a RESULT that
     ;; appeared during the check. Never closes `:pane-id` — it may be stale, reused, or
     ;; already gone; this command only ever touches the ledger JSON.
+    ;; Evidence files are never removed: a pruned supervisor-lost run stays diagnosable.
     (ledger/update! task (fn [current]
-                           (if (or (:captured-at current) (seq (:published (stream-state current))))
+                           (cond
+                             (or (:captured-at current) (seq (:published (stream-state current))))
                              (fail "prune refused: assignment was captured or published during the liveness check" {:task task})
-                             (assoc current :status "failed" :failure-phase "orphaned" :pruned-at (now) :prune-reason "missing-agent"))))))
+                             (and (headless? current) (execution-stop-refusal current))
+                             (fail "prune refused: the measurement execution started running during the liveness check" {:task task})
+                             :else
+                             (assoc current :status "failed" :failure-phase "orphaned" :pruned-at (now) :prune-reason (prune-reason current)))))))
 ;; --- explicit pane closure -----------------------------------------------------------
 ;; Capture closes nothing, so this verb is the whole closure path: explicit, guarded, and
 ;; auditable. It owns the settle wait (`ORCH_SETTLE_CLOSE_MS`) that capture used to spend on
@@ -1815,10 +2255,51 @@
 ;; evidence rather than skipping it. The pane is the operator's to dispose of either way;
 ;; what this recovers is the entry, which otherwise outlives it in `close --settled` and
 ;; `orphans` forever (task c04a4e67) or deadlocks its parent's publication (task 08fba41e).
+;; --- measurement closure ---------------------------------------------------------------
+;; Closing a measurement retires its round and its optional monitor; it never stops anything.
+;; The bar is a captured terminal result and an owned execution proved stopped. The monitor is
+;; closed only while its pane still holds the shell recorded at launch with nothing else in its
+;; foreground, so a replaced or busy occupant is reported and left alone.
+(defn- monitor-decision [{:keys [pane-id shell-pid]}]
+  (if-not (pane-alive? pane-id)
+    {:status "gone" :pane-id pane-id}
+    (let [info (pane-process-info! pane-id)]
+      (cond (not (and shell-pid (= shell-pid (:shell_pid info)))) {:status "replaced" :pane-id pane-id}
+            (pane-busy-foreground? info) {:status "retained" :reason "busy" :pane-id pane-id}
+            :else {:status "closed" :pane-id pane-id}))))
+(defn- close-measurement! [entry owner-check?]
+  (let [task (:task entry) child (:child entry)
+        caller (caller-parent-session) recorded (:parent-session entry)
+        state (stream-state entry)]
+    (when (and owner-check? (not (and caller recorded (= caller recorded))))
+      (fail "close refused: caller session does not own this ledger entry" {:task task}))
+    (when (:closed-at entry)
+      (fail "close refused: this round was already closed" {:task task :closed-at (:closed-at entry)}))
+    (when-not (and (stream-captured? state) (:sealed? state))
+      (fail "close refused: the measurement's terminal result is not captured" {:task task}))
+    (let [execution (execution-state entry)]
+      (when (:live? execution)
+        (fail "close refused: the measurement execution is still running" {:task task :execution-state execution})))
+    (let [monitor (some-> (:monitor entry) monitor-decision)
+          updated (with-child-lock child
+                    (fn []
+                      (ledger/update! task
+                                      (fn [current]
+                                        (when (:closed-at current) (fail "close refused: already closed" {:task task}))
+                                        (when (seq (unconsumed-items current))
+                                          (fail "close refused: an item was published during the check" {:task task}))
+                                        (when (= "closed" (:status monitor)) (herdr/close! (:pane-id monitor)))
+                                        (cond-> (assoc current :closed-at (now))
+                                          monitor (assoc :monitor-closure monitor))))))]
+      (cond-> {:status "closed" :task task :child child :closed-at (:closed-at updated)}
+        monitor (assoc :monitor monitor)))))
 (defn close-task! [task opts]
   (when-not task (fail "close requires a full task uuid" {}))
   (let [entry (ledger/read! task) entries (ledger/entries)]
     (cond
+      (and (headless? entry) (one opts :abandon))
+      (fail "close --abandon does not apply to a measurement; prune a supervisor-lost run instead" {:task task})
+      (headless? entry) (close-measurement! entry true)
       (not (one opts :abandon)) (do (assert-closable! entry entries) (settle-then-close! entry))
       (stream-captured? (stream-state entry))
       (do (assert-closable! entry entries)
@@ -1843,13 +2324,13 @@
          ;; entirely rather than falling back to an older round that names the same pane.
          newest-rounds
          (filter #(and (= caller (:parent-session %))
-                       (stream-captured? (stream-state %)) (:pane-id %)
+                       (stream-captured? (stream-state %)) (or (:pane-id %) (headless? %))
                        (nil? (:closed-at %)) (not= "invalid" (:status %))))
          (sort-by :created-at)
          ;; One refusal must not abandon the rest of the sweep, so each child's outcome --
          ;; including a refusal, named in full -- is reported in the array instead.
          (mapv (fn [entry]
-                 (try (settle-then-close! entry)
+                 (try (if (headless? entry) (close-measurement! entry true) (settle-then-close! entry))
                       (catch Exception e {:status "refused" :task (:task entry) :child (:child entry)
                                           :reason (.getMessage e) :detail (ex-data e)})))))))
 ;; --- retro candidate harvest ----------------------------------------------------------
@@ -1917,8 +2398,15 @@
 ;; only the operator has. Refused before the first ledger read, not merely before `--close`'s
 ;; mutation: the listing itself leaks that same visibility, and the contract already has the
 ;; operator take closing authority straight from the list.
+;; Every session value and pane a usable `agent list` reports, or nil when the listing is
+;; unusable. A recorded owner is either a session value or, when Herdr tracked no session for
+;; it, a bare pane id, so both are collected.
+(defn- attached-owners []
+  (try (when-let [agents (herdr/agents)]
+         (into #{} (mapcat #(remove nil? [(get-in % [:agent_session :value]) (:pane_id %)])) agents))
+       (catch Exception _ nil)))
 (defn orphans! [opts]
-  (when-let [persona (System/getenv "HERDR_ORCH_PERSONA")]
+  (when-let [persona (own-persona)]
     (fail "orphans is root-only: a delegated child cannot manage another session's captured children" {:own-persona persona}))
   (let [close? (boolean (one opts :close))
         prune? (boolean (one opts :prune))
@@ -1938,31 +2426,48 @@
         ;; rather than captured ones. A foreign session's stale entry was previously an
         ;; uncontrolled manual recipe (delete the ledger JSON after eyeballing `agent list`),
         ;; which is the same weak-evidence step `orphans` already replaced for panes.
+        ;; A captured measurement has no child pane whose live occupant `--close` could match,
+        ;; so the operator's authority alone does not admit one: its execution must be stopped
+        ;; and its recorded owner attached to no agent in a usable `agent list`. The listing is
+        ;; made only when such a round exists, and an unusable one admits none. Absence proves
+        ;; only that the owner is not attached now (see `close`'s ownership comment); that is
+        ;; enough here because the close stops nothing and writes only `:closed-at`, and the
+        ;; only pane it may close is a monitor still holding its recorded idle shell.
+        attached (delay (attached-owners))
+        ended-measurement? #(and (:sealed? (stream-state %)) (not (:live? (execution-state %)))
+                                 (some-> @attached (contains? (:parent-session %)) not))
         candidates (->> (ledger/entries)
                         newest-rounds
-                        (filter #(and (if prune?
+                        (filter #(and (nil? (:closed-at %)) (:parent-session %)
+                                      (not= caller (:parent-session %))
+                                      (if prune?
                                         (not (stream-captured? (stream-state %)))
-                                        (and (stream-captured? (stream-state %)) (:pane-id %)))
-                                      (nil? (:closed-at %)) (:parent-session %)
-                                      (not= caller (:parent-session %))))
+                                        (and (stream-captured? (stream-state %))
+                                             (if (headless? %) (ended-measurement? %) (:pane-id %))))))
                         (sort-by :created-at)
                         vec)]
     (cond
       prune?
       ;; Ownership is the single condition the operator overrides. Every other part of
       ;; `prune`'s proof applies unchanged, including the final re-validation inside
-      ;; `ledger/update!` that refuses a capture appearing during the listing.
+      ;; `ledger/update!` that refuses capture, publication or a live execution appearing
+      ;; during the listing.
       (mapv (fn [entry]
               (let [task (:task entry)]
                 (if-let [[message data] (stale-round-refusal entry live-agents)]
                   {:status "refused" :task task :child (:child entry) :reason message :detail data}
                   (do (ledger/update! task
                                       (fn [current]
-                                        (if (or (:captured-at current) (seq (:published (stream-state current))))
+                                        (cond
+                                          (or (:captured-at current) (seq (:published (stream-state current))))
                                           (fail "orphans --prune refused: assignment was captured or published during the liveness check"
                                                 {:task task})
+                                          (and (headless? current) (execution-stop-refusal current))
+                                          (fail "orphans --prune refused: the measurement execution started running during the liveness check"
+                                                {:task task})
+                                          :else
                                           (assoc current :status "failed" :failure-phase "orphaned"
-                                                 :pruned-at (now) :prune-reason "missing-agent"
+                                                 :pruned-at (now) :prune-reason (prune-reason current)
                                                  :pruned-by "orphans"))))
                       {:status "pruned" :task task :child (:child entry)
                        :parent-session (:parent-session entry)}))))
@@ -1973,8 +2478,10 @@
 
       :else
       ;; One refusal must not abandon the rest of the sweep, exactly as in `close --settled`.
+      ;; A measurement's orphan eligibility stands in for ownership, so `close-measurement!`
+      ;; skips only its owner check and keeps its capture, execution and monitor guards.
       (mapv (fn [entry]
-              (try (settle-then-close! entry)
+              (try (if (headless? entry) (close-measurement! entry false) (settle-then-close! entry))
                    (catch Exception e {:status "refused" :task (:task entry) :child (:child entry)
                                        :reason (.getMessage e) :detail (ex-data e)})))
             candidates))))
@@ -2032,10 +2539,13 @@
 ;; occupant is already excluded from `newest-rounds` by its own `live-round?` filter --
 ;; exactly the recovery path task f49a63f5 built for: a checkout survives a spawn failure
 ;; that struck after `git worktree add` but before the entry could claim a pane.
+;; A measurement also references its checkout while its owned execution still runs, even once
+;; its result is sealed.
 (defn- worktree-referenced-by-live-round? [path entries]
   (boolean (some #(and (= path (get-in % [:worktree :path]))
                        (nil? (:closed-at %))
-                       (not (:sealed? (stream-state %))))
+                       (or (not (:sealed? (stream-state %)))
+                           (and (headless? %) (:live? (execution-state %)))))
                  (newest-rounds entries))))
 ;; Every entry naming a given `:child` still carries its lineage's one checkout unchanged
 ;; (`continue!`'s whitelist), so the *last* entry for a child -- unfiltered, unlike
@@ -2275,6 +2785,9 @@
   (when-not task (fail "poke requires a full task uuid" {}))
   (let [entry (ledger/read! task)
         child (:child entry)]
+    ;; A measurement has no conversation to prompt; its supervisor alone publishes.
+    (when (headless? entry)
+      (fail "poke refused: a measurement round has no agent to prompt; its supervisor publishes the result" {:task task}))
     (herdr/preflight!)
     (let [ident (try (parent-identity) (catch Exception _ nil))
           caller (:parent-session ident)
@@ -2349,7 +2862,8 @@
                                         :kind :model :model-canonical :model-args :effort-args
                                         :retro :retro-source :spawns :spawns-source
                                         :timeout :timeout-source :effort :effort-source :placement :shell-pid
-                                        :work-root :worktree :read-only])
+                                        :work-root :worktree :read-only
+                                        :context :execution :role-absent :role-snapshot :fork])
                           {:task task :result result :continues prior-task
                            :parent-session caller :parent-pane (:parent-pane ident)
                            :waiting-policy waiting-policy :status "continuing"
@@ -2362,13 +2876,16 @@
   ;; Root-only, and refused before preflight, ledger allocation, and any pane mutation: a
   ;; delegated child deciding to keep its own children resident is exactly the hidden
   ;; lifecycle this design removes, so a denied continue creates nothing at all.
-  (when-let [persona (System/getenv "HERDR_ORCH_PERSONA")]
+  (when-let [persona (own-persona)]
     (fail "continue is root-only: a delegated child cannot assign follow-on rounds" {:own-persona persona}))
   (let [assignment (task-text opts)
         waiting-policy (if (one opts :wait) "blocking" "non-blocking")
         entry (ledger/read! prior-task)
         child (:child entry)
         entries (vec (ledger/entries))]
+    ;; Each sample is a fresh run of frozen inputs; a follow-on round would change the context.
+    (when (headless? entry)
+      (fail "continue refused: a measurement round cannot be continued; start a new measurement" {:task prior-task}))
     (herdr/preflight!)
     (let [ident (try (parent-identity) (catch Exception _ nil))
           caller (:parent-session ident)
@@ -2499,9 +3016,16 @@
               scoped? (some #(= session (:parent-session %)) entries)]
           (if-not scoped?
             {:status "pending" :reason "no-candidates"}
-            ;; `agent list` is the liveness boundary. The one snapshot taken immediately
-            ;; afterward carries both candidate sets and capture decisions for this tick.
+            ;; `agent list` and the headless execution reads are the liveness boundary. The one
+            ;; snapshot taken immediately afterward carries both candidate sets and capture
+            ;; decisions for this tick, so a child or supervisor that publishes and exits
+            ;; after its liveness read has its item in that snapshot.
             (let [index (live-agents)
+                  headless-live (into #{} (comp (filter #(and (= session (:parent-session %)) (headless? %)
+                                                              (not= "failed" (:status %)) (nil? (:closed-at %))))
+                                                (filter #(:live? (execution-state %)))
+                                                (map :task))
+                                      entries)
                   snapshot (stream-snapshot entries session)
                   candidates (any-candidates snapshot)
                   waiters (wait-candidates snapshot)
@@ -2513,7 +3037,7 @@
                 {:status "pending" :reason "no-candidates"}
                 (if-let [hit (capture-first candidates)]
                   (captured hit)
-                  (let [live (when index (filterv #(contains? index (:child %)) waiters))
+                  (let [live (when index (filterv #(if (headless? %) (contains? headless-live (:task %)) (contains? index (:child %))) waiters))
                         blocked (when index
                                   (filterv #(= "blocked" (:agent_status (get index (:child %)))) live))]
                     (cond
@@ -2529,10 +3053,19 @@
 ;; `agent!` is made unconditionally regardless of whether `:child-session` is already
 ;; recorded, so gating `record-session!` on its absence discarded an observation this call
 ;; already paid for, for free -- see `finish-capture!`'s identical fix.
-(defn live [entry]
+(defn- live-interactive [entry]
   (let [agent (try (herdr/agent! (:child entry)) (catch Exception _ nil))
         entry (or (record-session! (:task entry) (:agent_session agent)) entry)]
-    (with-reconciliation entry (assoc entry :live-agent agent))))
+    (with-reconciliation entry (assoc entry :live-agent agent
+                                      :context (core/entry-context entry) :execution (core/entry-execution entry)))))
+;; A measurement reports its execution from process identity and its monitor separately: a
+;; closed or replaced monitor says nothing about the execution, and no agent is probed.
+(defn- live-headless [entry]
+  (with-reconciliation entry
+    (cond-> (assoc entry :context (core/entry-context entry) :execution "headless" :execution-state (execution-state entry))
+      (:monitor entry) (assoc-in [:monitor :live?] (pane-alive? (get-in entry [:monitor :pane-id]))))))
+(defn live [entry]
+  (if (headless? entry) (live-headless entry) (live-interactive entry)))
 ;; --- agent-facing output shaping ----------------------------------------------------
 ;; Two independent knobs on the read verbs (`collect`, `status`, `list`, `harvest`), because
 ;; the parent pays for every byte of them and both defaults were wrong for an agent reader.
@@ -2640,8 +3173,8 @@
             "rename <target> (<name> | --clear)"
             "list"
             "get <target>"]
-   "task" ["run <persona> (--task TEXT | --task-file PATH | stdin) [--model MODEL] [--effort LEVEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--trait NAME]* [--prompt-extra TEXT] [--print-prompt] [--worktree <path>|new]"
-           "start <persona> (--task TEXT | --task-file PATH | stdin) [same options as run]"
+   "task" ["run [<persona>] (--task TEXT | --task-file PATH | stdin) [--context fresh|fork|measurement] [--measurement-config PATH] [--model MODEL] [--effort LEVEL] [--timeout MS] [--tab|--split] [--spawns NAMES|none] [--retro|--no-retro] [--trait NAME]* [--prompt-extra TEXT] [--print-prompt] [--worktree <path>|new]"
+           "start [<persona>] (--task TEXT | --task-file PATH | stdin) [same options as run]"
            "collect <full-task-uuid> [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
            "collect --any [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
            "status [full-task-uuid] [--format json|text] [--raw]"
@@ -2962,11 +3495,19 @@
     (let [pane (herdr/tab-create! {:cwd (or (one opts :cwd) (current-cwd)) :label (or (one opts :label) "spawn") :env {} :focus false})]
       (herdr/pane-run! (:pane_id pane) command)
       {:pane-id (:pane_id pane) :tab-id (:tab-id pane)})))
+;; A measurement subject carries a task-bound marker and no routing authority. Every command
+;; except help refuses it before any code falls back to the root or focused-pane identity.
+(def subject-env "HERDR_ORCH_SUBJECT")
+(defn- refuse-subject! [group op]
+  (when-let [task (System/getenv subject-env)]
+    (fail "refused: a measurement subject cannot run orchestration commands"
+          {:command (str/join " " (remove nil? [group op])) :subject-task task})))
 (defn execute [argv]
   (let [[group op & args] argv]
     (if (help-request? group op args)
       (help-text group op)
-      (let [parse-args (if (#{"spawn" "roster"} group) (cons op args) args)
+      (let [_ (refuse-subject! group op)
+            parse-args (if (#{"spawn" "roster"} group) (cons op args) args)
             opts (option-map parse-args (boolean-flags-for group op) known-options)
             positional (:_ opts)]
         (case group

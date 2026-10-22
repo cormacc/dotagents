@@ -20,9 +20,17 @@ The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/sk
 
 Spawning verbs require Herdr 0.9.1 or newer on both the client and the running server. Preflight reads both from `herdr status --json` and refuses an older or unknown endpoint before allocating a ledger entry or touching a pane ([docs/contract.md#Preconditions](docs/contract.md#preconditions)).
 
+Pi adapter checks run inside the installed Pi runtime with `scripts/pi/test.sh` (it needs `pi` on `PATH`, never uses the repository's pinned SDK, and records the runtime it ran against). Behaviour and the adapter contract are in [docs/contract.md#Pi fork adapter](docs/contract.md#pi-fork-adapter).
+
+The `fork-provider-context` suite captures inherited-worker and overlay requests through the installed Codex Responses consumer and a loopback fake endpoint. It then drops, reorders and replaces the current task identity in actual transmitted requests and requires rejection after passing controls. Child processes use disposable credentials/resources and the startup `pi/fake-only.cjs` egress guard. The `CAPTURE` output names retained synthetic request/session evidence under the process temporary directory; set `TMPDIR` to a disposable repository `.tmp/` directory when running it. These checks do not prove hosted-model obedience or full production-profile equivalence.
+
+A separate native-system case uses the installed immutable Luna capabilities, high thinking and explicit SSE. A context-only setup probe obtains the same isolated prompt construction without sending a provider request; the source changes only tools prose, and an overlay also changes the role addendum. One synthetic declaration stays frozen. The verifier derives where that declaration goes from the model's capabilities, using Pi 1.4.0's rule: an `additional_tools` item at the head of the input, with no top-level `tools`, when the model takes both mid-conversation system messages and additional tools. Re-check the rule after a Pi upgrade. The endpoint verifier expects the original worker in leading instructions and the overlay update in later developer input before the current assignment, plus signed synthetic reasoning replay. Applied assignment, update and declaration mutations and a native-capability-off control must fail this native verifier; the collapsed-system expectations remain separate. `NATIVE_CAPTURE` names this case's retained evidence. WebSocket frames and production-profile replay are not covered.
+
 `task run` and `task start` take assignment text from one source: `--task`, `--task-file`, or stdin. `run` waits for a published item. `start` returns once the prompt is submitted, so collect its output later.
 
 Commands that take a task ID require the complete UUID. This rule includes `collect`, `prune`, `poke`, `close`, `continue`, `compact`, and `worktree remove`. `publish --task` also requires the complete UUID. `task status` accepts a complete UUID or no UUID. No command resolves a UUID prefix.
+
+The persona is optional: `task run --task TEXT` launches a persona-less fresh child with no synthetic role (explicit `--trait` selections still apply). `--context fresh` is the default and `--context fork` forks the caller's own Pi session (see [docs/contract.md#Fork launch](docs/contract.md#fork-launch)); `--context measurement --measurement-config PATH` runs a Pi subject headless under a detached, supervisor-published run with no pane by default (see [docs/contract.md#Measurement launch](docs/contract.md#measurement-launch)); its request audit covers exactly four Pi APIs (see [docs/contract.md#Pi measurement adapter](docs/contract.md#pi-measurement-adapter)) ([docs/contract.md#Context modes](docs/contract.md#context-modes)). Root-owned staging, repeated measurements and the approval-gated context smoke are in [../references/workflow-recipes.md](../references/workflow-recipes.md).
 
 `--prompt-extra` appends exceptional constraints. `--print-prompt` previews the invariant wrapper. The CLI never offers raw prompt mode.
 
@@ -36,6 +44,7 @@ Command index. [docs/contract.md](docs/contract.md) owns precedence, guards, ref
 | `--spawns NAMES` / `none` | override the persona allow-list; `none` forces a leaf | [docs/contract.md#Spawn gating](docs/contract.md#spawn-gating) |
 | `--worktree <path>` / `new` | use an existing checkout or create one managed target | [docs/contract.md#Checkout target resolution](docs/contract.md#checkout-target-resolution) |
 | `--tab` / `--split` | force placement; the flags are mutually exclusive | [docs/contract.md#Placement](docs/contract.md#placement) |
+| `--context measurement --measurement-config PATH` | run one headless measurement sample; `--tab`/`--split` add a read-only monitor | [docs/contract.md#Measurement launch](docs/contract.md#measurement-launch) |
 | `task status [UUID]` / `task list` | inspect one round or list rounds | [docs/contract.md#JSON output](docs/contract.md#json-output) |
 | `task collect UUID` | capture the next published item | [docs/contract.md#Ledger and completion](docs/contract.md#ledger-and-completion) |
 | `task collect --any` | capture the first same-session child to publish | [docs/contract.md#Fan-in](docs/contract.md#fan-in) |
@@ -63,6 +72,7 @@ OH="$HOME/.agents/skills/herdr-orch/scripts/oh"
 "$OH" task start reviewer --task-file assignment.md
 "$OH" task collect <full-task-uuid> --wait --timeout 600000
 "$OH" task collect --any --wait --timeout 600000
+"$OH" task start --context measurement --measurement-config experiment/measurement.json --worktree new --task-file sample.txt
 "$OH" task status <full-task-uuid>
 "$OH" task continue <full-task-uuid> --task 'Re-review after the fixes.' --wait
 "$OH" task close <full-task-uuid>

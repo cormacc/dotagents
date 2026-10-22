@@ -1,0 +1,619 @@
+#+TITLE: herdr-orch: child context modes
+#+DATE: 2026-10-21 Wed
+#+PARENT: [[archive:f8f0d6bb-b571-4802-b1cc-d27d5c2fd30d][herdr-orch: child context modes]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/README.md]]
+#+SPEC: [[proj:skills/herdr-orch/README.org]]
+#+SPEC: [[proj:pi/extensions/herdr-orch/README.md]]
+#+SPEC: [[proj:skills/herdr-orch/references/workflow-recipes.md]]
+
+* Intent
+Give orchestrators one explicit choice of child context: fresh named-persona delegation, fresh persona-less delegation, forked conversation, or isolated measurement. Keep normal delegation safe and inspectable, remove orchestration instructions from measurement subjects, and compose root-owned workflows from the resulting task interface.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+The work is complete. ~oh task run|start --context fresh|fork|measurement~ gives an orchestrator one explicit choice of child context. Fresh is the default, and the persona is optional: a persona-less child receives the assignment, explicit traits and launcher guidance, but no role and no authority. "Spawn a subagent" selects fresh context and "fork a subagent" selects forked context. A Pi fork copies the caller's own persistent session and branches before the caller's current turn, so the child inherits only completed turns and its assignment is its only open request. A measurement runs a Pi subject headless under a detached supervisor with only the configured treatment, tools and literal assignment; a request-boundary audit covers four Pi APIs, and any other API fails closed. Root-owned workflows compose these modes with the existing task verbs. The guarded context-modes smoke passed on installed Pi 1.4.0 (see [[*Validation]]).
+
+** Scope
+*** In scope
+- Unified context selection on ~oh task run/start~, optional persona, existing explicit traits, preview, provenance and lifecycle compatibility.
+- Pi fork of the caller's completed turns, before the current turn that delegates; optional persona overlay; recorded named-persona inheritance.
+- Pi-only headless measurement, optional Herdr monitor panes, explicit context configuration, execution evidence and supervisor-owned result publication. Measurement request-level audit coverage is exactly four Pi APIs: ~anthropic-messages~, ~openai-completions~, ~openai-responses~ and ~openai-codex-responses~ (user-approved boundary). Within those four APIs the owner permits declared provider model fallbacks, Codex's exact default instruction for an empty treatment, image-bearing tool results and the runtime's exact empty and image-only result placeholders, each only as independently derived (see [[*Measurement]]).
+- Root-owned workflow recipe as the final phase, using existing task lifecycle verbs rather than a workflow engine.
+- Living contracts listed by ~#+SPEC:~; CLI examples, skill routing and ~/oh~ usage guidance change with the implementation they describe.
+*** Out of scope
+- Claude/Codex fork or measurement parity; unsupported combinations fail explicitly.
+- Measurement on any Pi API outside the four audited ones. Such a request fails closed before it is sent. This narrows measurement only; fresh delegation and forks are not restricted by API.
+- Exact cloning of live Pi configuration, extension-forced parent prompts or ephemeral parent sessions.
+- Nested workflow ownership, wider spawn permissions, arbitrary persona-file/inline-persona inputs, generic native-argument passthrough and a batch scheduler.
+- A new operating-system sandbox, automatic answer-quality scoring, new model weights or changes to packaged persona defaults.
+
+** Acceptance
+*** Core functionality
+- [x] Existing named-persona commands retain their observable delegation behaviour.
+- [x] A request to "spawn a subagent" selects fresh context unless context is explicitly overridden.
+- [x] A request to "fork a subagent" selects forked context.
+- [x] A fresh assignment can launch without a roster definition.
+- [x] Explicit traits compose without a persona.
+- [x] A Pi fork inherits the selected conversation through the caller's last completed turn. (Amended 2026-10-22 from "through the safe pre-launch batch boundary"; see [[*Pi fork]].)
+- [x] An authorised no-overlay fork reapplies the caller's recorded named-role snapshot when one exists.
+- [x] A below-root no-overlay fork is admitted only when its effective persona is in the caller's allow-list.
+- [x] A below-root no-overlay fork outside that allow-list fails before allocation.
+- [x] A selected persona replaces the inherited named role for the fork's current assignment.
+- [x] The fork operation leaves the source session bytes unchanged.
+- [x] Measurement requests match configured context and assignment under the exact recorded auth/model-compatibility adaptations, apart from protocol encoding.
+- [x] Unexpected model-visible text fails the request-context audit.
+- [x] A fork launched in a selected checkout uses that checkout as its runtime working directory.
+- [x] Measurement completion is published by the supervisor, not the subject.
+- [x] Repeated measurement runs allocate no panes by default.
+- [x] Explicit placement opens a Herdr monitor for measurement events, tool activity and errors.
+- [x] Closing a measurement monitor leaves the measured process running.
+- [x] Monitor input cannot enter the measured model context.
+- [x] Preview uses the launch resolver for stable configuration inputs.
+- [x] Fork preview reports the source session and invocation-relative boundary rule.
+- [x] Fork launch records its actual selected boundary entry.
+- [x] A root-owned workflow recipe demonstrates collected stage handoff.
+- [x] The workflow recipe demonstrates justified child reuse through ~continue~.
+*** Edge cases
+- [x] A fork with an unreadable, ephemeral or ambiguous source fails before child launch.
+- [x] Fork fixtures preserve the selected compaction projection.
+- [x] Fork fixtures preserve the selected active branch.
+- [x] Fork model context contains no unmatched launching tool call.
+- [x] Unsupported mode/harness combinations fail before launch.
+- [x] A measurement request on an API outside the four audited ones fails closed before it is sent.
+- [x] Persona-less identity cannot bypass the below-root spawn guard.
+- [x] Measurement configuration rejects unknown fields or unresolved selections before launch.
+- [x] Measurement option validation enforces the refusal matrix in [[*Measurement]] before allocation.
+- [x] Assignment transport preserves literal leading slashes.
+- [x] Assignment transport preserves literal leading at-signs.
+- [x] Assignment transport preserves literal leading hyphens.
+- [x] Assignment transport preserves literal template-like text.
+- [x] Concurrent measurements publish independently of open sibling tasks.
+- [x] Subject-side orchestration commands fail without adopting the root's identity.
+- [x] Invoker process-group termination leaves an acknowledged measurement collectable.
+- [x] Single-result waiting remains active while its headless execution is live.
+- [x] Fan-in waiting remains active while an eligible headless execution is live.
+- [x] Adapter tests execute inside the installed Pi runtime.
+- [x] Adapter checks report a runtime-resolution mismatch as failure.
+- [x] Measurement hard-limit expiry produces a failed execution result after owned-process cleanup.
+- [x] A missing expected output prevents measurement success.
+- [x] A malformed or failed harness termination prevents measurement success even if the process exits zero.
+- [x] Measurement ~continue~ requests fail explicitly.
+- [x] Measurement ~poke~ requests fail explicitly.
+- [x] Existing ledger entries without context metadata retain their current lifecycle interpretation.
+*** Anti-criteria
+- [x] Must not: treat absence of a persona as root authority.
+- [x] Must not: silently replace a requested fork with a fresh session.
+- [x] Must not: inject launcher persona, publication, retro or workflow guidance into measurement subjects or allow unrecorded request adaptations.
+- [x] Must not: weaken ownership, immutable-result, artefact-boundary or checkout-checkpoint safeguards.
+- [x] Must not: treat a successful measurement execution as proof of answer quality.
+- [x] Must not: add dependencies or a workflow engine without a separate demonstrated need.
+
+** Decisions
+*** Context and routing
+- CLI surface: ~--context fresh|fork|measurement~ on ~task run/start~, with an optional positional persona. ~fresh~ is the default; presence of a persona distinguishes normal persona delegation from persona-less delegation. ~fork~ permits an optional persona; ~measurement~ rejects one.
+- Chose a unified task interface with separate interactive and headless execution paths. Rejected a separate measurement command because task identity, inspection and result capture should remain consistent. Rejected independent fork/bare/no-wrap flags because their combinations obscure context selection. Headless execution does not prohibit a monitor pane: execution semantics and visibility are separate choices.
+- Use the same context resolver once per preview or launch invocation. Stable configuration follows the same rules; invocation-sensitive fork boundaries are recomputed, not frozen by an earlier preview. Preview reports the source session and boundary rule; the start envelope and ledger report the selected entry for that launch. Record mode, effective role/trait provenance, execution type and relevant snapshot/configuration hashes in the ledger and status. Existing records with no context metadata remain fresh interactive delegation.
+- Persona-less fresh children receive the assignment, explicit traits and normal launcher guidance, but no synthetic role instructions. Reuse existing kind/model/effort resolution, timeout and retro defaults; spawning capability defaults to leaf. A display label is not a persona or a permission grant.
+- Child identity is task-bound, separate from role and display name. Use ~anonymous~ as the display/index token when no role exists; it is not a role identity or permission grant. Distinguish an absent role from a named roster persona even if its name is ~anonymous~; the below-root absent-role refusal runs before name-based allow-list admission. Do not reserve an otherwise valid roster name merely to encode absence. Audit ~HERDR_ORCH_PERSONA~ consumers: ~placement-policy~, ~enforce-spawns!~, ~spawns-policy~, launch identity injection, ~orphans!~ and ~continue!~. Also cover ~child-name~, ~composed-persona-path~, ~ledger/allocate-index!~ and ~core/nested-prefix~. A missing role must never make a delegated process appear root-owned.
+- Below root, fresh anonymous and measurement launches remain forbidden. A fork resolves its effective target persona from an explicit overlay or the caller's recorded named role, then applies the existing caller allow-list. No-overlay inheritance grants no authority: an inherited role not in that list is refused before allocation. Below-root children remain leaves regardless of role/frontmatter; packaged allow-lists are unchanged.
+- Normal ~continue~ retains the child's existing context and resolved provenance. Context changes require a new child, not a new round in the old child.
+
+*** Pi fork
+- Fork reads the caller's own persistent Pi session; it does not select another child's session. Fork means conversation inheritance, not an exact live-process clone. Child resources and executable tools reload in the selected checkout. An unnamed root without an overlay uses normal child-runtime instructions plus inherited conversation; no named role is invented. An authorised named caller without an overlay supplies its recorded role snapshot.
+- Snapshot the persistent source before creating the child. Identify the launching assistant/tool batch on the active branch, then the caller's current turn: everything after its last completed assistant response (stop, no tool calls). Branch the child before the first message of any kind after that response (the request, a custom message that opened the run, a continuation's first message, or a message appended between turns such as `!` output or an extension message; that message and any compaction after it are dropped), so the child inherits only completed turns and its assignment is the only open request. The caller's request, steering, failed attempts and tool work in that turn stay outside the child; the caller passes any same-turn findings the child needs in the assignment, and the skill tells it to. A caller with no completed earlier turn refuses with a fresh-context remedy. Parallel sibling tool results must not cause selection of an arbitrary final line. Reject a source whose safe boundary cannot be proved.
+  Rejected (owner decision, 2026-10-22, after a controlled single-generation replay reproduced the inherited worker re-running its caller's fork command with the current assignment intact; ~.tmp/child-context-replay-c21f/REPORT.md~):
+  - Branch immediately before the launching batch: retains the caller's unanswered request, which the child treats as its own work.
+  - Keep the launching call and append a synthetic tool result: preserves same-turn work but adds model-visible history the runtime did not produce, and must also answer or drop sibling calls.
+- Use Pi's public session API rather than rewriting its JSONL format: ~SessionManager.forkFrom~ with the selected checkout as ~targetCwd~, ~branch~ at the proved turn boundary, then ~appendCustomEntry~ to persist the selected branch. Refuse a null boundary; do not substitute empty history. The marker is not model context. Launch the independent file through ~--session~; preserve source session identity, target checkout and selected entry in provenance. Installed Pi's explicit-session path takes runtime cwd from the session header, so pane cwd alone does not establish checkout isolation.
+- Store immutable named-role content/provenance at delegation launch so later edits to the definition cannot silently change an inherited role. A selected overlay uses its own resolved composition. If a named parent's role snapshot is unavailable, refuse implicit role inheritance with a remedy rather than claiming an exact copy; an explicit overlay remains available.
+- Apply new assignment identity and publication guidance after inherited conversation. Historical task/result identifiers are context, never current routing authority. Fork cleanup owns only newly created files and panes, never the parent session.
+- The installed Pi is the baseline: the adapters were built on Pi 1.3.0 and re-verified on 1.4.0. Source inspection is not proof that an adapter works. Verify installed capability before allocation; load adapters and their test extensions inside the installed Pi process. The repository test entry point must invoke that runtime, record its version and the API module's resolved runtime identity, and fail on mismatch. Do not import a repository-pinned SDK for these checks, hard-code a Nix-store path or add a separate SDK pin. Ordinary dependency tests do not count as installed-runtime adapter coverage.
+
+*** Measurement
+- Input: ~--measurement-config PATH~, required only for ~--context measurement~. Its closed JSON fields are ~systemPromptFile~ (optional; absent means empty text), ~skillFiles~, ~tools~, ~extensions~, ~hardTimeoutMs~ (required positive integer) and ~expectedOutputs~. Resource/output lists default to empty; an empty ~tools~ list enables zero tools, not the harness default. Tool names are exact and case-sensitive, not patterns. Resolve input paths relative to the configuration file; resolve expected outputs relative to the work root. Unknown fields, invalid types, unreadable inputs and unresolved selections fail before launch. Freeze resolved inputs per run rather than rereading editable files during execution.
+- Measurement refuses a positional persona, ~--trait~, ~--prompt-extra~, ~--retro~, ~--no-retro~ and ~--spawns~ before allocation; do not silently ignore them or apply persona defaults. ~--measurement-config~ is refused outside measurement mode. Keep model/effort selection, checkout selection, preview, wait budget and explicit monitor placement available.
+- The experiment assignment still comes from exactly one of ~--task~, ~--task-file~ or stdin. It is not wrapped. Transport literal text through the adapter rather than reinterpret it as CLI messages: leading ~/~, ~@~, ~-~ and template-like text must not become commands, file attachments, options or expansions. The subject's stdin is closed; only the parent CLI consumes assignment stdin.
+- Compile the system file text followed by the literal selected skill-file contents in list order, separated by two newlines, into an inspectable treatment prompt; expose the exact resulting text in preview. Default system text is empty. No discovered context files, skills, templates, tools, MCP servers or extensions may enter the subject. Explicit provider-auth extensions remain supported; do not remove credentials indiscriminately.
+- Derive request expectations before execution from configured inputs, provider/auth mode, resolved model compatibility and installed-runtime identity. Record expected adaptations separately from the treatment and retain the final request; never accept an adaptation merely because it appears in the observed payload. Apart from the protocol encoding defined below, only these inspected Pi adaptations are permitted:
+  - Anthropic OAuth :: First system block ~You are Claude Code, Anthropic's official CLI for Claude.~; tool definitions and historical ~tool_use~ names follow ~toClaudeCodeName~: case-insensitive lookup in Pi's canonical Claude Code tool-name list, otherwise unchanged. Configured selection stays exact and case-sensitive. Refuse converted-name collisions before launch. Other auth modes expect neither change.
+  - Anthropic model fallbacks :: Owner-approved. When the selected model declares ~compat.allowedFallbackModels~, the installed Anthropic consumer sends top-level ~fallbacks~ as that list reduced to ~{model}~, in order, and the ~server-side-fallback-2026-07-01~ beta (protocol encoding). Derive exactly that list from the model; an altered, added, dropped or reordered target fails. Do not exclude fallback-enabled models. A fallback can change which model serves a turn, so record per assistant turn the requested model, the allowed list and the provider-reported served model. Pi surfaces ~responseModel~ only when it differs from the requested id, so an absent value is recorded as unknown, never guessed to equal the requested model; a served model outside the declared list is recorded as undeclared, not guessed. Other APIs read no such setting and expect no ~fallbacks~.
+  - Codex default instruction :: Owner-approved. ~openai-codex-responses~ sends ~instructions: "You are a helpful assistant."~ when the configured treatment is empty. Permit and record exactly that text for an empty treatment (adaptation ~codex-default-instructions~); a non-empty treatment is sent as is, and no other default text on any API is implied.
+  - Tool-result images, captions, bridge messages and omission text :: Owner-approved across the four APIs. Derive each from the recorded tool-result content, its error state and the selected model's image capability through the installed consumer rules: the model-capability omission text ~(tool image omitted: model does not support images)~ in place of each run of images; the Anthropic image blocks, the placeholder text block ~(see attached image)~ for an image-only result, and for an error result the text ~(image attached after the tool results)~ in the result plus a caption ~Images from the error result of tool call <id> (<name>):~ and the images after all results of the turn; the Chat Completions bridge user message ~Attached image(s) from tool result:~ with its ~image_url~ blocks after the whole group of results; and the inline ~input_image~ parts of ~openai-responses~ and ~openai-codex-responses~. This is not permission to accept observed images or captions: a changed caption, image bytes, MIME type, an added or dropped image or a wrong capability fails. User-message images stay refused because the assignment is literal text.
+  - Empty and image-only result placeholders :: Owner-approved, only when independently derived from the recorded result: ~(no tool output)~ for an empty result on the OpenAI APIs and ~(see attached image)~ for an image-only result where the consumer rule produces it. Anthropic sends an empty string for an empty result.
+  - Anthropic native tool changes :: When ~supportsMidConvoSystemMessages~ and ~supportsMidConvoToolChanges~ are enabled and initial configured tools are non-empty, expect exactly one trailing ~__pi_deferred_placeholder__~ definition, independently of auth. Match its description ~Reserved placeholder. Never available. Never call this.~, ~input_schema~ ~{type: "object", properties: {}, required: []}~ and ~defer_loading: true~. Record it as a protocol artefact, not an executable tool; do not assume it is model-invisible. Other model/tool combinations expect no placeholder.
+- Protocol encoding includes ~betas~, ~thinking~, top-level ~output_config~, ~cache_control~ and ~eager_input_streaming~, plus empty-content ~output_config.effort~ system markers on ~supportsMidConvoEffort~ models when thinking is not disabled. ~openai-responses~ ~configuration_update~ effort items are protocol encoding of the same kind (owner-classified): their positions, content and levels are derived from the selected configuration, resolved level and recorded history, and an alteration, addition or removal fails; this does not permit arbitrary configuration updates. Derive expected marker positions/levels from the selected runtime, resolved effort and recorded history, independently of auth. Record encoding separately from treatment text; validate its runtime/model/effort-derived structure rather than compare it to the compiled treatment. This distinction does not exempt message text, tool definitions or altered/non-empty effort markers from the audit.
+- Freeze the executable tool list. Reject unrecorded context, added executable tools, altered protocol artefacts and mid-conversation tool additions/removals. Protocol recording grants no callable tools; a placeholder call is refused and makes the measurement execution fail, with failed evidence retained. Do not add an audit-exception option. Within the four audited APIs do not restrict otherwise supported models (fallback-enabled models are measured under the derived fallback list), and do not substitute a provider-neutral or transcript-only audit for the request-boundary audit. Any other API fails closed: the user explicitly approved this four-API measurement boundary, and it limits measurement only, never fresh delegation or forks.
+- The measurement adapter task owns a reusable subject launch/transport helper as well as the explicitly loaded extension; the integration supervisor reuses that helper rather than reconstructing argv, stdin, resource selection or request auditing.
+- Use a small explicitly loaded Pi adapter for the full-prompt replacement and request-boundary audit. Native ~--system-prompt~ alone is insufficient because Pi 1.3.0 still adds a cwd section. ~before_agent_start~ can return the full ~systemPrompt~; the adapter and fake-provider tests must verify the actual model-visible request, since the normal transcript records structured prompt sections rather than the forced text.
+- Record the selected harness/model/effort, effective input hashes, resource and tool inventory, request-context audit, event stream, stderr and final output. Keep credentials out of reports and launch manifests. Explicit extensions are trusted code; this is reproducibility/context control, not an OS security boundary.
+- A headless supervisor owns each run. Before ~start~ acknowledges or ~run~ waits, detach the supervisor from the invoking process group/session, close stdin and redirect stdout/stderr to recorded evidence files. The subject is owned by that supervisor, not the invoking tool call. Record PID plus process-start identity and owned process-group/session evidence; PID alone cannot prove ownership after reuse. Verify detachment on each supported platform; unsupported platform capability fails before launching a subject. Do not assume a Linux-only command provides Darwin support or add a dependency without separate approval.
+- ~collect~ and fan-in consume the existing immutable result stream. Single-result and fan-in waiters use execution liveness for headless entries, not Herdr agent presence. No pane is created by default. Repeated invocations supply batching without a scheduler.
+- Explicit ~--tab~ or ~--split~ requests a read-only monitor pane for measurement, using existing placement semantics without applying the normal configured placement default. The monitor displays recorded events, tool activity, errors and execution state; it is not the measured process's terminal. Record its identity separately. Opening, closing or typing into it cannot change experiment inputs, stop the supervisor or publish a result. Interactive investigation starts a separate session outside the measured run.
+- Successful execution requires process exit zero, valid successful terminal harness evidence, matching context audit and the configured expected outputs. ~expectedOutputs~ names newly created outputs, not modifications to tracked/pre-existing files. Reject such a pre-existing target before launch; existence alone would not prove this run produced it. Outputs remain inside the recorded work root under the existing symlink/path checks. Execution success is not a quality score.
+- Bind supervisor publication to its recorded task/execution identity, separate from root pane identity. Preserve publisher validation, locking, artefact containment and checkpoint rules without resolving the supervisor as the root session. Its discharge check is execution-local: open root siblings cannot block its result. Do not fake a Herdr agent. Test two concurrent samples publishing while each other's round remains open.
+- The subject receives no publication obligation or root routing. Remove inherited ~HERDR_PANE_ID~ and ~HERDR_ORCH_*~ routing/authority values, inject an explicit task-bound subject marker recognised by the delegated-child predicate, and refuse subject-side orchestration commands before any root/focused-pane fallback. This marker is transport metadata, not model-visible guidance. Keep explicitly required provider credentials. Environment separation prevents accidental authority inheritance; trusted tools/extensions are not an OS security boundary.
+- The hard execution limit bounds the owned process tree. ~--timeout~ remains the existing non-destructive wait budget. Crashes, output/audit failure and hard-limit expiry produce failed execution evidence. Never auto-retry a sample. Preserve partial evidence when cleanup or publication fails.
+- ~continue~ and ~poke~ refuse measurements. ~close~ requires captured terminal evidence and a stopped owned execution; it closes an optional still-owned monitor and marks the run closed. If the supervisor is lost without terminal evidence, retain the incomplete run for diagnosis; prune may retire it only after recorded process-start and process-group evidence prove its owned subject execution has stopped, without fabricating completion. A missing or replaced monitor never proves that the measured process has stopped and never permits closing another occupant. Status, fan-in, publication identity checks, prune, orphan handling, compact, harvest and worktree teardown must recognise the execution type rather than interpreting a missing pane as proof of death.
+- Preserve normal checkout selection/reservation and publication checkpoint rules. Measurement is not implicitly read-only merely because the subject has no persona.
+
+*** Workflow phase
+- A root-owned recipe in ~skills/herdr-orch/references/workflow-recipes.md~ composes the modes. Select fresh versus fork explicitly at each stage; use captured artefacts for handoff and ~continue~ only when retained context is useful. Independent validation uses a fresh child.
+- Demonstrate one ordinary multi-stage workflow and a repeated-measurement loop. Each sample declaring ~expectedOutputs~ uses a fresh disposable checkout, for example ~--worktree new~, so its output targets do not pre-exist. Collect, close and apply the existing managed-checkout teardown rules for each sample; retain required evidence before removal. Retain existing nesting and ownership rules. No new workflow persona, parser or scheduler is required.
+
+*** Deferred by owner decision (2026-10-22)
+These are recorded limits, not tracked work. Each names its trigger.
+- WebSocket continuation and full production hook replay are not tested; the fake-endpoint fork controls use SSE. Revisit if a live fork failure points at transport or a request hook.
+- Darwin detachment is refused before allocation, not implemented. Revisit when a Darwin host needs measurement.
+- Served-model provenance is recorded as unknown where Pi omits ~responseModel~ (Responses and Codex always; Anthropic and Chat Completions when the served model equals the requested one). Closing that gap needs a Pi change.
+- Measurement keeps these surfaces fail-closed: user-message images, tool-result blocks that are neither text nor image, assistant turns from another provider, API or model, assistant message ids over 64 characters, and grammar-constrained tools. The output cap is range-checked, not exact, and an ~anthropic-beta~ header or ~PI_CACHE_RETENTION~ supplied only by a ~before_provider_headers~ extension or a provider auth environment fails closed. Revisit when a measured model needs one of them.
+- The fork and measurement adapters stay in place until Pi exposes the session-snapshot and exact-prompt boundaries natively. Revisit when it does.
+- No upstream Herdr agent-start trace is proposed. The historical ~agent_pane_busy~ cause stays unknown (task ~b377c57e~, CANCELLED).
+
+** Shipped
+- ADDED ~skills/herdr-orch/references/workflow-recipes.md~ :: root-owned staging with captured artefacts, forked delegation, justified ~continue~, fresh independent validation, repeated headless measurements, optional monitors, disposable expected-output checkouts, and the approval-gated context-modes smoke with its actual limits.
+- MODIFIED ~skills/herdr-orch/scripts/docs/contract.md~ :: ADDED sections 'Context modes', 'Pi fork adapter' and 'Pi measurement adapter' (with 'Fork launch' and 'Measurement launch'); MODIFIED 'Environment', 'Continue', 'Fan-in' and 'Orphans' for the subject marker, carried context fields and headless rounds, and 'Spawn gating' for the below-root persona-less refusal. The fork boundary rule is the caller's last completed turn.
+- MODIFIED ~skills/herdr-orch/SKILL.md~ :: the 'Invocation policy' Context bullet states the fresh default, the optional persona, what a fork inherits and what the caller must put in the assignment, and the measurement mode.
+- MODIFIED ~skills/herdr-orch/scripts/README.md~ :: the installed-Pi adapter test entry point (~scripts/pi/test.sh~), the provider-capture boundaries and the Pi 1.4.0 declaration rule.
+- MODIFIED ~skills/herdr-orch/README.org~ :: the Spawn item describes the optional persona and the three context modes.
+- MODIFIED ~pi/extensions/herdr-orch/README.md~ and ~help.ts~ :: ~/oh~ usage notes route "spawn" to fresh and "fork" to forked context and link the workflow recipes.
+- Code :: ADDED ~skills/herdr-orch/scripts/pi/~ (fork and measurement adapters, request audit, runtime check, fake providers, installed-Pi test runner) and ~src/herdr_orch/{measurement,pi_adapter,supervisor}.clj~; MODIFIED ~cli.clj~, ~core.clj~ and ~smoke.clj~; ~bb.edn~ gains the ~test-pi-adapters~ task. No dependency was added.
+
+** Gotchas
+- An installed Pi upgrade can change request encoding under the adapters. Pi 1.4.0 moved Codex tool declarations into an ~additional_tools~ input item for models that take mid-conversation system messages and additional tools, which broke a test rule derived from 1.3.0. The follow-up below tracks the re-check.
+- A fork child that inherits its caller's unanswered request takes it as its own work, even when its assignment forbids that (controlled replay, see [[*Validation]]). This is why the boundary excludes the caller's whole current turn.
+- Pi can open a run without a user message (an extension's ~triggerTurn~ custom message, or a continuation), and it appends ~!~ output, tool-loadout system messages and extension messages between turns. A turn rule that looks only for user messages leaks the current request.
+- Installed Pi's explicit ~--session~ path takes the runtime working directory from the session header, not from the pane, so checkout isolation for a fork depends on the header.
+- A ~collect --wait~ on a round that ~task run~ already consumed reports ~pending~ only when its wait budget ends. The closure review observed the bridge in the passing smoke spend about 26 minutes in such waits.
+
+** Risks
+- Fork reliability is unmeasured: one smoke run passed after the boundary change. The leaf, identity and publication guards contain a child that disobeys its assignment, but they do not make it succeed.
+- A runtime change can alter what a measurement subject receives. The request-boundary audit and installed-runtime tests fail closed, so the cost is a refused run rather than a silent change.
+- Permission drift when the persona is absent: one delegated-child predicate serves every guard consumer, and each consumer has a test.
+
+** Follow-ups
+- [[task:216bd6b9-ed8e-4277-b653-bea0ea689706][herdr-orch: re-check Pi-version-specific test rules after each Pi upgrade]]
+
+* Plan
+All plan tasks are closed; [[*Implementation]] holds the end state.
+
+** DONE [#B] Add context resolution and persona-less delegation :skill:herdr_orch:
+CLOSED: [2026-10-21 Wed 15:53]
+:PROPERTIES:
+:CUSTOM_ID: bf34e806-3505-4280-9ce0-85602a0c6bd0
+:CREATED: [2026-08-12 Wed 23:12]
+:STARTED: [2026-10-21 Wed 15:45]
+:END:
+:LOGBOOK:
+- Created [2026-08-12 Wed 23:12]
+- State "STARTED" from "TODO" [2026-10-21 Wed 15:45]
+- State "DONE" from "STARTED" [2026-10-21 Wed 15:53]
+:END:
+Acceptance criteria:
+- [x] The existing named-persona regression suite passes for resolution, trait composition, placement and publication.
+- [x] Fresh persona-less launches receive no synthetic persona instructions.
+- [x] Explicit traits work on persona-less launches.
+- [x] A shared resolver supplies preview and launch context.
+- [x] Named-role launch content is snapshotted for later fork inheritance.
+- [x] Old ledger entries default to fresh interactive semantics.
+- [x] Anonymous display names satisfy the Herdr agent-name contract.
+- [x] Anonymous indexing does not require a roster definition.
+- [x] Anonymous composed paths do not require a roster definition.
+- [x] Nested labels preserve task-bound anonymous identity.
+- [x] The spawn guard recognises an anonymous delegated caller.
+- [x] The continuation guard recognises an anonymous delegated caller.
+- [x] The orphan guard recognises an anonymous delegated caller.
+- [x] Below-root placement recognises an anonymous delegated caller.
+- [x] A grandchild of an anonymous caller is forced leaf despite its frontmatter.
+- [x] Subject-marked invocations fail before root/focused-pane identity fallback.
+- [x] Below-root absent-role launches fail before allocation even when ~anonymous~ is explicitly allow-listed and a same-named roster definition exists.
+- [x] A named roster persona called ~anonymous~ remains distinct from an absent role.
+- [x] Unimplemented context modes fail before allocation until their integration tasks land.
+- [x] The skill and CLI documentation state the optional-persona/default-fresh contract.
+- [x] Must not: introduce a new authority grant when persona is absent.
+
+** DONE [#B] Implement the safe Pi fork adapter
+CLOSED: [2026-10-21 Wed 15:59]
+:PROPERTIES:
+:CUSTOM_ID: 84653126-cd7e-412a-9761-d43eaad7f97f
+:CREATED: [2026-08-07 Fri 10:06]
+:BLOCKED-BY: task:bf34e806-3505-4280-9ce0-85602a0c6bd0
+:STARTED: [2026-10-21 Wed 15:53]
+:END:
+:LOGBOOK:
+- Created [2026-08-07 Fri 10:06]
+- State "STARTED" from "TODO" [2026-10-21 Wed 15:53]
+- State "DONE" from "STARTED" [2026-10-21 Wed 15:59]
+:END:
+Acceptance criteria:
+- [x] Fork creates an independent persistent Pi session at the approved pre-launch batch boundary. (Reversed 2026-10-22 by owner decision: the boundary is the caller's last completed turn; see [[*Pi fork]].)
+- [x] A compacted multi-branch fixture retains the expected active projection.
+- [x] A partial parallel-tool batch is absent from the child's active context.
+- [x] No-overlay forks use the recorded named-role snapshot when present.
+- [x] Explicit persona overlays replace the inherited named role.
+- [x] Missing source, ambiguous boundary or missing required role snapshot fails before the adapter creates a fork.
+- [x] A null pre-launch boundary is refused rather than replaced by empty history.
+- [x] The adapter accepts the selected target checkout as an explicit input.
+- [x] The forked session header records that checkout as cwd.
+- [x] The adapter's discard operation removes only its created fork session, never the source.
+- [x] Source-session bytes remain unchanged by fork operations.
+- [x] The adapter returns fork source and selected boundary provenance for its caller.
+- [x] Adapter checks execute inside the installed Pi process through a documented repository entry point.
+- [x] Adapter checks fail if API resolution does not match the recorded installed runtime.
+- [x] The adapter does not enable public fork launch before integration.
+- [x] Must not: infer current task/result identity from inherited conversation.
+
+** DONE [#B] Implement the isolated Pi measurement adapter :herdr_orch:
+CLOSED: [2026-10-21 Wed 20:25]
+:PROPERTIES:
+:CUSTOM_ID: 8bb9b562-799d-4e3e-8f85-f0b1d830cd5a
+:CREATED: [2026-10-21 Wed 11:28]
+:STARTED: [2026-10-21 Wed 15:59]
+:END:
+:LOGBOOK:
+- Created [2026-10-21 Wed 11:28]
+- State "STARTED" from "TODO" [2026-10-21 Wed 15:59]
+- State "DONE" from "STARTED" [2026-10-21 Wed 16:08]
+- State "STARTED" from "DONE" [2026-10-21 Wed 16:27]
+- State "STARTED" from "STARTED" [2026-10-21 Wed 16:33]
+- State "DONE" from "STARTED" [2026-10-21 Wed 17:06]
+- State "STARTED" from "DONE" [2026-10-21 Wed 17:29]
+- State "DONE" from "STARTED" [2026-10-21 Wed 20:25]
+:END:
+Acceptance criteria:
+- [x] The closed JSON configuration in [[*Measurement]] validates before a model run.
+- [x] The compiled treatment prompt matches the configured system/skill content exactly.
+- [x] Assignment transport preserves literal leading slashes.
+- [x] Assignment transport preserves literal leading at-signs.
+- [x] Assignment transport preserves literal leading hyphens.
+- [x] Assignment transport preserves literal template-like text.
+- [x] The subject's stdin is closed.
+- [x] Only the selected tools are callable.
+- [x] An empty tool selection enables zero tools.
+- [x] Unknown or wrong-case tool selections fail explicitly.
+- [x] Discovered home/project context, skills, templates, extensions and MCP tools do not enter a measurement request.
+- [x] An explicitly selected provider-auth extension works in the fake-provider integration fixture.
+- [x] An OAuth fixture accepts the exact expected auth-adapter preamble.
+- [x] An unrecognised auth preamble fails the request-context audit.
+- [x] An OAuth fixture selecting ~read~ expects the provider tool definition ~Read~.
+- [x] OAuth call-history names use the recorded conversion rule.
+- [x] Mid-conversation tool additions fail the request-context audit.
+- [x] Mid-conversation tool removals fail the request-context audit.
+- [x] An unchanged OAuth tool name outside the conversion list passes the audit.
+- [x] An unrecorded tool-name change fails the request-context audit.
+- [x] Any tool definition outside configured tools and the expected protocol placeholder fails the audit.
+- [x] A native-tool-change fixture expects exactly one trailing placeholder matching [[*Measurement]].
+- [x] A fixture without native tool changes expects no placeholder.
+- [x] A zero-tool fixture expects no placeholder.
+- [x] An altered placeholder fails the request-context audit.
+- [x] A mid-conversation-effort fixture accepts exactly its expected empty-content effort markers.
+- [x] A fixture without the effort-marker compatibility expects no markers.
+- [x] An altered effort marker fails the request-context audit.
+- [x] The placeholder is absent from the executable tool inventory.
+- [x] A placeholder call is refused.
+- [x] A placeholder call makes the measurement execution fail.
+- [x] OAuth selections whose converted names collide fail before launch.
+- [x] A non-OAuth fixture selecting ~read~ expects ~read~.
+- [x] A fixture without an auth adaptation expects no preamble.
+- [x] Evidence separates the auth-adapter preamble from the configured treatment.
+- [x] Evidence maps provider tool names back to the configured names.
+- [x] The reusable subject launch/transport helper is exercised by the adapter tests.
+- [x] The adapter emits request-context evidence outside model context.
+- [x] A deliberately contaminated request fails the audit after a passing control.
+- [x] Recorded terminal evidence distinguishes successful completion from harness errors and malformed output.
+- [x] Adapter checks execute inside the installed Pi process through a documented repository entry point.
+- [x] Adapter checks fail if API resolution does not match the recorded installed runtime.
+- [x] Must not: add a model-visible launcher wrapper or publication instruction.
+- [x] Must not: install the measurement adapter into ordinary Pi auto-discovery.
+- [x] Each of ~openai-completions~, ~openai-responses~ and ~openai-codex-responses~ has a passing baseline in which the actual request carries exactly the treatment, assignment, configured tools and tool history.
+- [x] An altered system/developer/instructions text fails the request audit on each of the four audited APIs.
+- [x] A changed or added tool definition or altered tool history fails the request audit on each of the four audited APIs.
+- [x] A changed literal assignment fails the request audit on each of the four audited APIs.
+- [x] OpenAI-family configuration updates and the Codex default instructions are derived from the resolved model, level and history rather than read from the payload.
+- [x] An API outside the four audited ones fails closed before the request is sent.
+- [x] The complete pre-request payload is retained as evidence for every audited request.
+- [x] Recorded transcript history (assistant text and thinking, tool-call ids, names and arguments, tool-result ids and text) is compared by value with the provider-encoded request on each of the four audited APIs.
+- [x] Configured tool definitions (names, descriptions, parameter property names, descriptions and enums) are derived from the registry and compared by value on each of the four audited APIs.
+- [x] Changed tool-result text, injected assistant content, changed tool-call arguments or ids and changed tool schemas each fail the audit on each of the four audited APIs after a passing control, with the complete payload retained.
+- [x] An exception in the audit or in evidence writing ends the subject before the request is sent, even when failure evidence cannot be written.
+- [x] Execution success requires an ok audit and a retained request payload for every request the terminal evidence records.
+- [x] The leading instruction role is derived from the selected model on ~openai-completions~ and ~openai-responses~.
+- [x] A model with ~allowedFallbackModels~ is measured under the exact derived ~fallbacks~ list on ~anthropic-messages~; an altered, added or dropped target fails after a passing control.
+- [x] Each turn's requested model, the allowed fallback list and the provider-reported served model are recorded, with unavailable served-model provenance recorded as unknown.
+- [x] An empty treatment on ~openai-codex-responses~ expects exactly ~You are a helpful assistant.~ and a non-empty treatment expects its own text; any other instruction fails.
+- [x] Empty, image-only, mixed and error tool results are derived on each of the four audited APIs from the recorded content, error state and model image capability, including the omission text for a model without image input.
+- [x] A changed caption or bridge text, changed image bytes or MIME type, an added or dropped image and a changed placeholder each fail on each of the four audited APIs after a passing control.
+- [x] ~openai-responses~ configuration updates are derived as protocol encoding; a dropped, added or altered update fails.
+- [x] Chat Completions ~cache_control~ markers (~cacheControlFormat: "anthropic"~, including the built-in OpenRouter Anthropic models) are derived from the resolved compatibility and placed as the installed consumer places them; a stripped, reshaped, moved or added marker and text changed inside an annotated part fail after a passing control.
+- [x] Chat Completions ~reasoning_details~ are replayed from the recorded thinking signature as the installed consumer replays them; altered or dropped details fail after a passing control.
+- [x] Every top-level encoding field on each of the four audited APIs is derived before comparison from the selected model, the resolved thinking level and the configured runtime inputs and compared by value; a changed effort, budget, output format, template text, include, verbosity, tool choice or nested field fails after a passing control.
+- [x] Chat Completions tool objects and their ~function~ carry only the derived keys.
+- [x] The tool-selection check observes the refused call's side effect before the test root is removed, with a configured-tool positive control that shows the observation fires.
+
+** DONE [#B] Integrate fork and supervised measurement orchestration :herdr_orch:
+CLOSED: [2026-10-21 Wed 22:56]
+:PROPERTIES:
+:CUSTOM_ID: 8a0e5d7c-848c-4ebb-b6cf-060a053cc171
+:CREATED: [2026-10-21 Wed 11:28]
+:BLOCKED-BY: task:bf34e806-3505-4280-9ce0-85602a0c6bd0
+:BLOCKED-BY+: task:8bb9b562-799d-4e3e-8f85-f0b1d830cd5a
+:BLOCKED-BY+: task:84653126-cd7e-412a-9761-d43eaad7f97f
+:STARTED: [2026-10-21 Wed 16:08]
+:END:
+:LOGBOOK:
+- Created [2026-10-21 Wed 11:28]
+- State "STARTED" from "TODO" [2026-10-21 Wed 16:08]
+- State "DONE" from "STARTED" [2026-10-21 Wed 21:11]
+- State "STARTED" from "DONE" [2026-10-21 Wed 21:33]
+- State "DONE" from "STARTED" [2026-10-21 Wed 22:01]
+- State "STARTED" from "DONE" [2026-10-21 Wed 22:33]
+- State "DONE" from "STARTED" [2026-10-21 Wed 22:56]
+:END:
+Acceptance criteria:
+- [x] ~task run/start --context fork~ uses the caller-session adapter.
+- [x] A no-overlay fork from an unnamed root invents no named role.
+- [x] A named caller's no-overlay fork is admitted when its effective persona is explicitly allow-listed.
+- [x] A named caller's no-overlay fork is refused before allocation when that persona is not allow-listed.
+- [x] An admitted below-root fork remains a leaf.
+- [x] Preview reports the fork source and invocation-relative boundary rule.
+- [x] The start envelope reports the boundary entry selected by that launch.
+- [x] The ledger records the boundary entry selected by that launch.
+- [x] A fork launched with ~--worktree new~ runs in that checkout.
+- [x] Failed fork launch removes only its created fork session and owned pane.
+- [x] A fork whose resolved kind is not ~pi~ fails before allocation.
+- [x] Continuation retains fork provenance without forking again.
+- [x] Public help distinguishes fresh spawning from explicit forking.
+- [x] Shared repository test entry points run both installed-Pi adapter suites.
+- [x] ~task run/start --context measurement~ reuses the adapter's subject launch/transport helper.
+- [x] Measurement refuses a positional persona before allocation.
+- [x] Measurement whose resolved kind is not ~pi~ fails before allocation.
+- [x] Measurement refuses ~--trait~ before allocation.
+- [x] Measurement refuses ~--prompt-extra~ before allocation.
+- [x] Measurement refuses ~--retro~ before allocation.
+- [x] Measurement refuses ~--no-retro~ before allocation.
+- [x] Measurement refuses ~--spawns~ before allocation.
+- [x] Non-measurement modes refuse ~--measurement-config~ before allocation.
+- [x] Repeated default runs create no panes.
+- [x] Explicit ~--tab~ or ~--split~ opens a separately identified monitor.
+- [x] The monitor displays events, tool activity, errors and execution state.
+- [x] Monitor loss cannot stop the measured process.
+- [x] Monitor input cannot enter the measured context.
+- [x] A successful measurement publishes supervisor-owned terminal evidence.
+- [x] Two concurrent measurements publish independently while both rounds remain open.
+- [x] Supervisor publication is not blocked by an unrelated open interactive child.
+- [x] Subject-side spawn is refused before root/focused-pane fallback.
+- [x] Subject-side close is refused before root/focused-pane fallback.
+- [x] Subject-side continuation is refused before root/focused-pane fallback.
+- [x] Subject-side orphan handling is refused before root/focused-pane fallback.
+- [x] Subject-side publication is refused before root/focused-pane fallback.
+- [x] Non-zero exit prevents measurement success.
+- [x] Invalid or failed terminal harness evidence prevents measurement success.
+- [x] Context-audit failure prevents measurement success.
+- [x] Missing expected outputs produce failed execution evidence.
+- [x] Pre-existing expected-output targets are refused before launch.
+- [x] Hard-limit expiry produces failed evidence after owned-process cleanup.
+- [x] A wait-budget timeout leaves execution running.
+- [x] Killing the invoker's process group leaves an acknowledged sample running.
+- [x] A sample whose invoker was terminated remains collectable.
+- [x] Process-start identity prevents ownership claims after PID reuse.
+- [x] Unsupported platform detachment fails before subject launch.
+- [x] Supervisor loss remains diagnosable without fabricated completion.
+- [x] ~collect~ validates supervisor-owned immutable results.
+- [x] Fan-in returns eligible measurement results.
+- [x] ~collect --wait~ keeps waiting while its headless execution is live.
+- [x] ~collect --any --wait~ keeps waiting while an eligible headless execution is live.
+- [x] ~close~ refuses a running measurement.
+- [x] ~close~ refuses a measurement whose terminal result is not captured.
+- [x] ~close~ cannot close a replaced monitor occupant.
+- [x] ~continue~ refuses measurement rounds.
+- [x] ~poke~ refuses measurement rounds.
+- [x] Status reports headless execution independently of monitor liveness.
+- [x] Prune refuses an execution that is not proved stopped.
+- [x] Prune refuses a supervisor-lost run while its owned subject/process group remains live.
+- [x] Prune retires a supervisor-lost run only after recorded process-start and process-group evidence prove its owned subject execution stopped.
+- [x] Pruning a supervisor-lost run retains its partial evidence.
+- [x] Orphan handling does not retire a live measurement.
+- [x] Compact retains context/execution provenance in the audit trail.
+- [x] Harvest tolerates measurement results without process-retro items.
+- [x] Worktree teardown refuses a checkout referenced by a live measurement.
+- [x] Documentation and CLI output describe headless execution separately from optional visibility.
+- [x] Must not: weaken publication locking, ownership, artefact containment or checkout checkpoints.
+
+** DONE Document and validate root-owned workflow recipes
+CLOSED: [2026-10-22 Thu 18:18]
+:PROPERTIES:
+:CUSTOM_ID: 45adb239-2987-4a69-b06c-1d5feb1f8071
+:CREATED: [2026-10-08 Thu 19:11]
+:BLOCKED-BY: task:84653126-cd7e-412a-9761-d43eaad7f97f
+:BLOCKED-BY+: task:8a0e5d7c-848c-4ebb-b6cf-060a053cc171
+:STARTED: [2026-10-21 Wed 23:13]
+:END:
+:LOGBOOK:
+- Created [2026-10-08 Thu 19:11]
+- State "STARTED" from "TODO" [2026-10-21 Wed 23:13]
+- State "DONE" from "STARTED" [2026-10-22 Thu 18:18]
+:END:
+Acceptance criteria:
+- [x] The recipe states the fresh default for "spawn a subagent".
+- [x] The recipe states forked context for "fork a subagent".
+- [x] An ordinary multi-stage example hands off captured artefacts.
+- [x] An example reuses a child through ~continue~ for context-dependent follow-up.
+- [x] Independent validation uses a fresh child.
+- [x] A repeated-measurement example requires no pane per sample.
+- [x] Samples declaring expected outputs use separate disposable checkouts.
+- [x] The recipe retains required evidence before managed-checkout teardown.
+- [x] The measurement example shows optional monitor placement.
+- [x] The recipe keeps workflow ownership at the root.
+- [x] Bounded opt-in smoke evidence covers the accepted context shapes on the installed Pi runtime. (Fourth, separately approved invocation on Pi 1.4.0, 2026-10-22; see [[*Validation]].)
+- [x] Must not: add a workflow engine, persona or scheduler.
+
+*** CANCELLED Diagnose initial agent_pane_busy in context smoke
+CLOSED: [2026-10-22 Thu 18:17]
+:PROPERTIES:
+:CUSTOM_ID: b377c57e-d95a-45de-9cd9-c390d62a65f7
+:CREATED: [2026-10-22 Thu 00:55]
+:STARTED: [2026-10-22 Thu 01:10]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 00:55]
+- State "STARTED" from "TODO" [2026-10-22 Thu 01:10]
+- State "CANCELLED" from "STARTED" [2026-10-22 Thu 18:17]
+:END:
+Acceptance criteria:
+- [ ] The first-launch failure is explained against the Herdr consumer and its preconditions. (Not met: cancelled 2026-10-22 by owner decision. The retained evidence cannot classify which pre-command shell state Herdr refused, and the refusal did not recur in the three later live runs; see ~.tmp/child-context-launch-trace-assessment.md~.)
+- [ ] Any required correction has a passing control and a known-bad offline control. (Not met: no correction was identified, so none was made.)
+- [x] The scope of a subsequent live attempt is ready for fresh owner consent.
+- [x] Must not: launch live smoke subjects or retry the approved invocation without new consent.
+
+*** DONE Clarify current task in inherited fork context
+CLOSED: [2026-10-22 Thu 09:11]
+:PROPERTIES:
+:CUSTOM_ID: 9ca79199-0396-4686-a4a8-2acb2ec0a3b3
+:CREATED: [2026-10-22 Thu 08:55]
+:STARTED: [2026-10-22 Thu 08:59]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 08:55]
+- State "STARTED" from "TODO" [2026-10-22 Thu 08:59]
+- State "DONE" from "STARTED" [2026-10-22 Thu 09:11]
+:END:
+Acceptance criteria:
+- [x] The recorded active fork branch is reconciled with the current child assignment.
+- [x] The fork bootstrap distinguishes inherited workflow history from current work.
+- [x] Existing role snapshots are preserved.
+- [x] Existing spawn and publication authority guards are preserved.
+- [x] Offline controls detect removal of the current-task boundary.
+- [x] Must not: infer live model compliance from fake tests or launch another smoke without fresh consent.
+
+*** DONE Verify provider-facing current task in inherited forks
+CLOSED: [2026-10-22 Thu 10:10]
+:PROPERTIES:
+:CUSTOM_ID: be1289e9-a0ad-4df4-adf3-116c4cec0076
+:CREATED: [2026-10-22 Thu 09:47]
+:STARTED: [2026-10-22 Thu 09:51]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 09:47]
+- State "STARTED" from "TODO" [2026-10-22 Thu 09:51]
+- State "DONE" from "STARTED" [2026-10-22 Thu 10:10]
+:END:
+Acceptance criteria:
+- [x] A provider-free installed-Pi control captures the fork request at the provider boundary.
+- [x] The control verifies the current child assignment in the captured request.
+- [x] The no-overlay and overlay paths are compared.
+- [x] A deliberate missing or reordered current assignment is detected.
+- [x] Any unreproduced production-profile difference is explicit.
+- [x] Must not: widen fork authority, tune another prompt without evidence, or make a live provider request without fresh consent.
+
+*** DONE Map production fork transport and context hooks
+CLOSED: [2026-10-22 Thu 11:08]
+:PROPERTIES:
+:CUSTOM_ID: 876ab7b2-1874-4c6c-a17b-beb08a01dd3e
+:CREATED: [2026-10-22 Thu 10:20]
+:STARTED: [2026-10-22 Thu 10:22]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 10:20]
+- State "STARTED" from "TODO" [2026-10-22 Thu 10:22]
+- State "DONE" from "STARTED" [2026-10-22 Thu 11:08]
+:END:
+Acceptance criteria:
+- [x] Non-secret production transport and model compatibility inputs are traced to installed consumers.
+- [x] Request-changing extensions are identified by source without executing them.
+- [x] Differences from the isolated fork capture are explicit.
+- [x] The next provider-free replay or transport control is scoped from evidence.
+- [x] Must not: read credentials, load the production profile, change code/configuration, or launch live subjects.
+
+*** DONE Exercise native system-delta fork requests
+CLOSED: [2026-10-22 Thu 11:27]
+:PROPERTIES:
+:CUSTOM_ID: 4800af79-54a9-47c1-a057-325a2e3d21ee
+:CREATED: [2026-10-22 Thu 11:02]
+:STARTED: [2026-10-22 Thu 11:08]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 11:02]
+- State "STARTED" from "TODO" [2026-10-22 Thu 11:08]
+- State "DONE" from "STARTED" [2026-10-22 Thu 11:27]
+:END:
+Acceptance criteria:
+- [x] Installed-Pi fake endpoint captures exercise Luna native-system capabilities with high thinking.
+- [x] The inherited case changes only tools prose before the current assignment.
+- [x] The overlay case changes only tools prose and the role addendum before the current assignment.
+- [x] Native role-update placement is checked independently of the captured body.
+- [x] Applied current-task and role-update mutations are rejected after passing controls.
+- [x] Existing collapsed-system coverage remains intact.
+- [x] Must not: infer model obedience, load the production profile, change production code or make live requests.
+
+*** DONE Exclude the caller's current turn from forks
+CLOSED: [2026-10-22 Thu 17:22]
+:PROPERTIES:
+:CUSTOM_ID: 6c2db5bb-12dc-482c-8dbd-d793a4784250
+:CREATED: [2026-10-22 Thu 15:21]
+:STARTED: [2026-10-22 Thu 15:22]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 15:21]
+- State "STARTED" from "TODO" [2026-10-22 Thu 15:22]
+- State "DONE" from "STARTED" [2026-10-22 Thu 17:22]
+:END:
+Acceptance criteria:
+- [x] A fork branches before the first message after the caller's last completed assistant response; the current request, its steering messages and its tool work are outside the child context, including a turn opened by a custom message or a continuation. (Amended after review from "first user message".)
+- [x] A caller with no completed earlier turn, or a launching batch directly after the last completed response, refuses before a fork file exists.
+- [x] A compaction or failed attempt inside the current turn does not leave the current request in the child context.
+- [x] Preview, ledger and the adapter report the same boundary rule text.
+- [x] The context-modes smoke forks from a source with a completed earlier turn, and the child task depends on inherited context. (Offline; no live run.)
+- [x] The skill and workflow recipe tell a forking caller to put same-turn findings the child needs in the assignment.
+- [x] Must not: add synthetic model-visible history, widen fork authority or silently replace a fork with a fresh session.
+
+*** DONE Remove HERDR_ORCH_TASK dependence from the fork-model smoke test
+CLOSED: [2026-10-22 Thu 17:31]
+:PROPERTIES:
+:CUSTOM_ID: 4bbcb371-b15a-4c93-bcc6-196516d97cf8
+:CREATED: [2026-10-22 Thu 15:55]
+:STARTED: [2026-10-22 Thu 17:31]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 15:55]
+- State "STARTED" from "TODO" [2026-10-22 Thu 17:31]
+- State "DONE" from "STARTED" [2026-10-22 Thu 17:31]
+:END:
+Acceptance criteria:
+- [x] ~real-resolver-proves-explicit-fork-model-wins-over-role-frontmatter~ in ~skills/herdr-orch/scripts/test/herdr_orch/smoke_test.clj~ passes with and without ~HERDR_ORCH_TASK~ in the environment.
+- [x] Must not: change ~inherited-role~ behaviour in ~cli.clj~ to suit the test.
+
+*** DONE Re-baseline the native fork provider control for Pi 1.4.0
+CLOSED: [2026-10-22 Thu 17:31]
+:PROPERTIES:
+:CUSTOM_ID: ee52e547-0046-45dc-b3cb-db97aaa222f1
+:CREATED: [2026-10-22 Thu 17:03]
+:STARTED: [2026-10-22 Thu 17:31]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 17:03]
+- State "STARTED" from "TODO" [2026-10-22 Thu 17:31]
+- State "DONE" from "STARTED" [2026-10-22 Thu 17:31]
+:END:
+Acceptance criteria:
+- [x] The native case in ~skills/herdr-orch/scripts/pi/fork-provider-context.test.ts~ derives its expected tool declarations from the installed runtime's encoding, and passes on the installed Pi.
+- [x] A changed or dropped declaration still fails after a passing baseline.
+- [x] Must not: weaken the current-assignment, role-update or source-boundary assertions.
+
+* Implementation
+- Context resolution and persona-less delegation :: ~cli.clj~ ~resolve-launch~ is the single preview and launch resolver; ~context-policy~ validates ~--context~ and the measurement option matrix before allocation. A persona-less child carries ~HERDR_ORCH_PERSONA=anonymous~, so every below-root guard still applies, and ~HERDR_ORCH_ANONYMOUS=1~ for the absent role; ~enforce-spawns!~ refuses an absent target role before the name-based allow-list. ~HERDR_ORCH_SUBJECT~ makes every non-help ~oh~ command refuse. Ledger entries carry ~:context~, ~:execution~, ~:role-absent~ and ~:role-snapshot~; ~continue~ copies them, and an entry without them reads as fresh interactive. ~own-persona~, ~own-role-absent?~ and ~own-task~ are the environment readers that tests stub.
+- Fork :: ~scripts/pi/fork-adapter.ts~ is an explicitly loaded extension that ~src/herdr_orch/pi_adapter.clj~ runs inside the installed Pi through request and result files. ~findLaunchBoundary~ proves the in-flight launching batch from the active leaf; ~turnBoundary~ then selects the parent of the first message after the caller's last completed response. ~SessionManager.forkFrom~, ~branch~ and ~appendCustomEntry~ write an independent session whose header cwd is the selected checkout, and the source file is never written. ~spawn!~ forks after the checkout exists, records ~:fork~ provenance (source, hash, boundary, batch, rule, session) and discards only its own file on failure. ~fork-guidance~ in ~prompt-text~ precedes the assignment and marks inherited requests as context, not current work.
+- Measurement :: ~scripts/pi/measurement-adapter.ts~ replaces the system prompt through ~before_agent_start~, freezes the tool list and audits every provider request with ~measurement-audit.ts~. The audit compares the request by value with expectations derived from the configuration, model, resolved thinking level and runtime inputs, never from the observed payload; the owner-approved adaptations are in [[*Measurement]]. An audit or evidence exception ends the subject before the request is sent. ~src/herdr_orch/measurement.clj~ freezes launch inputs; ~supervisor.clj~ runs detached through ~setsid~ (Linux only), owns the subject's session, enforces the hard limit and publishes through ~publish-execution!~, bound to its recorded process identity. ~execution-state~ (process identity, never a pane) drives status, waits, fan-in, close, prune, orphans and worktree teardown. An optional read-only monitor runs ~supervisor monitor~.
+- Workflow recipe and smoke :: ~references/workflow-recipes.md~ holds the recipes. ~smoke.clj~ ~context-modes~ runs a fresh named child, a persona-less child, a two-round bridge whose ~continue~ round launches a no-overlay fork and a scout-overlay fork, and headless and monitored measurements. It accumulates a recovery manifest outside the checkouts and cleans up only through guarded close. It checks each fresh leg's role shape, each fork's role source, code word and launch prompt, and that each fork's history ends at the bridge's completed first round.
+- Tests :: the installed-Pi suites (~scripts/pi/test.sh~, ~bb test-pi-adapters~, part of ~bb test~) are ~fork-adapter~, ~fork-provider-context~ (collapsed and native-system fake-endpoint captures) and ~measurement-adapter~, each run with a runtime-mismatch control. The Clojure coverage is in ~cli_test.clj~, ~measurement_test.clj~ and ~smoke_test.clj~, with the ~test/fixtures/fake-pi~ and ~delayed-supervisor.clj~ fixtures. Reviews checked guard changes with mutation controls in scratch copies.
+
+* Validation
+- Live smoke (owner-approved, installed Pi 1.4.0, 2026-10-22 17:36-18:09) :: ~HERDR_ENV=1 ORCH_LIVE_SMOKE=1 ORCH_LIVE_SMOKE_MODEL=openai-codex/gpt-6-luna bb smoke-subagent context-modes~ exited 0 with an ~ok~ envelope in state ~complete~. Fresh named ~1f7b2928~ and persona-less ~42a979e2~ completed. Bridge round 1 ~dfb2511e~ recorded the code word ~synthetic-inherited-ea0942a2~, and round 2 ~8355c429~ launched the worker snapshot fork ~94536192~ and the scout overlay fork ~4cabb8ce~. Both forks branched at ~822471ca~, round 1's completed response, reported the code word and were closed by their owner; round 2's system message and request lie outside both. Headless ~66182bd3~ and monitored ~6cffeb88~ measurements completed, and their checkouts were removed. Evidence: ~.tmp/child-context-approved-turn-1736/run.log~ and ~.tmp/herdr-orch/context-smoke/e4e01dec-0179-4347-b2bd-3540b96b4d6d/manifest.json~. Three earlier approved runs on Pi 1.3.0 failed: the first at the first agent start with ~agent_pane_busy~ (task ~b377c57e~), and the second and third when the inherited worker fork re-ran its caller's workflow. One passing run is not a reliability rate.
+- Controlled replay (owner-approved, 2026-10-22) :: one hosted generation from a copy of the run-3 inherited child's session, with the input body verified against an offline copy, requested a nested fork although the assignment said the child was a leaf. No tool ran. This showed the failure with the current assignment intact; it does not prove the historical cause. Evidence: ~.tmp/child-context-replay-c21f/REPORT.md~.
+- Acceptance mapping (2026-10-22) :: each parent criterion maps to checked plan-task criteria, and the context-shape criteria also map to the live smoke. An independent closure review approved the mapping (~.tmp/closure/closure-review.md~; mapping ~.tmp/closure/mapping.md~). The core fork criterion rests on the ~fork-adapter.test.ts~ turn-boundary tests and the live smoke, not on the reversed plan criterion. The safeguard anti-criterion rests on the unchanged lock, ownership, artefact and checkpoint tests plus ~inherited-workflow-cannot-grant-nesting-or-parent-publication~, ~concurrent-measurements-publish-independently-of-open-siblings~ and ~worktree-teardown-refuses-a-checkout-of-a-live-measurement~. "No new dependency" was checked in ~bb.edn~ and the dependency manifests. The plan-task criteria lists stay in [[*Plan]] as the audit trail for this mapping.
+- Suites at closure (installed Pi 1.4.0, ~HERDR_ORCH_TASK~ unset) :: adapter suites fork 17/0, provider 2/0 and measurement 66/0, with the mismatch control; Clojure CLI, core, smoke and measurement namespaces 394 tests, 3,829 assertions, 0 failures, 0 errors; extension suite 88 ok.
+- Not met :: the historical ~agent_pane_busy~ diagnosis (task ~b377c57e~, CANCELLED by owner decision). No parent criterion depends on it.
+- Not verified :: Darwin detachment, WebSocket transport and production hook replay (see [[*Deferred by owner decision (2026-10-22)]]).

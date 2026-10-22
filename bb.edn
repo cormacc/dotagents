@@ -41,12 +41,16 @@
                           (apply (requiring-resolve 'org-tasks.test-runner/run)
                                  *command-line-args*))}
 
+  test-pi-adapters {:doc  "Run the herdr-orch Pi adapter suites inside the installed Pi runtime (needs `pi` on PATH)"
+                    :task (process/shell "skills/herdr-orch/scripts/pi/test.sh")}
+
   ;; scripts/isolated-test-run.bb gives the run one temporary root, deletes it
   ;; afterwards, and fails if the run registers a git worktree or orch/* branch.
   test {:doc  "Run all Clojure and repository script tests in an isolated temporary root"
         :task (do (load-file "scripts/isolated-test-run.bb")
                   ((resolve 'run-suites)
                    [(into ["test-clojure"] *command-line-args*)
+                    ["test-pi-adapters"]
                     ["scripts/test-run-trait-gate.bb"]
                     ["scripts/test-analyse-anthropic-cache-ttl.bb"]
                     ["scripts/test-check-section-links.bb"]
