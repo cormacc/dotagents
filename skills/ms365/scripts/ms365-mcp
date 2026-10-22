@@ -23,8 +23,14 @@ scopes=(
   Team.ReadBasic.All Channel.ReadBasic.All ChannelMessage.Read.All
 )
 
+# Requested in the token but used by no tool (--read-only stays set). SharePoint hides minor
+# (draft) versions from a read-only token in libraries that restrict drafts to editors, e.g.
+# qualReg controlledQualDocs: without this scope, reads return the last major version.
+extra_scopes=(Files.ReadWrite.All)
+
 exec npx -y "@softeria/ms-365-mcp-server@${version}" \
   --http "127.0.0.1:${port}" \
   --org-mode --read-only \
   --allowed-scopes "${scopes[*]}" \
+  --extra-scopes "${extra_scopes[*]}" \
   "$@"
