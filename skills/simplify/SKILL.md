@@ -13,8 +13,11 @@ This workflow is read-only and scope-bound, the same boundaries `herdr-orch`'s `
 
 Determine the exact range before reading code: an unstaged/staged diff, a commit range, a branch, or an explicitly named set of files. If the assignment does not name a range, ask once rather than defaulting to the whole repository.
 
+For working-tree reviews, including an "unstaged diff", include non-ignored untracked files within the requested paths by default and review each new file in full. `git diff` alone omits them. Exclude new files only when the user explicitly requests tracked files only or otherwise excludes them. Staged-only and commit/ref reviews retain their requested boundaries; do not attach unrelated working-tree files. State which files are in scope before reviewing.
+
 ```bash
 git diff
+git ls-files --others --exclude-standard
 git diff --cached
 git diff <base>...HEAD
 ```
