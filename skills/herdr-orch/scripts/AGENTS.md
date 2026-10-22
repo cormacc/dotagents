@@ -20,6 +20,8 @@ bb test-clojure herdr-orch.cli-test
 
 The Herdr tests use fake processes and per-test `ORCH_ASSIGNMENT_ROOT` directories. They must not write to the live `<git-root>/.tmp/herdr-orch/` tree.
 
+Before you cite a suite result, run it with the `HERDR_ORCH_*` variables unset, for example `env -u HERDR_ORCH_TASK bb test-clojure herdr-orch.cli-test`. A delegated child inherits those variables, and they can hide a test's dependence on them.
+
 ## Regenerating README listings
 
 `../README.org` embeds the packaged personas, traits, and models as `oh roster --format org` output. Each `#+CALL: oh-roster[:eval yes](section="...")` line runs the `oh-roster` block in that file's `Generated listings` section, with an empty `HOME` and assignment root so that only the packaged layer appears. The file-level `#+PROPERTY: header-args :eval no` disables every other block, so executing the whole buffer runs only those calls.
@@ -44,6 +46,8 @@ Run the live smoke only from the repository root and from a Herdr-managed pane. 
 ```sh
 ORCH_LIVE_SMOKE=1 ORCH_LIVE_SMOKE_MODEL=<model> bb smoke-subagent
 ```
+
+A smoke leg that tests inherited or forwarded context gives the child a task that appears nowhere in the inherited history, and requires an answer that only that context supplies, such as a generated code word.
 
 The live smoke starts an agent. Do not run it in CI. Maintainer rationale and smoke coverage notes are in `../design.org`.
 

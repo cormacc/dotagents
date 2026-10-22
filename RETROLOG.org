@@ -254,3 +254,27 @@ Rule removed from =home/AGENTS.md= at the user's request: "When you ask the user
 ** Self-improvement -- tight loop on a home-config tier
 
 Clean-tree condition relaxed at the user's request: uncommitted =TASKS.org= changes no longer block a tight-loop edit in dotagents or dotfiles. The dotagents tree held only task-capture edits to =TASKS.org=, and the clean-tree rule routed a one-line, user-requested rule removal to a TODO.
+
+* 2026-10-22 Thu -- herdr-orch child context modes closure
+
+Session diagnosed a live inherited-fork failure, changed the fork boundary, ran the live smoke to a pass and closed the change-record. Retro findings 1-4 and 7 are rules; 5 and 6 are tasks.
+
+** Verification discipline -- stop when diagnostics stop narrowing
+
+The user pointed out that the work was stuck: after a prompt fix left the inherited-worker fork failure unchanged, several rounds of offline provider-capture controls were built without narrowing the cause. A single controlled replay of the failing child's input then showed the behaviour directly, and the cause was the inherited unanswered request.
+
+** Verification discipline -- boundary predicates
+
+The first current-turn rule treated only user messages as a turn start; a reviewer found that Pi also opens runs with a custom message or a continuation, which leaked the request when steering followed. A later smoke check rejected a boundary that was too late but accepted one that was too early; a re-check reviewer found it by moving the boundary earlier on real session data.
+
+** Temporary files -- scratch directory reuse
+
+A scratch copy cited as the pre-repair baseline was later reused for mutation controls, so it no longer held the files its log described. A reviewer rebuilt the baseline with recorded hashes.
+
+** Live smoke (herdr-orch scripts) -- inherited-context legs
+
+The fork smoke's bridge assignment named the child's exact task as an instruction to launch forks. The inherited child re-ran that launch in two live runs. The repaired smoke gives the bridge a completed round with a generated code word and forks from a later round.
+
+** Tests (herdr-orch scripts) -- HERDR_ORCH_* environment
+
+One smoke test passed in delegated children only because they inherited =HERDR_ORCH_TASK=; from a root shell it errored. Child-reported green totals had hidden the dependence.

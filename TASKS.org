@@ -551,7 +551,7 @@ Evidence:
 :LOGBOOK:
 - Created [2026-10-14 Wed 11:10]
 :END:
-The portable rule "Read a path only after the call that writes it has finished and succeeded. Never run the two calls in parallel." (home/AGENTS.md, File operations) does not stop the agent from batching a write and its verifying read into one parallel tool call. The check then reads the old file and its result is wrong. Restating the rule has not changed the behaviour, so add a structural guard: a harness check that warns, or serialises, when one parallel tool batch both writes a path (Edit, Write) and reads it (Read, grep or bash naming the same path).
+The portable rule "Read a path only after the call that writes it has finished and succeeded. Never run the two calls in parallel." (home/AGENTS.md, File operations) does not stop the agent from batching a write and its verifying read into one parallel tool call. The check then reads the old file and its result is wrong. Restating the rule has not changed the behaviour, so add a structural guard: a harness check that warns, or serialises, when one parallel tool batch both writes a path (Edit, Write) and reads it (Read, grep or bash naming the same path), or writes the same path twice (Edit, Write, or a bash ~sed -i~ or redirect naming it).
 
 Origin:
 - cwd: /home/cormacc/nmd/products/connect/portal
@@ -562,6 +562,7 @@ Origin:
 Evidence:
 - 2026-10-14: four batches paired an Edit with a grep or sed of the same file; each check read the pre-edit content, and one led the agent to report a remaining match that the edit had already removed.
 - RETROLOG.org 2026-10-01 records the same failure ("Parallel read and write"), after which the rule was rewritten as an ordering rule.
+- 2026-10-22 (dotagents, herdr-orch change-record closure): one batch ran an Edit and a bash ~sed -i~ line deletion on the same record. The Edit wrote content from its own earlier read, so the deletion was lost without an error; a diff against a snapshot showed it.
 
 ** TODO org-plan: check that a change-record's identifiers resolve :skill:org_plan:
 :PROPERTIES:
@@ -617,3 +618,21 @@ Evidence:
 :END:
 With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.
 
+** TODO check-section-links: also check untracked, non-ignored files :project_convention:
+:PROPERTIES:
+:CUSTOM_ID: ff057776-88e5-4d2c-aa72-cf896995d908
+:CREATED: [2026-10-22 Thu 19:30]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 19:30]
+:END:
+~scripts/check-section-links.bb~ reads only ~git ls-files~, so a new, still-untracked org or Markdown file is never checked and the run reports 0 problems. Include ~git ls-files --others --exclude-standard~ in the file set, and add a test whose positive control is a broken link inside an untracked file.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-10-22 Thu 19:30]
+- sender: agent
+
+Evidence:
+- 2026-10-22: the untracked change-record design/log/2026-10-21-child-context-modes.org was reported clean several times. A deliberately broken same-file link in it was not reported. On a scratch repository where every file was tracked, the checker covered 13 more references and reported the control.

@@ -56,6 +56,8 @@
   - If all inputs pass or all inputs fail, test the verifier before you diagnose the system. Without the baseline you cannot tell a real finding from a broken harness.
 - When shipped behaviour produces a surprising probe result, inspect the probe before you diagnose the system.
   - First, verify each supplied key, parameter, and path against the consumer.
+- When diagnostics stop narrowing a cause, stop adding controls. Name the competing hypotheses and run the cheapest experiment that separates them.
+- Test a boundary predicate against every source path that creates its entries, with the boundary moved both earlier and later.
 
 # Git operations
 - Use `git mv` when you move files that Git controls. Do not use `mv` for those files.
@@ -73,6 +75,7 @@
 - Scope a repository reference sweep to tracked files with `git ls-files -z | xargs -0 grep`. A bare recursive grep also matches scratch copies under `.tmp/` and build output.
   - When the change under review adds files, also sweep `git ls-files -z --others --exclude-standard`. A tracked-only sweep reports absence for a symbol that exists in a new, still-untracked file.
   - Site the positive control inside one of those new files.
+- Do not reuse a scratch directory whose output you cite.
 - Search a gitignored scratch file by naming it directly, as in `rg <pattern> .tmp/<file>`. A path filter that names an unindexed file returns matches from unrelated tracked files instead.
 
 ## Command-line arguments
