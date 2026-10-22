@@ -346,6 +346,21 @@ Path corrected [2026-10-20 Tue]: the probe record is the repository user-layer f
 
 traits/simple/gate.md records two %simple probe runs at gpt-5.6-terra (matching base-analyst's read-only tier) against a low-temptation two-flag CLI task; both runs were non-discriminating (treated and control converged on the same minimal shape). Not retried at a lower tier within [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]]'s probe budget. Retry at a lower tier (or a higher-temptation scenario) and record the outcome in the same gate.md, per the honest-attempt admission bar in skills/herdr-orch/references/traits.md.
 
+** DONE Extract a generic docx skill from nmd-dcr
+CLOSED: [2026-10-22 Thu 20:40]
+:PROPERTIES:
+:CUSTOM_ID: 631ac981-1e93-4c0c-9629-b93bdac37a0b
+:CREATED: [2026-10-22 Thu 20:15]
+:STARTED: [2026-10-22 Thu 20:20]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 20:15]
+- State "STARTED" from "TODO" [2026-10-22 Thu 20:20]
+- State "DONE" from "STARTED" [2026-10-22 Thu 20:40]
+:END:
+#+IMPORT: [[plan:2026-10-22-docx-skill.org]]
+Move the generic .docx tooling from the Neuromod nmd-dcr skill into a new skills/docx skill, and the generic SharePoint version recipes into ms365.
+
 * Fixes
 
 ** TODO herdr-orch: failed-spawn hygiene :skill:herdr_orch:

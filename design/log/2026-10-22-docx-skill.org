@@ -1,0 +1,176 @@
+#+TITLE: Extract a generic docx skill from nmd-dcr
+#+DATE: 2026-10-22 Thu
+#+PARENT: [[task:631ac981-1e93-4c0c-9629-b93bdac37a0b][Extract a generic docx skill from nmd-dcr]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/docx/SKILL.md]]
+#+SPEC: [[proj:skills/ms365/SKILL.md]]
+#+SPEC: [[proj:skills/README.org]]
+
+* Intent
+Move the generic Word (.docx) tooling that the Neuromod `nmd-dcr` skill grew -- inspection, tracked-change extraction, version comparison and XML-safe editing -- into a reusable `docx` skill, and move the generic SharePoint version recipes into `ms365`. `nmd-dcr` keeps only the organisation-specific DCR workflow and FR0001 fill, so that each fact lives in the lowest layer where it is correct.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+Extracted from the `nmd-dcr` skill in the nmd-dev repository (`~/nmd/process/nmd-dev/.agents/skills/nmd-dcr/`), which keeps the FR0001 fill and loads `docx.core`.
+
+** Scope
+*** In scope
+- New `skills/docx`: `docx.core` library namespace, CLI (`inspect`, `changes`, `compare`), LibreOffice compare helper, synthetic fixtures, tests, `SKILL.md`.
+- Registration: `skills/README.org` inventory and the `bb.edn` `test` task.
+- `skills/ms365`: SharePoint version state and version download recipes, and the draft-visibility check.
+- `nmd-dcr` in the nmd-dev repository: consume `docx.core`; drop the moved commands and recipes.
+
+*** Out of scope
+- LG0017 write support (task in nmd-dev `TASKS.org`: "Let nmd-dcr write the LG0017 DCR reservation").
+- A generic template-fill language. `fill` stays specific to FR0001 in `nmd-dcr`.
+- Excel (.xlsx) editing, docjure or Apache POI.
+- Comments, headers or footers editing beyond the text that `inspect` reports.
+- Changes to the vendored `convert-documents-to-markdown` skill.
+
+** Acceptance
+*** Core functionality
+- [X] `docx.clj inspect` reports header and footer text, tracked-change counts by part, and the version history rows. → test:`skills/docx/scripts/test-docx.bb` `inspect-reports`
+- [X] `docx.clj changes` lists each paragraph with tracked changes, with heading, before text and after text. → test:`skills/docx/scripts/test-docx.bb` `changes-lists-changed-paragraphs`
+- [X] `docx.clj compare OLD NEW OUT` writes a .docx with tracked changes. → test:`skills/docx/scripts/test-docx.bb` `compare-marks-changes`
+- [X] `nmd-dcr` `fill` output is unchanged by the extraction (same table dump for FR0001 v9.0 and the test spec).
+- [X] `ms365` documents version state, both download routes and the draft-visibility check.
+*** Edge cases
+- [X] A part that starts with a UTF-8 byte-order mark parses. → test:`skills/docx/scripts/test-docx.bb` `byte-order-mark-is-removed`
+- [X] Text inside `w:ins` appears in `inspect` history cells and in `changes` after text. → test:`skills/docx/scripts/test-docx.bb` `inspect-reports`
+- [X] A table that only mentions "version" in body text is not reported as version history. → test:`skills/docx/scripts/test-docx.bb` `inspect-reports`
+- [X] `compare` finds the Python that LibreOffice links against when the system `python3` has no `uno` (Nix).
+- [X] Without `soffice`, the compare test reports SKIP, not PASS.
+*** Anti-criteria
+- [X] Must not: put Neuromod names, document numbers, people or SharePoint paths in `skills/docx` or `skills/ms365`. One earlier match remains: `skills/ms365/README.org` names the dotfiles module path `nmd/nmd.nix`, which predates this change.
+- [X] Must not: commit an organisation's document as a fixture.
+- [X] Must not: change the `nmd-dcr` user workflow or the FR0001 fill result.
+- [X] Must not: add a JVM or Python dependency to the bb library (`lo_compare.py` stays the only Python, because UNO has no bb binding).
+
+** Decisions
+- Skill name `docx` :: it holds inspection, comparison and editing helpers, not only tracked changes.
+  Rejected:
+  - `docx-tracked-changes`: too narrow once `docx.core` editing helpers are included.
+  - Extend `convert-documents-to-markdown`: vendored, so local edits are lost on re-sync; and its purpose is conversion, not review or editing.
+- Babashka with `clojure.data.xml` :: keeps namespace prefixes on emit, so `mc:Ignorable` stays valid and Word opens the result.
+  Rejected:
+  - `python-docx`: Python against the repository preference, and `cell.text` drops text inside `w:ins`.
+  - docjure / Apache POI: Java libraries that bb cannot load.
+- `nmd-dcr` loads `docx.core` from the installed skill through the bb classpath :: one copy of the helpers.
+  Rejected:
+  - Copy the helpers into `nmd-dcr`: two copies drift.
+  - Keep all helpers in `nmd-dcr`: generic code in an organisation layer.
+- Build fixtures at test time from hand-written WordprocessingML (decided 2026-10-22, reversing a committed-fixture plan) :: no binaries in Git, no pandoc or LibreOffice for generation, exact control of each XML feature under test. Only the compare test needs LibreOffice.
+  Rejected:
+  - Commit fixtures made with pandoc and LibreOffice: binary diffs, and neither tool gives direct control of a byte-order mark, checkbox controls or namespace prefixes.
+- SharePoint version recipes go to `ms365`, not `docx` :: they are about Graph, not about the file format.
+
+** Shipped
+- ADDED `skills/docx/SKILL.md`: `docx.clj` CLI (`inspect`, `changes`, `compare`), the `docx.core` namespace that other skills load from `scripts/src`, and the gotchas below.
+- ADDED `skills/ms365/references/sharepoint-versions.md`, linked from `skills/ms365/SKILL.md` under Common tasks.
+- MODIFIED `skills/README.org`: `docx` in the first-party inventory. `bb test` runs `skills/docx/scripts/test-docx.bb`.
+- MODIFIED `skills/ms365/README.org` and `scripts/ms365-mcp`: the extra-scope explanation names no organisation library.
+- nmd-dev: `nmd-dcr` `dcr.clj` is `fill` only and loads `docx.core` (`DOCX_SKILL_DIR` overrides the location); a `docx.core` layout error exits 2. Its `SKILL.md`, `references/sharepoint.md` and the nmd-dev `AGENTS.md` point to `docx` and `ms365`.
+
+** Gotchas
+- In hand-written WordprocessingML fixtures, escape `<`, `>` and `&` in text: a placeholder such as `<DD-Mmm-YYYY>` otherwise parses as an element.
+- In a bb script, `dir` is already referred from `clojure.repl`; a top-level `(def dir ...)` fails at analysis.
+
+** Risks
+- `nmd-dcr` depends on a skill outside its repository. A colleague without dotagents cannot run `fill`. Accepted: `ms365` is already an external dependency; `fill` fails with the expected path.
+- A later `clojure.data.xml` in bb could change prefix handling. Mitigated by the round-trip test.
+- LibreOffice compare output differs between versions. Tests assert presence of changes, not counts.
+
+* Plan
+** DONE Create skills/docx with a library namespace, CLI and tests
+CLOSED: [2026-10-22 Thu 20:33]
+:PROPERTIES:
+:CUSTOM_ID: 3252ff2a-3b45-4d7c-8557-418571f3446b
+:CREATED: [2026-10-22 Thu 20:16]
+:STARTED: [2026-10-22 Thu 20:20]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 20:16]
+- State "STARTED" from "TODO" [2026-10-22 Thu 20:20]
+- State "DONE" from "STARTED" [2026-10-22 Thu 20:33]
+:END:
+Acceptance criteria:
+- `skills/docx/scripts/src/docx/core.clj` holds the zip, element, cell, checkbox and footnote helpers from the nmd-dcr script dcr.clj (see Summary for its path), with docstrings.
+- `skills/docx/scripts/docx.clj inspect`, `changes` and `compare` give the same JSON shape as the `nmd-dcr` commands.
+- `skills/docx/scripts/lo_compare.py` is the only Python file.
+- The test builds its fixtures at run time from hand-written XML: a plain document, a tracked-changes document, a document with a UTF-8 byte-order mark, and a document with a version history table. No fixture file is committed.
+- `skills/docx/scripts/test-docx.bb` passes, and fails when an assertion is broken on purpose.
+- Tests cover: parse-emit keeps `mc:Ignorable` and its prefixes; the byte-order mark parses; `changes` lists paragraphs for the tracked fixture and none for the plain fixture; `inspect` finds the history table and ignores a table whose text only mentions a version; `compare` gives at least one `w:ins` and reports SKIP (not PASS) when `soffice` is absent.
+- `bb.edn` task `test` runs `test-docx.bb`; `skills/README.org` lists `docx`.
+- Must not: contain Neuromod names, document numbers or SharePoint paths (leak grep with a positive control in the same command).
+- Must not: commit a document downloaded from an organisation.
+
+** DONE Write skills/docx/SKILL.md
+CLOSED: [2026-10-22 Thu 20:34]
+:PROPERTIES:
+:CUSTOM_ID: 789b24f4-2df3-468f-95ae-977f1f0ef682
+:CREATED: [2026-10-22 Thu 20:16]
+:BLOCKED-BY: task:3252ff2a-3b45-4d7c-8557-418571f3446b
+:STARTED: [2026-10-22 Thu 20:33]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 20:16]
+- State "STARTED" from "TODO" [2026-10-22 Thu 20:33]
+- State "DONE" from "STARTED" [2026-10-22 Thu 20:34]
+:END:
+Acceptance criteria:
+- Frontmatter `name: docx`; the description says when to use it and how it differs from `convert-documents-to-markdown`.
+- Documents the CLI commands, the `docx.core` functions that consumers use, and how a consumer adds `scripts/src` to the bb classpath.
+- Records the gotchas: prefix preservation, `python-docx` skipping `w:ins` text, the byte-order mark, the LibreOffice wrapper symlinks on Nix, compare noise relative to Word.
+- skill-creator `quick_validate` passes, and rejects a copy with a bad name.
+
+** DONE Move the SharePoint version recipes into ms365
+CLOSED: [2026-10-22 Thu 20:34]
+:PROPERTIES:
+:CUSTOM_ID: ba71b9be-0479-4529-b432-e0adaf5b12f1
+:CREATED: [2026-10-22 Thu 20:16]
+:STARTED: [2026-10-22 Thu 20:34]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 20:16]
+- State "STARTED" from "TODO" [2026-10-22 Thu 20:34]
+- State "DONE" from "STARTED" [2026-10-22 Thu 20:34]
+:END:
+Acceptance criteria:
+- `skills/ms365` documents: version list and draft or published state; download of the current version through `get-download-url` with `curl` in the same script; download of an earlier version through `download-bytes`; the 'cannot get the content of the current version' error.
+- It documents the draft-visibility check (minor versions present in the version list) and links to the `--extra-scopes` note in `skills/ms365/README.org`.
+- Must not: name a Neuromod site, library or document.
+
+** DONE Make nmd-dcr consume the docx skill (nmd-dev repository)
+CLOSED: [2026-10-22 Thu 20:36]
+:PROPERTIES:
+:CUSTOM_ID: 94c23c41-14af-406b-b865-3407f7dbd08e
+:CREATED: [2026-10-22 Thu 20:16]
+:BLOCKED-BY: task:3252ff2a-3b45-4d7c-8557-418571f3446b
+:BLOCKED-BY+: task:ba71b9be-0479-4529-b432-e0adaf5b12f1
+:BLOCKED-BY+: task:789b24f4-2df3-468f-95ae-977f1f0ef682
+:STARTED: [2026-10-22 Thu 20:34]
+:END:
+:LOGBOOK:
+- Created [2026-10-22 Thu 20:16]
+- State "STARTED" from "TODO" [2026-10-22 Thu 20:34]
+- State "DONE" from "STARTED" [2026-10-22 Thu 20:36]
+:END:
+Acceptance criteria:
+- In `~/nmd/process/nmd-dev`, `.agents/skills/nmd-dcr/scripts/dcr.clj` keeps only `fill` and loads `docx.core` from the docx skill; `lo_compare.py` is removed from `nmd-dcr`.
+- When the docx skill is missing, `dcr.clj fill` exits 1 with a message that names the expected path.
+- A fill of FR0001 v9.0 with the test spec gives the same table dump as before the change.
+- `nmd-dcr` `SKILL.md` and `references/sharepoint.md` point to `docx` and `ms365` for the moved content; `sharepoint.md` keeps LG0017 and the known locations.
+- `nmd-dcr` compatibility frontmatter names the docx skill.
+
+* Implementation
+- `docx.core` throws `ex-info` with `{:docx/error :layout}` instead of exiting, so a library caller decides the exit code; `nmd-dcr` maps it to exit 2.
+- `tracked-counts` counts parsed `w:ins` and `w:del` elements rather than matching text, so it does not depend on the `w:` prefix; `prune-footnotes` reads references from the parsed document for the same reason. Counts on a real procedure draft are identical to the earlier regex count (597 and 112).
+- `lo-python` checks that `python3` exists before it runs it: `babashka.process` throws for a missing program even with `:continue true`.
+
+* Validation
+- The `docx.clj` `inspect` and `changes` output is identical to the earlier `nmd-dcr` commands for three real documents (a procedure at a major version, its draft with tracked changes, and FR0001).
+- After the extraction, `nmd-dcr` `fill` writes a `word/document.xml`, header and `footnotes.xml` that are byte-identical to the output from before it.
+- `DOCX_TEST_SELFCHECK=1` makes `test-docx.bb` exit 1; with `PATH` limited to `bb`, the compare test prints SKIP and the suite exits 0.
+- The leak grep found nothing in `skills/docx`; the same pattern found 54 lines in `nmd-dcr` as the positive control.

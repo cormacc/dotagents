@@ -24,8 +24,8 @@ scopes=(
 )
 
 # Requested in the token but used by no tool (--read-only stays set). SharePoint hides minor
-# (draft) versions from a read-only token in libraries that restrict drafts to editors, e.g.
-# qualReg controlledQualDocs: without this scope, reads return the last major version.
+# (draft) versions from a read-only token in libraries that restrict drafts to editors (e.g.
+# a controlled-documents library): without this scope, reads return the last major version.
 extra_scopes=(Files.ReadWrite.All)
 
 exec npx -y "@softeria/ms-365-mcp-server@${version}" \

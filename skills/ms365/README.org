@@ -82,7 +82,7 @@ A scope must be in three places, or the tools that need it stay hidden or fail:
 2. The Entra app /API permissions/, with admin consent granted again.
 3. A new sign-in (=pi mcp logout ms365=, then =pi mcp login ms365=), because a token does not gain scopes after it is issued.
 
-The launcher also passes =--extra-scopes= (the =extra_scopes= array). The server adds these scopes to the token request but enables no tool for them; =--read-only= still applies. =Files.ReadWrite.All= is there because SharePoint libraries that restrict drafts to editors (for example =qualReg/controlledQualDocs=) hide minor versions from a read-only token, so reads return the last major version. Add each extra scope to the Entra app too.
+The launcher also passes =--extra-scopes= (the =extra_scopes= array). The server adds these scopes to the token request but enables no tool for them; =--read-only= still applies. =Files.ReadWrite.All= is there because SharePoint libraries that restrict drafts to editors (for example a controlled-documents library) hide minor versions from a read-only token, so reads return the last major version. Add each extra scope to the Entra app too.
 
 Scopes that are deliberately not allowed: groups, shared mailboxes, mailbox settings, contacts, OneNote, To Do and Planner, presence, rooms, and meeting recordings and transcripts. =search-query= needs =Mail.Read=, =Chat.Read=, =Calendars.Read=, =ChannelMessage.Read.All=, and =People.Read= in addition to the file scopes.
 

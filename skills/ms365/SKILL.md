@@ -28,6 +28,7 @@ MCP tools are callable only from a `codemode` script, as `tools.mcp__ms365__<too
 - Find a SharePoint site :: `search-sharepoint-sites` with a word in `search`, for example `"quality"`. A `*` wildcard is rejected with `400 Bad Request`.
 - Search one document library :: `list-sharepoint-site-drives` for the drive ID, then `search-onedrive-files`.
 - Read file content :: `download-bytes`, or `get-download-url` for a short-lived URL. Convert Office files to text before you analyse them, and check which converter is installed (for example `pandoc`) instead of assuming one.
+- Versions and drafts :: read `references/sharepoint-versions.md` before you list versions, download an earlier version, or rely on a file in a library that has drafts: a read-only token can see the last major version instead of the current draft.
 - Mail :: `list-mail-messages`, `get-mail-message`, `list-mail-attachments`.
 - Calendar :: `get-calendar-view` for a date range, `list-calendar-events`, `find-meeting-times`.
 - Teams :: `list-chats`, `list-chat-messages`, `list-joined-teams`, `list-channel-messages`.
