@@ -598,31 +598,6 @@ Origin:
 Evidence:
 Checking a 330-line change-record against its changeset needed a one-off Babashka script (portal `.tmp/check-record-ids.clj`, gitignored) that runs `git grep -P` over `src` and `test` for each backticked span. It found one stale identifier (a renamed test helper) and confirmed the rest; a second pass verified the record after edits. The unresolved residue was removed or rejected names and Nexus/Replicant internals, which needed a manual check in the library jars.
 
-** DONE Run skill trigger evals in pi, in context :skill:skill_creator:
-CLOSED: [2026-10-19 Mon 13:34]
-:PROPERTIES:
-:CUSTOM_ID: b3522825-53ca-42d7-8ebb-6223e186ce9c
-:CREATED: [2026-10-17 Sat 13:04]
-:END:
-:LOGBOOK:
-- Created [2026-10-17 Sat 13:04]
-- State "DONE" from "TODO" [2026-10-19 Mon 13:34]
-:END:
-Run skill trigger evals (skill-creator description optimiser) in pi, with the full set of skills and extensions loaded, so that the candidate competes in context. Do not disable all skills or extensions, and do not use a project-only skill set. Record this in skill-creator's references/description-optimiser.md, and give the harness a pi path, because scripts/run_eval.py and scripts/improve_description.py only call claude -p.
-
-Resolution: --harness pi (the default) loads skills/skill-creator/scripts/pi_eval_swap.ts into each run. The extension swaps the candidate description into that run's system prompt and blocks every tool call; --cwd sets the project context. The original direction, to move the installed skill out of the tree during the eval, was rejected: it changes the live, shared tree for the whole eval, and the candidate, re-added with --skill, appears at the end of the list with a scratch path that the model identified as a test fixture. The claude -p worker collision moved to task:c99fabd6-fef3-41b4-9db9-5c4177c0cfd1.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-10-17 Sat 13:04]
-- sender: human
-
-Evidence:
-- doc-writing (then docs) trigger eval, 2026-10-16: with 10 workers and the installed skill visible, every positive query scored 0/3. The agent's first call was the installed skill, not the temporary command.
-- Workaround used: Claude Code with --setting-sources project, from a scratch project that linked every skill except the candidate, and --num-workers 1. A control eval then gave positive 2/2, negative 0/2.
-- User direction: prefer pi for skill evals; bypass only the skill under test, by moving it out of the skill tree temporarily.
-
 ** TODO Stop parallel claude trigger evals picking another worker's candidate :skill:skill_creator:
 :PROPERTIES:
 :CUSTOM_ID: c99fabd6-fef3-41b4-9db9-5c4177c0cfd1
