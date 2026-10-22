@@ -43,7 +43,7 @@ Format: `<type>[(scope)][!]: <description>` followed by an optional body and foo
    - Co-author / generation attribution footers unless the user asks
    - Narration of the diff: "This commit does X", "I", "we", "now", "currently", or a file name that the scope already gives. The diff shows *what* changed; the body says *why*.
 
-5. Show the proposed message to the user and wait for explicit approval before running `git commit`.
+5. Show the proposed message to the user and wait for explicit approval before running `git commit`. In a delegated session, do not ask: commit when the assignment grants approval; otherwise leave the change staged and put the draft message in the result.
 
 ## Merge request descriptions
 

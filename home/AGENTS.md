@@ -47,6 +47,7 @@
 - Ask one decision in each question.
   - Do not combine two independent choices in one option set.
   - Such an answer can confirm one choice while the other choice remains unconfirmed.
+  - End a reply with at most one question.
 - When a matched skill owns a domain, read that skill before you issue exploratory commands in that domain.
   - Do not run the skill read and the domain probes in parallel.
 - Do not cite a green suite as coverage until you confirm that it executes the changed file. Confirm which namespaces the test task runs before you attribute its total to one component.
@@ -58,6 +59,7 @@
   - First, verify each supplied key, parameter, and path against the consumer.
 - When diagnostics stop narrowing a cause, stop adding controls. Name the competing hypotheses and run the cheapest experiment that separates them.
 - Test a boundary predicate against every source path that creates its entries, with the boundary moved both earlier and later.
+- For a performance comparison, compare environments that differ only in the mechanism. Alternate them in rounds (ABAB) and report each round's median: one pair of medians cannot show that a difference is within noise.
 
 # Git operations
 - Use `git mv` when you move files that Git controls. Do not use `mv` for those files.
@@ -128,5 +130,5 @@
 - Redirect long-running or expensive command output to `.tmp/`.
   - Read slices from the saved file.
   - Do not pipe such output through `head` or `tail`. Those commands discard the remaining output and often require an expensive repeat execution.
-- Read a path only after the call that writes it has finished and succeeded. Never run the two calls in parallel. Also confirm that the expected output markers are present.
+- Read, stage or commit a path only after the call that writes it has finished and succeeded. Never run the two calls in parallel. Also confirm that the expected output markers are present.
 - Never report a diagnostic tool's verdict from a truncated view. Read the finding-count summary or the complete report before you report health.

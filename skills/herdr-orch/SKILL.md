@@ -67,7 +67,7 @@ Choose explicitly:
 - **Integration:** treat a worktree publication's `CHECKPOINT` as the child's branch tip at that gate. Inspect reconciliation, resolve remaining dirt, and integrate explicitly. `oh` never merges, rebases, pushes, or deletes the branch.
 - **Lifecycle:** capture closes nothing. After each capture, choose `close <full-task-uuid>` or `continue <full-task-uuid> --task '<next assignment>'`. Use `collect --close` when the close decision is already known. Whoever spawns a child closes it.
 
-Continue when the follow-up depends on the child's existing context. Respawn for unrelated work, a different persona, or independent Class C validation. The CLI owns continuation preconditions and refuses unsafe reuse. See the [scripts/docs/contract.md#Continue](scripts/docs/contract.md#continue).
+Continue when the follow-up depends on the child's existing context. Respawn for unrelated work, a different persona, or independent Class C validation. Before you continue a child, read its context use; above about 70%, close it and start a fresh worker with a handoff assignment instead. The CLI owns continuation preconditions and refuses unsafe reuse. See the [scripts/docs/contract.md#Continue](scripts/docs/contract.md#continue).
 
 For root-owned staged delegation, repeated measurements, evidence retention and the separately approved live context smoke, use [references/workflow-recipes.md](references/workflow-recipes.md). The recipe is policy over existing lifecycle verbs, not a workflow engine.
 

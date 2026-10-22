@@ -278,3 +278,35 @@ The fork smoke's bridge assignment named the child's exact task as an instructio
 ** Tests (herdr-orch scripts) -- HERDR_ORCH_* environment
 
 One smoke test passed in delegated children only because they inherited =HERDR_ORCH_TASK=; from a root shell it errored. Child-reported green totals had hidden the dependence.
+
+* 2026-10-22 Thu -- nix-microchip compiler-only, headless MPLAB and bundled packs work
+
+Session delegated build and review rounds through herdr-orch for three nix-microchip tasks. Findings 1-7 of its retro are rules; the project rule (pre-push diff search) is in nix-microchip AGENTS.md.
+
+** Scripts and transformations -- read, stage or commit after the write
+
+Three times an edit and the =git add= / =git commit= that should include it ran in the same parallel tool batch. Twice the edit missed its commit, and a follow-up commit was needed.
+
+** Verification discipline -- one question at the end of a reply
+
+A reply ended with two yes/no questions (push, and run a retro); the user answered "yes", which did not show which question it answered.
+
+** Verification discipline -- performance comparisons
+
+A worker reported a bind mount's cost as "within noise" from one pair of medians (114 and 147 ms for the same condition). Alternating master/branch rounds (ABAB, five rounds of 15 compiles) gave 114.8/111.5 ... 116.4/115.3 ms. An earlier worker comparison of mismatched prototype and full environments also gave different medians.
+
+** Validation (nix skill) -- local flake references
+
+=builtins.getFlake (toString <dir>)= copied the repository with its gitignored =.tmp/= (33 GB) into the store on each evaluation; =builtins.getFlake ("git+file://" + toString <dir>)= copied 376 KB (both measured). Thirteen such copies used about 384 GiB in about an hour and filled the disk from 550 GB to 163 GB free.
+
+** Validation (nix skill) -- --file and -A
+
+A worker's =nix build --file f -A attr= failed. Measured: =nix eval --file f.nix -A a= exits 1 with =unrecognised flag '-A'=; =nix eval --file f.nix a= exits 0.
+
+** Lifecycle (herdr-orch skill) -- child context before continue
+
+Two workers continued several times reached 80% and 83% context and ended rounds early with requested evidence missing (one round also had a failed record edit). A fresh worker with a handoff assignment completed the remaining work in one round.
+
+** Commit step 5 (git-commit skill) -- delegated sessions
+
+A delegated worker stopped at its commit-approval question; the parent's typed answer did not submit, and the parent committed the staged change itself. Later assignments that stated "commit without asking for approval (approved in advance)" committed without a stall.

@@ -112,6 +112,10 @@ nix-repl> :p homeConfigurations.default.config.programs.ssh.matchBlocks
 
 For dirty-working-tree evals, `git add` new files first -- Nix copies only tracked files into the store, and `path does not exist` errors point at an untracked `.nix` file.
 
+Refer to a local flake in a Git repository as `.#attr` or `git+file://<dir>`; in a Nix expression, use `builtins.getFlake ("git+file://" + toString <dir>)`. `builtins.getFlake (toString <dir>)` and `path:<dir>` copy the whole directory, ignored files included, into the store on each evaluation.
+
+`nix build --file <f>` and `nix eval --file <f>` take the attribute as a positional argument (`nix eval --file f.nix a`). `-A` exists only for `nix-build` and `nix-instantiate`.
+
 ## Pinning and inputs
 
 - **Pin everything.** Floating `builtins.fetchGit` / `fetchTarball` without `rev` + `narHash` is reproducibility debt. Convert to a flake input (which `flake.lock` pins automatically) or to `pkgs.fetchFromGitHub` with a `hash`.
