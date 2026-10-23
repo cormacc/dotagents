@@ -243,6 +243,80 @@
                                      "<w:comments xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"/>")
                                 "UTF-8")]))))
 
+(declare add-comment)
+
+;; ------------------------------------------------------------------ edit scripts
+
+(defn selector
+  "[pred description] for a paragraph selector: a string (the paragraph contains it) or a
+  map with one of :starts, :contains, :equals."
+  [sel]
+  (let [sel (if (string? sel) {:contains sel} sel)
+        [k v] (first (select-keys sel [:starts :contains :equals]))]
+    (when-not (and k (string? v) (seq v))
+      (throw (match-error (str "bad paragraph selector " (pr-str sel) ": use a string or {starts|contains|equals: text}"))))
+    [(case k
+       :starts #(str/starts-with? % v)
+       :contains #(str/includes? % v)
+       :equals #(= % v))
+     (str (name k) " " (pr-str v))]))
+
+(defn apply-script
+  "Apply an edit script to package entries. Returns {:entries :report}. Each edit is a map:
+    {:op \"replace\" :old s :new s [:in selector] [:comment s]}
+    {:op \"insert-after\" :after selector :text s [:style id] [:comment s]}
+    {:op \"delete\" :paragraph selector [:comment s]}
+  A replace without :in uses the paragraph that contains :old. Every edit must match one
+  paragraph; the first failure throws a :match error with :index, and the caller writes
+  nothing. Comments are added to comments.xml (created when absent). Tracking is enabled
+  in settings unless no-tracking?."
+  [entries script {:keys [author initials date no-tracking?]}]
+  (when-not (and (sequential? script) (seq script)) (throw (match-error "the edit script must be a non-empty list")))
+  (let [root (d/parse-entry entries "word/document.xml")
+        croot (d/parse-entry entries "word/comments.xml")
+        ids (id-source (max (max-id root) (if croot (max-id croot) -1)))
+        opts {:author author :date date :ids ids}
+        [root comments report]
+        (reduce
+         (fn [[root comments report] [i e]]
+           (try
+             (let [cid (when (seq (:comment e)) (ids))
+                   o (assoc opts :comment-id cid)
+                   rep (atom nil)
+                   op (str (:op e))
+                   root' (case op
+                           "replace"
+                           (let [[pred desc] (selector (or (:in e) (:old e)))]
+                             (update-unique-paragraph root pred desc
+                                                      (fn [p] (let [p' (tracked-replace p (str (:old e)) (str (:new e)) o)]
+                                                                (reset! rep {:before (d/text p) :after (d/text p')})
+                                                                p'))))
+                           "insert-after"
+                           (let [[pred desc] (selector (:after e))]
+                             (when (str/blank? (:text e)) (throw (match-error "insert-after needs :text")))
+                             (update-unique-paragraph root pred desc
+                                                      (fn [p] (reset! rep {:after_paragraph (d/text p) :inserted (:text e)})
+                                                        (tracked-insert-after p (:text e) (assoc o :style (:style e))))))
+                           "delete"
+                           (let [[pred desc] (selector (:paragraph e))]
+                             (update-unique-paragraph root pred desc
+                                                      (fn [p] (reset! rep {:deleted (d/text p)}) (tracked-delete p o))))
+                           (throw (match-error (str "unknown op " (pr-str (:op e)) ": use replace, insert-after or delete"))))]
+               [root' (cond-> comments cid (conj {:id cid :text (:comment e)})) (conj report (merge {:index i :op op} @rep))])
+             (catch clojure.lang.ExceptionInfo ex
+               (throw (ex-info (str "edit " i " (" (:op e) "): " (ex-message ex)) (merge (ex-data ex) {:index i}))))))
+         [root [] []]
+         (map-indexed vector script))
+        entries (cond-> entries (seq comments) ensure-comments-part)
+        comments-xml (when (seq comments)
+                       (reduce (fn [x c] (add-comment x (merge c {:author author :initials initials :date date})))
+                               (d/entry-str entries "word/comments.xml") comments))
+        settings (d/entry-str entries "word/settings.xml")]
+    {:entries (d/replace-entries entries (cond-> {"word/document.xml" (xml/emit-str root)}
+                                           comments-xml (assoc "word/comments.xml" comments-xml)
+                                           (and settings (not no-tracking?)) (assoc "word/settings.xml" (enable-tracking settings))))
+     :report report}))
+
 (defn add-comment
   "comments.xml text with a new comment. Text may hold several paragraphs, separated by a
   blank line."

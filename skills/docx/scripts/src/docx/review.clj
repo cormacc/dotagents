@@ -98,6 +98,61 @@
                    (conj out {:heading heading :before (txt #{:same :del}) :after after})
                    out)))))))
 
+;; ------------------------------------------------------------------ comments
+
+(defn- paragraph-tokens
+  "Tokens of p in document order: [:start id], [:end id], [kind text] with kind :same,
+  :ins or :del."
+  ([x] (paragraph-tokens x :same))
+  ([x kind]
+   (cond
+     (d/tag= (w "commentRangeStart") x) [[:start (get-in x [:attrs (w "id")])]]
+     (d/tag= (w "commentRangeEnd") x) [[:end (get-in x [:attrs (w "id")])]]
+     (d/tag= (w "t") x) [[kind (apply str (:content x))]]
+     (d/tag= (w "delText") x) [[:del (apply str (:content x))]]
+     (d/tag= (w "tab") x) [[kind "\t"]]
+     (d/el? x) (let [k (cond (#{(w "ins") (w "moveTo")} (:tag x)) :ins
+                           (#{(w "del") (w "moveFrom")} (:tag x)) :del
+                           :else kind)]
+               (if (#{(w "pPr") (w "rPr")} (:tag x)) [] (mapcat #(paragraph-tokens % k) (:content x))))
+     :else [])))
+
+(defn comments
+  "One map per comment: :id :author :date :text, the nearest :heading above its anchor, and
+  the anchored text :before (deletions in, insertions out) and :after."
+  [path]
+  (let [entries (d/read-entries path)
+        croot (d/parse-entry entries "word/comments.xml")
+        doc (d/parse-entry entries "word/document.xml")
+        ;; Walk paragraphs in order; a range can span paragraphs.
+        anchors (loop [[p & more] (d/descendants doc (w "p")) heading nil active {} done {}]
+                  (if-not p
+                    done
+                    (let [toks (paragraph-tokens p)
+                          after-text (str/trim (apply str (keep (fn [[k s]] (when (#{:same :ins} k) s)) toks)))
+                          heading (if (and (re-find #"(?i)heading|title" (str (style-of p))) (seq after-text)) after-text heading)
+                          [active done] (reduce (fn [[a dn] [k v]]
+                                                  (case k
+                                                    :start [(assoc a v {:heading heading :before "" :after ""}) dn]
+                                                    :end [(dissoc a v) (if-let [x (get a v)] (assoc dn v x) dn)]
+                                                    [(update-vals a #(cond-> %
+                                                                       (#{:same :del} k) (update :before str v)
+                                                                       (#{:same :ins} k) (update :after str v)))
+                                                     dn]))
+                                                [active done] toks)
+                          active (update-vals active #(-> % (update :before str "\n") (update :after str "\n")))]
+                      (recur more heading active done))))]
+    (vec (for [c (when croot (d/children croot (w "comment")))
+               :let [id (get-in c [:attrs (w "id")])
+                     a (get anchors id)]]
+           {:id id
+            :author (get-in c [:attrs (w "author")])
+            :date (get-in c [:attrs (w "date")])
+            :text (str/join "\n\n" (map #(str/trim (d/text %)) (d/children c (w "p"))))
+            :heading (:heading a)
+            :before (some-> (:before a) str/trim)
+            :after (some-> (:after a) str/trim)}))))
+
 ;; ------------------------------------------------------------------ compare
 
 (defn lo-python

@@ -361,6 +361,107 @@
     (is (= ["trackRevisions" "defaultTabStop"]
            (map #(name (:tag %)) (filter d/el? (:content (xml/parse-str (e/enable-tracking (str decl "<w:settings " ns-decls "><w:defaultTabStop w:val=\"720\"/></w:settings>"))))))))))
 
+;; ------------------------------------------------------------------ edit scripts, comments, clean
+
+(require '[docx.clean :as clean])
+
+(def cli (str (fs/path here "docx.clj")))
+(defn run-cli [& args] (apply process/shell {:out :string :err :string :continue true} "bb" cli args))
+
+(def script
+  [{:op "replace" :old "applies to all" :new "covers all" :comment "Reason: scope wording."}
+   {:op "insert-after" :after {:starts "Anchor"} :text "Inserted paragraph." :comment "Reason: new requirement.\n\nSecond line."}
+   {:op "delete" :paragraph {:equals "Delete me."}}])
+
+(def with-settings
+  "edit-src plus a settings part with an empty run in the body, to test what clean keeps."
+  (let [src (str (fs/path tmp "edit-src-settings.docx"))
+        entries (d/read-entries edit-src)
+        doc (d/entry-str entries "word/document.xml")
+        doc' (str/replace-first doc "<w:r><w:t xml:space=\"preserve\">Last paragraph.</w:t></w:r>"
+                                "<w:r><w:rPr><w:b/></w:rPr></w:r><w:r><w:t xml:space=\"preserve\">Last paragraph.</w:t></w:r>")]
+    (assert (not= doc doc') "fixture: empty run inserted")
+    (d/write-docx src (conj (d/replace-entries entries {"word/document.xml" doc'})
+                            ["word/settings.xml" (.getBytes (str decl "<w:settings " ns-decls "><w:zoom w:percent=\"100\"/><w:defaultTabStop w:val=\"720\"/></w:settings>") "UTF-8")]))
+    src))
+
+(defn edited! [name]
+  (let [out (str (fs/path tmp name))
+        {:keys [entries report]} (e/apply-script (d/read-entries with-settings) script
+                                                 {:author "Tester" :initials "TT" :date "2026-10-23T12:00:00Z"})]
+    (d/write-docx out entries)
+    [out report]))
+
+(deftest edit-script-applies-all-edits
+  (let [[out report] (edited! "s1.docx")
+        entries (d/read-entries out)]
+    (is (= ["replace" "insert-after" "delete"] (map :op report)))
+    (is (= "The procedure covers all released products." (:after (first report))))
+    (is (str/includes? (d/entry-str entries "word/settings.xml") "trackRevisions"))
+    (oracle out (vec (concat (take 1 original-lines) ["The procedure covers all released products."]
+                             (take 2 (drop 2 original-lines)) ["Anchor paragraph." "Inserted paragraph."] (drop 6 original-lines)))
+            rejected-lines)))
+
+(deftest edit-script-is-all-or-nothing
+  (let [bad (str (fs/path tmp "bad-script.json"))
+        out (str (fs/path tmp "never.docx"))]
+    (spit bad (json/generate-string (assoc script 1 {:op "insert-after" :after "No such paragraph" :text "x"})))
+    (let [r (run-cli "edit" with-settings bad out "--author" "Tester")]
+      (is (= 2 (:exit r)))
+      (is (str/includes? (:err r) "edit 1 (insert-after)"))
+      (is (not (fs/exists? out)) "nothing is written"))
+    (let [good (str (fs/path tmp "good-script.json"))]
+      (spit good (json/generate-string script))
+      (is (zero? (:exit (run-cli "edit" with-settings good out "--author" "Tester"))) "control: the valid script succeeds")
+      (is (fs/exists? out)))))
+
+(deftest comments-list-the-anchored-change
+  (let [[out _] (edited! "s2.docx")
+        cs (review/comments out)]
+    (is (= 2 (count cs)))
+    (is (= {:author "Tester" :text "Reason: scope wording." :heading "Purpose" :before "applies to all" :after "covers all"}
+           (select-keys (first cs) [:author :text :heading :before :after])))
+    (is (= "Reason: new requirement.\n\nSecond line." (:text (second cs))))
+    (is (= "Inserted paragraph." (:after (second cs))))
+    (is (= "" (:before (second cs))))))
+
+(deftest clean-accepts-everything-and-removes-comments
+  (let [[edited _] (edited! "s3.docx")
+        out (str (fs/path tmp "clean.docx"))
+        _ (d/write-docx out (clean/clean-entries (d/read-entries edited)))
+        entries (d/read-entries out)
+        doc (d/parse-entry entries "word/document.xml")
+        accepted (vec (concat (take 1 original-lines) ["The procedure covers all released products."]
+                              (take 2 (drop 2 original-lines)) ["Anchor paragraph." "Inserted paragraph."] (drop 6 original-lines)))]
+    (when pandoc? (is (= (pandoc-lines edited "accept") (pandoc-lines out "accept") (pandoc-lines out "reject"))
+                      "clean text equals the accept view of the input, and has nothing left to reject"))
+    (is (= accepted (mapv d/text (remove #(str/blank? (d/text %)) (d/descendants doc (w "p"))))))
+    (is (= (count accepted) (count (d/descendants doc (w "p")))) "the deleted paragraph leaves no empty paragraph")
+    (is (= {} (:tracked_changes (review/inspect out))))
+    (is (empty? (filter #(str/includes? (first %) "comments") entries)))
+    (is (not (str/includes? (d/entry-str entries "word/_rels/document.xml.rels") "comments")))
+    (is (not (str/includes? (d/entry-str entries "[Content_Types].xml") "comments")))
+    (is (not (str/includes? (d/entry-str entries "word/settings.xml") "trackRevisions")))
+    (is (empty? (filter #(some #{(w "commentRangeStart") (w "commentRangeEnd") (w "commentReference")} [(:tag %)])
+                        (tree-seq d/el? :content doc))))
+    (is (= 1 (count (filter #(and (d/tag= (w "r") %) (empty? (d/text %)) (seq (d/descendants % (w "b"))))
+                            (d/descendants doc (w "r")))))
+        "an empty run that was in the document stays")
+    (testing "--keep-tracking keeps the setting"
+      (is (str/includes? (d/entry-str (clean/clean-entries (d/read-entries edited) :keep-tracking? true) "word/settings.xml")
+                         "trackRevisions")))))
+
+(deftest cli-edit-comments-clean
+  (let [s (str (fs/path tmp "cli-script.edn")) e1 (str (fs/path tmp "cli-edited.docx")) c1 (str (fs/path tmp "cli-clean.docx"))]
+    (spit s (pr-str script))
+    (let [r (run-cli "edit" with-settings s e1 "--author" "Tester" "--initials" "TT")]
+      (is (zero? (:exit r)) (:err r))
+      (is (= 3 (count (get (json/parse-string (:out r)) "edits")))))
+    (is (= 2 (count (json/parse-string (:out (run-cli "comments" e1))))))
+    (let [r (run-cli "clean" e1 c1)]
+      (is (zero? (:exit r)) (:err r))
+      (when pandoc? (is (true? (get (json/parse-string (:out r)) "verified")))))))
+
 (deftest selfcheck
   (when (System/getenv "DOCX_TEST_SELFCHECK")
     (is (= 1 2) "deliberate failure: DOCX_TEST_SELFCHECK is set")))

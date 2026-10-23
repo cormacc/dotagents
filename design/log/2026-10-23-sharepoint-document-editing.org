@@ -144,14 +144,18 @@ Acceptance criteria:
 - Tests: `pandoc --track-changes=accept` gives the new text and `--track-changes=reject` gives the old text, paragraph by paragraph.
 - Must not: change any package part other than document, settings, comments, content types and relationships.
 
-** TODO Add comments listing and clean-copy commands to docx
+** DONE Add comments listing and clean-copy commands to docx
+CLOSED: [2026-10-23 Fri 16:22]
 :PROPERTIES:
 :CUSTOM_ID: 4535d43a-b85e-4263-a8ec-3b7588bb52cf
 :CREATED: [2026-10-23 Fri 13:28]
 :BLOCKED-BY: task:7ba83f3a-3858-4e72-9f68-bdf638b41b3c
+:STARTED: [2026-10-23 Fri 16:12]
 :END:
 :LOGBOOK:
 - Created [2026-10-23 Fri 13:28]
+- State "STARTED" from "TODO" [2026-10-23 Fri 16:12]
+- State "DONE" from "STARTED" [2026-10-23 Fri 16:22]
 :END:
 Acceptance criteria:
 - `docx.clj comments DOCX` lists each comment with author, date, text, the anchored text and the nearest heading.
@@ -159,14 +163,18 @@ Acceptance criteria:
 - The clean copy's paragraph text equals `pandoc --track-changes=accept` of the input; the test fails when they differ.
 - `inspect` of the clean copy reports no tracked changes, and no comment part remains.
 
-** TODO Add an edit-script command to docx
+** DONE Add an edit-script command to docx
+CLOSED: [2026-10-23 Fri 16:22]
 :PROPERTIES:
 :CUSTOM_ID: 9a944bf6-a635-4b9f-a109-10c9725908fe
 :CREATED: [2026-10-23 Fri 13:28]
 :BLOCKED-BY: task:7ba83f3a-3858-4e72-9f68-bdf638b41b3c
+:STARTED: [2026-10-23 Fri 16:12]
 :END:
 :LOGBOOK:
 - Created [2026-10-23 Fri 13:28]
+- State "STARTED" from "TODO" [2026-10-23 Fri 16:12]
+- State "DONE" from "STARTED" [2026-10-23 Fri 16:22]
 :END:
 Acceptance criteria:
 - `docx.clj edit IN SCRIPT OUT` applies an EDN or JSON list of edits (replace, insert-after, delete), each with an optional comment, using the docx.core functions.
@@ -218,6 +226,7 @@ Acceptance criteria:
 - On the sandbox document: check out, apply an edit script with comments, upload, check in as minor, and confirm in Word Online.
 - Draft DCR rows from the comments.
 - Produce the clean copy, upload, and publish as a major version with a comment; confirm the version history.
+- Upload a Word-authored draft with tracked changes (including deleted paragraph marks in lists) to the sandbox, let Word Online accept all changes, and compare its text and paragraph properties with `docx.clj clean` of the same draft.
 - Discard or delete the sandbox afterwards, as agreed with the user.
 
 * Implementation
@@ -269,6 +278,14 @@ Acceptance criteria:
 - The pandoc oracle cannot see a paragraph mark left behind: pandoc drops empty paragraphs. The tests therefore also check that an inserted or deleted paragraph's mark carries `w:ins` or `w:del`.
 - Pandoc's reject view rejects every tracked change in the document, including earlier changes by other authors; the expected texts in the tests allow for that.
 - A tracked paragraph insertion records the new paragraph's own mark as inserted, so rejecting it removes the paragraph and leaves the anchor's properties alone. The copy of the anchor's paragraph properties drops `w:sectPr` (a section break) and `w:pPrChange`.
+
+** Edit scripts, comments, clean copy
+- `docx.clj edit IN SCRIPT OUT` (`docx.edit/apply-script`), `docx.clj comments DOCX` (`docx.review/comments`), `docx.clj clean IN OUT` (`skills/docx/scripts/src/docx/clean.clj`). Exit codes: 2 for an edit that does not match, 3 for a clean copy that differs from pandoc.
+- Cheshire in Babashka parses JSON arrays lazily, so a parse error surfaced outside the `try` that should have caught it; `read-script` chooses the format by extension and realises the JSON inside the `try`.
+- `clean` merges a paragraph whose mark is deleted into the following paragraph, which keeps its properties (the surviving mark carries them), and removes a run only when it held a comment reference.
+- Checked on a Word-authored procedure draft (612 insertions, 120 deletions, property changes in tables and runs, 21 comments): 779 paragraphs match pandoc's accept view, with no tracked change left.
+- Pandoc's accept view does not apply a deleted paragraph mark: it keeps an empty list item and renumbers the list. Where it does merge paragraphs, it inserts a space. The `clean` check therefore strips list markers and ignores whitespace inside a paragraph; it still compares every character and the paragraph count.
+- LibreOffice's accept-all kept two runs of plain `w:del` text in that draft, so it is not a reliable reference. LibreOffice and `clean` still differ in list indentation after merged paragraphs; the trial compares `clean` with Word's own accept-all.
 
 * Open questions
 ** DECIDED Which route gives the Graph write commands?
