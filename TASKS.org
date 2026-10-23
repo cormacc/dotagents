@@ -381,6 +381,30 @@ Move the generic .docx tooling from the Neuromod nmd-dcr skill into a new skills
 :END:
 Word stores a field's last result, e.g. "Error! Reference source not found.", and LibreOffice recomputes it, so a render hides the defect. Report such stored field results in `docx.clj inspect`.
 
+** STARTED Edit SharePoint Word documents from a pi session
+:PROPERTIES:
+:CUSTOM_ID: 909f6071-a969-4e45-823b-680ecc1cf5c5
+:CREATED: [2026-10-23 Fri 13:27]
+:STARTED: [2026-10-23 Fri 14:03]
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 13:27]
+- State "STARTED" from "TODO" [2026-10-23 Fri 14:03]
+:END:
+#+IMPORT: [[plan:2026-10-23-sharepoint-document-editing.org]]
+Session check-out, tracked edits with reason comments, minor check-in; at the end of review, a clean copy and (on explicit request) a published major version.
+
+** TODO ms365: write ranges in a live SharePoint workbook
+:PROPERTIES:
+:CUSTOM_ID: 18357aa0-98cc-420b-9a52-4a8d94638adf
+:CREATED: [2026-10-23 Fri 13:29]
+:BLOCKED-BY: task:048a81b9-e952-44ec-85ed-05432eca2d50
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 13:29]
+:END:
+Write rows into a SharePoint workbook through the Graph workbook API (no file round-trip), using the Babashka Graph client from [[plan:2026-10-23-sharepoint-document-editing.org]]. In a library that requires check-out, a range write returns 403 EditModeWorkbookCheckedOutRequired unless the workbook is checked out (spike, 2026-10-23), so the write runs as a transaction: check out, write, read back, check in as minor (discard the check-out on failure). Acceptance: write one row in a transaction; re-read it and report a mismatch; refuse to overwrite a non-empty cell unless told to; write text cells as text (Excel converted "Oct 2026" to a date serial in the spike); documented in skills/ms365 without organisation names. First consumer: the nmd-dev task "Let nmd-dcr write the LG0017 DCR reservation".
+
 * Fixes
 
 ** TODO herdr-orch: failed-spawn hygiene :skill:herdr_orch:

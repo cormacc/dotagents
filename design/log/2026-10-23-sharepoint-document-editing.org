@@ -1,0 +1,259 @@
+#+TITLE: Edit SharePoint Word documents from a pi session
+#+DATE: 2026-10-23 Fri
+#+PARENT: [[task:909f6071-a969-4e45-823b-680ecc1cf5c5][Edit SharePoint Word documents from a pi session]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/docx/SKILL.md]]
+#+SPEC: [[proj:skills/ms365/SKILL.md]]
+#+SPEC: [[proj:skills/ms365/references/sharepoint-versions.md]]
+#+SPEC: [[proj:skills/ms365/README.org]]
+
+* Intent
+Let a pi session edit a Word document stored in SharePoint the way a reviewer does in Word: hold a check-out for the session, make tracked edits with comments that give the reason for each change, and check in one minor version. At the end of review, produce the clean copy (all changes accepted, no comments) and, only on explicit request, publish it as a major version with a comment. The generic parts live in the `docx` and `ms365` skills; the controlled-document workflow lives in the nmd-dev repository.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+The Word content is edited as WordprocessingML with `docx.core`: we know of no Graph API for Word content (unlike the Excel workbook API), and the `ms365` server has no Word tools, so tracked changes and comments are written into the file. Graph supplies the session around the edits: check-out, content upload, and check-in as a minor or published (major) version. The current manual route is a gap analysis in pi, then a Word Online add-in to apply it.
+
+** Scope
+*** In scope
+- `docx.core`: enable tracking; tracked replace, paragraph insert and paragraph delete; anchored comments.
+- `docx.clj`: `edit` (apply an edit script), `comments` (list comments with anchored text), `clean` (accept all changes, remove comments).
+- Graph write commands for a session: status, check-out, upload, check-in (minor), check-in as published (major), discard check-out.
+- Skill documentation in `docx` and `ms365`.
+- nmd-dev: a workflow for editing a controlled document, and DCR rows drafted from the comments (nmd-dev repository).
+
+*** Out of scope
+- Excel range writes: separate task "ms365: write ranges in a live SharePoint workbook", which uses the client built here. In a library that requires check-out, a range write needs a check-out (see Implementation, Spike), so it runs as a transaction.
+- A Word add-in (Office.js), and automating Word Online in a browser.
+- Editing through LibreOffice.
+- Tracked formatting changes, new tables, images and fields.
+- Merging concurrent edits by other users; the session check-out prevents them.
+- SharePoint library settings (versioning, content approval) and DocuSign routing.
+
+** Acceptance
+*** Core functionality
+- [ ] A session checks out once, saves edits by upload during the session, and checks in once, which creates one minor version.
+- [ ] On request, a transaction applies one edit script as check-out, upload and check-in in one command, and leaves no check-out when any step fails.
+- [ ] Word Online shows each tracked replace as a deletion and an insertion with author and date.
+- [ ] Word Online shows each comment, anchored to its edited text.
+- [ ] `docx.clj comments` lists each comment with its author, text, anchored text and nearest heading.
+- [ ] `docx.clj clean` gives paragraph text equal to `pandoc --track-changes=accept` of the input, with no tracked change and no comment part left.
+- [ ] Check-in as published creates a major version with the given comment in the version history.
+*** Edge cases
+- [ ] A match that spans runs with different formatting is replaced, and the untouched text keeps its formatting.
+- [ ] Existing tracked changes by other authors are kept by `edit` and accepted by `clean`.
+- [ ] A missing or ambiguous match aborts the whole edit script with the edit index, and writes nothing.
+- [ ] Check-out, upload and check-in refuse an item that another user has checked out.
+- [ ] A file above the simple-upload limit uploads through an upload session.
+*** Anti-criteria
+- [ ] Must not: publish a major version unless the user asks for it in that session.
+- [ ] Must not: end a session with a check-out held without reporting it.
+- [ ] Must not: change package parts other than document, settings, comments, content types and relationships.
+- [ ] Must not: round-trip a document through LibreOffice.
+- [ ] Must not: put organisation names, document numbers or SharePoint paths in the `docx` or `ms365` skills.
+- [ ] Must not: test against a controlled document; the spike and trial use a sandbox document.
+
+** Decisions
+- Edit the `.docx` XML with `docx.core` :: no Graph API for Word content is known to us; the XML route keeps every part that the edit does not touch, byte for byte.
+  Rejected:
+  - Word add-in (Office.js): runs only inside Word, not from a pi session.
+  - LibreOffice through UNO: round-trips the Word document, and its rendering and comparison of a procedure already differed from Word's.
+  - Word Online driven through Chromium: fragile, and still needs a script inside Word.
+- Hold one check-out for the editing session by default; a transaction (check-out, edit, check-in in one command) on request (user decisions, 2026-10-23) :: the session matches the manual QMS editing practice and gives one minor version for each session; a transaction suits a small, self-contained change.
+  Rejected:
+  - Check out and check in for each edit, always: one version for each edit, and the document is free for others between edits.
+- Check the clean copy against `pandoc --track-changes=accept` :: an independent implementation of accept-all, so the check does not share bugs with `clean`.
+- Publication runs only on an explicit request :: in a QMS, publication is usually a document-control step; an organisation skill states who may publish.
+- Write through a Babashka Graph client in the `ms365` skill (user decision, 2026-10-23) :: a fixed command set (status, check-out, upload, check-in, publish, discard, Excel range write, transaction) with its guardrails in code; the MCP server stays read-only for every other session. Its own sign-in uses the same Entra app (auth code with PKCE and a `localhost` redirect; device code as fallback) and renews tokens silently. It requests `Files.ReadWrite.All`, but Entra returns every scope consented for the app, so the token is as wide as the MCP server's; the fixed command set, not the token, limits what the client does. A narrower token needs a separate app registration.
+  Rejected:
+  - Open the MCP server to selected write tools: check-out and check-in need `graph-batch`, which accepts any method (including DELETE) on any Graph URL, so every session could change any file the user can edit, and the guardrails would be agent instructions only.
+  - Reuse the MCP server's stored token: couples the client to pi's internal token storage and gives it the server's wider scopes.
+
+** Risks
+- Word Online may need attributes that hand-written XML lacks (`w14:paraId`, `commentsExtended`, `commentsIds`). The spike tests this before the editing functions are built.
+- SharePoint semantics of an upload to a checked-out item are not yet verified. The spike tests them on a sandbox.
+- A write scope in an agent session can change controlled documents. Mitigated by the refusals in the Graph commands, the explicit publish flag, and sandbox-only testing.
+- A content-approval setting on a library can turn a published check-in into a pending approval. The spike records the behaviour.
+
+* Plan
+** DONE Spike: verify the SharePoint and Word behaviour on a sandbox document
+CLOSED: [2026-10-23 Fri 15:35]
+:PROPERTIES:
+:CUSTOM_ID: ec7f857e-e1db-4414-9479-02aff868178b
+:CREATED: [2026-10-23 Fri 13:28]
+:STARTED: [2026-10-23 Fri 14:03]
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 13:28]
+- State "STARTED" from "TODO" [2026-10-23 Fri 14:03]
+- State "DONE" from "STARTED" [2026-10-23 Fri 15:35]
+:END:
+Acceptance criteria:
+- A sandbox document in a SharePoint library with minor versions and check-out is agreed with the user; no controlled document is touched.
+- Recorded: whether `graph-batch` can POST checkout, checkin and content PUT while the ms365 server runs `--read-only`.
+- Recorded: whether `PUT .../content` on an item checked out to the user saves into the checked-out copy without a version that others can see.
+- Recorded: the version created by `checkin` with a comment (minor), and by `checkInAs: published` (major), and whether the library sends a published check-in to content approval.
+- Recorded: whether Word Online shows hand-written `w:ins`/`w:del` with author and date, and a hand-written comment, correctly; and whether Word Online needs `w14:paraId` or `commentsExtended`/`commentsIds` parts.
+- Recorded: whether `update-excel-range` writes one row in a sandbox workbook while another user has it open, and whether it needs the same write route as the Word commands.
+- Findings go in this record's Implementation section, and the open question on the write route is decided for both the Word commands and the Excel range writes.
+- Must not: write to any document in a QMS library.
+
+** TODO Add Graph write commands for a document editing session
+:PROPERTIES:
+:CUSTOM_ID: 048a81b9-e952-44ec-85ed-05432eca2d50
+:CREATED: [2026-10-23 Fri 13:28]
+:BLOCKED-BY: task:ec7f857e-e1db-4414-9479-02aff868178b
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 13:28]
+:END:
+Acceptance criteria:
+- Commands (route chosen in the spike): `status`, `checkout`, `upload`, `checkin --comment` (minor), `checkin --publish --comment` (major), `discard-checkout`.
+- `upload` uses an upload session above the simple-upload size limit.
+- `checkout`, `upload` and `checkin` refuse an item checked out to another user, and `upload` and `checkin` refuse an item that is not checked out to the user.
+- `--publish` is never a default and is never implied by another option.
+- Each command reports the item's version and publication state after it runs.
+- A `transaction` command (on request; the session is the default) checks out, applies one edit script, uploads and checks in as minor in one run; on any failure after check-out it discards the check-out and reports the failure.
+- Documented in `skills/ms365` (generic; no organisation names).
+
+** TODO Add tracked editing functions to docx.core
+:PROPERTIES:
+:CUSTOM_ID: 7ba83f3a-3858-4e72-9f68-bdf638b41b3c
+:CREATED: [2026-10-23 Fri 13:28]
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 13:28]
+:END:
+Acceptance criteria:
+- `enable-tracking` sets `w:trackRevisions` in `word/settings.xml`.
+- `tracked-replace` replaces a text match inside one paragraph as `w:del` + `w:ins` with author and date, also when the match spans runs with different formatting; untouched runs keep their formatting.
+- Tracked insertion of a new paragraph after a matched paragraph, and tracked deletion of a matched paragraph.
+- `add-comment` anchors a comment (author, initials, date, text) to the edited range and adds `comments.xml`, its relationship and its content type when absent.
+- A match that is missing or not unique throws, and nothing is written.
+- Existing tracked changes by other authors are kept.
+- Tests: `pandoc --track-changes=accept` gives the new text and `--track-changes=reject` gives the old text, paragraph by paragraph.
+- Must not: change any package part other than document, settings, comments, content types and relationships.
+
+** TODO Add comments listing and clean-copy commands to docx
+:PROPERTIES:
+:CUSTOM_ID: 4535d43a-b85e-4263-a8ec-3b7588bb52cf
+:CREATED: [2026-10-23 Fri 13:28]
+:BLOCKED-BY: task:7ba83f3a-3858-4e72-9f68-bdf638b41b3c
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 13:28]
+:END:
+Acceptance criteria:
+- `docx.clj comments DOCX` lists each comment with author, date, text, the anchored text and the nearest heading.
+- `docx.clj clean IN OUT` accepts all tracked changes (insertions, deletions, property changes, moves, deleted paragraph marks) and removes all comments, anchors and comment parts.
+- The clean copy's paragraph text equals `pandoc --track-changes=accept` of the input; the test fails when they differ.
+- `inspect` of the clean copy reports no tracked changes, and no comment part remains.
+
+** TODO Add an edit-script command to docx
+:PROPERTIES:
+:CUSTOM_ID: 9a944bf6-a635-4b9f-a109-10c9725908fe
+:CREATED: [2026-10-23 Fri 13:28]
+:BLOCKED-BY: task:7ba83f3a-3858-4e72-9f68-bdf638b41b3c
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 13:28]
+:END:
+Acceptance criteria:
+- `docx.clj edit IN SCRIPT OUT` applies an EDN or JSON list of edits (replace, insert-after, delete), each with an optional comment, using the docx.core functions.
+- The whole script is checked before anything is written: one failed match aborts with the edit index and no output file.
+- `--author` and `--initials` set the change and comment author; the date is the run time.
+- Prints one line per applied edit (index, paragraph heading, before, after).
+
+** TODO Document the editing session in the docx and ms365 skills
+:PROPERTIES:
+:CUSTOM_ID: 92b2b021-58b5-4166-ba7f-ea2218a4869f
+:CREATED: [2026-10-23 Fri 13:28]
+:BLOCKED-BY: task:048a81b9-e952-44ec-85ed-05432eca2d50
+:BLOCKED-BY+: task:9a944bf6-a635-4b9f-a109-10c9725908fe
+:BLOCKED-BY+: task:4535d43a-b85e-4263-a8ec-3b7588bb52cf
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 13:28]
+:END:
+Acceptance criteria:
+- `skills/docx/SKILL.md` documents `edit`, `comments` and `clean`, the edit-script format and the pandoc check.
+- `skills/ms365` documents the session: check out once, upload saves during the session, one check-in at the end, publish only on explicit request.
+- skill-creator `quick_validate` passes for both skills; leak grep (with a positive control) finds no organisation content.
+
+** TODO Add the controlled-document editing workflow to nmd-dev and nmd-dcr
+:PROPERTIES:
+:CUSTOM_ID: 093f9f80-0d5b-4118-ba2c-cf73cdf81c1a
+:CREATED: [2026-10-23 Fri 13:28]
+:BLOCKED-BY: task:92b2b021-58b5-4166-ba7f-ea2218a4869f
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 13:28]
+:END:
+Acceptance criteria:
+- nmd-dev: a workflow to edit a QMS document from a gap analysis: session check-out, tracked edits with comments that cite the standard clause, one minor check-in.
+- nmd-dcr: DCR Section 2 rows drafted from `docx.clj comments` (description from the change, reason from the comment).
+- nmd-dev: clean copy and publication are Document Control steps per QM0004; the workflow prepares the clean copy only on request and never publishes on its own initiative.
+- Work is in the nmd-dev repository; dotagents skills stay generic.
+
+** TODO Run an end-to-end trial on the sandbox document
+:PROPERTIES:
+:CUSTOM_ID: c4b4dbfd-52a5-489e-9f3e-16658dddc358
+:CREATED: [2026-10-23 Fri 13:28]
+:BLOCKED-BY: task:093f9f80-0d5b-4118-ba2c-cf73cdf81c1a
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 13:28]
+:END:
+Acceptance criteria:
+- On the sandbox document: check out, apply an edit script with comments, upload, check in as minor, and confirm in Word Online.
+- Draft DCR rows from the comments.
+- Produce the clean copy, upload, and publish as a major version with a comment; confirm the version history.
+- Discard or delete the sandbox afterwards, as agreed with the user.
+
+* Implementation
+** Spike
+*** Sandbox
+- Library `AgentEditing` in the SharePoint site `Sandbox` (list ID `cbc61743-0632-4c65-87a0-6ec0a69e7399`), created by the user on 2026-10-23.
+- Test files, uploaded and checked in at 1.0 (published): `TEST QM0019 copy.docx` (a procedure at a published major version, marked as a test copy in its header) and `TEST LG0017 copy.xlsx` (a copy of a co-authored log workbook).
+- Library settings copy the organisation's controlled-documents library (read from the library versioning settings pages, 2026-10-23):
+
+| Setting | Controlled documents library | Procedures library | AgentEditing |
+|---|---|---|---|
+| Content approval | No | No | No |
+| Versions | Major and minor | Major and minor | Major and minor |
+| Draft item security | Only users who can edit | Any user who can read | Only users who can edit |
+| Require check-out | Yes | Yes | Yes |
+
+- Graph does not expose these settings; the library versioning settings page (`_layouts/15/LstSetng.aspx?List={id}`) shows them to a user with permission to manage the library.
+
+*** Write route
+- With `--read-only`, the `ms365` server (0.156.2) exposes 89 tools and none of them writes: no tool name matches `batch`, `upload`, `check`, `update`, `create`, `delete`, `send` or `post`, while the same filter finds the six Excel read tools. `graph-batch` is among the excluded tools.
+- The server catalogue (334 tools) has no check-out or check-in tool. Its `graph-batch` accepts GET, POST, PATCH and DELETE sub-requests on any Graph URL, up to 20 per call.
+- Token lifetimes (Microsoft Learn, "Refresh tokens" and "Access tokens" pages, 2026-10-23): access tokens 60 to 90 minutes; refresh tokens 90 days for non-SPA clients, replaced on each use; revoked by a user password change, an admin revocation or reset, and subject to any Conditional Access sign-in frequency policy.
+
+*** Probe results (2026-10-23, prototype `.tmp/graph-proto.clj`, AgentEditing)
+- Sign-in: auth code with PKCE through `http://localhost:{port}/callback` worked first time; the token file is created with mode 600. The returned token carries every scope consented for the app, not only the requested `Files.ReadWrite.All`.
+- `POST .../checkout`: 204. The item reports `level: checkout`, and a new minor version (1.0 to 1.1) appears in the version list at once.
+- `PUT .../content` while checked out: 200. The upload saves into the checked-out draft and adds no version; a download then returns the uploaded `document.xml`, `comments.xml` and `settings.xml` byte for byte.
+- `POST .../checkin` with a comment: 204. The draft becomes a checked-in minor version (1.1), so check-out, upload and check-in give one minor version for each session. The comment shows in the SharePoint version history (user check).
+- `POST .../discardCheckout` (Graph v1.0): 204. The draft version from the check-out (1.2) is removed, and the content returns to the last checked-in version, byte for byte.
+- `POST .../checkin` with `checkInAs: published`: 204. The check-out draft becomes a major version (2.0, published); there is no approval step in a library without content approval.
+- Word Online (user check): a hand-written `w:del`/`w:ins` with author and date, and a comment in a new `comments.xml` with `w:annotationRef`, display correctly with no repair prompt; no `w14:paraId`, `commentsExtended` or `commentsIds` part was needed. With `w:trackRevisions` in `settings.xml`, the user's own edit in Word Online was tracked.
+- Viewing markup: in a library that requires check-out, Word Online showed the tracked changes only after a check-out; desktop Word shows them without one (user check). Reviewers must check out to add comments anyway, so a check-out for review is acceptable.
+- Excel range write (`PATCH .../workbook/worksheets/{name}/range(address=...)`) in a library that requires check-out: 403 `EditModeWorkbookCheckedOutRequired` without a check-out, and no change. After a check-out it returns 200; the values read back before and after check-in, and check-in creates a minor version. The criterion about writing while another user has the workbook open does not apply here: a required check-out prevents co-authoring.
+- Excel converted the text value `Oct 2026` to the date serial 46296. Write text cells as text (for example, set the number format to text first), and read back to verify.
+- Sandbox state after the spike: `TEST QM0019 copy.docx` at 2.0 (published); `TEST LG0017 copy.xlsx` at 1.1 with a test row (number 99999) in row 3375.
+
+* Open questions
+** DECIDED Which route gives the Graph write commands?
+:PROPERTIES:
+:DECIDED: [2026-10-23 Fri]
+:END:
+Decision: a Babashka Graph client in the `ms365` skill, for the Word commands and the Excel range writes. See Decisions.
+** DECIDED Which sandbox library and document do the spike and trial use?
+:PROPERTIES:
+:DECIDED: [2026-10-23 Fri]
+:END:
+Decision: library `AgentEditing` in the site `Sandbox`, with the test files listed under Implementation, Spike, Sandbox.
