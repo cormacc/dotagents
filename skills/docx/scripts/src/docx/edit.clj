@@ -192,24 +192,110 @@
                                        (run-of nil (el "commentReference" {"id" comment-id}))]))]
     (mark-paragraph (assoc p :content (vec (concat (d/children p (w "pPr")) body))) "del" opts)))
 
-;; ------------------------------------------------------------------ finding paragraphs
+;; ------------------------------------------------------------------ table rows
+
+(defn row-text
+  "Text of a table row: its cell texts (accepted view) joined by \" | \"."
+  [tr]
+  (str/join " | " (map #(str/join " " (map d/text (d/paras %))) (d/cells tr))))
+
+(def ^:private copied-props-drop
+  "Children dropped from copied row and cell properties: change marks, property-change
+  records and vertical merges (a copied merge would join the new cell to the one above)."
+  (set (map w ["ins" "del" "trPrChange" "tcPrChange" "cellIns" "cellDel" "cellMerge" "vMerge"])))
+
+(defn- copy-props [props]
+  (when props (update props :content (fn [c] (vec (remove #(and (d/el? %) (copied-props-drop (:tag %))) c))))))
+
+(defn- mark-row [tr kind {:keys [author date ids]}]
+  (let [trpr (or (copy-props (first (d/children tr (w "trPr")))) (xml/element (w "trPr")))
+        trpr (update trpr :content #(conj (vec %) (el kind {"id" (ids) "author" author "date" date})))
+        [pre post] (split-with #(d/tag= (w "tblPrEx") %) (remove #(d/tag= (w "trPr") %) (:content tr)))]
+    (assoc tr :content (vec (concat pre [trpr] post)))))
+
+(defn tracked-insert-row-after
+  "[anchor new-row]: a table row with one value for each cell, after anchor, recorded as
+  inserted. Row and cell properties, paragraph properties and run properties come from the
+  anchor. A blank line in a value starts a new paragraph in the cell. Throws a :match
+  error when the number of values differs from the anchor's cells.
+  opts: :author :date :ids :comment-id (anchored to the first cell)."
+  [anchor values {:keys [author date ids comment-id] :as opts}]
+  (let [tcs (d/cells anchor)]
+    (when (not= (count tcs) (count values))
+      (throw (match-error (str "the row has " (count tcs) " cells, the edit gives " (count values) " values"))))
+    (let [cell (fn [i tc v]
+                 (let [p0 (first (d/paras tc))
+                       ppr (some-> (first (d/children p0 (w "pPr")))
+                                   (update :content (fn [c] (vec (remove #(or (d/tag= (w "rPr") %) (d/tag= (w "sectPr") %)
+                                                                               (d/tag= (w "pPrChange") %)) c)))))
+                       rpr (d/text-rpr p0)
+                       paras (str/split (str v) #"\n\n")
+                       mkp (fn [j s]
+                             (let [anchor? (and comment-id (zero? i) (zero? j))
+                                   body (concat (when anchor? [(el "commentRangeStart" {"id" comment-id})])
+                                                (when (seq s) [(el "ins" {"id" (ids) "author" author "date" date} (run-of rpr (t-node s)))])
+                                                (when anchor? [(el "commentRangeEnd" {"id" comment-id})
+                                                               (run-of nil (el "commentReference" {"id" comment-id}))]))]
+                               (mark-paragraph (apply xml/element (w "p") {} (concat (when ppr [ppr]) body)) "ins" opts)))]
+                   (apply xml/element (w "tc") {}
+                          (concat (when-let [tcpr (copy-props (first (d/children tc (w "tcPr"))))] [tcpr])
+                                  (map-indexed mkp paras)))))
+          row (assoc anchor :content (vec (concat (d/children anchor (w "tblPrEx"))
+                                                  (d/children anchor (w "trPr"))
+                                                  (map-indexed (fn [i [tc v]] (cell i tc v)) (map vector tcs values)))))]
+      [anchor (mark-row row "ins" opts)])))
+
+(defn tracked-delete-row
+  "Table row tr recorded as deleted: the row itself (w:trPr/w:del) and every text run in
+  its cells, so that accepting removes the row and rejecting keeps it. Existing tracked
+  changes in the cells stay as they are. opts: :author :date :ids."
+  [tr {:keys [author date ids] :as opts}]
+  (let [del-run (fn [r] (assoc r :content (mapv #(if (d/tag= (w "t") %) (del-text-node (apply str (:content %))) %)
+                                                (:content r))))
+        wrap (fn wrap [x]
+               (cond
+                 (d/tag= (w "r") x) (el "del" {"id" (ids) "author" author "date" date} (del-run x))
+                 (or (d/tag= (w "ins") x) (d/tag= (w "del") x)) x
+                 (d/el? x) (assoc x :content (mapv wrap (:content x)))
+                 :else x))
+        tr' (assoc tr :content (mapv #(if (d/tag= (w "tc") %) (wrap %) %) (:content tr)))]
+    (mark-row tr' "del" opts)))
+
+;; ------------------------------------------------------------------ finding paragraphs and rows
+
+(defn- update-matching
+  "root with f applied to each element tagged tag for which (pred (text-of el)) is true.
+  f may return one element or a sequence."
+  [root tag text-of pred f]
+  (letfn [(walk [x]
+            (if-not (d/el? x)
+              [x]
+              (if (and (d/tag= tag x) (pred (text-of x)))
+                (let [r (f x)] (if (sequential? r) r [r]))
+                [(assoc x :content (vec (mapcat walk (:content x))))])))]
+    (first (walk root))))
+
+(defn update-paragraphs
+  "roots (a map of part name to root) with f applied to the elements that match pred, over
+  all the parts together: paragraphs by default, or table rows with :tag (w \"tr\") and
+  :text-of row-text. Unless all?, exactly one element must match; with all?, at least one.
+  Throws a :match error otherwise."
+  [roots pred desc f & {:keys [all? tag text-of] :or {tag (w "p") text-of d/text}}]
+  (let [counts (into {} (for [[n r] roots] [n (count (filter #(pred (text-of %)) (d/descendants r tag)))]))
+        total (reduce + (vals counts))
+        what (if (= tag (w "tr")) "table row" "paragraph")]
+    (cond
+      (zero? total) (throw (match-error (str "no " what " matches " desc) {:matches 0}))
+      (and (> total 1) (not all?)) (throw (match-error (str total " " what "s match " desc "; select one, or set all")
+                                                       {:matches total})))
+    (into {} (for [[n r] roots] [n (if (pos? (counts n)) (update-matching r tag text-of pred f) r)]))))
 
 (defn update-unique-paragraph
   "root with f applied to the only w:p for which (pred text) is true. f may return one
   paragraph or a sequence of paragraphs. Throws a :match error when no paragraph or more
   than one paragraph matches."
   [root pred desc f]
-  (let [hits (count (filter #(pred (d/text %)) (d/descendants root (w "p"))))]
-    (cond
-      (zero? hits) (throw (match-error (str "no paragraph matches " desc) {:matches 0}))
-      (> hits 1) (throw (match-error (str hits " paragraphs match " desc) {:matches hits})))
-    (letfn [(walk [x]
-              (if-not (d/el? x)
-                [x]
-                (if (and (d/tag= (w "p") x) (pred (d/text x)))
-                  (let [r (f x)] (if (sequential? r) r [r]))
-                  [(assoc x :content (vec (mapcat walk (:content x))))])))]
-      (first (walk root)))))
+  (get (update-paragraphs {:root root} pred desc f) :root))
 
 ;; ------------------------------------------------------------------ comments
 
@@ -261,58 +347,98 @@
        :equals #(= % v))
      (str (name k) " " (pr-str v))]))
 
+(def ^:private part-groups
+  "Edit script \"part\" values and the package parts they cover."
+  {"body" #"word/document\.xml" "headers" #"word/header\d*\.xml" "footers" #"word/footer\d*\.xml"})
+
 (defn apply-script
   "Apply an edit script to package entries. Returns {:entries :report}. Each edit is a map:
-    {:op \"replace\" :old s :new s [:in selector] [:comment s]}
-    {:op \"insert-after\" :after selector :text s [:style id] [:comment s]}
-    {:op \"delete\" :paragraph selector [:comment s]}
-  A replace without :in uses the paragraph that contains :old. Every edit must match one
-  paragraph; the first failure throws a :match error with :index, and the caller writes
-  nothing. Comments are added to comments.xml (created when absent). Tracking is enabled
-  in settings unless no-tracking?."
+    {:op \"replace\" :old s :new s [:in selector]}
+    {:op \"insert-after\" :after selector :text s [:style id]}
+    {:op \"delete\" :paragraph selector}
+    {:op \"insert-row-after\" :row selector :cells [s ...]}
+    {:op \"delete-row\" :row selector}
+  with optional :comment s, :part (\"body\" by default, \"headers\" or \"footers\") and
+  :all true. A replace without :in uses the paragraph that contains :old. A row selector
+  matches the row text (cell texts joined by \" | \"). Selection runs over all the parts
+  of the group; exactly one paragraph or row must match unless :all. A comment needs the
+  body and a single match. The first failure throws a :match error with :index, and the
+  caller writes nothing. Comments go to comments.xml (created when absent). Tracking is
+  enabled in settings unless no-tracking?."
   [entries script {:keys [author initials date no-tracking?]}]
   (when-not (and (sequential? script) (seq script)) (throw (match-error "the edit script must be a non-empty list")))
-  (let [root (d/parse-entry entries "word/document.xml")
+  (let [roots0 (into {} (for [n (d/part-names entries #"word/(document|header\d*|footer\d*)\.xml")]
+                          [n (d/parse-entry entries n)]))
         croot (d/parse-entry entries "word/comments.xml")
-        ids (id-source (max (max-id root) (if croot (max-id croot) -1)))
+        ids (id-source (reduce max (if croot (max-id croot) -1) (map max-id (vals roots0))))
         opts {:author author :date date :ids ids}
-        [root comments report]
+        [roots comments report]
         (reduce
-         (fn [[root comments report] [i e]]
+         (fn [[roots comments report] [i e]]
            (try
-             (let [cid (when (seq (:comment e)) (ids))
+             (let [group (str (or (:part e) "body"))
+                   re (or (part-groups group)
+                          (throw (match-error (str "unknown part " (pr-str (:part e)) ": use body, headers or footers"))))
+                   names (filter #(re-matches re %) (keys roots))
+                   _ (when (empty? names) (throw (match-error (str "the document has no " group))))
+                   all? (true? (:all e))
+                   _ (when (and (seq (:comment e)) (not= "body" group))
+                       (throw (match-error "Word has no comments in headers or footers: give the reason in the check-in comment or the change record")))
+                   _ (when (and (seq (:comment e)) all?)
+                       (throw (match-error "a comment anchors one place: drop \"all\" or the comment")))
+                   cid (when (seq (:comment e)) (ids))
                    o (assoc opts :comment-id cid)
-                   rep (atom nil)
+                   results (atom [])
+                   sub (select-keys roots names)
+                   upd (fn [sel f & {:keys [rows?]}]
+                         (let [[pred desc] (selector sel)]
+                           (if rows?
+                             (update-paragraphs sub pred desc f :all? all? :tag (w "tr") :text-of row-text)
+                             (update-paragraphs sub pred desc f :all? all?))))
                    op (str (:op e))
-                   root' (case op
-                           "replace"
-                           (let [[pred desc] (selector (or (:in e) (:old e)))]
-                             (update-unique-paragraph root pred desc
-                                                      (fn [p] (let [p' (tracked-replace p (str (:old e)) (str (:new e)) o)]
-                                                                (reset! rep {:before (d/text p) :after (d/text p')})
-                                                                p'))))
-                           "insert-after"
-                           (let [[pred desc] (selector (:after e))]
-                             (when (str/blank? (:text e)) (throw (match-error "insert-after needs :text")))
-                             (update-unique-paragraph root pred desc
-                                                      (fn [p] (reset! rep {:after_paragraph (d/text p) :inserted (:text e)})
-                                                        (tracked-insert-after p (:text e) (assoc o :style (:style e))))))
-                           "delete"
-                           (let [[pred desc] (selector (:paragraph e))]
-                             (update-unique-paragraph root pred desc
-                                                      (fn [p] (reset! rep {:deleted (d/text p)}) (tracked-delete p o))))
-                           (throw (match-error (str "unknown op " (pr-str (:op e)) ": use replace, insert-after or delete"))))]
-               [root' (cond-> comments cid (conj {:id cid :text (:comment e)})) (conj report (merge {:index i :op op} @rep))])
+                   sub' (case op
+                          "replace"
+                          (upd (or (:in e) (:old e))
+                               (fn [p] (let [p' (tracked-replace p (str (:old e)) (str (:new e)) o)]
+                                         (swap! results conj {:before (d/text p) :after (d/text p')})
+                                         p')))
+                          "insert-after"
+                          (do (when (str/blank? (:text e)) (throw (match-error "insert-after needs text")))
+                              (upd (:after e)
+                                   (fn [p] (swap! results conj {:after_paragraph (d/text p) :inserted (:text e)})
+                                     (tracked-insert-after p (:text e) (assoc o :style (:style e))))))
+                          "delete"
+                          (upd (:paragraph e)
+                               (fn [p] (swap! results conj {:deleted (d/text p)}) (tracked-delete p o)))
+                          "insert-row-after"
+                          (do (when-not (and (sequential? (:cells e)) (seq (:cells e)))
+                                (throw (match-error "insert-row-after needs cells: a list with one value for each cell")))
+                              (upd (:row e)
+                                   (fn [tr] (swap! results conj {:after_row (row-text tr) :inserted (mapv str (:cells e))})
+                                     (tracked-insert-row-after tr (mapv str (:cells e)) o))
+                                   :rows? true))
+                          "delete-row"
+                          (upd (:row e)
+                               (fn [tr] (swap! results conj {:deleted_row (row-text tr)}) (tracked-delete-row tr o))
+                               :rows? true)
+                          (throw (match-error (str "unknown op " (pr-str (:op e))
+                                                   ": use replace, insert-after, delete, insert-row-after or delete-row"))))]
+               [(merge roots sub')
+                (cond-> comments cid (conj {:id cid :text (:comment e)}))
+                (conj report (merge {:index i :op op}
+                                    (when (not= "body" group) {:part group})
+                                    (if (= 1 (count @results)) (first @results) {:results @results})))])
              (catch clojure.lang.ExceptionInfo ex
                (throw (ex-info (str "edit " i " (" (:op e) "): " (ex-message ex)) (merge (ex-data ex) {:index i}))))))
-         [root [] []]
+         [roots0 [] []]
          (map-indexed vector script))
+        changed (into {} (for [[n r] roots :when (not= r (roots0 n))] [n (xml/emit-str r)]))
         entries (cond-> entries (seq comments) ensure-comments-part)
         comments-xml (when (seq comments)
                        (reduce (fn [x c] (add-comment x (merge c {:author author :initials initials :date date})))
                                (d/entry-str entries "word/comments.xml") comments))
         settings (d/entry-str entries "word/settings.xml")]
-    {:entries (d/replace-entries entries (cond-> {"word/document.xml" (xml/emit-str root)}
+    {:entries (d/replace-entries entries (cond-> changed
                                            comments-xml (assoc "word/comments.xml" comments-xml)
                                            (and settings (not no-tracking?)) (assoc "word/settings.xml" (enable-tracking settings))))
      :report report}))

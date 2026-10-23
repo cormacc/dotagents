@@ -15,7 +15,7 @@ Review and edit Word `.docx` packages as WordprocessingML. A `.docx` is a zip of
 | Command | Output |
 |---|---|
 | `docx.clj inspect DOCX` | `headers`, `footers` (one string per part, paragraphs joined by ` \| `), `tracked_changes` (part name to `{ins, del}` counts), `version_history` (rows of cell text) |
-| `docx.clj changes DOCX` | One object per paragraph with tracked changes: `heading` (nearest heading above, by paragraph style), `before`, `after` |
+| `docx.clj changes DOCX` | One object per paragraph with tracked changes: `heading` (nearest heading above, by paragraph style), `before`, `after`; header and footer changes follow, with `part` |
 | `docx.clj comments DOCX` | One object per comment: `id`, `author`, `date`, `text`, `heading`, and the anchored text `before` and `after` the tracked changes |
 | `docx.clj edit IN SCRIPT OUT --author NAME [--initials XX] [--date ISO] [--no-tracking]` | Applies an edit script (below) as tracked changes; reports each edit |
 | `docx.clj clean IN OUT [--keep-tracking] [--no-verify]` | Writes the clean copy: all tracked changes accepted, all comments removed, tracking turned off; reports the pandoc check |
@@ -39,13 +39,20 @@ A JSON (`.json`) or EDN (`.edn`) list of edits, applied in order:
   {"op": "replace", "in": {"starts": "The software system"}, "old": "shall", "new": "should"},
   {"op": "insert-after", "after": {"starts": "The SDP shall identify"}, "text": "New requirement text.",
    "comment": "Reason: clause 5.2.4."},
-  {"op": "delete", "paragraph": {"equals": "Obsolete sentence."}}
+  {"op": "delete", "paragraph": {"equals": "Obsolete sentence."}},
+  {"op": "replace", "part": "headers", "all": true, "old": "11.0 (CR-123)", "new": "12.0 (CR-456)"},
+  {"op": "insert-row-after", "row": {"starts": "11.0 | 123"}, "cells": ["12.0", "456", "Summary of changes.", "<DD-Mmm-YYYY>"],
+   "comment": "Version history row for the change record."},
+  {"op": "delete-row", "row": {"contains": "Obsolete row"}}
 ]
 ```
 
 - `replace` changes the only occurrence of `old` in one paragraph: by default the paragraph that contains `old`; with `in`, the paragraph that the selector picks.
 - A selector is a string (the paragraph contains it) or `{"starts" | "contains" | "equals": text}`. It must pick exactly one paragraph. Text is matched in the accepted view (insertions in, deletions out). Automatic section numbers are not paragraph text: select by the paragraph's words.
 - `insert-after` copies the anchor's paragraph properties (or `"style": "StyleId"`) and the run properties of its first text run.
+- `insert-row-after` adds a table row with one value for each cell (a blank line in a value starts a new paragraph); it copies the anchor row's row, cell, paragraph and run properties, without vertical merges. `delete-row` removes a row. A row selector matches the row text: the cell texts joined by ` | `.
+- `"part": "headers"` or `"footers"` edits the header or footer parts instead of the body (default `"body"`); selection runs over all of them. A document often has the same header in several parts (first page, default): `"all": true` applies the edit to every match, where otherwise exactly one must match.
+- Word has no comments in headers or footers, so an edit there cannot carry a `comment`; neither can an edit with `all`, because one comment anchors one place. Give those reasons in the check-in comment or the change record.
 - `comment` is the reason for review and for change records; a blank line in it starts a new comment paragraph.
 - A match must lie in plain text runs. Text that crosses a field (a citation, a cross-reference), an existing tracked change or other non-text content is refused, so that other authors' changes are never split. Edit around it.
 - The whole script runs in memory first. The first edit that does not match aborts with its index, and no output file is written.
@@ -101,7 +108,7 @@ Main functions (each has a docstring):
 | `docx.core` | Tables | `heading`, `row-idx`, `update-row`, `update-cell`, `update-table` |
 | `docx.core` | Checkboxes | `checkbox?`, `n-checkboxes`, `set-checkbox`, `tick` (with `:expect n`) |
 | `docx.core` | Footnotes | `prune-footnotes` (after you remove footnote references) |
-| `docx.edit` | Tracked editing | `tracked-replace`, `tracked-insert-after`, `tracked-delete`, `update-unique-paragraph`, `max-id`, `id-source`, `enable-tracking` |
+| `docx.edit` | Tracked editing | `tracked-replace`, `tracked-insert-after`, `tracked-delete`, `tracked-insert-row-after`, `tracked-delete-row`, `row-text`, `update-paragraphs`, `update-unique-paragraph`, `max-id`, `id-source`, `enable-tracking` |
 | `docx.edit` | Comments, scripts | `ensure-comments-part`, `add-comment`, `selector`, `apply-script` |
 | `docx.clean` | Clean copy | `clean-xml`, `clean-entries` |
 | `docx.review` | Review | `inspect`, `changes`, `comments`, `compare-docx`, `lo-python` |

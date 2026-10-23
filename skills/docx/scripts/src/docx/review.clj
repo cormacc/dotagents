@@ -81,22 +81,29 @@
 (defn- style-of [p]
   (some-> (first (d/children p (w "pPr"))) (d/children (w "pStyle")) first (get-in [:attrs (w "val")])))
 
+(defn- part-changes [root part]
+  (loop [[p & more] (d/descendants root (w "p")) heading nil out []]
+    (if-not p
+      out
+      (let [ps (pieces p)
+            txt (fn [ks] (str/trim (apply str (keep (fn [[k s]] (when (ks k) s)) ps))))
+            after (txt #{:same :ins})
+            heading (if (and (re-find #"(?i)heading|title" (str (style-of p))) (seq after)) after heading)]
+        (recur more heading
+               (if (some #(not= :same (first %)) ps)
+                 (conj out (cond-> {:heading heading :before (txt #{:same :del}) :after after}
+                             part (assoc :part part)))
+                 out))))))
+
 (defn changes
-  "One map per body paragraph with tracked changes: :heading (the nearest heading above it,
-  by paragraph style), :before (text with deletions, without insertions) and :after."
+  "One map per paragraph with tracked changes: :heading (the nearest heading above it, by
+  paragraph style), :before (text with deletions, without insertions) and :after. Body
+  paragraphs come first; header and footer paragraphs follow, with :part (the part name)."
   [path]
-  (let [doc (d/parse-entry (d/read-entries path) "word/document.xml")]
-    (loop [[p & more] (d/descendants doc (w "p")) heading nil out []]
-      (if-not p
-        out
-        (let [ps (pieces p)
-              txt (fn [ks] (str/trim (apply str (keep (fn [[k s]] (when (ks k) s)) ps))))
-              after (txt #{:same :ins})
-              heading (if (and (re-find #"(?i)heading|title" (str (style-of p))) (seq after)) after heading)]
-          (recur more heading
-                 (if (some #(not= :same (first %)) ps)
-                   (conj out {:heading heading :before (txt #{:same :del}) :after after})
-                   out)))))))
+  (let [entries (d/read-entries path)]
+    (vec (concat (part-changes (d/parse-entry entries "word/document.xml") nil)
+                 (mapcat #(part-changes (d/parse-entry entries %) %)
+                         (d/part-names entries #"word/(header|footer)\d*\.xml"))))))
 
 ;; ------------------------------------------------------------------ comments
 

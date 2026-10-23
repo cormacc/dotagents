@@ -37,7 +37,10 @@
 (defn del [s] (str "<w:del w:id=\"2\" w:author=\"T\"><w:r><w:delText xml:space=\"preserve\">" (esc s) "</w:delText></w:r></w:del>"))
 (defn tc [& body] (str "<w:tc><w:tcPr/>" (apply str body) "</w:tc>"))
 (defn tr [& cs] (str "<w:tr>" (apply str cs) "</w:tr>"))
-(defn tbl [& trs] (str "<w:tbl><w:tblPr/><w:tblGrid/>" (apply str trs) "</w:tbl>"))
+;; Pandoc leaves out a table whose w:tblGrid has no w:gridCol, so give every fixture table
+;; three columns (the widest fixture row).
+(defn tbl [& trs] (str "<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w=\"2000\"/><w:gridCol w:w=\"2000\"/><w:gridCol w:w=\"2000\"/></w:tblGrid>"
+                       (apply str trs) "</w:tbl>"))
 (def checkbox
   (str "<w:sdt><w:sdtPr><w14:checkbox><w14:checked w14:val=\"0\"/>"
        "<w14:checkedState w14:val=\"2612\" w14:font=\"MS Gothic\"/>"
@@ -461,6 +464,96 @@
     (let [r (run-cli "clean" e1 c1)]
       (is (zero? (:exit r)) (:err r))
       (when pandoc? (is (true? (get (json/parse-string (:out r)) "verified")))))))
+
+;; ------------------------------------------------------------------ headers, footers, table rows
+
+(def split-header
+  (str decl "<w:hdr " ns-decls ">" (p (r "DOC-1 Example Procedure"))
+       (p (r "Version ") (r "2") (r ".0") (r " (CR-") (r "1)")) "</w:hdr>"))
+
+(def table-src
+  "A document with a history table, and the split-run header in two header parts."
+  (let [src (str (fs/path tmp "table-src.docx"))
+        body (str (heading "Version History") (history-table r) (p (r "End.")))]
+    (build! src body)
+    (d/write-docx src (conj (d/replace-entries (d/read-entries src) {"word/header1.xml" split-header})
+                            ["word/header2.xml" (.getBytes ^String split-header "UTF-8")]))
+    src))
+
+(defn script! [name script]
+  (let [out (str (fs/path tmp name))
+        {:keys [entries report]} (e/apply-script (d/read-entries table-src) script
+                                                 {:author "Tester" :initials "TT" :date "2026-10-23T12:00:00Z"})]
+    (d/write-docx out entries)
+    [out report]))
+
+(defn script-error [script]
+  (try (e/apply-script (d/read-entries table-src) script {:author "T" :initials "T" :date "2026-10-23T12:00:00Z"}) nil
+       (catch clojure.lang.ExceptionInfo ex {:error (:docx/error (ex-data ex)) :message (ex-message ex)})))
+
+(def header-edit {:op "replace" :part "headers" :old "2.0 (CR-1)" :new "3.0 (CR-2)"})
+
+(deftest header-edits
+  (testing "a match in two header parts needs all"
+    (is (= :match (:error (script-error [header-edit]))))
+    (is (str/includes? (:message (script-error [header-edit])) "2 paragraphs match")))
+  (testing "comments are refused in headers"
+    (is (str/includes? (:message (script-error [(assoc header-edit :all true :comment "why")])) "no comments in headers")))
+  (testing "with all, both headers change, across split runs"
+    (let [[out report] (script! "h1.docx" [(assoc header-edit :all true)])
+          ch (review/changes out)]
+      (is (= "headers" (:part (first report))))
+      (is (= 2 (count (:results (first report)))))
+      (is (= #{"word/header1.xml" "word/header2.xml"} (set (map :part ch))))
+      (is (every? #(and (= "Version 2.0 (CR-1)" (:before %)) (= "Version 3.0 (CR-2)" (:after %))) ch))
+      (is (= ["DOC-1 Example Procedure | Version 3.0 (CR-2)"] (:headers (review/inspect out))))
+      (is (= {"word/header1.xml" {:ins 1 :del 1} "word/header2.xml" {:ins 1 :del 1}} (:tracked_changes (review/inspect out))))
+      (testing "clean accepts header changes"
+        (let [c (str (fs/path tmp "h1-clean.docx"))]
+          (d/write-docx c (clean/clean-entries (d/read-entries out)))
+          (is (= {} (:tracked_changes (review/inspect c))))
+          (is (= ["DOC-1 Example Procedure | Version 3.0 (CR-2)"] (:headers (review/inspect c)))))))))
+
+(deftest table-row-edits
+  (when pandoc?
+    (is (str/includes? (str/join "\n" (pandoc-lines table-src "accept")) "Initial release")
+        "control: pandoc renders the fixture table"))
+  (let [row-sel {:starts "1.0 | Initial release"}]
+    (testing "a row insertion copies the anchor row and is tracked"
+      (let [[out report] (script! "t1.docx" [{:op "insert-row-after" :row row-sel :cells ["1.1" "Fixed typo" "02-Jan-2026"]
+                                              :comment "Reason: record the revision."}])
+            doc (d/parse-entry (d/read-entries out) "word/document.xml")
+            new-tr (first (filter #(str/starts-with? (e/row-text %) "1.1") (d/descendants doc (w "tr"))))]
+        (is (= "1.0 | Initial release | 01-Jan-2026" (:after_row (first report))))
+        (is (seq (some-> (first (d/children new-tr (w "trPr"))) (d/children (w "ins")))) "the row is marked inserted")
+        (is (= 3 (count (d/cells new-tr))))
+        (when pandoc?
+          (is (str/includes? (str/join "\n" (pandoc-lines out "accept")) "Fixed typo"))
+          (is (not (str/includes? (str/join "\n" (pandoc-lines out "reject")) "Fixed typo"))))
+        (is (= {:text "Reason: record the revision." :after "1.1"} (select-keys (first (review/comments out)) [:text :after])))
+        (testing "clean keeps the inserted row and drops its marks"
+          (let [c (str (fs/path tmp "t1-clean.docx"))
+                _ (d/write-docx c (clean/clean-entries (d/read-entries out)))
+                cdoc (d/parse-entry (d/read-entries c) "word/document.xml")]
+            (is (= {} (:tracked_changes (review/inspect c))))
+            (is (some #(str/starts-with? (e/row-text %) "1.1 | Fixed typo") (d/descendants cdoc (w "tr"))))))))
+    (testing "a cell count that differs from the anchor is refused"
+      (is (str/includes? (:message (script-error [{:op "insert-row-after" :row row-sel :cells ["1.1" "x"]}])) "3 cells")))
+    (testing "a row deletion is tracked; clean removes the row"
+      (let [[out _] (script! "t2.docx" [{:op "delete-row" :row row-sel}])
+            doc (d/parse-entry (d/read-entries out) "word/document.xml")
+            tr (first (filter #(str/includes? (e/row-text %) "") (filter #(seq (some-> (first (d/children % (w "trPr"))) (d/children (w "del"))))
+                                                                      (d/descendants doc (w "tr")))))
+            c (str (fs/path tmp "t2-clean.docx"))]
+        (is (some? tr) "the row is marked deleted")
+        (when pandoc?
+          (is (not (str/includes? (str/join "\n" (pandoc-lines out "accept")) "Initial release")))
+          (is (str/includes? (str/join "\n" (pandoc-lines out "reject")) "Initial release")))
+        (d/write-docx c (clean/clean-entries (d/read-entries out)))
+        (is (not-any? #(str/includes? (e/row-text %) "Initial release")
+                      (d/descendants (d/parse-entry (d/read-entries c) "word/document.xml") (w "tr"))))))
+    (testing "a row selector that matches no row is a match error"
+      (is (= :match (:error (script-error [{:op "delete-row" :row {:starts "9.9"}}])))))))
 
 (deftest selfcheck
   (when (System/getenv "DOCX_TEST_SELFCHECK")

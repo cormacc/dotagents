@@ -202,14 +202,17 @@ Acceptance criteria:
 - `skills/ms365` documents the session: check out once, upload saves during the session, one check-in at the end, publish only on explicit request.
 - skill-creator `quick_validate` passes for both skills; leak grep (with a positive control) finds no organisation content.
 
-** TODO Add the controlled-document editing workflow to nmd-dev and nmd-dcr
+** STARTED Add the controlled-document editing workflow to nmd-dev and nmd-dcr
 :PROPERTIES:
 :CUSTOM_ID: 093f9f80-0d5b-4118-ba2c-cf73cdf81c1a
 :CREATED: [2026-10-23 Fri 13:28]
+:STARTED: [2026-10-23 Fri 16:39]
 :BLOCKED-BY: task:92b2b021-58b5-4166-ba7f-ea2218a4869f
+:BLOCKED-BY+: task:08c99343-525d-43af-af35-677d02d0f6da
 :END:
 :LOGBOOK:
 - Created [2026-10-23 Fri 13:28]
+- State "STARTED" from "TODO" [2026-10-23 Fri 16:39]
 :END:
 Acceptance criteria:
 - nmd-dev: a workflow to edit a QMS document from a gap analysis: session check-out, tracked edits with comments that cite the standard clause, one minor check-in.
@@ -230,8 +233,31 @@ Acceptance criteria:
 - On the sandbox document: check out, apply an edit script with comments, upload, check in as minor, and confirm in Word Online.
 - Draft DCR rows from the comments.
 - Produce the clean copy, upload, and publish as a major version with a comment; confirm the version history.
+- Confirm in Word Online that a header edit and an inserted version history row display as tracked changes.
 - Upload a Word-authored draft with tracked changes (including deleted paragraph marks in lists) to the sandbox, let Word Online accept all changes, and compare its text and paragraph properties with `docx.clj clean` of the same draft.
 - Discard or delete the sandbox afterwards, as agreed with the user.
+
+** DONE Edit headers, footers and table rows in docx edit scripts
+CLOSED: [2026-10-23 Fri 16:49]
+:PROPERTIES:
+:CUSTOM_ID: 08c99343-525d-43af-af35-677d02d0f6da
+:CREATED: [2026-10-23 Fri 16:41]
+:STARTED: [2026-10-23 Fri 16:41]
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 16:41]
+- State "STARTED" from "TODO" [2026-10-23 Fri 16:41]
+- State "DONE" from "STARTED" [2026-10-23 Fri 16:49]
+:END:
+Acceptance criteria:
+- Any edit can target `"part": "headers"` or `"footers"`; selection runs over all header (footer) parts; `"all": true` applies an edit to every matching paragraph, otherwise exactly one must match.
+- A comment on a header or footer edit is refused with a usage message (Word has no comments in headers and footers).
+- `insert-row-after` (row selector, `cells`) inserts a tracked table row that copies the anchor row and cell properties; a cell count that differs from the anchor row is refused.
+- `delete-row` (row selector) records a tracked row deletion; accepting removes the row, rejecting keeps it.
+- A row selector matches the row text: its cell texts joined by " | ".
+- `docx.clj changes` also reports changes in headers and footers, with their part.
+- `docx.clj clean` accepts header changes and row insertions and deletions (pandoc check passes).
+- Tests: pandoc accept and reject views for rows; header text checked through `inspect`, `changes` and the marks directly (pandoc does not render headers).
 
 * Implementation
 ** Spike
@@ -290,6 +316,13 @@ Acceptance criteria:
 - Checked on a Word-authored procedure draft (612 insertions, 120 deletions, property changes in tables and runs, 21 comments): 779 paragraphs match pandoc's accept view, with no tracked change left.
 - Pandoc's accept view does not apply a deleted paragraph mark: it keeps an empty list item and renumbers the list. Where it does merge paragraphs, it inserts a space. The `clean` check therefore strips list markers and ignores whitespace inside a paragraph; it still compares every character and the paragraph count.
 - LibreOffice's accept-all kept two runs of plain `w:del` text in that draft, so it is not a reliable reference. LibreOffice and `clean` still differ in list indentation after merged paragraphs; the trial compares `clean` with Word's own accept-all.
+
+** Headers, footers and table rows
+- Edit scripts gain `"part"` (`body`, `headers`, `footers`), `"all"`, and the operations `insert-row-after` and `delete-row`; `docx.clj changes` reports header and footer changes with their part. Requested by the user (2026-10-23) so that the header version, DCR number and version history row need no manual step in Word.
+- A version-history row insertion copies the anchor row's row, cell, paragraph and run properties; it drops vertical merges, which would join the new cell to the one above.
+- Word has no comments in headers or footers, so a commented header edit is refused; a comment with `all` is refused too, because one comment anchors one place.
+- Pandoc leaves out a table whose `w:tblGrid` has no `w:gridCol`; the test fixtures declare grid columns, and a control assertion checks that pandoc renders the fixture table.
+- Real document (a procedure at a published version): the header version and DCR number, split by Word into five runs, and a new history row applied as tracked changes; `clean` then verified 656 paragraphs.
 
 * Open questions
 ** DECIDED Which route gives the Graph write commands?
