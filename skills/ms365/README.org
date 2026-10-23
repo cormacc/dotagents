@@ -7,6 +7,7 @@ This skill tells an agent how to use the Softeria [[https://github.com/softeria/
 - Server :: Softeria =ms-365-mcp-server=, started by [[file:scripts/ms365-mcp][scripts/ms365-mcp]] as a systemd user service on =127.0.0.1:3365=. The launcher is the single source for the pinned version, the flags (=--http=, =--org-mode=, =--read-only=), and the =--allowed-scopes= list.
 - Authentication :: OAuth authorisation-code flow with PKCE, in the browser. The server runs in HTTP mode because that mode provides OAuth.
 - Client :: an MCP server entry named =ms365= with URL =http://127.0.0.1:3365/mcp= and OAuth. Any MCP client that supports OAuth can use the same URL.
+- Graph client :: [[file:scripts/graph.clj][scripts/graph.clj]], a Babashka client for file changes, which the read-only server does not make. It signs in separately through the same Entra app (=graph.clj login --tenant ID --client ID= once; the ids go to =~/.config/ms365-graph/config.edn=) and needs no further Entra setup. [[file:references/graph-client.md][references/graph-client.md]] describes its commands and guardrails.
 - Identity :: an Entra app registration (single tenant, public client, no secret) with delegated Microsoft Graph permissions only, so each user sees only their own access.
 - Cost :: Microsoft Graph file, search, mail, calendar, and chat reads are not metered. No Copilot licence is necessary.
 

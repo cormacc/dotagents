@@ -1,12 +1,14 @@
 ---
 name: ms365
-description: Read Microsoft 365 data through the ms365 MCP server -- SharePoint and OneDrive documents, Outlook mail and calendar, Teams chats and channels, and the user directory. Use whenever the user asks to find, read, summarise, or ingest company documents, SharePoint sites or libraries, emails, meetings, Teams messages, or colleague details, even if they do not name Microsoft 365 or the MCP server.
-compatibility: Requires the Softeria ms-365-mcp-server running in HTTP mode on 127.0.0.1:3365 and an MCP client configured for it (pi native MCP server entry `ms365` in `pi/mcp.json`). Setup is in README.org.
+description: Read Microsoft 365 data through the ms365 MCP server -- SharePoint and OneDrive documents, Outlook mail and calendar, Teams chats and channels, and the user directory -- and change SharePoint or OneDrive files through a Babashka Graph client (check out, upload, check in, publish a version, write Excel cells). Use whenever the user asks to find, read, summarise, or ingest company documents, SharePoint sites or libraries, emails, meetings, Teams messages, or colleague details, or to check out, edit, upload, check in or publish a SharePoint file or write rows into a SharePoint workbook, even if they do not name Microsoft 365 or the MCP server.
+compatibility: Requires the Softeria ms-365-mcp-server running in HTTP mode on 127.0.0.1:3365 and an MCP client configured for it (pi native MCP server entry `ms365` in `pi/mcp.json`). The Graph client needs Babashka. Setup is in README.org.
 ---
 
 # ms365
 
 The `ms365` MCP server exposes Microsoft Graph as read-only tools. It uses delegated permissions, so results include only what the signed-in user can see. It cannot send mail, post messages, or change data.
+
+To change SharePoint or OneDrive files (check out, upload, check in, publish, write Excel cells), use the Babashka client `scripts/graph.clj`, not the MCP server. Read `references/graph-client.md` first: it has its own sign-in and guardrails, and publishing a major version needs the user's explicit request.
 
 ## Before the first call
 

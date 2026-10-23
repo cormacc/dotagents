@@ -100,14 +100,18 @@ Acceptance criteria:
 - Findings go in this record's Implementation section, and the open question on the write route is decided for both the Word commands and the Excel range writes.
 - Must not: write to any document in a QMS library.
 
-** TODO Add Graph write commands for a document editing session
+** DONE Add Graph write commands for a document editing session
+CLOSED: [2026-10-23 Fri 15:54]
 :PROPERTIES:
 :CUSTOM_ID: 048a81b9-e952-44ec-85ed-05432eca2d50
 :CREATED: [2026-10-23 Fri 13:28]
 :BLOCKED-BY: task:ec7f857e-e1db-4414-9479-02aff868178b
+:STARTED: [2026-10-23 Fri 15:40]
 :END:
 :LOGBOOK:
 - Created [2026-10-23 Fri 13:28]
+- State "STARTED" from "TODO" [2026-10-23 Fri 15:40]
+- State "DONE" from "STARTED" [2026-10-23 Fri 15:54]
 :END:
 Acceptance criteria:
 - Commands (route chosen in the spike): `status`, `checkout`, `upload`, `checkin --comment` (minor), `checkin --publish --comment` (major), `discard-checkout`.
@@ -245,6 +249,15 @@ Acceptance criteria:
 - Excel range write (`PATCH .../workbook/worksheets/{name}/range(address=...)`) in a library that requires check-out: 403 `EditModeWorkbookCheckedOutRequired` without a check-out, and no change. After a check-out it returns 200; the values read back before and after check-in, and check-in creates a minor version. The criterion about writing while another user has the workbook open does not apply here: a required check-out prevents co-authoring.
 - Excel converted the text value `Oct 2026` to the date serial 46296. Write text cells as text (for example, set the number format to text first), and read back to verify.
 - Sandbox state after the spike: `TEST QM0019 copy.docx` at 2.0 (published); `TEST LG0017 copy.xlsx` at 1.1 with a test row (number 99999) in row 3375.
+
+** Graph client
+- `skills/ms365/scripts/graph.clj` (CLI) over `skills/ms365/scripts/src/ms365/graph.clj`; commands and guardrails in `skills/ms365/references/graph-client.md`. The HTTP layer is a dynamic var, so `skills/ms365/scripts/test-graph.bb` runs against an in-memory fake of Graph that models check-out versioning as the spike measured it.
+- The user is identified by the ID token's `oid`, which equals `publication.checkedOutBy.user.id` (checked against the live check-out).
+- Excel writes without a workbook session read back stale data: an immediate read after a write returned the old empty row; the value appeared about 2 s later. The client writes in a session (`persistChanges: true`).
+- A number format set after Excel converted a value does not convert it back; the text format must come first.
+- The Excel service saves a closed session's changes to the file about 2 to 3 s after `closeSession` (the item's `cTag` changes then). A check-in before that produced a version without the write (sandbox 1.2). The client waits for the `cTag` change before it returns.
+- Cheshire in Babashka parses JSON arrays as sequences, not vectors; the CLI converts `--values` to vectors.
+- Live check on the sandbox (2026-10-23): refusal of an upload without a check-out (exit 2); a session check-out, upload and check-in gave one minor version; a `transaction --exec` gave one minor version; a failing transaction discarded its check-out; an Excel transaction wrote a row whose month stayed text, confirmed in the checked-in file and through the MCP server; a write to an occupied row was refused.
 
 * Open questions
 ** DECIDED Which route gives the Graph write commands?
