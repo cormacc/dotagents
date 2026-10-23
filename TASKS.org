@@ -361,6 +361,26 @@ CLOSED: [2026-10-22 Thu 20:40]
 #+IMPORT: [[plan:2026-10-22-docx-skill.org]]
 Move the generic .docx tooling from the Neuromod nmd-dcr skill into a new skills/docx skill, and the generic SharePoint version recipes into ms365.
 
+** TODO docx: add a sections command for documents without heading styles
+:PROPERTIES:
+:CUSTOM_ID: c5ddd90d-d948-4817-a6c7-e0b320083609
+:CREATED: [2026-10-23 Fri 11:38]
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 11:38]
+:END:
+`docx.clj changes` reports only styled headings. QM0019 numbers most sections without heading styles, so DCR26256 needed a LibreOffice render plus a phrase-locate script to map changes to section numbers. Add a command that maps each changed paragraph to its rendered section number.
+
+** TODO docx: report stored field errors in inspect
+:PROPERTIES:
+:CUSTOM_ID: 4c9163cd-a1d6-478f-880a-bda0983c4bc8
+:CREATED: [2026-10-23 Fri 11:38]
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 11:38]
+:END:
+Word stores a field's last result, e.g. "Error! Reference source not found.", and LibreOffice recomputes it, so a render hides the defect. Report such stored field results in `docx.clj inspect`.
+
 * Fixes
 
 ** TODO herdr-orch: failed-spawn hygiene :skill:herdr_orch:
