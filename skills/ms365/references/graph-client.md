@@ -38,7 +38,8 @@ ITEM is a SharePoint file URL (as the browser shows it) or `DRIVE:ITEM` ids.
 
 - Session (the default for document editing): `checkout` once, then `download`, edit and `upload` as often as needed, then one `checkin`. SharePoint creates the next minor version at check-out, uploads go into that draft without new versions, and the check-in keeps one minor version for the whole session. Report a check-out that is still held at the end of the work.
 - Word content: edit the downloaded file with the `docx` skill (`docx.clj edit` for tracked changes with reason comments, `docx.clj clean` for the clean copy before publication).
-- Transaction (on request, and for log rows): one command checks out, applies the change, and checks in. `--exec` downloads the file to `{in}`, runs the command, and uploads `{out}`. On any failure after the check-out, the client discards the check-out, so the file returns to the last checked-in version.
+- Transaction: one command checks out, applies the change, and checks in. `--exec` downloads the file to `{in}`, runs the command, and uploads `{out}`. On any failure after the check-out, the client discards the check-out, so the file returns to the last checked-in version.
+- Use a transaction, never a session, for a one-line update to a shared log or register (for example, reserving the next number in a numbering log): other people update the same file, and a transaction holds the check-out for seconds. Use it also for a small document change when the user asks for one.
 - Reviewers see tracked changes in desktop Word without a check-out; in a library that requires check-out, Word Online shows them only after a check-out.
 
 ## Guardrails
