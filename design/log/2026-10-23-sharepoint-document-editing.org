@@ -182,16 +182,20 @@ Acceptance criteria:
 - `--author` and `--initials` set the change and comment author; the date is the run time.
 - Prints one line per applied edit (index, paragraph heading, before, after).
 
-** TODO Document the editing session in the docx and ms365 skills
+** DONE Document the editing session in the docx and ms365 skills
+CLOSED: [2026-10-23 Fri 16:32]
 :PROPERTIES:
 :CUSTOM_ID: 92b2b021-58b5-4166-ba7f-ea2218a4869f
 :CREATED: [2026-10-23 Fri 13:28]
 :BLOCKED-BY: task:048a81b9-e952-44ec-85ed-05432eca2d50
 :BLOCKED-BY+: task:9a944bf6-a635-4b9f-a109-10c9725908fe
 :BLOCKED-BY+: task:4535d43a-b85e-4263-a8ec-3b7588bb52cf
+:STARTED: [2026-10-23 Fri 16:30]
 :END:
 :LOGBOOK:
 - Created [2026-10-23 Fri 13:28]
+- State "STARTED" from "TODO" [2026-10-23 Fri 16:30]
+- State "DONE" from "STARTED" [2026-10-23 Fri 16:32]
 :END:
 Acceptance criteria:
 - `skills/docx/SKILL.md` documents `edit`, `comments` and `clean`, the edit-script format and the pandoc check.
