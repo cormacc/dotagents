@@ -202,7 +202,8 @@ Acceptance criteria:
 - `skills/ms365` documents the session: check out once, upload saves during the session, one check-in at the end, publish only on explicit request.
 - skill-creator `quick_validate` passes for both skills; leak grep (with a positive control) finds no organisation content.
 
-** STARTED Add the controlled-document editing workflow to nmd-dev and nmd-dcr
+** DONE Add the controlled-document editing workflow to nmd-dev and nmd-dcr
+CLOSED: [2026-10-23 Fri 16:50]
 :PROPERTIES:
 :CUSTOM_ID: 093f9f80-0d5b-4118-ba2c-cf73cdf81c1a
 :CREATED: [2026-10-23 Fri 13:28]
@@ -213,6 +214,7 @@ Acceptance criteria:
 :LOGBOOK:
 - Created [2026-10-23 Fri 13:28]
 - State "STARTED" from "TODO" [2026-10-23 Fri 16:39]
+- State "DONE" from "STARTED" [2026-10-23 Fri 16:50]
 :END:
 Acceptance criteria:
 - nmd-dev: a workflow to edit a QMS document from a gap analysis: session check-out, tracked edits with comments that cite the standard clause, one minor check-in.
@@ -323,6 +325,10 @@ Acceptance criteria:
 - Word has no comments in headers or footers, so a commented header edit is refused; a comment with `all` is refused too, because one comment anchors one place.
 - Pandoc leaves out a table whose `w:tblGrid` has no `w:gridCol`; the test fixtures declare grid columns, and a control assertion checks that pandoc renders the fixture table.
 - Real document (a procedure at a published version): the header version and DCR number, split by Word into five runs, and a new history row applied as tracked changes; `clean` then verified 656 paragraphs.
+
+** Organisation workflow (nmd-dev repository)
+- `nmd-dev` workflow "Edit a controlled document" and its reference `controlled-document-editing.md`: one check-out session, reason comments that cite the clause and its title (checked with the standards library), the header and version history row by script once the change record number is known, and the clean copy and publication only on request, as Document Control steps under the organisation's document control procedure.
+- `nmd-dcr` drafts change-record rows from `docx.clj comments` and regenerates the record after any new minor version of the draft.
 
 * Open questions
 ** DECIDED Which route gives the Graph write commands?
