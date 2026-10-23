@@ -13,6 +13,7 @@
 
 (def here (fs/parent (fs/absolutize *file*)))
 (cp/add-classpath (str (fs/path here "src")))
+(require '[docx.edit :as e])
 (require '[docx.core :as d :refer [w]]
          '[docx.review :as review])
 
@@ -195,6 +196,170 @@
           out (str (fs/path tmp "compared.docx"))]
       (review/compare-docx plain new out)
       (is (pos? (get-in (review/inspect out) [:tracked_changes "word/document.xml" :ins] 0))))))
+
+;; ------------------------------------------------------------------ tracked editing
+
+(def edit-body
+  (str (heading "Purpose")
+       (p (r "The procedure applies to ") "<w:r><w:rPr><w:b/></w:rPr><w:t xml:space=\"preserve\">all released</w:t></w:r>" (r " products."))
+       (p (r "Standard: ISO/IEC 62304")
+          "<w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText xml:space=\"preserve\"> CITATION x </w:instrText></w:r>"
+          "<w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:r><w:t>[1]</w:t></w:r><w:r><w:fldChar w:fldCharType=\"end\"/></w:r>"
+          (r "."))
+       (p (r "Keep ") "<w:ins w:id=\"5\" w:author=\"Other\" w:date=\"2026-01-01T00:00:00Z\"><w:r><w:t xml:space=\"preserve\">this </w:t></w:r></w:ins>" (r "text here."))
+       (p (r "Delete me."))
+       "<w:p><w:pPr><w:pStyle w:val=\"Heading2\"/><w:sectPr/></w:pPr><w:r><w:t>Anchor paragraph.</w:t></w:r></w:p>"
+       (p (r "dup and dup"))
+       (p (r "Last paragraph."))))
+
+(def edit-src (build! (fs/path tmp "edit-src.docx") edit-body))
+(def opts {:author "Tester" :date "2026-10-23T12:00:00Z"})
+
+(defn edit-doc!
+  "Apply f (root ids -> root) to the document of edit-src; write and return a new path."
+  [name f & {:keys [entries-f]}]
+  (let [entries ((or entries-f identity) (d/read-entries edit-src))
+        root (d/parse-entry entries "word/document.xml")
+        ids (e/id-source (e/max-id root))
+        out (str (fs/path tmp name))]
+    (d/write-docx out (d/replace-entries entries {"word/document.xml" (xml/emit-str (f root ids))}))
+    out))
+
+(defn starts [s] #(str/starts-with? % s))
+
+(def pandoc? (boolean (fs/which "pandoc")))
+(defn pandoc-lines
+  "Non-blank lines of pandoc's plain text with tracked changes accepted or rejected."
+  [path mode]
+  (->> (:out (process/shell {:out :string} "pandoc" (str "--track-changes=" mode) "-t" "plain" "--wrap=none" path))
+       str/split-lines (map str/trim) (remove str/blank?) vec))
+(defn oracle [path accept reject]
+  (if-not pandoc?
+    (println "SKIP pandoc oracle: pandoc not found")
+    (do (is (= accept (pandoc-lines path "accept")) "accept view")
+        (is (= reject (pandoc-lines path "reject")) "reject view"))))
+
+(def original-lines
+  ["Purpose" "The procedure applies to all released products." "Standard: ISO/IEC 62304[1]."
+   "Keep this text here." "Delete me." "Anchor paragraph." "dup and dup" "Last paragraph."])
+
+(def rejected-lines
+  "Pandoc's reject view also rejects the fixture's existing insertion by Other (\"this \")."
+  (assoc original-lines 3 "Keep text here."))
+
+(deftest control-original-text
+  (when pandoc? (is (= original-lines (pandoc-lines edit-src "accept")))))
+
+(deftest replace-across-runs-keeps-formatting
+  (let [out (edit-doc! "r1.docx" (fn [root ids]
+                                   (e/update-unique-paragraph root (starts "The procedure") "procedure"
+                                                              #(e/tracked-replace % "applies to all" "covers all" (assoc opts :ids ids)))))
+        doc (d/parse-entry (d/read-entries out) "word/document.xml")
+        bold-texts (for [r (d/descendants doc (w "r")) :when (seq (d/descendants r (w "b")))]
+                     (apply str (concat (mapcat :content (d/descendants r (w "t"))) (mapcat :content (d/descendants r (w "delText"))))))]
+    (oracle out (assoc original-lines 1 "The procedure covers all released products.") rejected-lines)
+    (is (= #{"all" " released"} (set bold-texts)) "the bold run is split; both parts stay bold")
+    (is (= {"word/document.xml" {:ins 2 :del 1}} (:tracked_changes (review/inspect out))))))
+
+(deftest replace-refuses-a-match-across-a-field
+  (let [code (fn [old] (try (edit-doc! "r2.docx" (fn [root ids]
+                                                    (e/update-unique-paragraph root (starts "Standard") "standard"
+                                                                               #(e/tracked-replace % old "X" (assoc opts :ids ids)))))
+                            nil (catch clojure.lang.ExceptionInfo ex (ex-data ex))))]
+    (is (nil? (code "ISO/IEC 62304")) "text before the field can be replaced")
+    (is (= :match (:docx/error (code "62304[1]"))))
+    (is (= :match (:docx/error (code "zzz"))))))
+
+(deftest replace-and-paragraph-matching-must-be-unique
+  (let [run-edit (fn [pred old] (try (edit-doc! "r3.docx" (fn [root ids]
+                                                           (e/update-unique-paragraph root pred "x"
+                                                                                      #(e/tracked-replace % old "y" (assoc opts :ids ids)))))
+                                     :ok (catch clojure.lang.ExceptionInfo ex (select-keys (ex-data ex) [:docx/error :matches]))))]
+    (is (= {:docx/error :match} (run-edit (starts "dup") "dup")) "two occurrences in the paragraph")
+    (is (= {:docx/error :match :matches 0} (run-edit (starts "Nothing") "x")))
+    (is (= {:docx/error :match :matches 2} (run-edit #(str/includes? % "paragraph.") "x")))
+    (is (= :ok (run-edit (starts "dup") "dup and")) "control: a unique match succeeds")))
+
+(deftest existing-changes-by-other-authors-are-kept
+  (let [out (edit-doc! "r4.docx" (fn [root ids]
+                                   (e/update-unique-paragraph root (starts "Keep") "keep"
+                                                              #(e/tracked-replace % "here" "now" (assoc opts :ids ids)))))
+        doc (d/parse-entry (d/read-entries out) "word/document.xml")]
+    (is (= 1 (count (filter #(= "Other" (get-in % [:attrs (w "author")])) (d/descendants doc (w "ins"))))))
+    (oracle out (assoc original-lines 3 "Keep this text now.") (assoc original-lines 3 "Keep text here."))))
+
+(deftest insert-and-delete-paragraphs
+  (let [ins-out (edit-doc! "r5.docx" (fn [root ids]
+                                       (e/update-unique-paragraph root (starts "Anchor") "anchor"
+                                                                  #(e/tracked-insert-after % "Inserted paragraph." (assoc opts :ids ids)))))
+        new-p (first (filter #(= "Inserted paragraph." (d/text %))
+                             (d/descendants (d/parse-entry (d/read-entries ins-out) "word/document.xml") (w "p"))))]
+    (oracle ins-out (vec (concat (take 6 original-lines) ["Inserted paragraph."] (drop 6 original-lines))) rejected-lines)
+    (is (seq (d/descendants new-p (w "pStyle"))) "paragraph properties are copied")
+    (is (empty? (d/descendants new-p (w "sectPr"))) "the anchor's section break is not copied")
+    ;; Pandoc drops empty paragraphs, so the oracle cannot see a paragraph mark left behind.
+    (is (seq (some-> (first (d/children new-p (w "pPr"))) (d/children (w "rPr")) first (d/children (w "ins"))))
+        "the new paragraph mark is recorded as inserted"))
+  (let [del-out (edit-doc! "r6.docx" (fn [root ids]
+                                       (e/update-unique-paragraph root (starts "Delete me") "delete"
+                                                                  #(e/tracked-delete % (assoc opts :ids ids)))))]
+    (oracle del-out (vec (concat (take 4 original-lines) (drop 5 original-lines))) rejected-lines)
+    (let [del-p (first (filter #(= "Delete me." (apply str (mapcat :content (d/descendants % (w "delText")))))
+                               (d/descendants (d/parse-entry (d/read-entries del-out) "word/document.xml") (w "p"))))]
+      (is (seq (some-> (first (d/children del-p (w "pPr"))) (d/children (w "rPr")) first (d/children (w "del"))))
+          "the deleted paragraph mark is recorded as deleted"))))
+
+(deftest new-ids-are-unique
+  (let [out (edit-doc! "r7.docx" (fn [root ids]
+                                   (-> root
+                                       (e/update-unique-paragraph (starts "The procedure") "p" #(e/tracked-replace % "applies" "is" (assoc opts :ids ids)))
+                                       (e/update-unique-paragraph (starts "Delete me") "d" #(e/tracked-delete % (assoc opts :ids ids))))))
+        doc (d/parse-entry (d/read-entries out) "word/document.xml")
+        idv (keep #(get-in % [:attrs (w "id")]) (concat (d/descendants doc (w "ins")) (d/descendants doc (w "del"))))]
+    (is (= (count idv) (count (set idv))))
+    (is (every? #(> (parse-long %) 5) (remove #{"5"} idv)) "new ids are above the existing ones")))
+
+(deftest comments-part-and-anchors
+  (let [prep (fn [entries]
+               (let [en (-> entries e/ensure-comments-part e/ensure-comments-part)]
+                 (d/replace-entries en {"word/comments.xml"
+                                        (e/add-comment (d/entry-str en "word/comments.xml")
+                                                       {:id "100" :author "Tester" :initials "T" :date "2026-10-23T12:00:00Z"
+                                                        :text "Reason: clause 4.3.\n\nSecond paragraph."})})))
+        out (edit-doc! "r8.docx" (fn [root ids]
+                                   (e/update-unique-paragraph root (starts "The procedure") "p"
+                                                              #(e/tracked-replace % "applies" "is" (assoc opts :ids ids :comment-id "100"))))
+                       :entries-f prep)
+        entries (d/read-entries out)
+        rels (d/entry-str entries "word/_rels/document.xml.rels")
+        ct (d/entry-str entries "[Content_Types].xml")
+        cx (d/entry-str entries "word/comments.xml")
+        doc (d/parse-entry entries "word/document.xml")]
+    (is (= 1 (count (re-seq #"relationships/comments" rels))) "one relationship after two calls")
+    (is (= 1 (count (re-seq #"/word/comments.xml" ct))) "one content type override after two calls")
+    (is (= 1 (count (filter #(= "word/comments.xml" (first %)) entries))))
+    (is (str/includes? cx "w:annotationRef"))
+    (testing "parts other than document, comments, relationships and content types are unchanged"
+      (let [allowed #{"word/document.xml" "word/comments.xml" "word/_rels/document.xml.rels" "[Content_Types].xml"}
+            src (into {} (d/read-entries edit-src))]
+        (doseq [[n b] entries :when (not (allowed n))]
+          (is (java.util.Arrays/equals ^bytes (get src n) ^bytes b) n))
+        (is (< 3 (count (remove (comp allowed first) entries))) "control: some parts were compared")))
+    (doseq [t ["commentRangeStart" "commentRangeEnd" "commentReference"]]
+      (is (= ["100"] (map #(get-in % [:attrs (w "id")]) (d/descendants doc (w t)))) t))
+    (when pandoc?
+      (let [md (:out (process/shell {:out :string} "pandoc" "--track-changes=all" "-t" "markdown" "--wrap=none" out))]
+        (is (str/includes? md "Reason: clause 4.3."))
+        (is (str/includes? md "comment-start"))))))
+
+(deftest enable-tracking-respects-schema-order
+  (let [s (str decl "<w:settings " ns-decls "><w:zoom w:percent=\"100\"/><w:attachedTemplate r:id=\"x\"/><w:defaultTabStop w:val=\"720\"/></w:settings>")
+        out (e/enable-tracking s)
+        order (map #(name (:tag %)) (filter d/el? (:content (xml/parse-str out))))]
+    (is (= ["zoom" "attachedTemplate" "trackRevisions" "defaultTabStop"] order))
+    (is (= out (e/enable-tracking out)) "idempotent")
+    (is (= ["trackRevisions" "defaultTabStop"]
+           (map #(name (:tag %)) (filter d/el? (:content (xml/parse-str (e/enable-tracking (str decl "<w:settings " ns-decls "><w:defaultTabStop w:val=\"720\"/></w:settings>"))))))))))
 
 (deftest selfcheck
   (when (System/getenv "DOCX_TEST_SELFCHECK")

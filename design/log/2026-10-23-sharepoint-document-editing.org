@@ -122,13 +122,17 @@ Acceptance criteria:
 - A `transaction` command (on request; the session is the default) checks out, applies one edit script, uploads and checks in as minor in one run; on any failure after check-out it discards the check-out and reports the failure.
 - Documented in `skills/ms365` (generic; no organisation names).
 
-** TODO Add tracked editing functions to docx.core
+** DONE Add tracked editing functions to docx.core
+CLOSED: [2026-10-23 Fri 16:06]
 :PROPERTIES:
 :CUSTOM_ID: 7ba83f3a-3858-4e72-9f68-bdf638b41b3c
 :CREATED: [2026-10-23 Fri 13:28]
+:STARTED: [2026-10-23 Fri 15:58]
 :END:
 :LOGBOOK:
 - Created [2026-10-23 Fri 13:28]
+- State "STARTED" from "TODO" [2026-10-23 Fri 15:58]
+- State "DONE" from "STARTED" [2026-10-23 Fri 16:06]
 :END:
 Acceptance criteria:
 - `enable-tracking` sets `w:trackRevisions` in `word/settings.xml`.
@@ -258,6 +262,13 @@ Acceptance criteria:
 - The Excel service saves a closed session's changes to the file about 2 to 3 s after `closeSession` (the item's `cTag` changes then). A check-in before that produced a version without the write (sandbox 1.2). The client waits for the `cTag` change before it returns.
 - Cheshire in Babashka parses JSON arrays as sequences, not vectors; the CLI converts `--values` to vectors.
 - Live check on the sandbox (2026-10-23): refusal of an upload without a check-out (exit 2); a session check-out, upload and check-in gave one minor version; a `transaction --exec` gave one minor version; a failing transaction discarded its check-out; an Excel transaction wrote a row whose month stayed text, confirmed in the checked-in file and through the MCP server; a write to an occupied row was refused.
+
+** Tracked editing (docx.edit)
+- `skills/docx/scripts/src/docx/edit.clj`: `enable-tracking`, `tracked-replace`, `tracked-insert-after`, `tracked-delete`, `update-unique-paragraph`, `ensure-comments-part`, `add-comment`, `max-id`/`id-source`. Tests in `skills/docx/scripts/test-docx.bb`.
+- `tracked-replace` matches only inside a sequence of plain runs (a `w:r` holding only `w:t`). A match across a field, an existing tracked change or other non-text content is refused with a message that says so, so earlier changes by other authors stay untouched.
+- The pandoc oracle cannot see a paragraph mark left behind: pandoc drops empty paragraphs. The tests therefore also check that an inserted or deleted paragraph's mark carries `w:ins` or `w:del`.
+- Pandoc's reject view rejects every tracked change in the document, including earlier changes by other authors; the expected texts in the tests allow for that.
+- A tracked paragraph insertion records the new paragraph's own mark as inserted, so rejecting it removes the paragraph and leaves the anchor's properties alone. The copy of the anchor's paragraph properties drops `w:sectPr` (a section break) and `w:pPrChange`.
 
 * Open questions
 ** DECIDED Which route gives the Graph write commands?
