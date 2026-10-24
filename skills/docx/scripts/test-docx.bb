@@ -388,9 +388,9 @@
                             ["word/settings.xml" (.getBytes (str decl "<w:settings " ns-decls "><w:zoom w:percent=\"100\"/><w:defaultTabStop w:val=\"720\"/></w:settings>") "UTF-8")]))
     src))
 
-(defn edited! [name]
+(defn edited! [name & [edits]]
   (let [out (str (fs/path tmp name))
-        {:keys [entries report]} (e/apply-script (d/read-entries with-settings) script
+        {:keys [entries report]} (e/apply-script (d/read-entries with-settings) (or edits script)
                                                  {:author "Tester" :initials "TT" :date "2026-10-23T12:00:00Z"})]
     (d/write-docx out entries)
     [out report]))
@@ -428,18 +428,18 @@
     (is (= "Inserted paragraph." (:after (second cs))))
     (is (= "" (:before (second cs))))))
 
-(deftest clean-accepts-everything-and-removes-comments
-  (let [[edited _] (edited! "s3.docx")
+(deftest clean-accepts-supported-changes-and-removes-comments
+  (let [[edited _] (edited! "s3.docx" (subvec script 0 2))
         out (str (fs/path tmp "clean.docx"))
         _ (d/write-docx out (clean/clean-entries (d/read-entries edited)))
         entries (d/read-entries out)
         doc (d/parse-entry entries "word/document.xml")
         accepted (vec (concat (take 1 original-lines) ["The procedure covers all released products."]
-                              (take 2 (drop 2 original-lines)) ["Anchor paragraph." "Inserted paragraph."] (drop 6 original-lines)))]
+                              (take 3 (drop 2 original-lines)) ["Anchor paragraph." "Inserted paragraph."] (drop 6 original-lines)))]
     (when pandoc? (is (= (pandoc-lines edited "accept") (pandoc-lines out "accept") (pandoc-lines out "reject"))
                       "clean text equals the accept view of the input, and has nothing left to reject"))
     (is (= accepted (mapv d/text (remove #(str/blank? (d/text %)) (d/descendants doc (w "p"))))))
-    (is (= (count accepted) (count (d/descendants doc (w "p")))) "the deleted paragraph leaves no empty paragraph")
+    (is (= (count accepted) (count (d/descendants doc (w "p")))) "accepting the insertion leaves one paragraph for each expected text")
     (is (= {} (:tracked_changes (review/inspect out))))
     (is (empty? (filter #(str/includes? (first %) "comments") entries)))
     (is (not (str/includes? (d/entry-str entries "word/_rels/document.xml.rels") "comments")))
@@ -454,12 +454,68 @@
       (is (str/includes? (d/entry-str (clean/clean-entries (d/read-entries edited) :keep-tracking? true) "word/settings.xml")
                          "trackRevisions")))))
 
+(def deleted-mark "<w:p><w:pPr><w:rPr><w:del w:id=\"7\" w:author=\"Other\"/></w:rPr></w:pPr><w:r><w:t>First</w:t></w:r></w:p>")
+
+(deftest clean-refuses-deleted-paragraph-marks-in-every-story
+  (doseq [[part tag] [["word/document.xml" "document"]
+                     ["word/header1.xml" "hdr"] ["word/footer1.xml" "ftr"]
+                     ["word/footnotes.xml" "footnotes"] ["word/endnotes.xml" "endnotes"]]
+          :let [wrap (fn [content] (str decl "<w:" tag " " ns-decls ">" content "</w:" tag ">"))]
+          body [deleted-mark (str deleted-mark (p (r "Next")))
+                (tbl (tr (tc deleted-mark (p (r "Next")))))]
+          :let [good (wrap (str/replace body "<w:del w:id=\"7\" w:author=\"Other\"/>" ""))
+                bad (wrap body)
+                base (conj (d/read-entries with-settings)
+                           ["word/endnotes.xml" (.getBytes (str decl "<w:endnotes " ns-decls "/>") "UTF-8")])]]
+    (is (= bad (d/entry-str (d/replace-entries base {part bad}) part))
+        "control: the queried package part contains the bad input")
+    (is (string? (clean/clean-xml good)) "control: input without the deleted mark cleans")
+    (is (seq (clean/clean-entries (d/replace-entries base {part good})))
+        "control: the package story can be cleaned")
+    (is (= :deleted-paragraph-mark
+           (:feature (ex-data (try (clean/clean-xml bad) (catch clojure.lang.ExceptionInfo ex ex))))) part)
+    (is (= :deleted-paragraph-mark
+           (:feature (ex-data (try (clean/clean-entries (d/replace-entries base {part bad}))
+                                  (catch clojure.lang.ExceptionInfo ex ex))))) part)))
+
+(deftest cli-clean-refusal-does-not-write-output
+  (let [[bad _] (edited! "deleted-mark.docx")
+        good (build! (fs/path tmp "good-clean-input.docx") plain-body)
+        existing (str (fs/path tmp "existing-output.docx"))
+        missing (str (fs/path tmp "missing-output.docx"))]
+    (is (zero? (:exit (run-cli "clean" good existing))) "control: supported input writes output")
+    (let [before (fs/read-all-bytes existing)]
+      (doseq [flags [[] ["--no-verify"] ["--keep-tracking"]]]
+        (let [result (apply run-cli "clean" bad existing flags)]
+          (is (= 1 (:exit result)))
+          (is (str/includes? (:err result) "Accept All Changes"))
+          (is (= (seq before) (seq (fs/read-all-bytes existing))) "existing output is unchanged"))))
+    (is (= 1 (:exit (run-cli "clean" bad missing))))
+    (is (not (fs/exists? missing)) "refusal creates no output")))
+
+(deftest clean-removes-tracking-setting-by-namespace
+  (doseq [setting ["<w:trackRevisions/>"
+                   "<w:trackRevisions w:val=\"true\" />"
+                   "<w:trackRevisions w:val=\"1\"></w:trackRevisions>"
+                   "<w:trackRevisions w:val=\"false\"/>"
+                   "<x:trackRevisions xmlns:x=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" x:val=\"true\"/>"]]
+    (let [settings (str decl "<w:settings " ns-decls "><w:zoom w:percent=\"100\"/>" setting "</w:settings>")
+          entries (d/replace-entries (d/read-entries with-settings) {"word/settings.xml" settings})
+          input (d/parse-entry entries "word/settings.xml")
+          output (d/parse-entry (clean/clean-entries entries) "word/settings.xml")]
+      (is (= 1 (count (d/children input (w "trackRevisions")))) "control: the setting exists")
+      (is (empty? (d/children output (w "trackRevisions"))) setting)
+      (is (= (map :attrs (d/children input (w "zoom")))
+             (map :attrs (d/children output (w "zoom")))) "unrelated settings stay")
+      (is (= settings (d/entry-str (clean/clean-entries entries :keep-tracking? true) "word/settings.xml"))
+          "keep-tracking preserves the settings part byte for byte"))))
+
 (deftest cli-edit-comments-clean
   (let [s (str (fs/path tmp "cli-script.edn")) e1 (str (fs/path tmp "cli-edited.docx")) c1 (str (fs/path tmp "cli-clean.docx"))]
-    (spit s (pr-str script))
+    (spit s (pr-str (subvec script 0 2)))
     (let [r (run-cli "edit" with-settings s e1 "--author" "Tester" "--initials" "TT")]
       (is (zero? (:exit r)) (:err r))
-      (is (= 3 (count (get (json/parse-string (:out r)) "edits")))))
+      (is (= 2 (count (get (json/parse-string (:out r)) "edits")))))
     (is (= 2 (count (json/parse-string (:out (run-cli "comments" e1))))))
     (let [r (run-cli "clean" e1 c1)]
       (is (zero? (:exit r)) (:err r))

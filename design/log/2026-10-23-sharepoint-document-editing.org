@@ -19,7 +19,7 @@ The Word content is edited as WordprocessingML with `docx.core`: we know of no G
 ** Scope
 *** In scope
 - `docx.core`: enable tracking; tracked replace, paragraph insert and paragraph delete; anchored comments.
-- `docx.clj`: `edit` (apply an edit script), `comments` (list comments with anchored text), `clean` (accept all changes, remove comments).
+- `docx.clj`: `edit` (apply an edit script), `comments` (list comments with anchored text), `clean` (accept supported changes, remove comments; refuse deleted paragraph marks).
 - Graph write commands for a session: status, check-out, upload, check-in (minor), check-in as published (major), discard check-out.
 - Skill documentation in `docx` and `ms365`.
 - nmd-dev: a workflow for editing a controlled document, and DCR rows drafted from the comments (nmd-dev repository).
@@ -39,7 +39,8 @@ The Word content is edited as WordprocessingML with `docx.core`: we know of no G
 - [ ] Word Online shows each tracked replace as a deletion and an insertion with author and date.
 - [ ] Word Online shows each comment, anchored to its edited text.
 - [ ] `docx.clj comments` lists each comment with its author, text, anchored text and nearest heading.
-- [ ] `docx.clj clean` gives paragraph text equal to `pandoc --track-changes=accept` of the input, with no tracked change and no comment part left.
+- [ ] `docx.clj clean` gives paragraph text equal to `pandoc --track-changes=accept` of supported input, with no tracked change and no comment part left. Scope amended by the user on 2026-10-23: acceptance of deleted paragraph marks is withdrawn, not met; these require Word Accept All.
+- [X] A deleted paragraph mark in any story stops `clean` before it writes output, including with `--no-verify` or `--keep-tracking`.
 - [ ] Check-in as published creates a major version with the given comment in the version history.
 *** Edge cases
 - [ ] A match that spans runs with different formatting is replaced, and the untouched text keeps its formatting.
@@ -64,7 +65,10 @@ The Word content is edited as WordprocessingML with `docx.core`: we know of no G
 - Hold one check-out for the editing session by default; a transaction (check-out, edit, check-in in one command) on request (user decisions, 2026-10-23) :: the session matches the manual QMS editing practice and gives one minor version for each session; a transaction suits a small, self-contained change.
   Rejected:
   - Check out and check in for each edit, always: one version for each edit, and the document is free for others between edits.
-- Check the clean copy against `pandoc --track-changes=accept` :: an independent implementation of accept-all, so the check does not share bugs with `clean`.
+- Check the clean copy against `pandoc --track-changes=accept` :: an independent text check, not proof of formatting equivalence. A failed check blocks publication.
+- Refuse deleted paragraph marks and require Word Accept All (user decision, 2026-10-23) :: the Sandbox trial matched paragraph text but found different formatting in five merged paragraphs. Do not infer Word's formatting rules from this one document.
+  Rejected:
+  - Continue implementing Word-equivalent merge formatting: needs further Word trials; the user chose the limited refusal instead.
 - Publication runs only on an explicit request :: in a QMS, publication is usually a document-control step; an organisation skill states who may publish.
 - Write through a Babashka Graph client in the `ms365` skill (user decision, 2026-10-23) :: a fixed command set (status, check-out, upload, check-in, publish, discard, Excel range write, transaction) with its guardrails in code; the MCP server stays read-only for every other session. Its own sign-in uses the same Entra app (auth code with PKCE and a `localhost` redirect; device code as fallback) and renews tokens silently. It requests `Files.ReadWrite.All`, but Entra returns every scope consented for the app, so the token is as wide as the MCP server's; the fixed command set, not the token, limits what the client does. A narrower token needs a separate app registration.
   Rejected:
@@ -159,7 +163,7 @@ CLOSED: [2026-10-23 Fri 16:22]
 :END:
 Acceptance criteria:
 - `docx.clj comments DOCX` lists each comment with author, date, text, the anchored text and the nearest heading.
-- `docx.clj clean IN OUT` accepts all tracked changes (insertions, deletions, property changes, moves, deleted paragraph marks) and removes all comments, anchors and comment parts.
+- Original criterion: `docx.clj clean IN OUT` accepts all tracked changes (insertions, deletions, property changes, moves, deleted paragraph marks) and removes all comments, anchors and comment parts. Acceptance of deleted paragraph marks withdrawn by user decision on 2026-10-23 after the Word trial; see the refusal task.
 - The clean copy's paragraph text equals `pandoc --track-changes=accept` of the input; the test fails when they differ.
 - `inspect` of the clean copy reports no tracked changes, and no comment part remains.
 
@@ -222,14 +226,17 @@ Acceptance criteria:
 - nmd-dev: clean copy and publication are Document Control steps per QM0004; the workflow prepares the clean copy only on request and never publishes on its own initiative.
 - Work is in the nmd-dev repository; dotagents skills stay generic.
 
-** TODO Run an end-to-end trial on the sandbox document
+** STARTED Run an end-to-end trial on the sandbox document
 :PROPERTIES:
 :CUSTOM_ID: c4b4dbfd-52a5-489e-9f3e-16658dddc358
 :CREATED: [2026-10-23 Fri 13:28]
 :BLOCKED-BY: task:093f9f80-0d5b-4118-ba2c-cf73cdf81c1a
+:STARTED: [2026-10-23 Fri 16:55]
+:HANDOFF: Guard and tracking fix implemented and verified: bb test passes; docx 28 tests / 229 assertions. Original draft is refused with exit 1 and no output, including --no-verify and --keep-tracking; valid edited copy still passes pandoc. Word-accepted copy retains story paragraph text/properties in diagnostic cleaning, but default pandoc check fails; investigate task 688b8ba6 before treating it as verified. Evidence .tmp/clean-refusal-63bmVz/. Remaining: explicit authorisation for Sandbox major-publication test; agree cleanup. No SharePoint writes in this continuation; changes not committed.
 :END:
 :LOGBOOK:
 - Created [2026-10-23 Fri 13:28]
+- State "STARTED" from "TODO" [2026-10-23 Fri 16:55]
 :END:
 Acceptance criteria:
 - On the sandbox document: check out, apply an edit script with comments, upload, check in as minor, and confirm in Word Online.
@@ -238,6 +245,30 @@ Acceptance criteria:
 - Confirm in Word Online that a header edit and an inserted version history row display as tracked changes.
 - Upload a Word-authored draft with tracked changes (including deleted paragraph marks in lists) to the sandbox, let Word Online accept all changes, and compare its text and paragraph properties with `docx.clj clean` of the same draft.
 - Discard or delete the sandbox afterwards, as agreed with the user.
+
+*** DONE Refuse clean copies with deleted paragraph marks
+CLOSED: [2026-10-23 Fri 17:39]
+:PROPERTIES:
+:CUSTOM_ID: 4881d5fc-673c-4e9c-83db-e40a434cbbda
+:CREATED: [2026-10-23 Fri 17:30]
+:STARTED: [2026-10-23 Fri 17:30]
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 17:30]
+- State "STARTED" from "TODO" [2026-10-23 Fri 17:30]
+- State "DONE" from "STARTED" [2026-10-23 Fri 17:39]
+:END:
+Acceptance: clean-xml and clean-entries refuse a deleted paragraph mark in any story part; the CLI writes no output on refusal, including with --no-verify or --keep-tracking. Tracking-setting removal handles attributes and namespace aliases. Require Word Accept All for refused inputs; document the trial finding.
+
+*** TODO Investigate clean verification after Word Accept All
+:PROPERTIES:
+:CUSTOM_ID: 688b8ba6-afc9-4e21-8309-1839eede5005
+:CREATED: [2026-10-23 Fri 17:35]
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 17:35]
+:END:
+The Word-accepted Sandbox draft has equal paragraph text and properties before and after clean, but default pandoc verification fails at paragraph 409: the input accept view joins Tools to the following paragraph; the clean view keeps them separate. Evidence: .tmp/clean-refusal-63bmVz/verification.out and verification-final.out. Establish the cause with a synthetic fixture, without weakening the publication check or committing organisation documents.
 
 ** DONE Edit headers, footers and table rows in docx edit scripts
 CLOSED: [2026-10-23 Fri 16:49]
@@ -314,10 +345,9 @@ Acceptance criteria:
 ** Edit scripts, comments, clean copy
 - `docx.clj edit IN SCRIPT OUT` (`docx.edit/apply-script`), `docx.clj comments DOCX` (`docx.review/comments`), `docx.clj clean IN OUT` (`skills/docx/scripts/src/docx/clean.clj`). Exit codes: 2 for an edit that does not match, 3 for a clean copy that differs from pandoc.
 - Cheshire in Babashka parses JSON arrays lazily, so a parse error surfaced outside the `try` that should have caught it; `read-script` chooses the format by extension and realises the JSON inside the `try`.
-- `clean` merges a paragraph whose mark is deleted into the following paragraph, which keeps its properties (the surviving mark carries them), and removes a run only when it held a comment reference.
-- Checked on a Word-authored procedure draft (612 insertions, 120 deletions, property changes in tables and runs, 21 comments): 779 paragraphs match pandoc's accept view, with no tracked change left.
-- Pandoc's accept view does not apply a deleted paragraph mark: it keeps an empty list item and renumbers the list. Where it does merge paragraphs, it inserts a space. The `clean` check therefore strips list markers and ignores whitespace inside a paragraph; it still compares every character and the paragraph count.
-- LibreOffice's accept-all kept two runs of plain `w:del` text in that draft, so it is not a reliable reference. LibreOffice and `clean` still differ in list indentation after merged paragraphs; the trial compares `clean` with Word's own accept-all.
+- `clean` refuses a deleted paragraph mark in any story before it writes output. Use Word Accept All, save, then run `clean` on the saved copy. Run deletions, inserted paragraph marks and table-row changes remain supported.
+- The pandoc check removes list markers and ignores whitespace inside a paragraph. It checks text and paragraph count, not formatting; a failed check blocks publication.
+- LibreOffice's accept-all kept two runs of plain `w:del` text in the trial draft, so it is not a reliable reference.
 
 ** Headers, footers and table rows
 - Edit scripts gain `"part"` (`body`, `headers`, `footers`), `"all"`, and the operations `insert-row-after` and `delete-row`; `docx.clj changes` reports header and footer changes with their part. Requested by the user (2026-10-23) so that the header version, DCR number and version history row need no manual step in Word.
@@ -325,6 +355,14 @@ Acceptance criteria:
 - Word has no comments in headers or footers, so a commented header edit is refused; a comment with `all` is refused too, because one comment anchors one place.
 - Pandoc leaves out a table whose `w:tblGrid` has no `w:gridCol`; the test fixtures declare grid columns, and a control assertion checks that pandoc renders the fixture table.
 - Real document (a procedure at a published version): the header version and DCR number, split by Word into five runs, and a new history row applied as tracked changes; `clean` then verified 656 paragraphs.
+
+** Sandbox trial and clean-copy limit (2026-10-23)
+- User confirmed tracked body edits, reason comments, the header revision and inserted history row. The editing session advanced the test copy from 2.3 to 2.4; Word Accept All produced 2.5. Trial DCR rows were drafted from the reason comments.
+- Word-authored Sandbox draft: uploaded 0.1 versus Word-accepted 0.2. Before the refusal was added, `clean` matched Word's text in all 1,075 XML paragraphs, but paragraph formatting differed in five of the six merged groups; one lost list numbering. The user chose refusal, not further merge-format implementation.
+- `clean-xml` rejects deleted marks before removing revisions; `clean-entries` applies this to document, header, footer, footnote and endnote parts. Regression tests cover terminal marks, following paragraphs, table cells, untouched existing output, and refusal despite `--no-verify` or `--keep-tracking`. They failed against the merge implementation before the guard was added.
+- `clean-entries` removes `trackRevisions` by namespace, including attributed and differently prefixed forms; `--keep-tracking` keeps the settings bytes. The attributed-setting regression failed before the fix. On the saved Word-accepted copy, other settings and paragraph properties were retained.
+- Remaining verification issue: default pandoc verification of Word's accepted 0.2 fails at paragraph 409 (Tools joined to the following paragraph in the input view, separate in the output). Diagnostic XML comparison retained paragraph text and properties in every story, but this does not override the failed check. Follow-up task: `688b8ba6-afc9-4e21-8309-1839eede5005`.
+- Evidence: `.tmp/trial-113/format-evidence.out` and `.tmp/clean-refusal-63bmVz/`. No SharePoint writes during the refusal fix. Major-publication trial and cleanup still need user agreement.
 
 ** Organisation workflow (nmd-dev repository)
 - `nmd-dev` workflow "Edit a controlled document" and its reference `controlled-document-editing.md`: one check-out session, reason comments that cite the clause and its title (checked with the standards library), the header and version history row by script once the change record number is known, and the clean copy and publication only on request, as Document Control steps under the organisation's document control procedure.

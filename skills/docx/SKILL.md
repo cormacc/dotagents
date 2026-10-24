@@ -18,10 +18,10 @@ Review and edit Word `.docx` packages as WordprocessingML. A `.docx` is a zip of
 | `docx.clj changes DOCX` | One object per paragraph with tracked changes: `heading` (nearest heading above, by paragraph style), `before`, `after`; header and footer changes follow, with `part` |
 | `docx.clj comments DOCX` | One object per comment: `id`, `author`, `date`, `text`, `heading`, and the anchored text `before` and `after` the tracked changes |
 | `docx.clj edit IN SCRIPT OUT --author NAME [--initials XX] [--date ISO] [--no-tracking]` | Applies an edit script (below) as tracked changes; reports each edit |
-| `docx.clj clean IN OUT [--keep-tracking] [--no-verify]` | Writes the clean copy: all tracked changes accepted, all comments removed, tracking turned off; reports the pandoc check |
+| `docx.clj clean IN OUT [--keep-tracking] [--no-verify]` | Writes the clean copy: supported changes accepted, comments removed, tracking turned off; refuses deleted paragraph marks; reports the pandoc check |
 | `docx.clj compare OLD NEW OUT` | Writes `OUT`, a `.docx` that shows OLD to NEW as tracked changes |
 
-Exit codes: 0 success; 1 usage or input error; 2 an edit did not match (nothing written); 3 the clean copy differs from pandoc's accept view.
+Exit codes: 0 success; 1 usage, input or unsupported-change error; 2 an edit did not match (nothing written); 3 the clean copy differs from pandoc's accept view.
 
 - Text reads as if all tracked changes were accepted: inserted text is included, deleted text is not. `changes` and `comments` give both sides.
 - `version_history` is the last table with a header row that has a cell exactly `Version` and a cell that names a DCR or a description. Blank rows are dropped. A placeholder such as `<DD-Mmm-YYYY>` in the last row shows a field that the author has not completed.
@@ -73,9 +73,11 @@ Reviewers see the tracked changes and comments in desktop Word without a check-o
 
 ## Clean copy
 
-`docx.clj clean IN OUT` accepts insertions, deletions, moves, property changes, table-row and cell changes, and deleted paragraph marks (the paragraph's remaining content joins the next paragraph, which keeps its properties). It removes comment anchors, references and comment parts with their relationships and content types, and removes `trackRevisions` from the settings unless `--keep-tracking`.
+`docx.clj clean IN OUT` accepts insertions, run deletions, moves, property changes, and table-row and cell changes. It removes comment anchors, references and comment parts with their relationships and content types, and removes `trackRevisions` from the settings unless `--keep-tracking`.
 
-The check compares the clean copy, paragraph by paragraph, with pandoc's accept view of the input. Pandoc does not apply a deleted paragraph mark (it keeps an empty list item) and adds a space where it merges paragraphs, so the check strips list markers and ignores whitespace inside a paragraph; it still compares every character and the paragraph count. Before publication, open the clean copy in Word and check lists and merged paragraphs.
+A deleted paragraph mark in the body, a header, footer, footnote or endnote stops `clean` with exit 1 before it writes output. This includes marks inside table cells and marks made by the script's `delete` operation. `--no-verify` and `--keep-tracking` do not bypass this refusal. Use Word's **Accept All Changes**, save the copy, then run `clean` on that copy. Word's formatting rules for joined paragraphs are not reproduced by this tool.
+
+The check compares the clean copy with pandoc's accept view of the input, paragraph by paragraph, after it removes list markers and whitespace. It checks text, not formatting. Before publication, open the clean copy in Word and check lists and paragraph formatting. If the command fails, do not upload its output or use `--no-verify` to bypass the publication check; investigate the difference first.
 
 `docx.clj comments` before `clean` keeps the review record: the comments are gone after it.
 

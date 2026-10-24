@@ -14,10 +14,11 @@
 ;;                                  Apply an edit script (JSON or EDN) as tracked changes
 ;;                                  with comments
 ;;   docx.clj clean IN OUT [--keep-tracking] [--no-verify]
-;;                                  Accept all changes and remove all comments; checked
-;;                                  against pandoc's accept view when pandoc is installed
+;;                                  Accept supported changes and remove all comments;
+;;                                  refuse deleted paragraph marks; check against pandoc
+;;                                  when pandoc is installed
 ;;
-;; Exit codes: 0 success, 1 usage or input error, 2 an edit did not match, 3 the clean copy
+;; Exit codes: 0 success, 1 usage/input/unsupported change, 2 an edit did not match, 3 the clean copy
 ;; differs from pandoc's accept view.
 (require '[babashka.classpath :as cp]
          '[babashka.fs :as fs])
@@ -48,10 +49,8 @@
       :else (try (json!) (catch Exception _ (edn/read-string s))))))
 
 (defn- pandoc-lines
-  "Paragraph lines of pandoc's plain output, with list markers removed and marker-only lines
-  dropped. Pandoc does not apply a deleted paragraph mark: it keeps the paragraph as an
-  empty list item and numbers the list around it, where Word removes the paragraph. Without
-  the markers, the comparison checks the text of every paragraph and nothing else."
+  "Non-blank paragraph lines of pandoc's plain output, without list markers or marker-only
+  lines. The comparison checks paragraph text, not numbering or formatting."
   [path mode]
   (->> (:out (p/shell {:out :string} "pandoc" (str "--track-changes=" mode) "-t" "plain" "--wrap=none" (str path)))
        str/split-lines
@@ -61,8 +60,7 @@
 
 (defn- verify-clean
   "Compare the clean copy's text with pandoc's accept view of the input, paragraph by
-  paragraph, ignoring whitespace: where a deleted paragraph mark merges two paragraphs,
-  pandoc inserts a space and Word does not."
+  paragraph, ignoring whitespace. Throws with exit 3 on a text or paragraph-count mismatch."
   [in out]
   (if-not (fs/which "pandoc")
     {:verified "skipped: pandoc not found"}
