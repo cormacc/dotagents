@@ -266,7 +266,7 @@ When a non-goal would be easy to violate by accident, capture it as an anti-crit
 
 ### Body discipline
 
-Each plan task's body is the criteria list plus, at most, one pointer or non-obvious constraint. Prefer a stable symbol reference (file path plus function or var name) to a similar existing pattern -- never a bare line number or range, which drifts between planning and execution -- or an inline code sketch when no reference fits. For a repo-relative file pointer, use a single inline-code token such as `skills/org-tasks/SKILL.md`; `ot doctor` advises when a constrained citation under an existing root does not resolve. Skipping examples leads to workers reporting back for clarification -- spend the 30 seconds now.
+Each plan task's body is the criteria list plus, at most, one pointer or non-obvious constraint. Prefer a stable symbol reference (file path plus function or var name) to a similar existing pattern -- never a bare line number or range, which drifts between planning and execution -- or an inline code sketch when no reference fits. For a repo-relative file pointer, use a single inline-code token such as `skills/org-tasks/SKILL.md`; `ot doctor` advises when a constrained citation under an existing root does not resolve. Cite a file outside the repository with an absolute or `~/` path, because `ot doctor` resolves a relative inline path against the repository root. Skipping examples leads to workers reporting back for clarification -- spend the 30 seconds now.
 
 ## Plan task metadata and status
 

@@ -137,7 +137,7 @@ Resume checklist:
 1. Run `ot selected --format json` -- not `ot show selected`, which is strict and exits non-zero when nothing is selected. A `null` `selected` with a `null` `selectedId` means no selection: use `ot list --status-filter STARTED --format json` to find active work or ask the user. A `null` `selected` with a *non-null* `selectedId` is a stale pointer to a task that no longer exists (`ot doctor` reports `selected-not-found`); run `ot select --clear-stale` or re-select rather than treating it as an empty selection.
 2. Use the returned `task` + `ancestors` for subtree, properties, body, LOGBOOK, handoff, blockers, and linked issues.
 3. If `record.path` is present, read `ot section <path> Summary --format json`; read `Context` only when `record.hasContext` is true.
-4. Surface handoff notes and open questions immediately; use `record.hasOpenQuestions` as the cheap signal before reading that section.
+4. Surface handoff notes and open questions immediately; use `record.hasOpenQuestions` as the cheap signal before reading that section. The flag is true whenever an `Open questions` section exists, even when every entry is `DECIDED`: read the section before you report that questions are open.
 5. Defer full `* Implementation`, completed plan-task bodies, and off-path acceptance details until needed.
 
 Anti-pattern: do not hand-read `TASKS.org`, `TASKS.local.org`, or `TASKS.setup.org` to answer "what's selected"; use `ot selected --format json`.

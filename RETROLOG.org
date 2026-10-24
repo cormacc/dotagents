@@ -310,3 +310,19 @@ Two workers continued several times reached 80% and 83% context and ended rounds
 ** Commit step 5 (git-commit skill) -- delegated sessions
 
 A delegated worker stopped at its commit-approval question; the parent's typed answer did not submit, and the parent committed the staged change itself. Later assignments that stated "commit without asking for approval (approved in advance)" committed without a stall.
+
+* 2026-10-24 Sat -- mbt/cd archive and xc-dsc migration planning
+
+Session archived the firmware CI task and delegated planning of the xc16 to xc-dsc migration to a herdr-orch planner. Findings 1 and 2 came from the planner's process candidates; finding 3 came from the parent's own reply.
+
+** Temporary files -- submodule sweeps
+
+The planner's =git ls-files <submodule> | xargs grep= sweep matched nothing because the parent index holds only the gitlink. Measured in mbt/cd: =git ls-files neuromod= lists 1 entry; =git -C neuromod ls-files= lists 885.
+
+** Body discipline (org-plan skill) -- citations outside the repository
+
+=ot doctor= reported =inline-path-dangling= for a change-record that cited a file in the nix-microchip repository as a bare relative path. =inline-path-candidate?= in =org_tasks/doctor.clj= excludes paths that start with =/= or =~=.
+
+** Resuming and agent memory (org-tasks skill) -- hasOpenQuestions
+
+After archiving, the parent told the user the record might have open questions to carry over, based on =record.hasOpenQuestions: true=. Both entries in the section were =DECIDED=. =list_show.clj= sets the flag from the presence of the =Open questions= heading only.
