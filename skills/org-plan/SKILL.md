@@ -231,6 +231,8 @@ Stop planning once the plan is actionable. A 40-item ISC for a prototype is over
 
 ## Acceptance criteria
 
+For commit-pinned dependencies, specify the required content at that revision as the implementation acceptance criterion. Add branch-merge or release-state gates only when the user or project policy explicitly requires them.
+
 ### Ideal-state checklist (ISC) vs acceptance criteria
 
 The **ideal-state checklist (ISC)** is the consolidated, user-confirmed definition of done for the whole change: atomic, binary, one-second-verifiable criteria grouped into core functionality, edge cases, and anti-criteria. It is a planning artefact, drafted and signed off before the executable plan exists, and it lives in `** Acceptance` under `* Summary` so it survives closure-time pruning of task bodies.

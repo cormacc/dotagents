@@ -74,6 +74,8 @@ skill-name/
     └── assets/     — files used in output (templates, icons, fonts)
 ```
 
+Keep helpers used only by this skill in its `scripts/` directory. Reference shared project tools at their canonical location instead of copying them into the skill.
+
 Skills load progressively in three levels:
 
 1. **Metadata** (name + description) — always in context, ~100 words.

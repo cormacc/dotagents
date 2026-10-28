@@ -35,10 +35,12 @@ Use for code changes, scripts, extensions, new files, restructures, multiple pla
 
    ```bash
    ot --root <root> create "<actionable summary>" \
-     --section "Agent feedback" \
+     --section "Agent feedback" --allow-create-section \
      --tag '<target-tag>' \
      --body '<description and evidence>'
    ```
+
+   Repeat `--tag` for multiple tags, for example `--tag skill --tag org_tasks`; do not combine a facet and name into one argument.
 
 5. Report the returned UUID and ask whether to plan it now with `org-plan` or leave it on the backlog.
 

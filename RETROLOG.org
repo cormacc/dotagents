@@ -326,3 +326,17 @@ The planner's =git ls-files <submodule> | xargs grep= sweep matched nothing beca
 ** Resuming and agent memory (org-tasks skill) -- hasOpenQuestions
 
 After archiving, the parent told the user the record might have open questions to carry over, based on =record.hasOpenQuestions: true=. Both entries in the section were =DECIDED=. =list_show.clj= sets the flag from the presence of the =Open questions= heading only.
+
+* 2026-10-28 Wed -- CD simulator skill and stack-trace closure
+
+** Skill layout
+
+[[file:skills/skill-creator/SKILL.md]]: simulator helpers used only by the project-local skill were first placed under the project's root scripts directory. The user corrected their ownership, and bundling them required changes to command references and the test fixture's root lookup. Boundary review distinguishes a skill-only helper from an existing tool shared with the project; the latter stays at its canonical location.
+
+** Acceptance criteria
+
+[[file:skills/org-plan/SKILL.md]]: the record made a merged framework develop pin a completion condition even though CD pins an immutable commit. This held up closure after the user reported that the hardware smoke test passed. The user excluded merge flow from implementation completion. Boundary review preserves a merge gate when an explicit project policy or user requirement calls for it; an available commit pin does not override such a requirement.
+
+** Slow loop -- default, TODO first
+
+[[file:skills/self-improvement/SKILL.md]]: feedback capture failed because a facet and name were supplied as one tag argument, then failed because the target section did not exist. Disposable task fixtures confirmed that the combined tag is rejected with =invalid-tag= (exit 1), a missing section without the creation flag is rejected with =section-not-found= (exit 1), and repeated =--tag= options with =--allow-create-section= create the section and retain both tags. The correction changes the example and its argument guidance, not the CLI.
