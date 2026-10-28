@@ -181,6 +181,35 @@ https://github.com/smarzban/tsk
 It supports multiple items in progress and some other QOL features that could be worth looking at.
 As a Herdr plugin, tsk is also prior art for the deferred session-tree pane in 9f667467 (herdr plugin wrapper for herdr-orch).
 
+** TODO Investigate Atlassian Teamwork Graph API :atlassian:
+:PROPERTIES:
+:CUSTOM_ID: f673946f-c641-45c1-8b42-dbe58b23b2df
+:CREATED: [2026-10-27 Tue 14:43]
+:END:
+:LOGBOOK:
+- Created [2026-10-27 Tue 14:43]
+:END:
+Identify whether the Atlassian Teamwork Graph API complements or replaces the existing use of the Atlassian MCP server (mcp__atlassian, used by the org-jira skill).
+
+** TODO Evaluate matt pocock skills
+:PROPERTIES:
+:CUSTOM_ID: 7d41f389-6aa0-4a96-b38d-88738d9e621c
+:CREATED: [2026-10-28 Wed 13:18]
+:END:
+:LOGBOOK:
+- Created [2026-10-28 Wed 13:18]
+:END:
+
+** TODO Evaluate agent-skills (Addy Osmani)
+:PROPERTIES:
+:CUSTOM_ID: 0f6a6b03-d101-49f3-9279-27d4aa143356
+:CREATED: [2026-10-28 Wed 13:18]
+:END:
+:LOGBOOK:
+- Created [2026-10-28 Wed 13:18]
+:END:
+Reference: https://skills.addy.ie
+
 * Improvements
 
 ** TODO [#B] ot move: TUI/pi-overlay exposure and --before/--after ordering :skill:org_tasks:
