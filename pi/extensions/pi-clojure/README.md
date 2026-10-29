@@ -74,10 +74,13 @@ cd pi/extensions/pi-clojure
 ```
 
 Runtime dependencies are `bencode` and `parinfer`. Pi's coding-agent API and
-TypeBox are host-bundled peer dependencies (with exact development copies for
-typechecking), so the Home Manager production install (`npm install --omit=dev`)
-does not bundle a second pi runtime. This was verified with isolated pi 0.80.10:
-all three tools registered after a production-only install.
+TypeBox are host-bundled optional peer dependencies, so neither `npm ci` nor the
+Home Manager install (`npm install --omit=dev`) puts a second pi runtime in this
+directory.
+
+`test.sh` takes TypeScript, `tsx`, Node types, and pi's declarations from the
+repository root development dependencies, which track the installed pi release.
+Run `npm ci` at the repository root and in this directory first.
 
 ## History and license
 
@@ -85,3 +88,11 @@ The extension was originally imported from
 [`markokocic/pi-clojure`](https://github.com/markokocic/pi-clojure). Original
 authorship and the EPL-2.0 license are preserved in [LICENSE](LICENSE).
 [HISTORY.md](HISTORY.md) records that import and locally shipped changes.
+
+## Compatibility review
+
+Last review: 2026-10-29, against pi 1.4.0.
+
+- `bencode` 4.0.1 and `parinfer` 3.13.1.
+- Babashka 1.13.228 nREPL server: `clojure_eval` worked live in a pi 1.4.0 session.
+- Checks: `test.sh` (type-check with TypeScript 7.0.2 against the pi 1.4.0 declarations), and `pi --mode rpc` load with empty stderr.

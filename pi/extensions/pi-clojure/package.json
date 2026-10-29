@@ -21,17 +21,19 @@
     "tools"
   ],
   "dependencies": {
-    "bencode": "4.0.0",
+    "bencode": "4.0.1",
     "parinfer": "3.13.1"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
   },
-  "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.80.10",
-    "@types/node": "25.6.0",
-    "typebox": "1.1.38",
-    "typescript": "5.9.3"
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "typebox": {
+      "optional": true
+    }
   }
 }

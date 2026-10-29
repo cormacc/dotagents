@@ -42,3 +42,7 @@ upstream-sync ledger. Original authorship and EPL-2.0 licensing remain in
   TypeBox 1.x instead of a locally redeclared coding-agent API.
 - Retains local declarations only for runtime dependencies that do not publish
   TypeScript declarations (`bencode` and `parinfer`).
+- Type-checks against the repository root development dependencies, which pin
+  the installed pi release and its TypeScript and Node type versions, instead of
+  local development copies. The pi peers are optional, so no install route
+  places a second pi runtime here.

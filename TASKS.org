@@ -32,7 +32,6 @@
 - [[#fixes][Fixes]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
-  - [[#pi-clojure-bump-its-own-pi-coding-agent-dev-pin-from-08010-and-make-testsh-runnable][pi-clojure: bump its own pi-coding-agent dev pin from 0.80.10 and make test.sh runnable]]
 - [[#agent-feedback][Agent feedback]]
   - [[#self-improvement-persist-agents-metrics-comparison-script][self-improvement: persist AGENTS metrics comparison script]]
   - [[#validate-skillsbb-rejects-a-relative---python-path][validate-skills.bb rejects a relative --python path]]
@@ -527,16 +526,6 @@ oh worktree remove deletes the managed checkout but retains its orch/<id> branch
 * Upstream issues
 
 * Chores
-** TODO pi-clojure: bump its own pi-coding-agent dev pin from 0.80.10 and make test.sh runnable :pi:
-:PROPERTIES:
-:CUSTOM_ID: 17fea754-3b1e-4584-bcf8-fbcf76aa6395
-:CREATED: [2026-10-02 Fri 09:07]
-:END:
-:LOGBOOK:
-- Created [2026-10-02 Fri 09:07]
-:END:
-pi/extensions/pi-clojure/package.json pins @earendil-works/pi-coding-agent 0.80.10 separately from the root package.json (bumped to 1.0.0 by record design/log/2026-10-01-review-herdr-orch-w-r-t-pi-v1-0-0-releas.org). pi/extensions/pi-clojure/test.sh exits 127 because ./node_modules/.bin/tsc is absent: agents.nix installs that directory with --omit=dev. Measured 2026-10-02 with both the 0.80.10 and 1.0.0 root pins; the tsx test files themselves pass.
-
 ** TODO herdr-orch: re-check Pi-version-specific test rules after each Pi upgrade :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 216bd6b9-ed8e-4277-b653-bea0ea689706
