@@ -710,3 +710,22 @@ Origin:
 
 Evidence:
 - 2026-10-22: the untracked change-record design/log/2026-10-21-child-context-modes.org was reported clean several times. A deliberately broken same-file link in it was not reported. On a scratch repository where every file was tracked, the checker covered 13 more references and reported the control.
+
+** TODO ot archive rewrites unrelated imported change-records :skill:org_tasks:
+:PROPERTIES:
+:CUSTOM_ID: 0013aad5-365b-41d7-9daf-40e5b5f11201
+:CREATED: [2026-10-29 Thu 10:12]
+:END:
+:LOGBOOK:
+- Created [2026-10-29 Thu 10:12]
+:END:
+`ot archive` rewrites an `#+IMPORT:`-linked change-record that the archived task does not own, and drops blank lines from it. Archiving must leave every file other than the source task file, `TASKS.archive.org`, and the archived task's own record byte-identical. Add a regression test that archives a task while another open task imports a record with a blank line between a list item and the next heading.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: cormacc/dotagents @ main
+- timestamp: [2026-10-29 Thu 10:12]
+- sender: agent
+
+Evidence:
+Reproduced in a clean worktree at HEAD 2ca64af. `ot status 17fea754 DONE` changed only TASKS.org. `ot archive 17fea754 --yes` then also changed design/log/2026-10-23-sharepoint-document-editing.org, which is imported by a different, open task: it removed the blank line between the last list item of a task body and the following `***` heading, twice. The archived task (pi-clojure dev pin, in Chores) has no #+IMPORT: of its own.
