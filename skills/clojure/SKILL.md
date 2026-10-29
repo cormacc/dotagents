@@ -23,6 +23,23 @@ When you review or simplify Clojure code, read the [review reference](references
 
 For JVM/Babashka tests, use `clojure.test/run-test-var` or `clojure.test/run-tests`, not direct test-function calls, so fixtures run. Use the project's CLJS test runner for CLJS. Check test failures and errors, not just whether evaluation returned. In cross-platform regex tests, assert matching and non-matching inputs rather than regex equality or printed forms.
 
+## Debugging and discovery
+
+Inspect values in the REPL before you add `println` or log calls to source. The REPL gives the value at the point of failure without an edit-and-rerun cycle.
+
+- To capture a value inside a function, evaluate a copy of the function in the REPL with a temporary `(def dbg-x x)`, call the function, then inspect `dbg-x`. Do not write the capture into the file. Use a capture name that does not resolve in the namespace, because `def` replaces an existing var of the same name.
+- When you finish, reload the namespace from the saved file, then remove each capture var with `ns-unmap`. A reload restores the file's definitions but does not remove vars that only the REPL defined.
+- A REPL redefinition changes the user's running program (see the [tool guide](references/tool-guide.md)). During a review, do not redefine project code; see the [review reference](references/review.md).
+- A running system that holds a function value, such as a handler or a lifecycle component, keeps the old definition after you redefine the var. Restart it with the project's documented reset before you trust the result.
+- `tap>` is an alternative to a capture var when the project has a tap consumer. The `dataspex` skill covers inspection of tapped values.
+- Test the fix in the REPL, apply it to the file, then reload and run the tests as in [#Workflow](#workflow).
+
+Before you rely on an unfamiliar macro or Java API:
+
+- Expand the macro with `macroexpand-1` (one step) or `macroexpand` (until the head is not a macro).
+- List a Java class's members with `clojure.reflect/reflect`. Select methods with `(filter :return-type)`, not `(instance? clojure.reflect.Method %)`: Babashka 1.13.228 returned the same members as the JVM for `java.time.LocalDateTime` but could not resolve the `clojure.reflect.Method` class symbol. A listed member does not prove that Babashka can call it; probe the call as in workflow step 4.
+- Before you add a dependency for a Java API, check whether the project already depends on a Clojure wrapper for it.
+
 ## ClojureScript
 
 Confirm the selected build and attached JS runtime before evaluating CLJS. Opening a browser tab alone does not switch a CLJ nREPL session to CLJS. `clojure_eval` keeps one session for each host and port, so a CLJS selection persists until `:cljs/quit` or `reset`. See the [tool guide](references/tool-guide.md) for a shadow-cljs example.

@@ -434,6 +434,28 @@ Session check-out, tracked edits with reason comments, minor check-in; at the en
 :END:
 Write rows into a SharePoint workbook through the Graph workbook API (no file round-trip), using the Babashka Graph client from [[plan:2026-10-23-sharepoint-document-editing.org]]. In a library that requires check-out, a range write returns 403 EditModeWorkbookCheckedOutRequired unless the workbook is checked out (spike, 2026-10-23), so the write runs as a transaction: check out, write, read back, check in as minor (discard the check-out on failure). Acceptance: write one row in a transaction; re-read it and report a mismatch; refuse to overwrite a non-empty cell unless told to; write text cells as text (Excel converted "Oct 2026" to a date serial in the spike); documented in skills/ms365 without organisation names. First consumer: the nmd-dev task "Let nmd-dcr write the LG0017 DCR reservation".
 
+** TODO pi-clojure: structural edit tool for Clojure forms :pi:clojure:
+:PROPERTIES:
+:CUSTOM_ID: 3c08dae6-6d2f-4e3a-a66e-c27bc83be0e2
+:CREATED: [2026-10-29 Thu 09:29]
+:END:
+:LOGBOOK:
+- Created [2026-10-29 Thu 09:29]
+:END:
+Add a tool to pi/extensions/pi-clojure that replaces one Clojure form, matched by structure instead of exact text, so that an edit survives whitespace and line-break differences. Build it on rewrite-clj, which Babashka 1.13.228 includes (`(require (quote rewrite-clj.zip))` succeeds without add-deps).
+Trigger: implement only after observed friction, that is, exact-text edits that fail on Clojure files because the formatting differs. Without that evidence, cancel this task.
+Prior art: skills/clj-replace/scripts/clj-replace.bb in https://github.com/humorless/clj-native-agent (commit de8b9b3). Do not vendor it. Tests on 2026-10-29 found these faults, which the new tool must not repeat:
+- A comment inside the matched form was deleted, and the script exited 0.
+- With old text `(a) (b)` it replaced only `(a)`; with new text `(b) (c)` it wrote only `(b)`. Both runs reported success.
+- An anonymous function `#(...)` never matched (exit 2), because its sexpr contains generated parameter names.
+- Its SKILL.md does not give the script path.
+Acceptance criteria:
+- Refuse old or new text that parses to more than one form, or replace the whole sequence; never truncate silently.
+- Refuse, or report and preserve, comments and `#_` forms inside the matched node.
+- Match `#(...)`, reader conditionals, and metadata forms, with tests.
+- Require exactly one match; on no match or several matches, report each candidate location and change nothing.
+- Report the file location of the replacement, and add the tool to the pi-clojure README and to skills/clojure/SKILL.md.
+
 * Fixes
 
 ** TODO herdr-orch: failed-spawn hygiene :skill:herdr_orch:
