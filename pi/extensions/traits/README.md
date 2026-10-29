@@ -19,3 +19,10 @@ The extension invokes the co-installed `herdr-orch` trait launcher. Its path, sy
 On an interpolation error, the extension shows a warning and sends the original input unchanged. Unknown tokens are not errors: they remain unchanged without a warning.
 
 The extension provides no slash commands and has no suggested or default keybindings.
+
+## Compatibility review
+
+Last review: 2026-10-29, against pi 1.4.0.
+
+- Babashka 1.13.228 runs the trait launcher.
+- Checks: `test.sh` (including the pi integration suite), type-check against the pi 1.4.0 declarations, and `pi --mode rpc` load with empty stderr.

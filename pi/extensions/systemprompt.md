@@ -13,3 +13,10 @@ Displays the current system prompt without adding it to model context.
 - **JSON and print:** transcript rendering and RPC UI output are unavailable, so the command exits without output or a session/context entry.
 
 The extension has no external runtime dependencies or default keybindings.
+
+## Compatibility review
+
+Last review: 2026-10-29, against pi 1.4.0.
+
+- No external dependency.
+- Checks: `systemprompt.test.ts`, `systemprompt.pi-integration.test.ts`, type-check against the pi 1.4.0 declarations, and `pi --mode rpc` load with empty stderr and `/systemprompt` registered.

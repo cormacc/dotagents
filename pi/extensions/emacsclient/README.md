@@ -377,3 +377,10 @@ export EMACSCLIENT_TIMEOUT=30000  # 30 seconds
 Public domain
 
 Sourced from https://github.com/Warbo/pi-extensions - not my work
+
+## Compatibility review
+
+Last review: 2026-10-29, against pi 1.4.0.
+
+- GNU Emacs 31.1: `emacs-integration.test.ts` ran against a real Emacs server.
+- Checks: `test.sh` (including the pi RPC integration suite), type-check against the pi 1.4.0 declarations, and `pi --mode rpc` load with empty stderr.

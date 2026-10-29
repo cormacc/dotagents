@@ -422,3 +422,10 @@ tests that cannot resolve their runtime imports.
 
 None beyond `@earendil-works/pi-coding-agent` and
 `@earendil-works/pi-tui`.
+
+## Compatibility review
+
+Last review: 2026-10-29, against pi 1.4.0.
+
+- Babashka 1.13.228 runs `ot`.
+- Checks: `test.sh` (including the pi RPC integration suite), type-check against the pi 1.4.0 declarations, and `pi --mode rpc` load with empty stderr and `/tasks` registered.

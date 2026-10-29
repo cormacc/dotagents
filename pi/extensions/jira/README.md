@@ -160,3 +160,10 @@ test calls Jira. The `tasks:status-changed` listener's session-scoped cleanup is
 covered by `pi/extensions/test/event-subscriptions.test.ts` (run from
 `pi/extensions/emacsclient/test.sh`). Live smoke tests use `SAND` as their
 sandbox project.
+
+## Compatibility review
+
+Last review: 2026-10-29, against pi 1.4.0.
+
+- Babashka 1.13.228 runs `ot`. The review did not exercise the Atlassian MCP server.
+- Checks: `test.sh`, type-check against the pi 1.4.0 declarations, and `pi --mode rpc` load with empty stderr and `/jira` registered.

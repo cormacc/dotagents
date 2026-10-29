@@ -40,3 +40,10 @@ something…" entry.
   reports the unsupported-mode error rather than a false cancellation when
   run under real `pi --mode rpc`. RPC is intentionally not used to assert
   anything about TUI rendering.
+
+## Compatibility review
+
+Last review: 2026-10-29, against pi 1.4.0.
+
+- No external dependency.
+- Checks: `question.test.ts`, `question.pi-integration.test.ts`, type-check against the pi 1.4.0 declarations, and `pi --mode rpc` load with empty stderr.

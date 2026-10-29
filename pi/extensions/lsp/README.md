@@ -18,4 +18,12 @@ The extension has no custom keybindings and requires the relevant language serve
 
 ## Development prerequisite
 
-The focused LSP suite imports pi's public `generateDiffString` API, so the root development dependencies include `@earendil-works/pi-coding-agent` 0.80.10. This is the narrow package prerequisite pulled forward from the following package-scope migration task; it does not normalize the extension's other legacy imports.
+The focused LSP suite imports pi's public `generateDiffString` API, so the root development dependencies include `@earendil-works/pi-coding-agent`, pinned to the installed Pi release (1.4.0).
+
+## Compatibility review
+
+Last review: 2026-10-29, against pi 1.4.0.
+
+- `typescript-language-server` 6.0.2 and `clojure-lsp` 2026.10.15-11.42.38: `document_symbols` worked live in a pi 1.4.0 session.
+- The review did not exercise `basedpyright` (through `nix-shell`), `gopls`, or `nil`.
+- Checks: `test.sh` (edit application and result rendering; it starts no language server), type-check against the pi 1.4.0 declarations, and `pi --mode rpc` load with empty stderr.

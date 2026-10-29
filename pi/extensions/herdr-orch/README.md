@@ -34,3 +34,11 @@ None.
 ## Tests
 
 `./test.sh` runs `index.test.ts` (pi-to-`oh` argv, `/oh` behaviour, and rendering) and `../test/herdr-agent-state.test.ts` with the repository's locked `tsx`.
+
+## Compatibility review
+
+Last review: 2026-10-29, against pi 1.4.0.
+
+- Herdr 0.9.5: the `herdr_agent` and `herdr_layout` tools worked live in a pi 1.4.0 session.
+- Babashka 1.13.228 runs `oh`.
+- Checks: `test.sh`, type-check against the pi 1.4.0 declarations, and `pi --mode rpc` load with empty stderr and `/oh` registered.

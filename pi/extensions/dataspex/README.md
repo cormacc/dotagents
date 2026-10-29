@@ -41,3 +41,10 @@ The tools communicate with the browser runtime through nREPL, so they are not
 TUI-only; they still require the preconditions above. Runtime dependencies are
 provided by the local `pi-clojure` extension and Pi-hosted
 `@earendil-works/pi-coding-agent` and TypeBox 1.x (`typebox`) APIs.
+
+## Compatibility review
+
+Last review: 2026-10-29, against pi 1.4.0.
+
+- No external dependency beyond the `pi-clojure` extension. The review did not exercise a live Dataspex runtime.
+- Checks: `test.sh`, type-check against the pi 1.4.0 declarations, and `pi --mode rpc` load with empty stderr.
