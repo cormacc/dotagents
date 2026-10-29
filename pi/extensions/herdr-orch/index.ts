@@ -226,7 +226,7 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "Inspect or create Herdr workspaces, tabs, and pane topology",
     promptGuidelines: [
       "Use herdr_layout, herdr_pane, and herdr_agent only when the user explicitly mentions Herdr or asks to inspect or control Herdr.",
-      "Use herdr_layout to create terminal topology before starting a process or agent. Default to a sibling pane in the caller's current tab and cwd; create a tab or workspace only when requested.",
+      "Use herdr_layout to create terminal topology before starting a process or agent. Default to a sibling pane in the caller's current tab and cwd; create a tab or workspace only when requested. This default does not apply to herdr-orch delegation: `oh task` spawns use the configured placement, which is the user's standing request, so do not pass --split or --tab to them unless the user names a placement.",
       "Read opaque workspace, tab, and pane IDs from herdr_layout results instead of constructing them, and preserve UI focus unless the user asks to switch context.",
     ],
     parameters: LayoutParams,
