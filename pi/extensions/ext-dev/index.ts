@@ -261,7 +261,8 @@ export default function (pi: ExtensionAPI) {
         } else {
           ctx.ui.notify(`Available extensions:\n${extNames.map((name) => `  ${name}`).join("\n")}`, "info");
         }
-        if (args.trim() && !parsed.name) pi.sendUserMessage(args.trim());
+        // A slash command can run while the agent streams; pi rejects an undelivered user message then.
+        if (args.trim() && !parsed.name) pi.sendUserMessage(args.trim(), { deliverAs: "followUp" });
         return;
       }
 
@@ -283,7 +284,9 @@ export default function (pi: ExtensionAPI) {
           totalBytes: ext.totalBytes,
         },
       }, { triggerTurn: false, deliverAs: "nextTurn" });
-      pi.sendUserMessage(parsed.instruction || `Help me work on the "${parsed.name}" extension.`);
+      pi.sendUserMessage(parsed.instruction || `Help me work on the "${parsed.name}" extension.`, {
+        deliverAs: "followUp",
+      });
     },
   });
 }

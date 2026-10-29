@@ -224,7 +224,7 @@ export default function (pi: ExtensionAPI) {
 
       // Navigate if URL given
       if (params.url) {
-        onUpdate?.({ content: [{ type: "text", text: `Navigating to ${params.url}...` }] });
+        onUpdate?.({ content: [{ type: "text", text: `Navigating to ${params.url}...` }], details: {} });
         await page.goto(params.url, { waitUntil: "domcontentloaded" });
       }
 
@@ -521,7 +521,7 @@ export default function (pi: ExtensionAPI) {
 
       return {
         content: [{ type: "text", text }],
-        details: { result },
+        details: { cancelled: false, result },
       };
     },
   });

@@ -756,6 +756,7 @@ export default function (pi: ExtensionAPI) {
             text: `Starting LSP for ${language}...`,
           },
         ],
+        details: {},
       });
 
       let client: LspClient;
@@ -776,6 +777,7 @@ export default function (pi: ExtensionAPI) {
             text: `Running ${action}...`,
           },
         ],
+        details: {},
       });
 
       let resultText: string;

@@ -743,7 +743,7 @@ export default function (pi: ExtensionAPI) {
       // `/tasks new` - create a new top-level task without opening the overlay.
       if (args?.trim() === "new") {
         const loaded = await loadTasks(ctx.cwd);
-        const created = await createTask(ctx, loaded.tasks, ctx.cwd, null, null);
+        const created = await createTask(ctx, loaded.tasks, ctx.cwd, null);
         if (created) {
           await refreshTaskUi(ctx, ctx.cwd);
         }
@@ -915,7 +915,7 @@ export default function (pi: ExtensionAPI) {
         };
         const onNotify = (
           message: string,
-          kind: "info" | "warn" | "error" = "info",
+          kind: "info" | "warning" | "error" = "info",
         ) => {
           ctx.ui.notify(message, kind);
         };
@@ -1776,7 +1776,7 @@ async function createTask(
   _tasks: Task[],
   cwd: string,
   anchor: Task | null,
-  relation: "sibling" | "child",
+  relation?: "sibling" | "child",
 ): Promise<Task | null> {
   const prompt = anchor
     ? (relation === "child"

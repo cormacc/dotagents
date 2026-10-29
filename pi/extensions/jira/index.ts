@@ -98,12 +98,12 @@ const NO_SELECTION =
 
 /** The selected task, or null after notifying why there is none. */
 async function selectedTaskOrNotify(
-  ctx: { cwd: string; ui: { notify(msg: string, level: "info" | "warn" | "error"): void } },
+  ctx: { cwd: string; ui: { notify(msg: string, level: "info" | "warning" | "error"): void } },
   cfg: Awaited<ReturnType<typeof loadJiraConfig>>,
 ) {
   try {
     const task = await resolveSelectedTask(ctx.cwd, cfg);
-    if (!task) ctx.ui.notify(NO_SELECTION, "warn");
+    if (!task) ctx.ui.notify(NO_SELECTION, "warning");
     return task;
   } catch (e) {
     ctx.ui.notify(`Could not read the selected task: ${(e as Error).message}`, "error");
@@ -154,7 +154,7 @@ export default function (pi: ExtensionAPI) {
         if (!isConnected) {
           ctx.ui.notify(
             "Atlassian MCP: disconnected. Run /mcp login atlassian to enable Jira workflows.",
-            "warn",
+            "warning",
           );
           return;
         }
@@ -174,12 +174,12 @@ export default function (pi: ExtensionAPI) {
         if (rest.length === 0) {
           ctx.ui.notify(
             `Usage: /jira ${subcommand} KEY [KEY...]   (KEY = PROJ-NNN or a bare number when #+JIRA_PROJECT is set)`,
-            "warn",
+            "warning",
           );
           return;
         }
         if (!isConnected) {
-          ctx.ui.notify(DISCONNECTED, "warn");
+          ctx.ui.notify(DISCONNECTED, "warning");
           return;
         }
 
@@ -208,14 +208,14 @@ export default function (pi: ExtensionAPI) {
 
       if (subcommand === "claim" || subcommand === "comment") {
         if (!isConnected) {
-          ctx.ui.notify(DISCONNECTED, "warn");
+          ctx.ui.notify(DISCONNECTED, "warning");
           return;
         }
         const body = rest.join(" ").trim();
         if (subcommand === "comment" && !body) {
           ctx.ui.notify(
             "Usage: /jira comment <markdown body>   (operates on the selected task's :LINKED_ISSUES:)",
-            "warn",
+            "warning",
           );
           return;
         }
@@ -223,7 +223,7 @@ export default function (pi: ExtensionAPI) {
         const task = await selectedTaskOrNotify(ctx, cfg);
         if (!task) return;
         if (task.keys.length === 0) {
-          ctx.ui.notify("The selected task has no Jira-shaped :LINKED_ISSUES:.", "warn");
+          ctx.ui.notify("The selected task has no Jira-shaped :LINKED_ISSUES:.", "warning");
           return;
         }
         sendTrigger(
@@ -240,7 +240,7 @@ export default function (pi: ExtensionAPI) {
 
       if (subcommand === "create") {
         if (!isConnected) {
-          ctx.ui.notify(DISCONNECTED, "warn");
+          ctx.ui.notify(DISCONNECTED, "warning");
           return;
         }
         const opts = parseCreateArgs(rest);
@@ -249,7 +249,7 @@ export default function (pi: ExtensionAPI) {
         if (!project) {
           ctx.ui.notify(
             "Usage: /jira create [PROJECT] [--type Task|Story|Bug|Epic]   (or set #+JIRA_PROJECT in TASKS.setup.org / TASKS.local.org)",
-            "warn",
+            "warning",
           );
           return;
         }
@@ -265,7 +265,7 @@ export default function (pi: ExtensionAPI) {
 
       ctx.ui.notify(
         `Unknown subcommand "${subcommand}". Available: status, clone, get, claim, comment, create.`,
-        "warn",
+        "warning",
       );
     },
   });

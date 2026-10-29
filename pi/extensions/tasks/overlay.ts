@@ -97,7 +97,7 @@ export class TasksOverlay {
     /** Called when the user presses `J` to open linked-issue URLs. */
     private onOpenUrls?: (urls: string[]) => Promise<void>,
     /** Display a one-shot notification (status footer / toast). */
-    private onNotify?: (message: string, kind?: "info" | "warn" | "error") => void,
+    private onNotify?: (message: string, kind?: "info" | "warning" | "error") => void,
     /** Called when a task's status is cycled (via →/← / l/h). The canonical
         cycle order lives in `ot` (`ot status --cycle`); the overlay passes
         only a direction and receives the resolved status plus a fresh tree. */
@@ -427,7 +427,7 @@ export class TasksOverlay {
 
   private async cycleStatus(direction: 1 | -1): Promise<void> {
     if (this.statusUpdateInFlight) {
-      this.onNotify?.("Status update already in progress; wait for it to finish.", "warn");
+      this.onNotify?.("Status update already in progress; wait for it to finish.", "warning");
       return;
     }
     const row = this.rows[this.cursor];
@@ -465,7 +465,7 @@ export class TasksOverlay {
    *  status in-flight guard so only one graph mutation runs at a time. */
   private async cyclePriority(direction: 1 | -1): Promise<void> {
     if (this.statusUpdateInFlight) {
-      this.onNotify?.("Update already in progress; wait for it to finish.", "warn");
+      this.onNotify?.("Update already in progress; wait for it to finish.", "warning");
       return;
     }
     const row = this.rows[this.cursor];
@@ -581,7 +581,7 @@ export class TasksOverlay {
     const unresolvable = issues.filter((i) => i.url === null);
     if (resolvable.length === 0) {
       const first = unresolvable[0]?.error ?? "No resolvable linked-issue URLs.";
-      this.onNotify?.(first, "warn");
+      this.onNotify?.(first, "warning");
       return;
     }
 
