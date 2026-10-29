@@ -2,6 +2,6 @@
   "name": "pi-chromium",
   "private": true,
   "dependencies": {
-    "puppeteer-core": "^25.12.0"
+    "puppeteer-core": "25.16.0"
   }
 }

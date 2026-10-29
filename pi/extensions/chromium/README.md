@@ -20,9 +20,9 @@ user who can interact with its in-page overlay.
 
 ## Dependencies
 
-Runtime dependency: `puppeteer-core` (`^25.12.0`). The extension uses Pi-hosted
-`@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`,
-`@earendil-works/pi-tui`, and TypeBox 1.x (`typebox`) APIs.
+Runtime dependency: `puppeteer-core`, pinned to an exact version. The extension uses Pi-hosted `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-tui`, and TypeBox 1.x (`typebox`) APIs.
+
+The pin is exact because a range does not track new releases here. Home Manager activation reinstalls only when `package.json` changes, and it ignores the lockfile, so a range resolves once on each host when the manifest changes. Hosts then differ, and none of them follows later releases. Bump the pin at each compatibility review, and when the symptom below appears.
 
 ### Keep puppeteer-core in step with Chrome
 
@@ -36,10 +36,15 @@ Symptom-to-fix: if the CDP HTTP endpoint responds but the tools time out, the
 puppeteer-core version is too old for this Chrome. Bump it:
 
 ```sh
-npm install puppeteer-core@latest   # then reload the extension / restart pi
+npm install --save-exact puppeteer-core@latest   # then reload the extension / restart pi
 ```
 
-Observed once: `puppeteer-core@23.11.1` could not connect to `Chrome/153`
-(connect never resolved); `@25.12.0` connected in ~34 ms. The dependency is a
-`^25` range so patch/minor Chrome updates stay covered; a major Chrome jump may
-still need a manual bump.
+Observed once: `puppeteer-core@23.11.1` could not connect to `Chrome/153` (connect never resolved); `@25.12.0` connected in ~34 ms. Each puppeteer-core release names the Chrome version it targets in `PUPPETEER_REVISIONS`.
+
+## Compatibility review
+
+Last review: 2026-10-29, against pi 1.4.0.
+
+- `puppeteer-core` 25.16.0. It targets Chrome 156.0.8078.47.
+- Chromium 155.0.8059.84 (Nix, running on port 9222): `puppeteer.connect()` succeeded and listed the open pages. The installed `chromium` 156.0.8078.47 was not running, so the review did not exercise it.
+- Checks: type-check against the pi 1.4.0 declarations, and `pi --mode rpc` load with empty stderr. The extension has no test suite.
