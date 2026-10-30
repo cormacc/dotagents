@@ -3,6 +3,11 @@
 ## Questions
 - When the user asks a question, answer the question. Do not start coding. Use tools or scripts only when you need more information for the answer.
 
+## Replies
+- Start a reply with the answer or the result. Do not open with a statement of what you will do. Do not close with a recap or an offer of more help.
+- Number the steps that the user must do.
+- In work that continues over many turns, report progress as "step N of M".
+
 ## Prose
 - Write succinctly.
 - Use ASD-STE100 Simplified Technical English.
