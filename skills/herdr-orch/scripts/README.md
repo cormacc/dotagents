@@ -98,6 +98,15 @@ Each `--artifact` becomes a portable Markdown link. Use `<relative-path>` or `<r
 
 `oh agent start <name> --kind KIND --pane PANE` accepts any nonblank kind and lets the installed Herdr decide whether it exists (`herdr agent start --help` prints the live enum). A blank kind is refused before Herdr is invoked. `oh pane split [--pane PANE] [--direction right|down] [--cwd DIR] [--focus]` splits the named pane, defaulting to the caller's; an omitted direction is inferred from the *source* pane's geometry, and `--focus` requests focus where the default preserves it. Delegation never uses `--focus` ([docs/contract.md#Placement](docs/contract.md#placement)). `oh pane wait-output` searches Herdr's selected snapshot immediately, including existing output, and now explicitly uses the same `recent-unwrapped` source default as the wrapper's read family instead of upstream's `recent`. A live probe put a marker into scrollback followed by 250 lines: `oh pane read --lines 300` and `wait-output --source recent-unwrapped --lines 300` found it, while the formerly unqualified wait timed out. Aligning the source default made `wait-output --lines 300` find it too. Snapshot depth still matters, so pass `--source` and `--lines` explicitly when the search window matters. `oh spawn "<shell command>"` runs an ordinary command in a new tab, always unfocused because it never delegates.
 
+## Pi upgrade checks
+
+Run this checklist when the installed Pi store path or version changes:
+
+1. Run `scripts/pi/test.sh` against the installed runtime, not the repository SDK. Trace each failure to the installed consumer before changing an expectation.
+2. Re-check native tool-declaration placement in `pi/fork-provider-context.test.ts` against the installed `pi-ai` source and model capabilities.
+3. Re-check `turnBoundary` in `pi/fork-adapter.ts` against the installed `pi-coding-agent` turn semantics.
+4. Derive expectations from the consumer source, not an observed request payload. Run the passing controls and the known-bad mutations after any verifier change.
+
 ## Development
 
 Maintainer test, smoke, and fixture guidance is in [AGENTS.md](AGENTS.md).

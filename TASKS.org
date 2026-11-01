@@ -39,7 +39,7 @@
   - [[#herdr-orch-a-failed-spawn-round-is-permanent-ledger-residue][herdr-orch: a failed spawn round is permanent ledger residue]]
   - [[#guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][Guard against a parallel tool batch that writes and reads the same path]]
   - [[#herdr-orch-oh-task-start-fails-with-agent_pane_busy-when-started-right-after-another-spawn][herdr-orch: oh task start fails with agent_pane_busy when started right after another spawn]]
-  - [[#org-plan-check-that-a-change-records-identifiers-resolve][org-plan: check that a change-record's identifiers resolve]]
+  - [[#org-plan-check-non-path-identifiers-in-change-records][org-plan: check non-path identifiers in change-records]]
 
 * Explorations
 
@@ -132,7 +132,7 @@ CLOSED: [2026-08-27 Thu 14:21]
 - State "CANCELLED" from "TODO" [2026-08-27 Thu 14:21]
 :END:
 #+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
-*** TODO [#C] Review self-improvement skill w.r.t. org-memory protocol :org:
+*** TODO [#C] Compare self-improvement lesson capture with dev-agent-backlog :org:
 :PROPERTIES:
 :CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
 :CREATED: [2026-05-02 Sat 12:22]
@@ -142,10 +142,9 @@ CLOSED: [2026-08-27 Thu 14:21]
 :END:
 Spawned from the dev-agent-backlog prior-art review (parent task 5aed17ed-cfc4-4ae3-bb24-57c7d974a142). The review deferred dev-agent-backlog's "solution / lesson capture" idea on the basis that it overlaps with the existing self-improvement skill and is a separate concern from the task lifecycle protocol.
 
-Re-examine the self-improvement skill against the org-memory protocol (org-tasks, org-plan, org-jira) and decide:
-- whether durable lessons / solutions should land as their own org artefacts, separate change-records, or knowledge-base files
-- whether the skill should integrate with TASKS.org via spawned TODOs vs remain orthogonal
-- whether anything in the dev-agent-backlog HTML summary (design/log/2026-05-01-dev-agent-backlog-review-summary.html) should be borrowed for the self-improvement skill specifically
+Remaining scope: compare solution and lesson capture in [[file:design/log/2026-05-01-dev-agent-backlog-review-summary.html]] with [[file:skills/self-improvement/SKILL.md]], and identify a concrete missing behaviour worth adopting, or record that no addition is justified.
+
+The integration decisions are already represented by the self-improvement contract: TODO-first capture through =ot=, ownership routing, deduplication, and optional promotion through =org-plan=. Do not reopen those decisions or introduce another knowledge store merely to complete this prior-art comparison.
 
 ** TODO Investigate clojure in codemode :pi:clojure:
 :PROPERTIES:
@@ -297,38 +296,17 @@ Refresh the change-record before execution. Found stale [2026-10-20 Tue] at e67e
 Design and ship a shared skill-level helper that bootstraps a local Babashka copy when `bb` is absent. Both `org-tasks` (`ot`) and `herdr-orch` (`oh`, `traits`) depend on `bb`, so the helper belongs at skill level, not inside the Herdr plugin. Open design questions: where the helper lives, how both skills consume it, download and checksum policy, PATH placement, and the update story. Include the `ot` executable in the bootstrap decision: when `ot` is absent, define whether to install it with bbin or invoke the checked-out launcher. The helper must not assume an absolute user-local `ot` path. Raised during planning of the herdr plugin wrapper ([[plan:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]]); that change ships an install hint only.
 Priority lowered from A to B [2026-10-20 Tue] to match the plugin wrapper, its only recorded driver. Raise it again if `ot` or `oh` portability on hosts without `bb` becomes urgent on its own.
 
-** TODO Vendored skill hygiene :skill:
+** CANCELLED Vendored skill hygiene :skill:
+CLOSED: [2026-11-01 Sun 12:02]
 :PROPERTIES:
 :CUSTOM_ID: 65e49f0b-d805-4974-9511-75901d9992b6
 :CREATED: [2026-08-27 Thu 14:22]
 :END:
 :LOGBOOK:
 - Created [2026-08-27 Thu 14:22]
+- State "CANCELLED" from "TODO" [2026-11-01 Sun 12:02]
 :END:
-Remaining work: the glab upstream report below. =skills/herdr/LICENSE= was added in =7763016=. Ponytail attribution and reference access belong to the selected plan's guidance, workflow and activation tasks.
-*** TODO gitlab-cli-skills: glab-schedule create rejects --output json (list supports it) :skill_gitlab_cli_skills:
-:PROPERTIES:
-:CUSTOM_ID: 6d205682-bacc-465a-911f-419a76604e6f
-:CREATED: [2026-08-20 Thu 10:55]
-:END:
-:LOGBOOK:
-- Created [2026-08-20 Thu 10:55]
-:END:
-Verified: the installed `glab schedule create` rejects `--output json`/`-F json` ("Unknown flag: --output"), while `glab schedule list --output json` works correctly. `gitlab-cli-skills/glab-schedule/SKILL.md` documents `--output json`/`-F json` support generically for `glab schedule list` but does not flag that `create` (and likely `update`/`run`/`delete`) lack it -- an agent following the doc's pattern could reasonably expect JSON output from `create` too.
-
-gitlab-cli-skills is vendored third-party content (commit fc86308, "deps: Added gitlab-cli-skills (3rd party)"). Per the user: raise this upstream rather than editing the vendored file locally.
-
-*EDIT* [2026-08-27 Thu] The original body said no upstream source URL was recorded in the commit or the README, and route (a) was "locate the upstream repo". That is no longer true and the search step is done: [[file:skills/README.org::*Vendored]] names https://github.com/vince-winkintel/gitlab-cli-skills as the source, and `gitlab-cli-skills/.vendor.edn` records the upstream commit that `scripts/sync-gitlab-cli-skills.bb` installed. Remaining work is only to file the report or a PR there against `glab-schedule/SKILL.md`, and to record the issue link here. Keep the local-fix fallback for the case where upstream is unresponsive, noting that a local edit reclassifies the skill out of the vendored set per [[file:skills/README.org::*Vendored]].
-
-Origin:
-- cwd: /home/cormacc/nmd/infra/playbooks
-- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
-- timestamp: [2026-08-20 Thu 10:50]
-- sender: agent
-
-Evidence:
-- `glab schedule create --cron "0 6 * * *" --description "..." --ref develop --output json` -> `Unknown flag: --output.`
-- `glab schedule list --output json` succeeded and returned valid JSON in the same session.
+Cancelled as a redundant wrapper. Its sole remaining report task, [[task:6d205682-bacc-465a-911f-419a76604e6f]], was moved to Fixes with its evidence intact and resolved there. The earlier licence and attribution work is not reopened.
 
 ** TODO [#B] traits: probe backlog :skill:herdr_orch:
 :PROPERTIES:
@@ -422,7 +400,8 @@ Word stores a field's last result, e.g. "Error! Reference source not found.", an
 #+IMPORT: [[plan:2026-10-23-sharepoint-document-editing.org]]
 Session check-out, tracked edits with reason comments, minor check-in; at the end of review, a clean copy and (on explicit request) a published major version.
 
-** TODO ms365: write ranges in a live SharePoint workbook
+** DONE ms365: write ranges in a live SharePoint workbook
+CLOSED: [2026-11-01 Sun 12:02]
 :PROPERTIES:
 :CUSTOM_ID: 18357aa0-98cc-420b-9a52-4a8d94638adf
 :CREATED: [2026-10-23 Fri 13:29]
@@ -430,8 +409,11 @@ Session check-out, tracked edits with reason comments, minor check-in; at the en
 :END:
 :LOGBOOK:
 - Created [2026-10-23 Fri 13:29]
+- State "DONE" from "TODO" [2026-11-01 Sun 12:02]
 :END:
 Write rows into a SharePoint workbook through the Graph workbook API (no file round-trip), using the Babashka Graph client from [[plan:2026-10-23-sharepoint-document-editing.org]]. In a library that requires check-out, a range write returns 403 EditModeWorkbookCheckedOutRequired unless the workbook is checked out (spike, 2026-10-23), so the write runs as a transaction: check out, write, read back, check in as minor (discard the check-out on failure). Acceptance: write one row in a transaction; re-read it and report a mismatch; refuse to overwrite a non-empty cell unless told to; write text cells as text (Excel converted "Oct 2026" to a date serial in the spike); documented in skills/ms365 without organisation names. First consumer: the nmd-dev task "Let nmd-dcr write the LG0017 DCR reservation".
+
+Result: =excel-write!= and =transaction!= in =skills/ms365/scripts/src/ms365/graph.clj= implement the guarded write, text formatting, read-back and transaction flow; =skills/ms365/references/graph-client.md= documents it. The fake-Graph suite passed 17 tests and 76 assertions during backlog review. [[file:design/log/2026-10-23-sharepoint-document-editing.org]] records the earlier live transaction and occupied-cell refusal. This closure does not claim a new live write or completion of the consumer rollout or Word publication trial.
 
 ** TODO pi-clojure: structural edit tool for Clojure forms :pi:clojure:
 :PROPERTIES:
@@ -545,23 +527,50 @@ Result: both references and the Pi =TraitExpansion= type match the implemented r
 :END:
 oh worktree remove deletes the managed checkout but retains its orch/<id> branch, and contract.md section Worktree reconciliation and teardown states that oh never deletes a branch. Retained branches accumulate after integration. Decide between documented operator guidance and an ownership-checked verb. Carried over from the cancelled worktrunk investigation (47f84d9a), whose worktree-management motivation the managed checkouts (--worktree new, oh worktree list/remove) already cover.
 
+** CANCELLED gitlab-cli-skills: glab-schedule create rejects --output json (list supports it) :skill_gitlab_cli_skills:
+CLOSED: [2026-11-01 Sun 12:02]
+:PROPERTIES:
+:CUSTOM_ID: 6d205682-bacc-465a-911f-419a76604e6f
+:CREATED: [2026-08-20 Thu 10:55]
+:END:
+:LOGBOOK:
+- Created [2026-08-20 Thu 10:55]
+- State "CANCELLED" from "TODO" [2026-11-01 Sun 12:02]
+:END:
+Verified: the installed `glab schedule create` rejects `--output json`/`-F json` ("Unknown flag: --output"), while `glab schedule list --output json` works correctly. `gitlab-cli-skills/glab-schedule/SKILL.md` documents `--output json`/`-F json` support generically for `glab schedule list` but does not flag that `create` (and likely `update`/`run`/`delete`) lack it -- an agent following the doc's pattern could reasonably expect JSON output from `create` too.
+
+gitlab-cli-skills is vendored third-party content (commit fc86308, "deps: Added gitlab-cli-skills (3rd party)"). Per the user: raise this upstream rather than editing the vendored file locally.
+
+*EDIT* [2026-08-27 Thu] The original body said no upstream source URL was recorded in the commit or the README, and route (a) was "locate the upstream repo". That is no longer true and the search step is done: [[file:skills/README.org::*Vendored]] names https://github.com/vince-winkintel/gitlab-cli-skills as the source, and `gitlab-cli-skills/.vendor.edn` records the upstream commit that `scripts/sync-gitlab-cli-skills.bb` installed. That report was the remaining request at the time.
+
+Resolution: cancelled by the approved backlog housekeeping. The cited JSON example in =skills/gitlab-cli-skills/glab-schedule/SKILL.md= explicitly applies to =glab schedule list=; the task identifies an inference from that example, not an incorrect create-command instruction. An additional warning alone does not justify the proposed upstream report. Vendored content is unchanged.
+
+Origin:
+- cwd: /home/cormacc/nmd/infra/playbooks
+- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
+- timestamp: [2026-08-20 Thu 10:50]
+- sender: agent
+
+Evidence:
+- `glab schedule create --cron "0 6 * * *" --description "..." --ref develop --output json` -> `Unknown flag: --output.`
+- `glab schedule list --output json` succeeded and returned valid JSON in the same session.
+
 * Upstream issues
 
 * Chores
-** TODO herdr-orch: re-check Pi-version-specific test rules after each Pi upgrade :herdr_orch:
+** DONE herdr-orch: record the Pi upgrade verification checklist :herdr_orch:
+CLOSED: [2026-11-01 Sun 12:05]
 :PROPERTIES:
 :CUSTOM_ID: 216bd6b9-ed8e-4277-b653-bea0ea689706
 :CREATED: [2026-10-22 Thu 18:43]
 :END:
 :LOGBOOK:
 - Created [2026-10-22 Thu 18:43]
+- State "DONE" from "TODO" [2026-11-01 Sun 12:05]
 :END:
-Acceptance criteria:
-- [ ] After an installed Pi upgrade, ~skills/herdr-orch/scripts/pi/test.sh~ passes on the new runtime, or each failure is traced to a runtime change and its test rule is re-derived from the new installed consumer.
-- [ ] The native case in ~fork-provider-context.test.ts~ (tool-declaration placement) and the ~turnBoundary~ turn rule in ~fork-adapter.ts~ are re-checked against the new ~pi-ai~ and ~pi-coding-agent~ sources.
-- [ ] Must not: derive an expectation from an observed request payload.
+Scope changed by the approved backlog housekeeping: record the recurring upgrade checks as maintenance guidance rather than leave an implementation task open indefinitely. [[file:skills/herdr-orch/scripts/README.md]] section 'Pi upgrade checks' retains the installed-runtime trigger, consumer-derived native declaration and turn-boundary checks, and passing/known-bad verifier controls. This closure does not claim verification of a future Pi release.
 
-Scope/reference: ~skills/herdr-orch/scripts/README.md~ names the Pi 1.4.0 declaration rule. The 1.3.0 to 1.4.0 upgrade changed ~buildRequestBody~ tool resolution in ~openai-codex-responses.js~ and broke that case (see the record ~design/log/2026-10-21-child-context-modes.org~, Gotchas). Trigger: a change to the installed ~pi~ store path.
+The 1.3.0 to 1.4.0 tool-declaration change remains documented in [[file:design/log/2026-10-21-child-context-modes.org::*Summary]].
 
 * Agent feedback
 
@@ -697,7 +706,7 @@ Evidence:
 - RETROLOG.org 2026-10-01 records the same failure ("Parallel read and write"), after which the rule was rewritten as an ordering rule.
 - 2026-10-22 (dotagents, herdr-orch change-record closure): one batch ran an Edit and a bash ~sed -i~ line deletion on the same record. The Edit wrote content from its own earlier read, so the deletion was lost without an error; a diff against a snapshot showed it.
 
-** TODO org-plan: check that a change-record's identifiers resolve :skill:org_plan:
+** TODO org-plan: check non-path identifiers in change-records :skill:org_plan:
 :PROPERTIES:
 :CUSTOM_ID: 58d81bcd-bb15-4835-9737-da8fe64dd93b
 :CREATED: [2026-10-14 Wed 16:22]
@@ -705,7 +714,9 @@ Evidence:
 :LOGBOOK:
 - Created [2026-10-14 Wed 16:22]
 :END:
-Add a change-record check, in `ot doctor` or an org-plan script, that resolves each backticked identifier in a record (keywords, auto-resolved `::` keywords, qualified and simple symbols, namespaces, file paths) against tracked source, and reports the unresolved ones for review. Include a positive control in each run. Expect some names to stay unresolved by design (removed identifiers, rejected alternatives, library internals), so report them and do not fail on them.
+Add an advisory change-record check that resolves backticked non-path identifiers (keywords, auto-resolved =::= keywords, qualified and simple symbols, and namespaces) against tracked source. Report unresolved names for review without failing: removed identifiers, rejected alternatives and library internals can remain unresolved by design. Include a positive control in each run.
+
+The constrained path-citation check already exists as =inline-path-dangling= in =skills/org-tasks/scripts/src/org_tasks/doctor.clj=. Reuse that report rather than implementing another path checker; this task covers only the remaining symbol and namespace analysis.
 
 Origin:
 - cwd: /home/cormacc/nmd/products/connect/portal
