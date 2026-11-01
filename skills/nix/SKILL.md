@@ -114,6 +114,8 @@ For dirty-working-tree evals, `git add` new files first -- Nix copies only track
 
 Refer to a local flake in a Git repository as `.#attr` or `git+file://<dir>`; in a Nix expression, use `builtins.getFlake ("git+file://" + toString <dir>)`. `builtins.getFlake (toString <dir>)` and `path:<dir>` copy the whole directory, ignored files included, into the store on each evaluation.
 
+For a clean, untracked snapshot inside another Git repository, use an explicit `path:<snapshot-root>#<attr>` reference so Nix evaluates that snapshot rather than the enclosing Git source. Keep generated output outside the snapshot before evaluation: `path:` includes ignored files. Continue to use Git-backed references for ordinary tracked flakes.
+
 `nix build --file <f>` and `nix eval --file <f>` take the attribute as a positional argument (`nix eval --file f.nix a`). `-A` exists only for `nix-build` and `nix-instantiate`.
 
 ## Pinning and inputs

@@ -811,13 +811,17 @@ Origin:
 Evidence:
 CD workers on 30-31 October repeatedly reported WAITING checkpoint commits. Workers implementing DMA chunking and ETS-in-ISR explicitly reported later HEAD exports capturing their own changes as the baseline. Current skills/herdr-orch/scripts/src/herdr_orch/cli.clj defines checkpoint-worktree! to stage changes and commit dirty write-enabled worktrees. The mechanical contract already documents WAITING checkpoints, while waiting-instruction and publication-guidance omit the baseline consequence. Original project sessions: 2026-10-30T12-35-51-971Z_01a18ccf-3422-7625-a258-deb2579a6a63.jsonl and 2026-10-30T13-59-21-476Z_01a18d1b-a483-7569-a5ba-f1b93e27a28e.jsonl under ~/.pi/agent/sessions/ CD worktree directories. Review: ~/nmd/products/mbt/cd/.tmp/retro-20261031/review.md. Routed as TODO because this is executable work and the dotagents tree has unrelated changes.
 
-** TODO nix: document explicit path flakes for untracked scratch exports :skill:nix:
+** DONE nix: document explicit path flakes for untracked scratch exports :skill:nix:
+CLOSED: [2026-11-01 Sun 12:38]
 :PROPERTIES:
 :CUSTOM_ID: 9cf06f9f-fd19-4ccf-a9c5-6209e59b5c95
 :CREATED: [2026-10-31 Sat 16:04]
+:STARTED: [2026-11-01 Sun 12:08]
 :END:
 :LOGBOOK:
 - Created [2026-10-31 Sat 16:04]
+- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
+- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
 :END:
 Approved CD retrospective item 7. In skills/nix/SKILL.md, clarify the narrow exception for a clean, untracked snapshot inside another Git repository: use an explicit path:<snapshot-root> flake reference. Retain Git-backed evaluation for ordinary tracked flakes and the warning that path: includes ignored output.
 
@@ -828,6 +832,8 @@ Acceptance:
 - The exception sits beside the existing Git-backed-flake advice and does not contradict its default.
 - A disposable untracked-export case demonstrates the selection failure and explicit-path success without copying a parent build tree into the store.
 - Ordinary tracked-flake advice remains unchanged.
+
+Result: the narrow exception is beside the Git-backed-flake advice in =skills/nix/SKILL.md=. A disposable input-free flake probe passed the tracked-parent control, rejected the untracked Git-backed snapshot, and evaluated that snapshot through an explicit =path:= reference. Evidence: =.tmp/backlog-housekeeping.AMNxsn/nix-probe.jsonl=.
 
 Origin:
 - cwd: /home/cormacc/nmd/products/mbt/cd
