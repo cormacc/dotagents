@@ -1,6 +1,6 @@
 # Traits: store, admission, and probing
 
-Second-level reference for `herdr-orch`. The runtime summary is in [SKILL.md](../SKILL.md). The mechanics -- token grammar, resolution, frontmatter, `incompatible-with:` enforcement -- are in [scripts/docs/contract.md](../scripts/docs/contract.md) section Trait composition.
+Second-level reference for `herdr-orch`. The runtime summary is in [SKILL.md](../SKILL.md). The mechanics -- token grammar, resolution, and frontmatter -- are in [scripts/docs/contract.md](../scripts/docs/contract.md) section Trait composition.
 
 This reference covers the packaged trait store at `skills/herdr-orch/traits/`, the repository user-layer store at `traits/`, and the admission rules for their fragments. Skill-required fragments belong in the packaged store. The user layer holds local additions and gate-only fragments. A trait is a small reusable directive, named by its store file and inserted at a `%<name>` token by a consumer.
 
@@ -10,7 +10,7 @@ Rationale, measured probe history, and provenance conventions are in the second 
 
 Traits carry no implementation of their own. The interpolator remains `skills/herdr-orch/scripts/src/herdr_orch/traits.clj` as `herdr-orch.traits`, consumed in-process by `oh`. Do not move or copy it, add a `scripts/` tree here, add a shared classpath or path registry, or add availability checks or degraded modes between skills.
 
-Keep fragment mechanics with the interpolator contract in `skills/herdr-orch/scripts/docs/contract.md`: resolution, token grammar, frontmatter handling, unknown-token behavior, and `incompatible-with:` enforcement are implementation contracts, not alternate declarations here.
+Keep fragment mechanics with the interpolator contract in `skills/herdr-orch/scripts/docs/contract.md`: resolution, token grammar, frontmatter handling and unknown-token behavior are implementation contracts, not alternate declarations here.
 
 The probe runner is repo-level development tooling at `scripts/run-trait-gate.bb`. No probe logic belongs on any shipped runtime path.
 

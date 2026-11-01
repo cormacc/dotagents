@@ -194,6 +194,7 @@
                 "~~~\n%focused\n~~~\n"
                 "    %focused\n\t%focused\n")
            (:text result)))
+    (is (= #{:text :resolved :unknowns :repeats} (set (keys result))))
     (is (= ["focused" "ct"] (mapv :trait (:resolved result))))
     (is (= ["s"] (:unknowns result)))
     (is (= [] (:repeats result)))

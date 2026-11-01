@@ -471,13 +471,15 @@ Apply the seven approved audit suggestions: canonical planning instructions and 
 
 * Fixes
 
-** TODO herdr-orch: failed-spawn hygiene :skill:herdr_orch:
+** STARTED herdr-orch: failed-spawn hygiene :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: e66d5a45-823f-4c36-884b-2657c97d65c8
 :CREATED: [2026-10-20 Tue 12:25]
+:STARTED: [2026-11-01 Sun 12:08]
 :END:
 :LOGBOOK:
 - Created [2026-10-20 Tue 12:25]
+- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
 :END:
 Aggregate for residue left by a spawn that fails before its agent starts, plus small herdr-orch doc corrections. The two field reports (a22509e2, 435c5d86) share one trigger: agent_pane_busy on back-to-back oh task start. Verified 2026-10-20 at e67e868: safe-cleanup! in cli.clj marks the entry failed and closes the pane, but does not remove a managed checkout or its orch/<id> branch; contract.md section Retention states ledger entries are never deleted, so filtering failed entries from routine listings is the likely fix rather than a retire verb. contract.md section Start and prompt outcomes bans a local start retry (4741d59), so agent_pane_busy needs a repro on the installed Herdr (0.9.5) and either an upstream report or an explicit reversal of that decision.
 *** TODO herdr-orch: a failed spawn round is permanent ledger residue :skill:herdr_orch:
@@ -518,15 +520,21 @@ Origin:
 
 Evidence:
 - 2026-10-13: `oh task start worker` run twice in one shell command; the first succeeded, the second returned exit 1 with `agent_pane_busy` for pane `w2:p41`, round status `failed`, worktree `.tmp/herdr-orch/worktrees/<id>` at the base commit. `oh task close` then refused ("assignment is not captured"), and `close --abandon` refused ("already terminal"). A retry 8 s after a later start succeeded.
-*** TODO [#C] herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md :skill:herdr_orch:
+*** DONE [#C] herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md :skill:herdr_orch:
+CLOSED: [2026-11-01 Sun 12:38]
 :PROPERTIES:
 :CUSTOM_ID: 6d9ebbbf-5bcf-4798-bea7-70ba5c5cb590
 :CREATED: [2026-09-22 Tue 13:09]
+:STARTED: [2026-11-01 Sun 12:08]
 :END:
 :LOGBOOK:
 - Created [2026-09-22 Tue 13:09]
+- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
+- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
 :END:
 skills/herdr-orch/references/traits.md claims \`incompatible-with:\` enforcement is documented/implemented in skills/herdr-orch/scripts/docs/contract.md, and contract.md's Trait composition section claims herdr-orch.traits/interpolate returns "incompatibility declarations by trait in :incompatibilities". Neither is true: traits.clj's interpolate returns only :text, :resolved, :unknowns and :repeats (no :incompatibilities key), and no \`incompatible-with:\` frontmatter parsing or enforcement exists anywhere in traits.clj or cli.clj. Identified but deliberately left unfixed during [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]] ("Correct the documentation rather than assume a conflict engine exists. This plan does not add a generic semantic conflict solver.") Correct both docs to match the actual implementation (or implement the feature, if still wanted).
+
+Result: both references and the Pi =TraitExpansion= type match the implemented result; the contract explicitly states that semantic conflicts are not enforced. The result-key assertion, trait suites and TypeScript check pass. No conflict engine was added.
 *** TODO herdr-orch: guidance or a verb for retiring integrated orch/* branches :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: a84f503e-d621-42fc-ae96-7c0e3c0dd7d9

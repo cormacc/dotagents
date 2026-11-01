@@ -16,7 +16,6 @@ export interface ResolvedTrait {
 export interface TraitExpansion {
   text: string;
   resolved: ResolvedTrait[];
-  incompatibilities: Record<string, string[]>;
   unknowns: string[];
   repeats: string[];
 }
