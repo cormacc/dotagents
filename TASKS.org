@@ -753,3 +753,55 @@ Reproduced in a clean worktree at HEAD 2ca64af. `ot status 17fea754 DONE` change
 - Created [2026-10-31 Sat 10:15]
 :END:
 The npm run check invocation failed in skills/herdr-orch/scripts/pi/test.sh: the API resolved under repository node_modules, which HERDR_ORCH_FORBID_BUNDLE_PREFIX rejects. The runner chooses pi on PATH; scripts/check.sh reaches it through bb test. A direct bash scripts/check.sh invocation passed the installed-Pi adapter stage, then hit the 300-second overall limit during extension tests. Make the npm entry point preserve installed-runtime selection without weakening the mismatch control. Evidence: .tmp/consolidation.FiGdAD/repository-check.log and repository-direct.log. This was discovered while verifying task c15712eb; it is not attributed to the consolidation changes.
+
+** TODO herdr-orch: expose publication checkpoints and pin child baselines :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 100aed02-e3f6-4856-b79c-988624991172
+:CREATED: [2026-10-31 Sat 16:04]
+:END:
+:LOGBOOK:
+- Created [2026-10-31 Sat 16:04]
+:END:
+Approved CD retrospective item 6. Put the existing worktree publication checkpoint side effect in generated child instructions. Require a baseline to be resolved to an immutable commit before publication and use that commit for exports, diffs and regression controls. Preserve checkpoint semantics and explicit parent integration; do not merely append another warning to the skill body.
+
+Acceptance:
+- Generated worktree guidance states that WAITING and terminal publications can stage nonignored changes, create a checkpoint and move HEAD.
+- Generated guidance requires immutable baseline commits rather than mutable HEAD for baseline exports and comparisons.
+- Prompt-generation tests check the guidance and the distinction between worktree and shared-root publication.
+- No checkpoint semantics, integration permissions or global AGENTS.md rules change.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ stim-resilience
+- timestamp: [2026-10-31 Sat 16:03]
+- sender: agent
+
+Evidence:
+CD workers on 30-31 October repeatedly reported WAITING checkpoint commits. Workers implementing DMA chunking and ETS-in-ISR explicitly reported later HEAD exports capturing their own changes as the baseline. Current skills/herdr-orch/scripts/src/herdr_orch/cli.clj defines checkpoint-worktree! to stage changes and commit dirty write-enabled worktrees. The mechanical contract already documents WAITING checkpoints, while waiting-instruction and publication-guidance omit the baseline consequence. Original project sessions: 2026-10-30T12-35-51-971Z_01a18ccf-3422-7625-a258-deb2579a6a63.jsonl and 2026-10-30T13-59-21-476Z_01a18d1b-a483-7569-a5ba-f1b93e27a28e.jsonl under ~/.pi/agent/sessions/ CD worktree directories. Review: ~/nmd/products/mbt/cd/.tmp/retro-20261031/review.md. Routed as TODO because this is executable work and the dotagents tree has unrelated changes.
+
+** TODO nix: document explicit path flakes for untracked scratch exports :skill:nix:
+:PROPERTIES:
+:CUSTOM_ID: 9cf06f9f-fd19-4ccf-a9c5-6209e59b5c95
+:CREATED: [2026-10-31 Sat 16:04]
+:END:
+:LOGBOOK:
+- Created [2026-10-31 Sat 16:04]
+:END:
+Approved CD retrospective item 7. In skills/nix/SKILL.md, clarify the narrow exception for a clean, untracked snapshot inside another Git repository: use an explicit path:<snapshot-root> flake reference. Retain Git-backed evaluation for ordinary tracked flakes and the warning that path: includes ignored output.
+
+Proposed rule:
+For a clean, untracked snapshot inside another Git repository, use an explicit path:<snapshot-root> flake reference so Nix evaluates the snapshot rather than the enclosing Git source. Keep generated output outside that snapshot before evaluation. Continue to use Git-backed references for normal tracked flakes.
+
+Acceptance:
+- The exception sits beside the existing Git-backed-flake advice and does not contradict its default.
+- A disposable untracked-export case demonstrates the selection failure and explicit-path success without copying a parent build tree into the store.
+- Ordinary tracked-flake advice remains unchanged.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/mbt/cd
+- git: git@git.nmd.ie:products/mbt/cd @ stim-resilience
+- timestamp: [2026-10-31 Sat 16:03]
+- sender: agent
+
+Evidence:
+The CD integration reviewer on 30 October received a not-tracked-by-Git error for .tmp/review-int1/tree/flake.nix. The subsequent nix develop invocation used explicit path:$PWD and the focused test run completed. Original session: ~/.pi/agent/sessions/--home-cormacc-nmd-products-mbt-cd--/2026-10-30T15-09-07-429Z_01a18d5b-83e5-724d-8883-a2dcf1c58bed.jsonl. Current Nix guidance prefers Git-backed flakes and warns about path: copying ignored output; add an exception, not a blanket replacement. Review: ~/nmd/products/mbt/cd/.tmp/retro-20261031/review.md. Routed as TODO because unrelated dotagents changes prevent the home-config tight-loop exception.
