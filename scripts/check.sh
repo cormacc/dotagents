@@ -29,9 +29,7 @@ scripts/check-section-links.bb \
   --exclude skills/herdr/ \
   --exclude skills/gitlab-cli-skills/ \
   --exclude skills/convert-documents-to-markdown/ \
-  --exclude skills/caveman/ \
-  --exclude skills/ultracave/ \
-  --exclude skills/megacave/
+  --exclude skills/ultracave/
 
 printf '\n==> skill-creator clean validation and packaging\n'
 python3 -m venv "$work/venv"

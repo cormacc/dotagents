@@ -7,17 +7,16 @@ Talk like smart caveman. Same brain, fewer tokens.
 Makes the model answer first and cut the ceremony: no greeting, hedging,
 filler, recap, or closer. Articles drop when the sentence still reads in one
 pass. Code, commands, paths, numbers, and exact error strings never change.
-Result depends on model and workload. Measured once on the 3.1.0 skill text (`evals/snapshots/results.json`: claude-opus-5-5, ten prompts, single run, output length only, tiktoken o200k approximation): caveman 3% fewer output tokens at the median than a plain `Answer concisely.` control, inside the noise; ultracave 35%; megacave 9%. No quality-equivalence claim is published. Mode persists until changed or stopped.
+Result depends on model and workload. Measured once on the 3.1.0 skill text (`evals/snapshots/results.json`: claude-opus-5-5, ten prompts, single run, output length only, tiktoken o200k approximation): caveman 3% fewer output tokens at the median than a plain `Answer concisely.` control, inside the noise; ultracave 35%. No quality-equivalence claim is published. Mode persists until changed or stopped.
 
-Caveman is one of three sibling skills:
+Caveman is one of two sibling skills:
 
 | Skill | Command | What change |
 |-------|---------|-------------|
 | `caveman` | `/caveman` | The voice. Default. Answer first, fluff gone, every fact kept. |
 | `ultracave` | `/ultracave` | Grammar stripped. Fragments, one word when one word is enough, each fact once. |
-| `megacave` | `/megacave` | Classical Chinese (文言文). Far fewer characters, technical terms verbatim. |
 
-`/caveman ultra` and `/caveman wenyan` still work as aliases.
+`/caveman ultra` also works as an alias.
 
 Auto-clarity: every skill drops to normal prose for security warnings,
 irreversible-action confirmations, step sequences a fragment could scramble,
@@ -29,7 +28,6 @@ and a user who repeats a question. Resumes after the clear part.
 /caveman              # the voice (default)
 /caveman status       # show current mode without changing it
 /ultracave            # grammar stripped
-/megacave             # classical Chinese
 stop caveman          # back to normal prose
 ```
 
@@ -58,11 +56,8 @@ caveman:
 ultracave:
 > Inline object prop, new ref, re-render. `useMemo`.
 
-megacave:
-> 每繪新生對象參照，故重繪；以 `useMemo` 包之則免。
-
 ## See also
 
 - [`SKILL.md`](./SKILL.md): full LLM-facing instructions
-- [`../ultracave/`](../ultracave/) and [`../megacave/`](../megacave/): the sibling skills
+- [`../ultracave/`](../ultracave/): the sibling skill
 - [Caveman README](../../README.md): repo overview, install, benchmarks
