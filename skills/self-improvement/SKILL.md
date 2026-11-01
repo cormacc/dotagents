@@ -128,6 +128,16 @@ Evidence:
 
 When a matching open task exists, do not create a parallel item. Use `ot show <id>` to inspect it, then update it through the supported task workflow or report the duplicate for manual consolidation if no mutation command fits.
 
+## Instruction metrics
+
+Compare repository-relative instruction files against a Git revision without making source copies:
+
+```sh
+bb skills/self-improvement/scripts/compare-instructions.bb --ref HEAD -- home/AGENTS.md skills/self-improvement/SKILL.md
+```
+
+The JSON report includes per-file and total before, after and delta values for newline counts, UTF-16 character counts, and estimated tokens. Lines use `wc -l` semantics. Tokens use Pi's text heuristic, `ceil(characters / 4)`, rounded per file and then summed for totals; they are not tokenizer measurements. The report records the resolved baseline commit. Paths must be repository-relative and exist both at that commit and in the working tree; missing inputs fail rather than becoming zero counts. Run the fixtures with `bb skills/self-improvement/scripts/test-compare-instructions.bb`.
+
 ## Verification
 
 Re-read any modified instruction file and run `ot show <id>` for each created or reused task. Confirm that no duplicate or contradictory guidance was introduced, and that the edit added the rule only, with no incident narrative, count, or example list. Confirm that each displaced or new piece of evidence is in the commit body or the log file. Then report changed paths, task UUIDs, and deferred work.

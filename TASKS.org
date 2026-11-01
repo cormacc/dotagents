@@ -565,15 +565,21 @@ Scope/reference: ~skills/herdr-orch/scripts/README.md~ names the Pi 1.4.0 declar
 
 * Agent feedback
 
-** TODO [#C] self-improvement: persist AGENTS metrics comparison script :skill:self_improvement:
+** DONE [#C] self-improvement: persist AGENTS metrics comparison script :skill:self_improvement:
+CLOSED: [2026-11-01 Sun 12:38]
 :PROPERTIES:
 :CUSTOM_ID: efb0ea1c-149d-4c8d-83ef-6ce3ca1fd7d8
 :CREATED: [2026-08-14 Fri 21:45]
+:STARTED: [2026-11-01 Sun 12:08]
 :END:
 :LOGBOOK:
 - Created [2026-08-14 Fri 21:45]
+- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
+- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
 :END:
 Persist a reusable Babashka script that compares instruction files before and after a rewrite. The script must report line counts and Pi token estimates. Use `wc -l` line semantics and Pi's conservative `ceil(characters / 4)` estimate. Support a Git revision and working-tree paths without temporary source copies. Choose a canonical location, preferably a resource or script under `skills/self-improvement/`. Document the invocation and add tests for totals, final newlines, and multiple files. Do not use Node for this workflow.
+
+Result: =skills/self-improvement/scripts/compare-instructions.bb= compares a resolved Git commit with working-tree files, reporting per-file and total newline counts, UTF-16 characters and token estimates without source copies. The skill documents invocation and rounding. Tests cover final newlines, Unicode, multiple files, totals, older revisions and missing-input failures.
 
 Origin:
 - cwd: /home/cormacc/dotfiles/agents
