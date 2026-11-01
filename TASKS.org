@@ -576,13 +576,17 @@ Origin:
 Evidence:
 A one-off `.tmp/compare-agent-counts.clj` produced the requested comparison. A later Node verification duplicated the calculation and violated the repository's Babashka-first rule. The user identified the comparison as reusable and requested a durable script.
 
-** TODO validate-skills.bb rejects a relative --python path :project_convention:
+** DONE validate-skills.bb rejects a relative --python path :project_convention:
+CLOSED: [2026-11-01 Sun 12:38]
 :PROPERTIES:
 :CUSTOM_ID: 43a9ab20-69e4-43a6-9dbe-6ad6112bcfd7
 :CREATED: [2026-08-26 Wed 10:21]
+:STARTED: [2026-11-01 Sun 12:08]
 :END:
 :LOGBOOK:
 - Created [2026-08-26 Wed 10:21]
+- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
+- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
 :END:
 scripts/validate-skills.bb shells out to skill-creator's validator with `:dir skills/skill-creator`, so a relative interpreter path passed to `--python` resolves against that directory instead of the caller's cwd and the run dies at scripts/validate-skills.bb:52.
 
@@ -600,6 +604,8 @@ Measured: `bb scripts/validate-skills.bb --python .tmp/relpy` exits 1 with the e
 Acceptance criteria:
 - A relative `--python` value either works or fails with an argument error naming the constraint.
 - scripts/README.md documents the resolved behaviour.
+
+Result: explicit interpreter paths resolve against the caller's directory before the validator changes directories; bare commands retain =PATH= lookup. Interpreter-path fixtures and the validator-refusal control pass. The real skill validator also passes with a relative virtual-environment interpreter.
 
 ** TODO Hand-composed edit hazards: instruction rule additions :agents_md:
 :PROPERTIES:

@@ -98,7 +98,9 @@ scripts/validate-skills.bb --python /path/to/venv/bin/python
 scripts/validate-skills.bb --python python3 --skills-dir .tmp/fixture
 ```
 
-Runs `skills/skill-creator/scripts/quick_validate.py` over every `skills/*/SKILL.md` in two tiers. First-party and adopted skills gate the exit code; the vendored set from [../skills/README.org#Vendored](../skills/README.org#vendored) only warns, because those bodies follow upstream rather than this repository. `--skills-dir` exists so the gate itself can be tested against a fixture.
+Runs `skills/skill-creator/scripts/quick_validate.py` over every `skills/*/SKILL.md` in two tiers. First-party and adopted skills gate the exit code; the vendored set from [../skills/README.org#Vendored](../skills/README.org#vendored) only warns, because those bodies follow upstream rather than this repository. `--skills-dir` exists so the gate itself can be tested against a fixture. An explicit `--python` path, including a relative path such as `.tmp/venv/bin/python`, resolves against the caller's directory before the validator changes directories. A bare command such as `python3` is looked up through `PATH`.
+
+Run the interpreter-path and failure-control fixtures with `bb scripts/test-validate-skills.bb`.
 
 `scripts/check.sh` calls it in place of the previous single-skill validation, which checked only `skills/code-review` and so proved the tooling ran without covering the skill set.
 

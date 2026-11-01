@@ -54,6 +54,7 @@
                     ["scripts/test-run-trait-gate.bb"]
                     ["scripts/test-analyse-anthropic-cache-ttl.bb"]
                     ["scripts/test-check-section-links.bb"]
+                    ["scripts/test-validate-skills.bb"]
                     ["skills/doc-writing/scripts/test-unwrap.bb"]
                     ["skills/doc-writing/scripts/test-check-diagrams.bb"]
                     ["skills/docx/scripts/test-docx.bb"]

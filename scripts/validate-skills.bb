@@ -36,7 +36,12 @@
       (do (binding [*out* *err*] (println "error: unknown argument:" (first a)))
           (System/exit 2)))))
 
-(def opts (parse-args *command-line-args*))
+(def opts
+  (update (parse-args *command-line-args*) :python
+          (fn [python]
+            (if (and python (str/includes? python "/"))
+              (str (fs/absolutize python))
+              python))))
 (def skill-creator (fs/path "skills" "skill-creator"))
 
 (when-not (fs/exists? (fs/path skill-creator "scripts" "quick_validate.py"))
