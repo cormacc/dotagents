@@ -20,6 +20,8 @@ On an interpolation error, the extension shows a warning and sends the original 
 
 The extension provides no slash commands and has no suggested or default keybindings.
 
+Test tooling: [../test/README.md](../test/README.md).
+
 ## Compatibility review
 
 Last review: 2026-10-29, against pi 1.4.0.

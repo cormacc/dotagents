@@ -30,6 +30,8 @@ TUI-only; they still require the preconditions above. Runtime dependencies are
 provided by the local `pi-clojure` extension and Pi-hosted
 `@earendil-works/pi-coding-agent` and TypeBox 1.x (`typebox`) APIs.
 
+Test tooling: [../test/README.md](../test/README.md).
+
 ## Compatibility review
 
 Last review: 2026-10-29, against pi 1.4.0.

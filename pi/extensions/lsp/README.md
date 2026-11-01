@@ -20,6 +20,8 @@ The extension has no custom keybindings and requires the relevant language serve
 
 The focused LSP suite imports pi's public `generateDiffString` API, so the root development dependencies include `@earendil-works/pi-coding-agent`, pinned to the installed Pi release (1.4.0).
 
+Test tooling: [../test/README.md](../test/README.md).
+
 ## Compatibility review
 
 Last review: 2026-10-29, against pi 1.4.0.

@@ -27,15 +27,7 @@ for tool in emacs_eval emacs_ts_query emacs_read emacs_write; do
   fi
 done
 
-run_tsx() {
-  if command -v tsx >/dev/null 2>&1; then
-    tsx "$@"
-  elif [ -x "../../../node_modules/.bin/tsx" ]; then
-    ../../../node_modules/.bin/tsx "$@"
-  else
-    npx --yes tsx "$@"
-  fi
-}
+source ../test/support/locked-tools.sh
 
 CODE=0
 echo "# Running unit tests..."

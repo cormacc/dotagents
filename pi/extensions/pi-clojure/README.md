@@ -89,6 +89,8 @@ The extension was originally imported from
 authorship and the EPL-2.0 license are preserved in [LICENSE](LICENSE).
 [HISTORY.md](HISTORY.md) records that import and locally shipped changes.
 
+Test tooling: [../test/README.md](../test/README.md).
+
 ## Compatibility review
 
 Last review: 2026-10-29, against pi 1.4.0.

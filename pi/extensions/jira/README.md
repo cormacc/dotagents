@@ -161,6 +161,8 @@ covered by `pi/extensions/test/event-subscriptions.test.ts` (run from
 `pi/extensions/emacsclient/test.sh`). Live smoke tests use `SAND` as their
 sandbox project.
 
+Test tooling: [../test/README.md](../test/README.md).
+
 ## Compatibility review
 
 Last review: 2026-10-29, against pi 1.4.0.

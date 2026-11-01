@@ -4,25 +4,14 @@ set -euo pipefail
 # Test runner for the tasks extension.
 #
 # Sanity-checks the extension's structural shape and runs the
-# parser/scaffold unit tests via the root-local, lockfile-pinned tsx.
+# unit and integration tests via the root-local, lockfile-pinned tsx.
 # Designed to mirror emacsclient/test.sh in style, but deliberately has no
 # ambient/global tsx or `npx --yes` fallback: the dependency closure this
 # runner tests against is exactly what the root package-lock.json declares.
 
 cd "$(dirname "$0")"
 
-root="$(cd ../../.. && pwd)"
-TSX="$root/node_modules/.bin/tsx"
-
-fail_locked_deps() {
-  echo "not ok - $1" >&2
-  echo "not ok - run \`npm ci\` from the repository root ($root) to install the locked development dependencies, then re-run this test.sh" >&2
-  exit 1
-}
-
-if [ ! -x "$TSX" ]; then
-  fail_locked_deps "locked tsx not found at $TSX"
-fi
+source ../test/support/locked-tools.sh
 
 # The tsx-executable check above only proves one binary is present; a
 # partial install (for example: tsx present, @earendil-works/pi-coding-agent
@@ -73,7 +62,7 @@ CODE=0
 
 # Every *.test.ts beside this runner, plus the shared lib test. Globbed rather
 # than listed so a new test file cannot be added without being run.
-for t in ./*.test.ts ../lib/agent-paths.test.ts; do
+for t in ./*.test.ts ../lib/agent-paths.test.ts ../test/locked-tools.test.ts; do
   echo "# Running $t..."
   "$TSX" "$t" || CODE=1
 done

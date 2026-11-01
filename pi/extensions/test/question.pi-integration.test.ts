@@ -13,8 +13,7 @@
  * Modeled on pi/extensions/emacsclient/pi-integration.test.ts.
  */
 
-import { spawn, ChildProcess } from "node:child_process";
-import { createInterface } from "node:readline";
+import { createHarness } from "./support/rpc.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
@@ -38,23 +37,6 @@ function testFail(name: string, reason?: string) {
   console.log(`not ok - ${name}`);
   if (reason) console.log(`  # ${reason}`);
   failed++;
-}
-
-function waitForEvent(events: any[], predicate: (e: any) => boolean, timeout = 15000): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const start = Date.now();
-    const check = () => {
-      const found = events.find(predicate);
-      if (found) return resolve(found);
-      if (Date.now() - start > timeout) return reject(new Error("Timeout waiting for event"));
-      setTimeout(check, 50);
-    };
-    check();
-  });
-}
-
-function waitForResponse(events: any[], timeout = 15000): Promise<any> {
-  return waitForEvent(events, (e) => e.type === "response", timeout);
 }
 
 // ---------------------------------------------------------------------------
@@ -169,37 +151,15 @@ export default function (pi: ExtensionAPI) {
 // Pi process management
 // ---------------------------------------------------------------------------
 
-function startPi(extensions: string[], cwd: string): ChildProcess {
-  const args = [
-    "--mode", "rpc",
-    "--provider", "dummy",
-    "--model", "dummy-model",
-    ...extensions.flatMap((ext) => ["-e", ext]),
-  ];
-
-  return spawn("pi", args, {
-    stdio: ["pipe", "pipe", "pipe"],
-    cwd,
-    env: {
-      ...process.env,
-      HOME: cwd,
-      PI_CODING_AGENT_DIR: join(cwd, ".pi-agent"),
-    },
-  });
-}
-
-function sendCommand(proc: ChildProcess, cmd: any) {
-  proc.stdin!.write(JSON.stringify(cmd) + "\n");
-}
-
 async function runTest(name: string, testFn: (tempDir: string) => Promise<boolean | string>) {
   const tempDir = join(tmpdir(), `pi-question-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(tempDir, { recursive: true });
 
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     const result = await Promise.race([
       testFn(tempDir),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Test timeout (30s)")), 30000)),
+      new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("Test timeout (30s)")), 30000); }),
     ]);
 
     if (result === true) {
@@ -210,6 +170,7 @@ async function runTest(name: string, testFn: (tempDir: string) => Promise<boolea
   } catch (err: any) {
     testFail(name, err.message);
   } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
     rmSync(tempDir, { recursive: true, force: true });
   }
 }
@@ -222,26 +183,19 @@ async function runTest(name: string, testFn: (tempDir: string) => Promise<boolea
   await runTest("question tool under RPC reports unsupported mode, not cancellation", async (tempDir) => {
     const llm = createDummyLLM(tempDir);
     const ext = join(__dirname, "..", "question.ts");
-    const pi = startPi([llm, ext], tempDir);
-
-    const events: any[] = [];
-    const rl = createInterface({ input: pi.stdout! });
-    rl.on("line", (line) => {
-      try {
-        events.push(JSON.parse(line));
-      } catch {}
+    const harness = createHarness(ext, tempDir, {
+      args: ["--provider", "dummy", "--model", "dummy-model", "-e", llm],
     });
 
     try {
       await new Promise((r) => setTimeout(r, 500));
-      sendCommand(pi, { type: "prompt", message: "ask me something" });
+      const promptId = harness.send({ type: "prompt", message: "ask me something" });
 
-      const toolEnd = await waitForEvent(
-        events,
-        (e) => e.type === "tool_execution_end" && e.toolName === "question",
+      const toolEnd = await harness.waitFor(
+        (e) => e.type === "tool_execution_end" && e.toolName === "question", "question result",
       );
 
-      await waitForResponse(events);
+      await harness.waitFor((e) => e.type === "response" && e.id === promptId, "prompt response");
 
       const resultText = toolEnd.result?.content?.find((c: any) => c.type === "text")?.text ?? "";
       if (resultText !== "Error: UI not available (running in non-interactive mode)") {
@@ -253,8 +207,7 @@ async function runTest(name: string, testFn: (tempDir: string) => Promise<boolea
 
       return true;
     } finally {
-      pi.kill();
-      await new Promise((r) => pi.on("close", r));
+      await harness.dispose();
     }
   });
 

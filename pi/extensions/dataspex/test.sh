@@ -2,10 +2,5 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-if command -v tsx >/dev/null 2>&1; then
-  tsx ./index.test.ts
-elif [ -x "../../../node_modules/.bin/tsx" ]; then
-  ../../../node_modules/.bin/tsx ./index.test.ts
-else
-  npx --yes tsx ./index.test.ts
-fi
+source ../test/support/locked-tools.sh
+run_tsx ./index.test.ts

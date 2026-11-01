@@ -35,6 +35,8 @@ None.
 
 `./test.sh` runs `index.test.ts` (pi-to-`oh` argv, `/oh` behaviour, and rendering) and `../test/herdr-agent-state.test.ts` with the repository's locked `tsx`.
 
+Test tooling: [../test/README.md](../test/README.md).
+
 ## Compatibility review
 
 Last review: 2026-10-29, against pi 1.4.0.
