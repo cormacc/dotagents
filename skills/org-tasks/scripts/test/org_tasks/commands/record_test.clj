@@ -6,6 +6,11 @@
             [org-tasks.parser :as parser]
             [org-tasks.styling :as styling]))
 
+(defn- bootstrap-record-graph! [root]
+  (bootstrap-parent-child-graph! root)
+  (let [path (str (fs/path root "TASKS.org"))]
+    (spit path (str/replace (slurp path) #"\n(?=\*{2,} )" "\n\n"))))
+
 ;; ── record ────────────────────────────────────────────
 
 (deftest record-path-suggests-from-plan-template
@@ -69,3 +74,50 @@
         (is (str/includes? plan "* Plan\n** TODO Child A1"))
         (is (str/includes? plan ":CUSTOM_ID: aaaa2222-2222-4333-8444-555555555552"))
         (is (str/includes? plan "** TODO Child A2"))))))
+
+(deftest record-custom-path-imports-resolve-and-existing-files-stay-untouched
+  (doseq [record-path ["design/log/nested/feature.org" "notes/feature.org"]]
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-record-graph! root)
+        (let [id "aaaa1111-2222-4333-8444-555555555551"
+              {:keys [out exit]} (run-cli! "--root" root "--format" "json"
+                                          "record" "create" id "--path" record-path)
+              result (parse-json-result out)
+              {:keys [out]} (run-cli! "--root" root "--format" "json" "show" id)
+              shown (parse-json-result out)]
+          (is (zero? exit))
+          (is (true? (:absorbedSubtasks result)))
+          (is (nil? (get-in shown [:task :importError])))
+          (is (str/includes? out "Child A1") "the attached import reaches the migrated children")
+          (let [before (slurp (:recordPath result))
+                repeated (run-cli! "--root" root "--format" "json" "record" "create" id)
+                repeated-result (parse-json-result (:out repeated))]
+            (is (zero? (:exit repeated)))
+            (is (= (:recordPath result) (:recordPath repeated-result)))
+            (is (false? (:created repeated-result)))
+            (is (= before (slurp (:recordPath result))))))))))
+
+(deftest record-existing-file-and-dry-run-preserve-subtasks
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-record-graph! root)
+      (let [id "aaaa1111-2222-4333-8444-555555555551"
+            path "design/log/existing.org"
+            abs (str (fs/path root path))
+            tasks-before (slurp (str (fs/path root "TASKS.org")))]
+        (fs/create-dirs (fs/parent abs))
+        (spit abs "* Intent\nExisting record.\n")
+        (let [dry (run-cli! "--root" root "--format" "json" "--dry-run"
+                            "record" "create" id "--path" "notes/new.org")]
+          (is (zero? (:exit dry)))
+          (is (not (fs/exists? (fs/path root "notes/new.org"))))
+          (is (= tasks-before (slurp (str (fs/path root "TASKS.org"))))))
+        (let [created (run-cli! "--root" root "--format" "json"
+                                "record" "create" id "--path" path)
+              result (parse-json-result (:out created))]
+          (is (zero? (:exit created)))
+          (is (false? (:created result)))
+          (is (false? (:absorbedSubtasks result)))
+          (is (= "* Intent\nExisting record.\n" (slurp abs)))
+          (is (str/includes? (slurp (str (fs/path root "TASKS.org"))) "*** TODO Child A1")))))))

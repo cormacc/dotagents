@@ -5,6 +5,7 @@
             [clojure.string :as str]
             [org-tasks.effective :as effective]
             [org-tasks.loader :as loader]
+            [org-tasks.links :as links]
             [org-tasks.output :as out]
             [org-tasks.parser :as parser]
             [org-tasks.paths :as paths]
@@ -134,6 +135,19 @@
              (filterv seq))))
     (catch Throwable _ nil)))
 
+(defn- record-import [project-root tasks-path task abs]
+  (let [source (:source-path task)
+        plan-root (paths/resolve-project-path project-root project-root
+                                             (read-plans-dir project-root tasks-path))
+        suffix (when plan-root (str (fs/relativize plan-root abs)))
+        plan-link (when suffix (str "plan:" suffix))
+        path (if (and plan-link
+                      (not= ".." (first (str/split suffix #"/")))
+                      (= abs (links/resolve-task-link-target project-root task plan-link)))
+               plan-link
+               (str (fs/relativize (fs/parent source) abs)))]
+    {:path path :raw (str "[[" (when-not (= path plan-link) "file:") path "]]")}))
+
 (defn record-create-cmd [{:keys [opts] :as result}]
   (let [{:keys [project-root tasks files]} (load-context opts)
         id   (positional-arg result :id)
@@ -147,7 +161,9 @@
       (let [target (resolve-required-id tasks id opts)
             full-id (parser/get-task-id target)
             rel-path (or (:path opts) (suggest-plan-path target project-root (:tasks files)))
-            abs (paths/resolve-project-path project-root project-root rel-path)]
+            abs (if (and (not (:path opts)) (:import-path target))
+                  (links/resolve-task-link-target project-root target (:import-path target))
+                  (paths/resolve-project-path project-root project-root rel-path))]
         (cond
           (nil? abs)
           (out/emit-error opts
@@ -167,12 +183,9 @@
                 setup-file-rel (str (fs/relativize target-dir setup-path))
                 content     (scaffold-plan-content target setup-file-rel)
                 existed?    (fs/exists? abs)
-                ;; Attach #+IMPORT to the parent task if missing.
-                rel-to-plans (str (fs/file-name abs))
-                import-raw  (or (:import-raw target)
-                                (str "[[plan:" rel-to-plans "]]"))
-                import-path (or (:import-path target)
-                                (str "plan:" rel-to-plans))
+                record-link (record-import project-root (:tasks files) target abs)
+                import-raw (:raw record-link)
+                import-path (:path record-link)
                 absorbed? (and (not existed?) (seq (:children target)))
                 updated-target (cond-> (assoc target
                                              :import-path import-path
