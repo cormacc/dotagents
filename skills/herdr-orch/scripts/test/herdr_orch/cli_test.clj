@@ -6888,6 +6888,28 @@
   (is (< (.indexOf prompt "Fork task boundary") (.indexOf prompt lead)
          (.indexOf prompt "When finished, publish exactly once"))))
 
+(deftest publication-prompts-pin-baselines-and-distinguish-checkout-types
+  (doseq [worktree [nil {:path "/fixture-worktree"}]
+          policy ["blocking" "non-blocking"]]
+    (let [launch {:assignment "Check the fixture." :task "fixture-task" :result "/fixture-result"
+                  :spawns [] :waiting-policy policy :worktree worktree}
+          prompts [(cli/prompt-text launch)
+                   (cli/prompt-text (assoc launch :fork? true))
+                   (cli/continuation-prompt launch)
+                   (cli/poke-prompt (:task launch) (:result launch) worktree)]]
+      (doseq [prompt prompts]
+        (is (str/includes? prompt "immutable commit before the first publication"))
+        (is (str/includes? prompt "baseline exports, diffs and regression controls"))
+        (is (str/includes? prompt "do not resolve mutable HEAD after publication"))
+        (if worktree
+          (do
+            (is (str/includes? prompt "WAITING and terminal publications can stage nonignored changes"))
+            (is (str/includes? prompt "create a checkpoint commit and move HEAD"))
+            (is (not (str/includes? prompt "Shared-root publication"))))
+          (do
+            (is (str/includes? prompt "Shared-root publication does not automatically stage changes"))
+            (is (not (str/includes? prompt "create a checkpoint commit and move HEAD")))))))))
+
 (deftest fork-bootstrap-separates-current-work-from-inherited-context
   (doseq [[role lead] [[{} "Task: Use the inherited design notes to check input validation."]
                       [{:persona-path "/role.md"} "Read /role.md, adopt that role. Task: Use the inherited design notes to check input validation."]

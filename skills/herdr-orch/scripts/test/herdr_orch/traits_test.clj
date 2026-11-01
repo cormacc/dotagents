@@ -119,7 +119,7 @@
         spawner (get-in (output spawner-proc) [:result :preview])
         continued (cli/continuation-prompt {:assignment "follow on" :task "next-task" :result "/tmp/next.result"
                                             :waiting-policy "non-blocking"})
-        poked (cli/poke-prompt "poke-task" "/tmp/poke.result")]
+        poked (cli/poke-prompt "poke-task" "/tmp/poke.result" nil)]
     (is (zero? (:exit leaf-proc)) (:err leaf-proc))
     (is (zero? (:exit spawner-proc)) (:err spawner-proc))
     (doseq [[label prompt] [["leaf run preview" leaf]

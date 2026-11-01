@@ -780,13 +780,17 @@ The npm run check invocation failed in skills/herdr-orch/scripts/pi/test.sh: the
 
 Result: the adapter runner excludes =node_modules/.bin= entries when resolving and invoking Pi; locked TypeScript tools remain unchanged. Fixtures cover an npm shim ahead of the installed executable and refusal when only the shim is available. =npm run check= passes end to end, including all installed-Pi suites and the runtime-mismatch control. Evidence: =.tmp/backlog-housekeeping.AMNxsn/repository-check.log=.
 
-** TODO herdr-orch: expose publication checkpoints and pin child baselines :skill:herdr_orch:
+** DONE herdr-orch: expose publication checkpoints and pin child baselines :skill:herdr_orch:
+CLOSED: [2026-11-01 Sun 12:38]
 :PROPERTIES:
 :CUSTOM_ID: 100aed02-e3f6-4856-b79c-988624991172
 :CREATED: [2026-10-31 Sat 16:04]
+:STARTED: [2026-11-01 Sun 12:08]
 :END:
 :LOGBOOK:
 - Created [2026-10-31 Sat 16:04]
+- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
+- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
 :END:
 Approved CD retrospective item 6. Put the existing worktree publication checkpoint side effect in generated child instructions. Require a baseline to be resolved to an immutable commit before publication and use that commit for exports, diffs and regression controls. Preserve checkpoint semantics and explicit parent integration; do not merely append another warning to the skill body.
 
@@ -795,6 +799,8 @@ Acceptance:
 - Generated guidance requires immutable baseline commits rather than mutable HEAD for baseline exports and comparisons.
 - Prompt-generation tests check the guidance and the distinction between worktree and shared-root publication.
 - No checkpoint semantics, integration permissions or global AGENTS.md rules change.
+
+Result: fresh, forked, continuation and poke prompts pin Git baselines before publication and distinguish worktree checkpointing from shared-root publication. Preview and launch callers supply the checkout type. Prompt-generation tests pass; checkpoint and integration mechanics are unchanged.
 
 Origin:
 - cwd: /home/cormacc/nmd/products/mbt/cd
