@@ -1,7 +1,7 @@
 #!/usr/bin/env bb
 
-;; Check that every section reference in a repository's tracked org and
-;; Markdown files resolves. The forms are the ones AGENTS.md section 'Section
+;; Check section references in tracked and non-ignored untracked org and
+;; Markdown files. The forms are the ones AGENTS.md section 'Section
 ;; references' prescribes, plus custom-ID links:
 ;;
 ;;   org       [[file:path::*Heading]]  [[*Heading]]
@@ -41,7 +41,7 @@
     (str/trim out)))
 
 (defn tracked-docs []
-  (->> (str/split-lines (:out (shell {:out :string :dir root} "git" "ls-files" "--" "*.org" "*.md")))
+  (->> (str/split-lines (:out (shell {:out :string :dir root} "git" "ls-files" "--cached" "--others" "--exclude-standard" "--" "*.org" "*.md")))
        (remove str/blank?)
        (remove (fn [p] (some #(str/starts-with? p %) (:exclude opts))))
        (filter #(fs/regular-file? (fs/path root %)))))

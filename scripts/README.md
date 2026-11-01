@@ -80,7 +80,7 @@ scripts/check-section-links.bb --exclude skills/herdr/ --exclude skills/gitlab-c
 agents/scripts/check-section-links.bb    # from the dotfiles checkout, against that repository
 ```
 
-Checks that every section reference in the tracked `.org` and `.md` files of the git repository containing `--root` (default: the working directory) resolves. It covers the forms in [../AGENTS.md#Section references](../AGENTS.md#section-references) and custom-ID links:
+Checks that every section reference in tracked and non-ignored untracked `.org` and `.md` files of the git repository containing `--root` (default: the working directory) resolves. It covers the forms in [../AGENTS.md#Section references](../AGENTS.md#section-references) and custom-ID links:
 
 - Org `[[file:path::*Heading]]` and `[[*Heading]]`: the target heading exists. Matching is exact after the TODO keyword, priority cookie, `COMMENT` and tags are removed, as `org-get-heading` does.
 - Org `[[file:path::#id]]` and `[[#id]]`: a `CUSTOM_ID` matches, or a GitHub-style heading anchor matches. toc-org `_gh` tables of contents use the anchor form, and `toc-org-mode` translates it when the link is followed.

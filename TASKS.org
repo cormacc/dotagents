@@ -712,13 +712,17 @@ Checking a 330-line change-record against its changeset needed a one-off Babashk
 :END:
 With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.
 
-** TODO check-section-links: also check untracked, non-ignored files :project_convention:
+** DONE check-section-links: also check untracked, non-ignored files :project_convention:
+CLOSED: [2026-11-01 Sun 12:38]
 :PROPERTIES:
 :CUSTOM_ID: ff057776-88e5-4d2c-aa72-cf896995d908
 :CREATED: [2026-10-22 Thu 19:30]
+:STARTED: [2026-11-01 Sun 12:08]
 :END:
 :LOGBOOK:
 - Created [2026-10-22 Thu 19:30]
+- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
+- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
 :END:
 ~scripts/check-section-links.bb~ reads only ~git ls-files~, so a new, still-untracked org or Markdown file is never checked and the run reports 0 problems. Include ~git ls-files --others --exclude-standard~ in the file set, and add a test whose positive control is a broken link inside an untracked file.
 
@@ -730,6 +734,8 @@ Origin:
 
 Evidence:
 - 2026-10-22: the untracked change-record design/log/2026-10-21-child-context-modes.org was reported clean several times. A deliberately broken same-file link in it was not reported. On a scratch repository where every file was tracked, the checker covered 13 more references and reported the control.
+
+Result: the checker includes cached and non-ignored untracked documents. The fixture detects a broken untracked link, passes after repair, preserves ignore/exclude rules, and counts the document once after staging. The repository section-link check passes.
 
 ** TODO ot archive rewrites unrelated imported change-records :skill:org_tasks:
 :PROPERTIES:

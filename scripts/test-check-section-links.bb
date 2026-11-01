@@ -93,6 +93,26 @@
     (let [proc (check! dir "--exclude" "vendor/")]
       (is (zero? (:exit proc)) (:out proc)))))
 
+(deftest untracked-documents-are-checked-with-ignore-and-exclude-rules
+  (let [dir (fixture-repo! (assoc targets
+                                 ".gitignore" "ignored/\n"
+                                 "control.md" "[valid](docs/ref.md#notes)\n"))]
+    (doseq [rel ["drafts/new.md" "ignored/bad.md" "vendor/bad.md"]]
+      (fs/create-dirs (fs/parent (fs/path dir rel)))
+      (spit (str (fs/path dir rel)) "[broken](../docs/ref.md#absent)\n"))
+    (let [{:keys [exit out]} (check! dir "--exclude" "vendor/")]
+      (is (= 1 exit) out)
+      (is (str/includes? out "drafts/new.md:1: no anchor '#absent'") out)
+      (is (str/includes? out "checked 2 section references") out))
+    (spit (str (fs/path dir "drafts/new.md")) "[valid](../docs/ref.md#notes)\n")
+    (doseq [stage? [false true]]
+      (when stage?
+        (process/shell {:dir dir :out :string :err :string} "git" "add" "--" "drafts/new.md"))
+      (let [{:keys [exit out]} (check! dir "--exclude" "vendor/")]
+        (is (zero? exit) out)
+        (is (str/includes? out "checked 2 section references") out)
+        (is (str/includes? out "; 0 problems") out)))))
+
 (deftest unknown-argument-is-rejected
   (let [proc @(process/process ["bb" checker "--bogus"] {:out :string :err :string})]
     (is (= 2 (:exit proc)))
