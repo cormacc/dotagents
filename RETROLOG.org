@@ -5,6 +5,18 @@ Historic evidence for the rules in [[file:home/AGENTS.md][home/AGENTS.md]] and [
 
 The [[file:skills/retro/SKILL.md][retro]] skill appends to this file. Group each entry under the rule heading that the evidence supports, and use the rule's own instruction-file heading text so a reader can find the rule.
 
+* 2026-10-31 Sat -- skill and extension consolidation
+
+** Assignment premises / Trusting a result / Closure-time refresh and prune
+
+The following historical passages were moved from =skills/herdr-orch/SKILL.md= and =skills/org-plan/SKILL.md=. Their operational rules remain in those skills.
+
+- A headless `pi --print` refusal whose message described third-party usage billing was caused by `--no-extensions` disabling the provider-auth extension. The misreading was recorded as a plan assumption and mis-scoped a full benchmark round before a later task disproved it.
+- A density figure derived this way was persisted as measured and was wrong, because the child had reported a residual of about 15 words for a paragraph that measured 124.
+- One validator's approval is weak evidence on a subtle surface: two reviewers of this skill's own lifecycle rewrite returned opposite verdicts on an identical assignment (measurement in [`design/log/2026-08-06-herdr-orch-support-resident-reviewers-fo.org`](design/log/2026-08-06-herdr-orch-support-resident-reviewers-fo.org)). For a Class C closeout, prefer two independent validators and expect disjoint findings. Treat a lone APPROVED as unfalsified rather than validated. Measured again on the trait-composition closeout (2026-08-11): two reviewers on one assignment at different tiers overlapped on only 2 of 6 findings, and each uniquely caught something the other missed -- a trust-boundary bypass in one case, a test broken by a documentation edit in the other. One reviewer would have shipped whichever it missed.
+- A subagent has derived a device-support matrix from a data folder listing, called the existing spec stale, and been wrong -- the folder held an extra development-only entry.
+- Relaxing a criterion you authored, after your own work failed it, needs independent review before closure: two reviewers independently judged one such relaxation "rationalisation-shaped" because it claimed impossibility where a stricter satisfiable option had merely been declined on cost.
+
 * 2026-08-20 Thu -- examples culled from home/AGENTS.md
 
 Evidence removed from =home/AGENTS.md= when the file was reorganised and the per-rule example lists were culled.

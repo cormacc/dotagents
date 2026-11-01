@@ -6,7 +6,65 @@ A change-record is an org file linked from a task by `#+IMPORT:`. It starts as a
 
 `* Intent` → `* Summary` → optional `* User story` → optional `* Behavior` → optional `* Context` → `* Plan` → `* Implementation` → optional `* Validation` → optional `* Open questions`.
 
-Required: `* Intent`, `* Summary`, `* Plan`, `* Implementation`. Optional sections marked above. `* Summary` carries the durable record layer (including `** Acceptance`). `* Plan` is the transient plan layer (see org-plan *Two layers in one record*).
+Required: `* Intent`, `* Summary`, `* Plan`, `* Implementation`. Optional sections marked above. `* Summary` carries the durable record layer (including `** Acceptance`). `* Plan` is the transient plan layer (see [../SKILL.md#Two layers in one record](../SKILL.md#two-layers-in-one-record)).
+
+## Section definitions
+
+### Required
+
+`* Intent` -- 1--3 sentence durable north-star. *What* we are building and *why*. Stable across the work; this is the constitutional clause that `* Summary` builds on and the premortem stress-tests. Drafted from intent reverse-engineering (see [../SKILL.md#Drafting practices](../SKILL.md#drafting-practices)).
+
+`* Summary` -- condensed evolving memory layer. The cheap reconstruction surface resume tools and humans land on after Intent. Opens with the effort line (see [../SKILL.md#Drafting practices](../SKILL.md#drafting-practices)). Subsections populated as content accrues:
+
+- `** Scope` (required) -- `*** In scope` and `*** Out of scope` lists. Both lists. Out-of-scope items prevent feature creep and feed the premortem ("are we sure we don't need X?").
+- `** Acceptance` -- the consolidated ISC (user-confirmed definition of done), grouped into `*** Core functionality`, `*** Edge cases`, `*** Anti-criteria`. See [../SKILL.md#Acceptance criteria](../SKILL.md#acceptance-criteria).
+- `** Decisions` -- strategic durable design choices that constrain future work, not every tactical coding call. Captures the chosen approach plus rejected alternatives bulleted underneath. When a decision knowingly conflicts with the project constitution (AGENTS.md + skills -- see [../SKILL.md#The project constitution](../SKILL.md#the-project-constitution)), record the conflict and rationale explicitly rather than silently diverging.
+- `** Shipped` -- user-visible / protocol / code outcomes, populated as work lands. When a planned or discovered contract doc changes, prefix bullets with `ADDED`, `MODIFIED`, or `REMOVED` and name the contract doc. This is the post-hoc outcome, not the planning-time `#+SPEC:` declaration.
+- `** Gotchas` -- project-side surprises future implementers should not rediscover. Library/API/protocol facts belong in the relevant skill/reference when one exists.
+- `** Risks` -- drafted from premortem; durable risks considered and accepted. Distinct from `** Gotchas` (post-hoc surprise) and `* Open questions` (deferred-not-decided).
+- `** Follow-ups` -- pointers to real TODO tasks rather than burying work in prose.
+
+`* Plan` -- executable org TODO headings. Top-level plan tasks are `** TODO ...` so they live under `* Plan` while remaining parseable by task tooling. May be empty in a retrospective record.
+
+`* Implementation` -- tactical decisions, tricky details, maintenance context, and outcomes discovered while executing. If the canonical tactical record lives elsewhere (upstream PR, commit body, vendor doc, RFC), use a concise pointer instead of duplicating it.
+
+`* Validation` *(optional)* -- non-obvious verification evidence worth preserving: manual/exploratory checks, smoke tests, a specific reproduction, performance numbers, or an explicit note that no automated checks were run (and why). Omit it when the only evidence would be that the standard automated suites pass -- green unit/integration tests are an implicit pre-merge requirement, not record-worthy. Closure verifies `** Acceptance` and anti-criteria regardless of whether this section exists.
+
+### Optional
+
+`* User story` -- *As [who], I want [what], so that [why].* Use when there is a real end-user or operator perspective worth preserving -- the "so that" is often the most leaked motivation in any artifact. Skip for refactors, infra, dev-tooling, and observability work; forcing a user story onto those produces filler. Drafting-time aid: closure-prune unless the "so that" still earns its place.
+
+`* Behavior` -- feature-work walkthrough. Two subsections:
+
+- `** Happy path` -- numbered list of steps.
+- `** Edge cases` -- bullets of `[case]: [expected behavior]`.
+
+Drafting-time aid: the happy path becomes the implementation; edge cases become anti-criteria or `** Gotchas`. Closure-prune unless the walkthrough preserves something Implementation/Summary do not subsume.
+
+Optionally, when scenario rigour pays for itself (concurrent/stateful edge cases, protocol handshakes, anything where the trigger and outcome are easy to conflate), write a `** Happy path` step or `** Edge cases` bullet in Given/When/Then form instead of the terser default:
+
+```org
+** Edge cases
+- Given a WAITING task with no :BLOCKED-BY:, when `ot doctor` runs, then it emits `waiting-without-blocker`.
+```
+
+This is optional polish, not the default or required form -- do not impose GWT ceremony on straightforward edge cases.
+
+`* Context` -- background, motivation, alternatives, constraints, and trade-offs. **Default to omitting.** Promote only when durable rationale materially exceeds what `* Summary` can carry. At closure, delete Context unless it still earns its place.
+
+`* Open questions` -- deferred questions using heading-text prefixes, not TODO states:
+
+```org
+* Open questions
+** OPEN Should we batch a follow-up review for related skills?
+** DECIDED Should ready-task support add a new fan-in property?
+:PROPERTIES:
+:DECIDED: [2026-05-02 Sat 11:51]
+:END:
+Decision: retain `:BLOCKED-BY:`; no `:WAITS_FOR:` field.
+```
+
+`OPEN` / `DECIDED` are not task nodes and need no `:CUSTOM_ID:` or lifecycle metadata. Resume tooling surfaces remaining `OPEN` items.
 
 ## Minimal skeleton
 
@@ -87,31 +145,12 @@ See `src/services/AuthService.ts:15-40` for the existing pattern.
 Decision: retain `:BLOCKED-BY:`; no `:WAITS_FOR:` field.
 ```
 
-## Optional sections -- when to include
-
-### `* Validation`
-
-```org
-* Validation
-- Non-obvious verification evidence: manual/exploratory checks, smoke tests, a specific reproduction, performance numbers, or an explicit note that no automated checks were run (and why).
-```
-
-Include only when there is verification evidence worth preserving beyond the routine. Omit when the only thing to record is that the standard automated suites pass -- green unit/integration tests are an implicit pre-merge requirement, not record-worthy. `** Acceptance` is verified at closure whether or not this section exists.
-
-### `* User story`
+## Optional section examples
 
 ```org
 * User story
 As a [role], I want [capability], so that [outcome].
-```
 
-Include when there is a real end-user or operator perspective worth preserving. The "so that" clause is the most leaked motivation in any artifact -- once captured here, it survives the telephone game through plan → plan tasks → commits.
-
-Skip for refactors, infra, dev-tooling, observability work.
-
-### `* Behavior`
-
-```org
 * Behavior
 ** Happy path
 1. User does X.
@@ -123,19 +162,6 @@ Skip for refactors, infra, dev-tooling, observability work.
 - Concurrent request: last writer wins; no merge attempted.
 - Network failure mid-request: client retries with backoff; server idempotent.
 ```
-
-Include for feature work where the user-facing flow is load-bearing. Drafting-time aid -- at closure, the happy path is in Implementation and edge cases are anti-criteria or `** Gotchas`. Prune unless the walkthrough still carries unique value.
-
-Optional Given/When/Then form for an edge case where scenario rigour pays for itself (see org-plan SKILL.md section '`* Behavior`'):
-
-```org
-** Edge cases
-- Given a WAITING task with no :BLOCKED-BY:, when `ot doctor` runs, then it emits `waiting-without-blocker`.
-```
-
-### `* Context`
-
-Background, motivation, alternatives, constraints, trade-offs. **Default to omitting.** Promote only when durable rationale materially exceeds what `* Summary` can carry.
 
 ### Acceptance criteria citation
 

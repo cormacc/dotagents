@@ -12,19 +12,7 @@ When multiple shadow builds are active, pass `buildId` (with or without the lead
 
 ## Tool
 
-`dataspex` dispatches by `op`. Shared target params are `buildId?`, `port?`, and `host?`.
-
-| op | Parameters | Default output |
-|---|---|---|
-| `labels` | `{ buildId?, port?, host? }` | User labels as `{:label :rev :idx :history-len :val-type :has-ref?}` |
-| `value` | `{ label, path?, fresh?, limit?, level?, buildId?, port?, host? }` | Bounded current `:val` or fresh `:ref` deref; `path` is an EDN vector such as `[:patient :name]` |
-| `history` | `{ label, n?, includeVal?, buildId?, port?, host? }` | Latest audit entries, defaulting to `{:rev :created-at :diff}` and preferring `<label>-audit` |
-| `track` | `{ label, historyLimit?, buildId?, port?, host? }` | Registers `<label>-audit` with `{:track-changes? true}`; refuses to overwrite an existing audit label |
-| `untrack` | `{ label, buildId?, port?, host? }` | Removes the parallel audit label |
-| `db_query` | `{ label, q, args?, limit?, level?, buildId?, port?, host? }` | Runs a datascript query against a DB label and returns only the result set |
-| `actions_tail` | `{ label?, n?, buildId?, port?, host? }` | Latest nexus `LogInspector` entries from `Actions`, projected to `{:dispatched-at :actions :dispatch-data}` where `:actions` unwraps Nexus' `Action.data` |
-
-Migration: the former `dataspex_labels`, `dataspex_value`, `dataspex_history`, `dataspex_track`, `dataspex_untrack`, `dataspex_db_query`, and `dataspex_actions_tail` tools are now `dataspex` with the corresponding `op`. Resumed sessions may try an old name once before the updated skill steers the model to the new spelling.
+`dataspex` dispatches by `op`. The canonical [tool surface](../../../skills/dataspex/references/tool-surface.md) describes parameters, default projections, and migration from older names. The [skill](../../../skills/dataspex/SKILL.md) owns inspection workflow and runtime cautions.
 
 ## Design notes
 
