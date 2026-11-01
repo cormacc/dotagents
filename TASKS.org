@@ -756,15 +756,21 @@ Origin:
 Evidence:
 Reproduced in a clean worktree at HEAD 2ca64af. `ot status 17fea754 DONE` changed only TASKS.org. `ot archive 17fea754 --yes` then also changed design/log/2026-10-23-sharepoint-document-editing.org, which is imported by a different, open task: it removed the blank line between the last list item of a task body and the following `***` heading, twice. The archived task (pi-clojure dev pin, in Chores) has no #+IMPORT: of its own.
 
-** TODO Make npm run check select the installed Pi runtime :ext:test_infrastructure:
+** DONE Make npm run check select the installed Pi runtime :ext:test_infrastructure:
+CLOSED: [2026-11-01 Sun 12:38]
 :PROPERTIES:
 :CUSTOM_ID: 0e9cf14d-7054-42b9-b9c6-907e926a4f40
 :CREATED: [2026-10-31 Sat 10:15]
+:STARTED: [2026-11-01 Sun 12:08]
 :END:
 :LOGBOOK:
 - Created [2026-10-31 Sat 10:15]
+- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
+- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
 :END:
 The npm run check invocation failed in skills/herdr-orch/scripts/pi/test.sh: the API resolved under repository node_modules, which HERDR_ORCH_FORBID_BUNDLE_PREFIX rejects. The runner chooses pi on PATH; scripts/check.sh reaches it through bb test. A direct bash scripts/check.sh invocation passed the installed-Pi adapter stage, then hit the 300-second overall limit during extension tests. Make the npm entry point preserve installed-runtime selection without weakening the mismatch control. Evidence: .tmp/consolidation.FiGdAD/repository-check.log and repository-direct.log. This was discovered while verifying task c15712eb; it is not attributed to the consolidation changes.
+
+Result: the adapter runner excludes =node_modules/.bin= entries when resolving and invoking Pi; locked TypeScript tools remain unchanged. Fixtures cover an npm shim ahead of the installed executable and refusal when only the shim is available. =npm run check= passes end to end, including all installed-Pi suites and the runtime-mismatch control. Evidence: =.tmp/backlog-housekeeping.AMNxsn/repository-check.log=.
 
 ** TODO herdr-orch: expose publication checkpoints and pin child baselines :skill:herdr_orch:
 :PROPERTIES:

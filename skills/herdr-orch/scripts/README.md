@@ -20,7 +20,7 @@ The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/sk
 
 Spawning verbs require Herdr 0.9.1 or newer on both the client and the running server. Preflight reads both from `herdr status --json` and refuses an older or unknown endpoint before allocating a ledger entry or touching a pane ([docs/contract.md#Preconditions](docs/contract.md#preconditions)).
 
-Pi adapter checks run inside the installed Pi runtime with `scripts/pi/test.sh` (it needs `pi` on `PATH`, never uses the repository's pinned SDK, and records the runtime it ran against). Behaviour and the adapter contract are in [docs/contract.md#Pi fork adapter](docs/contract.md#pi-fork-adapter).
+Pi adapter checks run inside the installed Pi runtime with `scripts/pi/test.sh` (it resolves `pi` after excluding `node_modules/.bin` entries from `PATH`, never uses the repository's pinned SDK, and records the runtime it ran against). Behaviour and the adapter contract are in [docs/contract.md#Pi fork adapter](docs/contract.md#pi-fork-adapter).
 
 The `fork-provider-context` suite captures inherited-worker and overlay requests through the installed Codex Responses consumer and a loopback fake endpoint. It then drops, reorders and replaces the current task identity in actual transmitted requests and requires rejection after passing controls. Child processes use disposable credentials/resources and the startup `pi/fake-only.cjs` egress guard. The `CAPTURE` output names retained synthetic request/session evidence under the process temporary directory; set `TMPDIR` to a disposable repository `.tmp/` directory when running it. These checks do not prove hosted-model obedience or full production-profile equivalence.
 

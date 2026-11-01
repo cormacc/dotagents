@@ -7,12 +7,20 @@ set -euo pipefail
 
 here="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(git -C "$here" rev-parse --show-toplevel)"
-command -v pi >/dev/null || { echo "pi is not on PATH; the adapter checks need the installed Pi runtime" >&2; exit 1; }
-version="$(pi --version 2>&1 | tail -n 1)"
+# npm prepends repository shims; they must not choose the runtime under test.
+IFS=: read -r -a path_entries <<< "$PATH"
+installed_entries=()
+for entry in "${path_entries[@]}"; do
+  case "$entry" in */node_modules/.bin|*/node_modules/.bin/) continue ;; esac
+  installed_entries+=("$entry")
+done
+installed_path="$(IFS=:; printf '%s' "${installed_entries[*]}")"
+pi_bin="$(PATH="$installed_path" command -v pi)" || { echo "pi is not on PATH; the adapter checks need the installed Pi runtime" >&2; exit 1; }
+version="$(PATH="$installed_path" "$pi_bin" --version 2>&1 | tail -n 1)"
 suites=(${HERDR_ORCH_ADAPTER_SUITES:-fork-adapter fork-provider-context measurement-adapter})
 
 run_pi() {
-  PI_OFFLINE=1 pi --offline --no-session -ne -e "$here/run-tests.ts" --no-skills --no-prompt-templates --no-context-files --no-mcp -p x </dev/null 2>&1
+  PATH="$installed_path" PI_OFFLINE=1 "$pi_bin" --offline --no-session -ne -e "$here/run-tests.ts" --no-skills --no-prompt-templates --no-context-files --no-mcp -p x </dev/null 2>&1
 }
 
 echo "==> installed Pi $version"
