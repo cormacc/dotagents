@@ -217,6 +217,25 @@ export class OtCommandError extends Error {
   }
 }
 
+export interface OtRecordResult {
+  taskId: string;
+  recordPath: string;
+  importRaw: string;
+  created: boolean;
+  absorbedSubtasks: boolean;
+  scope: { since: string | null; until: string | null; commits: string[] | null } | null;
+}
+
+export function otRecordPath(id: string, opts: RunOtOptions = {}): Promise<{ taskId: string; suggested: string }> {
+  return runOtResult(["record", "path", id], opts);
+}
+
+export function otRecordCreate(
+  id: string, path: string, mode: "proactive" | "retrospective", opts: RunOtOptions = {},
+): Promise<OtRecordResult> {
+  return runOtResult(["record", "create", id, "--path", path, "--mode", mode], opts);
+}
+
 export interface OtSourceContent {
   sourceContent?: string;
   effectiveSourceContent?: string;

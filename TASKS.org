@@ -455,6 +455,20 @@ Acceptance criteria:
 - Require exactly one match; on no match or several matches, report each candidate location and change nothing.
 - Report the file location of the replacement, and add the tool to the pi-clojure README and to skills/clojure/SKILL.md.
 
+** DONE Consolidate skill policy and extension infrastructure
+CLOSED: [2026-10-31 Sat 10:18]
+:PROPERTIES:
+:CUSTOM_ID: c15712eb-72e7-4b27-97c6-c9d5028c4c0e
+:CREATED: [2026-10-31 Sat 09:49]
+:STARTED: [2026-10-31 Sat 09:49]
+:END:
+:LOGBOOK:
+- Created [2026-10-31 Sat 09:49]
+- State "STARTED" from "TODO" [2026-10-31 Sat 09:49]
+- State "DONE" from "STARTED" [2026-10-31 Sat 10:18]
+:END:
+Apply the seven approved audit suggestions: canonical planning instructions and format reference; move incident evidence out of rules; one Dataspex parameter reference; ot-owned record creation; shared RPC test infrastructure and locked launchers; shared nREPL port-file primitives. Preserve separate skill responsibilities and vendored sources. Verify affected suites, section links, skill metadata, and installed Pi extension discovery.
+
 * Fixes
 
 ** TODO herdr-orch: failed-spawn hygiene :skill:herdr_orch:
@@ -729,3 +743,13 @@ Origin:
 
 Evidence:
 Reproduced in a clean worktree at HEAD 2ca64af. `ot status 17fea754 DONE` changed only TASKS.org. `ot archive 17fea754 --yes` then also changed design/log/2026-10-23-sharepoint-document-editing.org, which is imported by a different, open task: it removed the blank line between the last list item of a task body and the following `***` heading, twice. The archived task (pi-clojure dev pin, in Chores) has no #+IMPORT: of its own.
+
+** TODO Make npm run check select the installed Pi runtime :ext:test_infrastructure:
+:PROPERTIES:
+:CUSTOM_ID: 0e9cf14d-7054-42b9-b9c6-907e926a4f40
+:CREATED: [2026-10-31 Sat 10:15]
+:END:
+:LOGBOOK:
+- Created [2026-10-31 Sat 10:15]
+:END:
+The npm run check invocation failed in skills/herdr-orch/scripts/pi/test.sh: the API resolved under repository node_modules, which HERDR_ORCH_FORBID_BUNDLE_PREFIX rejects. The runner chooses pi on PATH; scripts/check.sh reaches it through bb test. A direct bash scripts/check.sh invocation passed the installed-Pi adapter stage, then hit the 300-second overall limit during extension tests. Make the npm entry point preserve installed-runtime selection without weakening the mismatch control. Evidence: .tmp/consolidation.FiGdAD/repository-check.log and repository-direct.log. This was discovered while verifying task c15712eb; it is not attributed to the consolidation changes.

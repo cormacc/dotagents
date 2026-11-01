@@ -38,7 +38,7 @@ import {
   watch,
   type FSWatcher,
 } from "node:fs";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import { ensureEmacsServer } from "../emacsclient/emacsclient.ts";
 import { TasksOverlay } from "./overlay.ts";
@@ -50,6 +50,8 @@ import {
   otDoctor,
   otList,
   otPublishTask,
+  otRecordPath,
+  otRecordCreate,
   otRemoveTask,
   otSelectTask,
   otCyclePriority,
@@ -62,32 +64,22 @@ import {
   expandOrgLinkTarget,
   getTaskId,
   getTaskStarted,
-  parseLinkTemplates,
-  parseTasks,
   parseSelectedKeyword,
-  serializeTasks,
-  serializeTasksPreservingFile,
   type Task,
 } from "./parser.ts";
 import { formatFindingsReport, type Finding } from "./doctor.ts";
-import { insertTasksIntoPlanSection, scaffoldPlan } from "./scaffold.ts";
 import { isWithinRoot, resolveProjectPath } from "./paths.ts";
 import {
   evaluateSummaryRefresh,
   type SummaryRefreshReason,
 } from "./summary.ts";
 import { colorIssues, colorPriority, colorStatus, colorTags } from "./status-colors.ts";
-import { readEffectiveOrgContent } from "./effective.ts";
 import { getAgentPath } from "../lib/agent-paths.ts";
 
 const TASKS_FILE = "TASKS.org";
 /** Gitignored local file that stores per-contributor selection state. */
 const TASKS_LOCAL_FILE = "TASKS.local.org";
 const TASKS_ARCHIVE_FILE = "TASKS.archive.org";
-const TODO_PREAMBLE = "#+TODO: TODO(t) STARTED(s!) WAITING(w@/!) | DONE(d!) CANCELLED(c!)";
-const STARTUP_PREAMBLE = "#+STARTUP: logdone logdrawer";
-const ARCHIVE_PREAMBLE = "#+ARCHIVE: TASKS.archive.org::* From %s";
-const DEFAULT_PLANS_DIR = "./design/log";
 /** Hard cap so the compact selected-task widget never dominates the screen. */
 const MAX_COMPACT_LINES = 6;
 const COMPACT_WIDGET_ID = "tasks:selected";
@@ -1177,108 +1169,6 @@ async function openTaskInEmacs(
   pi.events.emit("emacs:open", { file: filePath, line: task.lineNumber });
 }
 
-/** Lowercase ASCII slug: letters/digits/hyphens, collapsed, trimmed, ≤ 40 chars. */
-function slugify(summary: string): string {
-  return summary
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40)
-    .replace(/-+$/, "") || "plan";
-}
-
-async function pathExists(p: string): Promise<boolean> {
-  try {
-    await access(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function defaultSetupFileContent(): string {
-  return [
-    TODO_PREAMBLE,
-    STARTUP_PREAMBLE,
-    "#+LINK: jira https://your-org.atlassian.net/browse/%s",
-    "#+JIRA_CLOUDID: 00000000-0000-4000-8000-000000000000",
-    "#+JIRA_PROJECT:",
-    "#+LINK: plan file:design/log/%s",
-    "# Default task/archive link targets assume plan files live under design/log/.",
-    "# TASKS.org and TASKS.archive.org declare local overrides before #+SETUPFILE:",
-    "# so org-mode resolves task links correctly from the task files themselves.",
-    "#+LINK: task file:../../TASKS.org::#%s",
-    "#+LINK: archive file:../../TASKS.archive.org::#%s",
-    "",
-  ].join("\n");
-}
-
-function defaultTaskLinkOverrides(): string[] {
-  return [
-    "#+LINK: task file:TASKS.org::#%s",
-    "#+LINK: archive file:TASKS.archive.org::#%s",
-  ];
-}
-
-function defaultLocalFileContent(): string {
-  return [
-    "#+SELECTED:",
-    "",
-    "# Per-checkout overrides for shared TASKS.setup.org defaults.",
-    "# TASKS.org loads this file via #+SETUPFILE before TASKS.setup.org, so",
-    "# any #+KEYWORD declared here wins over the shared default (org-mode",
-    "# resolves the first-declared occurrence).",
-    "",
-  ].join("\n");
-}
-
-function defaultOrgPreamble(path: string): string {
-  if (path.endsWith(TASKS_FILE)) {
-    return [
-      "#+TITLE: Project Tasks",
-      ...defaultTaskLinkOverrides(),
-      "#+SETUPFILE: ./TASKS.local.org",
-      "#+SETUPFILE: ./TASKS.setup.org",
-      ARCHIVE_PREAMBLE,
-      "",
-    ].join("\n");
-  }
-  if (path.endsWith(TASKS_ARCHIVE_FILE)) {
-    return [
-      "#+TITLE: Archived Tasks",
-      ...defaultTaskLinkOverrides(),
-      "#+SETUPFILE: ./TASKS.local.org",
-      "#+SETUPFILE: ./TASKS.setup.org",
-      "",
-    ].join("\n");
-  }
-  return "";
-}
-
-async function writeTaskFilePreserving(path: string, tasks: Task[]): Promise<void> {
-  if (path.endsWith(TASKS_FILE) || path.endsWith(TASKS_ARCHIVE_FILE)) {
-    const setupPath = join(dirname(path), "TASKS.setup.org");
-    if (!(await pathExists(setupPath))) {
-      await writeFile(setupPath, defaultSetupFileContent(), "utf-8");
-    }
-    // Ensure TASKS.local.org exists so the #+SETUPFILE chain does not warn
-    // on missing-file. The file stays gitignored and may carry per-checkout
-    // #+SELECTED, #+JIRA_CLOUDID overrides, etc.
-    const localPath = join(dirname(path), TASKS_LOCAL_FILE);
-    if (!(await pathExists(localPath))) {
-      await writeFile(localPath, defaultLocalFileContent(), "utf-8");
-    }
-  }
-  const cachedOriginal = tasks.find((t) => t.sourceContent)?.sourceContent;
-  const original = cachedOriginal ?? ((await pathExists(path))
-    ? await readFile(path, "utf-8")
-    : "");
-  const content = original
-    ? serializeTasksPreservingFile(original, tasks)
-    : `${defaultOrgPreamble(path)}${serializeTasks(tasks)}`;
-  await writeFile(path, content, "utf-8");
-}
-
 function getEmacsOptions(pi: ExtensionAPI) {
   const env = (globalThis as { [key: string]: unknown })["process"] as
     | { env?: Record<string, string | undefined> }
@@ -1292,120 +1182,6 @@ function getEmacsOptions(pi: ExtensionAPI) {
         timeout: opts?.timeout,
       }),
   };
-}
-
-/**
- * Project-root-relative plan directory derived from a `#+LINK: plan ...`
- * template. Only `file:`-prefixed templates are honoured — a URL-shaped
- * `plan` template (e.g. `https://.../%s`) wouldn't yield a meaningful local
- * scaffold path, so we fall back to the default rather than emit a
- * URL-shaped suggestion the user has to delete.
- */
-function planDirFromTemplate(template: string | undefined): string {
-  if (!template) return DEFAULT_PLANS_DIR;
-  if (!template.startsWith("file:")) return DEFAULT_PLANS_DIR;
-  const stripped = template.slice("file:".length);
-  const beforePlaceholder = stripped.includes("%s")
-    ? stripped.slice(0, stripped.indexOf("%s"))
-    : stripped;
-  const trimmed = beforePlaceholder.replace(/\/+$/, "");
-  return trimmed || DEFAULT_PLANS_DIR;
-}
-
-/**
- * Read the project-wide default plan directory from `#+LINK: plan file:.../%s`.
- * Resolution follows `TASKS.org` and one level of `#+SETUPFILE:`; this is the
- * canonical place for the abbreviation so we do not also probe
- * `TASKS.local.org` (intentional — shared config does not belong in a
- * gitignored file).
- */
-async function readPlansDir(cwd: string): Promise<string> {
-  try {
-    const tasksPath = join(cwd, TASKS_FILE);
-    const content = await readFile(tasksPath, "utf-8");
-    const effective = await readEffectiveOrgContent(cwd, tasksPath, content);
-    return planDirFromTemplate(parseLinkTemplates(effective).get("plan"));
-  } catch {
-    return DEFAULT_PLANS_DIR;
-  }
-}
-
-function joinPlanDir(dir: string, filename: string): string {
-  const trimmed = dir.trim().replace(/\/+$/, "") || ".";
-  if (trimmed === "." || trimmed === "./") return `./${filename}`;
-  if (trimmed.startsWith("./")) return `./${join(trimmed.slice(2), filename)}`;
-  return join(trimmed, filename);
-}
-
-function importLinkForPlanPath(cwd: string, sourceDir: string, absPlan: string, plansDir: string): { path: string; raw: string } {
-  const planRoot = isAbsolute(plansDir) ? plansDir : join(cwd, plansDir);
-  const planSuffix = relative(planRoot, absPlan).replace(/\\/g, "/");
-  if (planSuffix && !planSuffix.startsWith("..") && !isAbsolute(planSuffix)) {
-    const path = `plan:${planSuffix}`;
-    return { path, raw: `[[${path}]]` };
-  }
-  const filePath = relative(sourceDir, absPlan).replace(/\\/g, "/");
-  return { path: filePath, raw: `[[file:${filePath}]]` };
-}
-
-/**
- * Suggest a plan path for a task that has no #+IMPORT: yet.
- * Uses `#+LINK: plan file:.../%s` from TASKS.setup.org/TASKS.org as the plan template, falling back to `./design/log` when unspecified or malformed.
- */
-async function suggestPlanPath(task: Task, cwd: string): Promise<string> {
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  const slug = slugify(task.summary);
-  const filename = `${today}-${slug}.org`;
-  const plansDir = await readPlansDir(cwd);
-  return joinPlanDir(plansDir, filename);
-}
-
-function taskLabel(task: Task): string {
-  const priority = task.priority ? ` [#${task.priority}]` : "";
-  const tags = task.tags.length > 0 ? ` :${task.tags.join(":")}:` : "";
-  return `${task.status}${priority} ${task.summary}${tags}`;
-}
-
-function formatExtractedSubtaskList(tasks: Task[]): string {
-  const lines = ["Extracted subtasks moved to linked plan:"];
-  const write = (taskList: Task[], depth: number) => {
-    for (const task of taskList) {
-      lines.push(`${"  ".repeat(depth)}- ${taskLabel(task)}`);
-      write(task.children, depth + 1);
-    }
-  };
-  write(tasks, 0);
-  return lines.join("\n");
-}
-
-function appendExtractedSubtaskList(description: string, tasks: Task[]): string {
-  if (tasks.length === 0) return description;
-  const existing = description.trimEnd();
-  const extracted = formatExtractedSubtaskList(tasks);
-  return existing ? `${existing}\n\n${extracted}` : extracted;
-}
-
-function cloneTaskForPlan(task: Task, level: number): Task {
-  return {
-    ...task,
-    level,
-    tags: [...task.tags],
-    propertyLines: [...task.propertyLines],
-    logbookLines: [...task.logbookLines],
-    children: task.children.map((child) => cloneTaskForPlan(child, level + 1)),
-    importChildren: undefined,
-    importError: null,
-    sourcePath: undefined,
-    sourceContent: undefined,
-    effectiveSourceContent: undefined,
-    sourceRoot: undefined,
-    lineNumber: 0,
-    endLine: 0,
-  };
-}
-
-function cloneSubtasksForPlan(task: Task): Task[] {
-  return task.children.map((child) => cloneTaskForPlan(child, 2));
 }
 
 class PrefilledInputPrompt implements Component, Focusable {
@@ -1489,159 +1265,34 @@ async function promptForPlanPath(
   );
 }
 
-/**
- * Build the agent prompt that follows change-record scaffolding.
- *
- * Two flows produce the same change-record artefact but differ in what the
- * agent does next:
- *
- * - `proactive`: the user wants to plan up front.  Agent asks scoping
- *   questions, drafts * Summary and * Plan, promoting * Context only when
- *   rationale warrants it, then the user executes.
- * - `retrospective`: the task already closed without a plan.  Agent uses
- *   the task's :STARTED: / :CLOSED: timestamps to scope `git log`, then
- *   drafts * Summary and * Implementation, promoting * Context only when
- *   rationale warrants it.
- */
-function buildChangeRecordPrompt(
-  mode: "proactive" | "retrospective",
+/** Build task-specific context without copying the skills' planning policy. */
+export function buildChangeRecordPrompt(
+  mode: "proactive" | "retrospective" | "summary",
   task: Task,
-  planRelToSource: string,
-  absPlan: string,
-  absorbedSubtasks: boolean,
+  link: string,
+  recordPath: string,
+  detail?: string,
 ): string {
-  if (mode === "retrospective") {
-    return buildRetrospectiveChangeRecordPrompt(task, planRelToSource, absPlan);
-  }
-  return buildProactiveChangeRecordPrompt(
-    task, planRelToSource, absPlan, absorbedSubtasks,
-  );
-}
-
-function displayChangeRecordLink(target: string): string {
-  if (target.startsWith("[[")) return target;
-  if (/^[A-Za-z][A-Za-z0-9+.-]*:.+/.test(target) && !target.startsWith("file:")) return `[[${target}]]`;
-  return `[[file:${target}]]`;
-}
-
-function buildProactiveChangeRecordPrompt(
-  task: Task,
-  planRelToSource: string,
-  absPlan: string,
-  absorbedSubtasks: boolean,
-): string {
+  const action = mode === "proactive" ? "Develop a plan" :
+    mode === "retrospective" ? "Reconstruct the delivered work from git history" :
+    "Refresh the condensed memory layer";
   return [
-    "Develop a linked org change-record for the selected TASKS.org task.",
-    "",
-    `Task: ${task.status} ${task.priority ? `[#${task.priority}] ` : ""}${task.summary}`,
-    `Change-record link: ${displayChangeRecordLink(planRelToSource)}`,
-    `Change-record file: ${absPlan}`,
-    "",
-    "The tasks extension has already attached the #+IMPORT: keyword and scaffolded the change-record file.",
-    absorbedSubtasks
-      ? "Existing TASKS.org subtasks were moved into the linked change-record under * Plan, and the parent task now retains a plain-text summary of the extracted subtasks."
-      : "The parent task had no local subtasks to absorb.",
-    "",
-    "Use the `org-plan` and `org-tasks` skills. Start by asking me any scoping questions needed to develop the plan. Once the plan is agreed, write the final org content to the change-record file above. The scaffold ships the required sections (`* Summary`, `* Plan`, `* Implementation`); promote `* Context` to a top-level section between `* Summary` and `* Plan` only when durable rationale exceeds what `* Summary` can carry. New `** TODO` plan tasks must include `:CUSTOM_ID:` and `:CREATED: [YYYY-MM-DD Day HH:MM]` properties (use `date +'%Y-%m-%d %a %H:%M'` to obtain the timestamp). Prefer tool-driven status changes so `:LOGBOOK:` lifecycle history stays synchronized. After writing it, offer to open the file in Emacs.",
-  ].join("\n");
+    `${action} for this task using the \`org-plan\` and \`org-tasks\` skills. Read their current instructions first.`,
+    `Task: ${task.status} ${task.summary}`,
+    `Change-record link: ${link}`,
+    `Change-record file: ${recordPath}`,
+    detail,
+    "Show the draft for approval before writing. Offer to open the file in Emacs after writing.",
+  ].filter(Boolean).join("\n");
 }
 
-function taskCreatedTimestamp(task: Task): string | null {
-  for (const line of task.propertyLines) {
-    const match = /^\s*:CREATED:\s*\[([^\]]+)\]\s*$/i.exec(line);
-    if (match) return match[1]!.trim();
-  }
-  for (const line of task.logbookLines) {
-    const match = /^\s*-\s+Created\s+\[([^\]]+)\]\s*$/i.exec(line);
-    if (match) return match[1]!.trim();
-  }
-  return null;
+function buildSummaryRefreshPrompt(task: Task, link: string, recordPath: string, reason: SummaryRefreshReason): string {
+  return buildChangeRecordPrompt("summary", task, link, recordPath,
+    reason === "missing" ? "The record has no Summary heading." : "The summary may be stale because the record predates the task start.");
 }
 
-/**
- * Build the prompt the agent receives when a top-level task closes
- * and its linked change-record either lacks `* Summary` or has not
- * been touched since the parent task started. The prompt asks the
- * agent to author or refresh the condensed memory layer per the
- * `org-plan` skill's *Closure-time summary refresh* section.
- */
-function buildSummaryRefreshPrompt(
-  task: Task,
-  planRelToSource: string,
-  absPlan: string,
-  reason: SummaryRefreshReason,
-): string {
-  const reasonNote = reason === "missing"
-    ? "The change-record has no `* Summary` heading."
-    : "The change-record has a `* Summary` heading but has not been touched since the parent task started, so the summary may be stale.";
-  return [
-    "Refresh the condensed memory layer for the just-closed TASKS.org task.",
-    "",
-    `Task: ${task.status} ${task.priority ? `[#${task.priority}] ` : ""}${task.summary}`,
-    `Change-record link: ${displayChangeRecordLink(planRelToSource)}`,
-    `Change-record file: ${absPlan}`,
-    "",
-    reasonNote,
-    "",
-    "Use the `org-plan` and `org-tasks` skills. Generate or refresh the change-record's `* Summary` so a future agent can rebuild context cheaply:",
-    "",
-    "1. Read the change-record's existing sections (`* Plan`, `* Implementation`, and `* Context` if present).",
-    "2. Place `* Summary` at the top of the change-record (the first top-level section). Use a one-paragraph synopsis followed by the conventional subsections (`** Decisions`, `** Shipped`, `** Gotchas`, `** Follow-ups`); include only the subsections that carry content. Evidentiary material (commands run, test counts) belongs in the sibling top-level `* Validation` section, not under `* Summary`.",
-    "3. Keep the summary terse: it is the surface a future agent reads first, not a duplicate of the implementation ledger.",
-    "4. Leave `* Context` alone if it already exists. If it does not exist, do NOT add an empty one — `* Context` is optional and is included only when durable rationale materially exceeds what `* Summary` can carry.",
-    "5. Preserve `:CUSTOM_ID:`, `#+PARENT:`, LOGBOOK history, and the existing `* Implementation` audit detail.",
-    "6. Show me the draft, then write the final content to the change-record file. Offer to open the file in Emacs after writing.",
-  ].join("\n");
-}
-
-function buildRetrospectiveChangeRecordPrompt(
-  task: Task,
-  planRelToSource: string,
-  absPlan: string,
-): string {
-  const started = getTaskStarted(task);
-  const created = taskCreatedTimestamp(task);
-  const lowerBound = started ?? created;
-  const closed = task.closed;
-  const scopeNote = lowerBound
-    ? `Use ${started ? `:STARTED: [${started}]` : `the created timestamp [${created}]`} as the lower bound and CLOSED: [${closed ?? "now"}] as the upper bound for \`git log\`.`
-    : "The task has no :STARTED: or created timestamp; fall back to recent commits (for example `-n 20`).";
-  return [
-    "Generate a retrospective change-record for the just-closed TASKS.org task.",
-    "",
-    `Task: ${task.status} ${task.priority ? `[#${task.priority}] ` : ""}${task.summary}`,
-    `Change-record link: ${displayChangeRecordLink(planRelToSource)}`,
-    `Change-record file: ${absPlan}`,
-    "",
-    "The tasks extension has already attached the #+IMPORT: keyword and scaffolded the change-record file with empty * Summary, * Plan, and * Implementation sections.",
-    "",
-    "Steps:",
-    `1. ${scopeNote} A reasonable invocation is \`git log --oneline --since="${lowerBound ?? "<fallback>"}" --until="${closed ?? "now"}"\` when a lower bound is available.`,
-    "2. Inspect the relevant commits and code changes.",
-    "3. Draft the * Summary section: a one-paragraph synopsis of what shipped and why, plus any of `** Decisions`, `** Shipped`, `** Gotchas`, `** Follow-ups` subsections that carry content. Evidentiary material (commands run, test counts) belongs in the sibling top-level `* Validation` section, not under `* Summary`.",
-    "4. Draft the * Implementation section: bullet points listing what was changed and why, citing commits where useful. Include any rolled-back attempts or dead-ends if they appear in the history \u2014 the failure record is the most valuable part of a retrospective.",
-    "5. Promote `* Context` to a top-level section between `* Summary` and `* Plan` ONLY if durable rationale (background, alternatives, scope) materially exceeds what `* Summary` can carry. For typical retrospective records, omit `* Context` entirely.",
-    "6. Leave * Plan empty unless there were notable steps worth recording retrospectively.",
-    "7. Show me the draft for approval, then write the final content to the change-record file. After writing, offer to open it in Emacs.",
-  ].join("\n");
-}
-
-/**
- * Resolve or create a change-record for the given task, then open it in Emacs.
- *
- * If the task has a `#+IMPORT:` keyword: open that file.
- * Otherwise: prompt for a filename (seeded from the task summary and today's
- * date), scaffold the file, attach `#+IMPORT:` to the task body, save the source
- * org file, then send the agent a prompt to develop content.
- *
- * `mode` selects the agent-prompt body that follows scaffolding:
- * - `proactive` (default): agent helps plan up front.
- * - `retrospective`: task is already closed; agent drafts * Summary and
- *   * Implementation from git history, promoting * Context only when
- *   rationale warrants it. Triggered by status cycle to DONE on a task with
- *   no existing #+IMPORT: link.
- */
-async function handlePlanEdit(
+/** Open an imported record in Emacs, or approve a path and delegate creation to ot. */
+export async function handlePlanEdit(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
   task: Task,
@@ -1668,95 +1319,30 @@ async function handlePlanEdit(
     return;
   }
 
-  // ── Create new plan ──
-  const suggested = await suggestPlanPath(task, ctx.cwd);
-  const approved = await promptForPlanPath(ctx, task, suggested);
-  if (!approved) return;
-  const relPath = approved.split(/\r?\n/, 1)[0]?.trim();
-  if (!relPath) return;
-
-  const absPlan = await resolveProjectPath(ctx.cwd, ctx.cwd, relPath);
-  if (!absPlan) {
-    ctx.ui.notify("Plan path resolves outside project root", "error");
+  const id = getTaskId(task);
+  if (!id) {
+    ctx.ui.notify("Cannot create a record without a :CUSTOM_ID:.", "error");
     return;
   }
-  const planRelToSource = relative(sourceDir, absPlan).replace(/\\/g, "/");
-  const plansDir = await readPlansDir(ctx.cwd);
-  const planImport = importLinkForPlanPath(ctx.cwd, sourceDir, absPlan, plansDir);
-
-  const originalChildren = task.children;
-  const originalDescription = task.description;
-  const origImportPath = task.importPath;
-  const origImportRaw = task.importRaw;
-  const extractedPlanTasks = cloneSubtasksForPlan(task);
-
+  const options = { cwd: ctx.cwd };
   try {
-    await mkdir(dirname(absPlan), { recursive: true });
-    if (await pathExists(absPlan)) {
-      if (extractedPlanTasks.length > 0) {
-        const existing = await readFile(absPlan, "utf-8");
-        await writeFile(
-          absPlan,
-          insertTasksIntoPlanSection(existing, extractedPlanTasks),
-          "utf-8",
-        );
-      }
-    } else {
-      const planDir = dirname(absPlan);
-      const setupPath = join(ctx.cwd, "TASKS.setup.org");
-      if (!(await pathExists(setupPath))) {
-        await writeFile(setupPath, defaultSetupFileContent(), "utf-8");
-      }
-      const setupFileRelPath = relative(planDir, setupPath).replace(/\\/g, "/");
-      await writeFile(
-        absPlan,
-        scaffoldPlan(task, { setupFileRelPath }, extractedPlanTasks),
-        "utf-8",
-      );
-    }
-
-    // Attach #+IMPORT: to the in-memory task body and save its source file.
-    // Write the link form so the keyword is clickable in Emacs (C-c C-o)
-    // while remaining parseable by the extension. The parser preserves this
-    // raw value on round-trip. If the task already had local subtasks, move
-    // those task headings into the new plan and leave a plain-text summary on
-    // the parent so TASKS.org stays high-level without losing browse context.
-    task.importPath = planImport.path;
-    task.importRaw = planImport.raw;
-    if (originalChildren.length > 0) {
-      task.description = appendExtractedSubtaskList(
-        originalDescription,
-        originalChildren,
-      );
-      task.children = [];
-    }
-    const root = task.sourceRoot;
-    if (root) {
-      await writeTaskFilePreserving(sourcePath, root);
-    }
-  } catch (err) {
-    task.children = originalChildren;
-    task.description = originalDescription;
-    task.importPath = origImportPath;
-    task.importRaw = origImportRaw;
-    ctx.ui.notify(
-      `Failed to create plan: ${(err as Error).message}`,
-      "error",
-    );
-    return;
+    const { suggested } = await otRecordPath(id, options);
+    const approved = await promptForPlanPath(ctx, task, suggested);
+    const path = approved?.split(/\r?\n/, 1)[0]?.trim();
+    if (!path) return;
+    const record = await otRecordCreate(id, path, mode, options);
+    await refreshTaskUi(ctx, ctx.cwd);
+    ctx.ui.notify(`Change-record ready: ${relative(sourceDir, record.recordPath)}`, "info");
+    pi.sendUserMessage(buildChangeRecordPrompt(
+      mode, task, record.importRaw, record.recordPath,
+      JSON.stringify({
+        absorbedSubtasks: record.absorbedSubtasks,
+        scope: record.scope ? { since: record.scope.since, until: record.scope.until } : null,
+      }),
+    ), { deliverAs: "followUp" });
+  } catch (error) {
+    ctx.ui.notify(`Failed to create plan: ${(error as Error).message}`, "error");
   }
-
-  ctx.ui.notify(`Change-record scaffolded: ${planRelToSource}`, "info");
-  pi.sendUserMessage(
-    buildChangeRecordPrompt(
-      mode,
-      task,
-      planImport.path,
-      absPlan,
-      originalChildren.length > 0,
-    ),
-    { deliverAs: "followUp" },
-  );
 }
 
 // ── Create task flow ─────────────────────────────────────────────────────

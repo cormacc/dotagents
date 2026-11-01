@@ -39,7 +39,6 @@ import {
   setTaskHandoff,
   type Task,
 } from "./parser.ts";
-import { scaffoldPlan } from "./scaffold.ts";
 
 let passed = 0;
 let failed = 0;
@@ -205,86 +204,6 @@ function assertContains(haystack: string, needle: string, message: string): void
   const out = serializeTasks(tasks);
   assertContains(out, ":LOGBOOK:\n- Created [2026-04-28 Tue 10:49]",
     ":LOGBOOK: survives round-trip");
-}
-
-// ── scaffoldPlan minimal-scaffold snapshot ────────────────────────────
-//
-// Regression guard against unintentional changes to the minimal
-// extension-owned change-record scaffold. The `org-plan` skill owns the
-// richer human-facing summary subsection conventions.
-// (Plan creation only happens via the agent harness; the elisp side
-// has no scaffolder so there is no cross-implementation pairing.)
-
-{
-  // Freeze the date so the snapshot is deterministic.
-  const realDate = Date;
-  // @ts-expect-error — monkey-patch global Date for the duration of the test.
-  globalThis.Date = class extends realDate {
-    constructor() {
-      super("2026-04-28T00:00:00");
-    }
-  };
-  try {
-    const fixture: Task = {
-      level: 2,
-      status: "TODO",
-      priority: null,
-      summary: "Refine org-memory protocol",
-      tags: [],
-      description: "",
-      children: [],
-      propertyLines: [":CUSTOM_ID: 80ea589b-501c-42d9-86e7-4d414c0c314e"],
-      logbookLines: [],
-      importPath: null,
-      importRaw: null,
-      isLocal: false,
-      closed: null,
-      lineNumber: 0,
-      endLine: 0,
-    };
-    const expected = [
-      "#+TITLE: Refine org-memory protocol",
-      "#+DATE: 2026-04-28 Tue",
-      "#+PARENT: [[task:80ea589b-501c-42d9-86e7-4d414c0c314e][Refine org-memory protocol]]",
-      "#+SETUPFILE: ../../TASKS.setup.org",
-      "",
-      "* Summary",
-      "",
-      "* Plan",
-      "",
-      "* Implementation",
-      "",
-      "",
-    ].join("\n");
-    const actual = scaffoldPlan(fixture);
-    assertEqual(actual, expected,
-      "scaffoldPlan minimal extension scaffold snapshot");
-  } finally {
-    globalThis.Date = realDate;
-  }
-}
-
-{
-  const fixture: Task = {
-    level: 2,
-    status: "TODO",
-    priority: null,
-    summary: "Unsafe ] summary",
-    tags: [],
-    description: "",
-    children: [],
-    propertyLines: [":CUSTOM_ID: 80ea589b-501c-42d9-86e7-4d414c0c314e"],
-    logbookLines: [],
-    importPath: null,
-    importRaw: null,
-    isLocal: false,
-    closed: null,
-    lineNumber: 0,
-    endLine: 0,
-  };
-  const actual = scaffoldPlan(fixture);
-  assertContains(actual, "#+PARENT: [[task:80ea589b-501c-42d9-86e7-4d414c0c314e]]",
-    "scaffoldPlan omits unsafe parent-link descriptions");
 }
 
 {

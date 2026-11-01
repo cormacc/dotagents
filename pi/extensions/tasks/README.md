@@ -2,9 +2,7 @@
 
 Displays project tasks from a `TASKS.org` file in the project root using org-mode TODO syntax.
 The extension is a UI over the plain-org task-memory protocol documented in
-`skills/org-tasks/SKILL.md`; that skill defines the durable file-format
-contract, while this extension owns commands, rendering, selection, status writes,
-and archive mechanics. Protocol logic is being migrated incrementally to the
+`skills/org-tasks/SKILL.md`; that skill defines the durable file-format contract. The `ot` CLI owns protocol reads and writes; this extension owns commands, rendering, dialogs, and event glue. Protocol logic is being migrated incrementally to the
 portable Babashka `ot` CLI under `skills/org-tasks/scripts/`: leaf LLM tools now
 call `ot section` / `ot scan`, `/tasks doctor` calls `ot doctor`,
 selection/status/archive/publish/unpublish use
@@ -200,7 +198,7 @@ Task creation, plan path approval, and archive confirmation prompts temporarily 
 
 ### Change-records (proactive and retrospective)
 
-The file linked from a task via `#+IMPORT:` is called a *change-record*. The file shape is owned by the `org-plan` skill: required on every record are `* Summary`, `* Plan`, and `* Implementation`; `* Context` and `* Open questions` are optional. The same shape is produced by both flows below. `* Context` is promoted from "omit" to "include" only when durable rationale materially exceeds what `* Summary` can carry.
+The file linked from a task via `#+IMPORT:` is called a *change-record*. The [format reference](../../../skills/org-plan/references/change-record-format.md) owns its section contract. Both flows use `ot record path` and `ot record create`; the extension prompts for the path and sends task-specific context to an agent following the `org-plan` and `org-tasks` skills.
 
 **Proactive flow** — press `p` on a task that has no `#+IMPORT:`, accept the path prompt, and the agent helps draft `* Summary` and `* Plan` up front (promoting `* Context` only when needed). As work proceeds, plan tasks transition `TODO -> STARTED -> DONE`; `* Implementation` and `* Summary` are refreshed along the way.
 
@@ -208,10 +206,10 @@ The file linked from a task via `#+IMPORT:` is called a *change-record*. The fil
 
 - Triggers only on `TODO -> DONE` and `STARTED -> DONE`. `CANCELLED` does not trigger; cycling away from `DONE` does not trigger.
 - Triggers only when the parent task has no `#+IMPORT:` yet. Tasks with an existing change-record (planned or retrospective) skip the prompt.
-- If the resolved path already points to an existing file, content is appended (never overwritten).
+- An existing record file is left byte-identical. Its task receives the import link, but local subtasks remain on the parent; migration occurs only when a new record is created.
 - Cancelling the path prompt leaves the task `DONE` with no record attached. The user can attach one later via the `p` keybinding.
 
-**Closure-time `* Summary` refresh** — cycling a task with an existing `#+IMPORT:` to `DONE` triggers a parallel check: the extension reads the linked change-record and, when the file either lacks `* Summary` or has not been touched since the parent task's `:STARTED:` timestamp, sends the agent a prompt to author or refresh `* Summary` per the `org-plan` skill's *Closure-time summary refresh* section. The check is sandboxed to the project root and silently skips when the change-record cannot be read.
+**Closure-time `* Summary` refresh** — cycling a task with an existing `#+IMPORT:` to `DONE` triggers a parallel check: the extension reads the linked change-record and, when the file either lacks `* Summary` or has not been touched since the parent task's `:STARTED:` timestamp, sends the agent a prompt to author or refresh `* Summary` per the `org-plan` skill's closure policy. The check is sandboxed to the project root and silently skips when the change-record cannot be read.
 
 **Setting:** `<configured agent directory>/tasks-ext.json` (default:
 `~/.pi/agent/tasks-ext.json`)
@@ -356,67 +354,13 @@ Extension-specific notes:
   `[[task:<uuid>][summary]]` for live tasks and `[[archive:<uuid>][summary]]`
   after archival. The archive flow rewrites only the link prefix from `task:`
   to `archive:`; it does not rewrite relative file paths.
-- **Subtask absorption**: if `p` is pressed on a task that already
-  has local subtasks, those subtask trees are moved into the new
-  change-record under `* Plan`; the parent retains a plain-text
-  bullet summary of the extracted subtasks.
+- **Subtask absorption**: for a newly created record, `ot` moves local subtasks into its `* Plan` section and removes their parent-local copies. The UI displays them through the import; it does not persist a second plain-text summary.
 
 ## Tests
 
-```sh
-./test.sh
-```
+Run `./test.sh`. It discovers every co-located `*.test.ts` and runs the shared path and locked-launcher tests. The suites cover parsing, insertion, graph reconstruction, CLI adapters, sandboxing, removal, and summary-refresh detection.
 
-Runs structural sanity checks against `index.ts` plus the task-memory
-regression suites:
-
-- `parser.test.ts` — parser round-trip invariants and the
-  `scaffoldPlan()` literal-snapshot test.
-- `insert.test.ts` — deterministic task insertion, LOGBOOK rendering,
-  duplicate detection, and insert-tool path sandboxing.
-- `lifecycle.test.ts` — status-cycle LOGBOOK semantics, reopen
-  clearing `CLOSED:`, and re-close timestamp refresh.
-- `paths.test.ts` — project-root sandbox resolution for import and
-  scaffold paths, including traversal and symlink escapes.
-- `doctor.test.ts` — loaded-graph health checks (duplicate IDs,
-  broken imports, stale selection, blockers, stale parent status).
-- `memory.test.ts` — scenario-style agent-memory reconstruction for a
-  selected task with imported plan context, implementation notes,
-  blockers, and `* Summary` ingestion order.
-- `summary.test.ts` — closure-time `* Summary` refresh detection:
-  missing-section trigger, stale-mtime trigger, and the no-op case
-  where `* Summary` already exists and is recent.
-- `section.test.ts` — section-reading primitive: present, absent,
-  final-section-runs-to-EOF, file-with-zero-headings, literal `* `
-  inside `#+BEGIN_SRC` / `#+BEGIN_EXAMPLE`, case-insensitive matching
-  with trailing `:tags:`, default-to-Summary, nested subheadings
-  preserved, and duplicate-section first-match-wins.
-- `scan.test.ts` — scan-summaries primitive: rich record,
-  missing record content, record without `* Summary`, task with no
-  `#+IMPORT:`, `hasContext` flag per record, `scope=active`/`archived`/`all`,
-  tags OR-semantics, `maxBodyChars` truncation (with and without the
-  `…` sentinel) and default cap, tasks without `:CUSTOM_ID:` skipped,
-  plan tasks inside change-records emitting their own rows.
-- `pi-integration.test.ts` — RPC mode-boundary tests for `/tasks new`,
-  `/tasks doctor`, and bare `/tasks`, spawning the installed `pi` binary
-  directly. `/tasks` subcommands are dispatched before any model call, so
-  the harness passes no `--provider`/`--model` and generates no dummy
-  provider extension. It decodes stdout with its own LF-only JSONL reader
-  (`docs/rpc.md` documents Node `readline` as protocol-non-compliant
-  because it also splits on U+2028/U+2029) and races each expected event
-  against child stderr, an `extension_error` event, and early exit, so a
-  known startup failure reports promptly instead of surfacing only as a
-  generic timeout.
-
-These tests are the authoritative behavioural contract for the
-org-memory protocol implemented by this extension.
-
-`test.sh` runs every test through the repository's root-local, locked
-`node_modules/.bin/tsx` (from `package-lock.json`) rather than any
-ambient/global `tsx` or `npx --yes tsx` fallback. If the locked development
-dependencies are not installed, it fails immediately with the exact
-recovery command (`npm ci` from the repository root) instead of starting
-tests that cannot resolve their runtime imports.
+`record.test.ts` exercises the real `ot` record adapter: custom paths, migrated IDs, existing-file preservation, local source owners, sandbox refusal, and skill-owned prompt policy. `pi-integration.test.ts` uses the [shared RPC harness](../test/README.md) and retains framing, environment-isolation, response-correlation, early-load-failure, spawn-error, and stdin-error checks.
 
 ## Dependencies
 
