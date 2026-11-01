@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: EPL-2.0
 // Copyright © 2026-present Marko Kocic <marko@euptera.com>
 
-import * as fs from "node:fs";
+import { readNreplPortFile } from "../port-files.ts";
 import * as path from "node:path";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -20,24 +20,10 @@ function abortError(): Error {
   return new Error("nREPL port discovery aborted");
 }
 
-function isPort(port: number): boolean {
-  return Number.isInteger(port) && port >= 1 && port <= 65_535;
-}
-
-async function readPortFile(filePath: string): Promise<number | null> {
-  try {
-    const content = await fs.promises.readFile(filePath, "utf8");
-    const port = Number(content.trim());
-    return isPort(port) ? port : null;
-  } catch {
-    return null;
-  }
-}
-
 async function findPortInDirectory(dir: string, signal?: AbortSignal): Promise<number | null> {
   for (const file of PORT_FILES) {
     if (signal?.aborted) throw abortError();
-    const port = await readPortFile(path.join(dir, file));
+    const port = await readNreplPortFile(path.join(dir, file));
     if (port !== null) return port;
   }
   return null;

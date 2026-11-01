@@ -17,5 +17,6 @@ if [ ! -x "$TSC" ]; then fail_locked_deps "locked tsc not found at $TSC"; fi
   --skipLibCheck --allowImportingTsExtensions --types node \
   index.ts nrepl-client.ts tools/*.ts types.d.ts
 
+"$TSX" ./tools/port-files.test.ts
 "$TSX" ./tools/failure.test.ts
 "$TSX" ./tools/pi-clojure.test.ts

@@ -1,5 +1,9 @@
 #!/usr/bin/env tsx
-import registerDataspex from "./index.ts";
+import registerDataspex, { discoverPort } from "./index.ts";
+import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
 let registered: any;
 registerDataspex({
@@ -16,6 +20,18 @@ if (!Array.isArray(opSchema.enum) || opSchema.enum.join(",") !== "labels,value,h
 }
 
 async function main() {
+  const root = await mkdtemp(join(fileURLToPath(new URL("../../../.tmp/", import.meta.url)), "dataspex-ports-"));
+  try {
+    await mkdir(join(root, ".shadow-cljs"));
+    await writeFile(join(root, ".nrepl-port"), "7888");
+    await writeFile(join(root, ".shadow-cljs/nrepl.port"), "9000");
+    assert.equal(await discoverPort(root), 9000, "Dataspex prefers shadow-cljs");
+    await writeFile(join(root, ".shadow-cljs/nrepl.port"), "9000junk");
+    assert.equal(await discoverPort(root), 7888, "invalid files do not mask a later valid port");
+    console.log("ok - Dataspex preserves shadow-cljs precedence and rejects malformed ports");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 try {
   await registered.execute("test", { op: "value" }, undefined, undefined, { cwd: process.cwd() });
   throw new Error("dataspex failure returned instead of throwing");

@@ -55,6 +55,8 @@ model context or result details.
 
 ### `clojure_find_nrepl_port`
 
+Port-file parsing is shared with Dataspex: unreadable files, non-integers, and values outside 1–65535 are ignored. Each caller retains its own search precedence and probing policy.
+
 Searches `.nrepl-port`, `nrepl-port`, `.shadow-cljs/nrepl.port`, and
 `.cider-nrepl.port`, then probes 7888, 1666, 50505, 58885, 63333, and 7889.
 Discovery stops on cancellation. An unresponsive candidate cannot consume more

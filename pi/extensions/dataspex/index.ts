@@ -1,6 +1,6 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import * as fs from "node:fs/promises";
+import { readNreplPortFile } from "../pi-clojure/port-files.ts";
 import * as path from "node:path";
 import { evalExpr } from "../pi-clojure/nrepl-client";
 
@@ -45,19 +45,9 @@ function unwrapClojureString(value: string): string {
   return value;
 }
 
-async function readPortFile(cwd: string, file: string): Promise<number | null> {
-  try {
-    const text = await fs.readFile(path.join(cwd, file), "utf8");
-    const port = Number.parseInt(text.trim(), 10);
-    return Number.isFinite(port) ? port : null;
-  } catch {
-    return null;
-  }
-}
-
-async function discoverPort(cwd: string): Promise<number> {
+export async function discoverPort(cwd: string): Promise<number> {
   for (const file of PORT_FILES) {
-    const port = await readPortFile(cwd, file);
+    const port = await readNreplPortFile(path.join(cwd, file));
     if (port != null) return port;
   }
   throw new Error(
