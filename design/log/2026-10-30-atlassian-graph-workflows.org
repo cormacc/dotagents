@@ -1,0 +1,149 @@
+#+TITLE: Graph-aware Atlassian requirements exploration
+#+DATE: 2026-11-02 Mon
+#+PARENT: [[task:f673946f-c641-45c1-8b42-dbe58b23b2df][Investigate Atlassian Teamwork Graph API]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/org-jira/SKILL.md]]
+#+SPEC: [[proj:skills/org-jira/references/protocol.md]]
+#+SPEC: [[proj:pi/extensions/jira/README.md]]
+#+SPEC: [[proj:skills/org-jira/references/atlassian-exploration.md]]
+
+* Intent
+Improve Jira requirements and related Confluence exploration through the existing Atlassian MCP connection. Use Teamwork Graph for selective relationship discovery and native pi code mode for bounded orchestration, without replacing deterministic Jira actions with model-written scripts.
+
+* Summary
+*Level:* MVP | *Tests:* thorough | *Docs:* full
+
+Jira planning supports conditional, one-hop Teamwork Graph discovery through the existing MCP connection. Portable instructions and tested native pi code-mode recipes keep source reads separate from compact display and deterministic Jira actions. The six ~jira_*~ contracts and configured endpoint are unchanged.
+
+** Scope
+*** In scope
+- Jira-oriented requirements planning and related Confluence specifications/decisions, owned by [[proj:skills/org-jira/SKILL.md]].
+- Detailed portable procedure and optional pi recipes in [[proj:skills/org-jira/references/atlassian-exploration.md]].
+- Consistent MCP routing, unchanged site/token semantics and executable recipe tests.
+*** Out of scope
+- Direct Teamwork Graph API client, Forge application, ~twg~ CLI, new extension/tool, or new slash command.
+- MCP endpoint/authentication migration or support for multiple server generations without a demonstrated requirement.
+- Changes to existing ~jira_*~ input/output contracts, sandbox guards, task creation, or auto-transition behaviour.
+- Graph relationship writes, Confluence writes, production write tests, raw remote-content caches, or organisation-specific data committed to this public repository.
+- General-purpose agent research framework or speculative performance optimisation.
+
+** Acceptance
+Verified against the living workflow guidance, extracted-recipe tests and runtime checks below.
+*** Core functionality
+- [X] The skill states when a requirements question justifies graph discovery.
+- [X] The skill distinguishes natural-language Rovo search from JQL/CQL filtering.
+- [X] The planning path does not rely on ~jira_get~'s 300-character description preview.
+- [X] The graph procedure discovers relationships before fetching selected related objects.
+- [X] The default expansion has an explicit call budget.
+- [X] The procedure reports unconsumed cursors and omitted candidates.
+- [X] Each distilled requirement has a source identifier or URL.
+- [X] The pi recipes reduce results before returning them to the model.
+- [X] The documented JavaScript recipes execute in the recipe tests, rather than tests exercising copied logic.
+- [X] The standalone Jira test runner executes the recipe tests.
+- [X] The portable procedure remains usable without pi/code mode.
+*** Edge cases
+- [X] An MCP ~isError~ result is reported as failure even when its promise resolves.
+- [X] Partial failures retain successful sibling results with explicit per-source failures.
+- [X] Missing tools, authentication failure, access denial and exhausted credits have distinct recovery guidance where the server exposes that distinction.
+- [X] An empty graph result is not reported as proof that no related requirements exist.
+- [X] Body/output truncation is visible to the reader.
+- [X] Tests cover duplicate objects and mixed-site results before hydration.
+*** Anti-criteria
+- [X] Must not: call a remote write tool from an exploration recipe.
+- [X] Must not: follow graph edges recursively or consume pagination automatically.
+- [X] Must not: make ~jira_get~, clone, claim, comment, create or transition depend on graph access.
+- [X] Must not: replace sandbox-enforced Jira writes with model-written JavaScript.
+- [X] Must not: persist raw issue/page/graph bodies through ~store()~ or into task records.
+- [X] Must not: claim reduced latency or token use without a controlled measurement.
+
+** Decisions
+- Use skill instructions plus tested code-mode recipes :: Native orchestration avoids another runtime layer while the existing ~jira_*~ tools retain deterministic validation, sandbox restrictions and task-write semantics.
+  Rejected:
+  - A combined graph-context tool: no stable missing abstraction demonstrated.
+  - Replacing the Jira extension with scripts: returns safety-critical behaviour to model-authored code.
+  - A direct graph API/CLI: adds an access surface without a verified capability gap.
+- Keep exploration conditional and bounded :: The living reference owns the one-hop call budget and failure policy. Targeted reads remain available when graph/search access is unavailable.
+- Keep the configured endpoint :: The implementation uses the tools exposed by the configured connection, not guessed names from a different published server catalogue.
+
+** Shipped
+- MODIFIED :: [[proj:skills/org-jira/SKILL.md]] distinguishes full planning reads from compact display and routes optional graph discovery to the exploration reference.
+- ADDED :: [[proj:skills/org-jira/references/atlassian-exploration.md]] owns the portable procedure, read-only recipes and failure/budget policy.
+- MODIFIED :: [[proj:skills/org-jira/references/protocol.md]] links exploration without changing token or site resolution; [[proj:pi/extensions/jira/README.md]] records the action/exploration boundary and recipe-test coverage.
+
+* Plan
+** DONE Establish Atlassian read-only capability and response fixtures
+CLOSED: [2026-11-02 Mon 19:40]
+:PROPERTIES:
+:CUSTOM_ID: affc4ebb-d328-4497-a5cc-f756ddb9db23
+:CREATED: [2026-11-02 Mon 18:12]
+:STARTED: [2026-11-02 Mon 19:37]
+:END:
+:LOGBOOK:
+- Created [2026-11-02 Mon 18:12]
+- State "STARTED" from "TODO" [2026-11-02 Mon 19:37]
+- State "DONE" from "STARTED" [2026-11-02 Mon 19:40]
+:END:
+Acceptance verified: supported live envelopes captured in sanitised fixtures; source and scope checks succeeded.
+
+** DONE Add executable code-mode exploration recipes and fixture tests
+CLOSED: [2026-11-02 Mon 19:46]
+:PROPERTIES:
+:CUSTOM_ID: 6f0032b5-3a88-423f-957c-9baef1313573
+:CREATED: [2026-11-02 Mon 18:12]
+:BLOCKED-BY: task:affc4ebb-d328-4497-a5cc-f756ddb9db23
+:STARTED: [2026-11-02 Mon 19:40]
+:END:
+:LOGBOOK:
+- Created [2026-11-02 Mon 18:12]
+- State "STARTED" from "TODO" [2026-11-02 Mon 19:40]
+- State "DONE" from "STARTED" [2026-11-02 Mon 19:46]
+:END:
+Acceptance verified: documented blocks execute in fixture tests and native code mode; known-bad writes are rejected.
+
+** DONE Integrate bounded graph exploration into portable Jira planning guidance
+CLOSED: [2026-11-02 Mon 19:48]
+:PROPERTIES:
+:CUSTOM_ID: 0bdf81de-aa93-4554-8acf-5e00885b07f0
+:CREATED: [2026-11-02 Mon 18:12]
+:BLOCKED-BY: task:6f0032b5-3a88-423f-957c-9baef1313573
+:STARTED: [2026-11-02 Mon 19:46]
+:END:
+:LOGBOOK:
+- Created [2026-11-02 Mon 18:12]
+- State "STARTED" from "TODO" [2026-11-02 Mon 19:46]
+- State "DONE" from "STARTED" [2026-11-02 Mon 19:48]
+:END:
+Acceptance verified: portable guidance, MCP routing and extension documentation agree; link/skill checks pass.
+
+** DONE Validate bounded exploration and preserve existing Jira behaviour
+CLOSED: [2026-11-02 Mon 19:51]
+:PROPERTIES:
+:CUSTOM_ID: 0df23e0b-fe6e-43ec-b638-784634f33bd0
+:CREATED: [2026-11-02 Mon 18:12]
+:BLOCKED-BY: task:0bdf81de-aa93-4554-8acf-5e00885b07f0
+:STARTED: [2026-11-02 Mon 19:48]
+:END:
+:LOGBOOK:
+- Created [2026-11-02 Mon 18:12]
+- State "STARTED" from "TODO" [2026-11-02 Mon 19:48]
+- State "DONE" from "STARTED" [2026-11-02 Mon 19:51]
+:END:
+Acceptance verified: controlled read-only trial and regression checks completed; validation limits are recorded below.
+
+* Implementation
+The fixture runner extracts the shared JavaScript block and each recipe from the living reference. There is no second implementation to drift; native-VM checks remain separate from the Node.js fixture runner. Jira runtime code is unchanged.
+
+* Validation
+- Live read-only trial, 2026-11-02 :: Both selected sources read successfully. The Jira seed returned no relationships; the Confluence seed returned one parent page and a retention-window warning. Hydration and Rovo search succeeded. No relationship between the two seeds was inferred.
+- Call accounting :: Four discovery calls (two context, one hydration, one search) plus eight source/resolution/filter reads, including the final two-source recipe run. No remote writes or automatic cursor traversal.
+- Native code mode :: The four exact recipe blocks executed with sanitised fixtures in the active pi 1.4.0 VM; the selected-source block also executed against the approved live sources. A known-bad write was rejected. Model-free RPC startup loaded the Jira extension with empty stderr and ~jira~ registered.
+- Coverage limit :: The selected issue is disposable test material and the selected page is onboarding guidance, not a product specification. The trial verifies retrieval and honest scope reporting, not completeness or correctness of a product requirements analysis.
+- Privacy :: Fixtures contain synthetic IDs/URLs/bodies. A source sweep included tracked and new files, with the synthetic example host as a positive control; the queried live identifiers/hosts did not occur in the changed workflow/test files.
+
+* Open questions
+** DECIDED Which Jira project and Confluence space may be used for the live read-only trial?
+:PROPERTIES:
+:DECIDED: [2026-11-02 Mon 18:59]
+:END:
+Decision: use existing issues in Jira Sandbox (~SAND~) and existing pages in the Confluence 'Product Development' space, as requested by the user. Resolve representative item identifiers during capability validation. A failed graph entitlement check remains an explicit validation limit, not a reason to widen permissions or migrate endpoints automatically.

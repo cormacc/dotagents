@@ -1,0 +1,89 @@
+{
+  "cloudId": "11111111-1111-4111-8111-111111111111",
+  "baseUrl": "https://example.atlassian.net",
+  "issue": {
+    "id": "10001",
+    "key": "SAND-1",
+    "fields": {
+      "summary": "Example sandbox issue",
+      "description": "The operator must confirm the selected configuration before starting the example operation.",
+      "status": { "name": "Open" },
+      "updated": "2026-01-01T00:00:00.000Z"
+    }
+  },
+  "page": {
+    "id": "20001",
+    "type": "page",
+    "title": "Example requirements",
+    "spaceId": "30001",
+    "version": { "number": 1 },
+    "body": "# Example requirements\n\nShow the selected configuration before starting the example operation."
+  },
+  "graph": {
+    "data": {
+      "data": {
+        "object": {
+          "ari": "ari:cloud:confluence:11111111-1111-4111-8111-111111111111:page/20001",
+          "type": "ConfluencePage",
+          "title": "Example requirements",
+          "webUrl": "https://example.atlassian.net/wiki/spaces/EX/pages/20001"
+        },
+        "relationships": [
+          {
+            "relationshipName": "confluence_page_has_parent_confluence_page",
+            "targetObjectType": "ConfluencePage",
+            "targets": [
+              {
+                "ari": "ari:cloud:confluence:11111111-1111-4111-8111-111111111111:page/20002",
+                "type": "ConfluencePage",
+                "__typename": "ConfluencePage",
+                "title": "Example handbook",
+                "webUrl": "https://example.atlassian.net/wiki/spaces/EX/pages/20002"
+              }
+            ]
+          }
+        ],
+        "pagination": { "hasNextPage": false, "endCursor": null }
+      },
+      "hints": ["Call getTeamworkGraphObject with the returned ARIs."],
+      "warnings": ["Related-content relationships are limited to a retention window."]
+    }
+  },
+  "hydration": {
+    "data": {
+      "data": {
+        "objects": [
+          {
+            "ari": "ari:cloud:confluence:11111111-1111-4111-8111-111111111111:page/20002",
+            "type": "ConfluencePage",
+            "raw": {
+              "title": "Example handbook",
+              "webUrl": "https://example.atlassian.net/wiki/spaces/EX/pages/20002",
+              "content": {
+                "atlasDocFormat": {
+                  "representation": "ATLAS_DOC_FORMAT",
+                  "value": "{\"type\":\"doc\",\"version\":1,\"content\":[]}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "search": {
+    "results": [
+      {
+        "id": "ari:cloud:jira:11111111-1111-4111-8111-111111111111:issue/10001",
+        "title": "Example sandbox issue",
+        "text": "A ranked search preview, not the complete requirement.",
+        "url": "https://example.atlassian.net/browse/SAND-1",
+        "type": "issue",
+        "metadata": {
+          "cloudId": "11111111-1111-4111-8111-111111111111",
+          "searchScope": "generic"
+        }
+      }
+    ]
+  }
+}

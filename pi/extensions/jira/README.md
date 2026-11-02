@@ -102,6 +102,12 @@ are registered as `mcp__atlassian__<tool>` and are callable only through
 and the extension uses the presence of any `mcp__atlassian__` tool as a
 connection-status check without invoking it.
 
+## Requirements exploration
+
+Use the existing `jira_*` tools for compact display and deterministic task/write workflows. Requirements planning needs source bodies, not `jira_get`'s description preview. The [org-jira exploration reference](../../../skills/org-jira/references/atlassian-exploration.md) supplies a portable read-only procedure and optional native pi code-mode recipes for selected source reads, one-hop Teamwork Graph discovery, Rovo search and selected-object hydration. No new command or runtime tool is registered.
+
+The recipes batch independent reads, filter results before they reach the model, preserve partial failures and expose omissions/warnings. The reference owns the call budget. Graph/search access is optional; missing permissions or Rovo credits must not block targeted source reads or existing Jira flows. Code mode is orchestration, not a transaction: earlier calls are not undone if a later step fails. Keep sandbox-enforced writes in the existing tools.
+
 ## Linkage to tasks
 
 Jira keys live in the generic `:LINKED_ISSUES:` drawer property defined by the `tasks` extension (see `pi/extensions/tasks/README.md#linked-external-issues`). Jira keys are stored as typed org links, resolved by the org-native `#+LINK: jira` abbreviation.
@@ -160,6 +166,8 @@ test calls Jira. The `tasks:status-changed` listener's session-scoped cleanup is
 covered by `pi/extensions/test/event-subscriptions.test.ts` (run from
 `pi/extensions/emacsclient/test.sh`). Live smoke tests use `SAND` as their
 sandbox project.
+
+The runner also executes `exploration.test.ts`, which extracts the JavaScript blocks from the exploration reference and runs them against `exploration.fixtures.json`. Fixtures preserve the observed MCP response shapes with synthetic identifiers and content. The tests cover fulfilled error envelopes, partial failures, unsupported shapes, scope/size boundaries, visible truncation/cursors/warnings and a deliberately blocked write. They make no live Atlassian calls; native code-mode and live read-only trials are separate checks.
 
 Test tooling: [../test/README.md](../test/README.md).
 

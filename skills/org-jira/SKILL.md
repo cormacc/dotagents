@@ -1,6 +1,6 @@
 ---
 name: org-jira
-description: "Jira semantics over org-tasks. Use for Jira keys (PROJ-123), /jira commands, :LINKED_ISSUES:, #+LINK: jira, #+JIRA_* keywords, Jira epic/issue planning, or Atlassian MCP questions."
+description: "Jira semantics over org-tasks. Use for Jira keys (PROJ-123), /jira commands, :LINKED_ISSUES:, #+LINK: jira, #+JIRA_* keywords, Jira epic/issue planning, Jira-related Confluence requirements/specifications, Teamwork Graph discovery, or Atlassian MCP questions."
 ---
 
 # Jira integration for org-tasks
@@ -15,7 +15,7 @@ All Jira read/write goes through the `atlassian` MCP server. This skill names it
 
 The server must be authenticated before any workflow. If a call fails with an authentication error, tell the user to reconnect rather than retrying. In pi the reconnect command is `/mcp login atlassian` (or `pi mcp login atlassian` from a shell); in other harnesses use that harness's MCP login.
 
-Dispatch a tool call however your harness does it. Request only the fields a flow needs and keep the raw tool result out of your answer. In pi, MCP tools are not declared to the model; they are called from a `codemode` script (`tools.mcp__atlassian__getJiraIssue({...})`), so only what the script returns enters the context.
+Dispatch a tool call however your harness does it. Request only the fields a flow needs and keep the raw tool result out of your answer. Registered tools do not prove authorised access; distinguish authentication failures from permission or credit failures. In pi, MCP tools are not declared to the model; they are called from a `codemode` script (`tools.mcp__atlassian__getJiraIssue({...})`), so only what the script returns enters the context.
 
 ## Workflows
 
@@ -36,11 +36,12 @@ For each Jira-shaped token:
 
 1. Ensure the server is connected; if not, ask the user to reconnect and proceed without blocking the plan.
 2. Resolve the cloudId.
-3. Fetch the parent with `getJiraIssue` (summary, status, issue type, priority, assignee, plain-text description, parent key, relevant issue links).
+3. Fetch the parent with `getJiraIssue` (summary, status, issue type, priority, assignee, full description, parent key, relevant issue links and update time). `jira_get` is a compact display, not a substitute for this planning read. Request markdown; preserve ADF when the server returns it.
 4. Walk children only while they materially shape scope. Epics use `"parent" = KEY` (or legacy `"Epic Link" = KEY`). Tasks/Stories/Bugs use `parent = KEY`. Stop at done/out-of-scope branches or beyond two levels below the linked issue.
-5. Distil the walk. Name each linked parent and why it frames the work. Include in-scope children only when they affect the plan. Record blockers. Surface gaps in `* Open questions`. Do **not** mint Jira issues during this read-only walk. Jira keys are never org `:CUSTOM_ID:` values -- link Jira-derived local tasks via `:LINKED_ISSUES:`.
+5. If connected context could resolve a scope question, use the [read-only exploration procedure](references/atlassian-exploration.md#portable-procedure) to discover related Jira requirements or Confluence specifications/decisions. Use natural-language Rovo `search` when the starting source is unknown; use JQL/CQL for precise filters. Graph discovery is optional, one hop and subject to the reference's call budget, not automatic on each resume. Read selected source bodies before relying on search previews or graph metadata. The same procedure applies when starting from a Jira-related Confluence page without a linked local task.
+6. Distil the walk with source IDs/URLs. Name each linked parent and why it frames the work. Include in-scope children only when they affect the plan. Record blockers, partial failures, omitted candidates, unconsumed cursors, truncation and server warnings. Surface gaps in `* Open questions`. Do **not** mint Jira issues or graph relationships during this read-only walk. Jira keys are never org `:CUSTOM_ID:` values -- link Jira-derived local tasks via `:LINKED_ISSUES:`.
 
-Re-fetch on later sessions rather than caching raw Jira JSON or ADF.
+Re-fetch on later sessions rather than caching raw Jira JSON or ADF. Keep raw bodies out of pi's persistent `store()`; the exploration reference includes tested optional code-mode recipes that batch independent reads and reduce their results before returning them to the model.
 
 ### Status
 
@@ -127,7 +128,8 @@ In pi with the [`jira` extension](../../pi/extensions/jira/README.md) loaded, th
 
 - The command handler resolves the keys in TypeScript (arguments and `#+JIRA_PROJECT`, or the selected task through `ot`) and sends the model one hidden line that names one `codemode` call, for example `return await tools.jira_get({"keys":["SAND-77"]});`. Run that call exactly once and show the result; do nothing else and do not re-derive the steps.
 - Tools: `jira_get`, `jira_clone`, `jira_claim`, `jira_comment`, `jira_create`, `jira_transition`. They have `deferred` exposure: they are not in your tool list and not listed in the `codemode` description, but a `codemode` script calls them as `tools.<name>(args)`.
-- Without a `/jira` trigger (for example the user asks in prose to summarise or clone `SAND-75`): in pi, first check for the tools in a `codemode` script with `ALL_TOOLS.some((t) => t.name === "jira_get")`. If they exist, call the matching tool with the keys from the request (for example `return await tools.jira_get({"keys":["SAND-75"]});`) instead of the manual protocol, then show the result. Use `describeTool("jira_<name>")` if you need the argument schema. If they do not exist, use the manual protocol.
+- Requirements planning/exploration uses the direct MCP read path above and the [optional pi recipes](references/atlassian-exploration.md#pi-recipes), not `jira_get`'s description preview. Keep deterministic task/write actions in `jira_*`; code mode does not roll back earlier calls when a later call fails.
+- Without a `/jira` trigger, for one of the six display/action workflows (for example the user asks in prose for a compact summary or to clone `SAND-75`): in pi, first check for the tools in a `codemode` script with `ALL_TOOLS.some((t) => t.name === "jira_get")`. If they exist, call the matching tool with the keys from the request (for example `return await tools.jira_get({"keys":["SAND-75"]});`) instead of the manual protocol, then show the result. Use `describeTool("jira_<name>")` if you need the argument schema. If they do not exist, use the manual protocol.
 - `jira_clone` returns `[{key, status, ...}]` with `status` `inserted`, `duplicate` (cite `existingId`), `section_not_found` (ask whether to retry with `allowCreateSection: true`) or `error` (surface `message`).
 - The write tools refuse any key or project outside `SAND` before calling the server. `jira_transition` returns `{key, choices}` for a key whose transition names do not match, and performs nothing for it; list the choices to the user.
 - With `{"autoTransition": true}` in `<agent dir>/jira-ext.json`, a `tasks:status-changed` event to STARTED or DONE sends the `jira_transition` trigger for the task's Jira keys.
@@ -142,4 +144,4 @@ All write-path development and smoke testing runs against project `SAND`. Never 
 
 ## Offline / disconnected behaviour
 
-Reference display (badges, `J`, `ot issue urls`) needs no server. Anything else in this skill that needs the server must surface a clear notification ("Atlassian MCP not connected -- reconnect it; in pi run /mcp login atlassian") rather than failing silently.
+Reference display (badges, `J`, `ot issue urls`) needs no server. A disconnected server must surface a clear notification ("Atlassian MCP not connected -- reconnect it; in pi run /mcp login atlassian") rather than failing silently. Graph/search failure must not block available targeted Jira/page reads or existing `jira_*` flows; report the capability, permission or credit limit using the [exploration failure guidance](references/atlassian-exploration.md#failures-and-trust) rather than treating every error as a lost login.

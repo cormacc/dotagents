@@ -3,9 +3,9 @@ set -euo pipefail
 
 # Test runner for the jira extension.
 #
-# Sanity-checks the extension's structural shape, then runs jira.test.ts
-# (helpers, triggers, and the deferred jira_* tools against a fake
-# ctx.executeTool). The tasks:status-changed listener is also covered by
+# The Jira suite protects command and deferred-tool contracts. The exploration
+# suite executes the documented recipes so examples cannot drift from tests.
+# The tasks:status-changed listener is also covered by
 # ../test/event-subscriptions.test.ts (run from ../emacsclient/test.sh).
 
 cd "$(dirname "$0")"
@@ -29,3 +29,4 @@ source ../test/support/locked-tools.sh
 
 echo "# Running unit tests..."
 run_tsx ./jira.test.ts
+run_tsx ./exploration.test.ts

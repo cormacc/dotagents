@@ -65,6 +65,10 @@ Prefer `#+JIRA_CLOUDID` from the file. If absent:
 3. Without a `#+LINK: jira` base URL, use the only distinct `id`; with several, ask the user to set `#+JIRA_CLOUDID`.
 4. Use the `id` as the `cloudId` for subsequent calls.
 
+## Requirements exploration
+
+Requirements exploration uses the same site resolution above. The [exploration reference](atlassian-exploration.md#portable-procedure) owns conditional graph discovery, source reads, call budgets and failure handling. It does not change Jira-token selection or create new task/graph links.
+
 ## Auto-transition mapping
 
 When mirroring a local status change on Jira (manually after `ot status`, or from the pi `tasks:status-changed` event):

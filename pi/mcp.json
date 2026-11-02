@@ -2,7 +2,7 @@
   "mcpServers": {
     "atlassian": {
       "url": "https://mcp.atlassian.com/v1/mcp/authv2",
-      "description": "Jira and Confluence. For Jira issues, call the jira_* tools instead, e.g. tools.jira_get({keys})."
+      "description": "Jira and Confluence. Use jira_* for compact issue summaries and deterministic task/write actions. For read-only requirements exploration, use MCP source reads, Rovo search and Teamwork Graph per org-jira."
     },
     "ms365": {
       "url": "http://127.0.0.1:3365/mcp",
