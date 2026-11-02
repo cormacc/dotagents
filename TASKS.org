@@ -767,15 +767,21 @@ Evidence:
 
 Result: the checker includes cached and non-ignored untracked documents. The fixture detects a broken untracked link, passes after repair, preserves ignore/exclude rules, and counts the document once after staging. The repository section-link check passes.
 
-** TODO ot archive rewrites unrelated imported change-records :skill:org_tasks:
+** DONE ot archive rewrites unrelated imported change-records :skill:org_tasks:
+CLOSED: [2026-11-02 Mon 23:36]
 :PROPERTIES:
 :CUSTOM_ID: 0013aad5-365b-41d7-9daf-40e5b5f11201
 :CREATED: [2026-10-29 Thu 10:12]
+:STARTED: [2026-11-02 Mon 23:32]
 :END:
 :LOGBOOK:
 - Created [2026-10-29 Thu 10:12]
+- State "STARTED" from "TODO" [2026-11-02 Mon 23:32]
+- State "DONE" from "STARTED" [2026-11-02 Mon 23:36]
 :END:
-`ot archive` rewrites an `#+IMPORT:`-linked change-record that the archived task does not own, and drops blank lines from it. Archiving must leave every file other than the source task file, `TASKS.archive.org`, and the archived task's own record byte-identical. Add a regression test that archives a task while another open task imports a record with a blank line between a list item and the next heading.
+`ot archive` rewrites an `#+IMPORT:`-linked change-record that the archived task does not own, and drops blank lines from it. Archiving must leave every file other than the source task file, `TASKS.archive.org`, and the archived task's own record byte-identical, except that `TASKS.local.org` changes when clearing a selection inside the archived subtree. Add a regression test that archives a task while another open task imports a record with a blank line between a list item and the next heading.
+
+Result: `archive-cmd` uses `loader/save-source-roots-locality`, retaining the baseline that removes a source file's last task. `archive-preserves-unrelated-imported-records` in `skills/org-tasks/scripts/test/org_tasks/commands/archive_publish_test.clj` covers 24 combinations of source location, owned record, selection and dry-run, checking the exact write set and unchanged file bytes. The regression produced 24 failed assertions before the handler change and passes after it. The archive namespace passes 24 tests / 331 assertions; the combined org-tasks and herdr-orch Clojure suite passes 763 tests / 7,082 assertions. The CLI reference and machine contract document the permitted writes.
 
 Origin:
 - cwd: /home/cormacc/dotfiles/agents

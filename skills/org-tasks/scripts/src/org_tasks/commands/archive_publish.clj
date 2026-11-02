@@ -213,10 +213,8 @@
                                            (parser/serialize-tasks archived-tasks))
                                       (parser/serialize-tasks-preserving-file
                                         existing-archive archived-tasks))
-                    ;; Remove the archived task from the full graph and let
-                    ;; `save-source-roots` regroup by each remaining task's
-                    ;; *own* `:source-path` — correct whether it lived in
-                    ;; TASKS.org or a file-level `#+IMPORT:` plan file.
+                    ;; Keep unrelated source bytes intact while removing the
+                    ;; target from its own file, including file-level imports.
                     remaining-tasks (->> tasks
                                         (remove #(= full-id (parser/get-task-id %)))
                                         vec)
@@ -232,7 +230,7 @@
                   (do
                     (fs/create-dirs (fs/parent archive-path))
                     (loader/atomic-write archive-path archive-content))
-                  (loader/save-source-roots project-root remaining-tasks known-baselines)
+                  (loader/save-source-roots-locality project-root remaining-tasks known-baselines)
                   (rewrite-plan-parent-link! project-root target)
                   (when selection-cleared?
                     (loader/write-selected-id (:local files) nil)))

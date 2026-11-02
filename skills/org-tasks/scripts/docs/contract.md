@@ -312,6 +312,8 @@ Targets must have an active graph parent or import owner; protocol top-level roo
 }
 ```
 
+Archiving writes only the task's source file, the archive, the task's own linked record when its matching parent link changes from `task:` to `archive:`, and the local task file when clearing a selection inside the archived subtree. All other loaded source files remain byte-identical and are not written. The source file is updated even when its last task is archived; `--dry-run` writes nothing.
+
 Errors: `unknown-task`, `validation` (e.g. not closed), `path-outside-project`.
 
 ### `ot unarchive <id> [--section <name>]`

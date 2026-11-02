@@ -1,5 +1,6 @@
 (ns org-tasks.commands.archive-publish-test
   (:require [babashka.fs :as fs]
+            [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [org-tasks.commands.test-util :refer :all]
@@ -113,6 +114,95 @@
           (is (str/includes? archive (str ":CUSTOM_ID: " id)))
           (is (str/includes? archive ":ARCHIVED:"))
           (is (= "2026-05-01 Fri 09:00" (:archivedAt r))))))))
+
+(deftest archive-preserves-unrelated-imported-records
+  (doseq [source [:shared :shared-only :imported-only]
+          linked? [false true]
+          selected? [false true]
+          dry-run? [false true]]
+    (testing (str {:source source :linked? linked? :selected? selected? :dry-run? dry-run?})
+      (with-temp-dir
+        (fn [root]
+          (bootstrap-linked-plan-graph! root)
+          (let [id "11111111-2222-4333-8444-555555555551"
+                path (fn [relative] (str (fs/path root relative)))
+                tasks-path (path "TASKS.org")
+                local-path (path "TASKS.local.org")
+                unrelated-path (path "design/log/linked-plan.org")
+                own-path (path "design/log/own.org")
+                archive-path (path "TASKS.archive.org")
+                source-path (if (= source :imported-only) (path "target.org") tasks-path)
+                original-index (slurp tasks-path)
+                target (str "** DONE Closed task\nCLOSED: [2026-05-01 Fri 09:00]\n"
+                            ":PROPERTIES:\n:CUSTOM_ID: " id "\n:END:\n"
+                            (when linked? "#+IMPORT: [[plan:own.org]]\n"))
+                unrelated (str "* Plan\n** TODO Plan child\n:PROPERTIES:\n:CUSTOM_ID: "
+                               linked-plan-child-id "\n:END:\n"
+                               "Acceptance criteria:\n- Preserve this spacing.\n\n"
+                               "*** TODO Nested task\n:PROPERTIES:\n:CUSTOM_ID: "
+                               linked-plan-second-child-id "\n:END:\n")
+                own-record (str "#+PARENT: [[task:" id "][Closed task]]\n"
+                                "* Plan\n** DONE Own child\n:PROPERTIES:\n:CUSTOM_ID: "
+                                "dddddddd-4444-4444-8444-dddddddddddd\n:END:\n"
+                                "- Preserve this spacing too.\n\n"
+                                "*** DONE Own nested task\n:PROPERTIES:\n:CUSTOM_ID: "
+                                "eeeeeeee-5555-4555-8555-eeeeeeeeeeee\n:END:\n")]
+            (spit unrelated-path unrelated)
+            (when linked? (spit own-path own-record))
+            (spit local-path (str "#+SELECTED: " (when selected? id) "\n"))
+            (case source
+              :shared (spit tasks-path (str original-index "\n" target))
+              :shared-only
+              (do (spit (path "other-tasks.org") original-index)
+                  (spit tasks-path (str tasks-org-preamble "#+IMPORT: other-tasks.org\n"
+                                       "\n* Improvements\n" target)))
+              :imported-only
+              (do (spit tasks-path (str "#+IMPORT: target.org\n" original-index))
+                  (spit source-path (str tasks-org-preamble "* Plan\n" target))))
+            (is (not= unrelated
+                      (parser/serialize-tasks-preserving-file
+                        unrelated (:tasks (parser/parse-tasks unrelated))))
+                "control: canonical serialization changes the unrelated fixture")
+            (let [files (mapv path ["TASKS.org" "TASKS.local.org" "TASKS.setup.org"
+                                   "TASKS.archive.org" "other-tasks.org" "target.org"
+                                   "design/log/linked-plan.org" "design/log/own.org"])
+                  snapshot (fn [] (into {} (map (fn [p] [p (loader/safe-slurp p)])) files))
+                  before (snapshot)
+                  writes (atom #{})
+                  atomic-write loader/atomic-write
+                  {:keys [out exit]}
+                  (with-redefs [loader/atomic-write
+                                (fn [p content]
+                                  (swap! writes conj (str p))
+                                  (atomic-write p content))]
+                    (apply run-cli! "--root" root "--format" "json" "archive" id
+                           (when dry-run? ["--dry-run"])))
+                  envelope (json/parse-string out true)
+                  result (:result envelope)
+                  after (snapshot)
+                  allowed (if dry-run? #{}
+                              (cond-> #{source-path archive-path}
+                                linked? (conj own-path)
+                                selected? (conj local-path)))]
+              (is (zero? exit) out)
+              (is (true? (:ok envelope)))
+              (is (= id (get-in result [:task :id])))
+              (is (= (and selected? (not dry-run?)) (:selectionCleared result)))
+              (is (= allowed @writes) "only the intended files are written")
+              (is (= (apply dissoc before allowed) (apply dissoc after allowed))
+                  "all files outside the write set remain byte-identical")
+              (if dry-run?
+                (is (= before after))
+                (do
+                  (is (not (str/includes? (get after source-path) (str ":CUSTOM_ID: " id))))
+                  (is (str/includes? (get after archive-path) (str ":CUSTOM_ID: " id)))
+                  (is (str/includes? (get after archive-path) ":ARCHIVED:"))
+                  (when linked?
+                    (is (= (str/replace own-record (str "[[task:" id) (str "[[archive:" id))
+                           (get after own-path))
+                        "the owned record changes only its parent link"))
+                  (when selected?
+                    (is (= "" (get after local-path)))))))))))))
 
 (deftest archive-mutator-content-projection-is-compact-by-default-and-opt-in
   (with-temp-dir
