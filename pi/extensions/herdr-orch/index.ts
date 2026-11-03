@@ -185,7 +185,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("oh", {
-    description: `Show herdr-orch subagents, traits, and models without adding them to model context: ${SECTIONS.join(" | ")}`,
+    description: `Show herdr-orch subagents, traits, models, and workflow skills without adding them to model context: ${SECTIONS.join(" | ")}`,
     getArgumentCompletions: (prefix) => {
       const items = SECTIONS.filter((section) => section.startsWith(prefix.trim()))
         .map((section) => ({ value: section, label: section, description: SECTION_DESCRIPTIONS[section] }));

@@ -114,6 +114,8 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   same(parseSection(""), "help", "bare /oh shows the help overview");
   same(parseSection(" traits "), "traits", "section argument is trimmed");
   same(parseSection("bogus"), null, "unknown section is rejected");
+  same(parseSection("workflows"), "workflows", "workflow section is recognised");
+  same((oh!.getArgumentCompletions!("w") as Array<{ value: string }>).map((item) => item.value), ["workflows"], "workflow section is completed");
   same((oh!.getArgumentCompletions!("m") as Array<{ value: string }>).map((item) => item.value), ["models"], "completion narrows by prefix");
 
   const notices: Array<[string, string]> = [];
@@ -126,7 +128,7 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   before = execCalls.length;
   await oh!.handler("bogus", ctx("tui"));
   ok(execCalls.length === before && entries.length === 0, "unknown section: oh not invoked and nothing appended");
-  ok(notices.at(-1)?.[1] === "warning" && /help, personas, traits, models/.test(notices.at(-1)![0]), "unknown section: warns with the valid sections");
+  ok(notices.at(-1)?.[1] === "warning" && /help, personas, traits, models, workflows/.test(notices.at(-1)![0]), "unknown section: warns with the valid sections");
 
   before = execCalls.length;
   await oh!.handler("personas", ctx("tui"));
@@ -150,12 +152,21 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   same(execCalls.slice(before), [["roster", "--format", "markdown", "--detail"]], "RPC: one detail rendering of every section");
   same(entries.length, 1, "RPC: no session entry appended");
   ok(notices.length === noticesBefore + 1 && notices.at(-1)![1] === "info" && notices.at(-1)![0].includes("LISTING roster --format markdown --detail"), "RPC: listing is shown as a notification");
+
+  before = execCalls.length;
+  await oh!.handler("workflows", ctx("tui"));
+  same(execCalls.slice(before).sort(), [
+    ["roster", "--format", "markdown", "--section", "workflows"],
+    ["roster", "--format", "markdown", "--section", "workflows", "--detail"],
+  ], "TUI: workflow listing uses the shared CLI renderer in both forms");
+  same(entries.at(-1)?.data.section, "workflows", "workflow listing remains a display-only session entry");
 }
 
 // --- /oh framing ----------------------------------------------------------------------
 {
   same(rosterArgs("help", false), ["roster", "--format", "markdown"], "help asks oh for every section");
   same(rosterArgs("models", true), ["roster", "--format", "markdown", "--section", "models", "--detail"], "a section with detail");
+  same(rosterArgs("workflows", false), ["roster", "--format", "markdown", "--section", "workflows"], "workflow section arguments");
   const help = composeHelp("help", "## Personas\n\n- x\n", true);
   ok(help.startsWith("Herdr: this pane can delegate"), "help leads with the pane's Herdr status");
   ok(help.includes("## Personas\n\n- x\n\n## Usage"), "help keeps the oh listing verbatim before the usage notes");
@@ -163,7 +174,10 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   ok(/Spawn a subagent\* starts a fresh context.*fork a subagent\* inherits your completed earlier turns, not the current one/.test(help), "usage routes spawn to fresh and fork to forked context");
   ok(/--context measurement --measurement-config PATH`: a headless Pi sample with no pane/.test(help), "usage describes headless measurement apart from its optional monitor");
   ok(help.includes("skills/herdr-orch/references/workflow-recipes.md"), "usage links root-owned workflow recipes");
+  ok(help.includes("metadata: {herdr-orch: workflow}"), "usage documents the self-declaration marker");
+  ok(help.includes("does not run it or grant permission to delegate"), "catalogue membership does not grant execution authority");
   same(composeHelp("traits", "- `a` -- b\n", true), "- `a` -- b", "a section is the oh listing alone");
+  same(composeHelp("workflows", "- `flow` -- description\n", false), "- `flow` -- description", "workflow section adds no delegation framing");
 }
 
 if (failures > 0) {
