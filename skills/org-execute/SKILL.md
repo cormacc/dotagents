@@ -55,6 +55,8 @@ Mark the assigned tasks started through `org-tasks`, then dispatch the existing 
 
 Keep outstanding task-to-round mappings, checkout/baseline references and the next action in the canonical task's handoff while work is active. Record the full round UUID returned by `oh`; Org task IDs and delegation round IDs are different identities.
 
+If your tools include pi-context's `context_compact`, use it to remove finished delivery units from the root session. Set a checkpoint when you dispatch a unit. After step 6 of section 4 records the unit's outcome, compact to that checkpoint. Compact only when the canonical handoff holds every outstanding round UUID, baseline and next action: a compaction summary is not a durable record. Do not compact while a round UUID or an unreconciled review finding exists only in the conversation.
+
 ## 4. Capture, review and integrate
 
 1. Collect through `oh`. Apply `herdr-orch`'s terminal-result, timeout and recovery rules; a wait expiry or non-terminal item does not justify replacement work. Inspect captured artefacts and checkout reconciliation before acting on the report.
