@@ -4447,3 +4447,45 @@ Origin:
 - git: git@github.com:cormacc/dotagents.git @ main
 - timestamp: [2026-11-03 Tue 13:42]
 - sender: agent
+
+** DONE docx: add a sections command for documents without heading styles
+CLOSED: [2026-11-03 Tue 18:29]
+:PROPERTIES:
+:CUSTOM_ID: c5ddd90d-d948-4817-a6c7-e0b320083609
+:CREATED: [2026-10-23 Fri 11:38]
+:STARTED: [2026-11-03 Tue 18:15]
+:ARCHIVED: [2026-11-03 Tue 18:29]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 11:38]
+- State "STARTED" from "TODO" [2026-11-03 Tue 18:15]
+- State "DONE" from "STARTED" [2026-11-03 Tue 18:29]
+:END:
+`docx.clj changes` reports only styled headings. QM0019 numbers most sections without heading styles, so DCR26256 needed a LibreOffice render plus a phrase-locate script to map changes to section numbers. Add a command that maps each changed paragraph to its rendered section number.
+
+- Approach: ~docx.clj sections DOCX~ associates changes with outline-level or styled headings in document order, then reads their decimal section numbers from a private LibreOffice PDF render.
+- Acceptance: nested headings without heading styles, changed headings, body/table changes and deleted text retain the correct section context; missing or ambiguous rendered numbers and header/footer changes are explicit, not guessed. Exercise the CLI with synthetic numbering and a local QM0019 copy.
+- Must not: modify the input, change the ~changes~ contract, infer section headings from ordinary numbered lists, or add a package dependency.
+- Verified: ~skills/docx/scripts/test-docx.bb~ passed 33 tests / 272 assertions with Pandoc 3.13; self-check failed as required. Per-file clj-kondo, skill validation and section links passed. Local QM0019 retained all 397 change entries and identical input bytes: 97 matched decimal sections, 299 changes under unnumbered appendix/version-history headings unresolved, one header not applicable; four sampled section labels matched an independent PDF render.
+
+** DONE docx: report stored field errors in inspect
+CLOSED: [2026-11-03 Tue 18:53]
+:PROPERTIES:
+:CUSTOM_ID: 4c9163cd-a1d6-478f-880a-bda0983c4bc8
+:CREATED: [2026-10-23 Fri 11:38]
+:STARTED: [2026-11-03 Tue 18:44]
+:ARCHIVED: [2026-11-03 Tue 18:53]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 11:38]
+- State "STARTED" from "TODO" [2026-11-03 Tue 18:44]
+- State "DONE" from "STARTED" [2026-11-03 Tue 18:53]
+:END:
+Word stores a field's last result, e.g. "Error! Reference source not found.", and LibreOffice recomputes it, so a render hides the defect. Report such stored field results in `docx.clj inspect`.
+
+- Approach: add ~field_errors~ to ~inspect~, reading cached field results directly from body, header/footer and footnote/endnote XML; report part, one-based starting paragraph, instruction and result for English ~Error!~ results.
+- Acceptance: simple and complex fields, split runs/instructions, nesting and cross-paragraph fields are covered; ordinary error-like prose, instruction text, valid results and deleted revisions do not produce false positives. Verify the CLI and an unchanged input package.
+- Must not: render or recompute fields, change the existing inspection fields, modify the document, or add a dependency.
+- Verified: ~skills/docx/scripts/test-docx.bb~ passed 37 tests / 279 assertions with Pandoc 3.13; the CLI regression failed before implementation and the self-check failed as required. Per-file clj-kondo, skill validation, section links and ~git diff --check~ passed. Removed two stale TOC links to archived tasks.

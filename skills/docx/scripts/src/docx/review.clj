@@ -1,6 +1,6 @@
 (ns docx.review
-  "Review a .docx: header and footer text, tracked changes, version history, and a
-  LibreOffice comparison of two versions."
+  "Review a .docx: header and footer text, tracked changes, rendered section numbers,
+  stored field errors, version history, and a LibreOffice comparison of two versions."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.string :as str]
@@ -51,14 +51,82 @@
               :when (and (> (count trs) 1) (some history-header-row? (take 2 trs)))]
           trs)))
 
+(defn- field-append [state key text]
+  (if (seq (:stack state))
+    (update-in state [:stack (dec (count (:stack state))) key] str text)
+    state))
+
+(defn- field-start [state phase instruction]
+  (-> state
+      (update :stack conj {:paragraph (:paragraph state) :order (:next-order state)
+                           :phase phase :instruction instruction :result ""})
+      (update :next-order inc)))
+
+(defn- field-end [state]
+  (if-let [field (peek (:stack state))]
+    (let [state (update state :stack pop)
+          result (str/trim (:result field))
+          state (if (re-find #"(?i)^Error!" result)
+                  (update state :errors conj (-> (select-keys field [:paragraph :order :instruction])
+                                                (update :instruction str/trim)
+                                                (assoc :result result)))
+                  state)]
+      ;; A nested field's cached value belongs to its enclosing instruction or result,
+      ;; not to the enclosing field's other phase.
+      (if-let [phase (:phase (peek (:stack state)))]
+        (field-append state phase (:result field))
+        state))
+    state))
+
+(defn- field-walk [state node]
+  (let [tag (:tag node)
+        phase (:phase (peek (:stack state)))
+        kids (fn [state] (reduce field-walk state (:content node)))]
+    (cond
+      (not (d/el? node)) state
+      (#{(w "del") (w "moveFrom") (w "pPr") (w "rPr")} tag)
+      (update state :paragraph + (count (d/descendants node (w "p"))))
+      (= (w "p") tag) (let [state (kids (update state :paragraph inc))]
+                        (if (= :result (:phase (peek (:stack state))))
+                          (field-append state :result "\n") state))
+      (= (w "fldSimple") tag) (-> state
+                                  (field-start :result (get-in node [:attrs (w "instr")] ""))
+                                  kids field-end)
+      (= (w "fldChar") tag)
+      (case (get-in node [:attrs (w "fldCharType")])
+        "begin" (field-start state :instruction "")
+        "separate" (if (seq (:stack state))
+                     (assoc-in state [:stack (dec (count (:stack state))) :phase] :result) state)
+        "end" (field-end state)
+        state)
+      (and (= (w "instrText") tag) (= :instruction phase))
+      (field-append state :instruction (apply str (:content node)))
+      (and (= (w "t") tag) (= :result phase))
+      (field-append state :result (apply str (:content node)))
+      (and (= (w "tab") tag) (= :result phase)) (field-append state :result "\t")
+      (and (#{(w "br") (w "cr")} tag) (= :result phase)) (field-append state :result "\n")
+      :else (kids state))))
+
+(defn- field-errors [entries]
+  (vec (mapcat (fn [part]
+                 (let [state (field-walk {:paragraph 0 :next-order 0 :stack [] :errors []}
+                                         (d/parse-entry entries part))]
+                   (map #(-> % (dissoc :order) (assoc :part part))
+                        (sort-by :order (:errors state)))))
+               (sort (d/part-names entries #"word/(document|header\d*|footer\d*|footnotes|endnotes)\.xml")))))
+
 (defn inspect
-  "Summary of the .docx at path: :headers, :footers, :tracked_changes, :version_history."
+  "Summary of the .docx at path: :headers, :footers, :tracked_changes, :version_history
+  and :field_errors. Errors are cached field results starting with English 'Error!',
+  without rendering or recomputation; deleted revisions are excluded. Each error gives
+  :part, one-based starting :paragraph in the XML part, :instruction and :result."
   [path]
   (let [entries (d/read-entries path)]
     {:file (str path)
      :headers (parts-text entries #"word/header\d*\.xml")
      :footers (parts-text entries #"word/footer\d*\.xml")
      :tracked_changes (tracked-counts entries)
+     :field_errors (field-errors entries)
      :version_history (version-history (d/parse-entry entries "word/document.xml"))}))
 
 ;; ------------------------------------------------------------------ changes
@@ -81,19 +149,28 @@
 (defn- style-of [p]
   (some-> (first (d/children p (w "pPr"))) (d/children (w "pStyle")) first (get-in [:attrs (w "val")])))
 
-(defn- part-changes [root part]
-  (loop [[p & more] (d/descendants root (w "p")) heading nil out []]
-    (if-not p
-      out
-      (let [ps (pieces p)
-            txt (fn [ks] (str/trim (apply str (keep (fn [[k s]] (when (ks k) s)) ps))))
-            after (txt #{:same :ins})
-            heading (if (and (re-find #"(?i)heading|title" (str (style-of p))) (seq after)) after heading)]
-        (recur more heading
-               (if (some #(not= :same (first %)) ps)
-                 (conj out (cond-> {:heading heading :before (txt #{:same :del}) :after after}
-                             part (assoc :part part)))
-                 out))))))
+(defn- styled-heading? [p]
+  (boolean (re-find #"(?i)heading|title" (str (style-of p)))))
+
+(defn- piece-text [ps kinds]
+  (str/trim (apply str (keep (fn [[kind text]] (when (kinds kind) text)) ps))))
+
+(defn- part-changes
+  ([root part]
+   (part-changes root part (fn [_ p after]
+                            (when (and (styled-heading? p) (seq after)) {:heading after}))))
+  ([root part heading-context]
+   (loop [[p & more] (d/descendants root (w "p")) i 0 context {:heading nil} out []]
+     (if-not p
+       out
+       (let [ps (pieces p)
+             after (piece-text ps #{:same :ins})
+             context (or (heading-context i p after) context)]
+         (recur more (inc i) context
+                (if (some #(not= :same (first %)) ps)
+                  (conj out (cond-> (assoc context :before (piece-text ps #{:same :del}) :after after)
+                              part (assoc :part part)))
+                  out)))))))
 
 (defn changes
   "One map per paragraph with tracked changes: :heading (the nearest heading above it, by
@@ -104,6 +181,121 @@
     (vec (concat (part-changes (d/parse-entry entries "word/document.xml") nil)
                  (mapcat #(part-changes (d/parse-entry entries %) %)
                          (d/part-names entries #"word/(header|footer)\d*\.xml"))))))
+
+;; ------------------------------------------------------------------ rendered sections
+
+(defn- outline-level [node]
+  (some-> (first (d/children node (w "pPr")))
+          (d/children (w "outlineLvl")) first (get-in [:attrs (w "val")])))
+
+(defn- section-heading? [styles paragraph]
+  (let [level (or (outline-level paragraph)
+                  (loop [id (style-of paragraph) seen #{}]
+                    (when (and id (not (seen id)))
+                      (let [style (get styles id)]
+                        (or (outline-level style)
+                            (recur (some-> (first (d/children style (w "basedOn")))
+                                           (get-in [:attrs (w "val")]))
+                                   (conj seen id)))))))]
+    (if level
+      (contains? #{"0" "1" "2" "3" "4" "5" "6" "7" "8"} level)
+      (styled-heading? paragraph))))
+
+(defn- render-command [args]
+  (let [proc (p/process args {:out :string :err :string})
+        result (deref proc 120000 ::timeout)]
+    (when (= ::timeout result)
+      (p/destroy-tree proc)
+      (throw (ex-info "section render timed out after 120 seconds" {})))
+    (when-not (zero? (:exit result))
+      (throw (ex-info (str "section render failed: " (:err result)) {:exit (:exit result)})))
+    (:out result)))
+
+(defn- rendered-text [path]
+  (doseq [tool ["soffice" "pdftotext"]]
+    (when-not (fs/which tool)
+      (throw (ex-info (str "sections needs " tool " on PATH") {}))))
+  (let [tmp (fs/create-temp-dir {:prefix "docx-sections-"})
+        input (fs/path tmp "input.docx")
+        pdf (fs/path tmp "input.pdf")
+        profile (str (.toUri (fs/absolutize (fs/path tmp "profile"))))]
+    (try
+      (fs/copy path input)
+      (render-command ["soffice" (str "-env:UserInstallation=" profile)
+                       "--headless" "--norestore" "--convert-to" "pdf:writer_pdf_Export"
+                       "--outdir" (str tmp) (str input)])
+      ;; soffice can exit zero without creating a PDF (for example, on an import error).
+      (when-not (fs/exists? pdf)
+        (throw (ex-info "LibreOffice did not create the section render PDF" {})))
+      (render-command ["pdftotext" "-layout" (str pdf) "-"])
+      (finally (fs/delete-tree tmp)))))
+
+(defn- heading-matches [rendered heading]
+  (let [;; Literal numbers in heading text and automatic list labels share the same form.
+        title (str/replace heading #"^\d+(?:\.\d+)*\.?\s+" "")
+        words (str/split (str/trim title) #"\s+")
+        pattern (re-pattern (str "(?m)^\\h*([0-9]+(?:\\.[0-9]+)*)(?:\\.)?\\h+"
+                                 (str/join "\\s+" (map java.util.regex.Pattern/quote words)) "\\h*$"))
+        matcher (re-matcher pattern rendered)]
+    (loop [out []]
+      (if (.find matcher)
+        (recur (conj out {:position (.start matcher) :number (.group matcher 1)}))
+        out))))
+
+(defn- section-contexts [headings rendered]
+  (let [candidates (mapv (fn [heading]
+                           (assoc heading :matches
+                                  (vec (distinct (mapcat #(heading-matches rendered %)
+                                                        (:render-titles heading)))))) headings)
+        title-counts (frequencies (map :heading headings))
+        anchors (filterv #(and (= 1 (title-counts (:heading %)))
+                               (= 1 (count (:matches %)))) candidates)]
+    (into {}
+      (for [{:keys [index heading matches]} candidates
+            :let [before (last (filter #(< (:index %) index) anchors))
+                  after (first (filter #(> (:index %) index) anchors))
+                  lo (get-in before [:matches 0 :position] -1)
+                  hi (get-in after [:matches 0 :position] (count rendered))
+                  ;; Unique surrounding headings bound repeated titles without choosing
+                  ;; the first textual occurrence or trusting a table of contents.
+                  matches (filterv #(< lo (:position %) hi) matches)]]
+        [index (merge {:heading heading :section nil}
+                      (case (count matches)
+                        0 {:section_status "unresolved"}
+                        1 {:section (-> matches first :number) :section_status "matched"}
+                        {:section_status "ambiguous"}))]))))
+
+(defn sections
+  "Changes with :heading from explicit or inherited outline levels (0-8) or heading styles,
+  plus :section from a private LibreOffice PDF render. :section_status is matched,
+  unresolved, ambiguous, no-heading or not-applicable (headers/footers). Repeated titles
+  are bounded by unique surrounding headings; only one decimal-number match in that
+  interval is reported. The input package is not written."
+  [path]
+  (let [entries (d/read-entries path)
+        styles (into {} (map (fn [s] [(get-in s [:attrs (w "styleId")]) s])
+                             (d/children (d/parse-entry entries "word/styles.xml") (w "style"))))
+        root (d/parse-entry entries "word/document.xml")
+        headings (keep-indexed (fn [i p]
+                                 (when (section-heading? styles p)
+                                   (let [ps (pieces p)
+                                         title (or (not-empty (piece-text ps #{:same :ins}))
+                                                   (not-empty (piece-text ps #{:same :del})))]
+                                     (when title
+                                       {:index i :heading title
+                                        ;; LibreOffice's review view can show both sides
+                                        ;; of a replacement within the heading.
+                                        :render-titles (distinct (remove str/blank?
+                                                                  [title (piece-text ps #{:same :del})
+                                                                   (piece-text ps #{:same :ins :del})]))}))))
+                               (d/descendants root (w "p")))
+        contexts (when (and (seq headings) (seq (part-changes root nil)))
+                   (section-contexts headings (rendered-text path)))
+        body (part-changes root nil (fn [i _ _] (get contexts i)))
+        other (mapcat #(part-changes (d/parse-entry entries %) %)
+                      (d/part-names entries #"word/(header|footer)\d*\.xml"))]
+    (vec (concat (map #(merge {:section nil :section_status "no-heading"} %) body)
+                 (map #(assoc % :section nil :section_status "not-applicable") other)))))
 
 ;; ------------------------------------------------------------------ comments
 

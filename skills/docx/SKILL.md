@@ -1,7 +1,7 @@
 ---
 name: docx
 description: "Review/edit Word .docx files without Word: headers, footers, version history, paragraph-level tracked changes, anchored comments, tracked edits with reasons, verified clean copies for publication, redlines/comparisons, forms/templates, cells, checkboxes and footnotes. Use for Word revision review or programmatic edits, even without explicit .docx wording. For plain text reading use convert-documents-to-markdown."
-compatibility: Needs Babashka. clean checks its result with pandoc when pandoc is installed. compare needs LibreOffice; on Nix it finds the Python that LibreOffice links against.
+compatibility: Needs Babashka. clean checks its result with pandoc when pandoc is installed. sections needs LibreOffice and pdftotext. compare needs LibreOffice; on Nix it finds the Python that LibreOffice links against.
 ---
 
 # docx
@@ -14,8 +14,9 @@ Review and edit Word `.docx` packages as WordprocessingML. A `.docx` is a zip of
 
 | Command | Output |
 |---|---|
-| `docx.clj inspect DOCX` | `headers`, `footers` (one string per part, paragraphs joined by ` \| `), `tracked_changes` (part name to `{ins, del}` counts), `version_history` (rows of cell text) |
+| `docx.clj inspect DOCX` | `headers`, `footers` (one string per part, paragraphs joined by ` \| `), `tracked_changes` (part name to `{ins, del}` counts), `version_history` (rows of cell text), `field_errors` (stored field error results) |
 | `docx.clj changes DOCX` | One object per paragraph with tracked changes: `heading` (nearest heading above, by paragraph style), `before`, `after`; header and footer changes follow, with `part` |
+| `docx.clj sections DOCX` | Changed paragraphs with `heading`, `before`, `after`, `section` (rendered decimal number or null) and `section_status`; header/footer changes include `part` |
 | `docx.clj comments DOCX` | One object per comment: `id`, `author`, `date`, `text`, `heading`, and the anchored text `before` and `after` the tracked changes |
 | `docx.clj edit IN SCRIPT OUT --author NAME [--initials XX] [--date ISO] [--no-tracking]` | Applies an edit script (below) as tracked changes; reports each edit |
 | `docx.clj clean IN OUT [--keep-tracking] [--no-verify]` | Writes the clean copy: supported changes accepted, comments removed, tracking turned off; refuses deleted paragraph marks; reports the pandoc check |
@@ -23,10 +24,25 @@ Review and edit Word `.docx` packages as WordprocessingML. A `.docx` is a zip of
 
 Exit codes: 0 success; 1 usage, input or unsupported-change error; 2 an edit did not match (nothing written); 3 the clean copy differs from pandoc's accept view.
 
-- Text reads as if all tracked changes were accepted: inserted text is included, deleted text is not. `changes` and `comments` give both sides.
+- Text reads as if all tracked changes were accepted: inserted text is included, deleted text is not. `changes`, `sections` and `comments` give both sides.
 - `version_history` is the last table with a header row that has a cell exactly `Version` and a cell that names a DCR or a description. Blank rows are dropped. A placeholder such as `<DD-Mmm-YYYY>` in the last row shows a field that the author has not completed.
 - A large revision gives hundreds of `changes` entries. Redirect the output to a file and read it in slices.
-- `changes` and `comments` report the nearest paragraph with a heading style. Many documents number sections without heading styles; then render the document (LibreOffice to PDF, `pdftotext -layout`) and look up the changed text to find its section number.
+- `changes` and `comments` report the nearest paragraph with a heading style. Use `sections` when headings have outline levels but no heading styles, as in QM0019. It recognises direct and inherited outline levels 0 to 8, or heading/title styles, without treating ordinary numbered list items as headings.
+- `sections` renders a private copy with LibreOffice and reads its PDF with `pdftotext -layout`; it does not write the input or use a running LibreOffice profile. Its numbers describe LibreOffice's rendered review view, not a Word-verified clean copy. Repeated titles are matched between unique surrounding headings. A renderer failure exits 1; an unresolved number does not stop the report.
+- Check `section_status`: `matched` has one decimal-number match; `unresolved` has none; `ambiguous` has several; `no-heading` precedes any recognised heading; `not-applicable` is a header/footer change. All except `matched` have `section: null`. Unnumbered headings, appendix letters and headings without style or outline metadata need manual review; no section number is guessed.
+
+## Stored field errors
+
+`inspect` reads cached field results from the body, headers, footers, footnotes and endnotes, without rendering or updating the fields. LibreOffice can recompute fields and hide a stored error, so check this report before rendering a draft.
+
+`field_errors` is an array, empty when no matching error is found. Each entry has `part`, `paragraph` (the one-based XML paragraph where the field starts), `instruction` and `result`. Entries are sorted by part name and field-start order. For example:
+
+```json
+{"part": "word/document.xml", "paragraph": 2,
+ "instruction": "REF Existing \\h", "result": "Error! Reference source not found."}
+```
+
+The check recognises simple and complex fields whose stored result starts with English `Error!` (case-insensitive, surrounding whitespace removed). It joins split runs, keeps nested fields separate, and excludes deleted or moved-from revisions. Ordinary prose and field instructions are not results. This is not reference-target validation: a stale error is reported even if its target exists; localised messages and other error formats need manual review.
 
 ## Edit scripts
 
@@ -115,7 +131,7 @@ Main functions (each has a docstring):
 | `docx.edit` | Tracked editing | `tracked-replace`, `tracked-insert-after`, `tracked-delete`, `tracked-insert-row-after`, `tracked-delete-row`, `row-text`, `update-paragraphs`, `update-unique-paragraph`, `max-id`, `id-source`, `enable-tracking` |
 | `docx.edit` | Comments, scripts | `ensure-comments-part`, `add-comment`, `selector`, `apply-script` |
 | `docx.clean` | Clean copy | `clean-xml`, `clean-entries` |
-| `docx.review` | Review | `inspect`, `changes`, `comments`, `compare-docx`, `lo-python` |
+| `docx.review` | Review | `inspect`, `changes`, `sections`, `comments`, `compare-docx`, `lo-python` |
 
 - Find tables, rows and paragraphs by their text, not by index, so that a changed template fails instead of writing to the wrong place. Lookup functions throw `ex-info` with `{:docx/error :layout}`; matching in `docx.edit` throws `{:docx/error :match}`.
 
@@ -134,4 +150,4 @@ Main functions (each has a docstring):
 
 ## Tests
 
-`scripts/test-docx.bb` builds its fixtures from hand-written WordprocessingML at run time; no fixture file is committed. Tracked edits are checked against pandoc's accept and reject views (SKIP without pandoc) and, because pandoc drops empty paragraphs, against the paragraph marks directly. The compare test needs LibreOffice and prints SKIP without it. `DOCX_TEST_SELFCHECK=1` adds one assertion that must fail.
+`scripts/test-docx.bb` builds its fixtures from hand-written WordprocessingML at run time; no fixture file is committed. Tracked edits are checked against pandoc's accept and reject views (SKIP without pandoc) and, because pandoc drops empty paragraphs, against the paragraph marks directly. The compare test needs LibreOffice and prints SKIP without it. The sections CLI test needs `soffice` and `pdftotext`, and prints SKIP if either is missing; it checks automatic numbering, inherited outline levels, repeated titles, tracked heading edits, table cells, deletions and an unchanged input package. Focused tests also cover missing/ambiguous numbers and render failures. Stored field error tests check simple/complex fields, nested fields, paragraph boundaries, split runs, story parts, deleted revisions, false positives and an unchanged input package. `DOCX_TEST_SELFCHECK=1` adds one assertion that must fail.

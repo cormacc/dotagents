@@ -7,6 +7,7 @@
 (require '[babashka.classpath :as cp]
          '[babashka.fs :as fs]
          '[babashka.process :as process]
+         '[cheshire.core :as json]
          '[clojure.data.xml :as xml]
          '[clojure.string :as str]
          '[clojure.test :refer [deftest is testing run-tests]])
@@ -658,6 +659,234 @@
                       (d/descendants (d/parse-entry (d/read-entries c) "word/document.xml") (w "tr"))))))
     (testing "a row selector that matches no row is a match error"
       (is (= :match (:error (script-error [{:op "delete-row" :row {:starts "9.9"}}])))))))
+
+;; ------------------------------------------------------------------ rendered sections
+
+(defn section-par [level & runs]
+  (str "<w:p><w:pPr>" (when-not (zero? level) "<w:pStyle w:val=\"CustomSection\"/>")
+       "<w:numPr><w:ilvl w:val=\"" level "\"/><w:numId w:val=\"77\"/></w:numPr>"
+       (when (zero? level) "<w:outlineLvl w:val=\"0\"/>")
+       "</w:pPr>" (apply str runs) "</w:p>"))
+
+(defn sections-fixture! []
+  (let [path (build! (fs/path tmp "sections.docx")
+                     (str (p (ins "Preamble change."))
+                          (section-par 0 (r "Purpose (all)"))
+                          (p (r "Use ") (del "old") (ins "new") (r " text."))
+                          ;; An ordinary numbered item must not become section context.
+                          "<w:p><w:pPr><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"88\"/></w:numPr></w:pPr>"
+                          (ins "Numbered body item.") "</w:p>"
+                          (tbl (tr (tc (p (ins "Changed cell.")))))
+                          (section-par 1 (r "Details"))
+                          (p (del "Removed paragraph."))
+                          (section-par 0 (r "Sco") (del "ut") (ins "pe"))
+                          (p (ins "New scope text."))
+                          (section-par 1 (r "Details"))
+                          (p (ins "Second details paragraph."))))
+        entries (d/read-entries path)
+        parts {"word/numbering.xml"
+               (str decl "<w:numbering " ns-decls ">"
+                    "<w:abstractNum w:abstractNumId=\"7\"><w:multiLevelType w:val=\"multilevel\"/>"
+                    "<w:lvl w:ilvl=\"0\"><w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1\"/></w:lvl>"
+                    "<w:lvl w:ilvl=\"1\"><w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1.%2\"/></w:lvl>"
+                    "</w:abstractNum><w:abstractNum w:abstractNumId=\"8\">"
+                    "<w:lvl w:ilvl=\"0\"><w:start w:val=\"7\"/><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1)\"/></w:lvl>"
+                    "</w:abstractNum><w:num w:numId=\"77\"><w:abstractNumId w:val=\"7\"/></w:num>"
+                    "<w:num w:numId=\"88\"><w:abstractNumId w:val=\"8\"/></w:num></w:numbering>")
+               "word/styles.xml"
+               (str decl "<w:styles " ns-decls ">"
+                    "<w:style w:type=\"paragraph\" w:styleId=\"BaseSection\"><w:name w:val=\"Base Section\"/>"
+                    "<w:pPr><w:outlineLvl w:val=\"1\"/></w:pPr></w:style>"
+                    "<w:style w:type=\"paragraph\" w:styleId=\"CustomSection\"><w:name w:val=\"Custom Section\"/>"
+                    "<w:basedOn w:val=\"BaseSection\"/></w:style></w:styles>")}
+        rels (d/entry-str entries "word/_rels/document.xml.rels")
+        types (d/entry-str entries "[Content_Types].xml")]
+    (d/write-docx path
+      (d/replace-entries (into entries (for [[name text] parts] [name (.getBytes ^String text "UTF-8")]))
+        (merge parts
+               {"word/header1.xml" (str decl "<w:hdr " ns-decls ">" (p (ins "Changed header.")) "</w:hdr>")
+                "word/_rels/document.xml.rels"
+                (str/replace rels "</Relationships>"
+                  (str "<Relationship Id=\"rIdNum\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering\" Target=\"numbering.xml\"/>"
+                       "<Relationship Id=\"rIdStyles\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/></Relationships>"))
+                "[Content_Types].xml"
+                (str/replace types "</Types>"
+                  (str "<Override PartName=\"/word/numbering.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml\"/>"
+                       "<Override PartName=\"/word/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml\"/></Types>"))})))
+    path))
+
+(deftest sections-cli-maps-rendered-outline-numbers
+  (if-not (and (fs/which "soffice") (fs/which "pdftotext"))
+    (println "SKIP sections-cli-maps-rendered-outline-numbers: needs soffice and pdftotext")
+    (let [path (sections-fixture!)
+          original (slurp path :encoding "ISO-8859-1")
+          result (run-cli "sections" path)]
+      (is (= 0 (:exit result)) (:err result))
+      (when (zero? (:exit result))
+        (let [rows (json/parse-string (:out result) true)]
+          (is (= [nil "1" "1" "1" "1.1" "2" "2" "2.1" nil] (mapv :section rows)))
+          (is (= ["no-heading" "matched" "matched" "matched" "matched" "matched" "matched" "matched" "not-applicable"]
+                 (mapv :section_status rows)))
+          (is (= "Details" (:heading (nth rows 4))))
+          (is (= "Removed paragraph." (:before (nth rows 4))))
+          (is (= "" (:after (nth rows 4))))
+          (is (= "word/header1.xml" (:part (last rows))))))
+      (is (= original (slurp path :encoding "ISO-8859-1")) "the input package stays byte-identical"))))
+
+(defn sections-with-rendered [path text]
+  ;; Keep the document traversal and matching real; replace only the external renderer.
+  (with-redefs-fn {#'docx.review/rendered-text (constantly text)} #(review/sections path)))
+
+(deftest sections-retains-missing-and-ambiguous-context
+  (let [path (sections-fixture!)
+        missing (sections-with-rendered path "1 Purpose\n(all)\n2 Scope\n2.1 Details\n")
+        ambiguous (sections-with-rendered path "1 Purpose (all)\n1.1 Details\n1.2 Details\n2 Scope\n2.1 Details\n")]
+    (is (= "1" (:section (nth missing 1))) "wrapped titles and literal regex characters match")
+    (is (= [nil "unresolved"] ((juxt :section :section_status) (nth missing 4)))
+        "a missing heading must not borrow a later occurrence or the preceding section")
+    (is (= "2" (:section (nth missing 5))) "a missing earlier title must not invalidate a unique later heading")
+    (is (= "2.1" (:section (nth missing 7))))
+    (is (= [nil "ambiguous"] ((juxt :section :section_status) (nth ambiguous 4))))
+    (is (= "2.1" (:section (nth ambiguous 7))))
+    (is (= (count (review/changes path)) (count missing) (count ambiguous)))
+    (let [without-number (sections-with-rendered path "Purpose (all)\nDetails\nScope\nDetails\n")]
+      (is (every? #(= "unresolved" (:section_status %)) (take 7 (rest without-number)))
+          "unnumbered headings stay unresolved, not assigned a nearby number"))))
+
+(deftest sections-needs-render-tools-only-for-body-changes-with-headings
+  (let [path (sections-fixture!)]
+    (doseq [missing ["soffice" "pdftotext"]]
+      (with-redefs [fs/which (fn [tool] (when-not (= missing tool) "/fake/tool"))]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo (re-pattern (str "sections needs " missing))
+                             (review/sections path)))))
+    (with-redefs [fs/which (constantly nil)]
+      (is (= [] (review/sections plain)))
+      (let [path (build! (fs/path tmp "no-heading.docx") (p (ins "No heading change.")))]
+        (is (= [{:heading nil :before "" :after "No heading change."
+                 :section nil :section_status "no-heading"}]
+               (review/sections path)))))))
+
+(deftest sections-cleans-up-failed-renders
+  (let [path (sections-fixture!)
+        original (slurp path :encoding "ISO-8859-1")
+        make-temp fs/create-temp-dir
+        created (atom [])
+        track-temp (fn [opts] (let [path (make-temp opts)] (swap! created conj path) path))]
+    (with-redefs [fs/which (constantly "/fake/tool") fs/create-temp-dir track-temp]
+      (testing "a successful command without a PDF is an error"
+        (with-redefs-fn {#'docx.review/render-command (constantly "")}
+          #(is (thrown-with-msg? clojure.lang.ExceptionInfo #"did not create.*PDF" (review/sections path)))))
+      (testing "a non-zero renderer exit is an error"
+        (with-redefs [process/process (fn [_ _] (future {:exit 7 :err "fixture render failure"}))]
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"section render failed: fixture render failure"
+                               (review/sections path))))))
+    (is (= 2 (count @created)) "control: both failing renders created private scratch directories")
+    (is (every? #(not (fs/exists? %)) @created) "failure removes the copied input and private profile")
+    (is (= original (slurp path :encoding "ISO-8859-1")))))
+
+;; ------------------------------------------------------------------ stored field errors
+
+(defn field-char [kind]
+  (str "<w:r><w:fldChar w:fldCharType=\"" kind "\"/></w:r>"))
+
+(defn field-instruction [text]
+  (str "<w:r><w:instrText xml:space=\"preserve\">" (esc text) "</w:instrText></w:r>"))
+
+(defn complex-field [instruction & result]
+  (str (field-char "begin") (field-instruction instruction) (field-char "separate")
+       (apply str result) (field-char "end")))
+
+(defn simple-field [instruction & result]
+  (str "<w:fldSimple w:instr=\"" (str/replace (esc instruction) "\"" "&quot;") "\">"
+       (apply str result) "</w:fldSimple>"))
+
+(deftest inspect-cli-reports-stored-field-errors
+  (let [path (build! (fs/path tmp "field-errors.docx")
+                     (str (p "<w:bookmarkStart w:id=\"42\" w:name=\"Existing\"/>" (r "Existing target")
+                             "<w:bookmarkEnd w:id=\"42\"/>")
+                          (p (r "See ") (field-char "begin")
+                             (field-instruction " REF ") (field-instruction "Existing \\h ")
+                             (field-char "separate") (r "Er") (r "ror! Reference ") (r "source not found.")
+                             (field-char "end") (r " after the field."))
+                          (p (simple-field " PAGEREF Missing \\h " (r "Error! Bookmark not defined.")))
+                          (p (r "Error! Reference source not found."))
+                          (p (complex-field " IF 1 = 1 \"Error!\" \"x\" " (r "safe")))))
+        original (slurp path :encoding "ISO-8859-1")
+        result (run-cli "inspect" path)]
+    (is (= 0 (:exit result)) (:err result))
+    (when (zero? (:exit result))
+      (is (= [{:part "word/document.xml" :paragraph 2 :instruction "REF Existing \\h"
+               :result "Error! Reference source not found."}
+              {:part "word/document.xml" :paragraph 3 :instruction "PAGEREF Missing \\h"
+               :result "Error! Bookmark not defined."}]
+             (:field_errors (json/parse-string (:out result) true)))
+          "cached errors survive even when their reference target exists; prose and instructions are not results"))
+    (is (= [] (:field_errors (review/inspect plain))) "control: a document without error fields gives an empty list")
+    (is (= original (slurp path :encoding "ISO-8859-1")) "inspect leaves the cached XML byte-identical")))
+
+(deftest inspect-field-errors-track-nesting-and-paragraph-boundaries
+  (let [path (build! (fs/path tmp "nested-field-errors.docx")
+                     (str (p (field-char "begin") (field-instruction " REF Cross ")
+                             (field-char "separate") (r "Error! Reference"))
+                          (p (r "source not found.") (field-char "end"))
+                          (p (field-char "begin") (field-instruction " IF ")
+                             (complex-field "REF NestedInInstruction" (r "Error! Bookmark not defined."))
+                             (field-instruction " = 1 \"yes\" \"no\" ") (field-char "separate")
+                             (r "no") (field-char "end"))
+                          (tbl (tr (tc (p (field-char "begin") (field-instruction " QUOTE ")
+                                          (field-char "separate") (r "See ")
+                                          (simple-field "REF NestedInResult" (r "Error! Reference source not found."))
+                                          (r " here.") (field-char "end")))))
+                          (p (simple-field "REF First" (r "Error! First stored result."))
+                             (r "; ") (complex-field "REF Second" (r "Error! Second stored result.")))
+                          (p (complex-field "QUOTE" (simple-field "REF Inner" (r "Error! Nested result."))))))]
+    (is (= [{:part "word/document.xml" :paragraph 1 :instruction "REF Cross"
+             :result "Error! Reference\nsource not found."}
+            {:part "word/document.xml" :paragraph 3 :instruction "REF NestedInInstruction"
+             :result "Error! Bookmark not defined."}
+            {:part "word/document.xml" :paragraph 4 :instruction "REF NestedInResult"
+             :result "Error! Reference source not found."}
+            {:part "word/document.xml" :paragraph 5 :instruction "REF First" :result "Error! First stored result."}
+            {:part "word/document.xml" :paragraph 5 :instruction "REF Second" :result "Error! Second stored result."}
+            {:part "word/document.xml" :paragraph 6 :instruction "QUOTE" :result "Error! Nested result."}
+            {:part "word/document.xml" :paragraph 6 :instruction "REF Inner" :result "Error! Nested result."}]
+           (:field_errors (review/inspect path)))
+        "field boundaries keep instructions separate; nested error fields retain start order")))
+
+(deftest inspect-field-errors-ignore-deleted-revisions
+  (let [path (build! (fs/path tmp "revised-field-errors.docx")
+                     (str (p "<w:del w:id=\"3\" w:author=\"Old\">"
+                             (complex-field "REF Deleted" (r "Error! Deleted result.")) "</w:del>")
+                          (p "<w:moveFrom w:id=\"4\" w:author=\"Old\">"
+                             (complex-field "REF MovedFrom" (r "Error! Moved-from result.")) "</w:moveFrom>")
+                          (p (complex-field "REF Repaired" (del "Error! Old result.") (ins "3")))
+                          (p (complex-field "REF Broken" (del "3") (ins "Error! New result.")))
+                          (p "<w:moveTo w:id=\"5\" w:author=\"New\">"
+                             (simple-field "REF MovedTo" (r "Error! Moved-to result.")) "</w:moveTo>")))]
+    (is (= [{:part "word/document.xml" :paragraph 4 :instruction "REF Broken" :result "Error! New result."}
+            {:part "word/document.xml" :paragraph 5 :instruction "REF MovedTo" :result "Error! Moved-to result."}]
+           (:field_errors (review/inspect path))))))
+
+(deftest inspect-field-errors-cover-all-document-stories
+  (let [path (build! (fs/path tmp "story-field-errors.docx")
+                     (p (complex-field "REF Body" (r "Error! Body result."))))
+        story (fn [tag body] (str decl "<w:" tag " " ns-decls ">" body "</w:" tag ">"))
+        notes (str/replace footnotes (p (r "Used footnote"))
+                           (p (simple-field "REF Footnote" (r "Error! Footnote result."))))
+        endnotes (story "endnotes" (str "<w:endnote w:id=\"1\">"
+                                       (p (simple-field "REF Endnote" (r "Error! Endnote result."))) "</w:endnote>"))]
+    (d/write-docx path
+      (conj (d/replace-entries (d/read-entries path)
+                              {"word/header1.xml" (story "hdr" (p (simple-field "REF Header" (r "  Error! Header result.  "))))
+                               "word/footer1.xml" (story "ftr" (p (complex-field "REF Footer" (r "Error! Footer result."))))
+                               "word/footnotes.xml" notes})
+            ["word/endnotes.xml" (.getBytes ^String endnotes "UTF-8")]))
+    (is (= [{:part "word/document.xml" :paragraph 1 :instruction "REF Body" :result "Error! Body result."}
+            {:part "word/endnotes.xml" :paragraph 1 :instruction "REF Endnote" :result "Error! Endnote result."}
+            {:part "word/footer1.xml" :paragraph 1 :instruction "REF Footer" :result "Error! Footer result."}
+            {:part "word/footnotes.xml" :paragraph 2 :instruction "REF Footnote" :result "Error! Footnote result."}
+            {:part "word/header1.xml" :paragraph 1 :instruction "REF Header" :result "Error! Header result."}]
+           (:field_errors (review/inspect path))))))
 
 (deftest selfcheck
   (when (System/getenv "DOCX_TEST_SELFCHECK")

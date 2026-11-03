@@ -3,9 +3,11 @@
 ;;
 ;; Usage:
 ;;   docx.clj inspect DOCX          JSON: header and footer text, tracked-change counts,
-;;                                  version history rows
+;;                                  version history rows and stored field errors
 ;;   docx.clj changes DOCX          JSON: each paragraph with tracked changes, with its
 ;;                                  heading and its text before and after
+;;   docx.clj sections DOCX         JSON: changed paragraphs with rendered section numbers
+;;                                  (needs LibreOffice and pdftotext)
 ;;   docx.clj comments DOCX         JSON: each comment with author, date, text, heading and
 ;;                                  the anchored text before and after
 ;;   docx.clj compare OLD NEW OUT   Write OUT, a .docx with OLD -> NEW as tracked changes
@@ -79,6 +81,7 @@
     (case cmd
       "inspect" (review/inspect (arg 0 "DOCX"))
       "changes" (review/changes (arg 0 "DOCX"))
+      "sections" (review/sections (arg 0 "DOCX"))
       "comments" (review/comments (arg 0 "DOCX"))
       "compare" {:ok true :out (review/compare-docx (arg 0 "OLD") (arg 1 "NEW") (arg 2 "OUT"))}
       "edit" (let [in (arg 0 "IN") script (read-script (arg 1 "SCRIPT")) out (arg 2 "OUT")
@@ -95,7 +98,7 @@
                 (merge {:out out}
                        (if (:no-verify opts) {:verified "skipped: --no-verify"} (verify-clean in out))
                        {:inspect (select-keys (review/inspect out) [:tracked_changes])}))
-      (usage "usage: docx.clj inspect | changes | comments | compare | edit | clean (see the header of docx.clj)"))))
+      (usage "usage: docx.clj inspect | changes | sections | comments | compare | edit | clean (see the header of docx.clj)"))))
 
 (let [{:keys [args opts]} (cli/parse-args *command-line-args*
                                           {:coerce {:keep-tracking :boolean :no-verify :boolean :no-tracking :boolean
