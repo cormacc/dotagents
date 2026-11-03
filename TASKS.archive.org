@@ -4378,3 +4378,72 @@ Origin:
 - sender: human
 
 Evidence and the proposed scope are in the linked draft. The user reports faster context growth; its cause is not established. Use OpenAI models if subagents are needed while Anthropic subscription limits apply.
+
+** DONE chromium: add stable tab and frame targets :ext:chromium:
+CLOSED: [2026-11-03 Tue 17:27]
+:PROPERTIES:
+:CUSTOM_ID: 48b926fc-5430-4155-84ea-9d74f1df6435
+:CREATED: [2026-11-03 Tue 13:42]
+:STARTED: [2026-11-03 Tue 17:10]
+:ARCHIVED: [2026-11-03 Tue 17:27]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 13:42]
+- State "STARTED" from "TODO" [2026-11-03 Tue 17:10]
+- State "DONE" from "STARTED" [2026-11-03 Tue 17:27]
+:END:
+Give browser tools explicit, stable tab/frame targets, including cross-origin frames. Return the chosen target from navigation and enumeration, preserve it across calls, and reject a closed or missing target rather than selecting another page. Cover changed tab ordering, closed tabs and cross-origin frames in tests. Keep target reporting scoped so unrelated page URLs do not enter results.
+
+Inline approach: use CDP tab IDs and opaque live-frame handles; remember the exact selection across calls. Explicit tab selection resets to the main frame. Enumerate frame URLs only for an explicitly selected tab.
+- Acceptance: navigation and scoped enumeration return reusable targets; every browser action uses the selected tab/frame, including cross-origin frames.
+- Acceptance: tab reordering and new tabs do not change selection; closed tabs, detached frames and invalid IDs fail without fallback.
+- Anti-criteria: no unrelated URLs in target metadata or unscoped enumeration; no change to inspection text semantics or bounds.
+
+Evidence:
+- During the SharePoint sandbox trial, a browser inspection returned an unrelated GitLab page after navigation to the document library.
+- Original implementation: browser actions chose the last enumerated page; tab enumeration had no reusable IDs or frame selector.
+- Word's cross-origin iframe could not be inspected through the main-page DOM. A scratch CDP helper attached to the exact iframe target and inspected it successfully.
+- Contract: [[file:pi/extensions/chromium/README.md]] section 'Targeting'; agent guidance: [[file:pi/skills/chromium/SKILL.md]].
+
+Validation: [[file:pi/extensions/chromium/test.sh]] passes strict type-checking, eight routing regressions, an installed-Pi RPC load/schema check and a disposable-Chromium cross-origin iframe test. The live test covers inspection, evaluation, cookies, screenshots, picking, frame navigation across origins and stale-target rejection. Frame screenshot visually checked. Section-reference checks pass; task doctor reports no errors and three warnings on other tasks/specs.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-03 Tue 13:42]
+- sender: agent
+
+** DONE chromium: return rendered, bounded inspection text :ext:chromium:
+CLOSED: [2026-11-03 Tue 17:58]
+:PROPERTIES:
+:CUSTOM_ID: f72f2b5b-ab7f-4b90-a551-fe94ab001cbf
+:CREATED: [2026-11-03 Tue 13:42]
+:STARTED: [2026-11-03 Tue 17:51]
+:ARCHIVED: [2026-11-03 Tue 17:58]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 13:42]
+- State "STARTED" from "TODO" [2026-11-03 Tue 17:51]
+- State "DONE" from "STARTED" [2026-11-03 Tue 17:58]
+:END:
+Make browser_inspect text extraction match its rendered-text guidance. Exclude script/style bodies and hidden page data by default, make raw text an explicit mode, and bound output with a clear truncation marker. Test visible text alongside scripts, styles and hidden siblings, plus oversized rendered and raw results. Keep the declared result contract and README consistent.
+
+Inline plan:
+- Approach :: Use rendered HTML innerText for the default text action, add action="raw" for trimmed textContent, and cap inspection result strings at 12,000 UTF-16 code units including a clear marker. Keep details.result as a string and add details.truncated.
+- Acceptance :: Disposable-browser tests verify visible text beside script/style/hidden siblings, explicit raw extraction, hidden-root handling, and oversized rendered/raw output. Tool schema and README describe the same contract.
+- Must not :: Change tab/frame selection, use the user's browser for tests, introduce dependencies, or retain an unbounded duplicate in result details.
+- Verified :: Rendered-text regression failed on leaked script/style/hidden data before the fix; output-boundary regression failed at 12,001 characters. CHROMIUM-enabled pi/extensions/chromium/test.sh passes strict type-checking, 8 routing tests, 1 installed-Pi RPC test and 5 live-browser tests (including the parent). Section-link checks pass; ot doctor reports 0 errors and 3 warnings on other tasks/specs.
+
+Original evidence:
+- During the sandbox trial, browser_inspect on a SharePoint page body returned script source and embedded page configuration rather than only visible text, producing a large irrelevant result.
+- pi/extensions/chromium/index.ts: browser_inspect declares rendered-text guidance but its text branch returns el.textContent?.trim() without a local output bound.
+- Scoped innerText extraction through the pinned CDP context returned the visible version-history text and approved publication comment.
+- Owner: pi/extensions/chromium/index.ts and pi/extensions/chromium/README.md.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-03 Tue 13:42]
+- sender: agent

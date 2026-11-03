@@ -5,14 +5,19 @@ description: Interactive browser automation via Chrome DevTools Protocol. Use wh
 
 # Chromium Browser Tools
 
-Browser automation is provided by the `browser_nav`, `browser_eval`, `browser_tabs`,
-`browser_screenshot`, `browser_inspect`, `browser_pick`, and `browser_cookies` tools.
-These connect to Chromium/Chrome on `localhost:9222` — the browser must be running
-with `--remote-debugging-port=9222`.
+Browser automation is provided by the `browser_nav`, `browser_eval`, `browser_tabs`, `browser_screenshot`, `browser_inspect`, `browser_pick`, and `browser_cookies` tools. These connect to Chromium/Chrome on `localhost:9222`; the browser must be running with `--remote-debugging-port=9222`.
+
+## Stable targets
+
+Choose a tab before acting: use `browser_nav` with `newTab: true` to open a new one, or use `browser_tabs` to obtain a stable `tabId`. Unscoped enumeration lists IDs and titles without URL fields. Supply `tabId` to enumerate only that tab's frames and URLs; this also selects its main frame.
+
+All action tools accept `tabId` and `frameId` and return the chosen target. For a cross-origin iframe, pass its opaque `frameId` from `browser_tabs({tabId})` to `browser_inspect` or `browser_eval`; do not traverse it through the parent DOM. Omit both IDs to reuse the exact selected frame. An explicit `tabId` without `frameId` resets to its main frame. With multiple tabs and no selection, choose explicitly rather than relying on focus or ordering.
+
+Closed tabs and missing frames fail without fallback. Select a live tab and re-enumerate frames to recover. Frame handles must be re-enumerated after a reconnect or extension reload. `newTab: true` cannot be combined with target IDs. Full contract: [../../extensions/chromium/README.md#Targeting](../../extensions/chromium/README.md#targeting).
 
 ## Workflow
 
-1. **Investigate first** — use `browser_eval` to understand the page before acting:
+1. **Investigate first**: use `browser_eval` on the chosen target to understand the page before acting:
    ```javascript
    (function() {
      return {
@@ -37,8 +42,7 @@ with `--remote-debugging-port=9222`.
 
 ### browser_screenshot
 
-Take a screenshot. Optionally navigate first and wait for a CSS selector.
-Returns an inline image for vision models.
+Capture the selected tab viewport or iframe element. Optionally navigate the selected frame first and wait for a CSS selector in that frame. Returns an inline image for vision models.
 
 ```
 browser_screenshot
@@ -49,13 +53,12 @@ browser_screenshot
 
 ### browser_inspect
 
-Extract text, attributes, or element state by CSS selector. Lighter than a
-screenshot when you just need to check content.
+Extract rendered text, attributes, or element state by CSS selector in the selected frame. Lighter than a screenshot when you just need to check content. Text extraction excludes normal script/style bodies and hidden data; use `action: "raw"` explicitly for DOM source text. Results are bounded and report truncation. Full contract: [../../extensions/chromium/README.md#Inspection](../../extensions/chromium/README.md#inspection).
 
 ```
 browser_inspect
   selector:  "h1"
-  action:    "text" | "html" | "attr" | "count" | "visible" | "exists"
+  action:    "text" | "raw" | "html" | "attr" | "count" | "visible" | "exists"
   attribute: "href"       (when action is "attr")
   url:       "..."        (optional, navigate first)
   waitFor:   true         (default: true)
@@ -63,7 +66,7 @@ browser_inspect
 
 ### browser_eval
 
-Evaluate JavaScript in the active tab. Use for complex interactions.
+Evaluate JavaScript in the selected tab/frame, including cross-origin frames. Use for complex interactions.
 
 ```
 browser_eval
@@ -72,10 +75,10 @@ browser_eval
 
 ### browser_nav / browser_tabs / browser_cookies / browser_pick
 
-- `browser_nav` — Navigate to a URL (with optional `--new` tab)
-- `browser_tabs` — List all open tabs grouped by window
-- `browser_cookies` — Show cookies for the active tab
-- `browser_pick` — Interactive element picker (user clicks elements in the browser)
+- `browser_nav`: navigate the selected tab/frame, or open and select a tab with `newTab: true`.
+- `browser_tabs`: list tab IDs grouped by window; supply `tabId` to select its main frame and enumerate its frames.
+- `browser_cookies`: show cookies for the selected frame's URL.
+- `browser_pick`: interactive element picker inside the selected frame.
 
 ## Starting the Browser
 

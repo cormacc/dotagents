@@ -2,58 +2,58 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
-import puppeteer, { type Browser, type Page } from "puppeteer-core";
+import puppeteer, { type Browser } from "puppeteer-core";
+import { BrowserTargets, targetText } from "./targets.ts";
 import { readFile } from "node:fs/promises";
 
 const CDP_URL = "http://localhost:9222";
 const CONNECT_TIMEOUT = 5000;
+const INSPECT_RESULT_LIMIT = 12000;
+const INSPECT_TRUNCATION_MARKER = `\n[truncated: result limited to ${INSPECT_RESULT_LIMIT} characters]`;
+
+type PickInfo = { tag: string; id: string | null; class: string | null; text: string | null; html: string };
+type PickWindow = Window & { pick?: (message: string) => Promise<PickInfo | PickInfo[] | null> };
 
 // ---------------------------------------------------------------------------
 // Persistent connection state (lives in extension closure)
 // ---------------------------------------------------------------------------
 
-let browser: Browser | null = null;
+const targetParameters = {
+  tabId: Type.Optional(Type.String({ minLength: 1, description: "Stable tab ID from browser_nav or browser_tabs. Explicit tabId selects its main frame unless frameId is supplied." })),
+  frameId: Type.Optional(Type.String({ minLength: 1, description: "Opaque frame ID from browser_tabs({tabId}). Omit both IDs to reuse the exact selected target." })),
+};
 
-async function ensureBrowser(): Promise<Browser> {
-  // Check if existing connection is still alive
-  if (browser) {
+export default function (pi: ExtensionAPI) {
+  let browser: Browser | null = null;
+
+  async function ensureBrowser(): Promise<Browser> {
+    // Check if existing connection is still alive
+    if (browser) {
+      try {
+        // Quick liveness check
+        await browser.version();
+        return browser;
+      } catch {
+        browser = null;
+      }
+    }
+
+    let timer: ReturnType<typeof setTimeout>;
     try {
-      // Quick liveness check
-      await browser.version();
+      browser = await Promise.race([
+        puppeteer.connect({ browserURL: CDP_URL, defaultViewport: null }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Connection timeout")), CONNECT_TIMEOUT);
+        }),
+      ]);
       return browser;
-    } catch {
-      browser = null;
+    } finally {
+      clearTimeout(timer!);
     }
   }
 
-  browser = await Promise.race([
-    puppeteer.connect({ browserURL: CDP_URL, defaultViewport: null }),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Connection timeout")), CONNECT_TIMEOUT)
-    ),
-  ]);
+  const targets = new BrowserTargets(ensureBrowser);
 
-  return browser;
-}
-
-async function getActivePage(): Promise<Page> {
-  const b = await ensureBrowser();
-  const pages = await b.pages();
-  const page = pages.at(-1);
-  if (!page) throw new Error("No active tab found");
-  return page;
-}
-
-async function getAllPages(): Promise<Page[]> {
-  const b = await ensureBrowser();
-  return b.pages();
-}
-
-// ---------------------------------------------------------------------------
-// Extension entry point
-// ---------------------------------------------------------------------------
-
-export default function (pi: ExtensionAPI) {
   // Clean up on shutdown
   pi.on("session_shutdown", async () => {
     if (browser) {
@@ -71,32 +71,29 @@ export default function (pi: ExtensionAPI) {
     name: "browser_nav",
     label: "Browser Navigate",
     description:
-      "Navigate the browser to a URL. Connects to Chromium on localhost:9222 (must be started with --remote-debugging-port=9222).",
-    promptSnippet: "Navigate the browser to a URL, optionally in a new tab",
+      "Navigate the selected tab/frame to a URL and return its stable target IDs. Connects to Chromium on localhost:9222 (must be started with --remote-debugging-port=9222).",
+    promptSnippet: "Navigate a stable browser target, optionally in a new tab",
+    promptGuidelines: [
+      "Browser tools reuse the exact selected tab/frame when IDs are omitted. Use browser_tabs to choose a tabId; browser_tabs({tabId}) selects its main frame and lists its frameIds. Missing targets fail without fallback.",
+    ],
+    executionMode: "sequential",
     parameters: Type.Object({
+      ...targetParameters,
       url: Type.String({ description: "URL to navigate to" }),
       newTab: Type.Optional(
-        Type.Boolean({ description: "Open in a new tab instead of reusing the active one" })
+        Type.Boolean({ description: "Open and select a new tab. Cannot be combined with tabId or frameId." })
       ),
     }),
     async execute(_toolCallId, params, signal, onUpdate) {
       onUpdate?.({ content: [{ type: "text", text: `Navigating to ${params.url}...` }], details: {} });
 
-      const b = await ensureBrowser();
-      let page: Page;
-
-      if (params.newTab) {
-        page = await b.newPage();
-      } else {
-        page = await getActivePage();
-      }
-
-      await page.goto(params.url, { waitUntil: "domcontentloaded" });
-      const title = await page.title();
+      const { frame, target } = params.newTab ? await targets.open(params) : await targets.resolve(params);
+      await frame.goto(params.url, { waitUntil: "domcontentloaded" });
+      const title = await frame.title();
 
       return {
-        content: [{ type: "text", text: `${params.newTab ? "Opened" : "Navigated to"}: ${title}\nURL: ${page.url()}` }],
-        details: { title, url: page.url() },
+        content: [{ type: "text", text: `${targetText(target)}\n${params.newTab ? "Opened" : "Navigated to"}: ${title}\nURL: ${frame.url()}` }],
+        details: { target, title, url: frame.url() },
       };
     },
     renderCall(args, theme) {
@@ -108,21 +105,23 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ------------------------------------------------------------------
-  // browser_eval — Evaluate JavaScript in the active tab
+  // browser_eval — Evaluate JavaScript in the selected frame
   // ------------------------------------------------------------------
   pi.registerTool({
     name: "browser_eval",
     label: "Browser Eval",
     description:
-      "Evaluate JavaScript in the active browser tab. Code runs in an async context. Return values are serialized as text.",
-    promptSnippet: "Evaluate JavaScript in the active browser tab",
+      "Evaluate JavaScript in the selected tab/frame, including cross-origin frames. Code runs in an async context. Return values are serialized as text.",
+    promptSnippet: "Evaluate JavaScript in the selected tab/frame",
+    executionMode: "sequential",
     parameters: Type.Object({
+      ...targetParameters,
       code: Type.String({ description: "JavaScript code to evaluate. Runs in async context." }),
     }),
     async execute(_toolCallId, params) {
-      const page = await getActivePage();
+      const { frame, target } = await targets.resolve(params);
 
-      const result = await page.evaluate((code) => {
+      const result = await frame.evaluate((code) => {
         const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
         return new AsyncFunction(`return (${code})`)();
       }, params.code);
@@ -139,8 +138,8 @@ export default function (pi: ExtensionAPI) {
       }
 
       return {
-        content: [{ type: "text", text }],
-        details: {},
+        content: [{ type: "text", text: `${targetText(target)}\n${text}` }],
+        details: { target },
       };
     },
     renderCall(args, theme) {
@@ -157,39 +156,47 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "browser_tabs",
     label: "Browser Tabs",
-    description: "List all open browser tabs, grouped by window.",
-    promptSnippet: "List all browser tabs grouped by window",
-    parameters: Type.Object({}),
-    async execute() {
-      const pages = await getAllPages();
-
-      const windowMap: Record<number, Array<{ title: string; url: string }>> = {};
+    description: "List stable tab IDs grouped by window, without URLs. Supply tabId to select that tab's main frame and enumerate only its frames and URLs.",
+    promptSnippet: "List stable tab IDs, or select one tab and enumerate its frames",
+    executionMode: "sequential",
+    parameters: Type.Object({ tabId: targetParameters.tabId }),
+    async execute(_toolCallId, params) {
+      const scoped = params.tabId === undefined ? null : await targets.resolve(params);
+      const pages = scoped ? [scoped.page] : await (await ensureBrowser()).pages();
+      const target = scoped?.target ?? targets.selected;
+      const frames = scoped ? targets.frames(scoped.page) : undefined;
+      const windowMap: Record<number, Array<{ tabId: string; title: string; url?: string }>> = {};
 
       for (const page of pages) {
         const session = await page.createCDPSession();
         try {
           const { windowId } = await session.send("Browser.getWindowForTarget") as { windowId: number };
           if (!windowMap[windowId]) windowMap[windowId] = [];
-          windowMap[windowId].push({ title: await page.title(), url: page.url() });
+          windowMap[windowId].push({
+            tabId: await targets.tabId(page),
+            title: await page.title(),
+            ...(scoped ? { url: page.url() } : {}),
+          });
         } finally {
           await session.detach();
         }
       }
 
-      const lines: string[] = [];
+      const lines: string[] = [target ? targetText(target) : "No target selected."];
       let winNum = 1;
       for (const [winId, tabs] of Object.entries(windowMap)) {
         lines.push(`Window ${winNum} (id: ${winId}):`);
-        tabs.forEach((t, i) => {
-          lines.push(`  ${i}: ${t.title}`);
-          lines.push(`     ${t.url}`);
+        tabs.forEach(t => {
+          lines.push(`  tabId=${t.tabId}: ${t.title}`);
+          if (t.url !== undefined) lines.push(`     ${t.url}`);
         });
         winNum++;
       }
 
+      if (frames) lines.push(`Frames: ${JSON.stringify(frames, null, 2)}`);
       return {
         content: [{ type: "text", text: lines.join("\n") }],
-        details: { windowMap },
+        details: { target, windowMap, ...(frames ? { frames } : {}) },
       };
     },
   });
@@ -201,14 +208,16 @@ export default function (pi: ExtensionAPI) {
     name: "browser_screenshot",
     label: "Browser Screenshot",
     description:
-      "Take a screenshot of the current browser viewport. " +
+      "Capture the selected tab viewport, or the selected iframe element. " +
       "Optionally navigates to a URL first and waits for a CSS selector. " +
       "Returns the screenshot as an inline image.",
-    promptSnippet: "Screenshot the current browser viewport",
+    promptSnippet: "Capture the selected tab viewport or iframe element",
     promptGuidelines: [
       "After UI changes, verify visually with browser_screenshot; use waitFor for async content.",
     ],
+    executionMode: "sequential",
     parameters: Type.Object({
+      ...targetParameters,
       url: Type.Optional(
         Type.String({ description: "URL to navigate to before taking the screenshot." }),
       ),
@@ -220,18 +229,17 @@ export default function (pi: ExtensionAPI) {
       ),
     }),
     async execute(_toolCallId, params, signal, onUpdate) {
-      const page = await getActivePage();
+      const { page, frame, target } = await targets.resolve(params);
 
-      // Navigate if URL given
       if (params.url) {
         onUpdate?.({ content: [{ type: "text", text: `Navigating to ${params.url}...` }], details: {} });
-        await page.goto(params.url, { waitUntil: "domcontentloaded" });
+        await frame.goto(params.url, { waitUntil: "domcontentloaded" });
       }
 
       // Wait for selector if specified
       if (params.waitFor) {
         const timeout = (params.waitTimeout || 10) * 1000;
-        await page.waitForSelector(params.waitFor, { visible: true, timeout });
+        await frame.waitForSelector(params.waitFor, { visible: true, timeout });
       }
 
       const { tmpdir } = await import("node:os");
@@ -240,21 +248,27 @@ export default function (pi: ExtensionAPI) {
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const filepath = join(tmpdir(), `screenshot-${timestamp}.png`);
 
-      await page.screenshot({ path: filepath });
+      const element = frame === page.mainFrame() ? null : await frame.frameElement();
+      if (frame !== page.mainFrame() && !element) throw new Error("Frame target is detached or missing.");
+      try {
+        await (element ?? page).screenshot({ path: filepath });
+      } finally {
+        await element?.dispose();
+      }
 
       // Read file as base64 for inline image
       const imageData = await readFile(filepath);
       const base64 = imageData.toString("base64");
 
-      const title = await page.title();
-      const url = page.url();
+      const title = await frame.title();
+      const url = frame.url();
 
       return {
         content: [
-          { type: "text", text: `Screenshot of "${title}" at ${url}\nSaved to: ${filepath}` },
+          { type: "text", text: `${targetText(target)}\nScreenshot of "${title}" at ${url}\nSaved to: ${filepath}` },
           { type: "image", data: base64, mimeType: "image/png" },
         ],
-        details: { url, title, path: filepath },
+        details: { target, url, title, path: filepath },
       };
     },
     renderCall(args, theme) {
@@ -282,19 +296,23 @@ export default function (pi: ExtensionAPI) {
     name: "browser_inspect",
     label: "Browser Inspect",
     description:
-      "Extract text content, attributes, or element state from the current page " +
-      "using CSS selectors. Navigates to URL first if provided. " +
-      "Returns structured data about matched elements.",
-    promptSnippet: "Extract text/attributes from browser page elements by CSS selector",
+      "Inspect the first CSS match in the selected frame (count checks all matches). " +
+      "Default action text returns rendered HTML innerText, excluding script/style and hidden data; " +
+      "action raw explicitly returns trimmed textContent, including hidden data. " +
+      "Navigates to URL first if provided. Result strings are capped at 12000 UTF-16 code units " +
+      "including a truncation marker. Returns details {target, selector, action, result: string, truncated: boolean}.",
+    promptSnippet: "Inspect rendered text, explicit raw text, attributes or state by CSS selector",
     promptGuidelines: [
       "Use browser_inspect for rendered text/visibility/state checks; prefer it over browser_eval for simple queries.",
     ],
+    executionMode: "sequential",
     parameters: Type.Object({
+      ...targetParameters,
       selector: Type.String({
         description: 'CSS selector to query, e.g. "h1", ".patient-name", "[data-testid=\'status\']"',
       }),
       action: Type.Optional(
-        StringEnum(["text", "html", "attr", "count", "visible", "exists"] as const),
+        StringEnum(["text", "raw", "html", "attr", "count", "visible", "exists"] as const),
       ),
       attribute: Type.Optional(
         Type.String({ description: 'Attribute name to extract when action is "attr".' }),
@@ -307,11 +325,10 @@ export default function (pi: ExtensionAPI) {
       ),
     }),
     async execute(_toolCallId, params) {
-      const page = await getActivePage();
+      const { frame, target } = await targets.resolve(params);
 
-      // Navigate if URL given
       if (params.url) {
-        await page.goto(params.url, { waitUntil: "domcontentloaded" });
+        await frame.goto(params.url, { waitUntil: "domcontentloaded" });
       }
 
       const sel = params.selector;
@@ -321,7 +338,7 @@ export default function (pi: ExtensionAPI) {
       // Wait for element if requested
       if (shouldWait && action !== "exists") {
         try {
-          await page.waitForSelector(sel, { visible: true, timeout: 10000 });
+          await frame.waitForSelector(sel, { visible: true, timeout: 10000 });
         } catch {
           if (action !== "count") {
             throw new Error(`Element not found or not visible: "${sel}"`);
@@ -332,34 +349,52 @@ export default function (pi: ExtensionAPI) {
       let result: string;
       switch (action) {
         case "text":
-          result = await page.$eval(sel, (el) => el.textContent?.trim() ?? "");
+          result = await frame.$eval(sel, (el) => {
+            if (!(el instanceof HTMLElement) || el.matches("script, style")) return "";
+            // innerText falls back to raw text for display:none subtrees.
+            for (let node: Element | null = el; node; node = node.parentElement) {
+              const style = window.getComputedStyle(node);
+              if (style.display === "none" || style.contentVisibility === "hidden") return "";
+            }
+            return el.innerText.trim();
+          });
+          break;
+        case "raw":
+          result = await frame.$eval(sel, (el) => el.textContent?.trim() ?? "");
           break;
         case "html":
-          result = await page.$eval(sel, (el) => el.innerHTML);
+          result = await frame.$eval(sel, (el) => el.innerHTML);
           break;
         case "attr":
           if (!params.attribute) throw new Error('The "attr" action requires the "attribute" parameter.');
-          result = await page.$eval(sel, (el, attr) => el.getAttribute(attr) ?? "(null)", params.attribute);
+          result = await frame.$eval(sel, (el, attr) => el.getAttribute(attr) ?? "(null)", params.attribute);
           break;
         case "count":
-          result = String(await page.$$eval(sel, (els) => els.length));
+          result = String(await frame.$$eval(sel, (els) => els.length));
           break;
         case "visible":
-          result = String(await page.$eval(sel, (el) => {
+          result = String(await frame.$eval(sel, (el) => {
             const style = window.getComputedStyle(el);
             return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
           }).catch(() => false));
           break;
         case "exists":
-          result = String((await page.$(sel)) !== null);
+          const element = await frame.$(sel);
+          result = String(element !== null);
+          await element?.dispose();
           break;
         default:
-          result = await page.$eval(sel, (el) => el.textContent?.trim() ?? "");
+          throw new Error(`Unknown inspection action: ${action}`);
+      }
+
+      const truncated = result.length > INSPECT_RESULT_LIMIT;
+      if (truncated) {
+        result = result.slice(0, INSPECT_RESULT_LIMIT - INSPECT_TRUNCATION_MARKER.length) + INSPECT_TRUNCATION_MARKER;
       }
 
       return {
-        content: [{ type: "text", text: result }],
-        details: { selector: sel, action, result },
+        content: [{ type: "text", text: `${targetText(target)}\n${result}` }],
+        details: { target, selector: sel, action, result, truncated },
       };
     },
     renderCall(args, theme) {
@@ -371,17 +406,18 @@ export default function (pi: ExtensionAPI) {
   });
 
   // ------------------------------------------------------------------
-  // browser_cookies — Show cookies for the active tab
+  // browser_cookies — Show cookies for the selected frame URL
   // ------------------------------------------------------------------
   pi.registerTool({
     name: "browser_cookies",
     label: "Browser Cookies",
-    description: "Display all cookies for the current browser tab, including domain, path, httpOnly and secure flags.",
-    promptSnippet: "Show cookies for the active browser tab",
-    parameters: Type.Object({}),
-    async execute() {
-      const page = await getActivePage();
-      const cookies = await page.cookies();
+    description: "Display cookies for the selected frame's URL, including domain, path, httpOnly and secure flags.",
+    promptSnippet: "Show cookies for the selected tab/frame URL",
+    executionMode: "sequential",
+    parameters: Type.Object(targetParameters),
+    async execute(_toolCallId, params) {
+      const { page, frame, target } = await targets.resolve(params);
+      const cookies = await page.cookies(frame.url());
 
       const lines = cookies.map(
         (c) =>
@@ -389,8 +425,8 @@ export default function (pi: ExtensionAPI) {
       );
 
       return {
-        content: [{ type: "text", text: lines.join("\n\n") || "(no cookies)" }],
-        details: { count: cookies.length },
+        content: [{ type: "text", text: `${targetText(target)}\n${lines.join("\n\n") || "(no cookies)"}` }],
+        details: { target, count: cookies.length },
       };
     },
   });
@@ -404,20 +440,22 @@ export default function (pi: ExtensionAPI) {
     description:
       "Launch an interactive element picker in the browser. The user clicks elements to select them (Cmd/Ctrl+Click for multiple, Enter to finish, Esc to cancel). Returns CSS-relevant info and HTML for the selected elements.",
     promptSnippet: "Let the user pick DOM elements interactively in the browser",
+    executionMode: "sequential",
     parameters: Type.Object({
+      ...targetParameters,
       message: Type.String({ description: "Prompt message shown to the user in the browser overlay" }),
     }),
     async execute(_toolCallId, params) {
-      const page = await getActivePage();
+      const { frame, target } = await targets.resolve(params);
 
-      // Inject the pick() helper
-      await page.evaluate(() => {
-        if (!window["pick"]) {
-          window["pick"] = async (message) => {
+      await frame.evaluate(() => {
+        const pickWindow = window as PickWindow;
+        if (!pickWindow.pick) {
+          pickWindow.pick = async (message: string) => {
             if (!message) throw new Error("pick() requires a message parameter");
-            return new Promise((resolve) => {
-              const selections = [];
-              const selectedElements = new Set();
+            return new Promise<PickInfo | PickInfo[] | null>((resolve) => {
+              const selections: PickInfo[] = [];
+              const selectedElements = new Set<Element>();
 
               const overlay = document.createElement("div");
               overlay.style.cssText =
@@ -444,26 +482,26 @@ export default function (pi: ExtensionAPI) {
                 document.removeEventListener("keydown", onKey, true);
                 overlay.remove();
                 banner.remove();
-                selectedElements.forEach((el) => { el.style.outline = ""; });
+                selectedElements.forEach((el) => { (el as HTMLElement).style.outline = ""; });
               };
 
-              const onMove = (e) => {
+              const onMove = (e: MouseEvent) => {
                 const el = document.elementFromPoint(e.clientX, e.clientY);
                 if (!el || overlay.contains(el) || banner.contains(el)) return;
                 const r = el.getBoundingClientRect();
                 highlight.style.cssText = `position:absolute;border:2px solid #3b82f6;background:rgba(59,130,246,0.1);top:${r.top}px;left:${r.left}px;width:${r.width}px;height:${r.height}px`;
               };
 
-              const buildElementInfo = (el) => ({
+              const buildElementInfo = (el: Element): PickInfo => ({
                 tag: el.tagName.toLowerCase(),
                 id: el.id || null,
-                class: el.className || null,
+                class: el.getAttribute("class") || null,
                 text: el.textContent?.trim().slice(0, 200) || null,
                 html: el.outerHTML.slice(0, 500),
               });
 
-              const onClick = (e) => {
-                if (banner.contains(e.target)) return;
+              const onClick = (e: MouseEvent) => {
+                if (banner.contains(e.target as Node)) return;
                 e.preventDefault();
                 e.stopPropagation();
                 const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -472,7 +510,7 @@ export default function (pi: ExtensionAPI) {
                 if (e.metaKey || e.ctrlKey) {
                   if (!selectedElements.has(el)) {
                     selectedElements.add(el);
-                    el.style.outline = "3px solid #10b981";
+                    (el as HTMLElement).style.outline = "3px solid #10b981";
                     selections.push(buildElementInfo(el));
                     updateBanner();
                   }
@@ -483,7 +521,7 @@ export default function (pi: ExtensionAPI) {
                 }
               };
 
-              const onKey = (e) => {
+              const onKey = (e: KeyboardEvent) => {
                 if (e.key === "Escape") {
                   e.preventDefault();
                   cleanup();
@@ -503,25 +541,18 @@ export default function (pi: ExtensionAPI) {
         }
       });
 
-      const result = await page.evaluate(
-        (msg) => window["pick"](msg),
+      const result = await frame.evaluate(
+        (msg) => (window as PickWindow).pick!(msg),
         params.message
       );
 
-      if (result === null) {
-        return {
-          content: [{ type: "text", text: "Cancelled by user" }],
-          details: { cancelled: true },
-        };
-      }
-
-      const text = typeof result === "object"
+      const text = result === null ? "Cancelled by user" : typeof result === "object"
         ? JSON.stringify(result, null, 2)
         : String(result);
 
       return {
-        content: [{ type: "text", text }],
-        details: { cancelled: false, result },
+        content: [{ type: "text", text: `${targetText(target)}\n${text}` }],
+        details: { target, cancelled: result === null, result },
       };
     },
   });
