@@ -1,0 +1,29 @@
+[
+  {
+    "query": "Set up quality gates for this repository using the checks we already have.",
+    "should_trigger": true
+  },
+  {
+    "query": "Audit whether this coverage-threshold change lowers our agreed quality bar.",
+    "should_trigger": true
+  },
+  {
+    "query": "Our checks are slow and nobody knows which ones block delivery; establish the policy.",
+    "should_trigger": true
+  },
+  {
+    "query": "Fix this off-by-one bug and add a regression test.",
+    "should_trigger": false,
+    "owner": "worker"
+  },
+  {
+    "query": "Review this diff for reachable correctness defects.",
+    "should_trigger": false,
+    "owner": "code-review"
+  },
+  {
+    "query": "Write a GitLab CI job for the existing test command; the quality policy is already agreed.",
+    "should_trigger": false,
+    "owner": "gitlab-cli-skills"
+  }
+]

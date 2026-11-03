@@ -69,7 +69,7 @@ Choose explicitly:
 
 Continue when the follow-up depends on the child's existing context. Respawn for unrelated work, a different persona, or independent Class C validation. Before you continue a child, read its context use; above about 70%, close it and start a fresh worker with a handoff assignment instead. The CLI owns continuation preconditions and refuses unsafe reuse. See the [scripts/docs/contract.md#Continue](scripts/docs/contract.md#continue).
 
-For root-owned staged delegation, repeated measurements, evidence retention and the separately approved live context smoke, use [references/workflow-recipes.md](references/workflow-recipes.md). The recipe is policy over existing lifecycle verbs, not a workflow engine.
+For root-owned staged delegation, independent regression-test authorship, opt-in bounded decision review, repeated measurements, evidence retention and the separately approved live context smoke, use [references/workflow-recipes.md](references/workflow-recipes.md). The recipe is policy over existing lifecycle verbs, not a workflow engine.
 
 ## Process retrospectives
 

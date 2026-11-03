@@ -1,0 +1,65 @@
+#+TITLE: Adopt selected agent-skills workflows
+#+DATE: 2026-11-03 Tue
+#+PARENT: [[archive:e391c4be-fd2c-4397-ad90-ce8a1495ef4a][Adopt selected agent-skills workflows]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/quality-gates/SKILL.md]]
+#+SPEC: [[proj:skills/security-assessment/SKILL.md]]
+#+SPEC: [[proj:skills/performance-investigation/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/references/workflow-recipes.md]]
+
+* Intent
+Apply the selected adaptations from [[file:2026-11-03-evaluate-agent-skills-addy-osmani.org]], preserving existing task, review and delegation ownership. Add concrete workflows without another always-on lifecycle process.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+Three locally adapted skills and two opt-in root-owned recipes are implemented. The user approved six paired synthetic behavioural evaluations. All core decisions were correct in both arms; the small assessment sample does not establish a broad correctness gain.
+
+** Scope
+*** In scope
+- Quality-gate setup and audit, scoped security assessment, and measurement-led performance investigation.
+- Independent regression-test authorship and bounded decision review using existing personas.
+- Inventory, exact upstream provenance, MIT notices, reusable evaluation cases and retained evidence.
+*** Out of scope
+- New traits or specialist personas, a release-readiness workflow, automatic commits or deployment, global rule changes, and copied runtime guards or scanner implementations.
+- Active scans or load tests of live systems; broad claims about routing, runtime enforcement or cross-model effectiveness.
+
+** Acceptance
+- [X] Three valid workflow skills implement the selected adaptations without mandatory parallel contract files or fixed tool stacks.
+- [X] Both orchestration recipes preserve existing permissions, context and lifecycle ownership.
+- [X] Copied or substantially adapted material carries the pinned source and MIT notice.
+- [X] The skills inventory identifies all three as locally adapted.
+- [X] Six paired synthetic evaluations retain prompts, source hashes, assessments, grades and limits.
+- [X] Repository frontmatter and section-link checks cover the new files.
+- [X] Must not: add traits, personas, automatic commits, deployment authority or a second lifecycle router.
+
+** Decisions
+- Use =quality-gates=, =security-assessment= and =performance-investigation= as focused workflow names. Rejected bulk installation because existing planning, review, task memory and delegation retain their own contracts.
+- Use existing =worker=, =reviewer= and =base-analyst= personas when delegation is requested. A skill is not permission to launch a child or scan a service.
+- Keep evaluation fixtures and trigger examples inside each skill. Use existing skill-creator aggregation and review tooling; the temporary executor is not a shipped runner.
+- Retain non-discriminating results rather than strengthen claims from a passing treatment alone. Quality and performance both scored 8/8 with and without their skills; security scored 8/8 with and 7/8 without. The baseline omission was a compatible mitigation, not vulnerability detection.
+
+** Shipped
+- ADDED :: [[file:../../skills/quality-gates/SKILL.md]] -- agreed bars, ratchets, exceptions, stage placement, control-tested enforcement and semantic review of test translations.
+- ADDED :: [[file:../../skills/security-assessment/SKILL.md]] -- read-only trust-boundary assessment with abuse-path evidence and on-demand control questions.
+- ADDED :: [[file:../../skills/performance-investigation/SKILL.md]] -- controlled comparisons, correctness gates, keep/revert decisions, rejected-attempt records and web-evidence provenance.
+- MODIFIED :: [[file:../../skills/herdr-orch/references/workflow-recipes.md]] -- independent regression-test authorship and bounded decision review; [[file:../../skills/herdr-orch/SKILL.md]] exposes those recipes.
+- MODIFIED :: [[file:../../skills/README.org]] -- adapted-skill inventory.
+
+* Plan
+
+* Implementation
+- Provenance is pinned to =addyosmani/agent-skills= commit =301b02b12bff98e4688e6984af6556802322bbde=. Each new skill has a sibling =LICENSE=; the recipes link to their own retained MIT notice.
+- The skills carry two supplied-evidence cases each and positive/adjacent-negative trigger examples. Trigger examples were not run through the harness router.
+- The comparison used Pi 1.4.0 and =openai-codex/gpt-6.1-sol= at low thinking, with one sample per case per arm. Both arms used identical shared home instructions and fixture input; the treatment explicitly appended the skill and relevant reference bodies. CLI context discovery, extensions, MCP, other skills and tools were disabled. This was not a provider request audit.
+- Assessments were scored by the parent against the prewritten semantic expectations, not by a blind independent judge. Equivalent wording passed; no score required literal repetition of a token. Final assessments, grades, timing and source hashes are retained in [[file:2026-11-03-adopt-agent-skills-workflows/evaluations.json]]. Ephemeral authentication copies were removed after the runs.
+
+* Validation
+- Twelve executions completed with verified terminal responses and no tool calls. The completion parser passed a valid-stream control and rejected failed, incomplete and tool-using synthetic streams before live execution.
+- With-skill assessments passed 24/24 expectations; baselines passed 23/24. All six core dispositions were correct in both arms. No general correctness, latency or cost improvement is established by this sample.
+- These are assessments of supplied synthetic evidence, not execution tests of gate installation, exploit reproduction, benchmarking, recipe delegation or automatic skill triggering. Those capabilities remain unmeasured by this change.
+- Static review pages are under =.tmp/agent-skills-adoption.rgYdtO/<skill>/iteration-1/review.html= for the three new skill names. They show paired outputs and grades; no user feedback has been collected.
+- Frontmatter validation checked all 27 top-level skills with 0 gating failures and 2 warnings for vendored frontmatter. The validator's existing passing/failing fixtures passed. The section-link checker covered 395 references in 431 files with 0 problems; its own broken-link controls passed. =git diff --check= passed. All four retained MIT notices compare byte-identically with the pinned source.
+- =ot doctor= reported 0 errors and 7 warnings in other tasks or records. One =spec-stale= advisory is triggered by these documentation changes through the older wrapper record's broad links; no orchestration CLI implementation or mechanical contract was changed. The remaining warnings concern other declared specs and an unrelated parent status.

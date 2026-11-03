@@ -1,0 +1,33 @@
+{
+  "skill_name": "security-assessment",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Assess the export path for exploitable security issues. The author says authentication makes this safe. Trace the supplied code and give a scoped assessment, not fixes to the repository.",
+      "expected_output": "Report the reachable cross-tenant authorisation bypass: tenant A can supply tenant B and reach the database query. State prerequisites, asset, controls, impact and a compatible correction without claiming live exploitation.",
+      "files": [
+        "evals/fixtures/tenant-override.md"
+      ],
+      "expectations": [
+        "Finds the cross-tenant authorisation defect despite authentication.",
+        "Traces a logged-in tenant-A user's query.tenant=tenant-B through the chosen value to the database read.",
+        "States the protected report data, actor prerequisite, concrete impact and a mitigation that binds the query to authorised tenant scope.",
+        "Does not claim to run a live exploit or add unrelated speculative vulnerabilities."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Assess this export path. A reviewer flagged exportScoped because it contains no ownership check. Is that finding supported by the complete path below? Report only issues you can demonstrate.",
+      "expected_output": "Clear the claimed ownership defect because the sole caller enforces the server-issued tenant before the sink. Return no issues within scope and acknowledge that source inspection is not a security certification.",
+      "files": [
+        "evals/fixtures/upstream-authorisation.md"
+      ],
+      "expectations": [
+        "Rejects the claimed missing-ownership finding by tracing the sole caller's tenant comparison before exportScoped.",
+        "Returns an explicit no-issues result for the scoped authorisation question without manufacturing a new defect.",
+        "Does not require a duplicate helper check as a blocking fix under the stated sole-caller contract.",
+        "Distinguishes source evidence from live testing and does not certify the whole system secure."
+      ]
+    }
+  ]
+}

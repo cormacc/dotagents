@@ -1,0 +1,128 @@
+#+TITLE: Evaluate agent-skills (Addy Osmani)
+#+DATE: 2026-11-03 Tue
+#+PARENT: [[task:0f6a6b03-d101-49f3-9279-27d4aa143356][Evaluate agent-skills (Addy Osmani)]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+NO_SPEC: true
+#+LINK: upstream https://github.com/addyosmani/agent-skills/blob/301b02b12bff98e4688e6984af6556802322bbde/%s
+
+* Intent
+Evaluate Addy Osmani's agent-skills against our existing skills, traits and personas. Identify useful adaptations without installing a second engineering process or changing agent behaviour.
+
+* Summary
+*Level:* prototype · *Tests:* none · *Docs:* full
+
+Recommendation: adopt nothing verbatim. Prioritise a quality-gate setup workflow, a threat-model-led security workflow, and a measurement-led performance workflow. Use existing personas first; extract a new trait only if a concrete consumer and a controlled probe establish its value. The user subsequently approved the selected adaptations; implementation and its evidence are tracked separately in [[file:2026-11-03-adopt-agent-skills-workflows.org]]. This record preserves the evaluation scope.
+
+** Scope
+*** In scope
+- Screen all 25 upstream skill descriptions and workflow headings; inspect the strongest candidates, all four personas, release orchestration, evaluation documentation and local equivalents in detail.
+- Assess overlap, useful additions, composition boundaries, portability and evidence quality at upstream commit =301b02b12bff98e4688e6984af6556802322bbde= and local HEAD =5975811072ba1f6d72835a58aaf24d270ff7024b=, with the existing working-tree instructions.
+*** Out of scope
+- Install skills, change runtime instructions, run upstream hooks or paid agent evaluations, or implement the proposed workflows.
+- Certify upstream scripts, code examples, security controls or effectiveness on our models.
+
+** Acceptance
+- [X] Identify the source revision and catalogue scope.
+- [X] Distinguish new workflow candidates from material already covered locally.
+- [X] Assess each upstream persona and whether new traits are justified.
+- [X] Record concrete adaptations, conflicts and validation requirements.
+- [X] Must not: install upstream behaviour as part of this evaluation.
+
+** Decisions
+- Prefer selective local adaptations over bulk installation. The useful material is domain-specific procedure, not another always-on lifecycle router.
+- Keep ownership here: [[file:../../skills/org-plan/SKILL.md]], [[file:../../skills/org-tasks/SKILL.md]], [[file:../../skills/code-review/SKILL.md]], [[file:../../skills/simplify/SKILL.md]] and [[file:../../skills/herdr-orch/SKILL.md]] remain canonical for their respective contracts.
+- No new traits recommended initially. Most upstream stances overlap existing directives; domain checklists and multi-stage workflows do not belong in small trait fragments. [[file:../../skills/herdr-orch/references/traits.md]] section 'Admission bar' requires a named consumer and a recorded probe attempt, not attractive prose.
+
+** Shipped
+- ADDED :: This source-pinned evaluation. No skill, persona, trait or runtime setting was changed by this task.
+
+* Plan
+
+* Implementation
+** Priority recommendations
+*** 1. Quality-gate setup workflow
+Base this on [[upstream:skills/constraint-driven-development/SKILL.md]]. It turns preferences into a checkable contract: inspect existing tooling, agree on dimensions and thresholds, assign each check to an affordable lifecycle stage, measure a baseline, and track exceptions with an owner and expiry.
+
+Our worker and review instructions already require evidence and protect tests. The useful addition is project-level setup and maintenance of those checks, including detecting weakened thresholds, removed assertions, skipped tests and silenced checkers. This is a workflow skill, not a trait: it needs discovery, user decisions, configuration changes and deliberate violation tests.
+
+Adaptation: use the project's existing contract and check entry points; do not require a new =CONSTRAINTS.md= or duplicate =AGENTS.md=/=CLAUDE.md= instructions. Do not install tools until authorised. Treat coverage percentages and runtime budgets as negotiated values, not universal standards. Distinguish legitimate assertion replacement from a weakened test; our worker already accounts for migrated coverage by test name. Treat the floor guard as a heuristic to evaluate, not an automatic ban on every suppression or =TODO=.
+
+Validation before adoption: exercise each claimed gate on a clean input, a known violation and a scanner failure; test below-threshold findings where relevant. Include staged, unstaged and untracked changes. Demonstrate that a threshold change is detected without rejecting a legitimate test translation. Retain the current checks if a proposed replacement does not improve them.
+
+*** 2. Threat-model-led security workflow
+Adapt [[upstream:skills/security-and-hardening/SKILL.md]] and [[upstream:agents/security-auditor.md]]. The strongest procedure is to map assets and trust boundaries, apply STRIDE, derive abuse cases, then verify concrete exploit paths and mitigations. Dependency installation scripts, derived destructive paths, privacy retention, and LLM/tool boundaries are relevant beyond web applications.
+
+Our [[file:../../skills/code-review/SKILL.md]] already checks security defects. The addition is a deliberate threat model and domain-specific evidence checklist, not a second generic review. Begin with =base-analyst= for an explicitly scoped system audit, or =reviewer= for a diff. A thin security persona extending =base-analyst= becomes justified if this workflow gets repeated use; retain read-only scope, local severity rules and explicit unknowns. Do not give it default authority to scan live targets, install dependencies or change controls.
+
+Adaptation: load web/auth/privacy references only when relevant. Verify implementation guidance against the actual stack and current authoritative sources. Do not copy blanket environment-variable storage guidance, numerical defaults or legal-compliance claims as guarantees. A successful dependency audit is evidence about known advisories, not proof that a package is safe.
+
+Validation before adoption: compare against ordinary review on a bounded fixture with an exploitable trust-boundary defect and a safe control. Require a demonstrated input-to-sink path, no invented issue on the control, no writes, and explicit limits on untested surfaces.
+
+*** 3. Measurement-led performance workflow
+Adapt [[upstream:skills/performance-optimization/SKILL.md]] and the evidence contract in [[upstream:agents/web-performance-auditor.md]]. Preserve the sequence: baseline, locate the bottleneck, change one mechanism, remeasure, keep or revert, then guard against regression. Retain an attempt ledger, including rejected optimisations, in the existing change-record rather than requiring =PERF.md=.
+
+The persona's useful distinction is source inspection versus measurement: static findings are potential impact; scorecards remain unmeasured without artefacts; lab, field and trace evidence stay separate. This is more specific than our generic evidence bar. It does not justify a global measurement trait, because [[file:../../home/AGENTS.md]] already governs performance comparison.
+
+Adaptation: make the main workflow applicable to CLI, backend and agent tooling as well as web applications. Preserve our alternating ABAB rounds and per-round medians; do not replace them with one before/after pair. Web-only references and an optional web-performance persona can sit below that workflow. Our [[file:../../skills/herdr-orch/subagents/visual-tester.md]] checks appearance and interactions; it should not acquire an implied performance-certification role. Supplied reports are a valid starting point; do not assume our browser tools expose upstream's tracing or Lighthouse tools.
+
+Validation before adoption: use a known bottleneck and a neutral change. Require the workflow to distinguish both, preserve correctness, reject unsupported metric claims, and report unavailable tools honestly. Do not inherit generic bundle, latency or Lighthouse budgets as project requirements.
+
+*** 4. Two small orchestration recipes, not a new SDLC skill
+From [[upstream:skills/test-driven-development/SKILL.md]] and =agents/test-engineer.md=, retain independent regression-test authorship when it removes implementation bias: give a worker the bug and contract without the proposed fix; verify the test fails for the intended reason on an immutable baseline; only then assign the fix. Confirm the repaired behaviour and relevant suite. Ordinary fixes remain inline. Our [[file:../../skills/herdr-orch/subagents/worker.md]] already requires pre-fix failure evidence, so another general testing trait adds little.
+
+From [[upstream:skills/doubt-driven-development/SKILL.md]], retain a bounded decision check: provide an independent reviewer with the artefact, contract and necessary evidence, omit the author's persuasive narrative, then classify each finding as a contract misunderstanding, actionable defect, accepted trade-off or noise. Put this in [[file:../../skills/herdr-orch/references/workflow-recipes.md]] if adopted. Do not withhold the proposition when the assignment is explicitly to verify that proposition.
+
+Do not adopt review of every non-trivial decision or mandatory cross-model questions each cycle. Our [[file:../../skills/herdr-orch/SKILL.md]] section 'Executor tier and advisor strategy' records why routine worker consultation was retired; the advisor remains opt-in for stuck or materially ambiguous decisions. There is no local evidence here to reverse that policy.
+
+*** 5. Operational readiness when a deployment workflow needs it
+Combine relevant parts of [[upstream:skills/observability-and-instrumentation/SKILL.md]] and [[upstream:skills/shipping-and-launch/SKILL.md]] into a later, explicitly requested release-readiness workflow. Useful elements are operational questions before telemetry, entry-point plus correlation attribution, bounded metric labels, test-fired alerts, staged rollout decisions, and a verified rollback path.
+
+This must produce a readiness assessment before any deployment authority is granted. Select reviewers by actual risk and surface; do not copy a mandatory panel for every launch. Choose monitoring windows and thresholds from the service, not upstream's example percentages. Telemetry is not a universal dependency for local scripts or throwaway work. Defer a separate observability skill until instrumentation itself is a recurring assignment.
+
+** Catalogue disposition
+The priorities above are proposed adaptations. The following completes the screen of all 25 skill names; a screen is not a behavioural benchmark.
+
+- =constraint-driven-development= :: strongest new setup workflow; adapt as priority 1.
+- =security-and-hardening= :: adapt threat modelling and specialised references as priority 2.
+- =performance-optimization= :: adapt the experiment and evidence workflow as priority 3.
+- =test-driven-development= :: absorb the independent reproduction recipe; retain existing worker rules, rather than a second testing policy or fixed 80/15/5 pyramid quota.
+- =debugging-and-error-recovery= :: our =investigate= trait covers causal investigation; a reproduction/fix/guard recipe can complete the workflow without turning diagnosis-only requests into edits.
+- =doubt-driven-development= :: absorb extraction and reconciliation into an opt-in root-owned recipe; reject routine review and cross-model ceremony.
+- =observability-and-instrumentation= :: retain as a source for operational-readiness references; defer standalone adoption.
+- =shipping-and-launch= :: basis for optional release-readiness work, not automatic deployment or mandatory fan-out.
+- =interview-me= :: absorb only useful intent prompts into =planner=/=org-plan= if a gap is observed. Existing planning already asks what matters and obtains confirmation. Reject numerical confidence theatre and its rule that ordinary assent such as "sounds good" is insufficient.
+- =idea-refine= :: optional divergent/convergent technique for early planning; no separate intent/idea document tree by default.
+- =spec-driven-development= :: substantial overlap with =org-plan=; capability decomposition is useful when requirements genuinely bundle separable outcomes, not as a mandatory extra spec layer.
+- =planning-and-task-breakdown= :: retain =org-plan=/=ot=; do not introduce =tasks/plan.md= and another task-list target.
+- =incremental-implementation= :: existing worker, =simple= and =refactor= cover coherent, verified scope. Retain risk-first or vertical slicing as planning choices; reject automatic commits after each slice.
+- =context-engineering= :: existing task resume, scope-bound delegation and fresh-context rules cover the central need. No second context-management skill recommended.
+- =source-driven-development= :: existing identifier/source verification is already mandatory. Retain version-aware evidence; reject citation comments for every routine API call and instructions to prefer a newer pattern over project conventions.
+- =api-and-interface-design= :: useful contract-first and idempotency references if API design becomes a recurring assignment; defer a broad REST/TypeScript skill. Existing =migration= and =refactor= already protect transition and observable behaviour.
+- =frontend-ui-engineering= :: possible project-specific reference for accessibility, empty/error states and reference-led design. Do not impose its React component layout or expand every worker's prompt.
+- =browser-testing-with-devtools= :: retain our [[file:../../pi/skills/chromium/SKILL.md]] and =visual-tester=. Upstream's MCP-specific tool inventory is not our tool inventory; safety and runtime-check ideas can inform a later targeted revision.
+- =code-review-and-quality= :: keep local =code-review= and =reviewer=: scope, concrete evidence, false-positive limits and explicit no-issues results already have owners. Do not import a second severity taxonomy or mandatory praise.
+- =code-simplification= :: keep the distinction between read-only =simplify= and an implementation assignment using =refactor=. Do not import a second combined review-and-edit workflow.
+- =git-workflow-and-versioning= :: retain =git-commit= and explicit commit permission. Reject an always-triggered git skill and automatic save-point commits.
+- =ci-cd-and-automation= :: reference for project-specific pipeline work, not a generic GitHub Actions layer over our GitLab and Nix workflows.
+- =deprecation-and-migration= :: our =migration= trait already covers readers/writers, coexistence, rollback and expand/migrate/verify/contract. Lifecycle and consumer-migration details belong in the concrete plan, not another trait.
+- =documentation-and-adrs= :: retain =doc-writing= and task-linked change-records; do not create a competing decision-record hierarchy.
+- =using-agent-skills= :: reject the parallel lifecycle router and always-on behaviours; our skill descriptions and existing owners already provide routing.
+
+** Persona disposition
+- =code-reviewer= :: do not adopt; local =reviewer= has a stricter evidence and scope contract.
+- =test-engineer= :: do not add a persona yet. Use =worker= for test writing and =reviewer= or =base-analyst= for read-only test assessment; do not combine those permissions implicitly.
+- =security-auditor= :: strongest candidate for a thin specialist persona after the security workflow has a real consumer and a comparison against ordinary review.
+- =web-performance-auditor= :: useful specialised evidence contract; keep optional and web-only, separate from =visual-tester=. Start with the performance workflow and existing analysis personas.
+
+** Adoption and evidence limits
+- Source: [[https://skills.addy.ie]] links to [[https://github.com/addyosmani/agent-skills]]. The checked-out revision contains 25 skills and four personas. The landing page says 24 skills and a four-person launch panel; [[upstream:.claude/commands/ship.md]] actually uses three reviewers, and the performance persona explicitly excludes itself from that panel. Treat source as authoritative over the landing page.
+- [[upstream:evals/README.md]] distinguishes structural checks, lexical TF-IDF routing checks, and on-demand agent execution. Its plugin evaluations compare enabled and disabled arms and report model/CLI-specific limitations. These are useful evaluation patterns, not evidence that the catalogue will improve our agents. This evaluation did not reproduce those results.
+- Adapt trigger tests with positive prompts and adjacent negative-owner prompts; distinguish skill invocation from improved output. Reuse our [[file:../../skills/skill-creator/SKILL.md]] and trait-probing machinery instead of importing another runner. Do not treat lexical routing scores as measured harness triggering.
+- [[upstream:README.md]] documents that a per-skill installation omits repository-level =references/=. Any adaptation must move needed references inside its own skill or link to an established local owner, rather than retain broken =../../references/= paths.
+- [[upstream:LICENSE]] is MIT. Preserve the copyright and permission notice with copied or substantially adapted material, record the exact source revision and retained parts, and classify it as locally adapted rather than silently vendored.
+
+* Validation
+- Inspection only: screened all skill descriptions and workflow headings; read the shortlisted procedures and four personas in detail; compared them with local owners and inventories. No upstream script, hook, package installer or paid model evaluation was run.
+- Recommendations are based on source and fit, not measured improvements in correctness, cost or latency. A future adoption must establish a baseline and a behaviour-level comparison before making such claims.
+- Repository checks: =git diff --check= passed; =bb scripts/check-section-links.bb= checked 392 section references in 419 files with 0 problems; =ot doctor --format json= reported 0 errors and 6 warnings concerning other tasks and records.

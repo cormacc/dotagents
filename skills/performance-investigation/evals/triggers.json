@@ -1,0 +1,29 @@
+[
+  {
+    "query": "Profile why this CLI became slow and test one optimisation.",
+    "should_trigger": true
+  },
+  {
+    "query": "Assess whether these alternating benchmark rounds establish a real gain.",
+    "should_trigger": true
+  },
+  {
+    "query": "Interpret this web performance report without inventing missing field metrics.",
+    "should_trigger": true
+  },
+  {
+    "query": "Find unnecessary abstractions in this diff without editing it.",
+    "should_trigger": false,
+    "owner": "simplify"
+  },
+  {
+    "query": "Check whether this button's layout looks right on mobile.",
+    "should_trigger": false,
+    "owner": "chromium"
+  },
+  {
+    "query": "Investigate why this command fails with a permission error.",
+    "should_trigger": false,
+    "owner": "investigate"
+  }
+]

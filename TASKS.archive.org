@@ -3896,3 +3896,20 @@ CLOSED: [2026-10-29 Thu 10:09]
 pi/extensions/pi-clojure/package.json pins @earendil-works/pi-coding-agent 0.80.10 separately from the root package.json (bumped to 1.0.0 by record design/log/2026-10-01-review-herdr-orch-w-r-t-pi-v1-0-0-releas.org). pi/extensions/pi-clojure/test.sh exits 127 because ./node_modules/.bin/tsc is absent: agents.nix installs that directory with --omit=dev. Measured 2026-10-02 with both the 0.80.10 and 1.0.0 root pins; the tsx test files themselves pass.
 
 Resolution (2026-10-29): pi-clojure has no development dependencies. Its `test.sh` takes `tsc`, `tsx`, `@types/node`, and pi's declarations from the root development dependencies, which pin the installed pi 1.4.0 and pi's own TypeScript 7.0.2 and `@types/node` 22.19.19. Its pi peers are optional, so `npm ci` and the `--omit=dev` activation install produce the same runtime-only `node_modules`. Verified: `test.sh` passes against that tree, and a deliberately wrong type against `ExtensionAPI` fails the type-check.
+
+** DONE Adopt selected agent-skills workflows
+CLOSED: [2026-11-03 Tue 00:50]
+:PROPERTIES:
+:CUSTOM_ID: e391c4be-fd2c-4397-ad90-ce8a1495ef4a
+:CREATED: [2026-11-03 Tue 00:31]
+:STARTED: [2026-11-03 Tue 00:32]
+:ARCHIVED: [2026-11-03 Tue 00:50]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 00:31]
+- State "STARTED" from "TODO" [2026-11-03 Tue 00:32]
+- State "DONE" from "STARTED" [2026-11-03 Tue 00:50]
+:END:
+#+IMPORT: [[plan:2026-11-03-adopt-agent-skills-workflows.org]]
+Apply the recommendations in design/log/2026-11-03-evaluate-agent-skills-addy-osmani.org: three locally adapted workflow skills, two opt-in orchestration recipes, provenance, inventory, and six paired synthetic behavioural evaluations approved by the user. Keep new traits/personas and release-readiness work deferred.

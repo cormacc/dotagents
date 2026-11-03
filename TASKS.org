@@ -203,14 +203,19 @@ Identify whether the Atlassian Teamwork Graph API complements or replaces the ex
 - Created [2026-10-28 Wed 13:18]
 :END:
 
-** TODO Evaluate agent-skills (Addy Osmani)
+** DONE Evaluate agent-skills (Addy Osmani)
+CLOSED: [2026-11-03 Tue 00:27]
 :PROPERTIES:
 :CUSTOM_ID: 0f6a6b03-d101-49f3-9279-27d4aa143356
 :CREATED: [2026-10-28 Wed 13:18]
+:STARTED: [2026-11-03 Tue 00:22]
 :END:
 :LOGBOOK:
 - Created [2026-10-28 Wed 13:18]
+- State "STARTED" from "TODO" [2026-11-03 Tue 00:22]
+- State "DONE" from "STARTED" [2026-11-03 Tue 00:27]
 :END:
+#+IMPORT: [[plan:2026-11-03-evaluate-agent-skills-addy-osmani.org]]
 Reference: https://skills.addy.ie
 
 * Improvements

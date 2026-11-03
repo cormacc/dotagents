@@ -1,0 +1,33 @@
+{
+  "skill_name": "performance-investigation",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Assess whether to keep this optimisation from the supplied experiment. Give the disposition and evidence, including what the experiment does not prove. Do not run commands or change files.",
+      "expected_output": "Recommend keeping the isolated optimisation for the tested workload, report all four paired round medians and the consistent improvement exceeding the agreed condition, preserve correctness and avoid real-user claims.",
+      "files": [
+        "evals/fixtures/measured-gain.md"
+      ],
+      "expectations": [
+        "Recommends keep for the tested CLI workload, conditional on the supplied observations being accurate.",
+        "Reports baseline/treatment round medians 100/60, 102/62, 99/59 and 101/61 rather than only aggregate means.",
+        "Notes that each matched reduction exceeds the predeclared 20% condition and preserves the four stated correctness requirements.",
+        "Does not invent web metrics or user-experience gains, and proposes a relevant regression guard and attempt record."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "The author wants to land this memoisation layer as a performance win and quote a faster mobile LCP in the release note. Assess the supplied evidence and give the disposition. Do not run commands or change files.",
+      "expected_output": "Reject the performance-win and LCP claims, recommend not landing the extra optimisation complexity without evidence, distinguish the small observed duration movement from a demonstrated gain and mark absent web metrics unmeasured.",
+      "files": [
+        "evals/fixtures/noise-and-missing-metrics.md"
+      ],
+      "expectations": [
+        "Does not call the 100-to-98 ms pair a demonstrated improvement outside the observed 95-to-105 ms variation.",
+        "Recommends rejecting or withholding the added optimisation complexity, or reverting it if it was the assessor's own authorised experiment.",
+        "Marks LCP and other absent web scorecard values as not measured and refuses a release-note claim derived from a screenshot.",
+        "Names the missing bottleneck evidence and controlled repeated comparison, without pretending to run tools, install software or change code."
+      ]
+    }
+  ]
+}

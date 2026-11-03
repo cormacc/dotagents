@@ -1,0 +1,33 @@
+{
+  "skill_name": "quality-gates",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Audit this proposed quality-policy change. The implementation is ready and the patch makes CI green. Can we accept it? Give the concrete blockers and what still needs verification; do not change files.",
+      "expected_output": "Reject the unauthorised coverage decrease, the failure-to-success wrapper and the untracked skipped test. Explain that the scanner's clean and violation runs do not discriminate and that report generation is not enforcement.",
+      "files": [
+        "evals/fixtures/weakened-bar.md"
+      ],
+      "expectations": [
+        "Identifies the 80% to 60% decrease as an unauthorised weakening, not a way to meet the agreed bar.",
+        "Identifies the wrapper that turns scanner failure into success and the untracked skipped test.",
+        "Does not call the security gate verified: the known high violation exits successfully and the changed wrapper can mask errors.",
+        "Keeps docs/quality.md as the contract owner and does not claim to execute or change anything."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Audit whether this test rewrite weakens our quality bar. The old test names disappear. Should that block the change? Use the supplied evidence and stop at an assessment.",
+      "expected_output": "Accept the semantics-preserving consolidation without inventing a test-deletion violation. Map all old assertions to replacements, retain the existing policy owner and distinguish supplied check evidence from executed checks.",
+      "files": [
+        "evals/fixtures/preserved-assertions.md"
+      ],
+      "expectations": [
+        "Does not block solely because two old test names or assertion lines were removed.",
+        "Maps the empty-input rejection including EMPTY and the trimmed accepted value x to the replacement table rows.",
+        "Does not invent a changed threshold, skipped test or new exception in the declared range.",
+        "Attributes the check trials to supplied evidence rather than claiming to have run them."
+      ]
+    }
+  ]
+}

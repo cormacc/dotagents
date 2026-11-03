@@ -1,0 +1,29 @@
+[
+  {
+    "query": "Threat-model this import path and identify concrete abuse cases.",
+    "should_trigger": true
+  },
+  {
+    "query": "Assess whether untrusted model output can reach a privileged tool unsafely.",
+    "should_trigger": true
+  },
+  {
+    "query": "Audit the install-script policy and trust boundaries of this new dependency.",
+    "should_trigger": true
+  },
+  {
+    "query": "Review this branch for ordinary correctness regressions.",
+    "should_trigger": false,
+    "owner": "code-review"
+  },
+  {
+    "query": "Implement the already approved authentication fix.",
+    "should_trigger": false,
+    "owner": "worker"
+  },
+  {
+    "query": "List the configured GitLab access tokens without exposing their values.",
+    "should_trigger": false,
+    "owner": "gitlab-cli-skills"
+  }
+]

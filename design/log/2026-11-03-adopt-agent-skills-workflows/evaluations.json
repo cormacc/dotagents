@@ -1,0 +1,729 @@
+{
+  "schema" : "agent-skills-adoption-evidence/v1",
+  "pi_version" : "1.4.0",
+  "evaluation_mode" : "supplied-evidence, no-tools; not live execution or routing",
+  "treatment_sources" : [ {
+    "path" : "skills/quality-gates/SKILL.md",
+    "sha256" : "212b89622634f838fbaaa9a6c4e3f60fa41230ebbbb67b04e2a06f8efd556cf5"
+  }, {
+    "path" : "skills/security-assessment/SKILL.md",
+    "sha256" : "322e06679dd0fe5e4de8aecdc52c3ecae067349deff4b30da712995abfffa1fb"
+  }, {
+    "path" : "skills/security-assessment/references/controls.md",
+    "sha256" : "42f5cc690a6bf61a737c50cfc5dd3efff3c677196de72b2e6d46be146ea6ab60"
+  }, {
+    "path" : "skills/performance-investigation/SKILL.md",
+    "sha256" : "f8fe226c48fc0ade404802ef1b71b4603e216a5673d4d1ea7654d88b86edde82"
+  }, {
+    "path" : "skills/performance-investigation/references/web-evidence.md",
+    "sha256" : "3dbdfbab6f0e9d0d059cfba13fe2993da0ba508f0c5c062ac583dbecd0bf6d85"
+  } ],
+  "shared_context" : {
+    "path" : "home/AGENTS.md",
+    "sha256" : "f8640a1dc64e4572fb3cd968a47cc57c897a2c470acb62fa9500930a8b779a5e"
+  },
+  "thinking" : "low",
+  "samples_per_case_per_arm" : 1,
+  "upstream_revision" : "301b02b12bff98e4688e6984af6556802322bbde",
+  "credential_copies_remaining" : 0,
+  "scoring" : "parent-scored, not blind",
+  "limits" : [ "Responses assess supplied synthetic evidence; gates, exploits and benchmarks were not executed.", "Skill and relevant reference bodies were explicitly appended; automatic triggering was not measured.", "The CLI disabled context discovery, skills, extensions, MCP and tools. This was not a provider request audit.", "One paired sample per case, one model at low thinking, parent-scored and not blind; no repeated-run or cross-model efficacy claim.", "Quality and performance passed all assertions in both arms. The security baseline omitted a mitigation, not the vulnerability." ],
+  "runs" : [ {
+    "arm" : "with_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "quality-gates",
+    "assessment" : "**Do not accept this change.** The supplied evidence shows three blockers. Green CI does not establish compliance with the approved policy.\n\n### Contract and review scope\n\nThe policy owner is `docs/quality.md`. The scope is the complete working-tree change, including staged, unstaged and non-ignored untracked files, against the supplied immutable baseline. Its commit identifier is not provided, so the pinned range cannot be independently confirmed.\n\n### Concrete blockers\n\n- **Unauthorised coverage reduction:** The staged change lowers changed-line coverage from the approved 80% to 60%. No exception was approved. Retain 80% unless the owner approves a policy change.\n- **Security failures are suppressed:** The unstaged change adds `|| true` to `node scripts/security-verdict.mjs report.json`. This prevents that command’s failure from blocking through its shell exit status. The supplied high-severity trial exits 0, so it does not demonstrate enforcement of the security bar.\n- **Unapproved skipped test:** The untracked `test/export.test.js` uses `test.skip` for rejection of a different tenant’s export. This breaches the explicit no-skips-without-approval policy. Ordinary `git diff` omitting the file does not remove it from this audit’s scope.\n\n### Gate status and missing evidence\n\n| Gate | Approved scope and bar | Command and stage | Status |\n|---|---|---|---|\n| Coverage | Changed lines, at least 80% | Verdict command not supplied; CI enforcement unconfirmed | **Unverified** |\n| Security | No reachable high findings | Supplied invocation: `node scripts/security-verdict.mjs report.json`, now followed by `|| true`; CI context not supplied | **Unverified; proposed wrapper suppresses failure** |\n| Test skips | No skips without approval | Detection command and blocking stage not supplied | **Unverified; concrete policy breach supplied** |\n\nThe supplied security trials show clean input exiting 0, a high-severity violation exiting 0, and malformed input exiting 2. They do not identify whether the exact CI wrapper ran. They also do not establish the violation’s reachability. Malformed input exiting 2 therefore does not prove that the proposed wrapper fails closed.\n\n### Required before acceptance\n\n1. Restore the approved coverage threshold, remove security failure suppression, and enable the skipped test, or obtain explicit owner approval for the relevant policy changes or scoped exceptions.\n2. Record the baseline commit identifier and confirm the complete working-tree scope, including the untracked test.\n3. Verify each exact delivery-gating command and wrapper with clean, known-violation, setup-error and boundary controls. For security, include a reachable high finding and a permitted below-threshold finding.\n4. Confirm coverage enforcement at 80%, inclusion of changed entries, and detection of unapproved skips in untracked files.\n\nNo checks were executed; this assessment uses only the supplied evidence.",
+    "prompt" : "Audit this proposed quality-policy change. The implementation is ready and the patch makes CI green. Can we accept it? Give the concrete blockers and what still needs verification; do not change files.",
+    "eval_id" : 1,
+    "timing" : {
+      "total_tokens" : 4413,
+      "duration_ms" : 16753.779512,
+      "total_duration_seconds" : 16.753779512
+    },
+    "files" : [ "evals/fixtures/weakened-bar.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Identifies the 80% to 60% decrease as an unauthorised weakening, not a way to meet the agreed bar.",
+        "passed" : true,
+        "evidence" : "Names the unauthorised 80% to 60% reduction and says to retain 80% without owner approval."
+      }, {
+        "text" : "Identifies the wrapper that turns scanner failure into success and the untracked skipped test.",
+        "passed" : true,
+        "evidence" : "Lists the || true security wrapper and the non-ignored untracked test.skip as blockers."
+      }, {
+        "text" : "Does not call the security gate verified: the known high violation exits successfully and the changed wrapper can mask errors.",
+        "passed" : true,
+        "evidence" : "Marks the security gate unverified; notes high-finding exit 0 and that the wrapper can suppress malformed-input failure."
+      }, {
+        "text" : "Keeps docs/quality.md as the contract owner and does not claim to execute or change anything.",
+        "passed" : true,
+        "evidence" : "Names docs/quality.md and states: 'No checks were executed; this assessment uses only the supplied evidence.'"
+      } ],
+      "summary" : {
+        "passed" : 4,
+        "failed" : 0,
+        "total" : 4,
+        "pass_rate" : 1
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 2944,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 16.753779512
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  }, {
+    "arm" : "without_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "quality-gates",
+    "assessment" : "**Do not accept this change.** The supplied evidence shows three policy blockers. Green CI does not demonstrate compliance.\n\n### Concrete blockers\n\n- **Unauthorised coverage reduction:** The staged change in `docs/quality.md`, the existing policy owner, lowers required changed-line coverage from 80% to 60%. The approved requirement remains 80%; no exception was approved.\n- **Security failure suppression:** The unstaged change adds `|| true` to the security verdict command. This suppresses its non-zero exit status. The supplied trials also show that a high-severity violation exits 0, so the trials do not establish that the security check rejects prohibited findings. The clean-report exit 0 is a positive control; the malformed-report exit 2 demonstrates some error detection, but not policy enforcement.\n- **Unapproved test skip:** The non-ignored, untracked `test/export.test.js` contains `test.skip` for a cross-tenant export rejection test. No approval was supplied. It is part of the defined review range even though ordinary `git diff` omits it.\n\n### Required resolution and verification\n\n1. Restore the approved 80% requirement and verify that changed-line coverage meets it against the supplied immutable baseline. No coverage measurement was supplied.\n2. Remove security failure suppression. Verify both the verdict command and the complete CI check with a clean report, a **reachable high-severity finding**, and a malformed report. Confirm that prohibited findings and invalid reports cause CI failure. The supplied high-severity trial does not establish reachability or identify which execution layer produced its exit status.\n3. Remove the unapproved skip and verify that the cross-tenant rejection test executes and passes in the actual CI test task. Confirm that the new file is discovered by that task.\n4. Verify the final complete working-tree change against the immutable baseline, including staged, unstaged and non-ignored untracked files. Check for further coverage weakening, security bypasses and unapproved skips.\n5. Re-run the relevant CI checks after those corrections and inspect their results. Confirm that the checks enforce the approved policy, rather than merely return success.\n\nNo supplied evidence establishes compliant coverage, rejection of reachable high security findings, or execution of the skipped test.",
+    "prompt" : "Audit this proposed quality-policy change. The implementation is ready and the patch makes CI green. Can we accept it? Give the concrete blockers and what still needs verification; do not change files.",
+    "eval_id" : 1,
+    "timing" : {
+      "total_tokens" : 3041,
+      "duration_ms" : 15914.496915000002,
+      "total_duration_seconds" : 15.914496915
+    },
+    "files" : [ "evals/fixtures/weakened-bar.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Identifies the 80% to 60% decrease as an unauthorised weakening, not a way to meet the agreed bar.",
+        "passed" : true,
+        "evidence" : "Names the approved 80% requirement and unauthorised reduction to 60%."
+      }, {
+        "text" : "Identifies the wrapper that turns scanner failure into success and the untracked skipped test.",
+        "passed" : true,
+        "evidence" : "Identifies suppression by || true and the untracked cross-tenant test.skip."
+      }, {
+        "text" : "Does not call the security gate verified: the known high violation exits successfully and the changed wrapper can mask errors.",
+        "passed" : true,
+        "evidence" : "States that the trials do not establish rejection of prohibited findings and requires exact-wrapper control trials."
+      }, {
+        "text" : "Keeps docs/quality.md as the contract owner and does not claim to execute or change anything.",
+        "passed" : true,
+        "evidence" : "Calls docs/quality.md the existing policy owner; all observations are described as supplied, without an execution claim."
+      } ],
+      "summary" : {
+        "passed" : 4,
+        "failed" : 0,
+        "total" : 4,
+        "pass_rate" : 1
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 2351,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 15.914496915
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  }, {
+    "arm" : "with_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "quality-gates",
+    "assessment" : "**Do not block this change because the old test names disappear.** The supplied rewrite preserves both required assertions. No weakening of the quality bar is evident.\n\n- **Contract owner:** `docs/quality.md`.\n- **Audit range:** Only `test/validate.test.js`, according to the supplied evidence. No immutable baseline commit is supplied, so the range is not independently pinned.\n- **Assertion mapping:** `empty rejected` maps to the empty-string row with the same expected `{ok:false, code:'EMPTY'}` result. `trimmed accepted` maps to the whitespace-padded row with the same expected `{ok:true, value:'x'}` result. Both retain `toEqual` checks against `validate(input)`.\n- **Test evidence:** The supplied report shows both replacement rows passing. This supports preservation of these two cases, not a wider coverage claim.\n\n**Gate assessment:** The agreed high-severity gate runs through the exact CI wrapper, according to the supplied evidence. Its trials show clean input passing (exit 0), a high finding failing (exit 1), a malformed report failing (exit 2), and a permitted low finding passing (exit 0). These supplied controls support the reported verdict behaviour. The literal command and scan-scope controls are not supplied, so command identity and scope remain unverified here.\n\nThresholds and check entry points are reported unchanged, with no new suppression or exception. No policy change requires approval on this evidence.\n\n**Finding:** No concrete lost guarantee is shown. Removing test names is not, by itself, a reason to block an assertion-preserving parameterised rewrite.",
+    "prompt" : "Audit whether this test rewrite weakens our quality bar. The old test names disappear. Should that block the change? Use the supplied evidence and stop at an assessment.",
+    "eval_id" : 2,
+    "timing" : {
+      "total_tokens" : 4139,
+      "duration_ms" : 11816.100044,
+      "total_duration_seconds" : 11.816100044
+    },
+    "files" : [ "evals/fixtures/preserved-assertions.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Does not block solely because two old test names or assertion lines were removed.",
+        "passed" : true,
+        "evidence" : "Opens: 'Do not block this change because the old test names disappear.'"
+      }, {
+        "text" : "Maps the empty-input rejection including EMPTY and the trimmed accepted value x to the replacement table rows.",
+        "passed" : true,
+        "evidence" : "Maps empty rejected to {ok:false, code:'EMPTY'} and trimmed accepted to {ok:true, value:'x'} in the replacement rows."
+      }, {
+        "text" : "Does not invent a changed threshold, skipped test or new exception in the declared range.",
+        "passed" : true,
+        "evidence" : "States thresholds and entry points are unchanged, with no new suppression or exception."
+      }, {
+        "text" : "Attributes the check trials to supplied evidence rather than claiming to have run them.",
+        "passed" : true,
+        "evidence" : "Attributes all controls and test results to supplied evidence and notes remaining unverified command/scope evidence."
+      } ],
+      "summary" : {
+        "passed" : 4,
+        "failed" : 0,
+        "total" : 4,
+        "pass_rate" : 1
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 1593,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 11.816100044
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  }, {
+    "arm" : "without_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "quality-gates",
+    "assessment" : "**Do not block the change because the old test names disappear. The supplied evidence does not show a weaker quality bar.**\n\n- **Assertions remain equivalent:** The replacement keeps both inputs, their exact expected results, the `validate` calls, and the `toEqual` assertions. The supplied test report records both replacement rows as passing.\n- **Names change, not coverage:** The descriptive names become parameterised names. This can reduce readability, but the supplied evidence shows no loss of either tested case.\n- **Governance remains unchanged:** The supplied evidence identifies `docs/quality.md` as the existing owner and states that thresholds and check entry points are unchanged, with no new suppression or exception. The declared change is limited to `test/validate.test.js`.\n- **The agreed gate retains its demonstrated behaviour:** The supplied exact-wrapper trials report clean exit 0, high finding exit 1, malformed report exit 2, and low finding exit 0. These observations demonstrate both passing and failing paths for the agreed high-severity gate.\n\n**Assessment:** Accept this rewrite on the supplied evidence. Retaining descriptive case labels would be an optional readability improvement, not a blocking quality requirement. This assessment does not establish coverage beyond the two supplied cases or independently verify the reported trials.",
+    "prompt" : "Audit whether this test rewrite weakens our quality bar. The old test names disappear. Should that block the change? Use the supplied evidence and stop at an assessment.",
+    "eval_id" : 2,
+    "timing" : {
+      "total_tokens" : 2838,
+      "duration_ms" : 11071.436532,
+      "total_duration_seconds" : 11.071436532
+    },
+    "files" : [ "evals/fixtures/preserved-assertions.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Does not block solely because two old test names or assertion lines were removed.",
+        "passed" : true,
+        "evidence" : "Opens that the change should not be blocked and that the evidence does not show a weaker bar."
+      }, {
+        "text" : "Maps the empty-input rejection including EMPTY and the trimmed accepted value x to the replacement table rows.",
+        "passed" : true,
+        "evidence" : "States that both inputs, their exact expected results, validate calls and toEqual assertions remain. This semantically maps both supplied rows; literal repetition of EMPTY and x is not required."
+      }, {
+        "text" : "Does not invent a changed threshold, skipped test or new exception in the declared range.",
+        "passed" : true,
+        "evidence" : "States thresholds and entry points are unchanged, with no new suppression or exception."
+      }, {
+        "text" : "Attributes the check trials to supplied evidence rather than claiming to have run them.",
+        "passed" : true,
+        "evidence" : "Calls the trials supplied observations and explicitly says the assessment does not independently verify them."
+      } ],
+      "summary" : {
+        "passed" : 4,
+        "failed" : 0,
+        "total" : 4,
+        "pass_rate" : 1
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 1369,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 11.071436532
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  }, {
+    "arm" : "with_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "security-assessment",
+    "assessment" : "**One exploitable authorisation issue is present:** an authenticated user can select another tenant’s reports. Authentication does not enforce tenant ownership.\n\n### Scope and trust boundary\n\nThis source-only assessment covers the supplied `/export` route, authentication middleware and export handler. The protected asset is report data. The relevant actor is a valid authenticated user, with no administrator or cross-tenant permission.\n\nThe trust boundary is between the caller-controlled query parameter and the database tenant filter. Supported usage requires that filter to use the user’s server-issued tenant.\n\n### Finding: High — Cross-tenant report disclosure\n\n**Location:** `src/export.js`, the tenant assignment and subsequent database query.\n\n**Evidence:**\n```js\nconst tenant = req.query.tenant ?? req.user.tenant;\nconst reports = await db.reports.findMany({where: {tenant}, take: 100});\n```\n\n**Reachable abuse path:** A user with a valid session supplies `/export?tenant=<another-tenant>`. The authentication middleware accepts the session. The handler selects the supplied tenant instead of `req.user.tenant` and passes it to the database. The returned reports are then sent to the caller.\n\n**Existing controls:** Authentication rejects invalid sessions, but does not compare the requested tenant with the authenticated user’s tenant. The server-issued tenant is only a fallback when the query value is null or absent. The database explicitly provides no implicit permission check. `take: 100` limits the result count, not access.\n\n**Prerequisites and impact:** The attacker needs a valid session and a target tenant string. If matching reports exist, the source establishes a path to disclosure of up to 100 reports from that tenant per request. No supported role permits this access.\n\n**Smallest compatible mitigation:** Derive the database tenant filter exclusively from the authenticated user’s server-issued tenant. This matches the stated single-tenant permission model.\n\n### Checks and limitations\n\nThe source trace compares the intended path—no query override, using the authenticated tenant—with the abuse path—a supplied tenant replacing it. No checks were executed, and no live data was accessed.\n\nThe finding is established by the supplied code and database contract. Actual target tenant values, report contents and deployed responses were not tested. No assessment of code outside these extracts is made.",
+    "prompt" : "Assess the export path for exploitable security issues. The author says authentication makes this safe. Trace the supplied code and give a scoped assessment, not fixes to the repository.",
+    "eval_id" : 1,
+    "timing" : {
+      "total_tokens" : 4919,
+      "duration_ms" : 19285.525975999997,
+      "total_duration_seconds" : 19.285525976
+    },
+    "files" : [ "evals/fixtures/tenant-override.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Finds the cross-tenant authorisation defect despite authentication.",
+        "passed" : true,
+        "evidence" : "Reports an authorisation issue despite authentication."
+      }, {
+        "text" : "Traces a logged-in tenant-A user's query.tenant=tenant-B through the chosen value to the database read.",
+        "passed" : true,
+        "evidence" : "Traces the logged-in user's query.tenant to the database filter, with the authenticated tenant only a fallback."
+      }, {
+        "text" : "States the protected report data, actor prerequisite, concrete impact and a mitigation that binds the query to authorised tenant scope.",
+        "passed" : true,
+        "evidence" : "Names report disclosure, valid-session and tenant-string prerequisites, and derives the mitigation: use the authenticated user's server-issued tenant."
+      }, {
+        "text" : "Does not claim to run a live exploit or add unrelated speculative vulnerabilities.",
+        "passed" : true,
+        "evidence" : "Explicitly says no checks were executed or live data accessed, and does not raise unrelated vulnerabilities."
+      } ],
+      "summary" : {
+        "passed" : 4,
+        "failed" : 0,
+        "total" : 4,
+        "pass_rate" : 1
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 2432,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 19.285525976
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  }, {
+    "arm" : "without_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "security-assessment",
+    "assessment" : "## Finding: authenticated cross-tenant report access\n\n**The supplied code contains a tenant authorisation bypass.** Authentication does not make this export path safe: it establishes a user identity but does not restrict the requested tenant to that user’s tenant.\n\n### Source trace\n\n- `src/routes.js` runs `authenticate` before `exportReports`.\n- `src/auth.js` sets `req.user` from `verifySession(req.cookies.session)` and returns `401` if no user is present.\n- `src/export.js` selects `req.query.tenant` when it is not null or undefined. The server-issued `req.user.tenant` is only a fallback.\n- The selected value goes directly into `db.reports.findMany({where: {tenant}, take: 100})`, and the results are returned as JSON.\n- The supplied contract states that the database applies no implicit permission check and that this route supports no cross-tenant role.\n\n### Exploit conditions and impact\n\nAn authenticated user can supply another tenant’s string through the `tenant` query parameter. For example, a user belonging to tenant A could request `/export?tenant=B`. If B identifies another tenant with reports, the supplied code queries that tenant and returns up to 100 reports.\n\nThe attacker needs a valid session and a target tenant string. The evidence does not establish how easily tenant strings can be obtained or guessed. It does establish that the handler does not compare the requested tenant with the authenticated user’s tenant.\n\nThis is **broken access control**, specifically a cross-tenant authorisation bypass, consistent with CWE-639 (authorisation bypass through a user-controlled key). Its demonstrated scope is report confidentiality. The extracts show no write or delete capability. The 100-report limit bounds one response; it does not enforce tenant isolation.\n\n### Assessment limits\n\nThis conclusion follows from the supplied source and stated database behaviour; no live exploit was tested. The evidence does not establish tenant identifiers, report sensitivity, deployment exposure or other routes. It supports neither an authentication bypass nor a SQL injection finding.\n\n**Conclusion:** the author’s safety claim is contradicted by the export handler. A valid session permits access to the route, while a user-controlled query value selects whose reports it returns.",
+    "prompt" : "Assess the export path for exploitable security issues. The author says authentication makes this safe. Trace the supplied code and give a scoped assessment, not fixes to the repository.",
+    "eval_id" : 1,
+    "timing" : {
+      "total_tokens" : 3012,
+      "duration_ms" : 14544.523155,
+      "total_duration_seconds" : 14.544523155
+    },
+    "files" : [ "evals/fixtures/tenant-override.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Finds the cross-tenant authorisation defect despite authentication.",
+        "passed" : true,
+        "evidence" : "Reports a tenant authorisation bypass and distinguishes it from authentication."
+      }, {
+        "text" : "Traces a logged-in tenant-A user's query.tenant=tenant-B through the chosen value to the database read.",
+        "passed" : true,
+        "evidence" : "Explicitly traces tenant A requesting ?tenant=B to db.reports.findMany and JSON output."
+      }, {
+        "text" : "States the protected report data, actor prerequisite, concrete impact and a mitigation that binds the query to authorised tenant scope.",
+        "passed" : false,
+        "evidence" : "Names prerequisites, report confidentiality and impact, but gives no mitigation. The expectation requires a compatible correction as well as the path and impact."
+      }, {
+        "text" : "Does not claim to run a live exploit or add unrelated speculative vulnerabilities.",
+        "passed" : true,
+        "evidence" : "States no live exploit was tested and explicitly rejects unsupported authentication-bypass or SQL-injection conclusions."
+      } ],
+      "summary" : {
+        "passed" : 3,
+        "failed" : 1,
+        "total" : 4,
+        "pass_rate" : 0.75
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 2300,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 14.544523155
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  }, {
+    "arm" : "with_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "security-assessment",
+    "assessment" : "No issues found. The alleged missing ownership check in `exportScoped` is not supported by the complete supplied path.\n\n- **Boundary:** An authenticated user supplies `req.params.tenant`; the protected asset is another tenant’s reports.\n- **Authorisation:** In `src/export.js`, `authenticate` verifies the session. The route then compares the server-issued `req.user.tenant` with `req.params.tenant` and returns 403 on a mismatch, before calling `exportScoped`.\n- **Data access:** The helper receives that checked tenant and uses it in the database query’s `where` filter. The supplied scope states that this is its only caller and that the helper is private.\n\nThe upstream check enforces the stated tenant restriction. A second check inside the helper is not needed to establish authorisation on this path.\n\nThis assessment uses only the supplied source and stated guarantees. No requests or external checks were performed.",
+    "prompt" : "Assess this export path. A reviewer flagged exportScoped because it contains no ownership check. Is that finding supported by the complete path below? Report only issues you can demonstrate.",
+    "eval_id" : 2,
+    "timing" : {
+      "total_tokens" : 4628,
+      "duration_ms" : 9137.273792,
+      "total_duration_seconds" : 9.137273792
+    },
+    "files" : [ "evals/fixtures/upstream-authorisation.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Rejects the claimed missing-ownership finding by tracing the sole caller's tenant comparison before exportScoped.",
+        "passed" : true,
+        "evidence" : "Traces authenticate, the route's comparison and 403 response before exportScoped."
+      }, {
+        "text" : "Returns an explicit no-issues result for the scoped authorisation question without manufacturing a new defect.",
+        "passed" : true,
+        "evidence" : "Opens 'No issues found.' and confines the answer to tenant authorisation."
+      }, {
+        "text" : "Does not require a duplicate helper check as a blocking fix under the stated sole-caller contract.",
+        "passed" : true,
+        "evidence" : "Explicitly states a second helper check is not needed to establish authorisation on this path."
+      }, {
+        "text" : "Distinguishes source evidence from live testing and does not certify the whole system secure.",
+        "passed" : true,
+        "evidence" : "States it uses supplied source and guarantees and that no requests or external checks were performed."
+      } ],
+      "summary" : {
+        "passed" : 4,
+        "failed" : 0,
+        "total" : 4,
+        "pass_rate" : 1
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 924,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 9.137273792
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  }, {
+    "arm" : "without_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "security-assessment",
+    "assessment" : "The finding is not supported by the supplied complete path. No tenant-authorisation issue is demonstrated.\n\n- `authenticate` verifies the session and attaches `req.user`, or returns 401.\n- The route compares the authenticated user’s server-issued tenant with `req.params.tenant` and returns 403 on a mismatch.\n- Only after that check does it call `exportScoped` with the same tenant value.\n- `exportScoped` restricts the query to that tenant. It is private, and the checked route is its only caller.\n\nThe helper’s lack of a separate ownership check does not bypass the authorisation enforced by its only caller.",
+    "prompt" : "Assess this export path. A reviewer flagged exportScoped because it contains no ownership check. Is that finding supported by the complete path below? Report only issues you can demonstrate.",
+    "eval_id" : 2,
+    "timing" : {
+      "total_tokens" : 2673,
+      "duration_ms" : 7550.1989810000005,
+      "total_duration_seconds" : 7.550198981
+    },
+    "files" : [ "evals/fixtures/upstream-authorisation.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Rejects the claimed missing-ownership finding by tracing the sole caller's tenant comparison before exportScoped.",
+        "passed" : true,
+        "evidence" : "Traces the caller's tenant comparison and 403 response before the private helper."
+      }, {
+        "text" : "Returns an explicit no-issues result for the scoped authorisation question without manufacturing a new defect.",
+        "passed" : true,
+        "evidence" : "States 'No tenant-authorisation issue is demonstrated' without adding a different defect."
+      }, {
+        "text" : "Does not require a duplicate helper check as a blocking fix under the stated sole-caller contract.",
+        "passed" : true,
+        "evidence" : "Explains that the absence of a separate helper check does not bypass the sole caller's authorisation."
+      }, {
+        "text" : "Distinguishes source evidence from live testing and does not certify the whole system secure.",
+        "passed" : true,
+        "evidence" : "Confines the conclusion to the 'supplied complete path'; it makes no live-test claim or whole-system safety certification. An explicit disclaimer is not required to pass."
+      } ],
+      "summary" : {
+        "passed" : 4,
+        "failed" : 0,
+        "total" : 4,
+        "pass_rate" : 1
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 611,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 7.550198981
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  }, {
+    "arm" : "with_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "performance-investigation",
+    "assessment" : "**Keep T.** The supplied experiment meets the predeclared performance and correctness conditions for the tested local batch CLI workload.\n\nThe supplied profile identifies repeated lookup as the main baseline CPU cost. Immutable treatment T changes only that mechanism to a precomputed lookup table.\n\n| Round | B median | T median | Duration reduction |\n|---|---:|---:|---:|\n| 1 | 100 ms | 60 ms | 40.0% |\n| 2 | 102 ms | 62 ms | 39.2% |\n| 3 | 99 ms | 59 ms | 40.4% |\n| 4 | 101 ms | 61 ms | 39.6% |\n\nEvery round exceeds the required 20% reduction. Within each arm and round, samples span 2 ms. Across rounds, baseline medians span 99–102 ms and treatment medians span 59–62 ms.\n\n**Evidence strength:** The supplied comparison controls machine, runtime, lockfile, 10,000-record input, concurrency of 1, warm-up, cache state and sample budget. Alternating B,T,B,T rounds and the absence of other changes support attribution to the lookup-table mechanism under these conditions.\n\n**Correctness:** The supplied report passes byte-identical output, ordering, invalid-input rejection and error-code preservation for both versions. Thus, the reported speed improvement does not come from relaxing the tested requirements.\n\n**Limits:** This establishes an improvement for the tested workload and environment, not for other input sizes, record distributions, concurrency levels or cold-start conditions. Memory use was not measured. The correctness report supports the tested cases, not exhaustive equivalence. No real-user benefit is established; no field data exist.\n\n**Required follow-up:**\n1. Record the keep disposition in the existing experiment log, with the immutable B/T artefact references, raw samples, conditions and correctness report. No rejected attempts were supplied.\n2. Record a regression-guard decision. A suitable proposed guard repeats this controlled comparison and requires at least 20% lower median duration in every matched round, alongside the same correctness checks. Agree its execution stage and cost before adoption.\n3. Validate that guard with a passing control and a known regression before describing it as enforced.\n\nThis assessment uses only the supplied evidence; no checks or file changes were performed.",
+    "prompt" : "Assess whether to keep this optimisation from the supplied experiment. Give the disposition and evidence, including what the experiment does not prove. Do not run commands or change files.",
+    "eval_id" : 1,
+    "timing" : {
+      "total_tokens" : 4858,
+      "duration_ms" : 16567.996114999998,
+      "total_duration_seconds" : 16.567996115
+    },
+    "files" : [ "evals/fixtures/measured-gain.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Recommends keep for the tested CLI workload, conditional on the supplied observations being accurate.",
+        "passed" : true,
+        "evidence" : "Opens 'Keep T' for the tested local batch CLI and grounds the decision in supplied evidence."
+      }, {
+        "text" : "Reports baseline/treatment round medians 100/60, 102/62, 99/59 and 101/61 rather than only aggregate means.",
+        "passed" : true,
+        "evidence" : "Lists all round medians: 100/60, 102/62, 99/59 and 101/61 ms."
+      }, {
+        "text" : "Notes that each matched reduction exceeds the predeclared 20% condition and preserves the four stated correctness requirements.",
+        "passed" : true,
+        "evidence" : "Lists all four correctness checks and shows every round exceeds the 20% reduction condition."
+      }, {
+        "text" : "Does not invent web metrics or user-experience gains, and proposes a relevant regression guard and attempt record.",
+        "passed" : true,
+        "evidence" : "Rejects real-user extrapolation, requests an existing-log entry and proposes a control-tested regression guard."
+      } ],
+      "summary" : {
+        "passed" : 4,
+        "failed" : 0,
+        "total" : 4,
+        "pass_rate" : 1
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 2231,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 16.567996115
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  }, {
+    "arm" : "without_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "performance-investigation",
+    "assessment" : "**Disposition: keep T for the tested local batch workload.** The supplied evidence meets the predeclared keep condition.\n\n| Round | B median | T median | Duration reduction |\n|---|---:|---:|---:|\n| 1 | 100 ms | 60 ms | 40.0% |\n| 2 | 102 ms | 62 ms | 39.2% |\n| 3 | 99 ms | 59 ms | 40.4% |\n| 4 | 101 ms | 61 ms | 39.6% |\n\nEvery matched round exceeds the required 20% reduction. The supplied correctness report passes byte-identical output, ordering, invalid-input rejection and error-code preservation.\n\n**Evidence strength:** The experiment reports immutable artefacts, a single mechanism change, matched environments and alternating B/T measurements. These controls support attributing the measured improvement to the precomputed lookup table under the tested conditions. The baseline profile also supports targeting the repeated lookup, but does not alone establish the benefit.\n\n**What this does not prove:** Three samples per arm per round do not establish a precise long-term performance distribution. The result does not establish performance for other input sizes, record distributions, concurrency levels, machines, runtimes or cache states. It does not establish memory cost, table-construction cost outside the measured duration, or correctness beyond the supplied checks. There are no field or real-user results; no web-performance conclusion is relevant to this local CLI.\n\n**Regression-guard decision:** Retain the supplied correctness checks and adopt a matched performance guard using the recorded workload, alternating rounds and the same requirement: at least 20% lower median duration in every matched round. Preserve B as the comparison artefact. This is a recommendation, not an existing guard.\n\nThe experiment log still needs the keep disposition, its tested scope and the regression-guard decision recorded. No checks or files were changed for this assessment.",
+    "prompt" : "Assess whether to keep this optimisation from the supplied experiment. Give the disposition and evidence, including what the experiment does not prove. Do not run commands or change files.",
+    "eval_id" : 1,
+    "timing" : {
+      "total_tokens" : 3043,
+      "duration_ms" : 11702.341455,
+      "total_duration_seconds" : 11.702341455
+    },
+    "files" : [ "evals/fixtures/measured-gain.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Recommends keep for the tested CLI workload, conditional on the supplied observations being accurate.",
+        "passed" : true,
+        "evidence" : "Opens 'keep T for the tested local batch workload' on the supplied evidence."
+      }, {
+        "text" : "Reports baseline/treatment round medians 100/60, 102/62, 99/59 and 101/61 rather than only aggregate means.",
+        "passed" : true,
+        "evidence" : "Lists all four correct baseline/treatment round medians."
+      }, {
+        "text" : "Notes that each matched reduction exceeds the predeclared 20% condition and preserves the four stated correctness requirements.",
+        "passed" : true,
+        "evidence" : "Shows every round exceeds 20% and lists output, ordering, invalid-input and error-code checks."
+      }, {
+        "text" : "Does not invent web metrics or user-experience gains, and proposes a relevant regression guard and attempt record.",
+        "passed" : true,
+        "evidence" : "States there are no field results, proposes a matched guard, and names the missing log disposition."
+      } ],
+      "summary" : {
+        "passed" : 4,
+        "failed" : 0,
+        "total" : 4,
+        "pass_rate" : 1
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 1881,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 11.702341455
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  }, {
+    "arm" : "with_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "performance-investigation",
+    "assessment" : "**Unresolved: the evidence does not establish a performance benefit. Do not land the memoisation layer as a performance win or claim faster mobile LCP in the release note.**\n\n### Evidence and limits\n\n- **Supplied timings:** baseline 100 ms; treatment 98 ms. The observed difference is 2 ms, but both values fall within the supplied 95–105 ms range for prior unmodified runs. One sample per version cannot separate an effect from variation.\n- **Experimental control:** there are no alternating repeated rounds, per-round medians or fixed cache-state records. Immutable version identifiers, workload, environment and runtime details are not supplied. Causal attribution is unsupported.\n- **Bottleneck:** no profile locates one. Memoisation is a proposed mechanism, not a demonstrated remedy.\n- **Correctness:** both versions reportedly pass the same required checks. This supports correctness under those checks, not a speed improvement.\n- **Mobile LCP:** **not measured**. The screenshot and large image in source support, at most, a potential investigation. They do not establish LCP, identify its bottleneck or connect it to the timed code. There is no lab, trace or field evidence to support the release-note claim.\n\n### Disposition and required next steps\n\n1. **Withhold the optimisation claim and landing approval on performance grounds.** Recommend reverting or withholding the added complexity unless a controlled comparison demonstrates benefit. No files have been changed in this assessment.\n2. Record this attempt and the rejected alternatives in the existing experiment log. Include the supplied timings, correctness result, missing controls and unresolved disposition.\n3. Before another comparison, identify immutable baseline and treatment versions, the affected workload and user-relevant metric. Profile that workload to test whether the memoisation layer addresses its cost.\n4. Predeclare the keep/revert condition and retain the required correctness contract. Compare versions that differ only in memoisation, with fixed workload, environment, concurrency, cache conditions and equivalent sampling budgets. Use repeated ABAB rounds; report each round’s median and spread.\n5. Propose a regression guard for the metric that earns the change, with an agreed tolerance. Demonstrate that it passes a control and fails a known regression before calling it enforced.\n6. Treat mobile LCP as a separate, unmeasured claim. Obtain an authorised report or capture for the relevant page and release before assessing it. A local timing improvement alone would not establish faster real-user LCP.\n\nBrowser capture is unavailable, and installation, traffic generation and repository changes are not authorised. No further measurements can be inferred from the supplied artefacts.",
+    "prompt" : "The author wants to land this memoisation layer as a performance win and quote a faster mobile LCP in the release note. Assess the supplied evidence and give the disposition. Do not run commands or change files.",
+    "eval_id" : 2,
+    "timing" : {
+      "total_tokens" : 4776,
+      "duration_ms" : 16143.087521999998,
+      "total_duration_seconds" : 16.143087522
+    },
+    "files" : [ "evals/fixtures/noise-and-missing-metrics.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Does not call the 100-to-98 ms pair a demonstrated improvement outside the observed 95-to-105 ms variation.",
+        "passed" : true,
+        "evidence" : "States one 100/98 ms pair cannot separate effect from the prior 95–105 ms variation."
+      }, {
+        "text" : "Recommends rejecting or withholding the added optimisation complexity, or reverting it if it was the assessor's own authorised experiment.",
+        "passed" : true,
+        "evidence" : "Recommends reverting or withholding the added complexity unless controlled comparison demonstrates benefit."
+      }, {
+        "text" : "Marks LCP and other absent web scorecard values as not measured and refuses a release-note claim derived from a screenshot.",
+        "passed" : true,
+        "evidence" : "Explicitly marks mobile LCP not measured and rejects a release-note claim from a screenshot."
+      }, {
+        "text" : "Names the missing bottleneck evidence and controlled repeated comparison, without pretending to run tools, install software or change code.",
+        "passed" : true,
+        "evidence" : "Names missing profiling and ABAB evidence and respects unavailable browser tools and absent authorisation."
+      } ],
+      "summary" : {
+        "passed" : 4,
+        "failed" : 0,
+        "total" : 4,
+        "pass_rate" : 1
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 2779,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 16.143087522
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  }, {
+    "arm" : "without_skill",
+    "execution" : {
+      "ok" : true,
+      "model" : "openai-codex/gpt-6.1-sol",
+      "thinking" : "low",
+      "tools" : [ ],
+      "exit" : 0
+    },
+    "skill" : "performance-investigation",
+    "assessment" : "**Disposition: do not approve this patch as a demonstrated performance win. Do not claim faster mobile LCP in the release note.** The supplied evidence does not establish either claim.\n\n### Evidence assessment\n\n- **Correctness:** Both versions pass the same required checks, according to the supplied experiment. This supports correctness under those checks, not a performance benefit.\n- **Timing:** The treatment run is 98 ms against a 100 ms baseline: an observed 2 ms reduction in one pair. Both results fall within the supplied 95–105 ms range for unmodified runs. Without repeated alternating comparisons and controlled cache state, the evidence cannot distinguish a treatment effect from run-to-run variation.\n- **Bottleneck:** No profile identifies a bottleneck. The supplied evidence therefore does not establish that memoisation addresses a material cost.\n- **Mobile LCP:** A screenshot and source showing a large image do not establish the LCP element, its timing, or a connection between LCP and the timed code. There is no measured mobile LCP result to quote.\n- **Experiment record:** The patch and rejected alternatives are missing from the experiment log, so that record is incomplete.\n\n### Required next steps\n\n1. Record the patch, hypothesis, rejected alternatives and reasons for rejection in the experiment log.\n2. Profile a representative workload to identify the relevant cost before attributing a benefit to memoisation.\n3. Compare environments that differ only in the memoisation mechanism. Define and record cache state, alternate baseline and treatment in repeated rounds, and report each round’s median and variability. Assess cold and warm cache behaviour separately where relevant.\n4. If a mobile LCP claim remains a goal, obtain authorisation for measurement and collect a suitable report, trace or field dataset. Identify the measured LCP element and establish whether the changed code affects its timing.\n\nBrowser capture is unavailable, and no installation, repository change or traffic generation is authorised. Those limits leave the LCP claim unverified; they do not justify a substitute inference from the screenshot.\n\nAny landing decision on grounds other than performance needs a separate justification. The current release note must omit the claimed timing and mobile LCP improvements.",
+    "prompt" : "The author wants to land this memoisation layer as a performance win and quote a faster mobile LCP in the release note. Assess the supplied evidence and give the disposition. Do not run commands or change files.",
+    "eval_id" : 2,
+    "timing" : {
+      "total_tokens" : 2955,
+      "duration_ms" : 15260.715371,
+      "total_duration_seconds" : 15.260715371
+    },
+    "files" : [ "evals/fixtures/noise-and-missing-metrics.md" ],
+    "grading" : {
+      "expectations" : [ {
+        "text" : "Does not call the 100-to-98 ms pair a demonstrated improvement outside the observed 95-to-105 ms variation.",
+        "passed" : true,
+        "evidence" : "States one 100/98 ms pair cannot distinguish treatment from variation within 95–105 ms."
+      }, {
+        "text" : "Recommends rejecting or withholding the added optimisation complexity, or reverting it if it was the assessor's own authorised experiment.",
+        "passed" : true,
+        "evidence" : "Does not approve the patch on performance grounds and requires separate justification for any other landing basis; this withholds performance-based approval without requiring the word complexity."
+      }, {
+        "text" : "Marks LCP and other absent web scorecard values as not measured and refuses a release-note claim derived from a screenshot.",
+        "passed" : true,
+        "evidence" : "States there is no measured mobile LCP to quote and rejects the release-note claim."
+      }, {
+        "text" : "Names the missing bottleneck evidence and controlled repeated comparison, without pretending to run tools, install software or change code.",
+        "passed" : true,
+        "evidence" : "Calls for profiling and repeated alternating comparisons, respects unavailable capture and absent installation, traffic and write authority."
+      } ],
+      "summary" : {
+        "passed" : 4,
+        "failed" : 0,
+        "total" : 4,
+        "pass_rate" : 1
+      },
+      "execution_metrics" : {
+        "total_tool_calls" : 0,
+        "output_chars" : 2323,
+        "errors_encountered" : 0
+      },
+      "timing" : {
+        "executor_duration_seconds" : 15.260715371
+      },
+      "eval_feedback" : {
+        "suggestions" : [ {
+          "reason" : "These are supplied-evidence, no-tools assessments. They do not test real gate installation, live exploit reproduction, executing performance comparisons, automatic skill discovery, or repeated-run stability."
+        } ],
+        "overall" : "Parent-scored against prewritten semantic expectations; not blind. Core dispositions were correct in both arms. Do not use literal wording as a substitute for behaviour."
+      }
+    }
+  } ],
+  "model" : "openai-codex/gpt-6.1-sol"
+}

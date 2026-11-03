@@ -37,6 +37,32 @@ Independent validation is always a new fresh child, never a continuation of the 
 "$OH" task run reviewer --context fresh --worktree new --task-file .tmp/independent-validation.md --timeout 1200000
 ```
 
+## Independent regression-test authorship
+
+Use this recipe when a complex bug warrants separating the reproduction from the proposed fix. Ordinary fixes stay inline. It uses the existing `worker` persona, not a new test-writing role.
+
+1. Pin the baseline to an immutable commit and establish that the existing relevant checks run. Give a fresh worker the bug report, required behaviour, baseline, test conventions and allowed test files. Withhold the proposed fix and its rationale. Ask for a test-only change, a failure for the reported behaviour, and a safe control that confirms the harness works. Do not authorise a production-code edit.
+2. Capture and inspect the test artefact and checkpoint before closing the author. Confirm the diff is test-only and trace assertions to the bug contract. Independently run those exact tests against the pinned production baseline; an import error, unavailable runner or unrelated baseline failure is not a reproduction. Retain the failing output and the passing control.
+3. Give a different fresh worker the captured tests and a scoped implementation assignment. The worker may implement the fix, but must not weaken the approved assertions. Capture its result and inspect checkout reconciliation; do not assume a publication integrated anything.
+4. Verify the same test passes with the fix and fails without it for the intended reason. Run the relevant existing suite and account for changed test coverage by assertion and behaviour, not by total count. Reject a fix that only bypasses the test setup.
+5. Retain baseline, test and fix identifiers, exact commands, evidence and remaining limitations in the existing task record. Close only owned children after capture. Integration, commits and parent closure retain their existing authority rules.
+
+If the test cannot distinguish the bug from the intended behaviour, return it for correction before assigning a fix. Do not let either child choose a new contract to make the test pass. A fresh author reduces exposure to the proposed implementation; it does not prove that a test is independent or correct.
+
+## Bounded decision review
+
+Use this recipe for a materially uncertain or high-impact decision while correction is still cheap. It is root-owned and opt-in, not routine worker consultation or a review of every branch in the code.
+
+1. Name the decision and why an error matters. Prepare the smallest reviewable artefact, its required contract, and the caller, guard or test evidence needed to assess it. Omit the author's persuasive narrative. If the assignment is to verify a specific proposition, include that proposition; do not make the reviewer guess the question.
+2. Start a fresh read-only `reviewer` for a code or design range, or `base-analyst` for another explicitly scoped assessment. Ask it to look for contract violations and unstated assumptions, and to return an explicit no-issues result if none meets the evidence bar. Do not ask it to manufacture an objection or broaden the range.
+3. Capture the result and check each finding against source before accepting it. Classify it as a contract misunderstanding, an actionable defect, an accepted trade-off or noise. Correct an incomplete contract before another review. A reviewer is evidence, not authority to relax the user's requirements.
+4. Change the artefact only within approved scope. Re-review only when the changed artefact or clarified contract warrants it. Stop when no substantive unresolved issue remains. After at most three cycles, report unresolved issues to the owner rather than looping. Do not interpret the cycle limit as approval to ship a known defect.
+5. Retain the decision, evidence, classification and disposition in the existing record. Close each captured child. Cross-model review is a separate user choice, not a mandatory question each cycle or permission to launch another CLI.
+
+The `advisor` remains a focused consult for a stuck worker; this recipe does not introduce pre-publish reviews. See [../SKILL.md#Executor tier and advisor strategy](../SKILL.md#executor-tier-and-advisor-strategy).
+
+These two recipes adapt [test-driven-development](https://github.com/addyosmani/agent-skills/blob/301b02b12bff98e4688e6984af6556802322bbde/skills/test-driven-development/SKILL.md), [test-engineer](https://github.com/addyosmani/agent-skills/blob/301b02b12bff98e4688e6984af6556802322bbde/agents/test-engineer.md) and [doubt-driven-development](https://github.com/addyosmani/agent-skills/blob/301b02b12bff98e4688e6984af6556802322bbde/skills/doubt-driven-development/SKILL.md) from Addy Osmani's agent-skills at the linked revision, MIT License; see [agent-skills-LICENSE](agent-skills-LICENSE). They retain separate reproduction authorship and bounded, reconciled review, not automatic commits, routine fan-out or mandatory cross-model prompts.
+
 ## Repeated measurements
 
 A measurement is headless by default, so repeated samples do not allocate one pane per sample. Start or run one sample at a time, or use the root's own bounded fan-in policy with `collect --any --wait`; `oh` does not schedule batches. The measurement configuration controls its treatment, tools, hard limit and optional `expectedOutputs`.
