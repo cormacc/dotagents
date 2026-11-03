@@ -1,0 +1,153 @@
+#+TITLE: System prompt optimisation 2026-11-03
+#+DATE: 2026-11-03 Tue
+#+PARENT: [[archive:81b3e419-4e09-4bdf-87fe-069a321f2c91][System prompt optimisation 2026-11-03]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:home/AGENTS.md]]
+#+SPEC: [[proj:AGENTS.md]]
+#+SPEC: [[proj:skills/skill-creator/SKILL.md]]
+#+SPEC: [[proj:skills/self-improvement/SKILL.md]]
+#+SPEC: [[proj:pi/extensions/systemprompt.md]]
+#+SPEC: [[proj:pi/extensions/herdr-orch/README.md]]
+#+SPEC: [[proj:skills/doc-writing/SKILL.md]]
+#+SPEC: [[proj:skills/docx/SKILL.md]]
+#+SPEC: [[proj:skills/ms365/SKILL.md]]
+
+* Intent
+Reduce avoidable always-loaded prompt content while preserving instruction clarity, safety and skill selection. Prefer small, measurable changes appropriate to 500k or 1000k context windows; do not treat prompt reduction as a diagnosis of recent context growth.
+
+* Summary
+*Level:* MVP · *Tests:* smoke · *Docs:* inline
+
+The controlled base prompt is 40,093 characters, down from 42,581: 2,488 characters (5.8%), or 622 estimated tokens. Registered tool definitions are unchanged. The fixed routing smoke passes 9/9 on both description sets; no routing gain, latency gain or explanation of recent context growth is established.
+
+** Scope
+*** In scope
+- Local instruction ownership and duplication: [[file:../../home/AGENTS.md]] and [[file:../../AGENTS.md]], plus extension-injected rules identified during baseline capture.
+- Selected first-party skill descriptions, following [[file:../../skills/skill-creator/SKILL.md]]; identify vendored content through [[file:../../skills/README.org]].
+- Before/after measurements using the existing prompt inspection command documented in [[file:../../pi/extensions/systemprompt.md]] and instruction metrics documented in [[file:../../skills/self-improvement/SKILL.md]].
+- Identify upstream or parent-dotfiles candidates without changing those owners.
+*** Out of scope
+- Lazy tool loading, a new prompt framework or a general rewrite of skills.
+- Removing useful capabilities solely to reduce schema size.
+- Changes to the parent dotfiles repository without separate approval.
+- A full investigation of recent context growth, billing or latency.
+
+** Acceptance
+Approved definition of done.
+*** Core functionality
+- [X] Reproducible before/after captures separate instruction text from tool-definition JSON.
+- [X] The report names changed owners and shows section-level size deltas.
+- [X] Selected duplicate rules have one authoritative owner.
+- [X] File-search guidance has an explicit precedence rule.
+- [X] Edited skill descriptions pass the fixed routing cases.
+*** Edge cases
+- [X] Moved background remains reachable through checked links. No background removed; procedural pointers resolve to existing skills.
+- [X] Smoke cases record outcomes for skill selection, Herdr consent, precise edits, read-only questions and negative-result controls.
+*** Anti-criteria
+- [X] Must not: weaken safety, evidence or permission requirements to meet a size target.
+- [X] Must not: edit vendored instructions.
+- [X] Must not: claim a context-growth, latency or billing improvement from character counts alone.
+
+** Decisions
+- Choose small ownership and wording changes after baseline capture; there is no percentage-reduction quota.
+  Rejected:
+  - Tool-loading redesign: not justified by capacity alone at the user's context sizes.
+  - Do nothing: leaves the observed duplication and competing search instructions unresolved.
+- Keep fixed prompt overhead separate from turn-by-turn history growth; no historical attribution is established.
+- Use OpenAI models for any subagents while the reported Anthropic subscription limits apply; do not fall back to Anthropic during this work.
+- Batch non-blocking questions in this record for final review; ask immediately only when blocked.
+
+** Shipped
+- MODIFIED :: [[file:../../home/AGENTS.md]] defines file-search precedence; [[file:../../AGENTS.md]] links to the canonical prose rules instead of repeating wrapping instructions.
+- MODIFIED :: [[file:../../pi/extensions/herdr-orch/README.md]] documents skill-owned procedures. Tool guidelines retain consent and pane ownership boundaries; API descriptions and parameter schemas are unchanged.
+- MODIFIED :: [[file:../../skills/doc-writing/SKILL.md]], [[file:../../skills/docx/SKILL.md]] and [[file:../../skills/ms365/SKILL.md]] have shorter descriptions. Their bodies and compatibility fields are unchanged.
+
+** Gotchas
+- Base-command captures omit run-specific sections such as MCP namespace guidance; these totals are not provider wire sizes or the original full-session prompt totals.
+- An uncontrolled candidate capture added ~context_checkpoint~, ~context_timeline~, ~context_compact~ and the ~context-management~ skill. The accepted comparison pins the original 30 tools and 32 skill paths (31 descriptions shown; ~ultracave~ is explicit-only).
+- One run per routing query is a smoke check, not evidence of statistical equivalence.
+
+* Plan
+** DONE Establish a reproducible prompt baseline
+CLOSED: [2026-11-03 Tue 16:29]
+:PROPERTIES:
+:CUSTOM_ID: f691137d-ed02-4938-bbd2-eff00937f2eb
+:CREATED: [2026-11-03 Tue 14:17]
+:STARTED: [2026-11-03 Tue 16:21]
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 14:17]
+- State "STARTED" from "TODO" [2026-11-03 Tue 16:21]
+- State "DONE" from "STARTED" [2026-11-03 Tue 16:29]
+:END:
+Outcome: Pi 1.4.0 base-prompt and tool-definition baselines captured; rule ownership and smoke cases recorded.
+
+** DONE Consolidate always-loaded instructions
+CLOSED: [2026-11-03 Tue 16:41]
+:PROPERTIES:
+:CUSTOM_ID: cdca5309-2370-4e9a-b4a8-a990b269278a
+:CREATED: [2026-11-03 Tue 14:17]
+:BLOCKED-BY: task:f691137d-ed02-4938-bbd2-eff00937f2eb
+:STARTED: [2026-11-03 Tue 16:29]
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 14:17]
+- State "STARTED" from "TODO" [2026-11-03 Tue 16:29]
+- State "DONE" from "STARTED" [2026-11-03 Tue 16:41]
+:END:
+Outcome: canonical prose/search routing and skill-owned Herdr procedures verified; permission guardrails retained.
+
+** DONE Shorten selected skill catalogue descriptions
+CLOSED: [2026-11-03 Tue 16:41]
+:PROPERTIES:
+:CUSTOM_ID: ef089279-3187-47bd-8755-6c5683fa90bf
+:CREATED: [2026-11-03 Tue 14:17]
+:BLOCKED-BY: task:f691137d-ed02-4938-bbd2-eff00937f2eb
+:STARTED: [2026-11-03 Tue 16:29]
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 14:17]
+- State "STARTED" from "TODO" [2026-11-03 Tue 16:29]
+- State "DONE" from "STARTED" [2026-11-03 Tue 16:41]
+:END:
+Outcome: three first-party descriptions shortened; bodies unchanged; frozen routing checks pass.
+
+** DONE Validate the combined prompt reduction
+CLOSED: [2026-11-03 Tue 17:03]
+:PROPERTIES:
+:CUSTOM_ID: 1ab1a59c-0ea4-4ad3-880e-8d33e81a6e7f
+:CREATED: [2026-11-03 Tue 14:17]
+:BLOCKED-BY: task:cdca5309-2370-4e9a-b4a8-a990b269278a
+:BLOCKED-BY+: task:ef089279-3187-47bd-8755-6c5683fa90bf
+:STARTED: [2026-11-03 Tue 16:41]
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 14:17]
+- State "STARTED" from "TODO" [2026-11-03 Tue 16:41]
+- State "DONE" from "STARTED" [2026-11-03 Tue 17:03]
+:END:
+Outcome: 2,488 fewer instruction characters; 622 estimated tokens saved. Controlled routing, policy smoke, adapter and frontmatter checks pass.
+
+* Implementation
+** Rule ownership
+- Prose wrapping: [[file:../../home/AGENTS.md]] section 'Prose'; the repository guide links there. No historical background was removed.
+- File search: [[file:../../home/AGENTS.md]] section 'File lookup'; LSP for supported symbols, then path/content tools where suitable, then shell fallback. This resolves the competing general tool hints.
+- Direct Herdr layout, IDs, focus, ordinary-command waits and transcript recovery: [[file:../../skills/herdr/SKILL.md]]. Persona delegation placement: [[file:../../skills/herdr-orch/SKILL.md]]. The extension retains short permission guardrails and a mandatory skill-loading pointer rather than procedural copies.
+- Tool API contracts: [[file:../../pi/extensions/herdr-orch/index.ts]]. The retained descriptions own argument and lifecycle details; executable proxy behaviour is unchanged.
+- Skill descriptions route requests; existing skill bodies own document layout/diagram checks, Word edit/clean/compare procedures and Microsoft 365 read/write guardrails.
+
+** Candidates outside this change
+- Parent-dotfiles ~AGENTS.md~ package history and activation background: unchanged; needs separate repository approval.
+- Generic built-in shell advice and search-extension first-search hints: unchanged upstream; the local precedence rule resolves their overlap.
+- Deferred tool loading remains out of scope.
+
+* Validation
+- [[file:2026-11-03-system-prompt-optimisation/measurements.json]] records section counts, description deltas, pinned revisions, routing cases and policy answers. Pi 1.4.0; ~openai-codex/gpt-6.1-sol~. Tokens use ~ceil(UTF-16 characters / 4)~ per section, summed; no tokenizer or performance claim.
+- Changes by section: tool rules -1,646 characters; skill catalogue -1,004; project instructions +162. The compact registered-tool projection (~name~, ~description~, ~parameters~) remains 28,422 characters in both captures.
+- Frozen-loadout routing at high reasoning: 9/9 baseline, 9/9 candidate, with no evaluator warnings. Herdr consent/skill-selection routing: 2/2 candidate. Tool execution is blocked by the existing description evaluator. An earlier low-reasoning, uncontrolled run scored 8/9 before and 9/9 after; it does not establish an improvement.
+- No-tool policy-response smoke at low reasoning retains the expected answers for Herdr consent, pane ownership, precise edits, read-only questions, negative-result controls and search precedence. These are hypothetical responses, not end-to-end operation tests. The report verifier passes normal input and fails a deliberately unsafe negative-result answer with exit 1.
+- ~pi/extensions/herdr-orch/test.sh~ passes adapter argv checks, installed-Pi RPC help checks and agent-state checks. The new skill-pointer assertions failed before the metadata edit. Both fresh full-configuration RPC captures have empty stderr.
+- Frontmatter validation passes for the three edited skills; a missing-description fixture fails with exit 1. Existing home instruction lines, the parent instruction file, the three skill bodies and tool definitions were checked against their baselines.
+- Relevant unchanged specs: [[file:../../skills/skill-creator/SKILL.md]] governs description checks; [[file:../../skills/self-improvement/SKILL.md]] supplies the unchanged metrics tool; [[file:../../pi/extensions/systemprompt.md]] describes the unchanged prompt command. No vendored instruction was edited.
+- Scratch evidence and capture helpers: ~.tmp/system-prompt-implementation-egUmJp/~. Every model-based check explicitly selected OpenAI.

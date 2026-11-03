@@ -18,9 +18,8 @@ For `ot` CLI development, read `skills/org-tasks/scripts/AGENTS.md`.
 
 # Prose conventions
 ## Line wrapping
-- Do not hard-wrap prose that this repository owns. Use one logical line for each paragraph and each list item.
-- This convention applies to `AGENTS.md`, skill bodies, skill references, and org files that `org-tasks` manages.
-- Do not reflow a vendored skill. `skills/README.org` identifies vendored skills.
+- Apply [home/AGENTS.md#Prose](home/AGENTS.md#prose) to repository-owned prose.
+- Do not reflow vendored skills; [skills/README.org](skills/README.org) identifies them.
 
 ## Unicode
 - Do not use unicode characters for decoration - only when they convey information.

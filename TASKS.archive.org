@@ -4353,3 +4353,28 @@ CLOSED: [2026-11-03 Tue 01:10]
 - State "DONE" from "STARTED" [2026-11-03 Tue 01:10]
 :END:
 #+IMPORT: [[plan:2026-11-03-evaluate-matt-pocock-skills.org]]
+
+** DONE System prompt optimisation 2026-11-03 :agents_md:prompt:system:
+CLOSED: [2026-11-03 Tue 17:05]
+:PROPERTIES:
+:CUSTOM_ID: 81b3e419-4e09-4bdf-87fe-069a321f2c91
+:CREATED: [2026-11-03 Tue 14:16]
+:STARTED: [2026-11-03 Tue 16:21]
+:ARCHIVED: [2026-11-03 Tue 17:05]
+:ARCHIVE_OLPATH: Agent feedback
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 14:16]
+- State "STARTED" from "TODO" [2026-11-03 Tue 16:21]
+- State "DONE" from "STARTED" [2026-11-03 Tue 17:05]
+:END:
+#+IMPORT: [[plan:2026-11-03-system-prompt-optimisation.org]]
+Reduce avoidable always-loaded prompt content without weakening safety rules or skill routing. Prioritise clarity and low-cost changes for typical 500k or 1000k context windows; distinguish fixed prompt overhead from conversation growth.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: git@github.com:cormacc/dotagents.git @ main
+- timestamp: [2026-11-03 Tue 14:16]
+- sender: human
+
+Evidence and the proposed scope are in the linked draft. The user reports faster context growth; its cause is not established. Use OpenAI models if subagents are needed while Anthropic subscription limits apply.

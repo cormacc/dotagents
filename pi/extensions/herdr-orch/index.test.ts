@@ -8,7 +8,7 @@
 import register from "./index.ts";
 import { composeHelp, parseSection, rosterArgs } from "./help.ts";
 
-type Tool = { name: string; execute: (id: string, params: any, signal?: AbortSignal) => Promise<unknown> };
+type Tool = { name: string; description: string; promptGuidelines?: string[]; execute: (id: string, params: any, signal?: AbortSignal) => Promise<unknown> };
 
 let failures = 0;
 function ok(condition: unknown, message: string): void {
@@ -53,6 +53,14 @@ register({
     return { stdout: JSON.stringify({ ok: true, schema: "herdr-orch/v1", result: { echoed: args } }), stderr: "", code: 0, killed: false };
   },
 } as any);
+
+const layoutGuidelines = tools.get("herdr_layout")!.promptGuidelines!.join("\n");
+const paneGuidelines = tools.get("herdr_pane")!.promptGuidelines!.join("\n");
+ok(layoutGuidelines.includes("only when the user explicitly mentions Herdr or asks to inspect or control Herdr"), "always-loaded guidelines retain the Herdr consent boundary");
+ok(layoutGuidelines.includes("read the herdr skill"), "direct control loads the canonical Herdr procedures");
+ok(layoutGuidelines.includes("read herdr-orch"), "delegation loads its own placement contract");
+ok(paneGuidelines.includes("Do not close a Herdr pane you did not create unless the user explicitly asks"), "always-loaded guidelines retain pane ownership protection");
+ok(tools.get("herdr_agent")!.description.includes("idle, done, or blocked"), "agent readiness remains in the tool contract");
 
 async function argv(tool: string, params: Record<string, unknown>): Promise<string[]> {
   const before = execCalls.length;

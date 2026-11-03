@@ -1,6 +1,6 @@
 ---
 name: ms365
-description: Read Microsoft 365 data through the ms365 MCP server -- SharePoint and OneDrive documents, Outlook mail and calendar, Teams chats and channels, and the user directory -- and change SharePoint or OneDrive files through a Babashka Graph client (check out, upload, check in, publish a version, write Excel cells). Use whenever the user asks to find, read, summarise, or ingest company documents, SharePoint sites or libraries, emails, meetings, Teams messages, or colleague details, or to check out, edit, upload, check in or publish a SharePoint file or write rows into a SharePoint workbook, even if they do not name Microsoft 365 or the MCP server.
+description: "Find, read, summarise or ingest Microsoft 365 documents, mail, meetings, Teams chats/channels or colleague details. Use for company information even when Microsoft 365/MCP is not named, and for SharePoint/OneDrive sites, libraries, file edits, check-out/in, upload, publication or Excel cell/row writes. Read via ms365 MCP; write via the Babashka Graph client. Not for local-only Office work."
 compatibility: Requires the Softeria ms-365-mcp-server running in HTTP mode on 127.0.0.1:3365 and an MCP client configured for it (pi native MCP server entry `ms365` in `pi/mcp.json`). The Graph client needs Babashka. Setup is in README.org.
 ---
 

@@ -1,0 +1,535 @@
+{
+  "piVersion" : "1.4.0",
+  "toolDefinitions" : {
+    "before" : {
+      "characters" : 28422,
+      "estimatedTokens" : 7106
+    },
+    "after" : {
+      "characters" : 28422,
+      "estimatedTokens" : 7106
+    },
+    "identical" : true
+  },
+  "method" : "Fresh RPC command captures the base prompt, without a model request. UTF-16 characters; tokens = ceil(characters/4) per section, summed. Tool-definition JSON projects name, description and parameters; not provider wire size. Runtime before_agent_start sections, including MCP namespace guidance, are not captured.",
+  "instructions" : {
+    "before" : {
+      "characters" : 42581,
+      "estimatedTokens" : 10649
+    },
+    "after" : {
+      "characters" : 40093,
+      "estimatedTokens" : 10027
+    },
+    "delta" : {
+      "characters" : -2488,
+      "estimatedTokens" : -622
+    },
+    "sections" : [ {
+      "name" : "preamble",
+      "before" : {
+        "characters" : 169,
+        "estimatedTokens" : 43
+      },
+      "after" : {
+        "characters" : 169,
+        "estimatedTokens" : 43
+      },
+      "delta" : {
+        "characters" : 0,
+        "estimatedTokens" : 0
+      }
+    }, {
+      "name" : "tools",
+      "before" : {
+        "characters" : 1814,
+        "estimatedTokens" : 454
+      },
+      "after" : {
+        "characters" : 1814,
+        "estimatedTokens" : 454
+      },
+      "delta" : {
+        "characters" : 0,
+        "estimatedTokens" : 0
+      }
+    }, {
+      "name" : "rules",
+      "before" : {
+        "characters" : 4348,
+        "estimatedTokens" : 1087
+      },
+      "after" : {
+        "characters" : 2702,
+        "estimatedTokens" : 676
+      },
+      "delta" : {
+        "characters" : -1646,
+        "estimatedTokens" : -411
+      }
+    }, {
+      "name" : "docs",
+      "before" : {
+        "characters" : 1454,
+        "estimatedTokens" : 364
+      },
+      "after" : {
+        "characters" : 1454,
+        "estimatedTokens" : 364
+      },
+      "delta" : {
+        "characters" : 0,
+        "estimatedTokens" : 0
+      }
+    }, {
+      "name" : "project_context",
+      "before" : {
+        "characters" : 18237,
+        "estimatedTokens" : 4560
+      },
+      "after" : {
+        "characters" : 18399,
+        "estimatedTokens" : 4600
+      },
+      "delta" : {
+        "characters" : 162,
+        "estimatedTokens" : 40
+      }
+    }, {
+      "name" : "skills",
+      "before" : {
+        "characters" : 16517,
+        "estimatedTokens" : 4130
+      },
+      "after" : {
+        "characters" : 15513,
+        "estimatedTokens" : 3879
+      },
+      "delta" : {
+        "characters" : -1004,
+        "estimatedTokens" : -251
+      }
+    }, {
+      "name" : "cwd",
+      "before" : {
+        "characters" : 42,
+        "estimatedTokens" : 11
+      },
+      "after" : {
+        "characters" : 42,
+        "estimatedTokens" : 11
+      },
+      "delta" : {
+        "characters" : 0,
+        "estimatedTokens" : 0
+      }
+    } ]
+  },
+  "controls" : {
+    "existingHomeInstructionsPreserved" : true,
+    "parentInstructionsUnchanged" : true,
+    "modelMatches" : true,
+    "toolDefinitionsMatch" : true,
+    "skillOrderMatches" : true
+  },
+  "dotfilesRevision" : "8772cbe687e8b47bd2e9281aa399df4f05f31bd5",
+  "sourceFiles" : {
+    "ref" : "4943b6321ebb67ad6c6fa4a410b8bff5a99f9ccf",
+    "commit" : "4943b6321ebb67ad6c6fa4a410b8bff5a99f9ccf",
+    "files" : [ {
+      "path" : "home/AGENTS.md",
+      "before" : {
+        "lines" : 94,
+        "characters" : 9988,
+        "tokens" : 2497
+      },
+      "after" : {
+        "lines" : 97,
+        "characters" : 10289,
+        "tokens" : 2573
+      },
+      "delta" : {
+        "lines" : 3,
+        "characters" : 301,
+        "tokens" : 76
+      }
+    }, {
+      "path" : "AGENTS.md",
+      "before" : {
+        "lines" : 40,
+        "characters" : 2821,
+        "tokens" : 706
+      },
+      "after" : {
+        "lines" : 39,
+        "characters" : 2682,
+        "tokens" : 671
+      },
+      "delta" : {
+        "lines" : -1,
+        "characters" : -139,
+        "tokens" : -35
+      }
+    }, {
+      "path" : "skills/doc-writing/SKILL.md",
+      "before" : {
+        "lines" : 95,
+        "characters" : 8144,
+        "tokens" : 2036
+      },
+      "after" : {
+        "lines" : 95,
+        "characters" : 7818,
+        "tokens" : 1955
+      },
+      "delta" : {
+        "lines" : 0,
+        "characters" : -326,
+        "tokens" : -81
+      }
+    }, {
+      "path" : "skills/docx/SKILL.md",
+      "before" : {
+        "lines" : 137,
+        "characters" : 13356,
+        "tokens" : 3339
+      },
+      "after" : {
+        "lines" : 137,
+        "characters" : 12943,
+        "tokens" : 3236
+      },
+      "delta" : {
+        "lines" : 0,
+        "characters" : -413,
+        "tokens" : -103
+      }
+    }, {
+      "path" : "skills/ms365/SKILL.md",
+      "before" : {
+        "lines" : 49,
+        "characters" : 4816,
+        "tokens" : 1204
+      },
+      "after" : {
+        "lines" : 49,
+        "characters" : 4562,
+        "tokens" : 1141
+      },
+      "delta" : {
+        "lines" : 0,
+        "characters" : -254,
+        "tokens" : -63
+      }
+    } ],
+    "total" : {
+      "before" : {
+        "lines" : 415,
+        "characters" : 39125,
+        "tokens" : 9782
+      },
+      "after" : {
+        "lines" : 417,
+        "characters" : 38294,
+        "tokens" : 9576
+      },
+      "delta" : {
+        "lines" : 2,
+        "characters" : -831,
+        "tokens" : -206
+      }
+    }
+  },
+  "dotagentsRevision" : "4943b6321ebb67ad6c6fa4a410b8bff5a99f9ccf",
+  "loadout" : {
+    "tools" : [ "bash", "browser_cookies", "browser_eval", "browser_inspect", "browser_nav", "browser_pick", "browser_screenshot", "browser_tabs", "clojure_eval", "clojure_find_nrepl_port", "clojure_paren_repair", "codemode", "dataspex", "edit", "emacs_eval", "emacs_read", "emacs_ts_query", "emacs_write", "fffind", "ffgrep", "herdr_agent", "herdr_layout", "herdr_pane", "lsp", "question", "read", "session_query", "session_search", "web_enable", "write" ],
+    "skills" : [ "chromium", "ext-dev", "caveman", "clojure", "code-review", "convert-documents-to-markdown", "dataspex", "dirge", "doc-writing", "docx", "find-skills", "git-commit", "gitlab-cli-skills", "herdr", "herdr-orch", "logic-pro", "ms365", "nix", "org-execute", "org-jira", "org-plan", "org-tasks", "performance-investigation", "quality-gates", "retro", "security-assessment", "self-improvement", "simplify", "skill-creator", "tdd", "to-questionnaire", "ultracave" ],
+    "disabledSkill" : "ultracave",
+    "sessionEntriesBeforeCommand" : 2,
+    "conversationTextIncluded" : false
+  },
+  "guardSelfcheck" : {
+    "result" : "failed as intended",
+    "exitCode" : 1,
+    "alteredField" : "mayClaimAbsentWithSilentControl"
+  },
+  "policySmoke" : {
+    "model" : "openai-codex/gpt-6.1-sol:low",
+    "before" : {
+      "mayUseHerdrWithoutRequest" : false,
+      "mayCloseOthersPaneWithoutRequest" : false,
+      "mayEditCodeToAnswerHowItWorks" : false,
+      "mayClaimAbsentWithSilentControl" : false,
+      "sameFileEditCallCount" : 1,
+      "symbolLookupTool" : "lsp",
+      "pathLookupTool" : "fffind",
+      "contentLookupTool" : "ffgrep"
+    },
+    "after" : {
+      "mayUseHerdrWithoutRequest" : false,
+      "mayCloseOthersPaneWithoutRequest" : false,
+      "mayEditCodeToAnswerHowItWorks" : false,
+      "mayClaimAbsentWithSilentControl" : false,
+      "sameFileEditCallCount" : 1,
+      "symbolLookupTool" : "lsp",
+      "pathLookupTool" : "fffind",
+      "contentLookupTool" : "ffgrep"
+    },
+    "limit" : "No-tool hypothetical policy responses, not end-to-end operation tests."
+  },
+  "descriptions" : [ {
+    "name" : "doc-writing",
+    "before" : {
+      "characters" : 721,
+      "estimatedTokens" : 181
+    },
+    "after" : {
+      "characters" : 393,
+      "estimatedTokens" : 99
+    },
+    "bodyUnchanged" : true
+  }, {
+    "name" : "docx",
+    "before" : {
+      "characters" : 830,
+      "estimatedTokens" : 208
+    },
+    "after" : {
+      "characters" : 415,
+      "estimatedTokens" : 104
+    },
+    "bodyUnchanged" : true
+  }, {
+    "name" : "ms365",
+    "before" : {
+      "characters" : 648,
+      "estimatedTokens" : 162
+    },
+    "after" : {
+      "characters" : 392,
+      "estimatedTokens" : 98
+    },
+    "bodyUnchanged" : true
+  } ],
+  "herdrRouting" : {
+    "skill_name" : "herdr",
+    "description" : "Control Herdr, a terminal multiplexer for coding agents. Use only when the user explicitly mentions Herdr or asks to use Herdr to inspect or control panes, tabs, workspaces, commands, or another agent. Do not use merely because a task could benefit from a background terminal, delegation, or parallel work. Requires HERDR_ENV=1.",
+    "results" : [ {
+      "query" : "Use Herdr to inspect the current panes. This is a routing smoke test: read the relevant skill only; do not run commands or change any pane.",
+      "should_trigger" : true,
+      "trigger_rate" : 1.0,
+      "triggers" : 1,
+      "runs" : 1,
+      "pass" : true
+    }, {
+      "query" : "The test suite might benefit from another terminal. This is a routing smoke test: select the relevant skill only; do not run commands or change files.",
+      "should_trigger" : false,
+      "trigger_rate" : 0.0,
+      "triggers" : 0,
+      "runs" : 1,
+      "pass" : true
+    } ],
+    "summary" : {
+      "total" : 2,
+      "passed" : 2,
+      "failed" : 0
+    }
+  },
+  "routing" : [ {
+    "phase" : "before",
+    "model" : "openai-codex/gpt-6.1-sol:high",
+    "runsPerQuery" : 1,
+    "fixedTools" : 30,
+    "shownSkills" : 31,
+    "skills" : [ {
+      "skill_name" : "doc-writing",
+      "summary" : {
+        "total" : 3,
+        "passed" : 3,
+        "failed" : 0
+      },
+      "results" : [ {
+        "query" : "Unwrap hard-wrapped paragraphs in README.org without changing their wording. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Review and rewrite the comments and docstrings in a Go package for clarity, without changing its behaviour. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Look up a library's external API documentation and explain the example. Do not write or edit local documentation. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : false,
+        "trigger_rate" : 0.0,
+        "triggers" : 0,
+        "runs" : 1,
+        "pass" : true
+      } ]
+    }, {
+      "skill_name" : "docx",
+      "summary" : {
+        "total" : 3,
+        "passed" : 3,
+        "failed" : 0
+      },
+      "results" : [ {
+        "query" : "Review tracked changes and anchored comments in a Word document, including its header and version history. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Compare old.docx and new.docx into a tracked-changes redline. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Extract only the plain text of a Word document. Do not inspect revisions, comments or metadata, and do not edit it. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : false,
+        "trigger_rate" : 0.0,
+        "triggers" : 0,
+        "runs" : 1,
+        "pass" : true
+      } ]
+    }, {
+      "skill_name" : "ms365",
+      "summary" : {
+        "total" : 3,
+        "passed" : 3,
+        "failed" : 0
+      },
+      "results" : [ {
+        "query" : "Check out a sandbox SharePoint workbook, write rows, then check it back in without major publication. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Find a colleague's Teams messages about tomorrow's meeting. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Create a local Excel workbook from CSV data. Do not use SharePoint, OneDrive or any other cloud service. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : false,
+        "trigger_rate" : 0.0,
+        "triggers" : 0,
+        "runs" : 1,
+        "pass" : true
+      } ]
+    } ]
+  }, {
+    "phase" : "after",
+    "model" : "openai-codex/gpt-6.1-sol:high",
+    "runsPerQuery" : 1,
+    "fixedTools" : 30,
+    "shownSkills" : 31,
+    "skills" : [ {
+      "skill_name" : "doc-writing",
+      "summary" : {
+        "total" : 3,
+        "passed" : 3,
+        "failed" : 0
+      },
+      "results" : [ {
+        "query" : "Unwrap hard-wrapped paragraphs in README.org without changing their wording. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Review and rewrite the comments and docstrings in a Go package for clarity, without changing its behaviour. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Look up a library's external API documentation and explain the example. Do not write or edit local documentation. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : false,
+        "trigger_rate" : 0.0,
+        "triggers" : 0,
+        "runs" : 1,
+        "pass" : true
+      } ]
+    }, {
+      "skill_name" : "docx",
+      "summary" : {
+        "total" : 3,
+        "passed" : 3,
+        "failed" : 0
+      },
+      "results" : [ {
+        "query" : "Review tracked changes and anchored comments in a Word document, including its header and version history. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Compare old.docx and new.docx into a tracked-changes redline. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Extract only the plain text of a Word document. Do not inspect revisions, comments or metadata, and do not edit it. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : false,
+        "trigger_rate" : 0.0,
+        "triggers" : 0,
+        "runs" : 1,
+        "pass" : true
+      } ]
+    }, {
+      "skill_name" : "ms365",
+      "summary" : {
+        "total" : 3,
+        "passed" : 3,
+        "failed" : 0
+      },
+      "results" : [ {
+        "query" : "Find a colleague's Teams messages about tomorrow's meeting. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Check out a sandbox SharePoint workbook, write rows, then check it back in without major publication. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : true,
+        "trigger_rate" : 1.0,
+        "triggers" : 1,
+        "runs" : 1,
+        "pass" : true
+      }, {
+        "query" : "Create a local Excel workbook from CSV data. Do not use SharePoint, OneDrive or any other cloud service. This is a routing smoke test: read the relevant skill only; do not access documents or services, run commands, or write files.",
+        "should_trigger" : false,
+        "trigger_rate" : 0.0,
+        "triggers" : 0,
+        "runs" : 1,
+        "pass" : true
+      } ]
+    } ]
+  } ],
+  "excludedCapture" : {
+    "file" : "after.json",
+    "reason" : "Uncontrolled discovery added context_checkpoint, context_timeline, context_compact and the context-management skill. The accepted candidate capture pins the baseline tools and explicit skill paths."
+  },
+  "model" : {
+    "provider" : "openai-codex",
+    "id" : "gpt-6.1-sol"
+  }
+}

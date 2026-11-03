@@ -54,6 +54,9 @@
 
 # File operations
 
+## File lookup
+- Use LSP first for code symbols in a supported language; otherwise prefer `fffind` for paths or concepts and `ffgrep` for contents when available. Use shell search when these tools are unavailable or unsuitable. This routing takes precedence over general bash or first-search advice.
+
 ## Temporary files
 - Put scripts, data, experiments, tests, and other temporary work in `<repository-root>/.tmp/`. Resolve the root with `git rev-parse --show-toplevel`.
 - Never store transient state under `.agents/`. It holds durable agent configuration, and some harnesses mount it read-only so that an agent cannot change its own instructions.

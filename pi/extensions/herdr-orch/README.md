@@ -10,6 +10,8 @@ Exposes the `herdr-orch` skill's `oh` CLI to pi. The extension invokes the co-in
 
 The tools proxy Herdr control only. Persona delegation uses `oh task ...` as the skill describes.
 
+Always-loaded prompt guidelines retain the explicit Herdr-request boundary and pane ownership protection. Direct control loads [../../../skills/herdr/SKILL.md](../../../skills/herdr/SKILL.md) for procedures; persona delegation loads [../../../skills/herdr-orch/SKILL.md](../../../skills/herdr-orch/SKILL.md) for its placement contract. Tool descriptions retain their API contracts instead of repeating procedures as prompt guidelines.
+
 ## Slash command
 
 `/oh [help|personas|traits|models|workflows]` shows the output of `oh roster --format markdown` to the user. Without an argument it shows every section, the Herdr status of the pane, the spawn defaults, and short usage notes. The notes route natural language to a context: "spawn a subagent" is a fresh context, and "fork a subagent" is a forked context (`oh task run|start --context fork`). A measurement runs headless (`--context measurement`), with a read-only monitor pane only on `--tab` or `--split`.

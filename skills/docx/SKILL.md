@@ -1,6 +1,6 @@
 ---
 name: docx
-description: Review and edit Word .docx files without Word. Report header, footer and version history text; list tracked changes paragraph by paragraph; list comments with the text they anchor; apply an edit script as tracked changes with reason comments; produce a clean copy (all changes accepted, comments removed) checked against pandoc; compare two versions into a tracked-changes .docx (redline) with LibreOffice; and edit cells, checkboxes and footnotes from Babashka through docx.core and docx.edit. Use whenever a task needs what changed in a Word document, a redline or comparison, tracked edits or review comments in a .docx, a clean copy for publication, the version history or header of a .docx, or a programmatic edit of a .docx form or template. For plain reading of a document's text, use convert-documents-to-markdown instead.
+description: "Review/edit Word .docx files without Word: headers, footers, version history, paragraph-level tracked changes, anchored comments, tracked edits with reasons, verified clean copies for publication, redlines/comparisons, forms/templates, cells, checkboxes and footnotes. Use for Word revision review or programmatic edits, even without explicit .docx wording. For plain text reading use convert-documents-to-markdown."
 compatibility: Needs Babashka. clean checks its result with pandoc when pandoc is installed. compare needs LibreOffice; on Nix it finds the Python that LibreOffice links against.
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: doc-writing
-description: Write, restructure and check documentation -- Markdown and Org documents (READMEs, design records, architecture and onboarding guides) and code comments and docstrings. Covers terminology, identifier checks, where each kind of text belongs, line wrapping, Org and Markdown structure, and Mermaid and PlantUML diagrams and their GitLab rendering, with scripts that unwrap hard-wrapped files and render diagram blocks. Use whenever you create or substantially edit a .md or .org document, add or change a diagram, unwrap text, or write, review or rewrite comments and docstrings as a task, even if formatting is not mentioned. Not for looking up or reading external documentation. Voice and spelling rules are in AGENTS.md.
+description: "Use for creating or substantially editing Markdown (.md) or Org (.org) documents, adding/changing diagrams, unwrapping text, or writing/reviewing/rewriting comments and docstrings as a task, even when formatting is not mentioned. Covers terminology, identifiers, structure, wrapping and diagram validation. Not for external-documentation lookup or reading. Voice and spelling are in AGENTS.md."
 compatibility: The scripts need Babashka. check-diagrams.bb also needs mmdc (@mermaid-js/mermaid-cli) for Mermaid and plantuml for PlantUML; Org table alignment needs Emacs.
 ---
 

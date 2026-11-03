@@ -226,8 +226,7 @@ export default function (pi: ExtensionAPI) {
     promptSnippet: "Inspect or create Herdr workspaces, tabs, and pane topology",
     promptGuidelines: [
       "Use herdr_layout, herdr_pane, and herdr_agent only when the user explicitly mentions Herdr or asks to inspect or control Herdr.",
-      "Use herdr_layout to create terminal topology before starting a process or agent. Default to a sibling pane in the caller's current tab and cwd; create a tab or workspace only when requested. This default does not apply to herdr-orch delegation: `oh task` spawns use the configured placement, which is the user's standing request, so do not pass --split or --tab to them unless the user names a placement.",
-      "Read opaque workspace, tab, and pane IDs from herdr_layout results instead of constructing them, and preserve UI focus unless the user asks to switch context.",
+      "Before direct Herdr control, read the herdr skill; for persona delegation, read herdr-orch.",
     ],
     parameters: LayoutParams,
     async execute(_toolCallId, params, signal) {
@@ -288,9 +287,7 @@ export default function (pi: ExtensionAPI) {
       "Control a raw Herdr terminal pane. Use for shells, tests, servers, builds, logs, and other ordinary processes: run a command, read output, wait for matching output, send literal text or terminal keys, inspect, or close. Pane actions target opaque pane IDs and do not validate agent identity or interpret agent lifecycle. Use herdr_agent instead when controlling a recognized coding agent. Read output is truncated to 2000 lines or 50KB.",
     promptSnippet: "Run and inspect ordinary commands in Herdr terminal panes",
     promptGuidelines: [
-      "Use herdr_pane for ordinary commands and raw terminal control; use herdr_agent for coding-agent prompts, lifecycle waits, reads, and interactive keys.",
-      "Use herdr_pane wait_output for tests, servers, builds, and watchers. It searches existing output immediately; use recent-unwrapped for logs and transcripts.",
-      "Do not close a Herdr pane you did not create unless the user explicitly asks. herdr_pane always refuses to close the pane running the current pi process.",
+      "Do not close a Herdr pane you did not create unless the user explicitly asks.",
     ],
     parameters: PaneParams,
     async execute(_toolCallId, params, signal) {
@@ -331,12 +328,6 @@ export default function (pi: ExtensionAPI) {
     description:
       "Control a recognized coding agent occupying an existing Herdr pane. Starting requires an available interactive shell pane created through herdr_layout and never creates or changes layout. Agent targets are unique live names or the pane ID currently hosting the agent, never terminal IDs or bare kind labels. Use prompt, wait, read, and send_keys instead of raw pane input. Lifecycle states are working, blocked, done, idle, and unknown; prompt waits by default (wait=true) on the same operation and, like wait, settles on the first idle, done, or blocked state; until and timeout require wait, and an omitted timeout waits indefinitely. The kind for start is any kind the installed Herdr accepts. Read output is truncated to 2000 lines or 50KB.",
     promptSnippet: "Start, prompt, wait for, read, and interact with coding agents in Herdr",
-    promptGuidelines: [
-      "Use herdr_agent for recognized coding agents. Use herdr_layout to create an available shell pane first; herdr_agent start never creates or moves terminal layout.",
-      "For normal helper work, use herdr_layout pane_split, then herdr_agent start, herdr_agent prompt with wait enabled, and herdr_agent read. Use herdr_pane only for ordinary processes or intentional raw terminal control.",
-      "Treat herdr_agent idle and done as ready states, blocked as requiring inspection or input, and unknown as uncertain rather than completed. CLI reads do not mark done work as seen.",
-      "If herdr_agent read cannot recover a full alternate-screen response after increasing lines, ask the agent to write its complete response to a temporary Markdown file and return the path, then read that file directly.",
-    ],
     parameters: AgentParams,
     async execute(_toolCallId, params, signal) {
       switch (params.action) {
