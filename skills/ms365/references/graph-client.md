@@ -48,6 +48,7 @@ ITEM is a SharePoint file URL (as the browser shows it) or `DRIVE:ITEM` ids.
 - `upload`, `checkin`, `discard` and `excel-write` refuse a file that the signed-in user has not checked out.
 - `transaction` refuses a file that anyone has checked out; use the session commands for a file that is already checked out.
 - `checkin` needs a non-blank comment. `--publish` is never a default; publish only when the user asks for it.
+- Bodyless POST actions use HTTP/1.1: the live Graph endpoint returned HTTP 411 over HTTP/2. GET requests, JSON requests and uploads keep the transport default.
 - `excel-write` refuses non-empty target cells unless `--overwrite`, and checks that the values have the shape of the range.
 
 ## Excel writes

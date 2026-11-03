@@ -205,14 +205,17 @@
 
 (defn request
   "Graph request; returns the parsed JSON body (or nil). Throws :graph on a status >= 400.
-  :bytes sends a raw body; :as :bytes returns raw bytes."
+  :bytes sends a raw body; :as :bytes returns raw bytes. Bodyless POSTs use HTTP/1.1."
   [method path & {:keys [body bytes headers as]}]
-  (let [r (*http* {:method method :uri (if (str/starts-with? path "http") path (str graph-root path))
-                   :headers (merge {"Authorization" (str "Bearer " (access-token))}
-                                   (when body {"Content-Type" "application/json"})
-                                   headers)
-                   :body (cond bytes bytes body (json/generate-string body))
-                   :as (or as :string)})
+  (let [payload (cond bytes bytes body (json/generate-string body))
+        ;; Graph can reject bodyless HTTP/2 actions with 411; HTTP/1.1 supplies the length.
+        r (*http* (cond-> {:method method :uri (if (str/starts-with? path "http") path (str graph-root path))
+                           :headers (merge {"Authorization" (str "Bearer " (access-token))}
+                                           (when body {"Content-Type" "application/json"})
+                                           headers)
+                           :body payload
+                           :as (or as :string)}
+                    (and (= :post method) (nil? payload)) (assoc :version :http1.1)))
         status (:status r)]
     (if (and status (< status 400))
       (if (= as :bytes) (:body r) (when (seq (:body r)) (json/parse-string (:body r) true)))

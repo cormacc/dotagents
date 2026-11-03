@@ -158,6 +158,30 @@
     (fs/delete (g/token-path))
     (is (= :auth (code-of g/access-token)))))
 
+(deftest bodyless-posts-use-http1-framing
+  (with-fake
+    (let [seen (atom [])
+          bytes (.getBytes "payload" "UTF-8")]
+      (binding [g/*http* (fn [{:keys [method body version] :as req}]
+                          (swap! seen conj req)
+                          (if (and (= :post method) (nil? body) (not= :http1.1 version))
+                            (json-resp 411 {:error {:code "lengthRequired" :message "missing request length"}})
+                            (json-resp 200 {:accepted true})))]
+        (doseq [suffix ["/checkout" "/discardCheckout" "/workbook/closeSession"]]
+          (is (= {:accepted true} (g/request :post (str "/drives/D1/items/I1" suffix)))))
+        (is (every? #(= :http1.1 (:version %)) @seen))
+        (is (every? #(nil? (:body %)) @seen) "bodyless actions stay bodyless")
+        (is (= {:accepted true} (g/request :get "/me")))
+        (is (= {:accepted true} (g/request :post "/example" :body {:comment "test"})))
+        (is (= {:accepted true} (g/request :put "/example/content" :bytes bytes)))
+        (let [[get-req json-req byte-req] (take-last 3 @seen)]
+          (is (every? #(nil? (:version %)) [get-req json-req byte-req])
+              "other requests retain the transport default")
+          (is (nil? (:body get-req)))
+          (is (= {:comment "test"} (json/parse-string (:body json-req) true)))
+          (is (= "application/json" (get-in json-req [:headers "Content-Type"])))
+          (is (= (seq bytes) (seq (:body byte-req)))))))))
+
 ;; ------------------------------------------------------------------ guardrails
 
 (deftest checkout-guardrails
