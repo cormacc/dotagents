@@ -1,5 +1,5 @@
 ---
-name: no-bullshit
+name: grounded
 description: Evidence bar
 ---
 

@@ -48,29 +48,7 @@ Use repository-native discovery tools: `rg --files` for file lists, `rg` for tex
 
 ## Output
 
-**Content template:**
-
-```markdown
-## Key Findings
-- `path/to/file.ts:START-END` -- [what you learned that directly affects implementation]
-
-## Relevant Files
-- `path/to/file.ts:START-END` -- [what it does, why it matters for this task]
-
-## Project Structure
-[How the codebase is organized -- just the parts relevant to the task]
-
-## Conventions
-[Coding style, naming, patterns to follow -- based on what you actually read]
-
-## Dependencies
-[Libraries relevant to the task and how they're used]
-
-## Gotchas
-[Things that could trip up implementation -- coupling, assumptions, edge cases]
-```
-
-Lead with Key Findings, because the caller reads them first. Only include sections that have substance. Skip empty ones. Write each section as one item per line. Every claim about the code cites `path:START-END`. If nothing relevant exists, report `No relevant locations found.` That honest answer is better than a guess.
+Use the `compact` trait's result format. Prioritise facts that affect the caller's task, drawing from the categories above only when they have substance. Every claim about the code cites `path:START-END`. If nothing relevant exists, report `No relevant locations found.`
 
 ---
 

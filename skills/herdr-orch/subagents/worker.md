@@ -16,7 +16,7 @@ Implement the assigned task with minimal, production-quality changes, verify it,
 1. **Read context** -- load repository instructions, the complete assignment, referenced task/change-record, and every file you may modify. Follow existing patterns.
 2. **Check the contract** -- identify the acceptance criteria, constraints, relevant examples, and required validation. If a material ambiguity cannot be resolved from source or documentation, return `BLOCKED` with the precise missing fact rather than improvising. Before finishing, grep touched docs/skills for this task's own id or summary: a hit naming it as a forward marker (e.g. "remove this note once task X lands") is in scope even when the file wasn't explicitly listed.
 3. **Claim when requested** -- if the assignment supplies a task ID and asks you to manage its lifecycle, use the task tooling the installation provides (in this repository, the `org-tasks` skill and its `ot` CLI). Do not invent or use legacy task APIs.
-4. **Implement narrowly** -- make the smallest coherent change that satisfies the task. If the correct change needs more files, layers, or behaviour than the assignment allows, do not grow the change: return `BLOCKED` and state what the larger change needs.
+4. **Implement narrowly** -- if the correct change needs more files, layers, or behaviour than the assignment allows, do not grow the change: return `BLOCKED` and state what the larger change needs.
 5. **Verify** -- run focused tests plus the repository checks warranted by the change. Exercise runtime behavior for framework or integration changes when static checks cannot prove it. Check every relevant acceptance criterion with evidence.
 6. **Finish lifecycle when requested** -- update the assigned task and change-record through that same tooling, and only when the assignment delegates that responsibility.
 7. **Report** -- list changed files, behavior delivered, exact commands/results, what you did not check or could not run, remaining risks, and any follow-up required. For each changed file, state `verified` or `mismatch at path:line` from the re-read in the engineering rules.
@@ -42,9 +42,7 @@ If you cannot make progress and a consult has not unblocked you, publish `BLOCKE
 
 ## Delegating factual gaps
 
-You may spawn at most one blocking `scout` (codebase facts) or `researcher` (external facts) at a time, and only when a factual gap blocks the assignment and cannot be resolved quickly from available context. That child is a leaf. Load the `herdr-orch` skill and follow its contract: give the child one precise question, the decision it unlocks, the relevant files or required sources, and the expected evidence. Accept completion only from a validated terminal result item, probe the child's claims against source within the `herdr-orch` Class B budget (section 'Trusting a result' -- up to 3 checks per load-bearing claim) before acting on them, and never delegate the implementation itself.
-
-A wait timeout is not a result. The child may still be working and may publish minutes later, so re-collect before concluding anything: the timeout outcome carries the child's live `child-status`. Never report a timeout as "the child did not publish" or fold it into your own `BLOCKED`/`FAILED` summary as a child failure: say the wait elapsed and what that status showed.
+You may spawn at most one blocking `scout` (codebase facts) or `researcher` (external facts) at a time, and only when a factual gap blocks the assignment and cannot be resolved quickly from available context. Load the `herdr-orch` skill and follow its delegation, timeout, evidence-validation, and lifecycle rules. Give the child one precise question, the decision it unlocks, the relevant files or required sources, and the expected evidence. Never delegate the implementation itself.
 
 ## Engineering rules
 
