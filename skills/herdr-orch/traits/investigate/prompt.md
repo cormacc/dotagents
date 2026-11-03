@@ -13,3 +13,5 @@ Find the cause before you change anything.
 - Do not change code or configuration until one mechanism explains all of the evidence.
 - Stop the investigation when you can name the cause, or the exact fact that blocks you.
 - Report the cause and its proof. Do not fix it unless the assignment asks for a fix.
+
+For the reproduction procedure, read `references/debugging.md` relative to the installed `herdr-orch` skill. This reference does not authorise delegation.

@@ -1,0 +1,11 @@
+{
+  "positive": [
+    "Implement this accepted behaviour test-first.",
+    "Choose a regression test that does not copy the implementation."
+  ],
+  "negative": [
+    "Set our minimum coverage threshold.",
+    "Diagnose this failure without changing code."
+  ],
+  "note": "Authored routing cases; not measured harness-trigger results."
+}

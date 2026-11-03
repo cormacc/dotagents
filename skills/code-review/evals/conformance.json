@@ -1,0 +1,17 @@
+{
+  "skill_name": "conformance",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Perform two separately scoped reviews using only the supplied snippets; no execution. Spec R1: cleanup(items, true) must return matching names without deleting files. Spec R2: ordinary cleanup deletes matches. Changed range A, cleanup.ts:1 `function cleanup(items, dryRun=false) {` :2 `const matches = items.filter(isExpired);` :3 `return matches.map(removeFile);` :4 `}`. Existing tests exercise only dryRun=false and pass. Report a conformance finding with an exact requirement and reachable path, plus missing verification. Range B is an independently verified empty diff against its named base; report its own verdict without borrowing concerns from A or nearby code.",
+      "expected_output": "Find R1's missing dry-run branch at cleanup.ts:3, distinguish tests from conformance, and approve the independent empty range without widening it.",
+      "files": [],
+      "expectations": [
+        "Cites R1 and cleanup.ts:3 as a dryRun=true path that still invokes removeFile.",
+        "Requires a dry-run non-deletion check and does not treat the existing happy-path suite as conformance proof.",
+        "Reports a severity/evidence-based needs-changes verdict for range A.",
+        "Reports no issues and approval for the independently verified empty range B without broadening it."
+      ]
+    }
+  ]
+}

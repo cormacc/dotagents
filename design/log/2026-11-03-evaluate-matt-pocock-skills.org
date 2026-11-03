@@ -1,0 +1,161 @@
+#+TITLE: Evaluate Matt Pocock's skills
+#+DATE: 2026-11-03 Tue
+#+PARENT: [[archive:7d41f389-6aa0-4a96-b38d-88738d9e621c][Evaluate matt pocock skills]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+NO_SPEC: true
+#+LINK: upstream https://github.com/mattpocock/skills/blob/4ae2317ddb22b046e26455e4f9c9b3aaaf62212d/%s
+
+* Intent
+Evaluate Matt Pocock's skills against our bundled traits, personas and workflows. Recommend selective adoption, absorption or adaptation without installing another engineering process.
+
+* Summary
+*Level:* prototype · *Tests:* none · *Docs:* full
+
+Adopt no skill verbatim. Adapt the test-design material into a small on-demand workflow; absorb the reproducible debugging loop, active terminology checks and explicit requirement-conformance review into existing owners. Consider bounded discovery and alternative-interface recipes for substantial design work. Keep our persona roster, trait boundaries, task memory and approval rules.
+
+Here, /adopt/ means retain an upstream skill substantially unchanged; /absorb/ means place a useful fragment in an existing local owner; /adapt/ means maintain a local workflow with deliberate changes. These were recommendations at evaluation closeout. The user subsequently approved their implementation, recorded separately in [[file:2026-11-03-apply-matt-pocock-adaptations.org]].
+
+** Scope
+*** In scope
+- Read all 27 engineering/productivity =SKILL.md= bodies at upstream commit =4ae2317ddb22b046e26455e4f9c9b3aaaf62212d=, plus selected testing, architecture, invocation and handoff references.
+- Inspect the beta orchestration-related skills =chief-of-staff=, =software-factory=, =loop-me=, =claude-handoff= and =setup-ts-deep-modules=. Screen the other beta and misc entries through their inventories; do not treat that screen as a detailed review.
+- Compare with local HEAD =f85b22023bbad571166065ac29bb0d37aace7b99= and working-tree instructions: nine packaged personas, nine trait fragments, planning/task memory, review, simplification, skill authoring, retrospectives and relevant bundled prompts.
+*** Out of scope
+- Install skills or packages, execute upstream helpers, change runtime instructions, run paid model evaluations, or implement recommendations.
+- Certify scripts, universal engineering claims, or improvements in agent quality, cost or latency.
+
+** Acceptance
+- [X] Pin the source revision and state the inspection scope.
+- [X] Distinguish useful additions from existing local coverage.
+- [X] Map recommendations to traits, personas or workflow owners.
+- [X] Record conflicts and tests needed before adoption.
+- [X] Must not: install upstream behaviour during this evaluation.
+
+** Decisions
+- Prefer absorption into existing owners; create a skill only for a distinct, repeatable workflow. The test-design material is the strongest candidate for such an adaptation.
+- No new persona or trait is justified by this inspection alone. [[file:../../skills/herdr-orch/references/traits.md]] section 'Admission bar' requires a named consumer and a recorded probe attempt for a new trait.
+- Keep [[file:../../skills/org-plan/SKILL.md]], [[file:../../skills/org-tasks/SKILL.md]], [[file:../../skills/code-review/SKILL.md]], [[file:../../skills/simplify/SKILL.md]] and [[file:../../skills/herdr-orch/SKILL.md]] canonical. Do not add a parallel tracker, glossary requirement, lifecycle router or automatic commit policy.
+
+** Shipped
+- ADDED :: This source-pinned assessment and its task import. No skill, persona, trait or runtime setting was changed by this task.
+
+** Gotchas
+- The selected task's saved body contained no repository URL. The evaluated source is [[https://github.com/mattpocock/skills]], identified through external search.
+- Evaluate the pinned source, not remembered skill names or README shorthand. For example, the README describes red-green-refactor, but the current =tdd= body explicitly moves refactoring to review.
+
+* Plan
+
+* Implementation
+** Priority recommendations
+*** 1. Adapt test design, not another testing mandate
+[[upstream:skills/engineering/tdd/SKILL.md]], [[upstream:skills/engineering/tdd/tests.md]] and [[upstream:skills/engineering/tdd/mocking.md]] add a useful combination: choose the observable interface, derive expected values independently, avoid implementation-coupled assertions, and build one vertical test/implementation slice at a time.
+
+Our [[file:../../skills/herdr-orch/subagents/worker.md]] already requires a regression test to fail without the fix, and [[file:../../skills/herdr-orch/references/workflow-recipes.md]] already provides independent regression-test authorship. Repeating those rules in a new trait would add little. The useful addition is guidance on /which tests to write/ and /which interface to observe/, especially the distinction between behavioural and tautological assertions.
+
+Destination: a small optional testing workflow skill, read by =worker= for an explicit test-first assignment and usable inline. Keep examples and mock guidance in references; retain the existing independent-author recipe for complex bugs. No =test-engineer= persona is needed.
+
+Adaptation: use the accepted contract and existing test conventions to select the interface. Ask the user only when that choice changes scope or assurance, not before every test. Do not ban internal tests, call-order assertions or mocks categorically: ordering and interactions can themselves be the contract. Do not require all refactoring to wait for a separate review. Keep baseline, failure-path and assertion-preservation rules already owned locally.
+
+Probe before adoption: compare the existing worker with and without the new workflow on a small feature and a bug whose obvious test merely duplicates the implementation. Check that the test fails for the intended defect, exercises the real call pattern, and survives a behaviour-preserving restructuring. Include a case where call ordering is required, so the adaptation does not remove valid coverage.
+
+*** 2. Absorb the executable reproduction gate
+[[upstream:skills/engineering/diagnosing-bugs/SKILL.md]] makes the feedback loop an explicit deliverable: one executed command that detects the reported symptom, minimise while preserving that failure, test falsifiable predictions, and rerun the original scenario after the fix. Its emphasis on distinguishing the user's bug from a nearby failure is valuable.
+
+Our [[file:../../skills/herdr-orch/traits/investigate/prompt.md]] already separates symptom from inferred cause and ranks hypotheses. [[file:../../dirge/prompts/debug.md]] already asks for reproduction and a failing regression test. The addition is a more concrete completion gate, not a new debugging stance.
+
+Destination: an on-demand debugging recipe reached from =investigate= and relevant worker assignments. Keep the trait short and diagnosis-only: an instruction to diagnose must not silently authorise a fix. Use =worker= for authorised fixes, =advisor= for a stuck consult and =base-analyst= for a read-only assessment; retain the existing performance workflow for performance comparisons.
+
+Adaptation: require a passing control as well as the observed failure, protect captured secrets, and state which evidence is unavailable. Do not copy mandatory 3--5 hypotheses, unlimited persistence, or a blanket ban on reasoning before an automated reproduction exists. Some failures require source inspection to construct the probe. Stress loops, production instrumentation and live service calls still need bounded execution and appropriate authority.
+
+Probe: provide a symptom with a tempting unrelated failing test. Require the correct reproduction and a safe control, then confirm diagnosis-only mode makes no project changes. For fix mode, require the original scenario to pass, not just the minimised test.
+
+*** 3. Absorb active terminology checks; adapt bounded discovery
+[[upstream:skills/engineering/domain-modeling/SKILL.md]] goes beyond consistent wording: challenge overloaded terms, check claims against code, and test relationships with concrete edge-case scenarios. Its three-part ADR test -- hard to reverse, surprising without context, real alternatives -- is a useful filter for durable rationale.
+
+Our [[file:../../skills/doc-writing/SKILL.md]] already owns terminology and one home for each fact. [[file:../../skills/herdr-orch/subagents/planner.md]] and =org-plan= already clarify intent, explore alternatives, ask factual specialists and record decisions. Absorb the active checks into their existing ambiguity/design stages; put decisions in the change-record or existing living contract. Use a glossary only when the project needs one, and do not create =GLOSSARY.md=, =GLOSSARY-MAP.md= and =docs/adr/= as a compulsory second memory tree.
+
+[[upstream:skills/engineering/wayfinder/SKILL.md]] contributes a distinct technique for work too uncertain to plan fully: resolve /decision questions/ before scheduling implementation, keep a coarse list of in-scope questions that cannot yet be stated precisely, and expand the plan only as answers make it actionable. This is more specific than ordinary task decomposition.
+
+Destination: an optional discovery recipe under =org-plan=, using existing tasks, =:BLOCKED-BY:= and =Open questions=. Keep =planner= interactive; route facts to =scout=/=researcher=, experiments to a scoped worker or permitted scratch work, and preferences to the user. No =wayfinder= persona, tracker-label family or new scheduler is needed. Avoid a rigid one-ticket-per-session rule and model-independent context-size assumptions.
+
+Probe: use a multi-session design with one overloaded term and an unresolved decision that changes later work. Check that the plan exposes the conflict, does not invent downstream acceptance criteria, and resumes from the existing record without creating a competing memory surface.
+
+*** 4. Absorb requirement-conformance review, not the upstream reviewer
+[[upstream:skills/engineering/code-review/SKILL.md]] separates standards from spec conformance in fresh reviews. The useful question set is explicit: what is missing or partial, what was added without approval, and what looks implemented but is wrong?
+
+Our =reviewer= already loads the task/change-record; =code-review= already establishes intent, traces changed behaviour and ranks evidence-backed defects. Make requirement-to-implementation evidence more explicit when a spec exists. For a substantial change, the root can assign one fresh reviewer to conformance and another to correctness. This is opt-in decomposition of an existing role, not mandatory fan-out or a replacement for the separate =simplifier=.
+
+Keep local scope and verdict rules: include relevant staged, unstaged and untracked files for working-tree requests; accept a clean range; investigate concrete security/correctness paths; reconcile findings by impact. Do not import the compulsory Fowler-smell baseline, an empty-diff error, a universal 400-word cap, or a prohibition on reranking across axes. The object-oriented smell remedies are not universal replacements for the surrounding language's conventions.
+
+Probe: review a change that passes existing tests but omits one accepted requirement, plus a clean control. Require a precise contract citation and reachable consequence, without inventing standards findings or broadening the range.
+
+*** 5. Absorb instruction-authoring diagnostics selectively
+[[upstream:skills/productivity/writing-for-agents/SKILL.md]] offers useful review questions: does each pointer state when its target is needed; is branch-specific reference material disclosed only on that branch; does each step have an observable completion condition; is a directive a no-op against the current model baseline?
+
+Our [[file:../../skills/skill-creator/SKILL.md]], =doc-writing= and trait probes already own progressive disclosure, single ownership and behavioural evaluation. Add only missing diagnostic questions to those owners when a real failure warrants it; do not install another authoring skill or rename all our concepts to upstream's vocabulary.
+
+Treat claims about leading words, negation and context pressure as upstream hypotheses, not measured facts about our models. In particular, retain explicit negative safety boundaries and anti-criteria. Validate any shorter replacement against a tempting violation and the existing deployment instructions; attractive prose alone does not establish an improvement.
+
+** Traits and personas
+- =simple= and =prune= :: upstream YAGNI and deep-module arguments overlap our engineering stance and necessity challenge. Keep them; do not add a =deep= trait. Interface trade-offs belong in a design assignment, not an always-applied preference to merge modules.
+- =investigate= :: retain the causal stance; place the reproduction procedure in a recipe, as above.
+- =refactor= and =migration= :: retain preservation, rollback, coexistence and stage authority. Upstream =to-tickets= also recognises expand/contract for wide changes, but adds no missing transition-safety trait. Reject automatic deletion of lower-level tests from =codebase-design/DEEPENING.md=: prove which assertions the replacement preserves first.
+- =read-only=, =focused=, =grounded= and =compact= :: retain our write, assignment, range and output boundaries. Upstream file-writing research and architecture reports do not override them; use explicitly authorised artefact paths.
+- =planner= :: absorb terminology/discovery checks, not the full =grilling= interaction policy. Upstream asks a whole decision frontier per round; our replies and planner ask one decision at a time and stop once a plan is actionable.
+- =worker= :: remains the sole executor. Test author, implementer, merger and prototype builder are assignments, not reasons to multiply personas. The root retains integration and closeout authority.
+- =reviewer= and =simplifier= :: keep correctness/conformance separate from behaviour-preserving simplification. A broad architecture survey needs its own explicit scope.
+- =scout= and =researcher= :: already cover codebase and external facts, primary sources and version-aware uncertainty. Do not add an upstream =research= wrapper that always spawns another agent.
+- =advisor=, =base-analyst= and =visual-tester= :: use for scoped judgement, analysis and UI verification. No upstream workflow warrants routine advisor checks, a new general coordinator or expanded write permissions.
+
+** Stable catalogue disposition
+Every engineering/productivity skill is included below. The priority sections carry the rationale for recommended changes.
+
+- =tdd= :: adapt the test-design workflow; priority 1.
+- =diagnosing-bugs= :: absorb a reproduction/minimisation/fix recipe; priority 2.
+- =domain-modeling= :: absorb active terminology and scenario checks; priority 3.
+- =wayfinder= :: adapt an opt-in discovery recipe for genuinely uncertain multi-session work; priority 3.
+- =code-review= :: absorb explicit requirement-conformance questions; retain our reviewer and evidence bar; priority 4.
+- =writing-for-agents= :: selective authoring diagnostics, not another skill; priority 5.
+- =grilling=, =grill-me= and =grill-with-docs= :: retain our planner and one-decision interaction policy. Do not adopt relentless exhaustive interviewing or automatic factual fan-out.
+- =codebase-design= :: absorb the deletion test and interface-as-contract questions into substantial design work. Reject compulsory terminology substitutions and blanket architectural prescriptions.
+- =improve-codebase-architecture= :: defer a separate survey workflow. A scoped =base-analyst=/=simplifier= assignment can assess a named area; do not turn ordinary review into a periodic whole-tree audit or require an HTML report with CDN dependencies.
+- =to-spec= and =to-tickets= :: retain org change-records, atomic acceptance and real blockers. Vertical slices and expand/contract already fit our planning rules. Reject exhaustive user-story quotas, automatic tracker publication and the blanket removal of file pointers: our workers need re-verified path-plus-symbol evidence.
+- =implement= and =implement-spec= :: do not adopt their orchestration. They commit or manage branches, ticket resolution and worktrees as part of the workflow. Our root-owned integration, bounded concurrency and explicit permissions remain authoritative.
+- =prototype= :: absorb question-first experiments and visible state into design assignments. Use repository =.tmp/=, permitted scratch resources and existing UI checks. Do not automatically commit a prototype branch, fold experiments into production, or drop safety controls because the code is throwaway.
+- =triage= :: absorb verify-before-brief, check-for-existing-behaviour and prior-rejection checks when incoming requests need triage. Keep tracker operations with existing tracker skills and rationale in existing records; do not add its label state machine or =.out-of-scope/= tree by default. Its brief template reinforces concrete acceptance and scope, but our worker assignments still need re-verified file pointers.
+- =research= :: retain our researcher persona and existing report paths; primary-source discipline is already covered.
+- =retro= :: retain our retro/self-improvement split, approval and TODO-first routing. Mechanical checks before more prose are useful but already fit those owners. Reject moving all coding standards out of implementation or treating every missing hook as a session finding.
+- =handoff= :: absorb suggested next skills and pointer-only summaries if a gap appears. Keep task/change-record resume canonical; portable handoffs supplement it rather than replace it with an OS-temp document.
+- =ask-matt= :: do not adopt a second lifecycle router. Its context-boundary questions are useful reading, but its fixed smart-zone figure and harness commands are not portable policy. Existing delegation recipes distinguish fresh, fork and continue.
+- =setup-matt-pocock-skills= :: do not adopt; we already have task/tracker and documentation owners. Setup would add a parallel configuration tree and can initialise Git, add a remote or create labels.
+- =pr= :: do not adopt wholesale: its mandatory before/after evidence conflicts with our =git-commit= MR contract, which excludes test results. The smallest useful visual and explicit rollback/blast-radius note are optional ideas for a deliberately approved revision, not a silent template replacement.
+- =wizard= :: defer until a recurring manual procedure needs it. The useful shape is named stages, verified instructions, secret handling and confirmation before irreversible steps. Adapt to existing repository automation; do not adopt a Bash/GitHub-secret template or automatic commit policy by default.
+- =to-questionnaire= :: the best low-overlap standalone productivity candidate. Its distinction between interviewing the sender about the recipient/outcome and asking the recipient for missing knowledge is useful for requirements work. Adapt only when that workflow is requested; use the agreed document location and format, not an unsolicited current-directory file.
+- =wait-what= :: no new skill needed: simplified English and concise replies are already global rules. Re-explaining missing context is a conversational correction, not a glossary-file requirement.
+- =teach= :: useful only for a separately requested, persistent teaching workspace; outside this engineering bundle's immediate need. Do not create its lesson/reference/assets tree in a normal project session.
+
+** Optional design technique and beta screen
+[[upstream:skills/engineering/codebase-design/DESIGN-IT-TWICE.md]] is worth adapting when an interface decision is genuinely costly: give independent analysts different design constraints, compare concrete caller examples, then choose. Use =base-analyst= assignments and our bounded decision-review recipe; two materially different options are enough to start. Reject automatic 3+ agent fan-out and a flexibility-maximising assignment that invents requirements. This complements, rather than replaces, the planner's existing alternatives stage.
+
+[[upstream:skills/in-progress/README.md]] labels that bucket beta, excluded from the plugin and subject to disappearance. [[upstream:SCOPE.md]] calls misc frozen and unmaintained.
+
+- =chief-of-staff= :: reject as a bundled root persona. Mandatory delegation of all work, relentless proactive environment changes and self-approved retros conflict with our scoped, opt-in orchestration and approval model. Pointer-based memory is already covered.
+- =software-factory= :: defer as a separate infrastructure-design domain. Its questions about duplicate work, triggers and human re-entry are useful if we design automation, not grounds for turning our local harness into a factory. Do not replace our existing task/session vocabulary with its definitions.
+- =loop-me= :: defer; it designs recurring personal workflows rather than the selected engineering work. Late human checkpoints must not displace existing authorisation boundaries.
+- =claude-handoff= :: do not adopt a second background-agent launcher or OS-temp handoff path alongside our managed lifecycle.
+- =setup-ts-deep-modules= :: retain the pass/violation/pass enforcement pattern as a useful example, already consistent with =quality-gates=. Do not impose its package layout, dependency or internal-test ban across our projects.
+- Beta writing skills and misc migration/exercise/hook installers :: no recommendation from inventory screening alone; they are specialised work, not replacements for our bundled engineering process.
+
+** Adoption conditions
+- No automatic bulk installation. The collection includes names already owned here (=code-review= and =retro=) and workflows that assume a Skill tool, harness-specific invocation controls and per-repo setup. Resolve references and invocation behaviour for each actual consumer before copying anything.
+- Preserve our authority boundaries. Upstream implementation commits automatically; whole-spec work maximises concurrency and delegates merges; wayfinding can push research branches; setup can change repository/tracker state. These are not implied permissions in our installation.
+- Keep workflows separate from traits. Add no fragment solely because the upstream language is compelling. A future trait needs a concrete consumer, a treated/control probe and an honestly recorded outcome under our existing admission contract.
+- Use the existing =skill-creator= evaluation loop and trait-probe machinery. Test triggering separately from answer quality, include adjacent-owner negative cases, and compare against our full deployed baseline rather than an empty prompt. Do not claim gains until measured.
+- [[upstream:LICENSE]] is MIT, copyright 2026 Matt Pocock. Preserve its copyright and permission notice with copied or substantially adapted material, record the exact source and retained parts, and classify deliberate adaptations as locally maintained.
+
+* Validation
+- Source inspection only: all 27 stable engineering/productivity bodies, selected references and five beta workflow bodies were read; local comparison covered the packaged persona/trait inventory and relevant canonical workflows. No upstream script, installer or paid model evaluation was executed.
+- Recommendations establish fit and potential additions, not measured effectiveness. Existing trait admission and workflow evaluation requirements remain unchanged.
+- Catalogue coverage check: 27 source skills, none missing from the disposition; deliberately removing =tdd= from the catalogue made the check report that omission.
+- =git diff --check= passed. =bb scripts/check-section-links.bb= checked 396 section references in 432 files with 0 problems. =ot doctor --format json= reported 0 errors and the same 6 warnings as the pre-record baseline, on other tasks/records.

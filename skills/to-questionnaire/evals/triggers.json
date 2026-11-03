@@ -1,0 +1,11 @@
+{
+  "positive": [
+    "Prepare questions for the operations lead to answer asynchronously.",
+    "Draft a discovery questionnaire for another team's domain expert."
+  ],
+  "negative": [
+    "Interview me about my own design.",
+    "Send this questionnaire by email."
+  ],
+  "note": "Authored routing cases; not measured harness-trigger results."
+}

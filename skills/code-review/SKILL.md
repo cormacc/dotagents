@@ -21,6 +21,8 @@ git diff <base>...HEAD      # branch/MR changes when base is known
 
 If the requested base is ambiguous and different choices materially change the review, ask once. If you cannot ask, for example as a delegated child whose assignment does not route questions to a user, choose the most probable base, state it and the alternative in the summary, and continue. Include untracked files that are part of the implementation. Do not review only the latest commit when the request covers a branch or task.
 
+When an accepted spec or task contract exists, map its requirements to implementation and verification evidence. Check for missing or partial behaviour, additions outside accepted scope, and code that appears to implement a requirement but gets it wrong. A passing suite alone does not settle conformance. Report a concrete violation under the normal severity and evidence rules; put unresolved intent under Questions. An absent spec is a stated limit, not permission to invent requirements.
+
 ## 2. Trace changed behaviour
 
 Read each changed file plus the callers, types, tests, configuration, and error paths needed to understand impact. Verify symbols and APIs against source/docs. Focus on:
@@ -109,5 +111,7 @@ Then provide:
 If no finding meets the bar, say **"No issues found."** and still report the diff range and verification performed.
 
 ## Provenance
+
+The explicit requirement-conformance checks adapt Matt Pocock's [code-review](https://github.com/mattpocock/skills/blob/4ae2317ddb22b046e26455e4f9c9b3aaaf62212d/skills/engineering/code-review/SKILL.md) at that revision (MIT; [matt-pocock-LICENSE](matt-pocock-LICENSE)). They retain this skill's range, severity, reconciliation and clean-result rules rather than importing a compulsory standards panel.
 
 The one-line form for P3 findings, the wording rules, and the Questions item adapt `caveman-review` from https://github.com/JuliusBrussee/caveman/blob/v4.0.1/skills/caveman-review/SKILL.md (Apache License 2.0). The pass, fail, unavailable, and blocked result classes adapt `verify-and-stop` from the same repository and release. The expected-load rule, the treatment of a marked limit as a decision, and the numbering of findings across severities adapt `ponytail-review` from https://github.com/DietrichGebert/ponytail/blob/v5.3.2/skills/ponytail-review/SKILL.md (MIT License), where the marker is `shortcut:`.

@@ -1,0 +1,17 @@
+{
+  "skill_name": "discovery",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Assess planning readiness and give the next single decision question; no tools or file changes. Existing change-record: Intent is account-level log export; Open questions contains `Which actor owns an export?`; a coarse in-scope note says storage/retention constraints depend on that actor and cannot yet be specified. Existing glossary defines Account as the billing/legal owner. Source export.ts:1 `function exportLogs(userId) { return logs.forUser(userId); }`. The requester says 'an account can download all its logs' but also says 'only the individual login should see them'. A colleague wants to immediately create migration tickets, a new GLOSSARY.md plus ADR directory, and four parallel interface-design agents. What is settled, what needs a decision, and what should the plan contain next?",
+      "expected_output": "Expose the glossary/code/request conflict, ask one actor/scope decision, retain existing record and coarse note, and avoid premature implementation or mandatory fan-out.",
+      "files": [],
+      "expectations": [
+        "Distinguishes the billing/legal Account concept from the individual login and surfaces the conflict with source behaviour.",
+        "Asks one clear actor/scope decision rather than silently choosing or asking a batch of independent questions.",
+        "Keeps the existing record/open question and defers downstream migration acceptance until the decision is settled.",
+        "Does not mandate a new glossary/ADR tree, four-agent panel or implementation during discovery."
+      ]
+    }
+  ]
+}

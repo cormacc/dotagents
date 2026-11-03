@@ -1,0 +1,29 @@
+{
+  "skill_name": "tdd",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Assess a test-first plan for a new batch fee function; do not execute or change files. Contract: apply a 50% fee to the sum of all line amounts in cents, then round once, half up. Input [101, 101]. Candidate implementation rounds each line separately. Its proposed test computes the expected result with the same per-line map/round/reduce expression. Choose the first regression assertion, its independent expected value and the next red/green/refactor steps. Do not invent new features.",
+      "expected_output": "Use the independently worked aggregate result 101, reject the duplicated algorithm as an oracle, and describe a bounded vertical test-first slice.",
+      "files": [],
+      "expectations": [
+        "Identifies the independent expected fee as 101, not the per-line result 102.",
+        "Rejects the proposed oracle because it repeats the implementation's per-line rounding.",
+        "Requires an intended red result before the minimal fix and permits behaviour-preserving refactoring.",
+        "States that this is a proposed assessment, not an executed test or implemented feature."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Assess a test-design change; do not execute or modify anything. Queue contract: persist a message successfully before acknowledgement; on persistence failure never acknowledge. The final queue state looks correct even if ack occurs first. A proposed higher-level happy-path test checks only final state, and its author wants to delete existing persist-before-ack and persistence-failure/no-ack tests because they inspect internal interactions. Which assertions should remain, what would prove coverage replacement, and where should dependencies be substituted?",
+      "expected_output": "Preserve contractual ordering and failure assertions; reject blanket internal-interaction bans and unproven coverage deletion.",
+      "files": [],
+      "expectations": [
+        "Retains an observable persist-before-ack assertion because order is part of the contract.",
+        "Retains the no-ack-on-persistence-failure path.",
+        "Rejects deleting the existing tests merely because a higher-level happy path passes; requires assertion-level replacement evidence.",
+        "Chooses deterministic boundary substitution where needed without banning all internal interaction tests."
+      ]
+    }
+  ]
+}

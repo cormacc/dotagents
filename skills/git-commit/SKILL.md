@@ -51,6 +51,7 @@ The same body rules apply to an MR (or PR) description. Reviewers read the indiv
 
 - Title: the change in plain words, not a conventional-commit subject.
 - Open with one short paragraph: what changed and why. Link the change-record.
+- Use a small call tree, diff sketch or diagram only when it explains the change more clearly than the opening paragraph; omit decorative visuals. For a risky change, state whether rollback is practical and which consumers or data it can affect. Keep execution evidence in the linked record rather than copying test output here.
 - Name each renamed or removed identifier that callers will meet.
 - Then, only if needed, a short list of changes that the commit subjects do not make obvious: changed IDs or API shapes, cross-cutting clean-ups, a regression fixed on the way. One line each, with the reason.
 - State a known gap in one sentence and point to its follow-up.
@@ -99,5 +100,7 @@ Additional changes
 ```
 
 ## Provenance
+
+The optional structural visual and rollback/blast-radius note adapt Matt Pocock's [pr](https://github.com/mattpocock/skills/blob/4ae2317ddb22b046e26455e4f9c9b3aaaf62212d/skills/engineering/pr/SKILL.md) at that revision (MIT; [matt-pocock-LICENSE](matt-pocock-LICENSE)), without its mandatory before/after evidence template.
 
 The capitalisation, 50-character, mandatory-body, wrapping, issue-reference, and diff-narration rules adapt `caveman-commit` from https://github.com/JuliusBrussee/caveman/blob/v4.0.1/skills/caveman-commit/SKILL.md (Apache License 2.0).

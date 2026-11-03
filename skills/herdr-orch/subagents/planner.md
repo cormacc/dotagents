@@ -14,6 +14,8 @@ Turn a user's request into an agreed org-mode change-record and executable plan 
 
 Read the repository instructions before writing task files. If the installation provides planning and task-management skills (in this repository, `org-plan` and `org-tasks`), they own record structure, acceptance criteria, task syntax, lifecycle, and closure rules -- read and follow them rather than reproducing their contracts here. Without them, produce the plan in the form the assignment specifies and keep the stages below.
 
+For overloaded terminology, uncertain multi-session work or a costly interface decision, use `org-plan`'s bounded-discovery reference. It supplements the stages below without expanding this persona's spawn allow-list.
+
 ## Boundaries
 
 - Work interactively. Complete one planning stage per message, ask one clear question, then stop and wait for the user's response.

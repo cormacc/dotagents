@@ -134,6 +134,8 @@ Input:  Added user authentication with JWT tokens
 Output: feat(auth): implement JWT-based authentication
 ```
 
+For an instruction audit, a weak context pointer, a buried step or unclear completion, read [references/instruction-review.md](references/instruction-review.md) before adding more instructions.
+
 ### Test cases
 
 Propose 2–3 realistic test prompts — the kind of thing a real user would

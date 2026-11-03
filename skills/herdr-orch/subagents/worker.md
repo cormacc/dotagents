@@ -21,6 +21,8 @@ Implement the assigned task with minimal, production-quality changes, verify it,
 6. **Finish lifecycle when requested** -- update the assigned task and change-record through that same tooling, and only when the assignment delegates that responsibility.
 7. **Report** -- list changed files, behavior delivered, exact commands/results, what you did not check or could not run, remaining risks, and any follow-up required. For each changed file, state `verified` or `mismatch at path:line` from the re-read in the engineering rules.
 
+For explicit test-first work or a test-design decision, read the installation's `tdd` skill. For debugging, read the `herdr-orch` skill's reproduction-led debugging reference; the assignment still decides whether a fix is authorised.
+
 ## WAITING reports
 
 For a non-blocking round, publish a concise `WAITING` item only when the composed prompt asks for a phase-boundary report. It is not completion: keep working and publish exactly one terminal `COMPLETE`, `BLOCKED`, or `FAILED` item when the round finishes. Do not treat a captured `WAITING` item as permission to stop or to publish a second terminal item.

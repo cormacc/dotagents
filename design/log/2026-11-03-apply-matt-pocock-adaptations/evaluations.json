@@ -1,0 +1,1049 @@
+{
+  "source": "mattpocock/skills@4ae2317ddb22b046e26455e4f9c9b3aaaf62212d",
+  "baseline": "f85b22023bbad571166065ac29bb0d37aace7b99",
+  "model": "openai-codex/gpt-6.1-sol",
+  "thinking": "low",
+  "pi_version": "1.4.0",
+  "scope": "Supplied-evidence assessments with explicit instruction injection, shared home and repository instructions, and relevant baseline persona/skill instructions. Tools, extensions, MCP, skill/context discovery and session persistence disabled. Not a provider request audit.",
+  "limits": [
+    "One sample per case per arm; parent semantic grading, not blind independent grading.",
+    "All final expectations pass in both arms; no marginal correctness gain established.",
+    "No automatic triggering, pointer-following, tool execution, questionnaire drafting run, live resource or performance claim."
+  ],
+  "cases": [
+    {
+      "group": "tdd",
+      "id": 1,
+      "iteration": "iteration-1",
+      "prompt": "Assess a test-first plan for a new batch fee function; do not execute or change files. Contract: apply a 50% fee to the sum of all line amounts in cents, then round once, half up. Input [101, 101]. Candidate implementation rounds each line separately. Its proposed test computes the expected result with the same per-line map/round/reduce expression. Choose the first regression assertion, its independent expected value and the next red/green/refactor steps. Do not invent new features.",
+      "expectations": [
+        "Identifies the independent expected fee as 101, not the per-line result 102.",
+        "Rejects the proposed oracle because it repeats the implementation's per-line rounding.",
+        "Requires an intended red result before the minimal fix and permits behaviour-preserving refactoring.",
+        "States that this is a proposed assessment, not an executed test or implemented feature."
+      ],
+      "arms": {
+        "with_skill": {
+          "assessment": "The proposed test repeats the implementation’s defect. It cannot distinguish per-line rounding from the required batch rounding.\n\n**First regression assertion:** for input `[101, 101]`, assert that the batch fee is **101 cents**.\n\nIndependent calculation from the contract: the total is 202 cents; 50% is 101 cents. The candidate instead rounds each 50.5-cent fee to 51 cents, producing 102 cents.\n\n1. **Red:** Add the assertion through the batch fee function’s interface. Run it against the candidate and confirm failure because the actual result is 102, not 101.\n2. **Green:** Sum the line amounts, apply 50%, then round once, half up. Run the regression and relevant existing tests.\n3. **Refactor:** Remove duplication or clarify the code only if needed, preserving the contract. Rerun the tests.\n\nThis assertion catches per-line rounding. It does not independently verify half-up rounding when the final batch fee is fractional.\n\nNo files were changed and no tests were run.",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Identifies the independent expected fee as 101, not the per-line result 102.",
+                "passed": true,
+                "evidence": "**101 cents**"
+              },
+              {
+                "text": "Rejects the proposed oracle because it repeats the implementation's per-line rounding.",
+                "passed": true,
+                "evidence": "cannot distinguish per-line rounding"
+              },
+              {
+                "text": "Requires an intended red result before the minimal fix and permits behaviour-preserving refactoring.",
+                "passed": true,
+                "evidence": "**Refactor:**"
+              },
+              {
+                "text": "States that this is a proposed assessment, not an executed test or implemented feature.",
+                "passed": true,
+                "evidence": "No files were changed and no tests were run."
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 8150,
+            "duration_ms": 36014.608321,
+            "total_duration_seconds": 36.014608321
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "cf90d7eb73b54eff7b73cf0b258c20ddfa5db68620b2ed0e6e05b55c8575c6a2",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/subagents/worker.md",
+                "sha256": "0d068e1e7e2a374cb43ea215fa5ed61c2a65c37988220fc4c3bf0e2386727b34"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/traits/simple/prompt.md",
+                "sha256": "9aad2affd4ab7eeec83d37a4b996a34bab041181f28dbd2df50b83d28dd65022"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/tdd/SKILL.md",
+                "sha256": "24bcd4a2f130b4c3e100832130d7a533cb52bd4b2b34e29d906b33dca65d3cc0"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/tdd/references/test-design.md",
+                "sha256": "784755dab953b28de6fc998d7d310ebf97bde740a7a903b84c607e3dd3f18f42"
+              }
+            ]
+          }
+        },
+        "without_skill": {
+          "assessment": "The proposed test repeats the implementation’s error. It cannot detect per-line rounding.\n\n1. **First regression assertion:** assert that the batch fee for `[101, 101]` equals **101 cents**. Independent calculation: the sum is 202 cents; 50% is exactly 101 cents. Per-line half-up rounding instead gives 51 + 51 = 102 cents.\n2. **Red:** run this assertion against the candidate implementation. Confirm that it fails because the actual result is 102, not 101.\n3. **Green:** change the implementation to sum all line amounts, apply the 50% fee, then round once, half up. Run the regression test and the existing relevant tests.\n4. **Refactor:** remove duplication only if needed, preserve the contract, and rerun those tests.\n\nNo checks were executed and no files were changed.",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Identifies the independent expected fee as 101, not the per-line result 102.",
+                "passed": true,
+                "evidence": "**101 cents**"
+              },
+              {
+                "text": "Rejects the proposed oracle because it repeats the implementation's per-line rounding.",
+                "passed": true,
+                "evidence": "It cannot detect per-line rounding."
+              },
+              {
+                "text": "Requires an intended red result before the minimal fix and permits behaviour-preserving refactoring.",
+                "passed": true,
+                "evidence": "**Red:**"
+              },
+              {
+                "text": "States that this is a proposed assessment, not an executed test or implemented feature.",
+                "passed": true,
+                "evidence": "No checks were executed and no files were changed."
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 6755,
+            "duration_ms": 10065.695321,
+            "total_duration_seconds": 10.065695321
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "9092283690797ff2c20d8dd08311692c9f0fb5f513c266200468633176d29320",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/subagents/worker.md",
+                "sha256": "16200e60710e688390a1ab7477b3e4a8cff71a513f241841e54db85b6d7063cb"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/traits/simple/prompt.md",
+                "sha256": "9aad2affd4ab7eeec83d37a4b996a34bab041181f28dbd2df50b83d28dd65022"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "group": "tdd",
+      "id": 2,
+      "iteration": "iteration-1",
+      "prompt": "Assess a test-design change; do not execute or modify anything. Queue contract: persist a message successfully before acknowledgement; on persistence failure never acknowledge. The final queue state looks correct even if ack occurs first. A proposed higher-level happy-path test checks only final state, and its author wants to delete existing persist-before-ack and persistence-failure/no-ack tests because they inspect internal interactions. Which assertions should remain, what would prove coverage replacement, and where should dependencies be substituted?",
+      "expectations": [
+        "Retains an observable persist-before-ack assertion because order is part of the contract.",
+        "Retains the no-ack-on-persistence-failure path.",
+        "Rejects deleting the existing tests merely because a higher-level happy path passes; requires assertion-level replacement evidence.",
+        "Chooses deterministic boundary substitution where needed without banning all internal interaction tests."
+      ],
+      "arms": {
+        "with_skill": {
+          "assessment": "**Keep both existing contract assertions.** The proposed final-state test does not replace them: the supplied contract says the final state can be correct even when acknowledgement occurs too early.\n\n- **Success:** assert that persistence succeeds before acknowledgement occurs. This interaction order is required behaviour, not an incidental implementation detail.\n- **Persistence failure:** assert that acknowledgement never occurs.\n- Keep the higher-level final-state assertion as complementary coverage.\n\n**Coverage replacement requires equivalent failure detection.** Before deleting either existing test, identify its assertions and map each to a replacement. The replacement tests must fail for the intended reason when acknowledgement is deliberately moved before successful persistence, and when acknowledgement is deliberately allowed after persistence fails. A green happy-path test alone proves neither requirement.\n\n**Substitute dependencies at the external boundary that owns persistence and acknowledgement.** Prefer real, local dependencies where they are cheap, deterministic and safe. Otherwise, use controlled substitutes that can delay persistence completion, report persistence failure, and record acknowledgement timing. They must preserve the relevant success and failure behaviour. Do not replace the queue logic under test or mock incidental helpers merely to count calls.\n\nNo checks were executed; this assessment uses only the supplied contract and proposed test design.",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Retains an observable persist-before-ack assertion because order is part of the contract.",
+                "passed": true,
+                "evidence": "persistence succeeds before acknowledgement occurs"
+              },
+              {
+                "text": "Retains the no-ack-on-persistence-failure path.",
+                "passed": true,
+                "evidence": "acknowledgement never occurs"
+              },
+              {
+                "text": "Rejects deleting the existing tests merely because a higher-level happy path passes; requires assertion-level replacement evidence.",
+                "passed": true,
+                "evidence": "identify its assertions and map each to a replacement"
+              },
+              {
+                "text": "Chooses deterministic boundary substitution where needed without banning all internal interaction tests.",
+                "passed": true,
+                "evidence": "controlled substitutes that can delay persistence completion"
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 8170,
+            "duration_ms": 12907.964016,
+            "total_duration_seconds": 12.907964016
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "cf90d7eb73b54eff7b73cf0b258c20ddfa5db68620b2ed0e6e05b55c8575c6a2",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/subagents/worker.md",
+                "sha256": "0d068e1e7e2a374cb43ea215fa5ed61c2a65c37988220fc4c3bf0e2386727b34"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/traits/simple/prompt.md",
+                "sha256": "9aad2affd4ab7eeec83d37a4b996a34bab041181f28dbd2df50b83d28dd65022"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/tdd/SKILL.md",
+                "sha256": "24bcd4a2f130b4c3e100832130d7a533cb52bd4b2b34e29d906b33dca65d3cc0"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/tdd/references/test-design.md",
+                "sha256": "784755dab953b28de6fc998d7d310ebf97bde740a7a903b84c607e3dd3f18f42"
+              }
+            ]
+          }
+        },
+        "without_skill": {
+          "assessment": "Keep both contract assertions:\n\n- **Ordering:** persistence succeeds before acknowledgement. Final queue state alone cannot prove this.\n- **Failure:** if persistence fails, acknowledgement does not occur.\n\nThe higher-level happy-path test can remain, but its final-state assertion does not replace either existing test. These interactions are observable contract requirements, not incidental implementation details.\n\nCoverage replacement requires tests that:\n- Observe the ordering at the persistence and acknowledgement boundaries, including confirmation that persistence completes successfully before acknowledgement.\n- Cause persistence to fail and assert that no acknowledgement occurs.\n- Fail for the intended reason against deliberately incorrect behaviour: acknowledge before persistence succeeds, and acknowledge despite persistence failure. Each mutation must be confirmed as applied before interpreting the results.\n\nDelete the existing tests only when replacement assertions demonstrably cover both requirements. Test names or suite totals are not evidence of equivalent coverage.\n\nSubstitute dependencies at the external persistence and acknowledgement boundaries. Keep the queue orchestration under test real. Use controlled substitutes to delay or fail persistence and record acknowledgement, without mocking internal helpers or coupling tests to unrelated call sequences.",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Retains an observable persist-before-ack assertion because order is part of the contract.",
+                "passed": true,
+                "evidence": "persistence succeeds before acknowledgement"
+              },
+              {
+                "text": "Retains the no-ack-on-persistence-failure path.",
+                "passed": true,
+                "evidence": "if persistence fails, acknowledgement does not occur"
+              },
+              {
+                "text": "Rejects deleting the existing tests merely because a higher-level happy path passes; requires assertion-level replacement evidence.",
+                "passed": true,
+                "evidence": "replacement assertions demonstrably cover both requirements"
+              },
+              {
+                "text": "Chooses deterministic boundary substitution where needed without banning all internal interaction tests.",
+                "passed": true,
+                "evidence": "Substitute dependencies at the external persistence and acknowledgement boundaries"
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 6781,
+            "duration_ms": 11445.405456,
+            "total_duration_seconds": 11.445405456
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "9092283690797ff2c20d8dd08311692c9f0fb5f513c266200468633176d29320",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/subagents/worker.md",
+                "sha256": "16200e60710e688390a1ab7477b3e4a8cff71a513f241841e54db85b6d7063cb"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/traits/simple/prompt.md",
+                "sha256": "9aad2affd4ab7eeec83d37a4b996a34bab041181f28dbd2df50b83d28dd65022"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "group": "debugging",
+      "id": 1,
+      "iteration": "iteration-1",
+      "prompt": "Diagnosis-only assessment, no execution or writes. Reported symptom: concurrent logins for users A and B sometimes send B's token on A's request; isolated logins work. Supplied evidence: `test single-login` passed; `test error-format` exited 1 because its test runner could not import a formatter dependency. No concurrent reproduction has run. A colleague says the red error-format test is enough to start changing the token cache. Assess what is actually known and specify the next bounded probe and control. Stop at the diagnosis/fix authority boundary.",
+      "expectations": [
+        "Distinguishes the formatter import/setup error from the reported token symptom.",
+        "Requires a bounded concurrent two-user probe that asserts request token ownership, with an isolated or serial passing control.",
+        "Does not report an untested token-cache cause as established fact.",
+        "Does not claim to execute a probe or apply a fix, and preserves diagnosis-only scope."
+      ],
+      "arms": {
+        "with_skill": {
+          "assessment": "**The evidence does not establish a cause or justify changing the token cache.**\n\n- **Reported symptom:** concurrent logins for A and B sometimes send B’s token on A’s request; isolated logins work.\n- **Observed evidence:** `test single-login` passed. This supports only the isolated scenario that it exercised.\n- **Setup failure:** `test error-format` exited 1 because the runner could not import a formatter dependency. It did not demonstrate token crossover.\n- **Unknown:** no concurrent reproduction has run. Shared token state is a hypothesis, not a diagnosis.\n\n**Next bounded probe and control:**\n\n1. Use a disposable local target with two synthetic users and distinguishable, non-secret token markers. Capture each outgoing request’s user identity and token marker at the request boundary.\n2. In the same harness invocation, run sequential logins and requests for A and B as a positive control. Require both requests to complete with their own markers. An import or setup failure makes the probe inconclusive.\n3. Run a fixed maximum of 100 paired concurrent attempts under a 30-second outer timeout. Coordinate overlap at token storage and request construction where the harness permits it. Record the schedule, attempt count, completed requests and crossover count. Attach disposable-resource cleanup to the outer timeout.\n4. Treat any request carrying the other user’s marker as the failure signal. If crossover occurs, reduce the sequence while retaining the necessary overlap and shared state. Then inspect which state owner supplies the wrong marker. A clean bounded run does not prove absence of an intermittent fault.\n\n**Authority boundary:** this assignment permits diagnosis only. No checks were executed and no files were changed. Even a reproduced crossover would require evidence linking it to the token cache before naming that cache as the cause; a fix would need separate authorisation.",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Distinguishes the formatter import/setup error from the reported token symptom.",
+                "passed": true,
+                "evidence": "It did not demonstrate token crossover."
+              },
+              {
+                "text": "Requires a bounded concurrent two-user probe that asserts request token ownership, with an isolated or serial passing control.",
+                "passed": true,
+                "evidence": "run sequential logins and requests for A and B as a positive control"
+              },
+              {
+                "text": "Does not report an untested token-cache cause as established fact.",
+                "passed": true,
+                "evidence": "Shared token state is a hypothesis, not a diagnosis."
+              },
+              {
+                "text": "Does not claim to execute a probe or apply a fix, and preserves diagnosis-only scope.",
+                "passed": true,
+                "evidence": "this assignment permits diagnosis only"
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 7923,
+            "duration_ms": 15518.263225,
+            "total_duration_seconds": 15.518263225
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "4291a9ec888b31598a57dd1a9446448e3415f2a1317a49b8bdc096f178b17a8f",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/subagents/worker.md",
+                "sha256": "0d068e1e7e2a374cb43ea215fa5ed61c2a65c37988220fc4c3bf0e2386727b34"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/traits/simple/prompt.md",
+                "sha256": "9aad2affd4ab7eeec83d37a4b996a34bab041181f28dbd2df50b83d28dd65022"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/traits/investigate/prompt.md",
+                "sha256": "4678907f9f2542012782880f6fd4331a3f06d23c6e6d5f2286be081c61d7a81f"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/references/debugging.md",
+                "sha256": "578cdd5e42c55de3d3c94cab2a3f0c6fb9bd05af0d01a2ea904e4ef958005628"
+              }
+            ]
+          }
+        },
+        "without_skill": {
+          "assessment": "**The supplied evidence does not justify changing the token cache.** The cause is not established.\n\n- **Reported symptom:** concurrent logins for A and B sometimes send B’s token on A’s request. This has not been reproduced in the supplied tests.\n- **Observed evidence:** `test single-login` passed. This supports only the isolated case exercised by that test.\n- **Validation failure:** `test error-format` exited 1 because the runner could not import a formatter dependency. It provides no evidence about token ownership or concurrent requests.\n- **Hypothesis:** shared mutable authentication state could explain the reported cross-user token use. The evidence does not identify the token cache as that state.\n\n**Next bounded probe and control:**\n\n1. In a disposable local harness with fake users and distinguishable dummy tokens, run one controlled overlapping login/request sequence for A and B. Use a fixed timeout and force the suspected overlap: pause A before its request takes the token, complete B’s login, then resume A. Record user identity and token identity at assignment and request construction, without real credentials.\n2. In the same invocation, run the equivalent sequence serially as the positive control. Confirm that both requests occur and each carries its own token. If the control fails or produces no output, treat the probe as invalid.\n3. Compare the traces. If A’s request takes B’s token, identify the exact shared state and ownership transition responsible. If it does not, report that this interleaving did not reproduce the symptom; do not infer absence of a concurrency defect.\n\n**Boundary:** this is a diagnosis plan, not an established diagnosis. No checks were executed and no files were changed. A demonstrated cause would support a diagnosis report; it would not authorise a fix under this diagnosis-only assignment.",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Distinguishes the formatter import/setup error from the reported token symptom.",
+                "passed": true,
+                "evidence": "It provides no evidence about token ownership"
+              },
+              {
+                "text": "Requires a bounded concurrent two-user probe that asserts request token ownership, with an isolated or serial passing control.",
+                "passed": true,
+                "evidence": "run the equivalent sequence serially as the positive control"
+              },
+              {
+                "text": "Does not report an untested token-cache cause as established fact.",
+                "passed": true,
+                "evidence": "The cause is not established."
+              },
+              {
+                "text": "Does not claim to execute a probe or apply a fix, and preserves diagnosis-only scope.",
+                "passed": true,
+                "evidence": "No checks were executed and no files were changed."
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 7158,
+            "duration_ms": 16851.856492,
+            "total_duration_seconds": 16.851856492
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "ba547bf4cd13c2d615222fdce63102b87e6c582b2a64b26510e5effd62b31132",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/subagents/worker.md",
+                "sha256": "16200e60710e688390a1ab7477b3e4a8cff71a513f241841e54db85b6d7063cb"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/traits/simple/prompt.md",
+                "sha256": "9aad2affd4ab7eeec83d37a4b996a34bab041181f28dbd2df50b83d28dd65022"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/traits/investigate/prompt.md",
+                "sha256": "51c3b43773de6bfd374f5631cf1f43190697f4ca265669bde08b63ac910ea3e2"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "group": "debugging",
+      "id": 2,
+      "iteration": "iteration-1",
+      "prompt": "Diagnosis-only assessment, no execution or writes. Source token.ts:1 `let activeToken;` :2 `async function request(user) { activeToken = user.token; await barrier(); return send(activeToken); }`. Retained disposable-harness evidence: `test paired-users` ran and failed with expected tokens [A,B], actual [B,B]; trace shows A assigns A, B assigns B, then both resume. `test serial-users` ran and passed with [A,B]. The paired case reduces to two callers and the barrier; removing either concurrency or the shared variable eliminates this symptom. Explain the cause and proof, what can be concluded from these supplied results, and any recommendation. The user has not authorised a fix.",
+      "expectations": [
+        "Identifies the shared activeToken read after suspension as the mechanism linking both callers.",
+        "Uses the supplied paired failure and serial passing control as evidence, not newly executed results.",
+        "Preserves both callers and the suspension/shared-state pattern in the reproduction.",
+        "Stops after diagnosis; a possible scoped repair is only a recommendation, not an applied fix."
+      ],
+      "arms": {
+        "with_skill": {
+          "assessment": "**Cause:** The request function stores each user’s token in the same shared variable, `activeToken`. Its value can change while a request waits at `await barrier()`.\n\n**Proof from the supplied evidence:**\n- A assigns token A, then B assigns token B before either caller resumes.\n- Both callers then read `activeToken` as B, which explains the paired test’s actual result `[B,B]` instead of `[A,B]`.\n- The serial test passes with `[A,B]`.\n- Removing either concurrency or the shared variable eliminates the symptom in the supplied harness.\n\nThese results establish a shared-state race for the demonstrated interleaving. They do not establish how often it occurs in production or whether other call paths are affected. If tokens control authentication, the demonstrated behaviour could send one user’s request with another user’s credentials.\n\n**Recommendation:** Keep each token local to its request rather than in shared mutable state. Retain the paired-users case as a regression test and the serial case as a control if a fix is authorised.\n\nNo checks were executed and no files were changed for this assessment.",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Identifies the shared activeToken read after suspension as the mechanism linking both callers.",
+                "passed": true,
+                "evidence": "same shared variable, `activeToken`"
+              },
+              {
+                "text": "Uses the supplied paired failure and serial passing control as evidence, not newly executed results.",
+                "passed": true,
+                "evidence": "**Proof from the supplied evidence:**"
+              },
+              {
+                "text": "Preserves both callers and the suspension/shared-state pattern in the reproduction.",
+                "passed": true,
+                "evidence": "Retain the paired-users case as a regression test"
+              },
+              {
+                "text": "Stops after diagnosis; a possible scoped repair is only a recommendation, not an applied fix.",
+                "passed": true,
+                "evidence": "No checks were executed and no files were changed"
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 7819,
+            "duration_ms": 14189.494389,
+            "total_duration_seconds": 14.189494389
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "4291a9ec888b31598a57dd1a9446448e3415f2a1317a49b8bdc096f178b17a8f",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/subagents/worker.md",
+                "sha256": "0d068e1e7e2a374cb43ea215fa5ed61c2a65c37988220fc4c3bf0e2386727b34"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/traits/simple/prompt.md",
+                "sha256": "9aad2affd4ab7eeec83d37a4b996a34bab041181f28dbd2df50b83d28dd65022"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/traits/investigate/prompt.md",
+                "sha256": "4678907f9f2542012782880f6fd4331a3f06d23c6e6d5f2286be081c61d7a81f"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/references/debugging.md",
+                "sha256": "578cdd5e42c55de3d3c94cab2a3f0c6fb9bd05af0d01a2ea904e4ef958005628"
+              }
+            ]
+          }
+        },
+        "without_skill": {
+          "assessment": "**Cause:** `activeToken` is shared mutable state across requests. Each request reads it after `await barrier()`, rather than retaining its own token.\n\n**Proof from the supplied evidence:** A assigns `A`, then B overwrites it with `B`. Both requests then resume and call `send(activeToken)`, reading `B`. This explains the paired test’s expected `[A,B]` versus actual `[B,B]`.\n\nThe supplied results support these conclusions:\n- The paired test demonstrates cross-request token contamination under the recorded interleaving.\n- The serial test passes because its calls do not overlap; it does not establish concurrent safety.\n- Removing either concurrency or the shared variable eliminates the symptom in the reduced harness. This supports shared state across the suspension point as the cause, rather than the barrier alone.\n- The evidence does not establish production frequency or any actual security incident. If these tokens control authorisation, cross-user token use is a potential security risk.\n\n**Recommendation:** With approval, keep the token request-local and retain the paired test as a regression test. The supplied failing result provides a pre-fix baseline; a future fix must pass that test and preserve serial behaviour.\n\nNo fix is authorised. No commands were executed or files changed.",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Identifies the shared activeToken read after suspension as the mechanism linking both callers.",
+                "passed": true,
+                "evidence": "reads it after `await barrier()`"
+              },
+              {
+                "text": "Uses the supplied paired failure and serial passing control as evidence, not newly executed results.",
+                "passed": true,
+                "evidence": "**Proof from the supplied evidence:**"
+              },
+              {
+                "text": "Preserves both callers and the suspension/shared-state pattern in the reproduction.",
+                "passed": true,
+                "evidence": "retain the paired test as a regression test"
+              },
+              {
+                "text": "Stops after diagnosis; a possible scoped repair is only a recommendation, not an applied fix.",
+                "passed": true,
+                "evidence": "No fix is authorised."
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 7085,
+            "duration_ms": 13041.155153,
+            "total_duration_seconds": 13.041155153
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "ba547bf4cd13c2d615222fdce63102b87e6c582b2a64b26510e5effd62b31132",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/subagents/worker.md",
+                "sha256": "16200e60710e688390a1ab7477b3e4a8cff71a513f241841e54db85b6d7063cb"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/traits/simple/prompt.md",
+                "sha256": "9aad2affd4ab7eeec83d37a4b996a34bab041181f28dbd2df50b83d28dd65022"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/traits/investigate/prompt.md",
+                "sha256": "51c3b43773de6bfd374f5631cf1f43190697f4ca265669bde08b63ac910ea3e2"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "group": "discovery",
+      "id": 1,
+      "iteration": "iteration-1",
+      "prompt": "Assess planning readiness and give the next single decision question; no tools or file changes. Existing change-record: Intent is account-level log export; Open questions contains `Which actor owns an export?`; a coarse in-scope note says storage/retention constraints depend on that actor and cannot yet be specified. Existing glossary defines Account as the billing/legal owner. Source export.ts:1 `function exportLogs(userId) { return logs.forUser(userId); }`. The requester says 'an account can download all its logs' but also says 'only the individual login should see them'. A colleague wants to immediately create migration tickets, a new GLOSSARY.md plus ADR directory, and four parallel interface-design agents. What is settled, what needs a decision, and what should the plan contain next?",
+      "expectations": [
+        "Distinguishes the billing/legal Account concept from the individual login and surfaces the conflict with source behaviour.",
+        "Asks one clear actor/scope decision rather than silently choosing or asking a batch of independent questions.",
+        "Keeps the existing record/open question and defers downstream migration acceptance until the decision is settled.",
+        "Does not mandate a new glossary/ADR tree, four-agent panel or implementation during discovery."
+      ],
+      "arms": {
+        "with_skill": {
+          "assessment": "**Not ready for an implementation plan.** Export ownership is unresolved, and the requester’s statements imply different access scopes.\n\n**Settled**\n- The existing Intent is account-level log export.\n- The glossary defines Account as the billing/legal owner.\n- The supplied function takes `userId` and returns `logs.forUser(userId)`. This shows user-scoped retrieval, but does not establish authorisation or account-wide export.\n- Storage and retention remain in scope, dependent on the ownership decision.\n\n**Needs a decision**\n- Whether an export contains the billing/legal account’s logs or only the individual login’s logs. Export ownership and permission to download are distinct; “only the individual login should see them” does not resolve which logs belong in the export.\n\n**Next plan content — step 1 of 10**\n1. Keep the existing change-record canonical. Refine `Which actor owns an export?` into the concrete scope question below, preserving both requester statements.\n2. Keep storage and retention as a coarse in-scope note. Do not invent migration tasks or acceptance criteria before their requirements are known.\n3. After the decision, record the agreed meaning in the existing glossary and the rationale in the change-record. Then resolve access permissions and dependent constraints.\n4. Defer migration tickets and interface designs. The evidence does not justify a new glossary, an ADR directory, or four parallel agents; the planner’s supplied delegation limits also exclude interface-design agents.\n\n**Should an export contain logs from the whole billing/legal Account, or only logs belonging to the individual login that requests it?**",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Distinguishes the billing/legal Account concept from the individual login and surfaces the conflict with source behaviour.",
+                "passed": true,
+                "evidence": "glossary defines Account as the billing/legal owner"
+              },
+              {
+                "text": "Asks one clear actor/scope decision rather than silently choosing or asking a batch of independent questions.",
+                "passed": true,
+                "evidence": "Should an export contain logs from the whole billing/legal Account"
+              },
+              {
+                "text": "Keeps the existing record/open question and defers downstream migration acceptance until the decision is settled.",
+                "passed": true,
+                "evidence": "Keep storage and retention as a coarse in-scope note"
+              },
+              {
+                "text": "Does not mandate a new glossary/ADR tree, four-agent panel or implementation during discovery.",
+                "passed": true,
+                "evidence": "does not justify a new glossary, an ADR directory, or four parallel agents"
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 14510,
+            "duration_ms": 14252.991844,
+            "total_duration_seconds": 14.252991844
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "8f9bb84ccc02bf353d42ae02a5eed513617c686da60e90db3d147a031de601d3",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/subagents/planner.md",
+                "sha256": "3ea6875508f482de0dda61de16a78522ad12d3855afb3815b790747acf532a4c"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/traits/simple/prompt.md",
+                "sha256": "9aad2affd4ab7eeec83d37a4b996a34bab041181f28dbd2df50b83d28dd65022"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/org-plan/SKILL.md",
+                "sha256": "71fc97279c13ac79446cab2d03c2727d403f5d53556b4d7e8ec0d8dc33fb8449"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/org-plan/references/discovery.md",
+                "sha256": "3a8c364bd77a67214cb438d8f89f1e2e7cdcb313aa680e2c1f86b83e0318855e"
+              }
+            ]
+          }
+        },
+        "without_skill": {
+          "assessment": "**Planning is not ready for migration or interface-design tasks.** The unresolved ownership and access boundary changes what the export must contain.\n\n### Settled\n- The recorded intent is account-level log export.\n- The supplied glossary defines Account as the billing/legal owner.\n- The supplied `exportLogs(userId)` implementation retrieves logs through `logs.forUser(userId)`. This establishes the current user-scoped retrieval, not the intended account-level behaviour.\n- The record already identifies export ownership as unresolved and storage/retention constraints as dependent on that decision.\n\n### Needs a decision\n“An account can download all its logs” and “only the individual login should see them” leave two distinct concerns unclear: which logs belong in an export, and who may download it. Account-wide contents with restricted download access is possible; individual-only contents is another interpretation. Neither is confirmed.\n\n### What the plan should contain next\n1. Resolve the export-content boundary first; then resolve download authorisation separately.\n2. Update the existing record’s scope and ownership question from those decisions. Replace the coarse storage/retention note only when its dependencies are resolved.\n3. Identify affected retrieval callers, authorisation checks, tests, fixtures and existing contracts before defining executable work. These surfaces are not established by the supplied evidence.\n4. Agree atomic acceptance criteria for export contents and access denial, plus storage/retention criteria once specified.\n5. Keep the existing glossary and change-record as the contract homes. No supplied evidence justifies migration tickets, a new glossary, an ADR directory or four parallel interface-design agents.\n\n**Should an export contain logs for the whole billing/legal Account, or only logs belonging to the requesting individual login?**",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Distinguishes the billing/legal Account concept from the individual login and surfaces the conflict with source behaviour.",
+                "passed": true,
+                "evidence": "glossary defines Account as the billing/legal owner"
+              },
+              {
+                "text": "Asks one clear actor/scope decision rather than silently choosing or asking a batch of independent questions.",
+                "passed": true,
+                "evidence": "Should an export contain logs for the whole billing/legal Account"
+              },
+              {
+                "text": "Keeps the existing record/open question and defers downstream migration acceptance until the decision is settled.",
+                "passed": true,
+                "evidence": "Replace the coarse storage/retention note only when its dependencies are resolved"
+              },
+              {
+                "text": "Does not mandate a new glossary/ADR tree, four-agent panel or implementation during discovery.",
+                "passed": true,
+                "evidence": "No supplied evidence justifies migration tickets, a new glossary, an ADR directory or four parallel interface-design agents"
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 13278,
+            "duration_ms": 16852.682152,
+            "total_duration_seconds": 16.852682152
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "d516a4cc5528593ed267356c79fa40e0031a3dd2a1b83f54b179ca37d0f9d6c6",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/subagents/planner.md",
+                "sha256": "ec2a9b021975cc7652ac47f8f8af998b6010b73ef6b0d2bcdfff13f5f50dc296"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/traits/simple/prompt.md",
+                "sha256": "9aad2affd4ab7eeec83d37a4b996a34bab041181f28dbd2df50b83d28dd65022"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/org-plan/SKILL.md",
+                "sha256": "53c6489a50df571e8d2b5d477d611d270eaf15e3e3d01b0fc9ce6319ab81c062"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "group": "conformance",
+      "id": 1,
+      "iteration": "iteration-2",
+      "prompt": "Perform two separately scoped reviews using only the supplied snippets; no execution. Spec R1: cleanup(items, true) must return matching names without deleting files. Spec R2: ordinary cleanup deletes matches. Changed range A, cleanup.ts:1 `function cleanup(items, dryRun=false) {` :2 `const matches = items.filter(isExpired);` :3 `return matches.map(removeFile);` :4 `}`. Existing tests exercise only dryRun=false and pass. Report a conformance finding with an exact requirement and reachable path, plus missing verification. Range B is an independently verified empty diff against its named base; report its own verdict without borrowing concerns from A or nearby code.",
+      "expectations": [
+        "Cites R1 and cleanup.ts:3 as a dryRun=true path that still invokes removeFile.",
+        "Requires a dry-run non-deletion check and does not treat the existing happy-path suite as conformance proof.",
+        "Reports a severity/evidence-based needs-changes verdict for range A.",
+        "Reports no issues and approval for the independently verified empty range B without broadening it."
+      ],
+      "arms": {
+        "with_skill": {
+          "assessment": "## Range A\n\n### 1. [P1] Honour dry-run requirement R1 before deleting files\n- **Location:** `cleanup.ts:3`\n- **Problem:** R1 requires `cleanup(items, true)` to return matching names without deleting files. For an input containing an expired item, line 2 selects it and line 3 passes it to `removeFile`, regardless of `dryRun`.\n- **Impact:** A dry run reaches the deletion operation, contrary to R1.\n- **Fix:** Branch on `dryRun` before calling `removeFile`. Return matching names in the dry-run branch; retain deletion for ordinary cleanup as required by R2.\n- **Evidence:** The supplied function never reads `dryRun`. Both `true` and `false` reach `matches.map(removeFile)`.\n\n**Verdict:** NEEDS CHANGES\n\n**Verification:** Execution **blocked** by the assignment. The supplied evidence reports passing tests for `dryRun=false` only; these do not verify R1. Missing verification includes a dry-run test with an expired item that asserts the returned names and confirms no deletion call or file deletion occurs. The return contract of `removeFile` is not supplied, so the returned-name behaviour cannot be assessed independently.\n\n**Summary:** Reviewed only `cleanup.ts:1–4` against R1 and R2. The unconditional deletion path violates R1.\n\n## Range B\n\n**No issues found.**\n\n**Verdict:** APPROVED\n\n**Verification:** Execution **blocked** by the assignment. The supplied evidence establishes an independently verified empty diff against its named base; no changed runtime surface requires assessment.\n\n**Summary:** Reviewed Range B as the supplied verified empty range. No concerns from Range A were transferred to it.",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Cites R1 and cleanup.ts:3 as a dryRun=true path that still invokes removeFile.",
+                "passed": true,
+                "evidence": "**Location:** `cleanup.ts:3`"
+              },
+              {
+                "text": "Requires a dry-run non-deletion check and does not treat the existing happy-path suite as conformance proof.",
+                "passed": true,
+                "evidence": "dry-run test with an expired item"
+              },
+              {
+                "text": "Reports a severity/evidence-based needs-changes verdict for range A.",
+                "passed": true,
+                "evidence": "**Verdict:** NEEDS CHANGES"
+              },
+              {
+                "text": "Reports no issues and approval for the independently verified empty range B without broadening it.",
+                "passed": true,
+                "evidence": "**No issues found.**"
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 8163,
+            "duration_ms": 13733.720818,
+            "total_duration_seconds": 13.733720818
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "3f646e33160690774001492d9ed6a599a6e3b81f94ad90b0d39b6cc29e444cbb",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/subagents/reviewer.md",
+                "sha256": "0345f9cc73a85c1da8e89519144c108636874e5253c31360598799d44c129822"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/traits/read-only.md",
+                "sha256": "db603301b6987bd8beb30bf8eadfdfbab3c3632a9988b75c9ed9569da071d66f"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/traits/grounded.md",
+                "sha256": "9508b24324fcb8c7df4de0aa556230396f2f4598e23fe2238d6ed2e84047d2b2"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/skills/code-review/SKILL.md",
+                "sha256": "513732de261ac5dd6fe8c1af2570c92eaebcdd8511a1b9a43a007fe8e8bd3ef6"
+              }
+            ]
+          }
+        },
+        "without_skill": {
+          "assessment": "## Review A: `cleanup.ts:1–4`\n\n### 1. [P1] Honour `dryRun` before deleting matches\n- **Location:** `cleanup.ts:3`\n- **Problem:** Spec R1 requires `cleanup(items, true)` to return matching names without deleting files. The function does not check `dryRun` before calling `removeFile`.\n- **Impact:** A dry run can delete matching files.\n- **Fix:** Return matching names when `dryRun` is true; call `removeFile` only for ordinary cleanup, as required by R2.\n- **Evidence:** With an expired item, `cleanup(items, true)` includes it in `matches` at line 2 and passes it to `removeFile` at line 3. The supplied tests cover only `dryRun=false`.\n\n**Verdict:** `NEEDS CHANGES`\n\n**Verification:** Execution **blocked** by the assignment. The supplied evidence reports passing ordinary-cleanup tests, but these do not verify R1. Missing verification: assert that a dry run returns matching names and leaves matching files intact. Confirm that this test fails with the supplied implementation.\n\n**Summary:** Reviewed only range A against R1 and R2. The dry-run path violates R1.\n\n## Review B: independently verified empty diff\n\n**No issues found.**\n\n**Verdict:** `APPROVED`\n\n**Verification:** Execution **blocked** by the assignment. The supplied evidence establishes an empty diff against its named base; no runtime surface is changed.\n\n**Summary:** Reviewed range B independently. No concerns from range A or nearby code were included.",
+          "grading": {
+            "expectations": [
+              {
+                "text": "Cites R1 and cleanup.ts:3 as a dryRun=true path that still invokes removeFile.",
+                "passed": true,
+                "evidence": "**Location:** `cleanup.ts:3`"
+              },
+              {
+                "text": "Requires a dry-run non-deletion check and does not treat the existing happy-path suite as conformance proof.",
+                "passed": true,
+                "evidence": "these do not verify R1"
+              },
+              {
+                "text": "Reports a severity/evidence-based needs-changes verdict for range A.",
+                "passed": true,
+                "evidence": "**Verdict:** `NEEDS CHANGES`"
+              },
+              {
+                "text": "Reports no issues and approval for the independently verified empty range B without broadening it.",
+                "passed": true,
+                "evidence": "**No issues found.**"
+              }
+            ],
+            "summary": {
+              "passed": 4,
+              "failed": 0,
+              "total": 4,
+              "pass_rate": 1
+            },
+            "claims": [
+              {
+                "claim": "Execution used the selected model with tools disabled and completed normally.",
+                "verified": true,
+                "type": "process",
+                "evidence": "Verified terminal stream parser and execution-status.json; not a provider request audit."
+              }
+            ],
+            "eval_feedback": {
+              "suggestions": [],
+              "overall": "Parent-scored supplied-evidence assessment. All core expectations also pass in the control; this case does not establish a marginal correctness gain. No automatic triggering or tool execution was tested."
+            }
+          },
+          "timing": {
+            "total_tokens": 7943,
+            "duration_ms": 8689.476691,
+            "total_duration_seconds": 8.689476691
+          },
+          "execution": {
+            "ok": true,
+            "model": "openai-codex/gpt-6.1-sol",
+            "thinking": "low",
+            "tools": [],
+            "exit": 0,
+            "system_sha256": "87cc50a488fbf4a5a176033f39a8f3472b1d2a785db887b24adedbab47053779",
+            "instruction_hashes": [
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/subagents/reviewer.md",
+                "sha256": "0345f9cc73a85c1da8e89519144c108636874e5253c31360598799d44c129822"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/traits/read-only.md",
+                "sha256": "db603301b6987bd8beb30bf8eadfdfbab3c3632a9988b75c9ed9569da071d66f"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/traits/grounded.md",
+                "sha256": "9508b24324fcb8c7df4de0aa556230396f2f4598e23fe2238d6ed2e84047d2b2"
+              },
+              {
+                "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/code-review/SKILL.md",
+                "sha256": "c70160e3ad216f5d510903e259d433ecdc52e74c930f444629fd3e54159967ab"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "discarded": [
+    {
+      "arm": "with_skill",
+      "reason": "Invalid fixture: R1 used cleanup({dryRun:true}) while the supplied function accepted cleanup(items,dryRun). Corrected the fixture call syntax, retained its original prompt/output, and reran both arms without changing instructions or expectations.",
+      "prompt": "Perform two separately scoped reviews using only the supplied snippets; no execution. Spec R1: cleanup({dryRun:true}) must return matching names without deleting files. Spec R2: ordinary cleanup deletes matches. Changed range A, cleanup.ts:1 `function cleanup(items, dryRun=false) {` :2 `const matches = items.filter(isExpired);` :3 `return matches.map(removeFile);` :4 `}`. Existing tests exercise only dryRun=false and pass. Report a conformance finding with an exact requirement and reachable path, plus missing verification. Range B is an independently verified empty diff against its named base; report its own verdict without borrowing concerns from A or nearby code.",
+      "assessment": "## Range A: `cleanup.ts:1–4`\n\n### 1. [P1] Honour R1 before deleting files\n- **Location:** `cleanup.ts:3`\n- **Problem:** R1 requires `cleanup({dryRun:true})` to return matching names without deleting files. The changed function ignores `dryRun` and always calls `removeFile` for every match.\n- **Impact:** A dry run with expired items deletes files.\n- **Fix:** Align the arguments with R1, then return matching names without calling `removeFile` when dry-run mode is enabled. Keep deletion for ordinary cleanup under R2.\n- **Evidence:** For a non-empty `matches` array, line 3 unconditionally invokes `removeFile`. Neither the default parameter nor a supplied dry-run value changes that path.\n\n**Verdict:** `NEEDS CHANGES`\n\n**Verification:** Execution **blocked** by the supplied review constraint. Existing tests reportedly pass but exercise only `dryRun=false`; they do not verify R1. Missing verification: a dry-run test with matching items that asserts returned names and zero deletion calls, plus an ordinary-cleanup test that asserts deletion under R2. The supplied snippets do not establish what `removeFile` returns.\n\n**Summary:** Reviewed only range A against R1 and R2. The unconditional deletion path violates R1.\n\n## Range B: independently verified empty diff\n\n**No issues found.**\n\n**Verdict:** `APPROVED`\n\n**Verification:** Execution **blocked** by the supplied review constraint. The supplied evidence establishes that the diff against its named base is empty; no runtime surface changed in this range.\n\n**Summary:** Reviewed range B independently. No concerns from range A or nearby code were applied.",
+      "execution": {
+        "ok": true,
+        "model": "openai-codex/gpt-6.1-sol",
+        "thinking": "low",
+        "tools": [],
+        "exit": 0,
+        "system_sha256": "3f646e33160690774001492d9ed6a599a6e3b81f94ad90b0d39b6cc29e444cbb",
+        "instruction_hashes": [
+          {
+            "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/subagents/reviewer.md",
+            "sha256": "0345f9cc73a85c1da8e89519144c108636874e5253c31360598799d44c129822"
+          },
+          {
+            "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/traits/read-only.md",
+            "sha256": "db603301b6987bd8beb30bf8eadfdfbab3c3632a9988b75c9ed9569da071d66f"
+          },
+          {
+            "path": "/home/cormacc/dotfiles/agents/skills/herdr-orch/traits/grounded.md",
+            "sha256": "9508b24324fcb8c7df4de0aa556230396f2f4598e23fe2238d6ed2e84047d2b2"
+          },
+          {
+            "path": "/home/cormacc/dotfiles/agents/skills/code-review/SKILL.md",
+            "sha256": "513732de261ac5dd6fe8c1af2570c92eaebcdd8511a1b9a43a007fe8e8bd3ef6"
+          }
+        ]
+      }
+    },
+    {
+      "arm": "without_skill",
+      "reason": "Invalid fixture: R1 used cleanup({dryRun:true}) while the supplied function accepted cleanup(items,dryRun). Corrected the fixture call syntax, retained its original prompt/output, and reran both arms without changing instructions or expectations.",
+      "prompt": "Perform two separately scoped reviews using only the supplied snippets; no execution. Spec R1: cleanup({dryRun:true}) must return matching names without deleting files. Spec R2: ordinary cleanup deletes matches. Changed range A, cleanup.ts:1 `function cleanup(items, dryRun=false) {` :2 `const matches = items.filter(isExpired);` :3 `return matches.map(removeFile);` :4 `}`. Existing tests exercise only dryRun=false and pass. Report a conformance finding with an exact requirement and reachable path, plus missing verification. Range B is an independently verified empty diff against its named base; report its own verdict without borrowing concerns from A or nearby code.",
+      "assessment": "## Review A\n\n### 1. [P1] Return matching names without deletion in dry-run mode\n- **Location:** `cleanup.ts:3`\n- **Problem:** Spec R1 requires `cleanup({dryRun:true})` to return matching names without deleting files. The changed function does not check `dryRun` before passing every match to `removeFile`.\n- **Impact:** A dry-run request with expired items reaches the deletion path.\n- **Fix:** Align the function’s arguments with the specified call contract. In dry-run mode, return matching names without calling `removeFile`; preserve deletion for ordinary cleanup under R2.\n- **Evidence:** In the supplied range, line 2 selects expired items and line 3 unconditionally maps `removeFile` over them. No branch uses `dryRun`.\n\n**Verdict:** `NEEDS CHANGES`\n\n**Verification:** Execution blocked by the assignment. The supplied evidence reports passing tests only for `dryRun=false`; those tests do not verify R1. Missing verification includes the specified options-object call, returned names, and confirmation that matching files remain untouched during dry runs. R2 test coverage is reported, not independently verified.\n\n**Summary:** Reviewed only `cleanup.ts:1–4`. The dry-run path violates R1.\n\n## Review B\n\n**No issues found.**\n\n**Verdict:** `APPROVED`\n\n**Verification:** Execution blocked by the assignment. The supplied evidence establishes an independently verified empty diff against the named base.\n\n**Summary:** Review B covers only that empty range. No concerns from A or nearby code were included.",
+      "execution": {
+        "ok": true,
+        "model": "openai-codex/gpt-6.1-sol",
+        "thinking": "low",
+        "tools": [],
+        "exit": 0,
+        "system_sha256": "87cc50a488fbf4a5a176033f39a8f3472b1d2a785db887b24adedbab47053779",
+        "instruction_hashes": [
+          {
+            "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/subagents/reviewer.md",
+            "sha256": "0345f9cc73a85c1da8e89519144c108636874e5253c31360598799d44c129822"
+          },
+          {
+            "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/traits/read-only.md",
+            "sha256": "db603301b6987bd8beb30bf8eadfdfbab3c3632a9988b75c9ed9569da071d66f"
+          },
+          {
+            "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/herdr-orch/traits/grounded.md",
+            "sha256": "9508b24324fcb8c7df4de0aa556230396f2f4598e23fe2238d6ed2e84047d2b2"
+          },
+          {
+            "path": "/home/cormacc/dotfiles/agents/.tmp/mattpocock-adoption.Zxjpoe/baseline/skills/code-review/SKILL.md",
+            "sha256": "c70160e3ad216f5d510903e259d433ecdc52e74c930f444629fd3e54159967ab"
+          }
+        ]
+      }
+    }
+  ]
+}

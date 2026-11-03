@@ -4320,3 +4320,36 @@ CLOSED: [2026-11-03 Tue 00:27]
 :END:
 #+IMPORT: [[plan:2026-11-03-evaluate-agent-skills-addy-osmani.org]]
 Reference: https://skills.addy.ie
+
+** DONE Apply Matt Pocock skill adaptations :skill:
+CLOSED: [2026-11-03 Tue 01:36]
+:PROPERTIES:
+:CUSTOM_ID: f2a1bf08-583f-4374-811a-dcdf4a1b01c4
+:CREATED: [2026-11-03 Tue 01:12]
+:STARTED: [2026-11-03 Tue 01:13]
+:ARCHIVED: [2026-11-03 Tue 01:36]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 01:12]
+- State "STARTED" from "TODO" [2026-11-03 Tue 01:13]
+- State "DONE" from "STARTED" [2026-11-03 Tue 01:36]
+:END:
+#+IMPORT: [[plan:2026-11-03-apply-matt-pocock-adaptations.org]]
+Apply the approved recommendations in design/log/2026-11-03-evaluate-matt-pocock-skills.org. Preserve existing personas, traits, task ownership and approval boundaries. Include optional questionnaire and bounded design/discovery recipes; retain deferred or rejected upstream workflows as such. User approved paired synthetic model evaluations for test design, diagnosis-only debugging and planning/review.
+
+** DONE Evaluate matt pocock skills
+CLOSED: [2026-11-03 Tue 01:10]
+:PROPERTIES:
+:CUSTOM_ID: 7d41f389-6aa0-4a96-b38d-88738d9e621c
+:CREATED: [2026-10-28 Wed 13:18]
+:STARTED: [2026-11-03 Tue 01:03]
+:ARCHIVED: [2026-11-03 Tue 01:10]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-10-28 Wed 13:18]
+- State "STARTED" from "TODO" [2026-11-03 Tue 01:03]
+- State "DONE" from "STARTED" [2026-11-03 Tue 01:10]
+:END:
+#+IMPORT: [[plan:2026-11-03-evaluate-matt-pocock-skills.org]]

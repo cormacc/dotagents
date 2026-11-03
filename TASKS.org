@@ -144,15 +144,6 @@ https://github.com/smarzban/tsk
 It supports multiple items in progress and some other QOL features that could be worth looking at.
 As a Herdr plugin, tsk is also prior art for the deferred session-tree pane in 9f667467 (herdr plugin wrapper for herdr-orch).
 
-** TODO Evaluate matt pocock skills
-:PROPERTIES:
-:CUSTOM_ID: 7d41f389-6aa0-4a96-b38d-88738d9e621c
-:CREATED: [2026-10-28 Wed 13:18]
-:END:
-:LOGBOOK:
-- Created [2026-10-28 Wed 13:18]
-:END:
-
 * Improvements
 
 ** TODO [#B] ot move: TUI/pi-overlay exposure and --before/--after ordering :skill:org_tasks:
@@ -499,3 +490,13 @@ Checking a 330-line change-record against its changeset needed a one-off Babashk
 - Created [2026-10-19 Mon 13:34]
 :END:
 With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.
+
+** TODO Align skill-creator eval layout with benchmark aggregation :skill:skill_creator:
+:PROPERTIES:
+:CUSTOM_ID: 6f8073f2-d6c5-44ef-b088-273a699a2dc3
+:CREATED: [2026-11-03 Tue 01:32]
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 01:32]
+:END:
+The locally maintained skills/skill-creator/references/eval-workflow.md shows grading directly under a configuration, while load_run_results in skills/skill-creator/scripts/aggregate_benchmark.py only discovers configuration/run-N/grading.json. Align the owned workflow instructions with that consumer and make callers check the discovered run count before interpreting an aggregate. Keep the vendored Python implementation unchanged unless deliberately reclassified or fixed upstream. Origin: dotagents; observed during approved Matt Pocock adaptation evaluations on 2026-11-03. Evidence: aggregation of configuration/grading.json exited successfully with an empty runs array; staging the same grades under configuration/run-1/grading.json produced the expected paired runs. The corrected current results are retained in design/log/2026-11-03-apply-matt-pocock-adaptations/evaluations.json.

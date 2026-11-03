@@ -1,0 +1,26 @@
+{
+  "skill_name": "to-questionnaire",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Draft a Markdown questionnaire in .tmp/capacity-questions.md for the operations lead. I need their launch-load estimate and the name of the capacity-budget approver. I do not know those answers; do not ask me to supply them. Context is a small export service. No deadline has been agreed and do not send the draft.",
+      "expected_output": "Ask the recipient separate load and approval questions, cover both outcomes, invent no deadline and save only the agreed draft.",
+      "files": [],
+      "expectations": [
+        "Separates the load forecast and budget authority into single-idea questions.",
+        "Does not ask the sender to answer the subject-matter gaps.",
+        "Uses the agreed path and does not send or invent a deadline."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Make a requirements questionnaire for someone else about our data project. I have not said who should answer it or what decision I need back. Do not write a file yet.",
+      "expected_output": "Ask one recipient/outcome clarification and stop; no unsolicited document or implementation.",
+      "files": [],
+      "expectations": [
+        "Asks one necessary recipient or outcome clarification.",
+        "Does not generate a speculative questionnaire, choose a top-level path or contact anyone."
+      ]
+    }
+  ]
+}

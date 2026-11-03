@@ -14,6 +14,7 @@ Precedence: a project's own `AGENTS.md` conventions override this skill. Do not 
 
 - **Terminology.** Use one term for each thing, in prose, comments, diagrams and tables. Prefer the upstream term: if a library calls something a "phase function", do not invent "hook" for it. Define a term once, near its first use. When you name or rename something, check that the name does not suggest a different, existing thing, for example a context key `::stack` beside a library's own `:stack` key.
 - **Identifiers.** Verify each identifier, path and command against the source before you write it. After a rename, search comments, docstrings and documents for the old name too.
+- **Unresolved terms.** When terminology conflicts with code or carries multiple meanings, resolve the intended concept before writing a contract. Use [../org-plan/references/discovery.md#Clarify the domain](../org-plan/references/discovery.md#clarify-the-domain) for active terminology checks; preserve the project's existing glossary and decision-record locations.
 - **One home for each fact.** A docstring owns a contract, a design record owns a decision and its rationale, and a standalone document explains and links to both. Link instead of copying: a copy goes stale without anyone noticing.
 
 ## Comments and docstrings

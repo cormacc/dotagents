@@ -113,6 +113,10 @@ For MVP / production / critical work that can change durable behaviour, public A
 4. Propose a new spec only when scope introduces a durable new domain with no existing contract home. If a canonical contract already exists in code or docs (for example a skill file, OpenAPI document, schema namespace, or migration set), couple to that artifact directly instead of creating a duplicate under `design/specs/`.
 5. Skip this step with `#+NO_SPEC: true` for prototype work, trivial/single-file fixes that do not alter a contract, or projects with no durable contract layer. Do not use the opt-out to avoid updating stale docs.
 
+### Discovery and incoming requests
+
+For an incoming request, overloaded terminology, unresolved multi-session decisions, a question-first prototype or a costly interface choice, read [references/discovery.md](references/discovery.md). Use its intake checks and bounded discovery only where they remove a real planning blocker; keep this skill's record, acceptance and approval contracts.
+
 ### Approach exploration
 
 Before drafting `* Plan` for non-trivial changes, list 2--3 plausible approaches with real tradeoffs. Pick one; record the chosen approach in `** Decisions` with rejected alternatives bulleted underneath:

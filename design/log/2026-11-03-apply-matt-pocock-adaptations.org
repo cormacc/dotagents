@@ -1,0 +1,81 @@
+#+TITLE: Apply Matt Pocock skill adaptations
+#+DATE: 2026-11-03 Tue
+#+PARENT: [[archive:f2a1bf08-583f-4374-811a-dcdf4a1b01c4][Apply Matt Pocock skill adaptations]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/tdd/SKILL.md]]
+#+SPEC: [[proj:skills/to-questionnaire/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/references/debugging.md]]
+#+SPEC: [[proj:skills/herdr-orch/references/workflow-recipes.md]]
+#+SPEC: [[proj:skills/herdr-orch/subagents/worker.md]]
+#+SPEC: [[proj:skills/herdr-orch/subagents/planner.md]]
+#+SPEC: [[proj:skills/herdr-orch/traits/investigate/prompt.md]]
+#+SPEC: [[proj:skills/org-plan/SKILL.md]]
+#+SPEC: [[proj:skills/org-plan/references/discovery.md]]
+#+SPEC: [[proj:skills/code-review/SKILL.md]]
+#+SPEC: [[proj:skills/skill-creator/SKILL.md]]
+#+SPEC: [[proj:skills/skill-creator/references/instruction-review.md]]
+#+SPEC: [[proj:skills/doc-writing/SKILL.md]]
+#+SPEC: [[proj:skills/git-commit/SKILL.md]]
+
+* Intent
+Apply the approved recommendations from [[file:2026-11-03-evaluate-matt-pocock-skills.org]], including the optional questionnaire and bounded design techniques. Preserve existing task memory, personas, authority boundaries and workflow ownership.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+Two locally adapted skills and the approved additions to existing workflows are implemented. Six final paired synthetic assessments met all 24 expectations in both arms; this sample establishes no marginal correctness gain. The role roster, permissions and existing trait stances remain unchanged.
+
+** Scope
+*** In scope
+- Adapt =tdd= and =to-questionnaire= as focused workflow skills, with examples, provenance and MIT notices.
+- Absorb debugging, terminology, discovery, interface comparison, question-first prototypes, request intake, conformance review, handoff pointers and instruction-authoring diagnostics into existing owners.
+- Add optional structural visuals and rollback/blast-radius notes to MR guidance without importing test output.
+*** Out of scope
+- Previously deferred surveys, teaching/factory/wizard workflows, beta or misc installers, automatic commits and deployments, new personas/traits, another tracker or document hierarchy, and CLI changes.
+- Live resources, automatic skill-router claims, performance claims and cross-model certification.
+
+** Acceptance
+- [X] Both new skills validate and have explicit routing boundaries.
+- [X] Absorbed procedures have reference pointers from their named consumers; automatic pointer-following is not measured.
+- [X] Existing persona metadata, trait stances and permissions are preserved; investigate gains only a reference pointer.
+- [X] Source revision and applicable MIT notices accompany adapted material.
+- [X] Six paired synthetic cases retain inputs, instruction hashes, outputs, grades and limitations.
+- [X] Static checks cover the changed skills and section links.
+- [X] Must not: implement deferred/rejected upstream machinery or touch unrelated changes.
+
+** Decisions
+- Keep the existing role roster and canonical owners; use references instead of a broad new engineering skill.
+- The =investigate= fragment gains a location-independent pointer to the installed skill's debugging reference; its causal directives do not change. Assessment runs load that reference explicitly, so they do not prove pointer-following.
+- Tests compare supplied-evidence assessments at one model/settings combination, with shared home/repository instructions and the relevant baseline persona/skills. Tools and discovery are disabled; no request-audit or end-to-end execution claim follows.
+- Keep questionnaire drafting separate from sending, and existing MR evidence exclusions separate from optional risk explanation.
+
+** Shipped
+- ADDED :: [[file:../../skills/tdd/SKILL.md]] and its test-design reference -- independent oracles, contract-based test surfaces and vertical slices, preserving ordering and failure-path coverage.
+- ADDED :: [[file:../../skills/to-questionnaire/SKILL.md]] -- sender/outcome clarification and recipient questions, with agreed output locations and no sending authority.
+- ADDED :: [[file:../../skills/herdr-orch/references/debugging.md]] -- symptom-specific reproduction/control, minimisation and original-scenario verification. MODIFIED :: orchestration/worker routing and the =investigate= reference pointer; [[file:../../traits/investigate/gate.md]] records the non-discriminating assessment.
+- ADDED :: [[file:../../skills/org-plan/references/discovery.md]] -- request intake, terminology checks, decision-first discovery, question-first experiments, portable handoff hints and optional interface comparisons. MODIFIED :: planning, planner and documentation pointers.
+- MODIFIED :: [[file:../../skills/code-review/SKILL.md]] and bounded decision review -- explicit requirement conformance with existing severity, scope and authority rules.
+- ADDED :: [[file:../../skills/skill-creator/references/instruction-review.md]]; MODIFIED :: authoring routing, [[file:../../skills/git-commit/SKILL.md]] optional visuals/risk notes, and [[file:../../skills/README.org]] adapted-skill inventory.
+
+** Risks
+- Automatic routing, pointer discovery and actual tool behaviour are not measured. Questionnaire cases and trigger examples are authored but were not executed through a model or router.
+
+** Follow-ups
+- [[file:../../TASKS.org::#6f8073f2-d6c5-44ef-b088-273a699a2dc3][Align skill-creator eval layout with benchmark aggregation]] -- owned workflow guidance omits the aggregator's required =run-N/= directory. Kept separate from these adaptations.
+
+* Plan
+
+* Implementation
+- Upstream source: =mattpocock/skills@4ae2317ddb22b046e26455e4f9c9b3aaaf62212d=; local baseline: =f85b22023bbad571166065ac29bb0d37aace7b99=. Seven retained MIT notices compare byte-identically with that source's licence.
+- [[file:2026-11-03-apply-matt-pocock-adaptations/evaluations.json]] retains the six final cases, all twelve final assessments, instruction hashes, timing, parent grades and limits. It also retains the original conformance pair discarded for inconsistent fixture call syntax; both arms were rerun with matching syntax and unchanged criteria. No Matt Pocock script or installer was executed.
+- Comparisons used Pi 1.4.0 and =openai-codex/gpt-6.1-sol= at low thinking, one sample per case per arm, with relevant old/current persona and workflow instructions. Shared home and repository instructions were supplied explicitly. Tools, extensions, MCP, context/skill discovery and session persistence were disabled. The terminal-response parser checked completion, model identity and absence of tool events; this is not a provider request audit. Temporary authentication copies were removed.
+
+* Validation
+- Final semantic grades: test design 8/8 per arm, debugging 8/8 per arm, discovery 4/4 per arm and conformance 4/4 per arm. All core decisions passed in the baseline too; neither a general correctness gain nor a cost/latency gain is established. Grading was by the parent, not a blind independent judge.
+- The response parser passed its valid control and rejected six incomplete, failed, aborted, tool-using or wrong-provider controls. Validator controls passed 2 tests/11 assertions; section-link controls passed 6 tests/50 assertions.
+- Frontmatter validation covered 29 top-level skills with 0 gating failures and 2 vendored warnings. Both new skills packaged successfully, including their notices and runtime references. =git diff --check= passed.
+- Section-link checks covered 399 references in 439 files with 0 problems. Persona metadata comparison included a known-bad control; the two edited headers were byte-identical to baseline, and the =investigate= stance was preserved before its added pointer.
+- =ot doctor= reported 0 errors and 7 warnings: the 6 baseline warnings plus a =spec-stale= advisory on the older wrapper record's broad links. No orchestration CLI implementation or mechanical contract changed.
+- Graded static review pages are under =.tmp/mattpocock-adoption.Zxjpoe/<group>/iteration-1/review.html= for =tdd=, =debugging= and =discovery=; corrected =conformance= uses =iteration-2=. No user grading feedback has been collected.

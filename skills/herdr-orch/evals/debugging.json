@@ -1,0 +1,29 @@
+{
+  "skill_name": "debugging",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Diagnosis-only assessment, no execution or writes. Reported symptom: concurrent logins for users A and B sometimes send B's token on A's request; isolated logins work. Supplied evidence: `test single-login` passed; `test error-format` exited 1 because its test runner could not import a formatter dependency. No concurrent reproduction has run. A colleague says the red error-format test is enough to start changing the token cache. Assess what is actually known and specify the next bounded probe and control. Stop at the diagnosis/fix authority boundary.",
+      "expected_output": "Reject the unrelated setup failure as a reproduction; propose a two-caller symptom-specific probe and safe control, with no verified cause or fix claim.",
+      "files": [],
+      "expectations": [
+        "Distinguishes the formatter import/setup error from the reported token symptom.",
+        "Requires a bounded concurrent two-user probe that asserts request token ownership, with an isolated or serial passing control.",
+        "Does not report an untested token-cache cause as established fact.",
+        "Does not claim to execute a probe or apply a fix, and preserves diagnosis-only scope."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Diagnosis-only assessment, no execution or writes. Source token.ts:1 `let activeToken;` :2 `async function request(user) { activeToken = user.token; await barrier(); return send(activeToken); }`. Retained disposable-harness evidence: `test paired-users` ran and failed with expected tokens [A,B], actual [B,B]; trace shows A assigns A, B assigns B, then both resume. `test serial-users` ran and passed with [A,B]. The paired case reduces to two callers and the barrier; removing either concurrency or the shared variable eliminates this symptom. Explain the cause and proof, what can be concluded from these supplied results, and any recommendation. The user has not authorised a fix.",
+      "expected_output": "Attribute the failure to shared mutable token ownership across suspension, cite supplied failure/control/source and stop without editing or claiming execution.",
+      "files": [],
+      "expectations": [
+        "Identifies the shared activeToken read after suspension as the mechanism linking both callers.",
+        "Uses the supplied paired failure and serial passing control as evidence, not newly executed results.",
+        "Preserves both callers and the suspension/shared-state pattern in the reproduction.",
+        "Stops after diagnosis; a possible scoped repair is only a recommendation, not an applied fix."
+      ]
+    }
+  ]
+}
