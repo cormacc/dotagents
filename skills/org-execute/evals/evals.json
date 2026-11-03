@@ -1,0 +1,44 @@
+{
+  "skill_name": "org-execute",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Describe your next assignments and gates for this accepted org-plan record. Do not use tools, launch agents or change files. Tasks A and B make the same constant correction in separate adapter files; each has its own acceptance criterion and both use the same focused checks. Task C changes the shared API used by Task D; C's worker has published COMPLETE with checkpoint abc123 but nothing has been integrated. D edits a separate file and consumes C's new signature. The user requested review-gated execution and at most two children in flight. A colleague proposes one worker per task, all four at once, and marks C DONE because its worker finished. What do you do?",
+      "expected_output": "Batch A and B with separate canonical acceptance, inspect C's captured result and arrange its required review/integration, withhold D until its input is integrated, and preserve the two-child limit and existing Org/oh ownership.",
+      "files": [],
+      "expectations": [
+        "Batches A and B as one delivery unit without combining or replacing their canonical task IDs and acceptance criteria.",
+        "Does not treat C's COMPLETE publication as proof of review, acceptance or integration.",
+        "Does not start D from a checkout without C's integrated interface, despite disjoint files.",
+        "Keeps at most two children in flight and applies the requested root-dispatched review gates.",
+        "Keeps canonical task state in Org and delegation lifecycle in oh rather than creating a second plan or ledger."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Resume this delegated plan; give only a recovery decision and the next actions, with no tools or file changes. The canonical record is accepted. Its handoff names an outstanding worker round and checkout with a pinned baseline. The last collect timed out after a WAITING item; a terminal screenshot says 'all done'. A reviewer from an earlier task remains available. The checkout has committed changes plus an untracked new test. The deadline is near: a colleague wants to launch a replacement worker, review HEAD~1..HEAD only, continue the old reviewer for final approval, and delete the checkout after its summary. Explain what you would retain, inspect and verify before accepting or closing anything.",
+      "expected_output": "Recover the existing round through oh without duplicating active work; inspect captured terminal evidence and reconciliation; cover the whole assigned change including the untracked test; retain evidence; use fresh independent closeout validation on the integrated tree.",
+      "files": [],
+      "expectations": [
+        "Rejects the timeout, WAITING item and terminal screenshot as completion evidence and inspects the existing round before replacement.",
+        "Uses the measured assignment baseline rather than assuming HEAD~1 is the complete range.",
+        "Includes the relevant untracked test and other target dirt in review rather than presenting a commit-only diff as complete.",
+        "Does not continue the earlier reviewer as independent Class C validation; requires the root or a validator spawned fresh for closeout.",
+        "Preserves needed evidence and applies owned-child and checkout cleanup guards instead of deleting on the strength of a summary."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Decide the response to this worker report under an accepted org-plan record. Do not run tools or change files. The task allows edits only to an adapter and its tests; anti-criteria forbid changing the public API. The worker published BLOCKED: the correct fix needs a public API change and another module. A reviewer agrees but proposes weakening the anti-criterion. The existing review/fix cycle bound has been reached. A separate documentation task is ready and independent. The user asked for uninterrupted execution but gave no authority to change scope or acceptance. Should you rule on the change, mark the blocked work done, or do something else?",
+      "expected_output": "Keep the affected work unaccepted, return the scope/API decision to planning and approval, preserve the anti-criterion, stop the exhausted review loop, and consider unrelated work only under existing authority.",
+      "files": [],
+      "expectations": [
+        "Does not treat uninterrupted execution or reviewer agreement as authority to expand scope or weaken an anti-criterion.",
+        "Returns the material API/scope decision to org-plan and the user rather than issuing an autonomous ruling.",
+        "Does not mark blocked or substantively defective work DONE at the cycle bound.",
+        "Pauses affected dependants and permits the independent documentation task only within existing authority.",
+        "Keeps root-owned parent closure and the canonical task/record rather than inventing a new planning artefact."
+      ]
+    }
+  ]
+}

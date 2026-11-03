@@ -244,6 +244,8 @@ When drafting after work has started or completed:
 
 ## Executing from a change-record
 
+For delegated delivery of an accepted record, use [org-execute](../org-execute/SKILL.md). It coordinates assignment selection, batching, review gates, integration and recovery through `herdr-orch`; this skill retains the canonical plan, acceptance, decisions and closure rules. Inline execution keeps the loop below.
+
 Before starting, ask whether questions should be batched in `* Open questions` for final review or raised immediately. Then resume via [../org-tasks/SKILL.md#Resuming and agent memory](../org-tasks/SKILL.md#resuming-and-agent-memory). If commits touching the plan's target surface landed after the record was accepted, re-verify its pinned references and load-bearing assumptions against HEAD (or delegate a plan review) before implementing -- stale pins and drifted contracts are cheaper to catch before code exists.
 
 For each plan task:

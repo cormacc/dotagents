@@ -2,6 +2,8 @@
 
 Use these recipes from the root orchestrator. The root chooses context, validates captures, keeps evidence, and closes or tears down only the children and checkouts it owns. The recipes compose existing `oh` lifecycle verbs; they do not add a workflow engine, persona, scheduler, or runner.
 
+For delegated delivery of an accepted Org change-record, use [org-execute](../../org-execute/SKILL.md). It composes these recipes with `org-plan` and `org-tasks`; the recipes below also apply to work without an Org plan.
+
 ## Ordinary staged delegation
 
 “Spawn a subagent” means a fresh context, which is the default. Use a named persona when its role helps the stage, or omit the persona for a fresh persona-less child. Capture each stage before preparing its successor, and give the successor the captured, existence-validated artefacts rather than relying on an earlier child's pane context.
