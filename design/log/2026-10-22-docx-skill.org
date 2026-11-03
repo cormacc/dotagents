@@ -1,6 +1,6 @@
 #+TITLE: Extract a generic docx skill from nmd-dcr
 #+DATE: 2026-10-22 Thu
-#+PARENT: [[task:631ac981-1e93-4c0c-9629-b93bdac37a0b][Extract a generic docx skill from nmd-dcr]]
+#+PARENT: [[archive:631ac981-1e93-4c0c-9629-b93bdac37a0b][Extract a generic docx skill from nmd-dcr]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:skills/docx/SKILL.md]]

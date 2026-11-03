@@ -13,8 +13,6 @@
 
 * Table of Contents                                       :TOC_2_gh:noexport:
 - [[#explorations][Explorations]]
-  - [[#investigate-sova][Investigate sova]]
-  - [[#investigate-worktrunk-for-worktree-management-skillherdr-orch][Investigate worktrunk for worktree management... :skill:herdr-orch:]]
   - [[#herdr-orch-llm-usage-limit-fallback][herdr-orch: LLM usage limit fallback]]
   - [[#evaluate-rpiv-pi-workflow-setup][Evaluate rpiv-pi workflow setup]]
   - [[#explore-agent-memory-options][Explore agent memory options]]
@@ -22,19 +20,15 @@
   - [[#review-herdr-tsk-plugin-for-inspiration-for-org-tasks][Review herdr tsk plugin for inspiration for org-tasks]]
 - [[#improvements][Improvements]]
   - [[#ot-move-tuipi-overlay-exposure-and---before--after-ordering][ot move: TUI/pi-overlay exposure and --before/--after ordering]]
-  - [[#org-tasks-spec-checks-warn-forever-once-a-records-change-is-committed][org-tasks: spec checks warn forever once a record's change is committed]]
   - [[#herdr-plugin-wrapper-for-herdr-orch][herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#traits-re-probe-every-fragment-against-synthetic-non-decaying-scenarios][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
-  - [[#vendored-skill-hygiene][Vendored skill hygiene]]
   - [[#traits-retry-the-simple-probe-at-a-lower-model-tier][traits: retry the %simple probe at a lower model tier]]
   - [[#herdr-orch-fix-incompatible-withincompatibilities-doc-code-mismatch-in-contractmd-and-traitsmd][herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md]]
 - [[#fixes][Fixes]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
 - [[#agent-feedback][Agent feedback]]
-  - [[#self-improvement-persist-agents-metrics-comparison-script][self-improvement: persist AGENTS metrics comparison script]]
-  - [[#validate-skillsbb-rejects-a-relative---python-path][validate-skills.bb rejects a relative --python path]]
   - [[#hand-composed-edit-hazards-instruction-rule-additions][Hand-composed edit hazards: instruction rule additions]]
   - [[#herdr-orch-a-failed-spawn-round-is-permanent-ledger-residue][herdr-orch: a failed spawn round is permanent ledger residue]]
   - [[#guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][Guard against a parallel tool batch that writes and reads the same path]]
@@ -42,35 +36,6 @@
   - [[#org-plan-check-non-path-identifiers-in-change-records][org-plan: check non-path identifiers in change-records]]
 
 * Explorations
-
-** CANCELLED [#B] Investigate sova
-CLOSED: [2026-10-20 Tue 12:26]
-:PROPERTIES:
-:CUSTOM_ID: 8e199d7c-5f34-4287-98b3-b62e73e51f21
-:CREATED: [2026-10-08 Thu 22:21]
-:END:
-:LOGBOOK:
-- Created [2026-10-08 Thu 22:21]
-- State "CANCELLED" from "TODO" [2026-10-20 Tue 12:26]
-:END:
-This looks like a kind of wrapper for pi (via its SDK).
-Interesting -- has some stuff around subscription failover that might be worth adapting even if I bounce of sova itself.
-https://github.com/Naomarik/sova
-Cancelled [2026-10-20 Tue] during herdr-orch backlog consolidation: the subscription-failover idea, the only part relevant here, is now a candidate in c3ae685d (herdr-orch: LLM usage limit fallback). Reopen only to evaluate sova itself as a pi wrapper.
-
-** CANCELLED [#B] Investigate worktrunk for worktree management... :skill:herdr-orch:
-CLOSED: [2026-10-20 Tue 12:26]
-:PROPERTIES:
-:CUSTOM_ID: 47f84d9a-bf5d-4bcc-8bc4-f7b3d188ddfa
-:CREATED: [2026-08-21 Fri 15:31]
-:END:
-:LOGBOOK:
-- Created [2026-08-21 Fri 15:31]
-- State "CANCELLED" from "TODO" [2026-10-20 Tue 12:26]
-:END:
-This may be useful in the context of herdr-orch subagent management...
-https://github.com/max-sixty/worktrunk
-Cancelled [2026-10-20 Tue] during herdr-orch backlog consolidation: herdr-orch now manages its own worktrees (`oh task run|start --worktree new`, `oh worktree list`, `oh worktree remove`). The remaining gap, retained `orch/*` branches, is task a84f503e under the failed-spawn hygiene aggregate.
 
 ** TODO [#B] herdr-orch: LLM usage limit fallback :skill:herdr_orch:
 :PROPERTIES:
@@ -179,21 +144,6 @@ https://github.com/smarzban/tsk
 It supports multiple items in progress and some other QOL features that could be worth looking at.
 As a Herdr plugin, tsk is also prior art for the deferred session-tree pane in 9f667467 (herdr plugin wrapper for herdr-orch).
 
-** DONE Investigate Atlassian Teamwork Graph API :atlassian:
-CLOSED: [2026-11-02 Mon 19:53]
-:PROPERTIES:
-:CUSTOM_ID: f673946f-c641-45c1-8b42-dbe58b23b2df
-:CREATED: [2026-10-27 Tue 14:43]
-:STARTED: [2026-11-02 Mon 18:09]
-:END:
-:LOGBOOK:
-- Created [2026-10-27 Tue 14:43]
-- State "STARTED" from "TODO" [2026-11-02 Mon 18:09]
-- State "DONE" from "STARTED" [2026-11-02 Mon 19:53]
-:END:
-#+IMPORT: [[plan:2026-10-30-atlassian-graph-workflows.org]]
-Identify whether the Atlassian Teamwork Graph API complements or replaces the existing use of the Atlassian MCP server (mcp__atlassian, used by the org-jira skill).
-
 ** TODO Evaluate matt pocock skills
 :PROPERTIES:
 :CUSTOM_ID: 7d41f389-6aa0-4a96-b38d-88738d9e621c
@@ -202,21 +152,6 @@ Identify whether the Atlassian Teamwork Graph API complements or replaces the ex
 :LOGBOOK:
 - Created [2026-10-28 Wed 13:18]
 :END:
-
-** DONE Evaluate agent-skills (Addy Osmani)
-CLOSED: [2026-11-03 Tue 00:27]
-:PROPERTIES:
-:CUSTOM_ID: 0f6a6b03-d101-49f3-9279-27d4aa143356
-:CREATED: [2026-10-28 Wed 13:18]
-:STARTED: [2026-11-03 Tue 00:22]
-:END:
-:LOGBOOK:
-- Created [2026-10-28 Wed 13:18]
-- State "STARTED" from "TODO" [2026-11-03 Tue 00:22]
-- State "DONE" from "STARTED" [2026-11-03 Tue 00:27]
-:END:
-#+IMPORT: [[plan:2026-11-03-evaluate-agent-skills-addy-osmani.org]]
-Reference: https://skills.addy.ie
 
 * Improvements
 
@@ -231,34 +166,6 @@ Reference: https://skills.addy.ie
 Follow-ups from the initial `ot move` implementation (task 2a2f5aed): expose move in the ot TUI and pi tasks overlay (boundary.md notes the pending parity — needs a key map entry plus a destination picker), and add `--before`/`--after` ordering control so a move is not restricted to append-as-last-child / last-in-section semantics.
 
 Also: `ot move <id> --section <name>` fails `section-not-found` when the section heading does not already exist, so introducing a new section is a hand edit. Decide between a `--create-section` flag and documenting the pre-create requirement in the org-tasks skill. Measured in a scratch project: a move to a new section name errored, while the same move into an existing section succeeded.
-
-** DONE [#A] org-tasks: spec checks warn forever once a record's change is committed
-CLOSED: [2026-09-21 Mon 14:00]
-:PROPERTIES:
-:CUSTOM_ID: 2b032279-af18-4f98-9bb7-402c519a6f0f
-:CREATED: [2026-08-11 Tue 16:19]
-:STARTED: [2026-09-21 Mon 13:50]
-:END:
-:LOGBOOK:
-- Created [2026-08-11 Tue 16:19]
-- State "DONE" from "TODO" [2026-09-21 Mon 13:31]
-- State "STARTED" from "DONE" [2026-09-21 Mon 13:50]
-- State "DONE" from "STARTED" [2026-09-21 Mon 14:00]
-:END:
-=ot doctor='s =spec-untouched= and =spec-stale= checks read the current git working tree and index, so they cannot see work that has been committed. Every closed record whose change has landed therefore warns forever: immediately after committing the trait-composition change, a record with both declared specs genuinely updated in that same commit reported two =spec-untouched= warnings.
-
-The failure mode is not a false positive in isolation, it is habituation. A check that is permanently noisy on every completed record teaches the reader to skim past =ot doctor= output, which is the one place real findings appear.
-
-Acceptance criteria:
-- A declared =#+SPEC:= path that was modified in the commit closing the record, or in the record's own history, does not warn.
-- The check keeps working for its real case: an open record whose declared spec is untouched while linked code changes.
-- =references/ot-cli.md= documents the widened basis, replacing "has not been touched in the current git working tree/index".
-- A closed, committed record with correctly updated specs reports no findings; verify with this repository's own trait-composition record.
-Must not: silence the check for open records; infer specs that were never declared.
-
-*RESOLVED* [2026-09-21 Mon] Closed records count spec changes from their own Git history, including initial and merge commits and unquoted filenames. Open records still use the working tree/index. =doctor-closed-record-git-history= in =skills/org-tasks/scripts/test/org_tasks/commands/maintenance_test.clj= exercises both findings through the CLI, with open-record and unrelated-history controls.
-
-Verified the archived =DONE= task's record at =design/log/2026-08-08-herdr-orch-subagent-composition-and-exte.org=: with an empty working-tree changed set, the no-history control reports two =spec-untouched= findings; adding its collected history reports none.
 
 ** TODO [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
 :PROPERTIES:
@@ -306,18 +213,6 @@ Refresh the change-record before execution. Found stale [2026-10-20 Tue] at e67e
 Design and ship a shared skill-level helper that bootstraps a local Babashka copy when `bb` is absent. Both `org-tasks` (`ot`) and `herdr-orch` (`oh`, `traits`) depend on `bb`, so the helper belongs at skill level, not inside the Herdr plugin. Open design questions: where the helper lives, how both skills consume it, download and checksum policy, PATH placement, and the update story. Include the `ot` executable in the bootstrap decision: when `ot` is absent, define whether to install it with bbin or invoke the checked-out launcher. The helper must not assume an absolute user-local `ot` path. Raised during planning of the herdr plugin wrapper ([[plan:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]]); that change ships an install hint only.
 Priority lowered from A to B [2026-10-20 Tue] to match the plugin wrapper, its only recorded driver. Raise it again if `ot` or `oh` portability on hosts without `bb` becomes urgent on its own.
 
-** CANCELLED Vendored skill hygiene :skill:
-CLOSED: [2026-11-01 Sun 12:02]
-:PROPERTIES:
-:CUSTOM_ID: 65e49f0b-d805-4974-9511-75901d9992b6
-:CREATED: [2026-08-27 Thu 14:22]
-:END:
-:LOGBOOK:
-- Created [2026-08-27 Thu 14:22]
-- State "CANCELLED" from "TODO" [2026-11-01 Sun 12:02]
-:END:
-Cancelled as a redundant wrapper. Its sole remaining report task, [[task:6d205682-bacc-465a-911f-419a76604e6f]], was moved to Fixes with its evidence intact and resolved there. The earlier licence and attribution work is not reopened.
-
 ** TODO [#B] traits: probe backlog :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: b5bc69bb-0c51-43b8-92d8-ae6b54653aee
@@ -362,21 +257,6 @@ Path corrected [2026-10-20 Tue]: the probe record is the repository user-layer f
 
 traits/simple/gate.md records two %simple probe runs at gpt-5.6-terra (matching base-analyst's read-only tier) against a low-temptation two-flag CLI task; both runs were non-discriminating (treated and control converged on the same minimal shape). Not retried at a lower tier within [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]]'s probe budget. Retry at a lower tier (or a higher-temptation scenario) and record the outcome in the same gate.md, per the honest-attempt admission bar in skills/herdr-orch/references/traits.md.
 
-** DONE Extract a generic docx skill from nmd-dcr
-CLOSED: [2026-10-22 Thu 20:40]
-:PROPERTIES:
-:CUSTOM_ID: 631ac981-1e93-4c0c-9629-b93bdac37a0b
-:CREATED: [2026-10-22 Thu 20:15]
-:STARTED: [2026-10-22 Thu 20:20]
-:END:
-:LOGBOOK:
-- Created [2026-10-22 Thu 20:15]
-- State "STARTED" from "TODO" [2026-10-22 Thu 20:20]
-- State "DONE" from "STARTED" [2026-10-22 Thu 20:40]
-:END:
-#+IMPORT: [[plan:2026-10-22-docx-skill.org]]
-Move the generic .docx tooling from the Neuromod nmd-dcr skill into a new skills/docx skill, and the generic SharePoint version recipes into ms365.
-
 ** TODO docx: add a sections command for documents without heading styles
 :PROPERTIES:
 :CUSTOM_ID: c5ddd90d-d948-4817-a6c7-e0b320083609
@@ -410,21 +290,6 @@ Word stores a field's last result, e.g. "Error! Reference source not found.", an
 #+IMPORT: [[plan:2026-10-23-sharepoint-document-editing.org]]
 Session check-out, tracked edits with reason comments, minor check-in; at the end of review, a clean copy and (on explicit request) a published major version.
 
-** DONE ms365: write ranges in a live SharePoint workbook
-CLOSED: [2026-11-01 Sun 12:02]
-:PROPERTIES:
-:CUSTOM_ID: 18357aa0-98cc-420b-9a52-4a8d94638adf
-:CREATED: [2026-10-23 Fri 13:29]
-:BLOCKED-BY: task:048a81b9-e952-44ec-85ed-05432eca2d50
-:END:
-:LOGBOOK:
-- Created [2026-10-23 Fri 13:29]
-- State "DONE" from "TODO" [2026-11-01 Sun 12:02]
-:END:
-Write rows into a SharePoint workbook through the Graph workbook API (no file round-trip), using the Babashka Graph client from [[plan:2026-10-23-sharepoint-document-editing.org]]. In a library that requires check-out, a range write returns 403 EditModeWorkbookCheckedOutRequired unless the workbook is checked out (spike, 2026-10-23), so the write runs as a transaction: check out, write, read back, check in as minor (discard the check-out on failure). Acceptance: write one row in a transaction; re-read it and report a mismatch; refuse to overwrite a non-empty cell unless told to; write text cells as text (Excel converted "Oct 2026" to a date serial in the spike); documented in skills/ms365 without organisation names. First consumer: the nmd-dev task "Let nmd-dcr write the LG0017 DCR reservation".
-
-Result: =excel-write!= and =transaction!= in =skills/ms365/scripts/src/ms365/graph.clj= implement the guarded write, text formatting, read-back and transaction flow; =skills/ms365/references/graph-client.md= documents it. The fake-Graph suite passed 17 tests and 76 assertions during backlog review. [[file:design/log/2026-10-23-sharepoint-document-editing.org]] records the earlier live transaction and occupied-cell refusal. This closure does not claim a new live write or completion of the consumer rollout or Word publication trial.
-
 ** TODO pi-clojure: structural edit tool for Clojure forms :pi:clojure:
 :PROPERTIES:
 :CUSTOM_ID: 3c08dae6-6d2f-4e3a-a66e-c27bc83be0e2
@@ -446,20 +311,6 @@ Acceptance criteria:
 - Match `#(...)`, reader conditionals, and metadata forms, with tests.
 - Require exactly one match; on no match or several matches, report each candidate location and change nothing.
 - Report the file location of the replacement, and add the tool to the pi-clojure README and to skills/clojure/SKILL.md.
-
-** DONE Consolidate skill policy and extension infrastructure
-CLOSED: [2026-10-31 Sat 10:18]
-:PROPERTIES:
-:CUSTOM_ID: c15712eb-72e7-4b27-97c6-c9d5028c4c0e
-:CREATED: [2026-10-31 Sat 09:49]
-:STARTED: [2026-10-31 Sat 09:49]
-:END:
-:LOGBOOK:
-- Created [2026-10-31 Sat 09:49]
-- State "STARTED" from "TODO" [2026-10-31 Sat 09:49]
-- State "DONE" from "STARTED" [2026-10-31 Sat 10:18]
-:END:
-Apply the seven approved audit suggestions: canonical planning instructions and format reference; move incident evidence out of rules; one Dataspex parameter reference; ot-owned record creation; shared RPC test infrastructure and locked launchers; shared nREPL port-file primitives. Preserve separate skill responsibilities and vendored sources. Verify affected suites, section links, skill metadata, and installed Pi extension discovery.
 
 * Fixes
 
@@ -537,108 +388,10 @@ Result: both references and the Pi =TraitExpansion= type match the implemented r
 :END:
 oh worktree remove deletes the managed checkout but retains its orch/<id> branch, and contract.md section Worktree reconciliation and teardown states that oh never deletes a branch. Retained branches accumulate after integration. Decide between documented operator guidance and an ownership-checked verb. Carried over from the cancelled worktrunk investigation (47f84d9a), whose worktree-management motivation the managed checkouts (--worktree new, oh worktree list/remove) already cover.
 
-** CANCELLED gitlab-cli-skills: glab-schedule create rejects --output json (list supports it) :skill_gitlab_cli_skills:
-CLOSED: [2026-11-01 Sun 12:02]
-:PROPERTIES:
-:CUSTOM_ID: 6d205682-bacc-465a-911f-419a76604e6f
-:CREATED: [2026-08-20 Thu 10:55]
-:END:
-:LOGBOOK:
-- Created [2026-08-20 Thu 10:55]
-- State "CANCELLED" from "TODO" [2026-11-01 Sun 12:02]
-:END:
-Verified: the installed `glab schedule create` rejects `--output json`/`-F json` ("Unknown flag: --output"), while `glab schedule list --output json` works correctly. `gitlab-cli-skills/glab-schedule/SKILL.md` documents `--output json`/`-F json` support generically for `glab schedule list` but does not flag that `create` (and likely `update`/`run`/`delete`) lack it -- an agent following the doc's pattern could reasonably expect JSON output from `create` too.
-
-gitlab-cli-skills is vendored third-party content (commit fc86308, "deps: Added gitlab-cli-skills (3rd party)"). Per the user: raise this upstream rather than editing the vendored file locally.
-
-*EDIT* [2026-08-27 Thu] The original body said no upstream source URL was recorded in the commit or the README, and route (a) was "locate the upstream repo". That is no longer true and the search step is done: [[file:skills/README.org::*Vendored]] names https://github.com/vince-winkintel/gitlab-cli-skills as the source, and `gitlab-cli-skills/.vendor.edn` records the upstream commit that `scripts/sync-gitlab-cli-skills.bb` installed. That report was the remaining request at the time.
-
-Resolution: cancelled by the approved backlog housekeeping. The cited JSON example in =skills/gitlab-cli-skills/glab-schedule/SKILL.md= explicitly applies to =glab schedule list=; the task identifies an inference from that example, not an incorrect create-command instruction. An additional warning alone does not justify the proposed upstream report. Vendored content is unchanged.
-
-Origin:
-- cwd: /home/cormacc/nmd/infra/playbooks
-- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
-- timestamp: [2026-08-20 Thu 10:50]
-- sender: agent
-
-Evidence:
-- `glab schedule create --cron "0 6 * * *" --description "..." --ref develop --output json` -> `Unknown flag: --output.`
-- `glab schedule list --output json` succeeded and returned valid JSON in the same session.
-
 * Upstream issues
 
 * Chores
-** DONE herdr-orch: record the Pi upgrade verification checklist :herdr_orch:
-CLOSED: [2026-11-01 Sun 12:05]
-:PROPERTIES:
-:CUSTOM_ID: 216bd6b9-ed8e-4277-b653-bea0ea689706
-:CREATED: [2026-10-22 Thu 18:43]
-:END:
-:LOGBOOK:
-- Created [2026-10-22 Thu 18:43]
-- State "DONE" from "TODO" [2026-11-01 Sun 12:05]
-:END:
-Scope changed by the approved backlog housekeeping: record the recurring upgrade checks as maintenance guidance rather than leave an implementation task open indefinitely. [[file:skills/herdr-orch/scripts/README.md]] section 'Pi upgrade checks' retains the installed-runtime trigger, consumer-derived native declaration and turn-boundary checks, and passing/known-bad verifier controls. This closure does not claim verification of a future Pi release.
-
-The 1.3.0 to 1.4.0 tool-declaration change remains documented in [[file:design/log/2026-10-21-child-context-modes.org::*Summary]].
-
 * Agent feedback
-
-** DONE [#C] self-improvement: persist AGENTS metrics comparison script :skill:self_improvement:
-CLOSED: [2026-11-01 Sun 12:38]
-:PROPERTIES:
-:CUSTOM_ID: efb0ea1c-149d-4c8d-83ef-6ce3ca1fd7d8
-:CREATED: [2026-08-14 Fri 21:45]
-:STARTED: [2026-11-01 Sun 12:08]
-:END:
-:LOGBOOK:
-- Created [2026-08-14 Fri 21:45]
-- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
-- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
-:END:
-Persist a reusable Babashka script that compares instruction files before and after a rewrite. The script must report line counts and Pi token estimates. Use `wc -l` line semantics and Pi's conservative `ceil(characters / 4)` estimate. Support a Git revision and working-tree paths without temporary source copies. Choose a canonical location, preferably a resource or script under `skills/self-improvement/`. Document the invocation and add tests for totals, final newlines, and multiple files. Do not use Node for this workflow.
-
-Result: =skills/self-improvement/scripts/compare-instructions.bb= compares a resolved Git commit with working-tree files, reporting per-file and total newline counts, UTF-16 characters and token estimates without source copies. The skill documents invocation and rounding. Tests cover final newlines, Unicode, multiple files, totals, older revisions and missing-input failures.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: cormacc/dotagents @ main
-- timestamp: [2026-08-14 Fri 21:44]
-- sender: human
-
-Evidence:
-A one-off `.tmp/compare-agent-counts.clj` produced the requested comparison. A later Node verification duplicated the calculation and violated the repository's Babashka-first rule. The user identified the comparison as reusable and requested a durable script.
-
-** DONE validate-skills.bb rejects a relative --python path :project_convention:
-CLOSED: [2026-11-01 Sun 12:38]
-:PROPERTIES:
-:CUSTOM_ID: 43a9ab20-69e4-43a6-9dbe-6ad6112bcfd7
-:CREATED: [2026-08-26 Wed 10:21]
-:STARTED: [2026-11-01 Sun 12:08]
-:END:
-:LOGBOOK:
-- Created [2026-08-26 Wed 10:21]
-- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
-- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
-:END:
-scripts/validate-skills.bb shells out to skill-creator's validator with `:dir skills/skill-creator`, so a relative interpreter path passed to `--python` resolves against that directory instead of the caller's cwd and the run dies at scripts/validate-skills.bb:52.
-
-Either absolutise the `--python` value before the shell-out, or reject a relative value with an argument error that names the requirement. scripts/README.md should state whichever holds.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: cormacc/dotagents @ main
-- timestamp: [2026-08-21 Fri 18:02]
-- sender: agent
-
-Evidence:
-Measured: `bb scripts/validate-skills.bb --python .tmp/relpy` exits 1 with the error at line 52; the identical interpreter passed as an absolute path exits 0 with "16 skills checked, 0 gating failure(s)". Surfaced by a reviewer subagent that lost two retries to it.
-
-Acceptance criteria:
-- A relative `--python` value either works or fails with an argument error naming the constraint.
-- scripts/README.md documents the resolved behaviour.
-
-Result: explicit interpreter paths resolve against the caller's directory before the validator changes directories; bare commands retain =PATH= lookup. Interpreter-path fixtures and the validator-refusal control pass. The real skill validator also passes with a relative virtual-environment interpreter.
 
 ** TODO Hand-composed edit hazards: instruction rule additions :agents_md:
 :PROPERTIES:
@@ -746,133 +499,3 @@ Checking a 330-line change-record against its changeset needed a one-off Babashk
 - Created [2026-10-19 Mon 13:34]
 :END:
 With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.
-
-** DONE check-section-links: also check untracked, non-ignored files :project_convention:
-CLOSED: [2026-11-01 Sun 12:38]
-:PROPERTIES:
-:CUSTOM_ID: ff057776-88e5-4d2c-aa72-cf896995d908
-:CREATED: [2026-10-22 Thu 19:30]
-:STARTED: [2026-11-01 Sun 12:08]
-:END:
-:LOGBOOK:
-- Created [2026-10-22 Thu 19:30]
-- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
-- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
-:END:
-~scripts/check-section-links.bb~ reads only ~git ls-files~, so a new, still-untracked org or Markdown file is never checked and the run reports 0 problems. Include ~git ls-files --others --exclude-standard~ in the file set, and add a test whose positive control is a broken link inside an untracked file.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: git@github.com:cormacc/dotagents.git @ main
-- timestamp: [2026-10-22 Thu 19:30]
-- sender: agent
-
-Evidence:
-- 2026-10-22: the untracked change-record design/log/2026-10-21-child-context-modes.org was reported clean several times. A deliberately broken same-file link in it was not reported. On a scratch repository where every file was tracked, the checker covered 13 more references and reported the control.
-
-Result: the checker includes cached and non-ignored untracked documents. The fixture detects a broken untracked link, passes after repair, preserves ignore/exclude rules, and counts the document once after staging. The repository section-link check passes.
-
-** DONE ot archive rewrites unrelated imported change-records :skill:org_tasks:
-CLOSED: [2026-11-02 Mon 23:36]
-:PROPERTIES:
-:CUSTOM_ID: 0013aad5-365b-41d7-9daf-40e5b5f11201
-:CREATED: [2026-10-29 Thu 10:12]
-:STARTED: [2026-11-02 Mon 23:32]
-:END:
-:LOGBOOK:
-- Created [2026-10-29 Thu 10:12]
-- State "STARTED" from "TODO" [2026-11-02 Mon 23:32]
-- State "DONE" from "STARTED" [2026-11-02 Mon 23:36]
-:END:
-`ot archive` rewrites an `#+IMPORT:`-linked change-record that the archived task does not own, and drops blank lines from it. Archiving must leave every file other than the source task file, `TASKS.archive.org`, and the archived task's own record byte-identical, except that `TASKS.local.org` changes when clearing a selection inside the archived subtree. Add a regression test that archives a task while another open task imports a record with a blank line between a list item and the next heading.
-
-Result: `archive-cmd` uses `loader/save-source-roots-locality`, retaining the baseline that removes a source file's last task. `archive-preserves-unrelated-imported-records` in `skills/org-tasks/scripts/test/org_tasks/commands/archive_publish_test.clj` covers 24 combinations of source location, owned record, selection and dry-run, checking the exact write set and unchanged file bytes. The regression produced 24 failed assertions before the handler change and passes after it. The archive namespace passes 24 tests / 331 assertions; the combined org-tasks and herdr-orch Clojure suite passes 763 tests / 7,082 assertions. The CLI reference and machine contract document the permitted writes.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: cormacc/dotagents @ main
-- timestamp: [2026-10-29 Thu 10:12]
-- sender: agent
-
-Evidence:
-Reproduced in a clean worktree at HEAD 2ca64af. `ot status 17fea754 DONE` changed only TASKS.org. `ot archive 17fea754 --yes` then also changed design/log/2026-10-23-sharepoint-document-editing.org, which is imported by a different, open task: it removed the blank line between the last list item of a task body and the following `***` heading, twice. The archived task (pi-clojure dev pin, in Chores) has no #+IMPORT: of its own.
-
-** DONE Make npm run check select the installed Pi runtime :ext:test_infrastructure:
-CLOSED: [2026-11-01 Sun 12:38]
-:PROPERTIES:
-:CUSTOM_ID: 0e9cf14d-7054-42b9-b9c6-907e926a4f40
-:CREATED: [2026-10-31 Sat 10:15]
-:STARTED: [2026-11-01 Sun 12:08]
-:END:
-:LOGBOOK:
-- Created [2026-10-31 Sat 10:15]
-- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
-- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
-:END:
-The npm run check invocation failed in skills/herdr-orch/scripts/pi/test.sh: the API resolved under repository node_modules, which HERDR_ORCH_FORBID_BUNDLE_PREFIX rejects. The runner chooses pi on PATH; scripts/check.sh reaches it through bb test. A direct bash scripts/check.sh invocation passed the installed-Pi adapter stage, then hit the 300-second overall limit during extension tests. Make the npm entry point preserve installed-runtime selection without weakening the mismatch control. Evidence: .tmp/consolidation.FiGdAD/repository-check.log and repository-direct.log. This was discovered while verifying task c15712eb; it is not attributed to the consolidation changes.
-
-Result: the adapter runner excludes =node_modules/.bin= entries when resolving and invoking Pi; locked TypeScript tools remain unchanged. Fixtures cover an npm shim ahead of the installed executable and refusal when only the shim is available. =npm run check= passes end to end, including all installed-Pi suites and the runtime-mismatch control. Evidence: =.tmp/backlog-housekeeping.AMNxsn/repository-check.log=.
-
-** DONE herdr-orch: expose publication checkpoints and pin child baselines :skill:herdr_orch:
-CLOSED: [2026-11-01 Sun 12:38]
-:PROPERTIES:
-:CUSTOM_ID: 100aed02-e3f6-4856-b79c-988624991172
-:CREATED: [2026-10-31 Sat 16:04]
-:STARTED: [2026-11-01 Sun 12:08]
-:END:
-:LOGBOOK:
-- Created [2026-10-31 Sat 16:04]
-- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
-- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
-:END:
-Approved CD retrospective item 6. Put the existing worktree publication checkpoint side effect in generated child instructions. Require a baseline to be resolved to an immutable commit before publication and use that commit for exports, diffs and regression controls. Preserve checkpoint semantics and explicit parent integration; do not merely append another warning to the skill body.
-
-Acceptance:
-- Generated worktree guidance states that WAITING and terminal publications can stage nonignored changes, create a checkpoint and move HEAD.
-- Generated guidance requires immutable baseline commits rather than mutable HEAD for baseline exports and comparisons.
-- Prompt-generation tests check the guidance and the distinction between worktree and shared-root publication.
-- No checkpoint semantics, integration permissions or global AGENTS.md rules change.
-
-Result: fresh, forked, continuation and poke prompts pin Git baselines before publication and distinguish worktree checkpointing from shared-root publication. Preview and launch callers supply the checkout type. Prompt-generation tests pass; checkpoint and integration mechanics are unchanged.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/mbt/cd
-- git: git@git.nmd.ie:products/mbt/cd @ stim-resilience
-- timestamp: [2026-10-31 Sat 16:03]
-- sender: agent
-
-Evidence:
-CD workers on 30-31 October repeatedly reported WAITING checkpoint commits. Workers implementing DMA chunking and ETS-in-ISR explicitly reported later HEAD exports capturing their own changes as the baseline. Current skills/herdr-orch/scripts/src/herdr_orch/cli.clj defines checkpoint-worktree! to stage changes and commit dirty write-enabled worktrees. The mechanical contract already documents WAITING checkpoints, while waiting-instruction and publication-guidance omit the baseline consequence. Original project sessions: 2026-10-30T12-35-51-971Z_01a18ccf-3422-7625-a258-deb2579a6a63.jsonl and 2026-10-30T13-59-21-476Z_01a18d1b-a483-7569-a5ba-f1b93e27a28e.jsonl under ~/.pi/agent/sessions/ CD worktree directories. Review: ~/nmd/products/mbt/cd/.tmp/retro-20261031/review.md. Routed as TODO because this is executable work and the dotagents tree has unrelated changes.
-
-** DONE nix: document explicit path flakes for untracked scratch exports :skill:nix:
-CLOSED: [2026-11-01 Sun 12:38]
-:PROPERTIES:
-:CUSTOM_ID: 9cf06f9f-fd19-4ccf-a9c5-6209e59b5c95
-:CREATED: [2026-10-31 Sat 16:04]
-:STARTED: [2026-11-01 Sun 12:08]
-:END:
-:LOGBOOK:
-- Created [2026-10-31 Sat 16:04]
-- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
-- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
-:END:
-Approved CD retrospective item 7. In skills/nix/SKILL.md, clarify the narrow exception for a clean, untracked snapshot inside another Git repository: use an explicit path:<snapshot-root> flake reference. Retain Git-backed evaluation for ordinary tracked flakes and the warning that path: includes ignored output.
-
-Proposed rule:
-For a clean, untracked snapshot inside another Git repository, use an explicit path:<snapshot-root> flake reference so Nix evaluates the snapshot rather than the enclosing Git source. Keep generated output outside that snapshot before evaluation. Continue to use Git-backed references for normal tracked flakes.
-
-Acceptance:
-- The exception sits beside the existing Git-backed-flake advice and does not contradict its default.
-- A disposable untracked-export case demonstrates the selection failure and explicit-path success without copying a parent build tree into the store.
-- Ordinary tracked-flake advice remains unchanged.
-
-Result: the narrow exception is beside the Git-backed-flake advice in =skills/nix/SKILL.md=. A disposable input-free flake probe passed the tracked-parent control, rejected the untracked Git-backed snapshot, and evaluated that snapshot through an explicit =path:= reference. Evidence: =.tmp/backlog-housekeeping.AMNxsn/nix-probe.jsonl=.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/mbt/cd
-- git: git@git.nmd.ie:products/mbt/cd @ stim-resilience
-- timestamp: [2026-10-31 Sat 16:03]
-- sender: agent
-
-Evidence:
-The CD integration reviewer on 30 October received a not-tracked-by-Git error for .tmp/review-int1/tree/flake.nix. The subsequent nix develop invocation used explicit path:$PWD and the focused test run completed. Original session: ~/.pi/agent/sessions/--home-cormacc-nmd-products-mbt-cd--/2026-10-30T15-09-07-429Z_01a18d5b-83e5-724d-8883-a2dcf1c58bed.jsonl. Current Nix guidance prefers Git-backed flakes and warns about path: copying ignored output; add an exception, not a blanket replacement. Review: ~/nmd/products/mbt/cd/.tmp/retro-20261031/review.md. Routed as TODO because unrelated dotagents changes prevent the home-config tight-loop exception.

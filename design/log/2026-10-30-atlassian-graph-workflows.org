@@ -1,6 +1,6 @@
 #+TITLE: Graph-aware Atlassian requirements exploration
 #+DATE: 2026-11-02 Mon
-#+PARENT: [[task:f673946f-c641-45c1-8b42-dbe58b23b2df][Investigate Atlassian Teamwork Graph API]]
+#+PARENT: [[archive:f673946f-c641-45c1-8b42-dbe58b23b2df][Investigate Atlassian Teamwork Graph API]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:skills/org-jira/SKILL.md]]

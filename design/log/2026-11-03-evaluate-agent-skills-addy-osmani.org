@@ -1,6 +1,6 @@
 #+TITLE: Evaluate agent-skills (Addy Osmani)
 #+DATE: 2026-11-03 Tue
-#+PARENT: [[task:0f6a6b03-d101-49f3-9279-27d4aa143356][Evaluate agent-skills (Addy Osmani)]]
+#+PARENT: [[archive:0f6a6b03-d101-49f3-9279-27d4aa143356][Evaluate agent-skills (Addy Osmani)]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+NO_SPEC: true
