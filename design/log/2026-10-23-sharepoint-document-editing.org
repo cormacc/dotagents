@@ -1,6 +1,6 @@
 #+TITLE: Edit SharePoint Word documents from a pi session
 #+DATE: 2026-10-23 Fri
-#+PARENT: [[task:909f6071-a969-4e45-823b-680ecc1cf5c5][Edit SharePoint Word documents from a pi session]]
+#+PARENT: [[archive:909f6071-a969-4e45-823b-680ecc1cf5c5][Edit SharePoint Word documents from a pi session]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+SPEC: [[proj:skills/docx/SKILL.md]]
@@ -201,7 +201,6 @@ CLOSED: [2026-11-03 Tue 10:52]
 - State "DONE" from "STARTED" [2026-11-03 Tue 10:52]
 :END:
 Outcome: tracked body/header/history-row review and DCR trial completed; the verified clean copy was published at 1.0 with its approved comment. Original cleanup criterion (discard or delete the sandbox) withdrawn by the user on 2026-11-03, not met: retain all three test files for reuse.
-
 *** DONE Refuse clean copies with deleted paragraph marks
 CLOSED: [2026-10-23 Fri 17:39]
 :PROPERTIES:
@@ -215,7 +214,6 @@ CLOSED: [2026-10-23 Fri 17:39]
 - State "DONE" from "STARTED" [2026-10-23 Fri 17:39]
 :END:
 Outcome: deleted paragraph marks in every story are refused before output, including with --no-verify and --keep-tracking.
-
 *** DONE Investigate clean verification after Word Accept All
 CLOSED: [2026-11-03 Tue 10:15]
 :PROPERTIES:
@@ -229,7 +227,6 @@ CLOSED: [2026-11-03 Tue 10:15]
 - State "DONE" from "STARTED" [2026-11-03 Tue 10:15]
 :END:
 Outcome: reproduced pandoc#11943 with synthetic fields and lists; Pandoc 3.13 verifies the unchanged cleaner's output.
-
 *** DONE Use HTTP/1.1 for bodyless Graph POST actions
 CLOSED: [2026-11-03 Tue 10:38]
 :PROPERTIES:

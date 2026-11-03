@@ -16,24 +16,23 @@
   - [[#herdr-orch-llm-usage-limit-fallback][herdr-orch: LLM usage limit fallback]]
   - [[#evaluate-rpiv-pi-workflow-setup][Evaluate rpiv-pi workflow setup]]
   - [[#explore-agent-memory-options][Explore agent memory options]]
-  - [[#investigate-clojure-in-codemode][Investigate clojure in codemode]]
   - [[#review-herdr-tsk-plugin-for-inspiration-for-org-tasks][Review herdr tsk plugin for inspiration for org-tasks]]
 - [[#improvements][Improvements]]
   - [[#ot-move-tuipi-overlay-exposure-and---before--after-ordering][ot move: TUI/pi-overlay exposure and --before/--after ordering]]
   - [[#herdr-plugin-wrapper-for-herdr-orch][herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
-  - [[#traits-re-probe-every-fragment-against-synthetic-non-decaying-scenarios][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
-  - [[#traits-retry-the-simple-probe-at-a-lower-model-tier][traits: retry the %simple probe at a lower model tier]]
-  - [[#herdr-orch-fix-incompatible-withincompatibilities-doc-code-mismatch-in-contractmd-and-traitsmd][herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md]]
+  - [[#traits-probe-backlog][traits: probe backlog]]
+  - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
 - [[#fixes][Fixes]]
+  - [[#started-herdr-orch-failed-spawn-hygiene][STARTED herdr-orch: failed-spawn hygiene]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
 - [[#agent-feedback][Agent feedback]]
   - [[#hand-composed-edit-hazards-instruction-rule-additions][Hand-composed edit hazards: instruction rule additions]]
-  - [[#herdr-orch-a-failed-spawn-round-is-permanent-ledger-residue][herdr-orch: a failed spawn round is permanent ledger residue]]
   - [[#guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][Guard against a parallel tool batch that writes and reads the same path]]
-  - [[#herdr-orch-oh-task-start-fails-with-agent_pane_busy-when-started-right-after-another-spawn][herdr-orch: oh task start fails with agent_pane_busy when started right after another spawn]]
   - [[#org-plan-check-non-path-identifiers-in-change-records][org-plan: check non-path identifiers in change-records]]
+  - [[#stop-parallel-claude-trigger-evals-picking-another-workers-candidate][Stop parallel claude trigger evals picking another worker's candidate]]
+  - [[#align-skill-creator-eval-layout-with-benchmark-aggregation][Align skill-creator eval layout with benchmark aggregation]]
 
 * Explorations
 
@@ -110,27 +109,6 @@ Spawned from the dev-agent-backlog prior-art review (parent task 5aed17ed-cfc4-4
 Remaining scope: compare solution and lesson capture in [[file:design/log/2026-05-01-dev-agent-backlog-review-summary.html]] with [[file:skills/self-improvement/SKILL.md]], and identify a concrete missing behaviour worth adopting, or record that no addition is justified.
 
 The integration decisions are already represented by the self-improvement contract: TODO-first capture through =ot=, ownership routing, deduplication, and optional promotion through =org-plan=. Do not reopen those decisions or introduce another knowledge store merely to complete this prior-art comparison.
-
-** TODO Investigate clojure in codemode :pi:clojure:
-:PROPERTIES:
-:CUSTOM_ID: 02ca4985-26ae-40cd-926e-325794b7d25d
-:CREATED: [2026-10-01 Thu 13:32]
-:END:
-:LOGBOOK:
-- Created [2026-10-01 Thu 13:32]
-:END:
-Evaluate writing pi tool-orchestration scripts in Clojure via SCI (https://github.com/babashka/sci) instead of JavaScript.
-
-Findings so far (pi 0.99.2, 2026-10-01):
-- The built-in `codemode` tool is JavaScript only: its schema has one `code` field ("Raw JavaScript source") and each script runs in a fresh QuickJS WebAssembly sandbox (`@earendil-works/pi-codemode`, heap-limited). No language option or extension prelude.
-- `docs/extensions.md` says `codemode` uses only `prepareLoadout`, `exposure` and `ctx.executeTool()`, "so another tool can implement the same behavior under a different name". A `cljmode`-style extension tool could evaluate Clojure with SCI in Node and expose callable tools as functions over `ctx.executeTool()`.
-- npm has no `@babashka/sci` or `@borkdude/sci`; SCI-based packages `nbb` (1.6.214, Node) and `scittle` (0.8.33, browser script tags) exist.
-
-Open questions for a spike:
-- Async tool calls from SCI (promesa in nbb?) and how cleanly scripts chain them.
-- Isolation: a Node-hosted SCI tool runs in the pi process, not QuickJS; confirm what SCI exposes by default.
-- Whether loading SCI inside the QuickJS sandbox is feasible at all (bundle size per fresh sandbox, heap limit, browser globals in scittle).
-- Benefit versus cost: models write JS orchestration fluently; the gain is human readability of agent scripts, not tokens.
 
 ** TODO Review herdr tsk plugin for inspiration for org-tasks
 :PROPERTIES:
@@ -247,21 +225,6 @@ Must not: weaken a recorded condition to make a run agree; reuse a repo-referent
 Path corrected [2026-10-20 Tue]: the probe record is the repository user-layer file traits/simple/gate.md, not skills/herdr-orch/traits/simple/gate.md. It now records four non-discriminating runs: the two described here, plus two from the ponytail v5 review, all at one tier.
 
 traits/simple/gate.md records two %simple probe runs at gpt-5.6-terra (matching base-analyst's read-only tier) against a low-temptation two-flag CLI task; both runs were non-discriminating (treated and control converged on the same minimal shape). Not retried at a lower tier within [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]]'s probe budget. Retry at a lower tier (or a higher-temptation scenario) and record the outcome in the same gate.md, per the honest-attempt admission bar in skills/herdr-orch/references/traits.md.
-
-** DONE Edit SharePoint Word documents from a pi session
-CLOSED: [2026-11-03 Tue 10:59]
-:PROPERTIES:
-:CUSTOM_ID: 909f6071-a969-4e45-823b-680ecc1cf5c5
-:CREATED: [2026-10-23 Fri 13:27]
-:STARTED: [2026-10-23 Fri 14:03]
-:END:
-:LOGBOOK:
-- Created [2026-10-23 Fri 13:27]
-- State "STARTED" from "TODO" [2026-10-23 Fri 14:03]
-- State "DONE" from "STARTED" [2026-11-03 Tue 10:59]
-:END:
-#+IMPORT: [[plan:2026-10-23-sharepoint-document-editing.org]]
-Session check-out, tracked edits with reason comments, minor check-in; at the end of review, a clean copy and (on explicit request) a published major version.
 
 ** TODO pi-clojure: structural edit tool for Clojure forms :pi:clojure:
 :PROPERTIES:

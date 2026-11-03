@@ -4354,6 +4354,23 @@ CLOSED: [2026-11-03 Tue 01:10]
 :END:
 #+IMPORT: [[plan:2026-11-03-evaluate-matt-pocock-skills.org]]
 
+** DONE Edit SharePoint Word documents from a pi session
+CLOSED: [2026-11-03 Tue 10:59]
+:PROPERTIES:
+:CUSTOM_ID: 909f6071-a969-4e45-823b-680ecc1cf5c5
+:CREATED: [2026-10-23 Fri 13:27]
+:STARTED: [2026-10-23 Fri 14:03]
+:ARCHIVED: [2026-11-03 Tue 10:59]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-10-23 Fri 13:27]
+- State "STARTED" from "TODO" [2026-10-23 Fri 14:03]
+- State "DONE" from "STARTED" [2026-11-03 Tue 10:59]
+:END:
+#+IMPORT: [[plan:2026-10-23-sharepoint-document-editing.org]]
+Session check-out, tracked edits with reason comments, minor check-in; at the end of review, a clean copy and (on explicit request) a published major version.
+
 ** DONE System prompt optimisation 2026-11-03 :agents_md:prompt:system:
 CLOSED: [2026-11-03 Tue 17:05]
 :PROPERTIES:
@@ -4468,6 +4485,35 @@ CLOSED: [2026-11-03 Tue 18:29]
 - Acceptance: nested headings without heading styles, changed headings, body/table changes and deleted text retain the correct section context; missing or ambiguous rendered numbers and header/footer changes are explicit, not guessed. Exercise the CLI with synthetic numbering and a local QM0019 copy.
 - Must not: modify the input, change the ~changes~ contract, infer section headings from ordinary numbered lists, or add a package dependency.
 - Verified: ~skills/docx/scripts/test-docx.bb~ passed 33 tests / 272 assertions with Pandoc 3.13; self-check failed as required. Per-file clj-kondo, skill validation and section links passed. Local QM0019 retained all 397 change entries and identical input bytes: 97 matched decimal sections, 299 changes under unnumbered appendix/version-history headings unresolved, one header not applicable; four sampled section labels matched an independent PDF render.
+
+** CANCELLED Investigate clojure in codemode :pi:clojure:
+CLOSED: [2026-11-03 Tue 18:24]
+:PROPERTIES:
+:CUSTOM_ID: 02ca4985-26ae-40cd-926e-325794b7d25d
+:CREATED: [2026-10-01 Thu 13:32]
+:ARCHIVED: [2026-11-03 Tue 18:24]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- State "CANCELLED"  from "DONE"       [2026-11-03 Tue 18:24]
+- State "DONE"       from "WAITING"    [2026-11-03 Tue 18:24]
+- State "STARTED"    from "TODO"       [2026-11-03 Tue 18:24]
+- Created [2026-10-01 Thu 13:32]
+:END:
+*UPDATE* Cancelled -- this is internal use by the harness, not persistent scripts read by me -- let pi work in its native typescript in this context.
+
+Evaluate writing pi tool-orchestration scripts in Clojure via SCI (https://github.com/babashka/sci) instead of JavaScript.
+
+Findings so far (pi 0.99.2, 2026-10-01):
+- The built-in `codemode` tool is JavaScript only: its schema has one `code` field ("Raw JavaScript source") and each script runs in a fresh QuickJS WebAssembly sandbox (`@earendil-works/pi-codemode`, heap-limited). No language option or extension prelude.
+- `docs/extensions.md` says `codemode` uses only `prepareLoadout`, `exposure` and `ctx.executeTool()`, "so another tool can implement the same behavior under a different name". A `cljmode`-style extension tool could evaluate Clojure with SCI in Node and expose callable tools as functions over `ctx.executeTool()`.
+- npm has no `@babashka/sci` or `@borkdude/sci`; SCI-based packages `nbb` (1.6.214, Node) and `scittle` (0.8.33, browser script tags) exist.
+
+Open questions for a spike:
+- Async tool calls from SCI (promesa in nbb?) and how cleanly scripts chain them.
+- Isolation: a Node-hosted SCI tool runs in the pi process, not QuickJS; confirm what SCI exposes by default.
+- Whether loading SCI inside the QuickJS sandbox is feasible at all (bundle size per fresh sandbox, heap limit, browser globals in scittle).
+- Benefit versus cost: models write JS orchestration fluently; the gain is human readability of agent scripts, not tokens.
 
 ** DONE docx: report stored field errors in inspect
 CLOSED: [2026-11-03 Tue 18:53]
