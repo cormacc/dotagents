@@ -454,6 +454,54 @@
       (is (str/includes? (d/entry-str (clean/clean-entries (d/read-entries edited) :keep-tracking? true) "word/settings.xml")
                          "trackRevisions")))))
 
+(deftest clean-keeps-field-instructions-and-paragraph-boundaries
+  (let [field (fn [change]
+                (str "<w:r><w:fldChar w:fldCharType=\"begin\"/></w:r>"
+                     (when change (str "<w:" change " w:id=\"1\" w:author=\"Tester\">"))
+                     "<w:r><w:instrText xml:space=\"preserve\"> REF _Ref123 \\h </w:instrText></w:r>"
+                     (when change (str "</w:" change ">"))
+                     "<w:r><w:fldChar w:fldCharType=\"separate\"/></w:r>"
+                     (r "Target") "<w:r><w:fldChar w:fldCharType=\"end\"/></w:r>"))
+        numbering (str decl "<w:numbering " ns-decls ">"
+                       "<w:abstractNum w:abstractNumId=\"0\"><w:lvl w:ilvl=\"0\">"
+                       "<w:start w:val=\"1\"/><w:numFmt w:val=\"decimal\"/><w:lvlText w:val=\"%1.\"/>"
+                       "</w:lvl></w:abstractNum><w:num w:numId=\"1\"><w:abstractNumId w:val=\"0\"/></w:num></w:numbering>")
+        expected ["Before reference: Target end." "Another reference: Target done." "Tools" "Next paragraph."]
+        rendered (assoc expected 2 "1.  Tools")]
+    (doseq [change [nil "ins" "moveTo"]]
+      (let [label (or change "plain")
+            in (str (fs/path tmp (str "field-" label ".docx")))
+            out (str (fs/path tmp (str "field-" label "-clean.docx")))
+            checked (str (fs/path tmp (str "field-" label "-checked.docx")))
+            body (str (p (r "Before reference: ") (field change) (r " end."))
+                      (p (r "Another reference: ") (field nil) (r " done."))
+                      "<w:p><w:pPr><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"1\"/></w:numPr></w:pPr>"
+                      (r "Tools") "</w:p>" (p (r "Next paragraph.")))
+            _ (build! in body)
+            base (d/read-entries in)
+            rels (str/replace (d/entry-str base "word/_rels/document.xml.rels") "</Relationships>"
+                              "<Relationship Id=\"rIdNum\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering\" Target=\"numbering.xml\"/></Relationships>")
+            entries (conj (d/replace-entries base {"word/_rels/document.xml.rels" rels})
+                          ["word/numbering.xml" (.getBytes numbering "UTF-8")])
+            _ (d/write-docx in entries)
+            _ (d/write-docx out (clean/clean-entries entries))
+            doc (d/parse-entry (d/read-entries out) "word/document.xml")]
+        (is (= expected (mapv d/text (d/descendants doc (w "p")))))
+        (is (= [" REF _Ref123 \\h " " REF _Ref123 \\h "]
+               (mapv #(apply str (:content %)) (d/descendants doc (w "instrText")))))
+        (is (= {} (:tracked_changes (review/inspect out))))
+        (when pandoc?
+          (is (= rendered (pandoc-lines out "accept")))
+          (let [reader-correct? (= rendered (pandoc-lines in "accept"))
+                result (run-cli "clean" in checked)]
+            (if reader-correct?
+              (do (is (zero? (:exit result)) (:err result))
+                  (is (true? (:verified (json/parse-string (:out result) true)))))
+              ;; Pandoc before 3.13 can leak field state into later list items (#11943).
+              (do (is (some? change) "control: an untracked field reads correctly")
+                  (is (= 3 (:exit result)) "a faulty reference must still block verification")
+                  (is (str/includes? (:err result) "differs from pandoc's accept view"))))))))))
+
 (def deleted-mark "<w:p><w:pPr><w:rPr><w:del w:id=\"7\" w:author=\"Other\"/></w:rPr></w:pPr><w:r><w:t>First</w:t></w:r></w:p>")
 
 (deftest clean-refuses-deleted-paragraph-marks-in-every-story

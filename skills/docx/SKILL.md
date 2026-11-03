@@ -79,6 +79,8 @@ A deleted paragraph mark in the body, a header, footer, footnote or endnote stop
 
 The check compares the clean copy with pandoc's accept view of the input, paragraph by paragraph, after it removes list markers and whitespace. It checks text, not formatting. Before publication, open the clean copy in Word and check lists and paragraph formatting. If the command fails, do not upload its output or use `--no-verify` to bypass the publication check; investigate the difference first.
 
+Use Pandoc 3.13 or later when a field instruction has tracked changes. Older readers can join later paragraphs and lose list text in the reference view, even after Word Accept All leaves a tracked instruction in the saved file ([pandoc#11943](https://github.com/jgm/pandoc/issues/11943)). Upgrade Pandoc and repeat `clean`; do not bypass verification.
+
 `docx.clj comments` before `clean` keeps the review record: the comments are gone after it.
 
 ## Editing from Babashka
