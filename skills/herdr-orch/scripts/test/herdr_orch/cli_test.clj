@@ -296,9 +296,9 @@
                 (is (not (str/includes? (cli/roster-text listing "markdown" "all" false) "Resolution layers")))))
             (testing "a single section has no heading; all has one per section"
               (is (not (str/includes? org-traits "Traits")))
-              (is (= ["## Personas" "## Traits" "## Models" "## Spawn defaults"]
+              (is (= ["## Personas" "## Traits" "## Models" "## Workflows" "## Spawn defaults"]
                      (re-seq #"(?m)^## .*$" (cli/roster-text listing "markdown" "all" false))))
-              (is (= ["*Personas*" "*Traits*" "*Models*" "*Spawn defaults*"]
+              (is (= ["*Personas*" "*Traits*" "*Models*" "*Workflows*" "*Spawn defaults*"]
                      (re-seq #"(?m)^\*[A-Z][^*]*\*$" (cli/roster-text listing "org" "all" false)))))
             (testing "tables are padded the way each format aligns them"
               (let [org-rows (str/split-lines (cli/roster-text listing "org" "models" false))
@@ -4963,6 +4963,45 @@
           (is (not (str/includes? (:out proc) "\"ok\""))))))))
 
 ;; Discovery must work from any shell: no `HERDR_ENV`, no preflight, no Herdr call at all.
+(deftest empty-workflow-section-test
+  (doseq [format ["markdown" "org"] detail? [false true]]
+    (is (= "No workflow skills found."
+           (cli/roster-text {:workflows []} format "workflows" detail?)))))
+
+(deftest roster-discovers-workflow-skills-without-herdr-test
+  (let [{:keys [env dir log]} (fake-env {"HERDR_ENV" "0"})
+        path (fs/path dir ".agents" "skills" "fixture-flow" "SKILL.md")]
+    (fs/create-dirs (fs/parent path))
+    (spit (str path) (str "---\nname: fixture-flow\ndescription: >-\n  A fixture\n  workflow.\n"
+                         "metadata: {herdr-orch: workflow}\n---\nDo not execute these instructions.\n"))
+    (let [control @(process/process [(str (fs/path dir "herdr")) "status" "--json"]
+                                   {:env env :out :string :err :string})
+          before (count (calls log))]
+      (is (zero? (:exit control)) (:err control))
+      (is (pos? before) "positive control: fake Herdr calls are recorded")
+      (let [proc (call! env "roster")
+            envelope (result proc)]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (true? (:ok envelope)))
+        (when (:ok envelope)
+          (is (= {:name "fixture-flow" :description "A fixture workflow."
+                  :source "project" :path (str path)}
+                 (first (filter #(= "fixture-flow" (:name %))
+                                (get-in envelope [:result :workflows])))))
+          (is (= ["project" "project" "home" "packaged"]
+                 (mapv :source (get-in envelope [:result :layers :workflows]))))))
+      (doseq [[format expected] [["markdown" "- `fixture-flow` -- A fixture workflow."]
+                                ["org" "- =fixture-flow= -- A fixture workflow."]]]
+        (let [compact (call! env "roster" "--format" format "--section" "workflows")
+              detail (call! env "roster" "--format" format "--section" "workflows" "--detail")]
+          (is (zero? (:exit compact)) (:out compact))
+          (is (zero? (:exit detail)) (:out detail))
+          (is (some #{expected} (str/split-lines (:out compact))))
+          (is (str/includes? (:out detail)
+                             (str "A fixture workflow.; project: "
+                                  (if (= format "org") "=" "`") path)))))
+      (is (= before (count (calls log))) "roster made no Herdr call"))))
+
 (deftest roster-is-a-herdr-free-json-listing
   (let [{:keys [env log]} (fake-env {"HERDR_ENV" "0"})
         proc (call! env "roster")
@@ -4983,7 +5022,7 @@
         (is (zero? (:exit proc)) (:out proc))
         (is (str/starts-with? (:out proc) "- ="))))
     (doseq [[argv pattern] {["--format" "html"] #"--format must be json, markdown, or org"
-                            ["--format" "org" "--section" "bogus"] #"--section must be one of all, personas, traits, models"
+                            ["--format" "org" "--section" "bogus"] #"--section must be one of all, personas, traits, models, workflows"
                             ["--section" "traits"] #"apply only to markdown or org output"
                             ["--detail"] #"apply only to markdown or org output"}]
       (let [proc (apply call! env "roster" argv)]

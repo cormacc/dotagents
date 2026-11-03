@@ -289,13 +289,14 @@ The preview reports:
 
 To find a model miss, compare the model fields. If =model-canonical= still shows your short name, no =:aliases= entry matched. If =model-canonical= is correct but =model-args= repeats it instead of a native name, the =:models= row has no column for that kind.
 
-** Listing personas, traits, and models
+** Listing personas, traits, models, and workflows
 
 =oh roster= lists what a spawn would resolve from the caller's checkout:
 
 - each persona with its model, harness, traits, delegation grant, and source layer, or the error that a spawn would fail with
 - each trait with its description and the personas that select it
 - each model alias with the model name that each harness receives
+- each ordinary skill that declares itself a workflow, with its name and description
 - the spawn defaults
 
 It only reads files, so it works outside Herdr.
@@ -304,10 +305,20 @@ It only reads files, so it works outside Herdr.
 oh roster                                 # JSON, for tools and agents
 oh roster --format markdown               # every section, for a person
 oh roster --format org --section models   # one section, as an org list or table
+oh roster --format markdown --section workflows # self-declared workflow skills
 oh roster --format markdown --detail      # add paths, timeouts, retro, every alias, and the layers
 #+end_src
 
-In pi, =/oh= shows the same listing in the session and does not add it to model context. =/oh personas=, =/oh traits=, and =/oh models= show one section. The tool-output expand key (default =ctrl+o=) switches to the =--detail= form. See [[file:../../pi/extensions/herdr-orch/README.md][pi/extensions/herdr-orch/README.md]].
+In pi, =/oh= shows the same listing in the session and does not add it to model context. =/oh personas=, =/oh traits=, =/oh models=, and =/oh workflows= show one section. The tool-output expand key (default =ctrl+o=) switches to the =--detail= form. See [[file:../../pi/extensions/herdr-orch/README.md][pi/extensions/herdr-orch/README.md]].
+
+Workflow skills stay in their ordinary skill directories. To include one in the catalogue, add this YAML frontmatter metadata:
+
+#+begin_src yaml
+metadata:
+  herdr-orch: workflow
+#+end_src
+
+The marker means catalogue membership, not a required dependency or permission to delegate. Higher-precedence skills resolve before this marker is checked, so an override without it removes that name from the catalogue. The roots, parsing rules, and output contract are in [[file:scripts/docs/contract.md]] section 'Workflow skill discovery'.
 
 The listings below come from the packaged definitions only, so a project or home override does not appear. Run =oh roster= to see your own.
 
@@ -380,7 +391,7 @@ The first column shows the two shortest aliases for each canonical ID. A harness
 
 * Generated listings                                                :noexport:
 
-The =#+CALL:= lines in [[*Listing personas, traits, and models]] run this block. The file-level =#+PROPERTY: header-args :eval no= disables every other block, so =org-babel-execute-buffer= runs only those calls. An empty =HOME= and assignment root leave only the packaged layer, so the output does not depend on the machine. [[file:scripts/AGENTS.md]] section 'Regenerating README listings' gives the maintenance workflow.
+The =#+CALL:= lines in [[*Listing personas, traits, models, and workflows]] run this block. The file-level =#+PROPERTY: header-args :eval no= disables every other block, so =org-babel-execute-buffer= runs only those calls. An empty =HOME= and assignment root leave only the packaged layer, so the output does not depend on the machine. [[file:scripts/AGENTS.md]] section 'Regenerating README listings' gives the maintenance workflow.
 
 #+NAME: oh-roster
 #+begin_src sh :var section="personas" :results raw replace

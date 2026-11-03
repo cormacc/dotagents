@@ -10,14 +10,15 @@
             [herdr-orch.ledger :as ledger]
             [herdr-orch.measurement :as measurement]
             [herdr-orch.pi-adapter :as pi-adapter]
-            [herdr-orch.traits :as traits])
+            [herdr-orch.traits :as traits]
+            [herdr-orch.workflows :as workflows])
   (:import [java.io ByteArrayOutputStream]
            [java.nio.channels FileChannel]
            [java.nio.charset StandardCharsets]
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -3200,7 +3201,7 @@
    "worktree" ["list"
                "remove <full-task-uuid>"]
    "spawn" ["spawn \"<shell command>\""]
-   "roster" ["roster [--format json|markdown|org] [--section all|personas|traits|models] [--detail]"]})
+   "roster" ["roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]"]})
 ;; Derived from the signatures above rather than restated, so help and validation cannot
 ;; disagree. Flat on purpose: it exists to catch typos, and per-group scoping would
 ;; reintroduce a second list to keep in step. Boolean-ness is *not* derivable here
@@ -3328,10 +3329,9 @@
               (if settled? (close-settled!) (close-task! (first positional) opts)))
     (fail "unknown task command" {:command op})))
 ;; --- roster -------------------------------------------------------------------------
-;; Read-only discovery for a human reader (the pi `/oh` command renders it). Each value comes
-;; from the resolver a spawn uses -- roster lookup, `extends`/trait composition, the spawn,
-;; retro and timeout policies, and the merged config -- so the listing cannot disagree with
-;; what a spawn would do. A persona that fails composition is listed with its error instead
+;; Persona fields come from the spawn resolvers so discovery cannot disagree with a spawn.
+;; Workflow entries are ordinary skill metadata, not spawn policy. A persona that fails
+;; composition is listed with its error instead
 ;; of failing the whole listing: one broken override must not hide the rest of the roster.
 ;; Never contacts Herdr, so it needs neither `HERDR_ENV` nor a running server.
 (def layer-names ["project" "home" "packaged"])
@@ -3389,21 +3389,25 @@
 (defn roster-listing []
   (let [merged (config)
         directories (persona-directories)
-        personas (mapv #(roster-persona merged directories %) (available-personas))]
+        personas (mapv #(roster-persona merged directories %) (available-personas))
+        skill-roots (workflows/directories (ledger/assignment-root) (home-directory)
+                                          (fs/parent (skill-directory)))]
     {:personas personas
      :traits (roster-traits personas)
      :models (roster-models merged)
+     :workflows (workflows/discover skill-roots)
      :harnesses (vec (sort (map name (keys (:harnesses merged)))))
      :defaults (:defaults merged {})
      :layers {:personas (mapv (fn [s d] {:source s :directory (str d)}) layer-names directories)
-              :traits (mapv #(select-keys % [:source :directory]) (trait-directories))}}))
+              :traits (mapv #(select-keys % [:source :directory]) (trait-directories))
+              :workflows skill-roots}}))
 ;; Human renderings of `roster-listing`. One renderer serves the pi `/oh` command (Markdown)
 ;; and the generated listings in README.org (org), so the two cannot drift apart. The
 ;; compact form omits paths and per-run policy; `--detail` adds them. A single section is
 ;; one list or one table with no heading, which is what an org babel result can replace
 ;; cleanly on re-evaluation.
 (def roster-formats #{"json" "markdown" "org"})
-(def roster-sections ["all" "personas" "traits" "models"])
+(def roster-sections ["all" "personas" "traits" "models" "workflows"])
 (def ^:private roster-markup
   {"markdown" {:bold #(str "**" % "**") :code #(str "`" % "`") :heading #(str "## " %)}
    ;; A line starting `*Title*` is bold text, not an org heading: a heading needs `* `.
@@ -3440,6 +3444,13 @@
                                               (if (seq selected-by) (str "selected by " (str/join ", " selected-by)) "no persona selects it")
                                               (source-note markup source path detail?)]))))
           traits)))
+(defn- workflow-lines [{:keys [code]} workflows detail?]
+  (if (empty? workflows)
+    ["No workflow skills found."]
+    (mapv (fn [{:keys [name description source path]}]
+            (str "- " (code name) " -- " description
+                 (when detail? (str "; " source ": " (code path)))))
+          workflows)))
 ;; Cells are padded the way org aligns a table, so org's own realignment is a no-op and a
 ;; regenerated README result is byte-stable. Markdown needs at least three rule dashes.
 (defn- table-lines [format rows]
@@ -3470,7 +3481,8 @@
 (defn- layer-lines [{:keys [code]} layers]
   (let [chain (fn [entries] (str/join " > " (map #(str (:source %) " " (code (:directory %))) entries)))]
     [(str "- Personas: " (chain (:personas layers)))
-     (str "- Traits: " (chain (:traits layers)))]))
+     (str "- Traits: " (chain (:traits layers)))
+     (str "- Workflows: " (chain (:workflows layers)))]))
 (defn roster-text [listing format section detail?]
   (let [markup (roster-markup format)
         block (fn [part]
@@ -3478,13 +3490,14 @@
                   "personas" ["Personas" (persona-lines markup (:personas listing) detail?)]
                   "traits" ["Traits" (trait-lines markup (:traits listing) detail?)]
                   "models" ["Models" (model-lines format listing detail?)]
+                  "workflows" ["Workflows" (workflow-lines markup (:workflows listing) detail?)]
                   "defaults" ["Spawn defaults" (default-lines (:defaults listing))]
                   "layers" ["Resolution layers (highest first)" (layer-lines markup (:layers listing))]))]
     (if (= section "all")
       (str/join "\n\n" (map (fn [part]
                               (let [[title lines] (block part)]
                                 (str ((:heading markup) title) "\n\n" (str/join "\n" lines))))
-                            (cond-> ["personas" "traits" "models" "defaults"] detail? (conj "layers"))))
+                            (cond-> ["personas" "traits" "models" "workflows" "defaults"] detail? (conj "layers"))))
       (str/join "\n" (second (block section))))))
 (defn roster! [opts positional]
   (require-positionals positional 0 "roster")

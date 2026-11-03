@@ -2,6 +2,8 @@
 name: security-assessment
 description: Perform a scoped, threat-model-led security assessment of code, a design or a system. Use for threat modelling, abuse cases, security audits, trust-boundary analysis, dependency installation risk, or assessing LLM/tool permissions. Not a generic diff review, automatic hardening task, live penetration test or compliance certification.
 license: MIT
+metadata:
+  herdr-orch: workflow
 ---
 
 # Security assessment

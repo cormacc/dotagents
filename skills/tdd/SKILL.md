@@ -1,6 +1,8 @@
 ---
 name: tdd
 description: Test-first implementation and test design through observable contracts. Use for an explicit TDD or red-green-refactor request, choosing regression-test interfaces, or reviewing tautological and implementation-coupled tests. Not for setting coverage policy, broad code review, or diagnosis-only work.
+metadata:
+  herdr-orch: workflow
 ---
 
 # Test-driven development

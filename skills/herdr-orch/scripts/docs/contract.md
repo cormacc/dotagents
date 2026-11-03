@@ -61,7 +61,7 @@ When a wait outcome settles (idle/done) without a valid result file, the loop sl
 
 | Variable | Read by | Meaning |
 |---|---|---|
-| `ORCH_ASSIGNMENT_ROOT` | parent | Overrides the `git rev-parse --show-toplevel` probe behind the assignment root. It relocates the ledger, index markers, `RESULT` paths, project persona/trait/config lookup (`<root>/.agents/subagents/`, `<root>/.agents/traits/`, and `<root>/.agents/subagents/config.edn`) together, because all are per-project notions; the packaged defaults resolve from the installed skill/launcher location instead, never from the assignment root. A blank value is ignored, a relative value is absolutised so `RESULT` stays absolute, and a value that is not an existing directory is rejected. The resolved assignment root is injected uniformly into every child so nested delegation stays on the parent's ledger and roster. It is routing state, not a target or commit-permission signal; target selection changes cwd only. |
+| `ORCH_ASSIGNMENT_ROOT` | parent | Overrides the `git rev-parse --show-toplevel` probe behind the assignment root. It relocates the ledger, index markers, `RESULT` paths, project persona/trait/workflow/config lookup (`<root>/.agents/subagents/`, `<root>/.agents/traits/`, `<root>/.agents/skills/`, `<root>/skills/`, and `<root>/.agents/subagents/config.edn`) together, because all are per-project notions; the packaged defaults resolve from the installed skill/launcher location instead, never from the assignment root. A blank value is ignored, a relative value is absolutised so `RESULT` stays absolute, and a value that is not an existing directory is rejected. The resolved assignment root is injected uniformly into every child so nested delegation stays on the parent's ledger and roster. It is routing state, not a target or commit-permission signal; target selection changes cwd only. |
 | `ORCH_LIVE_SMOKE`, `ORCH_LIVE_SMOKE_MODEL` | `bb smoke-subagent` | Guards the live smoke, which also needs `HERDR_ENV=1`. Never CI work. |
 | `ORCH_LIVE_SMOKE_KIND` | `bb smoke-subagent` | Optional harness for the live smoke, applied by generating `kind:`-declaring copies of the personas it spawns -- it overrides no resolution of its own. |
 | `ORCH_POLL_INTERVAL_MS` | parent | Sleep between settled-without-result wait iterations and between `collect --any` poll ticks. Default 1000 ms. |
@@ -180,16 +180,17 @@ Config is loaded and schema-validated (parse errors and shape/type errors alike)
 
 ## Roster
 
-`oh roster [--format json|markdown|org] [--section all|personas|traits|models] [--detail]` is read-only discovery. It takes no positional argument, never runs preflight, and never calls Herdr, so it works without `HERDR_ENV`.
+`oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]` is read-only discovery. It takes no positional argument, never runs preflight, and never calls Herdr, so it works without `HERDR_ENV`.
 
 The default `--format json` is for a tool or agent. It writes the usual envelope, and its `result` is an object:
 
 - `personas` -- every name `available-personas` returns, sorted, each with `name`, `source` (`project`, `home`, or `packaged`), `path`, `description`, `model`, `model-canonical`, `kind`, `spawns`, `traits`, `retro`, `timeout`, and `extends` when a base resolved. The values come from the resolvers a spawn uses ([#Persona composition (`extends`)](#persona-composition-extends), [#Trait composition](#trait-composition), [#Spawn gating](#spawn-gating), [#Retro gating](#retro-gating), [#Timeout resolution](#timeout-resolution)) with no flags applied. `spawns` is the declared allow-list, not the depth-gated policy. A persona whose composition or policy resolution fails carries `error` (the message a spawn would fail with) in place of the resolved fields, and the listing still succeeds.
 - `traits` -- every name that some layer offers as `<name>.md` or `<name>/prompt.md` and that matches the token grammar, sorted, each with the winning `name`, `source`, `path`, frontmatter `description`, and `selected-by` (the listed personas whose `traits` contain it).
 - `models` -- one row for each canonical ID in the merged `:models` keys or `:aliases` values, sorted, with `canonical`, `aliases` (shortest first), and `kinds` (the sparse per-kind spellings; a kind absent from a row receives the canonical ID).
+- `workflows` -- marked ordinary skills, sorted by `name`, each with `name`, `description`, `source` (`project`, `home`, or `packaged`), and `path`. Discovery is defined in [#Workflow skill discovery](#workflow-skill-discovery).
 - `harnesses` -- the sorted kind names in the merged `:harnesses`.
 - `defaults` -- the merged `:defaults` map.
-- `layers` -- the ordered persona and trait resolution directories, each `{source, directory}`.
+- `layers` -- the ordered persona, trait, and workflow skill resolution directories, each `{source, directory}`.
 
 An invalid merged config fails the command, as it fails every spawn ([#Model resolution](#model-resolution)).
 
@@ -197,11 +198,34 @@ An invalid merged config fails the command, as it fails every spawn ([#Model res
 
 - A persona is one list item: name, then `model` (or `inherits parent model`), `kind`, `extends`, `spawns`, and `traits` when present, then a non-packaged source as `<source> layer`. Its description follows as an indented continuation line. A persona with `error` shows only its name and the error.
 - A trait is one list item: name, description, then `selected by <personas>` or `no persona selects it`, then a non-packaged source.
+- A workflow is one list item: the skill's name and description. `--detail` adds its source and resolved file path. An empty catalogue renders `No workflow skills found.`
 - Models are one table: the two shortest aliases, then one column for each harness. A harness with no entry for a row shows the canonical ID, which is what that harness receives. Cells are padded the way org aligns a table, so org's realignment of a babel result changes nothing.
 - `--section all`, the default, writes every section under a heading (`## Title` in Markdown, a bold `*Title*` line in org) and adds the spawn defaults. A single section writes only its list or table, with no heading, so that an org babel result can replace it cleanly.
 - `--detail` adds each path (instead of the `<source> layer` note), each persona's timeout and retro policy, every alias, and, under `all`, the resolution layers.
 
 `--section` or `--detail` with `--format json` is refused, as is an unknown format or section. `cli_test.clj`'s `readme-roster-listings-are-current` compares each listing embedded in README.org with a packaged-only rendering, so a packaged persona, trait, or config change fails `bb test` until the README is regenerated ([AGENTS.md#Regenerating README listings](../AGENTS.md#regenerating-readme-listings)).
+
+### Workflow skill discovery
+
+An ordinary skill opts into the catalogue through this YAML frontmatter marker:
+
+```yaml
+metadata:
+  herdr-orch: workflow
+```
+
+This marker means catalogue membership only. It does not declare a required dependency, execute instructions, grant spawn authority, or change the skill's name, location, or invocation. No name prefix or prose reference registers a workflow.
+
+Discovery searches these roots in order:
+
+1. `<assignment-root>/.agents/skills/`
+2. `<assignment-root>/skills/` for a skill-repository checkout
+3. `$HOME/.agents/skills/`
+4. The installed herdr-orch skill's parent directory, containing its sibling skills
+
+The first two roots have source `project`, followed by `home` and `packaged`. These are the CLI's documented roots, not an attempt to reproduce every harness's settings or package discovery. The assignment root is selected as described in [#Environment](#environment).
+
+Walk directories in lexical order, follow directory symlinks without revisiting an ancestor, skip dot directories and `node_modules`, and stop descending when a directory contains `SKILL.md`. Read only its frontmatter, using Babashka's bundled YAML parser with unsafe object construction disabled. Ignore malformed YAML, duplicate YAML keys, missing delimiters, or declarations without non-blank string `name` and `description` fields; file access errors propagate. Resolve duplicate declared skill names before checking for the exact string marker `metadata.herdr-orch: workflow`. A higher-precedence skill without the marker therefore hides a marked lower-precedence copy. Within one root, the first lexical path wins. Skill bodies are not read or executed for discovery.
 
 ## Ledger and completion
 

@@ -1,6 +1,8 @@
 ---
 name: org-plan
 description: "Draft, review, and execute implementation plans as TASKS.org-linked change-records -- owns change-record sections, subtask migration, and closure-time pruning. Use for 'let's plan', design write-ups, retrospective records, or pruning a change-record at closure."
+metadata:
+  herdr-orch: workflow
 ---
 
 # Plan

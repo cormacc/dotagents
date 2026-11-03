@@ -29,6 +29,8 @@ Definitions are `<name>.md` files discovered in descending precedence: `<git-roo
 
 Unknown personas require listing the roster (`oh roster`) and asking, not improvising.
 
+`oh roster --format markdown --section workflows` lists ordinary skills that opt into the workflow catalogue; pi exposes the same listing through `/oh workflows`. Catalogue membership does not run a skill or grant delegation authority. Authoring and discovery rules are in [scripts/docs/contract.md#Workflow skill discovery](scripts/docs/contract.md#workflow-skill-discovery).
+
 Delegate only when the child saves more parent context than its assignment and result cost. Answer inline when you already know the answer or one search finds it. Do not give a `worker` a change whose files you cannot yet name: run a `scout` first, then pass the cited locations. For a broad localisation question, start two `scout` children with different angles (for example definitions and callers, or callers and tests) and combine their citations.
 
 `base-analyst` is a directly usable, read-only analysis persona (default model `light`, a leaf by default): spawn it for an assessment that does not fit `scout`'s codebase-only remit or `researcher`'s external-facts remit. It also exists to be `extends:`-ed by a concrete analysis workflow (for example the `simplify` skill's persona) rather than repeating its assignment/evidence/uncertainty scaffold each time.
