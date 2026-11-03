@@ -317,6 +317,17 @@
        (if worktree
          "Write-enabled worktree WAITING and terminal publications can stage nonignored changes, create a checkpoint commit and move HEAD. Branch integration remains parent-owned."
          "Shared-root publication does not automatically stage changes or create checkpoint commits.")))
+;; pi-context's `context_compact` can fold history back to `root`, and in a child the first
+;; user message is the round's assignment: folding it leaves the scope and the publication
+;; contract only in the child's own summary. The kind gate is mechanical because only a `pi`
+;; child can load pi-context. Whether this child has it depends on personal and project
+;; settings, project trust and package filters that Pi resolves at startup, so the child
+;; checks its own tool list. The name carries the round's task UUID because names must be
+;; unique across the session tree, which a fork or a continued child shares.
+(defn- history-compaction-guidance [kind task]
+  (when (= "pi" kind)
+    (str "\nIf your tools include `context_compact` (pi-context), first call `context_checkpoint` with the name `round-" task "-start`. "
+         "Never compact to `root` or to a target before that checkpoint: this assignment must stay in raw context, not only in a summary.")))
 ;; A persona-less launch has no role to adopt: it receives the assignment, and any explicit
 ;; traits as a composed instruction file when one exists.
 (defn- assignment-lead [{:keys [persona-path role-absent assignment]}]
@@ -333,7 +344,7 @@
        "The selected role and delegation policy below still apply; inherited permissions do not grant authority. "
        "Use only the TASK and RESULT below for this launch, not earlier task, result or identity values."
        "\n\nCurrent delegated assignment:\n"))
-(defn prompt-text [{:keys [spawns task result waiting-policy prompt-extra retro-skill fork? worktree] :as launch}]
+(defn prompt-text [{:keys [spawns task result waiting-policy prompt-extra retro-skill fork? worktree kind] :as launch}]
   (str (when fork? fork-guidance)
        (assignment-lead launch) "\n\n"
        (delegation-guidance spawns) " Herdr assigned TASK=" task " and RESULT=" result ". "
@@ -341,6 +352,7 @@
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--status BLOCKED` (dependency) or `--status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
        publication-guidance
        (checkpoint-guidance worktree)
+       (history-compaction-guidance kind task)
        (retro-instruction retro-skill)
        (waiting-instruction waiting-policy task)
        (when prompt-extra (str "\nAdditional constraints: " prompt-extra))))
@@ -550,7 +562,7 @@
   (let [{:keys [context path composition role-absent label-persona inherited fork-source kind model effort config placement retro spawns timeout requested-target]} (resolve-launch persona opts)
         prompt-persona-path (if (:composed-content composition) "<composed-persona-path>" (some-> path str))]
     (cond->
-     {:preview (prompt-text {:spawns (:spawns spawns) :persona-path prompt-persona-path :role-absent role-absent :fork? (= "fork" context) :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro) :worktree requested-target})
+     {:preview (prompt-text {:spawns (:spawns spawns) :persona-path prompt-persona-path :role-absent role-absent :fork? (= "fork" context) :kind kind :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro) :worktree requested-target})
       ;; :model is the resolved (pre-alias) ID; :model-canonical is that ID after the
       ;; single-hop `:aliases` translation; :model-args is the effective translated
       ;; native spelling (e.g. `["--model" "opus"]`) from the merged roster config.
@@ -1308,7 +1320,7 @@
                                  (when persona-path (core/persona-args kind persona-path))
                                  (when fork? ["--session" (:sessionFile @fork-created)]))]
               (record-session! task (:agent_session (herdr/start! name kind (:pane-id persisted) native)))
-              (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path persona-path :role-absent role-absent :fork? fork? :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro) :worktree worktree})]
+              (let [prompt (prompt-text {:spawns (:spawns spawns) :persona-path persona-path :role-absent role-absent :fork? fork? :kind kind :task task :result result :waiting-policy waiting-policy :assignment assignment :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro) :worktree worktree})]
                 (ledger/update! task assoc :status "started" :started-at (now))
                 (herdr/prompt! name prompt)
                 (ledger/update! task assoc :status "prompted" :prompted-at (now)))))
@@ -2736,7 +2748,7 @@
 ;; The revalidation clause is the one instruction that cannot be mechanised: a long
 ;; residency's real risk is anchoring on its own earlier conclusions, and only the child can
 ;; re-check them.
-(defn continuation-prompt [{:keys [assignment task result waiting-policy worktree]}]
+(defn continuation-prompt [{:keys [assignment task result waiting-policy worktree kind]}]
   (str "Follow-on round in the role you already hold. Task: " assignment "\n\n"
        "This is a new assignment, not a revision of your last one: Herdr assigned TASK=" task " and RESULT=" result ". "
        "Revalidate every prior finding and every mutable baseline against current source before restating it; a claim you have not re-checked this round does not carry forward. "
@@ -2748,6 +2760,7 @@
        "If you cannot finish — an unrecoverable failure after reasonable retries, or a genuine blocking dependency — publish once with `--task " task " --status BLOCKED` (dependency) or `--task " task " --status FAILED` (unrecoverable), summarising work completed vs remaining; never stop silently or publish a second envelope after recovering. "
        publication-guidance
        (checkpoint-guidance worktree)
+       (history-compaction-guidance kind task)
        (waiting-instruction waiting-policy task)))
 
 ;; `poke` re-issues the publication instruction to a settled child that finished its work
@@ -2936,7 +2949,7 @@
         ;; Slow settling and every Herdr call stay outside the reservation. The helper
         ;; re-reads and re-validates mutable ledger state, then writes the successor while
         ;; explicit starts are excluded by the same assignment-root lock.
-        (let [{:keys [task result worktree]}
+        (let [{:keys [task result worktree kind]}
               (reserve-continuation! prior-task child ident caller waiting-policy)]
           ;; The entry must survive a failed prompt (a failed `agent prompt` may still have
           ;; delivered text, so deleting it could orphan a working child), but it must not
@@ -2947,7 +2960,7 @@
           ;; the `continue`, or `close` the prior round. No pane is touched: unlike a spawn
           ;; failure, the pane here predates this verb and belongs to a healthy child.
           (try
-            (herdr/prompt! child (continuation-prompt {:assignment assignment :task task :result result :waiting-policy waiting-policy :worktree worktree}))
+            (herdr/prompt! child (continuation-prompt {:assignment assignment :task task :result result :waiting-policy waiting-policy :worktree worktree :kind kind}))
             (catch Exception e
               (ledger/update! task assoc :status "failed" :failed-at (now) :failure-phase "continue-prompt")
               (throw e)))

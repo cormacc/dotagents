@@ -6949,6 +6949,48 @@
             (is (str/includes? prompt "Shared-root publication does not automatically stage changes"))
             (is (not (str/includes? prompt "create a checkpoint commit and move HEAD")))))))))
 
+(def ^:private compaction-condition "If your tools include `context_compact` (pi-context)")
+(def ^:private compaction-rule "Never compact to `root` or to a target before that checkpoint")
+
+(deftest history-compaction-guidance-is-pi-only-and-names-the-round
+  (let [launch {:assignment "Check the fixture." :task "fixture-task" :result "/fixture-result"
+                :spawns [] :waiting-policy "non-blocking"}
+        prompts (fn [kind] [(cli/prompt-text (assoc launch :kind kind))
+                            (cli/prompt-text (assoc launch :kind kind :fork? true))
+                            (cli/continuation-prompt (assoc launch :kind kind))])]
+    (doseq [prompt (prompts "pi")]
+      (is (str/includes? prompt compaction-condition))
+      (is (str/includes? prompt "first call `context_checkpoint` with the name `round-fixture-task-start`"))
+      (is (str/includes? prompt compaction-rule)))
+    (doseq [kind ["claude" "codex" nil]
+            prompt (prompts kind)]
+      (is (not (str/includes? prompt "context_compact")) (str "kind " (pr-str kind))))
+    (is (not (str/includes? (cli/poke-prompt "fixture-task" "/fixture-result" nil) "context_compact"))
+        "poke re-issues publication only; the round's checkpoint already exists")))
+
+(deftest history-compaction-guidance-follows-the-resolved-kind-through-spawn-and-continue
+  (testing "a pi child is told to checkpoint its round, and a continued round names its own task"
+    (let [{:keys [env dir prompt-file]} (fake-env {})
+          proc (call! env "task" "run" "worker" "--task" "round one" "--timeout" "200")
+          prior (ledger-entry* dir (get-in (result proc) [:result :task]))
+          first-prompt (slurp prompt-file)]
+      (is (= "pi" (:kind prior)))
+      (is (str/includes? first-prompt (str "`round-" (:task prior) "-start`")))
+      (is (str/includes? first-prompt compaction-rule))
+      (let [{:keys [proc entry]} (continue! env dir prior "--task" "round two")
+            next-prompt (slurp prompt-file)]
+        (is (zero? (:exit proc)) (:err proc))
+        (is (str/includes? next-prompt (str "`round-" (:task entry) "-start`")))
+        (is (not (str/includes? next-prompt (:task prior)))))))
+  (testing "a non-pi child gets no pi-context guidance"
+    (let [{:keys [env dir prompt-file]} (fake-env {"FAKE_PARENT_AGENT" "claude"})
+          proc (call! env "task" "start" "worker" "--model" "sonnet" "--task" "claude round")
+          entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
+      (is (zero? (:exit proc)) (:err proc))
+      (is (= "claude" (:kind entry)))
+      (is (str/includes? (slurp prompt-file) "claude round"))
+      (is (not (str/includes? (slurp prompt-file) "context_compact"))))))
+
 (deftest fork-bootstrap-separates-current-work-from-inherited-context
   (doseq [[role lead] [[{} "Task: Use the inherited design notes to check input validation."]
                       [{:persona-path "/role.md"} "Read /role.md, adopt that role. Task: Use the inherited design notes to check input validation."]
