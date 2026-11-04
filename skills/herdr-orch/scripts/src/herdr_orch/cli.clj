@@ -3,6 +3,7 @@
             [babashka.fs :as fs]
             [babashka.process :as process]
             [cheshire.core :as json]
+            [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [herdr-orch.core :as core]
@@ -11,6 +12,7 @@
             [herdr-orch.measurement :as measurement]
             [herdr-orch.pi-adapter :as pi-adapter]
             [herdr-orch.traits :as traits]
+            [herdr-orch.usage :as usage-mod]
             [herdr-orch.workflows :as workflows])
   (:import [java.io ByteArrayOutputStream]
            [java.nio.channels FileChannel]
@@ -18,7 +20,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--fresh] [--format json|markdown|text] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports each configured provider's remaining subscription allowance, read from the harness's cached OAuth credential and cached per provider; it never contacts Herdr and never writes a credential store. --provider is repeatable and an unconfigured name is a usage error; --fresh bypasses the cache; --detail (markdown only) adds the credential source and reset times.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -69,7 +71,7 @@
 ;; Single source of truth for delegation value-less flags. The raw tab/workspace create and
 ;; pane split `--focus` operator flag is scoped to those commands by `boolean-flags-for`; both
 ;; argv consumers use the same resolved set so no value-less flag swallows the next element.
-(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon" "--prune" "--detail" "--include-failed"})
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon" "--prune" "--detail" "--include-failed" "--fresh"})
 (defn boolean-flags-for [group op]
   (cond-> boolean-flags
     (or (and (#{"tab" "ws"} group) (= "create" op))
@@ -241,11 +243,13 @@
    (let [default-path (default-config-path)
          home-path (fs/path home ".agents" "subagents" "config.edn")
          project-path (fs/path (ledger/assignment-root) ".agents" "subagents" "config.edn")]
-     (core/validate-merged-config!
-      (core/merge-config
-       (or (config-file default-path) (fail "missing shipped default config" {:path default-path}))
-       (or (config-file home-path) {})
-       (or (config-file project-path) {}))))))
+     ;; Each loaded layer keeps its path so a merged-config error names the file that defines the
+     ;; offending key; a layer is absent only when its file is.
+     (let [layers (into [{:path (str default-path)
+                          :config (or (config-file default-path) (fail "missing shipped default config" {:path default-path}))}]
+                        (keep (fn [path] (when-let [config (config-file path)] {:path (str path) :config config})))
+                        [home-path project-path])]
+       (core/validate-merged-config! (apply core/merge-config (map :config layers)) layers)))))
 ;; The spawning agent's own model, feeding `resolve-model`'s same-kind inheritance tier.
 ;; `oh` injects HERDR_ORCH_MODEL into every child it spawns, so a child spawning a
 ;; grandchild reads back the model it was itself started with; at the root, where nothing
@@ -394,6 +398,59 @@
   (or (some->> (one opts :timeout) (core/timeout-value! "--timeout" nil))
       (:timeout entry)
       core/default-timeout-ms))
+;; --- model routing ----------------------------------------------------------------------
+;; A vector alias is routed once per launch, here, before any ledger or pane mutation, in both
+;; the interactive and the measurement path. A string alias or canonical ID never reaches this
+;; code with a vector, so it makes no usage call at all. Usage is read from `(home-directory)`
+;; (the credential root) and, when `HERDR_ORCH_USAGE_FIXTURE` names an EDN file, from that
+;; `{url {:status n :headers {} :body "..."}}` map instead of the network: a fixture file never
+;; falls through to the real endpoint, so tests cannot reach a provider.
+(defn- fixture-http-fn [path]
+  (let [responses (edn/read-string (slurp path))]
+    (fn [{:keys [url]}]
+      (or (get responses url)
+          (throw (ex-info "no usage fixture for URL" {:url url}))))))
+(defn- usage-http-fn []
+  (if-let [path (not-empty (System/getenv "HERDR_ORCH_USAGE_FIXTURE"))]
+    (fixture-http-fn path)
+    usage-mod/default-http-fn))
+(defn- usage-options [extra]
+  (merge {:home (home-directory) :http-fn (usage-http-fn)} extra))
+(defn- percent [fraction] (format "%.0f%%" (* 100.0 fraction)))
+(defn- candidate-summary [{:keys [canonical rank status remaining reserve reason]}]
+  (str canonical " (rank " rank "): "
+       (if remaining (str (percent remaining) " remaining") "allowance unknown")
+       (when (and remaining (not (pos? (- remaining (or reserve 0))))) (str ", at or below reserve " (percent (or reserve 0))))
+       (when (and status (not= :ok status)) (str " [" (name status) (when reason (str ": " reason)) "]"))))
+(defn- route-record [alias {:keys [chosen reason candidates]}]
+  {:alias alias :chosen chosen :reason reason
+   :candidates (mapv (fn [c] (cond-> {:model (:model c) :canonical (:canonical c) :provider (:provider c) :rank (:rank c)
+                                      :status (name (:status c)) :remaining (:remaining c) :reserve (:reserve c)}
+                               (:reason c) (assoc :reason (:reason c))))
+                     candidates)})
+;; Returns nil for a non-vector alias, else the `:model-route` record; refuses with each
+;; candidate and its allowance when nothing is eligible.
+(defn- route-model [config kind model]
+  (when (core/vector-alias? config model)
+    (let [candidates (core/candidates config kind model)
+          ;; An empty provider list would read as "all providers" in `usage-for`.
+          usage (if (seq candidates)
+                  (usage-mod/usage-for config (usage-options {:providers (vec (distinct (map :provider candidates)))}))
+                  {})
+          route (core/route candidates usage)]
+      (when (:refused route)
+        (fail (str "spawn refused: no candidate of model alias '" model "' has allowance for kind " kind ": "
+                   (if (seq (:candidates route)) (str/join "; " (map candidate-summary (:candidates route))) "no candidate runs on this kind"))
+              {:alias model :kind kind :candidates (:candidates (route-record model route))}))
+      (route-record model route))))
+;; The model a launch actually runs: the routed canonical ID, else the requested model.
+(defn- model-resolution [config kind model]
+  (let [route (route-model config kind model)
+        effective (or (:chosen route) model)]
+    {:model-route route
+     :model-effective effective
+     :model-canonical (core/canonical-model config effective)
+     :model-args (core/model-args config kind effective)}))
 ;; The one delegated-child predicate. `oh` injects HERDR_ORCH_PERSONA into every child it
 ;; launches, with the display token `anonymous` when the launch has no role, so an absent
 ;; role never makes a delegated process look root-owned. HERDR_ORCH_ANONYMOUS marks that
@@ -509,11 +566,14 @@
         fork-source (when (= "fork" context) (fork-source! ident kind))
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter frontmatter :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
         effort (effort-policy effective opts frontmatter kind ident)
-        config (config)]
+        config (config)
+        resolution (model-resolution config kind model)]
     {:context context :path path :composition composition :frontmatter frontmatter
      :inherited inherited :fork-source fork-source :overlay-persona persona
      :role-absent (nil? effective) :label-persona (or effective core/anonymous-persona)
      :ident ident :kind kind :model model :effort effort :config config
+     :model-route (:model-route resolution) :model-effective (:model-effective resolution)
+     :model-canonical (:model-canonical resolution) :model-args (:model-args resolution)
      :placement (placement-policy opts config)
      :retro (retro-policy effective opts frontmatter)
      :spawns (spawns-policy effective opts frontmatter)
@@ -532,10 +592,13 @@
             (fail "--context measurement needs a pi subject: the resolved kind is not pi" {:kind kind}))
         model (core/resolve-model {:requested (one opts :model) :resolved-kind kind :frontmatter {} :parent-kind (:parent-kind ident) :parent-model (:parent-model ident)})
         effort (effort-policy nil opts {} kind ident)
-        config (config)]
+        config (config)
+        resolution (model-resolution config kind model)]
     {:resolved resolved :treatment (measurement/compile-treatment resolved)
      :ident ident :kind kind :model model :effort effort :config config
-     :model-args (core/model-args config kind model) :effort-args (core/effort-args config kind (:effort effort))
+     :model-route (:model-route resolution) :model-effective (:model-effective resolution)
+     :model-canonical (:model-canonical resolution)
+     :model-args (:model-args resolution) :effort-args (core/effort-args config kind (:effort effort))
      :monitor (placement-flag opts)
      :timeout (timeout-policy nil opts {})
      :requested-target (worktree-target-option opts)}))
@@ -549,17 +612,18 @@
 ;; only user message and travels as literal text, so it is reported beside it.
 (defn- measurement-preview! [opts]
   (herdr/preflight!)
-  (let [{:keys [resolved treatment kind model effort config model-args effort-args monitor timeout]} (resolve-measurement opts)]
-    {:preview treatment :assignment (task-text opts)
+  (let [{:keys [resolved treatment kind model effort model-canonical model-route model-args effort-args monitor timeout]} (resolve-measurement opts)]
+    (cond-> {:preview treatment :assignment (task-text opts)
      :context "measurement" :execution "headless" :persona nil :role-absent true
      :measurement (measurement-inputs resolved treatment)
-     :kind kind :model model :model-canonical (core/canonical-model config model) :model-args model-args
+     :kind kind :model model :model-canonical model-canonical :model-args model-args
      :effort (:effort effort) :effort-source (:effort-source effort) :effort-args effort-args
      :monitor (or monitor "none")
-     :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)}))
+     :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)}
+      model-route (assoc :model-route model-route))))
 (defn- interactive-preview! [persona opts waiting-policy]
   (herdr/preflight!)
-  (let [{:keys [context path composition role-absent label-persona inherited fork-source kind model effort config placement retro spawns timeout requested-target]} (resolve-launch persona opts)
+  (let [{:keys [context path composition role-absent label-persona inherited fork-source kind model effort config placement retro spawns timeout requested-target model-canonical model-route model-args]} (resolve-launch persona opts)
         prompt-persona-path (if (:composed-content composition) "<composed-persona-path>" (some-> path str))]
     (cond->
      {:preview (prompt-text {:spawns (:spawns spawns) :persona-path prompt-persona-path :role-absent role-absent :fork? (= "fork" context) :kind kind :task "<assigned-task>" :result "<assigned-result>" :waiting-policy waiting-policy :assignment (task-text opts) :prompt-extra (one opts :prompt-extra) :retro-skill (:retro-skill retro) :worktree requested-target})
@@ -574,7 +638,7 @@
       :context context :execution "interactive"
       :persona persona :persona-text (:persona-text composition)
       :traits (:traits composition) :trait-sources (:trait-sources composition)
-      :kind kind :model model :model-canonical (core/canonical-model config model) :model-args (core/model-args config kind model) :placement placement :retro (:retro retro) :retro-source (:retro-source retro)
+      :kind kind :model model :model-canonical model-canonical :model-args model-args :placement placement :retro (:retro retro) :retro-source (:retro-source retro)
       :spawns (:spawns spawns) :spawns-source (:spawns-source spawns)
       :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)
       :effort (:effort effort) :effort-source (:effort-source effort) :effort-args (core/effort-args config kind (:effort effort))}
@@ -585,7 +649,8 @@
       fork-source (assoc :fork {:source-session fork-source :boundary-rule core/fork-boundary-rule
                                 :role-source (cond inherited "snapshot" persona "overlay" :else "none")}
                          :effective-persona (when-not role-absent label-persona))
-      (:base-persona composition) (assoc :base-persona (:base-persona composition)))))
+      (:base-persona composition) (assoc :base-persona (:base-persona composition))
+      model-route (assoc :model-route model-route))))
 (defn preview! [persona opts waiting-policy]
   (if (= "measurement" (:context (context-policy persona opts)))
     (measurement-preview! opts)
@@ -1170,7 +1235,8 @@
         ;; one. Config is loaded and schema-validated there too, before
         ;; `ledger/fresh-result`'s `fs/create-dirs`: malformed config must fail fast,
         ;; never after allocation has begun, as must an invalid `--effort`/`timeout:`.
-        {:keys [context composition role-absent label-persona inherited fork-source ident kind model effort config placement retro spawns timeout requested-target]} (resolve-launch persona opts)
+        {:keys [context composition role-absent label-persona inherited fork-source ident kind model effort config placement retro spawns timeout requested-target
+                model-effective model-canonical model-route model-args]} (resolve-launch persona opts)
         fork? (= "fork" context)
         _ (when fork? (pi-adapter/run-op! (fork-adapter-file) "fork-capability" {}))
         fork-created (atom nil)
@@ -1225,8 +1291,8 @@
                                  ;; The same translation `preview!` reports, recorded so the
                                  ;; parent sees the native args the child received without a
                                  ;; separate `--print-prompt` turn. `start!` below reads them back.
-                                 :model-canonical (core/canonical-model config model)
-                                 :model-args (core/model-args config kind model)
+                                 :model-canonical model-canonical
+                                 :model-args model-args
                                  :effort-args (core/effort-args config kind (:effort effort))
                                  :parent-session (:parent-session ident)
                                  :parent-pane (:parent-pane ident)
@@ -1236,6 +1302,7 @@
                                  :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)
                                  :effort (:effort effort) :effort-source (:effort-source effort)
                                  :placement placement :status "allocating" :created-at (now)}
+                          model-route (assoc :model-route model-route)
                           worktree (assoc :worktree worktree)
                           (and worktree read-only?) (assoc :read-only true)
                           ;; Launch provenance: the base persona (when `extends:`
@@ -1297,7 +1364,9 @@
                   ;; This child's own model, so its grandchildren inherit from it exactly
                   ;; as it inherited from here (`parent-model`). Absent when unresolved,
                   ;; leaving a grandchild on the harness default rather than a stale value.
-                  model (assoc "HERDR_ORCH_MODEL" model)
+                  ;; The routed canonical ID, never the alias: a same-kind grandchild
+                  ;; inherits a concrete model and does not route again.
+                  model (assoc "HERDR_ORCH_MODEL" model-effective)
                   role-absent (assoc "HERDR_ORCH_ANONYMOUS" "1"))
             ;; Tab placement skips caller-rect!/direction entirely: a tab needs neither.
             pane-placement (if (= placement "tab")
@@ -1406,7 +1475,7 @@
                          (apply assoc current kvs))))
 (defn- spawn-measurement! [opts waiting-policy]
   (herdr/preflight!)
-  (let [{:keys [resolved treatment ident kind model effort config model-args effort-args monitor timeout requested-target]} (resolve-measurement opts)
+  (let [{:keys [resolved treatment ident kind model effort model-canonical model-route model-args effort-args monitor timeout requested-target]} (resolve-measurement opts)
         _ (when-let [refusal (measurement/detach-refusal (measurement/platform))]
             (fail refusal {:platform (measurement/platform)}))
         assignment (task-text opts)
@@ -1427,7 +1496,7 @@
                                  :label (core/child-label {:persona persona-name :index index :model model})
                                  :index index :persona persona-name :persona-path nil :role-absent true
                                  :context "measurement" :execution "headless"
-                                 :kind kind :model model :model-canonical (core/canonical-model config model)
+                                 :kind kind :model model :model-canonical model-canonical
                                  :model-args model-args :effort-args effort-args
                                  :effort (:effort effort) :effort-source (:effort-source effort)
                                  :timeout (:timeout timeout) :timeout-source (:timeout-source timeout)
@@ -1438,6 +1507,7 @@
                                                      :assignment-sha256 (core/sha256 assignment))
                                  :launcher (measurement/process-identity (.pid (java.lang.ProcessHandle/current)))
                                  :status "allocating" :created-at (now)}
+                          model-route (assoc :model-route model-route)
                           (:worktree target) (assoc :worktree (:worktree target)))]
               (ledger/write! entry)
               {:target target :entry entry})))
@@ -2927,7 +2997,7 @@
                           (select-keys entry
                                        [:child :pane-id :tab-id :label :index :persona :persona-path
                                         :base-persona :traits :trait-sources
-                                        :kind :model :model-canonical :model-args :effort-args
+                                        :kind :model :model-canonical :model-route :model-args :effort-args
                                         :retro :retro-source :spawns :spawns-source
                                         :timeout :timeout-source :effort :effort-source :placement :shell-pid
                                         :work-root :worktree :read-only
@@ -3261,7 +3331,8 @@
    "worktree" ["list"
                "remove <full-task-uuid>"]
    "spawn" ["spawn \"<shell command>\""]
-   "roster" ["roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]"]})
+   "roster" ["roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]"]
+   "usage" ["usage [--provider NAME]* [--fresh] [--format json|markdown|text] [--detail]"]})
 ;; Derived from the signatures above rather than restated, so help and validation cannot
 ;; disagree. Flat on purpose: it exists to catch typos, and per-group scoping would
 ;; reintroduce a second list to keep in step. Boolean-ness is *not* derivable here
@@ -3272,7 +3343,7 @@
   "Global usage, one group's signatures, or a single command's signature."
   [group op]
   (if-let [lines (and group (signatures group))]
-    (let [prefix (if (#{"spawn" "roster"} group) "oh " (str "oh " group " "))
+    (let [prefix (if (#{"spawn" "roster" "usage"} group) "oh " (str "oh " group " "))
           matching (when (and op (not (str/starts-with? op "-")))
                      (seq (filter #(or (= op (first (str/split % #" ")))
                                        ;; `spawn`'s only signature repeats the group name.
@@ -3416,7 +3487,8 @@
                        ;; `description` is never inherited through `extends`.
                        :description (:description (core/parse-frontmatter text))
                        :model model
-                       :model-canonical (some->> model (core/canonical-model config))
+                       ;; A vector alias has no single canonical ID; the router picks one at spawn.
+                       :model-canonical (let [canonical (some->> model (core/canonical-model config))] (when (string? canonical) canonical))
                        :kind (:kind frontmatter)
                        :spawns (:spawns (core/resolve-spawns {:persona persona :frontmatter frontmatter
                                                               :resolve-persona #(core/resolve-persona (fn [p] (fs/exists? p)) directories %)}))
@@ -3447,14 +3519,26 @@
                  {:name trait :source source :path path
                   :description (try (:description (core/parse-frontmatter (slurp path))) (catch Exception _ nil))
                   :selected-by (vec (keep #(when (some #{trait} (:traits %)) (:name %)) personas))})))))
-;; One row per canonical ID, carrying every alias that names it and its per-kind spellings.
-;; Shortest alias first, so a weight name such as `light` leads its row.
+;; One row per canonical ID, carrying every string alias that names it and its per-kind
+;; spellings. Shortest alias first, so a short name such as `opus` leads its row. A vector
+;; alias names no single ID: `roster-routes` lists its ranked candidates instead, and each
+;; candidate's canonical ID still gets a row.
 (defn- roster-models [config]
-  (let [by-canonical (group-by val (:aliases config))]
+  (let [string-aliases (into {} (filter (comp string? val)) (:aliases config))
+        by-canonical (group-by val string-aliases)
+        candidates (mapcat #(map (comp (partial core/canonical-model config) :model) %) (filter vector? (vals (:aliases config))))]
     (mapv (fn [id] {:canonical id
                     :aliases (vec (sort-by (juxt count identity) (map key (by-canonical id))))
                     :kinds (into (sorted-map) (get-in config [:models id]))})
-          (sort (distinct (concat (keys (:models config)) (vals (:aliases config))))))))
+          (sort (distinct (concat (keys (:models config)) (vals string-aliases) candidates))))))
+;; One entry per vector alias, candidates lowest rank first and in config order within a rank.
+(defn- roster-routes [config]
+  (vec (for [[alias candidates] (sort-by key (:aliases config)) :when (vector? candidates)]
+         {:alias alias
+          :candidates (mapv (fn [{:keys [model rank]}]
+                              (let [canonical (core/canonical-model config model)]
+                                {:rank rank :model model :canonical canonical :provider (core/provider-prefix canonical)}))
+                            (sort-by :rank candidates))})))
 (defn roster-listing []
   (let [merged (config)
         directories (persona-directories)
@@ -3464,6 +3548,7 @@
     {:personas personas
      :traits (roster-traits personas)
      :models (roster-models merged)
+     :routes (roster-routes merged)
      :workflows (workflows/discover skill-roots)
      :harnesses (vec (sort (map name (keys (:harnesses merged)))))
      :defaults (:defaults merged {})
@@ -3531,18 +3616,30 @@
                (str "|" (str/join "+" (map #(str/join (repeat (+ 2 %) "-")) widths)) "|")
                (str "| " (str/join " | " (map #(str/join (repeat % "-")) widths)) " |"))]
     (into [(row (first rows)) rule] (map row (rest rows)))))
-(defn- model-lines [format {:keys [models harnesses]} detail?]
-  (if (empty? models)
-    ["No models configured."]
-    (let [kinds (if (seq harnesses) harnesses ["pi"])]
-      (table-lines format
-                   (cons (cons "Aliases" kinds)
-                         (map (fn [{:keys [canonical aliases] :as model}]
-                                (let [shown (if detail? aliases (take 2 aliases))]
-                                  ;; A kind absent from a row receives the canonical ID unchanged.
-                                  (cons (if (seq shown) (str/join ", " shown) "--")
-                                        (map #(get (:kinds model) (keyword %) canonical) kinds))))
-                              models))))))
+(defn- route-lines [{:keys [code]} routes detail?]
+  (mapv (fn [{:keys [alias candidates]}]
+          (str "- " (code alias) " -- "
+               (str/join "; " (map (fn [{:keys [rank model canonical]}]
+                                     (str "rank " rank " " (code model) (when (and detail? (not= model canonical)) (str " (" canonical ")"))))
+                                   candidates))))
+        routes))
+(defn- model-lines [format {:keys [models harnesses routes]} detail?]
+  (let [kinds (if (seq harnesses) harnesses ["pi"])
+        table (if (empty? models)
+                ["No models configured."]
+                (table-lines format
+                             (cons (cons "Aliases" kinds)
+                                   (map (fn [{:keys [canonical aliases] :as model}]
+                                          (let [shown (if detail? aliases (take 2 aliases))]
+                                            ;; A kind absent from a row receives the canonical ID unchanged.
+                                            (cons (if (seq shown) (str/join ", " shown) "--")
+                                                  (map #(get (:kinds model) (keyword %) canonical) kinds))))
+                                        models))))]
+    ;; Ranked aliases follow the table only when configured, so a config without them renders as before.
+    (if (seq routes)
+      (into (conj table "" "Ranked aliases (lowest rank is preferred):" "")
+            (route-lines (roster-markup format) routes detail?))
+      table)))
 (defn- default-lines [defaults]
   (if (seq defaults)
     (mapv (fn [[k v]] (str "- " (name k) ": " (if (keyword? v) (name v) v))) (sort-by key defaults))
@@ -3578,6 +3675,44 @@
       (fail "--section and --detail apply only to markdown or org output" {}))
     (let [listing (roster-listing)]
       (if (= format "json") listing (roster-text listing format (or section "all") detail?)))))
+;; --- usage --------------------------------------------------------------------------------
+;; `oh usage` reports each configured provider's allowance through `usage-mod/usage-for`. Like
+;; `roster` it never contacts Herdr. JSON is the default envelope keyed by provider; text lists
+;; every field, and markdown shows status, remaining, reason and windows, with `--detail` adding
+;; the credential source, fetch time and reset times for the pi `/oh` rendering.
+(def usage-formats #{"json" "markdown" "text"})
+(defn- instant-text [epoch-s] (str (java.time.Instant/ofEpochSecond (long epoch-s))))
+(defn- window-text [detail? {:keys [name scope used-fraction resets-at]}]
+  (str name (when scope (str " (" scope ")")) " " (percent used-fraction) " used"
+       (when (and detail? resets-at) (str ", resets " (instant-text resets-at)))))
+(defn- usage-line [{:keys [bold]} detail? provider {:keys [status reason remaining-fraction windows source fetched-at reserve]}]
+  (str "- " (bold provider) " -- " (clojure.core/name status)
+       "; " (if remaining-fraction (str (percent remaining-fraction) " remaining") "remaining unknown")
+       (when reason (str "; reason: " reason))
+       (when (seq windows) (str "; windows: " (str/join ", " (map #(window-text detail? %) windows))))
+       (when (and detail? source) (str "; source: " (clojure.core/name source)))
+       (when (and detail? (number? reserve)) (str "; reserve: " (percent reserve)))
+       (when (and detail? fetched-at) (str "; fetched: " (instant-text fetched-at)))))
+(defn usage-text [result format detail?]
+  (let [markup (if (= format "markdown") {:bold #(str "**" % "**")} {:bold identity})
+        detail? (or detail? (= format "text"))]
+    (if (empty? result)
+      "No providers configured."
+      (str/join "\n" (map (fn [[provider r]] (usage-line markup detail? provider r)) result)))))
+(defn usage! [opts positional]
+  (require-positionals positional 0 "usage")
+  (let [format (or (one opts :format) "json") detail? (boolean (one opts :detail))
+        names (vec (distinct (all opts :provider)))
+        config (config)
+        configured (set (keys (:providers config)))]
+    (when-not (usage-formats format) (fail "--format must be json, markdown, or text" {:format format}))
+    (when (and detail? (not= format "markdown")) (fail "--detail applies only to markdown output" {}))
+    ;; Validated before any credential read or fetch.
+    (when-let [unknown (seq (remove configured names))]
+      (fail (str "unknown provider: " (str/join ", " unknown)) {:unknown (vec unknown) :available (vec (sort configured))}))
+    (let [result (into (sorted-map)
+                       (usage-mod/usage-for config (usage-options {:providers (seq names) :fresh (boolean (one opts :fresh))})))]
+      (if (= format "json") result (usage-text result format detail?)))))
 (defn spawn-command! [opts positional]
   (let [[command] (require-positionals positional 1 "spawn")]
     (when (some #{command} (available-personas))
@@ -3597,7 +3732,7 @@
     (if (help-request? group op args)
       (help-text group op)
       (let [_ (refuse-subject! group op)
-            parse-args (if (#{"spawn" "roster"} group) (cons op args) args)
+            parse-args (if (#{"spawn" "roster" "usage"} group) (cons op args) args)
             opts (option-map parse-args (boolean-flags-for group op) known-options)
             positional (:_ opts)]
         (case group
@@ -3609,6 +3744,7 @@
           "worktree" (worktree! op opts positional)
           "spawn" (spawn-command! opts positional)
           "roster" (roster! opts positional)
+          "usage" (usage! opts positional)
           (fail "unknown oh command" {:command group}))))))
 (defn -main [& argv]
   (try (let [result (execute argv)] (println (if (string? result) result (core/json-envelope true result))))

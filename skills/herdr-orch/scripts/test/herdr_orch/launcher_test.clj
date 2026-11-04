@@ -45,10 +45,16 @@
     (spit (str bb-shim) "#!/usr/bin/env bash\nprintf '%s\\037' \"$@\" >>\"$BB_ARGV_LOG\"\nprintf '\\n' >>\"$BB_ARGV_LOG\"\nexec \"$REAL_BB\" \"$@\"\n")
     (fs/set-posix-file-permissions bb-shim "rwxr-xr-x")
     (fs/create-dirs (fs/path dir "empty-home"))
+    ;; Offline by construction: an empty HOME holds no credential, and every usage request is
+    ;; answered from this (empty) fixture file, never the network. The packaged `worker` model is
+    ;; a vector alias, so a launch here routes and would otherwise read `~/.pi/agent/auth.json`
+    ;; and call the providers.
+    (spit (str (fs/path dir "usage-fixture.edn")) "{}")
     (let [log (str (fs/path dir "calls")) env-file (str (fs/path dir "env")) bb-log (str (fs/path dir "bb-argv"))]
       {:dir dir :caller (str caller) :log log :env-file env-file :bb-log bb-log
        :env {"PATH" (str shim ":" (System/getenv "PATH"))
-             "HOME" (System/getenv "HOME")
+             "HOME" (str (fs/path dir "empty-home"))
+             "HERDR_ORCH_USAGE_FIXTURE" (str (fs/path dir "usage-fixture.edn"))
              "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p"
              "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file
              "FAKE_HERDR_PROMPT_FILE" (str (fs/path dir "prompt"))
@@ -58,8 +64,12 @@
 (defn- launch!
   "Invoke `bin` (possibly relative) with `cwd` as the process working directory."
   [h bin cwd]
-  @(process/process (into ["/bin/sh" "-c" "exec \"$0\" \"$@\"" bin] ["task" "start" "worker" "--task" "launcher matrix"])
-                    {:out :string :err :string :env (:env h) :dir cwd}))
+  (let [proc @(process/process (into ["/bin/sh" "-c" "exec \"$0\" \"$@\"" bin] ["task" "start" "worker" "--task" "launcher matrix"])
+                               {:out :string :err :string :env (:env h) :dir cwd})]
+    ;; Regression guard: a usage cache file means a launch fetched (or tried to fetch) usage.
+    (is (not (fs/exists? (fs/path (:dir h) ".tmp" "herdr-orch" "ledger" "usage")))
+        "the launcher harness stays offline: no usage fetch")
+    proc))
 
 (defn- bb-argv [h] (first (calls (:bb-log h))))
 

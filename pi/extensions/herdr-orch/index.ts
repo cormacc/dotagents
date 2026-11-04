@@ -4,14 +4,15 @@ import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Type } from "typebox";
-import { composeHelp, parseSection, rosterArgs, SECTION_DESCRIPTIONS, SECTIONS, type Section } from "./help.ts";
+import { composeHelp, parseSection, rosterArgs, usageArgs, SECTION_DESCRIPTIONS, SECTIONS, type Section } from "./help.ts";
 
 // `/oh` output is a session entry, not a message: it is shown to the user and never enters
 // model context, because the skill already gives the model this information.
 const HELP_ENTRY = "herdr-orch-help";
-// `compact` and `detail` are the two `oh roster --format markdown` renderings; the
-// tool-output expand state chooses one.
-type HelpEntry = { section: Section; herdr: boolean; compact: string; detail: string };
+// `compact` and `detail` are the CLI's Markdown renderings; the tool-output expand state
+// chooses one. The help overview keeps usage separate so its renderer can insert it after
+// roster's spawn defaults without putting either rendering in model context.
+type HelpEntry = { section: Section; herdr: boolean; compact: string; detail: string; usage?: { compact: string; detail: string } };
 
 type OhEnvelope = {
   ok: boolean;
@@ -180,12 +181,13 @@ export default function (pi: ExtensionAPI) {
     }
     box.addChild(new Text(theme.fg("toolTitle", theme.bold(`herdr-orch ${data.section}`)), 0, 0));
     const listing = expanded ? data.detail : data.compact;
-    box.addChild(new Markdown(composeHelp(data.section, listing, data.herdr), 0, 1, getMarkdownTheme()));
+    const usage = expanded ? data.usage?.detail : data.usage?.compact;
+    box.addChild(new Markdown(composeHelp(data.section, listing, data.herdr, usage), 0, 1, getMarkdownTheme()));
     return box;
   });
 
   pi.registerCommand("oh", {
-    description: `Show herdr-orch subagents, traits, models, and workflow skills without adding them to model context: ${SECTIONS.join(" | ")}`,
+    description: `Show herdr-orch subagents, traits, models, subscription usage, and workflow skills without adding them to model context: ${SECTIONS.join(" | ")}`,
     getArgumentCompletions: (prefix) => {
       const items = SECTIONS.filter((section) => section.startsWith(prefix.trim()))
         .map((section) => ({ value: section, label: section, description: SECTION_DESCRIPTIONS[section] }));
@@ -201,16 +203,29 @@ export default function (pi: ExtensionAPI) {
       }
       // cwd selects the project layer: `oh` resolves it from the git root of its cwd.
       const render = async (detail: boolean) => {
-        const { content } = await execute(rosterArgs(section, detail), ctx.signal, { cwd: ctx.cwd, timeout: 30_000 });
-        return content[0]?.text ?? "";
+        const cliArgs = section === "usage" ? usageArgs(detail) : rosterArgs(section, detail);
+        const listingPromise = execute(cliArgs, ctx.signal, { cwd: ctx.cwd, timeout: 30_000 })
+          .then(({ content }) => content[0]?.text ?? "");
+        if (section !== "help") return { listing: await listingPromise };
+        const usagePromise = execute(usageArgs(detail), ctx.signal, { cwd: ctx.cwd, timeout: 30_000 })
+          .then(({ content }) => content[0]?.text ?? "");
+        const [listing, usage] = await Promise.all([listingPromise, usagePromise]);
+        return { listing, usage };
       };
       const herdr = process.env.HERDR_ENV === "1";
       try {
         if (ctx.mode === "tui") {
           const [compact, detail] = await Promise.all([render(false), render(true)]);
-          pi.appendEntry<HelpEntry>(HELP_ENTRY, { section, herdr, compact, detail });
+          pi.appendEntry<HelpEntry>(HELP_ENTRY, {
+            section,
+            herdr,
+            compact: compact.listing,
+            detail: detail.listing,
+            ...(section === "help" ? { usage: { compact: compact.usage ?? "", detail: detail.usage ?? "" } } : {}),
+          });
         } else {
-          ctx.ui.notify(composeHelp(section, await render(true), herdr), "info");
+          const rendering = await render(true);
+          ctx.ui.notify(composeHelp(section, rendering.listing, herdr, rendering.usage), "info");
         }
       } catch (error) {
         ctx.ui.notify(`/oh: ${error instanceof Error ? error.message : String(error)}`, "error");

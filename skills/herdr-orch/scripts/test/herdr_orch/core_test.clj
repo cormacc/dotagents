@@ -265,6 +265,109 @@
     (let [config {:aliases {"heavy" "canonical-a"} :models {"canonical-a" {:pi "x"}}}]
       (is (= config (core/validate-merged-config! config))))))
 
+(def ^:private ranked-fixture
+  "{:harnesses {:claude {:model-flag \"--model\" :providers #{\"anthropic\"}}
+               :pi {:model-flag \"--model\"}}
+    :providers {\"anthropic\" {:usage :anthropic-oauth :credentials [:pi :claude] :cache-ttl-s 300}
+                \"openai-codex\" {:usage :codex-oauth :credentials [:codex] :cache-ttl-s 60 :reserve 0.1}
+                \"lemonade\" {}}
+    :models {\"anthropic/claude-a-1\" {:claude \"a\"}}
+    :aliases {\"a\" \"anthropic/claude-a-1\" \"x\" \"openai-codex/gpt-x\"
+              \"heavy\" [{:model \"a\" :rank 1} {:model \"x\" :rank 1} {:model \"lemonade/local\" :rank 2}]}}")
+
+(deftest ranked-alias-and-provider-shape-is-accepted-and-merges-per-key
+  (let [config (core/parse-config "/tmp/ranked.edn" ranked-fixture)]
+    (is (= [{:model "a" :rank 1} {:model "x" :rank 1} {:model "lemonade/local" :rank 2}] (get-in config [:aliases "heavy"])))
+    (is (= #{"anthropic"} (get-in config [:harnesses :claude :providers])))
+    (is (= config (core/validate-merged-config! config)) "the fixture is valid once merged")
+    (testing "vector alias is returned by canonical-model and flagged; string alias is not"
+      (is (core/vector-alias? config "heavy"))
+      (is (not (core/vector-alias? config "a")))
+      (is (not (core/vector-alias? config "anthropic/claude-a-1")))
+      (is (vector? (core/canonical-model config "heavy"))))
+    (testing "string alias and canonical ID resolve exactly as before"
+      (is (= ["--model" "a"] (core/model-args config "claude" "a")))
+      (is (= ["--model" "a"] (core/model-args config "claude" "anthropic/claude-a-1")))
+      (is (= ["--model" "openai-codex/gpt-x"] (core/model-args (assoc-in config [:harnesses :pi :model-flag] "--model") "pi" "x"))))
+    (testing "a vector alias is replaced wholesale per key; sibling aliases and :providers rows follow merge-config"
+      (let [override {:aliases {"heavy" [{:model "x" :rank 1}]} :providers {"anthropic" {:usage :anthropic-oauth :credentials [:claude] :cache-ttl-s 30}}}
+            merged (core/merge-config config override)]
+        (is (= [{:model "x" :rank 1}] (get-in merged [:aliases "heavy"])))
+        (is (= "anthropic/claude-a-1" (get-in merged [:aliases "a"])))
+        (is (= {:usage :anthropic-oauth :credentials [:claude] :cache-ttl-s 30} (get-in merged [:providers "anthropic"])))
+        (is (= {:usage :codex-oauth :credentials [:codex] :cache-ttl-s 60 :reserve 0.1} (get-in merged [:providers "openai-codex"])))))
+    (testing "provider-prefix"
+      (is (= "anthropic" (core/provider-prefix "anthropic/claude-a-1")))
+      (is (nil? (core/provider-prefix "bare")))
+      (is (nil? (core/provider-prefix nil))))))
+
+(deftest ranked-alias-and-provider-shape-violations-name-the-file
+  (let [bad (fn [text] (try (core/parse-config "/tmp/ranked-bad.edn" text) nil
+                            (catch clojure.lang.ExceptionInfo e (when (= "/tmp/ranked-bad.edn" (:path (ex-data e))) (.getMessage e)))))]
+    (is (nil? (bad "{:aliases {\"h\" [{:model \"a\" :rank 1}]} :providers {\"p\" {:usage :codex-oauth :credentials [:codex] :cache-ttl-s 1 :reserve 0}} :harnesses {:pi {:model-flag \"--model\" :providers #{\"p\"}}}}"))
+        "positive control: the minimal valid shape parses")
+    (doseq [[label text pattern]
+            [["empty candidate vector" "{:aliases {\"h\" []}}" #"must not be empty"]
+             ["candidate not a map" "{:aliases {\"h\" [\"a\"]}}" #"exactly :model and :rank"]
+             ["candidate extra key" "{:aliases {\"h\" [{:model \"a\" :rank 1 :x 1}]}}" #"exactly :model and :rank"]
+             ["candidate missing rank" "{:aliases {\"h\" [{:model \"a\"}]}}" #"exactly :model and :rank"]
+             ["blank candidate model" "{:aliases {\"h\" [{:model \"\" :rank 1}]}}" #":model must be a non-blank"]
+             ["zero rank" "{:aliases {\"h\" [{:model \"a\" :rank 0}]}}" #":rank must be a positive"]
+             ["negative rank" "{:aliases {\"h\" [{:model \"a\" :rank -1}]}}" #":rank must be a positive"]
+             ["fractional rank" "{:aliases {\"h\" [{:model \"a\" :rank 1.5}]}}" #":rank must be a positive"]
+             ["string rank" "{:aliases {\"h\" [{:model \"a\" :rank \"1\"}]}}" #":rank must be a positive"]
+             ["list alias value" "{:aliases {\"h\" ({:model \"a\" :rank 1})}}" #"string or a vector"]
+             [":providers not a map" "{:providers [1]}" #":providers must be a map"]
+             [":providers blank key" "{:providers {\"\" {}}}" #"key must be a non-blank"]
+             [":providers row not a map" "{:providers {\"p\" 1}}" #"entry must be a map"]
+             [":providers unknown key" "{:providers {\"p\" {:ttl 1}}}" #"unknown key"]
+             ["unknown :usage adapter" "{:providers {\"p\" {:usage :bogus}}}" #":usage must be a known adapter"]
+             [":usage not a keyword" "{:providers {\"p\" {:usage \"codex-oauth\"}}}" #":usage must be a known adapter"]
+             [":credentials not a vector" "{:providers {\"p\" {:credentials :pi}}}" #":credentials must be a vector"]
+             ["unknown credential store" "{:providers {\"p\" {:credentials [:keychain]}}}" #":credentials must be a vector"]
+             ["zero :cache-ttl-s" "{:providers {\"p\" {:cache-ttl-s 0}}}" #":cache-ttl-s must be a positive"]
+             ["fractional :cache-ttl-s" "{:providers {\"p\" {:cache-ttl-s 1.5}}}" #":cache-ttl-s must be a positive"]
+             [":reserve above 1" "{:providers {\"p\" {:reserve 1.5}}}" #":reserve must be a number"]
+             [":reserve below 0" "{:providers {\"p\" {:reserve -0.1}}}" #":reserve must be a number"]
+             [":reserve not a number" "{:providers {\"p\" {:reserve \"0.1\"}}}" #":reserve must be a number"]
+             ["harness :providers a vector" "{:harnesses {:pi {:model-flag \"--model\" :providers [\"p\"]}}}" #":providers must be a set"]
+             ["harness :providers non-string member" "{:harnesses {:pi {:model-flag \"--model\" :providers #{:p}}}}" #":providers must be a set"]]]
+      (let [message (bad text)]
+        (is (some? message) (str label ": must throw with the file path"))
+        (is (and message (re-find pattern message)) (str label ": " message))))
+    (testing "a provider row may be empty (local provider) and :reserve bounds are inclusive"
+      (is (nil? (bad "{:providers {\"local\" {} \"p\" {:reserve 1}}}"))))))
+
+(deftest merged-config-ranked-candidate-validation
+  (let [valid (core/parse-config "/tmp/ranked.edn" ranked-fixture)
+        thrown (fn [config] (try (core/validate-merged-config! config) nil (catch clojure.lang.ExceptionInfo e e)))]
+    (is (nil? (thrown valid)) "positive control: the fixture passes")
+    (testing "a candidate resolving to a vector alias fails, naming alias and model"
+      (let [e (thrown (assoc-in valid [:aliases "middle"] [{:model "heavy" :rank 1}]))]
+        (is (re-find #"resolves to a vector alias" (str (some-> e .getMessage))))
+        (is (= {:alias "middle" :model "heavy"} (select-keys (ex-data e) [:alias :model])))))
+    (testing "a candidate whose canonical provider prefix is not in :providers fails"
+      (let [e (thrown (assoc-in valid [:aliases "middle"] [{:model "unknown/model" :rank 1}]))]
+        (is (re-find #"not in :providers" (str (some-> e .getMessage))))
+        (is (= "unknown" (:provider (ex-data e)))))
+      (testing "through a string alias hop"
+        (let [e (thrown (-> valid (assoc-in [:aliases "y"] "mystery/model") (assoc-in [:aliases "middle"] [{:model "y" :rank 1}])))]
+          (is (= "mystery" (:provider (ex-data e))))))
+      (testing "a candidate with no provider prefix"
+        (is (some? (thrown (assoc-in valid [:aliases "middle"] [{:model "bare" :rank 1}]))))))
+    (testing "an explicit pass-through string alias is not checked for a provider prefix"
+      (is (nil? (thrown (assoc-in valid [:aliases "plain"] "mystery/model")))))
+    (testing "a :harnesses :providers member absent from :providers fails, naming the kind and provider"
+      (let [e (thrown (assoc-in valid [:harnesses :claude :providers] #{"anthropic" "nope"}))]
+        (is (= {:harness :claude :provider "nope"} (ex-data e)))))
+    (testing "a string alias chained to a vector alias is still a chain error"
+      (is (= "heavy" (:key (ex-data (thrown (assoc-in valid [:aliases "chain"] "heavy")))))))
+    (testing "a vector alias key colliding with a :models row still fails"
+      (is (= "heavy" (:key (ex-data (thrown (assoc-in valid [:models "heavy"] {:claude "x"})))))))
+    (testing "a vector alias with no :providers at all fails (sparse configs only allow string aliases)"
+      (is (some? (thrown {:aliases {"h" [{:model "a/b" :rank 1}]}})))
+      (is (nil? (thrown {:aliases {"h" "a/b"}}))))))
+
 (deftest placement-resolution-contract
   (testing "every flag/configuration/depth combination"
     (doseq [[flag configured below-root? expected]
@@ -782,3 +885,171 @@
     (is (false? (core/terminal-status? "WAITING")))
     (doseq [status ["COMPLETE" "FAILED" "BLOCKED"]]
       (is (true? (core/terminal-status? status)) status))))
+
+;; --- error provenance -----------------------------------------------------------------
+(deftest merged-config-errors-name-the-defining-layer
+  (let [layer (fn [path config] {:path path :config config})
+        base (layer "/shipped.edn" {:providers {"p" {}} :models {"p/m" {}} :aliases {"s" "p/m"}})
+        thrown (fn [layers]
+                 (try (core/validate-merged-config! (apply core/merge-config (map :config layers)) layers) nil
+                      (catch clojure.lang.ExceptionInfo e e)))]
+    (is (nil? (thrown [base (layer "/home.edn" {:aliases {"h" [{:model "s" :rank 1}]}})])) "positive control: a valid chain passes")
+    (testing "a candidate with an unknown provider names the file that defines the vector alias"
+      (let [e (thrown [base (layer "/home.edn" {:aliases {"h" [{:model "q/x" :rank 1}]}}) (layer "/project.edn" {})])]
+        (is (= "/home.edn" (:path (ex-data e))))
+        (is (re-find #"\(in /home\.edn\)" (.getMessage e)))))
+    (testing "the winning definition is attributed, not an overridden one"
+      (let [layers [base (layer "/home.edn" {:aliases {"h" [{:model "q/x" :rank 1}]}})
+                    (layer "/project.edn" {:aliases {"h" [{:model "q/y" :rank 1}]}})]]
+        (is (= "/project.edn" (:path (ex-data (thrown layers))))))
+      (is (nil? (thrown [base (layer "/home.edn" {:aliases {"h" [{:model "q/x" :rank 1}]}})
+                         (layer "/project.edn" {:aliases {"h" [{:model "s" :rank 1}]}})]))
+          "a later layer that replaces the bad alias clears the error"))
+    (testing "a string-alias hop defined in another layer is named too, alias file first"
+      (let [e (thrown [base (layer "/home.edn" {:aliases {"h" [{:model "hop" :rank 1}]}})
+                       (layer "/project.edn" {:aliases {"hop" "q/x"}})])]
+        (is (= ["/home.edn" "/project.edn"] (:paths (ex-data e))))
+        (is (= "/home.edn" (:path (ex-data e))))))
+    (testing "a vector-alias candidate, an alias/model overlap, a chain and a harness provider all carry the file"
+      (is (= "/project.edn" (:path (ex-data (thrown [base (layer "/project.edn" {:aliases {"h" [{:model "h2" :rank 1}] "h2" [{:model "s" :rank 1}]}})])))))
+      (is (= #{"/shipped.edn" "/project.edn"}
+             (set (:paths (ex-data (thrown [base (layer "/project.edn" {:aliases {"p/m" "s"}})]))))))
+      (is (= "/project.edn" (:path (ex-data (thrown [base (layer "/project.edn" {:aliases {"c" "s2" "s2" "p/m"}})])))))
+      (is (= "/home.edn" (:path (ex-data (thrown [base (layer "/home.edn" {:harnesses {:pi {:model-flag "--model" :providers #{"nope"}}}})
+                                                  (layer "/project.edn" {})]))))))
+    (testing "without layers the error carries no path and the same data as before"
+      (is (= {:harness :claude :provider "nope"}
+             (ex-data (try (core/validate-merged-config! {:harnesses {:claude {:providers #{"nope"}}}}) (catch clojure.lang.ExceptionInfo e e))))))))
+
+;; --- router ---------------------------------------------------------------------------
+(def ^:private route-config
+  {:harnesses {:pi {:model-flag "--model"}
+               :claude {:model-flag "--model" :providers #{"anthropic"}}}
+   :providers {"anthropic" {:usage :anthropic-oauth :credentials [:claude] :cache-ttl-s 300}
+               "openai-codex" {:usage :codex-oauth :credentials [:codex] :cache-ttl-s 60 :reserve 0.1}
+               "lemonade" {}}
+   :aliases {"fable" "anthropic/claude-fable-5-1" "astra" "openai-codex/gpt-6-astra"
+             "qwen" "lemonade/Qwen-Dense"
+             "plain" "anthropic/claude-opus-5-5"
+             "heavy" [{:model "fable" :rank 1} {:model "astra" :rank 1} {:model "qwen" :rank 2}]}})
+
+(defn- ok [remaining & [windows]] {:status :ok :remaining-fraction remaining :windows (or windows [])})
+(defn- chosen [candidates usage] (:chosen (core/route candidates usage)))
+
+(deftest candidates-expands-vector-aliases-and-filters-by-kind
+  (let [all (core/candidates route-config "pi" "heavy")]
+    (is (= [{:model "fable" :canonical "anthropic/claude-fable-5-1" :provider "anthropic" :rank 1 :reserve 0}
+            {:model "astra" :canonical "openai-codex/gpt-6-astra" :provider "openai-codex" :rank 1 :reserve 0.1}
+            {:model "qwen" :canonical "lemonade/Qwen-Dense" :provider "lemonade" :rank 2 :reserve 0}]
+           all)
+        "a kind without :providers accepts every provider; reserve defaults to 0, config order kept")
+    (is (= ["anthropic/claude-fable-5-1"] (map :canonical (core/candidates route-config "claude" "heavy")))
+        "the kind's provider set filters before selection")
+    (is (= ["anthropic/claude-fable-5-1" "openai-codex/gpt-6-astra" "lemonade/Qwen-Dense"]
+           (map :canonical (core/candidates route-config "gemini" "heavy"))) "an unlisted kind accepts every provider")
+    (testing "string alias, canonical ID and unknown names take no routing"
+      (is (every? nil? (map #(core/candidates route-config "pi" %) ["plain" "anthropic/claude-opus-5-5" "nothing"]))))
+    (testing "a candidate may name a canonical ID directly"
+      (is (= "anthropic/claude-x"
+             (:canonical (first (core/candidates (assoc-in route-config [:aliases "v"] [{:model "anthropic/claude-x" :rank 1}]) "pi" "v"))))))))
+
+(deftest candidates-with-every-provider-filtered-is-an-empty-vector
+  (is (= [] (core/candidates (assoc-in route-config [:harnesses :claude :providers] #{"nothing"}) "claude" "heavy"))))
+
+(deftest candidate-remaining-takes-the-minimum-over-account-and-matching-scopes
+  (let [cand {:provider "anthropic" :canonical "anthropic/claude-fable-5-1"}
+        usage (fn [& scoped] {"anthropic" (ok 0.6 (vec scoped))})
+        w (fn [scope used] {:name "w" :scope scope :used-fraction used :resets-at 1})]
+    (is (= 0.6 (core/candidate-remaining (usage) cand)) "account-wide aggregate only")
+    (is (= 0.25 (core/candidate-remaining (usage (w "fable" 0.75)) cand)) "a matching scope lowers it")
+    (is (= 0.6 (core/candidate-remaining (usage (w "fable" 0.2)) cand)) "a looser matching scope does not raise it")
+    (is (= 0.6 (core/candidate-remaining (usage (w "sonnet" 0.99)) cand)) "an unmatched scope is harmless")
+    (is (= 0.6 (core/candidate-remaining (usage (w nil 0.9)) cand)) "an account-wide window is already in the aggregate")
+    (is (< (abs (- 0.1 (core/candidate-remaining (usage (w "Fable" 0.9)) cand))) 1e-9) "scope case is irrelevant")
+    (is (= 0.5 (core/candidate-remaining {"anthropic" {:status :stale :remaining-fraction 0.5 :windows []}} cand)) "stale counts as known")
+    (is (nil? (core/candidate-remaining {"anthropic" {:status :unknown :reason "auth"}} cand)))
+    (is (nil? (core/candidate-remaining {} cand)) "a provider with no usage entry is unknown")
+    (is (= 1 (core/candidate-remaining {"lemonade" {:status :ok :windows [] :remaining-fraction 1}} {:provider "lemonade" :canonical "lemonade/q"}))
+        "the local provider shape from usage-for")))
+
+(deftest scoped-window-slug-boundaries
+  (let [remaining (fn [canonical scope]
+                    (core/candidate-remaining {"openai-codex" (ok 1.0 [{:name "w" :scope scope :used-fraction 0.9 :resets-at 1}])}
+                                              {:provider "openai-codex" :canonical canonical}))
+        gated? #(< (remaining %1 %2) 1.0)]
+    (is (gated? "openai-codex/gpt-6" "gpt-6") "equal slug")
+    (is (gated? "openai-codex/gpt-6-astra" "gpt-6") "prefix at a - boundary")
+    (is (not (gated? "openai-codex/gpt-60" "gpt-6")) "a later digit is not a boundary")
+    (is (not (gated? "openai-codex/gpt-6" "gpt-60")) "a longer scope never gates a shorter model")
+    (is (not (gated? "openai-codex/gpt-6.1-sol" "gpt-6")) "a . is not a boundary: another version")
+    (is (not (gated? "openai-codex/gpt-5.6-terra" "gpt-5.6-luna")) "sibling family")
+    (is (gated? "openai-codex/gpt-5.6-terra" "gpt-5.6-terra") "full slug")
+    (is (gated? "openai-codex/gpt-5.6-terra" "GPT 5.6 Terra") "display-style tokens")
+    (is (gated? "openai-codex/gpt-5.6-terra" "terra") "a single family token")
+    (is (not (gated? "openai-codex/gpt-5.6-terra" "terr")) "a partial token never matches")
+    (is (not (gated? "openai-codex/gpt-5.6-terra" "")) "an empty scope is harmless")
+    (is (not (gated? "openai-codex/gpt-5.6-terra" "   ")) "a blank scope is harmless")))
+
+(deftest route-orders-by-rank-then-known-then-remaining-then-config-order
+  (let [cand (fn [provider rank & [reserve]] {:model provider :canonical (str provider "/m") :provider provider :rank rank :reserve (or reserve 0)})
+        a (cand "a" 1) b (cand "b" 1) c (cand "c" 2)]
+    (testing "equal rank breaks by larger remaining fraction"
+      (is (= "b/m" (chosen [a b] {"a" (ok 0.3) "b" (ok 0.7)}))))
+    (testing "equal remaining breaks by config order"
+      (is (= "a/m" (chosen [a b] {"a" (ok 0.5) "b" (ok 0.5)})))
+      (is (= "b/m" (chosen [b a] {"a" (ok 0.5) "b" (ok 0.5)}))))
+    (testing "a lower rank number beats a larger remaining fraction at a worse rank"
+      (is (= "a/m" (chosen [c a] {"a" (ok 0.05) "c" (ok 0.9)}))))
+    (testing "same rank: known beats unknown even with less credit"
+      (is (= "b/m" (chosen [a b] {"a" {:status :unknown :reason "auth"} "b" (ok 0.01)})))
+      (is (= "a/m" (chosen [b a] {"a" (ok 0.01) "b" {:status :unknown}}))))
+    (testing "stale counts as known"
+      (is (= "b/m" (chosen [a b] {"a" {:status :unknown} "b" {:status :stale :remaining-fraction 0.4 :windows []}}))))
+    (testing "an unknown higher-priority rank beats a known lower-priority rank"
+      (let [r (core/route [a c] {"a" {:status :unknown :reason "timeout"} "c" (ok 0.9)})]
+        (is (= "a/m" (:chosen r)))
+        (is (re-find #"unknown.*timeout" (:reason r)))))
+    (testing "an exhausted higher rank falls back to a lower rank"
+      (is (= "c/m" (chosen [a c] {"a" (ok 0.0) "c" (ok 0.5)}))))
+    (testing "a known candidate at or below its reserve is excluded; above it is kept"
+      (is (= "c/m" (chosen [(cand "a" 1 0.1) c] {"a" (ok 0.1) "c" (ok 0.5)})))
+      (is (= "a/m" (chosen [(cand "a" 1 0.1) c] {"a" (ok 0.11) "c" (ok 0.5)}))))
+    (testing "an exhausted known candidate loses to an unknown one at a worse rank"
+      (is (= "c/m" (chosen [a c] {"a" (ok 0.0) "c" {:status :unknown}}))))
+    (testing "the local provider always has credit"
+      (is (= "l/m" (chosen [(cand "l" 2) (cand "z" 1)] {"l" {:status :ok :windows [] :remaining-fraction 1} "z" (ok 0.0)}))))))
+
+(deftest route-refuses-without-an-eligible-candidate
+  (let [cand (fn [p] {:model p :canonical (str p "/m") :provider p :rank 1 :reserve 0})
+        r (core/route [(cand "a") (cand "b")] {"a" (ok 0.0) "b" (ok 0.0)})]
+    (is (true? (:refused r)))
+    (is (not (contains? r :chosen)))
+    (is (= [0.0 0.0] (map :remaining (:candidates r))) "the refusal still reports each allowance")
+    (is (string? (:reason r))))
+  (let [r (core/route [] {})]
+    (is (true? (:refused r)))
+    (is (= [] (:candidates r)))))
+
+(deftest route-annotates-every-candidate
+  (let [cand {:model "fable" :canonical "anthropic/x-fable" :provider "anthropic" :rank 1 :reserve 0.2}
+        usage {"anthropic" {:status :stale :reason "429" :remaining-fraction 0.5
+                            :windows [{:name "w" :scope "fable" :used-fraction 0.7 :resets-at 5}]}}
+        r (core/route [cand {:model "n" :canonical "none/n" :provider "none" :rank 2 :reserve 0}] usage)]
+    (is (= (assoc cand :status :stale :remaining 0.30000000000000004 :reason "429") (first (:candidates r))))
+    (is (= {:status :unknown :remaining nil :reason "no usage entry"} (select-keys (second (:candidates r)) [:status :remaining :reason])))
+    (is (= "anthropic/x-fable" (:chosen r)))
+    (testing "an :ok provider carries no :reason"
+      (is (not (contains? (first (:candidates (core/route [cand] {"anthropic" (ok 0.9)}))) :reason))))))
+
+(deftest route-end-to-end-with-scoped-exhaustion
+  (let [usage {"anthropic" (ok 0.8 [{:name "seven_day_fable" :scope "fable" :used-fraction 1.0 :resets-at 9}])
+               "openai-codex" (ok 0.5)
+               "lemonade" {:status :ok :windows [] :remaining-fraction 1}}
+        cs (core/candidates route-config "pi" "heavy")]
+    (is (= "openai-codex/gpt-6-astra" (chosen cs usage)) "the exhausted fable scope leaves the rank-1 sibling")
+    (is (= "anthropic/claude-fable-5-1"
+           (chosen cs (assoc usage "anthropic" (ok 0.8 [{:name "seven_day_sonnet" :scope "sonnet" :used-fraction 1.0 :resets-at 9}]))))
+        "an unmatched scope gates nothing")
+    (is (= "lemonade/Qwen-Dense" (chosen cs (assoc usage "anthropic" (ok 0.0) "openai-codex" (ok 0.05)))) "fallback to local at rank 2; codex is within its reserve")
+    (is (true? (:refused (core/route (core/candidates route-config "claude" "heavy") (assoc usage "anthropic" (ok 0.0)))))
+        "the claude kind sees only anthropic")))

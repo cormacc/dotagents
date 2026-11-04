@@ -45,6 +45,8 @@
         prompt-file (str (fs/path dir "prompt"))
         state (str (fs/path dir "state"))]
     (fs/create-dirs home)
+    ;; Offline: the empty HOME holds no credential and usage requests read this fixture, never the network.
+    (spit (str (fs/path dir "usage-fixture.edn")) "{}")
     (fs/create-sym-link (fs/path dir "herdr") fake)
     {:dir (str dir) :log log :env-file env-file :prompt-file prompt-file :state state
      :env {"PATH" (str dir ":" (System/getenv "PATH"))
@@ -53,6 +55,7 @@
            "HERDR_PANE_ID" "w:p"
            "HERDR_ORCH_BIN" bin
            "ORCH_ASSIGNMENT_ROOT" (str dir)
+           "HERDR_ORCH_USAGE_FIXTURE" (str (fs/path dir "usage-fixture.edn"))
            "FAKE_HERDR_LOG" log
            "FAKE_HERDR_ENV_FILE" env-file
            "FAKE_HERDR_PROMPT_FILE" prompt-file

@@ -13,8 +13,20 @@
 ;; `"--effort"` becomes `["--effort" "high"]`).
 ;;
 ;; `:models` maps a canonical, pi-style `provider/model` ID to a sparse row of
-;; harness-native spellings for the *other* kinds.
-;; `:aliases` maps a short or weight name to its canonical ID
+;; harness-native spellings, each kind keeping only the spelling for its own provider (a
+;; claude spelling on an `anthropic/` row, a codex spelling on an `openai-codex/` row). Pi
+;; receives the canonical ID unchanged, so it has no column.
+;;
+;; `:aliases` maps a short name to its canonical ID, or a weight name to a vector of ranked
+;; candidates `{:model <short name or canonical ID> :rank n}`. Lower rank is preferred; the
+;; router chooses among them at spawn from each provider's remaining allowance. A candidate
+;; takes at most one string-alias hop and never names another vector alias.
+;;
+;; `:providers` maps a provider prefix to its allowance settings: `:usage` (adapter keyword,
+;; absent for a local provider with nothing to query), `:credentials` (stores read, in order,
+;; from `:pi`, `:claude`, `:codex`), `:cache-ttl-s` and an optional `:reserve` fraction.
+;; `:harnesses <kind> :providers` is the set of providers that kind can run; a kind without
+;; it accepts every provider.
 ;;
 ;; `:defaults` contains spawn defaults. `:placement` is :split, :tab, or :tab-split;
 ;; :tab-split chooses tab at root and split below root. Placement is never inherited.
@@ -23,24 +35,29 @@
 ;; ever-narrowing column, while a grandchild still splits so a nested unit reads as a unit.
 ;;
 ;; Override chain (project wins): this file (default) ← ~/.agents/subagents/config.edn
-;; ← <assignment-root>/.agents/subagents/config.edn. `:models` rows and `:harnesses`
-;; entries replace wholesale; `:aliases` and `:defaults` merge per key.
+;; ← <assignment-root>/.agents/subagents/config.edn. `:models` rows, `:harnesses`
+;; entries and `:providers` rows replace wholesale; `:aliases` and `:defaults` merge per key.
 {:defaults {:placement :tab-split}
  :harnesses {:pi     {:model-flag "--model" :effort-flag "--thinking"}
-             :claude {:model-flag "--model" :effort-flag "--effort"}
-             :codex  {:model-flag "--model" :effort-flag "-c model_reasoning_effort={}"}}
- :models {"anthropic/claude-fable-5-1"  {:claude "fable"            :codex "gpt-6-astra"}
-          "anthropic/claude-opus-5-5"   {:claude "opus"             :codex "gpt-6.1-sol"}
-          "anthropic/claude-sonnet-5-5" {:claude "sonnet"           :codex "gpt-5.6-terra"}
-          "anthropic/claude-haiku-5-5"  {:claude "haiku"            :codex "gpt-6-luna"}
-          "openai-codex/gpt-6-astra"    {:claude "fable"            :codex "gpt-6-astra"}
-          "openai-codex/gpt-6.1-sol"    {:claude "opus"             :codex "gpt-6.1-sol"}
-          "openai-codex/gpt-5.6-terra"  {:claude "sonnet"           :codex "gpt-5.6-terra"}
-          "openai-codex/gpt-6-luna"     {:claude "haiku"            :codex "gpt-6-luna"}}
- :aliases {"heavy"             "anthropic/claude-fable-5-1"
-           "middle"            "anthropic/claude-opus-5-5"
-           "light"             "anthropic/claude-sonnet-5-5"
-           "feather"           "anthropic/claude-haiku-5-5"
+             :claude {:model-flag "--model" :effort-flag "--effort" :providers #{"anthropic"}}
+             :codex  {:model-flag "--model" :effort-flag "-c model_reasoning_effort={}" :providers #{"openai-codex"}}}
+ :providers
+ {"anthropic"    {:usage :anthropic-oauth :credentials [:pi :claude] :cache-ttl-s 300}
+  "openai-codex" {:usage :codex-oauth :credentials [:pi :codex] :cache-ttl-s 60}
+  "lemonade"     {}}
+ :models {"anthropic/claude-fable-5-1"  {:claude "fable"}
+          "anthropic/claude-opus-5-5"   {:claude "opus"}
+          "anthropic/claude-sonnet-5-5" {:claude "sonnet"}
+          "anthropic/claude-haiku-5-5"  {:claude "haiku"}
+          "openai-codex/gpt-6-astra"    {:codex "gpt-6-astra"}
+          "openai-codex/gpt-6.1-sol"    {:codex "gpt-6.1-sol"}
+          "openai-codex/gpt-5.6-terra"  {:codex "gpt-5.6-terra"}
+          "openai-codex/gpt-6-luna"     {:codex "gpt-6-luna"}}
+ :aliases {"heavy"             [{:model "fable"  :rank 1} {:model "gpt-6-astra"   :rank 1}]
+           "middle"            [{:model "opus"   :rank 1} {:model "gpt-6.1-sol"   :rank 1}]
+           "light"             [{:model "sonnet" :rank 1} {:model "gpt-5.6-terra" :rank 1}]
+           "feather"           [{:model "haiku"  :rank 1} {:model "gpt-6-luna"    :rank 1} {:model "qwen-dense" :rank 2}]
+           "qwen-dense"        "lemonade/Qwen3.8-27B-GGUF-Q4_K_M"
            "fable"             "anthropic/claude-fable-5-1"
            "opus"              "anthropic/claude-opus-5-5"
            "sonnet"            "anthropic/claude-sonnet-5-5"

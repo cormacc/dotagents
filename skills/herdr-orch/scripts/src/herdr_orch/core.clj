@@ -210,14 +210,100 @@
 ;; pass-through/empty result. `canonical-model` is the single alias hop: its result is
 ;; looked up in `:models` directly, never re-resolved through `:aliases` again — a chain
 ;; is a validation error (`validate-merged-config!`), not runtime behaviour.
+;; An `:aliases` value is either that string or a vector of ranked candidates
+;; (`[{:model "<name-or-id>" :rank n} ...]`). A vector alias is resolved by the router, not by
+;; `canonical-model`, so it is returned unchanged here and must not reach `translate-model`.
 (defn canonical-model [config model]
   (get-in config [:aliases model] model))
+(defn vector-alias? [config model]
+  (vector? (get-in config [:aliases model])))
+;; Provider of a routed candidate: the `provider/` prefix of its canonical ID, nil when the ID has none.
+(defn provider-prefix [canonical]
+  (when-let [i (some-> canonical (str/index-of "/"))] (subs canonical 0 i)))
 (defn translate-model [config kind model]
   (let [canonical (canonical-model config model)]
     (or (get-in config [:models canonical (keyword kind)]) canonical)))
 (defn model-args [config kind model]
   (let [translated (translate-model config kind model) flag (get-in config [:harnesses (keyword kind) :model-flag])]
     (if (and translated flag) [flag translated] [])))
+;; --- routing (pure; no IO) ----------------------------------------------------------------
+;; A vector alias is routed at spawn: `candidates` expands it, the caller supplies each
+;; provider's allowance as `usage`, and `route` picks one. `usage` is keyed by provider name
+;; (a string) with values `{:status :ok|:stale|:unknown :reason r :windows [...] :remaining-fraction f}`
+;; where `:remaining-fraction` is the account-wide remainder and a window is
+;; `{:name :scope nil-or-lowercase-family :used-fraction f :resets-at s}`.
+
+;; Candidates of the vector alias `alias` that `kind` can run, in config order, each
+;; `{:model requested :canonical id :provider p :rank n :reserve r}`. nil when `alias` is not a
+;; vector alias, so a string alias or canonical ID takes no routing. A kind's `:providers` set
+;; filters before any selection; a kind without it accepts every provider.
+(defn candidates [config kind alias]
+  (let [v (get-in config [:aliases alias])
+        allowed (get-in config [:harnesses (keyword kind) :providers])]
+    (when (vector? v)
+      (into []
+            (keep (fn [{:keys [model rank]}]
+                    (let [canonical (canonical-model config model)
+                          provider (provider-prefix canonical)]
+                      (when (or (nil? allowed) (contains? allowed provider))
+                        {:model model :canonical canonical :provider provider :rank rank
+                         :reserve (or (get-in config [:providers provider :reserve]) 0)}))))
+            v))))
+
+(defn- scope-tokens [s]
+  (vec (remove str/blank? (str/split (str/lower-case (str s)) #"[-_\s]+"))))
+;; A scoped window gates a candidate when the scope's tokens appear as a contiguous run of the
+;; canonical basename's tokens. Token (not substring) matching keeps `gpt-6` from gating
+;; `gpt-60` or `gpt-6.1-sol`, since `.` does not split a token. known-limit: a bare numeric or
+;; generic scope token such as `6` matches any basename containing that token; revisit if a
+;; provider scopes limits by a non-family identifier.
+(defn- scope-matches? [scope canonical]
+  (let [want (scope-tokens scope)
+        basename (some-> canonical (str/split #"/" 2) peek)
+        have (scope-tokens basename)
+        n (count want)]
+    (boolean (and (pos? n)
+                  (some #(= want %) (partition n 1 have))))))
+
+;; Remaining fraction for `candidate`: the smaller of the provider's account-wide remainder and
+;; `1 - used` of each scoped window that matches the candidate; nil when the allowance is
+;; unknown. A scoped window that matches no candidate affects nothing.
+(defn candidate-remaining [usage {:keys [provider canonical]}]
+  (let [{:keys [status windows remaining-fraction]} (get usage provider)]
+    (when (#{:ok :stale} status)
+      (let [scoped (for [{:keys [scope used-fraction]} windows
+                         :when (and scope (number? used-fraction) (scope-matches? scope canonical))]
+                     (- 1.0 used-fraction))
+            all (cond-> (vec scoped) (number? remaining-fraction) (conj remaining-fraction))]
+        (when (seq all) (apply min all))))))
+
+(defn- annotate [usage candidate]
+  (let [entry (get usage (:provider candidate))
+        remaining (candidate-remaining usage candidate)]
+    (cond-> (assoc candidate
+                   :status (or (:status entry) :unknown)
+                   :remaining remaining)
+      (not= :ok (:status entry)) (assoc :reason (or (:reason entry) (when-not entry "no usage entry"))))))
+
+;; Chooses by rank (lower first), then known (`:ok`/`:stale`) before `:unknown` at the same rank,
+;; then larger remaining fraction, then config order. A known candidate whose remaining
+;; fraction is at or below its `:reserve` is excluded; an unknown one stays eligible, so an
+;; unknown higher-ranked candidate beats a known lower-ranked one. No eligible candidate refuses.
+(defn route [candidates usage]
+  (let [annotated (mapv #(annotate usage %) candidates)
+        eligible (filter #(or (nil? (:remaining %)) (> (:remaining %) (:reserve %))) annotated)
+        picked (first (sort-by (fn [c] [(:rank c) (if (:remaining c) 0 1) (- (or (:remaining c) 0))]) eligible))]
+    (if picked
+      {:chosen (:canonical picked)
+       :candidates annotated
+       :reason (if (:remaining picked)
+                 (str "rank " (:rank picked) " with " (:remaining picked) " remaining")
+                 (str "rank " (:rank picked) " allowance unknown" (when (:reason picked) (str ": " (:reason picked)))
+                      "; no known candidate with credit at that rank or better"))}
+      {:refused true
+       :candidates annotated
+       :reason (if (empty? annotated) "no candidates" "no candidate has credit and none has unknown allowance")})))
+
 ;; Opt-in per-harness native args, appended to every `agent start` for that kind. The
 ;; shipped config ships none, so relaxed command approval -- claude
 ;; `--permission-mode auto`, codex `--ask-for-approval never --sandbox workspace-write`
@@ -227,6 +313,9 @@
 ;; that kind receives no effort args).
 (defn harness-extra-args [config kind]
   (vec (get-in config [:harnesses (keyword kind) :extra-args])))
+;; Usage adapters and credential stores the `:providers` rows may name.
+(def usage-adapters #{:anthropic-oauth :codex-oauth})
+(def credential-stores #{:pi :claude :codex})
 ;; config.edn shape validation: sparse model rows and harness keywords absent from
 ;; `:harnesses` are allowed (the kind set is open by contract). `:defaults` is closed
 ;; so placement typos fail loudly. Every failure carries the offending file path.
@@ -240,6 +329,13 @@
       (let [flag (:model-flag entry)]
         (when-not (and (string? flag) (not (str/blank? flag)))
           (throw (ex-info "config :harnesses entry :model-flag must be a non-blank string" {:path path :harness kind :model-flag flag}))))
+      ;; `:providers` is the closed set of provider names this kind can run; a kind without
+      ;; it accepts every provider. Membership in the config's `:providers` is a merged check.
+      (when (contains? entry :providers)
+        (let [providers (:providers entry)]
+          (when-not (and (set? providers) (every? #(and (string? %) (not (str/blank? %))) providers))
+            (throw (ex-info "config :harnesses entry :providers must be a set of non-blank strings"
+                            {:path path :harness kind :providers providers})))))
       (when (contains? entry :effort-flag)
         (let [effort-flag (:effort-flag entry)]
           (when-not (and (string? effort-flag) (not (str/blank? effort-flag)))
@@ -264,16 +360,52 @@
       (doseq [[kind value] row]
         (when-not (keyword? kind) (throw (ex-info "config :models row key must be a keyword" {:path path :model id :key kind})))
         (when-not (string? value) (throw (ex-info "config :models row value must be a string" {:path path :model id :harness kind :value value})))))
-    ;; `:aliases` is a flat short-name -> canonical-ID map; both sides are keys/values
-    ;; that must round-trip through argv and error messages, so both are constrained to
-    ;; non-blank strings exactly like a `:models` row value.
-    (let [aliases (get config :aliases {})]
+    ;; `:aliases` maps a short-name to a canonical ID or to a non-empty vector of ranked
+    ;; candidates; names and IDs must round-trip through argv and error messages, so they are
+    ;; constrained to non-blank strings exactly like a `:models` row value. Lower rank is preferred.
+    (let [aliases (get config :aliases {})
+          nonblank? #(and (string? %) (not (str/blank? %)))]
       (when-not (map? aliases) (throw (ex-info "config :aliases must be a map" {:path path :value aliases})))
       (doseq [[k v] aliases]
-        (when-not (and (string? k) (not (str/blank? k)))
+        (when-not (nonblank? k)
           (throw (ex-info "config :aliases key must be a non-blank string" {:path path :key k})))
-        (when-not (and (string? v) (not (str/blank? v)))
-          (throw (ex-info "config :aliases value must be a non-blank string" {:path path :key k :value v})))))
+        (if (vector? v)
+          (do (when (empty? v)
+                (throw (ex-info "config :aliases candidate vector must not be empty" {:path path :key k})))
+              (doseq [candidate v]
+                (when-not (and (map? candidate) (= #{:model :rank} (set (keys candidate))))
+                  (throw (ex-info "config :aliases candidate must be a map with exactly :model and :rank" {:path path :key k :candidate candidate})))
+                (when-not (nonblank? (:model candidate))
+                  (throw (ex-info "config :aliases candidate :model must be a non-blank string" {:path path :key k :candidate candidate})))
+                (when-not (pos-int? (:rank candidate))
+                  (throw (ex-info "config :aliases candidate :rank must be a positive integer" {:path path :key k :candidate candidate})))))
+          (when-not (nonblank? v)
+            (throw (ex-info "config :aliases value must be a non-blank string or a vector of candidates" {:path path :key k :value v}))))))
+    ;; `:providers` carries the usage-query settings the router reads. Rows are closed so a
+    ;; misspelt key fails here instead of silently leaving a provider unknown. `:usage` is
+    ;; absent for a provider with no allowance to query (local).
+    (let [providers (get config :providers {})]
+      (when-not (map? providers) (throw (ex-info "config :providers must be a map" {:path path :value providers})))
+      (doseq [[name row] providers]
+        (when-not (and (string? name) (not (str/blank? name)))
+          (throw (ex-info "config :providers key must be a non-blank string" {:path path :key name})))
+        (when-not (map? row) (throw (ex-info "config :providers entry must be a map" {:path path :provider name :value row})))
+        (when-not (every? #{:usage :credentials :cache-ttl-s :reserve} (keys row))
+          (throw (ex-info "config :providers entry has unknown key" {:path path :provider name :value row})))
+        (when (and (contains? row :usage) (not (usage-adapters (:usage row))))
+          (throw (ex-info "config :providers entry :usage must be a known adapter keyword"
+                          {:path path :provider name :usage (:usage row) :adapters usage-adapters})))
+        (when (contains? row :credentials)
+          (let [credentials (:credentials row)]
+            (when-not (and (vector? credentials) (every? credential-stores credentials))
+              (throw (ex-info "config :providers entry :credentials must be a vector over :pi, :claude, :codex"
+                              {:path path :provider name :credentials credentials})))))
+        (when (and (contains? row :cache-ttl-s) (not (pos-int? (:cache-ttl-s row))))
+          (throw (ex-info "config :providers entry :cache-ttl-s must be a positive integer"
+                          {:path path :provider name :cache-ttl-s (:cache-ttl-s row)})))
+        (when (and (contains? row :reserve) (not (and (number? (:reserve row)) (<= 0 (:reserve row) 1))))
+          (throw (ex-info "config :providers entry :reserve must be a number from 0 to 1"
+                          {:path path :provider name :reserve (:reserve row)})))))
     (when (contains? config :defaults)
       (let [defaults (:defaults config)]
         (when-not (map? defaults) (throw (ex-info "config :defaults must be a map" {:path path :value defaults})))
@@ -303,15 +435,46 @@
 ;; would otherwise let one direction silently shadow the other (see the change-record's
 ;; "Decisions" section), and a chained alias (a value that is itself an `:aliases` key) would
 ;; make the effective translation depend on lower-layer files the reader may never see.
-(defn validate-merged-config! [config]
-  (let [aliases (get config :aliases {}) models (get config :models {})]
-    (doseq [k (keys aliases)]
-      (when (contains? models k)
-        (throw (ex-info "config key is present in both :aliases and :models" {:key k}))))
-    (doseq [v (vals aliases)]
-      (when (contains? aliases v)
-        (throw (ex-info "config :aliases value is itself an :aliases key; multi-hop alias chains are not supported" {:key v})))))
-  config)
+;; `layers` is the loaded override chain, lowest precedence first, as `[{:path :config} ...]`.
+;; It only attributes an error to a file; it never changes what is validated or merged. A key
+;; is attributed to the highest layer defining it, which is the definition that wins the merge.
+;; Without layers (in-process callers) errors carry no path.
+(defn- defining-path [layers section key]
+  (some #(when (contains? (get (:config %) section) key) (:path %)) (reverse layers)))
+(defn- config-error [layers message data & sources]
+  (let [paths (vec (distinct (keep (fn [[section key]] (defining-path layers section key)) sources)))]
+    (ex-info (cond-> message (seq paths) (str " (in " (str/join ", " paths) ")"))
+             (cond-> data (seq paths) (assoc :path (first paths) :paths paths)))))
+(defn validate-merged-config!
+  ([config] (validate-merged-config! config nil))
+  ([config layers]
+   (let [aliases (get config :aliases {}) models (get config :models {}) providers (get config :providers {})]
+     (doseq [k (keys aliases)]
+       (when (contains? models k)
+         (throw (config-error layers "config key is present in both :aliases and :models" {:key k}
+                              [:aliases k] [:models k]))))
+     (doseq [[k v] aliases :when (string? v)]
+       (when (contains? aliases v)
+         (throw (config-error layers "config :aliases value is itself an :aliases key; multi-hop alias chains are not supported"
+                              {:key v :alias k} [:aliases k] [:aliases v]))))
+     ;; A routed candidate takes one string-alias hop to a canonical ID, never a vector alias;
+     ;; its provider must be configured. Explicit pass-through strings are not checked.
+     (doseq [[k v] aliases :when (vector? v)
+             {:keys [model]} v]
+       (when (vector? (get aliases model))
+         (throw (config-error layers "config :aliases candidate :model resolves to a vector alias" {:alias k :model model}
+                              [:aliases k] [:aliases model])))
+       (let [canonical (get aliases model model) provider (provider-prefix canonical)]
+         (when-not (contains? providers provider)
+           (throw (config-error layers "config :aliases candidate provider is not in :providers"
+                                {:alias k :model model :canonical canonical :provider provider}
+                                [:aliases k] [:aliases model])))))
+     (doseq [[kind entry] (get config :harnesses {})
+             provider (:providers entry)]
+       (when-not (contains? providers provider)
+         (throw (config-error layers "config :harnesses :providers member is not in :providers"
+                              {:harness kind :provider provider} [:harnesses kind])))))
+   config))
 (defn worktree-branch [task]
   (str "orch/" (subs task 0 8)))
 ;; Resolve exactly one checkout target. An explicit value answers where: `new` requests a

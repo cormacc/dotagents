@@ -1,10 +1,10 @@
 /**
- * `/oh` sections and pi-specific framing. `oh roster --format markdown` owns the listing
- * itself, the same renderer that generates the README.org listings, so this file adds only
- * what is specific to a pi session: the Herdr status of this pane and the usage notes.
+ * `/oh` sections and pi-specific framing. `oh roster --format markdown` and `oh usage`
+ * own their listings, so this file adds only what is specific to a pi session: the Herdr
+ * status of this pane, usage placement, and the usage notes.
  */
 
-export const SECTIONS = ["help", "personas", "traits", "models", "workflows"] as const;
+export const SECTIONS = ["help", "personas", "traits", "models", "usage", "workflows"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export const SECTION_DESCRIPTIONS: Record<Section, string> = {
@@ -12,6 +12,7 @@ export const SECTION_DESCRIPTIONS: Record<Section, string> = {
   personas: "Subagent personas and their defaults",
   traits: "Traits and the personas that select them",
   models: "Model aliases and per-harness spellings",
+  usage: "Subscription allowance by provider",
   workflows: "Ordinary skills that opt into the workflow catalogue",
 };
 
@@ -22,7 +23,7 @@ export function parseSection(args: string): Section | null {
 }
 
 /** `oh` arguments for one rendering. `help` is every section, which is `oh`'s default. */
-export function rosterArgs(section: Section, detail: boolean): string[] {
+export function rosterArgs(section: Exclude<Section, "usage">, detail: boolean): string[] {
   return [
     "roster",
     "--format",
@@ -30,6 +31,11 @@ export function rosterArgs(section: Section, detail: boolean): string[] {
     ...(section === "help" ? [] : ["--section", section]),
     ...(detail ? ["--detail"] : []),
   ];
+}
+
+/** `oh usage` arguments for one rendering. */
+export function usageArgs(detail: boolean): string[] {
+  return ["usage", "--format", "markdown", ...(detail ? ["--detail"] : [])];
 }
 
 const USAGE = [
@@ -42,14 +48,24 @@ const USAGE = [
   "- Write `%name` in your own prompt to expand that trait into your message (pi `traits` extension).",
   "- Workflow skills opt in with `metadata: {herdr-orch: workflow}` in `SKILL.md`. Listing a skill does not run it or grant permission to delegate.",
   "- Override a persona or trait with a same-named file in a higher layer: project `.agents/subagents/` or `.agents/traits/`, or the same under `~/.agents/`.",
-  "- Show one section with `/oh personas`, `/oh traits`, `/oh models`, or `/oh workflows`. Expand the entry with the tool-output expand key (default `ctrl+o`) for paths, timeouts, retro, every alias, and the resolution layers.",
+  "- Show one section with `/oh personas`, `/oh traits`, `/oh models`, `/oh usage`, or `/oh workflows`. Expand the entry with the tool-output expand key (default `ctrl+o`) for paths, timeouts, retro, every alias, usage credential sources and reset times, and the resolution layers.",
 ];
 
 /** Frame the `oh` rendering: the full listing gets the pane's Herdr status and usage notes. */
-export function composeHelp(section: Section, listing: string, herdr: boolean): string {
+export function composeHelp(section: Section, listing: string, herdr: boolean, usage = ""): string {
   if (section !== "help") return listing.trimEnd();
   const status = herdr
     ? "Herdr: this pane can delegate (`HERDR_ENV=1`)."
     : "Herdr: not detected (`HERDR_ENV` is not `1`). Delegation needs a Herdr pane.";
-  return [status, "", listing.trimEnd(), "", "## Usage", "", ...USAGE].join("\n");
+  const usageBlock = usage.trimEnd();
+  return [
+    status,
+    "",
+    listing.trimEnd(),
+    ...(usageBlock ? ["", "## Subscription usage", "", usageBlock] : []),
+    "",
+    "## Usage",
+    "",
+    ...USAGE,
+  ].join("\n");
 }

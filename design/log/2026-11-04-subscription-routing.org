@@ -1,0 +1,225 @@
+#+TITLE: herdr-orch: Subscription-aware model routing
+#+DATE: 2026-11-04 Wed
+#+PARENT: [[archive:1c4648b2-ec59-4cbe-9153-b4c22301ad35][herdr-orch: Subscription-aware model routing]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/README.org]]
+#+SPEC: [[proj:pi/extensions/herdr-orch/README.md]]
+
+* Intent
+Route a weight alias (`heavy`, `middle`, ...) to the highest-ranked candidate model whose subscription still has allowance, balancing equal-rank candidates by remaining allowance, so that a spawn does not land on an exhausted Anthropic or ChatGPT/Codex subscription. Expose the allowance query as `oh usage` so pi and Herdr integrations can display it.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+Feature delivery, approved live fixture capture and the four owner-approved behaviour-preserving simplifications are complete; acceptance and scope are unchanged. No authored commit or push was made. An alias value in `config.edn` may be a vector of `{:model :rank}` candidates. At spawn, `oh` filters candidates to the providers the resolved harness kind can run, fetches each provider's remaining allowance through its cached harness OAuth token (read-only, cached per provider), and picks by rank, then known-before-unknown allowance, then larger remaining fraction, then config order. String aliases and canonical IDs resolve exactly as before with no usage call. `oh usage` reports per-provider allowance; `/oh usage` and bare `/oh` render it. Endpoint facts: [[file:2026-11-04-subscription-routing/usage-endpoint-research.md]].
+
+** Scope
+*** In scope
+- `config.edn` shape: vector-valued `:aliases` entries; new top-level `:providers`; `:harnesses :providers` kind filter; `:models` rows reduced to own-provider spellings. Shipped config converted; `config.new.edn` superseded.
+- `usage.clj`: credential readers for the `:pi`, `:claude` and `:codex` stores; adapters `:anthropic-oauth` and `:codex-oauth`; normalisation; per-provider file cache with negative caching.
+- Pure router in `core.clj`; config validation for the new keys; `validate-merged-config!` extension.
+- `oh usage [--provider NAME]* [--fresh] [--format json|text|markdown]`.
+- Spawn path integration: `:model-route` in `--print-prompt`, the `task start` envelope and the ledger entry; `HERDR_ORCH_MODEL` carries the chosen canonical ID.
+- Pi extension: `usage` section in `/oh`; bare `/oh` appends the usage block.
+- Contract: [[proj:skills/herdr-orch/scripts/docs/contract.md]] section 'Model resolution' (routing, `:providers`, cache) and a new 'Usage' section; [[proj:skills/herdr-orch/README.org]] roster embed and merge-rule note; [[proj:pi/extensions/herdr-orch/README.md]] slash command. `cli_test.clj` `shipped-config-invariants` and the contract weight table updated for ranked rows.
+*** Out of scope
+- In-session quota failure, retry and successor handling: [[file:2026-11-04-model-fallback.org]] (task c3ae685d). That work consumes this routing and `oh usage`.
+- Credential refresh, rotation or any write to a credential store.
+- Anthropic `extra_usage` and Codex `credits`/Reserve balances.
+- macOS Keychain credential store for claude (Linux credential file only).
+- Changing harness kind during routing; kind stays a persona property.
+- A pi or Herdr usage display plugin beyond the `/oh` rendering.
+
+** Acceptance
+*** Core functionality
+- [X] A vector-valued alias resolves to the highest-ranked candidate whose provider has credit; equal rank breaks by larger remaining fraction, then config order.
+- [X] A kind's `:providers` set excludes candidates before ranking; a kind without the key accepts every provider.
+- [X] A string alias or canonical ID resolves exactly as today and makes no usage call.
+- [X] A candidate's remaining fraction is `1 - max(used)` over the provider's account-wide windows plus any model-scoped window whose family token matches the candidate's canonical basename.
+- [X] `oh usage` reports, per configured provider: credential source, each window (name, scope, used fraction, reset time), remaining fraction, status `ok`/`stale`/`unknown`, and the reason when not `ok`.
+- [X] `oh usage --format json` returns a `herdr-orch/v1` envelope whose `result` is keyed by provider and documented in the contract.
+- [X] `--print-prompt`, the `task start` envelope and the ledger entry carry `:model-route` with candidates, each allowance, and the chosen canonical ID.
+- [X] `HERDR_ORCH_MODEL` injected into a routed child is the chosen canonical ID, so a same-kind grandchild inherits a concrete model and does not re-route.
+- [X] The shipped `config.edn` uses the new shape; `heavy`, `middle`, `light`, `feather` each list an anthropic and an openai-codex candidate; `bb test` passes with the updated `shipped-config-invariants` and weight table.
+- [X] `/oh usage` renders each configured provider's remaining fraction, or `unknown` with its reason; bare `/oh` includes the same block after the spawn defaults.
+- [X] Contract 'Model resolution' and 'Usage' sections, `README.org` and the extension README describe routing, `:providers`, `oh usage` and the cache.
+*** Edge cases
+- [X] No candidate with known credit and no `unknown` candidate refuses the spawn, naming each candidate and its allowance, before any ledger or pane mutation.
+- [X] A provider with status `unknown` is chosen only when no known-credit candidate of equal or higher rank exists, and the envelope records the reason.
+- [X] A provider with status `stale` counts as known, with its last good allowance.
+- [X] A provider without `:usage` (local) always has remaining fraction 1.0 and status `ok` with no fetch.
+- [X] An expired cached token yields `unknown` with reason `expired`; nothing refreshes or writes a credential store.
+- [X] A 401/403 yields `unknown` with reason `auth`/`scope`; a 429 or 5xx negative-caches for `max(Retry-After, ttl)` seconds and serves the last good payload as `stale`.
+- [X] An HTTP call that exceeds 5 s yields `unknown` with reason `timeout`.
+- [X] The cache is keyed by provider, honours that provider's `:cache-ttl-s`, is written by atomic rename, and `--fresh` bypasses it.
+- [X] A fetch writes a 30 s claim marker first; a second caller inside the claim window reads the cached snapshot instead of fetching.
+- [X] A stale snapshot older than 60 min is not served; status becomes `unknown` with reason `stale-expired`.
+- [X] A `null` Codex `primary_window` or `secondary_window` is skipped; a single-window response routes normally.
+- [X] Both Anthropic response shapes (flat `five_hour`/`seven_day`/`seven_day_<family>` buckets and `limits[]`) normalise to the same windows; a `null` bucket or a 0 % bucket with `null` reset is skipped.
+- [X] A model-scoped window whose family matches no candidate is reported by `oh usage` and affects no route.
+- [X] Config validation names the file for: a candidate `:model` that resolves to a vector alias, an unknown provider prefix, a missing or non-positive `:rank`, a `:harnesses :providers` member absent from `:providers`, an unknown `:usage` adapter, or a `:credentials` member outside `#{:pi :claude :codex}`.
+- [X] Usage adapters are exercised by fixture responses through a fake HTTP function; no test contacts a provider. Verified for the final harness. An earlier verification run breached this requirement; see [[*Validation]].
+*** Anti-criteria
+- [X] Must not: print, log, cache, envelope or include in an exception a token or refresh token (a test asserts no fixture token prefix appears in any output or cache file).
+- [X] Must not: refresh, rotate or write any credential store.
+- [X] Must not: change harness kind during routing.
+- [X] Must not: silently downgrade when every candidate is exhausted.
+- [X] Must not: add in-session failover, retry or successor logic.
+- [X] Must not: let the `/oh` usage entry enter model context (same session-entry mechanism as the roster).
+
+** Decisions
+- Keep fallback discrete :: task c3ae685d ([[file:2026-11-04-model-fallback.org]]) is in-session failure classification and successor authorisation; its open questions concern replay safety, not selection. Its implementation task is blocked on this task; its "allowed fallback targets" question is answered by the alias's ranked set. Rejected: absorbing it, which would force the replay-safety contract into a routing record.
+- Config shape :: `:models` rows keep canonical keys (native spelling survives) and lose the cross-provider columns; `:aliases` values are a string (single hop, unchanged) or a candidate vector; a new `:providers` map carries `:usage`, `:credentials`, `:cache-ttl-s`, optional `:reserve`; `:harnesses` gains `:providers`. Merge semantics unchanged: `:aliases`/`:defaults` per key, `:models`/`:harnesses`/`:providers` rows wholesale. Rejected: the draft `config.new.edn` inversion (short name → canonical in `:models`), which drops per-kind spellings.
+- Usage adapters inside `oh` (Babashka, `babashka.http-client`), reading harness credential files directly :: routing lives in `oh`, and claude/codex roots have no pi extension. Rejected:
+  - Shell out to a harness usage command: none is non-interactive.
+  - Fetch in the pi extension and pass to `oh`: blind outside pi.
+  - External collector (agent-router, ccusage): agent-router calls neither endpoint; a Node dependency for a few HTTP calls.
+- Allowance metric :: minimum remaining fraction across windows (account-wide plus matching model-scoped), 0.0--1.0; the config never names a window. Threshold is `> :reserve` (default 0).
+- Unknown is eligible but unranked :: a provider whose allowance cannot be determined is used only when nothing known has credit at that rank or above; never a spawn failure on its own.
+- Exhaustion refuses :: no silent downgrade; an explicit string model bypasses routing.
+- Per-provider cache TTL :: shipped anthropic 300 s (third-party polling of `api/oauth/usage` draws persistent 429), openai-codex 60 s; negative cache on non-200 honouring `Retry-After`; a 30 s claim marker so concurrent spawns make one fetch; last good payload served as `stale` for at most 60 min. Rejected: reading another extension's cache file (for example `~/.pi/agent/pi-minimal-footer/`): a herdr-orch extension will own display of this data and must not depend on another pi extension's format.
+- Request headers per provider :: Anthropic sends `anthropic-beta: oauth-2025-04-20` and a `User-Agent: claude-code/<version>` (the third-party reference attributes stricter rate limiting to other user agents; this causality was not tested); Codex sends `ChatGPT-Account-Id` when the store carries an account id, `Accept: application/json` and a `User-Agent`. Header values are config-free constants in the adapter.
+- Model-scoped windows gate their family only :: a scoped window (Anthropic `seven_day_<family>` / `limits[] weekly_scoped`, Codex `additional_rate_limits`) applies when its lower-case tokens form a contiguous run in the candidate's canonical basename. Hyphens, underscores and spaces split tokens; dots do not. Generic or numeric scope tokens can match several families; revisit if providers use non-family scope identifiers.
+- Scope of `HERDR_ORCH_MODEL` :: the chosen canonical ID, not the alias, so inheritance is concrete and routing happens once per spawn.
+
+** Gotchas
+- Both endpoints are unofficial. Shape failures become `unknown`; provider error-body variants remain incompletely observed.
+- Anthropic usage-endpoint rate limiting is anecdotal; tokens without `user:profile` can return 403. Provider caches and negative backoff limit polling.
+
+** Follow-ups
+- c3ae685d successor selection and quota classification consume `route` and `oh usage` (blocker recorded on task 8076bcaf).
+- Pi/Herdr usage display plugin beyond `/oh`: new task when wanted.
+
+* Plan
+** DONE Config shape: ranked aliases, :providers, kind filter, shipped config
+CLOSED: [2026-11-04 Wed 14:28]
+:PROPERTIES:
+:CUSTOM_ID: 1116a9eb-e29c-46af-9348-f2a1e3480959
+:CREATED: [2026-11-04 Wed 13:03]
+:STARTED: [2026-11-04 Wed 13:15]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 13:03]
+- State "STARTED" from "TODO" [2026-11-04 Wed 13:15]
+- State "DONE" from "STARTED" [2026-11-04 Wed 14:28]
+:END:
+Verified; see [[*Acceptance]].
+
+** DONE Pure router: candidates, scoped-window matching, route
+CLOSED: [2026-11-04 Wed 16:11]
+:PROPERTIES:
+:CUSTOM_ID: 4768699b-46dd-4241-954a-d46d59d78254
+:CREATED: [2026-11-04 Wed 13:03]
+:BLOCKED-BY: task:1116a9eb-e29c-46af-9348-f2a1e3480959
+:STARTED: [2026-11-04 Wed 13:29]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 13:03]
+- State "STARTED" from "TODO" [2026-11-04 Wed 13:29]
+- State "DONE" from "STARTED" [2026-11-04 Wed 13:38]
+- State "STARTED" from "DONE" [2026-11-04 Wed 15:58]
+- State "DONE" from "STARTED" [2026-11-04 Wed 16:11]
+:END:
+Verified; see [[*Acceptance]].
+
+** DONE usage.clj: credential readers, provider adapters, normalisation, cache
+CLOSED: [2026-11-04 Wed 16:11]
+:PROPERTIES:
+:CUSTOM_ID: 858bdf81-2d8c-48bc-8c58-87de3c4b475f
+:CREATED: [2026-11-04 Wed 13:03]
+:STARTED: [2026-11-04 Wed 13:15]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 13:03]
+- State "STARTED" from "TODO" [2026-11-04 Wed 13:15]
+- State "DONE" from "STARTED" [2026-11-04 Wed 13:38]
+- State "STARTED" from "DONE" [2026-11-04 Wed 14:27]
+- State "DONE" from "STARTED" [2026-11-04 Wed 14:38]
+- State "STARTED" from "DONE" [2026-11-04 Wed 15:58]
+- State "DONE" from "STARTED" [2026-11-04 Wed 16:11]
+:END:
+Verified; see [[*Acceptance]].
+
+** DONE oh usage command and contract Usage section
+CLOSED: [2026-11-04 Wed 16:11]
+:PROPERTIES:
+:CUSTOM_ID: b77c8cd8-e74e-42be-99ef-16bfcb464187
+:CREATED: [2026-11-04 Wed 13:03]
+:BLOCKED-BY: task:858bdf81-2d8c-48bc-8c58-87de3c4b475f
+:STARTED: [2026-11-04 Wed 13:38]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 13:03]
+- State "STARTED" from "TODO" [2026-11-04 Wed 13:38]
+- State "DONE" from "STARTED" [2026-11-04 Wed 14:15]
+- State "STARTED" from "DONE" [2026-11-04 Wed 15:58]
+- State "DONE" from "STARTED" [2026-11-04 Wed 16:11]
+:END:
+Verified; see [[*Acceptance]].
+
+** DONE Spawn-path routing: model-route in print-prompt, envelope and ledger
+CLOSED: [2026-11-04 Wed 14:15]
+:PROPERTIES:
+:CUSTOM_ID: e775e6d6-daca-4520-bf1d-9ecccf65ee79
+:CREATED: [2026-11-04 Wed 13:03]
+:BLOCKED-BY: task:4768699b-46dd-4241-954a-d46d59d78254
+:BLOCKED-BY+: task:858bdf81-2d8c-48bc-8c58-87de3c4b475f
+:STARTED: [2026-11-04 Wed 13:38]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 13:03]
+- State "STARTED" from "TODO" [2026-11-04 Wed 13:38]
+- State "DONE" from "STARTED" [2026-11-04 Wed 14:15]
+:END:
+Verified; see [[*Acceptance]].
+
+** DONE Pi extension: /oh usage section and bare /oh usage block
+CLOSED: [2026-11-04 Wed 14:31]
+:PROPERTIES:
+:CUSTOM_ID: cfda029c-b970-4fc4-bc21-4eec880f07d3
+:CREATED: [2026-11-04 Wed 13:03]
+:BLOCKED-BY: task:b77c8cd8-e74e-42be-99ef-16bfcb464187
+:STARTED: [2026-11-04 Wed 14:15]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 13:03]
+- State "STARTED" from "TODO" [2026-11-04 Wed 14:15]
+- State "DONE" from "STARTED" [2026-11-04 Wed 14:31]
+:END:
+Verified; see [[*Acceptance]].
+
+** DONE Capture redacted live fixtures and resolve the Codex error-body question
+CLOSED: [2026-11-04 Wed 15:04]
+:PROPERTIES:
+:CUSTOM_ID: a499516b-5baa-4752-8b23-7d9c8e739e1b
+:CREATED: [2026-11-04 Wed 13:03]
+:BLOCKED-BY: task:b77c8cd8-e74e-42be-99ef-16bfcb464187
+:STARTED: [2026-11-04 Wed 14:52]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 13:03]
+- State "STARTED" from "TODO" [2026-11-04 Wed 14:52]
+- State "DONE" from "STARTED" [2026-11-04 Wed 15:04]
+:END:
+Verified; see [[*Acceptance]].
+
+* Implementation
+- Shipped :: ranked alias configuration and provider filters, pure routing, read-only usage adapters/cache, `oh usage`, routed spawn provenance and concrete inheritance, and Pi `/oh usage` plus the bare `/oh` usage block. The declared contract and both READMEs describe the delivered interfaces.
+- Simplified ownership :: `canonical-model` owns candidate alias resolution; stable sorting preserves configuration-order ties; `partition` matches contiguous scope tokens; one cache-answer rule serves both sides of claim acquisition. Timeout exception handling and explicit route-record conversion remain unchanged.
+- Failure policy :: authentication, scope, malformed response and timeout failures remain `unknown` on immediate and cached reads. HTTP 429/5xx and network failures can serve the last good snapshot within 60 min. The full HTTP exchange is bounded; unwritable caches permit uncached queries.
+- Live fixtures :: [[file:2026-11-04-subscription-routing/live-fixtures.md]] records the approved capture and redaction limits. Captured bodies supplement synthetic edge-case fixtures and replay offline through the adapters.
+
+* Validation
+- Independent final reviews :: fresh OpenAI backend and extension reviewers checked the integrated change. The backend reviewer reproduced a negative-cache interleaving defect; the correction rechecks backoff after claim acquisition. Root independently confirmed concurrent 429 calls fell from two to one while success-race and sequential-negative controls remained one. Evidence: `.tmp/subscription-exec-1/final-backend-review.md`, `final-extension-review.md` and `negative-race-root-after.log`. No cross-process negative-cache interleaving probe was added.
+- Approved cuts :: root compared the pre-cut and final implementations: 5000 routing cases, 4060 scope cases and 1332 cache-decision cases matched, with known-bad controls. Candidate resolution also matched for unrestricted, filtered, empty, string and missing aliases. Structural checks confirmed timeout handling, route-record conversion and launch/measurement resolution were unchanged. Evidence: `.tmp/subscription-exec-1/cuts-equivalence-root.log`.
+- Offline suites :: final root `bb test`, including the captured-fixture regression and approved cuts, exited 0: 848 Clojure tests, 8123 assertions, repository script suites and installed Pi adapters (17 fork-adapter, 2 fork-provider-context, 66 measurement checks), in `.tmp/subscription-exec-1/final-full-root-4.log` and `.exit`. The separate extension suite passed fixture-backed actual Pi RPC `/oh usage` and bare `/oh` without a model turn. Root also reproduced cache-IO, cached-authentication, malformed-response and whole-exchange timeout boundaries with controls. The focused usage replay passed 27 tests and 240 assertions. Section-link validation checked 447 references in 459 files with 0 problems; `git diff --check` passed; `ot doctor` reported 0 errors and 10 warnings.
+- Historical test-isolation breach :: an earlier worker full-suite run passed the real HOME after vector aliases were activated and made unauthorised authenticated usage requests. Root verified `pi`-sourced usage cache metadata, disclosed the incident and stopped the owned follow-on process group. No credential-before-mtime baseline was captured for that incident; incidental responses did not satisfy live capture. Launcher/traits subprocesses now use fixture HTTP isolation; smoke isolates credentials, cache and HTTP; installed Pi RPC fixtures use a disposable HOME and cache root. The static guard includes known-bad controls but is not proof against every future test path.
+- Approved live capture :: on 2026-11-04, the actual CLI execution path made exactly one fresh request each to Anthropic and Codex with a private cache; both returned HTTP 200. Remaining fractions were 0.37 and 0.98. All three credential-store paths retained their presence and mtimes. Only allowlisted redacted bodies were retained; offline replay matched account-wide windows and remaining fractions. The fake dry run included planted-secret positive controls and redaction checks. Evidence: `.tmp/subscription-exec-1/approved-live-1/report.json`, credential metadata files and `capture-approved.clj`; durable fixtures are linked above. No retry, credential refresh or live agent smoke was performed under this approval.
+
+* Open questions
+** DECIDED Authorisation for live fixture capture
+The user explicitly approved one read-only authenticated request per provider on 2026-11-04. The approved capture is complete. This approval does not authorise further provider probes or a live agent smoke.
+** OPEN Codex 401/403/429 bodies on `/wham/usage`
+The approved Codex request returned 200, so 401/403/429 body variants remain unobserved. The adapter maps those statuses to `auth`, `scope` and transient `http-429` independently of body text; synthetic tests exercise these paths. No additional live error probe is needed for this delivery or authorised by the capture approval.

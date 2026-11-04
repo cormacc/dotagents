@@ -6,7 +6,7 @@
  */
 
 import register from "./index.ts";
-import { composeHelp, parseSection, rosterArgs } from "./help.ts";
+import { composeHelp, parseSection, rosterArgs, usageArgs } from "./help.ts";
 
 type Tool = { name: string; description: string; promptGuidelines?: string[]; execute: (id: string, params: any, signal?: AbortSignal) => Promise<unknown> };
 
@@ -48,8 +48,19 @@ register({
   async exec(_bin: string, args: string[], options?: Record<string, unknown>) {
     execCalls.push(args);
     execOptions.push(options);
-    // `oh roster --format markdown` prints its rendering, not an envelope.
+    // `oh roster` and `oh usage` markdown output are renderings, not envelopes.
     if (args[0] === "roster") return { stdout: `LISTING ${args.join(" ")}\n`, stderr: "", code: 0, killed: false };
+    if (args[0] === "usage") {
+      const detail = args.includes("--detail");
+      return {
+        stdout: detail
+          ? "- **anthropic** -- unknown; remaining unknown; reason: missing; source: pi; windows: five_hour 20% used, resets 2030-01-01T00:00:00Z\n"
+          : "- **anthropic** -- unknown; remaining unknown; reason: missing; windows: five_hour 20% used\n",
+        stderr: "",
+        code: 0,
+        killed: false,
+      };
+    }
     return { stdout: JSON.stringify({ ok: true, schema: "herdr-orch/v1", result: { echoed: args } }), stderr: "", code: 0, killed: false };
   },
 } as any);
@@ -123,6 +134,8 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   same(parseSection(" traits "), "traits", "section argument is trimmed");
   same(parseSection("bogus"), null, "unknown section is rejected");
   same(parseSection("workflows"), "workflows", "workflow section is recognised");
+  same(parseSection("usage"), "usage", "usage section is recognised");
+  same((oh!.getArgumentCompletions!("u") as Array<{ value: string }>).map((item) => item.value), ["usage"], "usage section is completed");
   same((oh!.getArgumentCompletions!("w") as Array<{ value: string }>).map((item) => item.value), ["workflows"], "workflow section is completed");
   same((oh!.getArgumentCompletions!("m") as Array<{ value: string }>).map((item) => item.value), ["models"], "completion narrows by prefix");
 
@@ -136,7 +149,7 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   before = execCalls.length;
   await oh!.handler("bogus", ctx("tui"));
   ok(execCalls.length === before && entries.length === 0, "unknown section: oh not invoked and nothing appended");
-  ok(notices.at(-1)?.[1] === "warning" && /help, personas, traits, models, workflows/.test(notices.at(-1)![0]), "unknown section: warns with the valid sections");
+  ok(notices.at(-1)?.[1] === "warning" && /help, personas, traits, models, usage, workflows/.test(notices.at(-1)![0]), "unknown section: warns with the valid sections");
 
   before = execCalls.length;
   await oh!.handler("personas", ctx("tui"));
@@ -157,9 +170,45 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   before = execCalls.length;
   const noticesBefore = notices.length;
   await oh!.handler("", ctx("rpc"));
-  same(execCalls.slice(before), [["roster", "--format", "markdown", "--detail"]], "RPC: one detail rendering of every section");
+  same(execCalls.slice(before).sort(), [
+    ["roster", "--format", "markdown", "--detail"],
+    ["usage", "--format", "markdown", "--detail"],
+  ], "RPC: detail roster and usage renderings support the help overview");
   same(entries.length, 1, "RPC: no session entry appended");
   ok(notices.length === noticesBefore + 1 && notices.at(-1)![1] === "info" && notices.at(-1)![0].includes("LISTING roster --format markdown --detail"), "RPC: listing is shown as a notification");
+  ok(notices.at(-1)![0].includes("reason: missing") && notices.at(-1)![0].includes("source: pi"), "RPC: detailed usage shows an unknown-provider reason and detail fields");
+
+  before = execCalls.length;
+  await oh!.handler("", ctx("tui"));
+  same(execCalls.slice(before).sort(), [
+    ["roster", "--format", "markdown"],
+    ["roster", "--format", "markdown", "--detail"],
+    ["usage", "--format", "markdown"],
+    ["usage", "--format", "markdown", "--detail"],
+  ], "TUI: bare oh appends compact and detailed usage after roster defaults");
+  same(entries.at(-1)?.data, {
+    section: "help",
+    herdr: process.env.HERDR_ENV === "1",
+    compact: "LISTING roster --format markdown\n",
+    detail: "LISTING roster --format markdown --detail\n",
+    usage: {
+      compact: "- **anthropic** -- unknown; remaining unknown; reason: missing; windows: five_hour 20% used\n",
+      detail: "- **anthropic** -- unknown; remaining unknown; reason: missing; source: pi; windows: five_hour 20% used, resets 2030-01-01T00:00:00Z\n",
+    },
+  }, "TUI: bare oh retains Herdr framing and usage outside model context");
+
+  before = execCalls.length;
+  await oh!.handler("usage", ctx("tui"));
+  same(execCalls.slice(before).sort(), [
+    ["usage", "--format", "markdown"],
+    ["usage", "--format", "markdown", "--detail"],
+  ], "TUI: usage calls the CLI's compact and detailed Markdown forms");
+  same(entries.at(-1)?.data, {
+    section: "usage",
+    herdr: process.env.HERDR_ENV === "1",
+    compact: "- **anthropic** -- unknown; remaining unknown; reason: missing; windows: five_hour 20% used\n",
+    detail: "- **anthropic** -- unknown; remaining unknown; reason: missing; source: pi; windows: five_hour 20% used, resets 2030-01-01T00:00:00Z\n",
+  }, "TUI: usage stays in the display-only entry and preserves its unknown reason");
 
   before = execCalls.length;
   await oh!.handler("workflows", ctx("tui"));
@@ -174,10 +223,14 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
 {
   same(rosterArgs("help", false), ["roster", "--format", "markdown"], "help asks oh for every section");
   same(rosterArgs("models", true), ["roster", "--format", "markdown", "--section", "models", "--detail"], "a section with detail");
+  same(usageArgs(false), ["usage", "--format", "markdown"], "usage asks for compact Markdown");
+  same(usageArgs(true), ["usage", "--format", "markdown", "--detail"], "usage asks for detailed Markdown");
   same(rosterArgs("workflows", false), ["roster", "--format", "markdown", "--section", "workflows"], "workflow section arguments");
   const help = composeHelp("help", "## Personas\n\n- x\n", true);
   ok(help.startsWith("Herdr: this pane can delegate"), "help leads with the pane's Herdr status");
   ok(help.includes("## Personas\n\n- x\n\n## Usage"), "help keeps the oh listing verbatim before the usage notes");
+  const helpWithUsage = composeHelp("help", "## Spawn defaults\n\n- tab-split\n", true, "- **anthropic** -- unknown; remaining unknown; reason: missing\n");
+  ok(helpWithUsage.includes("## Spawn defaults\n\n- tab-split\n\n## Subscription usage\n\n- **anthropic** -- unknown; remaining unknown; reason: missing\n\n## Usage"), "help appends the same usage block after spawn defaults before its instructions");
   ok(composeHelp("help", "", false).includes("not detected"), "help reports missing Herdr");
   ok(/Spawn a subagent\* starts a fresh context.*fork a subagent\* inherits your completed earlier turns, not the current one/.test(help), "usage routes spawn to fresh and fork to forked context");
   ok(/--context measurement --measurement-config PATH`: a headless Pi sample with no pane/.test(help), "usage describes headless measurement apart from its optional monitor");

@@ -186,37 +186,39 @@ The idea comes from [[https://github.com/xificurC/ai-behaviors][ai-behaviors]] (
 
 ** Model configuration
 
-=config.edn= has two model levels, plus harness invocation (=:harnesses=) and spawn defaults (=:defaults=):
+=config.edn= has two model levels, plus provider allowance settings (=:providers=), harness invocation (=:harnesses=) and spawn defaults (=:defaults=):
 
-- =:aliases= maps a short or weight name to a canonical model ID.
-- =:models= maps a canonical ID to the native name that each harness wants.
+- =:aliases= maps a short name to a canonical model ID, or a weight name to a vector of ranked candidates =[{:model ".." :rank n} ..]=.
+- =:models= maps a canonical ID to the native name that its own provider's harness wants.
+- =:providers= maps a provider prefix to its usage adapter, credential stores and cache settings. A kind's =:harnesses :providers= set lists the providers it can run.
 
-Canonical IDs use pi's =<provider>/<model>= form. The packaged config covers the models on Anthropic and OpenAI subscriptions. =heavy=, =middle=, =light=, and =feather= are the portable weight aliases. [[*Packaged models]] lists the current mapping. [[file:scripts/docs/contract.md]] section 'Model resolution' gives the resolution rules.
+Canonical IDs use pi's =<provider>/<model>= form. The packaged config covers the models on Anthropic and OpenAI subscriptions, and a local fallback. =heavy=, =middle=, =light=, and =feather= are the portable weight aliases. Each is a vector alias: at spawn, =oh= picks the lowest-ranked candidate whose subscription still has allowance, so a spawn does not land on an exhausted subscription. An explicit string alias or canonical ID is never routed and makes no usage query. =oh usage= shows the allowance that routing reads. [[*Packaged models]] lists the current mapping. [[file:scripts/docs/contract.md]] section 'Model resolution' gives the resolution rules.
 
 *** The merge rule that catches people
 
 =merge-config= is =merge-with merge=, so the merge is two levels deep:
 
-- Top-level keys (=:aliases=, =:models=, =:harnesses=, =:defaults=) merge across files.
-- One level down, an entry replaces its counterpart. An override =:models= row for ="anthropic/claude-opus-5-5"= replaces the whole row: its columns do not merge. An override =:harnesses :claude= entry replaces the packaged entry, so it must restate =:model-flag= (or validation rejects the file) and =:effort-flag= (or that kind gets no effort args).
-- =:aliases= and =:defaults= have scalar values, so each key merges on its own. Retargeting ="heavy"= takes one line and changes no other alias and no =:models= row.
+- Top-level keys (=:aliases=, =:models=, =:harnesses=, =:providers=, =:defaults=) merge across files.
+- One level down, an entry replaces its counterpart. An override =:models= row for ="anthropic/claude-opus-5-5"= replaces the whole row: its columns do not merge. An override =:providers= row replaces the packaged row wholesale, so it must restate every setting it keeps. An override =:harnesses :claude= entry replaces the packaged entry, so it must restate =:model-flag= (or validation rejects the file), =:effort-flag= (or that kind gets no effort args) and =:providers= (or that kind accepts every provider).
+- =:aliases= and =:defaults= merge per key. A vector alias is one value: an override replaces all its candidates and never merges them. Retargeting ="heavy"= takes one line and changes no other alias and no =:models= row.
 
-A weight name is an =:aliases= key, never a =:models= key. A key in both maps fails after the merge, with the key named. You see this error when you migrate an old override that has a full ="heavy"= row.
+A weight name is an =:aliases= key, never a =:models= key. A key in both maps fails after the merge, with the key and the files that define it named. You see this error when you migrate an old override that has a full ="heavy"= row. A candidate that resolves to a vector alias, a candidate whose provider is absent from =:providers=, and a =:harnesses :providers= member absent from =:providers= fail the same way.
 
 *** Worked example
 
 A home override that pins =heavy= to one Claude release, lets claude-kind and codex-kind children run unattended, and gives every child its own tab:
 
 #+begin_src clojure
-  {:aliases  {"heavy" "anthropic/claude-fable-5-20260714"}
+  {:aliases  {"heavy" "anthropic/claude-fable-5-20260714"}   ; a string alias: no routing, no usage query
    :models   {"anthropic/claude-fable-5-20260714"
-              {:claude "claude-fable-5-20260714"             ; pinned, not the floating alias
-               :codex "gpt-5.6-sol"}}                        ; cross-provider equivalent
+              {:claude "claude-fable-5-20260714"}}           ; pinned, not the floating alias; own provider only
    ;; Override the default permissions for more autonomous operation
    ;; We intentionally don't do this by default - it should be opt in
    :harnesses {:claude {:model-flag "--model"
+                        :providers #{"anthropic"}     ; restated: the entry replaces the packaged one
                         :extra-args ["--permission-mode" "auto"]}
                :codex {:model-flag "--model"
+                        :providers #{"openai-codex"}
                         :extra-args ["--ask-for-approval" "never"
                                      "--sandbox" "workspace-write"]}}
    :defaults  {:placement :tab}}
@@ -224,7 +226,7 @@ A home override that pins =heavy= to one Claude release, lets claude-kind and co
 
 The new canonical ID needs a row only because it is new. To point ="heavy"= at a packaged canonical ID, add only the =:aliases= entry.
 
-There is no =:pi= column. An ID with no column for a kind falls through to the canonical ID, which is the pi spelling. Here pi gets =--model anthropic/claude-fable-5-20260714=, claude gets =--model claude-fable-5-20260714=, and codex gets =--model gpt-5.6-sol=. The =:codex= column exists because it is a real cross-provider remap.
+There is no =:pi= column. An ID with no column for a kind falls through to the canonical ID, which is the pi spelling. Here pi gets =--model anthropic/claude-fable-5-20260714= and claude gets =--model claude-fable-5-20260714=. The =:providers= filter on a kind applies only to the candidates of a vector alias. A string alias or canonical ID passes through to every kind unchanged, so a codex-kind child told to run =heavy= (here a string alias) receives the Anthropic ID. Cross-provider equivalence is expressed as ranked candidates of a weight alias, not as a column. The example restates =:providers= because an override =:harnesses= entry replaces the packaged one, filter included.
 
 ** Harness configuration
 
@@ -276,18 +278,33 @@ Placement is resolved for each spawn and never inherited: it is not stored per c
 Preview a spawn without running it:
 
 #+begin_src sh
-oh task run scout --task x --model heavy --print-prompt
+oh task run scout --task x --model anthropic/claude-opus-5-5 --print-prompt
 #+end_src
 
 The preview reports:
 
 - =kind=
-- =model= (before the alias hop) and =model-canonical= (after it)
+- =model= (before the alias hop) and =model-canonical= (after it, or the routed choice for a vector alias)
+- =model-route= (only for a vector alias): the alias, each candidate's rank, provider, allowance and status, the chosen canonical ID and the reason. A preview of a vector alias reads cached allowance and may make one usage request, so name an explicit canonical ID to preview offline
 - =model-args=, the translated args that the harness receives
 - =effort=, =effort-source=, and =effort-args=
 - =placement=, =retro= and =retro-source=, and =spawns= and =spawns-source=
 
 To find a model miss, compare the model fields. If =model-canonical= still shows your short name, no =:aliases= entry matched. If =model-canonical= is correct but =model-args= repeats it instead of a native name, the =:models= row has no column for that kind.
+
+** Subscription allowance and model routing
+
+A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child launches: =oh= reads each candidate provider's remaining subscription allowance and picks the best-ranked candidate that still has credit. Equal-rank candidates are balanced by remaining allowance. A provider whose allowance cannot be read is =unknown=: it is used only when no known candidate of equal or better rank has credit, and a spawn is refused, before anything is created, when no candidate is eligible. [[file:scripts/docs/contract.md]] sections 'Routing' and 'Usage' give the ordering, the reserve, the cache and the status rules.
+
+#+begin_src sh
+oh usage                                    # JSON, keyed by provider
+oh usage --format markdown --detail         # remaining fraction, credential source, reset times
+oh usage --provider anthropic --fresh       # bypass the cache for one provider
+#+end_src
+
+=oh usage= reads the harness's cached OAuth token (pi, claude or codex store) and never refreshes or writes it. It calls two unofficial endpoints, so a shape change shows as =unknown=, not as a failure. A string alias or canonical ID (=--model opus=, =--model anthropic/claude-opus-5-5=) is never routed and makes no usage call.
+
+To try routing without a provider, point =HERDR_ORCH_USAGE_FIXTURE= at an EDN map of =url -> {:status 200 :body "..."}= and =HOME= at a directory with fixture credentials. The test suite does this, so it never reads a real credential or contacts a provider.
 
 ** Listing personas, traits, models, and workflows
 
@@ -364,21 +381,29 @@ A trait that no persona selects is for a spawn's =--trait NAME= or for interacti
 
 *** Packaged models
 
-The first column shows the two shortest aliases for each canonical ID. A harness with no entry of its own receives the canonical ID, which is the pi spelling ([[*Model configuration]]).
+The first column shows the two shortest string aliases for each canonical ID. A harness with no entry of its own receives the canonical ID, which is the pi spelling ([[*Model configuration]]). A native kind runs only its own provider's models, so a cell for another provider's model is the canonical ID and is never launched. The ranked list names each weight alias's candidates, lowest rank first.
 
 #+CALL: oh-roster[:eval yes](section="models")
 
 #+RESULTS:
-| Aliases                  | claude | codex         | pi                          |
-|--------------------------+--------+---------------+-----------------------------|
-| fable, heavy             | fable  | gpt-6-astra   | anthropic/claude-fable-5-1  |
-| haiku, feather           | haiku  | gpt-6-luna    | anthropic/claude-haiku-5-5  |
-| opus, middle             | opus   | gpt-6.1-sol   | anthropic/claude-opus-5-5   |
-| light, sonnet            | sonnet | gpt-5.6-terra | anthropic/claude-sonnet-5-5 |
-| gpt-terra, gpt-5.6-terra | sonnet | gpt-5.6-terra | openai-codex/gpt-5.6-terra  |
-| gpt-astra, gpt-6-astra   | fable  | gpt-6-astra   | openai-codex/gpt-6-astra    |
-| gpt-luna, gpt-6-luna     | haiku  | gpt-6-luna    | openai-codex/gpt-6-luna     |
-| gpt-sol, gpt-6.1-sol     | opus   | gpt-6.1-sol   | openai-codex/gpt-6.1-sol    |
+| Aliases                  | claude                           | codex                            | pi                               |
+|--------------------------+----------------------------------+----------------------------------+----------------------------------|
+| fable, claude-fable      | fable                            | anthropic/claude-fable-5-1       | anthropic/claude-fable-5-1       |
+| haiku, claude-haiku      | haiku                            | anthropic/claude-haiku-5-5       | anthropic/claude-haiku-5-5       |
+| opus, claude-opus        | opus                             | anthropic/claude-opus-5-5        | anthropic/claude-opus-5-5        |
+| sonnet, claude-sonnet    | sonnet                           | anthropic/claude-sonnet-5-5      | anthropic/claude-sonnet-5-5      |
+| qwen-dense               | lemonade/Qwen3.8-27B-GGUF-Q4_K_M | lemonade/Qwen3.8-27B-GGUF-Q4_K_M | lemonade/Qwen3.8-27B-GGUF-Q4_K_M |
+| gpt-terra, gpt-5.6-terra | openai-codex/gpt-5.6-terra       | gpt-5.6-terra                    | openai-codex/gpt-5.6-terra       |
+| gpt-astra, gpt-6-astra   | openai-codex/gpt-6-astra         | gpt-6-astra                      | openai-codex/gpt-6-astra         |
+| gpt-luna, gpt-6-luna     | openai-codex/gpt-6-luna          | gpt-6-luna                       | openai-codex/gpt-6-luna          |
+| gpt-sol, gpt-6.1-sol     | openai-codex/gpt-6.1-sol         | gpt-6.1-sol                      | openai-codex/gpt-6.1-sol         |
+
+Ranked aliases (lowest rank is preferred):
+
+- =feather= -- rank 1 =haiku=; rank 1 =gpt-6-luna=; rank 2 =qwen-dense=
+- =heavy= -- rank 1 =fable=; rank 1 =gpt-6-astra=
+- =light= -- rank 1 =sonnet=; rank 1 =gpt-5.6-terra=
+- =middle= -- rank 1 =opus=; rank 1 =gpt-6.1-sol=
 
 * Known gaps
 

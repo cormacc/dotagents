@@ -433,10 +433,19 @@
 (deftest real-resolver-proves-explicit-fork-model-wins-over-role-frontmatter
   (let [dir (fs/create-temp-dir {:prefix "fork-preview-test-"})
         source (str (fs/path dir "source.jsonl"))
+        ;; Resolved before the assignment root is isolated below.
+        launcher (cli/launcher-bin)
         worker (with-redefs [cli/own-persona (constantly nil)] (slurp (str (cli/roster "worker"))))]
     (try
       (spit source "synthetic")
+      ;; The packaged worker's `light` is a vector alias, so `preview!` routes it. The credential
+      ;; root is a temp dir (no credential, so no request), and a usage HTTP call would throw.
       (with-redefs [cli/execute (fn [argv] (throw (ex-info "LAUNCH FORBIDDEN" {:argv argv})))
+                    cli/home-directory (constantly (str dir))
+                    ;; The usage cache lives under the ledger, so the assignment root is isolated too.
+                    ledger/assignment-root (constantly (str dir))
+                    cli/launcher-bin (constantly launcher)
+                    cli/usage-http-fn (fn [] (fn [_] (throw (ex-info "LIVE USAGE FORBIDDEN" {}))))
                     herdr/preflight! (constantly true)
                     herdr/invoke (fn [argv] (throw (ex-info "LIVE HERDR FORBIDDEN" {:argv argv})))
                     cli/own-persona (constantly "worker") cli/own-role-absent? (constantly false)

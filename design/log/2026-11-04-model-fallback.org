@@ -90,6 +90,7 @@ Acceptance criteria:
 
 * Open questions
 ** OPEN Which fallback targets are allowed?
+Partly answered by [[file:2026-11-04-subscription-routing.org]] (Accepted): a weight alias's ranked candidate set, filtered by the kind's `:providers`, is the allowed model set for a successor of the same kind; `oh usage` supplies the quota evidence. Still open: whether a successor may change harness kind.
 Choose the allowed provider/model/harness transitions rather than deriving them from alias names. This autonomous chunk used OpenAI models exclusively and does not approve other-provider execution later.
 ** OPEN When may succession proceed without a human decision?
 Choose explicit parent authorisation only, or define a narrow automatic case with harness-specific proof that no request/tool effect was accepted. Unknown state must not silently become replay permission.

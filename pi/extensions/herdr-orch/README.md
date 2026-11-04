@@ -14,12 +14,12 @@ Always-loaded prompt guidelines retain the explicit Herdr-request boundary and p
 
 ## Slash command
 
-`/oh [help|personas|traits|models|workflows]` shows the output of `oh roster --format markdown` to the user. Without an argument it shows every section, the Herdr status of the pane, the spawn defaults, and short usage notes. The notes route natural language to a context: "spawn a subagent" is a fresh context, and "fork a subagent" is a forked context (`oh task run|start --context fork`). A measurement runs headless (`--context measurement`), with a read-only monitor pane only on `--tab` or `--split`.
+`/oh [help|personas|traits|models|usage|workflows]` shows a user-only discovery entry. `/oh usage` runs `oh usage --format markdown`; expanded output adds `--detail`, which adds credential sources and reset times. Without an argument, `/oh` shows every roster section, the Herdr status of the pane, the spawn defaults, the same subscription-usage block, and short usage notes. An unknown provider includes its CLI reason. The notes route natural language to a context: "spawn a subagent" is a fresh context, and "fork a subagent" is a forked context (`oh task run|start --context fork`). A measurement runs headless (`--context measurement`), with a read-only monitor pane only on `--tab` or `--split`.
 
-- `oh` owns the rendering. The same renderer generates the org listings in [../../../skills/herdr-orch/README.org](../../../skills/herdr-orch/README.org), so this extension adds only the Herdr status line and the usage notes (`help.ts`).
+- `oh roster` and `oh usage` own their renderings. The roster renderer also generates the org listings in [../../../skills/herdr-orch/README.org](../../../skills/herdr-orch/README.org), so this extension adds only the Herdr status line, placement of the usage block, and the usage notes (`help.ts`).
 
 - The output is a session entry (`appendEntry` with the `herdr-orch-help` type), so it never enters model context. The skill already gives the model this information.
-- In the TUI, `/oh` runs `oh` twice, with and without `--detail`, and stores both renderings in the entry. The tool-output expand key (default `ctrl+o`) switches to the detail rendering: it adds file paths, timeouts, retro gating, every model alias, and the resolution layers.
+- In the TUI, `/oh usage` runs `oh usage` twice, with and without `--detail`; bare `/oh` also runs `oh roster` in both forms. The entry stores both renderings. The tool-output expand key (default `ctrl+o`) switches to the detail rendering: roster detail adds file paths, timeouts, retro gating, every model alias, and the resolution layers; usage detail adds credential sources and reset times.
 - RPC mode shows the detail rendering as a notification. JSON and print modes do nothing.
 - `oh roster` runs in the session cwd, so the project layer is the git root of that cwd. Persona, trait, and model listings therefore show what a spawn would use. The `traits` extension expands a project-layer `%name` only in a trusted project, so an untrusted project's trait can appear in `/oh traits` and still not expand interactively.
 - `/oh workflows` lists ordinary skills whose YAML frontmatter contains `metadata: {herdr-orch: workflow}`. It reuses each skill's name and description; expanded output adds its source and path. This is catalogue membership, not execution or permission to delegate. The CLI owns skill-root discovery and shadowing ([../../../skills/herdr-orch/scripts/docs/contract.md#Workflow skill discovery](../../../skills/herdr-orch/scripts/docs/contract.md#workflow-skill-discovery)).
@@ -28,7 +28,7 @@ Always-loaded prompt guidelines retain the explicit Herdr-request boundary and p
 
 ## Dependencies
 
-Babashka and the co-installed dotagents skills tree. `/oh` does not need Herdr: `oh roster` never calls it.
+Babashka and the co-installed dotagents skills tree. `/oh` does not need Herdr: `oh roster` and `oh usage` never call it.
 
 ## Keybindings
 
@@ -36,7 +36,7 @@ None.
 
 ## Tests
 
-`./test.sh` runs `index.test.ts` (pi-to-`oh` argv, `/oh` behaviour, and rendering), `pi-integration.test.ts` (installed Pi RPC commands through the real CLI, including workflow discovery without a model turn), and `../test/herdr-agent-state.test.ts` with the repository's locked `tsx`.
+`./test.sh` runs `index.test.ts` (pi-to-`oh` argv, `/oh` behaviour, and rendering), `pi-integration.test.ts` (installed Pi RPC commands through the real CLI, including fixture-backed usage and workflow discovery without a model turn), and `../test/herdr-agent-state.test.ts` with the repository's locked `tsx`.
 
 Test tooling: [../test/README.md](../test/README.md).
 

@@ -4760,3 +4760,34 @@ CLOSED: [2026-11-04 Wed 11:18]
 :END:
 #+IMPORT: [[plan:2026-11-04-refactor-herdr-orch-skill.org]]
 Reduce always-loaded instructions through conditional reference loading while preserving delegation behaviour, authority boundaries and safety rules. Reuse existing references and the mechanical contract; remove historical examples from runtime guidance rather than moving them into another mandatory read.
+
+** DONE [#A] herdr-orch: Subscription-aware model routing
+CLOSED: [2026-11-04 Wed 16:12]
+:PROPERTIES:
+:CUSTOM_ID: 1c4648b2-ec59-4cbe-9153-b4c22301ad35
+:CREATED: [2026-11-04 Wed 11:36]
+:STARTED: [2026-11-04 Wed 13:15]
+:ARCHIVED: [2026-11-04 Wed 16:12]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 11:36]
+- State "STARTED" from "TODO" [2026-11-04 Wed 13:15]
+- State "WAITING" from "STARTED" [2026-11-04 Wed 14:38]
+- State "STARTED" from "WAITING" [2026-11-04 Wed 14:52]
+- State "DONE" from "STARTED" [2026-11-04 Wed 15:10]
+- State "STARTED" from "DONE" [2026-11-04 Wed 15:58]
+- State "DONE" from "STARTED" [2026-11-04 Wed 16:12]
+:END:
+#+IMPORT: [[plan:2026-11-04-subscription-routing.org]]
+Currently we route by weight/purpose alias (heavy, middle etc.), OR explicitly by name.
+Weight is mapped to a specific provider and model in config.edn
+Instead we want to map an alias to a set of models, each with an associated rank, and have herdr-orch route on the following basis...
+- Determine the remaining subscription limits per provider (for anthropic and openai codex subs, when configured)
+- Route the alias to the highest ranked model with remaining subscription credit
+- When two models have equal rank, route to the model with most remaining subscription credit (usage balancing)
+
+The logic to determine the remaining subscription limits should be exposed via the herdr-orch cli -- we'll want to re-use it later in a pi and/or herdr plugin to show the limits. Ideally it will use whatever login token is cached by pi (or claude or codex, if that's the detected harness).
+
+I've provided a draft version of the new config format at [[file:./skills/herdr-orch/subagents/config.new.edn]]
+This is intended to provide direction -- propose changes as appropriate for efficiency and to facilitate provider identification for the purposes of routing.

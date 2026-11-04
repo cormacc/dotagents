@@ -81,9 +81,12 @@
      ;; `<root>/skills/` is the second skill probe and the shape this repository uses, so
      ;; the retro skill resolves in-fixture without an installed `~/.agents/skills`.
      (fs/create-sym-link skills (fs/path root "skills"))
+     ;; Every fixture reads usage from this (empty) file, never the network, and credentials from
+     ;; the empty fixture HOME, so no test can reach a provider or read a real credential.
+     (spit (str (fs/path dir "usage-fixture.edn")) "{}")
      {:dir dir :log log :env-file env-file :prompt-file prompt-file :roster (str roster) :skills (str skills) :state (str (fs/path dir "state"))
       :env (merge {"PATH" (str dir ":" (System/getenv "PATH")) "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p" "HERDR_ORCH_BIN" bin "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file "FAKE_HERDR_PROMPT_FILE" prompt-file "FAKE_HERDR_STATE_DIR" (str (fs/path dir "state"))
-                   "HOME" (str home) "ORCH_ASSIGNMENT_ROOT" (str dir)
+                   "HOME" (str home) "ORCH_ASSIGNMENT_ROOT" (str dir) "HERDR_ORCH_USAGE_FIXTURE" (str (fs/path dir "usage-fixture.edn"))
                    "CLJ_CACHE" @shared-clj-cache "CLJ_CONFIG" @shared-clj-cache}
                   overrides)})))
 
@@ -237,7 +240,7 @@
         fragment (fn [name description] (str "---\nname: " name "\ndescription: " description "\n---\nFixture directive.\n"))]
     (fs/create-dirs project)
     (write! (fs/path skill "subagents" "config.edn") shipped-config-text)
-    (write! (fs/path skill "subagents" "base.md") (persona "base" "description: packaged base" "model: light" "traits: [alpha]" "retro: false"))
+    (write! (fs/path skill "subagents" "base.md") (persona "base" "description: packaged base" "model: sonnet" "traits: [alpha]" "retro: false"))
     (write! (fs/path skill "subagents" "derived.md") (persona "derived" "description: derived own" "extends: base" "spawns: base"))
     (write! (fs/path skill "subagents" "shadowed.md") (persona "shadowed" "description: packaged copy"))
     (write! (fs/path project ".agents" "subagents" "shadowed.md") (persona "shadowed" "description: project copy" "traits: [beta]"))
@@ -258,11 +261,11 @@
             by-name (fn [items] (into {} (map (juxt :name identity)) items))
             p (by-name personas)
             t (by-name traits)
-            light (get-in (core/parse-config "config.edn" shipped-config-text) [:aliases "light"])]
+            light (get-in (core/parse-config "config.edn" shipped-config-text) [:aliases "sonnet"])]
         (is (= ["base" "broken" "derived" "shadowed"] (mapv :name personas)))
         (is (= {:source "project" :description "project copy" :traits ["beta"]}
                (select-keys (p "shadowed") [:source :description :traits])))
-        (is (= {:source "packaged" :description "derived own" :extends "base" :model "light"
+        (is (= {:source "packaged" :description "derived own" :extends "base" :model "sonnet"
                 :model-canonical light :spawns ["base"] :traits ["alpha"] :retro false :timeout core/default-timeout-ms}
                (select-keys (p "derived") [:source :description :extends :model :model-canonical :spawns :traits :retro :timeout])))
         (is (true? (:retro (p "shadowed"))))
@@ -273,7 +276,7 @@
                (select-keys (t "alpha") [:source :description :selected-by])))
         (is (= {:source "packaged" :description "packaged gamma" :selected-by []}
                (select-keys (t "gamma") [:source :description :selected-by])))
-        (is (some #{"light"} (:aliases (first (filter #(= light (:canonical %)) models)))))
+        (is (some #{"sonnet"} (:aliases (first (filter #(= light (:canonical %)) models)))))
         (is (= :tab-split (:placement defaults)))
         (is (= ["project" "home" "packaged"] (mapv :source (:personas layers)) (mapv :source (:traits layers))))
         (testing "one renderer serves markdown and org"
@@ -286,7 +289,7 @@
                    org-traits))
             (is (= (str/replace org-traits "=" "`") md-traits))
             (is (str/includes? (cli/roster-text listing "org" "personas" false)
-                               "- *derived* -- light; extends base; spawns base; traits =alpha=\n  derived own"))
+                               "- *derived* -- sonnet; extends base; spawns base; traits =alpha=\n  derived own"))
             (is (str/includes? (cli/roster-text listing "markdown" "personas" false)
                                "- **broken** -- **error:** "))
             (testing "--detail adds paths, policy, and layers"
@@ -301,12 +304,69 @@
               (is (= ["*Personas*" "*Traits*" "*Models*" "*Workflows*" "*Spawn defaults*"]
                      (re-seq #"(?m)^\*[A-Z][^*]*\*$" (cli/roster-text listing "org" "all" false)))))
             (testing "tables are padded the way each format aligns them"
-              (let [org-rows (str/split-lines (cli/roster-text listing "org" "models" false))
-                    md-rows (str/split-lines (cli/roster-text listing "markdown" "models" false))]
+              ;; Only the table rows align; a ranked-alias list may follow the table.
+              (let [table-rows #(filterv (fn [line] (str/starts-with? line "|")) (str/split-lines %))
+                    org-rows (table-rows (cli/roster-text listing "org" "models" false))
+                    md-rows (table-rows (cli/roster-text listing "markdown" "models" false))]
                 (is (re-matches #"\|-+(\+-+)+\|" (second org-rows)))
                 (is (re-matches #"\| -{3,}( \| -{3,})+ \|" (second md-rows)))
                 (is (apply = (map count org-rows)))
                 (is (apply = (map count md-rows)))))))))))
+
+;; Ranked aliases come from an explicit fixture config, not the shipped one, so this holds
+;; independently of which shipped aliases are vectors. Mutates global with-redefs state -- serial.
+(deftest ^:serial roster-lists-ranked-aliases-from-a-fixture-config
+  (let [dir (fs/create-temp-dir {:prefix "roster-ranked-"})
+        project (str (fs/path dir "project"))
+        home (str (fs/path dir "home"))
+        skill (fs/path dir "installed" "herdr-orch")
+        write! (fn [path text] (fs/create-dirs (fs/parent path)) (spit (str path) text))]
+    (fs/create-dirs project)
+    (write! (fs/path skill "subagents" "config.edn")
+            (pr-str {:harnesses {:pi {:model-flag "--model"} :claude {:model-flag "--model" :providers #{"anthropic"}}}
+                     :providers {"anthropic" {:usage :anthropic-oauth :credentials [:claude] :cache-ttl-s 300}
+                                 "openai-codex" {:usage :codex-oauth :credentials [:codex] :cache-ttl-s 60}}
+                     :models {"anthropic/claude-a-1" {:claude "a"}}
+                     :aliases {"a" "anthropic/claude-a-1" "x" "openai-codex/gpt-x"
+                               "strong" [{:model "x" :rank 2} {:model "a" :rank 1} {:model "anthropic/claude-b" :rank 2}]
+                               "plain" "anthropic/claude-a-1"}}))
+    (write! (fs/path skill "subagents" "ranked.md") "---\nname: ranked\ndescription: fixture\nmodel: strong\nretro: false\n---\nFixture.\n")
+    (write! (fs/path skill "subagents" "plain.md") "---\nname: plain\ndescription: fixture\nmodel: plain\nretro: false\n---\nFixture.\n")
+    (with-redefs [ledger/assignment-root (constantly project)
+                  cli/home-directory (constantly home)
+                  cli/launcher-bin (constantly (str (fs/path skill "scripts" "oh")))]
+      (let [{:keys [personas models routes] :as listing} (cli/roster-listing)
+            by-name (into {} (map (juxt :name identity)) personas)]
+        (testing "a vector alias is a ranked route, lowest rank first, config order within a rank"
+          (is (= [{:alias "strong"
+                   :candidates [{:rank 1 :model "a" :canonical "anthropic/claude-a-1" :provider "anthropic"}
+                                {:rank 2 :model "x" :canonical "openai-codex/gpt-x" :provider "openai-codex"}
+                                {:rank 2 :model "anthropic/claude-b" :canonical "anthropic/claude-b" :provider "anthropic"}]}]
+                 routes)))
+        (testing "model rows hold string aliases only, and every candidate canonical ID has a row"
+          (is (= #{"anthropic/claude-a-1" "openai-codex/gpt-x" "anthropic/claude-b"} (set (map :canonical models))))
+          (is (= ["a" "plain"] (:aliases (first (filter #(= "anthropic/claude-a-1" (:canonical %)) models)))))
+          (is (not-any? #(some #{"strong"} (:aliases %)) models)))
+        (testing "a persona on a vector alias has no single canonical ID; a string alias keeps its own"
+          (is (= {:model "strong" :model-canonical nil} (select-keys (by-name "ranked") [:model :model-canonical])))
+          (is (= {:model "plain" :model-canonical "anthropic/claude-a-1"} (select-keys (by-name "plain") [:model :model-canonical]))))
+        (testing "markdown and org render the ranked list after the table"
+          (is (= (str "Ranked aliases (lowest rank is preferred):\n\n"
+                      "- `strong` -- rank 1 `a`; rank 2 `x`; rank 2 `anthropic/claude-b`")
+                 (second (str/split (cli/roster-text listing "markdown" "models" false) #"\n\n" 2))))
+          (is (str/includes? (cli/roster-text listing "org" "models" false) "- =strong= -- rank 1 =a=; rank 2 =x="))
+          (is (str/includes? (cli/roster-text listing "markdown" "models" true)
+                             "rank 1 `a` (anthropic/claude-a-1); rank 2 `x` (openai-codex/gpt-x); rank 2 `anthropic/claude-b`")
+              "--detail adds the canonical ID only where it differs from the written model"))))
+    (testing "a config with no vector alias renders no ranked section"
+      (write! (fs/path skill "subagents" "config.edn")
+              (pr-str {:harnesses {:pi {:model-flag "--model"}} :models {"m/x" {}} :aliases {"x" "m/x"}}))
+      (with-redefs [ledger/assignment-root (constantly project)
+                    cli/home-directory (constantly home)
+                    cli/launcher-bin (constantly (str (fs/path skill "scripts" "oh")))]
+        (let [listing (cli/roster-listing)]
+          (is (= [] (:routes listing)))
+          (is (not (str/includes? (cli/roster-text listing "markdown" "models" false) "Ranked"))))))))
 
 ;; The README embeds `oh roster --format org` output through org babel `#+CALL:` lines.
 ;; This fails when a packaged persona, trait, or config change was not regenerated into it.
@@ -314,7 +374,9 @@
 ;; cli/launcher-bin) -- must run serially.
 (deftest ^:serial readme-roster-listings-are-current
   (let [readme (slurp (str (fs/path root "skills" "herdr-orch" "README.org")))
-        embeds (re-seq #"(?m)^#\+CALL: oh-roster\[[^\]]*\]\(section=\"([a-z]+)\"\)\n\n#\+RESULTS:\n((?:.+\n)+)" readme)]
+        ;; A result may hold a blank line (the models table is followed by a ranked list); the block
+        ;; ends at a blank line followed by a heading, another `#+` line or the end.
+        embeds (re-seq #"(?m)^#\+CALL: oh-roster\[[^\]]*\]\(section=\"([a-z]+)\"\)\n\n#\+RESULTS:\n((?:.+\n|\n(?=[^\n*#]))+)" readme)]
     ;; Positive control: a parse that silently matched nothing would pass vacuously.
     (is (= ["personas" "traits" "models"] (mapv second embeds)))
     ;; The babel block runs with an empty HOME and assignment root: packaged layer only.
@@ -773,11 +835,11 @@
     (is (re-find #"--kind is not a spawn-time flag" (:out refused)))
     (is (not-any? mutating? (calls log)))
     ;; Inherited from the parent kind the fake herdr reports, with the resolved model.
-    (let [proc (call! env "task" "start" "worker" "--model" "heavy" "--task" "recorded")
+    (let [proc (call! env "task" "start" "worker" "--model" "fable" "--task" "recorded")
           entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
       (is (zero? (:exit proc)) (:err proc))
-      (is (= {:kind "pi" :model "heavy"} (select-keys entry [:kind :model])))
-      (is (= {:kind "pi" :model "heavy"} (select-keys (get-in (result proc) [:result]) [:kind :model])))))
+      (is (= {:kind "pi" :model "fable"} (select-keys entry [:kind :model])))
+      (is (= {:kind "pi" :model "fable"} (select-keys (get-in (result proc) [:result]) [:kind :model])))))
   ;; The two remaining tiers, each on its own: a definition that declares a harness, and a
   ;; definition that declares none under a non-pi parent.
   (let [{:keys [env dir]} (fake-env {} {"declared" "---\nname: declared\ndescription: fixture\nkind: claude\n---\nFixture.\n"
@@ -895,7 +957,7 @@
 
 (deftest relocated-assignment-root-persona-shadows-packaged-default
   (let [{:keys [env log roster]} (fake-env {}
-                                           {"worker" "---\nname: worker\ndescription: relocated project worker\nmodel: light\n---\nProject override.\n"})
+                                           {"worker" "---\nname: worker\ndescription: relocated project worker\nmodel: sonnet\n---\nProject override.\n"})
         proc (call! env "task" "start" "worker" "--task" "project persona shadows package")
         start (first (filter #(= ["agent" "start"] (vec (take 2 %)))
                              (calls log)))]
@@ -3680,7 +3742,7 @@
   ;; harness can stop that real process after target validation but before its ledger write,
   ;; with no signal, wait, timeout, or release-file branch in production code.
   (let [chunk (apply str (repeat 1024 "x"))
-        worker (str "---\nname: worker\ndescription: race fixture\nkind: pi\nmodel: light\n"
+        worker (str "---\nname: worker\ndescription: race fixture\nkind: pi\nmodel: sonnet\n"
                     "spawns: scout researcher advisor\nretro: false\n---\n%focused\n"
                     (str/join (repeat 16384 chunk)))
         {:keys [env dir log roster]} (fake-env {})
@@ -5138,21 +5200,31 @@
     (vec (take 4 (concat parts (repeat 0))))))
 
 (defn- contract-weight-table
-  "The weight table in contract.md section 'Model resolution', as {weight {:pi .. :claude .. :codex ..}}.
+  "The weight table in contract.md section 'Model resolution', as {weight {provider family-or-\"--\"}}.
   Its cells are model families (see `alias-family`), not versioned IDs."
   []
-  (into {}
-        (for [[_ weight pi claude codex]
-              (re-seq #"(?m)^\| `([a-z]+)` \| `([^`]+)` \| `([^`]+)` \| `([^`]+)` \|$"
-                      (slurp (str (fs/path root "skills" "herdr-orch" "scripts" "docs" "contract.md"))))]
-          [weight {:pi pi :claude claude :codex codex}])))
+  (let [text (slurp (str (fs/path root "skills" "herdr-orch" "scripts" "docs" "contract.md")))
+        rows (re-seq #"(?m)^\| `([a-z]+)` \| `([^`]+)` \| `([^`]+)` \| (`[^`]+`|--) \|$" text)]
+    (into {}
+          (for [[_ weight anthropic codex local] rows]
+            [weight {"anthropic" anthropic "openai-codex" codex "lemonade" (str/replace local "`" "")}]))))
+
+(defn- shipped-candidates
+  "Ranked candidates of the vector alias `weight`, each with its canonical ID and provider."
+  [config weight]
+  (for [{:keys [model rank]} (get-in config [:aliases weight])
+        :let [canonical (get-in config [:aliases model] model)]]
+    {:model model :rank rank :canonical canonical :provider (core/provider-prefix canonical)}))
 
 ;; Invariants of the shipped config, derived from the parsed file rather than restated by
 ;; hand, so a model bump needs no test edit. core_test.clj covers the resolution rules
 ;; themselves (alias hop, pass-through, open kind set) with fixture configs.
 (deftest shipped-config-invariants
-  (let [{:keys [aliases models harnesses] :as config} @shipped-config
-        native-kinds (disj (set (keys harnesses)) :pi)]
+  (let [{:keys [aliases models harnesses providers] :as config} @shipped-config
+        native-kinds (disj (set (keys harnesses)) :pi)
+        weights ["heavy" "middle" "light" "feather"]]
+    (testing "the shipped config is valid once merged"
+      (is (= config (core/validate-merged-config! config))))
     (testing "each shipped harness receives its model through --model"
       (doseq [kind [:pi :claude :codex]]
         (is (= "--model" (get-in harnesses [kind :model-flag])) (name kind))))
@@ -5162,36 +5234,66 @@
       (is (= "-c model_reasoning_effort={}" (get-in harnesses [:codex :effort-flag]))))
     (testing "the usage text names the shipped placement default"
       (is (str/includes? cli/usage (str "ships as " (get-in config [:defaults :placement])))))
-    (testing "every alias targets a :models row"
-      (doseq [[k target] aliases]
-        (is (contains? models target) (str k " -> " target))))
-    (testing "every :models row translates for each native harness and has no :pi column"
+    (testing "native kinds run only their own provider; pi has no provider filter"
+      (is (= #{"anthropic"} (get-in harnesses [:claude :providers])))
+      (is (= #{"openai-codex"} (get-in harnesses [:codex :providers])))
+      (is (not (contains? (:pi harnesses) :providers))))
+    (testing "every provider carries a usage adapter and credentials, or is a local provider with neither"
+      (is (= #{"anthropic" "openai-codex" "lemonade"} (set (keys providers))))
+      (doseq [[name row] providers]
+        (if (:usage row)
+          (do (is (seq (:credentials row)) name) (is (pos-int? (:cache-ttl-s row)) name))
+          (is (= {} row) name))))
+    (testing "every string alias targets a :models row or a canonical ID of a configured provider"
+      (doseq [[k target] aliases :when (string? target)]
+        (is (or (contains? models target) (contains? providers (core/provider-prefix target))) (str k " -> " target))))
+    (testing "every :models row sits under a configured provider and has one column per native kind that provider runs, and no :pi column"
       (is (seq native-kinds) "positive control: the shipped harnesses include native kinds")
-      (doseq [[id row] models]
-        (is (every? #(contains? row %) native-kinds) id)
+      (doseq [[id row] models
+              :let [provider (core/provider-prefix id)
+                    expected (set (filter #(contains? (get-in harnesses [% :providers]) provider) native-kinds))]]
+        (is (contains? providers provider) id)
+        (is (= expected (set (keys row))) id)
+        (is (= 1 (count row)) (str id " keeps only its own provider's spelling"))
         (is (not (contains? row :pi)) id)))
     (testing "an unversioned alias targets the same row as its latest versioned alias"
-      (let [checked (for [[family ks] (group-by alias-family (keys aliases))
+      (let [strings (into {} (filter (comp string? val)) aliases)
+            checked (for [[family ks] (group-by alias-family (keys strings))
                           :let [versioned (filter #(some numeric-token? (str/split % #"-")) ks)]
-                          :when (and (contains? aliases family) (seq versioned))]
+                          :when (and (contains? strings family) (seq versioned))]
                       (let [latest (last (sort-by alias-version versioned))]
-                        (is (= (aliases latest) (aliases family)) (str family " follows " latest))
+                        (is (= (strings latest) (strings family)) (str family " follows " latest))
                         family))]
         (is (seq (doall checked)) "positive control: at least one alias family is checked")))
+    (testing "the four weights are vector aliases of well-formed ranked candidates"
+      (is (= (set weights) (set (keep (fn [[k v]] (when (vector? v) k)) aliases))))
+      (doseq [weight weights
+              :let [candidates (shipped-candidates config weight)]]
+        (is (every? #(contains? providers (:provider %)) candidates) weight)
+        (is (every? #(pos-int? (:rank %)) candidates) weight)
+        (is (every? #(not (vector? (aliases (:model %)))) candidates) weight)))
+    (testing "each weight lists one rank-1 anthropic and one rank-1 openai-codex candidate"
+      (doseq [weight weights
+              provider ["anthropic" "openai-codex"]]
+        (is (= 1 (count (filter #(and (= provider (:provider %)) (= 1 (:rank %))) (shipped-candidates config weight))))
+            (str weight " " provider))))
+    (testing "feather also lists the local qwen-dense model at rank 2"
+      (is (= [{:model "qwen-dense" :rank 2 :canonical "lemonade/Qwen3.8-27B-GGUF-Q4_K_M" :provider "lemonade"}]
+             (filter #(= "lemonade" (:provider %)) (shipped-candidates config "feather")))))
     ;; The table names families, so a version bump in config.edn needs no doc edit, while a
     ;; weight that moves to another family (for example light: sonnet -> haiku) still fails.
-    (testing "contract.md's weight table names the family of each shipped translation"
+    (testing "contract.md's weight table names, per provider, the family of that weight's highest-ranked candidate"
       (let [table (contract-weight-table)]
-        (is (= #{"heavy" "middle" "light" "feather"} (set (keys table)))
+        (is (= (set weights) (set (keys table)))
             "positive control: the table parses and lists the documented weights")
         (doseq [[weight row] table
-                [kind family] row]
-          (is (= family (alias-family family))
-              (str "contract.md row " weight " " (name kind) " must name a family without version tokens: " family))
-          (let [[flag native] (core/model-args config (name kind) weight)]
-            (is (= "--model" flag) (str "contract.md row " weight " " (name kind) " resolves to model args"))
-            (is (= family (some-> native alias-family))
-                (str "contract.md row " weight " " (name kind) " must name the family of config.edn's " native))))))))
+                [provider cell] row
+                :let [best (first (sort-by :rank (filter #(= provider (:provider %)) (shipped-candidates config weight))))]]
+          (if best
+            (do (is (= cell (alias-family (:canonical best)))
+                    (str "contract.md row " weight " " provider " must name the family of " (:canonical best)))
+                (is (= cell (alias-family cell)) (str "contract.md row " weight " " provider " must name a family without version tokens: " cell)))
+            (is (= "--" cell) (str "contract.md row " weight " " provider " names no candidate"))))))))
 
 ;; Effort/thinking-level resolution mirrors `model:` precedence and mechanism
 ;; (change-record 2026-09-24-herdr-orch-add-thinking-level-support): --effort flag >
@@ -5246,7 +5348,7 @@
 ;; The spawn records the routing `--print-prompt` previews, so the parent needs no
 ;; preview turn to learn the native args its child received.
 (deftest spawn-ledger-and-envelope-report-the-previewed-routing
-  (doseq [[label persona flags] [["weight alias with explicit effort" "worker" ["--model" "light" "--effort" "high"]]
+  (doseq [[label persona flags] [["weight alias with explicit effort" "worker" ["--model" "sonnet" "--effort" "high"]]
                                  ["frontmatter model and effort" "effortful" []]]]
     (testing label
       (let [{:keys [env dir log]} (fake-env {} effort-roster)
@@ -5288,8 +5390,8 @@
 ;; Mutates global with-redefs state (cli/launcher-bin, ledger/assignment-root) --
 ;; must run serially.
 (deftest ^:serial config-loader-precedence-and-deployment-modes
-  (let [canonical (shipped-canonical "middle")
-        native (shipped-native "middle" :claude)
+  (let [canonical (shipped-canonical "opus")
+        native (shipped-native "opus" :claude)
         override (fn [row] (pr-str {:models {canonical row}}))
         tmp (str (fs/create-temp-dir {:prefix "config-loader-"}))
         ;; A bare-subtree install: only `scripts/` + a sibling `config.edn`, nested under
@@ -5347,11 +5449,11 @@
                     ledger/assignment-root (constantly project-root)]
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"missing shipped default config" (cli/config home-dir)))))))
 
-;; Both personas name the shipped `middle` weight alias, so their expected native model is
+;; Both personas name the shipped `opus` string alias, so their expected native model is
 ;; read from the shipped config rather than written as a literal.
 (def roster-model-personas
-  {"canonical-worker" "---\nname: canonical-worker\ndescription: fixture weight-alias persona\nkind: claude\nmodel: middle\n---\nFixture canonical worker.\n"
-   "kindless-worker" "---\nname: kindless-worker\ndescription: fixture kindless weight-alias persona\nmodel: middle\n---\nFixture kindless worker.\n"})
+  {"canonical-worker" "---\nname: canonical-worker\ndescription: fixture weight-alias persona\nkind: claude\nmodel: opus\n---\nFixture canonical worker.\n"
+   "kindless-worker" "---\nname: kindless-worker\ndescription: fixture kindless weight-alias persona\nmodel: opus\n---\nFixture kindless worker.\n"})
 (defn- start-native-args [log]
   (first (filter #(= ["agent" "start"] (vec (take 2 %))) (calls log))))
 (defn- flag-value [argv flag] (second (drop-while #(not= flag %) argv)))
@@ -5362,7 +5464,7 @@
   (let [{:keys [env log]} (fake-env {} roster-model-personas)
         proc (call! env "task" "start" "canonical-worker" "--task" "declared kind retains model")]
     (is (zero? (:exit proc)) (:err proc))
-    (is (= (shipped-native "middle" :claude) (flag-value (start-native-args log) "--model")))))
+    (is (= (shipped-native "opus" :claude) (flag-value (start-native-args log) "--model")))))
 
 ;; Acceptance: a kindless roster model is now honoured for any resolved kind, not only
 ;; pi (the retired pi-only kindless guard).
@@ -5370,7 +5472,7 @@
   (let [{:keys [env log]} (fake-env {"FAKE_PARENT_AGENT" "claude"} roster-model-personas)
         proc (call! env "task" "start" "kindless-worker" "--task" "kindless model non-pi kind")]
     (is (zero? (:exit proc)) (:err proc))
-    (is (= (shipped-native "middle" :claude) (flag-value (start-native-args log) "--model")))))
+    (is (= (shipped-native "opus" :claude) (flag-value (start-native-args log) "--model")))))
 
 ;; Preview case: `--print-prompt` (against the fake herdr CLI) reports both the
 ;; canonical resolved model and the effective translated native model args.
@@ -5378,15 +5480,15 @@
   (let [{:keys [env]} (fake-env {} roster-model-personas)
         proc (call! env "task" "run" "canonical-worker" "--task" "preview translation" "--print-prompt")]
     (is (zero? (:exit proc)) (:err proc))
-    (is (= "middle" (get-in (result proc) [:result :model])))
-    (is (= ["--model" (shipped-native "middle" :claude)] (get-in (result proc) [:result :model-args])))))
+    (is (= "opus" (get-in (result proc) [:result :model])))
+    (is (= ["--model" (shipped-native "opus" :claude)] (get-in (result proc) [:result :model-args])))))
 
 ;; A `ORCH_ASSIGNMENT_ROOT` relocation (the fixture's `dir`, distinct from the real
 ;; repo root) resolves the project roster override under the relocated root, winning
 ;; over the shipped default.
 (deftest relocated-assignment-root-resolves-project-config-override
   (let [{:keys [env dir]} (fake-env {} roster-model-personas)]
-    (spit (str (fs/path dir ".agents" "subagents" "config.edn")) (pr-str {:models {(shipped-canonical "middle") {:claude "opus-relocated"}}}))
+    (spit (str (fs/path dir ".agents" "subagents" "config.edn")) (pr-str {:models {(shipped-canonical "opus") {:claude "opus-relocated"}}}))
     (let [proc (call! env "task" "run" "canonical-worker" "--task" "relocated override" "--print-prompt")]
       (is (zero? (:exit proc)) (:err proc))
       (is (= ["--model" "opus-relocated"] (get-in (result proc) [:result :model-args]))))))
@@ -5409,26 +5511,26 @@
 ;; retargets `--model` end-to-end through the real loader, and `--print-prompt` reports
 ;; the post-alias canonical ID alongside the resolved (pre-alias) model and the native
 ;; translated model-args -- acceptance for two-level model resolution in code. The target
-;; is a genuine canonical ID rather than a shipped alias such as `middle`, because
+;; is a genuine canonical ID rather than a shipped alias such as `opus`, because
 ;; pointing a fresh alias at an existing alias key would be a rejected multi-hop chain.
 (deftest preview-reports-post-alias-canonical-model
   (let [{:keys [env dir]} (fake-env {} roster-model-personas)
-        canonical (shipped-canonical "middle")]
+        canonical (shipped-canonical "opus")]
     (spit (str (fs/path dir ".agents" "subagents" "config.edn")) (pr-str {:aliases {"fixture-heavy" canonical}}))
     (let [proc (call! env "task" "run" "canonical-worker" "--model" "fixture-heavy" "--task" "alias preview" "--print-prompt")]
       (is (zero? (:exit proc)) (:err proc))
       (is (= "fixture-heavy" (get-in (result proc) [:result :model])))
       (is (= canonical (get-in (result proc) [:result :model-canonical])))
-      (is (= ["--model" (shipped-native "middle" :claude)] (get-in (result proc) [:result :model-args]))))))
+      (is (= ["--model" (shipped-native "opus" :claude)] (get-in (result proc) [:result :model-args]))))))
 
 ;; Post-merge validation fires before any ledger allocation or pane mutation, exactly
-;; like the per-file shape checks above. The canonical ID of the shipped `middle` weight is
+;; like the per-file shape checks above. The canonical ID of the shipped `opus` alias is
 ;; already a shipped `:models` key (the two-level table's canonical row), so a project
 ;; override adding it as an `:aliases` key collides on merge without this test having to
 ;; shadow anything itself.
 (deftest project-override-alias-model-key-overlap-fails-before-ledger-or-mutation
   (let [{:keys [env log dir]} (fake-env {} minimal-persona)
-        canonical (shipped-canonical "middle")]
+        canonical (shipped-canonical "opus")]
     (spit (str (fs/path dir ".agents" "subagents" "config.edn")) (pr-str {:aliases {canonical "anthropic/claude-fable-5"}}))
     (let [proc (call! env "task" "start" "probe" "--task" "alias/model overlap aborts")]
       (is (= 1 (:exit proc)))
@@ -5441,16 +5543,93 @@
 ;; A chained alias (a value that is itself an `:aliases` key) is rejected the same way,
 ;; using fresh keys absent from the shipped table so only the chain check can fire. The
 ;; second hop targets a genuine canonical ID (a `:models` key) rather than a shipped
-;; alias such as `middle`, which would itself trip the chain check and make the failing
+;; alias such as `opus`, which would itself trip the chain check and make the failing
 ;; key non-deterministic between the two violations.
 (deftest project-override-alias-chain-fails-before-ledger-or-mutation
   (let [{:keys [env log dir]} (fake-env {} minimal-persona)]
-    (spit (str (fs/path dir ".agents" "subagents" "config.edn")) (pr-str {:aliases {"fixture-x" "fixture-y" "fixture-y" (shipped-canonical "middle")}}))
+    (spit (str (fs/path dir ".agents" "subagents" "config.edn")) (pr-str {:aliases {"fixture-x" "fixture-y" "fixture-y" (shipped-canonical "opus")}}))
     (let [proc (call! env "task" "start" "probe" "--task" "alias chain aborts")]
       (is (= 1 (:exit proc)))
       (is (re-find #"fixture-y" (:out proc)) (:out proc))
       (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
       (is (not-any? mutating? (calls log))))))
+
+;; Ranked-alias validation reaches the CLI through the same loader as every other shape rule:
+;; a per-file violation names the override file, a merged violation names the candidate, and
+;; both fail before any ledger or pane mutation. Fresh keys keep this independent of the shipped aliases.
+(deftest project-override-ranked-alias-violations-fail-before-ledger-or-mutation
+  (doseq [[label override pattern]
+          [["per-file: zero rank" {:aliases {"fixture-r" [{:model "fixture/model" :rank 0}]}} #":rank must be a positive"]
+           ["per-file: unknown adapter" {:providers {"fixture" {:usage :bogus}}} #":usage must be a known adapter"]
+           ["merged: provider absent from :providers" {:aliases {"fixture-r" [{:model "fixture/model" :rank 1}]}} #"not in :providers"]
+           ["merged: kind provider absent from :providers" {:harnesses {:pi {:model-flag "--model" :providers #{"fixture"}}}} #":harnesses :providers member"]]]
+    (testing label
+      (let [{:keys [env log dir]} (fake-env {} minimal-persona)]
+        (spit (str (fs/path dir ".agents" "subagents" "config.edn")) (pr-str override))
+        (let [proc (call! env "task" "start" "probe" "--task" "ranked violation aborts")]
+          (is (= 1 (:exit proc)) (:out proc))
+          (is (re-find pattern (:out proc)) (:out proc))
+          (when (str/starts-with? label "per-file")
+            (is (str/includes? (:out proc) "config.edn") "names the offending file"))
+          (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
+          (is (not-any? mutating? (calls log))))))))
+
+;; A merged-config violation names the file that defines the offending key, through the real
+;; CLI (project layer) and through `cli/config` with an injected home (home layer and mixed layers).
+(deftest project-override-merged-violations-name-the-project-file
+  (doseq [[label override pattern]
+          [["candidate provider" {:aliases {"fixture-r" [{:model "fixture/model" :rank 1}]}} #"not in :providers"]
+           ["harness provider" {:harnesses {:pi {:model-flag "--model" :providers #{"fixture"}}}} #":harnesses :providers member"]
+           ["vector candidate" {:providers {"fixture" {}} :aliases {"fixture-a" [{:model "fixture/x" :rank 1}] "fixture-b" [{:model "fixture-a" :rank 1}]}} #"resolves to a vector alias"]]]
+    (testing label
+      (let [{:keys [env log dir]} (fake-env {} minimal-persona)
+            config-path (str (fs/path dir ".agents" "subagents" "config.edn"))]
+        (spit config-path (pr-str override))
+        (let [proc (call! env "task" "start" "probe" "--task" "merged violation names file")]
+          (is (= 1 (:exit proc)) (:out proc))
+          (is (re-find pattern (:out proc)) (:out proc))
+          (is (str/includes? (:out proc) config-path) (:out proc))
+          (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger"))))
+          (is (not-any? mutating? (calls log))))))))
+
+(deftest ^:serial merged-config-violations-name-the-defining-layer-across-files
+  (let [tmp (fs/create-temp-dir {:prefix "config-provenance-"})
+        home (str (fs/path tmp "home")) project (str (fs/path tmp "project"))
+        home-config (str (fs/path home ".agents" "subagents" "config.edn"))
+        project-config (str (fs/path project ".agents" "subagents" "config.edn"))
+        write! (fn [path config] (fs/create-dirs (fs/parent path)) (spit path (pr-str config)))
+        failure (fn [] (try (cli/config home) nil (catch clojure.lang.ExceptionInfo e e)))]
+    (fs/create-dirs project)
+    ;; The launcher is pinned so the shipped layer resolves without the caller's HERDR_ORCH_BIN.
+    (with-redefs [ledger/assignment-root (constantly project)
+                  cli/launcher-bin (constantly (str (fs/path root "skills" "herdr-orch" "scripts" "oh")))]
+      (write! home-config {:providers {"fixture" {}} :aliases {"fixture-r" [{:model "fixture-hop" :rank 1}] "fixture-hop" "fixture/m"}})
+      (is (nil? (failure)) "positive control: the home layer alone is valid")
+      (testing "a project layer that breaks a home-defined candidate names both files, alias file first"
+        (write! project-config {:aliases {"fixture-hop" "elsewhere/m"}})
+        (let [e (failure)]
+          (is (re-find #"not in :providers" (str (some-> e .getMessage))))
+          (is (= [home-config project-config] (:paths (ex-data e))))
+          (is (= home-config (:path (ex-data e))))
+          (is (str/includes? (.getMessage e) home-config))
+          (is (str/includes? (.getMessage e) project-config))))
+      (testing "a bad home-only definition names the home file, not the project file"
+        (write! home-config {:providers {"fixture" {}} :aliases {"fixture-r" [{:model "elsewhere/m" :rank 1}]}})
+        (write! project-config {:defaults {:placement :tab}})
+        (let [e (failure)]
+          (is (= home-config (:path (ex-data e))))
+          (is (not (str/includes? (.getMessage e) project-config)))))
+      (testing "a project override that replaces the bad alias clears the error"
+        (write! project-config {:aliases {"fixture-r" [{:model "fixture/m" :rank 1}]}})
+        (is (nil? (failure))))
+      (testing "a harness provider error names the layer defining the harness entry"
+        (write! home-config {:harnesses {:pi {:model-flag "--model" :providers #{"ghost"}}}})
+        (write! project-config {})
+        (is (= home-config (:path (ex-data (failure))))))
+      (testing "an alias/model overlap names the alias file and the :models file"
+        (write! home-config {:models {"fixture-key" {:claude "x"}}})
+        (write! project-config {:aliases {"fixture-key" "fixture/m"}})
+        (is (= [project-config home-config] (:paths (ex-data (failure)))))))))
 
 ;; --- publisher-owned WORK-ROOT (task ed6d67bf) --------------------------------------
 ;; The parent selects the child's pane cwd, so the parent -- never the child -- owns the base
@@ -6833,8 +7012,8 @@
       ;; and it hands that same value on, so the next hop is identical to this one
       (is (= "anthropic/claude-opus-5" (injected-env (:env-file fixture) "HERDR_ORCH_MODEL")))))
   (testing "child -> grandchild: the injected value, not the harness environment"
-    (is (= "light" (spawned-model (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "helper"
-                                             "FAKE_PARENT_LABEL" "worker-1-light" "HERDR_ORCH_MODEL" "light"
+    (is (= "sonnet" (spawned-model (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "helper"
+                                             "FAKE_PARENT_LABEL" "worker-1-light" "HERDR_ORCH_MODEL" "sonnet"
                                              "PI_PROVIDER" "anthropic" "PI_MODEL" "claude-opus-5"}
                                             {"helper" modelless-persona})
                                   "helper" "--task" "inherit from child" "--spawns" "none"))))
@@ -6935,7 +7114,7 @@
       (is (no-allocation? dir log) label))))
 
 (deftest a-roster-persona-named-anonymous-is-distinct-from-an-absent-role
-  (let [named {"anonymous" "---\nname: anonymous\ndescription: roster persona\nkind: pi\nmodel: light\nretro: false\n---\nRoster persona.\n"}
+  (let [named {"anonymous" "---\nname: anonymous\ndescription: roster persona\nkind: pi\nmodel: sonnet\nretro: false\n---\nRoster persona.\n"}
         {:keys [env env-file dir]} (fake-env {"HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "anonymous" "FAKE_PARENT_LABEL" "worker-1-light"} named)
         proc (call! env "task" "start" "anonymous" "--task" "named anonymous")
         entry (ledger-entry* dir (get-in (result proc) [:result :task]))]
@@ -8347,3 +8526,347 @@
             (is (str/includes? (str (ex-message e)) stderr))
             (is (re-find #"setsid" (slurp stderr)) "the real cause is in that file"))))
       (finally (fs/delete-tree dir)))))
+
+;; --- subscription routing and `oh usage` ---------------------------------------------------
+;; Every case here runs against fixture credentials in the fixture HOME and a fixture HTTP map
+;; (`HERDR_ORCH_USAGE_FIXTURE`), so no test reads a real credential store or contacts a
+;; provider. A usage fetch leaves a cache file under `<ledger>/usage`, which doubles as the
+;; probe for "this launch made a usage call".
+(def ^:private anthropic-url "https://api.anthropic.com/api/oauth/usage")
+(def ^:private codex-url "https://chatgpt.com/backend-api/wham/usage")
+(def ^:private anthropic-secret "sk-fixture-ANTHROPIC-SECRET-0001")
+(def ^:private codex-secret "sk-fixture-CODEX-SECRET-0002")
+(def ^:private far-future-ms 4102444800000)
+
+(defn- usage-body
+  "Fixture HTTP map: Anthropic at `anthropic-used` percent (plus an optional model-scoped
+  bucket), Codex at `codex-used` percent."
+  [{:keys [anthropic-used codex-used scoped]}]
+  (cond-> {}
+    anthropic-used
+    (assoc anthropic-url
+           {:status 200 :headers {}
+            :body (json/generate-string
+                   (cond-> {:five_hour {:utilization anthropic-used :resets_at "2030-01-01T00:00:00Z"}
+                            :seven_day {:utilization 10.0 :resets_at "2030-01-02T00:00:00Z"}}
+                     scoped (assoc :seven_day_fable {:utilization scoped :resets_at "2030-01-02T00:00:00Z"})))})
+    codex-used
+    (assoc codex-url
+           {:status 200 :headers {}
+            :body (json/generate-string {:rate_limit {:primary_window {:used_percent codex-used :reset_at 1893456000}}})})))
+
+(defn- routed-fixture
+  "A fake-env whose HOME holds fixture pi credentials and whose usage HTTP map is `usage`."
+  ([usage] (routed-fixture usage {} nil))
+  ([usage overrides personas]
+   (let [fixture (fake-env overrides personas)
+         dir (:dir fixture)
+         auth (fs/path dir "home" ".pi" "agent" "auth.json")]
+     (fs/create-dirs (fs/parent auth))
+     (spit (str auth) (json/generate-string {:anthropic {:access anthropic-secret :expires far-future-ms}
+                                             :openai-codex {:access codex-secret :accountId "acct-fixture" :expires far-future-ms}}))
+     (spit (str (fs/path dir "usage-fixture.edn")) (pr-str usage))
+     fixture)))
+
+(defn- usage-cache-dir [dir] (fs/path dir ".tmp" "herdr-orch" "ledger" "usage"))
+(defn- made-usage-call? [dir] (fs/exists? (usage-cache-dir dir)))
+(defn- leaked-secrets
+  "Fixture token strings found in `texts` or any file under `dir` other than the credential store."
+  [dir & texts]
+  (let [auth (str (fs/path dir "home" ".pi" "agent" "auth.json"))
+        corpus (concat texts
+                       (for [p (fs/glob dir "**" {:max-depth 12}) :when (and (fs/regular-file? p) (not= auth (str p)))]
+                         (try (slurp (str p)) (catch Exception _ ""))))]
+    (vec (filter (fn [secret] (some #(str/includes? (str %) secret) corpus)) [anthropic-secret codex-secret]))))
+
+(def ^:private heavy-persona
+  (into {} (for [kind ["pi" "claude" "codex"]]
+             [(str kind "-heavy") (str "---\nname: " kind "-heavy\ndescription: fixture\nkind: " kind "\nmodel: heavy\nretro: false\n---\nFixture.\n")])))
+
+(def ^:private fable "anthropic/claude-fable-5-1")
+(def ^:private astra "openai-codex/gpt-6-astra")
+
+(defn- route-of [proc] (get-in (result proc) [:result :model-route]))
+
+(deftest usage-command-reports-every-format-offline
+  (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 28.0 :codex-used 40 :scoped 90.0}) {"HERDR_ENV" "0"} nil)
+        json-proc (call! env "usage")
+        by-provider (:result (result json-proc))]
+    (is (zero? (:exit json-proc)) (:out json-proc))
+    (is (true? (:ok (result json-proc))))
+    (is (= "herdr-orch/v1" (:schema (result json-proc))))
+    (is (empty? (calls log)) "never contacts Herdr, including outside Herdr (HERDR_ENV=0)")
+    (is (= #{:anthropic :openai-codex :lemonade} (set (keys by-provider))))
+    (let [a (:anthropic by-provider)]
+      (is (= "ok" (:status a)))
+      (is (< (abs (- 0.72 (:remaining-fraction a))) 1e-9) "account-wide remainder is the worst account window")
+      (is (= "pi" (:source a)))
+      (is (= #{["five_hour" nil] ["seven_day" nil] ["seven_day_fable" "fable"]}
+             (set (map (juxt :name :scope) (:windows a)))))
+      (is (every? #(and (number? (:used-fraction %)) (number? (:resets-at %))) (:windows a)))
+      (is (= 0 (:reserve a))))
+    (is (< (abs (- 0.6 (:remaining-fraction (:openai-codex by-provider)))) 1e-9))
+    (is (= {:status "ok" :remaining-fraction 1.0} (select-keys (:lemonade by-provider) [:status :remaining-fraction]))
+        "a provider without :usage is ok with no fetch")
+    (testing "text lists every field; markdown is compact and --detail adds source and resets"
+      (let [text (:out (call! env "usage" "--format" "text"))
+            md (:out (call! env "usage" "--format" "markdown"))
+            detail (:out (call! env "usage" "--format" "markdown" "--detail"))]
+        (is (str/includes? text "anthropic -- ok; 72% remaining"))
+        (is (str/includes? text "source: pi"))
+        (is (str/includes? text "reserve: 0%") "text lists the reserve too")
+        (is (str/includes? text "seven_day_fable (fable) 90% used, resets 2030-01-02T00:00:00Z"))
+        (is (str/includes? md "- **anthropic** -- ok; 72% remaining; windows: five_hour 28% used"))
+        (is (not (str/includes? md "source:")))
+        (is (not (str/includes? md "resets")))
+        (is (str/includes? detail "source: pi"))
+        (is (str/includes? detail "reserve: 0%"))
+        (is (not (str/includes? md "reserve")))
+        (is (str/includes? detail "five_hour 28% used, resets 2030-01-01T00:00:00Z"))
+        (is (str/includes? md "**lemonade** -- ok; 100% remaining"))))
+    (testing "--provider repeats and filters"
+      (let [r (:result (result (call! env "usage" "--provider" "anthropic" "--provider" "lemonade")))]
+        (is (= #{:anthropic :lemonade} (set (keys r))))))
+    (testing "invalid options fail with an error envelope"
+      (doseq [argv [["--format" "html"] ["--detail"] ["--format" "text" "--detail"] ["extra"]]]
+        (let [proc (apply call! env "usage" argv)]
+          (is (= 1 (:exit proc)) (str argv))
+          (is (false? (:ok (result proc))) (str argv)))))
+    (testing "no token reaches any output or the cache"
+      (is (made-usage-call? dir) "positive control: the fetch ran and wrote a cache")
+      (is (= [] (leaked-secrets dir (:out json-proc) (:err json-proc)))))
+    (testing "--help lists the command and its options without running it"
+      (let [proc (call! env "usage" "--help")]
+        (is (zero? (:exit proc)))
+        (is (str/includes? (:out proc) "usage [--provider NAME]* [--fresh] [--format json|markdown|text] [--detail]")))
+      (is (str/includes? (:out (call! env "--help")) "oh usage [--provider NAME]* [--fresh]")))))
+
+(deftest usage-unknown-provider-fails-before-any-credential-read-or-request
+  (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 10.0 :codex-used 10}))
+        proc (call! env "usage" "--provider" "anthropic" "--provider" "nope")]
+    (is (= 1 (:exit proc)))
+    (is (re-find #"unknown provider: nope" (:out proc)) (:out proc))
+    (is (= ["anthropic" "lemonade" "openai-codex"] (get-in (result proc) [:error :data :available])))
+    (is (not (made-usage-call? dir)) "no fetch, even for the valid name")
+    (is (empty? (calls log)))
+    (is (made-usage-call? (do (call! env "usage" "--provider" "anthropic") dir)) "control: a valid name does fetch")))
+
+(deftest usage-cache-serves-repeats-and-fresh-bypasses-it
+  (let [{:keys [env dir]} (routed-fixture (usage-body {:anthropic-used 28.0}))
+        remaining #(get-in (result (apply call! env "usage" "--provider" "anthropic" %&)) [:result :anthropic :remaining-fraction])]
+    (is (< (abs (- 0.72 (remaining))) 1e-9))
+    (spit (str (fs/path dir "usage-fixture.edn")) (pr-str (usage-body {:anthropic-used 60.0})))
+    (is (< (abs (- 0.72 (remaining))) 1e-9) "within the TTL the cached snapshot answers")
+    (is (< (abs (- 0.4 (remaining "--fresh"))) 1e-9) "--fresh bypasses the cache")))
+
+(deftest vector-alias-preview-reports-the-routed-choice
+  (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 28.0 :codex-used 40}) {} heavy-persona)
+        preview (fn [env persona] (call! env "task" "run" persona "--task" "x" "--print-prompt"))
+        proc (preview env "pi-heavy")
+        res (:result (result proc))
+        route (:model-route res)]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= "heavy" (:model res)) "the requested alias stays the audit label")
+    (is (= fable (:model-canonical res) (:chosen route)))
+    (is (= ["--model" fable] (:model-args res)))
+    (is (= "heavy" (:alias route)))
+    (is (= [[fable 1 "ok"] [astra 1 "ok"]] (map (juxt :canonical :rank :status) (:candidates route))))
+    (is (< (abs (- 0.72 (:remaining (first (:candidates route))))) 1e-9))
+    (is (string? (:reason route)))
+    (is (empty? (filter mutating? (calls log))) "a preview mutates nothing")
+    (is (zero? (ledger-count dir)))
+    (is (= [] (leaked-secrets dir (:out proc) (:err proc))))
+    (testing "larger remaining fraction wins at equal rank, and the model args follow the choice"
+      (spit (str (fs/path dir "usage-fixture.edn")) (pr-str (usage-body {:anthropic-used 90.0 :codex-used 40})))
+      (fs/delete-tree (usage-cache-dir dir))
+      (let [other (preview (assoc env "ORCH_ASSIGNMENT_ROOT" (str dir)) "pi-heavy")]
+        (is (= astra (get-in (result other) [:result :model-route :chosen])))
+        (is (= ["--model" astra] (get-in (result other) [:result :model-args])))))
+    (testing "a model-scoped window that matches a candidate gates it"
+      (spit (str (fs/path dir "usage-fixture.edn")) (pr-str (usage-body {:anthropic-used 10.0 :codex-used 80 :scoped 100.0})))
+      (fs/delete-tree (usage-cache-dir dir))
+      (is (= astra (get-in (result (preview env "pi-heavy")) [:result :model-route :chosen]))
+          "the fable scope is exhausted, so the rank-1 sibling is chosen"))))
+
+(deftest routing-filters-candidates-by-the-resolved-kind
+  (let [fixture (routed-fixture (usage-body {:anthropic-used 28.0 :codex-used 40}) {} heavy-persona)
+        env (:env fixture) dir (:dir fixture)
+        preview #(:result (result (call! env "task" "run" % "--task" "x" "--print-prompt")))]
+    (let [claude (preview "claude-heavy") codex (preview "codex-heavy")]
+      (is (= [fable] (map :canonical (get-in claude [:model-route :candidates]))) "claude sees only anthropic")
+      (is (= ["--model" "fable"] (:model-args claude)) "native claude spelling")
+      (is (= [astra] (map :canonical (get-in codex [:model-route :candidates]))) "codex sees only openai-codex")
+      (is (= ["--model" "gpt-6-astra"] (:model-args codex)) "native codex spelling"))
+    (testing "an exhausted own-provider candidate refuses even when the other provider has credit"
+      (spit (str (fs/path dir "usage-fixture.edn")) (pr-str (usage-body {:anthropic-used 100.0 :codex-used 5})))
+      (fs/delete-tree (usage-cache-dir dir))
+      (let [proc (call! env "task" "start" "claude-heavy" "--task" "filtered")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"no candidate of model alias 'heavy' has allowance for kind claude" (:out proc)) (:out proc))
+        (is (str/includes? (:out proc) fable))
+        (is (not (str/includes? (:out proc) astra)) "the codex candidate is filtered, not listed")
+        (is (zero? (ledger-count dir)))
+        (is (empty? (filter mutating? (calls (:log fixture)))))))))
+
+(deftest routed-start-records-the-route-and-injects-the-chosen-canonical
+  (let [{:keys [env dir log env-file] :as fixture} (routed-fixture (usage-body {:anthropic-used 90.0 :codex-used 40}) {} heavy-persona)
+        proc (call! env "task" "start" "pi-heavy" "--task" "routed")
+        envelope (:result (result proc))
+        entry (ledger-entry* dir (:task envelope))
+        argv (vec (start-native-args log))]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= astra (:chosen (:model-route envelope))) "the exhausted-ish anthropic loses on remaining fraction")
+    (is (= (:model-route envelope) (:model-route entry)) "envelope and ledger agree")
+    (is (= {:model "heavy" :model-canonical astra :model-args ["--model" astra]}
+           (select-keys entry [:model :model-canonical :model-args])))
+    (is (= astra (flag-value argv "--model")) "the chosen canonical ID is what the harness receives")
+    (is (= astra (injected-env env-file "HERDR_ORCH_MODEL")) "HERDR_ORCH_MODEL is the canonical ID, not the alias")
+    (is (= [] (leaked-secrets dir (:out proc) (:err proc))))
+    (testing "oh task status reports the route"
+      (let [status (call! env "task" "status" (:task envelope))]
+        (is (= astra (get-in (result status) [:result :model-route :chosen])) (:out status))))
+    (testing "a string model carries no :model-route"
+      (let [{env2 :env dir2 :dir} (routed-fixture (usage-body {:anthropic-used 1.0 :codex-used 1}))
+            p (call! env2 "task" "start" "worker" "--model" "opus" "--task" "string")
+            e (ledger-entry* dir2 (get-in (result p) [:result :task]))]
+        (is (zero? (:exit p)) (:out p))
+        (is (not (contains? e :model-route)))
+        (is (not (contains? (:result (result p)) :model-route)))))))
+
+(deftest routed-launch-without-credentials-uses-the-unknown-allowance-path
+  (let [{:keys [env dir]} (fake-env {} heavy-persona)
+        proc (call! env "task" "run" "pi-heavy" "--task" "x" "--print-prompt")
+        route (route-of proc)]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= fable (:chosen route)) "rank 1, first in config order")
+    (is (= [["unknown" "missing"] ["unknown" "missing"]] (map (juxt :status :reason) (:candidates route))))
+    (is (re-find #"unknown" (:reason route)))
+    (is (not (made-usage-call? dir)) "with no credential there is no fetch")))
+
+(deftest a-missing-fixture-response-never-falls-through-to-the-network
+  (let [{:keys [env dir]} (routed-fixture {} {} heavy-persona)
+        proc (call! env "task" "run" "pi-heavy" "--task" "x" "--print-prompt")
+        route (route-of proc)]
+    (is (zero? (:exit proc)) (:out proc))
+    (is (= [["unknown" "network"] ["unknown" "network"]] (map (juxt :status :reason) (:candidates route)))
+        "the fixture raised for the real URL; the launch still proceeds on unknown allowance")
+    (is (= [] (leaked-secrets dir (:out proc) (:err proc))))))
+
+(deftest routed-refusal-names-each-candidate-and-mutates-nothing
+  (let [{:keys [env dir log]} (routed-fixture (usage-body {:anthropic-used 100.0 :codex-used 100}) {} heavy-persona)
+        proc (call! env "task" "start" "pi-heavy" "--task" "refused")]
+    (is (= 1 (:exit proc)))
+    (let [out (:out proc)]
+      (is (re-find #"no candidate of model alias 'heavy' has allowance" out) out)
+      (is (str/includes? out (str fable " (rank 1): 0% remaining")) out)
+      (is (str/includes? out (str astra " (rank 1): 0% remaining")) out)
+      (is (not (str/includes? out "ok]")) "an ok status is not annotated"))
+    (is (= [fable astra] (map :canonical (get-in (result proc) [:error :data :candidates]))))
+    (is (zero? (ledger-count dir)))
+    (is (not (fs/exists? (fs/path dir ".tmp" "herdr-orch" "ledger" "indices"))) "no index allocated")
+    (is (empty? (filter mutating? (calls log))) "no pane, tab or agent call")
+    (is (= [] (leaked-secrets dir (:out proc) (:err proc))))
+    (testing "the refused preview fails the same way"
+      (is (= 1 (:exit (call! env "task" "run" "pi-heavy" "--task" "x" "--print-prompt")))))
+    (testing "control: with allowance restored the same launch succeeds"
+      (spit (str (fs/path dir "usage-fixture.edn")) (pr-str (usage-body {:anthropic-used 10.0 :codex-used 95})))
+      (fs/delete-tree (usage-cache-dir dir))
+      (is (zero? (:exit (call! env "task" "start" "pi-heavy" "--task" "allowed")))))))
+
+(deftest reserve-excludes-a-candidate-at-or-below-it
+  (let [{:keys [env dir]} (routed-fixture (usage-body {:anthropic-used 28.0 :codex-used 40}) {} heavy-persona)
+        project-config (fs/path dir ".agents" "subagents" "config.edn")]
+    (fs/create-dirs (fs/parent project-config))
+    ;; 72 % remaining against a 0.8 reserve: the anthropic candidate is excluded.
+    (spit (str project-config) (pr-str {:providers {"anthropic" {:usage :anthropic-oauth :credentials [:pi :claude] :cache-ttl-s 300 :reserve 0.8}
+                                                    "openai-codex" {:usage :codex-oauth :credentials [:pi :codex] :cache-ttl-s 60}
+                                                    "lemonade" {}}}))
+    (is (= astra (get-in (result (call! env "task" "run" "pi-heavy" "--task" "x" "--print-prompt")) [:result :model-route :chosen])))))
+
+(deftest explicit-models-and-inherited-canonical-ids-bypass-usage-entirely
+  (let [personas (assoc heavy-persona "modelless" modelless-persona)
+        run (fn [overrides & argv]
+              (let [fixture (routed-fixture (usage-body {:anthropic-used 28.0 :codex-used 40}) overrides personas)
+                    proc (apply call! (:env fixture) argv)]
+                (assoc fixture :proc proc)))]
+    (testing "controls: a vector alias, requested or inherited, does make the call"
+      (is (made-usage-call? (:dir (run {} "task" "run" "pi-heavy" "--task" "x" "--print-prompt"))))
+      (is (made-usage-call? (:dir (run {"HERDR_ORCH_MODEL" "heavy" "HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "modelless" "FAKE_PARENT_LABEL" "worker-1"}
+                                       "task" "start" "modelless" "--task" "x" "--spawns" "none")))))
+    (testing "a canonical ID, a string alias and an inherited canonical ID make no usage call"
+      (doseq [[label overrides argv]
+              [["explicit canonical ID" {} ["task" "run" "pi-heavy" "--model" fable "--task" "x" "--print-prompt"]]
+               ["explicit string alias" {} ["task" "run" "pi-heavy" "--model" "opus" "--task" "x" "--print-prompt"]]
+               ["inherited canonical ID" {"HERDR_ORCH_MODEL" astra "HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "modelless" "FAKE_PARENT_LABEL" "worker-1"}
+                ["task" "start" "modelless" "--task" "x" "--spawns" "none"]]]]
+        (let [{:keys [proc dir]} (apply run overrides argv)]
+          (is (zero? (:exit proc)) (str label ": " (:out proc)))
+          (is (not (made-usage-call? dir)) label)
+          (is (not (contains? (:result (result proc)) :model-route)) label))))
+    (testing "a grandchild inherits the chosen canonical ID and does not route again"
+      (let [{:keys [env-file proc] :as parent} (run {} "task" "start" "pi-heavy" "--task" "parent")
+            chosen (injected-env env-file "HERDR_ORCH_MODEL")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= fable chosen))
+        (let [child (routed-fixture (usage-body {:anthropic-used 28.0}) {"HERDR_ORCH_MODEL" chosen "HERDR_ORCH_PERSONA" "worker" "HERDR_ORCH_SPAWNS" "modelless" "FAKE_PARENT_LABEL" "worker-1"} personas)
+              p (call! (:env child) "task" "start" "modelless" "--task" "grandchild" "--spawns" "none")
+              entry (ledger-entry* (:dir child) (get-in (result p) [:result :task]))]
+          (is (zero? (:exit p)) (:out p))
+          (is (= chosen (:model entry)))
+          (is (not (contains? entry :model-route)))
+          (is (not (made-usage-call? (:dir child)))))))))
+
+(deftest measurement-launch-routes-before-allocation
+  (let [fixture (measurement-fixture)
+        dir (str (:dir fixture))
+        auth (fs/path dir "home" ".pi" "agent" "auth.json")]
+    (fs/create-dirs (fs/parent auth))
+    (spit (str auth) (json/generate-string {:anthropic {:access anthropic-secret :expires far-future-ms}
+                                            :openai-codex {:access codex-secret :expires far-future-ms}}))
+    (let [use! (fn [usage] (spit (str (fs/path dir "usage-fixture.edn")) (pr-str usage)) (when (fs/exists? (usage-cache-dir dir)) (fs/delete-tree (usage-cache-dir dir))))
+          preview #(measure! fixture "run" "--model" "heavy" "--print-prompt" "--task" "x")]
+      (use! (usage-body {:anthropic-used 28.0 :codex-used 40}))
+      (let [proc (preview) res (:result (result proc))]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= fable (get-in res [:model-route :chosen]) (:model-canonical res)))
+        (is (= ["--model" fable] (:model-args res)))
+        (is (= "heavy" (:model res))))
+      (testing "a refused route fails a measurement start before any allocation"
+        (use! (usage-body {:anthropic-used 100.0 :codex-used 100}))
+        (let [proc (measure! fixture "start" "--model" "heavy" "--task" "x")]
+          (is (= 1 (:exit proc)))
+          (is (re-find #"no candidate of model alias 'heavy' has allowance" (:out proc)) (:out proc))
+          (is (no-measurement-allocation? dir (:log fixture) fixture))))
+      (testing "an explicit canonical ID makes no usage call"
+        (use! (usage-body {:anthropic-used 28.0}))
+        (is (zero? (:exit (measure! fixture "run" "--model" fable "--print-prompt" "--task" "x"))))
+        (is (not (made-usage-call? dir)))))))
+
+(deftest secret-probe-detects-a-planted-token
+  (let [{:keys [dir]} (routed-fixture {})]
+    (is (= [anthropic-secret] (leaked-secrets dir (str "log " anthropic-secret))) "known-bad control: a leaked token is found")
+    (is (= [codex-secret] (do (spit (str (fs/path dir "stray.txt")) codex-secret) (leaked-secrets dir))) "a stray file is found")
+    (is (= [] (leaked-secrets (:dir (routed-fixture {})))) "clean control")))
+
+;; The repository's own home override (`subagents/config.edn`, deployed to `~/.agents/subagents`)
+;; replaces whole `:harnesses` rows, so it must restate each kind's `:providers`; otherwise a
+;; routed weight alias can choose another provider's model for that kind.
+(deftest repository-home-override-keeps-the-kind-provider-filter
+  (let [parse #(core/parse-config % (slurp (str (fs/path root %))))
+        shipped (parse "skills/herdr-orch/subagents/config.edn")
+        home (parse "subagents/config.edn")
+        merged (core/validate-merged-config! (core/merge-config shipped home))]
+    (testing "control: the packaged kinds carry the filter, so the home entries replacing them must too"
+      (is (= #{"anthropic"} (get-in shipped [:harnesses :claude :providers])))
+      (is (= #{"openai-codex"} (get-in shipped [:harnesses :codex :providers]))))
+    (doseq [kind (keys (:harnesses home))]
+      (is (= (get-in shipped [:harnesses kind :providers]) (get-in home [:harnesses kind :providers]))
+          (str kind " restates the packaged provider set")))
+    (is (seq (:harnesses home)) "positive control: the override has harness entries")
+    (testing "merged shipped + home: a kind still sees only its own provider's candidates"
+      (is (= ["anthropic/claude-fable-5-1"] (map :canonical (core/candidates merged "claude" "heavy"))))
+      (is (= ["openai-codex/gpt-6-astra"] (map :canonical (core/candidates merged "codex" "heavy"))))
+      (is (= ["--permission-mode" "auto"] (core/harness-extra-args merged "claude")) "the override's extra args survive"))
+    (testing "known-bad control: an override that drops :providers loses the filter"
+      (let [bad (core/merge-config shipped {:harnesses {:claude (dissoc (get-in home [:harnesses :claude]) :providers)}})]
+        (is (< 1 (count (core/candidates bad "claude" "heavy"))))))))
