@@ -23,7 +23,7 @@
     (is (str/includes? persona-text "Do not create, modify, or delete repository files."))
     (is (str/includes? persona-text "Every finding needs evidence that the named range introduced or exposed it."))
     (is (str/includes? persona-text "For a verified clean or empty range, return `No issues found.` and `APPROVED`."))
-    (is (= (str (fs/path root "skills/herdr-orch/traits/grounded.md"))
+    (is (= (str (fs/path root "skills/herdr-orch/traits/grounded/prompt.md"))
            (:path (first (filter #(= "grounded" (:trait %)) trait-sources)))))
     (is (not (fs/exists? (fs/path root "skills/herdr-orch/traits/no-bullshit.md")))))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"no-bullshit.*not found"
