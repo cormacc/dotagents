@@ -7,18 +7,9 @@ Talk like smart caveman. Same brain, fewer tokens.
 Makes the model answer first and cut the ceremony: no greeting, hedging,
 filler, recap, or closer. Articles drop when the sentence still reads in one
 pass. Code, commands, paths, numbers, and exact error strings never change.
-Result depends on model and workload. Measured once on the 3.1.0 skill text (`evals/snapshots/results.json`: claude-opus-5-5, ten prompts, single run, output length only, tiktoken o200k approximation): caveman 3% fewer output tokens at the median than a plain `Answer concisely.` control, inside the noise; ultracave 35%. No quality-equivalence claim is published. Mode persists until changed or stopped.
+Result depends on model and workload. Measured once on the 3.1.0 skill text (`evals/snapshots/results.json`: claude-opus-5-5, ten prompts, single run, output length only, tiktoken o200k approximation): caveman 3% fewer output tokens at the median than a plain `Answer concisely.` control, inside the noise. No quality-equivalence claim is published. Mode persists until changed or stopped.
 
-Caveman is one of two sibling skills:
-
-| Skill | Command | What change |
-|-------|---------|-------------|
-| `caveman` | `/caveman` | The voice. Default. Answer first, fluff gone, every fact kept. |
-| `ultracave` | `/ultracave` | Grammar stripped. Fragments, one word when one word is enough, each fact once. |
-
-`/caveman ultra` also works as an alias.
-
-Auto-clarity: every skill drops to normal prose for security warnings,
+Auto-clarity: caveman drops to normal prose for security warnings,
 irreversible-action confirmations, step sequences a fragment could scramble,
 and a user who repeats a question. Resumes after the clear part.
 
@@ -27,7 +18,6 @@ and a user who repeats a question. Resumes after the clear part.
 ```
 /caveman              # the voice (default)
 /caveman status       # show current mode without changing it
-/ultracave            # grammar stripped
 stop caveman          # back to normal prose
 ```
 
@@ -37,8 +27,7 @@ hosts answer from the conversation and mark it `(not tracked by this host)`.
 Want Claude Code sessions to start with normal prose? Set
 `{"defaultMode":"manual"}` in `.caveman.json` for one project or
 `~/.config/caveman/config.json` for your user. You can also set
-`CAVEMAN_DEFAULT_MODE=manual`. Then `/caveman` activates the voice and
-`/ultracave` selects ultracave. Stop persists across compaction and resume; a
+`CAVEMAN_DEFAULT_MODE=manual`. Then `/caveman` activates the voice. Stop persists across compaction and resume; a
 fresh session starts off again. This startup policy is Claude Code-only:
 OpenCode keeps its caveman default because the installer also supplies static
 activation rules.
@@ -53,11 +42,7 @@ Normal prose:
 caveman:
 > New object ref each render, so React re-renders. Wrap the prop in `useMemo`.
 
-ultracave:
-> Inline object prop, new ref, re-render. `useMemo`.
-
 ## See also
 
 - [`SKILL.md`](./SKILL.md): full LLM-facing instructions
-- [`../ultracave/`](../ultracave/): the sibling skill
 - [Caveman README](../../README.md): repo overview, install, benchmarks

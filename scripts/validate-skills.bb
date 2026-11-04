@@ -12,8 +12,6 @@
 ;; which the Agent Skills specification does not define -- it defines exactly
 ;; name, description, license, compatibility, metadata and allowed-tools, and
 ;; nominates `metadata` as the extension slot. Fixing that belongs upstream.
-;; Upstream ultracave (caveman) carries `disable-model-invocation:`,
-;; which pi honours but the specification does not define.
 
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [shell]]
@@ -25,7 +23,7 @@
 ;; adopted and locally rewritten, so this repository owns their frontmatter and
 ;; they gate like first-party skills. The adapted caveman skill also gates;
 ;; its upstream provenance metadata is retained. dirge is first-party.
-(def vendored #{"gitlab-cli-skills" "herdr" "ultracave"})
+(def vendored #{"gitlab-cli-skills" "herdr"})
 
 (defn parse-args [args]
   (loop [a args m {:skills-dir "skills" :python "python3"}]
