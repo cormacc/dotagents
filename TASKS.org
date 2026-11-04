@@ -16,7 +16,6 @@
   - [[#herdr-orch-llm-usage-limit-fallback][herdr-orch: LLM usage limit fallback]]
   - [[#evaluate-rpiv-pi-workflow-setup][Evaluate rpiv-pi workflow setup]]
   - [[#explore-agent-memory-options][Explore agent memory options]]
-  - [[#review-herdr-tsk-plugin-for-inspiration-for-org-tasks][Review herdr tsk plugin for inspiration for org-tasks]]
 - [[#improvements][Improvements]]
   - [[#herdr-plugin-wrapper-for-herdr-orch][herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
@@ -27,11 +26,8 @@
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
 - [[#agent-feedback][Agent feedback]]
-  - [[#hand-composed-edit-hazards-instruction-rule-additions][Hand-composed edit hazards: instruction rule additions]]
   - [[#guard-against-a-parallel-tool-batch-that-writes-and-reads-the-same-path][Guard against a parallel tool batch that writes and reads the same path]]
-  - [[#org-plan-check-non-path-identifiers-in-change-records][org-plan: check non-path identifiers in change-records]]
   - [[#stop-parallel-claude-trigger-evals-picking-another-workers-candidate][Stop parallel claude trigger evals picking another worker's candidate]]
-  - [[#align-skill-creator-eval-layout-with-benchmark-aggregation][Align skill-creator eval layout with benchmark aggregation]]
 
 * Explorations
 
@@ -101,23 +97,6 @@ Here's one https://github.com/elpapi42/pi-observational-memory
 Here's another one that's getting some buzz recently:
 https://github.com/TencentCloud/TencentDB-Agent-Memory/blob/feat/server_team/INSTALL.md
 
-** DONE Review herdr tsk plugin for inspiration for org-tasks
-CLOSED: [2026-11-04 Wed 00:53]
-:PROPERTIES:
-:CUSTOM_ID: ee586514-fd6b-42b0-b219-4fd382ace366
-:CREATED: [2026-10-08 Thu 19:11]
-:STARTED: [2026-11-04 Wed 00:51]
-:END:
-:LOGBOOK:
-- Created [2026-10-08 Thu 19:11]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:51]
-- State "DONE" from "STARTED" [2026-11-04 Wed 00:53]
-:END:
-#+IMPORT: [[plan:2026-11-04-tsk-prior-art.org]]
-https://github.com/smarzban/tsk
-It supports multiple items in progress and some other QOL features that could be worth looking at.
-As a Herdr plugin, tsk is also prior art for the deferred session-tree pane in 9f667467 (herdr plugin wrapper for herdr-orch).
-
 ** TODO [#C] Re-evaluate pi-context with a week of session data (after 2026-11-10) :pi:
 :PROPERTIES:
 :CUSTOM_ID: 14cd586c-6010-4b4f-9578-aa88284ec5ba
@@ -127,21 +106,6 @@ As a Herdr plugin, tsk is also prior art for the deferred session-tree pane in 9
 - Created [2026-11-03 Tue 20:06]
 :END:
 pi-context 2.3.0 is installed for all projects (pinned in pi/settings.json) after a one-session trial on 2026-11-03. Trial session 2026-11-03T17-10-13 (gpt-6.1-sol, 311 requests, 3 compactions) had mean context per request 103k against 210k-216k for baseline sessions 2026-11-03T00-22 and 2026-11-03T08-28. To revisit: run the analyze:session tool from a checkout of github.com/ttttmr/pi-context on sessions from the following week, in several projects, and compare mean context per request, peak context, total tokens, compaction count, and re-reads after compaction. Baseline and trial reports and the comparison script are in .tmp/pi-context-trial/ and .tmp/pi-context-compare.clj (scratch; regenerate if gone). The context-mode alternative was rejected because its Pi adapter does not intercept read, bash, or codemode output. In orchestrator sessions (root sessions that spawn through oh), also check each compaction made while a round was uncaptured: the summary must keep the round UUID, the reason for dispatch, and the acceptance criteria. If summaries drop them, add a rule to the herdr-orch Lifecycle bullet (deferred on 2026-11-03 because pi-context's summary contract already asks for running processes and the next step). Undeclared packages context-mode 1.0.146, @ogulcancelik/pi-herdr 0.4.0 and pi-zellij-tools 0.1.4 were removed from ~/.pi/agent/npm on 2026-11-03.
-
-** DONE Identify alternatives to pi-web-access (dependency security advisories) :pi:
-CLOSED: [2026-11-04 Wed 00:44]
-:PROPERTIES:
-:CUSTOM_ID: 3d7ea3e7-fc22-49a1-824d-3c400671ee70
-:CREATED: [2026-11-03 Tue 21:26]
-:STARTED: [2026-11-04 Wed 00:42]
-:END:
-:LOGBOOK:
-- Created [2026-11-03 Tue 21:26]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:42]
-- State "DONE" from "STARTED" [2026-11-04 Wed 00:44]
-:END:
-#+IMPORT: [[plan:2026-11-04-web-access-advisories.org]]
-On 2026-11-03, npm audit in ~/.pi/agent/npm reported 8 advisories (1 critical, 5 high, 2 moderate), all through @modelcontextprotocol/sdk@1.32.1, which pi-web-access@0.46.0 pins exactly: proxy-addr (critical, IP spoofing), hono, body-parser, fast-uri, ip-address, zod (high), @hono/node-server and qs (moderate). Six of the eight are in the SDK HTTP server stack (express, hono and their dependencies). pi-web-access imports only the SDK client (client/streamableHttp) and the stdio server, and none of the vulnerable packages directly, so those six are probably not reachable; this is an inference from imports, not a test. zod (memory exhaustion on oversized input) and fast-uri (host confusion, via ajv) are in the client path. npm reports a fix for all eight (fixAvailable: true); not tested. Before replacing the package: check whether a newer pi-web-access or an in-range dependency update clears the advisories, and whether upstream (github.com/nicobailon/pi-web-access) tracks them. If not, compare alternatives on the functions in use: web_search, fetch_content with stored responses (get_search_content), source_check, and the configured search providers (Exa served web_search on 2026-11-03).
 
 ** TODO [#B] Reconcile Pi managed npm dependencies after advisory research :security:
 :PROPERTIES:
@@ -314,73 +278,6 @@ Aggregate for residue left by a spawn that fails before its agent starts, plus s
 * Chores
 * Agent feedback
 
-** DONE Hand-composed edit hazards: instruction rule additions :agents_md:
-CLOSED: [2026-11-04 Wed 00:23]
-:PROPERTIES:
-:CUSTOM_ID: fd2acfc6-e7be-4487-985f-9176ce9e5b94
-:CREATED: [2026-08-27 Thu 14:22]
-:STARTED: [2026-11-04 Wed 00:23]
-:END:
-:LOGBOOK:
-- Created [2026-08-27 Thu 14:22]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:23]
-- State "DONE" from "STARTED" [2026-11-04 Wed 00:23]
-:END:
-Two near-misses from the same session both trace to one cause: a large hand-composed `newText` block was typed from memory rather than copied. Each child proposes a rule addition to a different instruction file, and both should land together so the pair is reviewed as one policy rather than two isolated warnings.
-
-Verified 2026-08-27 that neither rule is in place: `home/AGENTS.md` contains no `edits[]` occurrence (control: 55 list items present), and `skills/org-tasks/SKILL.md` contains no `newText` occurrence (control: 30 "org" matches).
-*** DONE Edit tool: pre-submit self-check for stray edits[] keys :skill_org_tasks:agents_md:
-CLOSED: [2026-11-04 Wed 00:23]
-:PROPERTIES:
-:CUSTOM_ID: 81a6a750-4187-4f0c-a8c2-2629014e915c
-:CREATED: [2026-08-20 Thu 10:54]
-:STARTED: [2026-11-04 Wed 00:23]
-:END:
-:LOGBOOK:
-- Created [2026-08-20 Thu 10:54]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:23]
-- State "DONE" from "STARTED" [2026-11-04 Wed 00:23]
-:END:
-Twice in one session (nmd/infra/playbooks, secret-management record), a call to the Edit tool included an extra, schema-invalid key (e.g. `newText_unused`) alongside a valid `{oldText, newText}` entry inside `edits[]`. The tool silently tolerated it and applied the edit correctly, but AGENTS.md already prohibits adding keys absent from a declared schema, warning that a tool can silently accept an unknown field and corrupt the payload -- this happened despite that existing rule already being in context, so restating it alone did not prevent recurrence.
-
-Proposed rule addition to home/AGENTS.md (Output and structured edits section): before submitting an Edit call with one or more entries, re-scan every object in `edits[]` and confirm it contains exactly `{oldText, newText}` and no other key.
-
-Origin:
-- cwd: /home/cormacc/nmd/infra/playbooks
-- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
-- timestamp: [2026-08-20 Thu 10:50]
-- sender: agent
-
-Evidence:
-- One instance while editing design/log/2026-08-17-implement-secret-management.org Decisions section (stray `newText_unused` key).
-- A second instance shortly after while editing the same file's Shipped/Gotchas bullets.
-- Neither call errored or was rejected; both edits applied correctly despite the invalid key.
-*** DONE org-tasks: copy heading state tokens verbatim during bulk newText edits :skill_org_tasks:
-CLOSED: [2026-11-04 Wed 00:23]
-:PROPERTIES:
-:CUSTOM_ID: d53b3498-3764-4ba5-85ea-4c7e40349f12
-:CREATED: [2026-08-20 Thu 10:54]
-:STARTED: [2026-11-04 Wed 00:23]
-:END:
-:LOGBOOK:
-- Created [2026-08-20 Thu 10:54]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:23]
-- State "DONE" from "STARTED" [2026-11-04 Wed 00:23]
-:END:
-While trimming a plan task's body in a change-record (nmd/infra/playbooks, design/log/2026-08-17-implement-secret-management.org), a large hand-composed `newText` block happened to span a heading line containing a TODO-state keyword. The heading was retyped as part of composing the replacement text, and the state keyword was mistyped from `STARTED` to `DONE`. This was caught in review before commit, but org-tasks explicitly forbids hand-editing task lifecycle state outside `ot status` -- this was a near-miss of exactly that violation, caused by manually retyping a heading rather than copying it.
-
-Proposed rule addition to skills/org-tasks/SKILL.md: when composing a large `newText` block that happens to include or span a heading line carrying a TODO-state keyword (TODO/STARTED/WAITING/DONE/CANCELLED), copy that heading token verbatim from the most recent read rather than retyping it from memory.
-
-Origin:
-- cwd: /home/cormacc/nmd/infra/playbooks
-- git: git@git.nmd.ie:infrastructure/playbooks.git @ develop
-- timestamp: [2026-08-20 Thu 10:50]
-- sender: agent
-
-Evidence:
-- The mistake was caught immediately after the edit by a grep for the target heading text, then reverted with a follow-up edit before any commit.
-- No incorrect state was ever committed or persisted; the near-miss was purely in an intermediate working-tree edit.
-
 ** STARTED Guard against a parallel tool batch that writes and reads the same path :agents_md:
 :PROPERTIES:
 :CUSTOM_ID: 503585ee-3c52-45ed-b5aa-9e99e5a91ed4
@@ -405,31 +302,6 @@ Evidence:
 - RETROLOG.org 2026-10-01 records the same failure ("Parallel read and write"), after which the rule was rewritten as an ordering rule.
 - 2026-10-22 (dotagents, herdr-orch change-record closure): one batch ran an Edit and a bash ~sed -i~ line deletion on the same record. The Edit wrote content from its own earlier read, so the deletion was lost without an error; a diff against a snapshot showed it.
 
-** DONE org-plan: check non-path identifiers in change-records :skill:org_plan:
-CLOSED: [2026-11-04 Wed 01:19]
-:PROPERTIES:
-:CUSTOM_ID: 58d81bcd-bb15-4835-9737-da8fe64dd93b
-:CREATED: [2026-10-14 Wed 16:22]
-:STARTED: [2026-11-04 Wed 00:42]
-:END:
-:LOGBOOK:
-- Created [2026-10-14 Wed 16:22]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:42]
-- State "DONE" from "STARTED" [2026-11-04 Wed 01:19]
-:END:
-Add an advisory change-record check that resolves backticked non-path identifiers (keywords, auto-resolved =::= keywords, qualified and simple symbols, and namespaces) against tracked source. Report unresolved names for review without failing: removed identifiers, rejected alternatives and library internals can remain unresolved by design. Include a positive control in each run.
-
-The constrained path-citation check already exists as =inline-path-dangling= in =skills/org-tasks/scripts/src/org_tasks/doctor.clj=. Reuse that report rather than implementing another path checker; this task covers only the remaining symbol and namespace analysis.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: git@git.nmd.ie:products/connect/portal @ fail-fast
-- timestamp: [2026-10-14 Wed 16:22]
-- sender: agent
-
-Evidence:
-Checking a 330-line change-record against its changeset needed a one-off Babashka script (portal `.tmp/check-record-ids.clj`, gitignored) that runs `git grep -P` over `src` and `test` for each backticked span. It found one stale identifier (a renamed test helper) and confirmed the rest; a second pass verified the record after edits. The unresolved residue was removed or rejected names and Nexus/Replicant internals, which needed a manual check in the library jars.
-
 ** STARTED Stop parallel claude trigger evals picking another worker's candidate :skill:skill_creator:
 :PROPERTIES:
 :CUSTOM_ID: c99fabd6-fef3-41b4-9db9-5c4177c0cfd1
@@ -442,39 +314,3 @@ Checking a 330-line change-record against its changeset needed a one-off Babashk
 :END:
 #+IMPORT: [[plan:2026-11-04-trigger-eval-isolation.org]]
 With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.
-
-** DONE Align skill-creator eval layout with benchmark aggregation :skill:skill_creator:
-CLOSED: [2026-11-04 Wed 00:29]
-:PROPERTIES:
-:CUSTOM_ID: 6f8073f2-d6c5-44ef-b088-273a699a2dc3
-:CREATED: [2026-11-03 Tue 01:32]
-:STARTED: [2026-11-04 Wed 00:22]
-:END:
-:LOGBOOK:
-- Created [2026-11-03 Tue 01:32]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:22]
-- State "DONE" from "STARTED" [2026-11-04 Wed 00:29]
-:END:
-The locally maintained skills/skill-creator/references/eval-workflow.md shows grading directly under a configuration, while load_run_results in skills/skill-creator/scripts/aggregate_benchmark.py only discovers configuration/run-N/grading.json. Align the owned workflow instructions with that consumer and make callers check the discovered run count before interpreting an aggregate. Keep the vendored Python implementation unchanged unless deliberately reclassified or fixed upstream. Origin: dotagents; observed during approved Matt Pocock adaptation evaluations on 2026-11-03. Evidence: aggregation of configuration/grading.json exited successfully with an empty runs array; staging the same grades under configuration/run-1/grading.json produced the expected paired runs. The corrected current results are retained in design/log/2026-11-03-apply-matt-pocock-adaptations/evaluations.json.
-
-** DONE Preserve nested imports when record creation migrates children :skill:org_tasks:
-CLOSED: [2026-11-04 Wed 02:11]
-:PROPERTIES:
-:CUSTOM_ID: c60595fa-86fb-4b2b-9c79-43bc7953d910
-:CREATED: [2026-11-04 Wed 01:45]
-:STARTED: [2026-11-04 Wed 01:46]
-:END:
-:LOGBOOK:
-- Created [2026-11-04 Wed 01:45]
-- State "STARTED" from "TODO" [2026-11-04 Wed 01:46]
-- State "DONE" from "STARTED" [2026-11-04 Wed 02:11]
-:END:
-~record create~ resolves migrated child and descendant imports in their original source context and emits ~file:~ links relative to the new record. Missing or out-of-root targets return ~validation~ before either file is written. The existing path sandbox semantics, IDs, states and nesting are preserved; existing-record and dry-run boundaries remain covered.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com/cormacc/dotagents @ main
-- sender: agent
-
-Evidence:
-During the memory-plan migration at e938733, ot doctor reported broken-import for the moved pi-hermes-memory child, resolving design/log/plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org. Replacing that import with the same-directory file link restored doctor error count to zero. The parent record-create result had ok true and absorbedSubtasks true. Named-template and relative imports are tested in normal and nested destination directories. Root reproduced the review's missing-target finding with an existing-target positive control, observed six failures in the new normal/dry-run regression, and verified the fix. Fresh independent closeout review found no issues; the final focused namespace passed 9 tests and 102 assertions.

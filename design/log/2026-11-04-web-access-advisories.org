@@ -1,6 +1,6 @@
 #+TITLE: pi-web-access advisory remediation research
 #+DATE: 2026-11-04 Wed
-#+PARENT: [[task:3d7ea3e7-fc22-49a1-824d-3c400671ee70][Identify alternatives to pi-web-access (dependency security advisories)]]
+#+PARENT: [[archive:3d7ea3e7-fc22-49a1-824d-3c400671ee70][Identify alternatives to pi-web-access (dependency security advisories)]]
 #+SETUPFILE: ../../TASKS.setup.org
 #+STATUS: Complete
 #+NO_SPEC: true
