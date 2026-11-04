@@ -48,8 +48,8 @@ Package herdr-orch as a Herdr plugin so `herdr plugin install cormacc/dotagents/
 - [ ] Setup repairs a plugin-owned dangling or stale link after printing its prior target.
 - [ ] Setup refuses a foreign link and a foreign-parent path, naming the resolved target.
 - [ ] With this machine's nix-managed links in place: doctor classifies both canonical paths healthy (externally managed) and setup no-ops → test:`herdr-plugin` manual linked-flow check.
-- [ ] `resolveTraitsBinary` resolution order is env override `HERDR_ORCH_TRAITS_BIN`, then `~/.agents/skills/herdr-orch/scripts/traits`, then extension-file-relative; first existing wins → test:`pi/extensions/traits/index.test.ts`.
-- [ ] When no traits candidate exists the extension error names all three paths tried → test:`pi/extensions/traits/index.test.ts`.
+- [X] `resolveTraitsBinary` resolution order is env override `HERDR_ORCH_TRAITS_BIN`, then `~/.agents/skills/herdr-orch/scripts/traits`, then extension-file-relative; first existing wins → test:`pi/extensions/traits/index.test.ts`.
+- [X] When no traits candidate exists the extension error names all three paths tried → test:`pi/extensions/traits/index.test.ts`.
 - [X] `oh` preflight requires Herdr >= 0.8.2 → spec:[[proj:skills/herdr-orch/scripts/docs/contract.md]] test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj`. Delivered [2026-08-26 Wed] by task cf561004 at 0.8.2, above this record's original 0.8.0 target.
 - [X] `grep -rn '0\.7\.5' skills/herdr-orch` returns only design-history mentions.
 - [ ] `herdr-plugin/README.md` documents prerequisites, install vs linked-dev flow, and both actions.
@@ -77,6 +77,10 @@ Package herdr-orch as a Herdr plugin so `herdr plugin install cormacc/dotagents/
 - Link classification by realpath equality against the clone root :: one rule serves linked-dev and GitHub-install modes. Measured on this machine: both canonical paths realpath into the live checkout, so linked-dev classifies healthy and setup no-ops. States: healthy, foreign, foreign-parent, plugin-stale, absent.
 - No `[[build]]` entries :: nothing needs building; the install-time no-global-mutation constraint is honoured structurally. Babashka is a documented prerequisite that doctor checks.
 - Traits fallback keeps the live path's priority :: env override, then the canonical home path, then extension-file-relative, per the parent task constraint.
+
+** Shipped
+
+- MODIFIED :: `pi/extensions/traits/README.md` -- launcher resolution uses the environment override, canonical home path, then extension-relative path; packaged traits derive from the launcher's real path, including symlink overrides.
 
 ** Risks
 
@@ -131,10 +135,16 @@ Anti-criteria:
 - Must not: overwrite or rewrite any link the plugin did not create.
 - Must not: download or install binaries.
 
-** TODO [#B] Traits-binary fallback resolution in the Pi extension
+** DONE [#B] Traits-binary fallback resolution in the Pi extension
+CLOSED: [2026-11-04 Wed 00:45]
 :PROPERTIES:
 :CUSTOM_ID: 5b195314-0877-486a-868a-b2acc7554423
 :CREATED: [2026-08-16 Sun 11:59]
+:STARTED: [2026-11-04 Wed 00:22]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:22]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:45]
 :END:
 Acceptance criteria:
 - Resolution order is `HERDR_ORCH_TRAITS_BIN` env override, then `~/.agents/skills/herdr-orch/scripts/traits`, then extension-file-relative `../../../skills/herdr-orch/scripts/traits`; the first existing candidate wins.
@@ -160,7 +170,13 @@ Acceptance criteria:
 
 * Implementation
 
+Traits fallback is delivered independently of the plugin scaffold. Isolated launcher fixtures cover precedence and missing paths; real and symlink launcher expansion plus installed-Pi RPC cases pass with a clean home. Plugin packaging and linked-flow verification remain open.
+
 * Open questions
+
+** OPEN Should the plugin package the Pi orchestration proxy extension as well as traits?
+
+`pi/extensions/herdr-orch/README.md` describes a separate orchestration tool and command surface added after this record. The accepted scope wires only traits; decide whether the proxy belongs in the plugin before extending doctor or setup to manage it.
 
 ** OPEN Add the `herdr-plugin` GitHub topic to cormacc/dotagents for marketplace listing?
 

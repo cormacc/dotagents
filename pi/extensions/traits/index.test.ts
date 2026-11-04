@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createTraitInputHandler, expandTraits, resolveTraitsBinary } from "./index.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -43,9 +44,63 @@ try {
   assert(!packaged.text.includes("%read-only"), `packaged trait did not expand: ${packaged.text}`);
   console.log("ok - the packaged layer is a default, available without project trust");
 
-  const binary = resolveTraitsBinary();
-  assert(binary.endsWith("/.agents/skills/herdr-orch/scripts/traits"), `unexpected binary: ${binary}`);
-  console.log("ok - CLI resolution is anchored under ~/.agents/skills");
+  const binaryRoot = join(root, "binary-resolution");
+  const extensionDirectory = join(binaryRoot, "pi", "extensions", "traits");
+  const envBinary = join(binaryRoot, "env-traits");
+  const home = join(binaryRoot, "home");
+  const cleanHome = join(binaryRoot, "empty-home");
+  const homeBinary = join(home, ".agents", "skills", "herdr-orch", "scripts", "traits");
+  const extensionBinary = join(extensionDirectory, "../../../skills", "herdr-orch", "scripts", "traits");
+  mkdirSync(dirname(homeBinary), { recursive: true });
+  mkdirSync(dirname(extensionBinary), { recursive: true });
+  mkdirSync(cleanHome);
+  writeFileSync(envBinary, "");
+  writeFileSync(homeBinary, "");
+  writeFileSync(extensionBinary, "");
+
+  assert(
+    resolveTraitsBinary(home, { HERDR_ORCH_TRAITS_BIN: envBinary }, extensionDirectory) === envBinary,
+    "environment override should resolve first when it exists",
+  );
+  assert(
+    resolveTraitsBinary(home, {}, extensionDirectory) === homeBinary,
+    "canonical home path should resolve before the extension-relative fallback",
+  );
+  rmSync(homeBinary);
+  assert(
+    resolveTraitsBinary(cleanHome, {}, extensionDirectory) === extensionBinary,
+    "extension-relative fallback should resolve with a clean home",
+  );
+  rmSync(extensionBinary);
+  const missingOverride = join(binaryRoot, "missing-env-traits");
+  try {
+    resolveTraitsBinary(cleanHome, { HERDR_ORCH_TRAITS_BIN: missingOverride }, extensionDirectory);
+    throw new Error("expected unresolved traits binary to throw");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    for (const path of [missingOverride, join(cleanHome, ".agents", "skills", "herdr-orch", "scripts", "traits"), extensionBinary]) {
+      assert(message.includes(path), `missing candidate from resolution error: ${path}`);
+    }
+  }
+  console.log("ok - CLI resolution uses environment, home, and extension-relative candidates with an actionable error");
+
+  const launcher = join(dirname(fileURLToPath(import.meta.url)), "../../../skills/herdr-orch/scripts/traits");
+  const launcherAlias = join(root, "traits-launcher");
+  const savedLauncherOverride = process.env.HERDR_ORCH_TRAITS_BIN;
+  symlinkSync(launcher, launcherAlias);
+  try {
+    for (const [label, binary] of [["real launcher", launcher], ["symlink launcher", launcherAlias]] as const) {
+      process.env.HERDR_ORCH_TRAITS_BIN = binary;
+      const expansion = await expandTraits("%read-only", root, { homeTraits: emptyHome });
+      assert(expansion.resolved.length === 1 && expansion.resolved[0]?.source === "packaged", `${label} should resolve the packaged trait`);
+      assert(expansion.resolved[0]?.trait === "read-only", `${label} should name the packaged trait`);
+      assert(!expansion.text.includes("%read-only"), `${label} did not expand the packaged trait: ${expansion.text}`);
+    }
+  } finally {
+    if (savedLauncherOverride === undefined) delete process.env.HERDR_ORCH_TRAITS_BIN;
+    else process.env.HERDR_ORCH_TRAITS_BIN = savedLauncherOverride;
+  }
+  console.log("ok - packaged traits expand through real and symlink launchers");
 
   const broken = join(root, "broken-traits");
   writeFileSync(broken, "#!/usr/bin/env bash\necho 'synthetic traits failure' >&2\nexit 7\n");

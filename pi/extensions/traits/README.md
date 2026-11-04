@@ -14,9 +14,9 @@ This `%<name>` token is interactive: it expands into the session that types it, 
 
 ## Runtime
 
-The extension invokes the co-installed `herdr-orch` trait launcher. Its path, symlink resolution, and cwd behaviour are owned by [../../../skills/herdr-orch/scripts/docs/contract.md#Standalone trait interpolator CLI](../../../skills/herdr-orch/scripts/docs/contract.md#standalone-trait-interpolator-cli). It requires Babashka and the co-installed dotagents skills tree. There is no availability probe or alternate implementation.
+The extension invokes the co-installed `herdr-orch` trait launcher. It resolves the first existing candidate in this order: `HERDR_ORCH_TRAITS_BIN`, `~/.agents/skills/herdr-orch/scripts/traits`, then `../../../skills/herdr-orch/scripts/traits` relative to this extension file. If no candidate exists, the error names the override and both fallback paths. The packaged layer derives from the selected launcher's real path, so a final-component symlink override uses its co-installed trait store. Its path, symlink resolution, and cwd behaviour are owned by [../../../skills/herdr-orch/scripts/docs/contract.md#Standalone trait interpolator CLI](../../../skills/herdr-orch/scripts/docs/contract.md#standalone-trait-interpolator-cli). It requires Babashka and the co-installed dotagents skills tree.
 
-On an interpolation error, the extension shows a warning and sends the original input unchanged. Unknown tokens are not errors: they remain unchanged without a warning.
+On an interpolation error, including a missing launcher, the extension shows a warning and sends the original input unchanged. Unknown tokens are not errors: they remain unchanged without a warning.
 
 The extension provides no slash commands and has no suggested or default keybindings.
 

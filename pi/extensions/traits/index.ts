@@ -4,8 +4,10 @@ import type {
   InputEventResult,
 } from "@earendil-works/pi-coding-agent";
 import { spawn } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface ResolvedTrait {
   trait: string;
@@ -27,14 +29,31 @@ interface TraitsEnvelope {
   error?: { message?: string };
 }
 
-/** Locate the co-installed CLI through the canonical global skills symlink. */
-export function resolveTraitsBinary(home = homedir()): string {
-  return join(home, ".agents", "skills", "herdr-orch", "scripts", "traits");
+/** Locate the co-installed CLI from an override, the global skills symlink, or this checkout. */
+export function resolveTraitsBinary(
+  home = homedir(),
+  environment: NodeJS.ProcessEnv = process.env,
+  extensionDirectory = dirname(fileURLToPath(import.meta.url)),
+): string {
+  const override = environment.HERDR_ORCH_TRAITS_BIN;
+  const homeBinary = join(home, ".agents", "skills", "herdr-orch", "scripts", "traits");
+  const extensionBinary = join(extensionDirectory, "../../../skills", "herdr-orch", "scripts", "traits");
+  const candidates = [
+    ...(override ? [override] : []),
+    homeBinary,
+    extensionBinary,
+  ];
+  const binary = candidates.find((candidate) => existsSync(candidate));
+  if (binary) return binary;
+
+  throw new Error(
+    `traits binary not found; tried HERDR_ORCH_TRAITS_BIN=${override ?? "(unset)"}, ${homeBinary}, ${extensionBinary}`,
+  );
 }
 
 /** The packaged fragment store ships beside `scripts/` in the installed skill, mirroring `skill-directory` in `cli.clj`. */
 export function resolvePackagedTraits(binary: string): string {
-  return join(dirname(dirname(binary)), "traits");
+  return join(dirname(dirname(realpathSync(binary))), "traits");
 }
 
 export interface TraitExpansionOptions {
