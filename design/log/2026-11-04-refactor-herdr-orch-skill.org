@@ -1,0 +1,151 @@
+#+TITLE: Refactor herdr-orch skill
+#+DATE: 2026-11-04 Wed
+#+PARENT: [[archive:17ddd94d-240d-4058-aa10-f2f7d439a327][Refactor herdr-orch skill]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Completed
+#+SPEC: [[proj:skills/herdr-orch/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/references/context-modes.md]]
+#+SPEC: [[proj:skills/herdr-orch/references/recovery.md]]
+#+SPEC: [[proj:skills/herdr-orch/references/workflow-recipes.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+
+* Intent
+Reduce the instructions loaded for ordinary herdr-orch delegation by extracting conditional mechanics into references. Preserve delegation behaviour, authority boundaries and safety rules.
+
+* Summary
+*Level:* MVP · *Tests:* thorough · *Docs:* full
+
+The core is 22.1% smaller by character count, with context, recovery and process details behind load-before-action references. Implementation was approved by the user's request to select the task and proceed. Baseline: commit ~47ba4d7cbafb6ef1e1b26daefd3293a1d2be07b4~, with ~skills/herdr-orch/SKILL.md~ at 26,826 characters and 6,707 estimated tokens, and [[file:../../skills/herdr-orch/references/workflow-recipes.md]] at 16,031 characters and 4,008 estimated tokens. These are the repository instruction-metrics script's character-based estimates, not measured request usage.
+
+** Scope
+*** In scope
+- Refactor [[file:../../skills/herdr-orch/SKILL.md]] and locally maintained references so the ordinary delegation path is a compact operational core.
+- Reuse canonical mechanics in [[file:../../skills/herdr-orch/scripts/docs/contract.md]], and repair inbound section links in the same change.
+- Map baseline rules to retained text or conditional references; remove historical narration from runtime guidance without deleting durable evidence.
+*** Out of scope
+- CLI, persona, trait, model, configuration or default-behaviour changes.
+- Editing the vendored Herdr skill, relaxing safety rules, or creating a second mechanical contract.
+- A new documentation framework, automated instruction benchmark or live provider experiment.
+
+** Acceptance
+*** Core functionality
+- [X] The core retains an executable spawn, collect, validate and close path using the existing CLI.
+- [X] The ownership map accounts for every baseline rule as retained, moved, mechanically duplicated or historical evidence; any proposed policy deletion needs separate approval.
+- [X] Each conditional reference has an explicit load-before-action trigger in the core, not merely a catalogue link.
+- [X] Ordinary delegation does not require loading fork, measurement, recovery or authoring details.
+- [X] Ownership, nesting, publication, integration and independent-closeout boundaries remain visible in the core.
+*** Edge cases
+- [X] Frontmatter identity and trigger scope are preserved; section links and reference paths resolve, including links in newly added files.
+- [X] Core size decreases against the pinned baseline; the record reports actual core and per-scenario loaded-text deltas without an arbitrary token ceiling or an unmeasured performance claim.
+- [X] Independent review and scenario walkthroughs find no omitted rule, delayed safety condition or contradictory duplicate.
+*** Anti-criteria
+- [X] Must not: change runtime behaviour, grant new mutation authority, or require every extracted reference on every delegation.
+
+** Decisions
+- Use a compact core plus conditionally loaded references :: reuse existing references and contract sections first; add a focused reference only where reuse would force an unrelated large read. Keep each rule and its necessary caveats together. Rejected:
+  - Shortening the current monolith alone: rare branches would still load for ordinary work.
+  - Making the core a bare index: loading the safety boundaries would depend on selecting the right reference before the hazard is visible.
+  - Moving all extracted text into one mandatory reference: this relocates rather than reduces the ordinary loading cost.
+- Preserve instruction meaning, not incident narration :: retain imperatives, negation, exceptions and authority constraints. Existing design history or RETROLOG.org owns examples and benchmark evidence; do not reproduce those examples in another runtime reference.
+
+** Ownership map
+Destinations and load-before-action triggers were recorded before extraction. The baseline paragraph anchors below refer to commit ~47ba4d7cbafb6ef1e1b26daefd3293a1d2be07b4~. Independent review corrected the draft's inaccurate line ranges; paragraph names are the durable audit anchors.
+
+- Entry through 'Definitions are', entry and persona discovery :: retain identity, environment/version guard, executable launch/collect examples, UUID and prompt discipline, interaction model and selected-definition rule in core. Replace raw-wrapper detail with a load-before-raw-control pointer to existing [[file:../../skills/herdr-orch/scripts/README.md]] section 'Raw passthrough'; persona discovery mechanics remain canonical in [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Persona discovery'.
+- 'Harness is', model routing :: retain deployment kind, measured parent harness, per-spawn model dial, tiers, actual resolver/preview and post-spawn evidence in core; remove incident narration only. Existing contract section 'Model resolution' loads before authoring or debugging an override.
+- 'Unknown personas' through 'simplifier', roster, catalogue and delegation selection :: retain in core, including unknown-persona ask, scout-first, broad two-scout localisation, base-analyst and separate simplifier/correctness review. Catalogue discovery mechanics load before authoring/discovering a workflow entry.
+- 'A persona body' through 'When shaping', traits :: retain explicit hashtag forwarding, interactive-expansion distinction, assignment-type selection, debugging and simple pointers. Replace duplicated substitution mechanics with a load-before-authoring-or-composition-diagnosis pointer to existing contract section 'Trait composition' and [[file:../../skills/herdr-orch/references/traits.md]]. The contract owns inline/metadata placement, failure-before-mutation and repeat handling.
+- 'Delegation capability' through the advisor-tier override, nesting and executor strategy :: retain allow-lists, overrides, absolute nesting, root-only continuation, worker/advisor scope, opt-in threshold, cap, tiers and prompt-extra convention. Replace only benchmark narration with the existing [[file:../../skills/herdr-orch/design.org]] section 'History' link; retain light preference, feather caution and unbenchmarked successor caveat.
+- Invocation policy's Context item :: core keeps fresh default, fork request routing, persona-less leaf authority and below-root named allow-list restriction. Exact trigger: before a fork or measurement launch, read [[file:../../skills/herdr-orch/references/context-modes.md]] section 'Launch modes'. Move the full context paragraph there, with relative links rebased; existing contract remains mechanical authority.
+- Invocation policy's Waiting through Lifecycle items :: retain waiting, placement, cardinality, isolation, integration and lifecycle in core without policy deletion.
+- 'Continue when', continuation :: exact trigger: before continuing, or preparing a child expected to continue, read [[file:../../skills/herdr-orch/references/context-modes.md]] section 'Continuation'. Move the full paragraph with context threshold and round-checkpoint caveats there; core retains related-context-only and root-only boundaries.
+- 'For an isolated-server investigation', workflow recipes :: retain isolated-server load-before-allocation pointer; make other listed recipes explicitly load before the corresponding workflow.
+- 'Use --retro' and 'A gated-in child', retro gating/transport :: move the two paragraphs to existing [[file:../../skills/herdr-orch/references/workflow-recipes.md]] section 'Process retrospectives'. Exact trigger: before overriding retro policy or consuming PROCESS candidates, read that section. 'Treat process candidates', completion publication and BLOCKED/FAILED paragraphs retain parent persistence ownership, publication example and status meanings in core.
+- 'For a settled child', 'To retire a newest round' and 'A spawn that exits', recovery :: move unpublished-result, abandon and failed-launch rules to [[file:../../skills/herdr-orch/references/recovery.md]]. Exact trigger: before handling an invalid/unpublished result, using poke/abandon or handling a failed spawn (including retry or cleanup), read that file. Review sharpened the failed-spawn trigger before this wording was applied. Core keeps validated terminal-only completion, read-summary-before-retry and capture-before-close boundaries.
+- 'Capture before' through 'Use explicit IDs', pane/ledger ownership :: retain resource ownership, orphan restriction, bulk per-child checks, ledger maintenance, validated artefact links and explicit IDs in core.
+- Assignment premises :: retain verified ref, no-promote, unverified assumptions, snapshot freshness, pre-change baseline and paired error-cause control. Remove only the historical example in the first paragraph.
+- Trusting a result :: retain consequence classes, bounded probes, attribution, failed-probe stop, independent fresh closeout, two-validator preference, curated-document contradiction probe and unconditional identifier checks in core.
+- Manual fallback :: core requires loading the upstream safety skill and existing contract sections 'Environment' and 'Ledger and completion' before any manual fallback; retain no-ledger/no-publication, capture/owned-pane and resumable BLOCKED caveats. No second manual protocol is created.
+
+The only new runtime references are context modes and recovery: neither existing workflow recipes nor the long mechanical contract is a focused home for those operational branches. Extracted paragraphs retain their original wording except for relative link rebasing and removal of the Context list label; condensed core paragraphs preserve their operational rules.
+
+** Shipped
+- MODIFIED :: ~skills/herdr-orch/SKILL.md~ -- conditional loading without changing the delegation policy or frontmatter.
+- ADDED :: [[file:../../skills/herdr-orch/references/context-modes.md]] and [[file:../../skills/herdr-orch/references/recovery.md]] -- focused operational branches, not replacement mechanical contracts.
+- MODIFIED :: [[file:../../skills/herdr-orch/references/workflow-recipes.md]] -- process gating and transport section.
+- MODIFIED :: [[file:../../skills/herdr-orch/scripts/docs/contract.md]] -- include advisor in the existing retro opt-out list, matching its unchanged persona frontmatter.
+
+* Plan
+** DONE Map instruction ownership and conditional loading
+CLOSED: [2026-11-04 Wed 11:05]
+:PROPERTIES:
+:CUSTOM_ID: 4f63792b-451b-433f-987f-d805f60fe9d5
+:CREATED: [2026-11-04 Wed 10:58]
+:STARTED: [2026-11-04 Wed 11:02]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 10:58]
+- State "STARTED" from "TODO" [2026-11-04 Wed 11:02]
+- State "DONE" from "STARTED" [2026-11-04 Wed 11:05]
+:END:
+
+** DONE Refactor the core and references without changing policy
+CLOSED: [2026-11-04 Wed 11:10]
+:PROPERTIES:
+:CUSTOM_ID: d5e04ae9-8c29-441a-b074-07c217c93763
+:CREATED: [2026-11-04 Wed 10:58]
+:BLOCKED-BY: task:4f63792b-451b-433f-987f-d805f60fe9d5
+:STARTED: [2026-11-04 Wed 11:05]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 10:58]
+- State "STARTED" from "TODO" [2026-11-04 Wed 11:05]
+- State "DONE" from "STARTED" [2026-11-04 Wed 11:10]
+:END:
+
+** DONE Validate loading paths and close the refactor record
+CLOSED: [2026-11-04 Wed 11:16]
+:PROPERTIES:
+:CUSTOM_ID: 7b090e57-6dd7-4820-b407-aa5c83eb9b77
+:CREATED: [2026-11-04 Wed 10:58]
+:BLOCKED-BY: task:d5e04ae9-8c29-441a-b074-07c217c93763
+:STARTED: [2026-11-04 Wed 11:10]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 10:58]
+- State "STARTED" from "TODO" [2026-11-04 Wed 11:10]
+- State "DONE" from "STARTED" [2026-11-04 Wed 11:16]
+:END:
+
+* Implementation
+The core retains the ordinary lifecycle and authority rules. Context modes and recovery have focused references; process gating/transport uses the existing recipe file; trait mechanics use the existing contract. A source-verified correction adds advisor to the contract's retro opt-out list; no runtime setting changes. Independent review found no omitted policy and prompted a sharper failed-spawn trigger. The final fresh reviewer approved static closeout with no policy, link or measurement blocker.
+
+* Validation
+Static document review only. No readiness reproduction, provider benchmark or agent launch for behaviour testing ran. Fresh read-only reviewers audited policy preservation and loading paths; their publications reported no omitted policy or blocking loading defect. They identified inaccurate draft record ranges, a weak failed-spawn trigger and a pre-existing retro opt-out documentation mismatch; those are corrected. Final fresh reviewer ~d117f4a4-a62d-449e-ac6d-5d7aab8c1cd3~ independently approved the corrected tree and recomputed all scenario counts. Earlier independent audits: ~84cdadc1-ed89-4c39-8dbe-72ed9d0755cd~ and ~f9b24e4e-406a-4e6d-9119-0452cb4388a8~. All three published terminal results and were closed; no PROCESS candidates were reported.
+
+** Loading walkthrough and size
+Counts are UTF-16 characters of the herdr-orch guidance selected by each static walkthrough, not observed API requests. Each side includes its complete core. Fork, measurement and continuation conservatively include the complete new context reference; recovery includes its complete reference. Process and investigation use the explicitly named recipe section, not the whole recipe file. Fallback includes the same Environment and Ledger and completion contract sections on both sides. Shared upstream Herdr, persona/trait, debugging and retro skill text is excluded equally from both sides; those unchanged reads are not savings. Estimated tokens sum ceil(characters/4) for each loaded fragment.
+
+| Scenario                 | Before characters | After characters | Delta | Before estimated tokens | After estimated tokens | Static outcome                                                                                         |
+|--------------------------+-------------------+------------------+-------+-------------------------+------------------------+--------------------------------------------------------------------------------------------------------|
+| Ordinary scout           |             26826 |            20901 | -5925 |                    6707 |                   5226 | Core gives run/collect, terminal validation and owner close; no specialised reference                  |
+| Fork                     |             26826 |            23919 | -2907 |                    6707 |                   5981 | Launch modes loads before spawn; Pi-only and completed-turn boundary retained                          |
+| Measurement              |             26826 |            23919 | -2907 |                    6707 |                   5981 | Launch modes loads before launch; supervisor publication, API allow-list and no continue/poke retained |
+| Nested child             |             26826 |            20901 | -5925 |                    6707 |                   5226 | Core retains allow-list, absolute one-level bound and blocking leaf ownership                          |
+| Requested trait          |             26826 |            20901 | -5925 |                    6707 |                   5226 | Core forwards explicit trait; interactive expansion never targets a child                              |
+| Recovery                 |             26826 |            22632 | -4194 |                    6707 |                   5659 | Recovery loads before invalid/unpublished handling, poke/abandon or failed-spawn retry/cleanup         |
+| Process candidate        |             26826 |            21921 | -4905 |                    6707 |                   5481 | Recipe loads before candidate handling; core forbids child persistence                                 |
+| Top-level closeout       |             26826 |            20901 | -5925 |                    6707 |                   5226 | Core requires independent fresh validation; implementing-child self-verification is insufficient       |
+| Missing launcher         |             43777 |            37852 | -5925 |                   10945 |                   9464 | Safety and contract sections load before manual fallback                                               |
+| Isolated investigation   |             28014 |            22089 | -5925 |                    7004 |                   5523 | Isolated recipe loads before resource allocation; no live launch is implied                            |
+| Continuation preparation |             26826 |            23919 | -2907 |                    6707 |                   5981 | Continuation loads before the first assignment when reuse is foreseen, and before every continue       |
+
+Core: 26,826 to 20,901 characters (-5,925; 22.1%), 6,707 to 5,226 estimated tokens. New context reference: 3,018 characters / 755 estimated tokens. New recovery reference: 1,731 / 433. Recipes: 16,031 to 17,052 / 4,008 to 4,263. The ordinary path does not load these references. These text reductions do not establish LLM compliance, speed or answer-quality improvements.
+
+** Checks
+- ~bb scripts/check-section-links.bb~ :: 436 references in 456 files; 0 problems, including new references. No baseline core heading was renamed or removed.
+- ~bb scripts/test-check-section-links.bb~ :: 6 tests, 50 assertions, 0 failures/errors; valid-reference controls and known-bad link cases exercise the checker.
+- ~bb scripts/validate-skills.bb --python .tmp/sc-venv/bin/python~ :: PyYAML 6.0.2; 29 skills, 0 gating failures, 1 unrelated vendored warning.
+- ~bb skills/self-improvement/scripts/compare-instructions.bb --ref 47ba4d7cbafb6ef1e1b26daefd3293a1d2be07b4 -- skills/herdr-orch/SKILL.md skills/herdr-orch/references/workflow-recipes.md~ plus section/file counts :: pinned-baseline measurements; new files have no baseline blob and are counted directly.
+- ~git diff --check~ :: clean. No CLI, persona, trait, model, configuration, default or vendored skill was edited by this refactor.
+- ~ot doctor --format json~ :: 0 errors, 10 advisory warnings across the task graph; no task or record health blocker.
