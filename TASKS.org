@@ -35,38 +35,51 @@
 
 * Explorations
 
-** TODO [#B] herdr-orch: LLM usage limit fallback :skill:herdr_orch:
+** STARTED [#B] herdr-orch: LLM usage limit fallback :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: c3ae685d-bb3c-4329-b233-cfa0604075bc
 :CREATED: [2026-08-11 Tue 17:54]
+:STARTED: [2026-11-04 Wed 00:54]
 :END:
 :LOGBOOK:
 - Created [2026-08-11 Tue 17:54]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:54]
 :END:
 It would be useful for sessions to fallback  after hitting session limits (anthropic -> openai -> local, openai -> anthropic -> local)
 Take a look at https://github.com/luongnv89/ccl, which implements a solution for pi, claude and codex. Evaluate whether we can piggyback on this without breaking our model aliasing etc.
 There's also `agent-router`, which is session limit aware: https://github.com/nidhi-singh02/agent-router
 Also evaluate the subscription-failover handling in sova (https://github.com/Naomarik/sova), folded in from the cancelled task 8e199d7c. Verified [2026-10-20 Tue] at e67e868: herdr-orch has no failover mechanism today (no match in contract.md, subagents/config.edn, or core.clj).
 
-** TODO [#D] Evaluate rpiv-pi workflow setup :pi:
+** STARTED [#D] Evaluate rpiv-pi workflow setup :pi:
 :PROPERTIES:
 :CUSTOM_ID: 95649700-252c-46d1-92fd-584f8b3b6237
 :CREATED: [2026-06-16 Tue 21:03]
+:STARTED: [2026-11-04 Wed 00:56]
 :END:
 :LOGBOOK:
 - Created [2026-06-16 Tue 21:03]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:56]
 :END:
+#+IMPORT: [[plan:2026-11-04-rpiv-evaluation.org]]
 An interesting-looking / opinionated workflow setup for pi.
 Likely to be some clashes with my own setup, but worth evaluating for (partial?) adoption.
 - https://github.com/juicesharp/rpiv-mono
 - https://rpiv-pi.com/
-*** TODO [#D] Check out rpiv-btw :pi:
+
+
+
+*** TODO Decide whether to trial standalone rpiv-btw
 :PROPERTIES:
-:CUSTOM_ID: ec8e6eb3-dcfc-4124-ad1c-17e88d8562b6
+:CUSTOM_ID: 86be0a2b-0097-4b18-9070-506bf85b2bfe
+:CREATED: [2026-11-04 Wed 00:56]
 :END:
-https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without polluting context... sounds useful
-
-
+:LOGBOOK:
+- Created [2026-11-04 Wed 00:56]
+:END:
+Acceptance criteria:
+- Keep the full rpiv-pi workflow uninstalled unless separately approved.
+- Decide whether cross-session question hints within one Pi process are acceptable.
+- Approve a disposable interactive trial on the installed Pi before any persistent package/settings change.
 
 ** STARTED [#C] Explore agent memory options :org:
 :PROPERTIES:

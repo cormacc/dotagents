@@ -1,0 +1,75 @@
+#+TITLE: Evaluate rpiv-pi workflow setup
+#+DATE: 2026-11-04 Wed
+#+PARENT: [[task:95649700-252c-46d1-92fd-584f8b3b6237][Evaluate rpiv-pi workflow setup]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Draft
+#+NO_SPEC: true
+
+* Intent
+Evaluate partial adoption of rpiv-pi without replacing Org planning, Herdr orchestration or the existing skill owners. Assess standalone rpiv-btw as a separate optional capability.
+
+* Summary
+*Level:* prototype · *Tests:* smoke · *Docs:* inline
+
+Source review at upstream revision ~46dbdfd78ab631bbf3ce41c2618bb173a5ec2725~, package version ~2.15.0~. Recommend against installing the full workflow alongside this setup. Standalone ~rpiv-btw~ is a plausible trial candidate, subject to its cross-session hint policy and installed-Pi compatibility checks. Nothing is installed and no live model request was made.
+
+** Scope
+*** In scope
+- Workflow ownership, dependencies, model configuration and artifact storage.
+- Standalone side-question context, tool access, persistence and cancellation boundaries.
+*** Out of scope
+- Running setup, syncing bundled agents, installing packages, or changing user settings.
+- Adopting rpiv's parallel plan/task store or replacing existing skills.
+
+** Acceptance
+Proposed trial criteria; not yet approved.
+*** Core functionality
+- [X] The full workflow's overlaps with local owners are identified.
+- [X] The standalone side-question package is assessed independently.
+- [ ] An approved disposable interactive trial works with the installed Pi and an OpenAI model.
+*** Edge cases
+- [ ] Compaction and branch changes invalidate the side-context snapshot in the installed runtime.
+- [ ] Dismissing a side request cancels it without cancelling the parent session.
+- [ ] Cross-session question hints follow the approved privacy policy.
+*** Anti-criteria
+- [X] Must not: install or configure the full workflow during research.
+- [ ] Must not: persist side answers into the main transcript during a trial.
+
+** Decisions
+- Retain existing workflow owners :: rpiv-pi documents Markdown artifacts under ~.rpiv/artifacts/~, a separate model override configuration, bundled skill/agent sync and detached workflow lanes. These overlap with org-plan, org-tasks, herdr-orch and current model aliases. Rejected:
+  - Install the full umbrella and reconcile later: introduces several owners and setup side effects before choosing an actual missing capability.
+  - Copy the workflow's skill set: duplicates existing planning and review contracts.
+- Evaluate ~rpiv-btw~ alone :: its declared peer dependencies are the three Pi packages and its package manifest exposes its own extension. No workflow umbrella is required by that manifest. Rejected:
+  - Treat it as a free context window: the side call resends a clone of the active branch plus side history to the active model and has its own request cost.
+- Do not equate ephemeral storage with session isolation :: the package's documented cross-session hint includes the last ten question strings from sessions in one Pi process. Answers and branch content are not part of that hint, but questions can still contain sensitive context.
+
+** Risks
+- The side completion prefers a private ~modelRegistry.runtime~ bridge for OAuth-aware request preparation. Its fallback and open-ended peer versions are not proof of compatibility with the installed Pi.
+- The README promises no transcript or disk persistence; this review confirms the request/context construction in source, not an interactive runtime observation.
+
+** Follow-ups
+- [[task:86be0a2b-0097-4b18-9070-506bf85b2bfe][Decide whether to trial standalone rpiv-btw]].
+
+* Plan
+** DONE [#D] Check out rpiv-btw :pi:
+CLOSED: [2026-11-04 Wed 00:56]
+:PROPERTIES:
+:CUSTOM_ID: ec8e6eb3-dcfc-4124-ad1c-17e88d8562b6
+:STARTED: [2026-11-04 Wed 00:56]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:56]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:56]
+:END:
+https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without polluting context... sounds useful
+
+* Implementation
+- Pinned source: [[https://github.com/juicesharp/rpiv-mono/tree/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725][rpiv-mono]]. The package's [[https://github.com/juicesharp/rpiv-mono/blob/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/rpiv-pi/README.md][workflow README]] describes four pipelines, additional sibling extensions, bundled skills/agents, guidance injection and detached lanes. The local comparison uses [[file:../../skills/org-plan/SKILL.md]], [[file:../../skills/org-tasks/SKILL.md]] and [[file:../../skills/herdr-orch/SKILL.md]].
+- [[https://github.com/juicesharp/rpiv-mono/blob/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/rpiv-btw/btw.ts][Side executor source]] uses ~ctx.model~, resolves authentication through the registry, sends ~tools: []~ and owns a separate abort controller. It snapshots completed assistant turns and invalidates snapshots on compaction/tree events. This checks construction, not provider behaviour.
+- [[https://github.com/juicesharp/rpiv-mono/blob/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/rpiv-btw/docs/context-model.md][Context contract]] documents current compacted branch context, session-specific side turns, process-memory storage and cross-session question hints. [[https://github.com/juicesharp/rpiv-mono/blob/46dbdfd78ab631bbf3ce41c2618bb173a5ec2725/packages/rpiv-btw/pi-compat.ts][Compatibility bridge]] prefers the host runtime and falls back to the compatibility completion API.
+
+* Open questions
+** OPEN Is the process-wide recent-question hint acceptable?
+Choose whether to accept the upstream behaviour or require session-only context before a trial. Do not silently patch a third-party package.
+** OPEN Should standalone rpiv-btw receive an interactive trial?
+If approved, use a disposable Pi agent directory and synthetic context first. Verify request model/provider, tool declarations, cancellation, branch/compaction changes and transcript persistence before any permanent installation.
