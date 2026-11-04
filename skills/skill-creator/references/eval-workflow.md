@@ -12,26 +12,37 @@ Within the workspace, organise by iteration (`iteration-1/`, `iteration-2/`,
 
 ## Step 1: Spawn all runs in the same turn
 
-For each test case, spawn two subagents in the same turn — one with the
-skill, one without. Don't spawn with-skill first and come back for baselines
-later.
+For each test case, spawn two subagents in the same turn -- one with the skill, one without. Don't spawn with-skill first and come back for baselines later.
+
+Each configuration and repetition needs its own `run-N/` directory. Start with `run-1/`; use `run-2/`, `run-3/`, and so on for repeated runs. The aggregator discovers grades only at `configuration/run-N/grading.json`.
+
+```text
+<workspace>/iteration-<N>/eval-<ID>/
+├── eval_metadata.json
+├── with_skill/run-1/
+│   ├── outputs/
+│   ├── timing.json
+│   └── grading.json
+└── without_skill/run-1/
+    ├── outputs/
+    ├── timing.json
+    └── grading.json
+```
 
 **With-skill run:**
 
-```
+```text
 Execute this task:
 - Skill path: <path-to-skill>
 - Task: <eval prompt>
 - Input files: <eval files if any, or "none">
-- Save outputs to: <workspace>/iteration-<N>/eval-<ID>/with_skill/outputs/
-- Outputs to save: <what the user cares about — the .docx, the final CSV, etc.>
+- Save outputs to: <workspace>/iteration-<N>/eval-<ID>/with_skill/run-1/outputs/
+- Outputs to save: <what the user cares about -- the .docx, the final CSV, etc.>
 ```
 
 **Baseline run** (same prompt; baseline depends on context):
-- *New skill* — no skill at all. Save to `without_skill/outputs/`.
-- *Improving an existing skill* — the previous version. Snapshot first
-  (`cp -r <skill-path> <workspace>/skill-snapshot/`), then point the
-  baseline subagent at the snapshot. Save to `old_skill/outputs/`.
+- *New skill* -- no skill at all. Save to `without_skill/run-1/outputs/`.
+- *Improving an existing skill* -- the previous version. Snapshot first (`cp -r <skill-path> <workspace>/skill-snapshot/`), then point the baseline subagent at the snapshot. Save to `old_skill/run-1/outputs/`.
 
 Write `eval_metadata.json` for each test case (assertions empty for now).
 Give each eval a descriptive name and use it as the directory name. If this
@@ -62,8 +73,7 @@ benchmark).
 
 ## Step 3: As runs complete, capture timing
 
-Each subagent notification includes `total_tokens` and `duration_ms`. Save
-immediately to `timing.json` in the run directory:
+Each subagent notification includes `total_tokens` and `duration_ms`. Save immediately to `configuration/run-N/timing.json`:
 
 ```json
 {
@@ -80,19 +90,20 @@ This is the only opportunity — the data isn't persisted elsewhere.
 Put the outputs in front of the user before you judge them yourself or
 revise the skill. Your own reading of the outputs comes second.
 
-1. **Grade.** Spawn a grader subagent (or grade inline) using
-   `agents/grader.md`. Save results to `grading.json` per run. The
-   `expectations` array must use `text`, `passed`, `evidence` (not
-   `name`/`met`/`details`) — the viewer depends on these exact fields. For
-   programmatic checks, write a script and run it.
+1. **Grade.** Spawn a grader subagent (or grade inline) using `agents/grader.md`. Save results to `configuration/run-N/grading.json` per run. The `expectations` array must use `text`, `passed`, `evidence` (not `name`/`met`/`details`) — the viewer depends on these exact fields. For programmatic checks, write a script and run it.
 
 2. **Aggregate:**
    ```bash
    python -m scripts.aggregate_benchmark <workspace>/iteration-N --skill-name <name>
+   expected_runs=12 # replace with evals x configurations x repetitions
+   actual_runs="$(jq '.runs | length' <workspace>/iteration-N/benchmark.json)"
+   test "$actual_runs" -gt 0 && test "$actual_runs" -eq "$expected_runs" || {
+     printf 'Aggregator discovered %s runs; expected %s\n' "$actual_runs" "$expected_runs" >&2
+     exit 1
+   }
+   jq '[.runs | group_by(.configuration)[] | {configuration: .[0].configuration, discovered_runs: length}]' <workspace>/iteration-N/benchmark.json
    ```
-   Produces `benchmark.json` and `benchmark.md`. Put each `with_skill` row
-   before its baseline counterpart. See `references/schemas.md` for the
-   schema if generating manually.
+   Produces `benchmark.json` and `benchmark.md`. Do not interpret the aggregate until the non-empty count equals the intended number and the per-configuration counts are plausible. Put each `with_skill` row before its baseline counterpart. See `references/schemas.md` for the schema if generating manually.
 
 3. **Analyst pass.** Read the benchmark and surface patterns the aggregate
    hides — non-discriminating assertions, high-variance evals, time/token
