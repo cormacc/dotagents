@@ -68,9 +68,13 @@ https://pi.dev/packages/@juicesharp/rpiv-btw Ask a one-off question without poll
 
 
 
-** TODO [#C] Explore agent memory options :org:
+** STARTED [#C] Explore agent memory options :org:
 :PROPERTIES:
 :CUSTOM_ID: df50e088-86c0-44be-8d0a-3a09fce88d2b
+:STARTED: [2026-11-04 Wed 00:24]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:24]
 :END:
 I'm enjoying the org-tasks flow for task tracking and planning, but it's not really agent memory.
 Identify a lower layer more immediately useful to the agent. This is a crowded/interesting space.
@@ -95,19 +99,21 @@ CLOSED: [2026-08-27 Thu 14:21]
 - State "CANCELLED" from "TODO" [2026-08-27 Thu 14:21]
 :END:
 #+IMPORT: [[plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
-*** TODO [#C] Compare self-improvement lesson capture with dev-agent-backlog :org:
+*** DONE [#C] Compare self-improvement lesson capture with dev-agent-backlog :org:
+CLOSED: [2026-11-04 Wed 00:24]
 :PROPERTIES:
 :CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
 :CREATED: [2026-05-02 Sat 12:22]
+:STARTED: [2026-11-04 Wed 00:24]
 :END:
 :LOGBOOK:
 - Created [2026-05-02 Sat 12:22]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:24]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:24]
 :END:
 Spawned from the dev-agent-backlog prior-art review (parent task 5aed17ed-cfc4-4ae3-bb24-57c7d974a142). The review deferred dev-agent-backlog's "solution / lesson capture" idea on the basis that it overlaps with the existing self-improvement skill and is a separate concern from the task lifecycle protocol.
 
-Remaining scope: compare solution and lesson capture in [[file:design/log/2026-05-01-dev-agent-backlog-review-summary.html]] with [[file:skills/self-improvement/SKILL.md]], and identify a concrete missing behaviour worth adopting, or record that no addition is justified.
-
-The integration decisions are already represented by the self-improvement contract: TODO-first capture through =ot=, ownership routing, deduplication, and optional promotion through =org-plan=. Do not reopen those decisions or introduce another knowledge store merely to complete this prior-art comparison.
+Reviewed [2026-11-04 Wed]: [[file:design/log/2026-05-01-dev-agent-backlog-review-summary.html]] proposes separate solution/lesson capture but gives no further capture contract. [[file:skills/self-improvement/SKILL.md]] already owns eligibility, TODO-first capture through =ot=, routing, deduplication, promotion through =org-plan=, and evidence retention in =RETROLOG.org= or commit bodies. No addition is justified by this comparison; keep the existing owners and do not add another knowledge store. This closes only the stored prior-art comparison, not the wider agent-memory exploration.
 
 ** TODO Review herdr tsk plugin for inspiration for org-tasks
 :PROPERTIES:
@@ -131,25 +137,42 @@ As a Herdr plugin, tsk is also prior art for the deferred session-tree pane in 9
 :END:
 pi-context 2.3.0 is installed for all projects (pinned in pi/settings.json) after a one-session trial on 2026-11-03. Trial session 2026-11-03T17-10-13 (gpt-6.1-sol, 311 requests, 3 compactions) had mean context per request 103k against 210k-216k for baseline sessions 2026-11-03T00-22 and 2026-11-03T08-28. To revisit: run the analyze:session tool from a checkout of github.com/ttttmr/pi-context on sessions from the following week, in several projects, and compare mean context per request, peak context, total tokens, compaction count, and re-reads after compaction. Baseline and trial reports and the comparison script are in .tmp/pi-context-trial/ and .tmp/pi-context-compare.clj (scratch; regenerate if gone). The context-mode alternative was rejected because its Pi adapter does not intercept read, bash, or codemode output. In orchestrator sessions (root sessions that spawn through oh), also check each compaction made while a round was uncaptured: the summary must keep the round UUID, the reason for dispatch, and the acceptance criteria. If summaries drop them, add a rule to the herdr-orch Lifecycle bullet (deferred on 2026-11-03 because pi-context's summary contract already asks for running processes and the next step). Undeclared packages context-mode 1.0.146, @ogulcancelik/pi-herdr 0.4.0 and pi-zellij-tools 0.1.4 were removed from ~/.pi/agent/npm on 2026-11-03.
 
-** TODO Identify alternatives to pi-web-access (dependency security advisories) :pi:
+** DONE Identify alternatives to pi-web-access (dependency security advisories) :pi:
+CLOSED: [2026-11-04 Wed 00:44]
 :PROPERTIES:
 :CUSTOM_ID: 3d7ea3e7-fc22-49a1-824d-3c400671ee70
 :CREATED: [2026-11-03 Tue 21:26]
+:STARTED: [2026-11-04 Wed 00:42]
 :END:
 :LOGBOOK:
 - Created [2026-11-03 Tue 21:26]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:42]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:44]
 :END:
+#+IMPORT: [[plan:2026-11-04-web-access-advisories.org]]
 On 2026-11-03, npm audit in ~/.pi/agent/npm reported 8 advisories (1 critical, 5 high, 2 moderate), all through @modelcontextprotocol/sdk@1.32.1, which pi-web-access@0.46.0 pins exactly: proxy-addr (critical, IP spoofing), hono, body-parser, fast-uri, ip-address, zod (high), @hono/node-server and qs (moderate). Six of the eight are in the SDK HTTP server stack (express, hono and their dependencies). pi-web-access imports only the SDK client (client/streamableHttp) and the stdio server, and none of the vulnerable packages directly, so those six are probably not reachable; this is an inference from imports, not a test. zod (memory exhaustion on oversized input) and fast-uri (host confusion, via ajv) are in the client path. npm reports a fix for all eight (fixAvailable: true); not tested. Before replacing the package: check whether a newer pi-web-access or an in-range dependency update clears the advisories, and whether upstream (github.com/nicobailon/pi-web-access) tracks them. If not, compare alternatives on the functions in use: web_search, fetch_content with stored responses (get_search_content), source_check, and the configured search providers (Exa served web_search on 2026-11-03).
+
+** TODO [#B] Reconcile Pi managed npm dependencies after advisory research :security:
+:PROPERTIES:
+:CUSTOM_ID: 6c82bead-d124-4ff1-b9e9-939ed43454de
+:CREATED: [2026-11-04 Wed 00:43]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 00:43]
+:END:
+Research task:3d7ea3e7-fc22-49a1-824d-3c400671ee70 found a fresh pi-web-access@0.46.0 resolution with its existing MCP SDK 1.32.1 pin audits clean; the live managed lock still has eight vulnerable packages. Before touching ~/.pi/agent/npm, choose and document the reconciliation mechanism, snapshot the previous package and lock state, retain lifecycle-script suppression, verify other managed packages remain present, and run the runtime audit plus isolated loading checks. Pi 1.4.0 skips unchanged top-level versions during update; its same-source install path does not pass --ignore-scripts. Do not replace the extension or enable automatic provider routing as part of this maintenance. Live provider calls need a separate approved scope.
 
 * Improvements
 
-** TODO [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
+** STARTED [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: 9f667467-a23c-497b-afe8-54afab3b0e5b
 :CREATED: [2026-08-16 Sun 11:02]
+:STARTED: [2026-11-04 Wed 00:27]
 :END:
 :LOGBOOK:
 - Created [2026-08-16 Sun 11:02]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:27]
 :END:
 #+IMPORT: [[plan:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]]
 Package herdr-orch as a Herdr plugin wrapper without replacing the existing skill as the orchestration core.
@@ -186,16 +209,19 @@ Refresh the change-record before execution. Found stale [2026-10-20 Tue] at e67e
 :LOGBOOK:
 - Created [2026-08-16 Sun 11:57]
 :END:
+#+IMPORT: [[plan:2026-11-04-babashka-bootstrap.org]]
 Design and ship a shared skill-level helper that bootstraps a local Babashka copy when `bb` is absent. Both `org-tasks` (`ot`) and `herdr-orch` (`oh`, `traits`) depend on `bb`, so the helper belongs at skill level, not inside the Herdr plugin. Open design questions: where the helper lives, how both skills consume it, download and checksum policy, PATH placement, and the update story. Include the `ot` executable in the bootstrap decision: when `ot` is absent, define whether to install it with bbin or invoke the checked-out launcher. The helper must not assume an absolute user-local `ot` path. Raised during planning of the herdr plugin wrapper ([[plan:2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org]]); that change ships an install hint only.
 Priority lowered from A to B [2026-10-20 Tue] to match the plugin wrapper, its only recorded driver. Raise it again if `ot` or `oh` portability on hosts without `bb` becomes urgent on its own.
 
-** TODO [#B] traits: probe backlog :skill:herdr_orch:
+** STARTED [#B] traits: probe backlog :skill:herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: b5bc69bb-0c51-43b8-92d8-ae6b54653aee
 :CREATED: [2026-10-20 Tue 12:25]
+:STARTED: [2026-11-04 Wed 00:46]
 :END:
 :LOGBOOK:
 - Created [2026-10-20 Tue 12:25]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:46]
 :END:
 Aggregate for outstanding trait probe work under the admission bar in skills/herdr-orch/references/traits.md: synthetic, non-decaying probes for the surviving flat fragments, and further attempts at fragments whose recorded probes did not discriminate. Probe records live in the repository user layer at traits/<name>/gate.md; the runner is scripts/run-trait-gate.bb.
 *** TODO [#B] traits: re-probe every fragment against synthetic, non-decaying scenarios
@@ -221,13 +247,17 @@ Acceptance criteria:
 - Redundancy is triaged before wording: =AGENTS.md= loads in every pi session and already carries directives adjacent to =%grounded= (claims stated only when measured or attributed; an empty result is not evidence of absence; a guard only ever seen pass is unverified). A fragment that shows no marginal effect over that baseline is a deletion candidate, not a rewording candidate -- =%challenge= was removed on exactly that reasoning.
 - Where a probe cannot be made to discriminate, say so and say why, rather than reporting an unexplained negative or quietly dropping the fragment.
 Must not: weaken a recorded condition to make a run agree; reuse a repo-referential subject; treat a passing probe as a precondition for the fragment staying in the store.
-*** TODO [#C] traits: retry the %simple probe at a lower model tier :skill:herdr_orch:
+*** DONE [#C] traits: retry the %simple probe at a lower model tier :skill:herdr_orch:
+CLOSED: [2026-11-04 Wed 00:47]
 :PROPERTIES:
 :CUSTOM_ID: 2bb48d42-b67f-4ba3-8ed1-1190a1ff333d
 :CREATED: [2026-09-22 Tue 13:09]
+:STARTED: [2026-11-04 Wed 00:46]
 :END:
 :LOGBOOK:
 - Created [2026-09-22 Tue 13:09]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:46]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:47]
 :END:
 Path corrected [2026-10-20 Tue]: the probe record is the repository user-layer file traits/simple/gate.md, not skills/herdr-orch/traits/simple/gate.md. It now records four non-discriminating runs: the two described here, plus two from the ponytail v5 review, all at one tier.
 
@@ -321,13 +351,17 @@ CLOSED: [2026-11-01 Sun 12:38]
 skills/herdr-orch/references/traits.md claims \`incompatible-with:\` enforcement is documented/implemented in skills/herdr-orch/scripts/docs/contract.md, and contract.md's Trait composition section claims herdr-orch.traits/interpolate returns "incompatibility declarations by trait in :incompatibilities". Neither is true: traits.clj's interpolate returns only :text, :resolved, :unknowns and :repeats (no :incompatibilities key), and no \`incompatible-with:\` frontmatter parsing or enforcement exists anywhere in traits.clj or cli.clj. Identified but deliberately left unfixed during [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]] ("Correct the documentation rather than assume a conflict engine exists. This plan does not add a generic semantic conflict solver.") Correct both docs to match the actual implementation (or implement the feature, if still wanted).
 
 Result: both references and the Pi =TraitExpansion= type match the implemented result; the contract explicitly states that semantic conflicts are not enforced. The result-key assertion, trait suites and TypeScript check pass. No conflict engine was added.
-*** TODO herdr-orch: guidance or a verb for retiring integrated orch/* branches :skill:herdr_orch:
+*** DONE herdr-orch: guidance or a verb for retiring integrated orch/* branches :skill:herdr_orch:
+CLOSED: [2026-11-04 Wed 00:24]
 :PROPERTIES:
 :CUSTOM_ID: a84f503e-d621-42fc-ae96-7c0e3c0dd7d9
 :CREATED: [2026-10-20 Tue 12:25]
+:STARTED: [2026-11-04 Wed 00:24]
 :END:
 :LOGBOOK:
 - Created [2026-10-20 Tue 12:25]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:24]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:24]
 :END:
 oh worktree remove deletes the managed checkout but retains its orch/<id> branch, and contract.md section Worktree reconciliation and teardown states that oh never deletes a branch. Retained branches accumulate after integration. Decide between documented operator guidance and an ownership-checked verb. Carried over from the cancelled worktrunk investigation (47f84d9a), whose worktree-management motivation the managed checkouts (--worktree new, oh worktree list/remove) already cover.
 
@@ -336,24 +370,32 @@ oh worktree remove deletes the managed checkout but retains its orch/<id> branch
 * Chores
 * Agent feedback
 
-** TODO Hand-composed edit hazards: instruction rule additions :agents_md:
+** DONE Hand-composed edit hazards: instruction rule additions :agents_md:
+CLOSED: [2026-11-04 Wed 00:23]
 :PROPERTIES:
 :CUSTOM_ID: fd2acfc6-e7be-4487-985f-9176ce9e5b94
 :CREATED: [2026-08-27 Thu 14:22]
+:STARTED: [2026-11-04 Wed 00:23]
 :END:
 :LOGBOOK:
 - Created [2026-08-27 Thu 14:22]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:23]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:23]
 :END:
 Two near-misses from the same session both trace to one cause: a large hand-composed `newText` block was typed from memory rather than copied. Each child proposes a rule addition to a different instruction file, and both should land together so the pair is reviewed as one policy rather than two isolated warnings.
 
 Verified 2026-08-27 that neither rule is in place: `home/AGENTS.md` contains no `edits[]` occurrence (control: 55 list items present), and `skills/org-tasks/SKILL.md` contains no `newText` occurrence (control: 30 "org" matches).
-*** TODO Edit tool: pre-submit self-check for stray edits[] keys :skill_org_tasks:agents_md:
+*** DONE Edit tool: pre-submit self-check for stray edits[] keys :skill_org_tasks:agents_md:
+CLOSED: [2026-11-04 Wed 00:23]
 :PROPERTIES:
 :CUSTOM_ID: 81a6a750-4187-4f0c-a8c2-2629014e915c
 :CREATED: [2026-08-20 Thu 10:54]
+:STARTED: [2026-11-04 Wed 00:23]
 :END:
 :LOGBOOK:
 - Created [2026-08-20 Thu 10:54]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:23]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:23]
 :END:
 Twice in one session (nmd/infra/playbooks, secret-management record), a call to the Edit tool included an extra, schema-invalid key (e.g. `newText_unused`) alongside a valid `{oldText, newText}` entry inside `edits[]`. The tool silently tolerated it and applied the edit correctly, but AGENTS.md already prohibits adding keys absent from a declared schema, warning that a tool can silently accept an unknown field and corrupt the payload -- this happened despite that existing rule already being in context, so restating it alone did not prevent recurrence.
 
@@ -369,13 +411,17 @@ Evidence:
 - One instance while editing design/log/2026-08-17-implement-secret-management.org Decisions section (stray `newText_unused` key).
 - A second instance shortly after while editing the same file's Shipped/Gotchas bullets.
 - Neither call errored or was rejected; both edits applied correctly despite the invalid key.
-*** TODO org-tasks: copy heading state tokens verbatim during bulk newText edits :skill_org_tasks:
+*** DONE org-tasks: copy heading state tokens verbatim during bulk newText edits :skill_org_tasks:
+CLOSED: [2026-11-04 Wed 00:23]
 :PROPERTIES:
 :CUSTOM_ID: d53b3498-3764-4ba5-85ea-4c7e40349f12
 :CREATED: [2026-08-20 Thu 10:54]
+:STARTED: [2026-11-04 Wed 00:23]
 :END:
 :LOGBOOK:
 - Created [2026-08-20 Thu 10:54]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:23]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:23]
 :END:
 While trimming a plan task's body in a change-record (nmd/infra/playbooks, design/log/2026-08-17-implement-secret-management.org), a large hand-composed `newText` block happened to span a heading line containing a TODO-state keyword. The heading was retyped as part of composing the replacement text, and the state keyword was mistyped from `STARTED` to `DONE`. This was caught in review before commit, but org-tasks explicitly forbids hand-editing task lifecycle state outside `ot status` -- this was a near-miss of exactly that violation, caused by manually retyping a heading rather than copying it.
 
@@ -391,14 +437,17 @@ Evidence:
 - The mistake was caught immediately after the edit by a grep for the target heading text, then reverted with a follow-up edit before any commit.
 - No incorrect state was ever committed or persisted; the near-miss was purely in an intermediate working-tree edit.
 
-** TODO Guard against a parallel tool batch that writes and reads the same path :agents_md:
+** STARTED Guard against a parallel tool batch that writes and reads the same path :agents_md:
 :PROPERTIES:
 :CUSTOM_ID: 503585ee-3c52-45ed-b5aa-9e99e5a91ed4
 :CREATED: [2026-10-14 Wed 11:10]
+:STARTED: [2026-11-04 Wed 00:48]
 :END:
 :LOGBOOK:
 - Created [2026-10-14 Wed 11:10]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:48]
 :END:
+#+IMPORT: [[plan:2026-11-04-parallel-file-guard.org]]
 The portable rule "Read a path only after the call that writes it has finished and succeeded. Never run the two calls in parallel." (home/AGENTS.md, File operations) does not stop the agent from batching a write and its verifying read into one parallel tool call. The check then reads the old file and its result is wrong. Restating the rule has not changed the behaviour, so add a structural guard: a harness check that warns, or serialises, when one parallel tool batch both writes a path (Edit, Write) and reads it (Read, grep or bash naming the same path), or writes the same path twice (Edit, Write, or a bash ~sed -i~ or redirect naming it).
 
 Origin:
@@ -412,13 +461,15 @@ Evidence:
 - RETROLOG.org 2026-10-01 records the same failure ("Parallel read and write"), after which the rule was rewritten as an ordering rule.
 - 2026-10-22 (dotagents, herdr-orch change-record closure): one batch ran an Edit and a bash ~sed -i~ line deletion on the same record. The Edit wrote content from its own earlier read, so the deletion was lost without an error; a diff against a snapshot showed it.
 
-** TODO org-plan: check non-path identifiers in change-records :skill:org_plan:
+** STARTED org-plan: check non-path identifiers in change-records :skill:org_plan:
 :PROPERTIES:
 :CUSTOM_ID: 58d81bcd-bb15-4835-9737-da8fe64dd93b
 :CREATED: [2026-10-14 Wed 16:22]
+:STARTED: [2026-11-04 Wed 00:42]
 :END:
 :LOGBOOK:
 - Created [2026-10-14 Wed 16:22]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:42]
 :END:
 Add an advisory change-record check that resolves backticked non-path identifiers (keywords, auto-resolved =::= keywords, qualified and simple symbols, and namespaces) against tracked source. Report unresolved names for review without failing: removed identifiers, rejected alternatives and library internals can remain unresolved by design. Include a positive control in each run.
 
@@ -433,22 +484,29 @@ Origin:
 Evidence:
 Checking a 330-line change-record against its changeset needed a one-off Babashka script (portal `.tmp/check-record-ids.clj`, gitignored) that runs `git grep -P` over `src` and `test` for each backticked span. It found one stale identifier (a renamed test helper) and confirmed the rest; a second pass verified the record after edits. The unresolved residue was removed or rejected names and Nexus/Replicant internals, which needed a manual check in the library jars.
 
-** TODO Stop parallel claude trigger evals picking another worker's candidate :skill:skill_creator:
+** STARTED Stop parallel claude trigger evals picking another worker's candidate :skill:skill_creator:
 :PROPERTIES:
 :CUSTOM_ID: c99fabd6-fef3-41b4-9db9-5c4177c0cfd1
 :CREATED: [2026-10-19 Mon 13:34]
+:STARTED: [2026-11-04 Wed 00:38]
 :END:
 :LOGBOOK:
 - Created [2026-10-19 Mon 13:34]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:38]
 :END:
+#+IMPORT: [[plan:2026-11-04-trigger-eval-isolation.org]]
 With --harness claude, scripts/run_eval.py (_run_single_query_claude) writes one <skill>-skill-<id> command per parallel worker into the same .claude/commands/ directory, so the agent sees several identical candidates and picks another worker's, and recall collapses. One worker scores correctly. Fix it (e.g. one scratch project per worker) or report it upstream. The pi harness is not affected: each pi run swaps the description in its own prompt. Split out of task:b3522825-53ca-42d7-8ebb-6223e186ce9c, whose Evidence section records the 2026-10-16 observation.
 
-** TODO Align skill-creator eval layout with benchmark aggregation :skill:skill_creator:
+** DONE Align skill-creator eval layout with benchmark aggregation :skill:skill_creator:
+CLOSED: [2026-11-04 Wed 00:29]
 :PROPERTIES:
 :CUSTOM_ID: 6f8073f2-d6c5-44ef-b088-273a699a2dc3
 :CREATED: [2026-11-03 Tue 01:32]
+:STARTED: [2026-11-04 Wed 00:22]
 :END:
 :LOGBOOK:
 - Created [2026-11-03 Tue 01:32]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:22]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:29]
 :END:
 The locally maintained skills/skill-creator/references/eval-workflow.md shows grading directly under a configuration, while load_run_results in skills/skill-creator/scripts/aggregate_benchmark.py only discovers configuration/run-N/grading.json. Align the owned workflow instructions with that consumer and make callers check the discovered run count before interpreting an aggregate. Keep the vendored Python implementation unchanged unless deliberately reclassified or fixed upstream. Origin: dotagents; observed during approved Matt Pocock adaptation evaluations on 2026-11-03. Evidence: aggregation of configuration/grading.json exited successfully with an empty runs array; staging the same grades under configuration/run-1/grading.json produced the expected paired runs. The corrected current results are retained in design/log/2026-11-03-apply-matt-pocock-adaptations/evaluations.json.

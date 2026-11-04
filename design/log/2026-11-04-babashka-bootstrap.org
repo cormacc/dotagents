@@ -1,0 +1,100 @@
+#+TITLE: Shared babashka bootstrap helper for bb-dependent skills
+#+DATE: 2026-11-04 Wed
+#+PARENT: [[task:41ca2ed9-9eff-47e0-b0ca-294e20f6c334][Shared babashka bootstrap helper for bb-dependent skills]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Draft
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+
+* Intent
+Make the Babashka-dependent skill launchers usable on a machine without `bb`, with one shared installation policy. Keep installation explicit and independent of the Herdr plugin.
+
+* Summary
+*Level:* MVP · *Tests:* thorough · *Docs:* README
+
+Design is blocked on distribution and installation-policy decisions. No launcher or user environment has changed.
+
+** Scope
+*** In scope
+- Shared bootstrap contract for `skills/org-tasks/scripts/ot`, `skills/herdr-orch/scripts/oh`, and `skills/herdr-orch/scripts/traits`.
+- Standalone skill-subtree installs, full checkouts, and symlinked deployment.
+- Version pin, checksum verification, cache location, supported platforms, and update policy.
+- Missing `ot`: choose the checked-out launcher or an explicit bbin installation; never assume one user's absolute path.
+*** Out of scope
+- Automatic downloads during ordinary task or orchestration commands.
+- Herdr plugin installation logic beyond an actionable prerequisite hint.
+- Silent edits to shell startup files or system package state.
+
+** Acceptance
+Proposed criteria; not yet approved.
+*** Core functionality
+- [ ] An installed `bb` is used without network access.
+- [ ] An explicit bootstrap operation installs the selected pinned version after checksum verification.
+- [ ] `ot`, `oh`, and `traits` use the same bootstrap policy.
+- [ ] A bare skill-subtree deployment resolves its helper without a full repository checkout.
+*** Edge cases
+- [ ] Unsupported platforms fail with an actionable message before download.
+- [ ] Checksum mismatch leaves no executable in the final cache location.
+- [ ] Interrupted installation leaves an existing working binary unchanged.
+- [ ] Launcher tests preserve the caller's working directory.
+*** Anti-criteria
+- [ ] Must not: download binaries during ordinary launcher invocation without explicit consent.
+- [ ] Must not: mutate PATH or shell startup files implicitly.
+- [ ] Must not: require an absolute user-local `ot` path.
+
+** Decisions
+- Recommend an explicit bootstrap command plus a prerequisite hint from ordinary launchers :: preserves predictable offline invocation and limits installation side effects. Rejected:
+  - Transparent first-run installation: introduces network and trust changes during a task command.
+  - Plugin-owned bootstrap: excludes `org-tasks` and makes a shared runtime depend on optional UI packaging.
+- Distribution remains undecided :: a repository-root helper alone does not satisfy standalone skill-subtree installs; copying an unversioned helper into each skill creates competing sources of truth.
+
+** Risks
+- A helper present only in a full checkout breaks standalone distribution; test both layouts before integration.
+- A downloaded binary is a new trust boundary; require a reviewed pin and checksum source before enabling installation.
+- Concurrent installers can corrupt a cache entry; stage downloads separately and publish atomically.
+
+* Plan
+** TODO Confirm bootstrap distribution and installation policy
+:PROPERTIES:
+:CUSTOM_ID: ce938f70-e677-4e81-bdb1-9b1ef33c33c4
+:CREATED: [2026-11-04 Wed 00:34]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 00:34]
+:END:
+Acceptance criteria:
+- The helper distribution supports standalone skill-subtree installs.
+- The binary pin and checksum source are approved.
+- Cache location, PATH policy, and update policy are explicit.
+- The missing-ot policy selects checkout invocation or bbin.
+Human input is required for the OPEN decisions in this record.
+
+** TODO Implement the approved bootstrap helper and launcher contract
+:PROPERTIES:
+:CUSTOM_ID: 7a473a6f-a6a0-4886-91c9-7a781e5d78c9
+:CREATED: [2026-11-04 Wed 00:38]
+:BLOCKED-BY: task:ce938f70-e677-4e81-bdb1-9b1ef33c33c4
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 00:38]
+:END:
+Acceptance criteria:
+- The approved pin is verified before atomic cache publication.
+- The three launchers retain offline installed-bb behaviour.
+- Full-checkout and bare-subtree fixtures pass.
+- Missing, corrupt, interrupted and concurrent download fixtures exercise failures without changing the live home.
+- README installation guidance matches the approved policy.
+
+* Implementation
+- Inspected the three checked-out bash launchers. Each invokes `bb`; each supports a repository `bb.edn` path and a standalone source-classpath path. `oh` exports its resolved launcher path as `HERDR_ORCH_BIN`.
+- The `ot` launcher documents bbin as a general-use installation option; it also supports direct checkout invocation. The missing-`ot` policy remains a separate explicit choice.
+
+* Open questions
+** OPEN How should standalone skills receive the shared helper?
+Choose a bundled versioned helper, a separately installed shared runtime, or a distribution change that always supplies the full checkout. The implementation must not assume a sibling skill exists.
+** OPEN Where may the bootstrap install its verified binary?
+Select a cache location and decide whether launchers call that location directly or require an explicit PATH update.
+** OPEN Which Babashka release and checksum source should be trusted?
+No download pin or platform matrix is selected in this draft.
+** OPEN Should missing `ot` use the checkout launcher or an explicit bbin install?
+Direct invocation avoids a second installation mechanism; bbin provides a general-use executable but adds a prerequisite.

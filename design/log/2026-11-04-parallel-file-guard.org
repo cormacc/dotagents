@@ -1,0 +1,97 @@
+#+TITLE: Guard against a parallel tool batch that writes and reads the same path
+#+DATE: 2026-11-04 Wed
+#+PARENT: [[task:503585ee-3c52-45ed-b5aa-9e99e5a91ed4][Guard against a parallel tool batch that writes and reads the same path]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Draft
+#+SPEC: [[proj:home/AGENTS.md]]
+
+* Intent
+Detect overlapping file access before a parallel tool batch makes a verification read stale or loses a write. Do not present a partial shell-command detector as complete filesystem protection.
+
+* Summary
+*Level:* MVP · *Tests:* thorough · *Docs:* README
+
+The installed Pi extension API documents a viable interception point for direct and nested codemode calls. The unresolved design choice is how to handle shell commands whose file effects cannot be inferred safely.
+
+** Scope
+*** In scope
+- A Pi extension that tracks active file accesses by tool-call ID and canonical path.
+- Structured `read`, `edit`, and `write` inputs, plus explicit-path search calls.
+- Literal-path shell reads, redirects, and in-place edits only after a documented supported grammar is selected.
+- Nested codemode calls, cancellation, failed calls, and reload cleanup.
+- Portable rules in `home/AGENTS.md`: retain the ordering rule; document the guard as a backstop, not a replacement.
+*** Out of scope
+- Filesystem sandboxing or protection from other processes and sessions.
+- Executing shell text to discover its file effects.
+- Treating regular-expression matches on arbitrary JavaScript or shell as proof of complete coverage.
+
+** Acceptance
+Proposed criteria; not yet approved.
+*** Core functionality
+- [ ] Overlapping structured write/read calls on one path produce the selected warning or refusal.
+- [ ] Overlapping structured write/write calls on one path produce the selected warning or refusal.
+- [ ] Independent paths can run concurrently.
+- [ ] A sequential write followed by a read produces no conflict after successful completion.
+- [ ] The installed Pi runtime test observes nested codemode calls at the interception point.
+*** Edge cases
+- [ ] Relative and absolute aliases identify the same existing file.
+- [ ] A new destination path is handled without requiring the file to exist.
+- [ ] Failure, cancellation, and reload release active access records.
+- [ ] Read/read concurrency is allowed.
+- [ ] Unsupported shell syntax is labelled unknown rather than safe.
+*** Anti-criteria
+- [ ] Must not: infer complete shell effects from a filename substring match.
+- [ ] Must not: wait for a sibling call inside a lifecycle hook in a way that can deadlock tool dispatch.
+- [ ] Must not: change the execution order silently.
+
+** Decisions
+- Prefer lifecycle interception over codemode source rewriting :: the installed extension guide documents `tool_call` and `tool_execution_end` for nested `ctx.executeTool()` calls, with `parentToolCallId`. This is a documented contract, not yet a runtime measurement for this guard. Rejected:
+  - Parse `Promise.all` source: misses dynamic tool calls, aliases, and direct model-issued parallel calls.
+  - Add another instruction only: the task records repeated failures after an ordering instruction was added.
+- Start with active-call conflict detection, not a promised whole-batch preflight :: per-call hooks cannot assume sibling calls have started. If blocking is selected, reject the conflicting later call instead of waiting within its hook.
+
+** Risks
+- Advisory warnings can arrive after a stale read has happened; blocking prevents a known overlap but can reject useful work.
+- Shell expansion, `cd`, globs, functions, scripts, and symlinks make literal-path analysis incomplete; a conservative unknown-command policy can cause false positives.
+- Cross-session writes remain outside this extension's state and need a separate boundary if they become a requirement.
+
+* Plan
+** STARTED Verify nested tool lifecycle and cancellation for a file guard
+:PROPERTIES:
+:CUSTOM_ID: 995ac213-cef7-4582-bea8-724f5c9abaf6
+:CREATED: [2026-11-04 Wed 00:38]
+:STARTED: [2026-11-04 Wed 00:48]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 00:38]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:48]
+:END:
+Acceptance criteria:
+- A disposable installed-Pi fixture observes tool_call and tool_execution_end for direct and nested calls.
+- Recorded call IDs distinguish siblings and their parent.
+- Failure and cancellation cleanup behaviour is measured.
+- No hosted model or live user file is used.
+
+** TODO Choose conflict and unknown-shell policy before implementing the guard
+:PROPERTIES:
+:CUSTOM_ID: 4d96299c-8cb8-4d28-9d9f-ce0f3fd4a31d
+:CREATED: [2026-11-04 Wed 00:38]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 00:38]
+:END:
+Acceptance criteria:
+- Warning versus refusal is selected explicitly.
+- Supported shell grammar and unknown-command behaviour are explicit.
+- The acceptance checklist records coverage limits.
+Human input is required for the OPEN decisions in this record.
+
+* Implementation
+- Read the installed Pi extension and codemode guides and the exported tool event declarations. Nested calls carry `parentToolCallId`; `tool_call` can block, while `tool_execution_end` carries completion and error state.
+- No extension is installed by this draft. Runtime event-order and cancellation behaviour remain to be demonstrated with a disposable local tool fixture; no hosted model call is needed.
+
+* Open questions
+** OPEN Should a detected overlap warn or block the conflicting call?
+A warning meets the original task's permitted advisory option but cannot prevent a stale read. Blocking is stronger and changes tool execution behaviour.
+** OPEN What should happen when a concurrent shell command has unknown file effects?
+Choose a documented literal-path subset with explicit coverage limits, conservative refusal during structured writes, or upstream filesystem-aware interception. Do not claim the selected subset covers arbitrary bash.

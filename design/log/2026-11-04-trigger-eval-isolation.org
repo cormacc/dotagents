@@ -1,0 +1,97 @@
+#+TITLE: Stop parallel claude trigger evals picking another worker's candidate
+#+DATE: 2026-11-04 Wed
+#+PARENT: [[task:c99fabd6-fef3-41b4-9db9-5c4177c0cfd1][Stop parallel claude trigger evals picking another worker's candidate]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Draft
+#+SPEC: [[proj:skills/skill-creator/references/eval-workflow.md]]
+
+* Intent
+Prevent concurrent Claude trigger evaluations from discovering another worker's candidate. Preserve the vendored runner boundary until an upstream fix or a deliberate local divergence is approved.
+
+* Summary
+*Level:* MVP · *Tests:* thorough · *Docs:* inline
+
+A serial workaround is documented. The concurrent runner remains unchanged; this task is not complete.
+
+** Scope
+*** In scope
+- `skills/skill-creator/scripts/run_eval.py`, specifically `_run_single_query_claude` and `run_eval`.
+- A disposable fake-CLI regression that measures candidate visibility without calling Claude.
+- An upstream report or an explicitly approved local patch with isolated discovery roots.
+*** Out of scope
+- Running Claude or any non-OpenAI model during this autonomous work.
+- Changing the Pi trigger-evaluation path.
+- Silently taking ownership of vendored scripts.
+
+** Acceptance
+Proposed criteria; not yet approved.
+*** Core functionality
+- [ ] Two concurrent workers each discover only their own candidate.
+- [ ] Single-worker behaviour remains unchanged.
+- [ ] A failing worker removes its own candidate without removing a sibling's candidate.
+*** Edge cases
+- [ ] A timeout removes the worker's candidate.
+- [ ] Required project context is retained in the selected isolation design.
+*** Anti-criteria
+- [ ] Must not: change live project command files during regression tests.
+- [ ] Must not: claim the serial workaround fixes independent concurrent processes.
+
+** Decisions
+- Document serial execution immediately :: both runners expose `--num-workers`; one worker avoids overlap inside one process. Also require one trigger-eval process per project root. This does not solve leftover or unrelated candidate files.
+- Prefer an upstream isolation fix :: `skills/README.org` classifies the runner as vendored. Rejected:
+  - Unique filenames alone: they prevent file collisions, not discovery contamination.
+  - Unreviewed scratch-project substitution: changing the working directory can remove project context and change what the eval measures.
+
+** Shipped
+- MODIFIED :: `skills/skill-creator/references/eval-workflow.md` documents the serial workaround and its limits.
+
+** Risks
+- An isolation design can alter the task environment; the fake-CLI visibility check alone cannot prove equivalent model behaviour.
+
+* Plan
+** DONE Draft a fake-CLI regression and upstream isolation report
+CLOSED: [2026-11-04 Wed 00:40]
+:PROPERTIES:
+:CUSTOM_ID: b1f804a4-7b15-48c9-8a64-bb1ed7aed621
+:CREATED: [2026-11-04 Wed 00:39]
+:STARTED: [2026-11-04 Wed 00:40]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 00:39]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:40]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:40]
+:END:
+Acceptance criteria:
+- A disposable fake CLI proves one-candidate visibility with one worker and cross-candidate visibility with concurrent workers.
+- Timeout and failure cleanup are recorded.
+- An issue draft includes the source cause, observed visibility and serial workaround.
+- No real Claude invocation or remote publication occurs.
+
+** TODO Select upstream delivery or approve a local isolation patch
+:PROPERTIES:
+:CUSTOM_ID: 7c012ad8-d95b-40a3-a26c-018e82e4c6d1
+:CREATED: [2026-11-04 Wed 00:40]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 00:40]
+:END:
+Acceptance criteria:
+- The vendored ownership decision is explicit.
+- The selected discovery-root design preserves required project context.
+- The concurrent visibility and cleanup acceptance criteria have regression coverage.
+Remote publication and vendor divergence remain unapproved.
+
+* Implementation
+- Source inspection confirms that `_run_single_query_claude` writes unique candidate files under the shared project `.claude/commands/` directory, starts the CLI from that project root, and removes its own file in `finally`.
+- `run_eval` dispatches queries through `ProcessPoolExecutor(max_workers=num_workers)`; `run_loop` passes its worker count through to it.
+- The stored task records an earlier multi-worker recall failure. This session has not rerun that model experiment.
+- A disposable fake-CLI probe called the checked-out `_run_single_query_claude` directly. The single-call positive control saw one candidate; two concurrent calls each saw the same two candidates. Failure and timeout controls each observed a candidate before confirming cleanup. No model was invoked. Temporary evidence: `.tmp/autonomous-backlog/probe-trigger-isolation.py` and `.tmp/autonomous-backlog/trigger-isolation-probe.log`.
+
+** Upstream report draft
+Title: Concurrent Claude trigger queries share candidate discovery.
+
+`_run_single_query_claude` writes each query's unique command file into the same project `.claude/commands/` directory before starting the CLI from that project root. A fake CLI that records visible command filenames observes one candidate for a single call, but both concurrent calls observe the same two candidates. Unique filenames avoid overwrites but do not isolate discovery. The stored model observation is reduced recall when a worker selects its sibling's candidate; the fake-CLI reproduction demonstrates visibility, not model choice. A fix needs isolated discovery per query while retaining the project context that the eval intends to measure. Serial workaround: `--num-workers 1` and one trigger-eval process per project root. Failure and timeout cleanup already remove the worker's own file. This report is a local draft; it has not been submitted.
+
+* Open questions
+** OPEN Should the fix be submitted upstream or maintained as a local vendor divergence?
+An upstream report can be drafted locally without publishing it. A local patch needs explicit ownership and sync policy.

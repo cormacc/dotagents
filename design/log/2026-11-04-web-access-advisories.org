@@ -1,0 +1,54 @@
+#+TITLE: pi-web-access advisory remediation research
+#+DATE: 2026-11-04 Wed
+#+PARENT: [[task:3d7ea3e7-fc22-49a1-824d-3c400671ee70][Identify alternatives to pi-web-access (dependency security advisories)]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+NO_SPEC: true
+
+* Intent
+Determine whether a supported dependency resolution can clear the recorded pi-web-access advisories before replacing its search and retrieval interface.
+
+* Summary
+*Level:* prototype · *Tests:* smoke · *Docs:* inline
+
+A disposable fresh `pi-web-access@0.46.0` installation retained `@modelcontextprotocol/sdk@1.32.1` and audited with zero runtime vulnerability entries. Replacement is not needed to clear the recorded dependency set. The live managed installation was not changed; remediation is follow-up work, not a delivered security fix.
+
+** Scope
+*** In scope
+- Published package metadata, the installed dependency lock, and disposable install/audit fixtures with lifecycle scripts disabled.
+- Required interface: `web_search`, `fetch_content`, `get_search_content`, and `source_check`.
+- Small alternative comparison if an in-range update is insufficient.
+*** Out of scope
+- Live npm-tree mutation, credential inspection, provider requests, or proof of exploit reachability.
+- A claim that zero audit entries proves security or functional compatibility.
+
+** Acceptance
+*** Core functionality
+- [X] Compare the published package version with the installed version.
+- [X] Test a fresh compatible resolution before recommending replacement.
+- [X] Identify limitations of the available Pi reconciliation path.
+*** Anti-criteria
+- [X] Must not: change the live managed npm root.
+- [X] Must not: run dependency lifecycle scripts or non-OpenAI model requests.
+
+** Decisions
+- Retain the extension pending dependency reconciliation :: the fresh fixture clears the recorded set while preserving the required tool interface. Rejected:
+  - `pi-web-access-minimal@0.1.3`: its documented interface drops `source_check` and `get_search_content`.
+  - `pi-web-search@1.7.0`: its documented search and `url_context` surface is not the required retrieval interface.
+  - `@feniix/pi-exa@7.1.1`: different tool names and no matching stored-result or source-check interface were documented in the reviewed package.
+- Do not equate `pi update --extensions` with transitive reconciliation :: the inspected Pi 1.4.0 update implementation skips an unchanged top-level version. Its same-source install path does not pass `--ignore-scripts`.
+
+** Follow-ups
+- [[task:6c82bead-d124-4ff1-b9e9-939ed43454de][Reconcile Pi managed npm dependencies after advisory research]].
+
+* Plan
+
+* Implementation
+- npm metadata reported `0.46.0` as both installed and latest package version on 2026-11-04. The published manifest pins MCP SDK `1.32.1`; [[https://registry.npmjs.org/pi-web-access/0.46.0][published manifest]]. Upstream [[https://github.com/nicobailon/pi-web-access/pull/522][PR 522]] records an earlier SDK pin update; no newer package was available in the inspected registry metadata.
+- The copied current lock audit reported eight vulnerable packages: `@hono/node-server`, `body-parser`, `fast-uri`, `hono`, `ip-address`, `proxy-addr`, `qs`, and `zod`. The fresh fixture retained the SDK pin but resolved patched transitive versions.
+- Automatic provider routing is not evidence of an OpenAI-only search path. No provider call was made, and this research makes no claim about which provider served a historical request.
+
+* Validation
+- Current-lock audit control: 8 entries (1 critical, 5 high, 2 moderate). Fresh installed-tree audit: 0 entries with `pi-web-access@0.46.0` and MCP SDK `1.32.1`. The parent re-read both full audit summaries and the fresh lock's package versions.
+- Disposable reproduction: create a package manifest with only `pi-web-access` pinned to `0.46.0`; run `npm install --package-lock-only --ignore-scripts --omit=dev --omit=peer`, `npm ci --ignore-scripts --omit=dev --omit=peer`, then `npm audit --ignore-scripts --omit=dev --omit=peer --json`. Do not run these commands in the live Pi managed root.
+- Temporary evidence: `.tmp/web-access-audit-current/audit.json`, `.tmp/web-access-fixture-baseline/audit-with-node-modules.json`, and `.tmp/autonomous-backlog/web-access-research.md`. No end-to-end provider or MCP request was tested.
