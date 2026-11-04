@@ -9,7 +9,7 @@ with `--remote-debugging-port=9222`.
 - `browser_nav`: navigate the selected tab/frame, or open and select a new tab with `newTab: true`.
 - `browser_eval`: evaluate asynchronous JavaScript in the selected frame, including cross-origin frames.
 - `browser_tabs`: list stable tab IDs grouped by browser window; supply `tabId` to select its main frame and enumerate its frames.
-- `browser_screenshot`: capture the selected tab viewport or iframe element, optionally after navigation or a selector wait in that frame.
+- `browser_screenshot`: capture the selected tab viewport or iframe element, optionally after navigation or a selector wait in that frame. Its verification guideline applies to browser-rendered web UI changes, not terminal UI changes.
 - `browser_inspect`: query rendered text, explicit raw text, HTML, attributes, counts, visibility, or existence in the selected frame.
 - `browser_cookies`: list cookies for the selected frame's URL.
 - `browser_pick`: show an overlay inside the selected frame so the user can select DOM elements.

@@ -352,3 +352,9 @@ After archiving, the parent told the user the record might have open questions t
 ** Slow loop -- default, TODO first
 
 [[file:skills/self-improvement/SKILL.md]]: feedback capture failed because a facet and name were supplied as one tag argument, then failed because the target section did not exist. Disposable task fixtures confirmed that the combined tag is rejected with =invalid-tag= (exit 1), a missing section without the creation flag is rejected with =section-not-found= (exit 1), and repeated =--tag= options with =--allow-create-section= create the section and retain both tags. The correction changes the example and its argument guidance, not the CLI.
+
+* 2026-11-04 Wed -- screenshot guideline scope
+
+** browser_screenshot -- Capture current viewport
+
+[[file:pi/extensions/chromium/index.ts]] supplied an unqualified “After UI changes” directive through =promptGuidelines=. Pi promoted it into the general prompt rules. During [[file:design/log/2026-11-03-ot-move-ordering-ui.org]], the agent generated HTML snapshots of terminal renderer output and opened them in Chromium to satisfy that directive. The user identified the web-versus-terminal scope error. The guideline is limited to browser-rendered web UI changes; the evidence stays here rather than in the loaded instruction.

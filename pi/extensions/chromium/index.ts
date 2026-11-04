@@ -213,7 +213,7 @@ export default function (pi: ExtensionAPI) {
       "Returns the screenshot as an inline image.",
     promptSnippet: "Capture the selected tab viewport or iframe element",
     promptGuidelines: [
-      "After UI changes, verify visually with browser_screenshot; use waitFor for async content.",
+      "After browser-rendered web UI changes (not terminal UI changes), verify visually with browser_screenshot; use waitFor for async page content.",
     ],
     executionMode: "sequential",
     parameters: Type.Object({
