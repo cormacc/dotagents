@@ -75,6 +75,129 @@
         (is (str/includes? plan ":CUSTOM_ID: aaaa2222-2222-4333-8444-555555555552"))
         (is (str/includes? plan "** TODO Child A2"))))))
 
+(deftest record-create-rebases-migrated-child-imports
+  (doseq [[record-path child-link grandchild-link]
+          [["design/log/feature.org" "child-import.org" "../../notes/grandchild.org"]
+           ["design/log/nested/feature.org" "../child-import.org" "../../../notes/grandchild.org"]]]
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-three-level-graph! root)
+        (let [tasks-path (str (fs/path root "TASKS.org"))
+              child-target (str (fs/path root "design" "log" "child-import.org"))
+              grandchild-target (str (fs/path root "notes" "grandchild.org"))
+              child-id "aaaa2222-2222-4333-8444-555555555552"
+              grandchild-id "aaaa3333-2222-4333-8444-555555555553"]
+          (fs/create-dirs (fs/parent child-target))
+          (fs/create-dirs (fs/parent grandchild-target))
+          (spit child-target "* TODO Imported child\n")
+          (spit grandchild-target "* TODO Imported grandchild\n")
+          (spit tasks-path
+                (-> (slurp tasks-path)
+                    (str/replace "*** TODO Child A1" "*** STARTED Child A1")
+                    (str/replace
+                     (str ":CUSTOM_ID: " child-id "\n:END:\n**** TODO Grandchild A1a")
+                     (str ":CUSTOM_ID: " child-id "\n:END:\n"
+                          "#+IMPORT: [[plan:child-import.org]]\n\n"
+                          "**** WAITING Grandchild A1a"))
+                    (str/replace
+                     (str ":CUSTOM_ID: " grandchild-id "\n:END:\n** TODO Parent B")
+                     (str ":CUSTOM_ID: " grandchild-id "\n:END:\n"
+                          "#+IMPORT: [[file:notes/grandchild.org]]\n\n"
+                          "** TODO Parent B"))
+                    (str/replace #"\n+(?=\*{2,} )" "\n\n")))
+          ;; The source-local `plan:` template and source-relative `file:`
+          ;; target both resolve before migration.
+          (doseq [[id target] [[child-id child-target]
+                               [grandchild-id grandchild-target]]]
+            (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "show" id)
+                  shown (parse-json-result out)]
+              (is (zero? exit))
+              (is (nil? (get-in shown [:task :importError])))
+              (is (= target (get-in shown [:task :importChildren 0 :sourcePath])))))
+          (let [{:keys [out exit]}
+                (run-cli! "--root" root "--format" "json"
+                          "record" "create" "aaaa1111-2222-4333-8444-555555555551"
+                          "--path" record-path)
+                result (parse-json-result out)
+                plan (slurp (:recordPath result))]
+            (is (zero? exit))
+            (is (true? (:absorbedSubtasks result)))
+            (is (str/includes? plan "** STARTED Child A1"))
+            (is (str/includes? plan (str ":CUSTOM_ID: " child-id)))
+            (is (str/includes? plan "*** WAITING Grandchild A1a"))
+            (is (str/includes? plan (str ":CUSTOM_ID: " grandchild-id)))
+            (is (str/includes? plan (str "#+IMPORT: [[file:" child-link "]]")))
+            (is (str/includes? plan (str "#+IMPORT: [[file:" grandchild-link "]]")))
+            (doseq [[id target] [[child-id child-target]
+                                 [grandchild-id grandchild-target]]]
+              (let [{:keys [out exit]} (run-cli! "--root" root "--format" "json" "show" id)
+                    shown (parse-json-result out)]
+                (is (zero? exit))
+                (is (nil? (get-in shown [:task :importError])))
+                (is (= target (get-in shown [:task :importChildren 0 :sourcePath])))))))))))
+
+(deftest record-create-refuses-unresolved-migrated-imports-before-writing
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-parent-child-graph! root)
+      (let [tasks-path (str (fs/path root "TASKS.org"))
+            record-path (str (fs/path root "design" "log" "feature.org"))]
+        (spit tasks-path
+              (str/replace (slurp tasks-path)
+                           ":CUSTOM_ID: aaaa2222-2222-4333-8444-555555555552\n:END:"
+                           (str ":CUSTOM_ID: aaaa2222-2222-4333-8444-555555555552\n:END:\n"
+                                "#+IMPORT: [[file:../../outside.org]]")))
+        (let [before (slurp tasks-path)
+              {:keys [err exit]}
+              (run-cli! "--root" root "--format" "json"
+                        "record" "create" "aaaa1111-2222-4333-8444-555555555551"
+                        "--path" "design/log/feature.org")
+              error (parse-json-error err)]
+          (is (= 1 exit))
+          (is (= "validation" (:code error)))
+          (is (not (fs/exists? record-path)))
+          (is (= before (slurp tasks-path)))
+          (is (str/includes? (slurp tasks-path) "#+IMPORT: [[file:../../outside.org]]")))))))
+
+(deftest record-create-refuses-missing-migrated-imports-before-writing
+  (doseq [dry-run? [false true]]
+    (with-temp-dir
+      (fn [root]
+        (bootstrap-record-graph! root)
+        (let [tasks-path (str (fs/path root "TASKS.org"))
+              record-path (str (fs/path root "design" "log" "feature.org"))]
+          (spit tasks-path
+                (str/replace (slurp tasks-path)
+                             ":CUSTOM_ID: aaaa2222-2222-4333-8444-555555555552\n:END:"
+                             (str ":CUSTOM_ID: aaaa2222-2222-4333-8444-555555555552\n:END:\n"
+                                  "#+IMPORT: [[file:notes/missing.org]]")))
+          (let [before (slurp tasks-path)
+                {:keys [err exit]}
+                (apply run-cli! (cond-> ["--root" root "--format" "json"
+                                        "record" "create" "aaaa1111-2222-4333-8444-555555555551"
+                                        "--path" "design/log/feature.org"]
+                                 dry-run? (conj "--dry-run")))
+                error (when (seq err) (parse-json-error err))]
+            (is (= 1 exit))
+            (is (= "validation" (:code error)))
+            (is (not (fs/exists? record-path)))
+            (is (= before (slurp tasks-path)))))))))
+
+(deftest record-create-keeps-plan-path-sandboxed
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-parent-child-graph! root)
+      (let [tasks-path (str (fs/path root "TASKS.org"))
+            before (slurp tasks-path)
+            {:keys [err exit]}
+            (run-cli! "--root" root "--format" "json"
+                      "record" "create" "aaaa1111-2222-4333-8444-555555555551"
+                      "--path" "../outside-record.org")
+            error (parse-json-error err)]
+        (is (= 1 exit))
+        (is (= "path-outside-project" (:code error)))
+        (is (= before (slurp tasks-path)))))))
+
 (deftest record-custom-path-imports-resolve-and-existing-files-stay-untouched
   (doseq [record-path ["design/log/nested/feature.org" "notes/feature.org"]]
     (with-temp-dir

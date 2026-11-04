@@ -197,7 +197,7 @@ ID-accepting commands accept full `:CUSTOM_ID:` values or any unique prefix of a
 
 ## Change-record scaffolding
 
-`ot record create <id>` creates the plan file when missing, attaches `#+IMPORT:` to the parent task, and migrates existing child task trees from the parent into the new record's `* Plan` section. Existing record files are not modified for migration. The scaffold emits the org-plan required sections (`* Intent`, `* Summary`, `* Plan`, `* Implementation`); optional sections such as `* Validation` are added by the author only when they earn their place. `ot doctor` checks spec-aware records for the required four and warns on a present-but-empty `* Validation`.
+`ot record create <id>` creates the plan file when missing, attaches `#+IMPORT:` to the parent task, and migrates existing child task trees from the parent into the new record's `* Plan` section. Imported child targets are preserved as rebased source-relative `file:` links; an unresolved target fails before either file is written. Existing record files are not modified for migration. The scaffold emits the org-plan required sections (`* Intent`, `* Summary`, `* Plan`, `* Implementation`); optional sections such as `* Validation` are added by the author only when they earn their place. `ot doctor` checks spec-aware records for the required four and warns on a present-but-empty `* Validation`.
 
 `--mode retrospective` also computes the `git log` scope from `:STARTED:`/`CLOSED:` and returns it in the JSON result for the prompting layer to use.
 

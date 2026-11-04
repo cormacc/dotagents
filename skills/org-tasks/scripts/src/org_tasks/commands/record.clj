@@ -79,27 +79,48 @@
         (str "[[" (name kind) ":" id "][" summary "]]")
         (str "[[" (name kind) ":" id "]]")))))
 
+(defn- rebase-migrated-import [project-root plan-path task]
+  (if-not (:import-path task)
+    {:task task}
+    (let [target (links/resolve-task-link-target project-root task (:import-path task))]
+      (if (and target (fs/exists? target))
+        (let [path (str (fs/relativize (fs/parent plan-path) target))]
+          {:task (assoc task :import-path path :import-raw (str "[[file:" path "]]"))})
+        {:error {:code "validation"
+                 :message (str "Migrated import does not resolve to an existing project file: "
+                               (:import-path task))}}))))
+
 (defn- relevel-for-plan
-  "Return `task` re-levelled so direct children of `parent-level`
-  become level-2 plan tasks under `* Plan`, preserving deeper nesting."
-  [parent-level task]
-  (let [level (max 2 (inc (- (:level task) parent-level)))]
-    (-> task
-        (assoc :level level)
-        (update :children #(mapv (partial relevel-for-plan parent-level) %))
-        ;; Import-expanded children are loader state, not on-disk children to
-        ;; copy into a newly scaffolded record.
-        (dissoc :import-children))))
+  "Return a re-levelled, import-rebased `task` or its migration error."
+  [project-root plan-path parent-level task]
+  (let [{rebased :task error :error} (rebase-migrated-import project-root plan-path task)]
+    (if error
+      {:error error}
+      (loop [remaining (:children rebased) children []]
+        (if-let [child (first remaining)]
+          (let [result (relevel-for-plan project-root plan-path parent-level child)]
+            (if-let [error (:error result)]
+              {:error error}
+              (recur (rest remaining) (conj children (:task result)))))
+          {:task (-> rebased
+                     (assoc :level (max 2 (inc (- (:level rebased) parent-level)))
+                            :children children)
+                     ;; Import-expanded children are loader state, not on-disk children to
+                     ;; copy into a newly scaffolded record.
+                     (dissoc :import-children))})))))
 
-(defn- migrated-plan-block [parent-task]
-  (let [children (mapv #(relevel-for-plan (:level parent-task) %)
-                       (:children parent-task))]
-    (when (seq children)
-      (str/trim-newline (parser/serialize-tasks children)))))
+(defn- migrated-plan-block [project-root plan-path parent-task]
+  (loop [remaining (:children parent-task) children []]
+    (if-let [child (first remaining)]
+      (let [result (relevel-for-plan project-root plan-path (:level parent-task) child)]
+        (if-let [error (:error result)]
+          {:error error}
+          (recur (rest remaining) (conj children (:task result)))))
+      {:plan-block (when (seq children)
+                     (str/trim-newline (parser/serialize-tasks children)))})))
 
-(defn- scaffold-plan-content [task setup-file-rel-path]
-  (let [parent-link (parent-link-target task :task)
-        plan-block  (migrated-plan-block task)]
+(defn- scaffold-plan-content [task setup-file-rel-path plan-block]
+  (let [parent-link (parent-link-target task :task)]
     (str/join "\n"
               (filter some?
                       [(str "#+TITLE: " (:summary task))
@@ -171,45 +192,49 @@
                            :message (str "Plan path resolves outside project root: " rel-path)})
 
           :else
-          (let [target-dir  (str (fs/parent abs))
-                ;; Canonicalise the setup path the same way `abs` was
-                ;; (resolve-project-path realpaths its result), so the
-                ;; relativize operands share a base even when the project
-                ;; root is under a symlink (e.g. macOS /var -> /private/var).
-                ;; Mixing a realpath'd dir with a raw one produced a broken
-                ;; climbing `#+SETUPFILE:` link.
-                setup-path  (or (paths/resolve-project-path project-root project-root "TASKS.setup.org")
-                                (str (fs/path project-root "TASKS.setup.org")))
-                setup-file-rel (str (fs/relativize target-dir setup-path))
-                content     (scaffold-plan-content target setup-file-rel)
-                existed?    (fs/exists? abs)
-                record-link (record-import project-root (:tasks files) target abs)
-                import-raw (:raw record-link)
-                import-path (:path record-link)
-                absorbed? (and (not existed?) (seq (:children target)))
-                updated-target (cond-> (assoc target
-                                             :import-path import-path
-                                             :import-raw import-raw)
-                                 absorbed? (assoc :children []))
-                tree-new (tree/update-by-id tasks full-id (constantly updated-target))
-                scope (when (= mode :retrospective)
-                        (let [started (parser/get-task-started target)
-                              closed  (:closed target)]
-                          {:since started
-                           :until closed
-                           :commits (git-log-commits project-root started closed)}))]
-            (when-not (:dry-run opts)
-              (fs/create-dirs (fs/parent abs))
-              (when-not existed?
-                (loader/atomic-write abs content))
-              (loader/save-source-roots project-root tree-new))
-            (out/emit-result
-              opts
-              {:taskId full-id
-               :recordPath abs
-               :importRaw import-raw
-               :created (not existed?)
-               :absorbedSubtasks (boolean absorbed?)
-               :scope scope
-               :text/lines
-               [(str (if existed? "Updated #+IMPORT → " "Scaffolded ") abs)]})))))))
+          (let [existed? (fs/exists? abs)
+                migration (when-not existed?
+                            (migrated-plan-block project-root abs target))]
+            (if-let [error (:error migration)]
+              (out/emit-error opts error)
+              (let [target-dir  (str (fs/parent abs))
+                    ;; Canonicalise the setup path the same way `abs` was
+                    ;; (resolve-project-path realpaths its result), so the
+                    ;; relativize operands share a base even when the project
+                    ;; root is under a symlink (e.g. macOS /var -> /private/var).
+                    ;; Mixing a realpath'd dir with a raw one produced a broken
+                    ;; climbing `#+SETUPFILE:` link.
+                    setup-path  (or (paths/resolve-project-path project-root project-root "TASKS.setup.org")
+                                    (str (fs/path project-root "TASKS.setup.org")))
+                    setup-file-rel (str (fs/relativize target-dir setup-path))
+                    content     (scaffold-plan-content target setup-file-rel (:plan-block migration))
+                    record-link (record-import project-root (:tasks files) target abs)
+                    import-raw (:raw record-link)
+                    import-path (:path record-link)
+                    absorbed? (and (not existed?) (seq (:children target)))
+                    updated-target (cond-> (assoc target
+                                                 :import-path import-path
+                                                 :import-raw import-raw)
+                                     absorbed? (assoc :children []))
+                    tree-new (tree/update-by-id tasks full-id (constantly updated-target))
+                    scope (when (= mode :retrospective)
+                            (let [started (parser/get-task-started target)
+                                  closed  (:closed target)]
+                              {:since started
+                               :until closed
+                               :commits (git-log-commits project-root started closed)}))]
+                (when-not (:dry-run opts)
+                  (fs/create-dirs (fs/parent abs))
+                  (when-not existed?
+                    (loader/atomic-write abs content))
+                  (loader/save-source-roots project-root tree-new))
+                (out/emit-result
+                  opts
+                  {:taskId full-id
+                   :recordPath abs
+                   :importRaw import-raw
+                   :created (not existed?)
+                   :absorbedSubtasks (boolean absorbed?)
+                   :scope scope
+                   :text/lines
+                   [(str (if existed? "Updated #+IMPORT → " "Scaffolded ") abs)]})))))))))

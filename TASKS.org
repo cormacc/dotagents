@@ -457,7 +457,8 @@ CLOSED: [2026-11-04 Wed 00:29]
 :END:
 The locally maintained skills/skill-creator/references/eval-workflow.md shows grading directly under a configuration, while load_run_results in skills/skill-creator/scripts/aggregate_benchmark.py only discovers configuration/run-N/grading.json. Align the owned workflow instructions with that consumer and make callers check the discovered run count before interpreting an aggregate. Keep the vendored Python implementation unchanged unless deliberately reclassified or fixed upstream. Origin: dotagents; observed during approved Matt Pocock adaptation evaluations on 2026-11-03. Evidence: aggregation of configuration/grading.json exited successfully with an empty runs array; staging the same grades under configuration/run-1/grading.json produced the expected paired runs. The corrected current results are retained in design/log/2026-11-03-apply-matt-pocock-adaptations/evaluations.json.
 
-** STARTED Preserve nested imports when record creation migrates children :skill:org_tasks:
+** DONE Preserve nested imports when record creation migrates children :skill:org_tasks:
+CLOSED: [2026-11-04 Wed 02:11]
 :PROPERTIES:
 :CUSTOM_ID: c60595fa-86fb-4b2b-9c79-43bc7953d910
 :CREATED: [2026-11-04 Wed 01:45]
@@ -466,8 +467,9 @@ The locally maintained skills/skill-creator/references/eval-workflow.md shows gr
 :LOGBOOK:
 - Created [2026-11-04 Wed 01:45]
 - State "STARTED" from "TODO" [2026-11-04 Wed 01:46]
+- State "DONE" from "STARTED" [2026-11-04 Wed 02:11]
 :END:
-record create moves child task text into a new change-record but retains child import text interpreted in the old source context. A child with a plan: import that was valid in TASKS.org became a broken import in the new record because its local link template was not carried over. Desired outcome: preserve each nested import target through source relocation using the existing link/path resolver; do not change path sandbox semantics.
+~record create~ resolves migrated child and descendant imports in their original source context and emits ~file:~ links relative to the new record. Missing or out-of-root targets return ~validation~ before either file is written. The existing path sandbox semantics, IDs, states and nesting are preserved; existing-record and dry-run boundaries remain covered.
 
 Origin:
 - cwd: /home/cormacc/dotfiles/agents
@@ -475,4 +477,4 @@ Origin:
 - sender: agent
 
 Evidence:
-During the memory-plan migration at e938733, ot doctor reported broken-import for the moved pi-hermes-memory child, resolving design/log/plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org. Replacing that import with the same-directory file link restored doctor error count to zero. The parent record-create result had ok true and absorbedSubtasks true. Add disposable tests for named-template and relative child imports in normal and nested destination directories, preserving IDs, state and target identity.
+During the memory-plan migration at e938733, ot doctor reported broken-import for the moved pi-hermes-memory child, resolving design/log/plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org. Replacing that import with the same-directory file link restored doctor error count to zero. The parent record-create result had ok true and absorbedSubtasks true. Named-template and relative imports are tested in normal and nested destination directories. Root reproduced the review's missing-target finding with an existing-target positive control, observed six failures in the new normal/dry-run regression, and verified the fix. Fresh independent closeout review found no issues; the final focused namespace passed 9 tests and 102 assertions.
