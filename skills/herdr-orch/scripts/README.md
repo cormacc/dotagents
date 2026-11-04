@@ -90,6 +90,17 @@ A child calls the injected absolute launcher path:
 
 Each `--artifact` becomes a portable Markdown link. Use `<relative-path>` or `<relative-path> :: <purpose>`. The parent push shows an advisory link before validation. A successful `collect` or `collect --any` returns existence-validated links in `result.artifact-links`. The URI uses `Path.toUri` and contains no terminal-control escape. Clickability depends on the parent harness and terminal. See [docs/contract.md#Artifact links](docs/contract.md#artifact-links).
 
+## Retire an integrated branch
+
+`oh worktree remove` retains the branch; branch deletion is an explicit parent operation, not an `oh` action. See [docs/contract.md#Worktree reconciliation and teardown](docs/contract.md#worktree-reconciliation-and-teardown).
+
+1. Capture and close the child, integrate its committed work, and remove its managed checkout with `oh worktree remove <full-task-uuid>`. Inspect any reported dirt before teardown.
+2. Read the recorded branch from `oh task status <full-task-uuid>`. Set `branch` to that exact value; do not select branches by an `orch/*` wildcard. Inspect `git worktree list --porcelain` and confirm that no remaining checkout uses it.
+3. Run `git merge-base --is-ancestor "$branch" HEAD` from the integration checkout. Continue only when its exit status is 0; an error or non-ancestor result is not permission to delete.
+4. Run `git branch -d -- "$branch"`. A refusal leaves the branch for review; do not replace `-d` with `-D` to bypass it.
+
+Squash or cherry-pick integration can fail the ancestry check even when the intended change landed. Keep that branch until its retained commits have been reviewed against the integrated result. This procedure deliberately does not automate deletion in that case.
+
 ## Raw passthrough
 
 `oh` also wraps the raw Herdr `pane`, `tab`, `ws`, and `agent` verbs. The wrapper is not a transparent mirror: it imposes agent-facing defaults that differ from upstream, so pass the flags explicitly when upstream semantics matter. `oh agent wait` defaults to a 600 s timeout where `herdr` waits indefinitely, and the read family defaults to `--source recent-unwrapped` (upstream: `recent`), falls back to `visible` on empty output, and truncates to 2000 lines / 50 KB.
