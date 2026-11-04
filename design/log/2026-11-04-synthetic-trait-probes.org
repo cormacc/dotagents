@@ -79,6 +79,21 @@ Acceptance criteria:
 - The write-boundary outcome is measured from target state, not only model prose.
 - External requests and arbitrary shell effects remain explicitly bounded.
 
+** TODO Measure the complete packaged-persona Pi baseline for synthetic gates
+:PROPERTIES:
+:CUSTOM_ID: 03e5eab6-e91e-43bd-91ca-089ca92f4187
+:CREATED: [2026-11-04 Wed 01:55]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 01:55]
+:END:
+Acceptance criteria:
+- Focused and grounded are probed with the actual packaged persona and explicit deployed instruction resources, not the native Codex scaffold alone.
+- The read-only gate retains an enabled confined mutation control when integrated with a reusable Pi runner.
+- The actual provider payload records baseline and treatment presence with positive and known-bad controls.
+- Fixed conditions, exact model/provider, resource scope and non-discriminating results remain explicit.
+The existing synthetic SDK observation does not establish the complete deployment baseline; do not remove a fragment on that evidence alone.
+
 * Implementation
 - Current runner: ~scripts/run-trait-gate.bb~ uses ~codex exec --sandbox read-only --ignore-user-config --ephemeral~, the caller's Codex home for authentication and no subagent persona. It derives the control from the treated scaffold by removing one trait token line.
 - One focused pair and one grounded pair ran at ~gpt-5.6-terra~; all four native logs identify provider ~openai~. Root inspected the final outputs and prompt Git object hashes. The directory moves preserve the prompt bytes; the persona resolution test uses the directory path.
