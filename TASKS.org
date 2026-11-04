@@ -260,19 +260,6 @@ Acceptance criteria:
 
 * Fixes
 
-** STARTED herdr-orch: failed-spawn hygiene :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: e66d5a45-823f-4c36-884b-2657c97d65c8
-:CREATED: [2026-10-20 Tue 12:25]
-:STARTED: [2026-11-01 Sun 12:08]
-:END:
-:LOGBOOK:
-- Created [2026-10-20 Tue 12:25]
-- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
-:END:
-#+IMPORT: [[plan:2026-11-04-failed-spawn-hygiene.org]]
-Aggregate for residue left by a spawn that fails before its agent starts, plus small herdr-orch doc corrections. The two field reports (a22509e2, 435c5d86) share one trigger: agent_pane_busy on back-to-back oh task start. Verified 2026-10-20 at e67e868: safe-cleanup! in cli.clj marks the entry failed and closes the pane, but does not remove a managed checkout or its orch/<id> branch; contract.md section Retention states ledger entries are never deleted, so filtering failed entries from routine listings is the likely fix rather than a retire verb. contract.md section Start and prompt outcomes bans a local start retry (4741d59), so agent_pane_busy needs a repro on the installed Herdr (0.9.5) and either an upstream report or an explicit reversal of that decision.
-
 * Upstream issues
 
 * Chores

@@ -4726,3 +4726,20 @@ Origin:
 
 Evidence:
 During the memory-plan migration at e938733, ot doctor reported broken-import for the moved pi-hermes-memory child, resolving design/log/plan:2026-05-21-evaluate-pi-hermes-memory-plugin.org. Replacing that import with the same-directory file link restored doctor error count to zero. The parent record-create result had ok true and absorbedSubtasks true. Named-template and relative imports are tested in normal and nested destination directories. Root reproduced the review's missing-target finding with an existing-target positive control, observed six failures in the new normal/dry-run regression, and verified the fix. Fresh independent closeout review found no issues; the final focused namespace passed 9 tests and 102 assertions.
+
+** DONE herdr-orch: failed-spawn hygiene :skill:herdr_orch:
+CLOSED: [2026-11-04 Wed 10:23]
+:PROPERTIES:
+:CUSTOM_ID: e66d5a45-823f-4c36-884b-2657c97d65c8
+:CREATED: [2026-10-20 Tue 12:25]
+:STARTED: [2026-11-01 Sun 12:08]
+:ARCHIVED: [2026-11-04 Wed 10:23]
+:ARCHIVE_OLPATH: Fixes
+:END:
+:LOGBOOK:
+- Created [2026-10-20 Tue 12:25]
+- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
+- State "DONE" from "STARTED" [2026-11-04 Wed 10:23]
+:END:
+#+IMPORT: [[plan:2026-11-04-failed-spawn-hygiene.org]]
+Failed launches retain audit history but are hidden from routine listings; rollback removes only a pristine managed checkout created by the failed round and retains its branch. Branch-retirement guidance and trait documentation corrections are complete. Bounded macOS and Linux investigations on Herdr 0.9.5 did not reproduce the readiness race; the Linux occupied-pane control did return agent_pane_busy. The fail-fast policy stands, with no local retry or upstream issue. See the linked record for acceptance, validation and the trigger to reopen the investigation.

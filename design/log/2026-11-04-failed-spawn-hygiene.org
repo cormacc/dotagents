@@ -1,8 +1,8 @@
 #+TITLE: herdr-orch: failed-spawn hygiene
 #+DATE: 2026-11-04 Wed
-#+PARENT: [[task:e66d5a45-823f-4c36-884b-2657c97d65c8][herdr-orch: failed-spawn hygiene]]
+#+PARENT: [[archive:e66d5a45-823f-4c36-884b-2657c97d65c8][herdr-orch: failed-spawn hygiene]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Active
+#+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
 
 * Intent
@@ -34,7 +34,7 @@ Automatic removal of a pristine failed-launch checkout and fail-fast with no loc
 *** Edge cases
 - [X] Publication status ~FAILED~, invalid captures and closed successful rounds are not confused with lower-case launch status ~failed~.
 - [X] Listing never changes ledger bytes or resource state.
-- [ ] A readiness reproduction records client/server versions and the exact upstream refusal.
+- [X] Bounded readiness investigations recorded client/server versions and outcomes on macOS and Linux. The original exact-refusal criterion was not met: neither host reproduced the race. On 2026-11-04 the Linux occupied-pane control returned ~agent_pane_busy~ with exit 1; no upstream race report is warranted by these trials.
 - [X] A checkout that was never cut reports ~missing~; a measurement ~launch~-phase failure is excluded from cleanup.
 - [X] A retained checkout stays removable with ~oh worktree remove~.
 *** Anti-criteria
@@ -59,10 +59,10 @@ Automatic removal of a pristine failed-launch checkout and fail-fast with no loc
 - ADDED :: [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Failed-launch checkout cleanup' defines the pristine-and-owned predicate, the ~:checkout-cleanup~ outcomes and the manual recovery path; section 'Preconditions' states the fail-fast retry policy.
 - MODIFIED :: [[file:../../skills/herdr-orch/SKILL.md]], [[file:../../skills/herdr-orch/README.org]] and [[file:../../skills/herdr-orch/scripts/README.md]] tell a parent that a failed spawn has cleaned up and that a retry is its own decision.
 
-** Risks
-- Hiding failed entries by default can surprise scripts that use listings as an audit export; the explicit option and unchanged full-UUID lookup must be documented and tested together.
-- A launch may fail after creating valuable files. Mitigated: the cleanup removes only a pristine, owned checkout, without ~--force~, and retains anything else with a reason.
-- A cleanup interrupted after the ~failed~ write leaves an entry with ~:worktree~ and no ~:checkout-cleanup~. Mitigated: the round is not live, so ~oh worktree list|remove~ recovers it.
+** Gotchas
+- Failed launches are hidden from routine listings, not deleted; audit callers need ~--include-failed~.
+- An interrupted cleanup can leave a checkout without ~:checkout-cleanup~; inspect it through ~oh worktree list|remove~.
+- Bounded negative trials do not rule out an intermittent readiness race. Reopen the investigation if a fresh field report supplies a reproducible trigger.
 
 * Plan
 ** DONE herdr-orch: a failed spawn round is permanent ledger residue :skill:herdr_orch:
@@ -77,18 +77,7 @@ CLOSED: [2026-11-04 Wed 01:19]
 - State "STARTED" from "TODO" [2026-11-04 Wed 01:03]
 - State "DONE" from "STARTED" [2026-11-04 Wed 01:19]
 :END:
-A round whose spawn failed cannot be removed from the ledger. `oh task prune` refuses it with "prune refused: assignment is already terminal", because prune requires a non-terminal `:status` (docs/contract.md, Prune). `oh task compact` retires `:envelope :text` only and never removes an entry. The dead entry therefore stays in `oh task status`/`list` output for the life of the ledger.
-
-Desired outcome: a way to retire a `failed` round, or an explicit contract statement that failed entries are permanent and are filtered from routine listings.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com/cormacc/dotagents @ main
-- timestamp: [2026-09-17 Thu 22:30]
-- sender: agent
-
-Evidence:
-Observed while spawning two reviewers: the first `oh task start reviewer --model claude-fable` failed with herdr `agent_pane_busy` (target pane not an available shell), creating round 51610531-d59c-44eb-af90-3ef5d104ac9f with status `failed`. A retry succeeded. `oh task prune 51610531-...` then refused as above, and no other verb retires the entry. Related but distinct from 08fba41e (no-publication rounds), which close --abandon now covers.
+Failed launches remain in audit history; routine listings hide them unless ~--include-failed~ is supplied.
 
 ** DONE herdr-orch: oh task start fails with agent_pane_busy when started right after another spawn :skill:herdr_orch:
 CLOSED: [2026-11-04 Wed 09:59]
@@ -102,18 +91,7 @@ CLOSED: [2026-11-04 Wed 09:59]
 - State "STARTED" from "TODO" [2026-11-04 Wed 08:43]
 - State "DONE" from "STARTED" [2026-11-04 Wed 09:59]
 :END:
-A second `oh task start` issued immediately after a first one failed with herdr `agent_pane_busy` ("agent target pane ... is not an available shell"): the new tab's pane was not yet a usable shell when `agent start` ran. The failed round had already created a managed checkout and its `orch/<id>` branch, which the parent had to remove by hand (`oh worktree remove`, then `git branch -d`). Desired outcome: `oh` waits for the new pane to report an available shell (or retries `agent start` briefly) before starting the agent, and removes a managed checkout it created for a round that failed before the agent started.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: git@git.nmd.ie:products/connect/portal @ fail-fast
-- timestamp: [2026-10-14 Wed 11:10]
-- sender: agent
-
-Evidence:
-- 2026-10-13: `oh task start worker` run twice in one shell command; the first succeeded, the second returned exit 1 with `agent_pane_busy` for pane `w2:p41`, round status `failed`, worktree `.tmp/herdr-orch/worktrees/<id>` at the base commit. `oh task close` then refused ("assignment is not captured"), and `close --abandon` refused ("already terminal"). A retry 8 s after a later start succeeded.
-
-Result: a failed interactive launch removes the pristine managed checkout it created and keeps the branch; the error names the round and the cleanup outcome. The wait-or-retry half was rejected by the fail-fast decision in [[*Decisions]]. A macOS reproduction on Herdr 0.9.5 found no ~agent_pane_busy~ in 17 trials; the Linux reproduction is task 7c3e0c68.
+Failed interactive launches remove only the pristine managed checkout they created and retain the branch. Fail-fast replaces the requested wait/retry; see [[*Decisions]].
 
 ** DONE [#C] herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md :skill:herdr_orch:
 CLOSED: [2026-11-01 Sun 12:38]
@@ -127,9 +105,7 @@ CLOSED: [2026-11-01 Sun 12:38]
 - State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
 - State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
 :END:
-skills/herdr-orch/references/traits.md claims \`incompatible-with:\` enforcement is documented/implemented in skills/herdr-orch/scripts/docs/contract.md, and contract.md's Trait composition section claims herdr-orch.traits/interpolate returns "incompatibility declarations by trait in :incompatibilities". Neither is true: traits.clj's interpolate returns only :text, :resolved, :unknowns and :repeats (no :incompatibilities key), and no \`incompatible-with:\` frontmatter parsing or enforcement exists anywhere in traits.clj or cli.clj. Identified but deliberately left unfixed during [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]] ("Correct the documentation rather than assume a conflict engine exists. This plan does not add a generic semantic conflict solver.") Correct both docs to match the actual implementation (or implement the feature, if still wanted).
-
-Result: both references and the Pi =TraitExpansion= type match the implemented result; the contract explicitly states that semantic conflicts are not enforced. The result-key assertion, trait suites and TypeScript check pass. No conflict engine was added.
+Trait references and the Pi result type match the implemented keys. No semantic conflict engine was added.
 
 ** DONE herdr-orch: guidance or a verb for retiring integrated orch/* branches :skill:herdr_orch:
 CLOSED: [2026-11-04 Wed 00:24]
@@ -143,28 +119,35 @@ CLOSED: [2026-11-04 Wed 00:24]
 - State "STARTED" from "TODO" [2026-11-04 Wed 00:24]
 - State "DONE" from "STARTED" [2026-11-04 Wed 00:24]
 :END:
-oh worktree remove deletes the managed checkout but retains its orch/<id> branch, and contract.md section Worktree reconciliation and teardown states that oh never deletes a branch. Retained branches accumulate after integration. Decide between documented operator guidance and an ownership-checked verb. Carried over from the cancelled worktrunk investigation (47f84d9a), whose worktree-management motivation the managed checkouts (--worktree new, oh worktree list/remove) already cover.
+Operator guidance is in [[file:../../skills/herdr-orch/scripts/README.md]] section 'Retire an integrated branch'. Branch deletion remains parent-owned.
 
-** TODO herdr-orch: reproduce agent_pane_busy on a Linux host :skill:herdr_orch:
+** DONE herdr-orch: reproduce agent_pane_busy on a Linux host :skill:herdr_orch:
+CLOSED: [2026-11-04 Wed 10:19]
 :PROPERTIES:
 :CUSTOM_ID: 7c3e0c68-3063-4f55-a8ea-e4c676710ef6
 :CREATED: [2026-11-04 Wed 09:59]
+:STARTED: [2026-11-04 Wed 10:16]
 :END:
 :LOGBOOK:
 - Created [2026-11-04 Wed 09:59]
+- State "STARTED" from "TODO" [2026-11-04 Wed 10:16]
+- State "DONE" from "STARTED" [2026-11-04 Wed 10:19]
 :END:
-The 2026-10-13 field report of `agent_pane_busy` on back-to-back `oh task start` came from a Linux host. A macOS reproduction on Herdr 0.9.5 (17 trials, see [[*Implementation]]) found none. Run the same disposable-session reproduction (`tab create`, `pane process-info`, `pane rename`, `agent start` with no delay; one batch that closes each tab and one that keeps agents live) on the Linux workstation with the installed Herdr. If it reproduces, record client/server versions and the exact refusal, and draft an upstream issue for user approval. Do not add a local retry: the fail-fast decision stands unless the race is frequent and upstream is slow.
+Linux investigation complete: 16 no-delay launches succeeded; an occupied-pane control returned ~agent_pane_busy~. See [[*Validation]]. No upstream issue was drafted because the readiness race was not reproduced.
 
 * Implementation
-- Current ~safe-cleanup!~ in ~skills/herdr-orch/scripts/src/herdr_orch/cli.clj~ records lower-case ~failed~, a failure timestamp and phase, then attempts pane closure for split/rename/start phases. The listing branches of ~task!~ omit only lower-case ~failed~ by default; ~--include-failed~ restores those audit entries. Full-UUID status remains unfiltered and refuses that listing-only option.
-- Independent closeout review found no issues in the filter change. The root repository check passed, including the CLI regression, adapter and extension suites; listing fixtures assert the exact status distinction, ledger bytes and absence of fake-Herdr mutations.
-- No live failure was forced in the session that shipped the filter. The stored historical report remains attributed to its reporter; it is not a reproduction on the installed server.
-- ~safe-cleanup!~ calls ~cleanup-failed-checkout!~ after the ~failed~ write and the pane close. ~failed-checkout-retention~ returns the first reason to keep the checkout, from ownership through ~reconciliation~ state, attached branch, tip, dirt, ignored paths and live reference; otherwise ~git worktree remove~ runs without ~--force~. The outcome is written to ~:checkout-cleanup~ and never throws. The spawn's outer handler rethrows the launch error with ~:task~ and ~:checkout-cleanup~ added to its data. The fake Herdr gained ~FAKE_START_WRITE~ to leave content in the work root before a start failure.
-- Tests: five ~cli_test.clj~ tests replace the old survival test (pristine removal plus retry, dirty and ignored retention, manual recovery of a retained checkout, an existing target, the measurement-phase exclusion) and a ~missing~ assertion on the creation-failure test. The focused run passed (7 tests, 60 assertions). With the dirty and ignored clauses disabled, the same run gave 7 failures. The full ~herdr-orch.cli-test~ namespace on Darwin gave 351 tests, 16 failures and 27 errors; a HEAD baseline in a separate checkout gave 347 tests and the identical set of failing tests, all measurement tests, which is consistent with Linux-only detachment. ~check-section-links.bb~ reported 0 problems, and clj-kondo reported no finding on a changed line.
-- Readiness reproduction, 2026-11-04, isolated session ~orchrepro~, Darwin, Herdr client and server 0.9.5, kind ~pi~, in oh's order (~tab create~, ~pane process-info~, ~pane rename~, ~agent start~) with no delay: 1 control trial, 10 trials that closed each tab, and 6 trials that kept up to 6 agents live. All 17 ~agent start~ calls exited 0; none returned ~agent_pane_busy~. Two trials have long wall-clock times because the host slept during them. The field report came from a Linux host, so this does not rule the race out there. The session, its workspaces and an empty Pi session directory were removed. No upstream issue was drafted, because there is no reproduction to report.
+- The cleanup and listing policy is defined by [[file:../../skills/herdr-orch/scripts/docs/contract.md]] sections 'Failed-launch checkout cleanup' and 'JSON output'. The contract was reviewed at closeout; the investigation required no behaviour or spec change.
+- Cleanup regression coverage includes pristine removal and retry, dirty/ignored-content retention, existing-target preservation, manual recovery, missing checkout and measurement-phase exclusion. The earlier mutation check reported 7 failures when dirty/ignored guards were disabled.
+- Linux closeout run at ~0d76aff~: ~herdr-orch.cli-test~, 351 tests and 3315 assertions, 0 failures and 0 errors, through the repository's isolated test runner. This supersedes the recorded Darwin run's 16 failures and 27 errors; it does not establish their cause.
+
+* Validation
+- macOS, 2026-11-04, Herdr client/server 0.9.5, kind ~pi~: the earlier record reports 17 successful launches in an isolated session (1 control, 10 close-after-launch trials, 6 agents kept live), without a readiness-race refusal.
+- Linux 7.3.1 x86_64, 2026-11-04, Herdr client/server 0.9.5, kind ~pi~, disposable session ~spawn-linux-7c3e0c68~: 1 launch control after a 2-second delay, then 10 close-after-launch trials and 6 trials keeping agents live. The 16 experimental trials followed ~tab create~, ~pane process-info~, ~pane rename~, ~agent start~ with no added delay. All 17 launches exited 0.
+- Positive refusal control in the same run: starting another agent in the occupied control pane exited 1 with code ~agent_pane_busy~ and message ~agent target pane w2:p2 is not an available shell~. This validates refusal detection, not the reported readiness race.
+- The session was stopped and deleted; the subsequent session inventory contained only the running default session. No prompt was sent to the trial agents. No local retry or upstream issue was added. Raw commands, versions, results and the CLI suite log are local scratch evidence under ~.tmp/linux-spawn-7c3e0c68-a4/~.
 
 * Open questions
 ** DECIDED Should failed-launch checkout removal become automatic?
 Decision [2026-11-04 Wed 08:43]: yes, for a pristine checkout that the round created. Dirty and ignored content are retained, the branch is retained, a never-cut checkout reports ~missing~, and an interrupted cleanup falls back to ~oh worktree list|remove~.
 ** DECIDED Should an upstream readiness report replace the requested local retry?
-Decision [2026-11-04 Wed 08:43]: fail-fast with a clean rollback and no local retry. The caller runs the spawn again. An upstream report needs a reproduction first; the macOS reproduction found none, and a Linux reproduction is the remaining step.
+Decision [2026-11-04 Wed 08:43]: fail-fast with a clean rollback and no local retry. The caller runs the spawn again. An upstream report needs a reproduction first; neither the macOS nor Linux trials reproduced the readiness race. The bounded investigation is complete; reopen it on new reproducible evidence.
