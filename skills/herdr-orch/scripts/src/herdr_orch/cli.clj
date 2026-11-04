@@ -20,7 +20,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--fresh] [--format json|markdown|text] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports each configured provider's remaining subscription allowance, read from the harness's cached OAuth credential and cached per provider; it never contacts Herdr and never writes a credential store. --provider is repeatable and an unconfigured name is a usage error; --fresh bypasses the cache; --detail (markdown only) adds the credential source and reset times.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n  oh usage [--provider NAME]* [--fresh] [--format json|markdown|text] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\nusage reports allowlisted subscription evidence from the operator-installed quota-axi executable; it never contacts Herdr or installs software. --provider is repeatable and an unconfigured name is a usage error; --fresh requests zero upstream reuse age; --detail (markdown only) adds reviewed scope bounds and reset times.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -399,23 +399,7 @@
       (:timeout entry)
       core/default-timeout-ms))
 ;; --- model routing ----------------------------------------------------------------------
-;; A vector alias is routed once per launch, here, before any ledger or pane mutation, in both
-;; the interactive and the measurement path. A string alias or canonical ID never reaches this
-;; code with a vector, so it makes no usage call at all. Usage is read from `(home-directory)`
-;; (the credential root) and, when `HERDR_ORCH_USAGE_FIXTURE` names an EDN file, from that
-;; `{url {:status n :headers {} :body "..."}}` map instead of the network: a fixture file never
-;; falls through to the real endpoint, so tests cannot reach a provider.
-(defn- fixture-http-fn [path]
-  (let [responses (edn/read-string (slurp path))]
-    (fn [{:keys [url]}]
-      (or (get responses url)
-          (throw (ex-info "no usage fixture for URL" {:url url}))))))
-(defn- usage-http-fn []
-  (if-let [path (not-empty (System/getenv "HERDR_ORCH_USAGE_FIXTURE"))]
-    (fixture-http-fn path)
-    usage-mod/default-http-fn))
-(defn- usage-options [extra]
-  (merge {:home (home-directory) :http-fn (usage-http-fn)} extra))
+;; Resolve vector aliases before allocation; explicit models bypass collection.
 (defn- percent [fraction] (format "%.0f%%" (* 100.0 fraction)))
 (defn- candidate-summary [{:keys [canonical rank status remaining reserve reason]}]
   (str canonical " (rank " rank "): "
@@ -435,8 +419,8 @@
     (let [candidates (core/candidates config kind model)
           ;; An empty provider list would read as "all providers" in `usage-for`.
           usage (if (seq candidates)
-                  (usage-mod/usage-for config (usage-options {:providers (vec (distinct (map :provider candidates)))}))
-                  {})
+                  (usage-mod/usage-for config {:providers (vec (distinct (map :provider candidates)))})
+                  {:providers []})
           route (core/route candidates usage)]
       (when (:refused route)
         (fail (str "spawn refused: no candidate of model alias '" model "' has allowance for kind " kind ": "
@@ -3676,29 +3660,35 @@
     (let [listing (roster-listing)]
       (if (= format "json") listing (roster-text listing format (or section "all") detail?)))))
 ;; --- usage --------------------------------------------------------------------------------
-;; `oh usage` reports each configured provider's allowance through `usage-mod/usage-for`. Like
-;; `roster` it never contacts Herdr. JSON is the default envelope keyed by provider; text lists
-;; every field, and markdown shows status, remaining, reason and windows, with `--detail` adding
-;; the credential source, fetch time and reset times for the pi `/oh` rendering.
+;; Render only the collector's allowlisted evidence, never subprocess text.
 (def usage-formats #{"json" "markdown" "text"})
-(defn- instant-text [epoch-s] (str (java.time.Instant/ofEpochSecond (long epoch-s))))
-(defn- window-text [detail? {:keys [name scope used-fraction resets-at]}]
-  (str name (when scope (str " (" scope ")")) " " (percent used-fraction) " used"
-       (when (and detail? resets-at) (str ", resets " (instant-text resets-at)))))
-(defn- usage-line [{:keys [bold]} detail? provider {:keys [status reason remaining-fraction windows source fetched-at reserve]}]
-  (str "- " (bold provider) " -- " (clojure.core/name status)
-       "; " (if remaining-fraction (str (percent remaining-fraction) " remaining") "remaining unknown")
-       (when reason (str "; reason: " reason))
-       (when (seq windows) (str "; windows: " (str/join ", " (map #(window-text detail? %) windows))))
-       (when (and detail? source) (str "; source: " (clojure.core/name source)))
-       (when (and detail? (number? reserve)) (str "; reserve: " (percent reserve)))
-       (when (and detail? fetched-at) (str "; fetched: " (instant-text fetched-at)))))
 (defn usage-text [result format detail?]
-  (let [markup (if (= format "markdown") {:bold #(str "**" % "**")} {:bold identity})
-        detail? (or detail? (= format "text"))]
-    (if (empty? result)
+  (let [bold (if (= format "markdown") #(str "**" % "**") identity)
+        detail? (or detail? (= format "text"))
+        scope-text (fn [{:keys [scope status effectivePercentRemaining boundedBy]}]
+                     (str scope " "
+                          (if (and (= "known" status) (some? effectivePercentRemaining))
+                            (if (zero? effectivePercentRemaining) "exhausted" (str effectivePercentRemaining "% remaining"))
+                            "remaining unknown")
+                          (when (and detail? (seq boundedBy))
+                            (str " (bounded by " (str/join ", " boundedBy) ")"))))]
+    (if (empty? (:providers result))
       "No providers configured."
-      (str/join "\n" (map (fn [[provider r]] (usage-line markup detail? provider r)) result)))))
+      (str/join "\n"
+                (for [{:keys [localProvider provider state windows quotaSemantics reason]} (:providers result)
+                      :let [scopes (:effectiveAvailability quotaSemantics)
+                            known-scopes (filter #(= "known" (:status %)) scopes)]]
+                  (str "- " (bold localProvider) " -- " (:status state)
+                       "; " (if (seq known-scopes)
+                               (str/join "; " (map scope-text scopes))
+                               "remaining unknown")
+                       (when reason (str "; reason: " reason))
+                       (when (and detail? provider) (str "; quota provider: " provider))
+                       (when (and detail? (seq windows))
+                         (str "; windows: "
+                              (str/join ", " (for [{:keys [id percentUsed resetsAt]} windows]
+                                               (str id (when (some? percentUsed) (str " " percentUsed "% used"))
+                                                    (when resetsAt (str ", resets " resetsAt)))))))))))))
 (defn usage! [opts positional]
   (require-positionals positional 0 "usage")
   (let [format (or (one opts :format) "json") detail? (boolean (one opts :detail))
@@ -3710,8 +3700,7 @@
     ;; Validated before any credential read or fetch.
     (when-let [unknown (seq (remove configured names))]
       (fail (str "unknown provider: " (str/join ", " unknown)) {:unknown (vec unknown) :available (vec (sort configured))}))
-    (let [result (into (sorted-map)
-                       (usage-mod/usage-for config (usage-options {:providers (seq names) :fresh (boolean (one opts :fresh))})))]
+    (let [result (usage-mod/usage-for config {:providers (seq names) :fresh (boolean (one opts :fresh))})]
       (if (= format "json") result (usage-text result format detail?)))))
 (defn spawn-command! [opts positional]
   (let [[command] (require-positionals positional 1 "spawn")]

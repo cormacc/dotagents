@@ -4791,3 +4791,24 @@ The logic to determine the remaining subscription limits should be exposed via t
 
 I've provided a draft version of the new config format at [[file:./skills/herdr-orch/subagents/config.new.edn]]
 This is intended to provide direction -- propose changes as appropriate for efficiency and to facilitate provider identification for the purposes of routing.
+
+** DONE Replace local usage collection with quota-axi
+CLOSED: [2026-11-04 Wed 23:27]
+:PROPERTIES:
+:CUSTOM_ID: d0852ffd-78fd-4bf0-9cce-37e9776498df
+:CREATED: [2026-11-04 Wed 17:33]
+:STARTED: [2026-11-04 Wed 17:33]
+:ARCHIVED: [2026-11-04 Wed 23:27]
+:ARCHIVE_OLPATH: Explorations
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 17:33]
+- State "STARTED" from "TODO" [2026-11-04 Wed 17:33]
+- State "WAITING" from "STARTED" [2026-11-04 Wed 17:42]
+- State "STARTED" from "WAITING" [2026-11-04 Wed 17:47]
+- State "DONE" from "STARTED" [2026-11-04 Wed 21:12]
+- State "STARTED" from "DONE" [2026-11-04 Wed 21:16]
+- State "DONE" from "STARTED" [2026-11-04 Wed 23:27]
+:END:
+#+IMPORT: [[plan:2026-11-04-quota-axi-backend.org]]
+Delivered quota-axi reporting, shared explicit/confirmed user-local setup and Pi 1.5 SDK/adapter alignment, with 202 fewer production/config lines. Fresh independent review, the complete offline root suite and separate Pi extension suite passed. The linked record preserves config/schema changes, accepted refresh/identity limits and disclosed test incidents. Changes are uncommitted; no production quota-axi installation or live provider probe is included.

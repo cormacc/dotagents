@@ -708,7 +708,8 @@ function anthropicTop(e: Expectation, cap: number): Record<string, unknown> {
   if (disabled) out.thinking = { type: "disabled" };
   else if (c.supportsMidConvoEffort === true) {
     out.thinking = { type: "adaptive", display: "summarized", block_binding: { prefix_mismatch_behavior: "drop_block" } };
-    out.output_config = { effort: "high" };
+    // Pi 1.5 uses a low baseline; per-message markers carry the active and historical levels.
+    out.output_config = { effort: "low" };
   } else if (f.reasoning && enabled) {
     if (c.forceAdaptiveThinking === true) {
       out.thinking = { type: "adaptive", display: "summarized" };

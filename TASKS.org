@@ -116,6 +116,25 @@ pi-context 2.3.0 is installed for all projects (pinned in pi/settings.json) afte
 :END:
 Research task:3d7ea3e7-fc22-49a1-824d-3c400671ee70 found a fresh pi-web-access@0.46.0 resolution with its existing MCP SDK 1.32.1 pin audits clean; the live managed lock still has eight vulnerable packages. Before touching ~/.pi/agent/npm, choose and document the reconciliation mechanism, snapshot the previous package and lock state, retain lifecycle-script suppression, verify other managed packages remain present, and run the runtime audit plus isolated loading checks. Pi 1.4.0 skips unchanged top-level versions during update; its same-source install path does not pass --ignore-scripts. Do not replace the extension or enable automatic provider routing as part of this maintenance. Live provider calls need a separate approved scope.
 
+** DONE Evaluate quota-axi as the usage collection backend
+CLOSED: [2026-11-04 Wed 17:21]
+:PROPERTIES:
+:CUSTOM_ID: 72e7144f-c94a-4c41-bb51-1537f5136be1
+:CREATED: [2026-11-04 Wed 17:06]
+:STARTED: [2026-11-04 Wed 17:08]
+:HANDOFF: Owner follow-up relaxes prior blockers: accept one account per provider and native Codex credential refresh; document that native and Pi logins must use that same account. Owner accepts adopting quota-axi before reported upstream Claude/Pi credential PR lands, with periodic native Claude authentication as interim support. PR identity/status not independently verified. These replace the evaluation no-go assumptions, not its measured evidence. Next: draft single-CLI replacement plan with net deletion measurement, unknown-on-missing-credentials behaviour and offline tests; propose design/log/2026-11-04-quota-axi-backend.org before scaffolding. No live provider probe or commit authorised. Both evaluation children closed; reports under .tmp/quota-axi-eval.
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 17:06]
+- State "STARTED" from "TODO" [2026-11-04 Wed 17:08]
+- State "DONE" from "STARTED" [2026-11-04 Wed 17:21]
+:END:
+Compare a pinned quota-axi release with the committed subscription-usage backend using source inspection and isolated offline fixtures. Prefer replacement over an additional configurable backend. The owner permits contract changes where they reduce maintained code and enable more providers; make each proposed change and remaining integration cost explicit. Preserve read-only credential handling, no inference spend, routing ownership and safe test isolation. Deliver a measured deletion/replacement inventory, account/source compatibility, additional-provider mapping, and a go/no-go recommendation. No live provider calls, real credential reads, production switch or new commit is authorised by this evaluation.
+
+Outcome: do not replace production collection with unmodified quota-axi 0.1.69 (npm gitHead 5734c41eee52eb9a80ba67f47269ebc06c0c41fc). Root source checks confirmed Claude credential discovery covers environment/native/Keychain rather than Pi Anthropic, and Codex reaches an app-server fallback without a refresh-option gate; the published README states that fallback can renew auth.json. Root repeated isolated filesystem/network controls and the snapshot CLI: schema 6, Claude/Codex/Kimi rows, unavailable Z.AI, exit 0, empty stderr. This proves the executable boundary, not raw vendor normalisation or credential behaviour. Measured gross replacement surface is 460 production lines and 642 collector-test lines; net savings remain unmeasured. The scratch mapper omits account identity/effective-scope validation and is not an integration candidate.
+
+Recommended direction: retain local collection until upstream supports Pi Anthropic account lanes and a genuinely no-refresh Codex path, then use one pinned CLI backend with no local credential reader, provider normaliser or second cache. Accept upstream cache/status semantics, stale-as-unknown routing evidence and a changed allowlisted usage envelope; retain local routing policy, explicit account/scope joins, process/output bounds and secret isolation. The source review identifies Kimi and Z.AI as conditional additional subscription coverage, subject to credential-source alignment; no models are enabled. Reports: [[file:.tmp/quota-axi-eval/source-report.md]] and [[file:.tmp/quota-axi-eval/runtime-report.md]] (scratch evidence, not durable specifications). Both evaluation children were captured and closed. No production migration or commit was made.
+
 * Improvements
 
 ** STARTED [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
@@ -256,6 +275,26 @@ Acceptance criteria:
 - Confirm advisory applicability and the supported runtime/test baseline before selecting a new pin.
 - Trial any approved version in an isolated fixture with lifecycle scripts disabled; run installed-runtime, adapter and extension checks against the intended version.
 - Update package and lockfile together only after the compatibility and version-policy decision. Do not use npm audit fix --force or change the live Pi installation as an audit shortcut.
+
+** TODO Apply the AXI guidelines to CLI tooling
+:PROPERTIES:
+:CUSTOM_ID: 15eb9554-346e-4828-912f-b24a5ab8a7f2
+:CREATED: [2026-11-04 Wed 17:23]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 17:23]
+:END:
+Review the AXI guidelines at [[https://axi.md]] and apply the relevant guidance to repository-maintained CLI tooling. Identify the affected tools and propose a scoped plan before implementation.
+
+** TODO Adapt herdr-mods quota for the Herdr CLI
+:PROPERTIES:
+:CUSTOM_ID: 9e209f54-73f2-4f3e-b08d-81559a268fc8
+:CREATED: [2026-11-04 Wed 17:47]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 17:47]
+:END:
+Adapt the quota module at [[https://github.com/Lakris2407/herdr-mods/tree/main/quota]] for use with the Herdr CLI rather than the Herdr desktop app. Follow on from task:d0852ffd-78fd-4bf0-9cce-37e9776498df once the quota-axi backend is available. Inspect the upstream module and CLI integration surface before proposing a scoped implementation plan; prefer reusing the quota-axi collection boundary over another collector. This task does not authorise implementation of the adaptation or live provider checks.
 
 * Fixes
 

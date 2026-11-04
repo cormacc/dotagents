@@ -54,7 +54,8 @@ The parent integrates. =oh= never merges, rebases, pushes, deletes a branch, or 
 
 - [[https://babashka.org][Babashka]] on =PATH=.
 - Herdr 0.9.1 or newer, client and server.
-- Pi 1.2.0 or newer, for a Pi parent or child.
+- Pi 1.5.0 or newer, for a Pi parent or child. The repository SDK is pinned to 1.5.0; installed-runtime adapter tests verify provider request encoding separately.
+- =quota-axi@0.1.69= with Node >=22.19 for subscription reporting. Run =~/.agents/skills/herdr-orch/scripts/quota-axi-setup install= explicitly, or confirm Pi =/oh setup=. Setup installs in a user-local prefix with lifecycle scripts disabled; collection and routing never install. Managed discovery precedes =PATH= fallback. See [[file:scripts/docs/contract.md]] section 'Usage'.
 - Optional: the =org-plan= and =org-tasks= skills in this repository.
 
 Herdr is the authority for direct pane and agent operations. The [[https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md][upstream Herdr skill]] is vendored at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]] for convenience. =oh= does not need it, so a standalone install works.
@@ -190,7 +191,7 @@ The idea comes from [[https://github.com/xificurC/ai-behaviors][ai-behaviors]] (
 
 - =:aliases= maps a short name to a canonical model ID, or a weight name to a vector of ranked candidates =[{:model ".." :rank n} ..]=.
 - =:models= maps a canonical ID to the native name that its own provider's harness wants.
-- =:providers= maps a provider prefix to its usage adapter, credential stores and cache settings. A kind's =:harnesses :providers= set lists the providers it can run.
+- =:providers= maps a provider prefix to =:quota-provider= and optional =:reserve=. Legacy =:usage=, =:credentials= and =:cache-ttl-s= settings fail with a migration error. A kind's =:harnesses :providers= set lists the providers it can run.
 
 Canonical IDs use pi's =<provider>/<model>= form. The packaged config covers the models on Anthropic and OpenAI subscriptions, and a local fallback. =heavy=, =middle=, =light=, and =feather= are the portable weight aliases. Each is a vector alias: at spawn, =oh= picks the lowest-ranked candidate whose subscription still has allowance, so a spawn does not land on an exhausted subscription. An explicit string alias or canonical ID is never routed and makes no usage query. =oh usage= shows the allowance that routing reads. [[*Packaged models]] lists the current mapping. [[file:scripts/docs/contract.md]] section 'Model resolution' gives the resolution rules.
 
@@ -285,7 +286,7 @@ The preview reports:
 
 - =kind=
 - =model= (before the alias hop) and =model-canonical= (after it, or the routed choice for a vector alias)
-- =model-route= (only for a vector alias): the alias, each candidate's rank, provider, allowance and status, the chosen canonical ID and the reason. A preview of a vector alias reads cached allowance and may make one usage request, so name an explicit canonical ID to preview offline
+- =model-route= (only for a vector alias): the alias, each candidate's rank, provider, allowance and status, the chosen canonical ID and the reason. A preview of a vector alias collects the same current upstream evidence as a start, so name an explicit canonical ID to preview without collection
 - =model-args=, the translated args that the harness receives
 - =effort=, =effort-source=, and =effort-args=
 - =placement=, =retro= and =retro-source=, and =spawns= and =spawns-source=
@@ -294,17 +295,15 @@ To find a model miss, compare the model fields. If =model-canonical= still shows
 
 ** Subscription allowance and model routing
 
-A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child launches: =oh= reads each candidate provider's remaining subscription allowance and picks the best-ranked candidate that still has credit. Equal-rank candidates are balanced by remaining allowance. A provider whose allowance cannot be read is =unknown=: it is used only when no known candidate of equal or better rank has credit, and a spawn is refused, before anything is created, when no candidate is eligible. [[file:scripts/docs/contract.md]] sections 'Routing' and 'Usage' give the ordering, the reserve, the cache and the status rules.
+A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child launches. Fresh known effective scope evidence provides numeric credit; unknown remains eligible. =:quota-scope= is an exact reviewed scope, never a fuzzy model match, and a sole =all_models= scope is the only default. Kimi and Z.AI are reporting-only and add no routing candidates. [[file:scripts/docs/contract.md]] sections 'Routing' and 'Usage' own the evidence and process contract.
 
 #+begin_src sh
-oh usage                                    # JSON, keyed by provider
-oh usage --format markdown --detail         # remaining fraction, credential source, reset times
-oh usage --provider anthropic --fresh       # bypass the cache for one provider
+oh usage                                    # JSON envelope with schema-5/6 providers array
+oh usage --format markdown --detail         # scope bounds and reset times
+oh usage --provider anthropic --fresh       # request fresh upstream evidence
 #+end_src
 
-=oh usage= reads the harness's cached OAuth token (pi, claude or codex store) and never refreshes or writes it. It calls two unofficial endpoints, so a shape change shows as =unknown=, not as a failure. A string alias or canonical ID (=--model opus=, =--model anthropic/claude-opus-5-5=) is never routed and makes no usage call.
-
-To try routing without a provider, point =HERDR_ORCH_USAGE_FIXTURE= at an EDN map of =url -> {:status 200 :body "..."}= and =HOME= at a directory with fixture credentials. The test suite does this, so it never reads a real credential or contacts a provider.
+The operator keeps Pi and native CLI logins on one subscription per provider; =oh= does not verify identity. quota-axi runs with =--no-credential-refresh=, but pinned upstream Codex can refresh native credentials. Claude's separate delegate remains disabled, so authenticate native Claude periodically until upstream Pi support is available; no verified upstream PR is required. Upstream owns five-minute reuse and fresh-zero behaviour. There is no local cache, backoff, or stale guarantee. A string alias or canonical ID (=--model opus=, =--model anthropic/claude-opus-5-5=) is never routed and makes no usage call.
 
 ** Listing personas, traits, models, and workflows
 

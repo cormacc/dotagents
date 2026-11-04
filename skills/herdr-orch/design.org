@@ -128,7 +128,9 @@ Consequently a smoke run's =PROCESS= candidates are manufactured, not observed, 
 
 ** API reviews
 
-Last review: 2026-10-13.
+The table and version notes below are historical review checkpoints. The supported Pi minimum is 1.5.0, as declared in [[file:README.org::*Requirements]]; the repository SDK uses the same exact release. Installed-runtime adapter tests check the built-in catalogue API and Pi 1.5 provider encoding.
+
+Last review in this table: 2026-10-13.
 
 | Field | Herdr | Pi |
 |-------+-------+----|
@@ -137,7 +139,7 @@ Last review: 2026-10-13.
 | Installed version inspected | 0.9.3, client and server (protocol 22) | 1.2.0 |
 | Previous review (2026-10-08) | 0.9.3 | 1.1.0 |
 
-The reviewed versions are review checkpoints, not compatibility certification. The minimum required API versions are the oldest that supply every API herdr-orch uses. Some features need a newer Pi, so [[file:README.org::*Requirements]] requires Pi 1.2.0, the oldest release with which all of them work:
+The reviewed versions are not compatibility certification. At this checkpoint, the API baseline and feature requirements differed: the feature minimum was Pi 1.2.0 for the reasons below. These notes do not lower the supported minimum in [[file:README.org::*Requirements]].
 
 - Pi 0.82.0 :: A root child inherits the root's model and effort through =PI_MODEL= and =PI_REASONING_LEVEL=. With an older Pi root, the child takes the persona value, else the harness default model and =medium= effort.
 - Pi 1.1.0 :: Adds =anthropic/claude-haiku-5-5=, the target of the =feather= and =haiku= aliases (=CHANGELOG.md= section '1.1.0'). An older Pi does not list that model.

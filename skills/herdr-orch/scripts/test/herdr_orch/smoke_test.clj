@@ -9,7 +9,8 @@
             [herdr-orch.core :as core]
             [herdr-orch.herdr :as herdr]
             [herdr-orch.ledger :as ledger]
-            [herdr-orch.smoke :as smoke]))
+            [herdr-orch.smoke :as smoke]
+            [herdr-orch.usage :as usage]))
 
 (def model "openai-codex/gpt-6-luna")
 (def snapshot (core/role-snapshot "worker" "---\nmodel: light\ntimeout: 1800000\n---\nSynthetic worker"))
@@ -435,17 +436,27 @@
         source (str (fs/path dir "source.jsonl"))
         ;; Resolved before the assignment root is isolated below.
         launcher (cli/launcher-bin)
-        worker (with-redefs [cli/own-persona (constantly nil)] (slurp (str (cli/roster "worker"))))]
+        worker (with-redefs [cli/own-persona (constantly nil)] (slurp (str (cli/roster "worker"))))
+        usage-calls (atom [])
+        fixture-usage {:providers [{:localProvider "anthropic" :provider "claude"
+                                    :state {:status "unavailable" :stale false} :reason "fixture-unknown"
+                                    :windows [] :quotaSemantics {:status "unknown" :effectiveAvailability []}}
+                                   {:localProvider "openai-codex" :provider "codex"
+                                    :state {:status "unavailable" :stale false} :reason "fixture-unknown"
+                                    :windows [] :quotaSemantics {:status "unknown" :effectiveAvailability []}}]}]
     (try
       (spit source "synthetic")
-      ;; The packaged worker's `light` is a vector alias, so `preview!` routes it. The credential
-      ;; root is a temp dir (no credential, so no request), and a usage HTTP call would throw.
+      ;; The implicit role keeps vector routing; the explicit `--model` bypasses it. The fixture
+      ;; accepts only that implicit request and never looks up an executable.
       (with-redefs [cli/execute (fn [argv] (throw (ex-info "LAUNCH FORBIDDEN" {:argv argv})))
                     cli/home-directory (constantly (str dir))
-                    ;; The usage cache lives under the ledger, so the assignment root is isolated too.
                     ledger/assignment-root (constantly (str dir))
                     cli/launcher-bin (constantly launcher)
-                    cli/usage-http-fn (fn [] (fn [_] (throw (ex-info "LIVE USAGE FORBIDDEN" {}))))
+                    usage/usage-for (fn [_ options]
+                                      (when-not (= {:providers ["anthropic" "openai-codex"]} options)
+                                        (throw (ex-info "UNEXPECTED USAGE REQUEST" {:options options})))
+                                      (swap! usage-calls conj options)
+                                      fixture-usage)
                     herdr/preflight! (constantly true)
                     herdr/invoke (fn [argv] (throw (ex-info "LIVE HERDR FORBIDDEN" {:argv argv})))
                     cli/own-persona (constantly "worker") cli/own-role-absent? (constantly false)
@@ -460,7 +471,11 @@
             (is (= model (:model-canonical explicit)))
             (is (= ["--model" model] (:model-args explicit)))
             (is (= (if persona "overlay" "snapshot") (get-in explicit [:fork :role-source])))
-            (is (= (if persona 600000 1800000) (:timeout explicit))))))
+            (is (= (if persona 600000 1800000) (:timeout explicit)))))
+        (is (= [{:providers ["anthropic" "openai-codex"]}
+                {:providers ["anthropic" "openai-codex"]}]
+               @usage-calls)
+            "only implicit vector aliases reach the offline usage fixture"))
       (finally (fs/delete-tree dir)))))
 
 (deftest live-consent-refusal-precedes-launch

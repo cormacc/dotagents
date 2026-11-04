@@ -14,13 +14,14 @@ Always-loaded prompt guidelines retain the explicit Herdr-request boundary and p
 
 ## Slash command
 
-`/oh [help|personas|traits|models|usage|workflows]` shows a user-only discovery entry. `/oh usage` runs `oh usage --format markdown`; expanded output adds `--detail`, which adds credential sources and reset times. Without an argument, `/oh` shows every roster section, the Herdr status of the pane, the spawn defaults, the same subscription-usage block, and short usage notes. An unknown provider includes its CLI reason. The notes route natural language to a context: "spawn a subagent" is a fresh context, and "fork a subagent" is a forked context (`oh task run|start --context fork`). A measurement runs headless (`--context measurement`), with a read-only monitor pane only on `--tab` or `--split`.
+`/oh [help|personas|traits|models|usage|workflows]` shows a user-only discovery entry. `/oh usage` runs `oh usage --format markdown`; expanded output adds `--detail`, which adds safe scope bounds and reset times. Without an argument, `/oh` shows every roster section, the Herdr status of the pane, the spawn defaults, the same subscription-usage block, and short usage notes. An unknown provider includes its fixed CLI reason. Usage reads have a 75 s Pi budget; roster reads retain 30 s. The notes route natural language to a context: "spawn a subagent" is a fresh context, and "fork a subagent" is a forked context (`oh task run|start --context fork`). A measurement runs headless (`--context measurement`), with a read-only monitor pane only on `--tab` or `--split`.
 
 - `oh roster` and `oh usage` own their renderings. The roster renderer also generates the org listings in [../../../skills/herdr-orch/README.org](../../../skills/herdr-orch/README.org), so this extension adds only the Herdr status line, placement of the usage block, and the usage notes (`help.ts`).
 
 - The output is a session entry (`appendEntry` with the `herdr-orch-help` type), so it never enters model context. The skill already gives the model this information.
-- In the TUI, `/oh usage` runs `oh usage` twice, with and without `--detail`; bare `/oh` also runs `oh roster` in both forms. The entry stores both renderings. The tool-output expand key (default `ctrl+o`) switches to the detail rendering: roster detail adds file paths, timeouts, retro gating, every model alias, and the resolution layers; usage detail adds credential sources and reset times.
-- RPC mode shows the detail rendering as a notification. JSON and print modes do nothing.
+- In the TUI, `/oh usage` runs `oh usage` twice, with and without `--detail`; bare `/oh` also runs `oh roster` in both forms. The entry stores both renderings. The tool-output expand key (default `ctrl+o`) switches to the detail rendering: roster detail adds file paths, timeouts, retro gating, every model alias, and the resolution layers; usage detail adds safe scope bounds and reset times.
+- RPC mode shows the detail rendering as a notification. JSON and print modes do not render listings.
+- `/oh setup` checks shared collector readiness without reading quotas. In the TUI, missing or wrong versions offer a confirmation before a user-local download with package lifecycle scripts disabled. Bare `/oh` and `/oh usage` perform the same readiness check once before their parallel renderings. Decline or cancellation never installs; RPC, JSON and print modes give manual setup instructions instead of waiting for confirmation. No startup, login, background or routing path installs software. The shared pin, target and process limits are in [../../../skills/herdr-orch/scripts/docs/contract.md#Usage](../../../skills/herdr-orch/scripts/docs/contract.md#usage).
 - `oh roster` runs in the session cwd, so the project layer is the git root of that cwd. Persona, trait, and model listings therefore show what a spawn would use. The `traits` extension expands a project-layer `%name` only in a trusted project, so an untrusted project's trait can appear in `/oh traits` and still not expand interactively.
 - `/oh workflows` lists ordinary skills whose YAML frontmatter contains `metadata: {herdr-orch: workflow}`. It reuses each skill's name and description; expanded output adds its source and path. This is catalogue membership, not execution or permission to delegate. The CLI owns skill-root discovery and shadowing ([../../../skills/herdr-orch/scripts/docs/contract.md#Workflow skill discovery](../../../skills/herdr-orch/scripts/docs/contract.md#workflow-skill-discovery)).
 - The output contract is in [../../../skills/herdr-orch/scripts/docs/contract.md#Roster](../../../skills/herdr-orch/scripts/docs/contract.md#roster).
@@ -28,7 +29,7 @@ Always-loaded prompt guidelines retain the explicit Herdr-request boundary and p
 
 ## Dependencies
 
-Babashka and the co-installed dotagents skills tree. `/oh` does not need Herdr: `oh roster` and `oh usage` never call it.
+Pi 1.5.0 or newer, Babashka and the co-installed dotagents skills tree. Confirmed setup uses the supported Pi `exec` timeout/cancellation API. The shared setup script and guardian bound subprocess output and cleanup, discard raw diagnostics, and return only fixed status fields; the adapter rejects status output larger than 4 KiB. `/oh` does not need Herdr: `oh roster` and `oh usage` never call it.
 
 ## Keybindings
 

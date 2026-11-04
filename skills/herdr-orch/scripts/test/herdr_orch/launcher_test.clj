@@ -3,6 +3,7 @@
   Babashka branch, keep `HERDR_ORCH_BIN` absolute, and preserve the caller's
   working directory (which becomes the child pane's `--cwd`)."
   (:require [babashka.fs :as fs]
+            [herdr-orch.test-support :as support]
             [babashka.process :as process]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]))
@@ -45,30 +46,27 @@
     (spit (str bb-shim) "#!/usr/bin/env bash\nprintf '%s\\037' \"$@\" >>\"$BB_ARGV_LOG\"\nprintf '\\n' >>\"$BB_ARGV_LOG\"\nexec \"$REAL_BB\" \"$@\"\n")
     (fs/set-posix-file-permissions bb-shim "rwxr-xr-x")
     (fs/create-dirs (fs/path dir "empty-home"))
-    ;; Offline by construction: an empty HOME holds no credential, and every usage request is
-    ;; answered from this (empty) fixture file, never the network. The packaged `worker` model is
-    ;; a vector alias, so a launch here routes and would otherwise read `~/.pi/agent/auth.json`
-    ;; and call the providers.
-    (spit (str (fs/path dir "usage-fixture.edn")) "{}")
+    ;; Install the fake collector before the packaged vector alias can route.
     (let [log (str (fs/path dir "calls")) env-file (str (fs/path dir "env")) bb-log (str (fs/path dir "bb-argv"))]
       {:dir dir :caller (str caller) :log log :env-file env-file :bb-log bb-log
-       :env {"PATH" (str shim ":" (System/getenv "PATH"))
+       :env (merge (support/quota-env! dir (fs/path scripts-dir "test/fixtures/quota-axi"))
+                   {"PATH" (str shim ":" (System/getenv "PATH"))
              "HOME" (str (fs/path dir "empty-home"))
-             "HERDR_ORCH_USAGE_FIXTURE" (str (fs/path dir "usage-fixture.edn"))
+             "FAKE_QUOTA_REPORT" (str (fs/path dir "usage-report.json"))
              "HERDR_ENV" "1" "HERDR_PANE_ID" "w:p"
              "FAKE_HERDR_LOG" log "FAKE_HERDR_ENV_FILE" env-file
              "FAKE_HERDR_PROMPT_FILE" (str (fs/path dir "prompt"))
              "ORCH_ASSIGNMENT_ROOT" dir
-             "BB_ARGV_LOG" bb-log "REAL_BB" real-bb}})))
+             "BB_ARGV_LOG" bb-log "REAL_BB" real-bb}
+                   {"PATH" (str shim ":" (fs/path dir "quota-bin") ":" (System/getenv "PATH"))})})))
 
 (defn- launch!
   "Invoke `bin` (possibly relative) with `cwd` as the process working directory."
   [h bin cwd]
   (let [proc @(process/process (into ["/bin/sh" "-c" "exec \"$0\" \"$@\"" bin] ["task" "start" "worker" "--task" "launcher matrix"])
                                {:out :string :err :string :env (:env h) :dir cwd})]
-    ;; Regression guard: a usage cache file means a launch fetched (or tried to fetch) usage.
-    (is (not (fs/exists? (fs/path (:dir h) ".tmp" "herdr-orch" "ledger" "usage")))
-        "the launcher harness stays offline: no usage fetch")
+    (is (fs/exists? (fs/path (:dir h) "quota-calls")) "the fake collector answered routing")
+    (is (not (fs/exists? (fs/path (:dir h) "vendor-escapes"))) "no native CLI escaped")
     proc))
 
 (defn- bb-argv [h] (first (calls (:bb-log h))))

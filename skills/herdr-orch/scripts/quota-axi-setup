@@ -1,0 +1,5 @@
+#!/usr/bin/env bb
+(require '[babashka.fs :as fs] '[babashka.classpath :as cp])
+(cp/add-classpath (str (fs/path (fs/parent (fs/canonicalize *file*)) "src")))
+(require '[herdr-orch.quota-setup :as setup])
+(apply setup/-main *command-line-args*)

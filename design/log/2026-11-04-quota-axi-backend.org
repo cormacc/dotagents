@@ -1,0 +1,166 @@
+#+TITLE: Replace local usage collection with quota-axi
+#+DATE: 2026-11-04 Wed
+#+PARENT: [[archive:d0852ffd-78fd-4bf0-9cce-37e9776498df][Replace local usage collection with quota-axi]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Accepted
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/herdr-orch/README.org]]
+#+SPEC: [[proj:skills/herdr-orch/scripts/README.md]]
+#+SPEC: [[proj:pi/extensions/herdr-orch/README.md]]
+
+* Intent
+Replace locally maintained subscription collection with one pinned quota-axi CLI boundary. Reduce maintained code while adding subscription information for Kimi and Z.AI, without transferring routing policy to the dependency.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* README
+
+One pinned CLI owns subscription collection; local code owns evidence validation and routing policy. Shared user-local setup requires explicit invocation or Pi confirmation. Pi 1.5 is the supported minimum. Production/config is 202 lines smaller, including setup and Pi integration.
+
+** Scope
+Subscription evidence collection, config validation, routing input, CLI/Pi reporting, offline fixtures and the four declared living contracts. Multiple accounts, verified Pi/native identity, new routing candidates, in-session failover, another backend/cache, implicit installation during collection/routing and live provider checks remain out of scope. Explicit shared setup, confirmed Pi setup and the owner-approved Pi 1.5 SDK/minimum/adapter alignment are in scope.
+
+** Shipped
+- ADDED :: bounded =quota-axi@0.1.69= CLI boundary, owned process-group guardian and explicit/confirmed user-local setup; Kimi/Z.AI usage-only mappings.
+- MODIFIED :: provider config uses =:quota-provider= and optional candidate =:quota-scope=; routing uses fresh validated effective subscription scopes; CLI/Pi reports use allowlisted schema-5/6 provider arrays. All four =#+SPEC:= documents describe setup and the replacement contract. The development SDK and native catalogue/effort adapter contracts target Pi 1.5.
+- REMOVED :: local credential extraction, vendor HTTP/normalisation, cache/backoff/locks and the old public window schema. Model IDs, ranks and harness restrictions are unchanged.
+
+** Gotchas
+- The operator must approve setup or install the pinned CLI explicitly, and keep Pi/native logins on the same subscription. Identity agreement is an assumption, not a check. Missing evidence remains eligible as unknown under the existing rank policy.
+- Native Codex app-server refresh remains possible despite =--no-credential-refresh= and is accepted. The separate Claude delegate stays disabled; the operator may need periodic native Claude authentication. No upstream Pi-support PR is a delivery prerequisite.
+- No local negative cache or stale-credit guarantee remains. Provider reads can take longer or repeat more often; the wrapper bounds execution and returns fixed unknown reasons.
+
+** Acceptance
+*** Core functionality
+- [X] One pinned quota-axi executable is the only remote usage collector.
+- [X] The old credential/HTTP/cache implementation is removed.
+- [X] Maintained production code decreases after counting the replacement boundary and routing/config changes.
+- [X] The old collector-test file is replaced by boundary/semantic tests; removed and added test lines are reported separately.
+- [X] Fixture-backed usage output includes Anthropic, Codex, Kimi and Z.AI subscription evidence.
+- [X] Existing explicit-model bypass, rank/reserve ordering, harness filters and refusal-before-allocation remain covered.
+- [X] JSON, text and markdown commands use the replacement evidence contract.
+- [X] Pi usage entries remain outside model context.
+*** Edge cases
+- [X] Missing executable, wrong version, malformed/oversized output and process timeout yield fixed unknown reasons.
+- [X] Upstream schema-5 single-lane reports are accepted.
+- [X] Upstream schema-6 account-lane reports are accepted under the single-account rule.
+- [X] Valid partial output remains usable even when the executable exits non-zero.
+- [X] Stale, windowless, ambiguous-account and unresolved-scope evidence grants no numeric routing credit.
+- [X] Model-scope conflicts cannot fall back to account-wide credit.
+- [X] Credit balances and monetary spend-control bounds grant no subscription routing credit.
+- [X] Legacy provider overrides fail with a migration message before collection or allocation.
+*** Anti-criteria
+- [X] Tests cannot reach real credentials, providers or vendor refresh commands; known-bad controls prove the isolation checks detect escape attempts.
+- [X] No token, email, account ID, local credential path, raw error or unfiltered subprocess output enters logs or CLI envelopes.
+- [X] No new model candidates are enabled by adding usage-only providers.
+- [X] No local account-management abstraction or compatibility copy of the old public window schema is retained.
+
+*** Confirmed setup amendment
+- [X] One shared script installs the exact pin in a user-local prefix with lifecycle scripts disabled, then validates the executable and Node version.
+- [X] Pi detects missing/wrong versions and asks permission before setup; decline and non-interactive paths never install.
+- [X] Non-Pi harnesses can invoke the same script explicitly; collection/routing never invokes it.
+- [X] Offline fake-npm tests and independent final validation cover the installer without installing quota-axi or calling providers.
+- [X] Maintained production code still decreases after counting setup and Pi integration.
+
+*** Pi 1.5 amendment
+- [X] The declared Pi minimum and repository development SDK are aligned to 1.5.
+- [X] Native catalogue and effort-encoding adapter checks pass on installed Pi 1.5 with their controls retained.
+- [X] Fresh independent review and the complete offline suite pass on the final tree.
+
+** Decisions
+- Pi runtime :: Pi 1.5 is the owner-approved minimum, superseding older-Pi support. The development SDK and adapter contracts match it; managed Anthropic effort uses a fixed low top-level baseline and per-message effort markers.
+- One supported CLI :: =quota-axi@0.1.69= with Node >=22.19; one explicit shared user-local setup script, also called by Pi after confirmation. No implicit routing-time installer, deep imports, fork or second backend. Upstream collectors are not public root exports, so selective reuse would retain both mechanisms. Version validation is bounded to 5 seconds.
+- Confirmed setup :: prefer a managed user-local executable, with PATH fallback for existing installs. Do not edit shell startup files or require elevated permissions. Validate Node and the exact executable version; install with lifecycle scripts disabled. Pi prompts only in an interactive user flow; explicit upgrades also require confirmation. Setup never authenticates providers or reads quotas. The initial manual-only prerequisite is superseded by this owner-approved amendment.
+- Upstream collection ownership :: argv =--json --full --no-credential-refresh --max-age 5m --provider <ids>=; =--fresh= selects age zero. Request only needed providers. Clear snapshot/profile-expansion/swap overrides without removing legitimate OAuth/native-home selectors.
+- Single subscription per provider :: accept one upstream row, including coalesced keys; multiple rows are ambiguous/unknown, never maximum headroom. No account-key or per-harness identity configuration.
+- Exact subscription evidence :: use =quotaSemantics.effectiveAvailability= without recomputing minima or scores. Validate finite 0..100 percentages and resolved subscription =boundedBy= references; reject credits/USD, stale/windowless/unresolved/conflicting evidence. A sole =all_models= scope can default; model scopes require exact reviewed config. Unknown scopes cannot inherit account credit. The shipped Opus selector =seven_day_opus= was checked against the pinned source.
+- Local routing policy :: retain rank/reserve/config order, harness filters, explicit-string bypass, inheritance and refusal before allocation. Legacy =:usage=, =:credentials= and =:cache-ttl-s= rows fail with a migration diagnostic. Whole-row override semantics are unchanged.
+- Public/process boundary :: retain the =herdr-orch/v1= envelope but replace its result with an allowlisted providers array preserving upstream schema 5 or 6. Strip identity, locators, arbitrary errors and descriptions. Collection is bounded to 60 seconds, cleanup to 2 seconds and stdout to 1 MiB; discard stderr. Pi usage calls allow 75 seconds. Cleanup targets the owned POSIX process group, not unrelated sessions.
+
+* Plan
+
+** DONE Replace collection and migrate routing evidence
+CLOSED: [2026-11-04 Wed 18:37]
+:PROPERTIES:
+:CUSTOM_ID: 5c73ee2a-64f6-49e4-add3-fd881296d06f
+:CREATED: [2026-11-04 Wed 17:35]
+:STARTED: [2026-11-04 Wed 17:50]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 17:35]
+- State "STARTED" from "TODO" [2026-11-04 Wed 17:50]
+- State "DONE" from "STARTED" [2026-11-04 Wed 18:37]
+:END:
+Collector, config and routing evidence accepted after independent boundary review.
+
+** DONE Integrate usage reporting and document operator setup
+CLOSED: [2026-11-04 Wed 20:35]
+:PROPERTIES:
+:CUSTOM_ID: 6da7c5f4-5114-4785-a841-d322d325f46e
+:CREATED: [2026-11-04 Wed 17:35]
+:BLOCKED-BY: task:5c73ee2a-64f6-49e4-add3-fd881296d06f
+:STARTED: [2026-11-04 Wed 18:37]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 17:35]
+- State "STARTED" from "TODO" [2026-11-04 Wed 18:37]
+- State "DONE" from "STARTED" [2026-11-04 Wed 20:35]
+:END:
+Reporting, four living contracts and offline Pi integration accepted after review fixes.
+
+** DONE Validate net deletion and migration acceptance
+CLOSED: [2026-11-04 Wed 21:09]
+:PROPERTIES:
+:CUSTOM_ID: 5c3f8fa3-7786-4c95-b7e8-0089238979bc
+:CREATED: [2026-11-04 Wed 17:35]
+:BLOCKED-BY: task:6da7c5f4-5114-4785-a841-d322d325f46e
+:STARTED: [2026-11-04 Wed 20:35]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 17:35]
+- State "STARTED" from "TODO" [2026-11-04 Wed 20:35]
+- State "DONE" from "STARTED" [2026-11-04 Wed 21:09]
+:END:
+Boundary, routing and net-reduction acceptance verified.
+
+** DONE Add confirmed shared quota-axi setup
+CLOSED: [2026-11-04 Wed 23:26]
+:PROPERTIES:
+:CUSTOM_ID: 85cbfb9f-185c-4104-ab6a-0513bec2eccf
+:CREATED: [2026-11-04 Wed 21:16]
+:STARTED: [2026-11-04 Wed 21:17]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 21:16]
+- State "STARTED" from "TODO" [2026-11-04 Wed 21:17]
+- State "DONE" from "STARTED" [2026-11-04 Wed 23:26]
+:END:
+Shared setup, consent, cancellation and fake-process controls accepted after independent review and full validation.
+
+** DONE Standardise Pi 1.5 and restore adapter validation
+CLOSED: [2026-11-04 Wed 23:26]
+:PROPERTIES:
+:CUSTOM_ID: ce7fcaf4-d1e5-4c88-a67b-e3f5195f79f4
+:CREATED: [2026-11-04 Wed 22:24]
+:STARTED: [2026-11-04 Wed 22:24]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 22:24]
+- State "STARTED" from "TODO" [2026-11-04 Wed 22:24]
+- State "DONE" from "STARTED" [2026-11-04 Wed 23:26]
+:END:
+Pi 1.5 SDK, schema/catalogue/effort compatibility and retained adapter controls independently validated.
+
+* Implementation
+Against =b89cc08=, production adds 374/removes 579 lines; configuration adds 11/removes 8; tests/fixtures add 785/remove 955; living documentation adds 33/removes 57. The dependency lock adds 70/removes 53, leaving a 185-line reduction even when counted. Counts include every new setup, guardian and fixture file; task/record and unrelated settings edits are separate.
+
+** Safety incident
+During implementation, a synthetic-PATH probe accidentally invoked host =codex --version=; credential access was not traced. No refresh or inference was requested. A broken fixture PATH merge also reached real =herdr status= with synthetic HOME. These incidents were disclosed. Corrected fixtures use absolute fake vendor targets and retain fake Herdr/quota PATH entries. Final validation used a refusing parent PATH and recorded five fake Herdr and three fake quota refusals across its attempts; individual call sites were not traced. Passing tests are credited under that protection, not as proof that every fixture is independently hermetic.
+
+* Validation
+Fresh independent semantic review and full integrated validation approved the final tree on Pi 1.5. The complete root suite passed 935 tests/8,628 assertions plus 86 installed-Pi adapter tests; its discovered Clojure stage contains 42 namespaces, 835 tests/8,019 assertions. The separate extension launcher passed 158 argv/UI/RPC/socket checks without a model turn. Applied native-escape, privacy, lifecycle, Node-order, discovery, consent and RPC mutants were rejected against passing controls. Source integrity matched all 32 in-scope files. Evidence: =.tmp/quota-axi-impl/pi15-review.md= and =.tmp/quota-axi-impl/pi15-validation.md=.
+
+Synthetic reports/fake npm validate the wrapper, not actual package installation, upstream raw normalisation, subscription identity/availability, native refresh concurrency, interactive TUI installation, Darwin cleanup or the exact minimum Node binary. No live provider/refresh probe was authorised. Repository test dependencies were restored with scripts disabled, then the approved SDK update installed exact Pi 1.5.0 with scripts disabled; neither consent covered quota-axi installation. The initial dependency audit reported two moderate and one high finding; no audit fixes were applied.
+
+* Follow-ups
+- task:9e209f54-73f2-4f3e-b08d-81559a268fc8 adapts herdr-mods quota for the Herdr CLI; it remains separate backlog work.
+- task:15eb9554-346e-4828-912f-b24a5ab8a7f2 covers the separate AXI CLI tooling audit.

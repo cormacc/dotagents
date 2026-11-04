@@ -227,11 +227,8 @@
   (let [translated (translate-model config kind model) flag (get-in config [:harnesses (keyword kind) :model-flag])]
     (if (and translated flag) [flag translated] [])))
 ;; --- routing (pure; no IO) ----------------------------------------------------------------
-;; A vector alias is routed at spawn: `candidates` expands it, the caller supplies each
-;; provider's allowance as `usage`, and `route` picks one. `usage` is keyed by provider name
-;; (a string) with values `{:status :ok|:stale|:unknown :reason r :windows [...] :remaining-fraction f}`
-;; where `:remaining-fraction` is the account-wide remainder and a window is
-;; `{:name :scope nil-or-lowercase-family :used-fraction f :resets-at s}`.
+;; The caller supplies validated effective subscription evidence. Routing owns
+;; rank, reserve and harness policy; the collector owns evidence validation.
 
 ;; Candidates of the vector alias `alias` that `kind` can run, in config order, each
 ;; `{:model requested :canonical id :provider p :rank n :reserve r}`. nil when `alias` is not a
@@ -242,50 +239,36 @@
         allowed (get-in config [:harnesses (keyword kind) :providers])]
     (when (vector? v)
       (into []
-            (keep (fn [{:keys [model rank]}]
+            (keep (fn [{:keys [model rank quota-scope]}]
                     (let [canonical (canonical-model config model)
                           provider (provider-prefix canonical)]
                       (when (or (nil? allowed) (contains? allowed provider))
-                        {:model model :canonical canonical :provider provider :rank rank
-                         :reserve (or (get-in config [:providers provider :reserve]) 0)}))))
+                        (cond-> {:model model :canonical canonical :provider provider :rank rank
+                                 :reserve (or (get-in config [:providers provider :reserve]) 0)}
+                          quota-scope (assoc :quota-scope quota-scope))))))
             v))))
 
-(defn- scope-tokens [s]
-  (vec (remove str/blank? (str/split (str/lower-case (str s)) #"[-_\s]+"))))
-;; A scoped window gates a candidate when the scope's tokens appear as a contiguous run of the
-;; canonical basename's tokens. Token (not substring) matching keeps `gpt-6` from gating
-;; `gpt-60` or `gpt-6.1-sol`, since `.` does not split a token. known-limit: a bare numeric or
-;; generic scope token such as `6` matches any basename containing that token; revisit if a
-;; provider scopes limits by a non-family identifier.
-(defn- scope-matches? [scope canonical]
-  (let [want (scope-tokens scope)
-        basename (some-> canonical (str/split #"/" 2) peek)
-        have (scope-tokens basename)
-        n (count want)]
-    (boolean (and (pos? n)
-                  (some #(= want %) (partition n 1 have))))))
+(defn candidate-remaining
+  "Validated evidence -> a candidate's fraction, or nil. No fuzzy scope joins or
+  account fallback from multi-scope evidence are permitted."
+  [evidence {:keys [provider quota-scope]}]
+  (when-let [row (first (filter #(= provider (:localProvider %)) (:providers evidence)))]
+    (if (:local row)
+      1.0
+      (when (and (= "fresh" (get-in row [:state :status])) (false? (get-in row [:state :stale])))
+        (let [scopes (get-in row [:quotaSemantics :effectiveAvailability])
+              scope (if (and quota-scope (not= "all_models" quota-scope))
+                      (first (filter #(= quota-scope (:scope %)) scopes))
+                      (when (and (= 1 (count scopes)) (= "all_models" (:scope (first scopes)))) (first scopes)))]
+          (when (= "known" (:status scope)) (/ (:effectivePercentRemaining scope) 100.0)))))))
 
-;; Remaining fraction for `candidate`: the smaller of the provider's account-wide remainder and
-;; `1 - used` of each scoped window that matches the candidate; nil when the allowance is
-;; unknown. A scoped window that matches no candidate affects nothing.
-(defn candidate-remaining [usage {:keys [provider canonical]}]
-  (let [{:keys [status windows remaining-fraction]} (get usage provider)]
-    (when (#{:ok :stale} status)
-      (let [scoped (for [{:keys [scope used-fraction]} windows
-                         :when (and scope (number? used-fraction) (scope-matches? scope canonical))]
-                     (- 1.0 used-fraction))
-            all (cond-> (vec scoped) (number? remaining-fraction) (conj remaining-fraction))]
-        (when (seq all) (apply min all))))))
+(defn- annotate [evidence candidate]
+  (let [entry (first (filter #(= (:provider candidate) (:localProvider %)) (:providers evidence)))
+        remaining (candidate-remaining evidence candidate)]
+    (cond-> (assoc candidate :status (if (some? remaining) :ok :unknown) :remaining remaining)
+      (nil? remaining) (assoc :reason (or (:reason entry) "unresolved-scope")))))
 
-(defn- annotate [usage candidate]
-  (let [entry (get usage (:provider candidate))
-        remaining (candidate-remaining usage candidate)]
-    (cond-> (assoc candidate
-                   :status (or (:status entry) :unknown)
-                   :remaining remaining)
-      (not= :ok (:status entry)) (assoc :reason (or (:reason entry) (when-not entry "no usage entry"))))))
-
-;; Chooses by rank (lower first), then known (`:ok`/`:stale`) before `:unknown` at the same rank,
+;; Chooses by rank (lower first), then known before unknown at the same rank,
 ;; then larger remaining fraction, then config order. A known candidate whose remaining
 ;; fraction is at or below its `:reserve` is excluded; an unknown one stays eligible, so an
 ;; unknown higher-ranked candidate beats a known lower-ranked one. No eligible candidate refuses.
@@ -313,9 +296,7 @@
 ;; that kind receives no effort args).
 (defn harness-extra-args [config kind]
   (vec (get-in config [:harnesses (keyword kind) :extra-args])))
-;; Usage adapters and credential stores the `:providers` rows may name.
-(def usage-adapters #{:anthropic-oauth :codex-oauth})
-(def credential-stores #{:pi :claude :codex})
+(def quota-providers #{"claude" "codex" "kimi" "zai"})
 ;; config.edn shape validation: sparse model rows and harness keywords absent from
 ;; `:harnesses` are allowed (the kind set is open by contract). `:defaults` is closed
 ;; so placement typos fail loudly. Every failure carries the offending file path.
@@ -373,8 +354,11 @@
           (do (when (empty? v)
                 (throw (ex-info "config :aliases candidate vector must not be empty" {:path path :key k})))
               (doseq [candidate v]
-                (when-not (and (map? candidate) (= #{:model :rank} (set (keys candidate))))
-                  (throw (ex-info "config :aliases candidate must be a map with exactly :model and :rank" {:path path :key k :candidate candidate})))
+                (when-not (and (map? candidate) (every? #{:model :rank :quota-scope} (keys candidate))
+                               (contains? candidate :model) (contains? candidate :rank))
+                  (throw (ex-info "config :aliases candidate must have :model, :rank and optional :quota-scope" {:path path :key k :candidate candidate})))
+                (when (and (contains? candidate :quota-scope) (not (nonblank? (:quota-scope candidate))))
+                  (throw (ex-info "config :aliases candidate :quota-scope must be a non-blank string" {:path path :key k})))
                 (when-not (nonblank? (:model candidate))
                   (throw (ex-info "config :aliases candidate :model must be a non-blank string" {:path path :key k :candidate candidate})))
                 (when-not (pos-int? (:rank candidate))
@@ -382,27 +366,20 @@
           (when-not (nonblank? v)
             (throw (ex-info "config :aliases value must be a non-blank string or a vector of candidates" {:path path :key k :value v}))))))
     ;; `:providers` carries the usage-query settings the router reads. Rows are closed so a
-    ;; misspelt key fails here instead of silently leaving a provider unknown. `:usage` is
-    ;; absent for a provider with no allowance to query (local).
+    ;; misspelt key fails here instead of silently leaving a provider unknown.
+    ;; Empty rows describe local providers with no subscription to query.
     (let [providers (get config :providers {})]
       (when-not (map? providers) (throw (ex-info "config :providers must be a map" {:path path :value providers})))
       (doseq [[name row] providers]
         (when-not (and (string? name) (not (str/blank? name)))
           (throw (ex-info "config :providers key must be a non-blank string" {:path path :key name})))
         (when-not (map? row) (throw (ex-info "config :providers entry must be a map" {:path path :provider name :value row})))
-        (when-not (every? #{:usage :credentials :cache-ttl-s :reserve} (keys row))
-          (throw (ex-info "config :providers entry has unknown key" {:path path :provider name :value row})))
-        (when (and (contains? row :usage) (not (usage-adapters (:usage row))))
-          (throw (ex-info "config :providers entry :usage must be a known adapter keyword"
-                          {:path path :provider name :usage (:usage row) :adapters usage-adapters})))
-        (when (contains? row :credentials)
-          (let [credentials (:credentials row)]
-            (when-not (and (vector? credentials) (every? credential-stores credentials))
-              (throw (ex-info "config :providers entry :credentials must be a vector over :pi, :claude, :codex"
-                              {:path path :provider name :credentials credentials})))))
-        (when (and (contains? row :cache-ttl-s) (not (pos-int? (:cache-ttl-s row))))
-          (throw (ex-info "config :providers entry :cache-ttl-s must be a positive integer"
-                          {:path path :provider name :cache-ttl-s (:cache-ttl-s row)})))
+        (when (some #(contains? row %) [:usage :credentials :cache-ttl-s])
+          (throw (ex-info "legacy provider settings: migrate to :quota-provider and remove :usage, :credentials and :cache-ttl-s" {:path path :provider name})))
+        (when-not (every? #{:quota-provider :reserve} (keys row))
+          (throw (ex-info "config :providers entry has unknown key" {:path path :provider name})))
+        (when (and (contains? row :quota-provider) (not (quota-providers (:quota-provider row))))
+          (throw (ex-info "config :providers entry :quota-provider must be claude, codex, kimi or zai" {:path path :provider name})))
         (when (and (contains? row :reserve) (not (and (number? (:reserve row)) (<= 0 (:reserve row) 1))))
           (throw (ex-info "config :providers entry :reserve must be a number from 0 to 1"
                           {:path path :provider name :reserve (:reserve row)})))))

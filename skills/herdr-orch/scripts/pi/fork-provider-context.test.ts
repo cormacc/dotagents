@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { getBuiltinModel } from "@earendil-works/pi-ai/providers/all";
 import { createFork } from "./fork-adapter.ts";
 import { startFakeOpenAI } from "./fake-openai.ts";
 import { runtimeIdentity, type TestCase } from "./runtime.ts";
@@ -279,17 +280,15 @@ async function captureNative(root: string, overlay: boolean, mutation = "none") 
   try {
     const env = { ...cleanEnv(dir), HOME: join(dir, "home"), HERDR_ORCH_FAKE_ORIGIN: fake.url };
     checkFakeGuard(env, fake.url, out);
-    // Resolve immutable catalogue data beside the running bundle, not a repository SDK or user store.
-    const catalogueFile = realpathSync(join(dirname(runtimeIdentity().bundle), "../../../pi-ai/dist/providers/data/openai-codex.json"));
-    const catalogue = JSON.parse(readFileSync(catalogueFile, "utf8"));
-    const luna = catalogue["openai-codex-responses"]["chat:gpt-6-luna"];
+    // Pi maps this public import to its immutable built-in catalogue, not a repository SDK or user store.
+    const luna = getBuiltinModel("openai-codex", "gpt-6-luna");
     assert.equal(luna.id, "gpt-6-luna");
     assert.equal(luna.provider, "openai-codex");
     assert.equal(luna.api, "openai-codex-responses");
     assert.equal(luna.reasoning, true);
     assert.equal(luna.compat.supportsMidConvoSystemMessages, true);
     assert.equal(luna.thinkingLevelMap.high, "high");
-    assert.ok(catalogue["openai-codex-responses"]["chat:gpt-6-sol"], "catalogue sibling control");
+    assert.equal(getBuiltinModel("openai-codex", "gpt-6-sol").id, "gpt-6-sol", "catalogue sibling control");
     const token = `x.${Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "acct-fixture" } })).toString("base64")}.y`;
     const model = { ...luna, baseUrl: fake.url, ...(mutation === "collapsed" ? { compat: { ...luna.compat, supportsMidConvoSystemMessages: false } } : {}) };
     writeJson(join(agent, "models.json"), { providers: { "openai-codex": { baseUrl: fake.url, apiKey: token, models: [model] } } });
@@ -387,7 +386,7 @@ export default function(pi) {
     assert.equal(fake.requests.length, 1, "native one received request");
     const body = fake.requests[0];
     writeJson(join(out, "request.json"), body);
-    writeJson(join(out, "identity.json"), { runtime: runtimeIdentity(), catalogueFile, catalogueSha256: sha(readFileSync(catalogueFile)), model: { id: model.id, provider: model.provider, api: model.api, reasoning: model.reasoning, compat: model.compat, thinkingLevelMap: model.thinkingLevelMap }, fork, argv, ...run, mutation });
+    writeJson(join(out, "identity.json"), { runtime: runtimeIdentity(), catalogueSource: "@earendil-works/pi-ai/providers/all:getBuiltinModel", catalogueSha256: sha(JSON.stringify(luna)), model: { id: model.id, provider: model.provider, api: model.api, reasoning: model.reasoning, compat: model.compat, thinkingLevelMap: model.thinkingLevelMap }, fork, argv, ...run, mutation });
     copyFileSync(sourceFile, join(out, "source.jsonl"));
     copyFileSync(fork.sessionFile, join(out, "child.jsonl"));
     copyFileSync(extension, join(out, "native-request.ts"));

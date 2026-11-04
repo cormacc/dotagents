@@ -1,5 +1,6 @@
 (ns herdr-orch.traits-test
   (:require [babashka.fs :as fs]
+            [herdr-orch.test-support :as support]
             [babashka.process :as process]
             [cheshire.core :as json]
             [clojure.string :as str]
@@ -45,23 +46,24 @@
         prompt-file (str (fs/path dir "prompt"))
         state (str (fs/path dir "state"))]
     (fs/create-dirs home)
-    ;; Offline: the empty HOME holds no credential and usage requests read this fixture, never the network.
-    (spit (str (fs/path dir "usage-fixture.edn")) "{}")
+    ;; quota-env! installs the fake collector and native vendor tripwires.
     (fs/create-sym-link (fs/path dir "herdr") fake)
     {:dir (str dir) :log log :env-file env-file :prompt-file prompt-file :state state
-     :env {"PATH" (str dir ":" (System/getenv "PATH"))
+     :env (merge {"PATH" (str dir ":" (System/getenv "PATH"))
            "HOME" (str home)
            "HERDR_ENV" "1"
            "HERDR_PANE_ID" "w:p"
            "HERDR_ORCH_BIN" bin
            "ORCH_ASSIGNMENT_ROOT" (str dir)
-           "HERDR_ORCH_USAGE_FIXTURE" (str (fs/path dir "usage-fixture.edn"))
+           "FAKE_QUOTA_REPORT" (str (fs/path dir "usage-report.json"))
            "FAKE_HERDR_LOG" log
            "FAKE_HERDR_ENV_FILE" env-file
            "FAKE_HERDR_PROMPT_FILE" prompt-file
            "FAKE_HERDR_STATE_DIR" state
            "CLJ_CACHE" @shared-clj-cache
-           "CLJ_CONFIG" @shared-clj-cache}}))
+           "CLJ_CONFIG" @shared-clj-cache}
+                 (support/quota-env! dir (fs/path root "skills/herdr-orch/scripts/test/fixtures/quota-axi"))
+                 {"PATH" (str dir ":" (fs/path dir "quota-bin") ":" (System/getenv "PATH"))})}))
 
 (defn- write-persona! [dir name body]
   (let [path (fs/path dir ".agents" "subagents" (str name ".md"))]

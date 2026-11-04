@@ -1,8 +1,7 @@
 import { getMarkdownTheme, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { StringEnum } from "@earendil-works/pi-ai";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Type } from "typebox";
 import { composeHelp, parseSection, rosterArgs, usageArgs, SECTION_DESCRIPTIONS, SECTIONS, type Section } from "./help.ts";
 
@@ -14,6 +13,8 @@ const HELP_ENTRY = "herdr-orch-help";
 // roster's spawn defaults without putting either rendering in model context.
 type HelpEntry = { section: Section; herdr: boolean; compact: string; detail: string; usage?: { compact: string; detail: string } };
 
+const USAGE_TIMEOUT_MS = 75_000;
+
 type OhEnvelope = {
   ok: boolean;
   schema: "herdr-orch/v1";
@@ -21,20 +22,20 @@ type OhEnvelope = {
   error?: { message?: unknown };
 };
 
-const StatusEnum = StringEnum(["idle", "working", "blocked", "done", "unknown"] as const, {
-  description: "Agent lifecycle state",
+const StatusEnum = Type.Enum(["idle", "working", "blocked", "done", "unknown"] as const, {
+  type: "string", description: "Agent lifecycle state",
 });
 
-const ReadSourceEnum = StringEnum(["visible", "recent", "recent-unwrapped", "detection"] as const, {
-  description: "Terminal snapshot source",
+const ReadSourceEnum = Type.Enum(["visible", "recent", "recent-unwrapped", "detection"] as const, {
+  type: "string", description: "Terminal snapshot source",
 });
 
-const OutputFormatEnum = StringEnum(["text", "ansi"] as const, {
-  description: "Output format; ansi preserves terminal styling",
+const OutputFormatEnum = Type.Enum(["text", "ansi"] as const, {
+  type: "string", description: "Output format; ansi preserves terminal styling",
 });
 
-const DirectionEnum = StringEnum(["right", "down"] as const, {
-  description: "Split direction. When omitted, the tool chooses from the source pane geometry.",
+const DirectionEnum = Type.Enum(["right", "down"] as const, {
+  type: "string", description: "Split direction. When omitted, the tool chooses from the source pane geometry.",
 });
 
 // Installed Herdr owns the kind set (`herdr agent start --help` prints the live enum), so
@@ -46,7 +47,7 @@ const AgentKind = Type.String({
 });
 
 const LayoutParams = Type.Object({
-  action: StringEnum(
+  action: Type.Enum(
     [
       "current",
       "workspace_list",
@@ -59,7 +60,7 @@ const LayoutParams = Type.Object({
       "pane_layout",
       "pane_split",
     ] as const,
-    { description: "Layout action" },
+    { type: "string", description: "Layout action" },
   ),
   workspace: Type.Optional(Type.String({ description: "Opaque workspace ID" })),
   tab: Type.Optional(Type.String({ description: "Opaque tab ID" })),
@@ -71,8 +72,8 @@ const LayoutParams = Type.Object({
 });
 
 const PaneParams = Type.Object({
-  action: StringEnum(["get", "run", "read", "wait_output", "send_text", "send_keys", "close"] as const, {
-    description: "Raw pane action",
+  action: Type.Enum(["get", "run", "read", "wait_output", "send_text", "send_keys", "close"] as const, {
+    type: "string", description: "Raw pane action",
   }),
   pane: Type.String({ description: "Opaque pane ID returned by herdr_layout" }),
   command: Type.Optional(Type.String({ description: "Shell command to submit atomically with Enter for run" })),
@@ -88,8 +89,8 @@ const PaneParams = Type.Object({
 });
 
 const AgentParams = Type.Object({
-  action: StringEnum(["list", "get", "start", "prompt", "wait", "read", "send_keys", "focus", "rename"] as const, {
-    description: "Agent lifecycle action",
+  action: Type.Enum(["list", "get", "start", "prompt", "wait", "read", "send_keys", "focus", "rename"] as const, {
+    type: "string", description: "Agent lifecycle action",
   }),
   target: Type.Optional(Type.String({ description: "Unique live agent name or pane ID currently hosting the agent" })),
   pane: Type.Optional(Type.String({ description: "Existing available shell pane ID for start" })),
@@ -150,6 +151,9 @@ function outputText(result: unknown): string {
 }
 
 export default function (pi: ExtensionAPI) {
+  const setupAbort = new AbortController();
+  pi.on("session_shutdown", () => setupAbort.abort());
+
   async function execute(args: string[], signal?: AbortSignal, options: { cwd?: string; timeout?: number } = {}) {
     const result = await pi.exec(launcherPath(), args, { signal, ...options });
     if (signal?.aborted || result.killed) throw new Error("Aborted");
@@ -187,16 +191,20 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("oh", {
-    description: `Show herdr-orch subagents, traits, models, subscription usage, and workflow skills without adding them to model context: ${SECTIONS.join(" | ")}`,
+    description: `Show herdr-orch subagents, traits, models, subscription usage, and workflow skills without adding them to model context: ${SECTIONS.join(" | ")} | setup`,
     getArgumentCompletions: (prefix) => {
-      const items = SECTIONS.filter((section) => section.startsWith(prefix.trim()))
-        .map((section) => ({ value: section, label: section, description: SECTION_DESCRIPTIONS[section] }));
+      const items = [...SECTIONS, "setup" as const].filter((section) => section.startsWith(prefix.trim()))
+        .map((section) => ({ value: section, label: section, description: section === "setup" ? "Confirmed user-local quota-axi setup" : SECTION_DESCRIPTIONS[section] }));
       return items.length ? items : null;
     },
     handler: async (args, ctx) => {
-      // JSON and print modes have no reader for the listing, so they do nothing.
-      if (!ctx.hasUI) return;
-      const section = parseSection(args);
+      const setup = args.trim() === "setup";
+      const manual = "Run ~/.agents/skills/herdr-orch/scripts/quota-axi-setup install explicitly (Node >=22.19 and npm required).";
+      if (!ctx.hasUI) {
+        if (setup) process.stderr.write(`${manual}\n`);
+        return;
+      }
+      const section = setup ? "usage" : parseSection(args);
       if (!section) {
         ctx.ui.notify(`Unknown /oh section "${args.trim()}". Use one of: ${SECTIONS.join(", ")}`, "warning");
         return;
@@ -204,16 +212,44 @@ export default function (pi: ExtensionAPI) {
       // cwd selects the project layer: `oh` resolves it from the git root of its cwd.
       const render = async (detail: boolean) => {
         const cliArgs = section === "usage" ? usageArgs(detail) : rosterArgs(section, detail);
-        const listingPromise = execute(cliArgs, ctx.signal, { cwd: ctx.cwd, timeout: 30_000 })
+        const listingPromise = execute(cliArgs, ctx.signal, { cwd: ctx.cwd, timeout: section === "usage" ? USAGE_TIMEOUT_MS : 30_000 })
           .then(({ content }) => content[0]?.text ?? "");
         if (section !== "help") return { listing: await listingPromise };
-        const usagePromise = execute(usageArgs(detail), ctx.signal, { cwd: ctx.cwd, timeout: 30_000 })
+        const usagePromise = execute(usageArgs(detail), ctx.signal, { cwd: ctx.cwd, timeout: USAGE_TIMEOUT_MS })
           .then(({ content }) => content[0]?.text ?? "");
         const [listing, usage] = await Promise.all([listingPromise, usagePromise]);
         return { listing, usage };
       };
       const herdr = process.env.HERDR_ENV === "1";
       try {
+        if (setup || section === "usage" || section === "help") {
+          const script = join(dirname(launcherPath()), "quota-axi-setup");
+          const runSetup = async (operation: "check" | "install") => {
+            try {
+              const signal = ctx.signal ? AbortSignal.any([ctx.signal, setupAbort.signal]) : setupAbort.signal;
+              signal.throwIfAborted();
+              // The shared script bounds subprocess output, discards diagnostics and emits
+              // fixed status fields; Pi's supported exec API only owns timeout/cancellation.
+              const result = await pi.exec(script, [operation], { cwd: ctx.cwd, signal, timeout: 140_000 });
+              if (signal.aborted || result.code !== 0 || result.killed || Buffer.byteLength(result.stdout, "utf8") > 4096) throw new Error();
+              const status = parseJson(result.stdout) as { ready?: boolean; version?: string; reason?: string } | null;
+              if (typeof status?.ready !== "boolean" || !/^\d+\.\d+\.\d+$/.test(status.version ?? "")) throw new Error();
+              return status;
+            } catch { throw new Error("Quota setup failed; run the quota-axi-setup script explicitly."); }
+          };
+          let status = await runSetup("check");
+          if (!status.ready && (setup || status.reason === "missing-executable" || status.reason === "wrong-version")) {
+            if (ctx.mode === "tui" && ctx.hasUI && await ctx.ui.confirm("Set up subscription reporting?",
+              `Download quota-axi@${status.version} with npm to XDG_DATA_HOME (or HOME/.local/share)/herdr-orch/quota-axi? Network access is required; package lifecycle scripts are disabled. No provider authentication or quota read occurs during setup.`, { timeout: 60_000 })) {
+              status = await runSetup("install");
+              if (!status.ready) ctx.ui.notify(`Quota setup failed. ${manual}`, "warning");
+            } else if (!setup) ctx.ui.notify(manual, "info");
+          }
+          if (setup) {
+            ctx.ui.notify(status.ready ? `quota-axi@${status.version} is ready.` : `Quota setup is not ready. ${manual}`, status.ready ? "info" : "warning");
+            return;
+          }
+        }
         if (ctx.mode === "tui") {
           const [compact, detail] = await Promise.all([render(false), render(true)]);
           pi.appendEntry<HelpEntry>(HELP_ENTRY, {

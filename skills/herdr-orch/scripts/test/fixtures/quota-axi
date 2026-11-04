@@ -1,0 +1,14 @@
+#!/usr/bin/env bb
+(require '[babashka.fs :as fs] '[cheshire.core :as json] '[clojure.string :as str])
+(let [root (fs/parent (fs/canonicalize *file*))
+      report (or (System/getenv "FAKE_QUOTA_REPORT") (str (fs/path root "usage-report.json")))
+      log (or (System/getenv "FAKE_QUOTA_LOG") (str (fs/path root "quota-calls")))]
+  (spit log (str (pr-str (vec *command-line-args*)) "\n") :append true)
+  (if (= ["--version"] (vec *command-line-args*))
+    (println (or (System/getenv "FAKE_QUOTA_VERSION") "0.1.69"))
+    (do
+      (when (some #(System/getenv %) ["QUOTA_AXI_SNAPSHOT" "QUOTA_AXI_CLAUDE_PROFILES" "QUOTA_AXI_CLAUDE_SWAP"])
+        (throw (ex-info "ambient override escaped" {})))
+      (print (if (fs/exists? report) (slurp report) "{\"schemaVersion\":5,\"providers\":[]}"))
+      (flush)
+      (System/exit (Integer/parseInt (or (System/getenv "FAKE_QUOTA_EXIT") "0"))))))

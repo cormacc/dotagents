@@ -943,6 +943,20 @@ export const tests: TestCase[] = [
     assert.deepEqual(deriveExpectation({ treatment: "T", configuredTools: [], facts: f("openai-codex-responses") }).adaptations, []);
   } },
 
+  { name: "audit: Pi 1.5 mid-conversation effort uses a low baseline independent of the trailing level", run() {
+    const f = facts({ compat: { supportsMidConvoEffort: true }, activeEffort: "medium" });
+    const e = deriveExpectation({ treatment: "TREATMENT", configuredTools: [], facts: f });
+    const payload = { model: "fake-model", max_tokens: 100, stream: true,
+      betas: ["mid-conversation-output-config-2026-07-01", "thinking-binding-controls-2026-08-01"],
+      thinking: { type: "adaptive", display: "summarized", block_binding: { prefix_mismatch_behavior: "drop_block" } },
+      output_config: { effort: "low" }, system: sys("TREATMENT"),
+      messages: [user(), { role: "system", content: [], output_config: { effort: "medium" } }] };
+    assert.deepEqual(auditPayload(payload, e, ASSIGNMENT, [U()]).violations, [], "literal installed-provider control");
+    const bad = structuredClone(payload);
+    bad.output_config.effort = "high";
+    assert.notDeepEqual(bad, payload, "baseline-effort mutation applied");
+    rejected(auditPayload(bad, e, ASSIGNMENT, [U()]), /top-level output_config differs/);
+  } },
   { name: "audit: top-level encoding is derived per API from the model, resolved level and runtime inputs; changed, added or missing values fail", run() {
     // Literal expected encodings, written from the installed consumers (anthropic-messages.js
     // streamSimple/getBetaFeatures/buildParams, openai-completions.js buildParams,
@@ -1195,6 +1209,7 @@ export const tests: TestCase[] = [
     const run = await runSubject({ tools: ["read"], compat: { supportsMidConvoEffort: true }, system: "SYS", script: call });
     assert.equal(run.code, 0, JSON.stringify(run.adapter("terminal.json")));
     assert.equal(run.requests.length, 2);
+    for (const request of run.requests) assert.deepEqual(request.output_config, { effort: "low" }, "Pi 1.5 baseline effort");
     const markers = (request: any) => request.messages.flatMap((m: any, i: number) => (m.role === "system" ? [{ i, effort: m.output_config.effort }] : []));
     assert.equal(markers(run.requests[0]).length, 1, "first request: only the trailing marker");
     assert.equal(markers(run.requests[1]).length, 2, "second request: one historical marker plus the trailing one");
