@@ -1,0 +1,120 @@
+#+TITLE: Explore agent memory options
+#+DATE: 2026-11-04 Wed
+#+PARENT: [[task:df50e088-86c0-44be-8d0a-3a09fce88d2b][Explore agent memory options]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Draft
+#+SPEC: [[proj:skills/self-improvement/SKILL.md]]
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+
+* Intent
+Evaluate a lower memory layer without adding a second task authority or enabling automatic session capture before its privacy and retention policy is agreed.
+
+* Summary
+*Level:* prototype · *Tests:* thorough · *Docs:* inline
+
+Primary-source comparison is complete. The candidates solve different problems: in-session consolidation, cross-session service-backed recall, or a provider proxy. This research did not install a candidate or approve a trial; compatibility with the installed Pi 1.4.0 runtime remains unverified.
+
+** Scope
+*** In scope
+- Candidate mechanisms, automatic capture/retrieval, data destinations, service requirements and deletion boundaries.
+- A synthetic-only compatibility and recall trial after selecting the memory problem and permitted data flow.
+- Existing ownership: org-tasks owns task lifecycle; self-improvement owns durable process feedback.
+*** Out of scope
+- Importing real session history, enabling background retention, deploying services or changing provider routing during research.
+- Treating compaction as proven cross-session memory or a wildcard peer dependency as runtime compatibility evidence.
+
+** Acceptance
+Proposed trial criteria; data-flow and adoption choices remain OPEN.
+*** Core functionality
+- [X] Comparison distinguishes the candidates' mechanisms and operational surfaces.
+- [ ] A selected candidate loads in the intended Pi runtime with synthetic data only.
+- [ ] A fixed cross-session question is answered from permitted retained data, with its source identified.
+*** Edge cases
+- [ ] A conflicting memory cannot override task state or repository instructions.
+- [ ] A deletion test identifies what disappears from active recall and what remains in backing history, queues or backups.
+- [ ] Provider/model requests and retained content match the agreed data-flow policy.
+*** Anti-criteria
+- [ ] Must not: ingest existing sessions or run automatic capture before explicit approval.
+- [ ] Must not: silently change model/provider selection or make memory a new task authority.
+
+** Decisions
+- Separate problem selection from package selection :: an in-session ledger, cross-session recall service and traffic proxy are not interchangeable. Rejected:
+  - Install all candidates for a live comparison: increases data exposure and changes several mechanisms at once.
+  - Treat publicity or a minimum Pi version as adoption evidence: neither establishes compatibility, usefulness or deletion semantics.
+- Recommend one isolated synthetic trial only after policy selection :: measure successful and misleading recall plus deletion before considering real sessions. This is a proposal, not approval to install or send data.
+
+** Risks
+- Automatic lifecycle capture can transmit more session content than an explicit recall tool call suggests.
+- Self-hosting a memory service does not by itself keep its extraction-model requests local.
+- Removing an active observation can leave its original ledger history intact.
+
+* Plan
+*** CANCELLED [#C] Evaluate pi-hermes-memory plugin :pi:memory:
+CLOSED: [2026-08-27 Thu 14:21]
+:PROPERTIES:
+:CUSTOM_ID: 5d36628d-818d-4823-a8b4-723b8e3145e9
+:CREATED: [2026-05-21 Thu 16:01]
+:END:
+:LOGBOOK:
+- Created [2026-05-21 Thu 16:01]
+- State "CANCELLED" from "TODO" [2026-08-27 Thu 14:21]
+:END:
+#+IMPORT: [[file:2026-05-21-evaluate-pi-hermes-memory-plugin.org]]
+
+** DONE [#C] Compare self-improvement lesson capture with dev-agent-backlog :org:
+CLOSED: [2026-11-04 Wed 00:24]
+:PROPERTIES:
+:CUSTOM_ID: 64a816ea-7484-4b0f-b8ed-aabbb5c66e52
+:CREATED: [2026-05-02 Sat 12:22]
+:STARTED: [2026-11-04 Wed 00:24]
+:END:
+:LOGBOOK:
+- Created [2026-05-02 Sat 12:22]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:24]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:24]
+:END:
+Spawned from the dev-agent-backlog prior-art review (parent task 5aed17ed-cfc4-4ae3-bb24-57c7d974a142). The review deferred dev-agent-backlog's "solution / lesson capture" idea on the basis that it overlaps with the existing self-improvement skill and is a separate concern from the task lifecycle protocol.
+
+Reviewed [2026-11-04 Wed]: [[proj:design/log/2026-05-01-dev-agent-backlog-review-summary.html]] proposes separate solution/lesson capture but gives no further capture contract. [[proj:skills/self-improvement/SKILL.md]] already owns eligibility, TODO-first capture through =ot=, routing, deduplication, promotion through =org-plan=, and evidence retention in =RETROLOG.org= or commit bodies. No addition is justified by this comparison; keep the existing owners and do not add another knowledge store. This closes only the stored prior-art comparison, not the wider agent-memory exploration.
+
+** TODO Select memory goal and permitted data flow
+:PROPERTIES:
+:CUSTOM_ID: 36212e4b-18b5-4aee-bb19-1f864d0debc4
+:CREATED: [2026-11-04 Wed 01:42]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 01:42]
+:END:
+Acceptance criteria:
+- Choose the memory problem before the package.
+- Specify permitted session content, projects, destinations, model providers and retention/deletion behaviour.
+- Keep org-tasks and self-improvement as their existing authorities.
+The OPEN decisions require human input before a live trial.
+
+** TODO Run the approved synthetic memory trial
+:PROPERTIES:
+:CUSTOM_ID: 41a3fdeb-2d21-4162-9f71-9a4e674a1305
+:BLOCKED-BY: task:36212e4b-18b5-4aee-bb19-1f864d0debc4
+:CREATED: [2026-11-04 Wed 01:42]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 01:42]
+:END:
+Acceptance criteria:
+- Use an isolated Pi home at the intended runtime and a pinned candidate.
+- Retain only synthetic fixtures; verify the agreed request destinations and model identity.
+- Measure successful recall, conflicting recall and post-deletion recall with positive controls.
+- Record a keep/reject decision without importing existing sessions or changing daily-driver settings.
+
+* Implementation
+- Atlas at [[https://github.com/neoneye/agent-memory-atlas/tree/802c5b4aae28534eeca410a9fa1c8a9fb01a9971][802c5b4]] is the researcher's comparative index, not an executable candidate.
+- Observational Memory at [[https://github.com/elpapi42/pi-observational-memory/tree/a94a98df103b6d8d297b5676152678fc56b76e25][a94a98d]] serialises branch entries and prior memory in ~src/hooks/consolidation-trigger.ts~ / ~runObserverStage~, then supplies them to a resolved worker model. The researcher reports in-session ledger observations rather than semantic cross-session search. Data egress depends on the selected model/provider.
+- Epimetheus at [[https://github.com/noctuid/epimetheus/tree/2d53c9b439961f1f649284c624c8d82d322bd348][2d53c9b]] documents automatic lifecycle retention and pre-call recall through Hindsight, with local or cloud deployment. Its README states that the shown embedded deployment also needs LLM-provider configuration; service-side deletion semantics remain unverified.
+- TencentDB Agent Memory at [[https://github.com/TencentCloud/TencentDB-Agent-Memory/tree/ecc01a545da0b2ac6cae2f0f0af0d39d41469793][ecc01a5]] registers a provider through ~MemoryCore/pi-plugin/index.ts~ using a proxy URL, user key and identity/session headers. The researcher describes proxy capture/injection plus a service stack, not a drop-in local memory file.
+- Root verified these three concrete data-flow boundaries and all four clone revisions. Broader capability/version claims remain attributed to ~.tmp/autonomous-backlog/memory-research/report.md~. No third-party script, memory service, candidate extension or candidate model request was run.
+
+* Open questions
+** OPEN Which memory problem should the trial solve?
+Choose cross-session factual recall, in-session consolidation, or team/service memory. Keep task and process-feedback ownership unchanged.
+** OPEN Which session data and destinations are permitted?
+Choose the permitted content, projects, storage/service location, extraction-model provider and retention/deletion policy before approving a candidate trial. The OpenAI-only constraint applies to this autonomous chunk; it does not approve future provider changes.
