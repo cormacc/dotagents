@@ -16,7 +16,7 @@ Run a trait's adversarial gate with a native Codex model ID:
 scripts/run-trait-gate.bb prune --model gpt-5.6-terra
 ```
 
-`run-trait-gate.bb` reads `traits/<name>/gate.md`, derives both arm sources from its one scaffold, and asserts that removing one exact `%<name>` token line is their only source difference. It calls the existing `skills/herdr-orch/scripts/traits` CLI with the repository trait store (`traits/`) and the packaged skill store (`skills/herdr-orch/traits/`) as layers to interpolate the treated arm, so a gate-only fragment at repository root and a real packaged fragment resolve alike; it does not implement interpolation or extend that CLI. Each arm is sent as a direct prompt to a separate `codex exec --ephemeral --sandbox read-only --ignore-user-config` process, so no subagent persona or durable configuration fixture is created. The runner gives Codex an isolated home under the run directory, copies existing authentication into it when present, and removes that isolated home after both arms or on failure; Codex never receives a durable configuration path for writes.
+`run-trait-gate.bb` reads `traits/<name>/gate.md`, derives both arm sources from its one scaffold, and asserts that removing one exact `%<name>` token line is their only source difference. It calls the existing `skills/herdr-orch/scripts/traits` CLI with the repository trait store (`traits/`) and the packaged skill store (`skills/herdr-orch/traits/`) as layers to interpolate the treated arm, so a gate-only fragment at repository root and a real packaged fragment resolve alike; it does not implement interpolation or extend that CLI. Each arm is sent as a direct prompt to a separate `codex exec --ephemeral --sandbox read-only --ignore-user-config` process, so no subagent persona or durable configuration fixture is created. The runner uses the caller's `CODEX_HOME`, or `~/.codex` when unset. `--ignore-user-config` skips that home's `config.toml`, but authentication still uses that home; the runner does not copy credentials or create an isolated Codex home. `--ephemeral` disables session-file persistence, not all possible runtime writes.
 
 Run artifacts are transient under `.tmp/trait-gates/`. The runner prints the treated and control final responses beside the pre-registered pass condition and stops without a verdict; a human applies the condition.
 
@@ -90,6 +90,26 @@ Checks that every section reference in tracked and non-ignored untracked `.org` 
 Paths must be relative to the linking file. Links inside code spans, org verbatim, and code blocks are examples and are skipped. `--exclude` drops a path prefix, such as a vendored skill. Each problem prints as `path:line: message`. The script exits 1 when any reference fails to resolve and 2 on a usage error.
 
 `scripts/check.sh` runs it with the vendored skills excluded. `bb test` runs the focused tests in `scripts/test-check-section-links.bb`.
+
+## Change-record identifier check
+
+```sh
+scripts/check-record-identifiers.bb --control known-identifier design/log/record.org
+```
+
+Checks backticked non-path identifiers in the specified change-records against text in Git-tracked `.clj`, `.cljc`, `.cljs`, `.edn` and `.bb` files. It supports keywords, `::` keywords, qualified and simple symbols, and namespaces. It uses exact token boundaries, reads source without evaluating it, and treats comments and strings as source evidence. It does not resolve bindings.
+
+The required `--control` is a known non-path identifier. The check tests it with the same matcher on every run and prints the accepted control. A missing control, unreadable record or tracked source, no tracked source, or Git failure exits non-zero. Unresolved record identifiers remain advisory and exit 0, because removed names, rejected alternatives and library internals can be valid record content.
+
+An auto-resolved `::keyword` is reported as uncertain rather than resolved or unresolved: without namespace context, its target cannot be determined. Paths are excluded from this check; `ot doctor` owns inline path validation through `inline-path-dangling`.
+
+Run the focused tests with:
+
+```sh
+bb scripts/test-check-record-identifiers.bb
+```
+
+`bb test` runs the focused tests in `scripts/test-check-record-identifiers.bb`.
 
 ## Skill frontmatter validation
 
