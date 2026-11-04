@@ -11,7 +11,7 @@ Detect overlapping file access before a parallel tool batch makes a verification
 * Summary
 *Level:* MVP · *Tests:* thorough · *Docs:* README
 
-The installed Pi extension API documents a viable interception point for direct and nested codemode calls. The unresolved design choice is how to handle shell commands whose file effects cannot be inferred safely.
+The installed Pi 1.4.0 runtime exposes direct and nested tool lifecycle events, including completion after nested failure and cancellation. A disposable fixture rejects a later conflicting nested call without waiting in its hook. Warning/refusal and unknown-shell policy still require a decision; no guard is installed.
 
 ** Scope
 *** In scope
@@ -45,7 +45,7 @@ Proposed criteria; not yet approved.
 - [ ] Must not: change the execution order silently.
 
 ** Decisions
-- Prefer lifecycle interception over codemode source rewriting :: the installed extension guide documents `tool_call` and `tool_execution_end` for nested `ctx.executeTool()` calls, with `parentToolCallId`. This is a documented contract, not yet a runtime measurement for this guard. Rejected:
+- Prefer lifecycle interception over codemode source rewriting :: the installed extension guide documents `tool_call` and `tool_execution_end` for nested `ctx.executeTool()` calls, with `parentToolCallId`. A disposable installed-runtime fixture confirms this seam for a custom parent tool; the codemode tool itself remains untested. Rejected:
   - Parse `Promise.all` source: misses dynamic tool calls, aliases, and direct model-issued parallel calls.
   - Add another instruction only: the task records repeated failures after an ordering instruction was added.
 - Start with active-call conflict detection, not a promised whole-batch preflight :: per-call hooks cannot assume sibling calls have started. If blocking is selected, reject the conflicting later call instead of waiting within its hook.
@@ -56,7 +56,8 @@ Proposed criteria; not yet approved.
 - Cross-session writes remain outside this extension's state and need a separate boundary if they become a requirement.
 
 * Plan
-** STARTED Verify nested tool lifecycle and cancellation for a file guard
+** DONE Verify nested tool lifecycle and cancellation for a file guard
+CLOSED: [2026-11-04 Wed 00:55]
 :PROPERTIES:
 :CUSTOM_ID: 995ac213-cef7-4582-bea8-724f5c9abaf6
 :CREATED: [2026-11-04 Wed 00:38]
@@ -65,6 +66,7 @@ Proposed criteria; not yet approved.
 :LOGBOOK:
 - Created [2026-11-04 Wed 00:38]
 - State "STARTED" from "TODO" [2026-11-04 Wed 00:48]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:55]
 :END:
 Acceptance criteria:
 - A disposable installed-Pi fixture observes tool_call and tool_execution_end for direct and nested calls.
@@ -88,7 +90,10 @@ Human input is required for the OPEN decisions in this record.
 
 * Implementation
 - Read the installed Pi extension and codemode guides and the exported tool event declarations. Nested calls carry `parentToolCallId`; `tool_call` can block, while `tool_execution_end` carries completion and error state.
-- No extension is installed by this draft. Runtime event-order and cancellation behaviour remain to be demonstrated with a disposable local tool fixture; no hosted model call is needed.
+- An installed-Pi fixture uses a loopback OpenAI-compatible endpoint and custom tools. Direct and nested calls emit both lifecycle events; nested IDs carry their parent ID. Concurrent child starts overlap, and a synchronous hook rejects the later conflict while the admitted sibling completes.
+- Nested throw and parent-requested cancellation each emit an error completion for the affected child; the cancelled agent settles with `aborted: true`. The fixture asserts Pi's expected exit 1 separately from its own successful exit 0.
+- Root verification: `timeout 45s node --import tsx .tmp/autonomous-backlog/nested-tool-probe/run-probe.ts`, exit 0, two local requests. Evidence: `.tmp/autonomous-backlog/nested-tool-probe/root-verification.json` and `report.md`. No hosted endpoint or live user file is used.
+- Limits: the fixture measures one level of custom nested calls, not codemode itself, arbitrary built-in concurrency, external cancellation, reload cleanup, shell effects or canonical-path correctness. These remain implementation verification work; the probe does not satisfy the guard's acceptance checklist.
 
 * Open questions
 ** OPEN Should a detected overlap warn or block the conflicting call?
