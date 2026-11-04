@@ -89,6 +89,7 @@ Install and local development: `scripts/README.md`.
 
 - Use the smallest useful task granularity: each task should describe a concrete outcome that can become `DONE`.
 - Prefer guaranteed `ot create` for new top-level tasks so IDs, timestamps, drawers, linked-issue duplicate checks, and section insertion stay deterministic. An available harness wrapper may delegate to the same command but is optional.
+- When an Edit `newText` block spans a task heading, copy the complete heading verbatim from the latest read; do not retype its state token. Use `ot status` for lifecycle changes, even when a body edit would make a state change convenient.
 - There is no `ot` mutator for a task or subtask's body prose. Editing that prose in place and verifying with `ot show <id>` plus `ot doctor` is the sanctioned route, not a protocol violation -- do not search for a verb that does not exist, and do not reach for `ot create` to replace a task whose body needs a correction.
 - A task body's source citations are a snapshot of when it was written. Before treating a stored body as a baseline, re-verify the symbols, paths, and line numbers it names: a task can outlive the function it cites, and a stale citation sends the next reader after code that no longer exists.
 - A stored body's stated constraints age the same way. Confirm the motivation of a load-bearing constraint with the requester before you design mechanism for it; a constraint that was real when written may have lapsed.

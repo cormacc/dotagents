@@ -83,6 +83,7 @@
 - Prefer Babashka to shell and Python for repository-local automation. Use Python only to invoke an existing Python tool or when its ecosystem is materially more suitable.
 - Use shell for single commands and for passing one command's output to another. Use a `bb` script (`.tmp/*.clj`) when a task needs a loop, a conditional, a string operation, two or more `|` operators, `awk`, `sed -n`, or nested quoting. At that complexity, shell can hide failures.
 - Never pass text that you did not author as the format argument to `printf`. Use `printf '%s' "$text"`, because corrupted output still exits 0.
+- Before submitting an Edit call, check that each `edits[]` entry contains exactly `oldText` and `newText`; remove stray keys even if the tool tolerates them.
 - For a scripted transformation or a long-region replacement, write a candidate under `.tmp/` and inspect its diff before you replace the source.
   - Check the end of each long edit. A truncated replacement can look complete.
   - If an edit call with several edits returns an error, treat the whole call as not applied. Verify with `grep` or `diff` before you reissue.
