@@ -625,6 +625,7 @@
         (is (re-find #"worktree add" (:out proc)))
         (is (= "failed" (:status entry)))
         (is (= "worktree" (:failure-phase entry)))
+        (is (= {:status "missing"} (:checkout-cleanup entry)) "cleanup reports the checkout that was never cut")
         (is (= #{:path :branch :base :repository} (set (keys (:worktree entry)))))
         (is (not (fs/exists? (get-in entry [:worktree :path]))))
         (is (nil? (:pane-id entry))))
@@ -2560,30 +2561,107 @@
       (is (re-find #"own" (:out proc)))
       (is (fs/exists? path)))))
 
-;; The recovery path task f49a63f5 built for: worktree fields (and the real checkout) are
-;; written/created before `git worktree add`'s later steps can fail, so a spawn failure
-;; that strikes after the checkout is cut (here, `agent start`) leaves a real, removable
-;; checkout behind rather than an orphaned, untraceable one.
-(deftest worktree-remove-recovers-a-checkout-orphaned-by-a-spawn-failure-after-creation
+;; --- failed-launch checkout cleanup ---------------------------------------------------
+;; The single ledger entry of a fixture whose only spawn failed: a failed round is hidden
+;; from routine listings, so read the entry file directly.
+(defn- only-ledger-entry [dir]
+  (let [entries (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
+                      :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
+                  (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" "")))]
+    (is (= 1 (count entries)) "positive control: exactly one spawn was allocated")
+    (first entries)))
+
+;; A launch that fails after `git worktree add` leaves nothing to integrate, so the pristine
+;; checkout it created goes with it and a retry starts clean. The branch stays, as for
+;; `worktree remove`, and the error names the hidden failed round.
+(deftest failed-launch-removes-the-pristine-checkout-it-created
   (let [{:keys [env dir]} (fake-env {"FAKE_FAIL_START" "1"})
         proc (call! env "task" "start" "worker" "--worktree" "new" "--task" "start fails after the checkout is cut")
-        ;; The failed `start` exits non-zero without printing the task id, so recover the
-        ;; single entry file directly (mirrors `prune-refuses-an-already-terminal-entry`).
-        entry (first (for [f (fs/list-dir (fs/path dir ".tmp" "herdr-orch" "ledger"))
-                           :when (and (fs/regular-file? f) (str/ends-with? (fs/file-name f) ".json"))]
-                       (ledger-entry* dir (str/replace (fs/file-name f) #"\.json$" ""))))
-        path (get-in entry [:worktree :path]) branch (get-in entry [:worktree :branch])]
+        entry (only-ledger-entry dir)
+        path (get-in entry [:worktree :path]) branch (get-in entry [:worktree :branch])
+        error-data (get-in (result proc) [:error :data])]
     (is (= 1 (:exit proc)))
+    (is (string? path) "positive control: the round recorded a managed checkout")
     (is (= "failed" (:status entry)))
     (is (= "start" (:failure-phase entry)))
-    (is (fs/exists? path) "the checkout survives a failure that struck after it was created")
-    (is (str/includes? (git-worktree-list dir) path))
+    (is (= {:status "removed"} (:checkout-cleanup entry)))
+    (is (= (:task entry) (:task error-data)))
+    (is (= {:status "removed"} (:checkout-cleanup error-data)))
+    (is (not (fs/exists? path)))
+    (is (not (str/includes? (git-worktree-list dir) path)))
+    (is (git-branch-exists? dir branch) "the branch is retained")
+    (let [retry (call! (dissoc env "FAKE_FAIL_START") "task" "start" "worker" "--worktree" "new" "--task" "retry")]
+      (is (zero? (:exit retry)) (:err retry)))))
+
+;; Deliberately triggered with known-bad input: the failed launch leaves content in its
+;; checkout. Dirty and ignored content are both preserved, unlike manual `worktree remove`,
+;; because a launch failure is not the parent's decision to discard ignored data.
+(deftest failed-launch-retains-a-checkout-that-holds-content
+  (doseq [[label written reason] [["untracked file" "launch.txt" "dirty"]
+                                  ["ignored file" "ignored.cache" "ignored"]]]
+    (testing label
+      (let [{:keys [env dir]} (fake-env {"FAKE_FAIL_START" "1" "FAKE_START_WRITE" written})
+            _ (spit (str (fs/path dir ".gitignore")) "ignored.cache\n")
+            _ (git-in! dir "add" ".gitignore")
+            _ (git-in! dir "commit" "-q" "-m" "fixture ignore rule")
+            proc (call! env "task" "start" "worker" "--worktree" "new" "--task" label)
+            entry (only-ledger-entry dir)
+            path (get-in entry [:worktree :path])]
+        (is (= 1 (:exit proc)))
+        (is (= "failed" (:status entry)))
+        (is (= "retained" (get-in entry [:checkout-cleanup :status])))
+        (is (= reason (get-in entry [:checkout-cleanup :reason])))
+        (is (some #(str/includes? % written) (get-in entry [:checkout-cleanup (keyword reason)])))
+        (is (= (:checkout-cleanup entry) (get-in (result proc) [:error :data :checkout-cleanup])))
+        (is (fs/exists? (fs/path path written)) "the content survives")
+        (is (str/includes? (git-worktree-list dir) path))))))
+
+;; A retained checkout keeps the manual recovery path: the failed round is not live, so
+;; `worktree remove` takes it once the parent has inspected it.
+(deftest worktree-remove-recovers-a-checkout-retained-by-a-failed-launch
+  (let [{:keys [env dir]} (fake-env {"FAKE_FAIL_START" "1" "FAKE_START_WRITE" "ignored.cache"})
+        _ (spit (str (fs/path dir ".gitignore")) "ignored.cache\n")
+        _ (git-in! dir "add" ".gitignore")
+        _ (git-in! dir "commit" "-q" "-m" "fixture ignore rule")
+        _ (call! env "task" "start" "worker" "--worktree" "new" "--task" "retained checkout")
+        entry (only-ledger-entry dir)
+        path (get-in entry [:worktree :path]) branch (get-in entry [:worktree :branch])]
+    (is (= "retained" (get-in entry [:checkout-cleanup :status])))
+    (is (fs/exists? path))
     (let [remove-proc (call! env "worktree" "remove" (:task entry))
           res (:result (result remove-proc))]
       (is (zero? (:exit remove-proc)) (:err remove-proc))
       (is (= "removed" (:status res)))
       (is (not (fs/exists? path)))
       (is (git-branch-exists? dir branch)))))
+
+;; Deliberately triggered with known-bad input: a clean existing checkout that the round
+;; did not create is never removed by a launch failure.
+(deftest failed-launch-never-removes-an-existing-target
+  (let [{:keys [env dir]} (fake-env {"FAKE_FAIL_START" "1"})
+        external (str (fs/canonicalize (fs/create-temp-dir {:prefix "failed-launch-existing-"})))
+        _ (fs/delete-tree external)
+        branch (str "existing/" (subs (str (java.util.UUID/randomUUID)) 0 8))]
+    (git-in! dir "worktree" "add" "-b" branch external (git-head dir))
+    (try
+      (let [proc (call! env "task" "start" "worker" "--worktree" external "--task" "existing target")
+            entry (only-ledger-entry dir)]
+        (is (= 1 (:exit proc)))
+        (is (= external (get-in entry [:worktree :path])) "positive control: the round used the existing checkout")
+        (is (= {:status "retained" :reason "not-created-by-round"} (:checkout-cleanup entry)))
+        (is (fs/exists? external))
+        (is (str/includes? (git-worktree-list dir) external)))
+      (finally
+        (git-in! dir "worktree" "remove" "--force" external)))))
+
+;; A measurement supervisor can outlive its launch failure, so the cleanup is limited to
+;; the interactive phases. The `:start` phase is exercised end to end above; calling it
+;; in-process here would write to this repository's own ledger.
+(deftest failed-launch-cleanup-skips-the-measurement-launch-phase
+  (is (nil? (cli/cleanup-failed-checkout!
+             {:task "00000000-0000-4000-8000-000000000000"
+              :worktree {:path "/nonexistent/checkout" :branch "orch/00000000" :base "0"}}
+             :launch))))
 
 ;; Teardown is only ever `oh worktree remove`: `close`, `prune`, `orphans --close`, and
 ;; `collect --close` must never touch a checkout, each verified directly against a

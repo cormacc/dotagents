@@ -280,6 +280,13 @@ case "${1:-}" in
             native_args=1
           fi
         done
+        # FAKE_START_WRITE names a path, relative to the placed child's work root, that
+        # `agent start` writes before any failure: content a launch left in its checkout.
+        if [ -n "${FAKE_START_WRITE:-}" ]; then
+          work_root="$(grep '^HERDR_ORCH_WORK_ROOT=' "$FAKE_HERDR_ENV_FILE" | head -1 | cut -d= -f2-)"
+          mkdir -p "$(dirname "$work_root/$FAKE_START_WRITE")"
+          printf 'launch residue\n' >"$work_root/$FAKE_START_WRITE"
+        fi
         [ "${FAKE_FAIL_START:-}" = 1 ] && { echo '{"error":"start"}' >&2; exit 1; }
         # FAKE_START_ERROR_CODE fails every `agent start` call with the given herdr
         # error code (real map shape, not the bare-string FAKE_FAIL_START), so a

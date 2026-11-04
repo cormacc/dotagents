@@ -930,9 +930,14 @@
   (if (headless? entry)
     (wait-headless! entry timeout owned?)
     (wait-interactive! entry timeout owned?)))
+(declare cleanup-failed-checkout!)
+;; The ledger write comes first, so an interrupted cleanup still leaves a terminal entry that
+;; `oh worktree list|remove` can finish by hand. The pane closes before the checkout is
+;; inspected, which ends any agent that could still write into it.
 (defn safe-cleanup! [entry phase]
   (ledger/update! (:task entry) assoc :status "failed" :failed-at (now) :failure-phase (name phase))
-  (when (and (:pane-id entry) (#{"split" "rename" "start"} (name phase))) (try (herdr/close! (:pane-id entry)) (catch Exception _))) )
+  (when (and (:pane-id entry) (#{"split" "rename" "start"} (name phase))) (try (herdr/close! (:pane-id entry)) (catch Exception _)))
+  (cleanup-failed-checkout! entry phase))
 ;; --- worktree checkout creation ------------------------------------------------------
 ;; "In flight" means genuinely unfinished, not merely unclosed: a round whose newest item
 ;; is a validated terminal result (COMPLETE/BLOCKED/FAILED) is done even if its pane was
@@ -1331,7 +1336,13 @@
         (let [current (ledger/read! task)]
           (when (not= "failed" (:status current)) (safe-cleanup! current :split)))
         (discard-fork! @fork-created)
-        (throw e)))))
+        ;; Routine listings hide the failed round, so the error names it and its checkout
+        ;; outcome: the caller can retry at once or inspect what was retained.
+        (let [cleanup (:checkout-cleanup (ledger/read! task))]
+          (throw (ex-info (or (ex-message e) (str e))
+                          (cond-> (merge {:task task} (ex-data e))
+                            cleanup (assoc :checkout-cleanup cleanup))
+                          e)))))))
 ;; --- headless measurement launch -----------------------------------------------------
 ;; The supervisor runs the same bb runtime and classpath as this process, so it loads exactly
 ;; the namespaces this launch validated with.
@@ -2556,8 +2567,8 @@
 ;; `close --settled`/`assert-children-discharged!` do, so a superseded continuation round
 ;; can never wedge removal forever, and a round that failed before it ever claimed a live
 ;; occupant is already excluded from `newest-rounds` by its own `live-round?` filter --
-;; exactly the recovery path task f49a63f5 built for: a checkout survives a spawn failure
-;; that struck after `git worktree add` but before the entry could claim a pane.
+;; exactly the recovery path task f49a63f5 built for: a checkout that a failed launch
+;; retained (see `cleanup-failed-checkout!`) stays removable.
 ;; A measurement also references its checkout while its owned execution still runs, even once
 ;; its result is sealed.
 (defn- worktree-referenced-by-live-round? [path entries]
@@ -2609,6 +2620,41 @@
             (git! (source-cwd) "worktree" "remove" path)
             {:status "removed" :task task :child (:child entry) :path path :branch branch :base base
              :tip tip :tip-is-ancestor-of-parent-head ancestor? :ignored ignored}))))))
+;; --- failed-launch checkout cleanup --------------------------------------------------
+;; A delegated launch that fails before its child takes the assignment leaves nothing to
+;; integrate, so a retry should start clean. Only a pristine checkout that this round
+;; created qualifies: the path and branch that `--worktree new` derives from this task,
+;; inside the managed root, attached to that branch at the recorded base, with no dirty or
+;; ignored paths and no live reference. Anything else is retained and reported, never
+;; forced, and `worktree list|remove` stays the manual path. The branch is always retained,
+;; as for `worktree remove`. A measurement launch is excluded: its supervisor can outlive
+;; the failure and still own the checkout.
+(def ^:private checkout-cleanup-phases #{"worktree" "split" "rename" "start"})
+(defn- failed-checkout-retention [entry]
+  (let [{:keys [path branch base]} (:worktree entry)
+        task (:task entry)]
+    (if-not (and (= path (worktree-checkout-path task))
+                 (= branch (core/worktree-branch task))
+                 (within-managed-worktree-root? (resolve-worktree-path path)))
+      {:status "retained" :reason "not-created-by-round"}
+      (let [rec (reconciliation entry)]
+        (cond
+          (= "missing" (:checkout-state rec)) {:status "missing"}
+          (= "invalid" (:checkout-state rec)) {:status "retained" :reason "invalid" :diagnostic (:diagnostic rec)}
+          (not= branch (checkout-branch! path)) {:status "retained" :reason "branch-mismatch"}
+          (not= base (:tip rec)) {:status "retained" :reason "committed" :tip (:tip rec)}
+          (seq (:dirty rec)) {:status "retained" :reason "dirty" :dirty (:dirty rec)}
+          (seq (:ignored rec)) {:status "retained" :reason "ignored" :ignored (:ignored rec)}
+          (worktree-referenced-by-live-round? path (ledger/entries)) {:status "retained" :reason "live-reference"})))))
+;; Never throws: the launch failure that triggered it is the error the caller must see.
+(defn cleanup-failed-checkout! [entry phase]
+  (when (and (:worktree entry) (checkout-cleanup-phases (name phase)))
+    (let [outcome (try (or (failed-checkout-retention entry)
+                           (do (git! (source-cwd) "worktree" "remove" (get-in entry [:worktree :path]))
+                               {:status "removed"}))
+                       (catch Exception e {:status "retained" :reason "error" :diagnostic (bounded-diagnostic e)}))]
+      (try (ledger/update! (:task entry) assoc :checkout-cleanup outcome) (catch Exception _))
+      outcome)))
 (defn worktree! [op opts positional]
   ;; A manual arity check, not `require-positionals`: that helper is defined later in
   ;; this file (next to `help-text`), and this dispatcher sits beside `orphans!` above it
