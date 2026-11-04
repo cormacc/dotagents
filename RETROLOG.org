@@ -358,3 +358,9 @@ After archiving, the parent told the user the record might have open questions t
 ** browser_screenshot -- Capture current viewport
 
 [[file:pi/extensions/chromium/index.ts]] supplied an unqualified “After UI changes” directive through =promptGuidelines=. Pi promoted it into the general prompt rules. During [[file:design/log/2026-11-03-ot-move-ordering-ui.org]], the agent generated HTML snapshots of terminal renderer output and opened them in Chromium to satisfy that directive. The user identified the web-versus-terminal scope error. The guideline is limited to browser-rendered web UI changes; the evidence stays here rather than in the loaded instruction.
+
+* 2026-11-04 Wed -- Linux failed-spawn investigation
+
+** Isolated Herdr investigations
+
+[[file:skills/herdr-orch/references/workflow-recipes.md]] section 'Isolated Herdr investigations': discovery chained with =&&= stopped at a command group's exit 2. The first disposable-server probe returned =workspace_not_found= because no workspace existed. After explicit workspace creation, a validator incorrectly rejected the exit-0 ={id,result}= response because it expected =oh='s =ok= field. Creating a workspace, passing its returned ID and checking the raw Herdr envelope allowed the corrected probe to complete; an occupied-pane control returned =agent_pane_busy= with exit 1. The verified run and cleanup are recorded in [[file:design/log/2026-11-04-failed-spawn-hygiene.org::*Validation]]. The recipe is local because [[file:skills/README.org::*Vendored]] prohibits editing the upstream Herdr skill. The separate Babashka =dir= collision already has guidance in the Clojure skill and needs no duplicate rule.

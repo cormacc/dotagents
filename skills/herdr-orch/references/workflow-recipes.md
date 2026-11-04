@@ -4,6 +4,15 @@ Use these recipes from the root orchestrator. The root chooses context, validate
 
 For delegated delivery of an accepted Org change-record, use [org-execute](../../org-execute/SKILL.md). It composes these recipes with `org-plan` and `org-tasks`; the recipes below also apply to work without an Org plan.
 
+## Isolated Herdr investigations
+
+Use this recipe for an authorised reproduction that needs a disposable server, not for ordinary delegation. Keep the vendored [Herdr skill](../../herdr/SKILL.md) unchanged.
+
+1. Run CLI discovery groups separately: a bare group prints usage and exits 2, so chaining groups with `&&` stops discovery.
+2. Start a uniquely named disposable server with `herdr --session NAME server`. Create its workspace with `workspace create --cwd PATH --no-focus`; pass the returned `.result.workspace.workspace_id` to `tab create --workspace`. Prefix every server-control command with the same `herdr --session NAME`; inherited caller IDs belong to the original session.
+3. Check exit status and the error envelope before reading result fields. Raw Herdr controls return `{id,result}` on success or `{id,error}` on failure, not `oh`'s `ok` envelope. `status --json` has its own top-level `client` and `server` fields.
+4. Establish one successful trial and one expected refusal before batching. Bound the whole probe and each external call; attach owned-session cleanup to the outer timeout. Stop and delete only the disposable session, then verify the session inventory.
+
 ## Ordinary staged delegation
 
 “Spawn a subagent” means a fresh context, which is the default. Use a named persona when its role helps the stage, or omit the persona for a fresh persona-less child. Capture each stage before preparing its successor, and give the successor the captured, existence-validated artefacts rather than relying on an earlier child's pane context.

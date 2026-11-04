@@ -22,7 +22,6 @@
   - [[#traits-probe-backlog][traits: probe backlog]]
   - [[#pi-clojure-structural-edit-tool-for-clojure-forms][pi-clojure: structural edit tool for Clojure forms]]
 - [[#fixes][Fixes]]
-  - [[#started-herdr-orch-failed-spawn-hygiene][STARTED herdr-orch: failed-spawn hygiene]]
 - [[#upstream-issues][Upstream issues]]
 - [[#chores][Chores]]
 - [[#agent-feedback][Agent feedback]]
