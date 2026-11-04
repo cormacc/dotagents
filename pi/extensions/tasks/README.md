@@ -117,12 +117,19 @@ The expanded UI is a centered split pane — task tree on the left, details for 
 | `p`                       | Edit the task's linked plan in Emacs, or start agent-assisted plan creation |
 | `n`                       | Create a new sibling task          |
 | `N`                       | Create a new child task            |
+| `m`                       | Move the current subtree to a parent, existing section, before or after a task |
 | `D` (shift-d)             | Preview and remove the current non-top-level task subtree |
 | `A` (shift-a)             | Archive the top-level task (must be `DONE` or `CANCELLED`) |
 | `P` (shift-p)             | Publish local task → `TASKS.org` (local tasks only)        |
 | `U` (shift-u)             | Unpublish task → `TASKS.local.org` (top-level shared tasks only) |
 | `J` (shift-j)             | Open linked-issue URLs in the browser (see *Linked external issues* below) |
 | `Esc` / `Alt+T`           | Close (Alt+T toggles)              |
+
+### Moving tasks
+
+Press `m` while the expanded overlay has focus. It closes temporarily so Pi's standard dialogs can show a relation picker followed by a same-file task picker, or an input for an existing section name. Task destinations exclude the source subtree. `Before task` places the moved subtree immediately before the anchor; `After task subtree` places it after the anchor's descendants. Both infer the anchor's parent and heading depth. `Last child of task` appends beneath the chosen parent. Sections must already exist in the owning file.
+
+The extension delegates the move to `ot move`; it does not edit Org content. Cancelling either dialog performs no move. Success, cancellation and errors reopen the refreshed overlay with the cursor task retained where possible. Moves cannot change file locality; use publish/unpublish for that.
 
 ### Task removal
 
@@ -358,7 +365,7 @@ Extension-specific notes:
 
 ## Tests
 
-Run `./test.sh`. It discovers every co-located `*.test.ts` and runs the shared path and locked-launcher tests. The suites cover parsing, insertion, graph reconstruction, CLI adapters, sandboxing, removal, and summary-refresh detection.
+Run `./test.sh`. It discovers every co-located `*.test.ts` and runs the shared path and locked-launcher tests. The suites cover parsing, insertion, graph reconstruction, CLI adapters, sandboxing, move destinations, picker cancellation, removal, and summary-refresh detection.
 
 `record.test.ts` exercises the real `ot` record adapter: custom paths, migrated IDs, existing-file preservation, local source owners, sandbox refusal, and skill-owned prompt policy. `pi-integration.test.ts` uses the [shared RPC harness](../test/README.md) and retains framing, environment-isolation, response-correlation, early-load-failure, spawn-error, and stdin-error checks.
 

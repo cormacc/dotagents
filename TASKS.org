@@ -18,7 +18,6 @@
   - [[#explore-agent-memory-options][Explore agent memory options]]
   - [[#review-herdr-tsk-plugin-for-inspiration-for-org-tasks][Review herdr tsk plugin for inspiration for org-tasks]]
 - [[#improvements][Improvements]]
-  - [[#ot-move-tuipi-overlay-exposure-and---before--after-ordering][ot move: TUI/pi-overlay exposure and --before/--after ordering]]
   - [[#herdr-plugin-wrapper-for-herdr-orch][herdr plugin wrapper for herdr-orch]]
   - [[#shared-babashka-bootstrap-helper-for-bb-dependent-skills][Shared babashka bootstrap helper for bb-dependent skills]]
   - [[#traits-probe-backlog][traits: probe backlog]]
@@ -143,18 +142,6 @@ pi-context 2.3.0 is installed for all projects (pinned in pi/settings.json) afte
 On 2026-11-03, npm audit in ~/.pi/agent/npm reported 8 advisories (1 critical, 5 high, 2 moderate), all through @modelcontextprotocol/sdk@1.32.1, which pi-web-access@0.46.0 pins exactly: proxy-addr (critical, IP spoofing), hono, body-parser, fast-uri, ip-address, zod (high), @hono/node-server and qs (moderate). Six of the eight are in the SDK HTTP server stack (express, hono and their dependencies). pi-web-access imports only the SDK client (client/streamableHttp) and the stdio server, and none of the vulnerable packages directly, so those six are probably not reachable; this is an inference from imports, not a test. zod (memory exhaustion on oversized input) and fast-uri (host confusion, via ajv) are in the client path. npm reports a fix for all eight (fixAvailable: true); not tested. Before replacing the package: check whether a newer pi-web-access or an in-range dependency update clears the advisories, and whether upstream (github.com/nicobailon/pi-web-access) tracks them. If not, compare alternatives on the functions in use: web_search, fetch_content with stored responses (get_search_content), source_check, and the configured search providers (Exa served web_search on 2026-11-03).
 
 * Improvements
-
-** TODO [#B] ot move: TUI/pi-overlay exposure and --before/--after ordering :skill:org_tasks:
-:PROPERTIES:
-:CUSTOM_ID: da7350ac-60c6-4336-9b7e-e0cbce51658c
-:CREATED: [2026-07-28 Tue 17:50]
-:END:
-:LOGBOOK:
-- Created [2026-07-28 Tue 17:50]
-:END:
-Follow-ups from the initial `ot move` implementation (task 2a2f5aed): expose move in the ot TUI and pi tasks overlay (boundary.md notes the pending parity — needs a key map entry plus a destination picker), and add `--before`/`--after` ordering control so a move is not restricted to append-as-last-child / last-in-section semantics.
-
-Also: `ot move <id> --section <name>` fails `section-not-found` when the section heading does not already exist, so introducing a new section is a hand edit. Decide between a `--create-section` flag and documenting the pre-create requirement in the org-tasks skill. Measured in a scratch project: a move to a new section name errored, while the same move into an existing section succeeded.
 
 ** TODO [#B] herdr plugin wrapper for herdr-orch :herdr_orch:
 :PROPERTIES:

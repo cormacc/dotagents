@@ -103,9 +103,12 @@
 (def ^:private move-spec
   {:parent  {:desc "Destination parent task :CUSTOM_ID: (append as last child)"
              :ref  "<uuid>" :coerce :string}
-   :section {:desc (str "Destination level-1 section in the task's own file "
-                       "(move back to top level)")
-             :ref  "<name>"}})
+   :section {:desc "Existing destination level-1 section in the task's own file"
+             :ref  "<name>"}
+   :before  {:desc "Insert as a sibling before this task"
+             :ref "<uuid>" :coerce :string}
+   :after   {:desc "Insert as a sibling after this task's whole subtree"
+             :ref "<uuid>" :coerce :string}})
 
 (def ^:private list-spec
   {:status-filter {:desc "Filter by status (repeatable)" :coerce []
@@ -206,8 +209,9 @@
     :summary ["<summary>" "Create a new task under --section"]}
    {:cmds ["move"]               :fn move/move-cmd
     :spec (merge move-spec include-content-spec) :args->opts [:id]
-    :summary ["<id> (--parent <id> | --section <name>)"
-              "Move an existing task subtree under another task or back to a section"]}
+    :tui-key :move
+    :summary ["<id> (--parent <id> | --section <name> | --before <id> | --after <id>)"
+              "Move an existing task subtree to a parent, section or sibling position"]}
    {:cmds ["remove"]             :fn removal/remove-cmd
     :spec remove-spec :args->opts [:id]
     :tui-key :remove

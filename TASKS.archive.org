@@ -4535,3 +4535,22 @@ Word stores a field's last result, e.g. "Error! Reference source not found.", an
 - Acceptance: simple and complex fields, split runs/instructions, nesting and cross-paragraph fields are covered; ordinary error-like prose, instruction text, valid results and deleted revisions do not produce false positives. Verify the CLI and an unchanged input package.
 - Must not: render or recompute fields, change the existing inspection fields, modify the document, or add a dependency.
 - Verified: ~skills/docx/scripts/test-docx.bb~ passed 37 tests / 279 assertions with Pandoc 3.13; the CLI regression failed before implementation and the self-check failed as required. Per-file clj-kondo, skill validation, section links and ~git diff --check~ passed. Removed two stale TOC links to archived tasks.
+
+** DONE [#B] ot move: TUI/pi-overlay exposure and --before/--after ordering :skill:org_tasks:
+CLOSED: [2026-11-04 Wed 00:03]
+:PROPERTIES:
+:CUSTOM_ID: da7350ac-60c6-4336-9b7e-e0cbce51658c
+:CREATED: [2026-07-28 Tue 17:50]
+:STARTED: [2026-11-03 Tue 23:23]
+:ARCHIVED: [2026-11-04 Wed 00:03]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-07-28 Tue 17:50]
+- State "STARTED" from "TODO" [2026-11-03 Tue 23:23]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:03]
+:END:
+#+IMPORT: [[plan:2026-11-03-ot-move-ordering-ui.org]]
+Follow-ups from the initial `ot move` implementation (task 2a2f5aed): expose move in the ot TUI and pi tasks overlay (boundary.md notes the pending parity — needs a key map entry plus a destination picker), and add `--before`/`--after` ordering control so a move is not restricted to append-as-last-child / last-in-section semantics.
+
+Also: `ot move <id> --section <name>` fails `section-not-found` when the section heading does not already exist, so introducing a new section is a hand edit. Decide between a `--create-section` flag and documenting the pre-create requirement in the org-tasks skill. Measured in a scratch project: a move to a new section name errored, while the same move into an existing section succeeded.

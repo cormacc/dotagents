@@ -1,0 +1,96 @@
+#+TITLE: ot move: TUI/pi-overlay exposure and --before/--after ordering
+#+DATE: 2026-11-03 Tue
+#+PARENT: [[archive:da7350ac-60c6-4336-9b7e-e0cbce51658c][ot move: TUI/pi-overlay exposure and --before/--after ordering]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Complete
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/contract.md]]
+#+SPEC: [[proj:skills/org-tasks/scripts/docs/boundary.md]]
+#+SPEC: [[proj:skills/org-tasks/references/ot-cli.md]]
+#+SPEC: [[proj:skills/org-tasks/SKILL.md]]
+#+SPEC: [[proj:pi/extensions/tasks/README.md]]
+
+* Intent
+Make existing task subtrees movable from either task browser. Support explicit sibling ordering without manual Org edits.
+
+* Summary
+*Level:* production · *Tests:* thorough · *Docs:* full
+
+** Scope
+*** In scope
+- CLI sibling-relative placement through ~--before~ or ~--after~.
+- A move destination picker in the standalone TUI and pi overlay.
+- CLI contract, UI boundary, skill and reference documentation listed above.
+*** Out of scope
+- Cross-file moves, archive relocation, automatic section creation and general task editing.
+
+** Acceptance
+*** Core functionality
+- [X] ~ot move <id> --before <anchor>~ inserts the subtree as the anchor's preceding sibling.
+- [X] ~ot move <id> --after <anchor>~ inserts the subtree after the anchor's whole subtree.
+- [X] Existing ~--parent~ placement appends as the last child.
+- [X] Existing ~--section~ placement appends within the named existing section.
+- [X] The standalone TUI offers a move destination picker.
+- [X] The pi overlay offers a move destination picker.
+- [X] Both UIs dispatch moves through ~ot move~.
+- [X] Documentation states that destination sections must already exist.
+*** Edge cases
+- [X] Moves reject self and descendant destinations without writes.
+- [X] Moves reject cross-file destinations without writes.
+- [X] Conflicting destination options fail before writes.
+- [X] Cancelling either picker leaves task files unchanged.
+- [X] Source-before-destination and source-after-destination moves use the correct post-cut position.
+*** Anti-criteria
+- [X] Must not: change task UUIDs, properties, body text or descendant order.
+- [X] Must not: introduce a second writable node for imported tasks.
+- [X] Must not: write on ~--dry-run~.
+
+** Decisions
+- Use four mutually exclusive destination modes: parent, section, before, after. Relative modes infer the anchor's parent and depth; no separate parent is needed.
+  Rejected:
+  - Ordering modifiers combined with parent/section: redundant destination information introduces mismatch handling.
+- Retain the line-splice implementation to preserve source text; both UIs delegate durable validation and writes to the CLI.
+  Rejected:
+  - UI-owned move logic: duplicates the file and graph safety rules.
+- Require pre-existing sections. A section-creation flag is unnecessary for the selected ordering and UI scope.
+- Use ~m~ for move within each browser; choose relation then destination. Sections use a name input; task destinations use a same-file picker.
+
+** Shipped
+- MODIFIED :: [[proj:skills/org-tasks/scripts/docs/contract.md]] defines relative placement and the ~beforeId~ / ~afterId~ result fields.
+- MODIFIED :: [[proj:skills/org-tasks/scripts/docs/boundary.md]] and [[proj:pi/extensions/tasks/README.md]] document ~m~ and CLI-owned move validation.
+- MODIFIED :: [[proj:skills/org-tasks/references/ot-cli.md]] and [[proj:skills/org-tasks/SKILL.md]] document ordering modes and the pre-existing-section requirement.
+
+* Plan
+** DONE Add sibling-relative move destinations and CLI contracts
+CLOSED: [2026-11-03 Tue 23:56]
+:PROPERTIES:
+:CUSTOM_ID: 579f3b2f-7648-4f38-92c9-3382eee34f92
+:CREATED: [2026-11-03 Tue 23:24]
+:STARTED: [2026-11-03 Tue 23:24]
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 23:24]
+- State "STARTED" from "TODO" [2026-11-03 Tue 23:24]
+- State "DONE" from "STARTED" [2026-11-03 Tue 23:56]
+:END:
+Verified by ~move-relative-destinations~, ~move-relative-preflights~ and the existing append/fidelity tests in [[proj:skills/org-tasks/scripts/test/org_tasks/commands/move_test.clj]].
+
+** DONE Expose move destination pickers in both task browsers
+CLOSED: [2026-11-04 Wed 00:02]
+:PROPERTIES:
+:CUSTOM_ID: b8a2a905-0f1e-4e7e-96e8-7ca49412445a
+:CREATED: [2026-11-03 Tue 23:24]
+:STARTED: [2026-11-03 Tue 23:56]
+:END:
+:LOGBOOK:
+- Created [2026-11-03 Tue 23:24]
+- State "STARTED" from "TODO" [2026-11-03 Tue 23:56]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:02]
+:END:
+Verified by ~move-picker-dispatches-four-destinations~ in [[proj:skills/org-tasks/scripts/test/org_tasks/tui_test.clj]] and [[proj:pi/extensions/tasks/move.test.ts]].
+
+* Implementation
+- Relative placement resolves the anchor again after cutting the source. Its in-file parent determines the result, independently of imported display-tree ancestry.
+- The standalone browser uses a modal picker; pi closes its overlay before native dialogs. Both refresh after mutation and retain the cursor task where possible.
+
+* Validation
+- Inspected renderer snapshots for the relation picker, task picker, section input and a scrolled long list at 70 columns, plus the pi overlay at 160 columns. These are renderer snapshots, not a live terminal-input smoke test.

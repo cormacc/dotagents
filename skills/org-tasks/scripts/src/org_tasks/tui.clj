@@ -183,7 +183,7 @@
     (styled state (str label ": " input "█") :fg message-color :bold true)))
 
 (def ^:private footer
-  "↑↓/jk move  ←→/hl status  ⇧←→ priority  Enter/Space/Tab collapse  s select  D remove  e edit  p plan  n/N new  A archive  P publish  U unpublish  J issues  Esc/Alt-t quit")
+  "↑↓/jk cursor  ←→/hl status  ⇧←→ priority  Enter/Space/Tab collapse  s select  m move  D remove  e edit  p plan  n/N new  A archive  P publish  U unpublish  J issues  Esc/Alt-t quit")
 
 (defn- view-dimensions [state]
   (let [width (max 20 (:width state 100))
@@ -245,6 +245,30 @@
   (let [msg-line (when-let [m (:message state)] (styled state m :fg message-color))]
     (crop content-w (or (prompt-line state) msg-line ""))))
 
+(defn- move-picker-view [state]
+  (let [{:keys [stage mode options cursor input]} (:move-task state)
+        {:keys [content-w pane-h]} (view-dimensions state)
+        section? (and (= stage :destination) (= mode :section))
+        body-h (max 1 (dec pane-h))
+        start (max 0 (- cursor (dec body-h)))
+        lines (if section?
+                [(str "Existing section name: " input "█")]
+                (if (seq options)
+                  (->> options
+                       (map-indexed (fn [idx option]
+                                      (str (if (= idx cursor) "> " "  ") (:label option))))
+                       (drop start))
+                  ["No same-file destinations. Esc cancels."]))]
+    (str/join "\n"
+              (map #(crop content-w %)
+                   (concat [(styled state (if (= stage :relation) "Move: choose relation"
+                                             (str "Move: choose " (name mode) " destination"))
+                                    :fg accent-color :bold true)]
+                           (fit-lines lines body-h)
+                           ["" (if section?
+                                 "Type section name  Enter confirm  Esc cancel"
+                                 "↑↓/jk choose  Enter confirm  Esc cancel")])))))
+
 (defn view [state]
   (let [{:keys [visible-tasks]} state
         {:keys [content-w pane-h tree-h stacked? tree-w detail-w]} (view-dimensions state)
@@ -254,11 +278,13 @@
         lines (if stacked?
                 (render-stacked state tree-w detail-w pane-h tree-lines detail-lines)
                 (render-wide tree-w detail-w tree-lines detail-pane))]
-    (str (str/join "\n" lines)
-         "\n"
-         (status-line state content-w)
-         "\n"
-         (styled state (crop content-w footer) :fg dim-color))))
+    (if (:move-task state)
+      (move-picker-view state)
+      (str (str/join "\n" lines)
+           "\n"
+           (status-line state content-w)
+           "\n"
+           (styled state (crop content-w footer) :fg dim-color)))))
 
 (defn- key-text [m]
   (let [k (:key m)]
@@ -274,6 +300,20 @@
     (or (msg/key-match? m :backspace) (msg/key-match? m :delete)) [[:new-task/backspace]]
     :else (let [s (key-text m)]
             (if (= 1 (count s)) [[:new-task/input s]] []))))
+
+(defn- move-msg->actions [state m]
+  (let [section? (= :section (get-in state [:move-task :mode]))]
+    (cond
+      (or (msg/key-match? m :escape) (msg/key-match? m "ctrl+c")
+          (msg/key-match? m "alt+t")) [[:move-task/cancel]]
+      (msg/key-match? m :enter) [[:move-task/submit]]
+      (and section? (or (msg/key-match? m :backspace) (msg/key-match? m :delete)))
+      [[:move-task/backspace]]
+      section? (let [s (key-text m)]
+                 (if (= 1 (count s)) [[:move-task/input s]] []))
+      (or (msg/key-match? m :down) (msg/key-match? m "j")) [[:move-task/cursor 1]]
+      (or (msg/key-match? m :up) (msg/key-match? m "k")) [[:move-task/cursor -1]]
+      :else [])))
 
 (defn- key-msg->actions [m]
   (cond
@@ -291,6 +331,7 @@
     (or (msg/key-match? m "l") (msg/key-match? m :right)) [[:task/cycle-status 1]]
     (or (msg/key-match? m "h") (msg/key-match? m :left)) [[:task/cycle-status -1]]
     (msg/key-match? m "s") [[:task/select]]
+    (msg/key-match? m "m") [[:move-task/start]]
     (msg/key-match? m "D") [[:task/remove]]
     (msg/key-match? m "A") [[:task/archive]]
     (msg/key-match? m "P") [[:task/publish]]
@@ -307,6 +348,7 @@
   [state m]
   (cond
     (msg/window-size? m) [[:tui/resize (:width m) (:height m)]]
+    (and (:move-task state) (msg/key-press? m)) (move-msg->actions state m)
     (:new-task state)    (prompt-msg->actions m)
     (msg/key-press? m)   (key-msg->actions m)
     :else                []))

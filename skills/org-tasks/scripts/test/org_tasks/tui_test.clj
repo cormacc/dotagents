@@ -43,6 +43,66 @@
 (defn- removal-tui-state [opts]
   (tasks/initial-state (tasks/load-tasks opts)))
 
+(deftest move-picker-filters-owner-and-subtree
+  (let [rows [{:id "a" :sourcePath "/tasks"}
+              {:id "b" :parentId "a" :sourcePath "/tasks"}
+              {:id "c" :parentId "b" :sourcePath "/tasks"}
+              {:id "d" :sourcePath "/tasks"}
+              {:id "e" :parentId "a" :sourcePath "/plan"}]]
+    (is (= ["d"] (mapv :id (tasks/move-candidates rows (first rows)))))
+    (is (= ["a" "b" "d"] (mapv :id (tasks/move-candidates rows (nth rows 2)))))))
+
+(deftest move-picker-cancel-and-render
+  (let [update (fn [s key] (first (tui/update-fn {} s (msg/key-press key))))
+        state (assoc (tasks/initial-state sample-result) :width 50 :height 12 :color? false)
+        picker (update state "m")]
+    (is (= :relation (get-in picker [:move-task :stage])))
+    (is (str/includes? (tui/view picker) "Move: choose relation"))
+    (is (every? #(<= (count %) 46) (str/split-lines (tui/view picker))))
+    (is (nil? (:move-task (update picker :escape))))
+    (is (= (:tasks state) (:tasks (update picker :escape))))
+    (let [destination (update picker :enter)]
+      (is (= :destination (get-in destination [:move-task :stage])))
+      (is (str/includes? (tui/view destination) "No same-file destinations"))
+      (is (= destination (update destination :enter)))
+      (is (nil? (:move-task (update destination :escape)))))))
+
+(deftest move-picker-dispatches-four-destinations
+  (doseq [[mode idx] [[:parent 0] [:section 1] [:before 2] [:after 3]]]
+    (test-util/with-temp-dir
+      (fn [root]
+        (let [path (str root "/TASKS.org")
+              content (str "* Improvements\n\n"
+                           (removal-task-block 2 "Source" removal-child-id) "\n"
+                           (removal-task-block 2 "Destination" removal-parent-id) "\n"
+                           "* Later\n")
+              _ (spit path content)
+              _ (spit (str root "/TASKS.local.org") "#+SELECTED:\n")
+              opts {:root root}
+              update (fn [s key] (first (tui/update-fn opts s (msg/key-press key))))
+              state (tasks/initial-state (tasks/load-tasks opts))
+              picker (nth (iterate #(update % :down) (update state "m")) idx)
+              destination (update picker :enter)
+              entered (if (= :section mode)
+                        (reduce #(update %1 (str %2)) destination "Later")
+                        destination)
+              cancelled (update entered :escape)]
+          (is (nil? (:move-task cancelled)))
+          (is (= content (slurp path)))
+          (let [result (update entered :enter)
+                rows (:tasks result)
+                by-id (into {} (map (juxt :id identity)) rows)]
+            (is (nil? (:move-task result)))
+            (is (= "Task moved." (:message result)))
+            (is (= removal-child-id (tasks/cursor-id result)))
+            (if (= mode :parent)
+              (is (= removal-parent-id (:parentId (get by-id removal-child-id))))
+              (is (nil? (:parentId (get by-id removal-child-id)))))
+            (is (= (if (#{:after :section :parent} mode)
+                     [removal-parent-id removal-child-id]
+                     [removal-child-id removal-parent-id])
+                   (mapv :id rows)))))))))
+
 (deftest initial-state-expands-selected-path
   (let [state (tasks/initial-state sample-result)]
     (is (= "b" (:selected-id state)))

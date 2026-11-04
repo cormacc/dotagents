@@ -1,12 +1,12 @@
 (ns org-tasks.commands.move
   "`ot move` — relocate an existing task subtree inside its own file.
 
-  Two mutually-exclusive destinations:
+  Four mutually-exclusive destinations:
 
-    --parent <id>     reparent as the last child of another task
-    --section <name>  lift the subtree back to a level-2 heading under a
-                      level-1 section of the same file (the depth
-                      `ot create` gives a top-level task)
+    --parent <id>     append as the last child of another task
+    --section <name>  append at level 2 under an existing level-1 section
+    --before <id>     insert as the anchor's preceding sibling
+    --after <id>      insert as a sibling after the anchor's whole subtree
 
   Deliberately in-file only. Cross-file relocation is already owned by
   `publish`/`unpublish` (locality) and `archive`/`unarchive` (archive),
@@ -100,14 +100,11 @@
               line))
           block)))
 
-(defn- insert-as-last-child
-  "Splice `block` in at the end of `parent`'s subtree — after the
-  parent's own trailing blank separator, before the next heading. The
-  block carries its own trailing separator, so a move and its inverse
-  reproduce the original spacing exactly."
-  [lines parent block]
-  (let [at    (second (task-range lines parent))
-        block (vec block)
+(defn- insert-at
+  "Splice `block` at the zero-based line offset `at`, restoring a
+  trailing separator when the destination uses blank-separated headings."
+  [lines at block]
+  (let [block (vec block)
         ;; A subtree cut from the end of its file has no separator of its
         ;; own. Restore one when the destination sits in blank-separated
         ;; text, or the block would weld to the following heading.
@@ -155,7 +152,7 @@
 ;; ── Write phase ───────────────────────────────────────────────────
 
 (defn- apply-move!
-  [opts {:keys [source full-id path dest-id section]}]
+  [opts {:keys [source full-id path dest-id section placement]}]
   (let [baseline  (:source-content source)
         ;; A structural move never touches file-level `#+LINK:` /
         ;; `#+SETUPFILE:` keywords, so the load-time effective content
@@ -191,10 +188,19 @@
                                                                     :source-content reduced)))
             dest-after  (when dest-id
                           (tree/find-by-id reduced-roots dest-id {:imports? false}))
-            to-level    (if dest-after (inc (:level dest-after)) section-level)
+            relative?   (#{:before :after} placement)
+            parent-id   (if relative?
+                          (in-file-parent-id reduced-roots dest-id)
+                          dest-id)
+            to-level    (if dest-after
+                          (+ (:level dest-after) (if relative? 0 1))
+                          section-level)
             shifted     (restar block (- to-level (:level src-node)))
             updated     (if dest-id
-                          (join-lines* (insert-as-last-child reduced-lines dest-after shifted))
+                          (let [[dest-start dest-end] (task-range reduced-lines dest-after)]
+                            (join-lines* (insert-at reduced-lines
+                                                   (if (= :before placement) dest-start dest-end)
+                                                   shifted)))
                           ;; Sections are non-task org content, so the
                           ;; top-level destination reuses the same splice
                           ;; `ot create` / `ot unarchive` insert through.
@@ -224,8 +230,10 @@
               {:task (task/task->wire (or after src-node) nil
                                       {:include-content? (boolean (:include-content opts))})
                :file path
-               :parentId dest-id
+               :parentId parent-id
                :section (when-not dest-id section)
+               :beforeId (when (= :before placement) dest-id)
+               :afterId (when (= :after placement) dest-id)
                :previousParentId (in-file-parent-id roots full-id)
                :fromLevel (:level src-node)
                :toLevel to-level
@@ -235,13 +243,17 @@
                [(str (if dry? "Would move " "Moved ")
                      (:summary src-node)
                      (if dest-after
-                       (str " → child of " (:summary dest-after))
+                       (str (case placement
+                              :before " → before "
+                              :after " → after "
+                              " → child of ")
+                            (:summary dest-after))
                        (str " → section " section))
                      " in " path)]})))))))
 
 ;; ── ot move ───────────────────────────────────────────────────────
 
-(defn- resolve-and-move! [opts tasks files id parent-arg section-arg]
+(defn- resolve-and-move! [opts tasks files id placement destination]
   (if (and (:none (task/find-by-id-or-prefix tasks id))
            (archived-match files id))
     (out/emit-error opts
@@ -252,7 +264,8 @@
     (let [source  (util/resolve-required-id tasks id opts)
           full-id (parser/get-task-id source)
           path    (:source-path source)
-          dest    (when parent-arg (util/resolve-required-id tasks parent-arg opts))
+          dest    (when (not= :section placement)
+                    (util/resolve-required-id tasks destination opts))
           dest-id (when dest (parser/get-task-id dest))]
       (cond
         (nil? full-id)
@@ -288,26 +301,30 @@
                            :full-id full-id
                            :path path
                            :dest-id dest-id
-                           :section section-arg})))))
+                           :section (when (= :section placement) destination)
+                           :placement placement})))))
 
 (defn move-cmd [{:keys [opts] :as result}]
-  (let [id          (arg->value (positional-arg result :id))
-        parent-arg  (arg->value (:parent opts))
-        section-arg (arg->value (:section opts))]
+  (let [id (arg->value (positional-arg result :id))
+        destinations (keep (fn [k]
+                             (when-let [value (arg->value (get opts k))]
+                               [k value]))
+                           [:parent :section :before :after])]
     (cond
       (nil? id)
       (out/emit-error opts {:code "argument-error"
                             :message "ot move requires a task id."})
 
-      (and parent-arg section-arg)
+      (> (count destinations) 1)
       (out/emit-error opts {:code "argument-error"
-                            :message "ot move accepts either --parent <id> or --section <name>, not both."})
+                            :message "ot move accepts exactly one destination: --parent, --section, --before or --after."})
 
-      (and (nil? parent-arg) (nil? section-arg))
+      (empty? destinations)
       (out/emit-error opts {:code "argument-error"
-                            :message "ot move requires a destination: --parent <id> or --section <name>."})
+                            :message "ot move requires a destination: --parent <id>, --section <name>, --before <id> or --after <id>."})
 
       :else
       (let [{:keys [tasks files]} (load-context opts)]
         (util/guard! opts
-          #(resolve-and-move! opts tasks files id parent-arg section-arg))))))
+          #(let [[placement destination] (first destinations)]
+             (resolve-and-move! opts tasks files id placement destination)))))))

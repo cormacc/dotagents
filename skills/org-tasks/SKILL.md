@@ -46,7 +46,8 @@ ot selected --format json  # selection query: {"selected": null} and exit 0 when
 ot show <id-or-selected>  # text output includes the task body; JSON/EDN retain Task.description
 ot create "New task" --section Improvements --body 'Description text' --tag mytag --linked-issue '[[jira:ABC-1]]'
 ot create "New plan task" --parent <id>  # nests under <id>, including a task inside a change-record
-ot move <id> --parent <dest-id>   # reparent an existing subtree in place (--section <name> lifts it back to top level)
+ot move <id> --parent <dest-id>   # append as last child (--section <name> appends in an existing section)
+ot move <id> --before <anchor-id> # preceding sibling (--after <anchor-id> follows the whole anchor subtree)
 ot status <id> STARTED   # also works for tasks inside linked plan files
 ot priority <id> B       # set/cycle/clear the priority cookie (--cycle forward|back, --clear)
 ot select <id>        # or: ot select --clear / ot select --clear-stale
@@ -92,7 +93,7 @@ Install and local development: `scripts/README.md`.
 - A task body's source citations are a snapshot of when it was written. Before treating a stored body as a baseline, re-verify the symbols, paths, and line numbers it names: a task can outlive the function it cites, and a stale citation sends the next reader after code that no longer exists.
 - A stored body's stated constraints age the same way. Confirm the motivation of a load-bearing constraint with the requester before you design mechanism for it; a constraint that was real when written may have lapsed.
 - When writing that body, cite a stable symbol, heading, or path rather than a bare line number, exactly as [../org-plan/SKILL.md#Body discipline](../org-plan/SKILL.md#body-discipline) requires of plan-task bodies -- the next edit above the citation invalidates it. `contract.md line 149` became line 150 within the same session that wrote the citation, and an earlier task recorded every line number in its body having drifted before its work began.
-- Regroup existing tasks with `ot move <id> --parent <dest-id>` / `--section <name>` rather than hand-editing or scripting org surgery; it preserves IDs, lifecycle metadata, descendants, and file locality. Moves are in-file only -- use `ot publish`/`ot unpublish` to change locality and `ot unarchive` before moving an archived task.
+- Regroup existing tasks with `ot move <id> --parent <dest-id>` / `--section <name>` rather than hand-editing or scripting org surgery; it preserves IDs, lifecycle metadata, descendants, and file locality. Use `--before <anchor-id>` / `--after <anchor-id>` instead for sibling ordering; they infer the anchor's parent and depth. Choose exactly one destination mode. The destination section must already exist: add its level-1 heading in the owning file before moving into a new section. Moves are in-file only -- use `ot publish`/`ot unpublish` to change locality and `ot unarchive` before moving an archived task.
 - Keep `TASKS.org` high-level. Put detailed checklists, implementation history, and acceptance criteria in linked change-records.
 - Add discovered work as new `TODO` tasks rather than burying it in prose.
 - Select local active work with `ot select <id>` or clear with `ot select --clear`. Repair a stale native-archive pointer only with `ot select --clear-stale`; it leaves valid and absent selections byte-identical.

@@ -43,12 +43,14 @@ import { dirname, isAbsolute, join, relative } from "node:path";
 import { ensureEmacsServer } from "../emacsclient/emacsclient.ts";
 import { TasksOverlay } from "./overlay.ts";
 import { cursorAfterRemoval, runOverlayRemoval } from "./removal.ts";
+import { runOverlayMove } from "./move.ts";
 import {
   otArchiveTask,
   otBackfill,
   otCreateTask,
   otDoctor,
   otList,
+  otMoveTask,
   otPublishTask,
   otRecordPath,
   otRecordCreate,
@@ -776,6 +778,7 @@ export default function (pi: ExtensionAPI) {
         | { type: "edit"; task: Task }
         | { type: "plan"; task: Task }
         | { type: "remove"; task: Task; cursorId: string | null }
+        | { type: "move"; task: Task }
         | { type: "publish"; task: Task }
         | { type: "summaryRefresh"; task: Task; reason: SummaryRefreshReason; absPlan: string }
         | { type: "unpublish"; task: Task };
@@ -812,6 +815,10 @@ export default function (pi: ExtensionAPI) {
 
         const onRemove = (task: Task, cursorId: string | null) => {
           workflow.request = { type: "remove", task, cursorId };
+        };
+
+        const onMove = (task: Task) => {
+          workflow.request = { type: "move", task };
         };
 
         const onPublish = (task: Task) => {
@@ -978,6 +985,7 @@ export default function (pi: ExtensionAPI) {
               onCycleStatus,
               onCyclePriority,
               onRemove,
+              onMove,
             );
             overlay.focusTaskId(preferredCursorId);
             preferredCursorId = null;
@@ -1039,6 +1047,27 @@ export default function (pi: ExtensionAPI) {
           if (fresh) await archiveTopLevel(ctx, tasks, fresh);
           loaded = await loadTasks(ctx.cwd);
           tasks = loaded.tasks;
+          reopen = true;
+        } else if (request.type === "move") {
+          const fresh = await reloadAndResolve(request.task, "move");
+          if (fresh) {
+            preferredCursorId = getTaskId(fresh);
+            try {
+              const moved = await runOverlayMove({
+                tasks,
+                source: fresh,
+                select: (title, choices) => ctx.ui.select(title, choices),
+                input: (title) => ctx.ui.input(title),
+                move: (id, destination) => otMoveTask(id, destination, { cwd: ctx.cwd }),
+              });
+              if (moved) ctx.ui.notify("Task moved.", "info");
+            } catch (err) {
+              ctx.ui.notify(`Move failed: ${(err as Error).message}`, "error");
+            }
+          }
+          loaded = await loadTasks(ctx.cwd);
+          tasks = loaded.tasks;
+          selectedId = await readSelectedId(loaded.files.local);
           reopen = true;
         } else if (request.type === "remove") {
           let nextCursorId = request.cursorId;

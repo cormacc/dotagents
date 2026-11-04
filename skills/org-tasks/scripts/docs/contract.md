@@ -203,7 +203,7 @@ Options:
 
 Options include `--section`, `--parent`, `--after`, `--priority`, repeated `--tag`, `--body` (a body line that would parse as an Org heading is indented by one space; pass a body that can start with `-` as `--body=<text>`), repeated `--linked-issue`, repeated `--also-scan`, `--allow-create-section`, and compatibility/test overrides `--id` and `--created-at`. `--parent` inserts a child under that task; `--after` inserts a sibling after the anchor task. Both resolve full IDs or unique prefixes across imports and write to the anchor's source file. `--relative-to` takes precedence over explicit placement. Linked-issue duplicate checks scan the target, both configured task roots (shared and local), their imports, and explicit `--also-scan` files. Errors: `unknown-task`, `ambiguous-id`, `section-not-found`, `duplicate-linked-issue`, `path-outside-project`, `empty-summary`.
 
-### `ot move <id> (--parent <id> | --section <name>)`
+### `ot move <id> (--parent <id> | --section <name> | --before <id> | --after <id>)`
 
 ```json
 "result": {
@@ -211,6 +211,8 @@ Options include `--section`, `--parent`, `--after`, `--priority`, repeated `--ta
   "file":             "/repo/TASKS.org",
   "parentId":         "uuid | null",
   "section":          "Improvements | null",
+  "beforeId":         "uuid | null",
+  "afterId":          "uuid | null",
   "previousParentId": "uuid | null",
   "fromLevel":        3,
   "toLevel":          2,
@@ -219,11 +221,11 @@ Options include `--section`, `--parent`, `--after`, `--priority`, repeated `--ta
 }
 ```
 
-Relocates an *existing* task subtree **within its own file**. Exactly one destination is required: `--parent <id>` appends the subtree as that task's last child (heading depth re-normalised for the whole subtree), `--section <name>` returns it to a level-2 heading at the end of that level-1 section -- the depth `ot create` gives a top-level task. `parentId` is `null` for a `--section` move and `section` is `null` for a `--parent` move. `previousParentId` is `null` when the task was already a root of its file. `movedCount` counts the moved root plus its descendants. `fromLevel`/`toLevel` are the subtree root's heading depth before and after. `task` reflects the post-move `level` and `line`. Like every mutator that returns `Task` (`status`, `priority`, `move`, `archive`, `unarchive`, `publish`, and `unpublish`), its default JSON/EDN projection omits `sourceContent` and `effectiveSourceContent` across the complete task tree. Pass `--include-content` to any of those commands to include both fields; text output is unchanged. This applies equally to `--dry-run` envelopes.
+Relocates an *existing* task subtree **within its own file**. Exactly one destination is required: `--parent <id>` appends the subtree as that task's last child; `--section <name>` appends at level 2 in an existing level-1 section; `--before <id>` inserts as the anchor's preceding sibling; `--after <id>` inserts as a sibling after the anchor's whole subtree. Heading depth is adjusted for the whole moved subtree. Relative moves inherit the anchor's depth and in-file parent; no parent or section option is needed. `parentId` is the resulting in-file parent UUID, or `null` for a file root. `section` names only an explicit section destination; it is `null` for task destinations. `beforeId` and `afterId` contain the resolved anchor UUID for their respective modes and are otherwise `null`. Sections must already exist; moves do not create them. `previousParentId` is `null` when the task was already a root of its file. `movedCount` counts the moved root plus its descendants. `fromLevel`/`toLevel` are the subtree root's heading depth before and after. `task` reflects the post-move `level` and `line`. Like every mutator that returns `Task` (`status`, `priority`, `move`, `archive`, `unarchive`, `publish`, and `unpublish`), its default JSON/EDN projection omits `sourceContent` and `effectiveSourceContent` across the complete task tree. Pass `--include-content` to any of those commands to include both fields; text output is unchanged. This applies equally to `--dry-run` envelopes.
 
 The subtree's source lines are relocated verbatim apart from heading stars, so `:CUSTOM_ID:`, `:CREATED:` / `:STARTED:`, `CLOSED:`, `:LOGBOOK:`, `#+IMPORT:`, unknown drawer properties, bodies, descendant order, and intra-subtree blank lines are byte-preserved, and every region of the file outside the move is left untouched. Because `:CUSTOM_ID:` never changes, `#+IMPORT:` links and a change-record's `#+PARENT: [[task:<uuid>]]` keep resolving across a move.
 
-Cross-file moves are refused: locality changes belong to `publish` / `unpublish`, and the archive to `archive` / `unarchive`. Errors: `argument-error` (no id, or both / neither of `--parent` and `--section`), `unknown-task` and `ambiguous-id` (either id), `section-not-found` (no such level-1 section in the owning file), `validation` (archived source, destination is the source itself or one of its descendants, destination lives in another file), plus `conflict`, `unreadable`, and `unterminated-drawer`. `--dry-run` runs every preflight and reports the same fields with `dryRun: true`, writing nothing.
+Cross-file moves are refused: locality changes belong to `publish` / `unpublish`, and the archive to `archive` / `unarchive`. Errors: `argument-error` (no id, or not exactly one of `--parent`, `--section`, `--before`, `--after`), `unknown-task` and `ambiguous-id` (source or destination id), `section-not-found` (no such level-1 section in the owning file), `validation` (archived source, destination is the source itself or one of its descendants, destination lives in another file), plus `conflict`, `unreadable`, and `unterminated-drawer`. `--dry-run` runs every preflight and reports the same fields with `dryRun: true`, writing nothing.
 
 ### `ot status <id> <new-status>`
 

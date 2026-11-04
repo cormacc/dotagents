@@ -116,6 +116,8 @@ export class TasksOverlay {
     ) => Promise<{ tasks: Task[] } | null>,
     /** Request removal after closing so Pi's confirmation dialog can focus. */
     private onRemove?: (task: Task, cursorId: string | null) => void,
+    /** Close before opening Pi's move destination dialogs. */
+    private onMove?: (task: Task) => void,
   ) {
     this.theme = theme;
     this.done = done;
@@ -356,6 +358,15 @@ export class TasksOverlay {
     if (matchesKey(data, "shift+a")) {
       this.archive();
       return "archive";
+    }
+
+    if (matchesKey(data, "m")) {
+      const row = this.rows[this.cursor];
+      if (row && this.onMove) {
+        this.onMove(row.task);
+        this.done(undefined);
+      }
+      return "move";
     }
 
     // Remove a non-top-level task subtree through the core `ot remove` flow.
@@ -1000,7 +1011,7 @@ export class TasksOverlay {
     lines.push(th.fg("borderMuted", hBar(width)));
     const helpText = th.fg(
       "dim",
-      " ↑↓/jk nav • ←→/hl status • ⇧←→ priority • Enter toggle • s select • e edit • p plan • n new • N subtask • D remove • A archive • P publish • U unpublish • Ctrl-d/u scroll • Esc/Alt-t close",
+      " ↑↓/jk nav • ←→/hl status • ⇧←→ priority • Enter toggle • s select • e edit • p plan • n new • N subtask • m move • D remove • A archive • P publish • U unpublish • Ctrl-d/u scroll • Esc/Alt-t close",
     );
     lines.push(truncateToWidth(pad(helpText, width), width));
     lines.push(th.fg("border", hBar(width)));

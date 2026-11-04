@@ -107,11 +107,15 @@ Tags are ASCII letters, digits, and underscores (`[A-Za-z0-9_]+`). Surrounding w
 `ot move <id>` relocates an existing task subtree **inside its own file** and takes exactly one destination:
 
 - `--parent <dest-id>` reparents the subtree as the destination task's last child, re-normalising heading depth for the whole subtree.
-- `--section <name>` returns it to a level-2 heading at the end of that level-1 section (the depth `ot create` gives a top-level task).
+- `--section <name>` returns it to a level-2 heading at the end of an existing level-1 section (the depth `ot create` gives a top-level task). Create the section heading in the owning file before moving into a new section.
+- `--before <anchor-id>` inserts it as the anchor's preceding sibling, at the anchor's depth.
+- `--after <anchor-id>` inserts it as a sibling after the anchor's whole subtree, at the anchor's depth.
+
+Relative destinations infer the anchor's in-file parent. Do not combine them with `--parent` or `--section`.
 
 The subtree's source lines move verbatim apart from heading stars, so `:CUSTOM_ID:`, `:CREATED:` / `:STARTED:`, `CLOSED:`, `:LOGBOOK:`, `#+IMPORT:`, unknown drawer properties, bodies, descendant order, and intra-subtree blank lines all survive byte-for-byte, and the rest of the file is left untouched. `:CUSTOM_ID:` never changes, so `#+IMPORT:` links and a change-record's `#+PARENT: [[task:<uuid>]]` keep resolving. Use it to group existing tasks under a new parent instead of hand-editing org.
 
-`move` is in-file only. Locality changes belong to `ot publish` / `ot unpublish` and the archive to `ot archive` / `ot unarchive`, so a destination in another file is refused rather than silently creating a second writable node for a UUID. It also refuses an archived source, a destination that is the task itself or one of its descendants, an unknown `--section`, and supplying both or neither destination. `--dry-run` runs every preflight and reports the proposed move without writing.
+`move` is in-file only. Locality changes belong to `ot publish` / `ot unpublish` and the archive to `ot archive` / `ot unarchive`, so a destination in another file is refused rather than silently creating a second writable node for a UUID. It also refuses an archived source, a destination that is the task itself or one of its descendants, an unknown `--section`, and supplying multiple destinations or none. `--dry-run` runs every preflight and reports the proposed move without writing.
 
 ## Blocker and issue mutations
 
@@ -140,6 +144,7 @@ Key map:
 | `⇧←` `⇧→` | cycle priority (unset→A forward, unset→D back) |
 | `Enter` / `Space` / `Tab` | collapse/expand subtree |
 | `s` | select / deselect task |
+| `m` | move: choose parent, existing section, before or after |
 | `D` | preview removal; press `D` again on the same task to remove and prune reported inbound blockers |
 | `n` / `N` | new sibling / child task |
 | `e` / `p` | edit task / edit linked plan |
@@ -156,6 +161,8 @@ Native Emacs `org-archive-subtree` may leave `#+SELECTED:` pointing at the archi
 `ot show <id>` resolves only the active graph (`TASKS.org`, local tasks, and linked imports), so a successfully archived id returns `unknown-task`. Verify archive visibility with `ot scan --scope archived --format json`; use `ot unarchive` when the archived subtree itself must be restored for active-graph inspection or mutation.
 
 `ot unarchive <id>` resolves exact IDs and unique prefixes from `TASKS.archive.org` only. It restores the archived subtree into an existing shared `TASKS.org` level-1 section, preferring explicit `--section` over the `:ARCHIVE_OLPATH:` stamped by `ot archive`; legacy entries and roots archived from a file-level `#+IMPORT:` record carry no `:ARCHIVE_OLPATH:`, so they require `--section` rather than being guessed. It removes `:ARCHIVED:` / `:ARCHIVE_OLPATH:`, reverses a matching linked record parent from `archive:` to `task:`, and does not change status, `CLOSED:`, or LOGBOOK. `--dry-run` reports the source, destination, section, and proposed parent rewrite without writing.
+
+`m` opens a relation picker followed by a same-file task destination picker, or an input for an existing section name. The task list excludes the source subtree. `Enter` confirms a choice; `Esc` cancels without a move. Both browsers send the chosen destination to `ot move`, refresh the graph and retain the cursor task where possible. The core CLI validates the destination again before writing.
 
 `n`/`N` mirror the pi overlay: with a cursor they create a sibling/child of the current task (inheriting its file/`--local` routing). With an empty list they create a top-level task under the default section.
 

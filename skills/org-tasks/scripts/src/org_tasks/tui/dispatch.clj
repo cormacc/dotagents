@@ -80,8 +80,9 @@
       (let [{:keys [exit envelope]} (tasks/call-command (command-fns cmd-key) (merge opts cmd-opts))]
         (dispatch
          (if (zero? exit)
-           [[:state/assoc :message ok-message]
-            [:tree/reload]]
+           (cond-> [[:state/assoc :message ok-message]
+                    [:tree/reload]]
+             (= cmd-key :move) (conj [:tree/reveal-task (:id cmd-opts)]))
            [[:state/assoc :message (tasks/error-message envelope)]]))))
 
     :remove/preview
@@ -200,6 +201,57 @@
                    "Removed subtree and pruned inbound blockers.")
           [[:state/assoc :remove-confirmation nil]
            [:remove/preview id]])))
+
+    :tree/reveal-task
+    (fn [state id]
+      (let [expanded (into (:expanded state) (tasks/ancestor-ids (:tasks state) id))
+            visible (tasks/visible-tasks (assoc state :expanded expanded))]
+        [[:state/assoc :expanded expanded :visible-tasks visible
+          :cursor (or (tasks/task-index-by-id visible id) (:cursor state))]
+         [:tree/scroll-to-cursor]]))
+
+    :move-task/start
+    (fn [state]
+      (when-let [source (tasks/cursor-task state)]
+        [[:state/assoc :move-task {:id (:id source) :stage :relation
+                                  :options tasks/move-relations :cursor 0 :input ""}
+          :remove-confirmation nil :message nil]]))
+
+    :move-task/cancel
+    (fn [_] [[:state/assoc :move-task nil :message "Move cancelled."]])
+
+    :move-task/cursor
+    (fn [state delta]
+      (let [{:keys [cursor options]} (:move-task state)]
+        [[:state/assoc-in [:move-task :cursor]
+          (max 0 (min (dec (count options)) (+ cursor delta)))]]))
+
+    :move-task/input
+    (fn [state s]
+      [[:state/assoc-in [:move-task :input] (str (get-in state [:move-task :input]) s)]])
+
+    :move-task/backspace
+    (fn [state]
+      [[:state/assoc-in [:move-task :input] (backspace (get-in state [:move-task :input]))]])
+
+    :move-task/submit
+    (fn [state]
+      (let [{:keys [id stage mode options cursor input]} (:move-task state)
+            choice (nth options cursor nil)]
+        (if (= stage :relation)
+          (when choice
+            (let [mode (:mode choice)
+                  source (tasks/cursor-task state)
+                  destinations (mapv (fn [t] {:label (str (:summary t) " [" (:id t) "]")
+                                               :value (:id t)})
+                                     (tasks/move-candidates (:tasks state) source))]
+              [[:state/assoc :move-task {:id id :stage :destination :mode mode
+                                        :options destinations :cursor 0 :input ""}]]))
+          (when-let [destination (if (= :section mode)
+                                   (not-empty (str/trim input))
+                                   (:value choice))]
+            (into [[:state/assoc :move-task nil]]
+                  (cmd-run :move {:id id mode destination} "Task moved."))))))
 
     :task/archive
     (fn [state]

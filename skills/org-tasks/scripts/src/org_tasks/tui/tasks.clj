@@ -95,6 +95,23 @@
         (recur (conj acc pid) (:parentId (get by-id pid)))
         acc))))
 
+(def move-relations
+  [{:label "Last child of task" :mode :parent}
+   {:label "Existing section" :mode :section}
+   {:label "Before task" :mode :before}
+   {:label "After task subtree" :mode :after}])
+
+(defn move-candidates
+  "Return same-file task destinations outside the source subtree.
+  The CLI remains responsible for validation against the current file."
+  [tasks source]
+  (filterv (fn [candidate]
+             (and (:sourcePath source)
+                  (= (:sourcePath source) (:sourcePath candidate))
+                  (not= (:id source) (:id candidate))
+                  (not (contains? (ancestor-ids tasks (:id candidate)) (:id source)))))
+           tasks))
+
 (defn task-depths
   "Map of task id -> nesting depth derived from the `:parentId` chain. Used for
   indentation: org heading `:level` is unreliable for imported plan children
@@ -150,6 +167,7 @@
                  :tree-scroll 0
                  :color? true
                  :new-task nil
+                 :move-task nil
                  :remove-confirmation nil})]
     ;; The cursor indexes *visible* tasks; the selected task is always visible
     ;; because its ancestors start expanded.

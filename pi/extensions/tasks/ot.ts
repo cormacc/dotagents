@@ -362,6 +362,20 @@ export function otRemoveTask(
   return runOtResult<OtRemoveResult>(cmd, opts);
 }
 
+export interface OtMoveDestination {
+  kind: "parent" | "section" | "before" | "after";
+  value: string;
+}
+
+/** Move through one explicit CLI destination, without shell interpolation. */
+export function otMoveTask(
+  id: string,
+  destination: OtMoveDestination,
+  opts: RunOtOptions = {},
+): Promise<unknown> {
+  return runOtResult(["move", id, `--${destination.kind}`, destination.value], opts);
+}
+
 export function otPublishTask(id: string, opts: RunOtOptions = {}): Promise<unknown> {
   return runOtResult(["publish", id], opts);
 }

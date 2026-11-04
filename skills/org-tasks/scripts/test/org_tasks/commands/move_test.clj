@@ -301,7 +301,7 @@
                                           "--section" "Housekeeping")]
           (is (= 1 exit))
           (is (= "argument-error" (:code e)))
-          (is (str/includes? (:message e) "not both"))
+          (is (str/includes? (:message e) "exactly one"))
           (is unchanged?)))
       (testing "unknown section"
         (let [[e exit unchanged?] (refusal root child-a1 "--section" "Nope")]
@@ -543,11 +543,108 @@
       (let [{:keys [out]}
             (run-cli! "--root" root "--format" "json" "move" child-a1 "--parent" parent-b)
             r (parse-json-result out)]
-        (is (= #{:task :file :parentId :section :previousParentId
+        (is (= #{:task :file :parentId :section :beforeId :afterId :previousParentId
                  :fromLevel :toLevel :movedCount :dryRun}
                (set (keys r)))
             "ot move result keys are contract (docs/contract.md section 'ot move')")
         (is (= (tasks-org root) (:file r)))))))
+
+(deftest move-relative-destinations
+  (doseq [[source mode anchor expected-order expected-parent expected-level]
+          [[child-a2 "--before" child-a1
+            [parent-a child-a2 child-a1 grandchild parent-b chores] parent-a 3]
+           [child-a1 "--after" child-a2
+            [parent-a child-a2 child-a1 grandchild parent-b chores] parent-a 3]
+           [chores "--before" child-a1
+            [parent-a chores child-a1 grandchild child-a2 parent-b] parent-a 3]
+           [chores "--after" child-a1
+            [parent-a child-a1 grandchild chores child-a2 parent-b] parent-a 3]
+           [child-a1 "--before" chores
+            [parent-a child-a2 parent-b child-a1 grandchild chores] nil 2]
+           [parent-b "--before" parent-a
+            [parent-b parent-a child-a1 grandchild child-a2 chores] nil 2]
+           [child-a2 "--after" parent-a
+            [parent-a child-a1 grandchild child-a2 parent-b chores] nil 2]]]
+    (testing (str source " " mode " " anchor)
+      (with-temp-dir
+        (fn [root]
+          (bootstrap-move-graph! root)
+          (let [before (slurp (tasks-org root))
+                dry (run-cli! "--root" root "--format" "json" "--dry-run"
+                              "move" source mode anchor)]
+            (is (zero? (:exit dry)) (:err dry))
+            (is (true? (:dryRun (parse-json-result (:out dry)))))
+            (is (= before (slurp (tasks-org root)))))
+          (let [{:keys [out err exit]} (run-cli! "--root" root "--format" "json"
+                                                "move" source mode anchor)
+                r (when (zero? exit) (parse-json-result out))
+                listed (run-cli! "--root" root "--format" "json" "list")
+                rows (:rows (parse-json-result (:out listed)))
+                after (slurp (tasks-org root))]
+            (is (zero? exit) err)
+            (is (zero? (:exit listed)) (:err listed))
+            (is (= expected-order (mapv :id rows)))
+            (is (= expected-parent (:parentId r)))
+            (is (= expected-level (:toLevel r)))
+            (is (= anchor (get r (if (= mode "--before") :beforeId :afterId))))
+            (is (= 6 (count (set (map :id rows)))))
+            (is (str/includes? after ":NS_CUSTOM: keep me"))
+            (is (str/includes? after "Child A1 body."))
+            (is (str/includes? after "CLOSED: [2026-05-03 Sun 11:00]"))))))))
+
+(deftest move-relative-preflights
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-move-graph! root)
+      (doseq [mode ["--before" "--after"]
+              anchor [parent-a child-a1 grandchild]]
+        (let [[e exit unchanged?] (refusal root parent-a mode anchor)]
+          (is (= 1 exit))
+          (is (= "validation" (:code e)))
+          (is unchanged?)))
+      (doseq [[left right] [["--parent" "--before"] ["--parent" "--after"]
+                           ["--before" "--after"] ["--section" "--before"]
+                           ["--section" "--after"]]]
+        (let [[e exit unchanged?] (refusal root child-a1 left
+                                          (if (= left "--section") "Housekeeping" parent-b)
+                                          right chores)]
+          (is (= 1 exit))
+          (is (= "argument-error" (:code e)))
+          (is unchanged?)))
+      (doseq [mode ["--before" "--after"]]
+        (let [[e exit unchanged?] (refusal root child-a1 mode "9999abcd")]
+          (is (= 1 exit))
+          (is (= "unknown-task" (:code e)))
+          (is unchanged?))))))
+
+(deftest move-relative-round-trip-and-imported-owner
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-move-graph! root)
+      (let [before (slurp (tasks-org root))]
+        (is (zero? (:exit (run-cli! "--root" root "move" child-a1 "--after" child-a2))))
+        (is (not= before (slurp (tasks-org root))))
+        (is (zero? (:exit (run-cli! "--root" root "move" child-a1 "--before" child-a2))))
+        (is (= before (slurp (tasks-org root)))))))
+  (with-temp-dir
+    (fn [root]
+      (bootstrap-linked-plan-graph! root)
+      (let [record (str (fs/path root "design" "log" "linked-plan.org"))
+            shared-before (slurp (tasks-org root))]
+        (doseq [mode ["--before" "--after"]]
+          (let [{:keys [out err exit]}
+                (run-cli! "--root" root "--format" "json" "move"
+                          linked-plan-second-child-id mode linked-plan-child-id)]
+            (is (zero? exit) err)
+            (is (= record (:file (parse-json-result out))))
+            (is (= shared-before (slurp (tasks-org root))))))
+        (doseq [mode ["--before" "--after"]]
+          (let [record-before (slurp record)
+                [e exit unchanged?] (refusal root linked-plan-child-id mode linked-plan-parent-id)]
+            (is (= 1 exit))
+            (is (= "validation" (:code e)))
+            (is unchanged?)
+            (is (= record-before (slurp record)))))))))
 
 (deftest move-mutator-content-projection-is-compact-by-default-and-opt-in
   (with-temp-dir
