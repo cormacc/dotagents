@@ -1,0 +1,84 @@
+#+TITLE: traits: re-probe every fragment against synthetic, non-decaying scenarios
+#+DATE: 2026-11-04 Wed
+#+PARENT: [[task:d669edf5-7f99-4645-81dc-597c01af98a8][traits: re-probe every fragment against synthetic, non-decaying scenarios]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Active
+#+SPEC: [[proj:skills/herdr-orch/references/traits.md]]
+
+* Intent
+Replace repository-dependent trait scenarios with synthetic subjects and record marginal effects honestly. Separate a fragment's write-boundary behaviour from restrictions imposed by the probe harness.
+
+* Summary
+*Level:* prototype · *Tests:* thorough · *Docs:* inline
+
+Focused and grounded synthetic scaffold pairs are recorded: focused produced the required treated/control response difference; grounded did not discriminate. The existing native Codex runner uses a read-only sandbox and direct prompts; it is not an exact packaged-persona Pi run and does not establish the deployed Pi instruction baseline. A no-write outcome from that sandbox cannot by itself demonstrate the read-only fragment's effect.
+
+** Scope
+*** In scope
+- Synthetic focused and grounded scenarios, pre-registered conditions and one treated/control pair per scenario.
+- Directory-form fragments with byte-identical prompt contents and user-layer gate records.
+- A disposable write-enabled read-only probe design and explicit baseline verification.
+*** Out of scope
+- Weakening a recorded condition, claiming general equivalence from one pair, or treating a pass as an admission prerequisite.
+- Rewriting or deleting a fragment based only on the current limited harness.
+- Letting a write-boundary probe mutate the real checkout or external state.
+
+** Acceptance
+*** Core functionality
+- [X] Focused and grounded have synthetic gates and honestly stated paired results.
+- [X] Prompt moves preserve the fragment bytes and resolution behaviour.
+- [ ] Read-only has a positive mutation control on a disposable target, followed by a paired write-enabled probe.
+*** Edge cases
+- [ ] Exact persona, model/provider and baseline instruction loading are stated for each observation.
+- [X] Non-discriminating results remain explicit; no condition is relaxed after the run.
+*** Anti-criteria
+- [ ] Must not: infer a trait effect from sandbox-enforced refusal.
+- [ ] Must not: use this repository as the reviewed subject or expose a recorded answer key as task context.
+
+** Decisions
+- Use the existing read-only runner for recommendation/review scaffold observations only :: focused and grounded have observable response boundaries. Rejected:
+  - Treat the same runner as a read-only mutation test: both arms have an independent prohibition on writes.
+  - Claim exact Pi deployment coverage from native Codex: instruction loading and persona composition differ.
+- Keep the whole task open until read-only and the baseline boundary are measured :: the current partial observations may guide follow-up but cannot satisfy the original task's full acceptance criteria.
+
+* Plan
+** DONE Record focused and grounded synthetic scaffold observations
+CLOSED: [2026-11-04 Wed 01:20]
+:PROPERTIES:
+:CUSTOM_ID: c3ae83fe-5ea7-4849-a2a1-eeb3d76f7cce
+:CREATED: [2026-11-04 Wed 01:08]
+:STARTED: [2026-11-04 Wed 01:08]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 01:08]
+- State "STARTED" from "TODO" [2026-11-04 Wed 01:08]
+- State "DONE" from "STARTED" [2026-11-04 Wed 01:20]
+:END:
+Acceptance criteria:
+- Each condition is fixed before one paired run.
+- Both native logs identify an OpenAI provider and the same model tier.
+- Prompt moves preserve content and resolution.
+- Gate records name the scaffold-only and Pi-baseline limits.
+
+** STARTED Build a valid disposable write-boundary and Pi-baseline probe
+:PROPERTIES:
+:CUSTOM_ID: 1ac8e5c2-a61a-4a34-ac6e-31ff3ae6adb6
+:CREATED: [2026-11-04 Wed 01:08]
+:STARTED: [2026-11-04 Wed 01:19]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 01:08]
+- State "STARTED" from "TODO" [2026-11-04 Wed 01:19]
+:END:
+Acceptance criteria:
+- An isolated synthetic repository permits a known control edit without exposing the real checkout to writes.
+- Treated and control differ only by the fragment at the same persona/model tier.
+- The inherited instruction baseline is recorded and its loading verified.
+- The write-boundary outcome is measured from target state, not only model prose.
+- External requests and arbitrary shell effects remain explicitly bounded.
+
+* Implementation
+- Current runner: ~scripts/run-trait-gate.bb~ uses ~codex exec --sandbox read-only --ignore-user-config --ephemeral~, the caller's Codex home for authentication and no subagent persona. It derives the control from the treated scaffold by removing one trait token line.
+- One focused pair and one grounded pair ran at ~gpt-5.6-terra~; all four native logs identify provider ~openai~. Root inspected the final outputs and prompt Git object hashes. The directory moves preserve the prompt bytes; the persona resolution test uses the directory path.
+- Focused: treated named ~lib/reservations.ts:4~ and one unassessed ~Open items~ bullet; control analysed the adjacent function. Grounded: both returned ~No issues found.~ and ~APPROVED~ without a broader finding. Neither result establishes the marginal effect over the deployed Pi baseline; the grounded control also loaded the repository code-review skill.
+- The combined root ~bb test~ run passed after updating the persona path assertion. A disposable Pi write-boundary harness is being prepared with local fake-model controls before any live paired run.

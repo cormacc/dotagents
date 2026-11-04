@@ -45,6 +45,7 @@
 - Created [2026-08-11 Tue 17:54]
 - State "STARTED" from "TODO" [2026-11-04 Wed 00:54]
 :END:
+#+IMPORT: [[plan:2026-11-04-model-fallback.org]]
 It would be useful for sessions to fallback  after hitting session limits (anthropic -> openai -> local, openai -> anthropic -> local)
 Take a look at https://github.com/luongnv89/ccl, which implements a solution for pi, claude and codex. Evaluate whether we can piggyback on this without breaking our model aliasing etc.
 There's also `agent-router`, which is session limit aware: https://github.com/nidhi-singh02/agent-router
@@ -65,9 +66,6 @@ An interesting-looking / opinionated workflow setup for pi.
 Likely to be some clashes with my own setup, but worth evaluating for (partial?) adoption.
 - https://github.com/juicesharp/rpiv-mono
 - https://rpiv-pi.com/
-
-
-
 *** TODO Decide whether to trial standalone rpiv-btw
 :PROPERTIES:
 :CUSTOM_ID: 86be0a2b-0097-4b18-9070-506bf85b2bfe
@@ -242,26 +240,29 @@ Priority lowered from A to B [2026-10-20 Tue] to match the plugin wrapper, its o
 - State "STARTED" from "TODO" [2026-11-04 Wed 00:46]
 :END:
 Aggregate for outstanding trait probe work under the admission bar in skills/herdr-orch/references/traits.md: synthetic, non-decaying probes for the surviving flat fragments, and further attempts at fragments whose recorded probes did not discriminate. Probe records live in the repository user layer at traits/<name>/gate.md; the runner is scripts/run-trait-gate.bb.
-*** TODO [#B] traits: re-probe every fragment against synthetic, non-decaying scenarios
+*** STARTED [#B] traits: re-probe every fragment against synthetic, non-decaying scenarios
 :PROPERTIES:
 :CUSTOM_ID: d669edf5-7f99-4645-81dc-597c01af98a8
 :CREATED: [2026-08-11 Tue 12:23]
+:STARTED: [2026-11-04 Wed 01:05]
 :END:
 :LOGBOOK:
 - Created [2026-08-11 Tue 12:23]
+- State "STARTED" from "TODO" [2026-11-04 Wed 01:05]
 :END:
+#+IMPORT: [[plan:2026-11-04-synthetic-trait-probes.org]]
 No trait fragment holds a probe result valid for the current repository state. Every scenario written so far takes this repository as its subject, so each decays as the repository documents itself: =read-only= baited a typo fix in our worktree, =focused= baited an audit of our =pi/extensions=, =no-bullshit= reviewed our own clean git range, and =%prune= asked about our own trait store. =%prune= is simply the one that was re-run and watched lapse (2026-08-11), which is how the decay was discovered.
 
 Requiring a passing probe was abandoned the same day precisely because of this, so nothing is blocked on this task. It is the durable fix rather than the workaround: a synthetic subject does not decay, and observations may then be stored beside the scaffold without becoming an answer key for the next control arm.
 
 Scope narrowed [2026-09-21 Mon]: =prune= is no longer this task's responsibility. The selected ponytail/traits plan already owns it -- [[file:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org::*Decisions]] requires "Replace its spent probe with a synthetic scenario", and its plan task 9e22a186 carries the acceptance criterion "prune has a replacement synthetic probe record". That plan also decides whether =focused= and =no-bullshit= survive at all ("assess reuse or refinement of focused and no-bullshit rather than introduce a generic rigorous synonym"), so this task is blocked on 9e22a186 to avoid writing probes for fragments the plan may delete or rewrite.
 
-Unblocked [2026-10-20 Tue]: the ponytail/traits plan is DONE and archived, and this task carries no =:BLOCKED-BY:=. =read-only=, =focused=, and =no-bullshit= all survived. The review-evidence trait is named =grounded=; the current flat files are =skills/herdr-orch/traits/{read-only,focused,grounded}.md=. Their =gate.md= records belong in the repository user layer at =traits/<name>/gate.md=, beside the existing ones.
+Unblocked [2026-10-20 Tue]: the ponytail/traits plan is DONE and archived, and this task carries no =:BLOCKED-BY:=. =read-only=, =focused=, and =no-bullshit= all survived. The review-evidence trait is named =grounded=. =focused= and =grounded= use =skills/herdr-orch/traits/<name>/prompt.md= and have synthetic =traits/<name>/gate.md= records; =read-only= remains at =skills/herdr-orch/traits/read-only.md= pending a valid write-enabled probe. The linked record states the native-Codex and Pi-baseline limits.
 
 Acceptance criteria:
 - Each of =read-only=, =focused=, and =grounded= that survives the plan's candidate assessment gets a scenario whose artifact under review is synthetic and self-contained -- invented for the probe, not drawn from this repository -- with its flaw documented nowhere the child can read.
 - Each probe runs treated and control at the same persona and tier through =scripts/run-trait-gate.bb=, with the condition pre-registered before the run, and records the outcome in =traits/<name>/gate.md= including =did not discriminate= where that is what happened.
-- Fragments still flat (=skills/herdr-orch/traits/focused.md=, =skills/herdr-orch/traits/grounded.md=, =skills/herdr-orch/traits/read-only.md=) convert to the directory form when they gain a =gate.md=.
+- A fragment that is still flat converts to directory form when it gains a =gate.md=; =read-only= remains pending.
 - Redundancy is triaged before wording: =AGENTS.md= loads in every pi session and already carries directives adjacent to =%grounded= (claims stated only when measured or attributed; an empty result is not evidence of absence; a guard only ever seen pass is unverified). A fragment that shows no marginal effect over that baseline is a deletion candidate, not a rewording candidate -- =%challenge= was removed on exactly that reasoning.
 - Where a probe cannot be made to discriminate, say so and say why, rather than reporting an unexplained negative or quietly dropping the fragment.
 Must not: weaken a recorded condition to make a run agree; reuse a repo-referential subject; treat a passing probe as a precondition for the fragment staying in the store.
@@ -303,6 +304,21 @@ Acceptance criteria:
 - Require exactly one match; on no match or several matches, report each candidate location and change nothing.
 - Report the file location of the replacement, and add the tool to the pi-clojure README and to skills/clojure/SKILL.md.
 
+** TODO [#B] Review Pi development pin advisories before upgrade :pi:
+:PROPERTIES:
+:CUSTOM_ID: a08802a5-e751-43de-a2c7-34638dac66a0
+:CREATED: [2026-11-04 Wed 01:31]
+:END:
+:LOGBOOK:
+- Created [2026-11-04 Wed 01:31]
+:END:
+The repository check passes, but npm audit reports three affected package entries: @earendil-works/pi-coding-agent, minimatch and undici (one high, two moderate). package.json pins the Pi development dependency to 1.4.0; the audit proposes 1.5.0 rather than a lock-only refresh. Audit evidence: .tmp/autonomous-backlog/root-npm-audit.json. This is separate from the installed pi-web-access dependency reconciliation task.
+
+Acceptance criteria:
+- Confirm advisory applicability and the supported runtime/test baseline before selecting a new pin.
+- Trial any approved version in an isolated fixture with lifecycle scripts disabled; run installed-runtime, adapter and extension checks against the intended version.
+- Update package and lockfile together only after the compatibility and version-policy decision. Do not use npm audit fix --force or change the live Pi installation as an audit shortcut.
+
 * Fixes
 
 ** STARTED herdr-orch: failed-spawn hygiene :skill:herdr_orch:
@@ -315,73 +331,8 @@ Acceptance criteria:
 - Created [2026-10-20 Tue 12:25]
 - State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
 :END:
+#+IMPORT: [[plan:2026-11-04-failed-spawn-hygiene.org]]
 Aggregate for residue left by a spawn that fails before its agent starts, plus small herdr-orch doc corrections. The two field reports (a22509e2, 435c5d86) share one trigger: agent_pane_busy on back-to-back oh task start. Verified 2026-10-20 at e67e868: safe-cleanup! in cli.clj marks the entry failed and closes the pane, but does not remove a managed checkout or its orch/<id> branch; contract.md section Retention states ledger entries are never deleted, so filtering failed entries from routine listings is the likely fix rather than a retire verb. contract.md section Start and prompt outcomes bans a local start retry (4741d59), so agent_pane_busy needs a repro on the installed Herdr (0.9.5) and either an upstream report or an explicit reversal of that decision.
-*** TODO herdr-orch: a failed spawn round is permanent ledger residue :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: a22509e2-bc51-45ae-a5a3-736753f68f48
-:CREATED: [2026-09-17 Thu 22:29]
-:END:
-:LOGBOOK:
-- Created [2026-09-17 Thu 22:29]
-:END:
-A round whose spawn failed cannot be removed from the ledger. `oh task prune` refuses it with "prune refused: assignment is already terminal", because prune requires a non-terminal `:status` (docs/contract.md, Prune). `oh task compact` retires `:envelope :text` only and never removes an entry. The dead entry therefore stays in `oh task status`/`list` output for the life of the ledger.
-
-Desired outcome: a way to retire a `failed` round, or an explicit contract statement that failed entries are permanent and are filtered from routine listings.
-
-Origin:
-- cwd: /home/cormacc/dotfiles/agents
-- git: github.com/cormacc/dotagents @ main
-- timestamp: [2026-09-17 Thu 22:30]
-- sender: agent
-
-Evidence:
-Observed while spawning two reviewers: the first `oh task start reviewer --model claude-fable` failed with herdr `agent_pane_busy` (target pane not an available shell), creating round 51610531-d59c-44eb-af90-3ef5d104ac9f with status `failed`. A retry succeeded. `oh task prune 51610531-...` then refused as above, and no other verb retires the entry. Related but distinct from 08fba41e (no-publication rounds), which close --abandon now covers.
-*** TODO herdr-orch: oh task start fails with agent_pane_busy when started right after another spawn :skill:herdr_orch:
-:PROPERTIES:
-:CUSTOM_ID: 435c5d86-d35f-43d8-a94c-d7c9419a29ed
-:CREATED: [2026-10-14 Wed 11:10]
-:END:
-:LOGBOOK:
-- Created [2026-10-14 Wed 11:10]
-:END:
-A second `oh task start` issued immediately after a first one failed with herdr `agent_pane_busy` ("agent target pane ... is not an available shell"): the new tab's pane was not yet a usable shell when `agent start` ran. The failed round had already created a managed checkout and its `orch/<id>` branch, which the parent had to remove by hand (`oh worktree remove`, then `git branch -d`). Desired outcome: `oh` waits for the new pane to report an available shell (or retries `agent start` briefly) before starting the agent, and removes a managed checkout it created for a round that failed before the agent started.
-
-Origin:
-- cwd: /home/cormacc/nmd/products/connect/portal
-- git: git@git.nmd.ie:products/connect/portal @ fail-fast
-- timestamp: [2026-10-14 Wed 11:10]
-- sender: agent
-
-Evidence:
-- 2026-10-13: `oh task start worker` run twice in one shell command; the first succeeded, the second returned exit 1 with `agent_pane_busy` for pane `w2:p41`, round status `failed`, worktree `.tmp/herdr-orch/worktrees/<id>` at the base commit. `oh task close` then refused ("assignment is not captured"), and `close --abandon` refused ("already terminal"). A retry 8 s after a later start succeeded.
-*** DONE [#C] herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md :skill:herdr_orch:
-CLOSED: [2026-11-01 Sun 12:38]
-:PROPERTIES:
-:CUSTOM_ID: 6d9ebbbf-5bcf-4798-bea7-70ba5c5cb590
-:CREATED: [2026-09-22 Tue 13:09]
-:STARTED: [2026-11-01 Sun 12:08]
-:END:
-:LOGBOOK:
-- Created [2026-09-22 Tue 13:09]
-- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
-- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
-:END:
-skills/herdr-orch/references/traits.md claims \`incompatible-with:\` enforcement is documented/implemented in skills/herdr-orch/scripts/docs/contract.md, and contract.md's Trait composition section claims herdr-orch.traits/interpolate returns "incompatibility declarations by trait in :incompatibilities". Neither is true: traits.clj's interpolate returns only :text, :resolved, :unknowns and :repeats (no :incompatibilities key), and no \`incompatible-with:\` frontmatter parsing or enforcement exists anywhere in traits.clj or cli.clj. Identified but deliberately left unfixed during [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]] ("Correct the documentation rather than assume a conflict engine exists. This plan does not add a generic semantic conflict solver.") Correct both docs to match the actual implementation (or implement the feature, if still wanted).
-
-Result: both references and the Pi =TraitExpansion= type match the implemented result; the contract explicitly states that semantic conflicts are not enforced. The result-key assertion, trait suites and TypeScript check pass. No conflict engine was added.
-*** DONE herdr-orch: guidance or a verb for retiring integrated orch/* branches :skill:herdr_orch:
-CLOSED: [2026-11-04 Wed 00:24]
-:PROPERTIES:
-:CUSTOM_ID: a84f503e-d621-42fc-ae96-7c0e3c0dd7d9
-:CREATED: [2026-10-20 Tue 12:25]
-:STARTED: [2026-11-04 Wed 00:24]
-:END:
-:LOGBOOK:
-- Created [2026-10-20 Tue 12:25]
-- State "STARTED" from "TODO" [2026-11-04 Wed 00:24]
-- State "DONE" from "STARTED" [2026-11-04 Wed 00:24]
-:END:
-oh worktree remove deletes the managed checkout but retains its orch/<id> branch, and contract.md section Worktree reconciliation and teardown states that oh never deletes a branch. Retained branches accumulate after integration. Decide between documented operator guidance and an ownership-checked verb. Carried over from the cancelled worktrunk investigation (47f84d9a), whose worktree-management motivation the managed checkouts (--worktree new, oh worktree list/remove) already cover.
 
 * Upstream issues
 
@@ -479,7 +430,8 @@ Evidence:
 - RETROLOG.org 2026-10-01 records the same failure ("Parallel read and write"), after which the rule was rewritten as an ordering rule.
 - 2026-10-22 (dotagents, herdr-orch change-record closure): one batch ran an Edit and a bash ~sed -i~ line deletion on the same record. The Edit wrote content from its own earlier read, so the deletion was lost without an error; a diff against a snapshot showed it.
 
-** STARTED org-plan: check non-path identifiers in change-records :skill:org_plan:
+** DONE org-plan: check non-path identifiers in change-records :skill:org_plan:
+CLOSED: [2026-11-04 Wed 01:19]
 :PROPERTIES:
 :CUSTOM_ID: 58d81bcd-bb15-4835-9737-da8fe64dd93b
 :CREATED: [2026-10-14 Wed 16:22]
@@ -488,6 +440,7 @@ Evidence:
 :LOGBOOK:
 - Created [2026-10-14 Wed 16:22]
 - State "STARTED" from "TODO" [2026-11-04 Wed 00:42]
+- State "DONE" from "STARTED" [2026-11-04 Wed 01:19]
 :END:
 Add an advisory change-record check that resolves backticked non-path identifiers (keywords, auto-resolved =::= keywords, qualified and simple symbols, and namespaces) against tracked source. Report unresolved names for review without failing: removed identifiers, rejected alternatives and library internals can remain unresolved by design. Include a positive control in each run.
 

@@ -1,0 +1,139 @@
+#+TITLE: herdr-orch: failed-spawn hygiene
+#+DATE: 2026-11-04 Wed
+#+PARENT: [[task:e66d5a45-823f-4c36-884b-2657c97d65c8][herdr-orch: failed-spawn hygiene]]
+#+SETUPFILE: ../../TASKS.setup.org
+#+STATUS: Draft
+#+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
+
+* Intent
+Reduce noise and resource residue from failed launches without deleting audit history or adding a readiness workaround that the current contract forbids.
+
+* Summary
+*Level:* MVP · *Tests:* thorough · *Docs:* README
+
+The current source marks launch failures terminal and retains ledger entries. Listing noise can be addressed separately from the upstream readiness report. Managed checkout cleanup needs ownership and preservation checks; it must not be inferred from a failed status alone.
+
+** Scope
+*** In scope
+- Failed-round visibility in routine ~task status~ and ~task list~ output.
+- A bounded upstream readiness reproduction and safe failed-launch checkout policy.
+- Existing branch-retirement guidance.
+*** Out of scope
+- Deleting ledger entries or immutable result files.
+- Reintroducing a local start retry, reducing the Herdr version floor, or deleting branches automatically.
+- Removing a checkout because its launch status is failed without checking its contents and ownership.
+
+** Acceptance
+Proposed criteria; readiness and automatic cleanup policy are not approved.
+*** Core functionality
+- [X] Routine listings omit lower-case launch status ~failed~ while ~--include-failed~ retains audit access.
+- [X] Lookup by full task UUID can still inspect a failed round.
+- [X] JSON and text output agree on which rounds are visible.
+*** Edge cases
+- [X] Publication status ~FAILED~, invalid captures and closed successful rounds are not confused with lower-case launch status ~failed~.
+- [X] Listing never changes ledger bytes or resource state.
+- [ ] A readiness reproduction records client/server versions and the exact upstream refusal.
+*** Anti-criteria
+- [ ] Must not: delete a ledger entry to hide it.
+- [ ] Must not: retry ~agent start~ under the existing contract.
+- [ ] Must not: remove dirty, ignored-content-bearing or foreign checkouts.
+
+** Decisions
+- Prefer a read-only listing filter with explicit opt-in audit visibility :: the stored task permits filtering and the retention contract preserves history. Rejected:
+  - A retire/delete verb: conflicts with retained audit history and adds mutation authority to a display problem.
+  - Automatic checkout removal inside every failure handler: a failed status does not prove an unused, clean checkout.
+- Keep readiness owned upstream :: [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'Start and prompt outcomes' explicitly forbids local polling/retry. A field report is not permission to reverse that decision. An upstream reproduction or explicit policy change must precede a workaround.
+
+** Shipped
+- MODIFIED :: [[file:../../skills/herdr-orch/scripts/docs/contract.md]] section 'JSON output' defines default failed-launch filtering and explicit audit visibility.
+- MODIFIED :: [[file:../../skills/herdr-orch/scripts/README.md]] section 'Retire an integrated branch' supplies operator guidance; the CLI retains its no-branch-deletion boundary.
+
+** Risks
+- Hiding failed entries by default can surprise scripts that use listings as an audit export; the explicit option and unchanged full-UUID lookup must be documented and tested together.
+- A launch may fail after creating valuable files. Checkout removal needs a separate ownership and preservation boundary, not only a status predicate.
+
+* Plan
+** DONE herdr-orch: a failed spawn round is permanent ledger residue :skill:herdr_orch:
+CLOSED: [2026-11-04 Wed 01:19]
+:PROPERTIES:
+:CUSTOM_ID: a22509e2-bc51-45ae-a5a3-736753f68f48
+:CREATED: [2026-09-17 Thu 22:29]
+:STARTED: [2026-11-04 Wed 01:03]
+:END:
+:LOGBOOK:
+- Created [2026-09-17 Thu 22:29]
+- State "STARTED" from "TODO" [2026-11-04 Wed 01:03]
+- State "DONE" from "STARTED" [2026-11-04 Wed 01:19]
+:END:
+A round whose spawn failed cannot be removed from the ledger. `oh task prune` refuses it with "prune refused: assignment is already terminal", because prune requires a non-terminal `:status` (docs/contract.md, Prune). `oh task compact` retires `:envelope :text` only and never removes an entry. The dead entry therefore stays in `oh task status`/`list` output for the life of the ledger.
+
+Desired outcome: a way to retire a `failed` round, or an explicit contract statement that failed entries are permanent and are filtered from routine listings.
+
+Origin:
+- cwd: /home/cormacc/dotfiles/agents
+- git: github.com/cormacc/dotagents @ main
+- timestamp: [2026-09-17 Thu 22:30]
+- sender: agent
+
+Evidence:
+Observed while spawning two reviewers: the first `oh task start reviewer --model claude-fable` failed with herdr `agent_pane_busy` (target pane not an available shell), creating round 51610531-d59c-44eb-af90-3ef5d104ac9f with status `failed`. A retry succeeded. `oh task prune 51610531-...` then refused as above, and no other verb retires the entry. Related but distinct from 08fba41e (no-publication rounds), which close --abandon now covers.
+
+** TODO herdr-orch: oh task start fails with agent_pane_busy when started right after another spawn :skill:herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: 435c5d86-d35f-43d8-a94c-d7c9419a29ed
+:CREATED: [2026-10-14 Wed 11:10]
+:END:
+:LOGBOOK:
+- Created [2026-10-14 Wed 11:10]
+:END:
+A second `oh task start` issued immediately after a first one failed with herdr `agent_pane_busy` ("agent target pane ... is not an available shell"): the new tab's pane was not yet a usable shell when `agent start` ran. The failed round had already created a managed checkout and its `orch/<id>` branch, which the parent had to remove by hand (`oh worktree remove`, then `git branch -d`). Desired outcome: `oh` waits for the new pane to report an available shell (or retries `agent start` briefly) before starting the agent, and removes a managed checkout it created for a round that failed before the agent started.
+
+Origin:
+- cwd: /home/cormacc/nmd/products/connect/portal
+- git: git@git.nmd.ie:products/connect/portal @ fail-fast
+- timestamp: [2026-10-14 Wed 11:10]
+- sender: agent
+
+Evidence:
+- 2026-10-13: `oh task start worker` run twice in one shell command; the first succeeded, the second returned exit 1 with `agent_pane_busy` for pane `w2:p41`, round status `failed`, worktree `.tmp/herdr-orch/worktrees/<id>` at the base commit. `oh task close` then refused ("assignment is not captured"), and `close --abandon` refused ("already terminal"). A retry 8 s after a later start succeeded.
+
+** DONE [#C] herdr-orch: fix incompatible-with/:incompatibilities doc-code mismatch in contract.md and traits.md :skill:herdr_orch:
+CLOSED: [2026-11-01 Sun 12:38]
+:PROPERTIES:
+:CUSTOM_ID: 6d9ebbbf-5bcf-4798-bea7-70ba5c5cb590
+:CREATED: [2026-09-22 Tue 13:09]
+:STARTED: [2026-11-01 Sun 12:08]
+:END:
+:LOGBOOK:
+- Created [2026-09-22 Tue 13:09]
+- State "STARTED" from "TODO" [2026-11-01 Sun 12:08]
+- State "DONE" from "STARTED" [2026-11-01 Sun 12:38]
+:END:
+skills/herdr-orch/references/traits.md claims \`incompatible-with:\` enforcement is documented/implemented in skills/herdr-orch/scripts/docs/contract.md, and contract.md's Trait composition section claims herdr-orch.traits/interpolate returns "incompatibility declarations by trait in :incompatibilities". Neither is true: traits.clj's interpolate returns only :text, :resolved, :unknowns and :repeats (no :incompatibilities key), and no \`incompatible-with:\` frontmatter parsing or enforcement exists anywhere in traits.clj or cli.clj. Identified but deliberately left unfixed during [[proj:design/log/2026-09-17-adapt-ponytail-for-use-with-herdr-orch-t.org]] ("Correct the documentation rather than assume a conflict engine exists. This plan does not add a generic semantic conflict solver.") Correct both docs to match the actual implementation (or implement the feature, if still wanted).
+
+Result: both references and the Pi =TraitExpansion= type match the implemented result; the contract explicitly states that semantic conflicts are not enforced. The result-key assertion, trait suites and TypeScript check pass. No conflict engine was added.
+
+** DONE herdr-orch: guidance or a verb for retiring integrated orch/* branches :skill:herdr_orch:
+CLOSED: [2026-11-04 Wed 00:24]
+:PROPERTIES:
+:CUSTOM_ID: a84f503e-d621-42fc-ae96-7c0e3c0dd7d9
+:CREATED: [2026-10-20 Tue 12:25]
+:STARTED: [2026-11-04 Wed 00:24]
+:END:
+:LOGBOOK:
+- Created [2026-10-20 Tue 12:25]
+- State "STARTED" from "TODO" [2026-11-04 Wed 00:24]
+- State "DONE" from "STARTED" [2026-11-04 Wed 00:24]
+:END:
+oh worktree remove deletes the managed checkout but retains its orch/<id> branch, and contract.md section Worktree reconciliation and teardown states that oh never deletes a branch. Retained branches accumulate after integration. Decide between documented operator guidance and an ownership-checked verb. Carried over from the cancelled worktrunk investigation (47f84d9a), whose worktree-management motivation the managed checkouts (--worktree new, oh worktree list/remove) already cover.
+
+* Implementation
+- Current ~safe-cleanup!~ in ~skills/herdr-orch/scripts/src/herdr_orch/cli.clj~ records lower-case ~failed~, a failure timestamp and phase, then attempts pane closure for split/rename/start phases. The listing branches of ~task!~ omit only lower-case ~failed~ by default; ~--include-failed~ restores those audit entries. Full-UUID status remains unfiltered and refuses that listing-only option.
+- Independent closeout review found no issues in the filter change. The root repository check passed, including the CLI regression, adapter and extension suites; listing fixtures assert the exact status distinction, ledger bytes and absence of fake-Herdr mutations.
+- No live failure was forced in this session. The stored historical report remains attributed to its reporter; it is not a reproduction on the installed server.
+
+* Open questions
+** OPEN Should failed-launch checkout removal become automatic?
+Choose an explicit operator cleanup path or a narrowly ownership-checked automatic path. Any automatic design must preserve dirty and ignored content, record a retained branch, and handle partial creation and interrupted cleanup.
+** OPEN Should an upstream readiness report replace the requested local retry?
+The existing no-retry decision remains binding. Capture a reproduction in a disposable Herdr session before drafting an upstream issue; do not publish it or change the local contract without approval.
