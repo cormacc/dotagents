@@ -5738,6 +5738,56 @@
       (is (= [(:task entry) (:child entry) (:pane-id entry) "prompted" "uncaptured" "open"]
              (str/split line #"\t"))))))
 
+(deftest failed-launches-are-hidden-only-from-routine-listings
+  (let [{:keys [env dir log]} (fake-env {})
+        failed (patch-entry! dir (start-child! env dir "failed launch") :status "failed" :failure-phase "start")
+        published* (start-child! env dir "published failure")
+        _ (publish-child! published* "FAILED")
+        _ (call! env "task" "collect" (:task published*))
+        published (ledger-entry* dir (:task published*))
+        invalid (patch-entry! dir (start-child! env dir "invalid capture") :status "invalid")
+        closed (patch-entry! dir (start-child! env dir "closed success")
+                             :status "COMPLETE" :captured-at "2026-01-01T00:00:00Z" :closed-at "2026-01-01T00:01:00Z")
+        visible #{(:task published) (:task invalid) (:task closed)}
+        all-tasks (conj visible (:task failed))
+        ledger-before (into {} (map (fn [task] [task (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json"))))]) all-tasks))
+        json-tasks (fn [proc] (set (map :task (:result (result proc)))))
+        text-tasks (fn [proc] (set (map #(first (str/split % #"\t")) (str/split-lines (str/trim (:out proc))))))]
+    ;; Start and capture establish real entry shapes, then direct fixtures isolate the exact
+    ;; terminal states that a read-only listing must distinguish.
+    (is (= "FAILED" (get-in published [:envelope :status])) "the published result is upper-case FAILED")
+    (spit log "")
+    (doseq [op ["status" "list"]]
+      (let [invoke #(apply call! env (into ["task" op] %))
+            default (invoke [])
+            included (invoke ["--include-failed"])
+            text-default (invoke ["--format" "text"])
+            text-included (invoke ["--format" "text" "--include-failed"])]
+        (doseq [proc [default included text-default text-included]]
+          (is (zero? (:exit proc)) (str op " -> " (:out proc))))
+        (is (= visible (json-tasks default)) (str op " default JSON"))
+        (is (= all-tasks (json-tasks included)) (str op " audit JSON"))
+        (is (= visible (text-tasks text-default)) (str op " default text"))
+        (is (= all-tasks (text-tasks text-included)) (str op " audit text"))))
+    (testing "a full UUID remains an audit lookup without the listing option"
+      (let [proc (call! env "task" "status" (:task failed))]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (= "failed" (get-in (result proc) [:result :status])))
+        (is (= (:task failed) (get-in (result proc) [:result :task])))))
+    (testing "a listing option with a full UUID refuses instead of silently doing nothing"
+      (let [proc (call! env "task" "status" (:task failed) "--include-failed")]
+        (is (= 1 (:exit proc)))
+        (is (re-find #"--include-failed is only valid without a task ID" (:out proc)))))
+    (testing "help advertises the value-less listing option"
+      (let [proc (call! env "task" "status" "--help")]
+        (is (zero? (:exit proc)) (:out proc))
+        (is (str/includes? (:out proc) "status [--include-failed]"))
+        (is (str/includes? (:out proc) "status <full-task-uuid> [--format json|text] [--raw]"))))
+    (is (= ledger-before
+           (into {} (map (fn [task] [task (slurp (str (fs/path dir ".tmp" "herdr-orch" "ledger" (str task ".json"))))]) all-tasks)))
+        "listing does not rewrite immutable ledger entries")
+    (is (not-any? mutating? (calls log)) "listing does not mutate panes, agents, tabs, or worktrees")))
+
 (deftest collect-and-status-render-lines-under-format-text
   (let [{:keys [env dir]} (fake-env {})
         entry (start-child! env dir "text capture")]

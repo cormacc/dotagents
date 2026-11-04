@@ -18,7 +18,7 @@
            [java.nio.file Files FileAlreadyExistsException Paths StandardOpenOption]
            [java.util UUID]))
 
-(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [full-task-uuid] | list [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
+(def usage "oh pane split|run|read|wait-output|send-text|send-keys|close|list|current|get|layout|rename\noh tab create|list|focus\noh ws create|list|focus\n\nRAW AGENT CONTROL\n  oh agent start|prompt|wait|read|send-keys|focus|rename|list|get\n\nDELEGATION TASK PROTOCOL\n  oh task run|start [<persona>] --task TEXT [--context fresh|fork] [--tab|--split] [--spawns NAMES|none] [options]\n  oh task run|start --context measurement --measurement-config PATH --task TEXT [--tab|--split] [options]\n  oh task collect <full-task-uuid> [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task collect --any [--wait --timeout MS] [--close] [--format text] [--raw]\n  oh task status [--include-failed] | status <full-task-uuid> | list [--include-failed] [--format text] [--raw]\n  oh task publish --status STATUS --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--task UUID] [--notify-timeout MS]\n  oh task prune <full-task-uuid>\n  oh task poke <full-task-uuid>\n  oh task continue <full-task-uuid> --task TEXT [--wait]\n  oh task close <full-task-uuid> | oh task close --settled\n  oh task orphans [--close | --prune]\n  oh task compact <full-task-uuid> | oh task compact --closed\n  oh task harvest [--format text]\n\nDISCOVERY\n  oh roster [--format json|markdown|org] [--section all|personas|traits|models|workflows] [--detail]\n\nWORKTREE TEARDOWN\n  oh worktree list\n  oh worktree remove <full-task-uuid>\n\noh spawn \"<shell command>\"\n\nspawn creates an unfocused tab, runs an ordinary shell command in its root pane, and reports that pane id. It never delegates; use `oh task run <persona>` for a persona.\nroster lists the resolved personas, traits, model aliases, workflow skills, and spawn defaults for this checkout. It never contacts Herdr. JSON is the default; markdown and org are human renderings, and --section/--detail apply only to them.\n--notify-timeout bounds the settle wait before the advisory parent push under the non-blocking policy (default 30000 ms).\n--tab places the delegated child in a new tab of the caller's workspace; --split places it in a split of the caller's pane. Either flag overrides the configured :defaults :placement, which ships as :tab-split (tab at root, split below root).\n--spawns overrides the persona's `spawns:` allow-list (whitespace/comma separated); the literal `none` forces a leaf.\n--trait NAME is repeatable and adds one explicit metadata trait selection, appended after a persona's own `extends`/`traits:` composition.\n--context fresh (the default) starts a fresh child, with or without a persona; --context fork starts a pi child that inherits the completed earlier turns of the caller's own pi session, not the current turn that delegates; put same-turn findings in the assignment. \"Spawn a subagent\" means fresh and \"fork a subagent\" means fork.\n--context measurement runs a pi subject headless under a detached supervisor, with only the treatment and tools that --measurement-config names and the literal assignment; it takes no persona, --trait, --prompt-extra, --retro, --no-retro or --spawns. No pane opens unless --tab or --split requests a read-only monitor. The supervisor publishes the result; collect it as usual. Execution success is not an answer-quality score.\n--worktree <path> (on task run/start) uses an existing linked checkout in the same repository; --worktree new creates a managed checkout. Without the flag, an initial or read-only child uses the caller's checkout and an additional concurrent write-enabled child receives a managed checkout.\n\n\nVerb semantics -- guards, refusal cases, precedence, and ledger fields -- are in scripts/docs/contract.md.\nOpaque assignment input is --task, --task-file, or stdin.")
 (defn fail [message data] (throw (ex-info message data)))
 (defn now [] (str (java.time.Instant/now)))
 ;; Zero is truthy in Clojure and `Thread/sleep` rejects negatives, so only a
@@ -69,7 +69,7 @@
 ;; Single source of truth for delegation value-less flags. The raw tab/workspace create and
 ;; pane split `--focus` operator flag is scoped to those commands by `boolean-flags-for`; both
 ;; argv consumers use the same resolved set so no value-less flag swallows the next element.
-(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon" "--prune" "--detail"})
+(def boolean-flags #{"--wait" "--print-prompt" "--retro" "--no-retro" "--tab" "--split" "--any" "--settled" "--clear" "--raw" "--close" "--closed" "--abandon" "--prune" "--detail" "--include-failed"})
 (defn boolean-flags-for [group op]
   (cond-> boolean-flags
     (or (and (#{"tab" "ws"} group) (= "create" op))
@@ -3199,8 +3199,9 @@
            "start [<persona>] (--task TEXT | --task-file PATH | stdin) [same options as run]"
            "collect <full-task-uuid> [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
            "collect --any [--wait] [--timeout MS] [--close] [--format json|text] [--raw]"
-           "status [full-task-uuid] [--format json|text] [--raw]"
-           "list [--format json|text] [--raw]"
+           "status [--include-failed] [--format json|text] [--raw]"
+           "status <full-task-uuid> [--format json|text] [--raw]"
+           "list [--include-failed] [--format json|text] [--raw]"
            "publish --status COMPLETE|BLOCKED|FAILED|WAITING --summary TEXT [--artifact RELATIVE-PATH]* [--finding TEXT]* [--next TEXT] [--process TEXT]* [--from-file PATH] [--task UUID] [--notify-timeout MS]"
            "prune <full-task-uuid>"
            "poke <full-task-uuid>"
@@ -3317,6 +3318,12 @@
     "list" (do (require-positionals positional 0 "agent list") (herdr/render-agents (herdr/agents)))
     "get" (let [[target] (require-positionals positional 1 "agent get")] (herdr/agent! target))
     (fail "unknown agent command" {:command op})))
+(defn- listing-entries [opts]
+  (let [entries (ledger/entries)]
+    (if (one opts :include-failed)
+      entries
+      (filterv #(not= "failed" (:status %)) entries))))
+
 (defn task! [op opts positional]
   (case op
     "run" (let [entry (spawn! (first positional) opts "blocking")] (if (:preview entry) entry (wait-and-capture! entry (round-timeout entry opts) true)))
@@ -3324,8 +3331,11 @@
     "collect" (let [any? (boolean (one opts :any))]
                 (when (and any? (first positional)) (fail "collect --any takes no task argument" {:task (first positional)}))
                 (present opts (collect-with-closure! opts (if any? (collect-any! opts) (collect! (first positional) opts))) capture-text))
-    "status" (present opts (if-let [task (first positional)] (live (ledger/read! task)) (mapv live (ledger/entries))) ledger-text)
-    "list" (present opts (mapv live (ledger/entries)) entries-text)
+    "status" (let [task (first positional)]
+               (when (and task (one opts :include-failed))
+                 (fail "--include-failed is only valid without a task ID" {:task task}))
+               (present opts (if task (live (ledger/read! task)) (mapv live (listing-entries opts))) ledger-text))
+    "list" (present opts (mapv live (listing-entries opts)) entries-text)
     "publish" (publish! opts)
     "prune" (prune! (first positional))
     "poke" (poke! (first positional))
