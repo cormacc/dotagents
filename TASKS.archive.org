@@ -4812,3 +4812,20 @@ CLOSED: [2026-11-04 Wed 23:27]
 :END:
 #+IMPORT: [[plan:2026-11-04-quota-axi-backend.org]]
 Delivered quota-axi reporting, shared explicit/confirmed user-local setup and Pi 1.5 SDK/adapter alignment, with 202 fewer production/config lines. Fresh independent review, the complete offline root suite and separate Pi extension suite passed. The linked record preserves config/schema changes, accepted refresh/identity limits and disclosed test incidents. Changes are uncommitted; no production quota-axi installation or live provider probe is included.
+
+** DONE herdr-orch: quota widget for the Herdr tab bar :herdr_orch:
+CLOSED: [2026-11-05 Thu 08:12]
+:PROPERTIES:
+:CUSTOM_ID: da733dca-7beb-47e9-baf2-e6d446105525
+:CREATED: [2026-11-05 Thu 00:51]
+:STARTED: [2026-11-05 Thu 01:44]
+:ARCHIVED: [2026-11-05 Thu 08:12]
+:ARCHIVE_OLPATH: Improvements
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 00:51]
+- State "STARTED" from "TODO" [2026-11-05 Thu 01:44]
+- State "DONE" from "STARTED" [2026-11-05 Thu 08:12]
+:END:
+#+IMPORT: [[plan:2026-11-05-herdr-orch-quota-widget.org]]
+Show subscription quota for each herdr-orch `config.edn` provider that has a `:quota-provider`, through the same quota-axi executable and allowlisted evidence as `oh usage`. Display in the Herdr tab-bar right status area (`[ui] tab_bar_right` command entry; `tab_bar_position = "bottom"` gives a footer). Prior art: https://github.com/danielpradilla/herdr-quota-meter. Related: 9f667467 (herdr plugin wrapper for herdr-orch), which plans the `herdr-plugin/` package.

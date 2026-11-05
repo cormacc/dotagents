@@ -1,8 +1,8 @@
 #+TITLE: herdr-orch: quota widget for the Herdr tab bar
 #+DATE: 2026-11-05 Thu
-#+PARENT: [[task:da733dca-7beb-47e9-baf2-e6d446105525][herdr-orch: quota widget for the Herdr tab bar]]
+#+PARENT: [[archive:da733dca-7beb-47e9-baf2-e6d446105525][herdr-orch: quota widget for the Herdr tab bar]]
 #+SETUPFILE: ../../TASKS.setup.org
-#+STATUS: Accepted
+#+STATUS: Complete
 #+SPEC: [[proj:skills/herdr-orch/scripts/docs/contract.md]]
 #+SPEC: [[proj:skills/herdr-orch/README.org]]
 #+SPEC: [[proj:skills/herdr-orch/scripts/README.md]]
@@ -13,15 +13,15 @@ Show the remaining subscription quota of each herdr-orch provider in the Herdr t
 * Summary
 *Level:* MVP · *Tests:* smoke · *Docs:* README
 
-Herdr plugin v1 cannot add tab-bar or footer items. The display is therefore a `[ui] tab_bar_right` command entry that runs `oh usage --format status`. `tab_bar_position = "bottom"` turns the tab row into a footer. The plugin adds a popup detail pane and an action that prints the config stanza for installs that Home Manager does not manage. On this machine, Home Manager links `~/.config/herdr/config.toml` to the live file `agents/herdr/config.toml`.
+Herdr plugin v1 cannot add tab-bar or footer items, so the display is a `[ui] tab_bar_right` command entry that runs `oh usage --format status` (for example `anthropic 96%s 36%w | openai-codex 88%w`); `tab_bar_position = "bottom"` turns the tab row into a footer. The `cormacc.herdr-orch` plugin adds a popup pane with `oh usage --format text` as a per-provider list, and an action that prints the config stanza for installs that Home Manager does not manage. On this machine, Home Manager links `~/.config/herdr/config.toml` out of store to `agents/herdr/config.toml`. Routing gives an unscoped candidate the `all_models` scope, so Opus, Sonnet and Haiku receive quota credit without config.
 
 ** Scope
 *** In scope
-- `oh usage --format status`: one plain line for the tab bar. Contract in `skills/herdr-orch/scripts/docs/contract.md` section 'Usage'; user docs in `skills/herdr-orch/README.org` and `skills/herdr-orch/scripts/README.md`.
-- `herdr-plugin/` minimal manifest (id `cormacc.herdr-orch`) with a `quota` popup pane and a `quota-stanza` action.
-- Amendment of the wrapper record `design/log/2026-08-16-herdr-plugin-wrapper-for-herdr-orch.org`, so that its scaffold task extends this manifest and does not replace it.
-- Tracked Herdr config at `agents/herdr/config.toml`, with the `tab_bar_right` entry and the current keys of `~/.config/herdr/config.toml`.
-- dotfiles `agents.nix`: an out-of-store link from `~/.config/herdr/config.toml` to that file. This is a separate commit in the parent dotfiles repository.
+- `oh usage --format status`, and `--format text` as a per-provider list.
+- `herdr-plugin/` manifest (id `cormacc.herdr-orch`) with a `quota` popup pane and a `quota-stanza` action; the wrapper record (task 9f667467) extends it.
+- Tracked Herdr config `agents/herdr/config.toml` and its dotfiles `agents.nix` link.
+- Routing default: an unscoped candidate uses `all_models`; Fable selects `model:fable`.
+- macOS test runs: the runner skips `^:linux-only` measurement tests and names them.
 
 *** Out of scope
 - Doctor and setup panes, link classification and other wrapper scope (task 9f667467).
@@ -33,61 +33,75 @@ Herdr plugin v1 cannot add tab-bar or footer items. The display is therefore a `
 
 ** Acceptance
 *** Core functionality
-- [ ] `oh usage --format status` prints exactly one line and exits 0 when the evidence is fresh.
-- [ ] Each provider with a `:quota-provider` row is shown with its `localProvider` name.
-- [ ] Rows with no `:quota-provider` (for example `lemonade`) are not shown.
-- [ ] A fresh provider shows `percentRemaining` for each `session`, `weekly` and `monthly` window, labelled by kind, for example `anthropic 82%s 64%w`.
-- [ ] A provider with `auth_required` status shows `auth?`.
-- [ ] A provider with `rate_limited` status shows `rl?`.
-- [ ] A provider that is unavailable for any other reason shows `err?`.
-- [ ] A stale provider has a `~` suffix on its percentages.
-- [ ] When every quota provider reports `missing-executable` or `wrong-version`, the line is `quota: setup?`.
-- [ ] `--provider` and `--fresh` have the same effect with `status` as with `json`.
-- [ ] `--detail` with `status` fails with the existing markdown-only usage error.
-- [ ] `herdr plugin link <checkout>/herdr-plugin` registers `cormacc.herdr-orch` on the installed Herdr.
-- [ ] `herdr plugin pane open --plugin cormacc.herdr-orch --entrypoint quota` opens a popup that shows `oh usage --format text` and refreshes every 60 s.
-- [ ] `herdr plugin action invoke cormacc.herdr-orch.quota-stanza` writes a `tab_bar_right` stanza to the plugin log, with the absolute path of the checkout's `oh`.
-- [ ] `~/.config/herdr/config.toml` is a symlink that resolves to `~/dotfiles/agents/herdr/config.toml`.
-- [ ] `herdr config check` reports no errors for the tracked config.
-- [ ] After `herdr server reload-config`, the tab row shows the status line.
+- [X] `oh usage --format status` prints exactly one line and exits 0 when the evidence is fresh → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `usage-status-renders-one-line-for-a-status-bar`
+- [X] Each provider with a `:quota-provider` row is shown with its `localProvider` name.
+- [X] Rows with no `:quota-provider` (for example `lemonade`) are not shown → test:`skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` `usage-status-markers-cover-every-state`
+- [X] A fresh provider shows `percentRemaining` for each `session`, `weekly` and `monthly` window, labelled by kind, for example `anthropic 82%s 64%w`.
+- [X] A provider with `auth_required` status shows `auth?`.
+- [X] A provider with `rate_limited` status shows `rl?`.
+- [X] A provider that is unavailable for any other reason shows `err?`.
+- [X] A stale provider has a `~` suffix on its percentages.
+- [X] When every quota provider reports `missing-executable` or `wrong-version`, the line is `quota: setup?`.
+- [X] `--provider` and `--fresh` have the same effect with `status` as with `json`. `--provider` is tested; `--fresh` shares the `usage!` path and has no status-specific test.
+- [X] `--detail` with `status` fails with the existing markdown-only usage error (exit 2).
+- [X] `herdr plugin link <checkout>/herdr-plugin` registers `cormacc.herdr-orch` on the installed Herdr.
+- [X] `herdr plugin pane open --plugin cormacc.herdr-orch --entrypoint quota` opens a popup that shows `oh usage --format text` and refreshes every 60 s.
+- [X] `herdr plugin action invoke cormacc.herdr-orch.quota-stanza` writes a `tab_bar_right` stanza to the plugin log, with the absolute path of the checkout's `oh` → test:`scripts/test-herdr-plugin.bb` `stanza-names-the-checkout-oh-and-bounded-timing`
+- [X] `~/.config/herdr/config.toml` is a symlink that resolves to `~/dotfiles/agents/herdr/config.toml`.
+- [X] `herdr config check` reports no errors for the tracked config.
+- [X] After `herdr server reload-config`, the tab row shows the status line.
 
 *** Edge cases
-- [ ] With no git root at the active pane's cwd, the command uses the home and packaged config layers.
-- [ ] In a project with `.agents/subagents/config.edn`, the line follows that project's `:providers`.
-- [ ] The tab-bar `timeout_seconds` exceeds the 60 s collection budget of `oh usage`.
-- [ ] Every plugin script path derives from `HERDR_PLUGIN_ROOT`. No hard-coded checkout path appears in `herdr-plugin/`.
+- [X] With no git root at the active pane's cwd, the command uses the home and packaged config layers → test:`scripts/test-herdr-plugin.bb` `pane-prints-text-usage-once`
+- [X] In a project with its own herdr-orch config (.agents/subagents/config.edn), the line follows that project's `:providers`. Covered through the shared `usage!` config path (`usage-rendering-reports-allowlisted-provider-evidence`), not by a status-specific test.
+- [X] The tab-bar `timeout_seconds` exceeds the 60 s collection budget of `oh usage`.
+- [X] Every plugin script path derives from `HERDR_PLUGIN_ROOT`. No hard-coded checkout path appears in `herdr-plugin/` → test:`scripts/test-herdr-plugin.bb` `plugin-files-hold-no-checkout-path`
 
 *** Anti-criteria
-- [ ] Must not: install software, start authentication, or call quota-axi outside `herdr-orch.usage/usage-for`.
-- [ ] Must not: write to Herdr config from the plugin. The stanza action only prints.
-- [ ] Must not: print identity, raw errors or any field that the `oh usage` allowlist removes.
-- [ ] Must not: change the `json`, `markdown` or `text` output of `oh usage`.
+- [X] Must not: install software, start authentication, or call quota-axi outside `herdr-orch.usage/usage-for`.
+- [X] Must not: write to Herdr config from the plugin. The stanza action only prints.
+- [X] Must not: print identity, raw errors or any field that the `oh usage` allowlist removes.
+- [ ] Must not: change the `json`, `markdown` or `text` output of `oh usage`. Reversed for `text` on 2026-11-05 at the operator's request: the pane, its only consumer, was hard to read as one line per provider. `json` and `markdown` are unchanged.
 
 ** Decisions
 - Display through a `tab_bar_right` command entry :: plugin v1 has no native tab-bar or footer API; `tab_bar_position = "bottom"` is the footer option. Rejected:
   - Plugin-provided footer or tab-bar widget: not in plugin v1.
-- Render in `oh` as `--format status` :: one renderer beside the other `oh usage` renderers, covered by the herdr-orch suite; the plugin stays an adapter. Rejected:
+- Render in `oh` (`--format status` and `text`) :: one place for every `oh usage` renderer, covered by the herdr-orch suite; the plugin stays an adapter. Rejected:
   - Plugin-local Babashka script over `oh usage --format json`: a second renderer outside the herdr-orch tests.
   - Direct quota-axi call, as in the prior art: duplicates discovery, version pinning, bounds and the allowlist.
 - Quota parts ship inside the `cormacc.herdr-orch` wrapper plugin :: one plugin per skill; the wrapper scaffold task extends this manifest. Rejected:
   - Separate quota plugin: a second id and README for one pane and one action.
   - No plugin: no detail pane, and no stanza help for installs without Home Manager.
-- Unavailable providers show a short marker :: a silent blank hides a broken setup. Herdr also clears the entry on a non-zero exit, so `status` exits 0 when it prints a marker line. Rejected:
+- Unavailable providers show a short marker :: a silent blank hides a broken setup. Herdr clears the entry after a non-zero exit, so `status` exits 0 for every marker. Fresh evidence without a session, weekly or monthly window shows `?`. Rejected:
   - Hide unavailable providers.
-- Window labels come from `kind` (`s`, `w`, `m`) :: the evidence has no window duration, so `5h` or `7d` labels would be guesses. `model` windows (for example `seven_day_opus`) show only in the popup, to keep the line short.
+- Window labels come from `kind` (`s`, `w`, `m`) :: the evidence has no window duration, so `5h` or `7d` labels would be guesses. `model` windows show only in the pane, to keep the line short.
+- `text` is a heading per provider with `- name :: value` lines and UTC reset times :: chosen by the operator for the pane. Rejected:
+  - A two-column table: reset times wrap in the popup.
+- An unscoped routing candidate uses the `all_models` scope also when other scopes exist :: least configuration; only a model with its own limit (today Fable, `model:fable`) needs a selector. Rejected:
+  - Explicit `:quota-scope "all_models"` only: a selector on every Claude model.
+  - The lowest known scope: under-credits Opus, Sonnet and Haiku when Fable's own limit is lower.
 - Herdr config lives in `agents/herdr/config.toml`, linked with `mkOutOfStoreSymlink` from `agents.nix` :: live-editable, the same pattern as the other agent config. Rejected:
-  - Nix-store copy: read-only, so Herdr's own writes (for example `onboarding = false`) fail.
+  - Home Manager `programs.herdr.settings`: a store copy, or with `mutableSettings` a merge into an untracked file; neither is live-editable from the repository.
 - The tab-bar command runs `~/.agents/skills/herdr-orch/scripts/oh`, with `interval_seconds = 60` and `timeout_seconds = 75` :: Herdr runs it with the active pane's cwd, so the project config layer applies. Upstream `--max-age 5m` limits vendor reads to one in each 5 minutes.
+- `^:linux-only` test metadata :: the contract refuses measurement outside Linux; the runner skips and names those tests rather than letting them fail or pass silently. Rejected:
+  - A Linux guard inside each test body: a silent pass on macOS.
+
+** Shipped
+- MODIFIED :: `skills/herdr-orch/scripts/docs/contract.md` -- 'Usage' defines the `status` and `text` formats; 'Routing' makes `all_models` the default scope.
+- MODIFIED :: `skills/herdr-orch/README.org`, `skills/herdr-orch/scripts/README.md` -- the status format, the `all_models` default, and a pointer to the plugin.
+- ADDED :: `herdr-plugin/` with `README.md`; `herdr/config.toml`; `scripts/test-herdr-plugin.bb` in `bb test`.
+- MODIFIED :: `skills/org-tasks/scripts/docs/test-map.md`, `skills/herdr-orch/scripts/AGENTS.md` -- `^:linux-only` skipping.
+- MODIFIED :: dotfiles `agents.nix` and `AGENTS.md` -- the Herdr config link.
+
+** Gotchas
+- On macOS, Claude Code keeps its live credential in the Keychain, and `~/.claude/.credentials.json` can be stale. quota-axi reports `auth_required` until the operator runs `quota-axi --provider claude --allow-keychain-prompt` once and chooses "Always Allow"; later reads without the flag then succeed.
+- Herdr runs tab-bar commands through `/bin/sh -lc` with the server's environment. On nix-darwin, `/etc/profile` rebuilds `PATH` from `$USER`, so `bb` and `node` come from `/etc/profiles/per-user/<user>/bin`.
 
 ** Risks
-- quota-axi is not installed on this machine: on 2026-11-05 `oh usage` reported `missing-executable` for every quota provider. The live check needs an operator-approved `quota-axi-setup install` and native sign-ins. Without them, only the `quota: setup?` path can be verified live.
-- `/bin/sh -lc` in the Herdr server environment may not have `bb` or `node` on PATH, especially on macOS. The live verification task checks this; the fix is an absolute interpreter path in the stanza.
-- A Herdr command that rewrites `config.toml` by rename (for example `herdr config reset-keys`, which backs up the file) can replace the symlink with a regular file. Accepted: `ls -l` shows it, and the next Home Manager switch reports the conflict.
-- Home Manager has no `backupFileExtension` in this flake, so the switch fails while `~/.config/herdr/config.toml` is a regular file. The config task moves the file before the switch.
-- Pinned upstream Codex can refresh native credentials although `--no-credential-refresh` is passed. A periodic caller makes this more frequent; the 5-minute upstream reuse limits it.
-- On macOS, Claude Code keeps its live credential in the Keychain. `~/.claude/.credentials.json` can be stale. Without Keychain access, quota-axi reports `auth_required` for `claude`: on 2026-11-05 `quota-axi auth` showed the file `expired` and the Keychain `skipped` (`keychain_prompt_required`). `oh` never passes `--allow-keychain-prompt`. The operator must grant access once in an interactive terminal.
-- Ownership of `herdr-plugin/herdr-plugin.toml` overlaps with task 9f667467. The manifest task amends that record in the same change.
-- The tab-bar `command` entry type has no documented minimum Herdr version. The manifest floor stays at 0.9.1; `herdr config check` on the installed 0.9.5 is the evidence.
+- A Herdr command that rewrites `config.toml` by rename (for example `herdr config reset-keys`) can replace the Home Manager link with a regular file. Accepted: `ls -l` shows it, and the next switch reports the collision.
+- Pinned upstream Codex can refresh native credentials although `--no-credential-refresh` is passed. The 60 s tab-bar caller makes this more frequent; the 5-minute upstream reuse limits it.
+- A future model-specific quota scope (for example `model:opus`) is routed on `all_models` until `config.edn` names it.
+- The tab-bar `command` entry has no documented minimum Herdr version. The manifest floor stays at 0.9.1; evidence is Herdr 0.9.5 only.
 
 ** Follow-ups
 - Wrapper doctor/setup scope continues in task 9f667467.
@@ -105,12 +119,7 @@ CLOSED: [2026-11-05 Thu 01:47]
 - State "STARTED" from "TODO" [2026-11-05 Thu 01:44]
 - State "DONE" from "STARTED" [2026-11-05 Thu 01:47]
 :END:
-Acceptance criteria:
-- All `oh usage --format status` criteria in `** Acceptance`, asserted in herdr-orch tests with the `quota-axi` fixture and `FAKE_QUOTA_REPORT`.
-- `contract.md` section 'Usage', the `usage` help text in `cli.clj`, `README.org` and `scripts/README.md` list the `status` format.
-- Must not: change the existing `json`, `markdown` or `text` output.
-
-Pointer: `usage-text` and `usage!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`. Another session has uncommitted edits in `cli.clj` that do not touch usage; expect a small merge.
+Delivered `usage-status` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`.
 
 ** DONE [#B] Add the quota pane and stanza action to `herdr-plugin/` :herdr_orch:
 CLOSED: [2026-11-05 Thu 01:50]
@@ -124,13 +133,7 @@ CLOSED: [2026-11-05 Thu 01:50]
 - State "STARTED" from "TODO" [2026-11-05 Thu 01:48]
 - State "DONE" from "STARTED" [2026-11-05 Thu 01:50]
 :END:
-Acceptance criteria:
-- `herdr-plugin/herdr-plugin.toml` declares id `cormacc.herdr-orch`, `min_herdr_version = "0.9.1"`, `platforms = ["linux", "macos"]`, popup pane `quota`, action `quota-stanza`, and no build, startup or event entries.
-- The pane and the action resolve `oh` as `$HERDR_PLUGIN_ROOT/../skills/herdr-orch/scripts/oh`.
-- The stanza names `interval_seconds = 60` and `timeout_seconds = 75`.
-- A smoke test runs both scripts with a fake `HERDR_PLUGIN_ROOT` and the quota-axi fixture, and checks the pane's first screen and the stanza text.
-- `herdr-plugin/README.md` documents the pane, the action and the footer option `tab_bar_position = "bottom"`.
-- The wrapper record's `** Scope`, `** Acceptance` and scaffold task 29d623ad say that the manifest already exists, with the quota pane and action.
+Delivered the manifest, pane, action and smoke test; the wrapper record now extends the manifest.
 
 ** DONE [#B] Track the Herdr config in `agents/herdr/` and link it :herdr_orch:
 CLOSED: [2026-11-05 Thu 08:08]
@@ -144,12 +147,7 @@ CLOSED: [2026-11-05 Thu 08:08]
 - State "STARTED" from "TODO" [2026-11-05 Thu 01:51]
 - State "DONE" from "STARTED" [2026-11-05 Thu 08:08]
 :END:
-Acceptance criteria:
-- `agents/herdr/config.toml` contains the current keys of `~/.config/herdr/config.toml` and a `tab_bar_right` command entry for `~/.agents/skills/herdr-orch/scripts/oh usage --format status`.
-- dotfiles `agents.nix` adds `"${config.home.homeDirectory}/.config/herdr/config.toml" = link "${agentsRoot}/herdr/config.toml";`, with a comment that gives the reason.
-- dotfiles `AGENTS.md` lists the new link in its `agents.nix` section.
-- Before the switch, the old file is saved under `.tmp/` and then removed.
-- Must not: link the whole `~/.config/herdr/` directory, which holds sockets, logs and session state.
+Delivered; the original file is saved in the local scratch directory .tmp/herdr-quota/herdr-config-backup/.
 
 ** DONE [#B] Live verification on this machine :herdr_orch:
 CLOSED: [2026-11-05 Thu 08:08]
@@ -162,20 +160,13 @@ CLOSED: [2026-11-05 Thu 08:08]
 :LOGBOOK:
 - State "DONE" from "TODO" [2026-11-05 Thu 08:08]
 :END:
-Acceptance criteria:
-- `herdr config check` passes, and after `herdr server reload-config` the tab row shows the status line.
-- Without quota-axi, the tab row shows `quota: setup?`.
-- With quota-axi installed (only with operator approval), the tab row shows percentages for `anthropic` and `openai-codex`.
-- The plugin links, its pane opens and the stanza action logs its block.
-- Record in `* Validation` whether `/bin/sh -lc` found `bb` and `node`.
+See `* Validation`.
 
 * Implementation
-- Baseline 2026-11-05 on macOS, after operator-approved `quota-axi-setup install` (0.1.69): `oh usage` reported `openai-codex` fresh with one `weekly` window (89% remaining), `anthropic`, `kimi` and `zai` `auth_required`, and `lemonade` local. After Keychain access was granted, `anthropic` was fresh with `five_hour` (`session`, 68%), `seven_day` (`weekly`, 39%) and `model:fable` (`model`, 85%) windows. The edited config has no `kimi` or `zai` rows. Fixture for status-format tests: a fresh row with session, weekly and model windows, an `auth_required` row, and a local row.
-- Routing: an unscoped vector-alias candidate uses the `all_models` scope also when quota-axi reports model scopes; Fable selects `model:fable`. Before, multi-scope evidence left Opus, Sonnet and Haiku unknown.
-- `oh usage --format text` is a per-provider list for the quota pane; markdown stays one line per provider.
-- macOS test runs skip `^:linux-only` measurement tests and name them; the contract refuses measurement outside Linux.
+- `oh usage` reads the config at each call, so a `config.edn` edit needs no reload. An invalid config makes the status command exit non-zero, and Herdr then clears the entry.
 
 * Validation
 - 2026-11-05, macOS, Herdr 0.9.5: the operator saw the status line in the tab row and the quota pane open and refresh. The entry command, run as `/bin/sh -lc` with the Herdr server's `PATH` and `USER`, found `bb` and `node` and exited 0.
 - `~/.config/herdr/config.toml` resolves through the Home Manager store link to `~/dotfiles/agents/herdr/config.toml` after `drs`.
 - `herdr config check` passed for the tracked config and failed for an `interval_seconds = 0` control.
+- `bb test` on macOS: 0 Clojure failures with 27 Linux-only tests skipped and named. `test-check-diagrams.bb` `mermaid-rendering` fails because the Nix `mermaid-cli` finds no `chrome-headless-shell` on macOS; this change does not touch it.
