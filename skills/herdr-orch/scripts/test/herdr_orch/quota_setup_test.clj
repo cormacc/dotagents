@@ -4,7 +4,8 @@
             [cheshire.core :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]
-            [herdr-orch.test-support :as support]))
+            [herdr-orch.test-support :as support]
+            [herdr-orch.usage :as usage]))
 
 (def root (str (fs/canonicalize ".")))
 (def bb (str (fs/which "bb")))
@@ -61,6 +62,25 @@
             (str/split-lines (slurp (get env "FAKE_NPM_LOG")))))
      (is (:ready (run-setup (assoc env "FAKE_QUOTA_VERSION" "9.9.9") "check")) "managed executable wins over PATH")
      (is (not (:ready (run-setup (assoc env "FAKE_INSTALLED_VERSION" "9.9.9") "install")))))))
+
+(deftest package-dependency-precedes-managed-and-path
+  (fixture
+   (fn [dir env]
+     (let [bin (fs/path (get env "HERDR_ORCH_PACKAGE_ROOT") "node_modules/.bin")]
+       (is (= "wrong-version" (:reason (run-setup (assoc env "FAKE_QUOTA_VERSION" "9.9.9") "check")))
+           "positive control: PATH fallback is selected without a package dependency")
+       (fs/create-dirs bin)
+       (executable! (fs/path bin "quota-axi") "echo 0.1.69\n")
+       (is (:ready (run-setup (assoc env "FAKE_QUOTA_VERSION" "9.9.9") "check")) "package dependency wins over PATH")
+       (is (not (:ready (run-setup (assoc env "FAKE_INSTALLED_VERSION" "9.9.9") "install"))) "positive control: wrong managed install")
+       (is (:ready (run-setup env "check")) "package dependency wins over a wrong managed install")
+       (fs/delete-tree (fs/path (get env "XDG_DATA_HOME") "herdr-orch"))
+       (executable! (fs/path bin "quota-axi") "echo 9.9.9\n")
+       (is (= "wrong-version" (:reason (run-setup env "check"))) "a wrong package version does not fall through")))))
+
+(deftest package-pin-matches-collector-pin
+  (let [manifest (json/parse-string (slurp (str (fs/path root "package.json"))) true)]
+    (is (= usage/version (get-in manifest [:dependencies :quota-axi])))))
 
 (deftest node-and-install-failures-are-fixed-and-not-ready
   (fixture

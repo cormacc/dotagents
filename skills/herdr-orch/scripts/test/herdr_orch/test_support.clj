@@ -20,6 +20,7 @@
     {"PATH" (str bin ":" (System/getenv "PATH")) "HOME" (str home)
      "CODEX_HOME" (str (fs/path home ".codex")) "CLAUDE_CONFIG_DIR" (str (fs/path home ".claude"))
      "XDG_DATA_HOME" (str (fs/path home ".local/share"))
+     "HERDR_ORCH_PACKAGE_ROOT" (str (fs/path dir "package"))
      "XDG_CONFIG_HOME" (str (fs/path home ".config")) "XDG_CACHE_HOME" (str (fs/path home ".cache"))
      "FAKE_QUOTA_REPORT" report "FAKE_QUOTA_LOG" (str (fs/path dir "quota-calls"))
      "FAKE_VENDOR_LOG" (str (fs/path dir "vendor-escapes"))}))

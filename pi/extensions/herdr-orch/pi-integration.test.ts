@@ -41,6 +41,8 @@ function writeUsageFixture(cwd: string): NodeJS.ProcessEnv {
     CODEX_HOME: join(cwd, ".codex"),
     CLAUDE_CONFIG_DIR: join(cwd, ".claude"),
     XDG_DATA_HOME: join(cwd, ".local/share"),
+    // Keep the checkout's own quota-axi dependency out of discovery.
+    HERDR_ORCH_PACKAGE_ROOT: join(cwd, "package"),
     XDG_CONFIG_HOME: join(cwd, ".config"),
     XDG_CACHE_HOME: join(cwd, ".cache"),
     FAKE_QUOTA_REPORT: fixture,

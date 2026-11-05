@@ -18,7 +18,7 @@ Use this recipe for an authorised reproduction that needs a disposable server, n
 “Spawn a subagent” means a fresh context, which is the default. Use a named persona when its role helps the stage, or omit the persona for a fresh persona-less child. Capture each stage before preparing its successor, and give the successor the captured, existence-validated artefacts rather than relying on an earlier child's pane context.
 
 ```sh
-OH="$HOME/.agents/skills/herdr-orch/scripts/oh"
+OH="<skill-dir>/scripts/oh"   # <skill-dir> as in SKILL.md
 "$OH" task start worker --worktree new --task-file .tmp/stage-1.md
 # Record the complete UUID as STAGE_1 from the start envelope.
 "$OH" task collect "$STAGE_1" --wait --timeout 1800000

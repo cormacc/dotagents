@@ -1,6 +1,6 @@
 # herdr-orch pi adapter
 
-Exposes the `herdr-orch` skill's `oh` CLI to pi. The extension invokes the co-installed launcher at `~/.agents/skills/herdr-orch/scripts/oh`, or `$HERDR_ORCH_BIN` when set. It has no alternate implementation: each call runs `oh` and reads its `herdr-orch/v1` JSON envelope.
+Exposes the `herdr-orch` skill's `oh` CLI to pi. The extension invokes `$HERDR_ORCH_BIN` when set, else the co-installed launcher at `~/.agents/skills/herdr-orch/scripts/oh`, else the launcher of the skill packaged with the extension (`../../../skills/herdr-orch/scripts/oh`). It has no alternate implementation: each call runs `oh` and reads its `herdr-orch/v1` JSON envelope.
 
 ## Tools
 
@@ -21,7 +21,8 @@ Always-loaded prompt guidelines retain the explicit Herdr-request boundary and p
 - The output is a session entry (`appendEntry` with the `herdr-orch-help` type), so it never enters model context. The skill already gives the model this information.
 - In the TUI, `/oh usage` runs `oh usage` twice, with and without `--detail`; bare `/oh` also runs `oh roster` in both forms. The entry stores both renderings. The tool-output expand key (default `ctrl+o`) switches to the detail rendering: roster detail adds file paths, timeouts, retro gating, every model alias, and the resolution layers; usage detail adds safe scope bounds and reset times.
 - RPC mode shows the detail rendering as a notification. JSON and print modes do not render listings.
-- `/oh setup` checks shared collector readiness without reading quotas. In the TUI, missing or wrong versions offer a confirmation before a user-local download with package lifecycle scripts disabled. Bare `/oh` and `/oh usage` perform the same readiness check once before their parallel renderings. Decline or cancellation never installs; RPC, JSON and print modes give manual setup instructions instead of waiting for confirmation. No startup, login, background or routing path installs software. The shared pin, target and process limits are in [../../../skills/herdr-orch/scripts/docs/contract.md#Usage](../../../skills/herdr-orch/scripts/docs/contract.md#usage).
+- The package manifest declares `quota-axi` as a dependency, so a Pi package install or the editable route's `npm ci` provides the collector. `/oh setup` is the fallback when no collector is found.
+- `/oh setup` checks shared collector readiness without reading quotas. In the TUI, missing or wrong versions offer a confirmation before a user-local download with package lifecycle scripts disabled. Bare `/oh` and `/oh usage` perform the same readiness check once before their parallel renderings. Decline or cancellation never installs; RPC, JSON and print modes give manual setup instructions instead of waiting for confirmation. No startup, login, background or routing path of the extension installs software. The shared pin, target and process limits are in [../../../skills/herdr-orch/scripts/docs/contract.md#Usage](../../../skills/herdr-orch/scripts/docs/contract.md#usage).
 - `oh roster` runs in the session cwd, so the project layer is the git root of that cwd. Persona, trait, and model listings therefore show what a spawn would use. The `traits` extension expands a project-layer `%name` only in a trusted project, so an untrusted project's trait can appear in `/oh traits` and still not expand interactively.
 - `/oh workflows` lists ordinary skills whose YAML frontmatter contains `metadata: {herdr-orch: workflow}`. It reuses each skill's name and description; expanded output adds its source and path. This is catalogue membership, not execution or permission to delegate. The CLI owns skill-root discovery and shadowing ([../../../skills/herdr-orch/scripts/docs/contract.md#Workflow skill discovery](../../../skills/herdr-orch/scripts/docs/contract.md#workflow-skill-discovery)).
 - The output contract is in [../../../skills/herdr-orch/scripts/docs/contract.md#Roster](../../../skills/herdr-orch/scripts/docs/contract.md#roster).
@@ -29,7 +30,7 @@ Always-loaded prompt guidelines retain the explicit Herdr-request boundary and p
 
 ## Dependencies
 
-Pi 1.5.0 or newer, Babashka and the co-installed dotagents skills tree. Confirmed setup uses the supported Pi `exec` timeout/cancellation API. The shared setup script and guardian bound subprocess output and cleanup, discard raw diagnostics, and return only fixed status fields; the adapter rejects status output larger than 4 KiB. `/oh` does not need Herdr: `oh roster` and `oh usage` never call it.
+Pi 1.5.0 or newer, Babashka, the `herdr-orch` skill (co-installed or packaged), and the `quota-axi` package dependency for usage reporting. Confirmed setup uses the supported Pi `exec` timeout/cancellation API. The shared setup script and guardian bound subprocess output and cleanup, discard raw diagnostics, and return only fixed status fields; the adapter rejects status output larger than 4 KiB. `/oh` does not need Herdr: `oh roster` and `oh usage` never call it.
 
 ## Keybindings
 

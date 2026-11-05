@@ -71,10 +71,26 @@
                         (fs/path (or (not-empty (System/getenv "HOME")) (System/getProperty "user.home")) ".local/share"))
                 "herdr-orch/quota-axi")))
 
-(defn executable []
-  (let [managed (fs/file (install-directory) "node_modules/.bin/quota-axi")]
-    (if (and (.isFile managed) (.canExecute managed)) (str managed)
-        (some-> (fs/which "quota-axi") str))))
+(defn package-directory
+  "Root of the checkout or Pi package that contains this skill. A Pi package install
+  puts its declared quota-axi dependency in the root node_modules. The environment
+  override lets tests isolate discovery from the developer's checkout."
+  []
+  (or (not-empty (System/getenv "HERDR_ORCH_PACKAGE_ROOT"))
+      (some-> (io/resource "herdr_orch/usage.clj") io/file fs/canonicalize
+              ;; src/herdr_orch/usage.clj -> skills/herdr-orch/scripts/src -> root
+              (fs/path "../../../../../..") fs/normalize str)))
+
+(defn executable
+  "First present candidate: package dependency, managed user-local install, then PATH.
+  A present candidate with a wrong version does not fall through to the next one."
+  []
+  (or (some->> [(some-> (package-directory) (fs/file "node_modules/.bin/quota-axi"))
+                (fs/file (install-directory) "node_modules/.bin/quota-axi")]
+               (filter #(and % (.isFile %) (.canExecute %)))
+               first
+               str)
+      (some-> (fs/which "quota-axi") str)))
 
 (defn version-failure [executable]
   (if-not executable "missing-executable"
@@ -138,7 +154,7 @@
 (defn usage-for
   "Collect an allowlisted evidence object for configured local provider names.
   Options: :providers limits collection; :fresh requests zero upstream reuse age.
-  Prefer the managed user-local executable, then PATH; never install software."
+  Discovery order is in `executable`; collection never installs software."
   ([config] (usage-for config {}))
   ([config {:keys [providers fresh]}]
    (let [names (or providers (sort (keys (:providers config))))

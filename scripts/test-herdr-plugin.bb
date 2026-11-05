@@ -34,6 +34,7 @@
         (spit report (json/generate-string {:schemaVersion 6 :providers [(quota-row "claude" 61) (quota-row "codex" 42)]}))
         (f {"PATH" (str bin ":" (System/getenv "PATH")) "HOME" (str home)
             "XDG_DATA_HOME" (str (fs/path home ".local/share"))
+            "HERDR_ORCH_PACKAGE_ROOT" (str (fs/path dir "package"))
             "FAKE_QUOTA_REPORT" report "FAKE_QUOTA_LOG" (str (fs/path dir "quota-calls"))
             "HERDR_PLUGIN_ROOT" plugin}))
       (finally (fs/delete-tree dir)))))

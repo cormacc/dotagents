@@ -20,7 +20,7 @@ The `traits` launcher and root `bb.edn` task expose the shared interpolator to n
 
 The launcher canonicalises its own path with `cd -P` (the deployed `~/.agents/skills` is a *directory* symlink), uses the repository `bb.edn` when present, and falls back to `bb --deps-root <scripts> -Sdeps '{:paths ["src"]}'` for a bare skill subtree. It never `cd`s before `exec`, so the CLI's working directory is always the caller's -- that value becomes the child pane's `--cwd` and drives assignment-root/roster resolution. It has no additional Maven dependencies.
 
-Subscription reporting requires `quota-axi@0.1.69` and Node >=22.19. Run `~/.agents/skills/herdr-orch/scripts/quota-axi-setup install` explicitly, or approve `/oh setup` in Pi's TUI. The shared script defaults to read-only `check`, which returns JSON readiness without reading quotas or authenticating. See [docs/contract.md#Usage](docs/contract.md#usage) for installation, discovery and failure limits. Collection and routing never install software. `oh usage` preserves upstream schema 5 or 6 in a `providers` array, uses only allowlisted evidence, and has no local cache, backoff, or stale guarantee. Its fixed 5 s version, 60 s collection, 2 s cleanup, and 1 MiB stdout limits return unknown evidence on failure. The packaged provider map reports Anthropic, Codex and local Lemonade; Kimi and Z.AI reporting requires an explicit provider override. `oh usage --format status` prints one line for a terminal status bar; [../../../herdr-plugin/README.md](../../../herdr-plugin/README.md) shows how to put it in Herdr's tab bar.
+Subscription reporting requires `quota-axi@0.1.69` and Node >=22.19. The repository `package.json` declares it as a dependency, so a Pi package install or `npm ci` in the checkout provides it. Without the package route, run `<skill-dir>/scripts/quota-axi-setup install` explicitly, or approve `/oh setup` in Pi's TUI. The shared script defaults to read-only `check`, which returns JSON readiness without reading quotas or authenticating. See [docs/contract.md#Usage](docs/contract.md#usage) for installation, discovery and failure limits. Collection and routing never install software. `oh usage` preserves upstream schema 5 or 6 in a `providers` array, uses only allowlisted evidence, and has no local cache, backoff, or stale guarantee. Its fixed 5 s version, 60 s collection, 2 s cleanup, and 1 MiB stdout limits return unknown evidence on failure. The packaged provider map reports Anthropic, Codex and local Lemonade; Kimi and Z.AI reporting requires an explicit provider override. `oh usage --format status` prints one line for a terminal status bar; [../../../herdr-plugin/README.md](../../../herdr-plugin/README.md) shows how to put it in Herdr's tab bar.
 
 Spawning verbs require Herdr 0.9.1 or newer on both the client and the running server. Preflight reads both from `herdr status --json` and refuses an older or unknown endpoint before allocating a ledger entry or touching a pane ([docs/contract.md#Preconditions](docs/contract.md#preconditions)).
 
@@ -75,7 +75,7 @@ Command index. [docs/contract.md](docs/contract.md) owns precedence, guards, ref
 A `WAITING` item is not completion -- only a validated terminal result item is.
 
 ```sh
-OH="$HOME/.agents/skills/herdr-orch/scripts/oh"
+OH="<skill-dir>/scripts/oh"   # <skill-dir>: e.g. ~/.agents/skills/herdr-orch
 "$OH" task run scout --task 'Find the relevant source files.' --timeout 600000
 "$OH" task start reviewer --task-file assignment.md
 "$OH" task collect <full-task-uuid> --wait --timeout 600000

@@ -2,7 +2,7 @@
 
 Agent skills, Pi extensions, Hermes Desktop plugins, prompts, custom subagents, and packaging metadata used by multiple coding harnesses. The repository is both an editable source tree and the source of the narrower **`@cormacc/agent-org-memory`** package.
 
-The package bundle contains the org-mode task-memory protocol (`org-tasks`, `org-plan`, `org-jira`), its Pi implementations (`tasks`, `jira`, `emacsclient`), and its native Hermes Desktop adapter. Everything else remains available through the source/submodule routes described below, not through that package slice.
+The package bundle contains the org-mode task-memory protocol (`org-tasks`, `org-plan`, `org-jira`), its Pi implementations (`tasks`, `jira`, `emacsclient`), its native Hermes Desktop adapter, and Herdr orchestration (the `herdr-orch` skill and Pi extension). Everything else remains available through the source/submodule routes described below, not through that package slice.
 
 ## Repository layout
 
@@ -16,7 +16,7 @@ dotagents/
 ├── RETROLOG.org              # retro evidence behind the rules in AGENTS.md
 ├── TASKS*.org                # repository task memory
 ├── package.json              # agent-org-memory manifest + root checks
-├── package-lock.json         # root validation dependencies
+├── package-lock.json         # package and root validation dependencies
 ├── bb.edn / deps.edn         # ot Babashka/tools.deps policy
 ├── skills/                   # generic cross-agent skills; ot lives under org-tasks/scripts
 │   └── herdr-orch/subagents/ # packaged Herdr persona defaults
@@ -50,13 +50,15 @@ npx skills add cormacc/dotagents --skill org-tasks --agent claude-code
 
 `~/.agents/skills/` is a cross-agent convention used by this setup. Pi also discovers it. Pi-specific skills under `pi/skills/` assume matching pi extensions and are not part of the generic skill route.
 
-### Org-memory package
+### Pi package
 
-The root `package.json` exposes exactly three Pi extensions, three skills, and the Hermes adapter:
+The root `package.json` exposes four Pi extensions, four skills, and the Hermes adapter:
 
-- `pi/extensions/{tasks,jira,emacsclient}`
-- `skills/{org-tasks,org-plan,org-jira}`
+- `pi/extensions/{tasks,jira,emacsclient,herdr-orch}`
+- `skills/{org-tasks,org-plan,org-jira,herdr-orch}`
 - `hermes/org-tasks/{desktop,plugin}`
+
+Its only runtime dependency is `quota-axi`, the subscription-usage collector of `herdr-orch`. Pi installs it into the package's `node_modules` when it installs the package. The `herdr-orch` extension runs the `oh` launcher of the bundled skill when `~/.agents/skills/herdr-orch` does not exist. The skill stays installable without Pi through the generic skill route; then run `skills/herdr-orch/scripts/quota-axi-setup install` for usage reporting. See [skills/herdr-orch/scripts/docs/contract.md#Usage](skills/herdr-orch/scripts/docs/contract.md#usage).
 
 Install from git or a checkout:
 
@@ -67,7 +69,7 @@ pi install /absolute/path/to/dotagents
 
 The npm name is reserved but not currently published. The package route does **not** activate the Hermes plugin, configure task roots, install custom agents, prompts, `pi/skills`, `pi/settings.json`, `pi/mcp.json`, Dirge files, `ot` as a shell command, or unrelated extensions. Package-only users must install `ot` separately (for example through `bbin`) and install/link the two Hermes artifacts as documented in [`hermes/org-tasks/README.org`](hermes/org-tasks/README.org).
 
-The npm `files` allowlist includes the selected source directories. Pi loads only manifest-declared entry points.
+The npm `files` allowlist includes the selected source directories, with their co-located tests. Pi loads only manifest-declared entry points.
 
 Pi records package installs in settings. Existing unpinned git checkouts advance when `pi update --extensions` or `pi update --all` runs; startup only reinstalls missing packages. A configured tag/commit remains pinned until the install spec is changed.
 
@@ -88,7 +90,7 @@ The consuming `agents.nix` links:
 
 Herdr persona definitions resolve project (`<git-root>/.agents/subagents/`) > home (`~/.agents/subagents/`) > packaged (`skills/herdr-orch/subagents/`). Home Manager manages `~/.agents/subagents/` (out-of-store, from this repo's `subagents/`) so the harness permission overrides ship to every host; it holds home overrides only, never the packaged persona defaults. The parallel `config.edn` chain replaces complete model-ID rows in the same precedence order and never uses a model or weight alias to select kind. The packaged weights are `heavy`, `middle`, `light`, and `feather`; their per-kind values are enumerated once, in [skills/herdr-orch/scripts/docs/contract.md#Model resolution](skills/herdr-orch/scripts/docs/contract.md#model-resolution).
 
-Activation fails early when the submodule is uninitialized. It installs local npm dependencies for chromium, pi-clojure, and dataspex when their manifests change. Chromium and pi-clojure now carry exact direct versions plus tracked lockfiles; the root check exercises those locks with `npm ci`.
+Activation fails early when the submodule is uninitialized. It runs `npm ci --ignore-scripts` in the checkout root when `package-lock.json` changes, which installs the package dependency `quota-axi` beside the root validation tools. It installs local npm dependencies for chromium, pi-clojure, and dataspex, with lifecycle scripts disabled, when their manifests change. Chromium and pi-clojure now carry exact direct versions plus tracked lockfiles; the root check exercises those locks with `npm ci`.
 
 This editable route intentionally preserves owner-local settings ownership: tracked `pi/settings.json` is live-linked and may be edited in the submodule. A clone-local `pi-settings` clean filter removes configured volatile fields (`lastChangelogVersion`, `deviceId`) before commit; it requires `jq` on PATH and is declared `required = true`. `defaultProvider` and `defaultModel` are tracked: pi saves them only when you press Ctrl+S on a model in `/model`. Under the dotfiles Home Manager wiring, activation runs the installer on every switch, so a changed field list reaches every clone; on any other clone run `./install-git-filter.sh` from the checkout root (idempotent; it exits early when the filter is current). A git command that rewrites the working tree (`git stash`, `git reset --hard`, `git checkout -- pi/settings.json`) writes back the committed copy without the stripped fields. The package route, by contrast, ships no settings.
 
@@ -103,7 +105,7 @@ The third-party `git:github.com/DietrichGebert/ponytail` package is no longer in
 - **Babashka (`bb`)** for `ot`; copying the scripts does not provide the runtime.
 - **Emacs/emacsclient** for Emacs-backed tools and task edit actions. Edit/open actions probe the server and can start `emacs --daemon`; direct eval/read/write tools still report connection/startup failures.
 - **Atlassian MCP** configured in `pi/mcp.json` (linked to `~/.pi/agent/mcp.json`; sign in with `pi mcp login atlassian`) for Jira network workflows.
-- Extension-local npm dependencies for chromium, pi-clojure, and dataspex on the editable route.
+- Root npm dependencies (`npm ci`), and extension-local npm dependencies for chromium, pi-clojure, and dataspex, on the editable route.
 
 ## Validation
 

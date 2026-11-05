@@ -5,7 +5,10 @@
  * `skills/herdr-orch/scripts/test/herdr_orch/cli_test.clj` against the fake-herdr call log.
  */
 
-import register from "./index.ts";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import register, { launcherPath } from "./index.ts";
 import { composeHelp, parseSection, rosterArgs, usageArgs } from "./help.ts";
 
 type Tool = { name: string; description: string; promptGuidelines?: string[]; execute: (id: string, params: any, signal?: AbortSignal) => Promise<unknown> };
@@ -358,6 +361,27 @@ same(await argv("herdr_layout", { action: "pane_split", focus: false }), ["pane"
   setupCalls.length = 0;
   await oh.handler("setup", ctx());
   same(setupCalls, [], "an already cancelled setup flow cannot spawn again");
+}
+
+{
+  // The packaged launcher lets a Pi package install run its bundled skill without ~/.agents.
+  const base = mkdtempSync(join(tmpdir(), "herdr-orch-launcher-"));
+  try {
+    const home = join(base, "home");
+    const extension = join(base, "package", "pi", "extensions", "herdr-orch");
+    const packaged = join(base, "package", "skills", "herdr-orch", "scripts", "oh");
+    const homeLauncher = join(home, ".agents", "skills", "herdr-orch", "scripts", "oh");
+    same(launcherPath(home, {}, extension), homeLauncher, "no launcher reports the documented home path");
+    mkdirSync(join(packaged, ".."), { recursive: true });
+    writeFileSync(packaged, "");
+    same(launcherPath(home, {}, extension), packaged, "packaged launcher is used without a home skill");
+    mkdirSync(join(homeLauncher, ".."), { recursive: true });
+    writeFileSync(homeLauncher, "");
+    same(launcherPath(home, {}, extension), homeLauncher, "home skill wins over the packaged launcher");
+    same(launcherPath(home, { HERDR_ORCH_BIN: "/override/oh" }, extension), "/override/oh", "override wins");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
 }
 
 if (failures > 0) {

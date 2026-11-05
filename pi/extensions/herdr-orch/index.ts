@@ -1,7 +1,9 @@
 import { getMarkdownTheme, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Box, Markdown, Text } from "@earendil-works/pi-tui";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
 import { composeHelp, parseSection, rosterArgs, usageArgs, SECTION_DESCRIPTIONS, SECTIONS, type Section } from "./help.ts";
 
@@ -113,8 +115,17 @@ const AgentParams = Type.Object({
   clearName: Type.Optional(Type.Boolean({ description: "Clear the current agent name for rename" })),
 });
 
-function launcherPath(): string {
-  return process.env.HERDR_ORCH_BIN ?? join(homedir(), ".agents", "skills", "herdr-orch", "scripts", "oh");
+/** Locate `oh` from an override, the global skills symlink, or the skill packaged with this extension. */
+export function launcherPath(
+  home = homedir(),
+  environment: NodeJS.ProcessEnv = process.env,
+  extensionDirectory = dirname(fileURLToPath(import.meta.url)),
+): string {
+  if (environment.HERDR_ORCH_BIN) return environment.HERDR_ORCH_BIN;
+  const homeLauncher = join(home, ".agents", "skills", "herdr-orch", "scripts", "oh");
+  const packagedLauncher = join(extensionDirectory, "../../../skills", "herdr-orch", "scripts", "oh");
+  // The home path stays the default so a missing launcher reports the documented location.
+  return existsSync(homeLauncher) || !existsSync(packagedLauncher) ? homeLauncher : packagedLauncher;
 }
 
 function isEnvelope(value: unknown): value is OhEnvelope {
@@ -199,7 +210,7 @@ export default function (pi: ExtensionAPI) {
     },
     handler: async (args, ctx) => {
       const setup = args.trim() === "setup";
-      const manual = "Run ~/.agents/skills/herdr-orch/scripts/quota-axi-setup install explicitly (Node >=22.19 and npm required).";
+      const manual = `Run ${join(dirname(launcherPath()), "quota-axi-setup")} install explicitly (Node >=22.19 and npm required).`;
       if (!ctx.hasUI) {
         if (setup) process.stderr.write(`${manual}\n`);
         return;

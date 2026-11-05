@@ -5,10 +5,10 @@ description: "Delegate work to Herdr subagents with the in-skill `oh` CLI: spawn
 
 # Herdr subagents
 
-Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md) safety rules and verify `HERDR_ENV=1` before delegation. That skill's layout default (a sibling pane, and no new tab unless the user asks) applies to raw layout control only, not to delegation placement: the configured placement is the user's standing request, so a child that `oh` puts in its own tab obeys that rule. `oh` requires Herdr 0.9.1 or newer on both the client and the running server; its preflight reads both from `herdr status --json` and refuses an older or unknown endpoint before allocating anything. For ordinary one-child delegation use `scripts/oh`. The canonical mechanical CLI, ledger, envelope, and exit-code contract is [`scripts/docs/contract.md`](scripts/docs/contract.md), with invocation and test entry points in [`scripts/README.md`](scripts/README.md).
+Use the [Herdr skill](https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md) safety rules and verify `HERDR_ENV=1` before delegation. That skill's layout default (a sibling pane, and no new tab unless the user asks) applies to raw layout control only, not to delegation placement: the configured placement is the user's standing request, so a child that `oh` puts in its own tab obeys that rule. `oh` requires Herdr 0.9.1 or newer on both the client and the running server; its preflight reads both from `herdr status --json` and refuses an older or unknown endpoint before allocating anything. For ordinary one-child delegation use `scripts/oh`. `<skill-dir>` below is the directory that holds this `SKILL.md`: `~/.agents/skills/herdr-orch` for a home install, or the installed package's `skills/herdr-orch` for a Pi package install. The canonical mechanical CLI, ledger, envelope, and exit-code contract is [`scripts/docs/contract.md`](scripts/docs/contract.md), with invocation and test entry points in [`scripts/README.md`](scripts/README.md).
 
 ```sh
-OH="$HOME/.agents/skills/herdr-orch/scripts/oh"
+OH="<skill-dir>/scripts/oh"
 "$OH" task run scout --task 'Locate the implementation and report paths.'
 "$OH" task start reviewer --task-file assignment.md
 "$OH" task start --task 'Summarise the build failure.'   # persona-less fresh child

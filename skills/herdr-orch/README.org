@@ -55,7 +55,7 @@ The parent integrates. =oh= never merges, rebases, pushes, deletes a branch, or 
 - [[https://babashka.org][Babashka]] on =PATH=.
 - Herdr 0.9.1 or newer, client and server.
 - Pi 1.5.0 or newer, for a Pi parent or child. The repository SDK is pinned to 1.5.0; installed-runtime adapter tests verify provider request encoding separately.
-- =quota-axi@0.1.69= with Node >=22.19 for subscription reporting. Run =~/.agents/skills/herdr-orch/scripts/quota-axi-setup install= explicitly, or confirm Pi =/oh setup=. Setup installs in a user-local prefix with lifecycle scripts disabled; collection and routing never install. Managed discovery precedes =PATH= fallback. See [[file:scripts/docs/contract.md]] section 'Usage'.
+- =quota-axi@0.1.69= with Node >=22.19 for subscription reporting. The repository =package.json= declares it, so a Pi package install or =npm ci= in the checkout provides it. Without Pi, run =scripts/quota-axi-setup install= explicitly, or confirm Pi =/oh setup=. Setup installs in a user-local prefix with lifecycle scripts disabled; collection and routing never install. Discovery prefers the package dependency, then the managed install, then =PATH=. See [[file:scripts/docs/contract.md]] section 'Usage'.
 - Optional: the =org-plan= and =org-tasks= skills in this repository.
 
 Herdr is the authority for direct pane and agent operations. The [[https://github.com/ogulcancelik/herdr/blob/master/skills/herdr/SKILL.md][upstream Herdr skill]] is vendored at [[file:../herdr/SKILL.md][skills/herdr/SKILL.md]] for convenience. =oh= does not need it, so a standalone install works.
