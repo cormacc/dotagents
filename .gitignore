@@ -3,6 +3,9 @@ node_modules/
 *.log
 npm-debug.log*
 
+# Herdr app runtime declarations
+/herdr-app/mods/*/gpui-kit.d.ts
+
 # Build outputs
 dist/
 build/
