@@ -253,6 +253,7 @@ Content-preservation checks do not cover this: frontmatter damage is silent, so 
 
 ## Reference files
 
+- For a skill that ships or changes a CLI, read [references/cli-design.md](references/cli-design.md) for the AXI reference and local contract exceptions.
 - `references/eval-workflow.md` — run/grade/review loop in detail
 - `references/description-optimiser.md` — description tuning workflow
 - `references/schemas.md` — JSON structures for `evals.json`, `grading.json`, `benchmark.json`

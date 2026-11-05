@@ -13,6 +13,8 @@ Rules and workflows for agents modifying the `ot` codebase. For *using* `ot` aga
 - **Canonical cycle orders** (status, priority) live in `lifecycle.clj`. UIs (TUI, pi overlay) pass only a direction.
 - **Path resolution is sandboxed.** All import/link target resolution goes through `org-tasks.links` → `paths.clj`. Do not re-derive base-dir selection at call sites; do not modify `paths.clj` semantics.
 
+For agent-facing CLI design or review, read [CLI design guidance](../../skill-creator/references/cli-design.md). It links the unchanged AXI reference and states local JSON, channel and workflow exceptions.
+
 ## Workflows
 
 - **Run `bb run ot` from the repo root.** `bb test` from either skill's `scripts/` directory delegates to the repository-root test task. To exercise `ot` against a scratch project, prefer `ot --root <dir>` over `cd`-ing into it.

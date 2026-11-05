@@ -2,6 +2,8 @@
 
 Use this file for maintainer workflows. User-facing CLI examples belong in `README.md`. Mechanical behaviour belongs in `docs/contract.md`. Design rationale belongs in `../design.org`.
 
+For agent-facing CLI design or review, read [CLI design guidance](../../skill-creator/references/cli-design.md). It links the unchanged AXI reference and states local JSON, channel and workflow exceptions.
+
 ## Tests
 
 Run the complete repository suite from the repository root or this scripts directory:

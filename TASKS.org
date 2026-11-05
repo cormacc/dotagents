@@ -279,14 +279,18 @@ Acceptance criteria:
 - Trial any approved version in an isolated fixture with lifecycle scripts disabled; run installed-runtime, adapter and extension checks against the intended version.
 - Update package and lockfile together only after the compatibility and version-policy decision. Do not use npm audit fix --force or change the live Pi installation as an audit shortcut.
 
-** TODO Apply the AXI guidelines to CLI tooling
+** STARTED Apply the AXI guidelines to CLI tooling
 :PROPERTIES:
-:CUSTOM_ID: 15eb9554-346e-4828-912f-b24a5ab8a7f2
-:CREATED: [2026-11-04 Wed 17:23]
+:CUSTOM_ID: a88aea76-e767-4722-807c-2f91324d1b30
+:CREATED: [2026-11-05 Thu 00:01]
+:STARTED: [2026-11-05 Thu 00:37]
+:HANDOFF: Seven implementation tasks complete. Isolated commit trees pass 737 selected Clojure tests, pi tasks and Hermes checks; 28 measurement-block tests remain excluded on macOS. Linux validation remains outstanding. Separate routing config edits remain outside the AXI commits and disagree with packaged tests/README listings. Evidence .tmp/axi-commits-1/ and .tmp/axi-implementation-7/.
 :END:
 :LOGBOOK:
-- Created [2026-11-04 Wed 17:23]
+- Created [2026-11-05 Thu 00:01]
+- State "STARTED" from "TODO" [2026-11-05 Thu 00:37]
 :END:
+#+IMPORT: [[plan:2026-11-05-axi-cli-guidelines.org]]
 Review the AXI guidelines at [[https://axi.md]] and apply the relevant guidance to repository-maintained CLI tooling. Identify the affected tools and propose a scoped plan before implementation.
 
 ** TODO Adapt herdr-mods quota for the Herdr CLI
