@@ -1,0 +1,22 @@
+# Herdr config. dotfiles `agents.nix` links ~/.config/herdr/config.toml here with
+# mkOutOfStoreSymlink, so edits take effect after `herdr server reload-config`
+# without a Home Manager switch. Herdr can also write this file itself (for
+# example `onboarding = false`); review such writes before you commit them.
+onboarding = false
+
+[ui]
+agent_panel_sort = "spaces"
+
+# Subscription quota for each herdr-orch provider. `oh` resolves its config from
+# the active pane's working directory, so a project's herdr-orch config applies.
+# The 75 s timeout exceeds the 60 s collection budget of `oh usage`.
+# See herdr-plugin/README.md. Set tab_bar_position = "bottom" for a footer.
+tab_bar_right = [
+  { type = "command", command = "~/.agents/skills/herdr-orch/scripts/oh usage --format status", interval_seconds = 60, timeout_seconds = 75 },
+]
+
+[ui.sound]
+enabled = false
+
+[ui.toast]
+delivery = "system"

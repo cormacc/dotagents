@@ -132,11 +132,15 @@ Acceptance criteria:
 - `herdr-plugin/README.md` documents the pane, the action and the footer option `tab_bar_position = "bottom"`.
 - The wrapper record's `** Scope`, `** Acceptance` and scaffold task 29d623ad say that the manifest already exists, with the quota pane and action.
 
-** TODO [#B] Track the Herdr config in `agents/herdr/` and link it :herdr_orch:
+** STARTED [#B] Track the Herdr config in `agents/herdr/` and link it :herdr_orch:
 :PROPERTIES:
 :CUSTOM_ID: a113bfe8-ea59-446a-ab1f-7c359ab93e9f
 :CREATED: [2026-11-05 Thu 00:59]
 :BLOCKED-BY: task:ef96d545-3f0a-4b99-b9ee-da92bdade902
+:STARTED: [2026-11-05 Thu 01:51]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-11-05 Thu 01:51]
 :END:
 Acceptance criteria:
 - `agents/herdr/config.toml` contains the current keys of `~/.config/herdr/config.toml` and a `tab_bar_right` command entry for `~/.agents/skills/herdr-orch/scripts/oh usage --format status`.
