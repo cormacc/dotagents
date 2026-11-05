@@ -27,8 +27,7 @@
     ]
   },
   "scripts": {
-    "check": "bash scripts/check.sh",
-    "check:nix": "nix flake check --impure --no-build"
+    "check": "bash scripts/check.sh"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

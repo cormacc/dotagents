@@ -37,7 +37,4 @@ scripts/validate-skills.bb --python "$work/venv/bin/python"
 (cd skills/skill-creator && "$work/venv/bin/python" -m scripts.package_skill "$root/skills/code-review" "$work/dist")
 test -s "$work/dist/code-review.skill"
 
-printf '\n==> native-system Nix package evaluation\n'
-npm run check:nix
-
 printf '\nAll repository checks passed.\n'

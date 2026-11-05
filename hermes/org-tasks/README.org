@@ -55,7 +55,7 @@ The environment root separator is the platform path separator (=:= on macOS/Linu
 
 * Installation
 
-Set =package_root= to either a dotagents checkout, an unpacked npm package, or the =agent-org-memory= Nix output. Set =hermes_home= explicitly for a named profile; it defaults to the active default-profile home:
+Set =package_root= to either a dotagents checkout or an unpacked npm package. Set =hermes_home= explicitly for a named profile; it defaults to the active default-profile home:
 
 #+begin_src shell
 package_root=/absolute/path/to/package-or-checkout

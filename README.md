@@ -67,25 +67,9 @@ pi install /absolute/path/to/dotagents
 
 The npm name is reserved but not currently published. The package route does **not** activate the Hermes plugin, configure task roots, install custom agents, prompts, `pi/skills`, `pi/settings.json`, `pi/mcp.json`, Dirge files, `ot` as a shell command, or unrelated extensions. Package-only users must install `ot` separately (for example through `bbin`) and install/link the two Hermes artifacts as documented in [`hermes/org-tasks/README.org`](hermes/org-tasks/README.org).
 
-The npm `files` allowlist includes the selected source directories. Pi loads only manifest-declared entry points. The Nix derivation applies an additional package-slice filter that removes co-located `*.test.ts`, `test_*.py`, `*.mjs`, `test.sh`, and `default.nix`; do not generalize that test-exclusion claim to every install route or every test asset.
+The npm `files` allowlist includes the selected source directories. Pi loads only manifest-declared entry points.
 
 Pi records package installs in settings. Existing unpinned git checkouts advance when `pi update --extensions` or `pi update --all` runs; startup only reinstalls missing packages. A configured tag/commit remains pinned until the install spec is changed.
-
-### Nix package
-
-The flake exposes `packages.<system>.agent-org-memory` and matching checks for four declared systems. Build the package for the current system:
-
-```bash
-nix build .#agent-org-memory
-```
-
-Evaluate the current/native-system package check with project conventions:
-
-```bash
-nix flake check --impure --no-build
-```
-
-That command does not prove cross-system builds. Use an appropriate builder and explicit system selection for broader coverage.
 
 ### Editable git submodule and Home Manager
 
@@ -129,9 +113,9 @@ Install declared validation dependencies and run the single root check:
 npm run check
 ```
 
-The command uses the tracked locks (`npm ci`), runs every active extension test runner, the Hermes org-tasks adapter tests, the Babashka task suite, subagent-definition frontmatter validation, skill metadata/inventory and GitLab routing checks, active relative-link and command/tool collision checks, clean skill-creator validation/packaging, and `nix flake check --impure --no-build` for the native system.
+The command uses the tracked locks (`npm ci`), runs every active extension test runner, the Hermes org-tasks adapter tests, the Babashka task suite, subagent-definition frontmatter validation, skill metadata/inventory and GitLab routing checks, active relative-link and command/tool collision checks, and clean skill-creator validation/packaging.
 
-It requires Node/npm, `bb`, Python 3 with venv support, Nix, Emacs, pi on `PATH`, and network access for clean npm/Python dependency installs.
+It requires Node/npm, `bb`, Python 3 with venv support, Emacs, pi on `PATH`, and network access for clean npm/Python dependency installs.
 
 For task-memory health after repository changes:
 
@@ -141,6 +125,6 @@ ot doctor --format json
 
 ## Releases
 
-Keep the manifest version and annotated git tag aligned. Git/package and flake consumers choose their own refs; editable submodule consumers update and commit the parent repository's submodule pointer. Do not push tags or submodule updates implicitly.
+Keep the manifest version and annotated git tag aligned. Git/package consumers choose their own refs; editable submodule consumers update and commit the parent repository's submodule pointer. Do not push tags or submodule updates implicitly.
 
 [pi]: https://github.com/earendil-works/pi-mono
