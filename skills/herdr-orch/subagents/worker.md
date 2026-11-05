@@ -29,7 +29,7 @@ For a non-blocking round, publish a concise `WAITING` item only when the compose
 
 ## Advisor consultation
 
-There is **no routine pre-publish review**: do not consult `advisor` merely because you are about to publish. Measured across three benchmark rounds, a mandatory consult produced no quality gain at any executor tier while adding cost and latency, so it was retired. Reviews at feature closeout are the orchestrator's job, not yours.
+There is **no routine pre-publish review**: do not consult `advisor` merely because you are about to publish. Reviews at feature closeout are the orchestrator's job, not yours.
 
 Consult `advisor` only when you are genuinely stuck:
 
