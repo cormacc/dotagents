@@ -314,6 +314,17 @@ Review the AXI guidelines at [[https://axi.md]] and apply the relevant guidance 
 #+IMPORT: [[plan:2026-11-04-herdr-orch-herdr-app-support.org]]
 Let oh delegate from a herdr-app terminal, and refuse when leaked Herdr TUI variables name the wrong session. Plan in the linked change-record.
 
+** TODO herdr-orch: quota widget for the Herdr tab bar :herdr_orch:
+:PROPERTIES:
+:CUSTOM_ID: da733dca-7beb-47e9-baf2-e6d446105525
+:CREATED: [2026-11-05 Thu 00:51]
+:END:
+:LOGBOOK:
+- Created [2026-11-05 Thu 00:51]
+:END:
+#+IMPORT: [[plan:2026-11-05-herdr-orch-quota-widget.org]]
+Show subscription quota for each herdr-orch `config.edn` provider that has a `:quota-provider`, through the same quota-axi executable and allowlisted evidence as `oh usage`. Display in the Herdr tab-bar right status area (`[ui] tab_bar_right` command entry; `tab_bar_position = "bottom"` gives a footer). Prior art: https://github.com/danielpradilla/herdr-quota-meter. Related: 9f667467 (herdr plugin wrapper for herdr-orch), which plans the `herdr-plugin/` package.
+
 * Fixes
 
 ** TODO Adapt herdr-mods quota for the Herdr CLI
