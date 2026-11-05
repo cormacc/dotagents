@@ -19,13 +19,15 @@
 ;;
 ;; `:aliases` maps a short name to its canonical ID, or a weight name to a vector of ranked
 ;; candidates `{:model <short name or canonical ID> :rank n}` with an optional exact
-;; `:quota-scope` selector. Lower rank is preferred; the
+;; `:quota-scope` selector. An unscoped candidate uses `all_models` only when it is the
+;; sole effective scope. Give a model with its own quota scope (for example `model:fable`)
+;; that exact selector. Lower rank is preferred; the
 ;; router chooses among them at spawn from each provider's remaining allowance. A candidate
 ;; takes at most one string-alias hop and never names another vector alias.
 ;;
 ;; `:providers` maps a local provider prefix to its exact quota-axi `:quota-provider`
 ;; and optional `:reserve` fraction. Empty rows describe local providers.
-;; Kimi and Z.AI are reporting-only: no alias below names them.
+;; Kimi and Z.AI reporting requires an explicit provider override; no alias names them.
 ;; `:harnesses <kind> :providers` is the set of providers that kind can run; a kind without
 ;; it accepts every provider.
 ;;
@@ -45,8 +47,6 @@
  :providers
  {"anthropic"    {:quota-provider "claude"}
   "openai-codex" {:quota-provider "codex"}
-  "kimi"         {:quota-provider "kimi"}
-  "zai"          {:quota-provider "zai"}
   "lemonade"     {}}
  :models {"anthropic/claude-fable-5-1"  {:claude "fable"}
           "anthropic/claude-opus-5-5"   {:claude "opus"}
@@ -56,28 +56,16 @@
           "openai-codex/gpt-6.1-sol"    {:codex "gpt-6.1-sol"}
           "openai-codex/gpt-5.6-terra"  {:codex "gpt-5.6-terra"}
           "openai-codex/gpt-6-luna"     {:codex "gpt-6-luna"}}
- :aliases {"heavy"             [{:model "fable"  :rank 1} {:model "gpt-6-astra"   :rank 1}]
-           "middle"            [{:model "opus"   :rank 1 :quota-scope "seven_day_opus"} {:model "gpt-6.1-sol"   :rank 1}]
-           "light"             [{:model "sonnet" :rank 1} {:model "gpt-5.6-terra" :rank 1}]
-           "feather"           [{:model "haiku"  :rank 1} {:model "gpt-6-luna"    :rank 1} {:model "qwen-dense" :rank 2}]
+ :aliases {"heavy"             [{:model "fable"  :rank 1 :quota-scope "model:fable"} {:model "gpt-astra"   :rank 1}]
+           "middle"            [{:model "opus"   :rank 1} {:model "gpt-sol"   :rank 1}]
+           "light"             [{:model "sonnet" :rank 1} {:model "gpt-terra" :rank 1}]
+           "feather"           [{:model "haiku"  :rank 1} {:model "gpt-luna"    :rank 1} {:model "qwen-dense" :rank 2}]
            "qwen-dense"        "lemonade/Qwen3.8-27B-GGUF-Q4_K_M"
            "fable"             "anthropic/claude-fable-5-1"
            "opus"              "anthropic/claude-opus-5-5"
            "sonnet"            "anthropic/claude-sonnet-5-5"
            "haiku"             "anthropic/claude-haiku-5-5"
-           "claude-fable"      "anthropic/claude-fable-5-1"
-           "claude-opus"       "anthropic/claude-opus-5-5"
-           "claude-sonnet"     "anthropic/claude-sonnet-5-5"
-           "claude-haiku"      "anthropic/claude-haiku-5-5"
            "gpt-astra"         "openai-codex/gpt-6-astra"
            "gpt-sol"           "openai-codex/gpt-6.1-sol"
            "gpt-terra"         "openai-codex/gpt-5.6-terra"
-           "gpt-luna"          "openai-codex/gpt-6-luna"
-           "claude-fable-5-1"  "anthropic/claude-fable-5-1"
-           "claude-opus-5-5"   "anthropic/claude-opus-5-5"
-           "claude-sonnet-5-5" "anthropic/claude-sonnet-5-5"
-           "claude-haiku-5-5"  "anthropic/claude-haiku-5-5"
-           "gpt-6-astra"       "openai-codex/gpt-6-astra"
-           "gpt-6.1-sol"       "openai-codex/gpt-6.1-sol"
-           "gpt-5.6-terra"     "openai-codex/gpt-5.6-terra"
-           "gpt-6-luna"        "openai-codex/gpt-6-luna"}}
+           "gpt-luna"          "openai-codex/gpt-6-luna"}}

@@ -5217,12 +5217,6 @@
   [k]
   (str/join "-" (remove numeric-token? (str/split k #"-"))))
 
-(defn- alias-version
-  "The version tokens of an alias key as a comparable vector: `claude-fable-5-1` -> [5 1 0 0]."
-  [k]
-  (let [parts (->> (str/split k #"-") (filter numeric-token?) (mapcat #(str/split % #"\.")) (map parse-long))]
-    (vec (take 4 (concat parts (repeat 0))))))
-
 (defn- contract-weight-table
   "The weight table in contract.md section 'Model resolution', as {weight {provider family-or-\"--\"}}.
   Its cells are model families (see `alias-family`), not versioned IDs."
@@ -5262,8 +5256,8 @@
       (is (= #{"anthropic"} (get-in harnesses [:claude :providers])))
       (is (= #{"openai-codex"} (get-in harnesses [:codex :providers])))
       (is (not (contains? (:pi harnesses) :providers))))
-    (testing "subscription mappings are explicit; Kimi and Z.AI add no candidates"
-      (is (= #{"anthropic" "openai-codex" "lemonade" "kimi" "zai"} (set (keys providers))))
+    (testing "packaged subscription mappings omit optional reporting-only providers"
+      (is (= #{"anthropic" "openai-codex" "lemonade"} (set (keys providers))))
       (doseq [[name row] providers]
         (if (:quota-provider row)
           (is (core/quota-providers (:quota-provider row)) name)
@@ -5282,15 +5276,14 @@
         (is (= expected (set (keys row))) id)
         (is (= 1 (count row)) (str id " keeps only its own provider's spelling"))
         (is (not (contains? row :pi)) id)))
-    (testing "an unversioned alias targets the same row as its latest versioned alias"
-      (let [strings (into {} (filter (comp string? val)) aliases)
-            checked (for [[family ks] (group-by alias-family (keys strings))
-                          :let [versioned (filter #(some numeric-token? (str/split % #"-")) ks)]
-                          :when (and (contains? strings family) (seq versioned))]
-                      (let [latest (last (sort-by alias-version versioned))]
-                        (is (= (strings latest) (strings family)) (str family " follows " latest))
-                        family))]
-        (is (seq (doall checked)) "positive control: at least one alias family is checked")))
+    (testing "packaged string aliases keep only short names"
+      (is (= #{"fable" "opus" "sonnet" "haiku" "gpt-astra" "gpt-sol"
+               "gpt-terra" "gpt-luna" "qwen-dense"}
+             (set (keep (fn [[k v]] (when (string? v) k)) aliases)))))
+    (testing "only Fable selects a model-specific quota scope"
+      (is (= "model:fable" (get-in aliases ["heavy" 0 :quota-scope])))
+      (doseq [weight ["middle" "light" "feather"]]
+        (is (nil? (get-in aliases [weight 0 :quota-scope])) weight)))
     (testing "the four weights are vector aliases of well-formed ranked candidates"
       (is (= (set weights) (set (keep (fn [[k v]] (when (vector? v) k)) aliases))))
       (doseq [weight weights
@@ -8671,7 +8664,7 @@
 (def ^:private anthropic-secret "sk-fixture-ANTHROPIC-SECRET-0001")
 (def ^:private codex-secret "sk-fixture-CODEX-SECRET-0002")
 (def ^:private far-future-ms 4102444800000)
-(defn- usage-body [{:keys [anthropic-used codex-used scoped]}]
+(defn- usage-body [{:keys [anthropic-used codex-used scoped fable-used]}]
   {:schemaVersion 5
    :providers
    (vec (for [[provider used] [["claude" anthropic-used] ["codex" codex-used]]
@@ -8681,8 +8674,11 @@
            :quotaSemantics {:status "known"
                             :effectiveAvailability
                             (cond-> [{:scope "all_models" :status "known" :effectivePercentRemaining (- 100 used) :boundedBy ["five_hour"]}]
-                              (and (= provider "claude") scoped)
-                              (conj {:scope "seven_day_fable" :status "known" :effectivePercentRemaining (- 100 scoped) :boundedBy ["five_hour"]}))}}))})
+                              (= provider "claude")
+                              (conj {:scope (if (some? scoped) "seven_day_fable" "model:fable")
+                                     :status "known"
+                                     :effectivePercentRemaining (- 100 (or scoped fable-used used))
+                                     :boundedBy ["five_hour"]}))}}))})
 (defn- routed-fixture
   ([report] (routed-fixture report {} nil))
   ([report overrides personas]
@@ -8715,7 +8711,7 @@
     (is (true? (:ok (result proc))))
     (is (= "herdr-orch/v1" (:schema (result proc))))
     (is (= 5 (:schemaVersion evidence)))
-    (is (= #{"anthropic" "openai-codex" "lemonade" "kimi" "zai"} (set (map :localProvider (:providers evidence)))))
+    (is (= #{"anthropic" "openai-codex" "lemonade"} (set (map :localProvider (:providers evidence)))))
     (is (empty? (calls log)))
     (is (made-usage-call? dir))
     (doseq [format ["text" "markdown"]]
@@ -8747,7 +8743,11 @@
                                        :effectiveAvailability [{:scope "all_models" :status "known"
                                                                 :effectivePercentRemaining remaining :boundedBy ["session"]}]}})
                    [["claude" 72 "fresh"] ["codex" 60 "fresh"] ["kimi" 48 "fresh"] ["zai" 0 "fresh"]])
-        {env :env} (routed-fixture {:schemaVersion 6 :providers rows} {"HERDR_ENV" "0"} nil)
+        {:keys [env dir]} (routed-fixture {:schemaVersion 6 :providers rows} {"HERDR_ENV" "0"} nil)
+        project-config (fs/path dir ".agents" "subagents" "config.edn")
+        _ (fs/create-dirs (fs/parent project-config))
+        _ (spit (str project-config) (pr-str {:providers {"kimi" {:quota-provider "kimi"}
+                                                       "zai" {:quota-provider "zai"}}}))
         json-result (:result (result (call! env "usage")))
         compact (:out (call! env "usage" "--format" "markdown"))
         detail (:out (call! env "usage" "--format" "markdown" "--detail"))
@@ -8772,7 +8772,7 @@
         proc (call! env "usage" "--provider" "anthropic" "--provider" "nope")]
     (is (= 2 (:exit proc)))
     (is (re-find #"unknown provider: nope" (:out proc)))
-    (is (= ["anthropic" "kimi" "lemonade" "openai-codex" "zai"] (get-in (result proc) [:error :data :available])))
+    (is (= ["anthropic" "lemonade" "openai-codex"] (get-in (result proc) [:error :data :available])))
     (is (not (made-usage-call? dir)))
     (is (empty? (calls log)))
     (call! env "usage" "--provider" "anthropic")
@@ -8813,6 +8813,12 @@
       (let [other (preview (assoc env "ORCH_ASSIGNMENT_ROOT" (str dir)) "pi-heavy")]
         (is (= astra (get-in (result other) [:result :model-route :chosen])))
         (is (= ["--model" astra] (get-in (result other) [:result :model-args])))))
+    (testing "the exact Fable scope wins over account-wide credit"
+      (spit (get env "FAKE_QUOTA_REPORT")
+            (json/generate-string (usage-body {:anthropic-used 10.0 :fable-used 100.0 :codex-used 80})))
+      (let [route (route-of (preview env "pi-heavy"))]
+        (is (= astra (:chosen route)))
+        (is (= 0.0 (:remaining (first (:candidates route)))))))
     (testing "unmapped model scopes do not inherit account-wide credit"
       (spit (get env "FAKE_QUOTA_REPORT") (json/generate-string (usage-body {:anthropic-used 10.0 :codex-used 80 :scoped 100.0})))
       (fs/delete-if-exists (usage-cache-dir dir))

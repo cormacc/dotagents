@@ -295,7 +295,7 @@ To find a model miss, compare the model fields. If =model-canonical= still shows
 
 ** Subscription allowance and model routing
 
-A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child launches. Fresh known effective scope evidence provides numeric credit; unknown remains eligible. =:quota-scope= is an exact reviewed scope, never a fuzzy model match, and a sole =all_models= scope is the only default. Kimi and Z.AI are reporting-only and add no routing candidates. [[file:scripts/docs/contract.md]] sections 'Routing' and 'Usage' own the evidence and process contract.
+A vector alias (=heavy=, =middle=, =light=, =feather=) is routed when a child launches. Fresh known effective scope evidence provides numeric credit; unknown remains eligible. =:quota-scope= is an exact reviewed scope, never a fuzzy model match, and a sole =all_models= scope is the only default. The packaged provider map contains Anthropic, Codex and local Lemonade. Kimi and Z.AI reporting requires an explicit provider override; neither has a shipped routing candidate. Fable selects =model:fable= explicitly; Opus uses the unscoped rule. [[file:scripts/docs/contract.md]] sections 'Routing' and 'Usage' own the evidence and process contract.
 
 #+begin_src sh
 oh usage                                    # JSON envelope with schema-5/6 providers array
@@ -385,24 +385,24 @@ The first column shows the two shortest string aliases for each canonical ID. A 
 #+CALL: oh-roster[:eval yes](section="models")
 
 #+RESULTS:
-| Aliases                  | claude                           | codex                            | pi                               |
-|--------------------------+----------------------------------+----------------------------------+----------------------------------|
-| fable, claude-fable      | fable                            | anthropic/claude-fable-5-1       | anthropic/claude-fable-5-1       |
-| haiku, claude-haiku      | haiku                            | anthropic/claude-haiku-5-5       | anthropic/claude-haiku-5-5       |
-| opus, claude-opus        | opus                             | anthropic/claude-opus-5-5        | anthropic/claude-opus-5-5        |
-| sonnet, claude-sonnet    | sonnet                           | anthropic/claude-sonnet-5-5      | anthropic/claude-sonnet-5-5      |
-| qwen-dense               | lemonade/Qwen3.8-27B-GGUF-Q4_K_M | lemonade/Qwen3.8-27B-GGUF-Q4_K_M | lemonade/Qwen3.8-27B-GGUF-Q4_K_M |
-| gpt-terra, gpt-5.6-terra | openai-codex/gpt-5.6-terra       | gpt-5.6-terra                    | openai-codex/gpt-5.6-terra       |
-| gpt-astra, gpt-6-astra   | openai-codex/gpt-6-astra         | gpt-6-astra                      | openai-codex/gpt-6-astra         |
-| gpt-luna, gpt-6-luna     | openai-codex/gpt-6-luna          | gpt-6-luna                       | openai-codex/gpt-6-luna          |
-| gpt-sol, gpt-6.1-sol     | openai-codex/gpt-6.1-sol         | gpt-6.1-sol                      | openai-codex/gpt-6.1-sol         |
+| Aliases    | claude                           | codex                            | pi                               |
+|------------+----------------------------------+----------------------------------+----------------------------------|
+| fable      | fable                            | anthropic/claude-fable-5-1       | anthropic/claude-fable-5-1       |
+| haiku      | haiku                            | anthropic/claude-haiku-5-5       | anthropic/claude-haiku-5-5       |
+| opus       | opus                             | anthropic/claude-opus-5-5        | anthropic/claude-opus-5-5        |
+| sonnet     | sonnet                           | anthropic/claude-sonnet-5-5      | anthropic/claude-sonnet-5-5      |
+| qwen-dense | lemonade/Qwen3.8-27B-GGUF-Q4_K_M | lemonade/Qwen3.8-27B-GGUF-Q4_K_M | lemonade/Qwen3.8-27B-GGUF-Q4_K_M |
+| gpt-terra  | openai-codex/gpt-5.6-terra       | gpt-5.6-terra                    | openai-codex/gpt-5.6-terra       |
+| gpt-astra  | openai-codex/gpt-6-astra         | gpt-6-astra                      | openai-codex/gpt-6-astra         |
+| gpt-luna   | openai-codex/gpt-6-luna          | gpt-6-luna                       | openai-codex/gpt-6-luna          |
+| gpt-sol    | openai-codex/gpt-6.1-sol         | gpt-6.1-sol                      | openai-codex/gpt-6.1-sol         |
 
 Ranked aliases (lowest rank is preferred):
 
-- =feather= -- rank 1 =haiku=; rank 1 =gpt-6-luna=; rank 2 =qwen-dense=
-- =heavy= -- rank 1 =fable=; rank 1 =gpt-6-astra=
-- =light= -- rank 1 =sonnet=; rank 1 =gpt-5.6-terra=
-- =middle= -- rank 1 =opus=; rank 1 =gpt-6.1-sol=
+- =feather= -- rank 1 =haiku=; rank 1 =gpt-luna=; rank 2 =qwen-dense=
+- =heavy= -- rank 1 =fable=; rank 1 =gpt-astra=
+- =light= -- rank 1 =sonnet=; rank 1 =gpt-terra=
+- =middle= -- rank 1 =opus=; rank 1 =gpt-sol=
 
 * Known gaps
 
