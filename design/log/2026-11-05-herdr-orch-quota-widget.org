@@ -112,11 +112,17 @@ Acceptance criteria:
 
 Pointer: `usage-text` and `usage!` in `skills/herdr-orch/scripts/src/herdr_orch/cli.clj`. Another session has uncommitted edits in `cli.clj` that do not touch usage; expect a small merge.
 
-** TODO [#B] Add the quota pane and stanza action to `herdr-plugin/` :herdr_orch:
+** DONE [#B] Add the quota pane and stanza action to `herdr-plugin/` :herdr_orch:
+CLOSED: [2026-11-05 Thu 01:50]
 :PROPERTIES:
 :CUSTOM_ID: 6d68367f-aa46-4862-96a3-ca1844e8225c
 :CREATED: [2026-11-05 Thu 00:59]
 :BLOCKED-BY: task:ef96d545-3f0a-4b99-b9ee-da92bdade902
+:STARTED: [2026-11-05 Thu 01:48]
+:END:
+:LOGBOOK:
+- State "STARTED" from "TODO" [2026-11-05 Thu 01:48]
+- State "DONE" from "STARTED" [2026-11-05 Thu 01:50]
 :END:
 Acceptance criteria:
 - `herdr-plugin/herdr-plugin.toml` declares id `cormacc.herdr-orch`, `min_herdr_version = "0.9.1"`, `platforms = ["linux", "macos"]`, popup pane `quota`, action `quota-stanza`, and no build, startup or event entries.

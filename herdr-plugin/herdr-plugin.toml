@@ -1,0 +1,21 @@
+id = "cormacc.herdr-orch"
+name = "herdr-orch"
+version = "0.1.0"
+description = "herdr-orch helpers: subscription quota pane and tab-bar status stanza."
+# Single floor shared with the bundled `oh` preflight; see the wrapper change-record.
+min_herdr_version = "0.9.1"
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "quota"
+title = "Subscription quota"
+placement = "popup"
+width = "80%"
+height = 16
+command = ["bash", "quota-pane.sh"]
+
+[[actions]]
+id = "quota-stanza"
+title = "Print the quota tab-bar stanza"
+description = "Print a [ui] tab_bar_right entry for `oh usage --format status`; does not edit Herdr config."
+command = ["bash", "quota-stanza.sh"]
